@@ -4,7 +4,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import JSON, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, SoftDeleteMixin, TimestampMixin
@@ -31,8 +31,10 @@ class MasterProcedure(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     procedure_type: Mapped[ProcedureType] = mapped_column(
-        String(20), nullable=False, default=ProcedureType.OP,
-        comment="op = work order, build = produces assembly"
+        String(20),
+        nullable=False,
+        default=ProcedureType.OP,
+        comment="op = work order, build = produces assembly",
     )
     status: Mapped[ProcedureStatus] = mapped_column(
         String(20), nullable=False, default=ProcedureStatus.DRAFT
@@ -83,8 +85,10 @@ class ProcedureStep(Base, IdMixin, TimestampMixin):
         ForeignKey("master_procedure.id", ondelete="CASCADE"), nullable=False, index=True
     )
     parent_step_id: Mapped[int | None] = mapped_column(
-        ForeignKey("procedure_step.id", ondelete="CASCADE"), nullable=True, index=True,
-        comment="NULL = top-level OP, set = sub-step"
+        ForeignKey("procedure_step.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="NULL = top-level OP, set = sub-step",
     )
     order: Mapped[int] = mapped_column(Integer, nullable=False, comment="Position in sequence")
     step_number: Mapped[str] = mapped_column(
@@ -106,14 +110,14 @@ class ProcedureStep(Base, IdMixin, TimestampMixin):
     )
     estimated_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     workcenter_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workcenter.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Default workcenter for this step"
+        ForeignKey("workcenter.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Default workcenter for this step",
     )
 
     # Relationships
-    procedure: Mapped["MasterProcedure"] = relationship(
-        "MasterProcedure", back_populates="steps"
-    )
+    procedure: Mapped["MasterProcedure"] = relationship("MasterProcedure", back_populates="steps")
     parent_step: Mapped["ProcedureStep | None"] = relationship(
         "ProcedureStep", remote_side="ProcedureStep.id", back_populates="sub_steps"
     )
@@ -192,8 +196,10 @@ class ProcedureOutput(Base, IdMixin, TimestampMixin):
         ForeignKey("master_procedure.id", ondelete="CASCADE"), nullable=False, index=True
     )
     part_id: Mapped[int] = mapped_column(
-        ForeignKey("part.id", ondelete="RESTRICT"), nullable=False, index=True,
-        comment="The part/assembly that this procedure produces"
+        ForeignKey("part.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+        comment="The part/assembly that this procedure produces",
     )
     quantity_produced: Mapped[Decimal] = mapped_column(
         Numeric(precision=15, scale=4), nullable=False, default=1
@@ -227,8 +233,10 @@ class StepKit(Base, IdMixin, TimestampMixin):
         Numeric(precision=15, scale=4), nullable=False
     )
     usage_type: Mapped[UsageType] = mapped_column(
-        String(20), nullable=False, default=UsageType.CONSUME,
-        comment="consume = inventory decremented, tooling = reused"
+        String(20),
+        nullable=False,
+        default=UsageType.CONSUME,
+        comment="consume = inventory decremented, tooling = reused",
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

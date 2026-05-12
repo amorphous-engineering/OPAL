@@ -1,7 +1,7 @@
 """Reports API routes - CSV exports and analytics."""
 
 import csv
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
 from typing import Any
 
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from opal.api.deps import DbSession
 from opal.db.models import InventoryRecord, Part
-from opal.db.models.execution import InstanceStatus, ProcedureInstance, StepExecution
+from opal.db.models.execution import ProcedureInstance
 from opal.db.models.issue import Issue
 from opal.db.models.risk import Risk
 
@@ -48,34 +48,46 @@ async def export_parts_csv(
     writer = csv.writer(output)
 
     # Header
-    writer.writerow([
-        "ID", "External PN", "Name", "Category", "Description",
-        "Unit", "Total Quantity", "Locations"
-    ])
+    writer.writerow(
+        [
+            "ID",
+            "External PN",
+            "Name",
+            "Category",
+            "Description",
+            "Unit",
+            "Total Quantity",
+            "Locations",
+        ]
+    )
 
     for part in parts:
         # Calculate total inventory
         total_qty = sum(float(inv.quantity) for inv in part.inventory_records)
-        locations = ", ".join(set(inv.location for inv in part.inventory_records if inv.quantity > 0))
+        locations = ", ".join(
+            set(inv.location for inv in part.inventory_records if inv.quantity > 0)
+        )
 
         # Low stock filter (skip if not low stock when filter is active)
         if low_stock and total_qty > 0:
             continue
 
-        writer.writerow([
-            part.id,
-            part.external_pn or "",
-            part.name,
-            part.category or "",
-            (part.description or "")[:100],
-            part.unit_of_measure or "",
-            total_qty,
-            locations,
-        ])
+        writer.writerow(
+            [
+                part.id,
+                part.external_pn or "",
+                part.name,
+                part.category or "",
+                (part.description or "")[:100],
+                part.unit_of_measure or "",
+                total_qty,
+                locations,
+            ]
+        )
 
     output.seek(0)
 
-    filename = f"parts_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"parts_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.csv"
 
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -103,26 +115,36 @@ async def export_inventory_csv(
     output = StringIO()
     writer = csv.writer(output)
 
-    writer.writerow([
-        "ID", "External PN", "Part Name", "Quantity", "Location",
-        "Lot Number", "Last Counted", "Last Updated"
-    ])
+    writer.writerow(
+        [
+            "ID",
+            "External PN",
+            "Part Name",
+            "Quantity",
+            "Location",
+            "Lot Number",
+            "Last Counted",
+            "Last Updated",
+        ]
+    )
 
     for inv in records:
-        writer.writerow([
-            inv.id,
-            inv.part.external_pn if inv.part else "",
-            inv.part.name if inv.part else "",
-            float(inv.quantity),
-            inv.location,
-            inv.lot_number or "",
-            inv.last_counted_at.isoformat() if inv.last_counted_at else "",
-            inv.updated_at.isoformat() if inv.updated_at else "",
-        ])
+        writer.writerow(
+            [
+                inv.id,
+                inv.part.external_pn if inv.part else "",
+                inv.part.name if inv.part else "",
+                float(inv.quantity),
+                inv.location,
+                inv.lot_number or "",
+                inv.last_counted_at.isoformat() if inv.last_counted_at else "",
+                inv.updated_at.isoformat() if inv.updated_at else "",
+            ]
+        )
 
     output.seek(0)
 
-    filename = f"inventory_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"inventory_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.csv"
 
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -159,11 +181,22 @@ async def export_executions_csv(
     output = StringIO()
     writer = csv.writer(output)
 
-    writer.writerow([
-        "ID", "Procedure", "Version", "Work Order", "Status",
-        "Created At", "Started At", "Completed At", "Duration (min)",
-        "Steps Completed", "Total Steps", "Priority"
-    ])
+    writer.writerow(
+        [
+            "ID",
+            "Procedure",
+            "Version",
+            "Work Order",
+            "Status",
+            "Created At",
+            "Started At",
+            "Completed At",
+            "Duration (min)",
+            "Steps Completed",
+            "Total Steps",
+            "Priority",
+        ]
+    )
 
     for inst in instances:
         duration_min = None
@@ -171,29 +204,33 @@ async def export_executions_csv(
             duration_min = round((inst.completed_at - inst.started_at).total_seconds() / 60, 1)
 
         completed_steps = sum(
-            1 for s in inst.step_executions
-            if (s.status.value if hasattr(s.status, 'value') else s.status) in ["completed", "skipped"]
+            1
+            for s in inst.step_executions
+            if (s.status.value if hasattr(s.status, "value") else s.status)
+            in ["completed", "skipped"]
         )
         total_steps = len(inst.step_executions)
 
-        writer.writerow([
-            inst.id,
-            inst.procedure.name if inst.procedure else "",
-            inst.version_id,
-            inst.work_order_number or "",
-            inst.status.value if hasattr(inst.status, 'value') else inst.status,
-            inst.created_at.isoformat() if inst.created_at else "",
-            inst.started_at.isoformat() if inst.started_at else "",
-            inst.completed_at.isoformat() if inst.completed_at else "",
-            duration_min or "",
-            completed_steps,
-            total_steps,
-            inst.priority,
-        ])
+        writer.writerow(
+            [
+                inst.id,
+                inst.procedure.name if inst.procedure else "",
+                inst.version_id,
+                inst.work_order_number or "",
+                inst.status.value if hasattr(inst.status, "value") else inst.status,
+                inst.created_at.isoformat() if inst.created_at else "",
+                inst.started_at.isoformat() if inst.started_at else "",
+                inst.completed_at.isoformat() if inst.completed_at else "",
+                duration_min or "",
+                completed_steps,
+                total_steps,
+                inst.priority,
+            ]
+        )
 
     output.seek(0)
 
-    filename = f"executions_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"executions_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.csv"
 
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -227,29 +264,40 @@ async def export_issues_csv(
     output = StringIO()
     writer = csv.writer(output)
 
-    writer.writerow([
-        "ID", "Title", "Type", "Status", "Priority",
-        "Description", "Linked Part", "Linked Procedure",
-        "Created At", "Updated At"
-    ])
+    writer.writerow(
+        [
+            "ID",
+            "Title",
+            "Type",
+            "Status",
+            "Priority",
+            "Description",
+            "Linked Part",
+            "Linked Procedure",
+            "Created At",
+            "Updated At",
+        ]
+    )
 
     for issue in issues:
-        writer.writerow([
-            issue.id,
-            issue.title,
-            issue.issue_type.value if hasattr(issue.issue_type, 'value') else issue.issue_type,
-            issue.status.value if hasattr(issue.status, 'value') else issue.status,
-            issue.priority.value if hasattr(issue.priority, 'value') else issue.priority,
-            (issue.description or "")[:200],
-            issue.part_id or "",
-            issue.procedure_id or "",
-            issue.created_at.isoformat() if issue.created_at else "",
-            issue.updated_at.isoformat() if issue.updated_at else "",
-        ])
+        writer.writerow(
+            [
+                issue.id,
+                issue.title,
+                issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type,
+                issue.status.value if hasattr(issue.status, "value") else issue.status,
+                issue.priority.value if hasattr(issue.priority, "value") else issue.priority,
+                (issue.description or "")[:200],
+                issue.part_id or "",
+                issue.procedure_id or "",
+                issue.created_at.isoformat() if issue.created_at else "",
+                issue.updated_at.isoformat() if issue.updated_at else "",
+            ]
+        )
 
     output.seek(0)
 
-    filename = f"issues_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"issues_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.csv"
 
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -278,31 +326,43 @@ async def export_risks_csv(
     output = StringIO()
     writer = csv.writer(output)
 
-    writer.writerow([
-        "ID", "Title", "Status", "Probability", "Impact", "Score", "Severity",
-        "Description", "Mitigation Plan", "Created At"
-    ])
+    writer.writerow(
+        [
+            "ID",
+            "Title",
+            "Status",
+            "Probability",
+            "Impact",
+            "Score",
+            "Severity",
+            "Description",
+            "Mitigation Plan",
+            "Created At",
+        ]
+    )
 
     for risk in risks:
         if min_score and risk.score < min_score:
             continue
 
-        writer.writerow([
-            risk.id,
-            risk.title,
-            risk.status.value if hasattr(risk.status, 'value') else risk.status,
-            risk.probability,
-            risk.impact,
-            risk.score,
-            risk.severity,
-            (risk.description or "")[:200],
-            (risk.mitigation_plan or "")[:200],
-            risk.created_at.isoformat() if risk.created_at else "",
-        ])
+        writer.writerow(
+            [
+                risk.id,
+                risk.title,
+                risk.status.value if hasattr(risk.status, "value") else risk.status,
+                risk.probability,
+                risk.impact,
+                risk.score,
+                risk.severity,
+                (risk.description or "")[:200],
+                (risk.mitigation_plan or "")[:200],
+                risk.created_at.isoformat() if risk.created_at else "",
+            ]
+        )
 
     output.seek(0)
 
-    filename = f"risks_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"risks_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.csv"
 
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -411,8 +471,10 @@ async def get_issue_metrics(
     by_priority: dict[str, int] = {}
 
     for issue in issues:
-        issue_type = issue.issue_type.value if hasattr(issue.issue_type, 'value') else issue.issue_type
-        priority = issue.priority.value if hasattr(issue.priority, 'value') else issue.priority
+        issue_type = (
+            issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type
+        )
+        priority = issue.priority.value if hasattr(issue.priority, "value") else issue.priority
 
         by_type[issue_type] = by_type.get(issue_type, 0) + 1
         by_priority[priority] = by_priority.get(priority, 0) + 1
@@ -432,10 +494,10 @@ async def get_issue_metrics(
 def _get_status(instance: ProcedureInstance) -> str:
     """Get status as string."""
     status = instance.status
-    return status.value if hasattr(status, 'value') else status
+    return status.value if hasattr(status, "value") else status
 
 
 def _get_issue_status(issue: Issue) -> str:
     """Get issue status as string."""
     status = issue.status
-    return status.value if hasattr(status, 'value') else status
+    return status.value if hasattr(status, "value") else status

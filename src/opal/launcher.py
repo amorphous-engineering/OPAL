@@ -6,7 +6,7 @@ import signal
 import subprocess
 import sys
 import webbrowser
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Thread
 
@@ -89,7 +89,7 @@ class OpalLauncher(App):
 
     def _log(self, message: str) -> None:
         """Write a timestamped message to the log widget."""
-        ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        ts = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
         try:
             log_view = self.query_one("#log-view", RichLog)
             log_view.write(f"{ts} {message}")
@@ -376,7 +376,9 @@ class OpalLauncher(App):
                 severity="information",
             )
         else:
-            self._log("Download from: https://github.com/amorphous-engineering/OPAL/releases/latest")
+            self._log(
+                "Download from: https://github.com/amorphous-engineering/OPAL/releases/latest"
+            )
             self.notify(
                 f"Update available: v{tag}",
                 title="OPAL Update",

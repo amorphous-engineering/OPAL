@@ -154,7 +154,9 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
         expected_benefit=issue.expected_benefit,
         root_cause=issue.root_cause,
         corrective_action=issue.corrective_action,
-        disposition_type=_get_enum_val(issue, "disposition_type") if issue.disposition_type else None,
+        disposition_type=_get_enum_val(issue, "disposition_type")
+        if issue.disposition_type
+        else None,
         disposition_notes=issue.disposition_notes,
         assigned_to_id=issue.assigned_to_id,
         disposition_approved_by_id=issue.disposition_approved_by_id,
@@ -228,12 +230,7 @@ async def list_issues(
 
     total = query.count()
 
-    issues = (
-        query.order_by(Issue.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+    issues = query.order_by(Issue.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
     return IssueListResponse(
         items=[_issue_to_response(i) for i in issues],
@@ -254,7 +251,9 @@ async def create_issue(
     try:
         issue_type = IssueType(data.issue_type)
     except ValueError as err:
-        raise HTTPException(status_code=400, detail=f"Invalid issue type: {data.issue_type}") from err
+        raise HTTPException(
+            status_code=400, detail=f"Invalid issue type: {data.issue_type}"
+        ) from err
 
     try:
         priority = IssuePriority(data.priority)
@@ -295,11 +294,7 @@ async def get_issue(
     db: DbSession,
 ) -> IssueResponse:
     """Get issue by ID."""
-    issue = (
-        db.query(Issue)
-        .filter(Issue.id == issue_id, Issue.deleted_at.is_(None))
-        .first()
-    )
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
@@ -314,11 +309,7 @@ async def update_issue(
     user_id: CurrentUserId,
 ) -> IssueResponse:
     """Update an issue."""
-    issue = (
-        db.query(Issue)
-        .filter(Issue.id == issue_id, Issue.deleted_at.is_(None))
-        .first()
-    )
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
@@ -332,7 +323,9 @@ async def update_issue(
         try:
             issue.issue_type = IssueType(data.issue_type)
         except ValueError as err:
-            raise HTTPException(status_code=400, detail=f"Invalid issue type: {data.issue_type}") from err
+            raise HTTPException(
+                status_code=400, detail=f"Invalid issue type: {data.issue_type}"
+            ) from err
     if data.status is not None:
         try:
             new_status = IssueStatus(data.status)
@@ -353,7 +346,9 @@ async def update_issue(
         try:
             issue.priority = IssuePriority(data.priority)
         except ValueError as err:
-            raise HTTPException(status_code=400, detail=f"Invalid priority: {data.priority}") from err
+            raise HTTPException(
+                status_code=400, detail=f"Invalid priority: {data.priority}"
+            ) from err
     if data.should_be is not None:
         issue.should_be = data.should_be
     if data.is_condition is not None:
@@ -414,11 +409,7 @@ async def delete_issue(
     user_id: CurrentUserId,
 ) -> None:
     """Soft delete an issue."""
-    issue = (
-        db.query(Issue)
-        .filter(Issue.id == issue_id, Issue.deleted_at.is_(None))
-        .first()
-    )
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
@@ -438,11 +429,7 @@ async def create_issue_comment(
     user_id: CurrentUserId,
 ) -> IssueCommentResponse:
     """Add a comment to an issue."""
-    issue = (
-        db.query(Issue)
-        .filter(Issue.id == issue_id, Issue.deleted_at.is_(None))
-        .first()
-    )
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
@@ -466,11 +453,7 @@ async def list_issue_comments(
     db: DbSession,
 ) -> list[IssueCommentResponse]:
     """List comments for an issue."""
-    issue = (
-        db.query(Issue)
-        .filter(Issue.id == issue_id, Issue.deleted_at.is_(None))
-        .first()
-    )
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 

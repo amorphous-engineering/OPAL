@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core.audit import log_create, log_update, get_model_dict
+from opal.core.audit import get_model_dict, log_create, log_update
 from opal.db.models import Workcenter
 
 router = APIRouter(prefix="/workcenters", tags=["workcenters"])
@@ -74,9 +74,7 @@ def create_workcenter(
 ) -> WorkcenterResponse:
     """Create a new workcenter."""
     # Check for duplicate code
-    existing = db.query(Workcenter).filter(
-        func.lower(Workcenter.code) == data.code.lower()
-    ).first()
+    existing = db.query(Workcenter).filter(func.lower(Workcenter.code) == data.code.lower()).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Workcenter code '{data.code}' already exists")
 
@@ -127,10 +125,14 @@ def update_workcenter(
 
     # Check for duplicate code if changing
     if "code" in update_data and update_data["code"].upper() != workcenter.code:
-        existing = db.query(Workcenter).filter(
-            func.lower(Workcenter.code) == update_data["code"].lower(),
-            Workcenter.id != workcenter_id,
-        ).first()
+        existing = (
+            db.query(Workcenter)
+            .filter(
+                func.lower(Workcenter.code) == update_data["code"].lower(),
+                Workcenter.id != workcenter_id,
+            )
+            .first()
+        )
         if existing:
             raise HTTPException(
                 status_code=400,

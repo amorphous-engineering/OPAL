@@ -105,12 +105,14 @@ async def onshape_status() -> OnshapeStatusResponse:
     documents = []
     if project and project.onshape.documents:
         for doc in project.onshape.documents:
-            documents.append({
-                "name": doc.name,
-                "document_id": doc.document_id,
-                "element_id": doc.element_id,
-                "auto_sync": doc.auto_sync,
-            })
+            documents.append(
+                {
+                    "name": doc.name,
+                    "document_id": doc.document_id,
+                    "element_id": doc.element_id,
+                    "auto_sync": doc.auto_sync,
+                }
+            )
 
     return OnshapeStatusResponse(
         enabled=settings.onshape_enabled,
@@ -178,9 +180,7 @@ async def add_document(body: AddDocumentRequest) -> DocumentRefResponse:
         base_url=settings.onshape_base_url,
     )
     try:
-        elements = await asyncio.to_thread(
-            client.get_elements, document_id, workspace_id
-        )
+        elements = await asyncio.to_thread(client.get_elements, document_id, workspace_id)
     finally:
         client.close()
 

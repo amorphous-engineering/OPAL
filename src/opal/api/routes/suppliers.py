@@ -1,13 +1,13 @@
 """Supplier API routes."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core.audit import log_create, log_update, get_model_dict
+from opal.core.audit import get_model_dict, log_create, log_update
 from opal.db.models import Supplier
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
@@ -142,9 +142,7 @@ async def create_supplier(
     # Check for duplicate code
     if data.code:
         existing = db.execute(
-            select(Supplier).where(
-                Supplier.code == data.code, Supplier.deleted_at.is_(None)
-            )
+            select(Supplier).where(Supplier.code == data.code, Supplier.deleted_at.is_(None))
         ).scalar_one_or_none()
         if existing:
             raise HTTPException(
@@ -182,9 +180,7 @@ async def get_supplier(
 ):
     """Get a supplier by ID."""
     supplier = db.execute(
-        select(Supplier).where(
-            Supplier.id == supplier_id, Supplier.deleted_at.is_(None)
-        )
+        select(Supplier).where(Supplier.id == supplier_id, Supplier.deleted_at.is_(None))
     ).scalar_one_or_none()
 
     if not supplier:
@@ -217,9 +213,7 @@ async def update_supplier(
 ):
     """Update a supplier."""
     supplier = db.execute(
-        select(Supplier).where(
-            Supplier.id == supplier_id, Supplier.deleted_at.is_(None)
-        )
+        select(Supplier).where(Supplier.id == supplier_id, Supplier.deleted_at.is_(None))
     ).scalar_one_or_none()
 
     if not supplier:
@@ -277,9 +271,7 @@ async def delete_supplier(
 ):
     """Soft-delete a supplier."""
     supplier = db.execute(
-        select(Supplier).where(
-            Supplier.id == supplier_id, Supplier.deleted_at.is_(None)
-        )
+        select(Supplier).where(Supplier.id == supplier_id, Supplier.deleted_at.is_(None))
     ).scalar_one_or_none()
 
     if not supplier:
@@ -296,7 +288,7 @@ async def delete_supplier(
         )
 
     old_data = get_model_dict(supplier)
-    supplier.deleted_at = datetime.now(timezone.utc)
+    supplier.deleted_at = datetime.now(UTC)
     db.flush()
     log_update(db, supplier, old_data, user_id)
     db.commit()

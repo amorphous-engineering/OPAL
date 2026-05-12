@@ -77,7 +77,9 @@ def _build_hierarchy(flat_rows: list[dict]) -> list[dict]:
 
 
 def resolve_header_value(
-    raw: dict, header_map: dict[str, str], prop_name: str,
+    raw: dict,
+    header_map: dict[str, str],
+    prop_name: str,
 ) -> str:
     """Extract a property value from headerIdToValue using the header map.
 
@@ -121,15 +123,11 @@ def parse_bom_item(
     )
     # part_id: itemSource.partId → itemSource.elementId (sub-assemblies) → raw.partId
     part_id = (
-        item_source.get("partId", "")
-        or item_source.get("elementId", "")
-        or raw.get("partId", "")
+        item_source.get("partId", "") or item_source.get("elementId", "") or raw.get("partId", "")
     )
     # name: header-based → direct field → capitalized variant
     part_name = (
-        resolve_header_value(raw, header_map, "name")
-        or raw.get("name", "")
-        or raw.get("Name", "")
+        resolve_header_value(raw, header_map, "name") or raw.get("name", "") or raw.get("Name", "")
     )
     # part_number: header-based (try both "partnumber" and "part number") → direct field variants
     part_number = (
@@ -139,10 +137,7 @@ def parse_bom_item(
         or raw.get("Part Number")
     ) or None
     # quantity: header-based → direct field, then parse string/float
-    raw_qty = (
-        resolve_header_value(raw, header_map, "quantity")
-        or raw.get("quantity", 1)
-    )
+    raw_qty = resolve_header_value(raw, header_map, "quantity") or raw.get("quantity", 1)
     try:
         quantity = int(raw_qty)
     except (ValueError, TypeError):
@@ -151,39 +146,52 @@ def parse_bom_item(
         except (ValueError, TypeError):
             logger.warning(
                 "Unparseable quantity %r for part %r, defaulting to 1",
-                raw_qty, part_name,
+                raw_qty,
+                part_name,
             )
             quantity = 1
     # description: header-based → direct field
     description = (
-        resolve_header_value(raw, header_map, "description")
-        or raw.get("description", "")
+        resolve_header_value(raw, header_map, "description") or raw.get("description", "")
     ) or None
 
     # Diagnostic warnings
     if not part_id:
-        warnings.append(BOMParseWarning(
-            item_index=item_index, field="part_id",
-            message="Empty part_id — item will be skipped during sync",
-        ))
+        warnings.append(
+            BOMParseWarning(
+                item_index=item_index,
+                field="part_id",
+                message="Empty part_id — item will be skipped during sync",
+            )
+        )
     if not part_name and not is_std:
-        warnings.append(BOMParseWarning(
-            item_index=item_index, field="part_name",
-            message=f"Empty part_name for non-standard-content item (part_id={part_id!r})",
-            raw_value=raw.get("headerIdToValue", {}),
-        ))
+        warnings.append(
+            BOMParseWarning(
+                item_index=item_index,
+                field="part_name",
+                message=f"Empty part_name for non-standard-content item (part_id={part_id!r})",
+                raw_value=raw.get("headerIdToValue", {}),
+            )
+        )
         logger.warning(
-            "BOM item[%d] has empty name. raw keys=%r, headerIdToValue=%r, "
-            "direct name=%r, Name=%r",
-            item_index, sorted(raw.keys()),
+            "BOM item[%d] has empty name. raw keys=%r, headerIdToValue=%r, direct name=%r, Name=%r",
+            item_index,
+            sorted(raw.keys()),
             raw.get("headerIdToValue"),
-            raw.get("name"), raw.get("Name"),
+            raw.get("name"),
+            raw.get("Name"),
         )
 
     source = "header" if raw.get("headerIdToValue") else "direct"
     logger.debug(
         "BOM item[%d] depth=%d: part_id=%r name=%r pn=%r qty=%d source=%s",
-        item_index, depth, part_id, part_name, part_number, quantity, source,
+        item_index,
+        depth,
+        part_id,
+        part_name,
+        part_number,
+        quantity,
+        source,
     )
 
     return OnshapeBOMItem(
@@ -265,9 +273,7 @@ class OnshapeClient:
 
         # Build the signature string — Onshape requires the entire string
         # to be lowercased before HMAC computation
-        raw_str = (
-            "\n".join([method, nonce, date, content_type, path, query]) + "\n"
-        ).lower()
+        raw_str = ("\n".join([method, nonce, date, content_type, path, query]) + "\n").lower()
 
         # HMAC-SHA256 signature
         signature = base64.b64encode(
@@ -325,28 +331,33 @@ class OnshapeClient:
                 )
             except (httpx.TimeoutException, httpx.ConnectError) as e:
                 last_error = e
-                wait = 2 ** attempt
+                wait = 2**attempt
                 logger.warning(
                     "Onshape request failed (attempt %d/%d): %s — retrying in %ds",
-                    attempt + 1, _retries, e, wait,
+                    attempt + 1,
+                    _retries,
+                    e,
+                    wait,
                 )
                 time.sleep(wait)
                 continue
 
             if response.status_code == 429:
                 # Rate limited — use Retry-After header or exponential backoff
-                retry_after = int(response.headers.get("Retry-After", 2 ** attempt))
+                retry_after = int(response.headers.get("Retry-After", 2**attempt))
                 logger.warning(
-                    "Onshape rate limited (429), retrying in %ds", retry_after,
+                    "Onshape rate limited (429), retrying in %ds",
+                    retry_after,
                 )
                 time.sleep(retry_after)
                 continue
 
             if response.status_code >= 500 and attempt < _retries - 1:
-                wait = 2 ** attempt
+                wait = 2**attempt
                 logger.warning(
                     "Onshape server error %d, retrying in %ds",
-                    response.status_code, wait,
+                    response.status_code,
+                    wait,
                 )
                 time.sleep(wait)
                 continue
@@ -406,23 +417,25 @@ class OnshapeClient:
         element_id: str,
     ) -> list[OnshapePart]:
         """Get all parts in a part studio element."""
-        path = (
-            f"/api/v6/parts/d/{document_id}/w/{workspace_id}/e/{element_id}"
-        )
+        path = f"/api/v6/parts/d/{document_id}/w/{workspace_id}/e/{element_id}"
         data = self._request("GET", path)
 
         parts = []
         for item in data:
-            parts.append(OnshapePart(
-                part_id=item.get("partId", ""),
-                name=item.get("name", ""),
-                part_number=item.get("partNumber"),
-                description=item.get("description"),
-                revision=item.get("revision"),
-                material=item.get("material", {}).get("displayName") if item.get("material") else None,
-                state=item.get("state"),
-                appearance=item.get("appearance"),
-            ))
+            parts.append(
+                OnshapePart(
+                    part_id=item.get("partId", ""),
+                    name=item.get("name", ""),
+                    part_number=item.get("partNumber"),
+                    description=item.get("description"),
+                    revision=item.get("revision"),
+                    material=item.get("material", {}).get("displayName")
+                    if item.get("material")
+                    else None,
+                    state=item.get("state"),
+                    appearance=item.get("appearance"),
+                )
+            )
         return parts
 
     def get_bom(
@@ -440,9 +453,7 @@ class OnshapeClient:
             element_id: Assembly element ID.
             indented: If True, return indented (hierarchical) BOM.
         """
-        path = (
-            f"/api/v6/assemblies/d/{document_id}/w/{workspace_id}/e/{element_id}/bom"
-        )
+        path = f"/api/v6/assemblies/d/{document_id}/w/{workspace_id}/e/{element_id}/bom"
         params = {
             "indented": str(indented).lower(),
             "multiLevel": str(indented).lower(),
@@ -469,14 +480,17 @@ class OnshapeClient:
             header_map[hdr["id"]] = prop.lower()
 
         if header_map:
-            logger.info("BOM header map (%d entries): %r", len(header_map),
-                        {k: v for k, v in header_map.items()
-                         if v in ("name", "quantity", "partnumber", "part number",
-                                  "description", "item")})
-        else:
-            logger.warning(
-                "No BOM headers found — will fall back to direct field access"
+            logger.info(
+                "BOM header map (%d entries): %r",
+                len(header_map),
+                {
+                    k: v
+                    for k, v in header_map.items()
+                    if v in ("name", "quantity", "partnumber", "part number", "description", "item")
+                },
             )
+        else:
+            logger.warning("No BOM headers found — will fall back to direct field access")
 
         # Resilient item extraction — try multiple response structures
         if isinstance(bom_table, dict):
@@ -525,19 +539,18 @@ class OnshapeClient:
         part_id: str,
     ) -> list[OnshapeMetadataProperty]:
         """Get metadata properties for a specific part."""
-        path = (
-            f"/api/v6/metadata/d/{document_id}/w/{workspace_id}"
-            f"/e/{element_id}/p/{part_id}"
-        )
+        path = f"/api/v6/metadata/d/{document_id}/w/{workspace_id}/e/{element_id}/p/{part_id}"
         data = self._request("GET", path)
 
         properties = []
         for prop in data.get("properties", []):
-            properties.append(OnshapeMetadataProperty(
-                name=prop.get("name", ""),
-                value=str(prop.get("value", "")) if prop.get("value") is not None else None,
-                property_id=prop.get("propertyId"),
-            ))
+            properties.append(
+                OnshapeMetadataProperty(
+                    name=prop.get("name", ""),
+                    value=str(prop.get("value", "")) if prop.get("value") is not None else None,
+                    property_id=prop.get("propertyId"),
+                )
+            )
         return properties
 
     def set_metadata(
@@ -557,10 +570,7 @@ class OnshapeClient:
             part_id: Part ID within the element.
             properties: List of {"propertyId": ..., "value": ...} dicts.
         """
-        path = (
-            f"/api/v6/metadata/d/{document_id}/w/{workspace_id}"
-            f"/e/{element_id}/p/{part_id}"
-        )
+        path = f"/api/v6/metadata/d/{document_id}/w/{workspace_id}/e/{element_id}/p/{part_id}"
         body = {"properties": properties}
         return self._request("POST", path, json_body=body)
 

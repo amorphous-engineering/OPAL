@@ -145,9 +145,7 @@ class WorkcentersScreen(Screen):
         if not detail.wc_data:
             self.notify("Select a workcenter first", severity="warning")
             return
-        self.app.push_screen(
-            WorkcenterFormModal(wc=detail.wc_data), callback=self._on_edited
-        )
+        self.app.push_screen(WorkcenterFormModal(wc=detail.wc_data), callback=self._on_edited)
 
     def _on_edited(self, data: dict[str, Any] | None) -> None:
         if data is None:

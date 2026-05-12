@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from opal.db.models.designator import DesignatorSequence
 
-
 # Designator type constants
 OPAL = "OPAL"
 WORK_ORDER = "WO"
@@ -39,9 +38,12 @@ def generate_designator(db: Session, designator_type: str, digits: int = 5) -> s
         The next designator string (e.g., "OPAL-00001", "WO-00042")
     """
     # Get or create the sequence record
-    seq = db.query(DesignatorSequence).filter(
-        DesignatorSequence.designator_type == designator_type
-    ).with_for_update().first()
+    seq = (
+        db.query(DesignatorSequence)
+        .filter(DesignatorSequence.designator_type == designator_type)
+        .with_for_update()
+        .first()
+    )
 
     if seq is None:
         # First time using this designator type - create sequence
@@ -136,9 +138,12 @@ def generate_serial_number(db: Session, part) -> str:
     """
     part_key = part.internal_pn or str(part.id)
     seq_key = f"SN-{part_key}"
-    seq = db.query(DesignatorSequence).filter(
-        DesignatorSequence.designator_type == seq_key
-    ).with_for_update().first()
+    seq = (
+        db.query(DesignatorSequence)
+        .filter(DesignatorSequence.designator_type == seq_key)
+        .with_for_update()
+        .first()
+    )
     if seq is None:
         seq = DesignatorSequence(designator_type=seq_key, last_value=0)
         db.add(seq)

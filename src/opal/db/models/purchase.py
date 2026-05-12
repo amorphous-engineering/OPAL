@@ -26,15 +26,20 @@ class Purchase(Base, IdMixin, TimestampMixin):
 
     # Reference number (e.g., PO-0001)
     reference: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, unique=True, index=True,
-        comment="Unique PO reference like PO-0001"
+        String(64),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="Unique PO reference like PO-0001",
     )
 
     # Supplier - keep legacy string field for backwards compatibility, add FK
     supplier: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     supplier_id: Mapped[int | None] = mapped_column(
-        ForeignKey("supplier.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Link to Supplier entity (preferred)"
+        ForeignKey("supplier.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Link to Supplier entity (preferred)",
     )
     supplier_reference: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="Supplier's order reference code"
@@ -69,9 +74,7 @@ class Purchase(Base, IdMixin, TimestampMixin):
     lines: Mapped[list["PurchaseLine"]] = relationship(
         "PurchaseLine", back_populates="purchase", cascade="all, delete-orphan"
     )
-    supplier_rel: Mapped["Supplier | None"] = relationship(
-        "Supplier", back_populates="purchases"
-    )
+    supplier_rel: Mapped["Supplier | None"] = relationship("Supplier", back_populates="purchases")
     created_by: Mapped["User | None"] = relationship(
         "User", foreign_keys=[created_by_id], back_populates="purchases_created"
     )
@@ -101,15 +104,11 @@ class PurchaseLine(Base, IdMixin, TimestampMixin):
     part_id: Mapped[int] = mapped_column(
         ForeignKey("part.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    qty_ordered: Mapped[Decimal] = mapped_column(
-        Numeric(precision=15, scale=4), nullable=False
-    )
+    qty_ordered: Mapped[Decimal] = mapped_column(Numeric(precision=15, scale=4), nullable=False)
     qty_received: Mapped[Decimal] = mapped_column(
         Numeric(precision=15, scale=4), nullable=False, default=0
     )
-    unit_cost: Mapped[Decimal | None] = mapped_column(
-        Numeric(precision=15, scale=4), nullable=True
-    )
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(precision=15, scale=4), nullable=True)
     destination: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="Override location for this line"
     )

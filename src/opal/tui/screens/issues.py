@@ -67,9 +67,7 @@ class IssueFormModal(FormModal):
             ]
             yield FormGroup(
                 "Status",
-                Select(
-                    status_options, id="field-status", value=self.issue.get("status", "open")
-                ),
+                Select(status_options, id="field-status", value=self.issue.get("status", "open")),
             )
 
         yield FormGroup(
@@ -79,9 +77,7 @@ class IssueFormModal(FormModal):
 
         # Link fields
         part_id = (
-            str(self.issue.get("part_id", ""))
-            if self.issue and self.issue.get("part_id")
-            else ""
+            str(self.issue.get("part_id", "")) if self.issue and self.issue.get("part_id") else ""
         )
         yield FormGroup(
             "Linked Part ID",
@@ -214,15 +210,11 @@ class IssueDetail(Static):
         content.mount(Label(f"Status: {status}", classes=f"detail-row status-{status}"))
 
         priority = issue.get("priority", "-")
-        content.mount(
-            Label(f"Priority: {priority}", classes=f"detail-row priority-{priority}")
-        )
+        content.mount(Label(f"Priority: {priority}", classes=f"detail-row priority-{priority}"))
 
         # Disposition info
         if issue.get("disposition_type"):
-            content.mount(
-                Label(f"Disposition: {issue['disposition_type']}", classes="detail-row")
-            )
+            content.mount(Label(f"Disposition: {issue['disposition_type']}", classes="detail-row"))
         if issue.get("root_cause"):
             content.mount(Label("Root Cause:", classes="detail-label"))
             content.mount(Label(issue["root_cause"][:200], classes="detail-text"))
@@ -238,9 +230,7 @@ class IssueDetail(Static):
 
         # Links
         if issue.get("part_id"):
-            content.mount(
-                Label(f"Linked Part: #{issue['part_id']}", classes="detail-row")
-            )
+            content.mount(Label(f"Linked Part: #{issue['part_id']}", classes="detail-row"))
         if issue.get("procedure_id"):
             content.mount(
                 Label(f"Linked Procedure: #{issue['procedure_id']}", classes="detail-row")
@@ -425,18 +415,14 @@ class IssuesScreen(Screen):
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
-    async def load_issues(
-        self, status: str | None = None, issue_type: str | None = None
-    ) -> None:
+    async def load_issues(self, status: str | None = None, issue_type: str | None = None) -> None:
         """Load issues from API."""
         client = get_client(self.app.api_url)
         table = self.query_one("#issues-table", DataTable)
         detail = self.query_one("#issue-detail", IssueDetail)
 
         try:
-            result = client.list_issues(
-                status=status, issue_type=issue_type, page_size=100
-            )
+            result = client.list_issues(status=status, issue_type=issue_type, page_size=100)
             issues = result.get("items", [])
 
             table.clear()

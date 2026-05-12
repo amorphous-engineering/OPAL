@@ -1,7 +1,7 @@
 """SQLAlchemy database setup."""
 
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import JSON, DateTime, Integer, create_engine, event
@@ -42,13 +42,13 @@ class TimestampMixin:
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -69,7 +69,7 @@ class SoftDeleteMixin:
 
     def soft_delete(self) -> None:
         """Mark record as deleted."""
-        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_at = datetime.now(UTC)
 
     def restore(self) -> None:
         """Restore a soft-deleted record."""
@@ -99,6 +99,7 @@ def get_engine():
     global _engine
     if _engine is None:
         from opal.config import get_active_settings
+
         settings = get_active_settings()
         _engine = create_engine(
             settings.database_url,

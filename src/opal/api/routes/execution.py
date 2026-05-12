@@ -1,14 +1,19 @@
 """Execution API routes - procedure instances and step execution."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core.audit import log_create, log_update, get_model_dict
-from opal.core.designators import generate_issue_number, generate_opal_number, generate_serial_number, generate_work_order_number
+from opal.core.audit import get_model_dict, log_create, log_update
+from opal.core.designators import (
+    generate_issue_number,
+    generate_opal_number,
+    generate_serial_number,
+    generate_work_order_number,
+)
 from opal.core.events import (
     emit_instance_completed,
     emit_instance_started,
@@ -179,7 +184,7 @@ async def list_instances(
                 version_id=inst.version_id,
                 version_number=version.version_number if version else 0,
                 work_order_number=inst.work_order_number,
-                status=inst.status.value if hasattr(inst.status, 'value') else inst.status,
+                status=inst.status.value if hasattr(inst.status, "value") else inst.status,
                 started_at=inst.started_at,
                 completed_at=inst.completed_at,
                 started_by_id=inst.started_by_id,
@@ -195,7 +200,7 @@ async def list_instances(
                         step_number_str=se.step_number_str,
                         level=se.level,
                         parent_step_order=se.parent_step_order,
-                        status=se.status.value if hasattr(se.status, 'value') else se.status,
+                        status=se.status.value if hasattr(se.status, "value") else se.status,
                         data_captured=se.data_captured,
                         started_at=se.started_at,
                         completed_at=se.completed_at,
@@ -243,9 +248,11 @@ async def create_instance(
         # Use current version
         if not procedure.current_version_id:
             raise HTTPException(status_code=400, detail="Procedure has no published version")
-        version = db.query(ProcedureVersion).filter(
-            ProcedureVersion.id == procedure.current_version_id
-        ).first()
+        version = (
+            db.query(ProcedureVersion)
+            .filter(ProcedureVersion.id == procedure.current_version_id)
+            .first()
+        )
 
     # Generate work order number if not provided
     work_order_number = data.work_order_number or generate_work_order_number(db)
@@ -291,12 +298,14 @@ async def create_instance(
 
     # Auto-allocate output assemblies for BUILD procedures
     proc_type = procedure.procedure_type
-    if hasattr(proc_type, 'value'):
+    if hasattr(proc_type, "value"):
         proc_type = proc_type.value
     if proc_type == ProcedureType.BUILD.value:
-        outputs = db.query(ProcedureOutput).filter(
-            ProcedureOutput.procedure_id == data.procedure_id
-        ).all()
+        outputs = (
+            db.query(ProcedureOutput)
+            .filter(ProcedureOutput.procedure_id == data.procedure_id)
+            .all()
+        )
         for output in outputs:
             output_part = db.query(Part).filter(Part.id == output.part_id).first()
             if not output_part:
@@ -344,7 +353,7 @@ async def create_instance(
         version_id=instance.version_id,
         version_number=version.version_number,
         work_order_number=instance.work_order_number,
-        status=instance.status.value if hasattr(instance.status, 'value') else instance.status,
+        status=instance.status.value if hasattr(instance.status, "value") else instance.status,
         started_at=instance.started_at,
         completed_at=instance.completed_at,
         started_by_id=instance.started_by_id,
@@ -360,7 +369,7 @@ async def create_instance(
                 step_number_str=se.step_number_str,
                 level=se.level,
                 parent_step_order=se.parent_step_order,
-                status=se.status.value if hasattr(se.status, 'value') else se.status,
+                status=se.status.value if hasattr(se.status, "value") else se.status,
                 data_captured=se.data_captured,
                 started_at=se.started_at,
                 completed_at=se.completed_at,
@@ -393,7 +402,7 @@ async def get_instance(
         version_id=instance.version_id,
         version_number=version.version_number if version else 0,
         work_order_number=instance.work_order_number,
-        status=instance.status.value if hasattr(instance.status, 'value') else instance.status,
+        status=instance.status.value if hasattr(instance.status, "value") else instance.status,
         started_at=instance.started_at,
         completed_at=instance.completed_at,
         started_by_id=instance.started_by_id,
@@ -409,7 +418,7 @@ async def get_instance(
                 step_number_str=se.step_number_str,
                 level=se.level,
                 parent_step_order=se.parent_step_order,
-                status=se.status.value if hasattr(se.status, 'value') else se.status,
+                status=se.status.value if hasattr(se.status, "value") else se.status,
                 data_captured=se.data_captured,
                 started_at=se.started_at,
                 completed_at=se.completed_at,
@@ -444,11 +453,11 @@ async def update_instance(
 
             # Set timestamps based on status
             if new_status == InstanceStatus.IN_PROGRESS and not instance.started_at:
-                instance.started_at = datetime.now(timezone.utc)
+                instance.started_at = datetime.now(UTC)
             elif new_status in [InstanceStatus.COMPLETED, InstanceStatus.ABORTED]:
-                instance.completed_at = datetime.now(timezone.utc)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}")
+                instance.completed_at = datetime.now(UTC)
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
 
     if data.work_order_number is not None:
         instance.work_order_number = data.work_order_number
@@ -474,7 +483,7 @@ async def update_instance(
         version_id=instance.version_id,
         version_number=version.version_number if version else 0,
         work_order_number=instance.work_order_number,
-        status=instance.status.value if hasattr(instance.status, 'value') else instance.status,
+        status=instance.status.value if hasattr(instance.status, "value") else instance.status,
         started_at=instance.started_at,
         completed_at=instance.completed_at,
         started_by_id=instance.started_by_id,
@@ -490,7 +499,7 @@ async def update_instance(
                 step_number_str=se.step_number_str,
                 level=se.level,
                 parent_step_order=se.parent_step_order,
-                status=se.status.value if hasattr(se.status, 'value') else se.status,
+                status=se.status.value if hasattr(se.status, "value") else se.status,
                 data_captured=se.data_captured,
                 started_at=se.started_at,
                 completed_at=se.completed_at,
@@ -520,14 +529,14 @@ async def start_step(
         raise HTTPException(status_code=404, detail="Instance not found")
 
     # Check instance is in progress
-    status_val = instance.status.value if hasattr(instance.status, 'value') else instance.status
+    status_val = instance.status.value if hasattr(instance.status, "value") else instance.status
     if status_val not in [InstanceStatus.PENDING.value, InstanceStatus.IN_PROGRESS.value]:
         raise HTTPException(status_code=400, detail="Instance is not active")
 
     # Start instance if pending
     if status_val == InstanceStatus.PENDING.value:
         instance.status = InstanceStatus.IN_PROGRESS
-        instance.started_at = datetime.now(timezone.utc)
+        instance.started_at = datetime.now(UTC)
 
         # Transition planned production records to WIP
         db.query(InventoryProduction).filter(
@@ -543,15 +552,16 @@ async def start_step(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_status = step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status
+    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
     if step_status != StepStatus.PENDING.value:
         raise HTTPException(status_code=400, detail="Step already started or completed")
 
     step_exec.status = StepStatus.IN_PROGRESS
-    step_exec.started_at = datetime.now(timezone.utc)
+    step_exec.started_at = datetime.now(UTC)
 
     # Get user name for event
     from opal.db.models import User
+
     user = db.query(User).filter(User.id == user_id).first()
     user_name = user.name if user else None
 
@@ -570,7 +580,7 @@ async def start_step(
         step_number_str=step_exec.step_number_str,
         level=step_exec.level,
         parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status,
+        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
         data_captured=step_exec.data_captured,
         started_at=step_exec.started_at,
         completed_at=step_exec.completed_at,
@@ -603,7 +613,7 @@ async def complete_step(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_status = step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status
+    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
     if step_status in [StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value]:
         raise HTTPException(status_code=400, detail="Step already completed")
 
@@ -617,7 +627,7 @@ async def complete_step(
 
     # If step wasn't started, start it now
     if step_status == StepStatus.PENDING.value:
-        step_exec.started_at = datetime.now(timezone.utc)
+        step_exec.started_at = datetime.now(UTC)
 
     # Server-side data capture validation
     version = db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
@@ -651,7 +661,7 @@ async def complete_step(
             raise HTTPException(status_code=422, detail=errors)
 
     step_exec.status = StepStatus.COMPLETED
-    step_exec.completed_at = datetime.now(timezone.utc)
+    step_exec.completed_at = datetime.now(UTC)
     step_exec.completed_by_id = user_id
     if data.data_captured:
         step_exec.data_captured = data.data_captured
@@ -660,11 +670,14 @@ async def complete_step(
 
     # Get user name for event
     from opal.db.models import User
+
     user = db.query(User).filter(User.id == user_id).first()
     user_name = user.name if user else None
 
     # Track old status to detect completion
-    old_instance_status = instance.status.value if hasattr(instance.status, 'value') else instance.status
+    old_instance_status = (
+        instance.status.value if hasattr(instance.status, "value") else instance.status
+    )
 
     # Check if procedure is complete (considering contingency rules)
     _check_instance_completion(instance, db)
@@ -677,8 +690,13 @@ async def complete_step(
     await emit_step_completed(instance_id, step_number, user_id, user_name)
 
     # Check if instance just completed
-    new_instance_status = instance.status.value if hasattr(instance.status, 'value') else instance.status
-    if old_instance_status != InstanceStatus.COMPLETED.value and new_instance_status == InstanceStatus.COMPLETED.value:
+    new_instance_status = (
+        instance.status.value if hasattr(instance.status, "value") else instance.status
+    )
+    if (
+        old_instance_status != InstanceStatus.COMPLETED.value
+        and new_instance_status == InstanceStatus.COMPLETED.value
+    ):
         await emit_instance_completed(instance_id, instance.procedure_id, new_instance_status)
 
     return StepExecutionResponse(
@@ -687,7 +705,7 @@ async def complete_step(
         step_number_str=step_exec.step_number_str,
         level=step_exec.level,
         parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status,
+        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
         data_captured=step_exec.data_captured,
         started_at=step_exec.started_at,
         completed_at=step_exec.completed_at,
@@ -736,7 +754,7 @@ async def update_step_notes(
         step_number_str=step_exec.step_number_str,
         level=step_exec.level,
         parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status,
+        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
         data_captured=step_exec.data_captured,
         started_at=step_exec.started_at,
         completed_at=step_exec.completed_at,
@@ -775,12 +793,12 @@ async def skip_step(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_status = step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status
+    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
     if step_status == StepStatus.COMPLETED.value:
         raise HTTPException(status_code=400, detail="Cannot skip completed step")
 
     step_exec.status = StepStatus.SKIPPED
-    step_exec.completed_at = datetime.now(timezone.utc)
+    step_exec.completed_at = datetime.now(UTC)
     step_exec.completed_by_id = user_id
     if data.reason:
         step_exec.data_captured = {"skip_reason": data.reason}
@@ -797,7 +815,7 @@ async def skip_step(
         step_number_str=step_exec.step_number_str,
         level=step_exec.level,
         parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status,
+        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
         data_captured=step_exec.data_captured,
         started_at=step_exec.started_at,
         completed_at=step_exec.completed_at,
@@ -834,23 +852,29 @@ async def signoff_step(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_status = step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status
+    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
 
     # Can only sign off steps that are awaiting sign-off
     if step_status != StepStatus.AWAITING_SIGNOFF.value:
         if step_status == StepStatus.SIGNED_OFF.value:
             raise HTTPException(status_code=400, detail="Step already signed off")
         elif step_status in [StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value]:
-            raise HTTPException(status_code=400, detail="Step has sub-steps that are not yet complete")
+            raise HTTPException(
+                status_code=400, detail="Step has sub-steps that are not yet complete"
+            )
         else:
-            raise HTTPException(status_code=400, detail=f"Cannot sign off step in {step_status} status")
+            raise HTTPException(
+                status_code=400, detail=f"Cannot sign off step in {step_status} status"
+            )
 
     step_exec.status = StepStatus.SIGNED_OFF
-    step_exec.signed_off_at = datetime.now(timezone.utc)
+    step_exec.signed_off_at = datetime.now(UTC)
     step_exec.signed_off_by_id = user_id
 
     # Track old status to detect completion
-    old_instance_status = instance.status.value if hasattr(instance.status, 'value') else instance.status
+    old_instance_status = (
+        instance.status.value if hasattr(instance.status, "value") else instance.status
+    )
 
     # Check if procedure is complete
     _check_instance_completion(instance, db)
@@ -860,8 +884,13 @@ async def signoff_step(
     db.refresh(instance)
 
     # Check if instance just completed
-    new_instance_status = instance.status.value if hasattr(instance.status, 'value') else instance.status
-    if old_instance_status != InstanceStatus.COMPLETED.value and new_instance_status == InstanceStatus.COMPLETED.value:
+    new_instance_status = (
+        instance.status.value if hasattr(instance.status, "value") else instance.status
+    )
+    if (
+        old_instance_status != InstanceStatus.COMPLETED.value
+        and new_instance_status == InstanceStatus.COMPLETED.value
+    ):
         await emit_instance_completed(instance_id, instance.procedure_id, new_instance_status)
 
     return StepExecutionResponse(
@@ -870,7 +899,7 @@ async def signoff_step(
         step_number_str=step_exec.step_number_str,
         level=step_exec.level,
         parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status,
+        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
         data_captured=step_exec.data_captured,
         started_at=step_exec.started_at,
         completed_at=step_exec.completed_at,
@@ -897,7 +926,6 @@ def _check_instance_completion(instance: ProcedureInstance, db: DbSession) -> No
 
     version_steps = {s["order"]: s for s in version.content.get("steps", [])}
     all_steps = db.query(StepExecution).filter(StepExecution.instance_id == instance.id).all()
-    step_by_number = {s.step_number: s for s in all_steps}
 
     # First pass: check if any parent steps should auto-complete when all children are done
     for step_exec in all_steps:
@@ -906,21 +934,26 @@ def _check_instance_completion(instance: ProcedureInstance, db: DbSession) -> No
             children = [s for s in all_steps if s.parent_step_order == step_exec.step_number]
 
             if children:  # Has sub-steps
-                step_status = step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status
+                step_status = (
+                    step_exec.status.value
+                    if hasattr(step_exec.status, "value")
+                    else step_exec.status
+                )
 
                 # If parent is still PENDING or IN_PROGRESS, check if all children are done
                 if step_status in [StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value]:
                     all_children_done = all(
-                        (c.status.value if hasattr(c.status, 'value') else c.status)
+                        (c.status.value if hasattr(c.status, "value") else c.status)
                         in [StepStatus.COMPLETED.value, StepStatus.SKIPPED.value]
                         for c in children
                     )
                     if all_children_done:
                         step_exec.status = StepStatus.COMPLETED
-                        step_exec.completed_at = datetime.now(timezone.utc)
+                        step_exec.completed_at = datetime.now(UTC)
+
                         # Use the last child's completer
                         def _to_aware(dt: datetime) -> datetime:
-                            return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+                            return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
 
                         last_child = max(
                             (c for c in children if c.completed_at),
@@ -934,11 +967,15 @@ def _check_instance_completion(instance: ProcedureInstance, db: DbSession) -> No
     for step_exec in all_steps:
         step_data = version_steps.get(step_exec.step_number, {})
         is_contingency = step_data.get("is_contingency", False)
-        step_status = step_exec.status.value if hasattr(step_exec.status, 'value') else step_exec.status
+        step_status = (
+            step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
+        )
 
         # All step types accept COMPLETED, SIGNED_OFF, or SKIPPED as done
         done_statuses = [
-            StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value, StepStatus.SKIPPED.value
+            StepStatus.COMPLETED.value,
+            StepStatus.SIGNED_OFF.value,
+            StepStatus.SKIPPED.value,
         ]
 
         # Non-contingency steps must be done
@@ -951,7 +988,7 @@ def _check_instance_completion(instance: ProcedureInstance, db: DbSession) -> No
 
     # All required steps are done
     instance.status = InstanceStatus.COMPLETED
-    instance.completed_at = datetime.now(timezone.utc)
+    instance.completed_at = datetime.now(UTC)
 
 
 @router.post("/{instance_id}/steps/{step_number}/nc", status_code=201)
@@ -1002,9 +1039,11 @@ async def log_non_conformance(
     return {
         "id": issue.id,
         "title": issue.title,
-        "issue_type": issue.issue_type.value if hasattr(issue.issue_type, 'value') else issue.issue_type,
-        "status": issue.status.value if hasattr(issue.status, 'value') else issue.status,
-        "priority": issue.priority.value if hasattr(issue.priority, 'value') else issue.priority,
+        "issue_type": issue.issue_type.value
+        if hasattr(issue.issue_type, "value")
+        else issue.issue_type,
+        "status": issue.status.value if hasattr(issue.status, "value") else issue.status,
+        "priority": issue.priority.value if hasattr(issue.priority, "value") else issue.priority,
         "procedure_instance_id": instance_id,
         "step_number": step_number,
     }
@@ -1153,7 +1192,9 @@ async def consume_kit(
     consumptions = []
 
     for item in data.items:
-        inv_record = db.query(InventoryRecord).filter(InventoryRecord.id == item.inventory_record_id).first()
+        inv_record = (
+            db.query(InventoryRecord).filter(InventoryRecord.id == item.inventory_record_id).first()
+        )
         if not inv_record:
             raise HTTPException(
                 status_code=404,
@@ -1242,7 +1283,9 @@ async def consume_step_parts(
     consumptions = []
 
     for item in data.items:
-        inv_record = db.query(InventoryRecord).filter(InventoryRecord.id == item.inventory_record_id).first()
+        inv_record = (
+            db.query(InventoryRecord).filter(InventoryRecord.id == item.inventory_record_id).first()
+        )
         if not inv_record:
             raise HTTPException(
                 status_code=404,
@@ -1252,8 +1295,10 @@ async def consume_step_parts(
         # Validate usage type
         try:
             usage = UsageType(item.usage_type)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid usage type: {item.usage_type}")
+        except ValueError as err:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid usage type: {item.usage_type}"
+            ) from err
 
         # Only deduct from inventory if consume type (not tooling)
         if usage == UsageType.CONSUME:
@@ -1294,7 +1339,9 @@ async def consume_step_parts(
     return consumptions
 
 
-@router.get("/{instance_id}/steps/{step_number}/consumptions", response_model=list[ConsumptionResponse])
+@router.get(
+    "/{instance_id}/steps/{step_number}/consumptions", response_model=list[ConsumptionResponse]
+)
 async def get_step_consumptions(
     instance_id: int,
     step_number: int,
@@ -1407,7 +1454,11 @@ async def get_procedure_outputs(
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
-    outputs = db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == instance.procedure_id).all()
+    outputs = (
+        db.query(ProcedureOutput)
+        .filter(ProcedureOutput.procedure_id == instance.procedure_id)
+        .all()
+    )
 
     return [
         OutputItem(
@@ -1610,13 +1661,15 @@ def _build_bom_reconciliation(db, instance) -> BOMReconciliationResponse:
     bom_kit_items = []
     for part_id, qty_required in kit_by_part.items():
         qty_consumed = consumed_by_part.pop(part_id, 0)
-        bom_kit_items.append(BOMKitItem(
-            part_id=part_id,
-            part_name=kit_part_names[part_id],
-            qty_required=qty_required,
-            qty_consumed=qty_consumed,
-            variance=qty_consumed - qty_required,
-        ))
+        bom_kit_items.append(
+            BOMKitItem(
+                part_id=part_id,
+                part_name=kit_part_names[part_id],
+                qty_required=qty_required,
+                qty_consumed=qty_consumed,
+                variance=qty_consumed - qty_required,
+            )
+        )
 
     # Remaining consumed parts not in kit
     unplanned = [
@@ -1636,15 +1689,17 @@ def _build_bom_reconciliation(db, instance) -> BOMReconciliationResponse:
     )
     outputs = []
     for p in productions:
-        prod_status = p.status.value if hasattr(p.status, 'value') else p.status
-        outputs.append(BOMOutputItem(
-            part_id=p.inventory_record.part_id,
-            part_name=p.inventory_record.part.name,
-            serial_number=p.serial_number,
-            opal_number=p.produced_opal_number,
-            quantity=float(p.quantity),
-            status=prod_status,
-        ))
+        prod_status = p.status.value if hasattr(p.status, "value") else p.status
+        outputs.append(
+            BOMOutputItem(
+                part_id=p.inventory_record.part_id,
+                part_name=p.inventory_record.part.name,
+                serial_number=p.serial_number,
+                opal_number=p.produced_opal_number,
+                quantity=float(p.quantity),
+                status=prod_status,
+            )
+        )
 
     return BOMReconciliationResponse(
         kit_items=bom_kit_items,
@@ -1669,9 +1724,11 @@ async def finalize_production(
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
-    inst_status = instance.status.value if hasattr(instance.status, 'value') else instance.status
+    inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
     if inst_status != InstanceStatus.COMPLETED.value:
-        raise HTTPException(status_code=400, detail="Instance must be COMPLETED before finalizing production")
+        raise HTTPException(
+            status_code=400, detail="Instance must be COMPLETED before finalizing production"
+        )
 
     # Get WIP production records for this instance
     productions = (
@@ -1688,11 +1745,13 @@ async def finalize_production(
 
     # Get all CONSUME-type consumption records for genealogy
     consumption_ids = [
-        c.id for c in
-        db.query(InventoryConsumption).filter(
+        c.id
+        for c in db.query(InventoryConsumption)
+        .filter(
             InventoryConsumption.procedure_instance_id == instance_id,
             InventoryConsumption.usage_type == UsageType.CONSUME,
-        ).all()
+        )
+        .all()
     ]
 
     finalized = []
@@ -1712,14 +1771,16 @@ async def finalize_production(
         if consumption_ids:
             record_assembly_genealogy(db, production.id, consumption_ids)
 
-        finalized.append({
-            "production_id": production.id,
-            "opal_number": production.produced_opal_number,
-            "serial_number": production.serial_number,
-            "part_name": inv_record.part.name,
-            "quantity": float(production.quantity),
-            "location": data.location,
-        })
+        finalized.append(
+            {
+                "production_id": production.id,
+                "opal_number": production.produced_opal_number,
+                "serial_number": production.serial_number,
+                "part_name": inv_record.part.name,
+                "quantity": float(production.quantity),
+                "location": data.location,
+            }
+        )
 
     db.commit()
 
@@ -1766,6 +1827,7 @@ async def join_execution(
 
     # Get user info
     from opal.db.models import User
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1777,15 +1839,17 @@ async def join_execution(
     existing = next((p for p in participants if p.get("user_id") == user_id), None)
     if existing:
         # Update last seen, already joined
-        existing["last_active"] = datetime.now(timezone.utc).isoformat()
+        existing["last_active"] = datetime.now(UTC).isoformat()
     else:
         # Add new participant
-        participants.append({
-            "user_id": user_id,
-            "user_name": user.name,
-            "joined_at": datetime.now(timezone.utc).isoformat(),
-            "last_step": None,
-        })
+        participants.append(
+            {
+                "user_id": user_id,
+                "user_name": user.name,
+                "joined_at": datetime.now(UTC).isoformat(),
+                "last_step": None,
+            }
+        )
 
     instance.participants = participants
     db.commit()

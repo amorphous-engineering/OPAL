@@ -88,12 +88,8 @@ class Settings(BaseSettings):
     auth_mode: str = Field(default="local", description="Auth mode: 'local' or 'exe'")
 
     # Onshape integration (off by default)
-    onshape_access_key: str = Field(
-        default="", description="Onshape API access key"
-    )
-    onshape_secret_key: str = Field(
-        default="", description="Onshape API secret key"
-    )
+    onshape_access_key: str = Field(default="", description="Onshape API access key")
+    onshape_secret_key: str = Field(default="", description="Onshape API secret key")
     onshape_base_url: str = Field(
         default="https://cad.onshape.com", description="Onshape API base URL"
     )

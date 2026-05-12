@@ -3,9 +3,9 @@
 import asyncio
 import contextlib
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles

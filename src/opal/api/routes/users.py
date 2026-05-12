@@ -1,12 +1,12 @@
 """User management endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams, RequiredAdmin, RequiredUser
-from opal.core.audit import get_model_dict, log_create, log_delete, log_update
+from opal.core.audit import get_model_dict, log_create, log_update
 from opal.core.events import emit_user_activity
 from opal.db.models import User
 
@@ -173,9 +173,14 @@ async def update_user(
 
     # Prevent removing last admin
     if "is_admin" in update_data and not update_data["is_admin"] and user.is_admin:
-        admin_count = db.query(User).filter(
-            User.is_admin == True, User.is_active == True  # noqa: E712
-        ).count()
+        admin_count = (
+            db.query(User)
+            .filter(
+                User.is_admin.is_(True),
+                User.is_active.is_(True),
+            )
+            .count()
+        )
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -230,9 +235,14 @@ async def delete_user(
 
     # Prevent deactivating last admin
     if user.is_admin:
-        admin_count = db.query(User).filter(
-            User.is_admin == True, User.is_active == True  # noqa: E712
-        ).count()
+        admin_count = (
+            db.query(User)
+            .filter(
+                User.is_admin.is_(True),
+                User.is_active.is_(True),
+            )
+            .count()
+        )
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -288,7 +298,7 @@ async def heartbeat(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user.last_seen_at = now
 
     # Track activity change for event emission
@@ -318,7 +328,7 @@ async def get_online_users(
 
     Users are considered online if they've sent a heartbeat within the timeout window.
     """
-    cutoff = datetime.now(timezone.utc).timestamp() - PRESENCE_TIMEOUT_SECONDS
+    cutoff = datetime.now(UTC).timestamp() - PRESENCE_TIMEOUT_SECONDS
 
     users = db.query(User).filter(User.is_active == True, User.last_seen_at.isnot(None)).all()  # noqa: E712
 
@@ -353,7 +363,7 @@ async def get_user_presence(
 
     is_online = False
     if user.last_seen_at:
-        cutoff = datetime.now(timezone.utc).timestamp() - PRESENCE_TIMEOUT_SECONDS
+        cutoff = datetime.now(UTC).timestamp() - PRESENCE_TIMEOUT_SECONDS
         is_online = user.last_seen_at.timestamp() > cutoff
 
     return OnlineUserResponse(

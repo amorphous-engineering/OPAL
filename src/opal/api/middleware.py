@@ -53,7 +53,16 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
     """
 
     LOCAL_EXEMPT = ("/login", "/logout", "/api/", "/static/", "/docs", "/favicon.ico")
-    EXE_EXEMPT = ("/__exe.dev/", "/login", "/logout", "/setup-profile", "/api/", "/static/", "/docs", "/favicon.ico")
+    EXE_EXEMPT = (
+        "/__exe.dev/",
+        "/login",
+        "/logout",
+        "/setup-profile",
+        "/api/",
+        "/static/",
+        "/docs",
+        "/favicon.ico",
+    )
 
     async def dispatch(self, request: Request, call_next: any) -> Response:
         settings = get_active_settings()
@@ -103,7 +112,9 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
             response.set_cookie("opal_user_id", str(user["id"]), max_age=max_age)
             response.set_cookie("opal_user_name", user["name"], max_age=max_age)
             response.set_cookie("opal_user_email", user["email"] or "", max_age=max_age)
-            response.set_cookie("opal_user_is_admin", "1" if user["is_admin"] else "0", max_age=max_age)
+            response.set_cookie(
+                "opal_user_is_admin", "1" if user["is_admin"] else "0", max_age=max_age
+            )
             return response
 
         # Set cookies so the rest of the app works unchanged
@@ -123,10 +134,14 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
         from opal.db.session import get_session
 
         with get_session() as db:
-            user = db.query(User).filter(
-                User.exe_user_id == exe_user_id,
-                User.is_active == True,  # noqa: E712
-            ).first()
+            user = (
+                db.query(User)
+                .filter(
+                    User.exe_user_id == exe_user_id,
+                    User.is_active == True,  # noqa: E712
+                )
+                .first()
+            )
 
             if user:
                 # Update email if changed
@@ -134,8 +149,11 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
                     user.email = exe_email
                     db.flush()
                 return {
-                    "id": user.id, "name": user.name, "email": user.email,
-                    "is_admin": user.is_admin, "needs_profile_setup": user.needs_profile_setup,
+                    "id": user.id,
+                    "name": user.name,
+                    "email": user.email,
+                    "is_admin": user.is_admin,
+                    "needs_profile_setup": user.needs_profile_setup,
                 }
 
             # Auto-create: derive placeholder name from email local part
@@ -156,11 +174,18 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
             db.add(new_user)
             db.flush()
             db.refresh(new_user)
-            logger.info("Auto-provisioned exe user: %s (exe_user_id=%s, needs_profile_setup=True)", name, exe_user_id)
+            logger.info(
+                "Auto-provisioned exe user: %s (exe_user_id=%s, needs_profile_setup=True)",
+                name,
+                exe_user_id,
+            )
 
             return {
-                "id": new_user.id, "name": new_user.name, "email": new_user.email,
-                "is_admin": new_user.is_admin, "needs_profile_setup": True,
+                "id": new_user.id,
+                "name": new_user.name,
+                "email": new_user.email,
+                "is_admin": new_user.is_admin,
+                "needs_profile_setup": True,
             }
 
 

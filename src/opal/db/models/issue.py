@@ -54,8 +54,11 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     """
 
     issue_number: Mapped[str] = mapped_column(
-        String(20), nullable=False, unique=True, index=True,
-        comment="Human-readable issue ID (e.g., IT-001)"
+        String(20),
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="Human-readable issue ID (e.g., IT-001)",
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -70,12 +73,22 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     )
 
     # Type-specific fields
-    should_be: Mapped[str | None] = mapped_column(Text, nullable=True, comment="NC: expected condition")
-    is_condition: Mapped[str | None] = mapped_column(Text, nullable=True, comment="NC: actual condition")
-    steps_to_reproduce: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Bug: repro steps")
-    expected_behavior: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Bug: expected")
+    should_be: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="NC: expected condition"
+    )
+    is_condition: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="NC: actual condition"
+    )
+    steps_to_reproduce: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Bug: repro steps"
+    )
+    expected_behavior: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Bug: expected"
+    )
     actual_behavior: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Bug: actual")
-    expected_benefit: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Improvement: benefit")
+    expected_benefit: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Improvement: benefit"
+    )
 
     # Disposition fields
     root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -118,19 +131,17 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     references: Mapped[list["IssueReference"]] = relationship(
         "IssueReference", back_populates="issue", cascade="all, delete-orphan"
     )
-    assigned_to: Mapped["User | None"] = relationship(
-        "User", foreign_keys=[assigned_to_id]
-    )
+    assigned_to: Mapped["User | None"] = relationship("User", foreign_keys=[assigned_to_id])
     disposition_approved_by: Mapped["User | None"] = relationship(
         "User", foreign_keys=[disposition_approved_by_id]
     )
     comments: Mapped[list["IssueComment"]] = relationship(
-        "IssueComment", back_populates="issue", cascade="all, delete-orphan",
-        order_by="IssueComment.created_at"
+        "IssueComment",
+        back_populates="issue",
+        cascade="all, delete-orphan",
+        order_by="IssueComment.created_at",
     )
-    attachments: Mapped[list["Attachment"]] = relationship(
-        "Attachment", back_populates="issue"
-    )
+    attachments: Mapped[list["Attachment"]] = relationship("Attachment", back_populates="issue")
 
     def __repr__(self) -> str:
         return f"<Issue(id={self.id}, type={self.issue_type}, title='{self.title}', status={self.status})>"

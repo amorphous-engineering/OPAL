@@ -1,12 +1,12 @@
 """Risks API routes."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core.audit import log_create, log_delete, log_update, get_model_dict
+from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_risk_number
 from opal.db.models.risk import Risk, RiskStatus
 
@@ -101,7 +101,13 @@ async def get_risk_matrix(db: DbSession) -> dict:
     return {
         "matrix": matrix,
         "labels": {
-            "probability": ["1 - Rare", "2 - Unlikely", "3 - Possible", "4 - Likely", "5 - Almost Certain"],
+            "probability": [
+                "1 - Rare",
+                "2 - Unlikely",
+                "3 - Possible",
+                "4 - Likely",
+                "5 - Almost Certain",
+            ],
             "impact": ["1 - Negligible", "2 - Minor", "3 - Moderate", "4 - Major", "5 - Severe"],
         },
         "total_risks": len(risks),
@@ -113,7 +119,7 @@ async def get_risk_matrix(db: DbSession) -> dict:
 
 def _risk_to_response(risk: Risk) -> RiskResponse:
     """Convert Risk model to response."""
-    status_val = risk.status.value if hasattr(risk.status, 'value') else risk.status
+    status_val = risk.status.value if hasattr(risk.status, "value") else risk.status
     return RiskResponse(
         id=risk.id,
         risk_number=risk.risk_number,
@@ -153,12 +159,7 @@ async def list_risks(
 
     total = query.count()
 
-    risks = (
-        query.order_by(Risk.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+    risks = query.order_by(Risk.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
     # Filter by severity/min_score in Python (computed properties)
     items = [_risk_to_response(r) for r in risks]
@@ -209,11 +210,7 @@ async def get_risk(
     db: DbSession,
 ) -> RiskResponse:
     """Get risk by ID."""
-    risk = (
-        db.query(Risk)
-        .filter(Risk.id == risk_id, Risk.deleted_at.is_(None))
-        .first()
-    )
+    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.deleted_at.is_(None)).first()
     if not risk:
         raise HTTPException(status_code=404, detail="Risk not found")
 
@@ -228,11 +225,7 @@ async def update_risk(
     user_id: CurrentUserId,
 ) -> RiskResponse:
     """Update a risk."""
-    risk = (
-        db.query(Risk)
-        .filter(Risk.id == risk_id, Risk.deleted_at.is_(None))
-        .first()
-    )
+    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.deleted_at.is_(None)).first()
     if not risk:
         raise HTTPException(status_code=404, detail="Risk not found")
 
@@ -245,8 +238,8 @@ async def update_risk(
     if data.status is not None:
         try:
             risk.status = RiskStatus(data.status)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}")
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
     if data.probability is not None:
         risk.probability = data.probability
     if data.impact is not None:
@@ -270,14 +263,10 @@ async def delete_risk(
     user_id: CurrentUserId,
 ) -> None:
     """Soft delete a risk."""
-    risk = (
-        db.query(Risk)
-        .filter(Risk.id == risk_id, Risk.deleted_at.is_(None))
-        .first()
-    )
+    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.deleted_at.is_(None)).first()
     if not risk:
         raise HTTPException(status_code=404, detail="Risk not found")
 
-    risk.deleted_at = datetime.now(timezone.utc)
+    risk.deleted_at = datetime.now(UTC)
     log_delete(db, risk, user_id)
     db.commit()

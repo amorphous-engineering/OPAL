@@ -1,10 +1,10 @@
 """Audit log model."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from opal.db.base import Base
@@ -30,7 +30,7 @@ class AuditLog(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 

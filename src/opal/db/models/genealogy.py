@@ -26,7 +26,7 @@ class AssemblyComponent(Base, IdMixin, TimestampMixin):
         ForeignKey("inventory_production.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        comment="The production record (assembly being built)"
+        comment="The production record (assembly being built)",
     )
 
     # The consumption record for the component used
@@ -34,7 +34,7 @@ class AssemblyComponent(Base, IdMixin, TimestampMixin):
         ForeignKey("inventory_consumption.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        comment="The consumption record (component used)"
+        comment="The consumption record (component used)",
     )
 
     # Denormalized OPAL number for efficient queries
@@ -42,24 +42,20 @@ class AssemblyComponent(Base, IdMixin, TimestampMixin):
         String(20),
         nullable=False,
         index=True,
-        comment="OPAL number of the consumed component (denormalized)"
+        comment="OPAL number of the consumed component (denormalized)",
     )
 
     # Quantity of this component used in the assembly
     quantity_used: Mapped[Decimal] = mapped_column(
-        Numeric(precision=15, scale=4),
-        nullable=False,
-        comment="Quantity of this component used"
+        Numeric(precision=15, scale=4), nullable=False, comment="Quantity of this component used"
     )
 
     # Relationships
     production: Mapped["InventoryProduction"] = relationship(
-        "InventoryProduction",
-        back_populates="assembly_components"
+        "InventoryProduction", back_populates="assembly_components"
     )
     consumption: Mapped["InventoryConsumption"] = relationship(
-        "InventoryConsumption",
-        back_populates="assembly_usage"
+        "InventoryConsumption", back_populates="assembly_usage"
     )
 
     def __repr__(self) -> str:

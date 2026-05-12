@@ -1,6 +1,6 @@
 """Inventory management endpoints."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 
@@ -13,7 +13,15 @@ from opal.api.deps import CurrentUserId, DbSession, PaginationParams
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.inventory import generate_opal_number
 from opal.db.models import InventoryRecord, Part, StockTestResult, StockTransfer, TestTemplate
-from opal.db.models.inventory import ConsumptionType, InventoryConsumption, InventoryProduction, SourceType, TestResult, TransferStatus, UsageType
+from opal.db.models.inventory import (
+    ConsumptionType,
+    InventoryConsumption,
+    InventoryProduction,
+    SourceType,
+    TestResult,
+    TransferStatus,
+    UsageType,
+)
 from opal.db.models.part import TrackingType
 
 router = APIRouter()
@@ -108,7 +116,9 @@ def inventory_to_response(record: InventoryRecord) -> InventoryResponse:
     """Convert inventory record to response."""
     source_type = None
     if record.source_type:
-        source_type = record.source_type.value if hasattr(record.source_type, 'value') else record.source_type
+        source_type = (
+            record.source_type.value if hasattr(record.source_type, "value") else record.source_type
+        )
 
     # Compute expiration fields
     is_expired = False
@@ -122,10 +132,10 @@ def inventory_to_response(record: InventoryRecord) -> InventoryResponse:
     # Compute calibration status
     calibration_status = None
     if record.part.is_tooling and record.calibration_due_at:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cal_due = record.calibration_due_at
         if cal_due.tzinfo is None:
-            cal_due = cal_due.replace(tzinfo=timezone.utc)
+            cal_due = cal_due.replace(tzinfo=UTC)
         if cal_due <= now:
             calibration_status = "overdue"
         elif (cal_due - now).days <= 30:
@@ -149,8 +159,12 @@ def inventory_to_response(record: InventoryRecord) -> InventoryResponse:
         expiration_date=record.expiration_date.isoformat() if record.expiration_date else None,
         is_expired=is_expired,
         days_until_expiration=days_until,
-        last_calibrated_at=record.last_calibrated_at.isoformat() if record.last_calibrated_at else None,
-        calibration_due_at=record.calibration_due_at.isoformat() if record.calibration_due_at else None,
+        last_calibrated_at=record.last_calibrated_at.isoformat()
+        if record.last_calibrated_at
+        else None,
+        calibration_due_at=record.calibration_due_at.isoformat()
+        if record.calibration_due_at
+        else None,
         calibration_status=calibration_status,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
@@ -166,7 +180,9 @@ async def list_inventory(
     lot_number: str | None = Query(None, description="Filter by lot number"),
     expired: bool = Query(False, description="Filter to only expired items"),
     expiring_soon: bool = Query(False, description="Filter to items expiring within 30 days"),
-    calibration_overdue: bool = Query(False, description="Filter to tooling items with overdue calibration"),
+    calibration_overdue: bool = Query(
+        False, description="Filter to tooling items with overdue calibration"
+    ),
 ) -> InventoryListResponse:
     """List inventory records with optional filtering."""
     query = db.query(InventoryRecord).join(Part).filter(Part.deleted_at.is_(None))
@@ -190,7 +206,7 @@ async def list_inventory(
             InventoryRecord.expiration_date <= threshold,
         )
     if calibration_overdue:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         query = query.filter(
             Part.is_tooling == True,  # noqa: E712
             InventoryRecord.calibration_due_at.isnot(None),
@@ -292,10 +308,7 @@ async def get_inventory_by_opal(
     record = (
         db.query(InventoryRecord)
         .join(Part)
-        .filter(
-            InventoryRecord.opal_number == opal_number,
-            Part.deleted_at.is_(None)
-        )
+        .filter(InventoryRecord.opal_number == opal_number, Part.deleted_at.is_(None))
         .first()
     )
     if not record:
@@ -319,10 +332,7 @@ async def get_opal_history(
     record = (
         db.query(InventoryRecord)
         .join(Part)
-        .filter(
-            InventoryRecord.opal_number == opal_number,
-            Part.deleted_at.is_(None)
-        )
+        .filter(InventoryRecord.opal_number == opal_number, Part.deleted_at.is_(None))
         .first()
     )
     if not record:
@@ -334,7 +344,13 @@ async def get_opal_history(
     history: list[OpalHistoryEntry] = []
 
     # Creation event
-    source_details: dict = {"source_type": (record.source_type.value if hasattr(record.source_type, 'value') else record.source_type) if record.source_type else "unknown"}
+    source_details: dict = {
+        "source_type": (
+            record.source_type.value if hasattr(record.source_type, "value") else record.source_type
+        )
+        if record.source_type
+        else "unknown"
+    }
     if record.source_purchase_line_id:
         source_details["purchase_line_id"] = record.source_purchase_line_id
         if record.source_purchase_line:
@@ -342,55 +358,73 @@ async def get_opal_history(
     if record.source_production_id:
         source_details["production_id"] = record.source_production_id
 
-    history.append(OpalHistoryEntry(
-        event_type="created",
-        timestamp=record.created_at.isoformat(),
-        details=source_details,
-    ))
+    history.append(
+        OpalHistoryEntry(
+            event_type="created",
+            timestamp=record.created_at.isoformat(),
+            details=source_details,
+        )
+    )
 
     # Consumptions
     for consumption in record.consumptions:
-        history.append(OpalHistoryEntry(
-            event_type="consumed",
-            timestamp=consumption.created_at.isoformat(),
-            details={
-                "quantity": float(consumption.quantity),
-                "consumption_type": consumption.consumption_type.value if hasattr(consumption.consumption_type, 'value') else consumption.consumption_type,
-                "usage_type": consumption.usage_type.value if hasattr(consumption.usage_type, 'value') else consumption.usage_type,
-                "procedure_instance_id": consumption.procedure_instance_id,
-                "step_execution_id": consumption.step_execution_id,
-            },
-        ))
+        history.append(
+            OpalHistoryEntry(
+                event_type="consumed",
+                timestamp=consumption.created_at.isoformat(),
+                details={
+                    "quantity": float(consumption.quantity),
+                    "consumption_type": consumption.consumption_type.value
+                    if hasattr(consumption.consumption_type, "value")
+                    else consumption.consumption_type,
+                    "usage_type": consumption.usage_type.value
+                    if hasattr(consumption.usage_type, "value")
+                    else consumption.usage_type,
+                    "procedure_instance_id": consumption.procedure_instance_id,
+                    "step_execution_id": consumption.step_execution_id,
+                },
+            )
+        )
 
     # Outgoing transfers (from this record)
     for transfer in record.outgoing_transfers:
-        history.append(OpalHistoryEntry(
-            event_type="transferred_out",
-            timestamp=transfer.transferred_at.isoformat() if transfer.transferred_at else transfer.created_at.isoformat(),
-            details={
-                "quantity": float(transfer.quantity),
-                "to_location": transfer.target_location,
-            },
-        ))
+        history.append(
+            OpalHistoryEntry(
+                event_type="transferred_out",
+                timestamp=transfer.transferred_at.isoformat()
+                if transfer.transferred_at
+                else transfer.created_at.isoformat(),
+                details={
+                    "quantity": float(transfer.quantity),
+                    "to_location": transfer.target_location,
+                },
+            )
+        )
 
     # Incoming transfers (to this record) - this record was created from a transfer
     for transfer in record.incoming_transfers:
-        history.append(OpalHistoryEntry(
-            event_type="transferred_in",
-            timestamp=transfer.transferred_at.isoformat() if transfer.transferred_at else transfer.created_at.isoformat(),
-            details={
-                "quantity": float(transfer.quantity),
-                "from_location": transfer.source_location,
-            },
-        ))
+        history.append(
+            OpalHistoryEntry(
+                event_type="transferred_in",
+                timestamp=transfer.transferred_at.isoformat()
+                if transfer.transferred_at
+                else transfer.created_at.isoformat(),
+                details={
+                    "quantity": float(transfer.quantity),
+                    "from_location": transfer.source_location,
+                },
+            )
+        )
 
     # Physical counts
     if record.last_counted_at:
-        history.append(OpalHistoryEntry(
-            event_type="counted",
-            timestamp=record.last_counted_at.isoformat(),
-            details={"quantity": float(record.quantity)},
-        ))
+        history.append(
+            OpalHistoryEntry(
+                event_type="counted",
+                timestamp=record.last_counted_at.isoformat(),
+                details={"quantity": float(record.quantity)},
+            )
+        )
 
     # Sort history by timestamp
     history.sort(key=lambda h: h.timestamp)
@@ -532,7 +566,9 @@ async def transfer_stock(
     If the target location doesn't exist for this part/lot combo, it's created.
     """
     # Get source inventory
-    source = db.query(InventoryRecord).filter(InventoryRecord.id == data.source_inventory_id).first()
+    source = (
+        db.query(InventoryRecord).filter(InventoryRecord.id == data.source_inventory_id).first()
+    )
     if not source:
         raise HTTPException(status_code=404, detail="Source inventory record not found")
 
@@ -543,13 +579,15 @@ async def transfer_stock(
     if float(source.quantity) < float(data.quantity):
         raise HTTPException(
             status_code=400,
-            detail=f"Insufficient quantity at source (have {source.quantity}, need {data.quantity})"
+            detail=f"Insufficient quantity at source (have {source.quantity}, need {data.quantity})",
         )
 
     # Check if transferring to same location
     target_lot = data.target_lot_number or source.lot_number
     if source.location == data.target_location and source.lot_number == target_lot:
-        raise HTTPException(status_code=400, detail="Cannot transfer to same location with same lot number")
+        raise HTTPException(
+            status_code=400, detail="Cannot transfer to same location with same lot number"
+        )
 
     # Find or create target inventory record
     target = (
@@ -590,7 +628,7 @@ async def transfer_stock(
         status=TransferStatus.COMPLETED,
         notes=data.notes,
         transferred_by_id=user_id,
-        transferred_at=datetime.now(timezone.utc),
+        transferred_at=datetime.now(UTC),
     )
     db.add(transfer)
     db.flush()
@@ -607,7 +645,7 @@ async def transfer_stock(
         target_location=transfer.target_location,
         source_lot_number=transfer.source_lot_number,
         target_lot_number=transfer.target_lot_number,
-        status=transfer.status.value if hasattr(transfer.status, 'value') else transfer.status,
+        status=transfer.status.value if hasattr(transfer.status, "value") else transfer.status,
         notes=transfer.notes,
         transferred_by_id=transfer.transferred_by_id,
         transferred_at=transfer.transferred_at.isoformat() if transfer.transferred_at else None,
@@ -629,8 +667,8 @@ async def list_transfers(
         query = query.filter(StockTransfer.part_id == part_id)
     if location:
         query = query.filter(
-            (StockTransfer.source_location == location) |
-            (StockTransfer.target_location == location)
+            (StockTransfer.source_location == location)
+            | (StockTransfer.target_location == location)
         )
 
     transfers = query.order_by(StockTransfer.created_at.desc()).limit(limit).all()
@@ -645,7 +683,7 @@ async def list_transfers(
             target_location=t.target_location,
             source_lot_number=t.source_lot_number,
             target_lot_number=t.target_lot_number,
-            status=t.status.value if hasattr(t.status, 'value') else t.status,
+            status=t.status.value if hasattr(t.status, "value") else t.status,
             notes=t.notes,
             transferred_by_id=t.transferred_by_id,
             transferred_at=t.transferred_at.isoformat() if t.transferred_at else None,
@@ -674,7 +712,7 @@ async def get_transfer(
         target_location=transfer.target_location,
         source_lot_number=transfer.source_lot_number,
         target_lot_number=transfer.target_lot_number,
-        status=transfer.status.value if hasattr(transfer.status, 'value') else transfer.status,
+        status=transfer.status.value if hasattr(transfer.status, "value") else transfer.status,
         notes=transfer.notes,
         transferred_by_id=transfer.transferred_by_id,
         transferred_at=transfer.transferred_at.isoformat() if transfer.transferred_at else None,
@@ -800,13 +838,17 @@ async def adjust_inventory(
 
     # Set last_counted_at for cycle counts
     if reason == AdjustmentReason.CYCLE_COUNT:
-        record.last_counted_at = datetime.now(timezone.utc)
+        record.last_counted_at = datetime.now(UTC)
 
     db.flush()
 
     # Create consumption or production record for traceability
     if adjustment < 0:
-        consumption_type = ConsumptionType.SCRAP if reason in (AdjustmentReason.DAMAGE, AdjustmentReason.SCRAP) else ConsumptionType.ADJUSTMENT
+        consumption_type = (
+            ConsumptionType.SCRAP
+            if reason in (AdjustmentReason.DAMAGE, AdjustmentReason.SCRAP)
+            else ConsumptionType.ADJUSTMENT
+        )
         consumption = InventoryConsumption(
             inventory_record_id=record.id,
             quantity=abs(adjustment),
@@ -861,7 +903,7 @@ async def record_count(
     old_values = get_model_dict(record)
 
     record.quantity = count_in.counted_quantity
-    record.last_counted_at = datetime.now(timezone.utc)
+    record.last_counted_at = datetime.now(UTC)
     db.commit()
     db.refresh(record)
 
@@ -902,7 +944,7 @@ async def record_calibration(
 
     old_values = get_model_dict(record)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     record.last_calibrated_at = now
 
     if record.part.calibration_interval_days:
@@ -1037,7 +1079,9 @@ async def list_test_templates(
     ]
 
 
-@router.post("/parts/{part_id}/test-templates", response_model=TestTemplateResponse, status_code=201)
+@router.post(
+    "/parts/{part_id}/test-templates", response_model=TestTemplateResponse, status_code=201
+)
 async def create_test_template(
     part_id: int,
     data: TestTemplateCreate,
@@ -1128,7 +1172,7 @@ async def list_test_results(
             inventory_record_id=r.inventory_record_id,
             template_id=r.template_id,
             test_name=r.test_name,
-            result=r.result.value if hasattr(r.result, 'value') else r.result,
+            result=r.result.value if hasattr(r.result, "value") else r.result,
             value=r.value,
             notes=r.notes,
             tested_at=r.tested_at.isoformat() if r.tested_at else None,
@@ -1154,14 +1198,16 @@ async def create_test_result(
     # Validate result value
     try:
         result_enum = TestResult(data.result)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid result: {data.result}")
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=f"Invalid result: {data.result}") from err
 
     # If template_id provided, validate it
     if data.template_id:
         template = db.query(TestTemplate).filter(TestTemplate.id == data.template_id).first()
         if not template:
-            raise HTTPException(status_code=404, detail=f"Test template {data.template_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Test template {data.template_id} not found"
+            )
 
     test_result = StockTestResult(
         inventory_record_id=inventory_id,
@@ -1170,7 +1216,7 @@ async def create_test_result(
         result=result_enum,
         value=data.value,
         notes=data.notes,
-        tested_at=datetime.now(timezone.utc) if result_enum != TestResult.PENDING else None,
+        tested_at=datetime.now(UTC) if result_enum != TestResult.PENDING else None,
         tested_by_id=user_id,
     )
     db.add(test_result)
@@ -1184,7 +1230,9 @@ async def create_test_result(
         inventory_record_id=test_result.inventory_record_id,
         template_id=test_result.template_id,
         test_name=test_result.test_name,
-        result=test_result.result.value if hasattr(test_result.result, 'value') else test_result.result,
+        result=test_result.result.value
+        if hasattr(test_result.result, "value")
+        else test_result.result,
         value=test_result.value,
         notes=test_result.notes,
         tested_at=test_result.tested_at.isoformat() if test_result.tested_at else None,
@@ -1204,10 +1252,7 @@ async def update_test_result(
     """Update a test result."""
     test_result = (
         db.query(StockTestResult)
-        .filter(
-            StockTestResult.id == test_id,
-            StockTestResult.inventory_record_id == inventory_id
-        )
+        .filter(StockTestResult.id == test_id, StockTestResult.inventory_record_id == inventory_id)
         .first()
     )
     if not test_result:
@@ -1218,8 +1263,8 @@ async def update_test_result(
     # Validate result value
     try:
         result_enum = TestResult(data.result)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid result: {data.result}")
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=f"Invalid result: {data.result}") from err
 
     test_result.test_name = data.test_name
     test_result.result = result_enum
@@ -1228,7 +1273,7 @@ async def update_test_result(
 
     # Set tested_at when result changes from pending
     if result_enum != TestResult.PENDING and not test_result.tested_at:
-        test_result.tested_at = datetime.now(timezone.utc)
+        test_result.tested_at = datetime.now(UTC)
         test_result.tested_by_id = user_id
 
     log_update(db, test_result, old_values, user_id)
@@ -1240,7 +1285,9 @@ async def update_test_result(
         inventory_record_id=test_result.inventory_record_id,
         template_id=test_result.template_id,
         test_name=test_result.test_name,
-        result=test_result.result.value if hasattr(test_result.result, 'value') else test_result.result,
+        result=test_result.result.value
+        if hasattr(test_result.result, "value")
+        else test_result.result,
         value=test_result.value,
         notes=test_result.notes,
         tested_at=test_result.tested_at.isoformat() if test_result.tested_at else None,
@@ -1259,10 +1306,7 @@ async def delete_test_result(
     """Delete a test result."""
     test_result = (
         db.query(StockTestResult)
-        .filter(
-            StockTestResult.id == test_id,
-            StockTestResult.inventory_record_id == inventory_id
-        )
+        .filter(StockTestResult.id == test_id, StockTestResult.inventory_record_id == inventory_id)
         .first()
     )
     if not test_result:
@@ -1289,15 +1333,21 @@ async def get_test_status(
 
     # Get all test results
     results = (
-        db.query(StockTestResult)
-        .filter(StockTestResult.inventory_record_id == inventory_id)
-        .all()
+        db.query(StockTestResult).filter(StockTestResult.inventory_record_id == inventory_id).all()
     )
 
     # Count by status
-    passed = sum(1 for r in results if (r.result.value if hasattr(r.result, 'value') else r.result) == 'pass')
-    failed = sum(1 for r in results if (r.result.value if hasattr(r.result, 'value') else r.result) == 'fail')
-    pending = sum(1 for r in results if (r.result.value if hasattr(r.result, 'value') else r.result) == 'pending')
+    passed = sum(
+        1 for r in results if (r.result.value if hasattr(r.result, "value") else r.result) == "pass"
+    )
+    failed = sum(
+        1 for r in results if (r.result.value if hasattr(r.result, "value") else r.result) == "fail"
+    )
+    pending = sum(
+        1
+        for r in results
+        if (r.result.value if hasattr(r.result, "value") else r.result) == "pending"
+    )
 
     # Check required tests from templates
     required_templates = (
@@ -1310,10 +1360,10 @@ async def get_test_status(
     missing_required = []
     for template in required_templates:
         template_results = [r for r in results if r.template_id == template.id]
-        if not template_results:
-            required_passed = False
-            missing_required.append(template.name)
-        elif not any((r.result.value if hasattr(r.result, 'value') else r.result) == 'pass' for r in template_results):
+        if not template_results or not any(
+            (r.result.value if hasattr(r.result, "value") else r.result) == "pass"
+            for r in template_results
+        ):
             required_passed = False
             missing_required.append(template.name)
 
@@ -1325,9 +1375,7 @@ async def get_test_status(
         "pending": pending,
         "required_tests_passed": required_passed,
         "missing_required_tests": missing_required,
-        "overall_status": "pass" if failed == 0 and pending == 0 and required_passed and len(results) > 0 else (
-            "fail" if failed > 0 else "pending"
-        ),
+        "overall_status": "pass"
+        if failed == 0 and pending == 0 and required_passed and len(results) > 0
+        else ("fail" if failed > 0 else "pending"),
     }
-
-

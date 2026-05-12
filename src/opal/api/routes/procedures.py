@@ -1,6 +1,6 @@
 """Procedures API routes."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core.audit import log_create, log_delete, log_update, get_model_dict, AuditContext
+from opal.core.audit import AuditContext, get_model_dict, log_create, log_delete, log_update
 from opal.db.models import Kit, Part, ProcedureOutput
 from opal.db.models.procedure import (
     MasterProcedure,
@@ -170,7 +170,6 @@ class KitItemUpdate(BaseModel):
 def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
     """Build a hierarchical step structure from flat list."""
     # Group steps by parent
-    step_map = {s.id: s for s in steps}
     children_map: dict[int | None, list[ProcedureStep]] = {None: []}
 
     for step in steps:
@@ -200,8 +199,13 @@ def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
     # Build tree starting from top-level steps
     top_level = children_map.get(None, [])
     # Sort: normal ops first (by step_number), then contingency ops
-    normal_ops = sorted([s for s in top_level if not s.is_contingency], key=lambda x: int(x.step_number) if x.step_number.isdigit() else 0)
-    contingency_ops = sorted([s for s in top_level if s.is_contingency], key=lambda x: x.step_number)
+    normal_ops = sorted(
+        [s for s in top_level if not s.is_contingency],
+        key=lambda x: int(x.step_number) if x.step_number.isdigit() else 0,
+    )
+    contingency_ops = sorted(
+        [s for s in top_level if s.is_contingency], key=lambda x: x.step_number
+    )
 
     return [build_schema(s) for s in normal_ops + contingency_ops]
 
@@ -288,8 +292,12 @@ async def get_procedure(
         id=procedure.id,
         name=procedure.name,
         description=procedure.description,
-        status=procedure.status.value if hasattr(procedure.status, "value") else str(procedure.status),
-        procedure_type=procedure.procedure_type.value if hasattr(procedure.procedure_type, "value") else str(procedure.procedure_type),
+        status=procedure.status.value
+        if hasattr(procedure.status, "value")
+        else str(procedure.status),
+        procedure_type=procedure.procedure_type.value
+        if hasattr(procedure.procedure_type, "value")
+        else str(procedure.procedure_type),
         current_version_id=procedure.current_version_id,
         created_at=procedure.created_at,
         updated_at=procedure.updated_at,
@@ -322,13 +330,15 @@ async def update_procedure(
     if data.status is not None:
         try:
             procedure.status = ProcedureStatus(data.status).value
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}")
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
     if data.procedure_type is not None:
         try:
             procedure.procedure_type = ProcedureType(data.procedure_type).value
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid procedure type: {data.procedure_type}")
+        except ValueError as err:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid procedure type: {data.procedure_type}"
+            ) from err
 
     log_update(db, procedure, old_values, user_id)
     db.commit()
@@ -352,7 +362,7 @@ async def delete_procedure(
     if not procedure:
         raise HTTPException(status_code=404, detail="Procedure not found")
 
-    procedure.deleted_at = datetime.now(timezone.utc)
+    procedure.deleted_at = datetime.now(UTC)
     log_delete(db, procedure, user_id)
     db.commit()
 
@@ -360,7 +370,9 @@ async def delete_procedure(
 # ============ Steps ============
 
 
-def _calculate_step_number(db: DbSession, procedure_id: int, parent_step_id: int | None, is_contingency: bool) -> str:
+def _calculate_step_number(
+    db: DbSession, procedure_id: int, parent_step_id: int | None, is_contingency: bool
+) -> str:
     """Calculate the next step number based on hierarchy and contingency status."""
     if parent_step_id:
         # Sub-step: get parent's step_number and add sub-number
@@ -384,7 +396,7 @@ def _calculate_step_number(db: DbSession, procedure_id: int, parent_step_id: int
                 .filter(
                     ProcedureStep.procedure_id == procedure_id,
                     ProcedureStep.parent_step_id.is_(None),
-                    ProcedureStep.is_contingency == True,
+                    ProcedureStep.is_contingency.is_(True),
                 )
                 .scalar()
             )
@@ -396,7 +408,7 @@ def _calculate_step_number(db: DbSession, procedure_id: int, parent_step_id: int
                 .filter(
                     ProcedureStep.procedure_id == procedure_id,
                     ProcedureStep.parent_step_id.is_(None),
-                    ProcedureStep.is_contingency == False,
+                    ProcedureStep.is_contingency.is_(False),
                 )
                 .scalar()
             )
@@ -651,7 +663,9 @@ async def publish_version(
                     "part_id": sk.part_id,
                     "part_name": sk.part.name,
                     "quantity_required": float(sk.quantity_required),
-                    "usage_type": sk.usage_type.value if hasattr(sk.usage_type, 'value') else sk.usage_type,
+                    "usage_type": sk.usage_type.value
+                    if hasattr(sk.usage_type, "value")
+                    else sk.usage_type,
                     "notes": sk.notes,
                 }
                 for sk in step_kit_map.get(step.id, [])
@@ -858,11 +872,7 @@ async def get_kit(
         raise HTTPException(status_code=404, detail="Procedure not found")
 
     kit_items = (
-        db.query(Kit)
-        .join(Part)
-        .filter(Kit.procedure_id == procedure_id)
-        .order_by(Part.name)
-        .all()
+        db.query(Kit).join(Part).filter(Kit.procedure_id == procedure_id).order_by(Part.name).all()
     )
 
     return [
@@ -899,9 +909,7 @@ async def add_kit_item(
 
     # Check if already in kit
     existing = (
-        db.query(Kit)
-        .filter(Kit.procedure_id == procedure_id, Kit.part_id == data.part_id)
-        .first()
+        db.query(Kit).filter(Kit.procedure_id == procedure_id, Kit.part_id == data.part_id).first()
     )
     if existing:
         raise HTTPException(status_code=400, detail="Part already in kit")
@@ -936,11 +944,7 @@ async def update_kit_item(
     user_id: CurrentUserId,
 ) -> KitItemResponse:
     """Update kit item quantity."""
-    kit_item = (
-        db.query(Kit)
-        .filter(Kit.id == kit_id, Kit.procedure_id == procedure_id)
-        .first()
-    )
+    kit_item = db.query(Kit).filter(Kit.id == kit_id, Kit.procedure_id == procedure_id).first()
     if not kit_item:
         raise HTTPException(status_code=404, detail="Kit item not found")
 
@@ -968,9 +972,7 @@ async def remove_kit_item(
 ) -> None:
     """Remove a part from the kit."""
     kit_item = (
-        db.query(Kit)
-        .filter(Kit.procedure_id == procedure_id, Kit.part_id == part_id)
-        .first()
+        db.query(Kit).filter(Kit.procedure_id == procedure_id, Kit.part_id == part_id).first()
     )
     if not kit_item:
         raise HTTPException(status_code=404, detail="Kit item not found")
@@ -1058,7 +1060,9 @@ async def add_output(
     # Check if already in outputs
     existing = (
         db.query(ProcedureOutput)
-        .filter(ProcedureOutput.procedure_id == procedure_id, ProcedureOutput.part_id == data.part_id)
+        .filter(
+            ProcedureOutput.procedure_id == procedure_id, ProcedureOutput.part_id == data.part_id
+        )
         .first()
     )
     if existing:
@@ -1076,11 +1080,7 @@ async def add_output(
     # Auto-populate kit from output part's BOM (single-level, direct children only)
     from opal.db.models.part import BOMLine
 
-    bom_lines = (
-        db.query(BOMLine)
-        .filter(BOMLine.assembly_id == data.part_id)
-        .all()
-    )
+    bom_lines = db.query(BOMLine).filter(BOMLine.assembly_id == data.part_id).all()
     for bom_line in bom_lines:
         kit_qty = Decimal(str(bom_line.quantity)) * output.quantity_produced
         existing_kit = (
@@ -1266,8 +1266,10 @@ async def add_step_kit_item(
     # Validate usage type
     try:
         usage = UsageType(data.usage_type)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid usage type: {data.usage_type}")
+    except ValueError as err:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid usage type: {data.usage_type}"
+        ) from err
 
     step_kit = StepKit(
         step_id=step_id,
@@ -1290,7 +1292,9 @@ async def add_step_kit_item(
         part_name=part.name,
         part_external_pn=part.external_pn,
         quantity_required=float(step_kit.quantity_required),
-        usage_type=step_kit.usage_type.value if hasattr(step_kit.usage_type, "value") else step_kit.usage_type,
+        usage_type=step_kit.usage_type.value
+        if hasattr(step_kit.usage_type, "value")
+        else step_kit.usage_type,
         notes=step_kit.notes,
     )
 
@@ -1325,8 +1329,10 @@ async def update_step_kit_item(
     if data.usage_type is not None:
         try:
             step_kit.usage_type = UsageType(data.usage_type)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid usage type: {data.usage_type}")
+        except ValueError as err:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid usage type: {data.usage_type}"
+            ) from err
     if data.notes is not None:
         step_kit.notes = data.notes
 
@@ -1341,7 +1347,9 @@ async def update_step_kit_item(
         part_name=step_kit.part.name,
         part_external_pn=step_kit.part.external_pn,
         quantity_required=float(step_kit.quantity_required),
-        usage_type=step_kit.usage_type.value if hasattr(step_kit.usage_type, "value") else step_kit.usage_type,
+        usage_type=step_kit.usage_type.value
+        if hasattr(step_kit.usage_type, "value")
+        else step_kit.usage_type,
         notes=step_kit.notes,
     )
 
@@ -1455,20 +1463,18 @@ async def clone_procedure(
     # Second pass - set parent references
     for source_step in source_steps:
         if source_step.parent_step_id and source_step.parent_step_id in step_id_map:
-            new_step = db.query(ProcedureStep).filter(
-                ProcedureStep.id == step_id_map[source_step.id]
-            ).first()
+            new_step = (
+                db.query(ProcedureStep)
+                .filter(ProcedureStep.id == step_id_map[source_step.id])
+                .first()
+            )
             if new_step:
                 new_step.parent_step_id = step_id_map[source_step.parent_step_id]
 
     # Clone step-level kit items
     if data.copy_kit:
         for source_step in source_steps:
-            source_step_kits = (
-                db.query(StepKit)
-                .filter(StepKit.step_id == source_step.id)
-                .all()
-            )
+            source_step_kits = db.query(StepKit).filter(StepKit.step_id == source_step.id).all()
             for sk in source_step_kits:
                 new_step_kit = StepKit(
                     step_id=step_id_map[source_step.id],
@@ -1491,7 +1497,9 @@ async def clone_procedure(
 
     # Clone output definitions
     if data.copy_outputs:
-        source_outputs = db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == source.id).all()
+        source_outputs = (
+            db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == source.id).all()
+        )
         for output in source_outputs:
             new_output = ProcedureOutput(
                 procedure_id=new_procedure.id,
@@ -1503,13 +1511,5 @@ async def clone_procedure(
     log_create(db, new_procedure, user_id)
     db.commit()
     db.refresh(new_procedure)
-
-    # Build response with steps
-    steps = (
-        db.query(ProcedureStep)
-        .filter(ProcedureStep.procedure_id == new_procedure.id)
-        .order_by(ProcedureStep.order)
-        .all()
-    )
 
     return ProcedureResponse.model_validate(new_procedure)

@@ -160,9 +160,7 @@ class RiskDetail(Static):
 
         # Linked issue
         if risk.get("linked_issue_id"):
-            content.mount(
-                Label(f"Linked Issue: #{risk['linked_issue_id']}", classes="detail-row")
-            )
+            content.mount(Label(f"Linked Issue: #{risk['linked_issue_id']}", classes="detail-row"))
 
         # Timestamps
         created = risk.get("created_at", "")[:16] if risk.get("created_at") else "-"

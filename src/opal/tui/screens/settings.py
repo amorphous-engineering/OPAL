@@ -69,9 +69,7 @@ class SettingsScreen(Screen):
                 sys_container.mount(
                     Label(f"Current User: {user.get('name', '?')}", classes="detail-row")
                 )
-                sys_container.mount(
-                    Label(f"User ID: {client.user_id}", classes="detail-row")
-                )
+                sys_container.mount(Label(f"User ID: {client.user_id}", classes="detail-row"))
         except Exception:
             pass
 
@@ -84,9 +82,7 @@ class SettingsScreen(Screen):
         try:
             config = client.get_project_config()
             proj_name = config.get("name", config.get("project_name", "?"))
-            config_container.mount(
-                Label(f"Project: {proj_name}", classes="detail-row")
-            )
+            config_container.mount(Label(f"Project: {proj_name}", classes="detail-row"))
 
             # Tiers
             tiers = config.get("tiers", [])
@@ -120,11 +116,7 @@ class SettingsScreen(Screen):
             if numbering:
                 config_container.mount(Label("Part Numbering:", classes="detail-label"))
                 prefix = numbering.get("prefix", "?")
-                config_container.mount(
-                    Label(f"  Prefix: {prefix}", classes="detail-row")
-                )
+                config_container.mount(Label(f"  Prefix: {prefix}", classes="detail-row"))
 
         except Exception as e:
-            config_container.mount(
-                Label(f"Could not load config: {e}", classes="status-error")
-            )
+            config_container.mount(Label(f"Could not load config: {e}", classes="status-error"))

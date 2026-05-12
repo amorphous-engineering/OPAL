@@ -1,7 +1,5 @@
 """Bill of Materials (BOM) management endpoints."""
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
@@ -76,7 +74,9 @@ def get_bom_line_response(line: BOMLine) -> BOMLineResponse:
     )
 
 
-def build_bom_tree(db: DbSession, part: Part, quantity: int = 1, ref: str | None = None, visited: set | None = None) -> BOMTreeNode:
+def build_bom_tree(
+    db: DbSession, part: Part, quantity: int = 1, ref: str | None = None, visited: set | None = None
+) -> BOMTreeNode:
     """Recursively build BOM tree for a part."""
     if visited is None:
         visited = set()
@@ -97,7 +97,9 @@ def build_bom_tree(db: DbSession, part: Part, quantity: int = 1, ref: str | None
 
     children = []
     for line in part.bom_lines:
-        child_node = build_bom_tree(db, line.component, line.quantity, line.reference_designator, visited)
+        child_node = build_bom_tree(
+            db, line.component, line.quantity, line.reference_designator, visited
+        )
         children.append(child_node)
 
     return BOMTreeNode(
@@ -161,7 +163,9 @@ async def get_where_used(
     return [get_bom_line_response(line) for line in lines]
 
 
-@router.post("/assemblies/{assembly_id}", response_model=BOMLineResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/assemblies/{assembly_id}", response_model=BOMLineResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_component_to_assembly(
     db: DbSession,
     assembly_id: int,
@@ -178,7 +182,9 @@ async def add_component_to_assembly(
         )
 
     # Verify component exists
-    component = db.query(Part).filter(Part.id == line_in.component_id, Part.deleted_at.is_(None)).first()
+    component = (
+        db.query(Part).filter(Part.id == line_in.component_id, Part.deleted_at.is_(None)).first()
+    )
     if not component:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

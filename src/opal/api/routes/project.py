@@ -1,7 +1,6 @@
 """Project configuration API routes."""
 
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -187,16 +186,16 @@ async def create_project(data: ProjectConfigCreate, admin: RequiredAdmin) -> Pro
 
 
 @router.put("/config")
-async def update_project_config(data: ProjectConfigUpdate, admin: RequiredAdmin) -> ProjectConfigResponse:
+async def update_project_config(
+    data: ProjectConfigUpdate, admin: RequiredAdmin
+) -> ProjectConfigResponse:
     """Update existing project configuration."""
     project = get_active_project()
     if not project:
         raise HTTPException(status_code=404, detail="No active project configuration")
 
     if not project.project_dir:
-        raise HTTPException(
-            status_code=400, detail="Cannot update project without project_dir"
-        )
+        raise HTTPException(status_code=400, detail="Cannot update project without project_dir")
 
     # Update configuration
     project.name = data.name
@@ -264,9 +263,7 @@ async def preview_part_number(data: PartNumberPreview) -> PartNumberPreviewRespo
 
     tier = project.get_tier(data.tier_level)
     if not tier:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown tier level: {data.tier_level}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown tier level: {data.tier_level}")
 
     part_number = project.generate_part_number(data.tier_level, data.sequence)
 

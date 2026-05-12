@@ -42,25 +42,19 @@ class OpalAPIClient:
 
     def create_part(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new part."""
-        resp = self.client.post(
-            self._url("/parts"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/parts"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
     def update_part(self, part_id: int, data: dict[str, Any]) -> dict[str, Any]:
         """Update a part."""
-        resp = self.client.patch(
-            self._url(f"/parts/{part_id}"), json=data, headers=self._headers()
-        )
+        resp = self.client.patch(self._url(f"/parts/{part_id}"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
     def delete_part(self, part_id: int) -> None:
         """Delete a part."""
-        resp = self.client.delete(
-            self._url(f"/parts/{part_id}"), headers=self._headers()
-        )
+        resp = self.client.delete(self._url(f"/parts/{part_id}"), headers=self._headers())
         resp.raise_for_status()
 
     def list_categories(self) -> list[str]:
@@ -104,9 +98,7 @@ class OpalAPIClient:
 
     def add_inventory(self, data: dict[str, Any]) -> dict[str, Any]:
         """Add inventory."""
-        resp = self.client.post(
-            self._url("/inventory"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/inventory"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -179,9 +171,7 @@ class OpalAPIClient:
 
     def create_procedure(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a procedure."""
-        resp = self.client.post(
-            self._url("/procedures"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/procedures"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -213,9 +203,7 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def update_step(
-        self, procedure_id: int, step_id: int, data: dict[str, Any]
-    ) -> dict[str, Any]:
+    def update_step(self, procedure_id: int, step_id: int, data: dict[str, Any]) -> dict[str, Any]:
         """Update a procedure step."""
         resp = self.client.patch(
             self._url(f"/procedures/{procedure_id}/steps/{step_id}"),
@@ -318,9 +306,7 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def update_step_notes(
-        self, instance_id: int, step_number: int, notes: str
-    ) -> dict[str, Any]:
+    def update_step_notes(self, instance_id: int, step_number: int, notes: str) -> dict[str, Any]:
         """Update step notes."""
         resp = self.client.patch(
             self._url(f"/procedure-instances/{instance_id}/steps/{step_number}/notes"),
@@ -330,9 +316,7 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def log_nc(
-        self, instance_id: int, step_number: int, data: dict[str, Any]
-    ) -> dict[str, Any]:
+    def log_nc(self, instance_id: int, step_number: int, data: dict[str, Any]) -> dict[str, Any]:
         """Log non-conformance during step execution."""
         resp = self.client.post(
             self._url(f"/procedure-instances/{instance_id}/steps/{step_number}/nc"),
@@ -344,9 +328,7 @@ class OpalAPIClient:
 
     def get_version_content(self, instance_id: int) -> dict[str, Any]:
         """Get version content for an instance."""
-        resp = self.client.get(
-            self._url(f"/procedure-instances/{instance_id}/version-content")
-        )
+        resp = self.client.get(self._url(f"/procedure-instances/{instance_id}/version-content"))
         resp.raise_for_status()
         return resp.json()
 
@@ -354,9 +336,7 @@ class OpalAPIClient:
 
     def get_kit_availability(self, instance_id: int) -> dict[str, Any]:
         """Get kit availability for an execution."""
-        resp = self.client.get(
-            self._url(f"/procedure-instances/{instance_id}/kit-availability")
-        )
+        resp = self.client.get(self._url(f"/procedure-instances/{instance_id}/kit-availability"))
         resp.raise_for_status()
         return resp.json()
 
@@ -384,9 +364,7 @@ class OpalAPIClient:
 
     def get_consumptions(self, instance_id: int) -> list[dict[str, Any]]:
         """Get all consumptions for an instance."""
-        resp = self.client.get(
-            self._url(f"/procedure-instances/{instance_id}/consumptions")
-        )
+        resp = self.client.get(self._url(f"/procedure-instances/{instance_id}/consumptions"))
         resp.raise_for_status()
         return resp.json()
 
@@ -394,9 +372,7 @@ class OpalAPIClient:
 
     def get_outputs(self, instance_id: int) -> list[dict[str, Any]]:
         """Get output items for an execution."""
-        resp = self.client.get(
-            self._url(f"/procedure-instances/{instance_id}/outputs")
-        )
+        resp = self.client.get(self._url(f"/procedure-instances/{instance_id}/outputs"))
         resp.raise_for_status()
         return resp.json()
 
@@ -412,17 +388,13 @@ class OpalAPIClient:
 
     def get_productions(self, instance_id: int) -> list[dict[str, Any]]:
         """Get production records for an instance."""
-        resp = self.client.get(
-            self._url(f"/procedure-instances/{instance_id}/productions")
-        )
+        resp = self.client.get(self._url(f"/procedure-instances/{instance_id}/productions"))
         resp.raise_for_status()
         return resp.json()
 
     def get_bom_reconciliation(self, instance_id: int) -> dict[str, Any]:
         """Get BOM reconciliation for an execution."""
-        resp = self.client.get(
-            self._url(f"/procedure-instances/{instance_id}/bom-reconciliation")
-        )
+        resp = self.client.get(self._url(f"/procedure-instances/{instance_id}/bom-reconciliation"))
         resp.raise_for_status()
         return resp.json()
 
@@ -462,9 +434,7 @@ class OpalAPIClient:
 
     def create_issue(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create an issue."""
-        resp = self.client.post(
-            self._url("/issues"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/issues"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -513,17 +483,13 @@ class OpalAPIClient:
 
     def create_risk(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a risk."""
-        resp = self.client.post(
-            self._url("/risks"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/risks"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
     def update_risk(self, risk_id: int, data: dict[str, Any]) -> dict[str, Any]:
         """Update a risk."""
-        resp = self.client.patch(
-            self._url(f"/risks/{risk_id}"), json=data, headers=self._headers()
-        )
+        resp = self.client.patch(self._url(f"/risks/{risk_id}"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -560,9 +526,7 @@ class OpalAPIClient:
 
     def create_purchase(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a purchase order."""
-        resp = self.client.post(
-            self._url("/purchases"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/purchases"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -611,9 +575,7 @@ class OpalAPIClient:
 
     def create_supplier(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a supplier."""
-        resp = self.client.post(
-            self._url("/suppliers"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/suppliers"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -641,9 +603,7 @@ class OpalAPIClient:
 
     def create_workcenter(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a workcenter."""
-        resp = self.client.post(
-            self._url("/workcenters"), json=data, headers=self._headers()
-        )
+        resp = self.client.post(self._url("/workcenters"), json=data, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 

@@ -1,13 +1,13 @@
 """Purchase order management endpoints."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
-from opal.core.audit import log_create, log_update, get_model_dict
+from opal.core.audit import get_model_dict, log_create, log_update
 from opal.core.inventory import generate_opal_number
 from opal.db.models import InventoryRecord, Part, Purchase, PurchaseLine, Supplier
 from opal.db.models.inventory import SourceType
@@ -168,9 +168,11 @@ def line_to_response(line: PurchaseLine) -> PurchaseLineResponse:
 
 def purchase_to_response(purchase: Purchase) -> PurchaseResponse:
     """Convert purchase to full response."""
-    lines = [line_to_response(l) for l in purchase.lines]
+    lines = [line_to_response(line) for line in purchase.lines]
     total_cost = sum(
-        (l.unit_cost or Decimal(0)) * l.qty_ordered for l in purchase.lines if l.unit_cost
+        (line.unit_cost or Decimal(0)) * line.qty_ordered
+        for line in purchase.lines
+        if line.unit_cost
     )
 
     return PurchaseResponse(
@@ -202,7 +204,9 @@ def purchase_to_response(purchase: Purchase) -> PurchaseResponse:
 def purchase_to_list_item(purchase: Purchase) -> PurchaseListItem:
     """Convert purchase to list item."""
     total_cost = sum(
-        (l.unit_cost or Decimal(0)) * l.qty_ordered for l in purchase.lines if l.unit_cost
+        (line.unit_cost or Decimal(0)) * line.qty_ordered
+        for line in purchase.lines
+        if line.unit_cost
     )
 
     return PurchaseListItem(
@@ -255,10 +259,11 @@ async def create_purchase(
     """Create a new purchase order."""
     # Validate supplier_id if provided
     if po_in.supplier_id:
-        supplier = db.query(Supplier).filter(
-            Supplier.id == po_in.supplier_id,
-            Supplier.deleted_at.is_(None)
-        ).first()
+        supplier = (
+            db.query(Supplier)
+            .filter(Supplier.id == po_in.supplier_id, Supplier.deleted_at.is_(None))
+            .first()
+        )
         if not supplier:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -354,7 +359,7 @@ async def update_purchase(
     if "status" in update_data:
         new_status = update_data["status"]
         if new_status == PurchaseStatus.ORDERED and purchase.status == PurchaseStatus.DRAFT:
-            update_data["ordered_at"] = datetime.now(timezone.utc)
+            update_data["ordered_at"] = datetime.now(UTC)
         elif new_status == PurchaseStatus.CANCELLED:
             pass  # Allow cancellation from any state
 
@@ -370,7 +375,9 @@ async def update_purchase(
     return purchase_to_response(purchase)
 
 
-@router.post("/{purchase_id}/lines", response_model=PurchaseLineResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{purchase_id}/lines", response_model=PurchaseLineResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_purchase_line(
     db: DbSession,
     purchase_id: int,
@@ -556,7 +563,7 @@ async def receive_purchase(
 
     if all_complete:
         purchase.status = PurchaseStatus.RECEIVED
-        purchase.received_at = datetime.now(timezone.utc)
+        purchase.received_at = datetime.now(UTC)
     elif any_received:
         purchase.status = PurchaseStatus.PARTIAL
 

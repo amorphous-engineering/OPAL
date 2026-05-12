@@ -92,9 +92,7 @@ class SupplierDetail(Static):
         content.mount(Label(f"ID: {supplier.get('id', '-')}", classes="detail-row"))
         content.mount(Label(f"Name: {supplier.get('name', '-')}", classes="detail-row"))
         if supplier.get("contact_name"):
-            content.mount(
-                Label(f"Contact: {supplier['contact_name']}", classes="detail-row")
-            )
+            content.mount(Label(f"Contact: {supplier['contact_name']}", classes="detail-row"))
         if supplier.get("email"):
             content.mount(Label(f"Email: {supplier['email']}", classes="detail-row"))
         if supplier.get("phone"):

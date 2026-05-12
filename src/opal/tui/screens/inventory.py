@@ -236,9 +236,7 @@ class InventoryDetail(Static):
         content.mount(Label(f"Location: {location}", classes="detail-row"))
 
         status = inv.get("status", "available")
-        content.mount(
-            Label(f"Status: {status}", classes=f"detail-row status-{status}")
-        )
+        content.mount(Label(f"Status: {status}", classes=f"detail-row status-{status}"))
 
         if inv.get("lot_number"):
             content.mount(Label(f"Lot#: {inv['lot_number']}", classes="detail-row"))
@@ -247,16 +245,12 @@ class InventoryDetail(Static):
             content.mount(Label(f"Serial#: {inv['serial_number']}", classes="detail-row"))
 
         if inv.get("expiration_date"):
-            content.mount(
-                Label(f"Expires: {inv['expiration_date'][:10]}", classes="detail-row")
-            )
+            content.mount(Label(f"Expires: {inv['expiration_date'][:10]}", classes="detail-row"))
 
         # Calibration info
         if inv.get("calibration_due_date"):
             content.mount(
-                Label(
-                    f"Cal Due: {inv['calibration_due_date'][:10]}", classes="detail-row"
-                )
+                Label(f"Cal Due: {inv['calibration_due_date'][:10]}", classes="detail-row")
             )
 
         created = inv.get("created_at", "")[:16] if inv.get("created_at") else "-"
@@ -275,9 +269,7 @@ class InventoryDetail(Static):
             action = entry.get("action", entry.get("event_type", "?"))
             ts = entry.get("created_at", entry.get("timestamp", ""))[:16]
             details = entry.get("details", entry.get("description", ""))
-            container.mount(
-                Label(f"[{ts}] {action}: {details}", classes="detail-row")
-            )
+            container.mount(Label(f"[{ts}] {action}: {details}", classes="detail-row"))
 
     def clear(self) -> None:
         """Clear the detail panel."""

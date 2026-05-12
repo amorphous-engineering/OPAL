@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -65,7 +65,10 @@ class ProcedureInstance(Base, IdMixin, TimestampMixin):
         DateTime(timezone=True), nullable=True, comment="Due date for completion"
     )
     priority: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Higher = more urgent (0=normal, 1=high, 2=urgent)"
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Higher = more urgent (0=normal, 1=high, 2=urgent)",
     )
 
     # Relationships
@@ -127,8 +130,10 @@ class StepExecution(Base, IdMixin, TimestampMixin):
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
     workcenter_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workcenter.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Actual workcenter where step was performed"
+        ForeignKey("workcenter.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Actual workcenter where step was performed",
     )
 
     # Hierarchy tracking (preserved from version snapshot)
@@ -143,7 +148,9 @@ class StepExecution(Base, IdMixin, TimestampMixin):
     )
 
     # Operator notes
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Free-text operator notes")
+    notes: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Free-text operator notes"
+    )
 
     # Sign-off fields (for parent OPs or steps with requires_signoff)
     signed_off_at: Mapped[datetime | None] = mapped_column(

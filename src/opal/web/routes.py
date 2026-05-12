@@ -1,6 +1,7 @@
 """Web UI routes."""
 
-from datetime import date, datetime, timedelta, timezone
+import contextlib
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -11,8 +12,8 @@ from sqlalchemy import func, or_
 
 from opal.api.deps import DbSession
 from opal.db.models import InventoryRecord, Kit, Part, Purchase, Supplier, User, Workcenter
-from opal.db.models.dataset import Dataset, DataPoint
-from opal.db.models.execution import InstanceStatus, ProcedureInstance, StepStatus
+from opal.db.models.dataset import DataPoint, Dataset
+from opal.db.models.execution import InstanceStatus, ProcedureInstance
 from opal.db.models.issue import Issue, IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import MasterProcedure, ProcedureStatus, ProcedureVersion
 from opal.db.models.purchase import PurchaseStatus
@@ -96,6 +97,7 @@ def _build_change_summary(entry) -> str:
         return "Deleted"
     return ""
 
+
 router = APIRouter()
 
 
@@ -132,10 +134,12 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
     is_admin = False
     cookie_user_id = request.cookies.get("opal_user_id")
     if cookie_user_id:
-        try:
-            current_user = db.query(User).filter(User.id == int(cookie_user_id), User.is_active == True).first()  # noqa: E712
-        except (ValueError, TypeError):
-            pass
+        with contextlib.suppress(ValueError, TypeError):
+            current_user = (
+                db.query(User)
+                .filter(User.id == int(cookie_user_id), User.is_active.is_(True))
+                .first()
+            )
     if current_user:
         is_admin = current_user.is_admin
 
@@ -171,15 +175,20 @@ async def login_page(request: Request, db: DbSession) -> HTMLResponse:
         return RedirectResponse(url="/", status_code=302)
 
     users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "users": users,
-        "auth_mode": settings.auth_mode,
-    })
+    return templates.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "users": users,
+            "auth_mode": settings.auth_mode,
+        },
+    )
 
 
 @router.post("/login")
-async def login_submit(request: Request, db: DbSession, user_id: int = Form(...)) -> RedirectResponse:
+async def login_submit(
+    request: Request, db: DbSession, user_id: int = Form(...)
+) -> RedirectResponse:
     """Set user identity cookies."""
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()  # noqa: E712
     if not user:
@@ -205,7 +214,13 @@ async def login_new_user(
     """Create a new user and log in. First user auto-becomes admin."""
     # First user ever created is auto-admin
     is_first_user = db.query(User).count() == 0
-    user = User(name=name, email=email or None, is_active=True, is_admin=is_first_user, needs_onboarding=True)
+    user = User(
+        name=name,
+        email=email or None,
+        is_active=True,
+        is_admin=is_first_user,
+        needs_onboarding=True,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -255,15 +270,20 @@ async def setup_profile_page(request: Request, db: DbSession) -> HTMLResponse:
     if not user.needs_profile_setup:
         return RedirectResponse(url="/", status_code=302)
 
-    return templates.TemplateResponse("setup_profile.html", {
-        "request": request,
-        "user": user,
-    })
+    return templates.TemplateResponse(
+        "setup_profile.html",
+        {
+            "request": request,
+            "user": user,
+        },
+    )
 
 
 @router.post("/setup-profile")
 async def setup_profile_submit(
-    request: Request, db: DbSession, name: str = Form(...),
+    request: Request,
+    db: DbSession,
+    name: str = Form(...),
 ) -> RedirectResponse:
     """Save display name and clear the profile setup flag."""
     user = _get_current_user(request, db)
@@ -315,28 +335,40 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
 
     # Get counts for dashboard
     context["parts_count"] = db.query(Part).filter(Part.deleted_at.is_(None)).count()
-    context["procedures_count"] = db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None)).count()
-    context["open_issues_count"] = db.query(Issue).filter(
-        Issue.deleted_at.is_(None),
-        Issue.status.in_(["open", "investigating", "disposition_pending"])
-    ).count()
-    context["in_progress_count"] = db.query(ProcedureInstance).filter(
-        ProcedureInstance.status == "in_progress"
-    ).count()
-    context["risks_count"] = db.query(Risk).filter(
-        Risk.deleted_at.is_(None),
-        Risk.status != "closed"
-    ).count()
-    context["high_risks_count"] = len([
-        r for r in db.query(Risk).filter(Risk.deleted_at.is_(None), Risk.status != "closed").all()
-        if r.severity == "high"
-    ])
+    context["procedures_count"] = (
+        db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None)).count()
+    )
+    context["open_issues_count"] = (
+        db.query(Issue)
+        .filter(
+            Issue.deleted_at.is_(None),
+            Issue.status.in_(["open", "investigating", "disposition_pending"]),
+        )
+        .count()
+    )
+    context["in_progress_count"] = (
+        db.query(ProcedureInstance).filter(ProcedureInstance.status == "in_progress").count()
+    )
+    context["risks_count"] = (
+        db.query(Risk).filter(Risk.deleted_at.is_(None), Risk.status != "closed").count()
+    )
+    context["high_risks_count"] = len(
+        [
+            r
+            for r in db.query(Risk).filter(Risk.deleted_at.is_(None), Risk.status != "closed").all()
+            if r.severity == "high"
+        ]
+    )
 
     # Low stock count
-    low_stock_parts = db.query(Part).filter(
-        Part.deleted_at.is_(None),
-        Part.reorder_point.isnot(None),
-    ).all()
+    low_stock_parts = (
+        db.query(Part)
+        .filter(
+            Part.deleted_at.is_(None),
+            Part.reorder_point.isnot(None),
+        )
+        .all()
+    )
     low_stock_count = 0
     for p in low_stock_parts:
         total_qty = (
@@ -351,35 +383,41 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
     # Expiring soon count (within 30 days)
     today = date.today()
     threshold = today + timedelta(days=30)
-    expiring_soon_count = db.query(InventoryRecord).join(Part).filter(
-        Part.deleted_at.is_(None),
-        InventoryRecord.expiration_date.isnot(None),
-        InventoryRecord.expiration_date <= threshold,
-    ).count()
+    expiring_soon_count = (
+        db.query(InventoryRecord)
+        .join(Part)
+        .filter(
+            Part.deleted_at.is_(None),
+            InventoryRecord.expiration_date.isnot(None),
+            InventoryRecord.expiration_date <= threshold,
+        )
+        .count()
+    )
     context["expiring_soon_count"] = expiring_soon_count
 
     # Calibration overdue count
-    cal_overdue_count = db.query(InventoryRecord).join(Part).filter(
-        Part.deleted_at.is_(None),
-        Part.is_tooling == True,  # noqa: E712
-        InventoryRecord.calibration_due_at.isnot(None),
-        InventoryRecord.calibration_due_at <= datetime.now(timezone.utc),
-    ).count()
+    cal_overdue_count = (
+        db.query(InventoryRecord)
+        .join(Part)
+        .filter(
+            Part.deleted_at.is_(None),
+            Part.is_tooling == True,  # noqa: E712
+            InventoryRecord.calibration_due_at.isnot(None),
+            InventoryRecord.calibration_due_at <= datetime.now(UTC),
+        )
+        .count()
+    )
     context["cal_overdue_count"] = cal_overdue_count
 
     # Get recent audit activity
-    recent_activity = (
-        db.query(AuditLog)
-        .order_by(AuditLog.timestamp.desc())
-        .limit(10)
-        .all()
-    )
+    recent_activity = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(10).all()
     context["recent_activity"] = recent_activity
 
     return templates.TemplateResponse("index.html", context)
 
 
 # ============ PARTS ============
+
 
 @router.get("/parts", response_class=HTMLResponse)
 async def parts_list(request: Request, db: DbSession) -> HTMLResponse:
@@ -437,10 +475,8 @@ async def parts_table(
         query = query.filter(Part.category == category)
 
     if tier:
-        try:
+        with contextlib.suppress(ValueError):
             query = query.filter(Part.tier == int(tier))
-        except ValueError:
-            pass
 
     if top_level:
         if top_level == "true":
@@ -575,12 +611,7 @@ async def parts_new(request: Request, db: DbSession) -> HTMLResponse:
         context["tiers"] = DEFAULT_TIERS
 
     # Get existing parts for parent selector
-    assemblies = (
-        db.query(Part)
-        .filter(Part.deleted_at.is_(None))
-        .order_by(Part.name)
-        .all()
-    )
+    assemblies = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
     context["assemblies"] = assemblies
 
     return templates.TemplateResponse("parts/new.html", context)
@@ -621,6 +652,7 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
 
     # Where Used: procedure kit usage
     from opal.db.models.procedure import StepKit
+
     kit_usages = (
         db.query(Kit)
         .join(MasterProcedure)
@@ -630,15 +662,12 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
     context["kit_usages"] = kit_usages
 
     # Where Used: step-level kit usage
-    step_kit_usages = (
-        db.query(StepKit)
-        .filter(StepKit.part_id == part.id)
-        .all()
-    )
+    step_kit_usages = db.query(StepKit).filter(StepKit.part_id == part.id).all()
     context["step_kit_usages"] = step_kit_usages
 
     # Where Used: consumption history
     from opal.db.models.inventory import InventoryConsumption
+
     consumption_history = (
         db.query(InventoryConsumption)
         .join(InventoryRecord)
@@ -651,6 +680,7 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
 
     # BOM: components of this assembly (design-level)
     from opal.db.models.part import BOMLine
+
     bom_lines = db.query(BOMLine).filter(BOMLine.assembly_id == part.id).all()
     context["bom_lines"] = bom_lines
 
@@ -660,6 +690,7 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
 
     # Test templates
     from opal.db.models.inventory import TestTemplate
+
     test_templates = (
         db.query(TestTemplate)
         .filter(TestTemplate.part_id == part.id)
@@ -672,6 +703,7 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
     onshape_link = None
     try:
         from opal.db.models.onshape_link import OnshapeLink
+
         onshape_link = db.query(OnshapeLink).filter(OnshapeLink.part_id == part.id).first()
     except Exception:
         pass
@@ -715,6 +747,7 @@ async def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLRespo
 
 # ============ INVENTORY ============
 
+
 @router.get("/inventory", response_class=HTMLResponse)
 async def inventory_list(request: Request, db: DbSession) -> HTMLResponse:
     """Inventory list page."""
@@ -722,7 +755,7 @@ async def inventory_list(request: Request, db: DbSession) -> HTMLResponse:
 
     # Get locations for filter
     locations = db.query(InventoryRecord.location).distinct().all()
-    context["locations"] = sorted([l[0] for l in locations])
+    context["locations"] = sorted([loc[0] for loc in locations])
 
     return templates.TemplateResponse("inventory/list.html", context)
 
@@ -738,7 +771,7 @@ async def inventory_new(
 
     # Get locations for autocomplete
     locations = db.query(InventoryRecord.location).distinct().all()
-    context["locations"] = sorted([l[0] for l in locations if l[0]])
+    context["locations"] = sorted([loc[0] for loc in locations if loc[0]])
 
     # If part_id provided, load the part
     selected_part = None
@@ -784,7 +817,7 @@ async def inventory_table(
             InventoryRecord.expiration_date <= threshold,
         )
     if calibration == "overdue":
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         query = query.filter(
             Part.is_tooling == True,  # noqa: E712
             InventoryRecord.calibration_due_at.isnot(None),
@@ -796,7 +829,7 @@ async def inventory_table(
 
     return templates.TemplateResponse(
         "inventory/table_rows.html",
-        {"request": request, "records": records, "today": date.today(), "now": datetime.now(timezone.utc)},
+        {"request": request, "records": records, "today": date.today(), "now": datetime.now(UTC)},
     )
 
 
@@ -807,7 +840,7 @@ async def inventory_opal_detail(
     opal_number: str,
 ) -> HTMLResponse:
     """OPAL item detail page with full traceability history."""
-    from opal.db.models.inventory import InventoryConsumption, InventoryProduction
+    from opal.db.models.inventory import InventoryProduction
     from opal.db.models.purchase import PurchaseLine
 
     record = (
@@ -828,7 +861,7 @@ async def inventory_opal_detail(
     context["record"] = record
     context["opal_number"] = opal_number
     context["today"] = date.today()
-    context["now"] = datetime.now(timezone.utc)
+    context["now"] = datetime.now(UTC)
 
     # Build history timeline
     history = []
@@ -837,7 +870,9 @@ async def inventory_opal_detail(
     source_po = None
     source_info = {}
     if record.source_purchase_line_id:
-        po_line = db.query(PurchaseLine).filter(PurchaseLine.id == record.source_purchase_line_id).first()
+        po_line = (
+            db.query(PurchaseLine).filter(PurchaseLine.id == record.source_purchase_line_id).first()
+        )
         if po_line and po_line.purchase:
             source_po = {
                 "id": po_line.purchase_id,
@@ -849,28 +884,36 @@ async def inventory_opal_detail(
             }
     context["source_po"] = source_po
 
-    history.append({
-        "event": "created",
-        "timestamp": record.created_at,
-        "details": {
-            "source_type": record.source_type.value if record.source_type and hasattr(record.source_type, 'value') else record.source_type,
-            "quantity": float(record.quantity),
-            **source_info,
-        },
-    })
+    history.append(
+        {
+            "event": "created",
+            "timestamp": record.created_at,
+            "details": {
+                "source_type": record.source_type.value
+                if record.source_type and hasattr(record.source_type, "value")
+                else record.source_type,
+                "quantity": float(record.quantity),
+                **source_info,
+            },
+        }
+    )
 
     # Consumptions
     for c in record.consumptions:
-        history.append({
-            "event": "consumed",
-            "timestamp": c.created_at,
-            "details": {
-                "quantity": float(c.quantity),
-                "usage_type": c.usage_type.value if hasattr(c.usage_type, 'value') else c.usage_type,
-                "procedure_instance_id": c.procedure_instance_id,
-                "notes": c.notes,
-            },
-        })
+        history.append(
+            {
+                "event": "consumed",
+                "timestamp": c.created_at,
+                "details": {
+                    "quantity": float(c.quantity),
+                    "usage_type": c.usage_type.value
+                    if hasattr(c.usage_type, "value")
+                    else c.usage_type,
+                    "procedure_instance_id": c.procedure_instance_id,
+                    "notes": c.notes,
+                },
+            }
+        )
 
     # Sort by timestamp
     history.sort(key=lambda h: h["timestamp"], reverse=True)
@@ -879,9 +922,11 @@ async def inventory_opal_detail(
     # Source production info (if this item was produced)
     source_wo = None
     if record.source_production_id:
-        production = db.query(InventoryProduction).filter(
-            InventoryProduction.id == record.source_production_id
-        ).first()
+        production = (
+            db.query(InventoryProduction)
+            .filter(InventoryProduction.id == record.source_production_id)
+            .first()
+        )
         if production and production.procedure_instance:
             source_wo = {
                 "instance_id": production.procedure_instance_id,
@@ -892,12 +937,14 @@ async def inventory_opal_detail(
 
     # Genealogy data
     from opal.core.genealogy import get_full_genealogy
+
     genealogy = get_full_genealogy(db, opal_number)
     context["genealogy_components"] = genealogy["components"]
     context["genealogy_assemblies"] = genealogy["assemblies_containing"]
 
     # Test results and templates
     from opal.db.models.inventory import StockTestResult, TestTemplate
+
     test_results = (
         db.query(StockTestResult)
         .filter(StockTestResult.inventory_record_id == record.id)
@@ -944,6 +991,7 @@ async def inventory_adjust(
 
 # ============ PURCHASES ============
 
+
 @router.get("/purchases", response_class=HTMLResponse)
 async def purchases_list(request: Request, db: DbSession) -> HTMLResponse:
     """Purchases list page."""
@@ -983,20 +1031,19 @@ async def purchases_new(
 
     # Get parts for line items - convert to dicts for JSON serialization
     parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
-    context["parts"] = [
-        {"id": p.id, "name": p.name, "external_pn": p.external_pn}
-        for p in parts
-    ]
+    context["parts"] = [{"id": p.id, "name": p.name, "external_pn": p.external_pn} for p in parts]
 
     # Get suppliers for dropdown - convert to dicts for JSON serialization
-    suppliers = db.query(Supplier).filter(
-        Supplier.deleted_at.is_(None),
-        Supplier.is_active == True  # noqa: E712
-    ).order_by(Supplier.name).all()
-    context["suppliers"] = [
-        {"id": s.id, "name": s.name, "code": s.code}
-        for s in suppliers
-    ]
+    suppliers = (
+        db.query(Supplier)
+        .filter(
+            Supplier.deleted_at.is_(None),
+            Supplier.is_active == True,  # noqa: E712
+        )
+        .order_by(Supplier.name)
+        .all()
+    )
+    context["suppliers"] = [{"id": s.id, "name": s.name, "code": s.code} for s in suppliers]
     context["preselected_supplier_id"] = supplier_id
 
     return templates.TemplateResponse("purchases/new.html", context)
@@ -1021,14 +1068,14 @@ async def purchases_detail(request: Request, db: DbSession, purchase_id: int) ->
     parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
     context["parts"] = parts  # Keep full objects for template rendering
     context["parts_json"] = [
-        {"id": p.id, "name": p.name, "external_pn": p.external_pn}
-        for p in parts
+        {"id": p.id, "name": p.name, "external_pn": p.external_pn} for p in parts
     ]
 
     return templates.TemplateResponse("purchases/detail.html", context)
 
 
 # ============ PROCEDURES ============
+
 
 @router.get("/procedures", response_class=HTMLResponse)
 async def procedures_list(request: Request, db: DbSession) -> HTMLResponse:
@@ -1062,22 +1109,30 @@ async def procedures_table(
     for p in procedures:
         version_number = None
         if p.current_version_id:
-            version = db.query(ProcedureVersion).filter(ProcedureVersion.id == p.current_version_id).first()
+            version = (
+                db.query(ProcedureVersion)
+                .filter(ProcedureVersion.id == p.current_version_id)
+                .first()
+            )
             if version:
                 version_number = version.version_number
         # Handle status - may be enum or string depending on context
-        status_val = p.status.value if hasattr(p.status, 'value') else p.status
-        procs_with_info.append({
-            "id": p.id,
-            "name": p.name,
-            "procedure_type": p.procedure_type.value if hasattr(p.procedure_type, 'value') else p.procedure_type,
-            "status": status_val,
-            "current_version_id": p.current_version_id,
-            "version_number": version_number,
-            "step_count": len(p.steps),
-            "created_at": p.created_at,
-            "updated_at": p.updated_at,
-        })
+        status_val = p.status.value if hasattr(p.status, "value") else p.status
+        procs_with_info.append(
+            {
+                "id": p.id,
+                "name": p.name,
+                "procedure_type": p.procedure_type.value
+                if hasattr(p.procedure_type, "value")
+                else p.procedure_type,
+                "status": status_val,
+                "current_version_id": p.current_version_id,
+                "version_number": version_number,
+                "step_count": len(p.steps),
+                "created_at": p.created_at,
+                "updated_at": p.updated_at,
+            }
+        )
 
     return templates.TemplateResponse(
         "procedures/table_rows.html",
@@ -1091,7 +1146,9 @@ async def procedures_new(request: Request, db: DbSession) -> HTMLResponse:
     context = get_base_context(request, db, "New Procedure - OPAL")
 
     # Get workcenters for the form
-    workcenters = db.query(Workcenter).filter(Workcenter.is_active == True).order_by(Workcenter.name).all()  # noqa: E712
+    workcenters = (
+        db.query(Workcenter).filter(Workcenter.is_active.is_(True)).order_by(Workcenter.name).all()
+    )
     context["workcenters"] = workcenters
 
     return templates.TemplateResponse("procedures/new.html", context)
@@ -1128,18 +1185,18 @@ async def procedures_detail(request: Request, db: DbSession, procedure_id: int) 
     # Get current version number
     current_version_num = None
     if procedure.current_version_id:
-        current_ver = db.query(ProcedureVersion).filter(ProcedureVersion.id == procedure.current_version_id).first()
+        current_ver = (
+            db.query(ProcedureVersion)
+            .filter(ProcedureVersion.id == procedure.current_version_id)
+            .first()
+        )
         if current_ver:
             current_version_num = current_ver.version_number
     context["current_version_num"] = current_version_num
 
     # Get kit items
     kit_items = (
-        db.query(Kit)
-        .join(Part)
-        .filter(Kit.procedure_id == procedure_id)
-        .order_by(Part.name)
-        .all()
+        db.query(Kit).join(Part).filter(Kit.procedure_id == procedure_id).order_by(Part.name).all()
     )
     context["kit_items"] = [
         {
@@ -1154,6 +1211,7 @@ async def procedures_detail(request: Request, db: DbSession, procedure_id: int) 
 
     # Get output items (what this procedure produces)
     from opal.db.models.procedure import ProcedureOutput
+
     output_items = (
         db.query(ProcedureOutput)
         .join(Part)
@@ -1268,6 +1326,7 @@ async def procedures_step_edit(
 
     # Get step kit items
     from opal.db.models.procedure import StepKit
+
     step_kit_items = db.query(StepKit).filter(StepKit.step_id == step_id).all()
     context["step_kit"] = [
         {
@@ -1306,7 +1365,9 @@ async def procedures_version_diff(
 
     proc_changes, step_diffs = diff_procedure_versions(version_a.content, version_b.content)
 
-    context = get_base_context(request, db, f"Diff v{version_a.version_number} → v{version_b.version_number} - OPAL")
+    context = get_base_context(
+        request, db, f"Diff v{version_a.version_number} → v{version_b.version_number} - OPAL"
+    )
     context["procedure"] = procedure
     context["version_a"] = version_a
     context["version_b"] = version_b
@@ -1330,10 +1391,14 @@ async def procedures_version_print(
 
     import segno
 
-    version = db.query(ProcedureVersion).filter(
-        ProcedureVersion.id == ver_id,
-        ProcedureVersion.procedure_id == proc_id,
-    ).first()
+    version = (
+        db.query(ProcedureVersion)
+        .filter(
+            ProcedureVersion.id == ver_id,
+            ProcedureVersion.procedure_id == proc_id,
+        )
+        .first()
+    )
     if not version:
         return HTMLResponse("Version not found", status_code=404)
 
@@ -1348,11 +1413,7 @@ async def procedures_version_print(
 
     # Get kit items for this procedure
     kit_items_raw = (
-        db.query(Kit)
-        .join(Part)
-        .filter(Kit.procedure_id == proc_id)
-        .order_by(Part.name)
-        .all()
+        db.query(Kit).join(Part).filter(Kit.procedure_id == proc_id).order_by(Part.name).all()
     )
     kit_items = [
         {
@@ -1366,20 +1427,27 @@ async def procedures_version_print(
     # Extract steps from version content
     steps = version.content.get("steps", [])
 
-    return templates.TemplateResponse("procedures/print_traveler.html", {
-        "request": request,
-        "procedure_name": version.content.get("procedure_name", procedure.name),
-        "version_number": version.version_number,
-        "description": version.content.get("procedure_description"),
-        "published_at": version.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if version.created_at else "",
-        "qr_data_uri": qr_data_uri,
-        "kit_items": kit_items,
-        "steps": steps,
-    })
+    return templates.TemplateResponse(
+        "procedures/print_traveler.html",
+        {
+            "request": request,
+            "procedure_name": version.content.get("procedure_name", procedure.name),
+            "version_number": version.version_number,
+            "description": version.content.get("procedure_description"),
+            "published_at": version.created_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if version.created_at
+            else "",
+            "qr_data_uri": qr_data_uri,
+            "kit_items": kit_items,
+            "steps": steps,
+        },
+    )
 
 
 @router.get("/procedures/versions/{version_id}", response_class=HTMLResponse)
-async def procedures_version_detail(request: Request, db: DbSession, version_id: int) -> HTMLResponse:
+async def procedures_version_detail(
+    request: Request, db: DbSession, version_id: int
+) -> HTMLResponse:
     """View a specific procedure version."""
     version = db.query(ProcedureVersion).filter(ProcedureVersion.id == version_id).first()
     if not version:
@@ -1389,11 +1457,7 @@ async def procedures_version_detail(request: Request, db: DbSession, version_id:
             status_code=404,
         )
 
-    procedure = (
-        db.query(MasterProcedure)
-        .filter(MasterProcedure.id == version.procedure_id)
-        .first()
-    )
+    procedure = db.query(MasterProcedure).filter(MasterProcedure.id == version.procedure_id).first()
 
     # Get all versions for this procedure (for compare links)
     versions = (
@@ -1453,6 +1517,7 @@ async def procedures_version_detail(request: Request, db: DbSession, version_id:
 
 # ============ EXECUTION ============
 
+
 @router.get("/executions", response_class=HTMLResponse)
 async def executions_list(request: Request, db: DbSession) -> HTMLResponse:
     """Procedure executions list page."""
@@ -1492,22 +1557,25 @@ async def executions_table(
     instances_data = []
     for inst in instances:
         version = db.query(ProcedureVersion).filter(ProcedureVersion.id == inst.version_id).first()
-        status_val = inst.status.value if hasattr(inst.status, 'value') else inst.status
+        status_val = inst.status.value if hasattr(inst.status, "value") else inst.status
         completed_steps = sum(
-            1 for se in inst.step_executions
-            if (se.status.value if hasattr(se.status, 'value') else se.status) == 'completed'
+            1
+            for se in inst.step_executions
+            if (se.status.value if hasattr(se.status, "value") else se.status) == "completed"
         )
-        instances_data.append({
-            "id": inst.id,
-            "procedure_name": inst.procedure.name,
-            "version_number": version.version_number if version else 0,
-            "work_order": inst.work_order_number or "-",
-            "status": status_val,
-            "completed_steps": completed_steps,
-            "total_steps": len(inst.step_executions),
-            "started_at": inst.started_at,
-            "created_at": inst.created_at,
-        })
+        instances_data.append(
+            {
+                "id": inst.id,
+                "procedure_name": inst.procedure.name,
+                "version_number": version.version_number if version else 0,
+                "work_order": inst.work_order_number or "-",
+                "status": status_val,
+                "completed_steps": completed_steps,
+                "total_steps": len(inst.step_executions),
+                "started_at": inst.started_at,
+                "created_at": inst.created_at,
+            }
+        )
 
     return templates.TemplateResponse(
         "executions/table_rows.html",
@@ -1531,8 +1599,7 @@ async def executions_new(request: Request, db: DbSession) -> HTMLResponse:
         .all()
     )
     context["procedures"] = [
-        {"id": p.id, "name": p.name, "current_version_id": p.current_version_id}
-        for p in procedures
+        {"id": p.id, "name": p.name, "current_version_id": p.current_version_id} for p in procedures
     ]
 
     return templates.TemplateResponse("executions/new.html", context)
@@ -1576,8 +1643,11 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
             "is_contingency": vs.get("is_contingency", False),
             "required_data_schema": vs.get("required_data_schema"),
             "execution": step_exec,
-            "status": (step_exec.status.value if step_exec and hasattr(step_exec.status, 'value')
-                       else (step_exec.status if step_exec else 'pending')),
+            "status": (
+                step_exec.status.value
+                if step_exec and hasattr(step_exec.status, "value")
+                else (step_exec.status if step_exec else "pending")
+            ),
         }
 
     all_steps = [build_step_data(vs) for vs in version_steps]
@@ -1588,7 +1658,6 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
     contingency_ops = []  # Contingency ops
 
     # Build lookup by step ID
-    step_by_id: dict[int, dict] = {s["id"]: s for s in all_steps if s.get("id")}
 
     # Group sub-steps by parent
     children_map: dict[int, list] = {}
@@ -1605,7 +1674,11 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
             sub_steps = sorted(children_map.get(step.get("id"), []), key=lambda s: s["order"])
             # Calculate progress for this op
             total = len(sub_steps) if sub_steps else 1
-            completed = sum(1 for s in sub_steps if s["status"] in ["completed", "skipped"]) if sub_steps else (1 if step["status"] in ["completed", "skipped"] else 0)
+            completed = (
+                sum(1 for s in sub_steps if s["status"] in ["completed", "skipped"])
+                if sub_steps
+                else (1 if step["status"] in ["completed", "skipped"] else 0)
+            )
             op_data = {
                 "step": step,
                 "sub_steps": sub_steps,
@@ -1621,6 +1694,7 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
     def sort_key_normal(x):
         sn = x["step"].get("step_number", "0")
         return int(sn) if sn.isdigit() else 0
+
     def sort_key_contingency(x):
         return x["step"].get("step_number", "C0")
 
@@ -1638,8 +1712,12 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
     context["kit_items"] = kit_items
 
     # Get existing consumptions
-    from opal.db.models.inventory import InventoryConsumption, InventoryProduction, ProductionStatus, UsageType
+    from opal.db.models.inventory import (
+        InventoryConsumption,
+        InventoryProduction,
+    )
     from opal.db.models.procedure import ProcedureOutput
+
     consumptions = (
         db.query(InventoryConsumption)
         .filter(InventoryConsumption.procedure_instance_id == instance_id)
@@ -1656,13 +1734,16 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
 
     # Step execution ID -> step number lookup
     step_exec_lookup = {
-        se.id: se.step_number_str or str(se.step_number)
-        for se in instance.step_executions
+        se.id: se.step_number_str or str(se.step_number) for se in instance.step_executions
     }
     context["step_exec_lookup"] = step_exec_lookup
 
     # Get outputs (what this procedure produces)
-    output_items = db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == instance.procedure_id).all()
+    output_items = (
+        db.query(ProcedureOutput)
+        .filter(ProcedureOutput.procedure_id == instance.procedure_id)
+        .all()
+    )
     context["output_items"] = output_items
 
     # Get existing productions
@@ -1675,10 +1756,10 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
 
     # BOM reconciliation data
     kit_items = context["kit_items"]
-    kit_by_part = {k.part_id: float(k.quantity_required) for k in kit_items}
     consume_consumptions = [
-        c for c in consumptions
-        if (c.usage_type.value if hasattr(c.usage_type, 'value') else c.usage_type) == 'consume'
+        c
+        for c in consumptions
+        if (c.usage_type.value if hasattr(c.usage_type, "value") else c.usage_type) == "consume"
     ]
     consumed_by_part: dict[int, float] = {}
     for c in consume_consumptions:
@@ -1689,45 +1770,54 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
     for k in kit_items:
         qty_consumed = consumed_by_part.pop(k.part_id, 0)
         qty_required = float(k.quantity_required)
-        bom_items.append({
-            "part_id": k.part_id,
-            "part_name": k.part.name,
-            "qty_required": qty_required,
-            "qty_consumed": qty_consumed,
-            "variance": qty_consumed - qty_required,
-        })
+        bom_items.append(
+            {
+                "part_id": k.part_id,
+                "part_name": k.part.name,
+                "qty_required": qty_required,
+                "qty_consumed": qty_consumed,
+                "variance": qty_consumed - qty_required,
+            }
+        )
     # Unplanned consumptions (consumed but not in kit)
     unplanned = []
     for pid, qty in consumed_by_part.items():
         inv_c = next((c for c in consume_consumptions if c.inventory_record.part_id == pid), None)
-        unplanned.append({
-            "part_id": pid,
-            "part_name": inv_c.inventory_record.part.name if inv_c else "Unknown",
-            "qty_consumed": qty,
-        })
+        unplanned.append(
+            {
+                "part_id": pid,
+                "part_name": inv_c.inventory_record.part.name if inv_c else "Unknown",
+                "qty_consumed": qty,
+            }
+        )
     context["bom_items"] = bom_items
     context["unplanned_consumptions"] = unplanned
 
     # Can finalize: instance completed + has WIP productions
-    inst_status = instance.status.value if hasattr(instance.status, 'value') else instance.status
+    inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
     has_wip = any(
-        (p.status.value if hasattr(p.status, 'value') else p.status) == 'wip'
-        for p in productions
+        (p.status.value if hasattr(p.status, "value") else p.status) == "wip" for p in productions
     )
-    context["can_finalize"] = inst_status == 'completed' and has_wip
+    context["can_finalize"] = inst_status == "completed" and has_wip
 
     # Linked issues
     from opal.db.models.issue import Issue
-    linked_issues = db.query(Issue).filter(
-        Issue.procedure_instance_id == instance.id,
-        Issue.deleted_at.is_(None),
-    ).all()
+
+    linked_issues = (
+        db.query(Issue)
+        .filter(
+            Issue.procedure_instance_id == instance.id,
+            Issue.deleted_at.is_(None),
+        )
+        .all()
+    )
     context["linked_issues"] = linked_issues
 
     return templates.TemplateResponse("executions/detail.html", context)
 
 
 # ============ ISSUES ============
+
 
 @router.get("/issues", response_class=HTMLResponse)
 async def issues_list(request: Request, db: DbSession) -> HTMLResponse:
@@ -1765,16 +1855,16 @@ async def issues_table(
 
     def get_val(obj, attr):
         val = getattr(obj, attr)
-        return val.value if hasattr(val, 'value') else val
+        return val.value if hasattr(val, "value") else val
 
     issues_data = [
         {
             "id": i.id,
             "issue_number": i.issue_number,
             "title": i.title,
-            "issue_type": get_val(i, 'issue_type'),
-            "status": get_val(i, 'status'),
-            "priority": get_val(i, 'priority'),
+            "issue_type": get_val(i, "issue_type"),
+            "status": get_val(i, "status"),
+            "priority": get_val(i, "priority"),
             "created_at": i.created_at,
             "procedure_id": i.procedure_id,
             "procedure_instance_id": i.procedure_instance_id,
@@ -1797,8 +1887,14 @@ async def issues_new(request: Request, db: DbSession) -> HTMLResponse:
 
     # Get parts, procedures, and users for linking
     parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
-    procedures = db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None)).order_by(MasterProcedure.name).all()
+    procedures = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.deleted_at.is_(None))
+        .order_by(MasterProcedure.name)
+        .all()
+    )
     from opal.db.models.user import User
+
     users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
     context["parts"] = parts
     context["procedures"] = procedures
@@ -1824,9 +1920,9 @@ async def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLR
     context["statuses"] = [s.value for s in IssueStatus]
     context["priorities"] = [p.value for p in IssuePriority]
 
+    from opal.db.models.attachment import Attachment
     from opal.db.models.issue import DispositionType
     from opal.db.models.issue_comment import IssueComment
-    from opal.db.models.attachment import Attachment
     from opal.db.models.user import User
 
     comments = (
@@ -1847,6 +1943,7 @@ async def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLR
 
 
 # ============ RISKS ============
+
 
 @router.get("/risks", response_class=HTMLResponse)
 async def risks_list(request: Request, db: DbSession) -> HTMLResponse:
@@ -1914,10 +2011,12 @@ async def risks_matrix(request: Request, db: DbSession) -> HTMLResponse:
     context["low_count"] = sum(1 for r in risks if r.severity == "low")
 
     # Convert risks to JSON for filtering
-    context["risks_json"] = json.dumps([
-        {"id": r.id, "title": r.title, "probability": r.probability, "impact": r.impact}
-        for r in risks
-    ])
+    context["risks_json"] = json.dumps(
+        [
+            {"id": r.id, "title": r.title, "probability": r.probability, "impact": r.impact}
+            for r in risks
+        ]
+    )
 
     return templates.TemplateResponse("risks/matrix.html", context)
 
@@ -1928,7 +2027,13 @@ async def risks_new(request: Request, db: DbSession) -> HTMLResponse:
     context = get_base_context(request, db, "New Risk - OPAL")
 
     # Get issues for linking
-    issues = db.query(Issue).filter(Issue.deleted_at.is_(None)).order_by(Issue.id.desc()).limit(100).all()
+    issues = (
+        db.query(Issue)
+        .filter(Issue.deleted_at.is_(None))
+        .order_by(Issue.id.desc())
+        .limit(100)
+        .all()
+    )
     context["issues"] = issues
 
     return templates.TemplateResponse("risks/new.html", context)
@@ -1954,13 +2059,19 @@ async def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLRes
 
 # ============ DATASETS ============
 
+
 @router.get("/datasets", response_class=HTMLResponse)
 async def datasets_list(request: Request, db: DbSession) -> HTMLResponse:
     """Datasets list page."""
     context = get_base_context(request, db, "Datasets - OPAL")
 
     # Get procedures for filter
-    procedures = db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None)).order_by(MasterProcedure.name).all()
+    procedures = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.deleted_at.is_(None))
+        .order_by(MasterProcedure.name)
+        .all()
+    )
     context["procedures"] = procedures
 
     return templates.TemplateResponse("datasets/list.html", context)
@@ -1996,7 +2107,12 @@ async def datasets_new(request: Request, db: DbSession) -> HTMLResponse:
     context = get_base_context(request, db, "New Dataset - OPAL")
 
     # Get procedures for linking
-    procedures = db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None)).order_by(MasterProcedure.name).all()
+    procedures = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.deleted_at.is_(None))
+        .order_by(MasterProcedure.name)
+        .all()
+    )
     context["procedures"] = procedures
 
     return templates.TemplateResponse("datasets/new.html", context)
@@ -2007,7 +2123,9 @@ async def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> H
     """Dataset detail page with chart."""
     import json
 
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
+    dataset = (
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
+    )
     if not dataset:
         return templates.TemplateResponse(
             "errors/404.html",
@@ -2029,14 +2147,16 @@ async def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> H
     context["data_points"] = data_points
 
     # Convert to JSON for chart
-    context["data_points_json"] = json.dumps([
-        {
-            "id": p.id,
-            "recorded_at": p.recorded_at.isoformat(),
-            "values": p.values,
-        }
-        for p in data_points
-    ])
+    context["data_points_json"] = json.dumps(
+        [
+            {
+                "id": p.id,
+                "recorded_at": p.recorded_at.isoformat(),
+                "values": p.values,
+            }
+            for p in data_points
+        ]
+    )
 
     return templates.TemplateResponse("datasets/detail.html", context)
 
@@ -2081,15 +2201,17 @@ async def suppliers_table(
     # Build response with purchase counts
     supplier_data = []
     for s in suppliers:
-        supplier_data.append({
-            "id": s.id,
-            "code": s.code,
-            "name": s.name,
-            "email": s.email,
-            "phone": s.phone,
-            "is_active": s.is_active,
-            "purchase_count": len(s.purchases) if s.purchases else 0,
-        })
+        supplier_data.append(
+            {
+                "id": s.id,
+                "code": s.code,
+                "name": s.name,
+                "email": s.email,
+                "phone": s.phone,
+                "is_active": s.is_active,
+                "purchase_count": len(s.purchases) if s.purchases else 0,
+            }
+        )
 
     return templates.TemplateResponse(
         "suppliers/table_rows.html",
@@ -2107,9 +2229,9 @@ async def suppliers_new(request: Request, db: DbSession) -> HTMLResponse:
 @router.get("/suppliers/{supplier_id}", response_class=HTMLResponse)
 async def suppliers_detail(request: Request, db: DbSession, supplier_id: int) -> HTMLResponse:
     """Supplier detail page."""
-    supplier = db.query(Supplier).filter(
-        Supplier.id == supplier_id, Supplier.deleted_at.is_(None)
-    ).first()
+    supplier = (
+        db.query(Supplier).filter(Supplier.id == supplier_id, Supplier.deleted_at.is_(None)).first()
+    )
     if not supplier:
         return templates.TemplateResponse(
             "errors/404.html",
@@ -2127,9 +2249,9 @@ async def suppliers_detail(request: Request, db: DbSession, supplier_id: int) ->
 @router.get("/suppliers/{supplier_id}/edit", response_class=HTMLResponse)
 async def suppliers_edit(request: Request, db: DbSession, supplier_id: int) -> HTMLResponse:
     """Supplier edit page."""
-    supplier = db.query(Supplier).filter(
-        Supplier.id == supplier_id, Supplier.deleted_at.is_(None)
-    ).first()
+    supplier = (
+        db.query(Supplier).filter(Supplier.id == supplier_id, Supplier.deleted_at.is_(None)).first()
+    )
     if not supplier:
         return templates.TemplateResponse(
             "errors/404.html",
@@ -2339,31 +2461,40 @@ async def label_print(
 ) -> HTMLResponse:
     """Print label with QR code for a part or inventory record."""
     if type == "inventory":
-        record = db.query(InventoryRecord).join(Part).filter(
-            InventoryRecord.id == id, Part.deleted_at.is_(None)
-        ).first()
+        record = (
+            db.query(InventoryRecord)
+            .join(Part)
+            .filter(InventoryRecord.id == id, Part.deleted_at.is_(None))
+            .first()
+        )
         if not record:
             return HTMLResponse("Not found", status_code=404)
-        return templates.TemplateResponse("label_print.html", {
-            "request": request,
-            "entity_type": "inventory",
-            "entity_id": record.id,
-            "identifier": record.opal_number or f"INV-{record.id}",
-            "name": record.part.name,
-            "location": record.location,
-        })
+        return templates.TemplateResponse(
+            "label_print.html",
+            {
+                "request": request,
+                "entity_type": "inventory",
+                "entity_id": record.id,
+                "identifier": record.opal_number or f"INV-{record.id}",
+                "name": record.part.name,
+                "location": record.location,
+            },
+        )
     elif type == "part":
         part = db.query(Part).filter(Part.id == id, Part.deleted_at.is_(None)).first()
         if not part:
             return HTMLResponse("Not found", status_code=404)
-        return templates.TemplateResponse("label_print.html", {
-            "request": request,
-            "entity_type": "parts",
-            "entity_id": part.id,
-            "identifier": part.internal_pn or f"PART-{part.id}",
-            "name": part.name,
-            "location": None,
-        })
+        return templates.TemplateResponse(
+            "label_print.html",
+            {
+                "request": request,
+                "entity_type": "parts",
+                "entity_id": part.id,
+                "identifier": part.internal_pn or f"PART-{part.id}",
+                "name": part.name,
+                "location": None,
+            },
+        )
     return HTMLResponse("Invalid type", status_code=400)
 
 
@@ -2491,12 +2622,7 @@ async def settings_onshape_sync_log(request: Request, db: DbSession) -> HTMLResp
     """HTMX partial: recent Onshape sync log entries."""
     from opal.db.models.onshape_link import OnshapeSyncLog
 
-    sync_logs = (
-        db.query(OnshapeSyncLog)
-        .order_by(OnshapeSyncLog.id.desc())
-        .limit(10)
-        .all()
-    )
+    sync_logs = db.query(OnshapeSyncLog).order_by(OnshapeSyncLog.id.desc()).limit(10).all()
     return templates.TemplateResponse(
         "settings/onshape_sync_log.html",
         {"request": request, "sync_logs": sync_logs},
@@ -2574,9 +2700,7 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
     for doc in project.onshape.documents:
         if doc.document_id == document_id and doc.element_id == element_id:
             context["onshape_doc_error"] = f"Already registered as '{doc.name}'"
-            return templates.TemplateResponse(
-                "settings/onshape_documents.html", context
-            )
+            return templates.TemplateResponse("settings/onshape_documents.html", context)
 
     # Auto-detect element type
     client = OnshapeClient(
@@ -2585,9 +2709,7 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
         base_url=settings.onshape_base_url,
     )
     try:
-        elements = await asyncio.to_thread(
-            client.get_elements, document_id, workspace_id
-        )
+        elements = await asyncio.to_thread(client.get_elements, document_id, workspace_id)
     except OnshapeApiError as e:
         context["onshape_doc_error"] = f"Onshape API error: {e.detail}"
         return templates.TemplateResponse("settings/onshape_documents.html", context)
@@ -2627,9 +2749,7 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
 
 
 @router.post("/settings/onshape/documents/remove", response_class=HTMLResponse)
-async def settings_onshape_remove_document(
-    request: Request, db: DbSession
-) -> HTMLResponse:
+async def settings_onshape_remove_document(request: Request, db: DbSession) -> HTMLResponse:
     """HTMX: remove an Onshape document from config."""
     from opal.config import get_active_project, get_active_settings
     from opal.project import save_project_config
@@ -2685,10 +2805,8 @@ async def settings_onshape_sync_pull(request: Request, db: DbSession) -> HTMLRes
     user_id: int | None = None
     cookie_user_id = request.cookies.get("opal_user_id")
     if cookie_user_id:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             user_id = int(cookie_user_id)
-        except (ValueError, TypeError):
-            pass
 
     if not settings.onshape_enabled or not project or not project.onshape.documents:
         sync_logs = db.query(OnshapeSyncLog).order_by(OnshapeSyncLog.id.desc()).limit(10).all()
@@ -2781,10 +2899,8 @@ async def settings_onshape_sync_push(request: Request, db: DbSession) -> HTMLRes
     user_id: int | None = None
     cookie_user_id = request.cookies.get("opal_user_id")
     if cookie_user_id:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             user_id = int(cookie_user_id)
-        except (ValueError, TypeError):
-            pass
 
     if not settings.onshape_enabled or not project or not project.onshape.documents:
         sync_logs = db.query(OnshapeSyncLog).order_by(OnshapeSyncLog.id.desc()).limit(10).all()
@@ -2871,7 +2987,8 @@ async def audit_list(request: Request, db: DbSession) -> HTMLResponse:
 
     # Get distinct table names for filter
     table_names = [
-        row[0] for row in db.query(AuditLog.table_name).distinct().order_by(AuditLog.table_name).all()
+        row[0]
+        for row in db.query(AuditLog.table_name).distinct().order_by(AuditLog.table_name).all()
     ]
     context["table_names"] = table_names
 
@@ -2898,13 +3015,13 @@ async def audit_table(
         query = query.filter(AuditLog.action == action)
     if date_from:
         try:
-            dt_from = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=UTC)
             query = query.filter(AuditLog.timestamp >= dt_from)
         except ValueError:
             pass
     if date_to:
         try:
-            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
             query = query.filter(AuditLog.timestamp < dt_to)
         except ValueError:
             pass

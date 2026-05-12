@@ -8,11 +8,13 @@ to connected clients. Events are used for:
 """
 
 import asyncio
+import contextlib
 import json
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, AsyncGenerator
+from typing import Any
 
 
 class EventType(str, Enum):
@@ -39,7 +41,7 @@ class Event:
 
     type: EventType
     data: dict[str, Any]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_sse(self) -> str:
         """Format event for SSE transmission."""
@@ -97,10 +99,8 @@ class EventBus:
             subscribers = list(self._subscribers.values())
 
         for queue in subscribers:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 queue.put_nowait(event)
-            except asyncio.QueueFull:
-                pass  # Skip slow consumers
 
         return len(subscribers)
 

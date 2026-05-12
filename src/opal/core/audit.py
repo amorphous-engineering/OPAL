@@ -1,11 +1,11 @@
 """Audit logging utilities."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import inspect, MetaData
+from sqlalchemy import MetaData, inspect
 from sqlalchemy.orm import Session
 
 from opal.db.models.audit import AuditAction, AuditLog
@@ -31,9 +31,7 @@ def get_model_dict(instance: Any) -> dict[str, Any]:
             continue
 
         # Convert datetime/date to ISO format for JSON serialization
-        if isinstance(value, datetime):
-            value = value.isoformat()
-        elif isinstance(value, date):
+        if isinstance(value, (datetime, date)):
             value = value.isoformat()
         # Convert Decimal to float for JSON serialization
         elif isinstance(value, Decimal):
@@ -67,7 +65,7 @@ def log_create(
     new_values = get_model_dict(instance)
 
     audit_entry = AuditLog(
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         table_name=instance.__tablename__,
         record_id=instance.id,
         action=AuditAction.CREATE,
@@ -96,7 +94,7 @@ def log_update(
         return None
 
     audit_entry = AuditLog(
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         table_name=instance.__tablename__,
         record_id=instance.id,
         action=AuditAction.UPDATE,
@@ -117,7 +115,7 @@ def log_delete(
     old_values = get_model_dict(instance)
 
     audit_entry = AuditLog(
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         table_name=instance.__tablename__,
         record_id=instance.id,
         action=AuditAction.DELETE,

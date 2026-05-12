@@ -34,7 +34,9 @@ async def load_demo_data(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     if db.query(Part).first():
-        raise HTTPException(status_code=400, detail="Database already has parts — cannot load demo data")
+        raise HTTPException(
+            status_code=400, detail="Database already has parts — cannot load demo data"
+        )
 
     from opal.seed import seed_database
 

@@ -36,9 +36,7 @@ class Attachment(Base, IdMixin, TimestampMixin):
     step_execution: Mapped["StepExecution | None"] = relationship(
         "StepExecution", back_populates="attachments"
     )
-    issue: Mapped["Issue | None"] = relationship(
-        "Issue", back_populates="attachments"
-    )
+    issue: Mapped["Issue | None"] = relationship("Issue", back_populates="attachments")
 
     def __repr__(self) -> str:
         return f"<Attachment(id={self.id}, filename='{self.original_filename}', type='{self.mime_type}')>"

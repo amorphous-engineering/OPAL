@@ -61,42 +61,48 @@ class AuditScreen(Screen):
         try:
             parts = client.list_parts(page_size=10)
             for p in parts.get("items", []):
-                entries.append({
-                    "timestamp": p.get("created_at", "")[:16],
-                    "user": "-",
-                    "action": "create",
-                    "entity": "part",
-                    "entity_id": str(p.get("id", "")),
-                    "details": p.get("name", ""),
-                })
+                entries.append(
+                    {
+                        "timestamp": p.get("created_at", "")[:16],
+                        "user": "-",
+                        "action": "create",
+                        "entity": "part",
+                        "entity_id": str(p.get("id", "")),
+                        "details": p.get("name", ""),
+                    }
+                )
         except Exception:
             pass
 
         try:
             issues = client.list_issues(page_size=10)
             for i in issues.get("items", []):
-                entries.append({
-                    "timestamp": i.get("created_at", "")[:16],
-                    "user": "-",
-                    "action": "create",
-                    "entity": "issue",
-                    "entity_id": str(i.get("id", "")),
-                    "details": i.get("title", ""),
-                })
+                entries.append(
+                    {
+                        "timestamp": i.get("created_at", "")[:16],
+                        "user": "-",
+                        "action": "create",
+                        "entity": "issue",
+                        "entity_id": str(i.get("id", "")),
+                        "details": i.get("title", ""),
+                    }
+                )
         except Exception:
             pass
 
         try:
             execs = client.list_instances(page_size=10)
             for e in execs.get("items", []):
-                entries.append({
-                    "timestamp": e.get("created_at", "")[:16],
-                    "user": "-",
-                    "action": "create",
-                    "entity": "execution",
-                    "entity_id": str(e.get("id", "")),
-                    "details": e.get("procedure_name", ""),
-                })
+                entries.append(
+                    {
+                        "timestamp": e.get("created_at", "")[:16],
+                        "user": "-",
+                        "action": "create",
+                        "entity": "execution",
+                        "entity_id": str(e.get("id", "")),
+                        "details": e.get("procedure_name", ""),
+                    }
+                )
         except Exception:
             pass
 

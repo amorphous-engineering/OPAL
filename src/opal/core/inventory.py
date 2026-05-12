@@ -2,10 +2,9 @@
 
 from sqlalchemy.orm import Session
 
-from opal.db.models.inventory import InventoryRecord
-
 # Re-export from new designators module for backward compatibility
 from opal.core.designators import generate_opal_number  # noqa: F401
+from opal.db.models.inventory import InventoryRecord
 
 
 def get_inventory_by_opal(db: Session, opal_number: str) -> InventoryRecord | None:
@@ -18,6 +17,4 @@ def get_inventory_by_opal(db: Session, opal_number: str) -> InventoryRecord | No
     Returns:
         The InventoryRecord if found, None otherwise.
     """
-    return db.query(InventoryRecord).filter(
-        InventoryRecord.opal_number == opal_number
-    ).first()
+    return db.query(InventoryRecord).filter(InventoryRecord.opal_number == opal_number).first()

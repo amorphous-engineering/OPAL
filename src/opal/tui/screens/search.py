@@ -80,7 +80,8 @@ class SearchScreen(Screen):
         try:
             issues = client.list_issues(page_size=20)
             items = [
-                i for i in issues.get("items", [])
+                i
+                for i in issues.get("items", [])
                 if query.lower() in (i.get("title", "") + i.get("description", "")).lower()
             ]
             if items:
@@ -105,7 +106,8 @@ class SearchScreen(Screen):
         try:
             procs = client.list_procedures(page_size=20)
             items = [
-                p for p in procs.get("items", [])
+                p
+                for p in procs.get("items", [])
                 if query.lower() in (p.get("name", "") + p.get("description", "")).lower()
             ]
             if items:
@@ -128,17 +130,11 @@ class SearchScreen(Screen):
             pass
 
         if total == 0:
-            await results_container.mount(
-                Label(f"No results for '{query}'", classes="hint")
-            )
+            await results_container.mount(Label(f"No results for '{query}'", classes="hint"))
         else:
-            await results_container.mount(
-                Label(f"{total} result(s) found", classes="hint")
-            )
+            await results_container.mount(Label(f"{total} result(s) found", classes="hint"))
 
-    async def _show_global_results(
-        self, container: VerticalScroll, result: dict[str, Any]
-    ) -> None:
+    async def _show_global_results(self, container: VerticalScroll, result: dict[str, Any]) -> None:
         """Display results from global search API."""
         total = 0
         for entity_type, items in result.items():
@@ -152,7 +148,9 @@ class SearchScreen(Screen):
             table.add_columns("ID", "Name/Title", "Type", "Status")
             for item in items[:15]:
                 name = item.get("name", item.get("title", item.get("part_number", "")))
-                itype = item.get("category", item.get("issue_type", item.get("procedure_type", "-")))
+                itype = item.get(
+                    "category", item.get("issue_type", item.get("procedure_type", "-"))
+                )
                 status = item.get("status", "-")
                 table.add_row(
                     str(item.get("id", "")),

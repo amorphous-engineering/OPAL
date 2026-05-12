@@ -43,9 +43,7 @@ class InventoryRecord(Base, IdMixin, TimestampMixin):
         String(255), nullable=False, index=True, comment="Physical location identifier"
     )
     lot_number: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    last_counted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_counted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Shelf life / expiration
     expiration_date: Mapped[date | None] = mapped_column(
@@ -54,22 +52,25 @@ class InventoryRecord(Base, IdMixin, TimestampMixin):
 
     # Calibration tracking (for tooling items)
     last_calibrated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
-        comment="When this tool was last calibrated"
+        DateTime(timezone=True), nullable=True, comment="When this tool was last calibrated"
     )
     calibration_due_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True,
-        comment="When next calibration is due"
+        DateTime(timezone=True), nullable=True, index=True, comment="When next calibration is due"
     )
 
     # OPAL number for traceability (unique identifier for physical item/batch)
     opal_number: Mapped[str | None] = mapped_column(
-        String(20), nullable=True, unique=True, index=True,
-        comment="Unique identifier like OPAL-00001"
+        String(20),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="Unique identifier like OPAL-00001",
     )
     alias: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, index=True,
-        comment="User-friendly alias for this inventory record"
+        String(100),
+        nullable=True,
+        index=True,
+        comment="User-friendly alias for this inventory record",
     )
 
     # Source tracking - where did this inventory come from?
@@ -77,12 +78,16 @@ class InventoryRecord(Base, IdMixin, TimestampMixin):
         String(20), nullable=True, comment="purchase, production, manual, transfer"
     )
     source_purchase_line_id: Mapped[int | None] = mapped_column(
-        ForeignKey("purchase_line.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Link to PO line if from purchase"
+        ForeignKey("purchase_line.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Link to PO line if from purchase",
     )
     source_production_id: Mapped[int | None] = mapped_column(
-        ForeignKey("inventory_production.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Link to production record if produced"
+        ForeignKey("inventory_production.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Link to production record if produced",
     )
 
     # Relationships
@@ -91,8 +96,9 @@ class InventoryRecord(Base, IdMixin, TimestampMixin):
         "InventoryConsumption", back_populates="inventory_record"
     )
     productions: Mapped[list["InventoryProduction"]] = relationship(
-        "InventoryProduction", foreign_keys="InventoryProduction.inventory_record_id",
-        back_populates="inventory_record"
+        "InventoryProduction",
+        foreign_keys="InventoryProduction.inventory_record_id",
+        back_populates="inventory_record",
     )
     test_results: Mapped[list["StockTestResult"]] = relationship(
         "StockTestResult", back_populates="inventory_record", cascade="all, delete-orphan"
@@ -101,8 +107,9 @@ class InventoryRecord(Base, IdMixin, TimestampMixin):
         "PurchaseLine", foreign_keys=[source_purchase_line_id], backref="inventory_records"
     )
     source_production: Mapped["InventoryProduction | None"] = relationship(
-        "InventoryProduction", foreign_keys=[source_production_id],
-        overlaps="productions,inventory_record"
+        "InventoryProduction",
+        foreign_keys=[source_production_id],
+        overlaps="productions,inventory_record",
     )
 
     def __repr__(self) -> str:
@@ -137,15 +144,19 @@ class InventoryConsumption(Base, IdMixin, TimestampMixin):
         String(20), nullable=False, default=ConsumptionType.PROCEDURE
     )
     usage_type: Mapped[UsageType] = mapped_column(
-        String(20), nullable=False, default=UsageType.CONSUME,
-        comment="consume = permanent, tooling = returned"
+        String(20),
+        nullable=False,
+        default=UsageType.CONSUME,
+        comment="consume = permanent, tooling = returned",
     )
     procedure_instance_id: Mapped[int | None] = mapped_column(
         ForeignKey("procedure_instance.id", ondelete="SET NULL"), nullable=True, index=True
     )
     step_execution_id: Mapped[int | None] = mapped_column(
-        ForeignKey("step_execution.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Which step consumed this part"
+        ForeignKey("step_execution.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Which step consumed this part",
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     consumed_by_id: Mapped[int | None] = mapped_column(
@@ -162,9 +173,7 @@ class InventoryConsumption(Base, IdMixin, TimestampMixin):
     step_execution: Mapped["StepExecution | None"] = relationship(
         "StepExecution", back_populates="consumptions"
     )
-    consumed_by_user: Mapped["User | None"] = relationship(
-        "User", back_populates="consumptions"
-    )
+    consumed_by_user: Mapped["User | None"] = relationship("User", back_populates="consumptions")
     assembly_usage: Mapped[list["AssemblyComponent"]] = relationship(
         "AssemblyComponent", back_populates="consumption"
     )
@@ -189,12 +198,13 @@ class InventoryProduction(Base, IdMixin, TimestampMixin):
         String(100), nullable=True, index=True, comment="Serial for trackable assemblies"
     )
     produced_opal_number: Mapped[str | None] = mapped_column(
-        String(20), nullable=True, index=True,
-        comment="OPAL number assigned to produced item"
+        String(20), nullable=True, index=True, comment="OPAL number assigned to produced item"
     )
     status: Mapped[ProductionStatus] = mapped_column(
-        String(20), nullable=False, default=ProductionStatus.PLANNED,
-        comment="planned = allocated, wip = execution started, completed = finalized"
+        String(20),
+        nullable=False,
+        default=ProductionStatus.PLANNED,
+        comment="planned = allocated, wip = execution started, completed = finalized",
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     produced_by_id: Mapped[int | None] = mapped_column(
@@ -208,9 +218,7 @@ class InventoryProduction(Base, IdMixin, TimestampMixin):
     procedure_instance: Mapped["ProcedureInstance | None"] = relationship(
         "ProcedureInstance", back_populates="productions"
     )
-    produced_by_user: Mapped["User | None"] = relationship(
-        "User", back_populates="productions"
-    )
+    produced_by_user: Mapped["User | None"] = relationship("User", back_populates="productions")
     assembly_components: Mapped[list["AssemblyComponent"]] = relationship(
         "AssemblyComponent", back_populates="production"
     )
@@ -242,8 +250,7 @@ class TestTemplate(Base, IdMixin, TimestampMixin):
         default=False, nullable=False, comment="Whether this test is mandatory"
     )
     test_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="boolean",
-        comment="boolean, numeric, text"
+        String(50), nullable=False, default="boolean", comment="boolean, numeric, text"
     )
     min_value: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=15, scale=4), nullable=True, comment="For numeric tests"
@@ -276,8 +283,10 @@ class StockTestResult(Base, IdMixin, TimestampMixin):
         ForeignKey("inventory_record.id", ondelete="CASCADE"), nullable=False, index=True
     )
     template_id: Mapped[int | None] = mapped_column(
-        ForeignKey("test_template.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Link to predefined test template"
+        ForeignKey("test_template.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Link to predefined test template",
     )
     test_name: Mapped[str] = mapped_column(
         String(255), nullable=False, comment="Test name (from template or custom)"
@@ -289,9 +298,7 @@ class StockTestResult(Base, IdMixin, TimestampMixin):
         String(255), nullable=True, comment="Test value (numeric or text result)"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tested_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tested_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
@@ -303,9 +310,7 @@ class StockTestResult(Base, IdMixin, TimestampMixin):
     template: Mapped["TestTemplate | None"] = relationship(
         "TestTemplate", back_populates="test_results"
     )
-    tested_by_user: Mapped["User | None"] = relationship(
-        "User", back_populates="test_results"
-    )
+    tested_by_user: Mapped["User | None"] = relationship("User", back_populates="test_results")
 
     def __repr__(self) -> str:
         return f"<StockTestResult(id={self.id}, inv_id={self.inventory_record_id}, test='{self.test_name}', result={self.result})>"
@@ -326,12 +331,16 @@ class StockTransfer(Base, IdMixin, TimestampMixin):
     """
 
     source_inventory_id: Mapped[int] = mapped_column(
-        ForeignKey("inventory_record.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Source inventory record (may be null if source deleted)"
+        ForeignKey("inventory_record.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Source inventory record (may be null if source deleted)",
     )
     target_inventory_id: Mapped[int | None] = mapped_column(
-        ForeignKey("inventory_record.id", ondelete="SET NULL"), nullable=True, index=True,
-        comment="Target inventory record (created on transfer)"
+        ForeignKey("inventory_record.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Target inventory record (created on transfer)",
     )
     part_id: Mapped[int] = mapped_column(
         ForeignKey("part.id", ondelete="CASCADE"), nullable=False, index=True
@@ -354,9 +363,7 @@ class StockTransfer(Base, IdMixin, TimestampMixin):
     transferred_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
-    transferred_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    transferred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     source_inventory: Mapped["InventoryRecord | None"] = relationship(
@@ -366,9 +373,7 @@ class StockTransfer(Base, IdMixin, TimestampMixin):
         "InventoryRecord", foreign_keys=[target_inventory_id], backref="incoming_transfers"
     )
     part: Mapped["Part"] = relationship("Part", backref="stock_transfers")
-    transferred_by_user: Mapped["User | None"] = relationship(
-        "User", backref="stock_transfers"
-    )
+    transferred_by_user: Mapped["User | None"] = relationship("User", backref="stock_transfers")
 
     def __repr__(self) -> str:
         return f"<StockTransfer(id={self.id}, part_id={self.part_id}, qty={self.quantity}, {self.source_location} -> {self.target_location})>"

@@ -1,8 +1,8 @@
 """Part requirements management endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from opal.api.deps import CurrentUserId, DbSession
@@ -127,7 +127,9 @@ async def list_part_requirements(
     return [get_requirement_response(pr) for pr in reqs]
 
 
-@router.post("/parts/{part_id}", response_model=PartRequirementResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/parts/{part_id}", response_model=PartRequirementResponse, status_code=status.HTTP_201_CREATED
+)
 async def assign_requirement(
     db: DbSession,
     part_id: int,
@@ -237,7 +239,7 @@ async def verify_requirement(
     old_values = get_model_dict(pr)
 
     pr.status = "verified"
-    pr.verified_at = datetime.now(timezone.utc)
+    pr.verified_at = datetime.now(UTC)
     pr.verified_by_id = user_id
     if verify_in.notes:
         pr.notes = verify_in.notes

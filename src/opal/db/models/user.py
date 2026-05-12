@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -38,10 +38,14 @@ class User(Base, IdMixin, TimestampMixin):
         "ProcedureInstance", back_populates="started_by_user"
     )
     step_executions: Mapped[list["StepExecution"]] = relationship(
-        "StepExecution", foreign_keys="StepExecution.completed_by_id", back_populates="completed_by_user"
+        "StepExecution",
+        foreign_keys="StepExecution.completed_by_id",
+        back_populates="completed_by_user",
     )
     step_signoffs: Mapped[list["StepExecution"]] = relationship(
-        "StepExecution", foreign_keys="StepExecution.signed_off_by_id", back_populates="signed_off_by_user"
+        "StepExecution",
+        foreign_keys="StepExecution.signed_off_by_id",
+        back_populates="signed_off_by_user",
     )
     consumptions: Mapped[list["InventoryConsumption"]] = relationship(
         "InventoryConsumption", back_populates="consumed_by_user"

@@ -2,7 +2,7 @@
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from mcp.server import Server
@@ -553,38 +553,46 @@ async def _list_parts(db, args: dict) -> list[TextContent]:
     if args.get("search"):
         search = f"%{args['search']}%"
         query = query.filter(
-            (Part.name.ilike(search)) | (Part.internal_pn.ilike(search)) | (Part.external_pn.ilike(search))
+            (Part.name.ilike(search))
+            | (Part.internal_pn.ilike(search))
+            | (Part.external_pn.ilike(search))
         )
 
     limit = args.get("limit", 50)
     parts = query.order_by(Part.id.desc()).limit(limit).all()
 
-    return json_response({
-        "count": len(parts),
-        "parts": [
-            {
-                "id": p.id,
-                "internal_pn": p.internal_pn,
-                "name": p.name,
-                "category": p.category,
-                "external_pn": p.external_pn,
-                "description": p.description,
-                "tier": p.tier,
-                "parent_id": p.parent_id,
-            }
-            for p in parts
-        ],
-    })
+    return json_response(
+        {
+            "count": len(parts),
+            "parts": [
+                {
+                    "id": p.id,
+                    "internal_pn": p.internal_pn,
+                    "name": p.name,
+                    "category": p.category,
+                    "external_pn": p.external_pn,
+                    "description": p.description,
+                    "tier": p.tier,
+                    "parent_id": p.parent_id,
+                }
+                for p in parts
+            ],
+        }
+    )
 
 
 async def _get_part(db, args: dict) -> list[TextContent]:
     """Get a specific part by ID."""
     from opal.db.models import InventoryConsumption, InventoryRecord
 
-    part = db.query(Part).filter(
-        Part.id == args["part_id"],
-        Part.deleted_at.is_(None),
-    ).first()
+    part = (
+        db.query(Part)
+        .filter(
+            Part.id == args["part_id"],
+            Part.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
@@ -601,37 +609,43 @@ async def _get_part(db, args: dict) -> list[TextContent]:
     children = db.query(Part).filter(Part.parent_id == part.id, Part.deleted_at.is_(None)).all()
 
     # Get consumption history (which OPs used this part)
-    consumptions = db.query(InventoryConsumption).join(
-        InventoryRecord, InventoryConsumption.inventory_record_id == InventoryRecord.id
-    ).filter(InventoryRecord.part_id == part.id).order_by(InventoryConsumption.created_at.desc()).limit(10).all()
+    consumptions = (
+        db.query(InventoryConsumption)
+        .join(InventoryRecord, InventoryConsumption.inventory_record_id == InventoryRecord.id)
+        .filter(InventoryRecord.part_id == part.id)
+        .order_by(InventoryConsumption.created_at.desc())
+        .limit(10)
+        .all()
+    )
 
-    return json_response({
-        "id": part.id,
-        "internal_pn": part.internal_pn,
-        "external_pn": part.external_pn,
-        "name": part.name,
-        "description": part.description,
-        "category": part.category,
-        "tier": part.tier,
-        "tier_name": tier_name,
-        "parent_id": part.parent_id,
-        "unit_of_measure": part.unit_of_measure,
-        "created_at": part.created_at.isoformat(),
-        "children": [
-            {"id": c.id, "internal_pn": c.internal_pn, "name": c.name}
-            for c in children
-        ],
-        "recent_consumptions": [
-            {
-                "id": c.id,
-                "quantity": float(c.quantity),
-                "procedure_instance_id": c.procedure_instance_id,
-                "step_execution_id": c.step_execution_id,
-                "consumed_at": c.created_at.isoformat(),
-            }
-            for c in consumptions
-        ],
-    })
+    return json_response(
+        {
+            "id": part.id,
+            "internal_pn": part.internal_pn,
+            "external_pn": part.external_pn,
+            "name": part.name,
+            "description": part.description,
+            "category": part.category,
+            "tier": part.tier,
+            "tier_name": tier_name,
+            "parent_id": part.parent_id,
+            "unit_of_measure": part.unit_of_measure,
+            "created_at": part.created_at.isoformat(),
+            "children": [
+                {"id": c.id, "internal_pn": c.internal_pn, "name": c.name} for c in children
+            ],
+            "recent_consumptions": [
+                {
+                    "id": c.id,
+                    "quantity": float(c.quantity),
+                    "procedure_instance_id": c.procedure_instance_id,
+                    "step_execution_id": c.step_execution_id,
+                    "consumed_at": c.created_at.isoformat(),
+                }
+                for c in consumptions
+            ],
+        }
+    )
 
 
 def _generate_internal_pn(db, tier: int) -> str:
@@ -679,19 +693,21 @@ async def _create_part(db, args: dict) -> list[TextContent]:
     db.commit()
     db.refresh(part)
 
-    return json_response({
-        "success": True,
-        "message": f"Created part '{part.name}' with ID {part.id} ({internal_pn})",
-        "part": {
-            "id": part.id,
-            "internal_pn": internal_pn,
-            "name": part.name,
-            "category": part.category,
-            "tier": tier,
-            "tier_name": tier_name,
-            "parent_id": parent_id,
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created part '{part.name}' with ID {part.id} ({internal_pn})",
+            "part": {
+                "id": part.id,
+                "internal_pn": internal_pn,
+                "name": part.name,
+                "category": part.category,
+                "tier": tier,
+                "tier_name": tier_name,
+                "parent_id": parent_id,
+            },
+        }
+    )
 
 
 def _build_part_tree(db, part: Part, depth: int, current_depth: int = 0) -> dict:
@@ -708,8 +724,7 @@ def _build_part_tree(db, part: Part, depth: int, current_depth: int = 0) -> dict
         children = db.query(Part).filter(Part.parent_id == part.id, Part.deleted_at.is_(None)).all()
         if children:
             result["children"] = [
-                _build_part_tree(db, child, depth, current_depth + 1)
-                for child in children
+                _build_part_tree(db, child, depth, current_depth + 1) for child in children
             ]
 
     return result
@@ -729,12 +744,7 @@ async def _get_part_tree(db, args: dict) -> list[TextContent]:
     else:
         # Get all top-level parts (no parent)
         top_level = db.query(Part).filter(Part.parent_id.is_(None), Part.deleted_at.is_(None)).all()
-        tree = {
-            "top_level_parts": [
-                _build_part_tree(db, p, depth)
-                for p in top_level
-            ]
-        }
+        tree = {"top_level_parts": [_build_part_tree(db, p, depth) for p in top_level]}
 
     return json_response(tree)
 
@@ -751,29 +761,27 @@ async def _get_part_consumption_history(db, args: dict) -> list[TextContent]:
     limit = args.get("limit", 20)
 
     # Get consumption records with related info
-    consumptions = db.query(
-        InventoryConsumption,
-        InventoryRecord,
-        ProcedureInstance,
-        StepExecution
-    ).join(
-        InventoryRecord, InventoryConsumption.inventory_record_id == InventoryRecord.id
-    ).outerjoin(
-        ProcedureInstance, InventoryConsumption.procedure_instance_id == ProcedureInstance.id
-    ).outerjoin(
-        StepExecution, InventoryConsumption.step_execution_id == StepExecution.id
-    ).filter(
-        InventoryRecord.part_id == args["part_id"]
-    ).order_by(
-        InventoryConsumption.created_at.desc()
-    ).limit(limit).all()
+    consumptions = (
+        db.query(InventoryConsumption, InventoryRecord, ProcedureInstance, StepExecution)
+        .join(InventoryRecord, InventoryConsumption.inventory_record_id == InventoryRecord.id)
+        .outerjoin(
+            ProcedureInstance, InventoryConsumption.procedure_instance_id == ProcedureInstance.id
+        )
+        .outerjoin(StepExecution, InventoryConsumption.step_execution_id == StepExecution.id)
+        .filter(InventoryRecord.part_id == args["part_id"])
+        .order_by(InventoryConsumption.created_at.desc())
+        .limit(limit)
+        .all()
+    )
 
     history = []
     for consumption, inv_record, proc_instance, step_exec in consumptions:
         entry = {
             "consumption_id": consumption.id,
             "quantity": float(consumption.quantity),
-            "usage_type": consumption.usage_type.value if hasattr(consumption.usage_type, 'value') else consumption.usage_type,
+            "usage_type": consumption.usage_type.value
+            if hasattr(consumption.usage_type, "value")
+            else consumption.usage_type,
             "consumed_at": consumption.created_at.isoformat(),
             "opal_number": inv_record.opal_number,
             "notes": consumption.notes,
@@ -783,7 +791,9 @@ async def _get_part_consumption_history(db, args: dict) -> list[TextContent]:
                 "id": proc_instance.id,
                 "procedure_id": proc_instance.procedure_id,
                 "work_order_number": proc_instance.work_order_number,
-                "status": proc_instance.status.value if hasattr(proc_instance.status, 'value') else proc_instance.status,
+                "status": proc_instance.status.value
+                if hasattr(proc_instance.status, "value")
+                else proc_instance.status,
             }
         if step_exec:
             entry["step"] = {
@@ -792,13 +802,15 @@ async def _get_part_consumption_history(db, args: dict) -> list[TextContent]:
             }
         history.append(entry)
 
-    return json_response({
-        "part_id": part.id,
-        "internal_pn": part.internal_pn,
-        "part_name": part.name,
-        "total_consumptions": len(history),
-        "history": history,
-    })
+    return json_response(
+        {
+            "part_id": part.id,
+            "internal_pn": part.internal_pn,
+            "part_name": part.name,
+            "total_consumptions": len(history),
+            "history": history,
+        }
+    )
 
 
 async def _list_procedures(db, args: dict) -> list[TextContent]:
@@ -814,18 +826,20 @@ async def _list_procedures(db, args: dict) -> list[TextContent]:
 
     procedures = query.order_by(MasterProcedure.id.desc()).limit(50).all()
 
-    return json_response({
-        "count": len(procedures),
-        "procedures": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "status": p.status.value if hasattr(p.status, "value") else p.status,
-                "step_count": len(p.steps),
-            }
-            for p in procedures
-        ],
-    })
+    return json_response(
+        {
+            "count": len(procedures),
+            "procedures": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "status": p.status.value if hasattr(p.status, "value") else p.status,
+                    "step_count": len(p.steps),
+                }
+                for p in procedures
+            ],
+        }
+    )
 
 
 async def _create_procedure(db, args: dict) -> list[TextContent]:
@@ -839,23 +853,29 @@ async def _create_procedure(db, args: dict) -> list[TextContent]:
     db.commit()
     db.refresh(procedure)
 
-    return json_response({
-        "success": True,
-        "message": f"Created procedure '{procedure.name}' with ID {procedure.id}",
-        "procedure": {
-            "id": procedure.id,
-            "name": procedure.name,
-            "status": "draft",
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created procedure '{procedure.name}' with ID {procedure.id}",
+            "procedure": {
+                "id": procedure.id,
+                "name": procedure.name,
+                "status": "draft",
+            },
+        }
+    )
 
 
 async def _add_procedure_step(db, args: dict) -> list[TextContent]:
     """Add a step to a procedure."""
-    procedure = db.query(MasterProcedure).filter(
-        MasterProcedure.id == args["procedure_id"],
-        MasterProcedure.deleted_at.is_(None),
-    ).first()
+    procedure = (
+        db.query(MasterProcedure)
+        .filter(
+            MasterProcedure.id == args["procedure_id"],
+            MasterProcedure.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not procedure:
         return json_response({"error": f"Procedure {args['procedure_id']} not found"})
@@ -875,15 +895,17 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
     db.commit()
     db.refresh(step)
 
-    return json_response({
-        "success": True,
-        "message": f"Added step '{step.title}' to procedure '{procedure.name}'",
-        "step": {
-            "id": step.id,
-            "step_number": step.step_number,
-            "title": step.title,
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Added step '{step.title}' to procedure '{procedure.name}'",
+            "step": {
+                "id": step.id,
+                "step_number": step.step_number,
+                "title": step.title,
+            },
+        }
+    )
 
 
 async def _list_issues(db, args: dict) -> list[TextContent]:
@@ -899,19 +921,21 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
     limit = args.get("limit", 50)
     issues = query.order_by(Issue.id.desc()).limit(limit).all()
 
-    return json_response({
-        "count": len(issues),
-        "issues": [
-            {
-                "id": i.id,
-                "title": i.title,
-                "type": i.issue_type.value if hasattr(i.issue_type, "value") else i.issue_type,
-                "status": i.status.value if hasattr(i.status, "value") else i.status,
-                "priority": i.priority.value if hasattr(i.priority, "value") else i.priority,
-            }
-            for i in issues
-        ],
-    })
+    return json_response(
+        {
+            "count": len(issues),
+            "issues": [
+                {
+                    "id": i.id,
+                    "title": i.title,
+                    "type": i.issue_type.value if hasattr(i.issue_type, "value") else i.issue_type,
+                    "status": i.status.value if hasattr(i.status, "value") else i.status,
+                    "priority": i.priority.value if hasattr(i.priority, "value") else i.priority,
+                }
+                for i in issues
+            ],
+        }
+    )
 
 
 async def _create_issue(db, args: dict) -> list[TextContent]:
@@ -931,16 +955,18 @@ async def _create_issue(db, args: dict) -> list[TextContent]:
     db.commit()
     db.refresh(issue)
 
-    return json_response({
-        "success": True,
-        "message": f"Created issue '{issue.title}' with ID {issue.id}",
-        "issue": {
-            "id": issue.id,
-            "title": issue.title,
-            "type": issue_type,
-            "priority": priority,
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created issue '{issue.title}' with ID {issue.id}",
+            "issue": {
+                "id": issue.id,
+                "title": issue.title,
+                "type": issue_type,
+                "priority": priority,
+            },
+        }
+    )
 
 
 async def _list_risks(db, args: dict) -> list[TextContent]:
@@ -956,20 +982,22 @@ async def _list_risks(db, args: dict) -> list[TextContent]:
     if args.get("severity"):
         risks = [r for r in risks if r.severity == args["severity"]]
 
-    return json_response({
-        "count": len(risks),
-        "risks": [
-            {
-                "id": r.id,
-                "title": r.title,
-                "probability": r.probability,
-                "impact": r.impact,
-                "severity": r.severity,
-                "status": r.status.value if hasattr(r.status, "value") else r.status,
-            }
-            for r in risks
-        ],
-    })
+    return json_response(
+        {
+            "count": len(risks),
+            "risks": [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "probability": r.probability,
+                    "impact": r.impact,
+                    "severity": r.severity,
+                    "status": r.status.value if hasattr(r.status, "value") else r.status,
+                }
+                for r in risks
+            ],
+        }
+    )
 
 
 async def _create_risk(db, args: dict) -> list[TextContent]:
@@ -986,17 +1014,19 @@ async def _create_risk(db, args: dict) -> list[TextContent]:
     db.commit()
     db.refresh(risk)
 
-    return json_response({
-        "success": True,
-        "message": f"Created risk '{risk.title}' with ID {risk.id}",
-        "risk": {
-            "id": risk.id,
-            "title": risk.title,
-            "probability": risk.probability,
-            "impact": risk.impact,
-            "severity": risk.severity,
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created risk '{risk.title}' with ID {risk.id}",
+            "risk": {
+                "id": risk.id,
+                "title": risk.title,
+                "probability": risk.probability,
+                "impact": risk.impact,
+                "severity": risk.severity,
+            },
+        }
+    )
 
 
 async def _get_project_info(db, args: dict) -> list[TextContent]:
@@ -1007,14 +1037,22 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
     # Get counts
     part_count = db.query(Part).filter(Part.deleted_at.is_(None)).count()
     procedure_count = db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None)).count()
-    open_issues = db.query(Issue).filter(
-        Issue.deleted_at.is_(None),
-        Issue.status.in_(["open", "investigating"]),
-    ).count()
-    active_risks = db.query(Risk).filter(
-        Risk.deleted_at.is_(None),
-        Risk.status != "closed",
-    ).count()
+    open_issues = (
+        db.query(Issue)
+        .filter(
+            Issue.deleted_at.is_(None),
+            Issue.status.in_(["open", "investigating"]),
+        )
+        .count()
+    )
+    active_risks = (
+        db.query(Risk)
+        .filter(
+            Risk.deleted_at.is_(None),
+            Risk.status != "closed",
+        )
+        .count()
+    )
 
     info = {
         "database": settings.database_url,
@@ -1073,12 +1111,14 @@ async def _preview_part_number(db, args: dict) -> list[TextContent]:
     try:
         part_number = project.generate_part_number(tier, sequence)
         tier_config = project.get_tier(tier)
-        return json_response({
-            "part_number": part_number,
-            "tier": tier,
-            "tier_name": tier_config.name if tier_config else None,
-            "sequence": sequence,
-        })
+        return json_response(
+            {
+                "part_number": part_number,
+                "tier": tier,
+                "tier_name": tier_config.name if tier_config else None,
+                "sequence": sequence,
+            }
+        )
     except ValueError as e:
         return json_response({"error": str(e)})
 
@@ -1092,26 +1132,32 @@ async def _list_requirements(db, args: dict) -> list[TextContent]:
     if not project:
         return json_response({"error": "No project loaded", "requirements": []})
 
-    return json_response({
-        "count": len(project.requirements),
-        "requirements": [
-            {
-                "id": r.id,
-                "title": r.title,
-                "description": r.description,
-                "category": r.category,
-            }
-            for r in project.requirements
-        ],
-    })
+    return json_response(
+        {
+            "count": len(project.requirements),
+            "requirements": [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "description": r.description,
+                    "category": r.category,
+                }
+                for r in project.requirements
+            ],
+        }
+    )
 
 
 async def _list_part_requirements(db, args: dict) -> list[TextContent]:
     """List requirements assigned to a part."""
-    part = db.query(Part).filter(
-        Part.id == args["part_id"],
-        Part.deleted_at.is_(None),
-    ).first()
+    part = (
+        db.query(Part)
+        .filter(
+            Part.id == args["part_id"],
+            Part.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
@@ -1119,30 +1165,38 @@ async def _list_part_requirements(db, args: dict) -> list[TextContent]:
     project = get_active_project()
     reqs = db.query(PartRequirement).filter(PartRequirement.part_id == args["part_id"]).all()
 
-    return json_response({
-        "part_id": args["part_id"],
-        "part_name": part.name,
-        "count": len(reqs),
-        "requirements": [
-            {
-                "id": r.id,
-                "requirement_id": r.requirement_id,
-                "title": project.get_requirement(r.requirement_id).title if project and project.get_requirement(r.requirement_id) else None,
-                "status": r.status,
-                "notes": r.notes,
-                "verified_at": r.verified_at.isoformat() if r.verified_at else None,
-            }
-            for r in reqs
-        ],
-    })
+    return json_response(
+        {
+            "part_id": args["part_id"],
+            "part_name": part.name,
+            "count": len(reqs),
+            "requirements": [
+                {
+                    "id": r.id,
+                    "requirement_id": r.requirement_id,
+                    "title": project.get_requirement(r.requirement_id).title
+                    if project and project.get_requirement(r.requirement_id)
+                    else None,
+                    "status": r.status,
+                    "notes": r.notes,
+                    "verified_at": r.verified_at.isoformat() if r.verified_at else None,
+                }
+                for r in reqs
+            ],
+        }
+    )
 
 
 async def _assign_requirement(db, args: dict) -> list[TextContent]:
     """Assign a requirement to a part."""
-    part = db.query(Part).filter(
-        Part.id == args["part_id"],
-        Part.deleted_at.is_(None),
-    ).first()
+    part = (
+        db.query(Part)
+        .filter(
+            Part.id == args["part_id"],
+            Part.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
@@ -1155,16 +1209,26 @@ async def _assign_requirement(db, args: dict) -> list[TextContent]:
         if req_config:
             req_title = req_config.title
         else:
-            return json_response({"error": f"Requirement {args['requirement_id']} not found in project config"})
+            return json_response(
+                {"error": f"Requirement {args['requirement_id']} not found in project config"}
+            )
 
     # Check if already assigned
-    existing = db.query(PartRequirement).filter(
-        PartRequirement.part_id == args["part_id"],
-        PartRequirement.requirement_id == args["requirement_id"],
-    ).first()
+    existing = (
+        db.query(PartRequirement)
+        .filter(
+            PartRequirement.part_id == args["part_id"],
+            PartRequirement.requirement_id == args["requirement_id"],
+        )
+        .first()
+    )
 
     if existing:
-        return json_response({"error": f"Requirement {args['requirement_id']} already assigned to part {args['part_id']}"})
+        return json_response(
+            {
+                "error": f"Requirement {args['requirement_id']} already assigned to part {args['part_id']}"
+            }
+        )
 
     pr = PartRequirement(
         part_id=args["part_id"],
@@ -1175,16 +1239,18 @@ async def _assign_requirement(db, args: dict) -> list[TextContent]:
     db.commit()
     db.refresh(pr)
 
-    return json_response({
-        "success": True,
-        "message": f"Assigned requirement '{req_title or args['requirement_id']}' to part '{part.name}'",
-        "part_requirement": {
-            "id": pr.id,
-            "part_id": pr.part_id,
-            "requirement_id": pr.requirement_id,
-            "status": pr.status,
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Assigned requirement '{req_title or args['requirement_id']}' to part '{part.name}'",
+            "part_requirement": {
+                "id": pr.id,
+                "part_id": pr.part_id,
+                "requirement_id": pr.requirement_id,
+                "status": pr.status,
+            },
+        }
+    )
 
 
 async def _verify_requirement(db, args: dict) -> list[TextContent]:
@@ -1195,23 +1261,25 @@ async def _verify_requirement(db, args: dict) -> list[TextContent]:
         return json_response({"error": f"Part requirement {args['part_requirement_id']} not found"})
 
     pr.status = "verified"
-    pr.verified_at = datetime.now(timezone.utc)
+    pr.verified_at = datetime.now(UTC)
     if args.get("notes"):
         pr.notes = args["notes"]
 
     db.commit()
     db.refresh(pr)
 
-    return json_response({
-        "success": True,
-        "message": f"Verified requirement {pr.requirement_id}",
-        "part_requirement": {
-            "id": pr.id,
-            "requirement_id": pr.requirement_id,
-            "status": pr.status,
-            "verified_at": pr.verified_at.isoformat(),
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Verified requirement {pr.requirement_id}",
+            "part_requirement": {
+                "id": pr.id,
+                "requirement_id": pr.requirement_id,
+                "status": pr.status,
+                "verified_at": pr.verified_at.isoformat(),
+            },
+        }
+    )
 
 
 # ============ BOM TOOLS ============
@@ -1219,48 +1287,62 @@ async def _verify_requirement(db, args: dict) -> list[TextContent]:
 
 async def _get_bom(db, args: dict) -> list[TextContent]:
     """Get BOM for an assembly."""
-    part = db.query(Part).filter(
-        Part.id == args["assembly_id"],
-        Part.deleted_at.is_(None),
-    ).first()
+    part = (
+        db.query(Part)
+        .filter(
+            Part.id == args["assembly_id"],
+            Part.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not part:
         return json_response({"error": f"Part {args['assembly_id']} not found"})
 
     lines = db.query(BOMLine).filter(BOMLine.assembly_id == args["assembly_id"]).all()
 
-    return json_response({
-        "assembly_id": part.id,
-        "assembly_name": part.name,
-        "count": len(lines),
-        "components": [
-            {
-                "id": line.id,
-                "component_id": line.component_id,
-                "component_name": line.component.name,
-                "component_external_pn": line.component.external_pn,
-                "quantity": line.quantity,
-                "reference_designator": line.reference_designator,
-            }
-            for line in lines
-        ],
-    })
+    return json_response(
+        {
+            "assembly_id": part.id,
+            "assembly_name": part.name,
+            "count": len(lines),
+            "components": [
+                {
+                    "id": line.id,
+                    "component_id": line.component_id,
+                    "component_name": line.component.name,
+                    "component_external_pn": line.component.external_pn,
+                    "quantity": line.quantity,
+                    "reference_designator": line.reference_designator,
+                }
+                for line in lines
+            ],
+        }
+    )
 
 
 async def _add_component(db, args: dict) -> list[TextContent]:
     """Add a component to an assembly's BOM."""
-    assembly = db.query(Part).filter(
-        Part.id == args["assembly_id"],
-        Part.deleted_at.is_(None),
-    ).first()
+    assembly = (
+        db.query(Part)
+        .filter(
+            Part.id == args["assembly_id"],
+            Part.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not assembly:
         return json_response({"error": f"Assembly part {args['assembly_id']} not found"})
 
-    component = db.query(Part).filter(
-        Part.id == args["component_id"],
-        Part.deleted_at.is_(None),
-    ).first()
+    component = (
+        db.query(Part)
+        .filter(
+            Part.id == args["component_id"],
+            Part.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not component:
         return json_response({"error": f"Component part {args['component_id']} not found"})
@@ -1269,13 +1351,21 @@ async def _add_component(db, args: dict) -> list[TextContent]:
         return json_response({"error": "A part cannot be a component of itself"})
 
     # Check if already exists
-    existing = db.query(BOMLine).filter(
-        BOMLine.assembly_id == args["assembly_id"],
-        BOMLine.component_id == args["component_id"],
-    ).first()
+    existing = (
+        db.query(BOMLine)
+        .filter(
+            BOMLine.assembly_id == args["assembly_id"],
+            BOMLine.component_id == args["component_id"],
+        )
+        .first()
+    )
 
     if existing:
-        return json_response({"error": f"Component {args['component_id']} already in assembly {args['assembly_id']} BOM"})
+        return json_response(
+            {
+                "error": f"Component {args['component_id']} already in assembly {args['assembly_id']} BOM"
+            }
+        )
 
     line = BOMLine(
         assembly_id=args["assembly_id"],
@@ -1287,16 +1377,18 @@ async def _add_component(db, args: dict) -> list[TextContent]:
     db.commit()
     db.refresh(line)
 
-    return json_response({
-        "success": True,
-        "message": f"Added '{component.name}' to '{assembly.name}' BOM",
-        "bom_line": {
-            "id": line.id,
-            "assembly_id": line.assembly_id,
-            "component_id": line.component_id,
-            "quantity": line.quantity,
-        },
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Added '{component.name}' to '{assembly.name}' BOM",
+            "bom_line": {
+                "id": line.id,
+                "assembly_id": line.assembly_id,
+                "component_id": line.component_id,
+                "quantity": line.quantity,
+            },
+        }
+    )
 
 
 async def _remove_component(db, args: dict) -> list[TextContent]:
@@ -1312,10 +1404,12 @@ async def _remove_component(db, args: dict) -> list[TextContent]:
     db.delete(line)
     db.commit()
 
-    return json_response({
-        "success": True,
-        "message": f"Removed '{component_name}' from '{assembly_name}' BOM",
-    })
+    return json_response(
+        {
+            "success": True,
+            "message": f"Removed '{component_name}' from '{assembly_name}' BOM",
+        }
+    )
 
 
 # ============ SERVER ENTRY POINT ============

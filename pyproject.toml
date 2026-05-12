@@ -1,6 +1,6 @@
 [project]
 name = "opal"
-version = "1.2.2"
+version = "1.2.3"
 description = "Operations, Procedures, Assets, Logistics - ERP for small teams and hardware projects"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -58,7 +58,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]
+ignore = ["E501", "F821", "B008"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -79,14 +79,22 @@ async def upload_attachment(
 
     # Validate linked entities exist
     if procedure_instance_id:
-        instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == procedure_instance_id).first()
+        instance = (
+            db.query(ProcedureInstance)
+            .filter(ProcedureInstance.id == procedure_instance_id)
+            .first()
+        )
         if not instance:
-            raise HTTPException(status_code=404, detail=f"Procedure instance {procedure_instance_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Procedure instance {procedure_instance_id} not found"
+            )
 
     if step_execution_id:
         step_exec = db.query(StepExecution).filter(StepExecution.id == step_execution_id).first()
         if not step_exec:
-            raise HTTPException(status_code=404, detail=f"Step execution {step_execution_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Step execution {step_execution_id} not found"
+            )
 
     if issue_id:
         issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()

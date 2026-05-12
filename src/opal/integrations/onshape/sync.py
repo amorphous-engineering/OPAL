@@ -23,8 +23,9 @@ ROOT_ASSEMBLY_MARKER = "__asm_root__"
 
 def _compute_pull_hash(name: str, description: str | None, part_number: str | None) -> str:
     """SHA-256 hash of Onshape-owned fields for change detection."""
-    data = json.dumps({"name": name, "description": description, "part_number": part_number},
-                      sort_keys=True)
+    data = json.dumps(
+        {"name": name, "description": description, "part_number": part_number}, sort_keys=True
+    )
     return hashlib.sha256(data.encode()).hexdigest()
 
 
@@ -161,9 +162,7 @@ def _sync_bom_structure(
     # Build map of current BOM lines for this assembly
     existing_lines = {
         bl.component_id: bl
-        for bl in db.query(BOMLine)
-        .filter(BOMLine.assembly_id == assembly_part_id)
-        .all()
+        for bl in db.query(BOMLine).filter(BOMLine.assembly_id == assembly_part_id).all()
     }
 
     # Pass 1: resolve all items to component_id, accumulate quantities,
@@ -219,8 +218,13 @@ def _sync_bom_structure(
         # Recurse into representative's children
         if representative.children:
             c, u, r = _sync_bom_structure(
-                db, representative.children, component_id, onshape_to_opal, user_id,
-                visited, default_element_id,
+                db,
+                representative.children,
+                component_id,
+                onshape_to_opal,
+                user_id,
+                visited,
+                default_element_id,
             )
             created += c
             updated += u
@@ -321,7 +325,8 @@ def pull_sync(
 
         logger.info(
             "Fetched %d items from Onshape (element_type=%s)",
-            len(flat_items), doc_ref.element_type,
+            len(flat_items),
+            doc_ref.element_type,
         )
 
         # Validate: warn on empty names
@@ -449,7 +454,8 @@ def pull_sync(
                     parts_restored += 1
                     logger.info(
                         "Restored soft-deleted part %s (Onshape %s)",
-                        part.internal_pn, item.part_id,
+                        part.internal_pn,
+                        item.part_id,
                     )
 
                 if link.pull_hash == pull_hash:
@@ -535,12 +541,13 @@ def pull_sync(
         # ── Phase 2: BOM structure (assemblies only) ──────────
 
         if not is_part_studio and root_assembly_part_id is not None:
-            bom_lines_created, bom_lines_updated, bom_lines_removed = (
-                _sync_bom_structure(
-                    db, bom_items, root_assembly_part_id,
-                    onshape_to_opal, user_id,
-                    default_element_id=doc_ref.element_id,
-                )
+            bom_lines_created, bom_lines_updated, bom_lines_removed = _sync_bom_structure(
+                db,
+                bom_items,
+                root_assembly_part_id,
+                onshape_to_opal,
+                user_id,
+                default_element_id=doc_ref.element_id,
             )
 
         # ── Mark stale links ──────────────────────────────────
@@ -618,11 +625,12 @@ def pull_sync(
 
         # ── Auto-push PNs for newly created parts ─────────────
         if new_part_ids:
-            logger.info(
-                "Auto-pushing PNs for %d newly created parts", len(new_part_ids)
-            )
+            logger.info("Auto-pushing PNs for %d newly created parts", len(new_part_ids))
             push_log = push_sync(
-                db, client, doc_ref, user_id,
+                db,
+                client,
+                doc_ref,
+                user_id,
                 trigger="auto",
                 part_ids=new_part_ids,
             )
@@ -720,10 +728,12 @@ def push_sync(
             for opal_field, onshape_prop_name in field_mapping.items():
                 value = getattr(part, opal_field, None)
                 if value is not None:
-                    properties.append({
-                        "propertyId": onshape_prop_name,
-                        "value": str(value),
-                    })
+                    properties.append(
+                        {
+                            "propertyId": onshape_prop_name,
+                            "value": str(value),
+                        }
+                    )
 
             if not properties:
                 continue
@@ -743,10 +753,12 @@ def push_sync(
                 for prop in properties:
                     prop_id = name_to_id.get(prop["propertyId"])
                     if prop_id:
-                        resolved_properties.append({
-                            "propertyId": prop_id,
-                            "value": prop["value"],
-                        })
+                        resolved_properties.append(
+                            {
+                                "propertyId": prop_id,
+                                "value": prop["value"],
+                            }
+                        )
 
                 if resolved_properties:
                     client.set_metadata(

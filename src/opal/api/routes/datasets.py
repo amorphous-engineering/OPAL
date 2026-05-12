@@ -2,7 +2,7 @@
 
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,8 +10,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core.audit import log_create, log_delete, log_update, get_model_dict
-from opal.db.models.dataset import Dataset, DataPoint
+from opal.core.audit import get_model_dict, log_create, log_delete, log_update
+from opal.db.models.dataset import DataPoint, Dataset
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -67,7 +67,9 @@ class DatasetCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
-    data_schema: dict[str, Any] = Field(..., alias="schema", description="Schema defining fields and types")
+    data_schema: dict[str, Any] = Field(
+        ..., alias="schema", description="Schema defining fields and types"
+    )
     procedure_id: int | None = None
 
     model_config = {"populate_by_name": True}
@@ -137,10 +139,7 @@ async def list_datasets(
     total = query.count()
 
     datasets = (
-        query.order_by(Dataset.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
+        query.order_by(Dataset.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     )
 
     return DatasetListResponse(
@@ -183,9 +182,7 @@ async def get_dataset(
 ) -> DatasetDetailResponse:
     """Get dataset by ID with optional data points."""
     dataset = (
-        db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-        .first()
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
     )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -232,9 +229,7 @@ async def update_dataset(
 ) -> DatasetResponse:
     """Update a dataset."""
     dataset = (
-        db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-        .first()
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
     )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -265,14 +260,12 @@ async def delete_dataset(
 ) -> None:
     """Soft delete a dataset."""
     dataset = (
-        db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-        .first()
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
     )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    dataset.deleted_at = datetime.now(timezone.utc)
+    dataset.deleted_at = datetime.now(UTC)
     log_delete(db, dataset, user_id)
     db.commit()
 
@@ -289,14 +282,12 @@ async def add_data_point(
 ) -> DataPointResponse:
     """Add a data point to a dataset."""
     dataset = (
-        db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-        .first()
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
     )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    recorded_at = data.recorded_at or datetime.now(timezone.utc)
+    recorded_at = data.recorded_at or datetime.now(UTC)
 
     point = DataPoint(
         dataset_id=dataset_id,
@@ -329,9 +320,7 @@ async def list_data_points(
 ) -> list[DataPointResponse]:
     """List data points for a dataset."""
     dataset = (
-        db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-        .first()
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
     )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -343,12 +332,7 @@ async def list_data_points(
     if end_date:
         query = query.filter(DataPoint.recorded_at <= end_date)
 
-    points = (
-        query.order_by(DataPoint.recorded_at.asc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    points = query.order_by(DataPoint.recorded_at.asc()).offset(offset).limit(limit).all()
 
     return [
         DataPointResponse(
@@ -400,9 +384,7 @@ async def get_chart_data(
     Returns data in Chart.js compatible format.
     """
     dataset = (
-        db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-        .first()
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
     )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -414,11 +396,7 @@ async def get_chart_data(
     if end_date:
         query = query.filter(DataPoint.recorded_at <= end_date)
 
-    points = (
-        query.order_by(DataPoint.recorded_at.asc())
-        .limit(limit)
-        .all()
-    )
+    points = query.order_by(DataPoint.recorded_at.asc()).limit(limit).all()
 
     labels = []
     data_values = []
@@ -458,9 +436,7 @@ async def export_dataset_csv(
 ) -> StreamingResponse:
     """Export dataset data points as CSV."""
     dataset = (
-        db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-        .first()
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
     )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")

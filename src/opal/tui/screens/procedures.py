@@ -153,9 +153,7 @@ class ProcedureDetail(Static):
         content.mount(Label(f"Name: {procedure.get('name', '-')}", classes="detail-row"))
         content.mount(Label(f"Code: {procedure.get('code', '-')}", classes="detail-row"))
         content.mount(Label(f"Category: {procedure.get('category', '-')}", classes="detail-row"))
-        content.mount(
-            Label(f"Type: {procedure.get('procedure_type', 'op')}", classes="detail-row")
-        )
+        content.mount(Label(f"Type: {procedure.get('procedure_type', 'op')}", classes="detail-row"))
 
         current_version = procedure.get("current_version_id")
         if current_version:

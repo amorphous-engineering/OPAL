@@ -63,7 +63,9 @@ def diff_procedure_versions(
                 if sa.get(f) != sb.get(f):
                     changed.append(f)
             if changed:
-                diffs.append(StepDiff(status="modified", step_a=sa, step_b=sb, changed_fields=changed))
+                diffs.append(
+                    StepDiff(status="modified", step_a=sa, step_b=sb, changed_fields=changed)
+                )
             else:
                 diffs.append(StepDiff(status="unchanged", step_a=sa, step_b=sb))
 

@@ -1,6 +1,6 @@
 """Undo last action endpoint."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -8,7 +8,7 @@ from sqlalchemy import inspect
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_update
-from opal.db.models.audit import AuditAction, AuditLog
+from opal.db.models.audit import AuditLog
 
 router = APIRouter(prefix="/undo", tags=["undo"])
 
@@ -23,8 +23,8 @@ def _get_model_map() -> dict[str, type]:
 
     from opal.db.models import (
         Attachment,
-        Dataset,
         DataPoint,
+        Dataset,
         Issue,
         Kit,
         MasterProcedure,
@@ -42,10 +42,23 @@ def _get_model_map() -> dict[str, type]:
     from opal.db.models.inventory import InventoryRecord
 
     models = [
-        Part, InventoryRecord, MasterProcedure, ProcedureStep,
-        ProcedureInstance, StepExecution, Issue, Risk, Dataset,
-        DataPoint, Purchase, PurchaseLine, Supplier, User,
-        Workcenter, Kit, Attachment,
+        Part,
+        InventoryRecord,
+        MasterProcedure,
+        ProcedureStep,
+        ProcedureInstance,
+        StepExecution,
+        Issue,
+        Risk,
+        Dataset,
+        DataPoint,
+        Purchase,
+        PurchaseLine,
+        Supplier,
+        User,
+        Workcenter,
+        Kit,
+        Attachment,
     ]
     for model in models:
         table_name = inspect(model).mapped_table.name
@@ -80,7 +93,7 @@ async def get_last_undoable(
     user_id: CurrentUserId,
 ) -> UndoPreview:
     """Get the most recent undoable action for the current user."""
-    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
 
     entry = (
         db.query(AuditLog)
@@ -146,7 +159,7 @@ async def undo_last(
     user_id: CurrentUserId,
 ) -> UndoResult:
     """Execute undo of the most recent action."""
-    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
 
     entry = (
         db.query(AuditLog)
@@ -200,12 +213,15 @@ async def undo_last(
             raise HTTPException(status_code=404, detail=f"{table} #{record_id} not found")
 
         # Safety: check record hasn't been modified since the audit entry
-        if hasattr(record, "updated_at") and entry.timestamp:
-            if record.updated_at > entry.timestamp:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Record has been modified since this action — cannot safely undo",
-                )
+        if (
+            hasattr(record, "updated_at")
+            and entry.timestamp
+            and record.updated_at > entry.timestamp
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Record has been modified since this action — cannot safely undo",
+            )
 
         old_values = get_model_dict(record)
 

@@ -55,13 +55,15 @@ async def search(
         .all()
     )
     for p in parts:
-        results.append(SearchResult(
-            entity_type="part",
-            id=p.id,
-            label=p.name,
-            sublabel=p.internal_pn or p.external_pn,
-            url=f"/parts/{p.id}",
-        ))
+        results.append(
+            SearchResult(
+                entity_type="part",
+                id=p.id,
+                label=p.name,
+                sublabel=p.internal_pn or p.external_pn,
+                url=f"/parts/{p.id}",
+            )
+        )
 
     # Issues
     issues = (
@@ -79,14 +81,16 @@ async def search(
     )
     for i in issues:
         status_val = i.status.value if hasattr(i.status, "value") else i.status
-        results.append(SearchResult(
-            entity_type="issue",
-            id=i.id,
-            label=i.title,
-            sublabel=f"#{i.id}",
-            url=f"/issues/{i.id}",
-            status=status_val,
-        ))
+        results.append(
+            SearchResult(
+                entity_type="issue",
+                id=i.id,
+                label=i.title,
+                sublabel=f"#{i.id}",
+                url=f"/issues/{i.id}",
+                status=status_val,
+            )
+        )
 
     # Procedures
     procedures = (
@@ -101,14 +105,16 @@ async def search(
     )
     for p in procedures:
         status_val = p.status.value if hasattr(p.status, "value") else p.status
-        results.append(SearchResult(
-            entity_type="procedure",
-            id=p.id,
-            label=p.name,
-            sublabel=f"#{p.id}",
-            url=f"/procedures/{p.id}",
-            status=status_val,
-        ))
+        results.append(
+            SearchResult(
+                entity_type="procedure",
+                id=p.id,
+                label=p.name,
+                sublabel=f"#{p.id}",
+                url=f"/procedures/{p.id}",
+                status=status_val,
+            )
+        )
 
     # Executions
     instances = (
@@ -124,14 +130,16 @@ async def search(
     )
     for inst in instances:
         status_val = inst.status.value if hasattr(inst.status, "value") else inst.status
-        results.append(SearchResult(
-            entity_type="execution",
-            id=inst.id,
-            label=f"Execution #{inst.id}",
-            sublabel=inst.work_order_number,
-            url=f"/executions/{inst.id}",
-            status=status_val,
-        ))
+        results.append(
+            SearchResult(
+                entity_type="execution",
+                id=inst.id,
+                label=f"Execution #{inst.id}",
+                sublabel=inst.work_order_number,
+                url=f"/executions/{inst.id}",
+                status=status_val,
+            )
+        )
 
     # Risks
     risks = (
@@ -149,14 +157,16 @@ async def search(
     )
     for r in risks:
         status_val = r.status.value if hasattr(r.status, "value") else r.status
-        results.append(SearchResult(
-            entity_type="risk",
-            id=r.id,
-            label=r.title,
-            sublabel=f"#{r.id}",
-            url=f"/risks/{r.id}",
-            status=status_val,
-        ))
+        results.append(
+            SearchResult(
+                entity_type="risk",
+                id=r.id,
+                label=r.title,
+                sublabel=f"#{r.id}",
+                url=f"/risks/{r.id}",
+                status=status_val,
+            )
+        )
 
     # Suppliers
     suppliers = (
@@ -173,13 +183,15 @@ async def search(
         .all()
     )
     for s in suppliers:
-        results.append(SearchResult(
-            entity_type="supplier",
-            id=s.id,
-            label=s.name,
-            sublabel=s.code,
-            url=f"/suppliers/{s.id}",
-        ))
+        results.append(
+            SearchResult(
+                entity_type="supplier",
+                id=s.id,
+                label=s.name,
+                sublabel=s.code,
+                url=f"/suppliers/{s.id}",
+            )
+        )
 
     # Purchases
     purchases = (
@@ -196,14 +208,16 @@ async def search(
     )
     for po in purchases:
         status_val = po.status.value if hasattr(po.status, "value") else po.status
-        results.append(SearchResult(
-            entity_type="purchase",
-            id=po.id,
-            label=f"PO-{po.id}",
-            sublabel=po.reference,
-            url=f"/purchases/{po.id}",
-            status=status_val,
-        ))
+        results.append(
+            SearchResult(
+                entity_type="purchase",
+                id=po.id,
+                label=f"PO-{po.id}",
+                sublabel=po.reference,
+                url=f"/purchases/{po.id}",
+                status=status_val,
+            )
+        )
 
     # Datasets
     datasets = (
@@ -217,13 +231,15 @@ async def search(
         .all()
     )
     for d in datasets:
-        results.append(SearchResult(
-            entity_type="dataset",
-            id=d.id,
-            label=d.name,
-            sublabel=f"#{d.id}",
-            url=f"/datasets/{d.id}",
-        ))
+        results.append(
+            SearchResult(
+                entity_type="dataset",
+                id=d.id,
+                label=d.name,
+                sublabel=f"#{d.id}",
+                url=f"/datasets/{d.id}",
+            )
+        )
 
     # Workcenters
     workcenters = (
@@ -239,12 +255,14 @@ async def search(
         .all()
     )
     for w in workcenters:
-        results.append(SearchResult(
-            entity_type="workcenter",
-            id=w.id,
-            label=w.name,
-            sublabel=w.code,
-            url=f"/workcenters/{w.id}",
-        ))
+        results.append(
+            SearchResult(
+                entity_type="workcenter",
+                id=w.id,
+                label=w.name,
+                sublabel=w.code,
+                url=f"/workcenters/{w.id}",
+            )
+        )
 
     return results

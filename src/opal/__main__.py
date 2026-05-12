@@ -196,6 +196,7 @@ def main() -> None:
         description="OPAL - Operations, Procedures, Assets, Logistics",
     )
     from opal import __version__
+
     parser.add_argument(
         "--version",
         action="version",

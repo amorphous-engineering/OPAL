@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, SoftDeleteMixin, TimestampMixin
@@ -28,8 +28,11 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     """
 
     internal_pn: Mapped[str | None] = mapped_column(
-        String(50), nullable=True, unique=True, index=True,
-        comment="Internal part number from project config (e.g., PO/1-001)"
+        String(50),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="Internal part number from project config (e.g., PO/1-001)",
     )
     external_pn: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True, comment="Manufacturer/supplier part number"
@@ -44,36 +47,46 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         "metadata", JSON, nullable=True, comment="Flexible additional fields"
     )
     tracking_type: Mapped[TrackingType] = mapped_column(
-        String(20), nullable=False, default=TrackingType.SERIALIZED,
-        comment="bulk = one OPAL per batch, serialized = one OPAL per unit (default)"
+        String(20),
+        nullable=False,
+        default=TrackingType.SERIALIZED,
+        comment="bulk = one OPAL per batch, serialized = one OPAL per unit (default)",
     )
 
     # Tiered inventory classification (1=Flight, 2=Ground, 3=Loose by default)
     tier: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1, index=True,
-        comment="Inventory tier level (1=Flight, 2=Ground, 3=Loose)"
+        Integer,
+        nullable=False,
+        default=1,
+        index=True,
+        comment="Inventory tier level (1=Flight, 2=Ground, 3=Loose)",
     )
 
     # Low stock threshold
     reorder_point: Mapped[Decimal | None] = mapped_column(
-        Numeric(precision=15, scale=4), nullable=True,
-        comment="Quantity threshold below which part is considered low stock"
+        Numeric(precision=15, scale=4),
+        nullable=True,
+        comment="Quantity threshold below which part is considered low stock",
     )
 
     # Tooling & calibration
     is_tooling: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, index=True,
-        comment="Whether this part is a tool requiring calibration tracking"
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+        comment="Whether this part is a tool requiring calibration tracking",
     )
     calibration_interval_days: Mapped[int | None] = mapped_column(
-        Integer, nullable=True,
-        comment="Days between required calibrations (e.g., 365 for annual)"
+        Integer, nullable=True, comment="Days between required calibrations (e.g., 365 for annual)"
     )
 
     # Assembly hierarchy - parts can contain other parts
     parent_id: Mapped[int | None] = mapped_column(
-        ForeignKey("part.id"), nullable=True, index=True,
-        comment="Parent assembly this part belongs to"
+        ForeignKey("part.id"),
+        nullable=True,
+        index=True,
+        comment="Parent assembly this part belongs to",
     )
 
     # Relationships
@@ -95,8 +108,7 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
 
     # Self-referential relationships for assembly hierarchy
     parent: Mapped["Part | None"] = relationship(
-        "Part", remote_side="Part.id", back_populates="children",
-        foreign_keys=[parent_id]
+        "Part", remote_side="Part.id", back_populates="children", foreign_keys=[parent_id]
     )
     children: Mapped[list["Part"]] = relationship(
         "Part", back_populates="parent", foreign_keys=[parent_id]
@@ -109,15 +121,15 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
 
     # BOM: components contained in this assembly
     bom_lines: Mapped[list["BOMLine"]] = relationship(
-        "BOMLine", back_populates="assembly",
+        "BOMLine",
+        back_populates="assembly",
         foreign_keys="BOMLine.assembly_id",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     # BOM: assemblies this part is used in
     used_in: Mapped[list["BOMLine"]] = relationship(
-        "BOMLine", back_populates="component",
-        foreign_keys="BOMLine.component_id"
+        "BOMLine", back_populates="component", foreign_keys="BOMLine.component_id"
     )
 
     def __repr__(self) -> str:
@@ -137,18 +149,17 @@ class PartRequirement(Base, IdMixin, TimestampMixin):
         ForeignKey("part.id", ondelete="CASCADE"), nullable=False, index=True
     )
     requirement_id: Mapped[str] = mapped_column(
-        String(50), nullable=False, index=True,
-        comment="Requirement ID from project config (e.g., REQ-001)"
+        String(50),
+        nullable=False,
+        index=True,
+        comment="Requirement ID from project config (e.g., REQ-001)",
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="open",
-        comment="open, verified, waived, not_applicable"
+        String(20), nullable=False, default="open", comment="open, verified, waived, not_applicable"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    verified_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("user.id"), nullable=True
-    )
+    verified_by_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
 
     # Relationships
     part: Mapped["Part"] = relationship("Part", back_populates="requirements")
@@ -168,20 +179,22 @@ class BOMLine(Base, IdMixin, TimestampMixin):
     __tablename__ = "bom_lines"
 
     assembly_id: Mapped[int] = mapped_column(
-        ForeignKey("part.id", ondelete="CASCADE"), nullable=False, index=True,
-        comment="The assembly (parent part)"
+        ForeignKey("part.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="The assembly (parent part)",
     )
     component_id: Mapped[int] = mapped_column(
-        ForeignKey("part.id", ondelete="CASCADE"), nullable=False, index=True,
-        comment="The component (child part)"
+        ForeignKey("part.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="The component (child part)",
     )
     quantity: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1,
-        comment="Number of this component in the assembly"
+        Integer, nullable=False, default=1, comment="Number of this component in the assembly"
     )
     reference_designator: Mapped[str | None] = mapped_column(
-        String(50), nullable=True,
-        comment="Reference designator (e.g., R1, C3, U2)"
+        String(50), nullable=True, comment="Reference designator (e.g., R1, C3, U2)"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

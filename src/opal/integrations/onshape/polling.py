@@ -50,9 +50,7 @@ async def onshape_polling_loop(interval_minutes: int) -> None:
                 db = SessionLocal()
                 try:
                     # Pull sync (auto-pushes PNs for new parts internally)
-                    await asyncio.to_thread(
-                        pull_sync, db, client, doc_ref, None, "poll"
-                    )
+                    await asyncio.to_thread(pull_sync, db, client, doc_ref, None, "poll")
                 finally:
                     db.close()
 

@@ -217,9 +217,7 @@ class ExecutionDetail(Static):
         )
         yield VerticalScroll(id="kit-production-panel")
 
-    def show_execution(
-        self, instance: dict[str, Any], version_content: dict[str, Any]
-    ) -> None:
+    def show_execution(self, instance: dict[str, Any], version_content: dict[str, Any]) -> None:
         """Display execution details."""
         self.instance_data = instance
         self.version_content = version_content
@@ -246,9 +244,7 @@ class ExecutionDetail(Static):
 
         # Progress
         step_executions = instance.get("step_executions", [])
-        completed = sum(
-            1 for s in step_executions if s.get("status") in ["completed", "skipped"]
-        )
+        completed = sum(1 for s in step_executions if s.get("status") in ["completed", "skipped"])
         total = len(step_executions)
         progress = (completed / total * 100) if total > 0 else 0
         content.mount(
@@ -258,9 +254,7 @@ class ExecutionDetail(Static):
         # Scheduling info
         if instance.get("scheduled_start_at"):
             content.mount(
-                Label(
-                    f"Scheduled: {instance['scheduled_start_at'][:16]}", classes="detail-row"
-                )
+                Label(f"Scheduled: {instance['scheduled_start_at'][:16]}", classes="detail-row")
             )
         if instance.get("target_completion_at"):
             content.mount(
@@ -275,17 +269,13 @@ class ExecutionDetail(Static):
         # Show steps
         self._render_steps(instance, version_content)
 
-    def _render_steps(
-        self, instance: dict[str, Any], version_content: dict[str, Any]
-    ) -> None:
+    def _render_steps(self, instance: dict[str, Any], version_content: dict[str, Any]) -> None:
         """Render step execution list."""
         steps_container = self.query_one("#steps-execution", VerticalScroll)
         steps_container.remove_children()
 
         steps = version_content.get("steps", [])
-        step_executions = {
-            s["step_number"]: s for s in instance.get("step_executions", [])
-        }
+        step_executions = {s["step_number"]: s for s in instance.get("step_executions", [])}
 
         for step in sorted(steps, key=lambda s: s.get("order", 0)):
             step_exec = step_executions.get(step["order"])
@@ -550,9 +540,7 @@ class ExecutionsScreen(Screen):
             return
         client = get_client(self.app.api_url)
         try:
-            client.update_step_notes(
-                detail.instance_data["id"], step["step_number"], data["notes"]
-            )
+            client.update_step_notes(detail.instance_data["id"], step["step_number"], data["notes"])
             self.notify("Notes updated")
             self.run_worker(self._reload_selected())
         except Exception as e:
@@ -616,9 +604,7 @@ class ExecutionsScreen(Screen):
             for inst in instances:
                 step_execs = inst.get("step_executions", [])
                 completed = sum(
-                    1
-                    for s in step_execs
-                    if s.get("status") in ["completed", "skipped"]
+                    1 for s in step_execs if s.get("status") in ["completed", "skipped"]
                 )
                 total = len(step_execs)
                 progress = f"{completed}/{total}"

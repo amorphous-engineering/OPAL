@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, SoftDeleteMixin, TimestampMixin

@@ -2,7 +2,6 @@
 
 import csv
 import io
-from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -12,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
-from opal.core.audit import log_create, log_delete, log_update, get_model_dict
+from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.db.models import InventoryRecord, Part
 
 router = APIRouter()
@@ -137,9 +136,13 @@ async def list_parts(
     pagination: PaginationParams,
     search: str | None = Query(None, description="Search in name, external_pn, description"),
     category: str | None = Query(None, description="Filter by category"),
-    tier: int | None = Query(None, description="Filter by tier level (1=Flight, 2=Ground, 3=Loose)"),
+    tier: int | None = Query(
+        None, description="Filter by tier level (1=Flight, 2=Ground, 3=Loose)"
+    ),
     parent_id: int | None = Query(None, description="Filter by parent assembly ID"),
-    top_level: bool = Query(False, description="Only show parts with no parent (top-level assemblies)"),
+    top_level: bool = Query(
+        False, description="Only show parts with no parent (top-level assemblies)"
+    ),
     low_stock: bool = Query(False, description="Only show parts below reorder point"),
 ) -> PartListResponse:
     """List all parts with optional filtering."""
@@ -183,9 +186,8 @@ async def list_parts(
             .group_by(InventoryRecord.part_id)
             .subquery()
         )
-        query = (
-            query.outerjoin(stock_subq, Part.id == stock_subq.c.part_id)
-            .filter(func.coalesce(stock_subq.c.total_qty, 0) < Part.reorder_point)
+        query = query.outerjoin(stock_subq, Part.id == stock_subq.c.part_id).filter(
+            func.coalesce(stock_subq.c.total_qty, 0) < Part.reorder_point
         )
 
     total = query.count()
@@ -221,7 +223,9 @@ async def create_part(
     """Create a new part."""
     # Validate parent exists if specified
     if part_in.parent_id is not None:
-        parent = db.query(Part).filter(Part.id == part_in.parent_id, Part.deleted_at.is_(None)).first()
+        parent = (
+            db.query(Part).filter(Part.id == part_in.parent_id, Part.deleted_at.is_(None)).first()
+        )
         if not parent:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -332,7 +336,9 @@ async def update_part(
                 detail="A part cannot be its own parent",
             )
         # Parent must exist
-        parent = db.query(Part).filter(Part.id == part_in.parent_id, Part.deleted_at.is_(None)).first()
+        parent = (
+            db.query(Part).filter(Part.id == part_in.parent_id, Part.deleted_at.is_(None)).first()
+        )
         if not parent:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -404,9 +410,19 @@ _HEADER_ALIASES: dict[str, str] = {
 }
 
 # Columns to silently ignore (from CSV export format)
-_IGNORE_COLUMNS = {"id", "internal_pn", "internal pn", "internal_part_number",
-                    "total_quantity", "total quantity", "locations", "stock_qty",
-                    "stock qty", "created_at", "updated_at"}
+_IGNORE_COLUMNS = {
+    "id",
+    "internal_pn",
+    "internal pn",
+    "internal_part_number",
+    "total_quantity",
+    "total quantity",
+    "locations",
+    "stock_qty",
+    "stock qty",
+    "created_at",
+    "updated_at",
+}
 
 
 class ImportRowPreview(BaseModel):
@@ -478,9 +494,15 @@ async def import_preview(
         raise HTTPException(status_code=400, detail="CSV must have a 'Name' column")
 
     # Collect existing parts for duplicate detection
-    existing_names = {p.name.lower() for p in db.query(Part.name).filter(Part.deleted_at.is_(None)).all()}
+    existing_names = {
+        p.name.lower() for p in db.query(Part.name).filter(Part.deleted_at.is_(None)).all()
+    }
     existing_external_pns = set()
-    for row in db.query(Part.external_pn).filter(Part.deleted_at.is_(None), Part.external_pn.isnot(None)).all():
+    for row in (
+        db.query(Part.external_pn)
+        .filter(Part.deleted_at.is_(None), Part.external_pn.isnot(None))
+        .all()
+    ):
         existing_external_pns.add(row[0].lower())
 
     valid_tiers = {1, 2, 3, 4, 5}  # Reasonable tier range
@@ -528,7 +550,9 @@ async def import_preview(
             preview.errors.append(f"Tier must be 1-5, got {preview.tier}")
 
         if preview.tracking_type and preview.tracking_type.lower() not in valid_tracking:
-            preview.errors.append(f"Tracking type must be 'bulk' or 'serialized', got '{preview.tracking_type}'")
+            preview.errors.append(
+                f"Tracking type must be 'bulk' or 'serialized', got '{preview.tracking_type}'"
+            )
 
         # Check duplicates
         if preview.name and preview.name.lower() in existing_names:
@@ -566,7 +590,9 @@ async def import_parts(
     if len(import_in.rows) > 5000:
         raise HTTPException(status_code=400, detail="Maximum 5000 rows per import")
 
-    existing_names = {p.name.lower() for p in db.query(Part.name).filter(Part.deleted_at.is_(None)).all()}
+    existing_names = {
+        p.name.lower() for p in db.query(Part.name).filter(Part.deleted_at.is_(None)).all()
+    }
 
     created = 0
     skipped = 0

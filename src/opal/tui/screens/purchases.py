@@ -22,9 +22,7 @@ class PurchaseFormModal(FormModal):
 
     def build_form(self) -> ComposeResult:
         if self.suppliers:
-            supplier_options = [
-                (s.get("name", f"#{s['id']}"), s["id"]) for s in self.suppliers
-            ]
+            supplier_options = [(s.get("name", f"#{s['id']}"), s["id"]) for s in self.suppliers]
             yield FormGroup(
                 "Supplier",
                 Select(supplier_options, id="field-supplier", prompt="Select supplier..."),
@@ -174,9 +172,7 @@ class PurchaseDetail(Static):
                 qty = line.get("quantity", 0)
                 cost = line.get("unit_cost", "")
                 cost_str = f" @ ${cost}" if cost else ""
-                lines_container.mount(
-                    Label(f"  {part} x{qty}{cost_str}", classes="detail-row")
-                )
+                lines_container.mount(Label(f"  {part} x{qty}{cost_str}", classes="detail-row"))
 
     def clear(self) -> None:
         """Clear the detail panel."""
@@ -243,9 +239,7 @@ class PurchasesScreen(Screen):
             suppliers = result.get("items", [])
         except Exception:
             suppliers = []
-        self.app.push_screen(
-            PurchaseFormModal(suppliers=suppliers), callback=self._on_po_created
-        )
+        self.app.push_screen(PurchaseFormModal(suppliers=suppliers), callback=self._on_po_created)
 
     def _on_po_created(self, data: dict[str, Any] | None) -> None:
         if data is None:
