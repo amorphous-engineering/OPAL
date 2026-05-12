@@ -103,20 +103,16 @@ function Install-Binary {
 
 # --- PATH check ---
 
-function Update-PathAdvice {
+function Update-Path {
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($UserPath -and $UserPath.Split(";") -contains $InstallDir) {
         return
     }
 
-    Write-Warn "$InstallDir is not in your PATH"
-    Write-Host ""
-    Write-Host "  Run this to add it permanently:"
-    Write-Host ""
-    Write-Host "    [Environment]::SetEnvironmentVariable('Path', `"$InstallDir;`" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  Then restart your terminal."
-    Write-Host ""
+    [Environment]::SetEnvironmentVariable("Path", "$InstallDir;$UserPath", "User")
+    $env:Path = "$InstallDir;$env:Path"
+    Write-Info "Added $InstallDir to your PATH"
+    Write-Warn "Restart your terminal for the PATH change to take effect in new sessions"
 }
 
 # --- Main ---
@@ -133,7 +129,7 @@ function Install-Opal {
     $DownloadUrl = Find-DownloadUrl -AssetPattern $AssetName
 
     Install-Binary -Url $DownloadUrl -AssetName $AssetName
-    Update-PathAdvice
+    Update-Path
 
     Write-Host ""
     Write-Host "OPAL $Tag installed successfully." -ForegroundColor White
