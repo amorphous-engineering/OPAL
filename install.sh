@@ -1,9 +1,9 @@
 #!/bin/sh
 # OPAL installer — downloads the latest release binary for macOS/Linux.
-# Usage: curl -LsSf https://raw.githubusercontent.com/CST-100/OPAL/master/install.sh | sh
+# Usage: curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh
 set -eu
 
-REPO="CST-100/OPAL"
+REPO="amorphous-engineering/OPAL"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 INSTALL_DIR="${HOME}/.local/bin"
 INSTALL_PATH="${INSTALL_DIR}/opal"

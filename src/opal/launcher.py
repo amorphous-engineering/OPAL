@@ -376,7 +376,7 @@ class OpalLauncher(App):
                 severity="information",
             )
         else:
-            self._log("Download from: https://github.com/CST-100/OPAL/releases/latest")
+            self._log("Download from: https://github.com/amorphous-engineering/OPAL/releases/latest")
             self.notify(
                 f"Update available: v{tag}",
                 title="OPAL Update",

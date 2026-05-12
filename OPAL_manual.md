@@ -78,15 +78,15 @@ Install with a single command:
 
 ```bash
 # macOS / Linux
-curl -LsSf https://raw.githubusercontent.com/CST-100/OPAL/master/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/CST-100/OPAL/master/install.ps1 | iex
+irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
 ```
 
-Or download manually from the [GitHub Releases](https://github.com/CST-100/OPAL/releases/latest) page:
+Or download manually from the [GitHub Releases](https://github.com/amorphous-engineering/OPAL/releases/latest) page:
 
 | Platform | File |
 |----------|------|
@@ -130,7 +130,7 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ##### Step 2: Download OPAL
 
 ```bash
-git clone https://github.com/CST-100/OPAL.git
+git clone https://github.com/amorphous-engineering/OPAL.git
 cd OPAL
 ```
 
@@ -2405,7 +2405,7 @@ This is intentional! Published versions are immutable. To update:
 
 #### Bug Reports
 
-File issues on GitHub: https://github.com/CST-100/OPAL/issues
+File issues on GitHub: https://github.com/amorphous-engineering/OPAL/issues
 
 Include:
 - OPAL version (`v0.3.2` shown in header)
@@ -2531,4 +2531,4 @@ OPAL is open-source software. See LICENSE file for details.
 **End of Manual**
 
 For the latest version of this manual and OPAL updates, visit:
-https://github.com/CST-100/OPAL
+https://github.com/amorphous-engineering/OPAL

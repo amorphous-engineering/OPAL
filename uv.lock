@@ -524,7 +524,7 @@ wheels = [
 
 [[package]]
 name = "opal"
-version = "1.1.0"
+version = "1.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

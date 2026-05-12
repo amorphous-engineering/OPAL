@@ -13,7 +13,7 @@ import httpx
 
 from opal import __version__
 
-GITHUB_RELEASES_URL = "https://api.github.com/repos/CST-100/OPAL/releases/latest"
+GITHUB_RELEASES_URL = "https://api.github.com/repos/amorphous-engineering/OPAL/releases/latest"
 GITHUB_HEADERS = {"Accept": "application/vnd.github.v3+json"}
 
 

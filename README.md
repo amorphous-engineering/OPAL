@@ -10,15 +10,15 @@ Install with a single command:
 
 ```bash
 # macOS / Linux
-curl -LsSf https://raw.githubusercontent.com/CST-100/OPAL/master/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/CST-100/OPAL/master/install.ps1 | iex
+irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
 ```
 
-Or download manually from [GitHub Releases](https://github.com/CST-100/OPAL/releases/latest):
+Or download manually from [GitHub Releases](https://github.com/amorphous-engineering/OPAL/releases/latest):
 
 | Platform | File |
 |----------|------|

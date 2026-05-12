@@ -1,8 +1,8 @@
 # OPAL installer for Windows — downloads the latest release binary.
-# Usage: irm https://raw.githubusercontent.com/CST-100/OPAL/master/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
-$Repo = "CST-100/OPAL"
+$Repo = "amorphous-engineering/OPAL"
 $ApiUrl = "https://api.github.com/repos/$Repo/releases/latest"
 $InstallDir = Join-Path $env:LOCALAPPDATA "OPAL"
 $InstallPath = Join-Path $InstallDir "opal.exe"
