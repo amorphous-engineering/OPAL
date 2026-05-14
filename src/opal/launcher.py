@@ -408,7 +408,7 @@ class OpalLauncher(App):
         def on_progress(downloaded: int, total: int) -> None:
             if total > 0:
                 pct = int(downloaded / total * 100)
-                self.call_from_thread(self._log, f"  Download: {pct}% ({downloaded}/{total} bytes)")
+                self._log(f"  Download: {pct}% ({downloaded}/{total} bytes)")
 
         try:
             tmp_path = await download_update(asset_url, progress_callback=on_progress)
