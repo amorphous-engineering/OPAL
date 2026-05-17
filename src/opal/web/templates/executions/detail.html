@@ -419,15 +419,23 @@ async function uploadStepPhoto(input, stepExecutionId, fieldName) {
     const fd = new FormData();
     fd.append('file', input.files[0]);
     fd.append('step_execution_id', stepExecutionId);
+    // Build headers WITHOUT Content-Type — fetch must set it to
+    // multipart/form-data with the right boundary for FormData bodies.
+    const headers = {};
+    const userId = localStorage.getItem('opal_user_id');
+    if (userId) headers['X-User-Id'] = userId;
     try {
         const r = await fetch('/api/attachments/upload', {
             method: 'POST',
-            headers: getHeaders(),
+            headers,
             body: fd,
         });
         if (!r.ok) {
             const err = await r.json().catch(() => ({}));
-            alert('Photo upload failed: ' + (err.detail || r.status));
+            const msg = typeof err.detail === 'string'
+                ? err.detail
+                : JSON.stringify(err.detail || {status: r.status});
+            alert('Photo upload failed: ' + msg);
             return;
         }
         const data = await r.json();
