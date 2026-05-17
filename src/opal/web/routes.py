@@ -410,7 +410,7 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
     context["cal_overdue_count"] = cal_overdue_count
 
     # Get recent audit activity
-    recent_activity = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(10).all()
+    recent_activity = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(15).all()
     context["recent_activity"] = recent_activity
 
     return templates.TemplateResponse("index.html", context)

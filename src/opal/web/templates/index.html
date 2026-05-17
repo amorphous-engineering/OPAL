@@ -16,35 +16,44 @@
     {{ ok.stat(risks_count, "ACTIVE RISKS", href="/risks") }}
 </div>
 
+{% call ok.panel("QUICK ACTIONS", margin_top="var(--space-md)") %}
+        <div style="display: flex; gap: var(--space-md); flex-wrap: wrap;">
+            {{ ok.btn("+ NEW PART", href="/parts/new", variant="primary") }}
+            {{ ok.btn("+ NEW PROCEDURE", href="/procedures/new", variant="primary") }}
+            {{ ok.btn("+ NEW ISSUE", href="/issues/new", variant="primary") }}
+            {{ ok.btn("+ NEW RISK", href="/risks/new", variant="primary") }}
+            {{ ok.btn("+ NEW DATASET", href="/datasets/new", variant="primary") }}
+            {{ ok.btn("START EXECUTION", href="/executions/new") }}
+        </div>
+{% endcall %}
+
 <div class="grid grid-2 mt-md">
     {% call ok.panel("RECENT ACTIVITY", actions=ok.btn("VIEW ALL", href="/audit", size="sm")) %}
-        <div style="max-height: 300px; overflow-y: auto;">
-            {% if recent_activity %}
-            {% call ok.table() %}
-                <thead>
-                    <tr>
-                        {{ ok.th("ACTION", width="80px") }}
-                        {{ ok.th("ENTITY") }}
-                        {{ ok.th("TIME", width="160px") }}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for log in recent_activity %}
-                    {% set action_val = log.action.value if log.action.value is defined else log.action %}
-                    <tr>
-                        <td>
+        {% if recent_activity %}
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("ACTION", width="80px") }}
+                    {{ ok.th("ENTITY") }}
+                    {{ ok.th("TIME", width="160px") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_activity %}
+                {% set action_val = log.action.value if log.action.value is defined else log.action %}
+                <tr>
+                    <td>
 {{ ok.status(action_val | upper, "ok" if action_val == 'create' else ("info" if action_val == 'update' else ("error" if action_val == 'delete' else "default"))) }}
-                        </td>
-                        <td>{{ log.table_name }} #{{ log.record_id }}</td>
-                        <td>{{ ok.timestamp(log.timestamp) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            {% endcall %}
-            {% else %}
-            {{ ok.empty("No recent activity") }}
-            {% endif %}
-        </div>
+                    </td>
+                    <td>{{ log.table_name }} #{{ log.record_id }}</td>
+                    <td>{{ ok.timestamp(log.timestamp) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+        {% else %}
+        {{ ok.empty("No recent activity") }}
+        {% endif %}
     {% endcall %}
     {% call ok.panel("KEYBOARD SHORTCUTS") %}
             {% call ok.table() %}
@@ -116,14 +125,4 @@
     {% endcall %}
 </div>
 
-{% call ok.panel("QUICK ACTIONS", margin_top="var(--space-md)") %}
-        <div style="display: flex; gap: var(--space-md); flex-wrap: wrap;">
-            {{ ok.btn("+ NEW PART", href="/parts/new", variant="primary") }}
-            {{ ok.btn("+ NEW PROCEDURE", href="/procedures/new", variant="primary") }}
-            {{ ok.btn("+ NEW ISSUE", href="/issues/new", variant="primary") }}
-            {{ ok.btn("+ NEW RISK", href="/risks/new", variant="primary") }}
-            {{ ok.btn("+ NEW DATASET", href="/datasets/new", variant="primary") }}
-            {{ ok.btn("START EXECUTION", href="/executions/new") }}
-        </div>
-{% endcall %}
 {% endblock %}
