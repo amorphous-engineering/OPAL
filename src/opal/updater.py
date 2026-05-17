@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import stat
@@ -12,6 +13,8 @@ from pathlib import Path
 import httpx
 
 from opal import __version__
+
+logger = logging.getLogger(__name__)
 
 GITHUB_RELEASES_URL = "https://api.github.com/repos/amorphous-engineering/OPAL/releases/latest"
 GITHUB_HEADERS = {"Accept": "application/vnd.github.v3+json"}
@@ -80,7 +83,13 @@ async def check_for_update() -> dict | None:
     try:
         latest = Version(tag)
         current = Version(__version__)
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "Skipping update check: could not parse version (tag=%r, current=%r): %s",
+            tag,
+            __version__,
+            e,
+        )
         return None
 
     if latest <= current:
@@ -170,16 +179,27 @@ def replace_binary(new_binary: Path) -> Path:
     backup.unlink(missing_ok=True)
 
     # Rename current → backup
-    current.rename(backup)
+    try:
+        current.rename(backup)
+    except OSError as e:
+        raise RuntimeError(
+            f"Cannot replace binary at {current}: {e}. "
+            "The OPAL binary lives in a directory you don't have write access to "
+            "(common when installed via Homebrew or to /usr/local/bin). "
+            "Re-run the installer with sudo, or move OPAL to a user-writable location."
+        ) from e
 
     try:
         # Move new binary into place
         new_binary.rename(current)
-    except Exception:
+    except OSError as e:
         # Restore from backup on failure
         if backup.exists() and not current.exists():
             backup.rename(current)
-        raise
+        raise RuntimeError(
+            f"Cannot install new binary at {current}: {e}. "
+            "Original binary restored from backup."
+        ) from e
 
     # Make executable on Unix
     if sys.platform != "win32":

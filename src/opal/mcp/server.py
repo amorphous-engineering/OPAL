@@ -1,7 +1,7 @@
 """OPAL MCP Server implementation."""
 
 import json
-import sys
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,6 +23,8 @@ from opal.db.models import (
 from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import ProcedureStatus, ProcedureStep
 from opal.db.models.risk import RiskStatus
+
+logger = logging.getLogger(__name__)
 
 # Create MCP server
 server = Server("opal")
@@ -1417,12 +1419,12 @@ async def _remove_component(db, args: dict) -> list[TextContent]:
 
 async def run_server():
     """Run the MCP server."""
-    print("OPAL MCP Server started", file=sys.stderr)
-    print(f"Database: {get_active_settings().database_url}", file=sys.stderr)
+    logger.info("OPAL MCP Server started")
+    logger.info("Database: %s", get_active_settings().database_url)
 
     project = get_active_project()
     if project:
-        print(f"Project: {project.name}", file=sys.stderr)
+        logger.info("Project: %s", project.name)
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

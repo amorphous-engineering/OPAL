@@ -1,6 +1,6 @@
 # OPAL User Manual
 
-**Version 0.4.5**
+**Version 1.3.0**
 
 **Operations, Procedures, Assets, Logistics**
 
