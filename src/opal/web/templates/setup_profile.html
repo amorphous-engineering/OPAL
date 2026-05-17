@@ -34,13 +34,11 @@
             letter-spacing: 0.1em;
         }
         .setup-subtitle {
-            font-family: var(--font-mono);
             font-size: 0.75rem;
             color: var(--text-muted);
             margin-top: var(--space-xs);
         }
         .setup-email {
-            font-family: var(--font-mono);
             font-size: 0.75rem;
             color: var(--text-muted);
             margin-bottom: var(--space-sm);
@@ -57,7 +55,7 @@
         <div class="panel">
             <div class="panel-header">YOUR NAME</div>
             <div class="panel-body">
-                <div class="setup-email">Signed in as {{ user.email }}</div>
+                <div class="setup-email">Signed in as <span class="mono">{{ user.email }}</span></div>
                 <form method="POST" action="/setup-profile">
                     <div class="form-group">
                         <label class="form-label" for="name">Display Name *</label>

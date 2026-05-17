@@ -17,7 +17,7 @@
         <br>
         {% if rec.part.internal_pn %}<span class="mono" style="font-size: 0.875rem;">{{ rec.part.internal_pn }}</span>{% endif %}
         {% if rec.part.internal_pn and rec.part.external_pn %} / {% endif %}
-        {% if rec.part.external_pn %}<span class="text-muted" style="font-size: 0.875rem;">{{ rec.part.external_pn }}</span>{% endif %}
+        {% if rec.part.external_pn %}<span class="mono text-muted" style="font-size: 0.875rem;">{{ rec.part.external_pn }}</span>{% endif %}
         {% endif %}
     </td>
     <td>{{ ok.mono(rec.location) }}</td>

@@ -1622,6 +1622,7 @@ body.exec-detail .exec-tab-content > div {
 }
 
 .op-title {
+    font-family: var(--font-sans);
     font-weight: 600;
 }
 
@@ -1679,6 +1680,7 @@ body.exec-detail .exec-tab-content > div {
 }
 
 .step-title {
+    font-family: var(--font-sans);
     color: var(--text-primary);
 }
 
