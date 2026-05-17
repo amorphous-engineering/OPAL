@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
+from opal.db.models.execution import StepExecution, StepStatus
 from opal.db.models.issue import (
     DispositionType,
     Issue,
@@ -396,10 +397,52 @@ async def update_issue(
         issue.disposition_approved_by_id = data.disposition_approved_by_id
 
     log_update(db, issue, old_values, user_id)
+
+    # Auto-resume step on hold once all linked NCs reach a terminal disposition.
+    _maybe_resume_step_after_nc_update(db, issue, user_id)
+
     db.commit()
     db.refresh(issue)
 
     return _issue_to_response(issue)
+
+
+def _maybe_resume_step_after_nc_update(db, issue: "Issue", user_id: int | None) -> None:
+    """If this NC just reached a terminal state and no other open NCs remain on
+    its step, pop the step back to IN_PROGRESS."""
+    if issue.step_execution_id is None:
+        return
+    issue_type = issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type
+    if issue_type != IssueType.NON_CONFORMANCE.value:
+        return
+    issue_status = issue.status.value if hasattr(issue.status, "value") else issue.status
+    if issue_status not in (IssueStatus.DISPOSITION_APPROVED.value, IssueStatus.CLOSED.value):
+        return
+
+    step_exec = db.get(StepExecution, issue.step_execution_id)
+    if step_exec is None:
+        return
+    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
+    if step_status != StepStatus.ON_HOLD.value:
+        return
+
+    remaining = (
+        db.query(Issue)
+        .filter(
+            Issue.step_execution_id == step_exec.id,
+            Issue.issue_type == IssueType.NON_CONFORMANCE,
+            Issue.id != issue.id,
+            Issue.status.notin_(
+                [IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]
+            ),
+            Issue.deleted_at.is_(None),
+        )
+        .count()
+    )
+    if remaining == 0:
+        step_old = get_model_dict(step_exec)
+        step_exec.status = StepStatus.IN_PROGRESS
+        log_update(db, step_exec, step_old, user_id)
 
 
 @router.delete("/{issue_id}", status_code=204)

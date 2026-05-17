@@ -1841,6 +1841,19 @@ async def executions_detail(
     )
     context["linked_issues"] = linked_issues
 
+    # Step-hold lookup: open NCs that put their step on hold, keyed by step_execution_id.
+    holding_ncs_by_step: dict[int, list[Issue]] = {}
+    for iss in linked_issues:
+        iss_type = iss.issue_type.value if hasattr(iss.issue_type, "value") else iss.issue_type
+        iss_status = iss.status.value if hasattr(iss.status, "value") else iss.status
+        if (
+            iss_type == "non_conformance"
+            and iss.step_execution_id
+            and iss_status not in ("disposition_approved", "closed")
+        ):
+            holding_ncs_by_step.setdefault(iss.step_execution_id, []).append(iss)
+    context["step_holding_ncs"] = holding_ncs_by_step
+
     # Meta tab extras: last-activity timestamp + flat data-capture audit rows.
     step_update_times = [
         se.updated_at for se in instance.step_executions if se.updated_at is not None

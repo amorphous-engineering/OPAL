@@ -796,6 +796,12 @@ async def skip_step(
     step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
     if step_status == StepStatus.COMPLETED.value:
         raise HTTPException(status_code=400, detail="Cannot skip completed step")
+    if step_status == StepStatus.ON_HOLD.value:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot skip a step that is on hold for an open NC; "
+            "resolve the NC disposition first.",
+        )
 
     step_exec.status = StepStatus.SKIPPED
     step_exec.completed_at = datetime.now(UTC)
@@ -1033,6 +1039,16 @@ async def log_non_conformance(
     db.flush()
 
     log_create(db, issue, user_id)
+
+    # Put the step on hold until the NC disposition is approved or the issue closed.
+    step_status_now = (
+        step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
+    )
+    if step_status_now != StepStatus.ON_HOLD.value:
+        step_old = get_model_dict(step_exec)
+        step_exec.status = StepStatus.ON_HOLD
+        log_update(db, step_exec, step_old, user_id)
+
     db.commit()
     db.refresh(issue)
 

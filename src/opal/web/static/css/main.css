@@ -1533,6 +1533,26 @@ body.exec-detail .exec-tab-content > div {
     border-color: var(--accent-yellow);
 }
 
+.exec-sidebar-status--on_hold {
+    background: var(--accent-yellow);
+    border-color: var(--accent-yellow);
+}
+
+.step-hold-banner {
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--diff-modified-bg);
+    border-left: 3px solid var(--accent-yellow);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.step-hold-banner strong {
+    color: var(--accent-yellow);
+    letter-spacing: 0.05em;
+}
+
 .exec-sidebar-status--skipped {
     background: var(--text-muted);
     border-color: var(--text-muted);

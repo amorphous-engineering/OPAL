@@ -58,7 +58,7 @@
                 {% if op.status in ['completed', 'signed_off'] and op.execution and op.execution.completed_by_user %}
                 {{ ok.status("COMPLETED BY " ~ op.execution.completed_by_user.name|upper, "ok") }}
                 {% else %}
-                {{ ok.status(op.status | upper | replace('_', ' '), "ok" if op.status in ['completed', 'signed_off'] else ("info" if op.status == 'in_progress' else ("warn" if op.status in ['skipped', 'awaiting_signoff'] else "default"))) }}
+                {{ ok.status(op.status | upper | replace('_', ' '), "ok" if op.status in ['completed', 'signed_off'] else ("info" if op.status == 'in_progress' else ("warn" if op.status in ['skipped', 'awaiting_signoff', 'on_hold'] else "default"))) }}
                 {% endif %}
                 {% if op.status in ['awaiting_signoff', 'in_progress'] and inst_status in ['pending', 'in_progress'] and op_data.sub_steps %}
                 <button class="btn btn-sm btn-primary" onclick="completeStep({{ op.order }})" style="margin-left: var(--space-sm);">COMPLETE</button>
@@ -78,7 +78,7 @@
                     {% if step.status in ['completed', 'signed_off'] and step.execution and step.execution.completed_by_user %}
                     {{ ok.status("COMPLETED BY " ~ step.execution.completed_by_user.name|upper, "ok") }}
                     {% else %}
-                    {{ ok.status(step.status | upper | replace('_', ' '), "ok" if step.status in ['completed', 'signed_off'] else ("info" if step.status == 'in_progress' else ("warn" if step.status in ['skipped', 'awaiting_signoff'] else "default"))) }}
+                    {{ ok.status(step.status | upper | replace('_', ' '), "ok" if step.status in ['completed', 'signed_off'] else ("info" if step.status == 'in_progress' else ("warn" if step.status in ['skipped', 'awaiting_signoff', 'on_hold'] else "default"))) }}
                     {% endif %}
                     {% if step.execution and step.execution.started_at %}
                     <span class="text-muted mono" style="margin-left: auto; font-size: 0.75rem;">
@@ -87,6 +87,13 @@
                     {% endif %}
                 </summary>
                 <div class="step-detail-body">
+                    {% if step.status == 'on_hold' and step.execution %}
+                    {% set hold_ncs = step_holding_ncs.get(step.execution.id, []) %}
+                    <div class="step-hold-banner">
+                        <strong>ON HOLD</strong> — awaiting disposition approval on
+                        {% for nc in hold_ncs %}<a href="/issues/{{ nc.id }}" class="mono">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+                    </div>
+                    {% endif %}
                     {% if step.instructions %}
                     <div class="step-instructions" data-markdown>{{ step.instructions }}</div>
                     {% endif %}
@@ -230,6 +237,13 @@
                     {% endif %}
                 </summary>
                 <div class="step-detail-body">
+                    {% if op.status == 'on_hold' and op.execution %}
+                    {% set hold_ncs = step_holding_ncs.get(op.execution.id, []) %}
+                    <div class="step-hold-banner">
+                        <strong>ON HOLD</strong> — awaiting disposition approval on
+                        {% for nc in hold_ncs %}<a href="/issues/{{ nc.id }}" class="mono">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+                    </div>
+                    {% endif %}
                     {% if op.instructions %}
                     <div class="step-instructions" data-markdown>{{ op.instructions }}</div>
                     {% endif %}

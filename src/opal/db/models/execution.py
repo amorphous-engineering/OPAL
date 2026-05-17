@@ -24,6 +24,7 @@ class StepStatus(str, Enum):
 
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
+    ON_HOLD = "on_hold"  # NC logged; blocked until all open NC dispositions terminal
     COMPLETED = "completed"  # Work done (leaf steps or sub-steps)
     AWAITING_SIGNOFF = "awaiting_signoff"  # Parent OP waiting for sign-off
     SIGNED_OFF = "signed_off"  # Parent OP signed off

@@ -577,3 +577,93 @@ def test_leave_execution(client, auth_headers):
         f"/api/procedure-instances/{instance_id}/participants"
     ).json()
     assert len(participants["participants"]) == 0
+
+
+# ============ NC step-hold tests ============
+
+
+def _start_step_and_log_nc(client, instance_id, step_number=1, title="NC A"):
+    """Start a step and log an NC against it. Returns (issue_id, step_status_after)."""
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{step_number}/start")
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{step_number}/nc",
+        json={"title": title, "description": "x", "priority": "medium"},
+    )
+    assert resp.status_code == 201
+    issue_id = resp.json()["id"]
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    step_status = next(
+        s["status"] for s in inst["step_executions"] if s["step_number"] == step_number
+    )
+    return issue_id, step_status
+
+
+def test_log_nc_puts_step_on_hold(client):
+    """Logging an NC against an in-progress step transitions it to on_hold."""
+    instance_id = _create_instance(client)
+    _, step_status = _start_step_and_log_nc(client, instance_id)
+    assert step_status == "on_hold"
+
+
+def test_approving_nc_disposition_resumes_step(client):
+    """Approving the sole NC's disposition pops the step back to in_progress."""
+    instance_id = _create_instance(client)
+    issue_id, _ = _start_step_and_log_nc(client, instance_id)
+
+    resp = client.patch(
+        f"/api/issues/{issue_id}",
+        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
+    )
+    assert resp.status_code == 200
+
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    step_status = next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1)
+    assert step_status == "in_progress"
+
+
+def test_two_open_ncs_keep_step_on_hold_until_all_resolved(client):
+    """With two open NCs on a step, the step stays held until both reach a
+    terminal disposition state."""
+    instance_id = _create_instance(client)
+    issue_a, _ = _start_step_and_log_nc(client, instance_id, title="NC A")
+
+    # Log a second NC on the same step via the API (UI hides the button while held).
+    resp_b = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/nc",
+        json={"title": "NC B", "description": "y", "priority": "medium"},
+    )
+    assert resp_b.status_code == 201
+    issue_b = resp_b.json()["id"]
+
+    # Approve A only — step must remain on hold for B.
+    client.patch(
+        f"/api/issues/{issue_a}",
+        json={"status": "disposition_approved", "disposition_type": "rework"},
+    )
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    assert next(
+        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
+    ) == "on_hold"
+
+    # Approve B — step now resumes.
+    client.patch(
+        f"/api/issues/{issue_b}",
+        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
+    )
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    assert next(
+        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
+    ) == "in_progress"
+
+
+def test_cannot_skip_on_hold_step(client):
+    """The /skip endpoint refuses a step that is on hold for an open NC."""
+    instance_id = _create_instance(client)
+    _start_step_and_log_nc(client, instance_id)
+
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/skip",
+        json={"reason": "trying to bypass"},
+    )
+    assert resp.status_code == 400
+    assert "on hold" in resp.json()["detail"].lower()
