@@ -1375,11 +1375,13 @@ textarea {
     font-size: 0.875rem;
 }
 
-body.exec-detail .main {
+body.exec-detail .main,
+body.procedure-detail .main {
     padding-top: 0;
 }
 
-body.exec-detail .exec-tabs {
+body.exec-detail .exec-tabs,
+body.procedure-detail .exec-tabs {
     margin-left: calc(-1 * var(--space-md));
     margin-right: calc(-1 * var(--space-md));
     padding-left: var(--space-md);
@@ -1417,12 +1419,14 @@ body.exec-detail .exec-tabs {
 
 /* Execution-detail page: lock to viewport so each tab scrolls within .exec-tab-content,
    and the Operations exec-layout fills the remaining space naturally. */
-body.exec-detail {
+body.exec-detail,
+body.procedure-detail {
     height: 100vh;
     overflow: hidden;
 }
 
-body.exec-detail .main {
+body.exec-detail .main,
+body.procedure-detail .main {
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -1430,7 +1434,8 @@ body.exec-detail .main {
     padding-bottom: 0;
 }
 
-body.exec-detail .exec-tab-content {
+body.exec-detail .exec-tab-content,
+body.procedure-detail .exec-tab-content {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -1442,7 +1447,8 @@ body.exec-detail .exec-tab-content {
    layout so its children (panels, or .exec-layout) become direct flex children
    of .exec-tab-content. Operations: .exec-layout flex:1 fills available space.
    Other tabs: panels stack naturally and .exec-tab-content scrolls if they overflow. */
-body.exec-detail .exec-tab-content > div {
+body.exec-detail .exec-tab-content > div,
+body.procedure-detail .exec-tab-content > div {
     display: contents;
 }
 

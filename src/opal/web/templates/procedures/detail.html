@@ -1,6 +1,8 @@
 {% extends "layouts/base.html" %}
 {% import 'opalkit/_macros.html' as ok %}
 
+{% block body_class %}procedure-detail{% endblock %}
+
 {% block breadcrumbs %}
 {{ ok.crumb("HOME") }}
 {{ ok.crumb("TEMPLATES", "/procedures") }}
@@ -8,362 +10,32 @@
 {% endblock %}
 
 {% block content %}
-<div class="grid grid-2">
-    {% call ok.panel(procedure.name, actions=ok.status(procedure.status | upper, "ok" if procedure.status == "active" else ("error" if procedure.status == "deprecated" else "warn"))) %}
-            {% call ok.table() %}
-                {{ ok.detail_row("ID", ok.id_cell(procedure.id), th_width="120px") }}
-                {{ ok.detail_row("TYPE", ok.status(procedure.procedure_type | upper, "info" if procedure.procedure_type == "build" else "default"), th_width="120px") }}
-                <tr>
-                    <th style="width: 120px;">STATUS</th>
-                    <td>
-                        <select id="status-select" class="form-select" style="width: auto;" onchange="updateStatus(this.value)">
-                            {% for s in statuses %}
-                            <option value="{{ s }}" {% if procedure.status == s %}selected{% endif %}>{{ s | upper }}</option>
-                            {% endfor %}
-                        </select>
-                    </td>
-                </tr>
-                {{ ok.detail_row("CURRENT VER", ok.mono("v" ~ current_version_num) if procedure.current_version_id else "-", th_width="120px") }}
-                {{ ok.detail_row("CREATED", ok.timestamp(procedure.created_at), th_width="120px") }}
-                {{ ok.detail_row("UPDATED", ok.timestamp(procedure.updated_at), th_width="120px") }}
-            {% endcall %}
-            {% if procedure.description %}
-            <div style="margin-top: var(--space-md);">
-                <div class="form-label">DESCRIPTION</div>
-                <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);" data-markdown>{{ procedure.description }}</div>
-            </div>
-            {% endif %}
-            <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm);">
-                {{ ok.btn("EDIT", href="/procedures/" ~ procedure.id ~ "/edit") }}
-                {{ ok.btn("CLONE", attrs='onclick="cloneProcedure()"') }}
-                {{ ok.btn("PUBLISH VERSION", variant="primary", attrs='onclick="publishVersion()"') }}
-            </div>
-    {% endcall %}
-
-    {% call ok.panel("VERSIONS") %}
-            {% if versions %}
-            {% call ok.table() %}
-                <thead>
-                    <tr>
-                        {{ ok.th("VERSION", width="80px") }}
-                        {{ ok.th("PUBLISHED") }}
-                        {{ ok.th("", width="60px") }}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for v in versions %}
-                    <tr>
-                        <td class="mono">v{{ v.version_number }}{% if v.id == procedure.current_version_id %} {{ ok.status("CURRENT", "ok") }}{% endif %}</td>
-                        <td>{{ ok.timestamp(v.created_at) }}</td>
-                        <td>{{ ok.btn("VIEW", href="/procedures/versions/" ~ v.id) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            {% endcall %}
-            {% if versions | length >= 2 %}
-            <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm); align-items: center;">
-                <span class="form-label" style="margin: 0;">COMPARE:</span>
-                <select id="compare-v1" class="form-select" style="width: auto;">
-                    {% for v in versions %}
-                    <option value="{{ v.id }}">v{{ v.version_number }}{% if v.id == procedure.current_version_id %} (current){% endif %}</option>
-                    {% endfor %}
-                </select>
-                <span class="text-muted">vs</span>
-                <select id="compare-v2" class="form-select" style="width: auto;">
-                    {% for v in versions %}
-                    <option value="{{ v.id }}"{% if loop.index == 2 %} selected{% endif %}>v{{ v.version_number }}{% if v.id == procedure.current_version_id %} (current){% endif %}</option>
-                    {% endfor %}
-                </select>
-                {{ ok.btn("COMPARE", attrs='onclick="compareVersions()"') }}
-            </div>
-            {% endif %}
-            {% else %}
-            {{ ok.empty("No versions published yet") }}
-            {% endif %}
-    {% endcall %}
+{# Tab navigation — mirrors templates/executions/detail.html #}
+<div class="exec-tabs" role="tablist">
+    {% set tabs = [
+        ('meta',       'META'),
+        ('operations', 'OPERATIONS'),
+        ('kit',        'KIT'),
+        ('outputs',    'OUTPUTS'),
+        ('versions',   'VERSIONS'),
+    ] %}
+    {% for slug, label in tabs %}
+    {% set href = '?tab=' ~ slug ~ ('&op=' ~ selected_op_order if slug == 'operations' and selected_op_order else '') %}
+    <a href="{{ href }}"
+       class="exec-tab{% if tab == slug %} active{% endif %}"
+       hx-get="{{ href }}"
+       hx-target=".exec-tab-content"
+       hx-select=".exec-tab-content > *"
+       hx-swap="innerHTML scroll:false"
+       hx-push-url="true"
+       hx-on:click="this.parentNode.querySelectorAll('.exec-tab').forEach(el => el.classList.remove('active')); this.classList.add('active')">
+        {{ label }}
+    </a>
+    {% endfor %}
 </div>
 
-{% call ok.panel("OPERATIONS (DRAFT)", actions=ok.btn("+ ADD OP", variant="primary", attrs='onclick="showAddOp()"'), margin_top="var(--space-md)") %}
-        {% if ops %}
-        <div id="ops-list">
-            {% for op_data in ops %}
-            {% set op = op_data.step %}
-            <div class="op-block" data-op-id="{{ op.id }}">
-                <div class="op-header">
-                    <span class="op-number mono">OP {{ op.step_number }}</span>
-                    <span class="op-title">{{ op.title }}</span>
-                    {% if op.estimated_duration_minutes %}
-                    <span class="op-duration mono">{{ op.estimated_duration_minutes }}m</span>
-                    {% endif %}
-                    <span class="op-progress">{{ op_data.sub_steps|length }} steps</span>
-                    <span class="op-actions">
-                        {{ ok.btn("+ STEP", size="sm", attrs='onclick="showAddStep(' ~ op.id ~ ')"') }}
-                        {{ ok.btn("EDIT", size="sm", attrs='onclick="editStep(' ~ op.id ~ ')"') }}
-                        {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="deleteStep(' ~ op.id ~ ')"') }}
-                    </span>
-                </div>
-                {% if op.instructions %}
-                <div class="op-instructions" data-markdown>{{ op.instructions }}</div>
-                {% endif %}
-                {% if op_data.sub_steps %}
-                {% for step in op_data.sub_steps %}
-                <details class="step-details" open>
-                    <summary class="step-summary">
-                        <span class="step-number mono">{{ step.step_number }}</span>
-                        <span class="step-title">{{ step.title }}</span>
-                        {% if step.requires_signoff %}{{ ok.status("SIGNOFF", "info") }}{% endif %}
-                        {% if step.required_data_schema and step.required_data_schema.get('fields') %}{{ ok.status("DATA", "default") }}{% endif %}
-                        {% if step.estimated_duration_minutes %}
-                        <span class="op-duration mono" style="margin-left: auto;">{{ step.estimated_duration_minutes }}m</span>
-                        {% endif %}
-                        <span class="op-actions" style="{% if not step.estimated_duration_minutes %}margin-left: auto;{% endif %}">
-                            {{ ok.btn("EDIT", size="sm", attrs='onclick="event.stopPropagation(); editStep(' ~ step.id ~ ')"') }}
-                            {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="event.stopPropagation(); deleteStep(' ~ step.id ~ ')"') }}
-                        </span>
-                    </summary>
-                    <div class="step-detail-body">
-                        {% if step.instructions %}
-                        <div class="step-instructions" data-markdown>{{ step.instructions }}</div>
-                        {% endif %}
-                        {% if step.step_kits %}
-                        <div style="margin: var(--space-sm) 0;">
-                            <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">STEP PARTS</div>
-                            <table class="data-table">
-                                <thead><tr><th>PART</th><th style="width:80px;text-align:right;">QTY</th><th style="width:80px;">TYPE</th></tr></thead>
-                                <tbody>
-                                    {% for sk in step.step_kits %}
-                                    <tr>
-                                        <td><a href="/parts/{{ sk.part_id }}">{{ sk.part.name }}</a>{% if sk.notes %} <span class="text-muted">({{ sk.notes }})</span>{% endif %}</td>
-                                        <td class="mono" style="text-align:right;">{{ sk.quantity_required }}</td>
-                                        <td>{{ ok.status(sk.usage_type.value|upper, "info" if sk.usage_type.value == 'tooling' else "default") }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% endif %}
-                        {% if step.required_data_schema and step.required_data_schema.get('fields') %}
-                        <div style="margin: var(--space-sm) 0;">
-                            <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
-                            <table class="data-table">
-                                <thead><tr><th>FIELD</th><th style="width:80px;">TYPE</th><th style="width:80px;">REQUIRED</th></tr></thead>
-                                <tbody>
-                                    {% for field in step.required_data_schema.get('fields', []) %}
-                                    <tr>
-                                        <td>{{ field.label }}{% if field.get('unit') %} <span class="text-muted">({{ field.unit }})</span>{% endif %}</td>
-                                        <td class="mono">{{ field.type | upper }}</td>
-                                        <td>{% if field.required %}{{ ok.status("REQ", "info") }}{% else %}-{% endif %}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% endif %}
-                    </div>
-                </details>
-                {% endfor %}
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        {{ ok.empty("No operations defined yet") }}
-        {% endif %}
-{% endcall %}
-
-{% if contingency_ops %}
-{% call ok.panel("CONTINGENCY OPERATIONS", actions=ok.btn("+ ADD CONTINGENCY", attrs='onclick="showAddOp(true)"'), margin_top="var(--space-md)") %}
-        <div id="contingency-ops-list">
-            {% for op_data in contingency_ops %}
-            {% set op = op_data.step %}
-            <div class="op-block op-contingency" data-op-id="{{ op.id }}">
-                <div class="op-header">
-                    <span class="op-number mono">OP {{ op.step_number }}</span>
-                    {{ ok.status("CONTINGENCY", "warn") }}
-                    <span class="op-title">{{ op.title }}</span>
-                    {% if op.estimated_duration_minutes %}
-                    <span class="op-duration mono">{{ op.estimated_duration_minutes }}m</span>
-                    {% endif %}
-                    <span class="op-progress">{{ op_data.sub_steps|length }} steps</span>
-                    <span class="op-actions">
-                        {{ ok.btn("+ STEP", size="sm", attrs='onclick="showAddStep(' ~ op.id ~ ')"') }}
-                        {{ ok.btn("EDIT", size="sm", attrs='onclick="editStep(' ~ op.id ~ ')"') }}
-                        {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="deleteStep(' ~ op.id ~ ')"') }}
-                    </span>
-                </div>
-                {% if op.instructions %}
-                <div class="op-instructions" data-markdown>{{ op.instructions }}</div>
-                {% endif %}
-                {% if op_data.sub_steps %}
-                {% for step in op_data.sub_steps %}
-                <details class="step-details" open>
-                    <summary class="step-summary">
-                        <span class="step-number mono">{{ step.step_number }}</span>
-                        <span class="step-title">{{ step.title }}</span>
-                        {% if step.requires_signoff %}{{ ok.status("SIGNOFF", "info") }}{% endif %}
-                        {% if step.required_data_schema and step.required_data_schema.get('fields') %}{{ ok.status("DATA", "default") }}{% endif %}
-                        {% if step.estimated_duration_minutes %}
-                        <span class="op-duration mono" style="margin-left: auto;">{{ step.estimated_duration_minutes }}m</span>
-                        {% endif %}
-                        <span class="op-actions" style="{% if not step.estimated_duration_minutes %}margin-left: auto;{% endif %}">
-                            {{ ok.btn("EDIT", size="sm", attrs='onclick="event.stopPropagation(); editStep(' ~ step.id ~ ')"') }}
-                            {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="event.stopPropagation(); deleteStep(' ~ step.id ~ ')"') }}
-                        </span>
-                    </summary>
-                    <div class="step-detail-body">
-                        {% if step.instructions %}
-                        <div class="step-instructions" data-markdown>{{ step.instructions }}</div>
-                        {% endif %}
-                        {% if step.step_kits %}
-                        <div style="margin: var(--space-sm) 0;">
-                            <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">STEP PARTS</div>
-                            <table class="data-table">
-                                <thead><tr><th>PART</th><th style="width:80px;text-align:right;">QTY</th><th style="width:80px;">TYPE</th></tr></thead>
-                                <tbody>
-                                    {% for sk in step.step_kits %}
-                                    <tr>
-                                        <td><a href="/parts/{{ sk.part_id }}">{{ sk.part.name }}</a>{% if sk.notes %} <span class="text-muted">({{ sk.notes }})</span>{% endif %}</td>
-                                        <td class="mono" style="text-align:right;">{{ sk.quantity_required }}</td>
-                                        <td>{{ ok.status(sk.usage_type.value|upper, "info" if sk.usage_type.value == 'tooling' else "default") }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% endif %}
-                        {% if step.required_data_schema and step.required_data_schema.get('fields') %}
-                        <div style="margin: var(--space-sm) 0;">
-                            <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
-                            <table class="data-table">
-                                <thead><tr><th>FIELD</th><th style="width:80px;">TYPE</th><th style="width:80px;">REQUIRED</th></tr></thead>
-                                <tbody>
-                                    {% for field in step.required_data_schema.get('fields', []) %}
-                                    <tr>
-                                        <td>{{ field.label }}{% if field.get('unit') %} <span class="text-muted">({{ field.unit }})</span>{% endif %}</td>
-                                        <td class="mono">{{ field.type | upper }}</td>
-                                        <td>{% if field.required %}{{ ok.status("REQ", "info") }}{% else %}-{% endif %}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% endif %}
-                    </div>
-                </details>
-                {% endfor %}
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-{% endcall %}
-{% else %}
-{% call ok.panel("CONTINGENCY OPERATIONS", actions=ok.btn("+ ADD CONTINGENCY", attrs='onclick="showAddOp(true)"'), margin_top="var(--space-md)") %}
-        {{ ok.empty("No contingency operations defined") }}
-{% endcall %}
-{% endif %}
-
-{% call ok.panel("KIT (BILL OF MATERIALS)", actions=ok.btn("+ ADD PART", variant="primary", attrs='onclick="showAddKit()"'), margin_top="var(--space-md)") %}
-        {% if kit_items %}
-        {% call ok.table() %}
-            <thead>
-                <tr>
-                    {{ ok.th("PART", width="60px") }}
-                    {{ ok.th("NAME") }}
-                    {{ ok.th("PN", width="120px") }}
-                    {{ ok.th("QTY REQ", width="100px", align="right") }}
-                    {{ ok.th("", width="60px") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in kit_items %}
-                <tr>
-                    <td>{{ ok.id_cell(item.part_id, "/parts/" ~ item.part_id) }}</td>
-                    <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
-                    {{ ok.td(item.part_external_pn or '-', mono=true) }}
-                    {{ ok.td(item.quantity_required, mono=true, align="right") }}
-                    <td>{{ ok.btn("X", variant="danger", attrs='onclick="removeKitItem(' ~ item.part_id ~ ')"') }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        {% endcall %}
-        {% else %}
-        {{ ok.empty("No parts in kit") }}
-        {% endif %}
-{% endcall %}
-
-{% if procedure.procedure_type == "build" %}
-{% call ok.panel("OUTPUTS (ASSEMBLY PRODUCTS)", actions=ok.btn("+ ADD OUTPUT", variant="primary", attrs='onclick="showAddOutput()"'), margin_top="var(--space-md)") %}
-        {% if output_items %}
-        {% call ok.table() %}
-            <thead>
-                <tr>
-                    {{ ok.th("PART", width="60px") }}
-                    {{ ok.th("NAME") }}
-                    {{ ok.th("PN", width="120px") }}
-                    {{ ok.th("QTY", width="100px", align="right") }}
-                    {{ ok.th("", width="60px") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in output_items %}
-                <tr>
-                    <td>{{ ok.id_cell(item.part_id, "/parts/" ~ item.part_id) }}</td>
-                    <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
-                    {{ ok.td(item.part_external_pn or '-', mono=true) }}
-                    {{ ok.td(item.quantity_produced, mono=true, align="right") }}
-                    <td>{{ ok.btn("X", variant="danger", attrs='onclick="removeOutputItem(' ~ item.part_id ~ ')"') }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        {% endcall %}
-        {% else %}
-        {{ ok.empty("No outputs defined — add the part(s) this procedure produces") }}
-        {% endif %}
-{% endcall %}
-{% endif %}
-
-<!-- Add Output Modal -->
-<div id="add-output-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">ADD OUTPUT PART</div>
-            <div class="panel-body">
-                <form id="add-output-form" onsubmit="addOutputItem(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="output-part-search">PART *</label>
-                        <div class="part-search-container">
-                            <input type="text"
-                                   id="output-part-search"
-                                   class="form-input part-search-input"
-                                   placeholder="Search parts..."
-                                   autocomplete="off"
-                                   hx-get="/parts/search"
-                                   hx-trigger="keyup changed delay:200ms"
-                                   hx-target="#output-part-results"
-                                   hx-vals='{"limit": 5}'
-                                   name="q">
-                            <input type="hidden" id="output-part" name="part_id" required>
-                            <div id="output-part-results" class="part-search-dropdown"></div>
-                            <div id="output-part-selected" class="part-search-selected" style="display: none;">
-                                <span class="part-id"></span>
-                                <span class="part-name"></span>
-                                <span class="part-search-clear" onclick="clearPartSelection('output')">&times;</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="output-qty">QUANTITY PRODUCED *</label>
-                        <input type="number" id="output-qty" name="quantity_produced" class="form-input" step="0.0001" min="0.0001" value="1" required>
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideAddOutput()"') }}
-                        {{ ok.btn("ADD", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="output-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
-    </div>
+<div class="exec-tab-content">
+    {% include 'procedures/tabs/' ~ tab ~ '.html' %}
 </div>
 
 <!-- Add Operation Modal -->
@@ -397,7 +69,7 @@
     </div>
 </div>
 
-<!-- Add Step Modal (under an OP) -->
+<!-- Add Step Modal (sub-step under an OP) -->
 <div id="add-step-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px;">
         <div class="panel">
@@ -472,8 +144,178 @@
     </div>
 </div>
 
+<!-- Add Output Modal -->
+<div id="add-output-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
+        <div class="panel">
+            <div class="panel-header">ADD OUTPUT PART</div>
+            <div class="panel-body">
+                <form id="add-output-form" onsubmit="addOutputItem(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="output-part-search">PART *</label>
+                        <div class="part-search-container">
+                            <input type="text"
+                                   id="output-part-search"
+                                   class="form-input part-search-input"
+                                   placeholder="Search parts..."
+                                   autocomplete="off"
+                                   hx-get="/parts/search"
+                                   hx-trigger="keyup changed delay:200ms"
+                                   hx-target="#output-part-results"
+                                   hx-vals='{"limit": 5}'
+                                   name="q">
+                            <input type="hidden" id="output-part" name="part_id" required>
+                            <div id="output-part-results" class="part-search-dropdown"></div>
+                            <div id="output-part-selected" class="part-search-selected" style="display: none;">
+                                <span class="part-id"></span>
+                                <span class="part-name"></span>
+                                <span class="part-search-clear" onclick="clearPartSelection('output')">&times;</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="output-qty">QUANTITY PRODUCED *</label>
+                        <input type="number" id="output-qty" name="quantity_produced" class="form-input" step="0.0001" min="0.0001" value="1" required>
+                    </div>
+                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                        {{ ok.btn("CANCEL", attrs='onclick="hideAddOutput()"') }}
+                        {{ ok.btn("ADD", variant="primary", type="submit") }}
+                    </div>
+                </form>
+                <div id="output-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Step-Part Modal (per step kit add) -->
+<div id="step-part-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
+        <div class="panel">
+            <div class="panel-header">ADD PART TO STEP</div>
+            <div class="panel-body">
+                <form id="step-part-form" onsubmit="addStepPart(event)">
+                    <input type="hidden" id="step-part-step-id" value="">
+                    <div class="form-group">
+                        <label class="form-label" for="step-part-id">PART *</label>
+                        <select id="step-part-id" name="part_id" class="form-select" required>
+                            <option value="">Select part...</option>
+                            {% for p in parts %}
+                            <option value="{{ p.id }}">{{ p.id }} - {{ p.name }}{% if p.external_pn %} ({{ p.external_pn }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="step-part-qty">QUANTITY *</label>
+                        <input type="number" id="step-part-qty" name="quantity_required" class="form-input" step="0.0001" min="0.0001" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="step-part-type">USAGE TYPE *</label>
+                        <select id="step-part-type" name="usage_type" class="form-select" required>
+                            <option value="consume">CONSUME - Part installed/used up</option>
+                            <option value="tooling">TOOLING - GSE/fixtures (reusable)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="step-part-notes">NOTES</label>
+                        <input type="text" id="step-part-notes" name="notes" class="form-input" placeholder="Optional notes">
+                    </div>
+                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                        {{ ok.btn("CANCEL", attrs='onclick="hideAddStepPart()"') }}
+                        {{ ok.btn("ADD", variant="primary", type="submit") }}
+                    </div>
+                </form>
+                <div id="step-part-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data-Capture Field Modal (per step schema field add/edit) -->
+<div id="field-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
+        <div class="panel">
+            <div class="panel-header" id="field-modal-title">ADD DATA CAPTURE FIELD</div>
+            <div class="panel-body">
+                <form id="field-form" onsubmit="saveField(event)">
+                    <input type="hidden" id="field-step-id" value="">
+                    <input type="hidden" id="field-edit-index" value="-1">
+                    <div class="form-group">
+                        <label class="form-label" for="field-name">FIELD NAME *</label>
+                        <input type="text" id="field-name" class="form-input" required placeholder="e.g., torque_value" pattern="[a-z0-9_]+">
+                        <small class="form-help">Lowercase, underscores only (used as key)</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="field-label">DISPLAY LABEL *</label>
+                        <input type="text" id="field-label" class="form-input" required placeholder="e.g., Torque Value">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="field-type">TYPE *</label>
+                        <select id="field-type" class="form-select" required onchange="toggleTypeExtras(this.value)">
+                            <option value="text">Text</option>
+                            <option value="number">Number</option>
+                            <option value="checkbox">Checkbox</option>
+                            <option value="select">Dropdown</option>
+                            <option value="textarea">Multi-line Text</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: var(--space-sm);">
+                            <input type="checkbox" id="field-required">
+                            <span>Required</span>
+                        </label>
+                    </div>
+                    <div id="extras-number" style="display: none;">
+                        <div style="display: flex; gap: var(--space-md);">
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label" for="field-min">MIN</label>
+                                <input type="number" id="field-min" class="form-input" step="any">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label" for="field-max">MAX</label>
+                                <input type="number" id="field-max" class="form-input" step="any">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label" for="field-unit">UNIT</label>
+                                <input type="text" id="field-unit" class="form-input" placeholder="e.g., Nm">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="field-step-incr">STEP</label>
+                            <input type="number" id="field-step-incr" class="form-input" step="any" placeholder="e.g., 0.1">
+                        </div>
+                    </div>
+                    <div id="extras-text" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label" for="field-placeholder">PLACEHOLDER</label>
+                            <input type="text" id="field-placeholder" class="form-input">
+                        </div>
+                    </div>
+                    <div id="extras-select" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label" for="field-options">OPTIONS (one per line) *</label>
+                            <textarea id="field-options" class="form-textarea" rows="4" placeholder="Aluminum&#10;Steel&#10;Titanium"></textarea>
+                        </div>
+                    </div>
+                    <div id="extras-textarea" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label" for="field-rows">ROWS</label>
+                            <input type="number" id="field-rows" class="form-input" min="2" max="20" value="3">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end; margin-top: var(--space-lg);">
+                        {{ ok.btn("CANCEL", attrs='onclick="hideFieldModal()"') }}
+                        {{ ok.btn("SAVE FIELD", variant="primary", type="submit") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 const procedureId = {{ procedure.id }};
+const stepSchemas = {};  // { stepId: [field, ...] }
 
 function getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
@@ -482,128 +324,56 @@ function getHeaders() {
     return headers;
 }
 
-// Part search component functions
-function selectPart(el) {
-    const partId = el.dataset.partId;
-    const partName = el.dataset.partName;
-    const partPn = el.dataset.partPn;
-
-    const container = el.closest('.part-search-dropdown').parentElement;
-    const hiddenInput = container.querySelector('input[type="hidden"]');
-    const searchInput = container.querySelector('.part-search-input');
-    const dropdown = container.querySelector('.part-search-dropdown');
-    const selected = container.querySelector('.part-search-selected');
-
-    hiddenInput.value = partId;
-    selected.querySelector('.part-id').textContent = partId;
-    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
-    selected.style.display = 'flex';
-    searchInput.style.display = 'none';
-    dropdown.classList.remove('active');
-    dropdown.innerHTML = '';
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : str;
+    return div.innerHTML;
 }
 
-function clearPartSelection(prefix) {
-    const container = document.getElementById(prefix + '-part-search').closest('.part-search-container');
-    const hiddenInput = container.querySelector('input[type="hidden"]');
-    const searchInput = container.querySelector('.part-search-input');
-    const selected = container.querySelector('.part-search-selected');
-
-    hiddenInput.value = '';
-    searchInput.value = '';
-    searchInput.style.display = 'block';
-    selected.style.display = 'none';
-    searchInput.focus();
-}
-
-// Show dropdown when results load
-document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target.classList.contains('part-search-dropdown')) {
-        const dropdown = evt.detail.target;
-        if (dropdown.innerHTML.trim()) {
-            dropdown.classList.add('active');
-        } else {
-            dropdown.classList.remove('active');
-        }
-    }
-});
-
-// Hide dropdown when clicking outside
-document.addEventListener('click', function(evt) {
-    if (!evt.target.closest('.part-search-container')) {
-        document.querySelectorAll('.part-search-dropdown').forEach(d => d.classList.remove('active'));
-    }
-});
+// ============ Procedure-level actions ============
 
 async function updateStatus(status) {
     try {
-        const response = await fetch(`/api/procedures/${procedureId}`, {
-            method: 'PATCH',
-            headers: getHeaders(),
-            body: JSON.stringify({ status: status }),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to update status'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
+        const r = await fetch(`/api/procedures/${procedureId}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ status }) });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to update status')); }
+    } catch (e) { alert('Network error: ' + e.message); }
 }
 
 async function cloneProcedure() {
     const newName = prompt('Enter name for the cloned procedure:', 'Copy of {{ procedure.name | replace("'", "\\'") }}');
     if (newName === null) return;
-
     try {
-        const body = {};
-        if (newName.trim()) body.new_name = newName.trim();
-
-        const response = await fetch(`/api/procedures/${procedureId}/clone`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(body),
-        });
-        if (response.ok) {
-            const data = await response.json();
-            window.location.href = '/procedures/' + data.id;
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to clone procedure'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
+        const body = newName.trim() ? { new_name: newName.trim() } : {};
+        const r = await fetch(`/api/procedures/${procedureId}/clone`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(body) });
+        if (r.ok) { const d = await r.json(); window.location.href = '/procedures/' + d.id; }
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to clone procedure')); }
+    } catch (e) { alert('Network error: ' + e.message); }
 }
 
 async function publishVersion() {
     if (!confirm('Publish current steps as a new version?')) return;
-
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/publish`, {
-            method: 'POST',
-            headers: getHeaders(),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to publish version'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
+        const r = await fetch(`/api/procedures/${procedureId}/publish`, { method: 'POST', headers: getHeaders() });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to publish version')); }
+    } catch (e) { alert('Network error: ' + e.message); }
 }
 
-// Operation functions
+function compareVersions() {
+    const v1 = document.getElementById('compare-v1').value;
+    const v2 = document.getElementById('compare-v2').value;
+    if (v1 === v2) { alert('Select two different versions to compare'); return; }
+    window.location.href = `/procedures/${procedureId}/versions/${v1}/diff/${v2}`;
+}
+
+// ============ Op / Step add via modal ============
+
 function showAddOp(isContingency = false) {
     document.getElementById('add-op-modal').style.display = 'block';
     document.getElementById('op-is-contingency').value = isContingency ? 'true' : 'false';
     document.getElementById('add-op-title').textContent = isContingency ? 'ADD CONTINGENCY OPERATION' : 'ADD OPERATION';
 }
-
 function hideAddOp() {
     document.getElementById('add-op-modal').style.display = 'none';
     document.getElementById('add-op-form').reset();
@@ -614,39 +384,23 @@ async function addOp(event) {
     const form = document.getElementById('add-op-form');
     const errorDiv = document.getElementById('op-error');
     errorDiv.style.display = 'none';
-
     const data = {
         title: form.title.value,
         instructions: form.instructions.value || null,
         estimated_duration_minutes: form.estimated_duration_minutes.value ? parseInt(form.estimated_duration_minutes.value) : null,
         is_contingency: document.getElementById('op-is-contingency').value === 'true',
     };
-
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/steps`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to add operation');
-            errorDiv.style.display = 'block';
-        }
-    } catch (e) {
-        errorDiv.textContent = 'Network error: ' + e.message;
-        errorDiv.style.display = 'block';
-    }
+        const r = await fetch(`/api/procedures/${procedureId}/steps`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); errorDiv.textContent = formatApiError(err.detail, 'Failed to add operation'); errorDiv.style.display = 'block'; }
+    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
 }
 
-// Step functions (sub-steps under an OP)
 function showAddStep(parentOpId) {
     document.getElementById('add-step-modal').style.display = 'block';
     document.getElementById('step-parent-id').value = parentOpId;
 }
-
 function hideAddStep() {
     document.getElementById('add-step-modal').style.display = 'none';
     document.getElementById('add-step-form').reset();
@@ -657,7 +411,6 @@ async function addStep(event) {
     const form = document.getElementById('add-step-form');
     const errorDiv = document.getElementById('step-error');
     errorDiv.style.display = 'none';
-
     const parentId = document.getElementById('step-parent-id').value;
     const data = {
         title: form.title.value,
@@ -665,58 +418,216 @@ async function addStep(event) {
         estimated_duration_minutes: form.estimated_duration_minutes.value ? parseInt(form.estimated_duration_minutes.value) : null,
         parent_step_id: parentId ? parseInt(parentId) : null,
     };
-
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/steps`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to add step');
-            errorDiv.style.display = 'block';
-        }
-    } catch (e) {
-        errorDiv.textContent = 'Network error: ' + e.message;
-        errorDiv.style.display = 'block';
-    }
-}
-
-function editStep(stepId) {
-    window.location.href = `/procedures/${procedureId}/steps/${stepId}/edit`;
+        const r = await fetch(`/api/procedures/${procedureId}/steps`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); errorDiv.textContent = formatApiError(err.detail, 'Failed to add step'); errorDiv.style.display = 'block'; }
+    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
 }
 
 async function deleteStep(stepId) {
     if (!confirm('Delete this step/operation? This will also delete any sub-steps.')) return;
-
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/steps/${stepId}`, {
-            method: 'DELETE',
-            headers: getHeaders(),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to delete step'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
+        const r = await fetch(`/api/procedures/${procedureId}/steps/${stepId}`, { method: 'DELETE', headers: getHeaders() });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to delete step')); }
+    } catch (e) { alert('Network error: ' + e.message); }
+}
+
+function openInlineEditor(stepId) {
+    const row = document.getElementById(`step-${stepId}-row`);
+    if (row) {
+        row.open = true;
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
-// Kit functions
-function showAddKit() {
-    document.getElementById('add-kit-modal').style.display = 'block';
+// ============ Inline step save (with schema) ============
+
+async function saveStep(event, stepId) {
+    event.preventDefault();
+    const form = event.target;
+    const errorDiv = document.getElementById(`step-error-${stepId}`);
+    errorDiv.style.display = 'none';
+
+    const fields = stepSchemas[stepId] || [];
+    const schema = fields.length > 0 ? { fields } : null;
+
+    const data = {
+        title: form.title.value,
+        instructions: form.instructions.value || null,
+        estimated_duration_minutes: form.estimated_duration_minutes.value ? parseInt(form.estimated_duration_minutes.value) : null,
+        requires_signoff: form.requires_signoff ? form.requires_signoff.checked : false,
+        required_data_schema: schema,
+    };
+    if (form.is_contingency) data.is_contingency = form.is_contingency.checked;
+
+    try {
+        const r = await fetch(`/api/procedures/${procedureId}/steps/${stepId}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); errorDiv.textContent = formatApiError(err.detail, 'Failed to save step'); errorDiv.style.display = 'block'; }
+    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
 }
 
+// ============ Step-parts (per step kit) ============
+
+function showAddStepPart(stepId) {
+    document.getElementById('step-part-step-id').value = stepId;
+    document.getElementById('step-part-modal').style.display = 'block';
+}
+function hideAddStepPart() {
+    document.getElementById('step-part-modal').style.display = 'none';
+    document.getElementById('step-part-form').reset();
+}
+
+async function addStepPart(event) {
+    event.preventDefault();
+    const form = document.getElementById('step-part-form');
+    const stepId = document.getElementById('step-part-step-id').value;
+    const errorDiv = document.getElementById('step-part-error');
+    errorDiv.style.display = 'none';
+    const data = {
+        part_id: parseInt(form.part_id.value),
+        quantity_required: parseFloat(form.quantity_required.value),
+        usage_type: form.usage_type.value,
+        notes: form.notes.value || null,
+    };
+    try {
+        const r = await fetch(`/api/procedures/${procedureId}/steps/${stepId}/kit`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); errorDiv.textContent = formatApiError(err.detail, 'Failed to add part'); errorDiv.style.display = 'block'; }
+    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
+}
+
+async function removeStepPart(stepId, partId) {
+    if (!confirm('Remove this part from the step?')) return;
+    try {
+        const r = await fetch(`/api/procedures/${procedureId}/steps/${stepId}/kit/${partId}`, { method: 'DELETE', headers: getHeaders() });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to remove part')); }
+    } catch (e) { alert('Network error: ' + e.message); }
+}
+
+// ============ Data-capture schema (per step) ============
+
+function initStepSchema(stepId, raw) {
+    stepSchemas[stepId] = (raw && raw.fields) ? raw.fields : [];
+    renderStepSchema(stepId);
+}
+
+function renderStepSchema(stepId) {
+    const container = document.getElementById(`schema-fields-list-${stepId}`);
+    if (!container) return;
+    const fields = stepSchemas[stepId] || [];
+    if (fields.length === 0) {
+        container.innerHTML = '<span class="text-muted">No data capture fields defined</span>';
+        return;
+    }
+    let html = '<table class="data-table"><thead><tr><th>NAME</th><th>LABEL</th><th style="width:80px;">TYPE</th><th style="width:60px;">REQ</th><th style="width:100px;"></th></tr></thead><tbody>';
+    fields.forEach((f, i) => {
+        html += `<tr><td class="mono">${escapeHtml(f.name)}</td><td>${escapeHtml(f.label)}</td><td>${escapeHtml(f.type)}</td><td>${f.required ? 'YES' : '-'}</td><td style="display:flex;gap:var(--space-xs);"><button type="button" class="btn btn-sm" onclick="editField(${stepId}, ${i})">EDIT</button><button type="button" class="btn btn-sm" style="color:var(--accent-red);" onclick="deleteField(${stepId}, ${i})">X</button></td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function toggleTypeExtras(type) {
+    document.getElementById('extras-number').style.display = type === 'number' ? 'block' : 'none';
+    document.getElementById('extras-text').style.display = type === 'text' ? 'block' : 'none';
+    document.getElementById('extras-select').style.display = type === 'select' ? 'block' : 'none';
+    document.getElementById('extras-textarea').style.display = type === 'textarea' ? 'block' : 'none';
+}
+
+function showAddField(stepId) {
+    document.getElementById('field-step-id').value = stepId;
+    document.getElementById('field-edit-index').value = '-1';
+    document.getElementById('field-modal-title').textContent = 'ADD DATA CAPTURE FIELD';
+    document.getElementById('field-form').reset();
+    toggleTypeExtras('text');
+    document.getElementById('field-modal').style.display = 'block';
+}
+
+function hideFieldModal() {
+    document.getElementById('field-modal').style.display = 'none';
+}
+
+function editField(stepId, index) {
+    const f = (stepSchemas[stepId] || [])[index];
+    if (!f) return;
+    document.getElementById('field-step-id').value = stepId;
+    document.getElementById('field-edit-index').value = index;
+    document.getElementById('field-modal-title').textContent = 'EDIT FIELD';
+    document.getElementById('field-name').value = f.name;
+    document.getElementById('field-label').value = f.label;
+    document.getElementById('field-type').value = f.type;
+    document.getElementById('field-required').checked = !!f.required;
+    toggleTypeExtras(f.type);
+    if (f.type === 'number') {
+        document.getElementById('field-min').value = f.min != null ? f.min : '';
+        document.getElementById('field-max').value = f.max != null ? f.max : '';
+        document.getElementById('field-unit').value = f.unit || '';
+        document.getElementById('field-step-incr').value = f.step || '';
+    } else if (f.type === 'text') {
+        document.getElementById('field-placeholder').value = f.placeholder || '';
+    } else if (f.type === 'select') {
+        document.getElementById('field-options').value = (f.options || []).join('\n');
+    } else if (f.type === 'textarea') {
+        document.getElementById('field-rows').value = f.rows || 3;
+    }
+    document.getElementById('field-modal').style.display = 'block';
+}
+
+function deleteField(stepId, index) {
+    if (!confirm('Delete this data capture field?')) return;
+    stepSchemas[stepId].splice(index, 1);
+    renderStepSchema(stepId);
+}
+
+function saveField(event) {
+    event.preventDefault();
+    const stepId = parseInt(document.getElementById('field-step-id').value);
+    const editIndex = parseInt(document.getElementById('field-edit-index').value);
+    const type = document.getElementById('field-type').value;
+    const field = {
+        name: document.getElementById('field-name').value.trim(),
+        label: document.getElementById('field-label').value.trim(),
+        type,
+        required: document.getElementById('field-required').checked,
+    };
+    if (type === 'number') {
+        const min = document.getElementById('field-min').value;
+        const max = document.getElementById('field-max').value;
+        const unit = document.getElementById('field-unit').value.trim();
+        const stepIncr = document.getElementById('field-step-incr').value;
+        if (min !== '') field.min = parseFloat(min);
+        if (max !== '') field.max = parseFloat(max);
+        if (unit) field.unit = unit;
+        if (stepIncr !== '') field.step = parseFloat(stepIncr);
+    } else if (type === 'text') {
+        const ph = document.getElementById('field-placeholder').value.trim();
+        if (ph) field.placeholder = ph;
+    } else if (type === 'select') {
+        const opts = document.getElementById('field-options').value.split('\n').map(s => s.trim()).filter(Boolean);
+        if (opts.length === 0) { alert('Please enter at least one option'); return; }
+        field.options = opts;
+    } else if (type === 'textarea') {
+        field.rows = parseInt(document.getElementById('field-rows').value) || 3;
+    }
+    if (!stepSchemas[stepId]) stepSchemas[stepId] = [];
+    const dupIdx = stepSchemas[stepId].findIndex(f => f.name === field.name);
+    if (dupIdx >= 0 && dupIdx !== editIndex) { alert('A field with this name already exists'); return; }
+    if (editIndex >= 0) stepSchemas[stepId][editIndex] = field;
+    else stepSchemas[stepId].push(field);
+    hideFieldModal();
+    renderStepSchema(stepId);
+}
+
+// ============ Kit (procedure level) ============
+
+function showAddKit() { document.getElementById('add-kit-modal').style.display = 'block'; }
 function hideAddKit() {
     document.getElementById('add-kit-modal').style.display = 'none';
     document.getElementById('add-kit-form').reset();
-    // Reset the part search
     document.getElementById('kit-part').value = '';
     document.getElementById('kit-part-search').value = '';
     document.getElementById('kit-part-search').style.display = 'block';
@@ -729,55 +640,26 @@ async function addKitItem(event) {
     const form = document.getElementById('add-kit-form');
     const errorDiv = document.getElementById('kit-error');
     errorDiv.style.display = 'none';
-
-    const data = {
-        part_id: parseInt(form.part_id.value),
-        quantity_required: parseFloat(form.quantity_required.value),
-    };
-
+    const data = { part_id: parseInt(form.part_id.value), quantity_required: parseFloat(form.quantity_required.value) };
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/kit`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to add part to kit');
-            errorDiv.style.display = 'block';
-        }
-    } catch (e) {
-        errorDiv.textContent = 'Network error: ' + e.message;
-        errorDiv.style.display = 'block';
-    }
+        const r = await fetch(`/api/procedures/${procedureId}/kit`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); errorDiv.textContent = formatApiError(err.detail, 'Failed to add part to kit'); errorDiv.style.display = 'block'; }
+    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
 }
 
 async function removeKitItem(partId) {
     if (!confirm('Remove this part from the kit?')) return;
-
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/kit/${partId}`, {
-            method: 'DELETE',
-            headers: getHeaders(),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to remove part'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
+        const r = await fetch(`/api/procedures/${procedureId}/kit/${partId}`, { method: 'DELETE', headers: getHeaders() });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to remove part')); }
+    } catch (e) { alert('Network error: ' + e.message); }
 }
 
-// Output functions
-function showAddOutput() {
-    document.getElementById('add-output-modal').style.display = 'block';
-}
+// ============ Outputs (procedure level) ============
 
+function showAddOutput() { document.getElementById('add-output-modal').style.display = 'block'; }
 function hideAddOutput() {
     document.getElementById('add-output-modal').style.display = 'none';
     document.getElementById('add-output-form').reset();
@@ -793,66 +675,68 @@ async function addOutputItem(event) {
     const form = document.getElementById('add-output-form');
     const errorDiv = document.getElementById('output-error');
     errorDiv.style.display = 'none';
-
-    const data = {
-        part_id: parseInt(form.part_id.value),
-        quantity_produced: parseFloat(form.quantity_produced.value),
-    };
-
+    const data = { part_id: parseInt(form.part_id.value), quantity_produced: parseFloat(form.quantity_produced.value) };
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/outputs`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to add output');
-            errorDiv.style.display = 'block';
-        }
-    } catch (e) {
-        errorDiv.textContent = 'Network error: ' + e.message;
-        errorDiv.style.display = 'block';
-    }
+        const r = await fetch(`/api/procedures/${procedureId}/outputs`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); errorDiv.textContent = formatApiError(err.detail, 'Failed to add output'); errorDiv.style.display = 'block'; }
+    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
 }
 
 async function removeOutputItem(partId) {
     if (!confirm('Remove this output part?')) return;
-
     try {
-        const response = await fetch(`/api/procedures/${procedureId}/outputs/${partId}`, {
-            method: 'DELETE',
-            headers: getHeaders(),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to remove output'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
+        const r = await fetch(`/api/procedures/${procedureId}/outputs/${partId}`, { method: 'DELETE', headers: getHeaders() });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to remove output')); }
+    } catch (e) { alert('Network error: ' + e.message); }
 }
 
-function compareVersions() {
-    const v1 = document.getElementById('compare-v1').value;
-    const v2 = document.getElementById('compare-v2').value;
-    if (v1 === v2) {
-        alert('Select two different versions to compare');
-        return;
-    }
-    window.location.href = `/procedures/${procedureId}/versions/${v1}/diff/${v2}`;
+// ============ Part search component (modal autocompletes) ============
+
+function selectPart(el) {
+    const partId = el.dataset.partId;
+    const partName = el.dataset.partName;
+    const partPn = el.dataset.partPn;
+    const container = el.closest('.part-search-dropdown').parentElement;
+    const hiddenInput = container.querySelector('input[type="hidden"]');
+    const searchInput = container.querySelector('.part-search-input');
+    const dropdown = container.querySelector('.part-search-dropdown');
+    const selected = container.querySelector('.part-search-selected');
+    hiddenInput.value = partId;
+    selected.querySelector('.part-id').textContent = partId;
+    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
+    selected.style.display = 'flex';
+    searchInput.style.display = 'none';
+    dropdown.classList.remove('active');
+    dropdown.innerHTML = '';
 }
+
+function clearPartSelection(prefix) {
+    const container = document.getElementById(prefix + '-part-search').closest('.part-search-container');
+    container.querySelector('input[type="hidden"]').value = '';
+    container.querySelector('.part-search-input').value = '';
+    container.querySelector('.part-search-input').style.display = 'block';
+    container.querySelector('.part-search-selected').style.display = 'none';
+}
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && evt.detail.target.classList.contains('part-search-dropdown')) {
+        const dropdown = evt.detail.target;
+        if (dropdown.innerHTML.trim()) dropdown.classList.add('active');
+        else dropdown.classList.remove('active');
+    }
+});
+
+document.addEventListener('click', function(evt) {
+    if (!evt.target.closest('.part-search-container')) {
+        document.querySelectorAll('.part-search-dropdown').forEach(d => d.classList.remove('active'));
+    }
+});
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-        hideAddOp();
-        hideAddStep();
-        hideAddKit();
-        hideAddOutput();
+        hideAddOp(); hideAddStep(); hideAddKit(); hideAddOutput(); hideAddStepPart(); hideFieldModal();
     }
 });
 </script>

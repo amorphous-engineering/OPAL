@@ -1154,9 +1154,19 @@ async def procedures_new(request: Request, db: DbSession) -> HTMLResponse:
     return templates.TemplateResponse("procedures/new.html", context)
 
 
+_PROCEDURE_TABS = ("meta", "operations", "kit", "outputs", "versions")
+
+
 @router.get("/procedures/{procedure_id}", response_class=HTMLResponse)
-async def procedures_detail(request: Request, db: DbSession, procedure_id: int) -> HTMLResponse:
-    """Procedure detail page."""
+async def procedures_detail(
+    request: Request,
+    db: DbSession,
+    procedure_id: int,
+    tab: str = "meta",
+    op: int | None = None,
+    step: int | None = None,
+) -> HTMLResponse:
+    """Procedure detail / editor page."""
     procedure = (
         db.query(MasterProcedure)
         .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
@@ -1266,6 +1276,44 @@ async def procedures_detail(request: Request, db: DbSession, procedure_id: int) 
     context["ops"] = ops
     context["contingency_ops"] = contingency_ops
 
+    # Validate tab + pick selected op for the Operations tab.
+    context["tab"] = tab if tab in _PROCEDURE_TABS else "meta"
+    all_ops = ops + contingency_ops
+    valid_op_orders = {o["step"].order for o in all_ops}
+
+    def _default_op_order() -> int | None:
+        if not all_ops:
+            return None
+        return all_ops[0]["step"].order
+
+    context["selected_op_order"] = op if op in valid_op_orders else _default_op_order()
+    context["selected_step_id"] = step
+
+    # Per-step kit lookup keyed by step.id for the inline editor.
+    from opal.db.models.procedure import ProcedureStep, StepKit
+
+    step_kit_rows = (
+        db.query(StepKit)
+        .join(ProcedureStep, StepKit.step_id == ProcedureStep.id)
+        .filter(ProcedureStep.procedure_id == procedure_id)
+        .all()
+    )
+    step_kit_by_step: dict[int, list[dict]] = {}
+    for sk in step_kit_rows:
+        step_kit_by_step.setdefault(sk.step_id, []).append(
+            {
+                "id": sk.id,
+                "part_id": sk.part_id,
+                "part_name": sk.part.name,
+                "quantity_required": float(sk.quantity_required),
+                "usage_type": sk.usage_type.value
+                if hasattr(sk.usage_type, "value")
+                else sk.usage_type,
+                "notes": sk.notes,
+            }
+        )
+    context["step_kit_by_step"] = step_kit_by_step
+
     return templates.TemplateResponse("procedures/detail.html", context)
 
 
@@ -1289,62 +1337,33 @@ async def procedures_edit(request: Request, db: DbSession, procedure_id: int) ->
     return templates.TemplateResponse("procedures/edit.html", context)
 
 
-@router.get("/procedures/{procedure_id}/steps/{step_id}/edit", response_class=HTMLResponse)
-async def procedures_step_edit(
-    request: Request, db: DbSession, procedure_id: int, step_id: int
-) -> HTMLResponse:
-    """Edit a procedure step."""
+@router.get("/procedures/{procedure_id}/steps/{step_id}/edit")
+async def procedures_step_edit(db: DbSession, procedure_id: int, step_id: int) -> RedirectResponse:
+    """Redirect the deep-link step editor URL to the inline editor in the
+    Operations tab. Keeps old bookmarks working."""
     from opal.db.models.procedure import ProcedureStep
-
-    procedure = (
-        db.query(MasterProcedure)
-        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
-        .first()
-    )
-    if not procedure:
-        return templates.TemplateResponse(
-            "errors/404.html",
-            {"request": request, "message": f"Procedure {procedure_id} not found"},
-            status_code=404,
-        )
 
     step = (
         db.query(ProcedureStep)
         .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
         .first()
     )
-    if not step:
-        return templates.TemplateResponse(
-            "errors/404.html",
-            {"request": request, "message": f"Step {step_id} not found"},
-            status_code=404,
-        )
+    parent_order = None
+    if step is not None:
+        if step.parent_step_id is not None:
+            parent = (
+                db.query(ProcedureStep).filter(ProcedureStep.id == step.parent_step_id).first()
+            )
+            if parent is not None:
+                parent_order = parent.order
+        else:
+            parent_order = step.order
 
-    context = get_base_context(request, db, f"Edit Step - {procedure.name} - OPAL")
-    context["procedure"] = procedure
-    context["step"] = step
-
-    # Get step kit items
-    from opal.db.models.procedure import StepKit
-
-    step_kit_items = db.query(StepKit).filter(StepKit.step_id == step_id).all()
-    context["step_kit"] = [
-        {
-            "id": sk.id,
-            "part_id": sk.part_id,
-            "part_name": sk.part.name,
-            "quantity_required": float(sk.quantity_required),
-            "usage_type": sk.usage_type.value if hasattr(sk.usage_type, "value") else sk.usage_type,
-            "notes": sk.notes,
-        }
-        for sk in step_kit_items
-    ]
-
-    # Get parts for dropdown
-    parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
-    context["parts"] = parts
-
-    return templates.TemplateResponse("procedures/step_edit.html", context)
+    target = f"/procedures/{procedure_id}?tab=operations"
+    if parent_order is not None:
+        target += f"&op={parent_order}"
+    target += f"&step={step_id}"
+    return RedirectResponse(url=target, status_code=302)
 
 
 @router.get("/procedures/{proc_id}/versions/{v1_id}/diff/{v2_id}", response_class=HTMLResponse)

@@ -1,0 +1,126 @@
+<div>
+<div class="exec-layout">
+    <div class="exec-sidebar">
+        <div class="exec-sidebar-header">
+            <span>OPERATIONS</span>
+            <button class="btn btn-sm btn-primary" onclick="showAddOp()" style="float:right;">+ ADD OP</button>
+        </div>
+        {% for op_data in ops %}
+        {% set op = op_data.step %}
+        <a href="?tab=operations&op={{ op.order }}"
+           class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}"
+           hx-get="?tab=operations&op={{ op.order }}"
+           hx-target=".exec-tab-content"
+           hx-select=".exec-tab-content > *"
+           hx-swap="innerHTML scroll:false"
+           hx-push-url="true"
+           hx-on:click="this.closest('.exec-sidebar').querySelectorAll('.exec-sidebar-item').forEach(el => el.classList.remove('active')); this.classList.add('active')">
+            <span class="exec-sidebar-item-title">{{ op.title }}</span>
+            <span class="exec-sidebar-item-meta mono">
+                <span>OP {{ op.step_number }}</span>
+                <span class="exec-sidebar-progress">{{ op_data.sub_steps | length }} {% if op_data.sub_steps | length == 1 %}step{% else %}steps{% endif %}</span>
+                {% if op.requires_signoff %}<span class="exec-sidebar-status exec-sidebar-status--awaiting_signoff" title="Sign-off required"></span>{% endif %}
+            </span>
+            <span class="exec-sidebar-item-gid mono">#{{ op.id }}</span>
+        </a>
+        {% endfor %}
+        {% if contingency_ops %}
+        <div class="exec-sidebar-divider"></div>
+        {% for op_data in contingency_ops %}
+        {% set op = op_data.step %}
+        <a href="?tab=operations&op={{ op.order }}"
+           class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}"
+           hx-get="?tab=operations&op={{ op.order }}"
+           hx-target=".exec-tab-content"
+           hx-select=".exec-tab-content > *"
+           hx-swap="innerHTML scroll:false"
+           hx-push-url="true"
+           hx-on:click="this.closest('.exec-sidebar').querySelectorAll('.exec-sidebar-item').forEach(el => el.classList.remove('active')); this.classList.add('active')">
+            <span class="exec-sidebar-item-title">{{ op.title }}</span>
+            <span class="exec-sidebar-item-meta mono">
+                <span>OP {{ op.step_number }}</span>
+                <span class="exec-sidebar-progress">{{ op_data.sub_steps | length }} {% if op_data.sub_steps | length == 1 %}step{% else %}steps{% endif %}</span>
+                <span class="exec-sidebar-status exec-sidebar-status--skipped" title="Contingency"></span>
+            </span>
+            <span class="exec-sidebar-item-gid mono">#{{ op.id }}</span>
+        </a>
+        {% endfor %}
+        {% endif %}
+        <a href="#" class="exec-sidebar-item" onclick="showAddOp(true); return false;" style="color: var(--text-muted);">
+            <span class="exec-sidebar-item-title">+ Add contingency operation</span>
+            <span class="exec-sidebar-item-meta mono">&nbsp;</span>
+            <span class="exec-sidebar-item-gid mono">&nbsp;</span>
+        </a>
+    </div>
+
+    <div class="exec-main">
+        {% for op_data in ops + contingency_ops %}
+        {% set op = op_data.step %}
+        {% if op.order == selected_op_order %}
+        <div class="op-block{% if op.is_contingency %} op-contingency{% endif %}" id="op-{{ op.order }}">
+            <div class="op-header">
+                <span class="op-number mono">OP {{ op.step_number }}</span>
+                {% if op.is_contingency %}{{ ok.status("CONTINGENCY", "warn") }}{% endif %}
+                <span class="op-title">{{ op.title }}</span>
+                {% if op.estimated_duration_minutes %}
+                <span class="op-duration mono">{{ op.estimated_duration_minutes }}m</span>
+                {% endif %}
+                <span class="op-progress">{{ op_data.sub_steps | length }} {% if op_data.sub_steps | length == 1 %}step{% else %}steps{% endif %}</span>
+                <span class="op-actions" style="margin-left: auto;">
+                    {{ ok.btn("+ STEP", size="sm", attrs='onclick="showAddStep(' ~ op.id ~ ')"') }}
+                    {{ ok.btn("EDIT OP", size="sm", attrs='onclick="openInlineEditor(' ~ op.id ~ ')"') }}
+                    {{ ok.btn("DELETE", size="sm", variant="danger", attrs='onclick="deleteStep(' ~ op.id ~ ')"') }}
+                </span>
+            </div>
+            {% if op.instructions %}
+            <div class="op-instructions" data-markdown>{{ op.instructions }}</div>
+            {% endif %}
+
+            {# Inline editor for the op itself if no sub-steps OR EDIT OP clicked. #}
+            {% set show_op_editor = (not op_data.sub_steps) or (op.id == selected_step_id) %}
+            {% set step_for_render_op = op %}
+            {% set step_kit_for_op = step_kit_by_step.get(op.id, []) %}
+            <details class="step-details" id="step-{{ op.id }}-row"{% if show_op_editor %} open{% endif %}>
+                <summary class="step-summary">
+                    <span class="step-number mono">{{ op.step_number }}</span>
+                    <span class="step-title">{{ op.title }}</span>
+                    {% if op.requires_signoff %}{{ ok.status("SIGNOFF", "info") }}{% endif %}
+                    {% if op.required_data_schema and op.required_data_schema.get('fields') %}{{ ok.status("DATA " ~ op.required_data_schema.get('fields') | length, "default") }}{% endif %}
+                </summary>
+                <div class="step-detail-body">
+                    {% with step=step_for_render_op, step_kit=step_kit_for_op, is_op=true %}
+                    {% include 'procedures/tabs/_step_editor.html' %}
+                    {% endwith %}
+                </div>
+            </details>
+
+            {% for step in op_data.sub_steps %}
+            {% set step_display_number = step.step_number if '.' in step.step_number else (op.step_number ~ '.' ~ step.step_number) %}
+            <details class="step-details" id="step-{{ step.id }}-row"{% if step.id == selected_step_id %} open{% endif %}>
+                <summary class="step-summary">
+                    <span class="step-number mono">{{ step_display_number }}</span>
+                    <span class="step-title">{{ step.title }}</span>
+                    {% if step.requires_signoff %}{{ ok.status("SIGNOFF", "info") }}{% endif %}
+                    {% if step.required_data_schema and step.required_data_schema.get('fields') %}{{ ok.status("DATA " ~ step.required_data_schema.get('fields') | length, "default") }}{% endif %}
+                    {% if step.estimated_duration_minutes %}
+                    <span class="text-muted mono" style="margin-left: auto; font-size: 0.75rem;">{{ step.estimated_duration_minutes }}m</span>
+                    {% endif %}
+                </summary>
+                <div class="step-detail-body">
+                    {% with step=step, step_kit=step_kit_by_step.get(step.id, []), is_op=false %}
+                    {% include 'procedures/tabs/_step_editor.html' %}
+                    {% endwith %}
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% if not selected_op_order %}
+        <div class="empty-state mono" style="padding: var(--space-xl); text-align: center; color: var(--text-muted);">
+            No operations yet — click <strong>+ ADD OP</strong> in the sidebar to create the first one.
+        </div>
+        {% endif %}
+    </div>
+</div>
+</div>

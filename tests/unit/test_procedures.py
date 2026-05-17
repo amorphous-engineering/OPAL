@@ -411,3 +411,58 @@ def test_add_output_multiplies_bom_qty_by_output_qty(client):
     kit = client.get(f"/api/procedures/{proc_id}/kit").json()
     kit_by_part = {item["part_id"]: item["quantity_required"] for item in kit}
     assert kit_by_part[parts["Screw"]] == 6.0  # 2 * 3
+
+
+# ============ Web-UI tabs ============
+
+
+def _make_proc_with_step(client) -> tuple[int, int]:
+    """Create a procedure with a single step, return (proc_id, step_id)."""
+    proc_resp = client.post("/api/procedures", json={"name": "Tab Test Procedure"})
+    proc_id = proc_resp.json()["id"]
+    step_resp = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step A"})
+    step_id = step_resp.json()["id"]
+    return proc_id, step_id
+
+
+def _login(client, test_user) -> None:
+    """Authenticate the web client by setting the local-auth cookie."""
+    client.cookies.set("opal_user_id", str(test_user.id))
+
+
+def test_procedure_detail_default_tab_is_meta(client, test_user):
+    """A bare /procedures/{id} request lands on the Meta tab."""
+    proc_id, _ = _make_proc_with_step(client)
+    _login(client, test_user)
+    r = client.get(f"/procedures/{proc_id}")
+    assert r.status_code == 200
+    body = r.text
+    assert 'class="exec-tab active"' in body
+    assert "Tab Test Procedure" in body
+
+
+def test_procedure_detail_tab_query_param_honored(client, test_user):
+    """?tab=operations renders the Operations sidebar layout."""
+    proc_id, _ = _make_proc_with_step(client)
+    _login(client, test_user)
+    r = client.get(f"/procedures/{proc_id}?tab=operations")
+    assert r.status_code == 200
+    body = r.text
+    assert "exec-layout" in body
+    assert "exec-sidebar" in body
+    assert "step-editor-form" in body
+
+
+def test_legacy_step_edit_url_redirects_to_tab(client, test_user):
+    """The retired /procedures/{id}/steps/{step_id}/edit URL 302's to the
+    inline editor in the Operations tab."""
+    proc_id, step_id = _make_proc_with_step(client)
+    _login(client, test_user)
+    r = client.get(
+        f"/procedures/{proc_id}/steps/{step_id}/edit",
+        follow_redirects=False,
+    )
+    assert r.status_code == 302
+    location = r.headers["location"]
+    assert location.startswith(f"/procedures/{proc_id}?tab=operations")
+    assert f"step={step_id}" in location

@@ -1,0 +1,36 @@
+<div>
+{% if procedure.procedure_type == "build" %}
+{% call ok.panel("OUTPUTS (ASSEMBLY PRODUCTS)", actions=ok.btn("+ ADD OUTPUT", variant="primary", attrs='onclick="showAddOutput()"')) %}
+    {% if output_items %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("PART", width="60px") }}
+                {{ ok.th("NAME") }}
+                {{ ok.th("PN", width="120px") }}
+                {{ ok.th("QTY", width="100px", align="right") }}
+                {{ ok.th("", width="60px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in output_items %}
+            <tr>
+                <td>{{ ok.id_cell(item.part_id, "/parts/" ~ item.part_id) }}</td>
+                <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
+                {{ ok.td(item.part_external_pn or '-', mono=true) }}
+                {{ ok.td(item.quantity_produced, mono=true, align="right") }}
+                <td>{{ ok.btn("X", variant="danger", attrs='onclick="removeOutputItem(' ~ item.part_id ~ ')"') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ok.empty("No outputs defined — add the part(s) this procedure produces") }}
+    {% endif %}
+{% endcall %}
+{% else %}
+{% call ok.panel("OUTPUTS") %}
+    {{ ok.empty("Outputs are only configured on build-type procedures. This procedure's type is " ~ (procedure.procedure_type | upper) ~ ".") }}
+{% endcall %}
+{% endif %}
+</div>

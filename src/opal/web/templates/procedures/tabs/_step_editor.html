@@ -1,0 +1,79 @@
+{# Inline editor for a procedure step. Required Jinja vars:
+   - step: ProcedureStep ORM object
+   - step_kit: list of dicts {id, part_id, part_name, quantity_required, usage_type, notes}
+   - is_op: bool — true when step is a top-level op (affects contingency toggle availability)
+#}
+<form class="step-editor-form" data-step-id="{{ step.id }}" onsubmit="saveStep(event, {{ step.id }})">
+    <div class="form-group">
+        <label class="form-label">TITLE</label>
+        <input type="text" name="title" class="form-input" value="{{ step.title }}" required>
+    </div>
+    <div class="form-group">
+        <label class="form-label">INSTRUCTIONS (markdown)</label>
+        <textarea name="instructions" class="form-textarea" rows="4">{{ step.instructions or '' }}</textarea>
+    </div>
+    <div style="display: flex; gap: var(--space-md);">
+        <div class="form-group" style="flex: 1;">
+            <label class="form-label">EST. DURATION (min)</label>
+            <input type="number" name="estimated_duration_minutes" class="form-input" min="1" value="{{ step.estimated_duration_minutes or '' }}">
+        </div>
+        <div class="form-group" style="flex: 1;">
+            <label class="form-label">&nbsp;</label>
+            <label style="display: flex; align-items: center; gap: var(--space-sm);">
+                <input type="checkbox" name="requires_signoff"{% if step.requires_signoff %} checked{% endif %}>
+                <span>Requires sign-off</span>
+            </label>
+            {% if is_op %}
+            <label style="display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-sm);">
+                <input type="checkbox" name="is_contingency"{% if step.is_contingency %} checked{% endif %}>
+                <span>Contingency operation</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="margin-top: var(--space-md);">
+        <div class="form-label" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xs);">
+            <span>STEP PARTS</span>
+            <button type="button" class="btn btn-sm" onclick="showAddStepPart({{ step.id }})">+ ADD PART</button>
+        </div>
+        <div id="step-kit-list-{{ step.id }}">
+            {% if step_kit %}
+            <table class="data-table">
+                <thead>
+                    <tr><th>PART</th><th style="width:80px;">QTY</th><th style="width:80px;">TYPE</th><th style="width:60px;"></th></tr>
+                </thead>
+                <tbody>
+                    {% for item in step_kit %}
+                    <tr>
+                        <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a>{% if item.notes %} <span class="text-muted">({{ item.notes }})</span>{% endif %}</td>
+                        <td class="mono">{{ item.quantity_required }}</td>
+                        <td>{{ ok.status("TOOLING", "info") if item.usage_type == 'tooling' else ok.status("CONSUME", "ok") }}</td>
+                        <td><button type="button" class="btn btn-sm" style="color: var(--accent-red);" onclick="removeStepPart({{ step.id }}, {{ item.part_id }})">X</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <span class="text-muted">No step parts defined</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="margin-top: var(--space-md);">
+        <div class="form-label" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xs);">
+            <span>DATA CAPTURE FIELDS</span>
+            <button type="button" class="btn btn-sm" onclick="showAddField({{ step.id }})">+ ADD FIELD</button>
+        </div>
+        <div id="schema-fields-list-{{ step.id }}"></div>
+        <script>
+            initStepSchema({{ step.id }}, {{ step.required_data_schema | tojson if step.required_data_schema else '{}' }});
+        </script>
+    </div>
+
+    <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm); justify-content: flex-end;">
+        <button type="button" class="btn" style="color: var(--accent-red);" onclick="deleteStep({{ step.id }})">DELETE</button>
+        <button type="submit" class="btn btn-primary">SAVE</button>
+    </div>
+    <div id="step-error-{{ step.id }}" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+</form>

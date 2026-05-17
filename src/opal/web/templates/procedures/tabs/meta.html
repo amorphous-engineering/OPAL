@@ -1,0 +1,32 @@
+<div>
+{% call ok.panel(procedure.name, actions=ok.status(procedure.status | upper, "ok" if procedure.status == "active" else ("error" if procedure.status == "deprecated" else "warn"))) %}
+    {% call ok.table() %}
+        {{ ok.detail_row("ID", ok.id_cell(procedure.id), th_width="120px") }}
+        {{ ok.detail_row("TYPE", ok.status(procedure.procedure_type | upper, "info" if procedure.procedure_type == "build" else "default"), th_width="120px") }}
+        <tr>
+            <th style="width: 120px;">STATUS</th>
+            <td>
+                <select id="status-select" class="form-select" style="width: auto;" onchange="updateStatus(this.value)">
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if procedure.status == s %}selected{% endif %}>{{ s | upper }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+        </tr>
+        {{ ok.detail_row("CURRENT VER", ok.mono("v" ~ current_version_num) if procedure.current_version_id else "-", th_width="120px") }}
+        {{ ok.detail_row("CREATED", ok.timestamp(procedure.created_at), th_width="120px") }}
+        {{ ok.detail_row("UPDATED", ok.timestamp(procedure.updated_at), th_width="120px") }}
+    {% endcall %}
+    {% if procedure.description %}
+    <div style="margin-top: var(--space-md);">
+        <div class="form-label">DESCRIPTION</div>
+        <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);" data-markdown>{{ procedure.description }}</div>
+    </div>
+    {% endif %}
+    <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm);">
+        {{ ok.btn("EDIT", href="/procedures/" ~ procedure.id ~ "/edit") }}
+        {{ ok.btn("CLONE", attrs='onclick="cloneProcedure()"') }}
+        {{ ok.btn("PUBLISH VERSION", variant="primary", attrs='onclick="publishVersion()"') }}
+    </div>
+{% endcall %}
+</div>

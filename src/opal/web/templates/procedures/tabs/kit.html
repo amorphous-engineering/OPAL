@@ -1,0 +1,30 @@
+<div>
+{% call ok.panel("KIT (BILL OF MATERIALS)", actions=ok.btn("+ ADD PART", variant="primary", attrs='onclick="showAddKit()"')) %}
+    {% if kit_items %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("PART", width="60px") }}
+                {{ ok.th("NAME") }}
+                {{ ok.th("PN", width="120px") }}
+                {{ ok.th("QTY REQ", width="100px", align="right") }}
+                {{ ok.th("", width="60px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in kit_items %}
+            <tr>
+                <td>{{ ok.id_cell(item.part_id, "/parts/" ~ item.part_id) }}</td>
+                <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
+                {{ ok.td(item.part_external_pn or '-', mono=true) }}
+                {{ ok.td(item.quantity_required, mono=true, align="right") }}
+                <td>{{ ok.btn("X", variant="danger", attrs='onclick="removeKitItem(' ~ item.part_id ~ ')"') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ok.empty("No parts in kit") }}
+    {% endif %}
+{% endcall %}
+</div>
