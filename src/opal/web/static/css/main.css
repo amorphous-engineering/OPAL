@@ -466,6 +466,14 @@ select option {
     border: 1px solid var(--border-color);
 }
 
+textarea {
+    resize: none;
+    overflow: hidden;
+    /* Modern browsers auto-grow with content; older browsers fall back to the
+       JS autoresize handler in layouts/base.html. */
+    field-sizing: content;
+}
+
 .form-input:focus,
 .form-textarea:focus,
 .form-select:focus {

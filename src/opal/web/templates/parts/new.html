@@ -23,7 +23,7 @@
 
             <div class="form-group">
                 <label class="form-label" for="description">DESCRIPTION</label>
-                <textarea id="description" name="description" class="form-input" rows="4" placeholder="Detailed part description (supports markdown)" style="resize: none; overflow: hidden;" oninput="autoResize(this)"></textarea>
+                <textarea id="description" name="description" class="form-input" rows="4" placeholder="Detailed part description (supports markdown)"></textarea>
             </div>
 
             <div class="grid grid-2" style="gap: var(--space-md);">
@@ -101,7 +101,7 @@
 
             <div class="form-group">
                 <label class="form-label">METADATA (JSON)</label>
-                <textarea id="metadata" name="metadata" class="form-input" rows="4" placeholder='{"key": "value"}' style="font-family: var(--font-mono); font-size: 0.875rem; resize: none; overflow: hidden;" oninput="autoResize(this)"></textarea>
+                <textarea id="metadata" name="metadata" class="form-input" rows="4" placeholder='{"key": "value"}'></textarea>
                 <small class="form-help">Optional: Additional structured data as JSON</small>
             </div>
 
@@ -110,11 +110,6 @@
 {% endcall %}
 
 <script>
-function autoResize(textarea) {
-    textarea.style.height = 'auto';
-    textarea.style.height = textarea.scrollHeight + 'px';
-}
-
 function toggleCalibrationFields() {
     var show = document.getElementById('is_tooling').checked;
     document.getElementById('calibration-fields').style.display = show ? '' : 'none';

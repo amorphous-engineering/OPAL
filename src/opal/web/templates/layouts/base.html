@@ -520,6 +520,25 @@
         // Re-render after HTMX swaps
         document.body.addEventListener('htmx:afterSwap', renderMarkdown);
 
+        // Auto-resize textareas to fit content (fallback for browsers without
+        // CSS field-sizing: content). Width stays fixed; height grows with text.
+        const TEXTAREA_AUTOSIZE_SUPPORTED = CSS.supports && CSS.supports('field-sizing', 'content');
+        function autosizeTextarea(el) {
+            if (TEXTAREA_AUTOSIZE_SUPPORTED) return;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        }
+        function autosizeAll(root) {
+            (root || document).querySelectorAll('textarea').forEach(autosizeTextarea);
+        }
+        document.body.addEventListener('input', function(e) {
+            if (e.target && e.target.tagName === 'TEXTAREA') {
+                autosizeTextarea(e.target);
+            }
+        });
+        document.addEventListener('DOMContentLoaded', function() { autosizeAll(); });
+        document.body.addEventListener('htmx:afterSwap', function(e) { autosizeAll(e.target); });
+
         // Undo last action
         async function triggerUndo() {
             var userId = localStorage.getItem('opal_user_id') || '1';

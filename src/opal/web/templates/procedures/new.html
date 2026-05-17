@@ -14,7 +14,7 @@
 
             <div class="form-group">
                 <label class="form-label" for="description">DESCRIPTION</label>
-                <textarea id="description" name="description" class="form-textarea" rows="4" placeholder="Detailed procedure description (supports markdown)" style="resize: none; overflow: hidden;" oninput="autoResize(this)"></textarea>
+                <textarea id="description" name="description" class="form-textarea" rows="4" placeholder="Detailed procedure description (supports markdown)"></textarea>
                 <small class="form-help">Optional: Provide context and overview of the procedure</small>
             </div>
 
@@ -46,11 +46,6 @@
 {% endcall %}
 
 <script>
-function autoResize(textarea) {
-    textarea.style.height = 'auto';
-    textarea.style.height = textarea.scrollHeight + 'px';
-}
-
 async function createProcedure(event) {
     event.preventDefault();
 
