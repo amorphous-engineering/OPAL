@@ -78,7 +78,7 @@
                                 {% if d.step_a %}
                                 <strong>{{ d.step_a.title }}</strong>
                                 {% if d.status == 'removed' %}
-                                <br><span class="text-muted" style="font-size: 0.85em;">{{ d.step_a.instructions[:100] if d.step_a.instructions else '' }}{{ '...' if d.step_a.instructions and d.step_a.instructions|length > 100 else '' }}</span>
+                                <br><span class="text-muted" style="font-size: 0.875rem;">{{ d.step_a.instructions[:100] if d.step_a.instructions else '' }}{{ '...' if d.step_a.instructions and d.step_a.instructions|length > 100 else '' }}</span>
                                 {% endif %}
                                 {% else %}
                                 <span class="text-muted">-</span>
@@ -88,7 +88,7 @@
                                 {% if d.step_b %}
                                 <strong>{{ d.step_b.title }}</strong>
                                 {% if d.status == 'added' %}
-                                <br><span class="text-muted" style="font-size: 0.85em;">{{ d.step_b.instructions[:100] if d.step_b.instructions else '' }}{{ '...' if d.step_b.instructions and d.step_b.instructions|length > 100 else '' }}</span>
+                                <br><span class="text-muted" style="font-size: 0.875rem;">{{ d.step_b.instructions[:100] if d.step_b.instructions else '' }}{{ '...' if d.step_b.instructions and d.step_b.instructions|length > 100 else '' }}</span>
                                 {% endif %}
                                 {% elif d.status == 'removed' %}
                                 <span class="text-muted">-</span>

@@ -46,7 +46,7 @@
         {% set completed = steps | selectattr('status', 'in', ['completed', 'signed_off', 'skipped']) | list | length %}
         {% set total = steps | length %}
         <div style="margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--border-color);">
-            <div style="font-size: 1.25rem; font-weight: bold; color: var(--accent-orange);">
+            <div style="font-size: 1.25rem; font-weight: 600; color: var(--accent-orange);">
                 {{ completed }} / {{ total }} STEPS
             </div>
             <div style="background: var(--bg-tertiary); height: 14px; border: 1px solid var(--border-color); margin-top: var(--space-xs);">

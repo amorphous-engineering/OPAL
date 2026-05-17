@@ -37,6 +37,21 @@
     --space-md: 16px;
     --space-lg: 24px;
     --space-xl: 32px;
+
+    /* Modal / overlay */
+    --modal-backdrop: rgba(0, 0, 0, 0.8);
+
+    /* Diff view tints (accent-color + low opacity) */
+    --diff-added-bg: rgba(74, 222, 128, 0.1);
+    --diff-removed-bg: rgba(248, 113, 113, 0.1);
+    --diff-modified-bg: rgba(251, 191, 36, 0.1);
+    --diff-changed-bg: rgba(251, 191, 36, 0.15);
+
+    /* Z-index scale: base 1, sticky 10, dropdown 100, modal 9000, palette 10000 */
+    --z-sticky: 10;
+    --z-dropdown: 100;
+    --z-modal: 9000;
+    --z-palette: 10000;
 }
 
 /* Reset */
@@ -248,7 +263,7 @@ select option {
     color: var(--text-muted);
     position: sticky;
     bottom: 0;
-    z-index: 10;
+    z-index: var(--z-sticky);
 }
 
 .footer-status {
@@ -532,7 +547,7 @@ select option {
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 9999;
+    z-index: var(--z-palette);
     display: flex;
     align-items: flex-start;
     justify-content: center;
@@ -545,7 +560,7 @@ select option {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
+    background: var(--modal-backdrop);
 }
 
 .cmd-palette-dialog {
@@ -554,7 +569,7 @@ select option {
     max-width: 90vw;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    z-index: 10000;
+    z-index: 1;
 }
 
 .cmd-input {
@@ -628,7 +643,7 @@ select option {
 .cmd-group-header {
     padding: var(--space-xs) var(--space-md);
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -646,7 +661,7 @@ select option {
 
 .cmd-status {
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     padding: 1px 4px;
     border: 1px solid var(--text-muted);
     color: var(--text-muted);
@@ -1214,8 +1229,8 @@ select option {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 9000;
+    background: var(--modal-backdrop);
+    z-index: var(--z-modal);
     display: none;
     align-items: flex-start;
     justify-content: center;
@@ -1485,7 +1500,7 @@ body.exec-detail .exec-tab-content > div {
 }
 
 .exec-sidebar-item-gid {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     letter-spacing: 0.02em;
 }
@@ -1823,17 +1838,17 @@ a.user-menu-link.active {
 
 /* Diff view styles */
 .diff-added {
-    background: rgba(74, 222, 128, 0.1);
+    background: var(--diff-added-bg);
     border-left: 3px solid var(--accent-green);
 }
 
 .diff-removed {
-    background: rgba(248, 113, 113, 0.1);
+    background: var(--diff-removed-bg);
     border-left: 3px solid var(--accent-red);
 }
 
 .diff-modified {
-    background: rgba(251, 191, 36, 0.1);
+    background: var(--diff-modified-bg);
     border-left: 3px solid var(--accent-yellow);
 }
 
@@ -1842,6 +1857,6 @@ a.user-menu-link.active {
 }
 
 .diff-field-changed {
-    background: rgba(251, 191, 36, 0.15);
+    background: var(--diff-changed-bg);
     padding: 1px 4px;
 }

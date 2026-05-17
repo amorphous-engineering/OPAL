@@ -4,7 +4,7 @@
 <tr>
     <td class="mono">
         {% if rec.opal_number %}
-        <a href="/inventory/opal/{{ rec.opal_number }}" style="font-weight: bold; color: var(--accent-blue);">
+        <a href="/inventory/opal/{{ rec.opal_number }}" style="font-weight: 600; color: var(--accent-blue);">
             {{ rec.opal_number }}
         </a>
         {% else %}
@@ -15,9 +15,9 @@
         <a href="/parts/{{ rec.part_id }}">{{ rec.part.name }}</a>
         {% if rec.part.internal_pn or rec.part.external_pn %}
         <br>
-        {% if rec.part.internal_pn %}<span class="mono" style="font-size: 0.85em;">{{ rec.part.internal_pn }}</span>{% endif %}
+        {% if rec.part.internal_pn %}<span class="mono" style="font-size: 0.875rem;">{{ rec.part.internal_pn }}</span>{% endif %}
         {% if rec.part.internal_pn and rec.part.external_pn %} / {% endif %}
-        {% if rec.part.external_pn %}<span class="text-muted" style="font-size: 0.85em;">{{ rec.part.external_pn }}</span>{% endif %}
+        {% if rec.part.external_pn %}<span class="text-muted" style="font-size: 0.875rem;">{{ rec.part.external_pn }}</span>{% endif %}
         {% endif %}
     </td>
     <td>{{ ok.mono(rec.location) }}</td>

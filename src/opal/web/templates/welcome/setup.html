@@ -22,7 +22,7 @@
                 <!-- Configure Project -->
                 <div style="flex: 1; border: 1px solid var(--border-color); padding: var(--space-lg);">
                     <h3 style="margin: 0 0 var(--space-sm) 0; font-family: var(--font-mono); letter-spacing: 0.05em;">SET UP PROJECT</h3>
-                    <p style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); margin-bottom: var(--space-md); line-height: 1.5;">
+                    <p style="font-family: var(--font-mono); font-size: 0.875rem; color: var(--text-muted); margin-bottom: var(--space-md); line-height: 1.5;">
                         Configure your project name, inventory tiers, part numbering scheme, categories, and requirements.
                     </p>
                     {{ ok.btn("CONFIGURE", variant="primary", href="/project/new") }}
@@ -31,7 +31,7 @@
                 <!-- Load Demo -->
                 <div style="flex: 1; border: 1px solid var(--border-color); padding: var(--space-lg);">
                     <h3 style="margin: 0 0 var(--space-sm) 0; font-family: var(--font-mono); letter-spacing: 0.05em;">LOAD DEMO DATA</h3>
-                    <p style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); margin-bottom: var(--space-md); line-height: 1.5;">
+                    <p style="font-family: var(--font-mono); font-size: 0.875rem; color: var(--text-muted); margin-bottom: var(--space-md); line-height: 1.5;">
                         Load Project Kestrel — a sample LOX/ethanol sounding rocket with 54 parts, 6 procedures, issues, risks, and purchase orders.
                     </p>
                     {{ ok.btn("LOAD DEMO", variant="primary", attrs='onclick="loadDemo()"') }}
@@ -41,10 +41,10 @@
             <div id="loading-msg" style="display: none; font-family: var(--font-mono); color: var(--accent-blue); margin-bottom: var(--space-md);">
                 Loading demo data...
             </div>
-            <div id="error-msg" style="display: none; font-family: var(--font-mono); color: var(--text-red); margin-bottom: var(--space-md);"></div>
+            <div id="error-msg" style="display: none; font-family: var(--font-mono); color: var(--accent-red); margin-bottom: var(--space-md);"></div>
 
             <div style="text-align: right;">
-                <a href="#" onclick="skipOnboarding(); return false;" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">SKIP FOR NOW</a>
+                <a href="#" onclick="skipOnboarding(); return false;" style="font-family: var(--font-mono); font-size: 0.875rem; color: var(--text-muted);">SKIP FOR NOW</a>
             </div>
         </div>
     </div>

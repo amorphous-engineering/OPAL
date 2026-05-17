@@ -9,7 +9,7 @@
 
 {% block content %}
 {% set type_val_header = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
-{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: bold; margin-left: var(--space-md);">SAVED</span>{{ ok.status(type_val_header | upper | replace('_', ' '), "error" if type_val_header == 'non_conformance' else ("warn" if type_val_header == 'bug' else ("info" if type_val_header == 'improvement' else "draft"))) }}{% endset %}
+{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: 600; margin-left: var(--space-md);">SAVED</span>{{ ok.status(type_val_header | upper | replace('_', ' '), "error" if type_val_header == 'non_conformance' else ("warn" if type_val_header == 'bug' else ("info" if type_val_header == 'improvement' else "draft"))) }}{% endset %}
 {% call ok.panel("ISSUE " ~ (issue.issue_number or issue.id), max_width="1100px", actions=issue_actions) %}
         <div style="display: flex; gap: var(--space-lg);">
             <!-- LEFT COLUMN (60%) -->
@@ -18,7 +18,7 @@
                 <div style="margin-bottom: var(--space-md);">
                     <h2 id="issue-title-display" style="cursor: pointer; margin: 0;" onclick="startEditTitle()" title="Click to edit">{{ issue.title }}</h2>
                     <div id="issue-title-edit" style="display: none;">
-                        <input type="text" id="title-input" class="form-input" value="{{ issue.title }}" style="font-size: 1.2rem; font-weight: bold; width: 100%;" onkeydown="if(event.key==='Enter') saveTitle(); if(event.key==='Escape') cancelEditTitle();" onblur="saveTitle()">
+                        <input type="text" id="title-input" class="form-input" value="{{ issue.title }}" style="font-size: 1.2rem; font-weight: 600; width: 100%;" onkeydown="if(event.key==='Enter') saveTitle(); if(event.key==='Escape') cancelEditTitle();" onblur="saveTitle()">
                     </div>
                 </div>
 
@@ -39,7 +39,7 @@
                 {% set type_val = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
                 {% if type_val == 'non_conformance' %}
                 <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: bold;">NON-CONFORMANCE DETAILS</div>
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">NON-CONFORMANCE DETAILS</div>
                     <div style="margin-bottom: var(--space-sm);">
                         <div class="form-label">SHOULD BE</div>
                         <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('should_be', this.value || null)">{{ issue.should_be or '' }}</textarea>
@@ -51,7 +51,7 @@
                 </div>
                 {% elif type_val == 'bug' %}
                 <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: bold;">BUG DETAILS</div>
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">BUG DETAILS</div>
                     <div style="margin-bottom: var(--space-sm);">
                         <div class="form-label">STEPS TO REPRODUCE</div>
                         <textarea class="form-textarea" rows="3" style="width: 100%;" onblur="updateIssue('steps_to_reproduce', this.value || null)">{{ issue.steps_to_reproduce or '' }}</textarea>
@@ -67,7 +67,7 @@
                 </div>
                 {% elif type_val == 'improvement' %}
                 <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: bold;">IMPROVEMENT DETAILS</div>
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">IMPROVEMENT DETAILS</div>
                     <div>
                         <div class="form-label">EXPECTED BENEFIT</div>
                         <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('expected_benefit', this.value || null)">{{ issue.expected_benefit or '' }}</textarea>
@@ -77,7 +77,7 @@
 
                 <!-- Disposition section -->
                 <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: bold;">DISPOSITION</div>
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">DISPOSITION</div>
 
                     <div style="display: flex; gap: var(--space-md); margin-bottom: var(--space-sm);">
                         <div style="flex: 1;">
@@ -119,14 +119,14 @@
 
                 <!-- Comments section -->
                 <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: bold;">ACTIVITY LOG</div>
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">ACTIVITY LOG</div>
 
                     <div id="comments-list">
                         {% if comments %}
                         {% for comment in comments %}
                         <div style="padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
                             <div style="display: flex; justify-content: space-between; margin-bottom: var(--space-xs);">
-                                <span style="font-weight: bold;">{{ comment.user.name if comment.user else 'System' }}</span>
+                                <span style="font-weight: 600;">{{ comment.user.name if comment.user else 'System' }}</span>
                                 <span class="text-secondary" style="font-family: var(--font-mono); font-size: 0.85em;">{{ ok.timestamp(comment.created_at) }}</span>
                             </div>
                             <div style="white-space: pre-wrap;">{{ comment.body }}</div>
@@ -147,7 +147,7 @@
 
                 <!-- Attachments section -->
                 <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: bold;">ATTACHMENTS</div>
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">ATTACHMENTS</div>
 
                     {% if attachments %}
                     {% call ok.table() %}
@@ -224,7 +224,7 @@
                 <!-- Links -->
                 {% if issue.part_id or issue.procedure_id or issue.procedure_instance_id %}
                 <div style="margin-top: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: bold;">LINKS</div>
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">LINKS</div>
                     {% call ok.table() %}
                         {% if issue.part_id %}
                         {{ ok.detail_row("PART", ok.link(issue.part.name if issue.part else ('Part #' ~ issue.part_id), "/parts/" ~ issue.part_id), th_width="80px") }}

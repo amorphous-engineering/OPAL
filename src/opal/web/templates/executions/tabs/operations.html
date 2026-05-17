@@ -96,7 +96,7 @@
                     {% set step_cons = step_consumptions.get(step_exec.id, []) if step_exec else [] %}
                     {% if step_kit or step_cons %}
                     <div class="step-kit-panel" style="margin: var(--space-sm) 0;">
-                        <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">
+                        <div class="form-label" style="margin-bottom: var(--space-xs);">
                             STEP PARTS
                             {% if step_cons %}{{ ok.status("CONSUMED " ~ step_cons|length, "ok") }}{% endif %}
                         </div>
@@ -145,7 +145,7 @@
                         <div class="form-label" style="margin-bottom: var(--space-xs);">DATA CAPTURE</div>
                         {% for field in schema.get('fields', []) %}
                         <div class="form-group" style="margin-bottom: var(--space-sm);">
-                            <label class="form-label" style="font-size: 0.75rem;">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
+                            <label class="form-label">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
                             {% if step.status == 'in_progress' and inst_status in ['pending', 'in_progress'] %}
                                 {% if field.type == 'text' %}
                                 <input type="text" class="form-input" data-capture-field="{{ field.name }}" placeholder="{{ field.get('placeholder', '') }}"{% if field.required %} required{% endif %}{% if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined %} value="{{ step.execution.data_captured[field.name] }}"{% endif %}>
@@ -183,7 +183,7 @@
 
                     {% if step.status in ['in_progress', 'completed', 'signed_off', 'awaiting_signoff'] %}
                     <div class="step-notes" style="margin-top: var(--space-sm);">
-                        <label class="form-label" style="font-size: 0.75rem;">NOTES</label>
+                        <label class="form-label">NOTES</label>
                         {% if step.status == 'in_progress' and inst_status in ['pending', 'in_progress'] %}
                         <textarea class="form-textarea step-notes-input" rows="2" placeholder="Operator notes..."
                                   onblur="saveNotes({{ step.order }}, this.value)">{% if step.execution and step.execution.notes %}{{ step.execution.notes }}{% endif %}</textarea>
@@ -239,7 +239,7 @@
                     {% set step_cons = step_consumptions.get(step_exec.id, []) if step_exec else [] %}
                     {% if step_kit or step_cons %}
                     <div class="step-kit-panel" style="margin: var(--space-sm) 0;">
-                        <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">
+                        <div class="form-label" style="margin-bottom: var(--space-xs);">
                             STEP PARTS
                             {% if step_cons %}{{ ok.status("CONSUMED " ~ step_cons|length, "ok") }}{% endif %}
                         </div>
@@ -288,7 +288,7 @@
                         <div class="form-label" style="margin-bottom: var(--space-xs);">DATA CAPTURE</div>
                         {% for field in schema.get('fields', []) %}
                         <div class="form-group" style="margin-bottom: var(--space-sm);">
-                            <label class="form-label" style="font-size: 0.75rem;">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
+                            <label class="form-label">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
                             {% if op.status == 'in_progress' and inst_status in ['pending', 'in_progress'] %}
                                 {% if field.type == 'text' %}
                                 <input type="text" class="form-input" data-capture-field="{{ field.name }}" placeholder="{{ field.get('placeholder', '') }}"{% if field.required %} required{% endif %}>
@@ -317,7 +317,7 @@
 
                     {% if op.status in ['in_progress', 'completed', 'signed_off', 'awaiting_signoff'] %}
                     <div class="step-notes" style="margin-top: var(--space-sm);">
-                        <label class="form-label" style="font-size: 0.75rem;">NOTES</label>
+                        <label class="form-label">NOTES</label>
                         {% if op.status == 'in_progress' and inst_status in ['pending', 'in_progress'] %}
                         <textarea class="form-textarea step-notes-input" rows="2" placeholder="Operator notes..."
                                   onblur="saveNotes({{ op.order }}, this.value)">{% if op.execution and op.execution.notes %}{{ op.execution.notes }}{% endif %}</textarea>
