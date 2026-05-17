@@ -174,13 +174,27 @@
                                 </select>
                                 {% elif field.type == 'textarea' %}
                                 <textarea class="form-textarea" data-capture-field="{{ field.name }}" rows="{{ field.get('rows', 3) }}"{% if field.required %} required{% endif %}>{% if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined %}{{ step.execution.data_captured[field.name] }}{% endif %}</textarea>
+                                {% elif field.type == 'photo' %}
+                                {% set existing_id = step.execution.data_captured[field.name] if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined else None %}
+                                <div class="step-photo-capture">
+                                    {% if existing_id %}
+                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                    {% endif %}
+                                    <input type="file" accept="image/*" class="step-photo-input" onchange="uploadStepPhoto(this, {{ step.execution.id }}, '{{ field.name | e }}')">
+                                    <input type="hidden" data-capture-field="{{ field.name }}" value="{{ existing_id or '' }}"{% if field.required %} required{% endif %}>
+                                </div>
                                 {% endif %}
                         </div>
                             {% else %}
                                 {% if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined %}
-                                <div class="mono" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
-                                    {% if field.type == 'checkbox' %}{{ 'YES' if step.execution.data_captured[field.name] else 'NO' }}{% else %}{{ step.execution.data_captured[field.name] }}{% endif %}
-                                </div>
+                                    {% if field.type == 'photo' %}
+                                    {% set existing_id = step.execution.data_captured[field.name] %}
+                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                    {% else %}
+                                    <div class="mono" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
+                                        {% if field.type == 'checkbox' %}{{ 'YES' if step.execution.data_captured[field.name] else 'NO' }}{% else %}{{ step.execution.data_captured[field.name] }}{% endif %}
+                                    </div>
+                                    {% endif %}
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
@@ -319,12 +333,26 @@
                                 <select class="form-select" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}><option value="">Select...</option>{% for opt in field.get('options', []) %}<option value="{{ opt }}">{{ opt }}</option>{% endfor %}</select>
                                 {% elif field.type == 'textarea' %}
                                 <textarea class="form-textarea" data-capture-field="{{ field.name }}" rows="{{ field.get('rows', 3) }}"{% if field.required %} required{% endif %}></textarea>
+                                {% elif field.type == 'photo' %}
+                                {% set existing_id = op.execution.data_captured[field.name] if op.execution and op.execution.data_captured and op.execution.data_captured[field.name] is defined else None %}
+                                <div class="step-photo-capture">
+                                    {% if existing_id %}
+                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                    {% endif %}
+                                    <input type="file" accept="image/*" class="step-photo-input" onchange="uploadStepPhoto(this, {{ op.execution.id }}, '{{ field.name | e }}')">
+                                    <input type="hidden" data-capture-field="{{ field.name }}" value="{{ existing_id or '' }}"{% if field.required %} required{% endif %}>
+                                </div>
                                 {% endif %}
                             {% else %}
                                 {% if op.execution and op.execution.data_captured and op.execution.data_captured[field.name] is defined %}
-                                <div class="mono" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
-                                    {% if field.type == 'checkbox' %}{{ 'YES' if op.execution.data_captured[field.name] else 'NO' }}{% else %}{{ op.execution.data_captured[field.name] }}{% endif %}
-                                </div>
+                                    {% if field.type == 'photo' %}
+                                    {% set existing_id = op.execution.data_captured[field.name] %}
+                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                    {% else %}
+                                    <div class="mono" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
+                                        {% if field.type == 'checkbox' %}{{ 'YES' if op.execution.data_captured[field.name] else 'NO' }}{% else %}{{ op.execution.data_captured[field.name] }}{% endif %}
+                                    </div>
+                                    {% endif %}
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}

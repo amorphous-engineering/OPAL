@@ -3,7 +3,7 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -28,6 +28,7 @@ class AttachmentResponse(BaseModel):
     procedure_instance_id: int | None
     step_execution_id: int | None
     issue_id: int | None = None
+    procedure_id: int | None = None
     created_at: str
 
     model_config = {"from_attributes": True}
@@ -43,6 +44,7 @@ def _attachment_to_response(att: Attachment) -> AttachmentResponse:
         procedure_instance_id=att.procedure_instance_id,
         step_execution_id=att.step_execution_id,
         issue_id=att.issue_id,
+        procedure_id=att.procedure_id,
         created_at=att.created_at.isoformat(),
     )
 
@@ -52,13 +54,16 @@ async def upload_attachment(
     db: DbSession,
     user_id: CurrentUserId,
     file: UploadFile,
-    procedure_instance_id: int | None = None,
-    step_execution_id: int | None = None,
-    issue_id: int | None = None,
+    procedure_instance_id: int | None = Form(default=None),
+    step_execution_id: int | None = Form(default=None),
+    issue_id: int | None = Form(default=None),
+    procedure_id: int | None = Form(default=None),
 ) -> AttachmentResponse:
     """Upload a file attachment.
 
-    Can be linked to a procedure instance, step execution, and/or issue.
+    Can be linked to a procedure instance, step execution, issue, and/or
+    procedure template. `procedure_id` scopes inline images used in step
+    instructions so they're cleaned up when the procedure is deleted.
     """
     settings = get_active_settings()
 
@@ -101,6 +106,22 @@ async def upload_attachment(
         if not issue:
             raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
 
+    if procedure_id:
+        from opal.db.models import MasterProcedure
+
+        procedure = (
+            db.query(MasterProcedure)
+            .filter(
+                MasterProcedure.id == procedure_id,
+                MasterProcedure.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not procedure:
+            raise HTTPException(
+                status_code=404, detail=f"Procedure {procedure_id} not found"
+            )
+
     # Sanitize filename and generate stored name
     original_name = file.filename or "unnamed"
     # Strip path separators and limit length
@@ -122,6 +143,7 @@ async def upload_attachment(
         procedure_instance_id=procedure_instance_id,
         step_execution_id=step_execution_id,
         issue_id=issue_id,
+        procedure_id=procedure_id,
     )
     db.add(attachment)
     db.flush()

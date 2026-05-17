@@ -539,6 +539,92 @@
         document.addEventListener('DOMContentLoaded', function() { autosizeAll(); });
         document.body.addEventListener('htmx:afterSwap', function(e) { autosizeAll(e.target); });
 
+        // Markdown textarea image uploads — drag-drop + button-trigger.
+        // Targets any <textarea class="md-image-target"> with optional
+        // data-procedure-id (template-level scope so attachments cascade-
+        // delete with the procedure).
+        function _mdAuthHeaders() {
+            const h = {};
+            const userId = localStorage.getItem('opal_user_id');
+            if (userId) h['X-User-Id'] = userId;
+            return h;
+        }
+        function insertAtCursor(textarea, text) {
+            const s = textarea.selectionStart, e = textarea.selectionEnd;
+            textarea.value = textarea.value.slice(0, s) + text + textarea.value.slice(e);
+            textarea.selectionStart = textarea.selectionEnd = s + text.length;
+            textarea.focus();
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        async function uploadMarkdownImage(textarea, file, procedureId) {
+            const fd = new FormData();
+            fd.append('file', file);
+            if (procedureId) fd.append('procedure_id', procedureId);
+            try {
+                const r = await fetch('/api/attachments/upload', {
+                    method: 'POST',
+                    headers: _mdAuthHeaders(),
+                    body: fd,
+                });
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({}));
+                    alert('Image upload failed: ' + (err.detail || r.status));
+                    return;
+                }
+                const data = await r.json();
+                const md = `![${file.name}](/api/attachments/${data.id}/download)`;
+                insertAtCursor(textarea, md);
+            } catch (e) { alert('Network error: ' + e.message); }
+        }
+        function attachMarkdownImageUpload(textarea) {
+            if (textarea.dataset.mdImageBound === '1') return;
+            textarea.dataset.mdImageBound = '1';
+            textarea.addEventListener('dragover', e => {
+                if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+                    e.preventDefault();
+                    textarea.classList.add('md-drop-target');
+                }
+            });
+            textarea.addEventListener('dragleave', () => {
+                textarea.classList.remove('md-drop-target');
+            });
+            textarea.addEventListener('drop', async e => {
+                if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+                e.preventDefault();
+                textarea.classList.remove('md-drop-target');
+                const procedureId = textarea.dataset.procedureId || '';
+                for (const file of e.dataTransfer.files) {
+                    if (file.type.startsWith('image/')) {
+                        await uploadMarkdownImage(textarea, file, procedureId);
+                    }
+                }
+            });
+        }
+        function pickAndUploadMarkdownImage(textareaSelector) {
+            // Accepts either a CSS selector or a textarea element directly.
+            const ta = (typeof textareaSelector === 'string')
+                ? document.querySelector(textareaSelector)
+                : textareaSelector;
+            if (!ta) return;
+            const picker = document.createElement('input');
+            picker.type = 'file';
+            picker.accept = 'image/*';
+            picker.style.display = 'none';
+            picker.addEventListener('change', async () => {
+                if (picker.files.length) {
+                    await uploadMarkdownImage(ta, picker.files[0], ta.dataset.procedureId || '');
+                }
+                picker.remove();
+            });
+            document.body.appendChild(picker);
+            picker.click();
+        }
+        function bindAllMarkdownImageTargets() {
+            document.querySelectorAll('textarea.md-image-target').forEach(attachMarkdownImageUpload);
+        }
+        document.addEventListener('DOMContentLoaded', bindAllMarkdownImageTargets);
+        document.body.addEventListener('htmx:afterSwap', bindAllMarkdownImageTargets);
+
         // Undo last action
         async function triggerUndo() {
             var userId = localStorage.getItem('opal_user_id') || '1';

@@ -18,7 +18,7 @@ class Attachment(Base, IdMixin, TimestampMixin):
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    # Optional links - attachment can belong to instance, step, issue, or neither
+    # Optional links - attachment can belong to instance, step, issue, procedure, or neither
     procedure_instance_id: Mapped[int | None] = mapped_column(
         ForeignKey("procedure_instance.id", ondelete="CASCADE"), nullable=True, index=True
     )
@@ -27,6 +27,12 @@ class Attachment(Base, IdMixin, TimestampMixin):
     )
     issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issue.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    procedure_id: Mapped[int | None] = mapped_column(
+        ForeignKey("master_procedure.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="Template-level scope: inline images in step instructions / procedure description",
     )
 
     # Relationships

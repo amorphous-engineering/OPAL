@@ -414,6 +414,43 @@ async function finalizeProduction() {
     } catch (e) { const msg = 'Network error: ' + e.message; if (errorDiv) { errorDiv.textContent = msg; errorDiv.style.display = 'block'; } else alert(msg); }
 }
 
+async function uploadStepPhoto(input, stepExecutionId, fieldName) {
+    if (!input.files.length) return;
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    fd.append('step_execution_id', stepExecutionId);
+    try {
+        const r = await fetch('/api/attachments/upload', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: fd,
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            alert('Photo upload failed: ' + (err.detail || r.status));
+            return;
+        }
+        const data = await r.json();
+        const container = input.closest('.step-photo-capture');
+        if (!container) return;
+        const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
+        if (hidden) hidden.value = String(data.id);
+        const url = `/api/attachments/${data.id}/download`;
+        let thumb = container.querySelector('img.step-photo-thumb');
+        if (!thumb) {
+            const link = document.createElement('a');
+            link.target = '_blank';
+            thumb = document.createElement('img');
+            thumb.className = 'step-photo-thumb';
+            thumb.alt = fieldName;
+            link.appendChild(thumb);
+            container.insertBefore(link, input);
+        }
+        thumb.src = url;
+        thumb.parentElement.href = url;
+    } catch (e) { alert('Network error: ' + e.message); }
+}
+
 async function loadStepKitAvailability() {
     const tables = document.querySelectorAll('[data-step-kit]');
     if (!tables.length) return;

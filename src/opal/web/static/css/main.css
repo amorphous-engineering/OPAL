@@ -1658,6 +1658,46 @@ body.procedure-detail .exec-tab-content > div {
     border-bottom: 2px solid var(--accent-orange) !important;
 }
 
+/* Step photo capture (data-capture field type = photo) */
+.step-photo-capture {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.step-photo-thumb {
+    max-width: 240px;
+    max-height: 240px;
+    border: 1px solid var(--border-color);
+    display: block;
+}
+
+.step-photo-input {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+/* Markdown image upload — drag-drop target highlight + toolbar */
+.md-toolbar {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+    margin-bottom: var(--space-xs);
+}
+
+textarea.md-image-target.md-drop-target {
+    outline: 2px dashed var(--accent-orange);
+    outline-offset: -2px;
+}
+
+/* Inline images rendered from markdown — keep them readable but not full-bleed. */
+.markdown-content img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--border-color);
+    margin: var(--space-sm) 0;
+}
+
 .exec-sidebar-status--skipped {
     background: var(--text-muted);
     border-color: var(--text-muted);

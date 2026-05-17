@@ -616,3 +616,58 @@ def test_execution_gating_blocks_start_until_prereqs_complete(client):
     assert client.post(
         f"/api/procedure-instances/{instance_id}/steps/2/start"
     ).status_code == 200
+
+
+# ============ Photo / inline-image attachments ============
+
+
+def test_upload_attachment_with_procedure_id(client, test_user):
+    """An attachment uploaded with procedure_id persists the FK so it
+    cascade-deletes with the procedure."""
+    proc = client.post("/api/procedures", json={"name": "Image Test"}).json()
+    proc_id = proc["id"]
+
+    r = client.post(
+        "/api/attachments/upload",
+        files={"file": ("ref.png", b"\x89PNG\r\n\x1a\nfake", "image/png")},
+        data={"procedure_id": str(proc_id)},
+        headers={"X-User-Id": str(test_user.id)},
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["procedure_id"] == proc_id
+    assert data["mime_type"] == "image/png"
+
+
+def test_photo_field_round_trips_through_publish(client):
+    """A required_data_schema field of type=photo persists on the step and
+    is included in the published version snapshot."""
+    proc = client.post("/api/procedures", json={"name": "Photo Schema Test"}).json()
+    proc_id = proc["id"]
+    step = client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Inspect"}
+    ).json()
+    step_id = step["id"]
+
+    # Save a schema with a photo field
+    schema = {
+        "fields": [
+            {"name": "witness_photo", "label": "Witness Photo", "type": "photo", "required": True}
+        ]
+    }
+    r = client.patch(
+        f"/api/procedures/{proc_id}/steps/{step_id}",
+        json={"required_data_schema": schema},
+    )
+    assert r.status_code == 200
+    # Round-trip via the procedure detail
+    top = client.get(f"/api/procedures/{proc_id}").json()["steps"]
+    saved = top[0]["required_data_schema"]
+    assert saved == schema
+
+    # Publish; snapshot must include the photo field
+    publish = client.post(f"/api/procedures/{proc_id}/publish").json()
+    version = client.get(f"/api/procedures/versions/{publish['id']}").json()
+    snapshot_field = version["content"]["steps"][0]["required_data_schema"]["fields"][0]
+    assert snapshot_field["type"] == "photo"
+    assert snapshot_field["required"] is True
