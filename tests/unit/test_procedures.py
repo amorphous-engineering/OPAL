@@ -466,3 +466,113 @@ def test_legacy_step_edit_url_redirects_to_tab(client, test_user):
     location = r.headers["location"]
     assert location.startswith(f"/procedures/{proc_id}?tab=operations")
     assert f"step={step_id}" in location
+
+
+# ============ Operation dependencies + gating ============
+
+
+def _make_proc_with_n_ops(client, n: int = 3) -> tuple[int, list[int]]:
+    """Create a procedure with N top-level ops, return (proc_id, [op_id, ...])."""
+    proc = client.post("/api/procedures", json={"name": "Dep Test"}).json()
+    proc_id = proc["id"]
+    op_ids: list[int] = []
+    for i in range(1, n + 1):
+        s = client.post(
+            f"/api/procedures/{proc_id}/steps", json={"title": f"OP {i}"}
+        ).json()
+        op_ids.append(s["id"])
+    return proc_id, op_ids
+
+
+def test_set_and_list_dependencies(client):
+    """PUT /steps/{id}/dependencies stores edges; GET /dependencies returns them."""
+    proc_id, op_ids = _make_proc_with_n_ops(client, 3)
+    # OP 3 depends on OP 1 and OP 2
+    r = client.put(
+        f"/api/procedures/{proc_id}/steps/{op_ids[2]}/dependencies",
+        json={"depends_on": [op_ids[0], op_ids[1]]},
+    )
+    assert r.status_code == 200
+    listing = client.get(f"/api/procedures/{proc_id}/dependencies").json()
+    edges = {(d["step_id"], d["depends_on_step_id"]) for d in listing}
+    assert edges == {(op_ids[2], op_ids[0]), (op_ids[2], op_ids[1])}
+
+
+def test_dependency_self_loop_rejected(client):
+    proc_id, op_ids = _make_proc_with_n_ops(client, 2)
+    r = client.put(
+        f"/api/procedures/{proc_id}/steps/{op_ids[0]}/dependencies",
+        json={"depends_on": [op_ids[0]]},
+    )
+    assert r.status_code == 400
+    assert "itself" in r.json()["detail"].lower()
+
+
+def test_dependency_cycle_rejected(client):
+    """Existing edge A→B; adding B→A creates a cycle and must be rejected."""
+    proc_id, op_ids = _make_proc_with_n_ops(client, 2)
+    # B (op 2) depends on A (op 1)
+    client.put(
+        f"/api/procedures/{proc_id}/steps/{op_ids[1]}/dependencies",
+        json={"depends_on": [op_ids[0]]},
+    )
+    # Try to add reverse: A depends on B
+    r = client.put(
+        f"/api/procedures/{proc_id}/steps/{op_ids[0]}/dependencies",
+        json={"depends_on": [op_ids[1]]},
+    )
+    assert r.status_code == 400
+    assert "cycle" in r.json()["detail"].lower()
+
+
+def test_published_version_snapshots_dependencies(client):
+    """When a procedure is published, dep edges land in version content as
+    `depends_on: [order, ...]` on each op's snapshot."""
+    proc_id, op_ids = _make_proc_with_n_ops(client, 3)
+    client.put(
+        f"/api/procedures/{proc_id}/steps/{op_ids[2]}/dependencies",
+        json={"depends_on": [op_ids[0], op_ids[1]]},
+    )
+    publish = client.post(f"/api/procedures/{proc_id}/publish").json()
+    version_id = publish["id"]
+    # Pull the version content via the version endpoint
+    version = client.get(f"/api/procedures/versions/{version_id}").json()
+    steps = version["content"]["steps"]
+    op3 = next(s for s in steps if s["title"] == "OP 3")
+    assert sorted(op3["depends_on"]) == sorted([
+        next(s["order"] for s in steps if s["title"] == "OP 1"),
+        next(s["order"] for s in steps if s["title"] == "OP 2"),
+    ])
+
+
+def test_execution_gating_blocks_start_until_prereqs_complete(client):
+    """OP 2 (deps on OP 1) cannot be started until OP 1 is completed."""
+    proc_id, op_ids = _make_proc_with_n_ops(client, 2)
+    client.put(
+        f"/api/procedures/{proc_id}/steps/{op_ids[1]}/dependencies",
+        json={"depends_on": [op_ids[0]]},
+    )
+    client.post(f"/api/procedures/{proc_id}/publish")
+
+    inst = client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()
+    instance_id = inst["id"]
+
+    # Attempt to start OP 2 first → blocked
+    r = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/2/start"
+    )
+    assert r.status_code == 400
+    assert "waiting" in r.json()["detail"].lower()
+
+    # Start + complete OP 1, then OP 2 should be startable.
+    assert client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/start"
+    ).status_code == 200
+    assert client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/complete", json={}
+    ).status_code == 200
+    assert client.post(
+        f"/api/procedure-instances/{instance_id}/steps/2/start"
+    ).status_code == 200

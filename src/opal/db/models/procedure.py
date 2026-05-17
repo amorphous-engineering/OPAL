@@ -4,7 +4,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import JSON, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, SoftDeleteMixin, TimestampMixin
@@ -246,3 +246,33 @@ class StepKit(Base, IdMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<StepKit(step_id={self.step_id}, part_id={self.part_id}, usage={self.usage_type})>"
+
+
+class StepDependency(Base, IdMixin, TimestampMixin):
+    """Operation-level prerequisite: `step_id` cannot start until
+    `depends_on_step_id` reaches a terminal status. Both sides must be
+    top-level ops (parent_step_id IS NULL) of the same procedure."""
+
+    __tablename__ = "step_dependency"
+    __table_args__ = (
+        UniqueConstraint("step_id", "depends_on_step_id", name="uq_step_dependency"),
+    )
+
+    step_id: Mapped[int] = mapped_column(
+        ForeignKey("procedure_step.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="The dependent (gated) step",
+    )
+    depends_on_step_id: Mapped[int] = mapped_column(
+        ForeignKey("procedure_step.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="The prerequisite step",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<StepDependency(step_id={self.step_id}, "
+            f"depends_on_step_id={self.depends_on_step_id})>"
+        )

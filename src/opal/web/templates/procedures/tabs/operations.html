@@ -8,6 +8,7 @@
         {% for op_data in ops %}
         {% set op = op_data.step %}
         <a href="?tab=operations&op={{ op.order }}"
+           data-step-id="{{ op.id }}"
            class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}"
            hx-get="?tab=operations&op={{ op.order }}"
            hx-target=".exec-tab-content"
@@ -29,6 +30,7 @@
         {% for op_data in contingency_ops %}
         {% set op = op_data.step %}
         <a href="?tab=operations&op={{ op.order }}"
+           data-step-id="{{ op.id }}"
            class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}"
            hx-get="?tab=operations&op={{ op.order }}"
            hx-target=".exec-tab-content"
@@ -96,7 +98,7 @@
 
             {% for step in op_data.sub_steps %}
             {% set step_display_number = step.step_number if '.' in step.step_number else (op.step_number ~ '.' ~ step.step_number) %}
-            <details class="step-details" id="step-{{ step.id }}-row"{% if step.id == selected_step_id %} open{% endif %}>
+            <details class="step-details" data-step-id="{{ step.id }}" id="step-{{ step.id }}-row"{% if step.id == selected_step_id %} open{% endif %}>
                 <summary class="step-summary">
                     <span class="step-number mono">{{ step_display_number }}</span>
                     <span class="step-title">{{ step.title }}</span>

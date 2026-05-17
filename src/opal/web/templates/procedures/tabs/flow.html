@@ -1,0 +1,250 @@
+<div>
+{% call ok.panel("FLOW (OPERATION DEPENDENCY GRAPH)") %}
+    <p class="text-muted" style="margin-bottom: var(--space-sm); font-size: 0.875rem;">
+        Drag from the right edge of one operation to the left edge of another to declare a prerequisite.
+        Hover an edge and click the red X to remove it. Sub-steps inside an operation are not part of the graph.
+    </p>
+    <div class="flow-canvas" id="flow-canvas">
+        <svg id="flow-svg" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" style="display: block;">
+            <defs>
+                <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 Z" fill="var(--text-secondary)"/>
+                </marker>
+            </defs>
+            <g id="flow-edges"></g>
+            <g id="flow-nodes"></g>
+            <path id="flow-dragline" stroke="var(--accent-orange)" stroke-width="2" fill="none" style="display: none; pointer-events: none;"/>
+        </svg>
+    </div>
+{% endcall %}
+
+<script>
+(function() {
+    const ops = [
+        {% for op_data in ops + contingency_ops %}
+        {% set op = op_data.step %}
+        { id: {{ op.id }}, number: "{{ op.step_number | e }}", title: {{ op.title | tojson }}, is_contingency: {{ 'true' if op.is_contingency else 'false' }} },
+        {% endfor %}
+    ];
+    const deps = {{ dependencies | tojson }};  // [{step_id, depends_on_step_id}]
+    const procedureIdFlow = {{ procedure.id }};
+
+    const NODE_W = 220, NODE_H = 64, COL_GAP = 80, ROW_GAP = 24;
+    const PAD = 20;
+
+    function depthOf(opId, depMap, memo) {
+        if (memo.has(opId)) return memo.get(opId);
+        memo.set(opId, 0);  // tentative for cycle safety (shouldn't have any)
+        const prereqs = depMap.get(opId) || [];
+        if (prereqs.length === 0) {
+            memo.set(opId, 0);
+            return 0;
+        }
+        const d = 1 + Math.max(...prereqs.map(p => depthOf(p, depMap, memo)));
+        memo.set(opId, d);
+        return d;
+    }
+
+    function layout() {
+        const depMap = new Map();  // opId -> [prereq opIds]
+        for (const d of deps) {
+            if (!depMap.has(d.step_id)) depMap.set(d.step_id, []);
+            depMap.get(d.step_id).push(d.depends_on_step_id);
+        }
+        const memo = new Map();
+        const cols = new Map();  // colIndex -> [opIds]
+        for (const op of ops) {
+            const d = depthOf(op.id, depMap, memo);
+            if (!cols.has(d)) cols.set(d, []);
+            cols.get(d).push(op.id);
+        }
+        const positions = new Map();  // opId -> {x, y}
+        const sortedCols = [...cols.keys()].sort((a,b) => a-b);
+        for (const c of sortedCols) {
+            const idsInCol = cols.get(c);
+            idsInCol.sort((a, b) => {
+                const oa = ops.find(o => o.id === a), ob = ops.find(o => o.id === b);
+                return oa.number.localeCompare(ob.number, undefined, { numeric: true });
+            });
+            idsInCol.forEach((id, row) => {
+                positions.set(id, {
+                    x: PAD + c * (NODE_W + COL_GAP),
+                    y: PAD + row * (NODE_H + ROW_GAP),
+                });
+            });
+        }
+        return positions;
+    }
+
+    function render() {
+        const svg = document.getElementById('flow-svg');
+        const nodesG = document.getElementById('flow-nodes');
+        const edgesG = document.getElementById('flow-edges');
+        nodesG.innerHTML = '';
+        edgesG.innerHTML = '';
+
+        const positions = layout();
+        let maxX = 0, maxY = 0;
+        positions.forEach(p => { maxX = Math.max(maxX, p.x + NODE_W); maxY = Math.max(maxY, p.y + NODE_H); });
+        svg.setAttribute('viewBox', `0 0 ${maxX + PAD} ${maxY + PAD}`);
+        svg.setAttribute('width', maxX + PAD);
+        svg.setAttribute('height', maxY + PAD);
+
+        // Edges
+        for (const d of deps) {
+            const src = positions.get(d.depends_on_step_id);
+            const dst = positions.get(d.step_id);
+            if (!src || !dst) continue;
+            const x1 = src.x + NODE_W, y1 = src.y + NODE_H / 2;
+            const x2 = dst.x, y2 = dst.y + NODE_H / 2;
+            const cx = (x1 + x2) / 2;
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`);
+            path.setAttribute('class', 'flow-edge');
+            path.setAttribute('marker-end', 'url(#flow-arrow)');
+            edgesG.appendChild(path);
+
+            // X marker at midpoint to delete
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            const xMarker = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            xMarker.setAttribute('class', 'flow-edge-delete');
+            xMarker.setAttribute('transform', `translate(${mx}, ${my})`);
+            xMarker.dataset.stepId = d.step_id;
+            xMarker.dataset.prereqId = d.depends_on_step_id;
+            xMarker.style.cursor = 'pointer';
+            xMarker.innerHTML = `
+                <circle r="9" fill="var(--bg-tertiary)" stroke="var(--accent-red)"></circle>
+                <line x1="-4" y1="-4" x2="4" y2="4" stroke="var(--accent-red)" stroke-width="2"></line>
+                <line x1="-4" y1="4" x2="4" y2="-4" stroke="var(--accent-red)" stroke-width="2"></line>
+            `;
+            xMarker.addEventListener('click', () => removeDep(d.step_id, d.depends_on_step_id));
+            edgesG.appendChild(xMarker);
+        }
+
+        // Nodes
+        for (const op of ops) {
+            const p = positions.get(op.id);
+            if (!p) continue;
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('class', 'flow-node');
+            g.setAttribute('transform', `translate(${p.x}, ${p.y})`);
+            g.dataset.opId = op.id;
+            // Rect
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('width', NODE_W);
+            rect.setAttribute('height', NODE_H);
+            rect.setAttribute('class', 'flow-node-rect' + (op.is_contingency ? ' flow-node-rect--contingency' : ''));
+            g.appendChild(rect);
+            // OP number
+            const num = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            num.setAttribute('x', 12);
+            num.setAttribute('y', 24);
+            num.setAttribute('class', 'flow-node-number');
+            num.textContent = `OP ${op.number}`;
+            g.appendChild(num);
+            // Title
+            const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            title.setAttribute('x', 12);
+            title.setAttribute('y', 48);
+            title.setAttribute('class', 'flow-node-title');
+            title.textContent = op.title.length > 26 ? op.title.slice(0, 24) + '…' : op.title;
+            g.appendChild(title);
+            // Output port (right edge hit zone)
+            const outPort = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            outPort.setAttribute('x', NODE_W - 12);
+            outPort.setAttribute('y', 0);
+            outPort.setAttribute('width', 12);
+            outPort.setAttribute('height', NODE_H);
+            outPort.setAttribute('class', 'flow-node-port flow-node-port-out');
+            outPort.dataset.opId = op.id;
+            outPort.addEventListener('mousedown', e => startEdgeDrag(e, op.id));
+            g.appendChild(outPort);
+            // Input port (left edge hit zone)
+            const inPort = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            inPort.setAttribute('x', 0);
+            inPort.setAttribute('y', 0);
+            inPort.setAttribute('width', 12);
+            inPort.setAttribute('height', NODE_H);
+            inPort.setAttribute('class', 'flow-node-port flow-node-port-in');
+            inPort.dataset.opId = op.id;
+            g.appendChild(inPort);
+            nodesG.appendChild(g);
+        }
+    }
+
+    let dragState = null;
+    function startEdgeDrag(e, sourceOpId) {
+        e.preventDefault();
+        const svg = document.getElementById('flow-svg');
+        const rect = svg.getBoundingClientRect();
+        const scaleX = svg.viewBox.baseVal.width / rect.width;
+        const scaleY = svg.viewBox.baseVal.height / rect.height;
+        dragState = { sourceOpId, rect, scaleX, scaleY };
+        // Compute source point
+        const ops_pos = layout();
+        const src = ops_pos.get(sourceOpId);
+        if (!src) return;
+        const x1 = src.x + NODE_W, y1 = src.y + NODE_H / 2;
+        dragState.startX = x1;
+        dragState.startY = y1;
+        document.getElementById('flow-dragline').style.display = '';
+        updateDragline(e);
+    }
+    function updateDragline(e) {
+        if (!dragState) return;
+        const dragline = document.getElementById('flow-dragline');
+        const x = (e.clientX - dragState.rect.left) * dragState.scaleX;
+        const y = (e.clientY - dragState.rect.top) * dragState.scaleY;
+        const cx = (dragState.startX + x) / 2;
+        dragline.setAttribute('d', `M ${dragState.startX} ${dragState.startY} C ${cx} ${dragState.startY}, ${cx} ${y}, ${x} ${y}`);
+    }
+    function endEdgeDrag(e) {
+        if (!dragState) return;
+        document.getElementById('flow-dragline').style.display = 'none';
+        // Find target node under the mouse
+        const target = e.target.closest('.flow-node-port-in');
+        if (target) {
+            const targetOpId = parseInt(target.dataset.opId);
+            if (targetOpId && targetOpId !== dragState.sourceOpId) {
+                addDep(targetOpId, dragState.sourceOpId);
+            }
+        }
+        dragState = null;
+    }
+
+    document.addEventListener('mousemove', updateDragline);
+    document.addEventListener('mouseup', endEdgeDrag);
+
+    async function addDep(stepId, prereqId) {
+        const existing = deps.filter(d => d.step_id === stepId).map(d => d.depends_on_step_id);
+        if (existing.includes(prereqId)) return;  // already there
+        const newDeps = [...existing, prereqId];
+        try {
+            const r = await fetch(`/api/procedures/${procedureIdFlow}/steps/${stepId}/dependencies`, {
+                method: 'PUT',
+                headers: getHeaders(),
+                body: JSON.stringify({ depends_on: newDeps }),
+            });
+            if (r.ok) window.location.reload();
+            else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to add dependency')); }
+        } catch (e) { alert('Network error: ' + e.message); }
+    }
+
+    async function removeDep(stepId, prereqId) {
+        const remaining = deps.filter(d => d.step_id === stepId && d.depends_on_step_id !== prereqId).map(d => d.depends_on_step_id);
+        try {
+            const r = await fetch(`/api/procedures/${procedureIdFlow}/steps/${stepId}/dependencies`, {
+                method: 'PUT',
+                headers: getHeaders(),
+                body: JSON.stringify({ depends_on: remaining }),
+            });
+            if (r.ok) window.location.reload();
+            else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to remove dependency')); }
+        } catch (e) { alert('Network error: ' + e.message); }
+    }
+
+    if (ops.length > 0) render();
+})();
+</script>
+</div>

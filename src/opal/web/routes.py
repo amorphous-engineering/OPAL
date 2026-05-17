@@ -1154,7 +1154,7 @@ async def procedures_new(request: Request, db: DbSession) -> HTMLResponse:
     return templates.TemplateResponse("procedures/new.html", context)
 
 
-_PROCEDURE_TABS = ("meta", "operations", "kit", "outputs", "versions")
+_PROCEDURE_TABS = ("meta", "operations", "flow", "kit", "outputs", "versions")
 
 
 @router.get("/procedures/{procedure_id}", response_class=HTMLResponse)
@@ -1290,7 +1290,7 @@ async def procedures_detail(
     context["selected_step_id"] = step
 
     # Per-step kit lookup keyed by step.id for the inline editor.
-    from opal.db.models.procedure import ProcedureStep, StepKit
+    from opal.db.models.procedure import ProcedureStep, StepDependency, StepKit
 
     step_kit_rows = (
         db.query(StepKit)
@@ -1313,6 +1313,17 @@ async def procedures_detail(
             }
         )
     context["step_kit_by_step"] = step_kit_by_step
+
+    # Dependency edges for the Flow tab — only top-level op-to-op edges.
+    dep_rows = (
+        db.query(StepDependency)
+        .join(ProcedureStep, StepDependency.step_id == ProcedureStep.id)
+        .filter(ProcedureStep.procedure_id == procedure_id)
+        .all()
+    )
+    context["dependencies"] = [
+        {"step_id": d.step_id, "depends_on_step_id": d.depends_on_step_id} for d in dep_rows
+    ]
 
     return templates.TemplateResponse("procedures/detail.html", context)
 
@@ -1872,6 +1883,32 @@ async def executions_detail(
         ):
             holding_ncs_by_step.setdefault(iss.step_execution_id, []).append(iss)
     context["step_holding_ncs"] = holding_ncs_by_step
+
+    # Gating lookup: top-level ops whose prerequisite ops haven't reached
+    # a terminal status yet. Keyed by op.order → list of blocking step_number_str.
+    terminal_step_statuses = {"completed", "signed_off", "skipped"}
+    exec_by_order = {se.step_number: se for se in instance.step_executions}
+    gated_ops_by_order: dict[int, list[str]] = {}
+    version_steps_for_gating = version.content.get("steps", []) if version else []
+    for vs in version_steps_for_gating:
+        if vs.get("level", 0) != 0:
+            continue
+        deps = vs.get("depends_on") or []
+        if not deps:
+            continue
+        blockers: list[str] = []
+        for dep_order in deps:
+            prereq = exec_by_order.get(dep_order)
+            if prereq is None:
+                continue
+            prereq_status = (
+                prereq.status.value if hasattr(prereq.status, "value") else prereq.status
+            )
+            if prereq_status not in terminal_step_statuses:
+                blockers.append(prereq.step_number_str or str(dep_order))
+        if blockers:
+            gated_ops_by_order[vs["order"]] = blockers
+    context["gated_ops_by_order"] = gated_ops_by_order
 
     # Meta tab extras: last-activity timestamp + flat data-capture audit rows.
     step_update_times = [

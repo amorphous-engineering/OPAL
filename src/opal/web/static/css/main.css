@@ -1584,6 +1584,80 @@ body.procedure-detail .exec-tab-content > div {
     letter-spacing: 0.05em;
 }
 
+/* Flow tab — operation-dependency node graph */
+.flow-canvas {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    width: 100%;
+    height: 60vh;
+    min-height: 400px;
+    overflow: auto;
+    user-select: none;
+}
+
+.flow-node-rect {
+    fill: var(--bg-tertiary);
+    stroke: var(--border-color);
+    stroke-width: 1;
+}
+
+.flow-node-rect--contingency {
+    stroke: var(--accent-yellow);
+    stroke-dasharray: 4 2;
+}
+
+.flow-node-number {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    fill: var(--accent-orange);
+}
+
+.flow-node-title {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    fill: var(--text-primary);
+}
+
+.flow-node-port {
+    fill: transparent;
+    cursor: crosshair;
+}
+
+.flow-node-port-out:hover,
+.flow-node-port-in:hover {
+    fill: var(--accent-orange);
+    fill-opacity: 0.2;
+}
+
+.flow-edge {
+    stroke: var(--text-secondary);
+    stroke-width: 1.5;
+    fill: none;
+}
+
+.flow-edge-delete {
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+.flow-edge-delete:hover {
+    opacity: 1;
+}
+
+#flow-edges:hover .flow-edge-delete {
+    opacity: 1;
+}
+
+/* Drag-to-reorder visual feedback for sidebar / sub-step rows */
+.drop-indicator-above {
+    border-top: 2px solid var(--accent-orange) !important;
+}
+
+.drop-indicator-below {
+    border-bottom: 2px solid var(--accent-orange) !important;
+}
+
 .exec-sidebar-status--skipped {
     background: var(--text-muted);
     border-color: var(--text-muted);

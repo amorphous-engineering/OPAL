@@ -17,6 +17,7 @@ from opal.db.models.procedure import (
     ProcedureStep,
     ProcedureType,
     ProcedureVersion,
+    StepDependency,
     StepKit,
     UsageType,
 )
@@ -599,6 +600,136 @@ async def reorder_steps(
     return [StepSchema.model_validate(s) for s in steps]
 
 
+# ============ Operation dependencies ============
+
+
+class StepDependencyPayload(BaseModel):
+    """Replace a step's full prerequisite list (step.ids of other ops)."""
+
+    depends_on: list[int] = Field(default_factory=list)
+
+
+@router.get("/{procedure_id}/dependencies")
+async def list_dependencies(procedure_id: int, db: DbSession) -> list[dict]:
+    """Return all op-level dependency edges for a procedure as
+    [{step_id, depends_on_step_id}, ...]."""
+    procedure = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
+        .first()
+    )
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+
+    rows = (
+        db.query(StepDependency)
+        .join(ProcedureStep, StepDependency.step_id == ProcedureStep.id)
+        .filter(ProcedureStep.procedure_id == procedure_id)
+        .all()
+    )
+    return [{"step_id": d.step_id, "depends_on_step_id": d.depends_on_step_id} for d in rows]
+
+
+@router.put("/{procedure_id}/steps/{step_id}/dependencies")
+async def set_step_dependencies(
+    procedure_id: int,
+    step_id: int,
+    data: StepDependencyPayload,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> dict:
+    """Replace the prerequisite set for an operation atomically. Validates
+    same-procedure scope, op-level only, no self-loops, no cycles."""
+    procedure = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
+        .first()
+    )
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+
+    target = (
+        db.query(ProcedureStep)
+        .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
+        .first()
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="Step not found")
+    if target.parent_step_id is not None:
+        raise HTTPException(
+            status_code=400, detail="Dependencies are only allowed on top-level operations"
+        )
+
+    requested = list(dict.fromkeys(data.depends_on))  # dedupe, preserve order
+    if step_id in requested:
+        raise HTTPException(status_code=400, detail="A step cannot depend on itself")
+
+    if requested:
+        prereqs = (
+            db.query(ProcedureStep).filter(ProcedureStep.id.in_(requested)).all()
+        )
+        prereq_map = {p.id: p for p in prereqs}
+        for pid in requested:
+            p = prereq_map.get(pid)
+            if p is None or p.procedure_id != procedure_id:
+                raise HTTPException(
+                    status_code=400, detail=f"Step {pid} is not in this procedure"
+                )
+            if p.parent_step_id is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Step {pid} is a sub-step; only operations can be prerequisites",
+                )
+
+    # Cycle check: simulate the new edge set, then DFS from target reaching itself.
+    # Existing edges (excluding outgoing-from-step_id which we're replacing).
+    existing = db.query(StepDependency).all()
+    # In the dependency graph, an edge A->B means "B depends on A".
+    # We model it as adjacency from prereq -> dependent so we walk reachability forward.
+    adj: dict[int, set[int]] = {}
+    for d in existing:
+        if d.step_id == step_id:
+            continue
+        adj.setdefault(d.depends_on_step_id, set()).add(d.step_id)
+    for pid in requested:
+        adj.setdefault(pid, set()).add(step_id)
+
+    # If we can reach any prereq from step_id, a cycle exists.
+    def reachable_from(start: int) -> set[int]:
+        seen = {start}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            for nxt in adj.get(cur, ()):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    stack.append(nxt)
+        return seen
+
+    downstream = reachable_from(step_id)
+    cycle_prereqs = downstream & set(requested)
+    if cycle_prereqs:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cycle: step {step_id} already gates {sorted(cycle_prereqs)}; "
+            "cannot depend on them.",
+        )
+
+    # Apply: delete current deps for step_id, insert new ones, audit log each.
+    current = db.query(StepDependency).filter(StepDependency.step_id == step_id).all()
+    for d in current:
+        log_delete(db, d, user_id)
+        db.delete(d)
+    db.flush()
+    for pid in requested:
+        new_dep = StepDependency(step_id=step_id, depends_on_step_id=pid)
+        db.add(new_dep)
+        db.flush()
+        log_create(db, new_dep, user_id)
+    db.commit()
+    return {"step_id": step_id, "depends_on": requested}
+
+
 # ============ Versions ============
 
 
@@ -643,6 +774,19 @@ async def publish_version(
     for sk in all_step_kits:
         step_kit_map.setdefault(sk.step_id, []).append(sk)
 
+    # Bulk-load step dependencies; emit deps as a list of prerequisite `order`
+    # values per step so the execution engine can resolve them against the
+    # frozen snapshot without joining tables.
+    all_deps = (
+        db.query(StepDependency).filter(StepDependency.step_id.in_(step_ids)).all()
+    )
+    step_id_to_order = {s.id: s.order for s in steps}
+    depends_on_map: dict[int, list[int]] = {}
+    for d in all_deps:
+        prereq_order = step_id_to_order.get(d.depends_on_step_id)
+        if prereq_order is not None:
+            depends_on_map.setdefault(d.step_id, []).append(prereq_order)
+
     # Create snapshot with hierarchical structure
     def step_to_dict(step: ProcedureStep) -> dict:
         return {
@@ -658,6 +802,7 @@ async def publish_version(
             "requires_signoff": step.requires_signoff,
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "workcenter_id": step.workcenter_id,
+            "depends_on": sorted(depends_on_map.get(step.id, [])),
             "step_kit": [
                 {
                     "part_id": sk.part_id,

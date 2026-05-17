@@ -24,6 +24,7 @@ from opal.db.models.procedure import (
     ProcedureOutput,
     ProcedureStep,
     ProcedureVersion,
+    StepDependency,
     StepKit,
 )
 from opal.db.models.purchase import Purchase, PurchaseLine
@@ -62,6 +63,7 @@ __all__ = [
     "ReferenceType",
     "Risk",
     "RiskReference",
+    "StepDependency",
     "StepExecution",
     "StepKit",
     "StockTestResult",

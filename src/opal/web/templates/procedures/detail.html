@@ -15,6 +15,7 @@
     {% set tabs = [
         ('meta',       'META'),
         ('operations', 'OPERATIONS'),
+        ('flow',       'FLOW'),
         ('kit',        'KIT'),
         ('outputs',    'OUTPUTS'),
         ('versions',   'VERSIONS'),
@@ -316,6 +317,16 @@
 <script>
 const procedureId = {{ procedure.id }};
 const stepSchemas = {};  // { stepId: [field, ...] }
+// All step IDs in this procedure, in current order — used to translate a partial
+// reorder of one container (op list / sub-step list) into the full ID list the
+// reorder API requires.
+window.__allProcedureStepIds = [
+    {%- for op_data in ops + contingency_ops -%}
+        {{ op_data.step.id }}
+        {%- for sub in op_data.sub_steps %}, {{ sub.id }}{% endfor -%}
+        {%- if not loop.last -%}, {%- endif -%}
+    {%- endfor -%}
+];
 
 function getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
@@ -739,5 +750,107 @@ document.addEventListener('keydown', function(e) {
         hideAddOp(); hideAddStep(); hideAddKit(); hideAddOutput(); hideAddStepPart(); hideFieldModal();
     }
 });
+
+// ============ Drag-to-reorder (operations sidebar + sub-step rows) ============
+
+let dragSrcStepId = null;
+
+function attachReorderHandlers() {
+    // Sidebar op cards — each <a class="exec-sidebar-item"> with data-step-id reorders ops.
+    document.querySelectorAll('.exec-sidebar .exec-sidebar-item[data-step-id]').forEach(el => {
+        el.setAttribute('draggable', 'true');
+        el.addEventListener('dragstart', onDragStart);
+        el.addEventListener('dragover', onDragOver);
+        el.addEventListener('dragleave', onDragLeave);
+        el.addEventListener('drop', onDrop);
+        el.addEventListener('dragend', onDragEnd);
+    });
+    // Sub-step rows — <summary> with data-step-id, reorders within an op.
+    document.querySelectorAll('.exec-main details.step-details[data-step-id] > summary').forEach(el => {
+        el.setAttribute('draggable', 'true');
+        el.addEventListener('dragstart', onDragStart);
+        el.addEventListener('dragover', onDragOver);
+        el.addEventListener('dragleave', onDragLeave);
+        el.addEventListener('drop', onDrop);
+        el.addEventListener('dragend', onDragEnd);
+    });
+}
+
+function onDragStart(e) {
+    const host = e.currentTarget;
+    const stepId = host.dataset.stepId || host.closest('[data-step-id]')?.dataset.stepId;
+    if (!stepId) return;
+    dragSrcStepId = parseInt(stepId);
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', stepId); } catch (_) {}
+}
+
+function onDragOver(e) {
+    if (dragSrcStepId == null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const host = e.currentTarget;
+    const rect = host.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    host.classList.toggle('drop-indicator-above', before);
+    host.classList.toggle('drop-indicator-below', !before);
+}
+
+function onDragLeave(e) {
+    e.currentTarget.classList.remove('drop-indicator-above', 'drop-indicator-below');
+}
+
+function onDragEnd(e) {
+    document.querySelectorAll('.drop-indicator-above, .drop-indicator-below').forEach(el => {
+        el.classList.remove('drop-indicator-above', 'drop-indicator-below');
+    });
+    dragSrcStepId = null;
+}
+
+async function onDrop(e) {
+    e.preventDefault();
+    const host = e.currentTarget;
+    const targetStepId = parseInt(host.dataset.stepId || host.closest('[data-step-id]')?.dataset.stepId || '0');
+    host.classList.remove('drop-indicator-above', 'drop-indicator-below');
+    if (!dragSrcStepId || !targetStepId || dragSrcStepId === targetStepId) return;
+    const before = (e.clientY - host.getBoundingClientRect().top) < host.getBoundingClientRect().height / 2;
+
+    // Collect siblings (same container, same data-step-id presence) in current visual order.
+    const siblings = [...host.parentElement.querySelectorAll(':scope > [data-step-id]')]
+        .map(el => parseInt(el.dataset.stepId))
+        .filter(id => !isNaN(id));
+    // Remove src then insert at the target position
+    const newOrder = siblings.filter(id => id !== dragSrcStepId);
+    const idx = newOrder.indexOf(targetStepId);
+    newOrder.splice(before ? idx : idx + 1, 0, dragSrcStepId);
+
+    // The reorder API requires ALL step IDs in this procedure. We only reordered
+    // a subset (this container). Merge in the rest from the page state, preserving
+    // their existing relative order.
+    const allStepIds = window.__allProcedureStepIds || [];
+    const subsetSet = new Set(siblings);
+    const merged = [];
+    let cursor = 0;
+    for (const id of allStepIds) {
+        if (subsetSet.has(id)) {
+            merged.push(newOrder[cursor++]);
+        } else {
+            merged.push(id);
+        }
+    }
+
+    try {
+        const r = await fetch(`/api/procedures/${procedureId}/steps/reorder`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ step_ids: merged }),
+        });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to reorder')); }
+    } catch (err) { alert('Network error: ' + err.message); }
+}
+
+document.addEventListener('DOMContentLoaded', attachReorderHandlers);
+document.body.addEventListener('htmx:afterSwap', attachReorderHandlers);
 </script>
 {% endblock %}

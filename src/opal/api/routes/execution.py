@@ -556,6 +556,52 @@ async def start_step(
     if step_status != StepStatus.PENDING.value:
         raise HTTPException(status_code=400, detail="Step already started or completed")
 
+    # Gating: top-level ops can have prerequisite ops declared on the procedure
+    # version snapshot. All prereqs must be in a terminal state before this op
+    # can start. (Sub-steps inside an op execute linearly and have no deps.)
+    if step_exec.level == 0:
+        version = (
+            db.query(ProcedureVersion)
+            .filter(ProcedureVersion.id == instance.version_id)
+            .first()
+        )
+        if version is not None:
+            version_step = next(
+                (
+                    s
+                    for s in version.content.get("steps", [])
+                    if s.get("order") == step_number
+                ),
+                None,
+            )
+            dep_orders = (version_step or {}).get("depends_on") or []
+            if dep_orders:
+                terminal = {
+                    StepStatus.COMPLETED.value,
+                    StepStatus.SIGNED_OFF.value,
+                    StepStatus.SKIPPED.value,
+                }
+                exec_lookup = {
+                    se.step_number: se for se in instance.step_executions
+                }
+                blockers: list[str] = []
+                for dep_order in dep_orders:
+                    prereq = exec_lookup.get(dep_order)
+                    if prereq is None:
+                        continue
+                    prereq_status = (
+                        prereq.status.value
+                        if hasattr(prereq.status, "value")
+                        else prereq.status
+                    )
+                    if prereq_status not in terminal:
+                        blockers.append(prereq.step_number_str or str(dep_order))
+                if blockers:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot start: waiting on OP " + ", ".join(blockers),
+                    )
+
     step_exec.status = StepStatus.IN_PROGRESS
     step_exec.started_at = datetime.now(UTC)
 
