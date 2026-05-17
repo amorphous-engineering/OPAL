@@ -1605,12 +1605,16 @@ async def executions_new(request: Request, db: DbSession) -> HTMLResponse:
     return templates.TemplateResponse("executions/new.html", context)
 
 
+_EXECUTION_TABS = ("meta", "operations", "data", "bom", "issues", "kitting")
+
+
 @router.get("/executions/{instance_id}", response_class=HTMLResponse)
 async def executions_detail(
     request: Request,
     db: DbSession,
     instance_id: int,
     op: int | None = None,
+    tab: str = "meta",
 ) -> HTMLResponse:
     """Execution detail/run page."""
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
@@ -1726,6 +1730,8 @@ async def executions_detail(
 
     context["selected_op_order"] = op if op in valid_orders else _pick_default_order()
 
+    context["tab"] = tab if tab in _EXECUTION_TABS else "meta"
+
     # Map step order -> version step data (for data capture schemas, requires_signoff)
     context["version_steps_map"] = {s["order"]: s for s in version_steps}
 
@@ -1834,6 +1840,40 @@ async def executions_detail(
         .all()
     )
     context["linked_issues"] = linked_issues
+
+    # Meta tab extras: last-activity timestamp + flat data-capture audit rows.
+    step_update_times = [
+        se.updated_at for se in instance.step_executions if se.updated_at is not None
+    ]
+    candidate_times = [t for t in [instance.updated_at, *step_update_times] if t is not None]
+    context["last_activity_at"] = max(candidate_times) if candidate_times else None
+
+    data_rows = []
+    for se in instance.step_executions:
+        if not se.data_captured:
+            continue
+        step_num = se.step_number_str or str(se.step_number)
+        by_name = se.completed_by_user.name if se.completed_by_user else None
+        at = se.completed_at or se.updated_at
+        for field, value in se.data_captured.items():
+            if isinstance(value, bool):
+                display = "YES" if value else "NO"
+            elif value is None or value == "":
+                display = "—"
+            else:
+                display = str(value)
+            data_rows.append(
+                {
+                    "step_number": step_num,
+                    "step_sort": se.step_number,
+                    "field": field,
+                    "value": display,
+                    "by": by_name,
+                    "at": at,
+                }
+            )
+    data_rows.sort(key=lambda r: (r["step_sort"], r["field"]))
+    context["data_rows"] = data_rows
 
     return templates.TemplateResponse("executions/detail.html", context)
 

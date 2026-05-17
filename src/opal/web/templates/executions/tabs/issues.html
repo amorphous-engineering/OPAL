@@ -1,0 +1,43 @@
+<div>
+<div class="panel">
+    <div class="panel-header">
+        <span>ISSUE TICKETS</span>
+        <div class="panel-header-actions">
+            <a class="btn btn-sm" href="/issues/new?procedure_instance_id={{ instance.id }}">+ NEW ISSUE</a>
+        </div>
+    </div>
+    <div class="panel-body">
+        {% if linked_issues %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 110px;">ISSUE</th>
+                    <th>TITLE</th>
+                    <th style="width: 110px;">TYPE</th>
+                    <th style="width: 110px;">PRIORITY</th>
+                    <th style="width: 120px;">STATUS</th>
+                    <th style="width: 180px;">OPENED</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in linked_issues %}
+                {% set istatus = issue.status.value if issue.status.value is defined else issue.status %}
+                {% set itype = issue.issue_type.value if issue.issue_type and issue.issue_type.value is defined else (issue.issue_type or '') %}
+                {% set ipriority = issue.priority.value if issue.priority and issue.priority.value is defined else (issue.priority or '') %}
+                <tr>
+                    <td class="mono"><a href="/issues/{{ issue.id }}">{{ issue.issue_number }}</a></td>
+                    <td>{{ issue.title }}</td>
+                    <td class="mono">{{ itype | upper }}</td>
+                    <td class="mono">{{ ipriority | upper }}</td>
+                    <td>{{ ok.status(istatus | upper | replace('_', ' '), "ok" if istatus in ['resolved', 'closed'] else ("warn" if istatus == 'in_progress' else "default")) }}</td>
+                    <td>{{ ok.timestamp(issue.created_at) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No issues are linked to this execution.</p>
+        {% endif %}
+    </div>
+</div>
+</div>

@@ -246,6 +246,9 @@ select option {
     font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--text-muted);
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
 }
 
 .footer-status {
@@ -1318,21 +1321,107 @@ select option {
     color: var(--status-warn);
 }
 
-/* Execution Layout — Sidebar + Main */
+/* Execution Tabs — mirrors .nav-dropdown-btn so the chrome reads as one family.
+   On the exec-detail page the strip breaks out of .main padding so it runs
+   edge-to-edge; the .main padding-top is also zeroed so the strip hugs the
+   breadcrumbs above. */
+.exec-tabs {
+    display: flex;
+    gap: var(--space-xs);
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: var(--space-md);
+    padding-bottom: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+body.exec-detail .main {
+    padding-top: 0;
+}
+
+body.exec-detail .exec-tabs {
+    margin-left: calc(-1 * var(--space-md));
+    margin-right: calc(-1 * var(--space-md));
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+    padding-top: var(--space-xs);
+}
+
+.exec-tab {
+    padding: var(--space-xs) var(--space-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.exec-tab:hover {
+    color: var(--text-primary);
+    border-color: var(--border-light);
+}
+
+.exec-tab.active {
+    color: var(--accent-orange);
+    border-color: var(--accent-orange);
+}
+
+.exec-tab.htmx-request::after {
+    content: none;
+}
+
+.exec-tab-content {
+    min-height: 400px;
+}
+
+/* Execution-detail page: lock to viewport so each tab scrolls within .exec-tab-content,
+   and the Operations exec-layout fills the remaining space naturally. */
+body.exec-detail {
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.exec-detail .main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 0;
+}
+
+body.exec-detail .exec-tab-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Each tab partial wraps in a single <div> for hx-select. Make it transparent for
+   layout so its children (panels, or .exec-layout) become direct flex children
+   of .exec-tab-content. Operations: .exec-layout flex:1 fills available space.
+   Other tabs: panels stack naturally and .exec-tab-content scrolls if they overflow. */
+body.exec-detail .exec-tab-content > div {
+    display: contents;
+}
+
+/* Execution Layout — Sidebar + Main (fills available space; columns scroll within) */
 .exec-layout {
     display: flex;
     gap: 0;
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    margin-bottom: var(--space-sm);
 }
 
 .exec-sidebar {
     width: 250px;
     flex-shrink: 0;
     border-right: 1px solid var(--border-color);
-    position: sticky;
-    top: 0;
-    max-height: 80vh;
     overflow-y: auto;
 }
 

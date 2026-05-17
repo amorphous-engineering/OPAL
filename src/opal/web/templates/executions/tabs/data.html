@@ -1,0 +1,38 @@
+<div>
+<div class="panel">
+    <div class="panel-header">
+        <span>CAPTURED DATA</span>
+        <div class="panel-header-actions">
+            <span class="text-muted mono">{{ data_rows | length }} ROW{{ 'S' if data_rows | length != 1 }}</span>
+        </div>
+    </div>
+    <div class="panel-body">
+        {% if data_rows %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 90px;">STEP</th>
+                    <th style="width: 220px;">FIELD</th>
+                    <th>VALUE</th>
+                    <th style="width: 200px;">BY</th>
+                    <th style="width: 180px;">AT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data_rows %}
+                <tr>
+                    <td class="mono">{{ row.step_number }}</td>
+                    <td class="mono">{{ row.field }}</td>
+                    <td class="mono">{{ row.value }}</td>
+                    <td>{{ row.by or '-' }}</td>
+                    <td>{{ ok.timestamp(row.at) if row.at else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No structured data has been captured yet for this execution.</p>
+        {% endif %}
+    </div>
+</div>
+</div>

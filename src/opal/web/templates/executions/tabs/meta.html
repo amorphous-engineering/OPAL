@@ -1,0 +1,78 @@
+<div>
+{% call ok.panel(instance.work_order_number or "EXECUTION #" ~ instance.id, actions=ok.status(inst_status | upper | replace('_', ' '))) %}
+    {% call ok.table() %}
+        {{ ok.detail_row("PROCEDURE", ok.link(instance.procedure.name, "/procedures/" ~ instance.procedure_id), th_width="160px") }}
+        {{ ok.detail_row("VERSION", ok.mono("v" ~ version.version_number) if version else "-", th_width="160px") }}
+        {{ ok.detail_row("WORK ORDER", ok.mono(instance.work_order_number or '-'), th_width="160px") }}
+        {{ ok.detail_row("CREATED", ok.timestamp(instance.created_at), th_width="160px") }}
+        {{ ok.detail_row("STARTED", ok.timestamp(instance.started_at) if instance.started_at else '-', th_width="160px") }}
+        {{ ok.detail_row("COMPLETED", ok.timestamp(instance.completed_at) if instance.completed_at else '-', th_width="160px") }}
+        {{ ok.detail_row("LAST ACTIVITY", ok.timestamp(last_activity_at) if last_activity_at else '-', th_width="160px") }}
+        {{ ok.detail_row("STARTED BY", instance.started_by_user.name if instance.started_by_user else '-', th_width="160px") }}
+        {{ ok.detail_row("VERSION AUTHOR", (version.created_by_user.name if version and version.created_by_user else '-'), th_width="160px") }}
+        {{ ok.detail_row("VERSION CREATED", ok.timestamp(version.created_at) if version else '-', th_width="160px") }}
+        {% if instance.scheduled_start_at %}{{ ok.detail_row("SCHEDULED START", ok.timestamp(instance.scheduled_start_at), th_width="160px") }}{% endif %}
+        {% if instance.target_completion_at %}{{ ok.detail_row("TARGET COMPLETION", ok.timestamp(instance.target_completion_at), th_width="160px") }}{% endif %}
+    {% endcall %}
+    {% if inst_status == 'in_progress' %}
+    <div style="margin-top: var(--space-md);">
+        {{ ok.btn("ABORT EXECUTION", variant="danger", attrs='onclick="abortExecution()"') }}
+    </div>
+    {% endif %}
+{% endcall %}
+
+<div class="panel">
+    <div class="panel-header">
+        <span>COLLABORATION</span>
+        <div class="panel-header-actions">
+            <span id="connection-status" class="connection-status">
+                <span class="connection-dot"></span>
+                <span id="connection-text">OFFLINE</span>
+            </span>
+        </div>
+    </div>
+    <div class="panel-body">
+        {% if inst_status in ['pending', 'in_progress'] %}
+        <div style="margin-bottom: var(--space-md);">
+            <button id="join-btn" class="btn btn-join" onclick="joinExecution()" style="display: none;">JOIN EXECUTION</button>
+            <button id="leave-btn" class="btn btn-leave" onclick="leaveExecution()" style="display: none;">LEAVE EXECUTION</button>
+        </div>
+        {% endif %}
+        <div class="participants-header">ACTIVE PARTICIPANTS</div>
+        <div id="participants-list" class="participants-list">
+            <span class="text-muted">Loading...</span>
+        </div>
+
+        {% set completed = steps | selectattr('status', 'in', ['completed', 'signed_off', 'skipped']) | list | length %}
+        {% set total = steps | length %}
+        <div style="margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--border-color);">
+            <div style="font-size: 1.25rem; font-weight: bold; color: var(--accent-orange);">
+                {{ completed }} / {{ total }} STEPS
+            </div>
+            <div style="background: var(--bg-tertiary); height: 14px; border: 1px solid var(--border-color); margin-top: var(--space-xs);">
+                <div style="background: var(--accent-green); height: 100%; width: {{ (completed / total * 100) if total > 0 else 0 }}%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <span>ATTACHMENTS</span>
+        <div class="panel-header-actions">
+            <span id="attachment-count" class="text-muted mono">0</span>
+        </div>
+    </div>
+    <div class="panel-body">
+        {% if inst_status in ['pending', 'in_progress'] %}
+        <div style="margin-bottom: var(--space-md); display: flex; gap: var(--space-sm); align-items: center;">
+            <input type="file" id="attachment-file" class="form-input" style="flex: 1;">
+            {{ ok.btn("UPLOAD", variant="primary", attrs='onclick="uploadAttachment()"') }}
+        </div>
+        {% endif %}
+        <div id="attachments-list">
+            <span class="text-muted">Loading...</span>
+        </div>
+    </div>
+</div>
+</div>

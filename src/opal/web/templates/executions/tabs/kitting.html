@@ -1,0 +1,179 @@
+<div>
+{% if kit_items %}
+<div class="panel">
+    <div class="panel-header">
+        <span>KIT / PARTS CONSUMPTION</span>
+        <div class="panel-header-actions">
+            {% if consumptions %}
+            {{ ok.status("CONSUMED", "ok") }}
+            {% elif inst_status == 'completed' %}
+            {{ ok.status("PENDING", "warn") }}
+            {% endif %}
+        </div>
+    </div>
+    <div class="panel-body">
+        {% if consumptions %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>PART</th>
+                    <th style="width: 100px; text-align: right;">QTY</th>
+                    <th style="width: 150px;">LOCATION</th>
+                    <th style="width: 100px;">LOT</th>
+                    <th style="width: 80px;">STEP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in consumptions %}
+                <tr>
+                    <td><a href="/parts/{{ c.inventory_record.part_id }}">{{ c.inventory_record.part.name }}</a></td>
+                    <td class="mono" style="text-align: right;">{{ c.quantity }}</td>
+                    <td class="mono">{{ c.inventory_record.location }}</td>
+                    <td class="mono">{{ c.inventory_record.lot_number or '-' }}</td>
+                    <td class="mono">{% if c.step_execution_id %}{{ step_exec_lookup.get(c.step_execution_id, '-') }}{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <table class="data-table" id="kit-table">
+            <thead>
+                <tr>
+                    <th>PART</th>
+                    <th style="width: 100px; text-align: right;">REQUIRED</th>
+                    <th style="width: 100px; text-align: right;">AVAILABLE</th>
+                    <th style="width: 200px;">CONSUME FROM</th>
+                    <th style="width: 100px;">QTY</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for kit in kit_items %}
+                <tr data-part-id="{{ kit.part_id }}" data-required="{{ kit.quantity_required }}">
+                    <td><a href="/parts/{{ kit.part_id }}">{{ kit.part.name }}</a></td>
+                    <td class="mono" style="text-align: right;">{{ kit.quantity_required }}</td>
+                    <td class="mono availability-cell" style="text-align: right;">-</td>
+                    <td>
+                        <select name="inv_{{ kit.part_id }}" class="form-select inv-select" data-part-id="{{ kit.part_id }}">
+                            <option value="">Loading...</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" name="qty_{{ kit.part_id }}" class="form-input qty-input"
+                               data-part-id="{{ kit.part_id }}" step="0.0001" min="0"
+                               value="{{ kit.quantity_required }}">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if inst_status in ['in_progress', 'completed'] %}
+        <div style="display: flex; justify-content: flex-end; margin-top: var(--space-md);">
+            <button class="btn btn-primary" onclick="consumeParts()">CONSUME PARTS</button>
+        </div>
+        <div id="consume-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        {% elif inst_status == 'pending' %}
+        <p class="text-muted" style="margin-top: var(--space-md);">Parts can be consumed after the execution is started.</p>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if productions %}
+<div class="panel">
+    <div class="panel-header">
+        <span>PRODUCTION</span>
+        <div class="panel-header-actions">
+            {% for p in productions %}
+                {% set pstatus = p.status.value if p.status.value is defined else p.status %}
+                {% if pstatus == 'completed' %}
+                    {{ ok.status("FINALIZED", "ok") }}
+                {% elif pstatus == 'wip' %}
+                    {{ ok.status("WIP", "info") }}
+                {% else %}
+                    {{ ok.status("PLANNED", "default") }}
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    <div class="panel-body">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>PART</th>
+                    <th style="width: 160px;">SERIAL</th>
+                    <th style="width: 140px;">OPAL #</th>
+                    <th style="width: 100px; text-align: right;">QTY</th>
+                    <th style="width: 120px;">LOT (WO)</th>
+                    <th style="width: 150px;">LOCATION</th>
+                    <th style="width: 100px;">STATUS</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in productions %}
+                {% set pstatus = p.status.value if p.status.value is defined else p.status %}
+                <tr>
+                    <td><a href="/parts/{{ p.inventory_record.part_id }}">{{ p.inventory_record.part.name }}</a></td>
+                    <td class="mono">{{ p.serial_number or '-' }}</td>
+                    <td class="mono">{% if p.produced_opal_number %}<a href="/inventory/opal/{{ p.produced_opal_number }}">{{ p.produced_opal_number }}</a>{% else %}-{% endif %}</td>
+                    <td class="mono" style="text-align: right;">{% if pstatus == 'completed' %}{{ p.quantity }}{% else %}({{ p.quantity }}){% endif %}</td>
+                    <td class="mono">{{ p.inventory_record.lot_number or '-' }}</td>
+                    <td class="mono">{{ p.inventory_record.location or '-' }}</td>
+                    <td>{{ ok.status(pstatus | upper, "ok" if pstatus == 'completed' else ("info" if pstatus == 'wip' else "default")) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if can_finalize %}
+        <div style="margin-top: var(--space-md); border-top: 1px solid var(--border-color); padding-top: var(--space-md);">
+            <div style="display: flex; gap: var(--space-md); align-items: flex-end;">
+                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                    <label class="form-label" for="finalize-location">STORAGE LOCATION *</label>
+                    <input type="text" id="finalize-location" class="form-input" placeholder="e.g., SHELF-A1, CLEANROOM-2">
+                </div>
+                <button class="btn btn-primary" onclick="finalizeProduction()">FINALIZE PRODUCTION</button>
+            </div>
+            <div id="finalize-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% elif output_items %}
+<div class="panel">
+    <div class="panel-header"><span>ASSEMBLY OUTPUT</span></div>
+    <div class="panel-body">
+        <table class="data-table" id="output-table">
+            <thead><tr><th>PART</th><th style="width:100px;text-align:right;">EXPECTED</th><th style="width:100px;">QTY</th><th style="width:150px;">LOCATION *</th><th style="width:100px;">LOT</th><th style="width:150px;">SERIAL</th></tr></thead>
+            <tbody>
+                {% for out in output_items %}
+                <tr data-part-id="{{ out.part_id }}">
+                    <td><a href="/parts/{{ out.part_id }}">{{ out.part.name }}</a></td>
+                    <td class="mono" style="text-align:right;">{{ out.quantity_produced }}</td>
+                    <td><input type="number" name="out_{{ out.part_id }}_qty" class="form-input" step="0.0001" min="0" value="{{ out.quantity_produced }}"></td>
+                    <td><input type="text" name="out_{{ out.part_id }}_loc" class="form-input" placeholder="Location"></td>
+                    <td><input type="text" name="out_{{ out.part_id }}_lot" class="form-input" placeholder="Lot #"></td>
+                    <td><input type="text" name="out_{{ out.part_id }}_serial" class="form-input" placeholder="Serial #"></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if inst_status in ['in_progress', 'completed'] %}
+        <div style="display: flex; justify-content: flex-end; margin-top: var(--space-md);">
+            <button class="btn btn-primary" onclick="produceOutput()">RECORD OUTPUT</button>
+        </div>
+        <div id="produce-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        {% elif inst_status == 'pending' %}
+        <p class="text-muted" style="margin-top: var(--space-md);">Output can be recorded after the execution is started.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if not kit_items and not productions and not output_items %}
+<div class="panel">
+    <div class="panel-header"><span>KITTING</span></div>
+    <div class="panel-body"><p class="text-muted">No kit, output, or production records for this procedure.</p></div>
+</div>
+{% endif %}
+</div>

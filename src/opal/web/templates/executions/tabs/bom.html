@@ -1,0 +1,41 @@
+<div>
+<div class="panel">
+    <div class="panel-header"><span>BOM RECONCILIATION</span></div>
+    <div class="panel-body">
+        {% if bom_items %}
+        <table class="data-table">
+            <thead><tr><th>PART</th><th style="width:100px;text-align:right;">REQUIRED</th><th style="width:100px;text-align:right;">CONSUMED</th><th style="width:100px;text-align:right;">VARIANCE</th></tr></thead>
+            <tbody>
+                {% for item in bom_items %}
+                <tr>
+                    <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
+                    <td class="mono" style="text-align:right;">{{ item.qty_required }}</td>
+                    <td class="mono" style="text-align:right;">{{ item.qty_consumed }}</td>
+                    <td class="mono" style="text-align:right;{% if item.variance > 0 %}color:var(--accent-yellow);{% elif item.variance < 0 %}color:var(--accent-red);{% endif %}">{% if item.variance > 0 %}+{% endif %}{{ item.variance }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No BOM items defined for this procedure.</p>
+        {% endif %}
+
+        {% if unplanned_consumptions %}
+        <div style="margin-top: var(--space-md);">
+            <strong class="text-yellow">UNPLANNED CONSUMPTIONS</strong>
+            <table class="data-table" style="margin-top: var(--space-sm);">
+                <thead><tr><th>PART</th><th style="width:100px;text-align:right;">QTY</th></tr></thead>
+                <tbody>
+                    {% for item in unplanned_consumptions %}
+                    <tr>
+                        <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
+                        <td class="mono" style="text-align:right;">{{ item.qty_consumed }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+</div>
