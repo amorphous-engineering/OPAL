@@ -84,20 +84,42 @@
         <div class="exec-sidebar-header">OPERATIONS</div>
         {% for op_data in ops %}
         {% set op = op_data.step %}
-        <a href="#op-{{ op.order }}" class="exec-sidebar-item{% if op.status == 'in_progress' %} active{% endif %}">
-            <span class="mono">OP {{ op.step_number }}</span>
-            <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
-            <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>
+        <a href="?op={{ op.order }}"
+           class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}"
+           hx-get="?op={{ op.order }}"
+           hx-target=".exec-main"
+           hx-select=".exec-main > *"
+           hx-swap="innerHTML scroll:false"
+           hx-push-url="true"
+           hx-on:click="this.closest('.exec-sidebar').querySelectorAll('.exec-sidebar-item').forEach(el => el.classList.remove('active')); this.classList.add('active')">
+            <span class="exec-sidebar-item-title">{{ op.title }}</span>
+            <span class="exec-sidebar-item-meta mono">
+                <span>OP {{ op.step_number }}</span>
+                <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
+                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>
+            </span>
+            <span class="exec-sidebar-item-gid mono">{% if op.execution %}#{{ op.execution.id }}{% else %}—{% endif %}</span>
         </a>
         {% endfor %}
         {% if contingency_ops %}
         <div class="exec-sidebar-divider"></div>
         {% for op_data in contingency_ops %}
         {% set op = op_data.step %}
-        <a href="#op-{{ op.order }}" class="exec-sidebar-item{% if op.status == 'in_progress' %} active{% endif %}">
-            <span class="mono">OP {{ op.step_number }}</span>
-            <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
-            <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>
+        <a href="?op={{ op.order }}"
+           class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}"
+           hx-get="?op={{ op.order }}"
+           hx-target=".exec-main"
+           hx-select=".exec-main > *"
+           hx-swap="innerHTML scroll:false"
+           hx-push-url="true"
+           hx-on:click="this.closest('.exec-sidebar').querySelectorAll('.exec-sidebar-item').forEach(el => el.classList.remove('active')); this.classList.add('active')">
+            <span class="exec-sidebar-item-title">{{ op.title }}</span>
+            <span class="exec-sidebar-item-meta mono">
+                <span>OP {{ op.step_number }}</span>
+                <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
+                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>
+            </span>
+            <span class="exec-sidebar-item-gid mono">{% if op.execution %}#{{ op.execution.id }}{% else %}—{% endif %}</span>
         </a>
         {% endfor %}
         {% endif %}
@@ -107,6 +129,7 @@
     <div class="exec-main">
         {% for op_data in ops + contingency_ops %}
         {% set op = op_data.step %}
+        {% if op.order == selected_op_order %}
         <div class="op-block{% if op.is_contingency %} op-contingency{% endif %}" id="op-{{ op.order }}">
             <div class="op-header">
                 <span class="op-number mono">OP {{ op.step_number }}</span>
@@ -407,7 +430,11 @@
             </details>
             {% endif %}
         </div>
+        {% endif %}
         {% endfor %}
+        {% if not selected_op_order %}
+        <div class="empty-state mono">NO OPERATIONS</div>
+        {% endif %}
     </div>
 </div>
 

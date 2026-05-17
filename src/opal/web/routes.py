@@ -1606,7 +1606,12 @@ async def executions_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/executions/{instance_id}", response_class=HTMLResponse)
-async def executions_detail(request: Request, db: DbSession, instance_id: int) -> HTMLResponse:
+async def executions_detail(
+    request: Request,
+    db: DbSession,
+    instance_id: int,
+    op: int | None = None,
+) -> HTMLResponse:
     """Execution detail/run page."""
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
@@ -1703,6 +1708,23 @@ async def executions_detail(request: Request, db: DbSession, instance_id: int) -
 
     context["ops"] = ops
     context["contingency_ops"] = contingency_ops
+
+    # Pick which op's steps to render on the right pane.
+    all_ops = ops + contingency_ops
+    valid_orders = {o["step"]["order"] for o in all_ops}
+
+    def _pick_default_order() -> int | None:
+        if not all_ops:
+            return None
+        for o in all_ops:
+            if o["step"]["status"] == "in_progress":
+                return o["step"]["order"]
+        for o in all_ops:
+            if o["step"]["status"] not in ("completed", "signed_off", "skipped"):
+                return o["step"]["order"]
+        return all_ops[0]["step"]["order"]
+
+    context["selected_op_order"] = op if op in valid_orders else _pick_default_order()
 
     # Map step order -> version step data (for data capture schemas, requires_signoff)
     context["version_steps_map"] = {s["order"]: s for s in version_steps}

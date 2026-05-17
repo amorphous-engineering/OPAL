@@ -1350,14 +1350,16 @@ select option {
 
 .exec-sidebar-item {
     display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    flex-direction: column;
+    gap: 2px;
     padding: var(--space-xs) var(--space-md);
     font-family: var(--font-mono);
     font-size: 0.875rem;
     color: var(--text-secondary);
     text-decoration: none;
     border-bottom: 1px solid var(--border-color);
+    border-left: 3px solid transparent;
+    min-width: 0;
 }
 
 .exec-sidebar-item:hover {
@@ -1369,6 +1371,34 @@ select option {
     background: var(--bg-tertiary);
     color: var(--accent-orange);
     border-left: 3px solid var(--accent-orange);
+}
+
+.exec-sidebar-item-title {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.exec-sidebar-item.htmx-request::after {
+    content: none;
+}
+
+.exec-sidebar-item-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.exec-sidebar-item-gid {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
 }
 
 .exec-sidebar-progress {
