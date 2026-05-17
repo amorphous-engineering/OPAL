@@ -774,9 +774,17 @@ function attachReorderHandlers() {
         el.setAttribute('draggable', 'false');
         el.addEventListener('dragstart', e => e.preventDefault());
 
-        // Cursor hint goes on the row that actually moves, not on a <summary>.
+        // Cursor hint + suppress text selection on the row that actually moves.
+        // Without user-select: none, clicking-and-dragging just highlights the
+        // row's text and our threshold-based drag detection never trips.
         const row = el.closest('[data-step-id]');
-        if (row) row.style.cursor = 'grab';
+        if (row) {
+            row.style.cursor = 'grab';
+            row.style.userSelect = 'none';
+            row.style.webkitUserSelect = 'none';
+        }
+        el.style.userSelect = 'none';
+        el.style.webkitUserSelect = 'none';
 
         el.addEventListener('mousedown', onReorderMouseDown);
     });
