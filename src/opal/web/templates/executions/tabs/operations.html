@@ -15,8 +15,9 @@
             <span class="exec-sidebar-item-title">{{ op.title }}</span>
             <span class="exec-sidebar-item-meta mono">
                 <span>OP {{ op.step_number }}</span>
+                {% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">PENDING</span>{% endif %}
                 <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
-                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>{% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">PENDING</span>{% endif %}
+                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>
             </span>
             <span class="exec-sidebar-item-gid mono">{% if op.execution %}#{{ op.execution.id }}{% else %}—{% endif %}</span>
         </a>
@@ -36,8 +37,9 @@
             <span class="exec-sidebar-item-title">{{ op.title }}</span>
             <span class="exec-sidebar-item-meta mono">
                 <span>OP {{ op.step_number }}</span>
+                {% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">PENDING</span>{% endif %}
                 <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
-                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>{% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">PENDING</span>{% endif %}
+                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>
             </span>
             <span class="exec-sidebar-item-gid mono">{% if op.execution %}#{{ op.execution.id }}{% else %}—{% endif %}</span>
         </a>
