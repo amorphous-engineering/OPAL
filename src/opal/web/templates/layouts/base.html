@@ -560,6 +560,8 @@
             const fd = new FormData();
             fd.append('file', file);
             if (procedureId) fd.append('procedure_id', procedureId);
+            // Tag as inline so the reference-documents panel doesn't list it.
+            fd.append('kind', 'inline');
             try {
                 const r = await fetch('/api/attachments/upload', {
                     method: 'POST',

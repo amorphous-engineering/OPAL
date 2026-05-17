@@ -17,6 +17,12 @@ class Attachment(Base, IdMixin, TimestampMixin):
     )
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    kind: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="'inline' = embedded in markdown content; 'reference' = downloadable doc; null = legacy/unscoped",
+    )
 
     # Optional links - attachment can belong to instance, step, issue, procedure, or neither
     procedure_instance_id: Mapped[int | None] = mapped_column(

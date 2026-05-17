@@ -1326,6 +1326,19 @@ async def procedures_detail(
         {"step_id": d.step_id, "depends_on_step_id": d.depends_on_step_id} for d in dep_rows
     ]
 
+    # Reference documents (drawings, PDFs, datasheets) attached at template level.
+    from opal.db.models.attachment import Attachment
+
+    context["reference_attachments"] = (
+        db.query(Attachment)
+        .filter(
+            Attachment.procedure_id == procedure_id,
+            Attachment.kind == "reference",
+        )
+        .order_by(Attachment.original_filename.asc())
+        .all()
+    )
+
     return templates.TemplateResponse("procedures/detail.html", context)
 
 
@@ -1910,6 +1923,19 @@ async def executions_detail(
         if blockers:
             gated_ops_by_order[vs["order"]] = blockers
     context["gated_ops_by_order"] = gated_ops_by_order
+
+    # Reference documents on the procedure template (eng drawings, PDFs, etc.).
+    from opal.db.models.attachment import Attachment as _Attachment
+
+    context["reference_attachments"] = (
+        db.query(_Attachment)
+        .filter(
+            _Attachment.procedure_id == instance.procedure_id,
+            _Attachment.kind == "reference",
+        )
+        .order_by(_Attachment.original_filename.asc())
+        .all()
+    )
 
     # Meta tab extras: last-activity timestamp + flat data-capture audit rows.
     step_update_times = [

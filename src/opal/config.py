@@ -115,7 +115,20 @@ class Settings(BaseSettings):
         description="Maximum upload file size in bytes",
     )
     allowed_mime_types: str = Field(
-        default="image/jpeg,image/png,image/gif,application/pdf,text/plain,text/csv",
+        default=(
+            "image/jpeg,image/png,image/gif,image/webp,image/svg+xml,"
+            "application/pdf,text/plain,text/csv,text/markdown,"
+            "application/msword,"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
+            "application/vnd.ms-excel,"
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+            "application/vnd.ms-powerpoint,"
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
+            "image/vnd.dwg,application/acad,application/x-acad,"
+            "model/step+xml,application/step,application/x-step,"
+            "model/stl,application/sla,application/vnd.ms-pki.stl,"
+            "application/zip,application/json"
+        ),
         description="Comma-separated list of allowed MIME types",
     )
 

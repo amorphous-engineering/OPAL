@@ -639,6 +639,42 @@ def test_upload_attachment_with_procedure_id(client, test_user):
     assert data["mime_type"] == "image/png"
 
 
+def test_reference_docs_filter_excludes_inline_images(client, test_user):
+    """GET /api/attachments?procedure_id=N&kind=reference returns only the
+    reference-doc uploads, not inline images."""
+    proc = client.post("/api/procedures", json={"name": "Docs Test"}).json()
+    proc_id = proc["id"]
+    headers = {"X-User-Id": str(test_user.id)}
+
+    # Upload one inline image and one reference doc on the same procedure.
+    r1 = client.post(
+        "/api/attachments/upload",
+        files={"file": ("inline.png", b"\x89PNG\r\n\x1a\nfake", "image/png")},
+        data={"procedure_id": str(proc_id), "kind": "inline"},
+        headers=headers,
+    )
+    assert r1.status_code == 201
+    inline_id = r1.json()["id"]
+
+    r2 = client.post(
+        "/api/attachments/upload",
+        files={"file": ("drawing.pdf", b"%PDF-fake", "application/pdf")},
+        data={"procedure_id": str(proc_id), "kind": "reference"},
+        headers=headers,
+    )
+    assert r2.status_code == 201
+    ref_id = r2.json()["id"]
+    assert r2.json()["kind"] == "reference"
+
+    # Filtered list returns only the reference doc.
+    listing = client.get(
+        f"/api/attachments?procedure_id={proc_id}&kind=reference"
+    ).json()
+    ids = {a["id"] for a in listing}
+    assert ref_id in ids
+    assert inline_id not in ids
+
+
 def test_photo_field_round_trips_through_publish(client):
     """A required_data_schema field of type=photo persists on the step and
     is included in the published version snapshot."""

@@ -29,6 +29,7 @@ class AttachmentResponse(BaseModel):
     step_execution_id: int | None
     issue_id: int | None = None
     procedure_id: int | None = None
+    kind: str | None = None
     created_at: str
 
     model_config = {"from_attributes": True}
@@ -45,6 +46,7 @@ def _attachment_to_response(att: Attachment) -> AttachmentResponse:
         step_execution_id=att.step_execution_id,
         issue_id=att.issue_id,
         procedure_id=att.procedure_id,
+        kind=att.kind,
         created_at=att.created_at.isoformat(),
     )
 
@@ -58,6 +60,7 @@ async def upload_attachment(
     step_execution_id: int | None = Form(default=None),
     issue_id: int | None = Form(default=None),
     procedure_id: int | None = Form(default=None),
+    kind: str | None = Form(default=None),
 ) -> AttachmentResponse:
     """Upload a file attachment.
 
@@ -144,6 +147,7 @@ async def upload_attachment(
         step_execution_id=step_execution_id,
         issue_id=issue_id,
         procedure_id=procedure_id,
+        kind=kind,
     )
     db.add(attachment)
     db.flush()
@@ -183,8 +187,11 @@ async def list_attachments(
     procedure_instance_id: int | None = Query(None),
     step_execution_id: int | None = Query(None),
     issue_id: int | None = Query(None),
+    procedure_id: int | None = Query(None),
+    kind: str | None = Query(None),
 ) -> list[AttachmentResponse]:
-    """List attachments, optionally filtered by instance, step, or issue."""
+    """List attachments, optionally filtered by instance, step, issue,
+    procedure, or kind."""
     query = db.query(Attachment)
 
     if procedure_instance_id is not None:
@@ -193,6 +200,10 @@ async def list_attachments(
         query = query.filter(Attachment.step_execution_id == step_execution_id)
     if issue_id is not None:
         query = query.filter(Attachment.issue_id == issue_id)
+    if procedure_id is not None:
+        query = query.filter(Attachment.procedure_id == procedure_id)
+    if kind is not None:
+        query = query.filter(Attachment.kind == kind)
 
     attachments = query.order_by(Attachment.created_at.desc()).limit(200).all()
     return [_attachment_to_response(a) for a in attachments]

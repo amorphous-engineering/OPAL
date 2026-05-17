@@ -22,6 +22,34 @@
 {% endcall %}
 
 <div class="panel">
+    <div class="panel-header"><span>REFERENCE DOCUMENTS</span></div>
+    <div class="panel-body">
+        {% if reference_attachments %}
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("FILE") }}
+                    {{ ok.th("TYPE", width="200px") }}
+                    {{ ok.th("SIZE", width="100px", align="right") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in reference_attachments %}
+                <tr>
+                    <td><a href="/api/attachments/{{ a.id }}/download" target="_blank" class="mono">{{ a.original_filename }}</a></td>
+                    <td class="mono">{{ a.mime_type }}</td>
+                    <td class="mono" style="text-align: right;">{{ '{:.1f}'.format(a.size_bytes / 1024) }} KB</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+        {% else %}
+        {{ ok.empty("No reference documents attached to this procedure") }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel">
     <div class="panel-header">
         <span>COLLABORATION</span>
         <div class="panel-header-actions">
