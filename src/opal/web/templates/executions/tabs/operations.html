@@ -16,7 +16,7 @@
             <span class="exec-sidebar-item-meta mono">
                 <span>OP {{ op.step_number }}</span>
                 <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
-                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>{% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">BLOCKED</span>{% endif %}
+                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>{% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">PENDING</span>{% endif %}
             </span>
             <span class="exec-sidebar-item-gid mono">{% if op.execution %}#{{ op.execution.id }}{% else %}—{% endif %}</span>
         </a>
@@ -37,7 +37,7 @@
             <span class="exec-sidebar-item-meta mono">
                 <span>OP {{ op.step_number }}</span>
                 <span class="exec-sidebar-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
-                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>{% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">BLOCKED</span>{% endif %}
+                <span class="exec-sidebar-status exec-sidebar-status--{{ op.status }}"></span>{% if op.status == "pending" and gated_ops_by_order and gated_ops_by_order.get(op.order) %}<span class="text-yellow mono" style="font-size: 0.7rem; margin-left: var(--space-xs);" title="Waiting on OP {{ gated_ops_by_order.get(op.order) | join(", ") }}">PENDING</span>{% endif %}
             </span>
             <span class="exec-sidebar-item-gid mono">{% if op.execution %}#{{ op.execution.id }}{% else %}—{% endif %}</span>
         </a>
@@ -206,7 +206,7 @@
                         {% if inst_status in ['pending', 'in_progress'] %}
                             {% set sub_blockers = gated_ops_by_order.get(step.order) if gated_ops_by_order else None %}
                             {% if step.status == 'pending' and sub_blockers %}
-                            <span class="text-yellow mono">BLOCKED — waiting on OP {{ sub_blockers | join(', ') }}</span>
+                            <span class="text-yellow mono">PENDING — waiting on OP {{ sub_blockers | join(', ') }}</span>
                             {% elif step.status == 'pending' %}
                             <button class="btn btn-sm btn-primary" onclick="startStep({{ step.order }})">START</button>
                             <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, '{{ step.title | e }}')">SKIP</button>
@@ -348,7 +348,7 @@
                         {% if inst_status in ['pending', 'in_progress'] %}
                             {% set op_blockers = gated_ops_by_order.get(op.order) if gated_ops_by_order else None %}
                             {% if op.status == 'pending' and op_blockers %}
-                            <span class="text-yellow mono">BLOCKED — waiting on OP {{ op_blockers | join(', ') }}</span>
+                            <span class="text-yellow mono">PENDING — waiting on OP {{ op_blockers | join(', ') }}</span>
                             {% elif op.status == 'pending' %}
                             <button class="btn btn-primary" onclick="startStep({{ op.order }})">START</button>
                             <button class="btn" onclick="showSkipModal({{ op.order }}, '{{ op.title | e }}')">SKIP</button>
