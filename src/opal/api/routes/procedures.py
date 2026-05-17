@@ -561,6 +561,37 @@ async def delete_step(
     db.commit()
 
 
+def _renumber_procedure_steps(steps: list[ProcedureStep]) -> None:
+    """Recompute every step.step_number for a procedure based on the current
+    `order` values. Normal top-level ops → "1", "2", ...; contingency top-level
+    ops → "C1", "C2", ...; sub-steps → "<parent_step_number>.<sub_index>".
+    Mutates the steps in place; caller is responsible for committing."""
+    top_level = sorted(
+        [s for s in steps if s.parent_step_id is None], key=lambda s: s.order
+    )
+    normal_idx = 0
+    contingency_idx = 0
+    for op in top_level:
+        if op.is_contingency:
+            contingency_idx += 1
+            op.step_number = f"C{contingency_idx}"
+        else:
+            normal_idx += 1
+            op.step_number = str(normal_idx)
+    # Sub-steps inherit their parent's new prefix.
+    children_by_parent: dict[int, list[ProcedureStep]] = {}
+    for s in steps:
+        if s.parent_step_id is not None:
+            children_by_parent.setdefault(s.parent_step_id, []).append(s)
+    for parent_id, kids in children_by_parent.items():
+        parent = next((s for s in steps if s.id == parent_id), None)
+        if parent is None:
+            continue
+        kids.sort(key=lambda s: s.order)
+        for i, kid in enumerate(kids, start=1):
+            kid.step_number = f"{parent.step_number}.{i}"
+
+
 @router.post("/{procedure_id}/steps/reorder", response_model=list[StepSchema])
 async def reorder_steps(
     procedure_id: int,
@@ -587,6 +618,9 @@ async def reorder_steps(
     # Update order
     for i, step_id in enumerate(data.step_ids, start=1):
         step_map[step_id].order = i
+
+    # Renumber step_number labels to follow the new order.
+    _renumber_procedure_steps(steps)
 
     db.commit()
 

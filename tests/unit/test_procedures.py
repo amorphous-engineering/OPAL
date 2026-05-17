@@ -545,6 +545,46 @@ def test_published_version_snapshots_dependencies(client):
     ])
 
 
+def test_reorder_renumbers_step_labels(client):
+    """After a reorder the step_number display labels follow the new sequence:
+    normal ops → 1, 2, 3...; contingency ops → C1, C2...; sub-steps → <op>.N."""
+    proc = client.post("/api/procedures", json={"name": "Renumber Test"}).json()
+    proc_id = proc["id"]
+    a = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "A"}).json()
+    b = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "B"}).json()
+    c = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "C"}).json()
+    # Sub-step under B
+    b1 = client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "B.1", "parent_step_id": b["id"]},
+    ).json()
+
+    # Initial labels
+    initial = {s["title"]: s["step_number"] for s in client.get(f"/api/procedures/{proc_id}").json()["steps"]}
+    assert initial["A"] == "1"
+    assert initial["B"] == "2"
+    assert initial["C"] == "3"
+
+    # Reorder to: C, A, B(+B.1)
+    new_order = [c["id"], a["id"], b["id"], b1["id"]]
+    r = client.post(f"/api/procedures/{proc_id}/steps/reorder", json={"step_ids": new_order})
+    assert r.status_code == 200
+
+    # /api/procedures/{id} returns a hierarchical structure: top-level
+    # steps with nested sub_steps. Flatten for lookup.
+    top = client.get(f"/api/procedures/{proc_id}").json()["steps"]
+    flat = []
+    for s in top:
+        flat.append(s)
+        flat.extend(s.get("sub_steps", []))
+    labels = {s["title"]: s["step_number"] for s in flat}
+    assert labels["C"] == "1"
+    assert labels["A"] == "2"
+    assert labels["B"] == "3"
+    # Sub-step inherits parent's new number
+    assert labels["B.1"] == "3.1"
+
+
 def test_execution_gating_blocks_start_until_prereqs_complete(client):
     """OP 2 (deps on OP 1) cannot be started until OP 1 is completed."""
     proc_id, op_ids = _make_proc_with_n_ops(client, 2)
