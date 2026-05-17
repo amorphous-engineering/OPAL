@@ -121,9 +121,7 @@ async def upload_attachment(
             .first()
         )
         if not procedure:
-            raise HTTPException(
-                status_code=404, detail=f"Procedure {procedure_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Procedure {procedure_id} not found")
 
     # Sanitize filename and generate stored name
     original_name = file.filename or "unnamed"

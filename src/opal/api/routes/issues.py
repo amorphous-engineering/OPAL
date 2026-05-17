@@ -432,9 +432,7 @@ def _maybe_resume_step_after_nc_update(db, issue: "Issue", user_id: int | None) 
             Issue.step_execution_id == step_exec.id,
             Issue.issue_type == IssueType.NON_CONFORMANCE,
             Issue.id != issue.id,
-            Issue.status.notin_(
-                [IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]
-            ),
+            Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
             Issue.deleted_at.is_(None),
         )
         .count()

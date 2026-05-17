@@ -1376,9 +1376,7 @@ async def procedures_step_edit(db: DbSession, procedure_id: int, step_id: int) -
     parent_order = None
     if step is not None:
         if step.parent_step_id is not None:
-            parent = (
-                db.query(ProcedureStep).filter(ProcedureStep.id == step.parent_step_id).first()
-            )
+            parent = db.query(ProcedureStep).filter(ProcedureStep.id == step.parent_step_id).first()
             if parent is not None:
                 parent_order = parent.order
         else:
@@ -1961,9 +1959,7 @@ async def executions_detail(
                 # as "N image(s) (#12, #17)" rather than leaking the raw
                 # storage format "[12, 17]" into the audit table.
                 if value:
-                    display = f"{len(value)} image(s) (" + ", ".join(
-                        f"#{v}" for v in value
-                    ) + ")"
+                    display = f"{len(value)} image(s) (" + ", ".join(f"#{v}" for v in value) + ")"
                 else:
                     display = "—"
             else:

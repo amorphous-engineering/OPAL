@@ -254,9 +254,7 @@ class StepDependency(Base, IdMixin, TimestampMixin):
     top-level ops (parent_step_id IS NULL) of the same procedure."""
 
     __tablename__ = "step_dependency"
-    __table_args__ = (
-        UniqueConstraint("step_id", "depends_on_step_id", name="uq_step_dependency"),
-    )
+    __table_args__ = (UniqueConstraint("step_id", "depends_on_step_id", name="uq_step_dependency"),)
 
     step_id: Mapped[int] = mapped_column(
         ForeignKey("procedure_step.id", ondelete="CASCADE"),

@@ -566,9 +566,7 @@ def _renumber_procedure_steps(steps: list[ProcedureStep]) -> None:
     `order` values. Normal top-level ops → "1", "2", ...; contingency top-level
     ops → "C1", "C2", ...; sub-steps → "<parent_step_number>.<sub_index>".
     Mutates the steps in place; caller is responsible for committing."""
-    top_level = sorted(
-        [s for s in steps if s.parent_step_id is None], key=lambda s: s.order
-    )
+    top_level = sorted([s for s in steps if s.parent_step_id is None], key=lambda s: s.order)
     normal_idx = 0
     contingency_idx = 0
     for op in top_level:
@@ -699,16 +697,12 @@ async def set_step_dependencies(
         raise HTTPException(status_code=400, detail="A step cannot depend on itself")
 
     if requested:
-        prereqs = (
-            db.query(ProcedureStep).filter(ProcedureStep.id.in_(requested)).all()
-        )
+        prereqs = db.query(ProcedureStep).filter(ProcedureStep.id.in_(requested)).all()
         prereq_map = {p.id: p for p in prereqs}
         for pid in requested:
             p = prereq_map.get(pid)
             if p is None or p.procedure_id != procedure_id:
-                raise HTTPException(
-                    status_code=400, detail=f"Step {pid} is not in this procedure"
-                )
+                raise HTTPException(status_code=400, detail=f"Step {pid} is not in this procedure")
             if p.parent_step_id is not None:
                 raise HTTPException(
                     status_code=400,
@@ -811,9 +805,7 @@ async def publish_version(
     # Bulk-load step dependencies; emit deps as a list of prerequisite `order`
     # values per step so the execution engine can resolve them against the
     # frozen snapshot without joining tables.
-    all_deps = (
-        db.query(StepDependency).filter(StepDependency.step_id.in_(step_ids)).all()
-    )
+    all_deps = db.query(StepDependency).filter(StepDependency.step_id.in_(step_ids)).all()
     step_id_to_order = {s.id: s.order for s in steps}
     depends_on_map: dict[int, list[int]] = {}
     for d in all_deps:

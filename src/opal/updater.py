@@ -197,8 +197,7 @@ def replace_binary(new_binary: Path) -> Path:
         if backup.exists() and not current.exists():
             backup.rename(current)
         raise RuntimeError(
-            f"Cannot install new binary at {current}: {e}. "
-            "Original binary restored from backup."
+            f"Cannot install new binary at {current}: {e}. Original binary restored from backup."
         ) from e
 
     # Make executable on Unix
