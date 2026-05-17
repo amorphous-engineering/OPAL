@@ -46,10 +46,13 @@
     }
 
     function layout() {
-        const depMap = new Map();  // opId -> [prereq opIds]
+        const depMap = new Map();    // opId -> [prereq opIds]
+        const childMap = new Map();  // opId -> [dependent opIds]
         for (const d of deps) {
             if (!depMap.has(d.step_id)) depMap.set(d.step_id, []);
             depMap.get(d.step_id).push(d.depends_on_step_id);
+            if (!childMap.has(d.depends_on_step_id)) childMap.set(d.depends_on_step_id, []);
+            childMap.get(d.depends_on_step_id).push(d.step_id);
         }
         const memo = new Map();
         const cols = new Map();  // colIndex -> [opIds]
@@ -58,20 +61,76 @@
             if (!cols.has(d)) cols.set(d, []);
             cols.get(d).push(op.id);
         }
-        const positions = new Map();  // opId -> {x, y}
-        const sortedCols = [...cols.keys()].sort((a,b) => a-b);
-        for (const c of sortedCols) {
-            const idsInCol = cols.get(c);
-            idsInCol.sort((a, b) => {
+        const sortedColKeys = [...cols.keys()].sort((a, b) => a - b);
+
+        // Seed each column with step_number order as a stable starting point.
+        const orderByCol = new Map();
+        for (const c of sortedColKeys) {
+            const arr = [...cols.get(c)];
+            arr.sort((a, b) => {
                 const oa = ops.find(o => o.id === a), ob = ops.find(o => o.id === b);
                 return oa.number.localeCompare(ob.number, undefined, { numeric: true });
             });
-            idsInCol.forEach((id, row) => {
+            orderByCol.set(c, arr);
+        }
+
+        // Sugiyama-style barycenter sweeps: alternate forward (place each node
+        // near the mean row of its prereqs) and backward (near mean row of its
+        // children). Four passes is plenty at this scale.
+        const rowOf = (opId) => orderByCol.get(memo.get(opId)).indexOf(opId);
+        const meanRow = (ids) => {
+            const rows = ids.map(rowOf).filter(r => r >= 0);
+            if (!rows.length) return null;
+            return rows.reduce((a, b) => a + b, 0) / rows.length;
+        };
+        const reorder = (c, neighborMap) => {
+            const arr = orderByCol.get(c);
+            const decorated = arr.map((id, idx) => {
+                const nb = neighborMap.get(id) || [];
+                const m = nb.length ? meanRow(nb) : null;
+                return { id, idx, b: m == null ? idx : m };
+            });
+            decorated.sort((a, b) => a.b - b.b || a.idx - b.idx);
+            orderByCol.set(c, decorated.map(d => d.id));
+        };
+        for (let pass = 0; pass < 4; pass++) {
+            for (let i = 1; i < sortedColKeys.length; i++) reorder(sortedColKeys[i], depMap);
+            for (let i = sortedColKeys.length - 2; i >= 0; i--) reorder(sortedColKeys[i], childMap);
+        }
+
+        // Absolute row assignment: each node anchors to the mean row of its
+        // prereqs (rounded) so single-node columns line up with their parent
+        // instead of always sitting at row 0. Walk in barycenter order and
+        // enforce monotonic rows per column to break collisions.
+        const rowOf2 = new Map();  // opId -> integer row (absolute)
+        for (const c of sortedColKeys) {
+            const orderedIds = orderByCol.get(c);
+            let prevRow = -1;
+            let fallbackRow = 0;
+            for (const id of orderedIds) {
+                const prereqs = depMap.get(id) || [];
+                const prereqRows = prereqs.map(p => rowOf2.get(p)).filter(r => r !== undefined);
+                let target;
+                if (prereqRows.length > 0) {
+                    target = Math.round(prereqRows.reduce((a, b) => a + b, 0) / prereqRows.length);
+                } else {
+                    target = fallbackRow;
+                }
+                const row = Math.max(target, prevRow + 1);
+                rowOf2.set(id, row);
+                prevRow = row;
+                fallbackRow = row + 1;
+            }
+        }
+
+        const positions = new Map();
+        for (const c of sortedColKeys) {
+            for (const id of orderByCol.get(c)) {
                 positions.set(id, {
                     x: PAD + c * (NODE_W + COL_GAP),
-                    y: PAD + row * (NODE_H + ROW_GAP),
+                    y: PAD + rowOf2.get(id) * (NODE_H + ROW_GAP),
                 });
-            });
+            }
         }
         return positions;
     }
@@ -174,38 +233,76 @@
     }
 
     let dragState = null;
+    let scrollRaf = null;
+    let scrollDx = 0, scrollDy = 0;
+
+    function tickAutoScroll() {
+        if (!dragState || (scrollDx === 0 && scrollDy === 0)) {
+            scrollRaf = null;
+            return;
+        }
+        const canvas = document.getElementById('flow-canvas');
+        if (canvas) {
+            canvas.scrollLeft += scrollDx;
+            canvas.scrollTop += scrollDy;
+        }
+        scrollRaf = requestAnimationFrame(tickAutoScroll);
+    }
+    function updateAutoScroll(e) {
+        const canvas = document.getElementById('flow-canvas');
+        if (!canvas) { scrollDx = scrollDy = 0; return; }
+        const r = canvas.getBoundingClientRect();
+        const EDGE = 40, SPEED = 12;
+        scrollDx = 0; scrollDy = 0;
+        if (e.clientX < r.left + EDGE)  scrollDx = -SPEED;
+        else if (e.clientX > r.right - EDGE) scrollDx = SPEED;
+        if (e.clientY < r.top + EDGE)   scrollDy = -SPEED;
+        else if (e.clientY > r.bottom - EDGE) scrollDy = SPEED;
+        if ((scrollDx !== 0 || scrollDy !== 0) && scrollRaf == null) {
+            scrollRaf = requestAnimationFrame(tickAutoScroll);
+        }
+    }
+    function stopAutoScroll() {
+        if (scrollRaf != null) cancelAnimationFrame(scrollRaf);
+        scrollRaf = null;
+        scrollDx = scrollDy = 0;
+    }
+
     function startEdgeDrag(e, sourceOpId) {
         e.preventDefault();
-        const svg = document.getElementById('flow-svg');
-        const rect = svg.getBoundingClientRect();
-        const scaleX = svg.viewBox.baseVal.width / rect.width;
-        const scaleY = svg.viewBox.baseVal.height / rect.height;
-        dragState = { sourceOpId, rect, scaleX, scaleY };
-        // Compute source point
+        dragState = { sourceOpId };
         const ops_pos = layout();
         const src = ops_pos.get(sourceOpId);
-        if (!src) return;
-        const x1 = src.x + NODE_W, y1 = src.y + NODE_H / 2;
-        dragState.startX = x1;
-        dragState.startY = y1;
+        if (!src) { dragState = null; return; }
+        dragState.startX = src.x + NODE_W;
+        dragState.startY = src.y + NODE_H / 2;
         document.getElementById('flow-dragline').style.display = '';
         updateDragline(e);
     }
     function updateDragline(e) {
         if (!dragState) return;
+        // Recompute the SVG rect each frame — auto-pan changes its position.
+        const svg = document.getElementById('flow-svg');
+        const rect = svg.getBoundingClientRect();
+        const scaleX = svg.viewBox.baseVal.width / rect.width;
+        const scaleY = svg.viewBox.baseVal.height / rect.height;
         const dragline = document.getElementById('flow-dragline');
-        const x = (e.clientX - dragState.rect.left) * dragState.scaleX;
-        const y = (e.clientY - dragState.rect.top) * dragState.scaleY;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
         const cx = (dragState.startX + x) / 2;
         dragline.setAttribute('d', `M ${dragState.startX} ${dragState.startY} C ${cx} ${dragState.startY}, ${cx} ${y}, ${x} ${y}`);
+        updateAutoScroll(e);
     }
     function endEdgeDrag(e) {
         if (!dragState) return;
         document.getElementById('flow-dragline').style.display = 'none';
-        // Find target node under the mouse
-        const target = e.target.closest('.flow-node-port-in');
-        if (target) {
-            const targetOpId = parseInt(target.dataset.opId);
+        stopAutoScroll();
+        // Accept a drop on the dedicated input port OR anywhere on a node body.
+        const targetEl = (e.target && e.target.closest)
+            ? (e.target.closest('.flow-node-port-in') || e.target.closest('.flow-node'))
+            : null;
+        if (targetEl) {
+            const targetOpId = parseInt(targetEl.dataset.opId);
             if (targetOpId && targetOpId !== dragState.sourceOpId) {
                 addDep(targetOpId, dragState.sourceOpId);
             }
