@@ -77,6 +77,41 @@
     </div>
 </div>
 
+<!-- Redline Op Modal -->
+<div id="redline-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 640px; max-height: 86vh; overflow-y: auto;">
+        <div class="panel">
+            <div class="panel-header">
+                <span>ADD REDLINE OP</span>
+                <span class="mono text-muted" id="redline-host-label" style="font-size: 0.75rem;"></span>
+            </div>
+            <div class="panel-body">
+                <form id="redline-form" onsubmit="submitRedline(event)">
+                    <input type="hidden" id="redline-host-order">
+                    <div class="form-group">
+                        <label class="form-label" for="redline-issue-id">AUTHORIZING NC</label>
+                        <select id="redline-issue-id" class="form-select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="redline-title">REDLINE OP TITLE</label>
+                        <input type="text" id="redline-title" class="form-input" maxlength="255" placeholder="e.g. Rework defective fastener" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SUB-STEPS</label>
+                        <div id="redline-steps"></div>
+                        <button type="button" class="btn btn-sm" onclick="addRedlineStep()" style="margin-top: var(--space-xs);">+ ADD STEP</button>
+                    </div>
+                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end; margin-top: var(--space-md);">
+                        <button type="button" class="btn" onclick="hideRedlineModal()">CANCEL</button>
+                        <button type="submit" class="btn btn-primary">CREATE REDLINE</button>
+                    </div>
+                </form>
+                <div id="redline-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Skip Modal -->
 <div id="skip-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
@@ -320,8 +355,100 @@ async function submitSkip(event) {
     }
 }
 
+// ---- Redline / ad-hoc op modal -----------------------------------------
+
+function showRedlineModal(hostOrder, hostNumberStr, issueIds, issueNumbers) {
+    document.getElementById('redline-host-order').value = hostOrder;
+    document.getElementById('redline-host-label').textContent = 'on OP ' + hostNumberStr;
+    const sel = document.getElementById('redline-issue-id');
+    sel.innerHTML = '';
+    (issueIds || []).forEach((id, i) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = (issueNumbers && issueNumbers[i]) || ('NC #' + id);
+        sel.appendChild(opt);
+    });
+    document.getElementById('redline-title').value = '';
+    document.getElementById('redline-steps').innerHTML = '';
+    addRedlineStep();
+    document.getElementById('redline-error').style.display = 'none';
+    document.getElementById('redline-modal').style.display = 'block';
+}
+
+function hideRedlineModal() {
+    document.getElementById('redline-modal').style.display = 'none';
+}
+
+function addRedlineStep() {
+    const container = document.getElementById('redline-steps');
+    const idx = container.children.length + 1;
+    const row = document.createElement('div');
+    row.className = 'redline-step-row';
+    row.style.border = '1px solid var(--border-color)';
+    row.style.padding = 'var(--space-sm)';
+    row.style.marginBottom = 'var(--space-xs)';
+    row.innerHTML = `
+        <div style="display: flex; gap: var(--space-sm); align-items: center; margin-bottom: var(--space-xs);">
+            <span class="mono text-muted" style="font-size: 0.75rem; min-width: 30px;">${idx}.</span>
+            <input type="text" class="form-input redline-step-title" placeholder="Step title" required style="flex: 1;" maxlength="255">
+            <label style="display: flex; align-items: center; gap: var(--space-xs); white-space: nowrap;">
+                <input type="checkbox" class="redline-step-signoff"> <span class="mono" style="font-size: 0.75rem;">SIGN-OFF</span>
+            </label>
+            <button type="button" class="btn btn-sm" onclick="removeRedlineStep(this)">REMOVE</button>
+        </div>
+        <textarea class="form-textarea redline-step-instructions" rows="2" placeholder="Instructions (optional, markdown)" style="width: 100%;"></textarea>
+    `;
+    container.appendChild(row);
+}
+
+function removeRedlineStep(btn) {
+    const row = btn.closest('.redline-step-row');
+    const container = row.parentElement;
+    if (container.children.length <= 1) return;  // need at least one
+    row.remove();
+    // Renumber labels
+    Array.from(container.children).forEach((r, i) => {
+        const label = r.querySelector('.mono');
+        if (label) label.textContent = (i + 1) + '.';
+    });
+}
+
+async function submitRedline(event) {
+    event.preventDefault();
+    const errorDiv = document.getElementById('redline-error');
+    errorDiv.style.display = 'none';
+    const issueId = parseInt(document.getElementById('redline-issue-id').value);
+    const title = document.getElementById('redline-title').value.trim();
+    const steps = Array.from(document.querySelectorAll('#redline-steps .redline-step-row')).map(r => ({
+        title: r.querySelector('.redline-step-title').value.trim(),
+        instructions: r.querySelector('.redline-step-instructions').value || null,
+        requires_signoff: r.querySelector('.redline-step-signoff').checked,
+    }));
+    if (!issueId || !title || steps.length === 0 || steps.some(s => !s.title)) {
+        errorDiv.textContent = 'NC, title, and at least one sub-step (with a title) are required.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    try {
+        const r = await fetch(`/api/procedure-instances/${instanceId}/ad-hoc-ops`, {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ issue_id: issueId, title, steps }),
+        });
+        if (r.ok) {
+            window.location.reload();
+        } else {
+            const err = await r.json();
+            errorDiv.textContent = formatApiError(err.detail, 'Failed to create redline');
+            errorDiv.style.display = 'block';
+        }
+    } catch (e) {
+        errorDiv.textContent = 'Network error: ' + e.message;
+        errorDiv.style.display = 'block';
+    }
+}
+
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { hideNCModal(); hideSkipModal(); }
+    if (e.key === 'Escape') { hideNCModal(); hideSkipModal(); hideRedlineModal(); }
 });
 
 async function loadKitAvailability() {

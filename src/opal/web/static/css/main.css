@@ -1508,6 +1508,25 @@ body.procedure-detail .exec-tab-content > div {
     border-left: 3px solid var(--accent-orange);
 }
 
+/* Redline / ad-hoc op sidebar treatment */
+.exec-redline-banner {
+    display: block;
+    background: var(--accent-red);
+    color: #fff;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    padding: 2px var(--space-sm);
+    text-decoration: none;
+    text-transform: uppercase;
+}
+.exec-redline-banner:hover {
+    background: var(--accent-red);
+    text-decoration: underline;
+}
+.exec-sidebar-item--redline {
+    border-left: 3px solid var(--accent-red);
+}
+
 .exec-sidebar-item-title {
     font-family: var(--font-sans);
     font-weight: 600;

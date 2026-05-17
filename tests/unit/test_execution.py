@@ -667,3 +667,182 @@ def test_cannot_skip_on_hold_step(client):
     )
     assert resp.status_code == 400
     assert "on hold" in resp.json()["detail"].lower()
+
+
+# ============ Redline / ad-hoc op tests ============
+
+
+def _create_redline_setup(client):
+    """Create an instance, log an NC on step 1, return (instance_id, issue_id, host_step_exec_id)."""
+    instance_id = _create_instance(client)
+    issue_id, _ = _start_step_and_log_nc(client, instance_id)
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    host_se_id = next(
+        s["id"] for s in inst["step_executions"] if s["step_number"] == 1
+    )
+    return instance_id, issue_id, host_se_id
+
+
+def test_redline_creation_and_step_numbering(client):
+    """Creating a redline op yields step_number_str '1R1' with sub-steps '1R1.1', '1R1.2'."""
+    instance_id, issue_id, _ = _create_redline_setup(client)
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
+        json={
+            "issue_id": issue_id,
+            "title": "Rework fastener",
+            "steps": [
+                {"title": "Remove old fastener"},
+                {"title": "Install new fastener"},
+            ],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["step_number_str"] == "1R1"
+    assert len(body["sub_steps"]) == 2
+    assert [s["step_number_str"] for s in body["sub_steps"]] == ["1R1.1", "1R1.2"]
+    assert body["host_order"] == 1
+    assert body["issue_id"] == issue_id
+
+
+def test_redline_gates_host_op(client):
+    """A snapshot op can't restart while a redline op tied to its NC is incomplete."""
+    instance_id, issue_id, _ = _create_redline_setup(client)
+    client.post(
+        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
+        json={
+            "issue_id": issue_id,
+            "title": "Rework",
+            "steps": [{"title": "Do rework"}],
+        },
+    )
+    # Approve the NC's disposition.
+    client.patch(
+        f"/api/issues/{issue_id}",
+        json={"status": "disposition_approved", "disposition_type": "rework"},
+    )
+    # Held step must remain on_hold because the redline isn't complete.
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    assert next(
+        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
+    ) == "on_hold"
+
+
+def test_redline_completion_releases_held_step(client):
+    """Completing the last redline sub-step (with NC disposition approved) auto-resumes the host."""
+    instance_id, issue_id, _ = _create_redline_setup(client)
+    op_resp = client.post(
+        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
+        json={
+            "issue_id": issue_id,
+            "title": "Rework",
+            "steps": [{"title": "Do rework"}],
+        },
+    ).json()
+    sub_step_number = op_resp["sub_steps"][0]["step_number"]
+
+    # Approve the NC dispo first — step should NOT yet resume.
+    client.patch(
+        f"/api/issues/{issue_id}",
+        json={"status": "disposition_approved", "disposition_type": "rework"},
+    )
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    assert next(
+        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
+    ) == "on_hold"
+
+    # Run the redline sub-step to completion.
+    client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/start"
+    )
+    client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/complete",
+        json={},
+    )
+
+    # Host step should now have auto-resumed.
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    assert next(
+        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
+    ) == "in_progress"
+
+
+def test_redline_orphan_when_nc_soft_deleted(client):
+    """If the NC is soft-deleted while the redline is unstarted, the host op
+    is no longer gated by that orphan redline."""
+    instance_id, issue_id, _ = _create_redline_setup(client)
+    op_resp = client.post(
+        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
+        json={
+            "issue_id": issue_id,
+            "title": "Rework",
+            "steps": [{"title": "Do rework"}],
+        },
+    ).json()
+    # Soft-delete the NC.
+    del_resp = client.delete(f"/api/issues/{issue_id}")
+    assert del_resp.status_code == 204
+
+    # The redline rows persist as historical record.
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    redline_op_step_num = op_resp["step_number"]
+    assert any(
+        s["step_number"] == redline_op_step_num for s in inst["step_executions"]
+    )
+
+    # But the orphan no longer gates the host. We can't directly test start_step
+    # here because the host is still on_hold from the NC; the gate logic only
+    # fires when something tries to start the host. Instead verify the list
+    # endpoint still returns it (no crashes) and start_step's redline-gate
+    # excludes orphans (covered by the issue-soft-delete filter).
+    list_resp = client.get(f"/api/procedure-instances/{instance_id}/ad-hoc-ops")
+    assert list_resp.status_code == 200
+    assert len(list_resp.json()) == 1
+
+
+def test_redline_delete_unstarted(client):
+    """An unstarted redline can be deleted; once any sub-step is started, deletion is rejected."""
+    instance_id, issue_id, _ = _create_redline_setup(client)
+    op_resp = client.post(
+        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
+        json={
+            "issue_id": issue_id,
+            "title": "Rework",
+            "steps": [{"title": "Do rework"}],
+        },
+    ).json()
+    op_id = op_resp["id"]
+    sub_step_number = op_resp["sub_steps"][0]["step_number"]
+
+    # Start the sub-step → delete should now fail.
+    client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/start"
+    )
+    fail = client.delete(f"/api/procedure-instances/{instance_id}/ad-hoc-ops/{op_id}")
+    assert fail.status_code == 400
+
+
+def test_redline_requires_nc(client):
+    """A non-NC issue can't be used as a redline anchor."""
+    instance_id = _create_instance(client)
+    # Manually create a non-NC issue via the issues API.
+    resp = client.post(
+        "/api/issues",
+        json={
+            "title": "Generic bug",
+            "issue_type": "bug",
+            "priority": "low",
+            "procedure_instance_id": instance_id,
+        },
+    )
+    issue_id = resp.json()["id"]
+    bad = client.post(
+        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
+        json={
+            "issue_id": issue_id,
+            "title": "Bogus",
+            "steps": [{"title": "Step"}],
+        },
+    )
+    assert bad.status_code == 400

@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -161,10 +161,37 @@ class StepExecution(Base, IdMixin, TimestampMixin):
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Redline / ad-hoc step fields. Non-NULL ad_hoc_issue_id marks the row as
+    # an ad-hoc step inserted into a running execution as part of an NC.
+    # The op-level row (level=0) and its sub-steps share the same issue_id
+    # and host_order. Snapshot steps leave these NULL.
+    ad_hoc_issue_id: Mapped[int | None] = mapped_column(
+        ForeignKey("issue.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Issue (NC) that authorized this redline",
+    )
+    ad_hoc_host_order: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Snapshot step_number of the host op being gated",
+    )
+    title: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Used by ad-hoc rows; snapshot rows load from version"
+    )
+    instructions: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Markdown")
+    required_data_schema: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Same shape as procedure_step.required_data_schema"
+    )
+    requires_signoff: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, comment="Ad-hoc sign-off flag"
+    )
+
     # Relationships
     instance: Mapped["ProcedureInstance"] = relationship(
         "ProcedureInstance", back_populates="step_executions"
     )
+    ad_hoc_issue: Mapped["Issue | None"] = relationship("Issue", foreign_keys=[ad_hoc_issue_id])
     completed_by_user: Mapped["User | None"] = relationship(
         "User", foreign_keys=[completed_by_id], back_populates="step_executions"
     )

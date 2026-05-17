@@ -1752,6 +1752,83 @@ async def executions_detail(
     ops.sort(key=sort_key_normal)
     contingency_ops.sort(key=sort_key_contingency)
 
+    # Build redline op_data from ad-hoc StepExecution rows. These have no
+    # corresponding snapshot entry — title/instructions live directly on the
+    # row. Interleave them before their host op in the sidebar.
+    redline_op_rows = [
+        se for se in instance.step_executions if se.ad_hoc_issue_id is not None and se.level == 0
+    ]
+    redlines_by_host: dict[int, list] = {}
+    if redline_op_rows:
+        # Bulk-fetch the issues so we can show their issue_number / link.
+        issue_ids = {se.ad_hoc_issue_id for se in redline_op_rows if se.ad_hoc_issue_id}
+        issue_lookup = {i.id: i for i in db.query(Issue).filter(Issue.id.in_(issue_ids)).all()}
+        for op_row in redline_op_rows:
+            sub_rows = sorted(
+                [s for s in instance.step_executions if s.parent_step_order == op_row.step_number],
+                key=lambda s: s.step_number,
+            )
+
+            def _se_status(se):
+                return se.status.value if hasattr(se.status, "value") else se.status
+
+            sub_steps = [
+                {
+                    "order": s.step_number,
+                    "step_number": s.step_number_str,
+                    "level": s.level,
+                    "parent_step_id": None,
+                    "id": None,
+                    "title": s.title or "",
+                    "instructions": s.instructions,
+                    "is_contingency": False,
+                    "required_data_schema": s.required_data_schema,
+                    "execution": s,
+                    "status": _se_status(s),
+                }
+                for s in sub_rows
+            ]
+            total = len(sub_steps) if sub_steps else 1
+            completed = (
+                sum(1 for s in sub_steps if s["status"] in ["completed", "skipped"])
+                if sub_steps
+                else (1 if _se_status(op_row) in ["completed", "skipped"] else 0)
+            )
+            op_step = {
+                "order": op_row.step_number,
+                "step_number": op_row.step_number_str,
+                "level": 0,
+                "parent_step_id": None,
+                "id": None,
+                "title": op_row.title or "",
+                "instructions": op_row.instructions,
+                "is_contingency": False,
+                "required_data_schema": op_row.required_data_schema,
+                "execution": op_row,
+                "status": _se_status(op_row),
+                "is_ad_hoc": True,
+                "ad_hoc_issue": issue_lookup.get(op_row.ad_hoc_issue_id),
+                "ad_hoc_host_order": op_row.ad_hoc_host_order,
+            }
+            op_data = {
+                "step": op_step,
+                "sub_steps": sub_steps,
+                "total_steps": total,
+                "completed_steps": completed,
+                "is_ad_hoc": True,
+            }
+            redlines_by_host.setdefault(op_row.ad_hoc_host_order, []).append(op_data)
+
+    # Interleave: for each normal op, insert its redlines just before it.
+    if redlines_by_host:
+        interleaved: list = []
+        for op_data in ops:
+            host_order = op_data["step"].get("order")
+            for r in redlines_by_host.get(host_order, []):
+                interleaved.append(r)
+            interleaved.append(op_data)
+        ops = interleaved
+
     context["ops"] = ops
     context["contingency_ops"] = contingency_ops
 
@@ -1871,8 +1948,6 @@ async def executions_detail(
     context["can_finalize"] = inst_status == "completed" and has_wip
 
     # Linked issues
-    from opal.db.models.issue import Issue
-
     linked_issues = (
         db.query(Issue)
         .filter(
@@ -1895,6 +1970,26 @@ async def executions_detail(
         ):
             holding_ncs_by_step.setdefault(iss.step_execution_id, []).append(iss)
     context["step_holding_ncs"] = holding_ncs_by_step
+
+    # Per-op aggregate of open NCs (op-level + any of its sub-steps). Used to
+    # decide when to show the "+ ADD REDLINE OP" button and to populate the
+    # modal's NC dropdown. Keyed by op.order.
+    open_ncs_by_op_order: dict[int, list[Issue]] = {}
+    for op_data in ops + contingency_ops:
+        op_step = op_data["step"]
+        if op_data.get("is_ad_hoc"):
+            continue
+        op_exec = op_step.get("execution")
+        bucket: list[Issue] = []
+        if op_exec is not None:
+            bucket.extend(holding_ncs_by_step.get(op_exec.id, []))
+        for sub in op_data.get("sub_steps", []):
+            sub_exec = sub.get("execution")
+            if sub_exec is not None:
+                bucket.extend(holding_ncs_by_step.get(sub_exec.id, []))
+        if bucket:
+            open_ncs_by_op_order[op_step["order"]] = bucket
+    context["op_open_ncs_by_order"] = open_ncs_by_op_order
 
     # Gating lookup: top-level ops whose prerequisite ops haven't reached
     # a terminal status yet. Keyed by op.order → list of blocking step_number_str.

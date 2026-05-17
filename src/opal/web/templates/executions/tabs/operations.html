@@ -4,8 +4,11 @@
         <div class="exec-sidebar-header">OPERATIONS</div>
         {% for op_data in ops %}
         {% set op = op_data.step %}
+        {% if op_data.is_ad_hoc and op.ad_hoc_issue %}
+        <a class="exec-redline-banner mono" href="/issues/{{ op.ad_hoc_issue.id }}" title="Open NC {{ op.ad_hoc_issue.issue_number }}">REDLINE — {{ op.ad_hoc_issue.issue_number }}</a>
+        {% endif %}
         <a href="?tab=operations&op={{ op.order }}"
-           class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}"
+           class="exec-sidebar-item{% if op.order == selected_op_order %} active{% endif %}{% if op_data.is_ad_hoc %} exec-sidebar-item--redline{% endif %}"
            hx-get="?tab=operations&op={{ op.order }}"
            hx-target=".exec-main"
            hx-select=".exec-main > *"
@@ -64,6 +67,9 @@
                 {% endif %}
                 {% if op.status in ['awaiting_signoff', 'in_progress'] and inst_status in ['pending', 'in_progress'] and op_data.sub_steps %}
                 <button class="btn btn-sm btn-primary" onclick="completeStep({{ op.order }})" style="margin-left: var(--space-sm);">COMPLETE</button>
+                {% endif %}
+                {% if not op_data.is_ad_hoc and inst_status in ['pending', 'in_progress'] and op_open_ncs_by_order and op_open_ncs_by_order.get(op.order) %}
+                <button class="btn btn-sm" onclick='showRedlineModal({{ op.order }}, {{ op.step_number | tojson }}, {{ (op_open_ncs_by_order.get(op.order) or []) | map(attribute="id") | list | tojson }}, {{ (op_open_ncs_by_order.get(op.order) or []) | map(attribute="issue_number") | list | tojson }})' style="margin-left: var(--space-sm); border-color: var(--accent-red); color: var(--accent-red);">+ ADD REDLINE OP</button>
                 {% endif %}
             </div>
 

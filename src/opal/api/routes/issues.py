@@ -437,10 +437,35 @@ def _maybe_resume_step_after_nc_update(db, issue: "Issue", user_id: int | None) 
         )
         .count()
     )
-    if remaining == 0:
-        step_old = get_model_dict(step_exec)
-        step_exec.status = StepStatus.IN_PROGRESS
-        log_update(db, step_exec, step_old, user_id)
+    if remaining != 0:
+        return
+
+    # Hold back if any redline op authorized by an NC on this step is still
+    # outstanding. Approving the disposition isn't enough — the rework itself
+    # has to be completed before the held step can resume.
+    terminal_states = (
+        StepStatus.COMPLETED,
+        StepStatus.SIGNED_OFF,
+        StepStatus.SKIPPED,
+    )
+    open_redlines = (
+        db.query(StepExecution)
+        .join(Issue, Issue.id == StepExecution.ad_hoc_issue_id)
+        .filter(
+            StepExecution.instance_id == step_exec.instance_id,
+            StepExecution.level == 0,
+            Issue.step_execution_id == step_exec.id,
+            Issue.deleted_at.is_(None),
+            StepExecution.status.notin_(terminal_states),
+        )
+        .count()
+    )
+    if open_redlines:
+        return
+
+    step_old = get_model_dict(step_exec)
+    step_exec.status = StepStatus.IN_PROGRESS
+    log_update(db, step_exec, step_old, user_id)
 
 
 @router.delete("/{issue_id}", status_code=204)

@@ -592,6 +592,36 @@ async def start_step(
                         detail="Cannot start: waiting on OP " + ", ".join(blockers),
                     )
 
+        # Redline gate: any incomplete ad-hoc op attached to this host op must
+        # finish first. Orphans (NC soft-deleted) are ignored so the host op
+        # isn't blocked forever by a vanished NC.
+        terminal_redline = {
+            StepStatus.COMPLETED.value,
+            StepStatus.SIGNED_OFF.value,
+            StepStatus.SKIPPED.value,
+        }
+        redline_blockers: list[str] = []
+        redline_rows = (
+            db.query(StepExecution)
+            .join(Issue, Issue.id == StepExecution.ad_hoc_issue_id)
+            .filter(
+                StepExecution.instance_id == instance.id,
+                StepExecution.ad_hoc_host_order == step_number,
+                StepExecution.level == 0,
+                Issue.deleted_at.is_(None),
+            )
+            .all()
+        )
+        for r in redline_rows:
+            r_status = r.status.value if hasattr(r.status, "value") else r.status
+            if r_status not in terminal_redline:
+                redline_blockers.append(r.step_number_str or f"#{r.id}")
+        if redline_blockers:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot start: waiting on redline op " + ", ".join(redline_blockers),
+            )
+
     step_exec.status = StepStatus.IN_PROGRESS
     step_exec.started_at = datetime.now(UTC)
 
@@ -717,6 +747,19 @@ async def complete_step(
 
     # Check if procedure is complete (considering contingency rules)
     _check_instance_completion(instance, db)
+
+    # If this step is part of a redline op, re-evaluate the held host step's
+    # auto-resume — it may now be unblocked.
+    if step_exec.ad_hoc_issue_id is not None:
+        from opal.api.routes.issues import _maybe_resume_step_after_nc_update
+
+        redline_issue = (
+            db.query(Issue)
+            .filter(Issue.id == step_exec.ad_hoc_issue_id, Issue.deleted_at.is_(None))
+            .first()
+        )
+        if redline_issue is not None:
+            _maybe_resume_step_after_nc_update(db, redline_issue, user_id)
 
     db.commit()
     db.refresh(step_exec)
@@ -920,6 +963,19 @@ async def signoff_step(
 
     # Check if procedure is complete
     _check_instance_completion(instance, db)
+
+    # If this signoff terminates a redline step, re-evaluate the held host
+    # step's auto-resume — it may now be unblocked.
+    if step_exec.ad_hoc_issue_id is not None:
+        from opal.api.routes.issues import _maybe_resume_step_after_nc_update
+
+        redline_issue = (
+            db.query(Issue)
+            .filter(Issue.id == step_exec.ad_hoc_issue_id, Issue.deleted_at.is_(None))
+            .first()
+        )
+        if redline_issue is not None:
+            _maybe_resume_step_after_nc_update(db, redline_issue, user_id)
 
     db.commit()
     db.refresh(step_exec)
@@ -1977,3 +2033,279 @@ async def get_participants(
             for p in (instance.participants or [])
         ],
     )
+
+
+# ============ Redline / ad-hoc operations ============
+
+
+class AdHocSubStepInput(BaseModel):
+    """A single sub-step on a new redline op."""
+
+    title: str = Field(..., min_length=1, max_length=255)
+    instructions: str | None = None
+    required_data_schema: dict[str, Any] | None = None
+    requires_signoff: bool = False
+
+
+class AdHocOpCreate(BaseModel):
+    """Payload to create a redline op against a held NC."""
+
+    issue_id: int
+    title: str = Field(..., min_length=1, max_length=255)
+    steps: list[AdHocSubStepInput] = Field(..., min_length=1)
+
+
+class AdHocOpResponse(BaseModel):
+    """A redline op (level=0 StepExecution row) with its sub-steps."""
+
+    id: int
+    instance_id: int
+    issue_id: int
+    issue_number: str | None
+    host_order: int
+    step_number: int
+    step_number_str: str
+    title: str
+    status: str
+    created_at: str
+    sub_steps: list[StepExecutionResponse]
+
+
+def _redline_op_response(db, op_row: StepExecution) -> AdHocOpResponse:
+    """Bundle a redline op with its sub-steps for API output."""
+    sub_rows = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.instance_id == op_row.instance_id,
+            StepExecution.parent_step_order == op_row.step_number,
+        )
+        .order_by(StepExecution.step_number)
+        .all()
+    )
+    issue_number: str | None = None
+    if op_row.ad_hoc_issue_id:
+        issue = db.query(Issue).filter(Issue.id == op_row.ad_hoc_issue_id).first()
+        if issue:
+            issue_number = issue.issue_number
+    return AdHocOpResponse(
+        id=op_row.id,
+        instance_id=op_row.instance_id,
+        issue_id=op_row.ad_hoc_issue_id or 0,
+        issue_number=issue_number,
+        host_order=op_row.ad_hoc_host_order or 0,
+        step_number=op_row.step_number,
+        step_number_str=op_row.step_number_str,
+        title=op_row.title or "",
+        status=op_row.status.value if hasattr(op_row.status, "value") else op_row.status,
+        created_at=op_row.created_at.isoformat() if op_row.created_at else "",
+        sub_steps=[
+            StepExecutionResponse(
+                id=s.id,
+                step_number=s.step_number,
+                step_number_str=s.step_number_str,
+                level=s.level,
+                parent_step_order=s.parent_step_order,
+                status=s.status.value if hasattr(s.status, "value") else s.status,
+                data_captured=s.data_captured,
+                started_at=s.started_at,
+                completed_at=s.completed_at,
+                completed_by_id=s.completed_by_id,
+                notes=s.notes,
+                signed_off_at=s.signed_off_at,
+                signed_off_by_id=s.signed_off_by_id,
+                duration_seconds=s.duration_seconds,
+            )
+            for s in sub_rows
+        ],
+    )
+
+
+@router.post(
+    "/{instance_id}/ad-hoc-ops",
+    response_model=AdHocOpResponse,
+    status_code=201,
+)
+async def create_ad_hoc_op(
+    instance_id: int,
+    payload: AdHocOpCreate,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> AdHocOpResponse:
+    """Insert a redline / ad-hoc operation into a running execution as part of
+    an NC. The redline gates the host op and rides the NC's disposition for
+    auto-resume."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    issue = db.query(Issue).filter(Issue.id == payload.issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    issue_type = issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type
+    if issue_type != IssueType.NON_CONFORMANCE.value:
+        raise HTTPException(status_code=400, detail="Redlines can only be attached to an NC")
+    if issue.step_execution_id is None:
+        raise HTTPException(
+            status_code=400, detail="NC is not attached to a step; cannot create redline"
+        )
+
+    host_exec = db.get(StepExecution, issue.step_execution_id)
+    if not host_exec or host_exec.instance_id != instance.id:
+        raise HTTPException(status_code=400, detail="NC does not belong to this execution")
+
+    # Host order is the snapshot order of the held op. If the NC was logged on
+    # a sub-step, gate against its parent op (the level-0 ancestor).
+    if host_exec.level == 0:
+        host_order = host_exec.step_number
+        host_number_str = host_exec.step_number_str
+    else:
+        if host_exec.parent_step_order is None:
+            raise HTTPException(
+                status_code=400, detail="Host step has no parent op to attach the redline to"
+            )
+        host_order = host_exec.parent_step_order
+        parent_exec = next(
+            (
+                se
+                for se in instance.step_executions
+                if se.step_number == host_order and se.level == 0
+            ),
+            None,
+        )
+        host_number_str = parent_exec.step_number_str if parent_exec else str(host_order)
+
+    existing_redlines = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.instance_id == instance.id,
+            StepExecution.ad_hoc_host_order == host_order,
+            StepExecution.level == 0,
+        )
+        .count()
+    )
+    redline_seq = existing_redlines + 1
+    op_number_str = f"{host_number_str}R{redline_seq}"
+
+    max_step_number = (
+        db.query(StepExecution.step_number)
+        .filter(StepExecution.instance_id == instance.id)
+        .order_by(StepExecution.step_number.desc())
+        .limit(1)
+        .scalar()
+    ) or 0
+    op_step_number = max_step_number + 1
+
+    op_row = StepExecution(
+        instance_id=instance.id,
+        step_number=op_step_number,
+        step_number_str=op_number_str,
+        level=0,
+        parent_step_order=None,
+        status=StepStatus.PENDING,
+        title=payload.title.strip(),
+        ad_hoc_issue_id=issue.id,
+        ad_hoc_host_order=host_order,
+        requires_signoff=False,
+    )
+    db.add(op_row)
+    db.flush()
+    log_create(db, op_row, user_id)
+
+    for idx, sub in enumerate(payload.steps, start=1):
+        sub_row = StepExecution(
+            instance_id=instance.id,
+            step_number=op_step_number + idx,
+            step_number_str=f"{op_number_str}.{idx}",
+            level=1,
+            parent_step_order=op_step_number,
+            status=StepStatus.PENDING,
+            title=sub.title.strip(),
+            instructions=sub.instructions,
+            required_data_schema=sub.required_data_schema,
+            requires_signoff=sub.requires_signoff,
+            ad_hoc_issue_id=issue.id,
+            ad_hoc_host_order=host_order,
+        )
+        db.add(sub_row)
+        db.flush()
+        log_create(db, sub_row, user_id)
+
+    db.commit()
+    db.refresh(op_row)
+    return _redline_op_response(db, op_row)
+
+
+@router.get("/{instance_id}/ad-hoc-ops", response_model=list[AdHocOpResponse])
+async def list_ad_hoc_ops(
+    instance_id: int,
+    db: DbSession,
+) -> list[AdHocOpResponse]:
+    """List redline ops on this execution."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    ops = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.instance_id == instance_id,
+            StepExecution.ad_hoc_issue_id.is_not(None),
+            StepExecution.level == 0,
+        )
+        .order_by(StepExecution.ad_hoc_host_order, StepExecution.step_number)
+        .all()
+    )
+    return [_redline_op_response(db, o) for o in ops]
+
+
+@router.delete("/{instance_id}/ad-hoc-ops/{op_id}", status_code=204)
+async def delete_ad_hoc_op(
+    instance_id: int,
+    op_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> None:
+    """Delete a redline op and its sub-steps. Allowed only if no sub-step has
+    been started yet."""
+    op_row = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.id == op_id,
+            StepExecution.instance_id == instance_id,
+            StepExecution.ad_hoc_issue_id.is_not(None),
+            StepExecution.level == 0,
+        )
+        .first()
+    )
+    if not op_row:
+        raise HTTPException(status_code=404, detail="Redline op not found")
+
+    sub_rows = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.instance_id == instance_id,
+            StepExecution.parent_step_order == op_row.step_number,
+        )
+        .all()
+    )
+    started = [
+        s
+        for s in sub_rows
+        if (s.status.value if hasattr(s.status, "value") else s.status) != StepStatus.PENDING.value
+    ]
+    if started:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete redline op: one or more sub-steps already started",
+        )
+    op_status = op_row.status.value if hasattr(op_row.status, "value") else op_row.status
+    if op_status != StepStatus.PENDING.value:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete redline op: op is no longer pending",
+        )
+
+    for s in sub_rows:
+        db.delete(s)
+    db.delete(op_row)
+    db.commit()
