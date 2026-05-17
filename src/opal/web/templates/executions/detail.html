@@ -142,6 +142,14 @@ async function completeStep(stepNumber) {
                 const name = f.dataset.captureField;
                 if (f.type === 'checkbox') data.data_captured[name] = f.checked;
                 else if (f.type === 'number') data.data_captured[name] = f.value ? parseFloat(f.value) : null;
+                else if (f.dataset.captureFieldType === 'photo') {
+                    // Photo fields store a JSON array of attachment ids
+                    // (single-photo fields are still a 1-element array).
+                    let ids = [];
+                    try { ids = JSON.parse(f.value || '[]'); } catch (_) { ids = []; }
+                    if (!Array.isArray(ids)) ids = ids ? [ids] : [];
+                    data.data_captured[name] = ids.length ? ids : null;
+                }
                 else data.data_captured[name] = f.value || null;
             });
 
@@ -149,7 +157,9 @@ async function completeStep(stepNumber) {
             fields.forEach(f => {
                 const name = f.dataset.captureField;
                 const val = data.data_captured[name];
-                if (f.hasAttribute('required') && (val === null || val === '' || val === undefined)) {
+                if (f.hasAttribute('required')
+                    && (val === null || val === '' || val === undefined
+                        || (Array.isArray(val) && val.length === 0))) {
                     const label = f.closest('.form-group')?.querySelector('.form-label');
                     const fieldName = label ? label.textContent.replace(/\s*\*\s*$/, '').replace(/\s*\(.*\)\s*$/, '').trim() : name;
                     errors.push(fieldName + ' is required');
@@ -414,49 +424,98 @@ async function finalizeProduction() {
     } catch (e) { const msg = 'Network error: ' + e.message; if (errorDiv) { errorDiv.textContent = msg; errorDiv.style.display = 'block'; } else alert(msg); }
 }
 
-async function uploadStepPhoto(input, stepExecutionId, fieldName) {
-    if (!input.files.length) return;
-    const fd = new FormData();
-    fd.append('file', input.files[0]);
-    fd.append('step_execution_id', stepExecutionId);
-    // Build headers WITHOUT Content-Type — fetch must set it to
-    // multipart/form-data with the right boundary for FormData bodies.
+function _stepPhotoUploadHeaders() {
+    // FormData bodies need fetch to set its own multipart Content-Type +
+    // boundary, so do not include Content-Type in our headers.
     const headers = {};
     const userId = localStorage.getItem('opal_user_id');
     if (userId) headers['X-User-Id'] = userId;
-    try {
-        const r = await fetch('/api/attachments/upload', {
-            method: 'POST',
-            headers,
-            body: fd,
-        });
-        if (!r.ok) {
-            const err = await r.json().catch(() => ({}));
-            const msg = typeof err.detail === 'string'
-                ? err.detail
-                : JSON.stringify(err.detail || {status: r.status});
-            alert('Photo upload failed: ' + msg);
-            return;
-        }
-        const data = await r.json();
-        const container = input.closest('.step-photo-capture');
-        if (!container) return;
-        const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
-        if (hidden) hidden.value = String(data.id);
-        const url = `/api/attachments/${data.id}/download`;
-        let thumb = container.querySelector('img.step-photo-thumb');
-        if (!thumb) {
-            const link = document.createElement('a');
-            link.target = '_blank';
-            thumb = document.createElement('img');
-            thumb.className = 'step-photo-thumb';
-            thumb.alt = fieldName;
-            link.appendChild(thumb);
-            container.insertBefore(link, input);
-        }
-        thumb.src = url;
-        thumb.parentElement.href = url;
-    } catch (e) { alert('Network error: ' + e.message); }
+    return headers;
+}
+
+function _renderStepPhotoGallery(container, ids, fieldName) {
+    const gallery = container.querySelector('.step-photo-gallery');
+    if (!gallery) return;
+    gallery.innerHTML = '';
+    for (const id of ids) {
+        const item = document.createElement('div');
+        item.className = 'step-photo-item';
+        item.dataset.attachmentId = String(id);
+        const link = document.createElement('a');
+        link.href = `/api/attachments/${id}/download`;
+        link.target = '_blank';
+        const img = document.createElement('img');
+        img.className = 'step-photo-thumb';
+        img.alt = fieldName;
+        img.src = `/api/attachments/${id}/download`;
+        link.appendChild(img);
+        item.appendChild(link);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm';
+        btn.textContent = 'REMOVE';
+        btn.onclick = function() { removeStepPhoto(btn); };
+        item.appendChild(btn);
+        gallery.appendChild(item);
+    }
+    // Sync the hidden capture-field value.
+    const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
+    if (hidden) hidden.value = JSON.stringify(ids);
+}
+
+async function uploadStepPhotos(input) {
+    if (!input.files.length) return;
+    const container = input.closest('.step-photo-capture');
+    if (!container) return;
+    const stepExecutionId = container.dataset.stepExecutionId;
+    const fieldName = container.dataset.fieldName;
+    const isMultiple = container.dataset.multiple === 'true';
+    const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
+    let existing = [];
+    try { existing = JSON.parse(hidden.value || '[]'); } catch (_) { existing = []; }
+    if (!Array.isArray(existing)) existing = existing ? [existing] : [];
+
+    const newIds = [];
+    for (const file of input.files) {
+        if (!file.type.startsWith('image/')) continue;
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('step_execution_id', stepExecutionId);
+        try {
+            const r = await fetch('/api/attachments/upload', {
+                method: 'POST',
+                headers: _stepPhotoUploadHeaders(),
+                body: fd,
+            });
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                const msg = typeof err.detail === 'string'
+                    ? err.detail
+                    : JSON.stringify(err.detail || {status: r.status});
+                alert('Photo upload failed: ' + msg);
+                continue;
+            }
+            const data = await r.json();
+            newIds.push(data.id);
+        } catch (e) { alert('Network error: ' + e.message); }
+    }
+    const updated = isMultiple ? [...existing, ...newIds] : newIds.slice(-1);
+    _renderStepPhotoGallery(container, updated, fieldName);
+    // Allow re-selecting the same file (helps if the user re-attaches the same image).
+    input.value = '';
+}
+
+function removeStepPhoto(buttonOrItem) {
+    const item = buttonOrItem.closest('.step-photo-item');
+    if (!item) return;
+    const container = item.closest('.step-photo-capture');
+    const removeId = parseInt(item.dataset.attachmentId);
+    const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
+    let existing = [];
+    try { existing = JSON.parse(hidden.value || '[]'); } catch (_) { existing = []; }
+    if (!Array.isArray(existing)) existing = existing ? [existing] : [];
+    const updated = existing.filter(id => id !== removeId);
+    _renderStepPhotoGallery(container, updated, container.dataset.fieldName);
 }
 
 async function loadStepKitAvailability() {

@@ -175,21 +175,33 @@
                                 {% elif field.type == 'textarea' %}
                                 <textarea class="form-textarea" data-capture-field="{{ field.name }}" rows="{{ field.get('rows', 3) }}"{% if field.required %} required{% endif %}>{% if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined %}{{ step.execution.data_captured[field.name] }}{% endif %}</textarea>
                                 {% elif field.type == 'photo' %}
-                                {% set existing_id = step.execution.data_captured[field.name] if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined else None %}
-                                <div class="step-photo-capture">
-                                    {% if existing_id %}
-                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
-                                    {% endif %}
-                                    <input type="file" accept="image/*" class="step-photo-input" onchange="uploadStepPhoto(this, {{ step.execution.id }}, '{{ field.name | e }}')">
-                                    <input type="hidden" data-capture-field="{{ field.name }}" value="{{ existing_id or '' }}"{% if field.required %} required{% endif %}>
+                                {% set raw = step.execution.data_captured[field.name] if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined else None %}
+                                {% set existing_ids = raw if raw is iterable and raw is not string else ([raw] if raw else []) %}
+                                {% set is_multiple = field.get('multiple', False) %}
+                                <div class="step-photo-capture" data-multiple="{{ 'true' if is_multiple else 'false' }}" data-field-name="{{ field.name | e }}" data-step-execution-id="{{ step.execution.id }}">
+                                    <div class="step-photo-gallery">
+                                        {% for att_id in existing_ids %}
+                                        <div class="step-photo-item" data-attachment-id="{{ att_id }}">
+                                            <a href="/api/attachments/{{ att_id }}/download" target="_blank"><img src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                            <button type="button" class="btn btn-sm" onclick="removeStepPhoto(this)">REMOVE</button>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    <input type="file" accept="image/*"{% if is_multiple %} multiple{% endif %} class="step-photo-input" onchange="uploadStepPhotos(this)">
+                                    <input type="hidden" data-capture-field="{{ field.name }}" data-capture-field-type="photo" value="{{ existing_ids | tojson }}"{% if field.required %} required{% endif %}>
                                 </div>
                                 {% endif %}
                         </div>
                             {% else %}
                                 {% if step.execution and step.execution.data_captured and step.execution.data_captured[field.name] is defined %}
                                     {% if field.type == 'photo' %}
-                                    {% set existing_id = step.execution.data_captured[field.name] %}
-                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                    {% set raw = step.execution.data_captured[field.name] %}
+                                    {% set existing_ids = raw if raw is iterable and raw is not string else ([raw] if raw else []) %}
+                                    <div class="step-photo-gallery">
+                                        {% for att_id in existing_ids %}
+                                        <a href="/api/attachments/{{ att_id }}/download" target="_blank"><img src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                        {% endfor %}
+                                    </div>
                                     {% else %}
                                     <div class="mono" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
                                         {% if field.type == 'checkbox' %}{{ 'YES' if step.execution.data_captured[field.name] else 'NO' }}{% else %}{{ step.execution.data_captured[field.name] }}{% endif %}
@@ -334,20 +346,32 @@
                                 {% elif field.type == 'textarea' %}
                                 <textarea class="form-textarea" data-capture-field="{{ field.name }}" rows="{{ field.get('rows', 3) }}"{% if field.required %} required{% endif %}></textarea>
                                 {% elif field.type == 'photo' %}
-                                {% set existing_id = op.execution.data_captured[field.name] if op.execution and op.execution.data_captured and op.execution.data_captured[field.name] is defined else None %}
-                                <div class="step-photo-capture">
-                                    {% if existing_id %}
-                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
-                                    {% endif %}
-                                    <input type="file" accept="image/*" class="step-photo-input" onchange="uploadStepPhoto(this, {{ op.execution.id }}, '{{ field.name | e }}')">
-                                    <input type="hidden" data-capture-field="{{ field.name }}" value="{{ existing_id or '' }}"{% if field.required %} required{% endif %}>
+                                {% set raw = op.execution.data_captured[field.name] if op.execution and op.execution.data_captured and op.execution.data_captured[field.name] is defined else None %}
+                                {% set existing_ids = raw if raw is iterable and raw is not string else ([raw] if raw else []) %}
+                                {% set is_multiple = field.get('multiple', False) %}
+                                <div class="step-photo-capture" data-multiple="{{ 'true' if is_multiple else 'false' }}" data-field-name="{{ field.name | e }}" data-step-execution-id="{{ op.execution.id }}">
+                                    <div class="step-photo-gallery">
+                                        {% for att_id in existing_ids %}
+                                        <div class="step-photo-item" data-attachment-id="{{ att_id }}">
+                                            <a href="/api/attachments/{{ att_id }}/download" target="_blank"><img src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                            <button type="button" class="btn btn-sm" onclick="removeStepPhoto(this)">REMOVE</button>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    <input type="file" accept="image/*"{% if is_multiple %} multiple{% endif %} class="step-photo-input" onchange="uploadStepPhotos(this)">
+                                    <input type="hidden" data-capture-field="{{ field.name }}" data-capture-field-type="photo" value="{{ existing_ids | tojson }}"{% if field.required %} required{% endif %}>
                                 </div>
                                 {% endif %}
                             {% else %}
                                 {% if op.execution and op.execution.data_captured and op.execution.data_captured[field.name] is defined %}
                                     {% if field.type == 'photo' %}
-                                    {% set existing_id = op.execution.data_captured[field.name] %}
-                                    <a href="/api/attachments/{{ existing_id }}/download" target="_blank"><img src="/api/attachments/{{ existing_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                    {% set raw = op.execution.data_captured[field.name] %}
+                                    {% set existing_ids = raw if raw is iterable and raw is not string else ([raw] if raw else []) %}
+                                    <div class="step-photo-gallery">
+                                        {% for att_id in existing_ids %}
+                                        <a href="/api/attachments/{{ att_id }}/download" target="_blank"><img src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" class="step-photo-thumb"></a>
+                                        {% endfor %}
+                                    </div>
                                     {% else %}
                                     <div class="mono" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
                                         {% if field.type == 'checkbox' %}{{ 'YES' if op.execution.data_captured[field.name] else 'NO' }}{% else %}{{ op.execution.data_captured[field.name] }}{% endif %}

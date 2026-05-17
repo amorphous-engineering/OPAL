@@ -305,6 +305,14 @@
                             <input type="number" id="field-rows" class="form-input" min="2" max="20" value="3">
                         </div>
                     </div>
+                    <div id="extras-photo" style="display: none;">
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: var(--space-sm);">
+                                <input type="checkbox" id="field-multiple">
+                                <span>Allow multiple photos</span>
+                            </label>
+                        </div>
+                    </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end; margin-top: var(--space-lg);">
                         {{ ok.btn("CANCEL", attrs='onclick="hideFieldModal()"') }}
                         {{ ok.btn("SAVE FIELD", variant="primary", type="submit") }}
@@ -548,6 +556,7 @@ function toggleTypeExtras(type) {
     document.getElementById('extras-text').style.display = type === 'text' ? 'block' : 'none';
     document.getElementById('extras-select').style.display = type === 'select' ? 'block' : 'none';
     document.getElementById('extras-textarea').style.display = type === 'textarea' ? 'block' : 'none';
+    document.getElementById('extras-photo').style.display = type === 'photo' ? 'block' : 'none';
 }
 
 function showAddField(stepId) {
@@ -585,6 +594,8 @@ function editField(stepId, index) {
         document.getElementById('field-options').value = (f.options || []).join('\n');
     } else if (f.type === 'textarea') {
         document.getElementById('field-rows').value = f.rows || 3;
+    } else if (f.type === 'photo') {
+        document.getElementById('field-multiple').checked = !!f.multiple;
     }
     document.getElementById('field-modal').style.display = 'block';
 }
@@ -624,6 +635,8 @@ function saveField(event) {
         field.options = opts;
     } else if (type === 'textarea') {
         field.rows = parseInt(document.getElementById('field-rows').value) || 3;
+    } else if (type === 'photo') {
+        field.multiple = document.getElementById('field-multiple').checked;
     }
     if (!stepSchemas[stepId]) stepSchemas[stepId] = [];
     const dupIdx = stepSchemas[stepId].findIndex(f => f.name === field.name);

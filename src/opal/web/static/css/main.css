@@ -1665,6 +1665,23 @@ body.procedure-detail .exec-tab-content > div {
     gap: var(--space-xs);
 }
 
+.step-photo-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.step-photo-gallery:empty {
+    display: none;
+}
+
+.step-photo-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    align-items: flex-start;
+}
+
 .step-photo-thumb {
     max-width: 240px;
     max-height: 240px;

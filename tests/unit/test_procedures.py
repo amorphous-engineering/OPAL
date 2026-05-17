@@ -649,10 +649,11 @@ def test_photo_field_round_trips_through_publish(client):
     ).json()
     step_id = step["id"]
 
-    # Save a schema with a photo field
+    # Save a schema with both a single-photo and a multi-photo field.
     schema = {
         "fields": [
-            {"name": "witness_photo", "label": "Witness Photo", "type": "photo", "required": True}
+            {"name": "witness_photo", "label": "Witness Photo", "type": "photo", "required": True, "multiple": False},
+            {"name": "defect_photos", "label": "Defect Photos", "type": "photo", "required": False, "multiple": True},
         ]
     }
     r = client.patch(
@@ -665,9 +666,11 @@ def test_photo_field_round_trips_through_publish(client):
     saved = top[0]["required_data_schema"]
     assert saved == schema
 
-    # Publish; snapshot must include the photo field
+    # Publish; snapshot must include both photo fields with their multiple flags.
     publish = client.post(f"/api/procedures/{proc_id}/publish").json()
     version = client.get(f"/api/procedures/versions/{publish['id']}").json()
-    snapshot_field = version["content"]["steps"][0]["required_data_schema"]["fields"][0]
-    assert snapshot_field["type"] == "photo"
-    assert snapshot_field["required"] is True
+    snap_fields = version["content"]["steps"][0]["required_data_schema"]["fields"]
+    assert snap_fields[0]["type"] == "photo"
+    assert snap_fields[0]["required"] is True
+    assert snap_fields[0]["multiple"] is False
+    assert snap_fields[1]["multiple"] is True
