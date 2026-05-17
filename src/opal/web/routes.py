@@ -1930,6 +1930,16 @@ async def executions_detail(
                 display = "YES" if value else "NO"
             elif value is None or value == "":
                 display = "—"
+            elif isinstance(value, list):
+                # Multi-photo (and any future list-valued capture) — render
+                # as "N image(s) (#12, #17)" rather than leaking the raw
+                # storage format "[12, 17]" into the audit table.
+                if value:
+                    display = f"{len(value)} image(s) (" + ", ".join(
+                        f"#{v}" for v in value
+                    ) + ")"
+                else:
+                    display = "—"
             else:
                 display = str(value)
             data_rows.append(
