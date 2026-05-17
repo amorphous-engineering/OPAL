@@ -1269,9 +1269,10 @@ async def procedures_detail(
             else:
                 ops.append(step_data)
 
-    # Sort ops by step_number
-    ops.sort(key=lambda x: int(x["step"].step_number) if x["step"].step_number.isdigit() else 0)
-    contingency_ops.sort(key=lambda x: x["step"].step_number)
+    # Sort by `order` (the sequence field the reorder API updates). `step_number`
+    # is a stable display label and never changes when ops are rearranged.
+    ops.sort(key=lambda x: x["step"].order)
+    contingency_ops.sort(key=lambda x: x["step"].order)
 
     context["ops"] = ops
     context["contingency_ops"] = contingency_ops
