@@ -766,20 +766,38 @@ function attachReorderHandlers() {
     targets.forEach(el => {
         if (el.dataset.reorderBound === '1') return;
         el.dataset.reorderBound = '1';
-        el.style.cursor = 'grab';
+        // CRITICAL: <a href> is natively draggable as a link in every browser.
+        // The native link drag eats subsequent mousemove events, so our
+        // pointer-based handler never sees them. Disable native drag
+        // explicitly. preventDefault on dragstart is a fallback for browsers
+        // that ignore draggable="false" on <a> elements.
+        el.setAttribute('draggable', 'false');
+        el.addEventListener('dragstart', e => e.preventDefault());
+
+        // Cursor hint goes on the row that actually moves, not on a <summary>.
+        const row = el.closest('[data-step-id]');
+        if (row) row.style.cursor = 'grab';
+
         el.addEventListener('mousedown', onReorderMouseDown);
     });
 }
 
 function onReorderMouseDown(e) {
     if (e.button !== 0) return;
-    // Ignore clicks on action buttons inside the row
+    // Ignore mousedowns that originate on interactive children of the row.
     if (e.target.closest('button, input, textarea, select')) return;
 
-    const host = e.currentTarget;
-    const hostStepId = parseInt(host.dataset.stepId || host.closest('[data-step-id]')?.dataset.stepId);
+    // `hostRow` is the [data-step-id] element being reordered. For a
+    // sidebar <a>, this is the trigger itself. For a sub-step <summary>,
+    // this is the parent <details data-step-id>.
+    const hostRow = e.currentTarget.closest('[data-step-id]');
+    if (!hostRow) return;
+    const hostStepId = parseInt(hostRow.dataset.stepId);
     if (!hostStepId) return;
-    const container = host.parentElement;
+    // Container holds the siblings we'd reorder against:
+    //  - sidebar: .exec-sidebar (siblings are other ops + the "+ Add contingency" link)
+    //  - sub-step: .op-block (siblings are the other <details> rows in the same op)
+    const container = hostRow.parentElement;
 
     const startX = e.clientX, startY = e.clientY;
     let dragging = false;
@@ -796,7 +814,7 @@ function onReorderMouseDown(e) {
         const stack = document.elementsFromPoint(clientX, clientY);
         for (const el of stack) {
             const candidate = el.closest('[data-step-id]');
-            if (candidate && candidate !== host && candidate.parentElement === container) {
+            if (candidate && candidate !== hostRow && candidate.parentElement === container) {
                 return candidate;
             }
         }
@@ -808,9 +826,8 @@ function onReorderMouseDown(e) {
         const dx = Math.abs(ev.clientX - startX);
         if (!dragging && (dy > REORDER_THRESHOLD_PX || dx > REORDER_THRESHOLD_PX)) {
             dragging = true;
-            host.style.opacity = '0.5';
+            hostRow.style.opacity = '0.5';
             document.body.style.cursor = 'grabbing';
-            // Block clicks during drag (a click would fire on mouseup otherwise).
             ev.preventDefault();
         }
         if (!dragging) return;
@@ -828,7 +845,7 @@ function onReorderMouseDown(e) {
     async function onUp(ev) {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        host.style.opacity = '';
+        hostRow.style.opacity = '';
         document.body.style.cursor = '';
         if (!dragging) {
             clearIndicators();
@@ -839,10 +856,10 @@ function onReorderMouseDown(e) {
         const clickBlocker = (ce) => {
             ce.stopPropagation();
             ce.preventDefault();
-            host.removeEventListener('click', clickBlocker, true);
+            hostRow.removeEventListener('click', clickBlocker, true);
         };
-        host.addEventListener('click', clickBlocker, true);
-        setTimeout(() => host.removeEventListener('click', clickBlocker, true), 0);
+        hostRow.addEventListener('click', clickBlocker, true);
+        setTimeout(() => hostRow.removeEventListener('click', clickBlocker, true), 0);
 
         const target = findDropTarget(ev.clientX, ev.clientY);
         clearIndicators();
