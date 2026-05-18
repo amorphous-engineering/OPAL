@@ -467,6 +467,52 @@ def _maybe_resume_step_after_nc_update(db, issue: "Issue", user_id: int | None) 
     step_exec.status = StepStatus.IN_PROGRESS
     log_update(db, step_exec, step_old, user_id)
 
+    # Propagate resume up: when an NC was logged on a sub-step we also flipped
+    # the parent op to ON_HOLD so the whole operation paused. Now that this
+    # sub-step is clear, resume the parent too — but only if no other
+    # sub-step of that parent has any open NC remaining.
+    if step_exec.level > 0 and step_exec.parent_step_order is not None:
+        parent_exec = (
+            db.query(StepExecution)
+            .filter(
+                StepExecution.instance_id == step_exec.instance_id,
+                StepExecution.step_number == step_exec.parent_step_order,
+                StepExecution.level == 0,
+            )
+            .first()
+        )
+        if parent_exec is not None:
+            parent_status = (
+                parent_exec.status.value
+                if hasattr(parent_exec.status, "value")
+                else parent_exec.status
+            )
+            if parent_status == StepStatus.ON_HOLD.value:
+                sibling_se_ids = [
+                    se.id
+                    for se in db.query(StepExecution)
+                    .filter(
+                        StepExecution.instance_id == step_exec.instance_id,
+                        StepExecution.parent_step_order == parent_exec.step_number,
+                    )
+                    .all()
+                ]
+                sibling_se_ids.append(parent_exec.id)
+                siblings_open = (
+                    db.query(Issue)
+                    .filter(
+                        Issue.step_execution_id.in_(sibling_se_ids),
+                        Issue.issue_type == IssueType.NON_CONFORMANCE,
+                        Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
+                        Issue.deleted_at.is_(None),
+                    )
+                    .count()
+                )
+                if siblings_open == 0:
+                    parent_old = get_model_dict(parent_exec)
+                    parent_exec.status = StepStatus.IN_PROGRESS
+                    log_update(db, parent_exec, parent_old, user_id)
+
 
 @router.delete("/{issue_id}", status_code=204)
 async def delete_issue(

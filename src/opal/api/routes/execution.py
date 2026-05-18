@@ -556,16 +556,41 @@ async def start_step(
     if step_status != StepStatus.PENDING.value:
         raise HTTPException(status_code=400, detail="Step already started or completed")
 
-    # Gating: top-level ops can have prerequisite ops declared on the procedure
-    # version snapshot. All prereqs must be in a terminal state before this op
-    # can start. (Sub-steps inside an op execute linearly and have no deps.)
+    # Gating. We evaluate against the op-level entry — for sub-steps, that's
+    # the parent op. A sub-step inside a gated/held op must not start.
+    gate_op_order: int | None = None
     if step_exec.level == 0:
+        gate_op_order = step_number
+    elif step_exec.parent_step_order is not None:
+        gate_op_order = step_exec.parent_step_order
+        # Refuse if the parent op is on hold (NC open on a sibling sub-step).
+        parent_exec = next(
+            (
+                se
+                for se in instance.step_executions
+                if se.step_number == gate_op_order and se.level == 0
+            ),
+            None,
+        )
+        if parent_exec is not None:
+            parent_status = (
+                parent_exec.status.value
+                if hasattr(parent_exec.status, "value")
+                else parent_exec.status
+            )
+            if parent_status == StepStatus.ON_HOLD.value:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot start: parent OP is on hold (open NC)",
+                )
+
+    if gate_op_order is not None:
         version = (
             db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
         )
         if version is not None:
             version_step = next(
-                (s for s in version.content.get("steps", []) if s.get("order") == step_number),
+                (s for s in version.content.get("steps", []) if s.get("order") == gate_op_order),
                 None,
             )
             dep_orders = (version_step or {}).get("depends_on") or []
@@ -592,9 +617,8 @@ async def start_step(
                         detail="Cannot start: waiting on OP " + ", ".join(blockers),
                     )
 
-        # Redline gate: any incomplete ad-hoc op attached to this host op must
-        # finish first. Orphans (NC soft-deleted) are ignored so the host op
-        # isn't blocked forever by a vanished NC.
+        # Redline gate: any incomplete ad-hoc op attached to the gate op must
+        # finish first. Orphans (NC soft-deleted) are ignored.
         terminal_redline = {
             StepStatus.COMPLETED.value,
             StepStatus.SIGNED_OFF.value,
@@ -606,7 +630,7 @@ async def start_step(
             .join(Issue, Issue.id == StepExecution.ad_hoc_issue_id)
             .filter(
                 StepExecution.instance_id == instance.id,
-                StepExecution.ad_hoc_host_order == step_number,
+                StepExecution.ad_hoc_host_order == gate_op_order,
                 StepExecution.level == 0,
                 Issue.deleted_at.is_(None),
             )
@@ -1140,6 +1164,30 @@ async def log_non_conformance(
         step_old = get_model_dict(step_exec)
         step_exec.status = StepStatus.ON_HOLD
         log_update(db, step_exec, step_old, user_id)
+
+    # Propagate hold to the parent op so the whole operation stalls — not
+    # just the offending sub-step. Other sub-steps in the same op must not
+    # be startable while an NC is open anywhere inside it.
+    if step_exec.level > 0 and step_exec.parent_step_order is not None:
+        parent_exec = (
+            db.query(StepExecution)
+            .filter(
+                StepExecution.instance_id == instance_id,
+                StepExecution.step_number == step_exec.parent_step_order,
+                StepExecution.level == 0,
+            )
+            .first()
+        )
+        if parent_exec is not None:
+            parent_status = (
+                parent_exec.status.value
+                if hasattr(parent_exec.status, "value")
+                else parent_exec.status
+            )
+            if parent_status != StepStatus.ON_HOLD.value:
+                parent_old = get_model_dict(parent_exec)
+                parent_exec.status = StepStatus.ON_HOLD
+                log_update(db, parent_exec, parent_old, user_id)
 
     db.commit()
     db.refresh(issue)

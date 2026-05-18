@@ -238,9 +238,12 @@
 
                     <div class="step-actions">
                         {% if inst_status in ['pending', 'in_progress'] %}
-                            {% set sub_blockers = gated_ops_by_order.get(step.order) if gated_ops_by_order else None %}
-                            {% if step.status == 'pending' and sub_blockers %}
-                            <span class="text-yellow mono">PENDING — waiting on OP {{ sub_blockers | join(', ') }}</span>
+                            {% set parent_blockers = gated_ops_by_order.get(op.order) if gated_ops_by_order else None %}
+                            {% set parent_on_hold = op.status == 'on_hold' %}
+                            {% if step.status == 'pending' and parent_on_hold %}
+                            <span class="text-yellow mono">OP ON HOLD — open NC</span>
+                            {% elif step.status == 'pending' and parent_blockers %}
+                            <span class="text-yellow mono">PENDING — OP waiting on {{ parent_blockers | join(', ') }}</span>
                             {% elif step.status == 'pending' %}
                             <button class="btn btn-sm btn-primary" onclick="startStep({{ step.order }})">START</button>
                             <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, '{{ step.title | e }}')">SKIP</button>

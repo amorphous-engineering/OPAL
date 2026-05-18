@@ -846,3 +846,124 @@ def test_redline_requires_nc(client):
         },
     )
     assert bad.status_code == 400
+
+
+# ============ NC propagates ON_HOLD to whole op (issue #3) ============
+
+
+def _create_instance_with_sub_steps(client):
+    """Create a procedure with OP A (two sub-steps) and OP B (one sub-step).
+    Returns (instance_id, op_a_order, op_a_sub1_order, op_a_sub2_order, op_b_order).
+    """
+    proc_resp = client.post("/api/procedures", json={"name": "Sub-step Procedure"})
+    proc_id = proc_resp.json()["id"]
+    op_a = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP A"}).json()
+    client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "A.1", "parent_step_id": op_a["id"]},
+    )
+    client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "A.2", "parent_step_id": op_a["id"]},
+    )
+    op_b = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP B"}).json()
+    client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "B.1", "parent_step_id": op_b["id"]},
+    )
+    client.post(f"/api/procedures/{proc_id}/publish")
+    inst_resp = client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    )
+    instance_id = inst_resp.json()["id"]
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    steps = inst["step_executions"]
+    by_label = {s["step_number_str"]: s["step_number"] for s in steps}
+    return (
+        instance_id,
+        by_label["1"],
+        by_label["1.1"],
+        by_label["1.2"],
+        by_label["2"],
+    )
+
+
+def test_nc_on_sub_step_puts_parent_op_on_hold(client):
+    """Logging an NC on a sub-step also marks the parent op ON_HOLD."""
+    instance_id, op_a, a1, _a2, _op_b = _create_instance_with_sub_steps(client)
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/start")
+    client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{a1}/nc",
+        json={"title": "NC on A.1", "description": "x", "priority": "medium"},
+    )
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    by_num = {s["step_number"]: s["status"] for s in inst["step_executions"]}
+    assert by_num[a1] == "on_hold"
+    assert by_num[op_a] == "on_hold"
+
+
+def test_sibling_sub_step_cannot_start_while_op_on_hold(client):
+    """A sibling sub-step of an NC'd step cannot be started — the whole op is held."""
+    instance_id, _op_a, a1, a2, _op_b = _create_instance_with_sub_steps(client)
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/start")
+    client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{a1}/nc",
+        json={"title": "NC", "description": "x", "priority": "medium"},
+    )
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/start")
+    assert resp.status_code == 400
+    assert "on hold" in resp.json()["detail"].lower()
+
+
+def test_nc_resolution_resumes_both_sub_step_and_parent_op(client):
+    """Disposing the NC pops both the sub-step and the parent op back to in_progress."""
+    instance_id, op_a, a1, _a2, _op_b = _create_instance_with_sub_steps(client)
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/start")
+    nc_resp = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{a1}/nc",
+        json={"title": "NC", "description": "x", "priority": "medium"},
+    )
+    issue_id = nc_resp.json()["id"]
+    client.patch(
+        f"/api/issues/{issue_id}",
+        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
+    )
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    by_num = {s["step_number"]: s["status"] for s in inst["step_executions"]}
+    assert by_num[a1] == "in_progress"
+    assert by_num[op_a] == "in_progress"
+
+
+# ============ Sub-steps on pending (gated) ops are not startable (issue #2) ============
+
+
+def test_sub_step_cannot_start_when_parent_op_has_unmet_prereqs(client):
+    """OP B has OP A as a dependency. A sub-step of OP B must not be startable
+    until OP A is terminal."""
+    # Build a procedure: OP A, OP B (depends on A) with one sub-step.
+    proc_resp = client.post("/api/procedures", json={"name": "Gated Sub Procedure"})
+    proc_id = proc_resp.json()["id"]
+    op_a = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP A"}).json()
+    op_b = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP B"}).json()
+    b1 = client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "B.1", "parent_step_id": op_b["id"]},
+    ).json()
+    # Declare OP B depends on OP A.
+    client.put(
+        f"/api/procedures/{proc_id}/steps/{op_b['id']}/dependencies",
+        json={"depends_on": [op_a["id"]]},
+    )
+    client.post(f"/api/procedures/{proc_id}/publish")
+    inst_resp = client.post("/api/procedure-instances", json={"procedure_id": proc_id})
+    instance_id = inst_resp.json()["id"]
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    by_label = {s["step_number_str"]: s["step_number"] for s in inst["step_executions"]}
+    b1_order = by_label["2.1"]
+
+    # OP A not started yet; B.1 must refuse.
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{b1_order}/start")
+    assert resp.status_code == 400
+    assert "waiting on" in resp.json()["detail"].lower()
+    # B.1 unused but kept as a reference to confirm setup correctness.
+    assert b1["id"] is not None
