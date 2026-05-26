@@ -102,6 +102,26 @@
 {% endcall %}
 {% endif %}
 
+{# ── AUTH MODE ── #}
+{% set auth_actions %}
+            {% if is_admin %}<a class="btn" href="/settings/auth-mode">EDIT</a>{% endif %}
+{% endset %}
+{% call ok.panel("AUTH MODE", actions=auth_actions, margin_top="var(--space-md)") %}
+        {% call ok.table() %}
+            {{ ok.detail_row("MODE", ok.status(sys_info.auth_mode | upper, "ok" if sys_info.auth_mode == "exe" else "default")) }}
+        {% endcall %}
+        {% if sys_info.auth_mode == "exe" %}
+        <p class="text-muted" style="margin-top: var(--space-sm); font-size: 0.85rem;">
+            OPAL is trusting <code>X-ExeDev-UserID</code> / <code>X-ExeDev-Email</code>
+            headers from a reverse proxy.
+        </p>
+        {% else %}
+        <p class="text-muted" style="margin-top: var(--space-sm); font-size: 0.85rem;">
+            Cookie-based user selection. Anyone reaching the server can pick an identity.
+        </p>
+        {% endif %}
+{% endcall %}
+
 {# ── ONSHAPE INTEGRATION ── #}
 {% if onshape_enabled %}
 {% set onshape_actions %}
@@ -191,7 +211,6 @@
             {{ ok.detail_row("PLATFORM", sys_info.platform, mono=true) }}
             {{ ok.detail_row("SERVER", sys_info.server, mono=true) }}
             {{ ok.detail_row("DEBUG MODE", ok.status("ON", "warn") if sys_info.debug else ok.status("OFF", "ok")) }}
-            {{ ok.detail_row("AUTH MODE", sys_info.auth_mode, mono=true) }}
         {% endcall %}
 
         <div style="margin-top: var(--space-lg);">

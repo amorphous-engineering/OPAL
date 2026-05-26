@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - OPAL</title>
+    <script>
+        (function() {
+            var theme = localStorage.getItem('opal_theme') || 'dark';
+            if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        })();
+    </script>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .setup-container { width: 520px; max-width: 95vw; }
+        .setup-header { text-align: center; margin-bottom: var(--space-lg); }
+        .setup-brand {
+            font-family: var(--font-mono);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-orange);
+            letter-spacing: 0.1em;
+        }
+        .setup-subtitle { font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-xs); }
+        .mode-card {
+            border: 1px solid var(--border-color);
+            padding: var(--space-md);
+            margin-bottom: var(--space-md);
+            cursor: pointer;
+        }
+        .mode-card:has(input:checked) {
+            border-color: var(--accent-orange);
+        }
+        .mode-card-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-weight: 600;
+            margin-bottom: var(--space-xs);
+        }
+        .mode-card-body { font-size: 0.85rem; color: var(--text-muted); margin-left: 24px; }
+        #local-fields, #exe-fields { display: none; }
+        body:has(#mode-local:checked) #local-fields { display: block; }
+        body:has(#mode-exe:checked) #exe-fields { display: block; }
+    </style>
+</head>
+<body>
+<div class="setup-container">
+    <div class="setup-header">
+        <div class="setup-brand">OPAL</div>
+        <div class="setup-subtitle">First-Run Setup</div>
+    </div>
+
+    {% if error %}
+    <div style="margin-bottom: var(--space-md); color: var(--accent-red); font-weight: 600;">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/setup">
+
+        <div class="panel">
+            <div class="panel-header"><span>AUTHENTICATION MODE</span></div>
+            <div class="panel-body">
+
+                <label class="mode-card" for="mode-local">
+                    <div class="mode-card-header">
+                        <input type="radio" name="auth_mode" id="mode-local" value="local"
+                               {% if current_auth_mode != 'exe' %}checked{% endif %}>
+                        LOCAL
+                    </div>
+                    <div class="mode-card-body">
+                        Cookie-based user selection. Anyone on the network with access to
+                        the server picks an identity from a roster. Suitable for trusted
+                        local installs (a single team on a private LAN).
+                    </div>
+                </label>
+
+                <label class="mode-card" for="mode-exe">
+                    <div class="mode-card-header">
+                        <input type="radio" name="auth_mode" id="mode-exe" value="exe"
+                               {% if current_auth_mode == 'exe' %}checked{% endif %}>
+                        EXE (REVERSE PROXY)
+                    </div>
+                    <div class="mode-card-body">
+                        Trust <code>X-ExeDev-UserID</code> / <code>X-ExeDev-Email</code>
+                        headers from a reverse proxy (exe.dev SSO). Users are auto-provisioned
+                        on first request. <strong>Requires a reverse proxy in front</strong>
+                        &mdash; without one, anyone can forge headers and impersonate any user.
+                    </div>
+                </label>
+
+            </div>
+        </div>
+
+        <div id="local-fields">
+            <div class="panel" style="margin-top: var(--space-md);">
+                <div class="panel-header"><span>FIRST ADMIN</span></div>
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label class="form-label" for="name">NAME <span class="text-red">*</span></label>
+                        <input type="text" name="name" id="name" class="form-input" placeholder="Full Name">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="email">EMAIL</label>
+                        <input type="email" name="email" id="email" class="form-input" placeholder="Optional">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="exe-fields">
+            <div class="panel" style="margin-top: var(--space-md);">
+                <div class="panel-header"><span>NEXT STEP</span></div>
+                <div class="panel-body">
+                    <p class="text-muted" style="font-size: 0.85rem;">
+                        On save you'll be redirected to <code>/__exe.dev/login</code>.
+                        The first identity authenticated through the proxy becomes the
+                        admin. If you reach OPAL directly without the proxy you will
+                        be locked out.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: var(--space-md); display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary">CONTINUE</button>
+        </div>
+
+    </form>
+
+</div>
+</body>
+</html>

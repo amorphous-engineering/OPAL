@@ -1,0 +1,65 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("SETTINGS", "/settings") }}
+{{ ok.crumb("AUTH MODE") }}
+{% endblock %}
+
+{% block content %}
+{% call ok.panel("AUTH MODE", max_width="720px") %}
+
+    {% call ok.table() %}
+        {{ ok.detail_row("CURRENT", ok.status(current_auth_mode | upper, "ok" if current_auth_mode == "exe" else "default")) }}
+    {% endcall %}
+
+    <p class="text-muted" style="margin: var(--space-md) 0;">
+        The auth mode is stored in the local database and overrides the
+        <code>OPAL_AUTH_MODE</code> environment variable. Changes take effect on the
+        next request.
+    </p>
+
+    <form method="post" action="/settings/auth-mode">
+
+        <div class="form-group">
+            <label class="form-label">MODE</label>
+            <label style="display: block; margin-bottom: var(--space-sm);">
+                <input type="radio" name="auth_mode" value="local"
+                       {% if current_auth_mode != 'exe' %}checked{% endif %}>
+                <strong>LOCAL</strong> &mdash; cookie-based user selection on a trusted LAN.
+            </label>
+            <label style="display: block;">
+                <input type="radio" name="auth_mode" value="exe"
+                       {% if current_auth_mode == 'exe' %}checked{% endif %}>
+                <strong>EXE</strong> &mdash; trust <code>X-ExeDev-UserID</code> /
+                <code>X-ExeDev-Email</code> headers from a reverse proxy.
+            </label>
+        </div>
+
+        <div class="form-group" style="border-left: 3px solid var(--accent-yellow); padding-left: var(--space-md);">
+            <label style="display: flex; align-items: flex-start; gap: var(--space-sm);">
+                <input type="checkbox" name="confirm_proxy" value="true">
+                <span class="text-muted" style="font-size: 0.85rem;">
+                    I confirm that OPAL sits behind a reverse proxy that injects
+                    <code>X-ExeDev-UserID</code>. Without this, anyone reaching OPAL
+                    directly can forge headers and impersonate any user.
+                    <strong>Required when switching to EXE.</strong>
+                </span>
+            </label>
+        </div>
+
+        {{ ok.form_actions(cancel_href="/settings", submit_text="SAVE") }}
+
+        {% if save_result %}
+        <div style="margin-top: var(--space-md); text-align: right;
+                    color: {% if save_result.ok %}var(--accent-green){% else %}var(--accent-red){% endif %};
+                    font-weight: 600;">
+            {{ save_result.message }}
+        </div>
+        {% endif %}
+
+    </form>
+
+{% endcall %}
+{% endblock %}

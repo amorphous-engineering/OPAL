@@ -233,6 +233,7 @@ def get_active_project() -> "ProjectConfig | None":
 # Subset of Settings fields editable from the in-app settings UI. The DB
 # overlay only touches these; everything else stays env-driven.
 _DB_OVERLAY_FIELDS: tuple[str, ...] = (
+    "auth_mode",
     "onshape_access_key",
     "onshape_secret_key",
     "onshape_base_url",

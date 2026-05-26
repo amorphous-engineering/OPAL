@@ -159,12 +159,17 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
 # ============ LOGIN / LOGOUT ============
 
 
-@router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, db: DbSession) -> HTMLResponse:
+@router.get("/login", response_class=HTMLResponse, response_model=None)
+async def login_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
     """User selection page."""
     from opal.config import get_active_settings
 
     settings = get_active_settings()
+
+    # First-run: zero users means the operator hasn't picked an auth mode yet.
+    # Send them to /setup before anyone can create the admin user.
+    if db.query(User).count() == 0:
+        return RedirectResponse(url="/setup", status_code=302)
 
     # In exe mode, redirect to exe.dev login
     if settings.auth_mode == "exe":
@@ -183,6 +188,81 @@ async def login_page(request: Request, db: DbSession) -> HTMLResponse:
             "auth_mode": settings.auth_mode,
         },
     )
+
+
+@router.get("/setup", response_class=HTMLResponse, response_model=None)
+async def setup_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
+    """First-run auth-mode picker. Bounces home once any user exists."""
+    if db.query(User).count() > 0:
+        return RedirectResponse(url="/", status_code=302)
+
+    from opal.config import get_active_settings
+
+    settings = get_active_settings()
+    return templates.TemplateResponse(
+        "setup.html",
+        {
+            "request": request,
+            "current_auth_mode": settings.auth_mode,
+        },
+    )
+
+
+@router.post("/setup", response_model=None)
+async def setup_submit(
+    request: Request,
+    db: DbSession,
+    auth_mode: str = Form(...),
+    name: str = Form(default=""),
+    email: str = Form(default=""),
+) -> RedirectResponse | HTMLResponse:
+    """Lock in the auth mode (and create the first admin in local mode)."""
+    if db.query(User).count() > 0:
+        return RedirectResponse(url="/", status_code=302)
+
+    if auth_mode not in ("local", "exe"):
+        return RedirectResponse(url="/setup", status_code=302)
+
+    from opal.config import apply_db_overlay, set_app_setting
+
+    set_app_setting(db, "auth_mode", auth_mode)
+    db.commit()
+    apply_db_overlay(db)
+
+    if auth_mode == "exe":
+        # In exe mode the first proxy request auto-provisions the admin.
+        # Send them through the proxy login.
+        return RedirectResponse(url="/__exe.dev/login?redirect=/", status_code=302)
+
+    # Local mode: create the first admin from the form fields.
+    clean_name = name.strip()
+    if not clean_name:
+        return templates.TemplateResponse(
+            "setup.html",
+            {
+                "request": request,
+                "current_auth_mode": "local",
+                "error": "Name is required to create the first admin user.",
+            },
+        )
+    user = User(
+        name=clean_name,
+        email=(email.strip() or None),
+        is_active=True,
+        is_admin=True,
+        needs_onboarding=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    response = RedirectResponse(url="/welcome", status_code=302)
+    max_age = 365 * 24 * 3600
+    response.set_cookie("opal_user_id", str(user.id), max_age=max_age)
+    response.set_cookie("opal_user_name", user.name, max_age=max_age)
+    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
+    response.set_cookie("opal_user_is_admin", "1", max_age=max_age)
+    return response
 
 
 @router.post("/login")
@@ -3076,6 +3156,59 @@ async def settings_page(request: Request, db: DbSession) -> HTMLResponse:
     }
 
     return templates.TemplateResponse("settings/index.html", context)
+
+
+@router.get("/settings/auth-mode", response_class=HTMLResponse, response_model=None)
+async def settings_auth_mode_form(
+    request: Request, db: DbSession
+) -> HTMLResponse | RedirectResponse:
+    """Admin-only auth-mode edit form."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+    from opal.config import get_active_settings
+
+    context = get_base_context(request, db, "Auth Mode - OPAL")
+    context["current_auth_mode"] = get_active_settings().auth_mode
+    context["save_result"] = None
+    return templates.TemplateResponse("settings/auth_mode.html", context)
+
+
+@router.post("/settings/auth-mode", response_class=HTMLResponse, response_model=None)
+async def settings_auth_mode_save(
+    request: Request,
+    db: DbSession,
+    auth_mode: str = Form(...),
+    confirm_proxy: bool = Form(default=False),
+) -> HTMLResponse | RedirectResponse:
+    """Persist the auth_mode override (db overlay). Switching to exe requires
+    the admin to confirm a reverse proxy is in place — otherwise anyone can
+    forge ``X-ExeDev-UserID`` and impersonate any user."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+    from opal.config import apply_db_overlay, get_active_settings, set_app_setting
+
+    context = get_base_context(request, db, "Auth Mode - OPAL")
+
+    if auth_mode not in ("local", "exe"):
+        context["current_auth_mode"] = get_active_settings().auth_mode
+        context["save_result"] = {"ok": False, "message": f"Invalid auth_mode '{auth_mode}'."}
+        return templates.TemplateResponse("settings/auth_mode.html", context)
+
+    if auth_mode == "exe" and not confirm_proxy:
+        context["current_auth_mode"] = get_active_settings().auth_mode
+        context["save_result"] = {
+            "ok": False,
+            "message": "Confirm a reverse proxy is in front before switching to exe mode.",
+        }
+        return templates.TemplateResponse("settings/auth_mode.html", context)
+
+    set_app_setting(db, "auth_mode", auth_mode)
+    db.commit()
+    apply_db_overlay(db)
+
+    context["current_auth_mode"] = auth_mode
+    context["save_result"] = {"ok": True, "message": f"Auth mode set to {auth_mode}."}
+    return templates.TemplateResponse("settings/auth_mode.html", context)
 
 
 def _onshape_form_context(request: Request, db: DbSession) -> dict[str, Any]:
