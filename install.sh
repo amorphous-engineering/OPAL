@@ -4,7 +4,7 @@
 set -eu
 
 REPO="amorphous-engineering/OPAL"
-API_URL="https://api.github.com/repos/${REPO}/releases/latest"
+RELEASES_URL="https://github.com/${REPO}/releases"
 INSTALL_DIR="${HOME}/.local/bin"
 INSTALL_PATH="${INSTALL_DIR}/opal"
 
@@ -95,22 +95,38 @@ detect_platform() {
 }
 
 # --- Release lookup ---
+#
+# Avoids api.github.com (60 req/hr unauth limit per IP). Resolves the latest
+# tag by following the redirect on /releases/latest, then downloads the
+# asset directly from /releases/download/<tag>/<asset>.
+
+resolve_latest_tag() {
+    # Follow the redirect on /releases/latest and read the resolved path.
+    # Works on any public repo without an API call.
+    if [ "$HAS_CURL" = true ]; then
+        RESOLVED="$(curl -sSLI -o /dev/null -w '%{url_effective}' "${RELEASES_URL}/latest")" \
+            || err "Failed to resolve latest release URL"
+    else
+        # wget prints the final URL to stderr with -S; capture and parse.
+        RESOLVED="$(wget -q -S --spider --max-redirect=5 -O - "${RELEASES_URL}/latest" 2>&1 \
+            | awk '/^Location: /{loc=$2} END{print loc}')"
+    fi
+
+    case "$RESOLVED" in
+        */releases/tag/*) TAG="${RESOLVED##*/releases/tag/}" ;;
+        *) TAG="" ;;
+    esac
+
+    if [ -z "$TAG" ]; then
+        err "Could not determine latest release tag from ${RELEASES_URL}/latest"
+    fi
+}
 
 find_download_url() {
-    info "Fetching latest release from GitHub..."
-
-    RELEASE_JSON="$(download_text "$API_URL")" || err "Failed to fetch release info from GitHub"
-
-    TAG="$(printf '%s' "$RELEASE_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
-    if [ -z "$TAG" ]; then
-        err "Could not determine latest release tag"
-    fi
+    info "Resolving latest release..."
+    resolve_latest_tag
     info "Latest release: ${TAG}"
-
-    DOWNLOAD_URL="$(printf '%s' "$RELEASE_JSON" | grep '"browser_download_url"' | grep "$ASSET_NAME" | head -1 | sed 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
-    if [ -z "$DOWNLOAD_URL" ]; then
-        err "No release asset found matching '${ASSET_NAME}'"
-    fi
+    DOWNLOAD_URL="${RELEASES_URL}/download/${TAG}/${ASSET_NAME}"
 }
 
 # --- Install ---
