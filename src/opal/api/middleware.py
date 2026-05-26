@@ -52,9 +52,10 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
               auto-provision users, set cookies.
     """
 
-    LOCAL_EXEMPT = ("/login", "/logout", "/api/", "/static/", "/docs", "/favicon.ico")
+    LOCAL_EXEMPT = ("/setup", "/login", "/logout", "/api/", "/static/", "/docs", "/favicon.ico")
     EXE_EXEMPT = (
         "/__exe.dev/",
+        "/setup",
         "/login",
         "/logout",
         "/setup-profile",
