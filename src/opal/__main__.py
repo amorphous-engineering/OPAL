@@ -163,6 +163,36 @@ def cmd_init(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def cmd_import_requirements(args: argparse.Namespace) -> None:
+    """Import the opal.project.yaml requirement catalog into the database."""
+    _setup_project(args)
+
+    from opal.config import get_active_project
+    from opal.db.base import SessionLocal
+    from opal.se.import_requirements import import_requirements_from_config
+
+    config = get_active_project()
+    if config is None:
+        print("No opal.project.yaml found — nothing to import.")
+        sys.exit(1)
+    if not config.requirements:
+        print(f"Project '{config.name}' defines no requirements in opal.project.yaml.")
+        sys.exit(0)
+
+    db = SessionLocal()
+    try:
+        result = import_requirements_from_config(db, config)
+        db.commit()
+    finally:
+        db.close()
+
+    print(result.summary())
+    for req_number in result.created:
+        print(f"  created {req_number}")
+    for req_number in result.skipped:
+        print(f"  skipped {req_number} (already in database)")
+
+
 def cmd_tui(args: argparse.Namespace) -> None:
     """Launch the TUI (Terminal User Interface)."""
     from opal.config import get_active_settings
@@ -250,6 +280,14 @@ def main() -> None:
     init_parser = subparsers.add_parser("init", help="Initialize OPAL")
     add_project_args(init_parser)
     init_parser.set_defaults(func=cmd_init)
+
+    # import-requirements command
+    import_req_parser = subparsers.add_parser(
+        "import-requirements",
+        help="Import opal.project.yaml requirements into the database (one-shot, idempotent)",
+    )
+    add_project_args(import_req_parser)
+    import_req_parser.set_defaults(func=cmd_import_requirements)
 
     # tui command
     tui_parser = subparsers.add_parser("tui", help="Launch the TUI")

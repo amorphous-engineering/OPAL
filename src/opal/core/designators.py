@@ -18,9 +18,10 @@ WORK_ORDER = "WO"
 ISSUE = "IT"
 RISK = "RISK"
 SERIAL = "SN"
+REQUIREMENT = "REQ"
 
 # Known simple prefixes (serial numbers use compound prefix SN-{PN})
-_SIMPLE_PREFIXES = (OPAL, WORK_ORDER, ISSUE, RISK)
+_SIMPLE_PREFIXES = (OPAL, WORK_ORDER, ISSUE, RISK, REQUIREMENT)
 
 
 def generate_designator(db: Session, designator_type: str, digits: int = 5) -> str:
@@ -103,6 +104,21 @@ def generate_issue_number(db: Session) -> str:
         The next available issue number.
     """
     return generate_designator(db, ISSUE)
+
+
+def generate_requirement_number(db: Session) -> str:
+    """Generate the next requirement number.
+
+    Format: REQ-XXXX (4 digits, zero-padded)
+    Example: REQ-0001, REQ-0042
+
+    Args:
+        db: Database session
+
+    Returns:
+        The next available requirement number.
+    """
+    return generate_designator(db, REQUIREMENT, digits=4)
 
 
 def generate_risk_number(db: Session) -> str:
