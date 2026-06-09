@@ -132,6 +132,11 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         "BOMLine", back_populates="component", foreign_keys="BOMLine.component_id"
     )
 
+    # Supplier catalog entries for this part
+    supplier_entries: Mapped[list["SupplierPart"]] = relationship(
+        "SupplierPart", back_populates="part", cascade="all, delete-orphan"
+    )
+
     def __repr__(self) -> str:
         return f"<Part(id={self.id}, name='{self.name}', tier={self.tier})>"
 

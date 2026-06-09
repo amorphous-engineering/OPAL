@@ -8,11 +8,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
-from opal.db.models import InventoryRecord, Part
+from opal.db.models import InventoryRecord, Part, SupplierPart
 
 router = APIRouter()
 
@@ -635,3 +635,62 @@ async def import_parts(
     db.commit()
 
     return ImportResult(created=created, skipped=skipped, errors=errors)
+
+
+# --- Supplier cross-reference view ---
+
+
+class PartSupplierResponse(BaseModel):
+    """Supplier catalog entry as seen from a part."""
+
+    id: int
+    supplier_id: int
+    supplier_name: str
+    part_id: int
+    part_name: str
+    vendor_pn: str
+    is_preferred: bool
+    notes: str | None
+    created_at: str
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/{part_id}/suppliers", response_model=list[PartSupplierResponse])
+async def list_part_suppliers(
+    db: DbSession,
+    part_id: int,
+):
+    """List all suppliers that carry this part (cross-reference view)."""
+    part = db.execute(
+        select(Part).where(Part.id == part_id, Part.deleted_at.is_(None))
+    ).scalar_one_or_none()
+    if not part:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Part {part_id} not found",
+        )
+
+    entries = (
+        db.execute(
+            select(SupplierPart)
+            .where(SupplierPart.part_id == part_id)
+            .order_by(SupplierPart.is_preferred.desc(), SupplierPart.id)
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        PartSupplierResponse(
+            id=sp.id,
+            supplier_id=sp.supplier_id,
+            supplier_name=sp.supplier.name,
+            part_id=sp.part_id,
+            part_name=sp.part.name,
+            vendor_pn=sp.vendor_pn,
+            is_preferred=sp.is_preferred,
+            notes=sp.notes,
+            created_at=sp.created_at.strftime("%Y-%m-%dT%H:%M:%S") + "Z",
+        )
+        for sp in entries
+    ]

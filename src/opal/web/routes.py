@@ -789,6 +789,9 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
         pass
     context["onshape_link"] = onshape_link
 
+    # Supplier catalog entries for this part
+    context["supplier_entries"] = part.supplier_entries
+
     return templates.TemplateResponse("parts/detail.html", context)
 
 
@@ -2783,6 +2786,7 @@ async def suppliers_detail(request: Request, db: DbSession, supplier_id: int) ->
     context = get_base_context(request, db, f"{supplier.name} - OPAL")
     context["supplier"] = supplier
     context["purchases"] = supplier.purchases
+    context["catalog_entries"] = supplier.catalog_entries
 
     return templates.TemplateResponse("suppliers/detail.html", context)
 

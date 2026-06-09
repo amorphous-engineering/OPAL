@@ -240,6 +240,76 @@
     </div>
 </div>
 
+<!-- Suppliers Panel -->
+{% set supplier_panel_actions %}
+    {{ ok.btn("+ LINK SUPPLIER", variant="primary", attrs='onclick="showAddSupplier()"') }}
+{% endset %}
+{% call ok.panel("SUPPLIERS (" ~ (supplier_entries | length) ~ ")", actions=supplier_panel_actions, margin_top="var(--space-md)") %}
+    {% if supplier_entries %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("SUPPLIER") }}
+                {{ ok.th("VENDOR PN", width="160px") }}
+                {{ ok.th("PREFERRED", width="90px") }}
+                {{ ok.th("NOTES") }}
+                {{ ok.th("", width="60px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in supplier_entries %}
+            <tr>
+                <td><a href="/suppliers/{{ entry.supplier_id }}">{{ entry.supplier.name }}</a></td>
+                <td class="mono">{{ entry.vendor_pn }}</td>
+                <td>{% if entry.is_preferred %}{{ ok.status("YES", "ok") }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                <td class="text-secondary">{{ entry.notes or '-' }}</td>
+                <td>
+                    {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="deleteSupplierEntry(' ~ entry.id ~ ', ' ~ entry.supplier_id ~ ')"') }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ok.empty("No suppliers linked to this part") }}
+    {% endif %}
+{% endcall %}
+
+<!-- Add Supplier Modal -->
+<div id="add-supplier-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
+        <div class="panel">
+            <div class="panel-header">LINK SUPPLIER</div>
+            <div class="panel-body">
+                <form id="add-supplier-form" onsubmit="addSupplierEntry(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="sup-supplier-id">SUPPLIER ID *</label>
+                        <input type="number" id="sup-supplier-id" name="supplier_id" class="form-input mono" required min="1" placeholder="Enter supplier ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="sup-vendor-pn">VENDOR PN *</label>
+                        <input type="text" id="sup-vendor-pn" name="vendor_pn" class="form-input mono" required placeholder="e.g. DK-12345">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="sup-preferred" name="is_preferred"> PREFERRED SUPPLIER
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="sup-notes">NOTES</label>
+                        <input type="text" id="sup-notes" name="notes" class="form-input">
+                    </div>
+                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                        {{ ok.btn("CANCEL", attrs='onclick="hideAddSupplier()"') }}
+                        {{ ok.btn("LINK", variant="primary", type="submit") }}
+                    </div>
+                </form>
+                <div id="sup-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Where Used: Procedure Usage -->
 {% if kit_usages %}
 {% call ok.panel("PROCEDURE USAGE (" ~ (kit_usages | length) ~ ")", margin_top="var(--space-md)") %}
@@ -761,7 +831,69 @@ document.addEventListener('keydown', function(e) {
         hideAddComponent();
         hideEditBom();
         hideAddTest();
+        hideAddSupplier();
     }
 });
+
+// Supplier link functions
+function showAddSupplier() {
+    document.getElementById('add-supplier-modal').style.display = 'block';
+}
+
+function hideAddSupplier() {
+    document.getElementById('add-supplier-modal').style.display = 'none';
+    document.getElementById('add-supplier-form').reset();
+    document.getElementById('sup-error').style.display = 'none';
+}
+
+async function addSupplierEntry(event) {
+    event.preventDefault();
+    const errorDiv = document.getElementById('sup-error');
+    errorDiv.style.display = 'none';
+
+    const supplierId = parseInt(document.getElementById('sup-supplier-id').value);
+    const data = {
+        part_id: partId,
+        vendor_pn: document.getElementById('sup-vendor-pn').value,
+        is_preferred: document.getElementById('sup-preferred').checked,
+        notes: document.getElementById('sup-notes').value || null,
+    };
+
+    try {
+        const response = await fetch(`/api/suppliers/${supplierId}/parts`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            errorDiv.textContent = typeof error.detail === 'string' ? error.detail : 'Failed to link supplier';
+            errorDiv.style.display = 'block';
+        }
+    } catch (e) {
+        errorDiv.textContent = 'Network error: ' + e.message;
+        errorDiv.style.display = 'block';
+    }
+}
+
+async function deleteSupplierEntry(entryId, supplierId) {
+    if (!confirm('Remove this supplier link?')) return;
+    try {
+        const response = await fetch(`/api/suppliers/${supplierId}/parts/${entryId}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            alert(typeof error.detail === 'string' ? error.detail : 'Failed to remove link');
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
 </script>
 {% endblock %}
