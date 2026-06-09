@@ -237,6 +237,10 @@ async def create_part(
     if not internal_pn:
         internal_pn = generate_internal_pn(db, part_in.tier)
 
+    # Tier 2 (Ground) parts are tooling/GSE by definition — force the flag
+    if part_in.tier == 2:
+        part_in = part_in.model_copy(update={"is_tooling": True})
+
     part = Part(
         name=part_in.name,
         internal_pn=internal_pn,
@@ -616,6 +620,8 @@ async def import_parts(
                 tracking_type=part_in.tracking_type or "bulk",
                 tier=part_in.tier,
                 reorder_point=part_in.reorder_point,
+                # Tier 2 (Ground) parts are tooling/GSE by definition
+                is_tooling=part_in.tier == 2,
                 metadata_=part_in.metadata,
             )
             db.add(part)

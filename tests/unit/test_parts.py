@@ -137,3 +137,24 @@ def test_get_categories(client):
     categories = response.json()
     assert "Electronics" in categories
     assert "Mechanical" in categories
+
+
+def test_tier2_part_forces_is_tooling(client):
+    """Tier 2 (Ground) parts are tooling by definition, regardless of input."""
+    response = client.post(
+        "/api/parts",
+        json={"name": "Torque Fixture", "tier": 2, "is_tooling": False},
+    )
+    assert response.status_code == 201
+    assert response.json()["is_tooling"] is True
+
+
+def test_non_tier2_part_keeps_is_tooling(client):
+    """Tiers other than 2 honor the submitted is_tooling value."""
+    flight = client.post("/api/parts", json={"name": "Flight Bracket", "tier": 1}).json()
+    assert flight["is_tooling"] is False
+
+    loose = client.post(
+        "/api/parts", json={"name": "Bench Meter", "tier": 3, "is_tooling": True}
+    ).json()
+    assert loose["is_tooling"] is True

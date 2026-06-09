@@ -21,6 +21,7 @@
         {{ ok.detail_row("VERSION CREATED", ok.timestamp(version.created_at) if version else '-', th_width="160px") }}
         {% if instance.scheduled_start_at %}{{ ok.detail_row("SCHEDULED START", ok.timestamp(instance.scheduled_start_at), th_width="160px") }}{% endif %}
         {% if instance.target_completion_at %}{{ ok.detail_row("TARGET COMPLETION", ok.timestamp(instance.target_completion_at), th_width="160px") }}{% endif %}
+        {% if instance.target_entity %}{{ ok.detail_row("TARGET ENTITY", ok.mono("[" ~ (instance.target_entity.entity_type or '?') | upper ~ "] " ~ (instance.target_entity.entity_label or instance.target_entity.entity_id)), th_width="160px") }}{% endif %}
     {% endcall %}
     {% if inst_status == 'in_progress' %}
     <div style="margin-top: var(--space-md);">

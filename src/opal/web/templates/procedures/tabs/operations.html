@@ -63,6 +63,7 @@
             <div class="op-header">
                 <span class="op-number mono">OP {{ op.step_number }}</span>
                 {% if op.is_contingency %}{{ ok.status("CONTINGENCY", "warn") }}{% endif %}
+                {% if op.required_role %}{{ ok.status(op.required_role, "info") }}{% endif %}
                 <span class="op-title">{{ op.title }}</span>
                 {% if op.estimated_duration_minutes %}
                 <span class="op-duration mono">{{ op.estimated_duration_minutes }}m</span>
@@ -74,6 +75,9 @@
                     {{ ok.btn("DELETE", size="sm", variant="danger", attrs='onclick="deleteStep(' ~ op.id ~ ')"') }}
                 </span>
             </div>
+            {% if op.caution %}
+            <div class="caution-block text-red mono">CAUTION: {{ op.caution }}</div>
+            {% endif %}
             {% if op.instructions %}
             <div class="op-instructions" data-markdown>{{ op.instructions }}</div>
             {% endif %}
@@ -102,6 +106,8 @@
                 <summary class="step-summary">
                     <span class="step-number mono">{{ step_display_number }}</span>
                     <span class="step-title">{{ step.title }}</span>
+                    {% if step.required_role %}{{ ok.status(step.required_role, "info") }}{% endif %}
+                    {% if step.caution %}{{ ok.status("CAUTION", "error") }}{% endif %}
                     {% if step.requires_signoff %}{{ ok.status("SIGNOFF", "info") }}{% endif %}
                     {% if step.required_data_schema and step.required_data_schema.get('fields') %}{{ ok.status("DATA " ~ step.required_data_schema.get('fields') | length, "default") }}{% endif %}
                     {% if step.estimated_duration_minutes %}

@@ -1603,6 +1603,16 @@ body.procedure-detail .exec-tab-content > div {
     letter-spacing: 0.05em;
 }
 
+.caution-block {
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--accent-red);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--accent-red);
+    letter-spacing: 0.05em;
+}
+
 /* Flow tab — operation-dependency node graph */
 .flow-canvas {
     background: var(--bg-secondary);
