@@ -13,10 +13,15 @@ from sqlalchemy import func
 
 from opal.config import get_active_project, get_active_settings
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
-from opal.core.designators import generate_issue_number, generate_risk_number
+from opal.core.designators import (
+    generate_designator,
+    generate_issue_number,
+    generate_risk_number,
+)
 from opal.db.base import SessionLocal
 from opal.db.models import (
     BOMLine,
+    InventoryRecord,
     Issue,
     Kit,
     MasterProcedure,
@@ -25,12 +30,18 @@ from opal.db.models import (
     ProcedureOutput,
     ProcedureStep,
     ProcedureVersion,
+    Purchase,
+    PurchaseLine,
     Risk,
     StepDependency,
     StepKit,
+    Supplier,
+    Workcenter,
 )
 from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
+from opal.db.models.part import TrackingType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
+from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.risk import RiskStatus
 
 logger = logging.getLogger(__name__)
@@ -908,6 +919,242 @@ async def list_tools() -> list[Tool]:
                 "required": ["bom_line_id"],
             },
         ),
+        # Suppliers
+        Tool(
+            name="search_suppliers",
+            description=(
+                "Search suppliers by name substring. Returns matching active "
+                "(non-deleted) suppliers with id, name, code, website, email, "
+                "and is_active."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Name substring filter (optional)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results (default 20)",
+                        "default": 20,
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="create_supplier",
+            description="Create a new supplier/vendor record.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Supplier name"},
+                    "code": {
+                        "type": "string",
+                        "description": "Short code, e.g. SUP-001 (optional)",
+                    },
+                    "website": {"type": "string"},
+                    "email": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "address": {"type": "string"},
+                    "notes": {"type": "string"},
+                },
+                "required": ["name"],
+            },
+        ),
+        # Workcenters
+        Tool(
+            name="create_workcenter",
+            description=(
+                "Create a new workcenter (work location). A unique code is "
+                "required; if omitted, one is derived from the name."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Workcenter name"},
+                    "code": {
+                        "type": "string",
+                        "description": "Short unique code, e.g. AB1 (optional, derived from name if omitted)",
+                    },
+                    "description": {"type": "string"},
+                    "location": {"type": "string", "description": "Physical location (optional)"},
+                },
+                "required": ["name"],
+            },
+        ),
+        # Inventory
+        Tool(
+            name="get_inventory_summary",
+            description=(
+                "Get current stock summary for a part: total quantity on hand, "
+                "record count, breakdown by location, and (for tooling parts) "
+                "calibration status."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "part_id": {"type": "integer", "description": "The part ID"},
+                },
+                "required": ["part_id"],
+            },
+        ),
+        # Bulk parts
+        Tool(
+            name="bulk_create_parts",
+            description=(
+                "Create multiple parts in one transaction. Each entry follows "
+                "the same schema as create_part. Tier-2 parts are forced to "
+                "is_tooling=true. Returns the created parts with their assigned "
+                "internal_pn values."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "parts": {
+                        "type": "array",
+                        "description": "List of part objects to create",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "category": {"type": "string"},
+                                "tier": {"type": "integer", "default": 1},
+                                "tracking_type": {
+                                    "type": "string",
+                                    "enum": ["serialized", "bulk"],
+                                    "default": "serialized",
+                                },
+                                "unit_of_measure": {"type": "string", "default": "each"},
+                                "description": {"type": "string"},
+                                "external_pn": {"type": "string"},
+                                "reorder_point": {"type": "number"},
+                                "parent_id": {"type": "integer"},
+                            },
+                            "required": ["name"],
+                        },
+                    },
+                },
+                "required": ["parts"],
+            },
+        ),
+        # Purchase orders
+        Tool(
+            name="create_purchase_order",
+            description=(
+                "Create a purchase order with one or more line items. A PO "
+                "reference (PO-NNNN) is auto-generated. Starts in 'draft' status."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "supplier_id": {"type": "integer", "description": "Supplier ID"},
+                    "notes": {"type": "string"},
+                    "lines": {
+                        "type": "array",
+                        "description": "Line items",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "part_id": {"type": "integer"},
+                                "quantity": {"type": "number", "exclusiveMinimum": 0},
+                                "unit_cost": {"type": "number"},
+                                "notes": {"type": "string"},
+                            },
+                            "required": ["part_id", "quantity"],
+                        },
+                    },
+                },
+                "required": ["supplier_id", "lines"],
+            },
+        ),
+        # Composite procedure build
+        Tool(
+            name="build_procedure",
+            description=(
+                "Create a complete procedure with all steps, step kits, "
+                "procedure-level kit items, and outputs in a single call. "
+                "Equivalent to create_procedure + add_procedure_step (xN) + "
+                "add_step_kit_item (xN) + add_kit_item (xN) + add_output (xN)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Procedure name"},
+                    "procedure_type": {
+                        "type": "string",
+                        "enum": ["op", "build"],
+                        "default": "op",
+                    },
+                    "description": {"type": "string"},
+                    "steps": {
+                        "type": "array",
+                        "description": "Ordered list of top-level steps (OPs)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "instructions": {"type": "string"},
+                                "required_role": {"type": "string"},
+                                "caution": {"type": "string"},
+                                "requires_signoff": {"type": "boolean", "default": False},
+                                "estimated_duration_minutes": {"type": "integer", "minimum": 1},
+                                "workcenter_id": {"type": "integer"},
+                                "step_kits": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "part_id": {"type": "integer"},
+                                            "quantity_required": {
+                                                "type": "number",
+                                                "exclusiveMinimum": 0,
+                                            },
+                                            "usage_type": {
+                                                "type": "string",
+                                                "enum": ["consume", "tooling"],
+                                                "default": "consume",
+                                            },
+                                        },
+                                        "required": ["part_id", "quantity_required"],
+                                    },
+                                },
+                            },
+                            "required": ["title"],
+                        },
+                    },
+                    "kit": {
+                        "type": "array",
+                        "description": "Procedure-level kit items",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "part_id": {"type": "integer"},
+                                "quantity_required": {"type": "number", "exclusiveMinimum": 0},
+                            },
+                            "required": ["part_id", "quantity_required"],
+                        },
+                    },
+                    "outputs": {
+                        "type": "array",
+                        "description": "Output parts produced (build-type procedures)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "part_id": {"type": "integer"},
+                                "quantity_produced": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "default": 1,
+                                },
+                            },
+                            "required": ["part_id"],
+                        },
+                    },
+                },
+                "required": ["name"],
+            },
+        ),
     ]
 
 
@@ -1017,6 +1264,32 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _add_component(db, arguments)
         elif name == "remove_component":
             return await _remove_component(db, arguments)
+
+        # Suppliers
+        elif name == "search_suppliers":
+            return await _search_suppliers(db, arguments)
+        elif name == "create_supplier":
+            return await _create_supplier(db, arguments)
+
+        # Workcenters
+        elif name == "create_workcenter":
+            return await _create_workcenter(db, arguments)
+
+        # Inventory
+        elif name == "get_inventory_summary":
+            return await _get_inventory_summary(db, arguments)
+
+        # Bulk parts
+        elif name == "bulk_create_parts":
+            return await _bulk_create_parts(db, arguments)
+
+        # Purchase orders
+        elif name == "create_purchase_order":
+            return await _create_purchase_order(db, arguments)
+
+        # Composite procedure build
+        elif name == "build_procedure":
+            return await _build_procedure(db, arguments)
 
         else:
             return json_response({"error": f"Unknown tool: {name}"})
@@ -1143,6 +1416,47 @@ def _generate_internal_pn(db, tier: int) -> str:
     return project.generate_part_number(tier, count + 1)
 
 
+def _tier_name(tier: int) -> str | None:
+    """Look up the configured display name for a tier, if any."""
+    project = get_active_project()
+    if project:
+        tier_config = project.get_tier(tier)
+        if tier_config:
+            return tier_config.name
+    return None
+
+
+def _build_part(db, args: dict) -> Part:
+    """Construct (but do not commit) a Part from tool args.
+
+    Applies the is_tooling auto-sync rule (tier 2 -> tooling/GSE) and
+    generates the internal_pn. Shared by create_part and bulk_create_parts.
+    The caller is responsible for db.add / flush / log_create / commit.
+    """
+    tier = args.get("tier", 1)
+    internal_pn = _generate_internal_pn(db, tier)
+
+    raw_tracking = args.get("tracking_type")
+    tracking_type = TrackingType(raw_tracking) if raw_tracking else None
+
+    return Part(
+        name=args["name"],
+        internal_pn=internal_pn,
+        category=args.get("category"),
+        description=args.get("description"),
+        external_pn=args.get("external_pn"),
+        unit_of_measure=args.get("unit_of_measure", "each"),
+        tier=tier,
+        parent_id=args.get("parent_id"),
+        reorder_point=Decimal(str(args["reorder_point"]))
+        if args.get("reorder_point") is not None
+        else None,
+        # Tier 2 (Ground) parts are tooling/GSE by definition
+        is_tooling=tier == 2,
+        **({"tracking_type": tracking_type} if tracking_type is not None else {}),
+    )
+
+
 async def _create_part(db, args: dict) -> list[TextContent]:
     """Create a new part."""
     # Validate parent if specified
@@ -1153,28 +1467,7 @@ async def _create_part(db, args: dict) -> list[TextContent]:
             return json_response({"error": f"Parent part {parent_id} not found"})
 
     tier = args.get("tier", 1)
-    project = get_active_project()
-    tier_name = None
-    if project:
-        tier_config = project.get_tier(tier)
-        if tier_config:
-            tier_name = tier_config.name
-
-    # Generate internal_pn
-    internal_pn = _generate_internal_pn(db, tier)
-
-    part = Part(
-        name=args["name"],
-        internal_pn=internal_pn,
-        category=args.get("category"),
-        description=args.get("description"),
-        external_pn=args.get("external_pn"),
-        unit_of_measure=args.get("unit_of_measure", "each"),
-        tier=tier,
-        parent_id=parent_id,
-        # Tier 2 (Ground) parts are tooling/GSE by definition
-        is_tooling=tier == 2,
-    )
+    part = _build_part(db, args)
     db.add(part)
     db.flush()
     log_create(db, part)
@@ -1184,14 +1477,14 @@ async def _create_part(db, args: dict) -> list[TextContent]:
     return json_response(
         {
             "success": True,
-            "message": f"Created part '{part.name}' with ID {part.id} ({internal_pn})",
+            "message": f"Created part '{part.name}' with ID {part.id} ({part.internal_pn})",
             "part": {
                 "id": part.id,
-                "internal_pn": internal_pn,
+                "internal_pn": part.internal_pn,
                 "name": part.name,
                 "category": part.category,
                 "tier": tier,
-                "tier_name": tier_name,
+                "tier_name": _tier_name(tier),
                 "parent_id": parent_id,
             },
         }
@@ -3155,6 +3448,423 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
                 "copied_kit": copy_kit,
                 "copied_outputs": copy_outputs,
             },
+        }
+    )
+
+
+# ============ SUPPLIERS ============
+
+
+async def _search_suppliers(db, args: dict) -> list[TextContent]:
+    """Search suppliers by name substring (non-deleted)."""
+    query = db.query(Supplier).filter(Supplier.deleted_at.is_(None))
+
+    if args.get("query"):
+        query = query.filter(Supplier.name.ilike(f"%{args['query']}%"))
+
+    limit = args.get("limit", 20)
+    suppliers = query.order_by(Supplier.name).limit(limit).all()
+
+    return json_response(
+        {
+            "count": len(suppliers),
+            "suppliers": [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "code": s.code,
+                    "website": s.website,
+                    "email": s.email,
+                    "is_active": s.is_active,
+                }
+                for s in suppliers
+            ],
+        }
+    )
+
+
+async def _create_supplier(db, args: dict) -> list[TextContent]:
+    """Create a new supplier."""
+    supplier = Supplier(
+        name=args["name"],
+        code=args.get("code"),
+        website=args.get("website"),
+        email=args.get("email"),
+        phone=args.get("phone"),
+        address=args.get("address"),
+        notes=args.get("notes"),
+    )
+    db.add(supplier)
+    db.flush()
+    log_create(db, supplier)
+    db.commit()
+    db.refresh(supplier)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created supplier '{supplier.name}' with ID {supplier.id}",
+            "supplier": {
+                "id": supplier.id,
+                "name": supplier.name,
+                "code": supplier.code,
+                "website": supplier.website,
+                "email": supplier.email,
+                "phone": supplier.phone,
+                "address": supplier.address,
+                "is_active": supplier.is_active,
+            },
+        }
+    )
+
+
+# ============ WORKCENTERS ============
+
+
+def _derive_workcenter_code(name: str) -> str:
+    """Derive a short uppercase code from a workcenter name."""
+    letters = "".join(ch for ch in name.upper() if ch.isalnum())
+    return (letters[:8] or "WC") if letters else "WC"
+
+
+async def _create_workcenter(db, args: dict) -> list[TextContent]:
+    """Create a new workcenter. Code is required+unique; derive if omitted."""
+    code = args.get("code") or _derive_workcenter_code(args["name"])
+
+    existing = db.query(Workcenter).filter(Workcenter.code == code).first()
+    if existing:
+        return json_response({"error": f"Workcenter code '{code}' already exists"})
+
+    workcenter = Workcenter(
+        name=args["name"],
+        code=code,
+        description=args.get("description"),
+        location=args.get("location"),
+    )
+    db.add(workcenter)
+    db.flush()
+    log_create(db, workcenter)
+    db.commit()
+    db.refresh(workcenter)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created workcenter '{workcenter.name}' ({workcenter.code})",
+            "workcenter": {
+                "id": workcenter.id,
+                "name": workcenter.name,
+                "code": workcenter.code,
+                "description": workcenter.description,
+                "location": workcenter.location,
+                "is_active": workcenter.is_active,
+            },
+        }
+    )
+
+
+# ============ INVENTORY SUMMARY ============
+
+
+async def _get_inventory_summary(db, args: dict) -> list[TextContent]:
+    """Summarize stock for a part: totals, by-location, and calibration."""
+    part = db.query(Part).filter(Part.id == args["part_id"], Part.deleted_at.is_(None)).first()
+    if not part:
+        return json_response({"error": f"Part {args['part_id']} not found"})
+
+    records = db.query(InventoryRecord).filter(InventoryRecord.part_id == part.id).all()
+
+    total_qty = sum((r.quantity for r in records), Decimal(0))
+    by_location = [
+        {
+            "location": r.location,
+            "qty": float(r.quantity),
+            "opal_number": r.opal_number,
+        }
+        for r in records
+    ]
+
+    summary = {
+        "part_id": part.id,
+        "part_name": part.name,
+        "internal_pn": part.internal_pn,
+        "tier": part.tier,
+        "total_qty": float(total_qty),
+        "record_count": len(records),
+        "by_location": by_location,
+        "is_tooling": part.is_tooling,
+    }
+
+    if part.is_tooling:
+        # No stored calibration_status field; compute from calibration_due_at.
+        # The earliest due date across records is the binding one.
+        due_dates = [r.calibration_due_at for r in records if r.calibration_due_at is not None]
+        now = datetime.now(UTC)
+        if not due_dates:
+            calibration_status = "unknown"
+            earliest_due = None
+        else:
+            earliest_due = min(due_dates)
+            # SQLite returns naive datetimes; normalize to UTC for comparison.
+            cmp_due = earliest_due if earliest_due.tzinfo else earliest_due.replace(tzinfo=UTC)
+            calibration_status = "overdue" if cmp_due <= now else "ok"
+        summary["calibration_due_at"] = earliest_due.isoformat() if earliest_due else None
+        summary["calibration_status"] = calibration_status
+        summary["calibration_interval_days"] = part.calibration_interval_days
+
+    return json_response(summary)
+
+
+# ============ BULK PART CREATION ============
+
+
+async def _bulk_create_parts(db, args: dict) -> list[TextContent]:
+    """Create multiple parts in a single transaction."""
+    part_args = args.get("parts") or []
+    if not part_args:
+        return json_response({"error": "No parts provided"})
+
+    # Validate all parent_ids up front so the whole batch is rejected cleanly.
+    for idx, pa in enumerate(part_args):
+        if not pa.get("name"):
+            return json_response({"error": f"Part at index {idx} is missing required 'name'"})
+        parent_id = pa.get("parent_id")
+        if parent_id:
+            parent = db.query(Part).filter(Part.id == parent_id, Part.deleted_at.is_(None)).first()
+            if not parent:
+                return json_response(
+                    {"error": f"Parent part {parent_id} not found (part index {idx})"}
+                )
+
+    created = []
+    for pa in part_args:
+        part = _build_part(db, pa)
+        db.add(part)
+        db.flush()
+        log_create(db, part)
+        created.append(part)
+
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created {len(created)} part(s)",
+            "count": len(created),
+            "parts": [
+                {
+                    "id": p.id,
+                    "internal_pn": p.internal_pn,
+                    "name": p.name,
+                    "category": p.category,
+                    "tier": p.tier,
+                    "tier_name": _tier_name(p.tier),
+                    "is_tooling": p.is_tooling,
+                    "parent_id": p.parent_id,
+                }
+                for p in created
+            ],
+        }
+    )
+
+
+# ============ PURCHASE ORDERS ============
+
+
+async def _create_purchase_order(db, args: dict) -> list[TextContent]:
+    """Create a purchase order with line items."""
+    supplier = (
+        db.query(Supplier)
+        .filter(Supplier.id == args["supplier_id"], Supplier.deleted_at.is_(None))
+        .first()
+    )
+    if not supplier:
+        return json_response({"error": f"Supplier {args['supplier_id']} not found"})
+
+    line_args = args.get("lines") or []
+    if not line_args:
+        return json_response({"error": "A purchase order requires at least one line"})
+
+    # Validate parts before creating anything.
+    for line in line_args:
+        part = db.query(Part).filter(Part.id == line["part_id"], Part.deleted_at.is_(None)).first()
+        if not part:
+            return json_response({"error": f"Part {line['part_id']} not found"})
+
+    reference = generate_designator(db, "PO", digits=4)
+    purchase = Purchase(
+        reference=reference,
+        supplier=supplier.name,
+        supplier_id=supplier.id,
+        status=PurchaseStatus.DRAFT,
+        notes=args.get("notes"),
+    )
+    db.add(purchase)
+    db.flush()
+
+    for line in line_args:
+        db.add(
+            PurchaseLine(
+                purchase_id=purchase.id,
+                part_id=line["part_id"],
+                qty_ordered=Decimal(str(line["quantity"])),
+                unit_cost=Decimal(str(line["unit_cost"]))
+                if line.get("unit_cost") is not None
+                else None,
+                notes=line.get("notes"),
+            )
+        )
+
+    db.flush()
+    log_create(db, purchase)
+    db.commit()
+    db.refresh(purchase)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created purchase order {reference} with {len(line_args)} line(s)",
+            "purchase_id": purchase.id,
+            "po_number": purchase.reference,
+            "supplier_id": purchase.supplier_id,
+            "line_count": len(line_args),
+            "status": purchase.status.value
+            if hasattr(purchase.status, "value")
+            else purchase.status,
+        }
+    )
+
+
+# ============ COMPOSITE PROCEDURE BUILD ============
+
+
+async def _build_procedure(db, args: dict) -> list[TextContent]:
+    """Create a full procedure (steps, step kits, kit, outputs) in one call."""
+    raw_type = args.get("procedure_type", "op")
+    try:
+        procedure_type = ProcedureType(raw_type)
+    except ValueError:
+        return json_response(
+            {"error": f"Invalid procedure_type {raw_type!r}; expected 'op' or 'build'"}
+        )
+
+    steps_in = args.get("steps") or []
+    kit_in = args.get("kit") or []
+    outputs_in = args.get("outputs") or []
+
+    # Validate all referenced parts and workcenters before mutating anything.
+    def _part_exists(part_id: int) -> bool:
+        return (
+            db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first() is not None
+        )
+
+    for i, step in enumerate(steps_in):
+        if not step.get("title"):
+            return json_response({"error": f"Step at index {i} is missing required 'title'"})
+        wc_id = step.get("workcenter_id")
+        if wc_id and db.query(Workcenter).filter(Workcenter.id == wc_id).first() is None:
+            return json_response({"error": f"Workcenter {wc_id} not found (step index {i})"})
+        for sk in step.get("step_kits") or []:
+            if not _part_exists(sk["part_id"]):
+                return json_response(
+                    {"error": f"Part {sk['part_id']} not found (step index {i} kit)"}
+                )
+            try:
+                UsageType(sk.get("usage_type", "consume"))
+            except ValueError:
+                return json_response({"error": f"Invalid usage_type {sk.get('usage_type')!r}"})
+    for k in kit_in:
+        if not _part_exists(k["part_id"]):
+            return json_response({"error": f"Kit part {k['part_id']} not found"})
+    for o in outputs_in:
+        if not _part_exists(o["part_id"]):
+            return json_response({"error": f"Output part {o['part_id']} not found"})
+
+    procedure = MasterProcedure(
+        name=args["name"],
+        description=args.get("description"),
+        procedure_type=procedure_type.value,
+        status=ProcedureStatus.DRAFT.value,
+    )
+    db.add(procedure)
+    db.flush()
+    log_create(db, procedure)
+
+    step_count = 0
+    step_kit_count = 0
+    for i, step in enumerate(steps_in):
+        ps = ProcedureStep(
+            procedure_id=procedure.id,
+            parent_step_id=None,
+            order=i + 1,
+            step_number=str(i + 1),
+            level=0,
+            title=step["title"],
+            instructions=step.get("instructions"),
+            required_role=step.get("required_role"),
+            caution=step.get("caution"),
+            requires_signoff=bool(step.get("requires_signoff", False)),
+            estimated_duration_minutes=step.get("estimated_duration_minutes"),
+            workcenter_id=step.get("workcenter_id"),
+        )
+        db.add(ps)
+        db.flush()
+        log_create(db, ps)
+        step_count += 1
+
+        for sk in step.get("step_kits") or []:
+            item = StepKit(
+                step_id=ps.id,
+                part_id=sk["part_id"],
+                quantity_required=Decimal(str(sk["quantity_required"])),
+                usage_type=UsageType(sk.get("usage_type", "consume")),
+            )
+            db.add(item)
+            db.flush()
+            log_create(db, item)
+            step_kit_count += 1
+
+    kit_item_count = 0
+    for k in kit_in:
+        item = Kit(
+            procedure_id=procedure.id,
+            part_id=k["part_id"],
+            quantity_required=Decimal(str(k["quantity_required"])),
+        )
+        db.add(item)
+        db.flush()
+        log_create(db, item)
+        kit_item_count += 1
+
+    output_count = 0
+    for o in outputs_in:
+        output = ProcedureOutput(
+            procedure_id=procedure.id,
+            part_id=o["part_id"],
+            quantity_produced=Decimal(str(o.get("quantity_produced", 1))),
+        )
+        db.add(output)
+        db.flush()
+        log_create(db, output)
+        output_count += 1
+
+    db.commit()
+    db.refresh(procedure)
+
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"Built procedure '{procedure.name}' (ID {procedure.id}) with "
+                f"{step_count} step(s), {kit_item_count} kit item(s), "
+                f"{output_count} output(s)"
+            ),
+            "procedure_id": procedure.id,
+            "name": procedure.name,
+            "step_count": step_count,
+            "step_kit_count": step_kit_count,
+            "kit_item_count": kit_item_count,
+            "output_count": output_count,
         }
     )
 
