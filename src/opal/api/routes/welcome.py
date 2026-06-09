@@ -14,7 +14,7 @@ class WelcomeResponse(BaseModel):
 
 
 @router.post("/complete", response_model=WelcomeResponse)
-async def complete_onboarding(
+def complete_onboarding(
     db: DbSession,
     user: RequiredUser,
 ) -> WelcomeResponse:
@@ -25,7 +25,7 @@ async def complete_onboarding(
 
 
 @router.post("/load-demo", response_model=WelcomeResponse)
-async def load_demo_data(
+def load_demo_data(
     db: DbSession,
     user: RequiredUser,
 ) -> WelcomeResponse:

@@ -85,12 +85,25 @@
             <div class="form-group">
                 <label class="form-label">LINK TO (optional)</label>
                 <div style="display: flex; gap: var(--space-md);">
-                    <select id="part-id" name="part_id" class="form-select" style="flex: 1;">
-                        <option value="">No part...</option>
-                        {% for p in parts %}
-                        <option value="{{ p.id }}">{{ p.id }} - {{ p.name }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="part-search-container" style="flex: 1;">
+                        <input type="text"
+                               id="issue-part-search"
+                               class="form-input part-search-input"
+                               placeholder="No part... (search to link)"
+                               autocomplete="off"
+                               hx-get="/parts/search"
+                               hx-trigger="keyup changed delay:200ms"
+                               hx-target="#issue-part-results"
+                               hx-vals='{"limit": 5}'
+                               name="q">
+                        <input type="hidden" id="part-id" name="part_id">
+                        <div id="issue-part-results" class="part-search-dropdown"></div>
+                        <div id="issue-part-selected" class="part-search-selected" style="display: none;">
+                            <span class="part-id"></span>
+                            <span class="part-name"></span>
+                            <span class="part-search-clear" onclick="clearPartSelection('issue')">&times;</span>
+                        </div>
+                    </div>
                     <select id="procedure-id" name="procedure_id" class="form-select" style="flex: 1;">
                         <option value="">No procedure...</option>
                         {% for p in procedures %}
@@ -107,6 +120,41 @@
 {% endcall %}
 
 <script>
+// Part search component (same contract as the other part typeaheads)
+function selectPart(el) {
+    const partId = el.dataset.partId;
+    const partName = el.dataset.partName;
+    const partPn = el.dataset.partPn;
+    const container = el.closest('.part-search-dropdown').parentElement;
+    const hiddenInput = container.querySelector('input[type="hidden"]');
+    const searchInput = container.querySelector('.part-search-input');
+    const dropdown = container.querySelector('.part-search-dropdown');
+    const selected = container.querySelector('.part-search-selected');
+    hiddenInput.value = partId;
+    selected.querySelector('.part-id').textContent = partId;
+    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
+    selected.style.display = 'flex';
+    searchInput.style.display = 'none';
+    dropdown.classList.remove('active');
+    dropdown.innerHTML = '';
+}
+
+function clearPartSelection(prefix) {
+    const container = document.getElementById(prefix + '-part-search').closest('.part-search-container');
+    container.querySelector('input[type="hidden"]').value = '';
+    container.querySelector('.part-search-input').value = '';
+    container.querySelector('.part-search-input').style.display = 'block';
+    container.querySelector('.part-search-selected').style.display = 'none';
+}
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && evt.detail.target.classList.contains('part-search-dropdown')) {
+        const dropdown = evt.detail.target;
+        if (dropdown.innerHTML.trim()) dropdown.classList.add('active');
+        else dropdown.classList.remove('active');
+    }
+});
+
 function toggleTypeFields() {
     const type = document.getElementById('issue-type').value;
     document.getElementById('nc-fields').style.display = type === 'non_conformance' ? '' : 'none';

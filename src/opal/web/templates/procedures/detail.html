@@ -198,13 +198,26 @@
                 <form id="step-part-form" onsubmit="addStepPart(event)">
                     <input type="hidden" id="step-part-step-id" value="">
                     <div class="form-group">
-                        <label class="form-label" for="step-part-id">PART *</label>
-                        <select id="step-part-id" name="part_id" class="form-select" required>
-                            <option value="">Select part...</option>
-                            {% for p in parts %}
-                            <option value="{{ p.id }}">{{ p.id }} - {{ p.name }}{% if p.external_pn %} ({{ p.external_pn }}){% endif %}</option>
-                            {% endfor %}
-                        </select>
+                        <label class="form-label" for="step-part-part-search">PART *</label>
+                        <div class="part-search-container">
+                            <input type="text"
+                                   id="step-part-part-search"
+                                   class="form-input part-search-input"
+                                   placeholder="Search parts..."
+                                   autocomplete="off"
+                                   hx-get="/parts/search"
+                                   hx-trigger="keyup changed delay:200ms"
+                                   hx-target="#step-part-results"
+                                   hx-vals='{"limit": 5}'
+                                   name="q">
+                            <input type="hidden" id="step-part-id" name="part_id" required>
+                            <div id="step-part-results" class="part-search-dropdown"></div>
+                            <div id="step-part-selected" class="part-search-selected" style="display: none;">
+                                <span class="part-id"></span>
+                                <span class="part-name"></span>
+                                <span class="part-search-clear" onclick="clearPartSelection('step-part')">&times;</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="step-part-qty">QUANTITY *</label>
@@ -545,6 +558,7 @@ function showAddStepPart(stepId) {
 function hideAddStepPart() {
     document.getElementById('step-part-modal').style.display = 'none';
     document.getElementById('step-part-form').reset();
+    clearPartSelection('step-part');
 }
 
 async function addStepPart(event) {

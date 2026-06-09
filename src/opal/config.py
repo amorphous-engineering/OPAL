@@ -88,6 +88,11 @@ class Settings(BaseSettings):
 
     # Authentication
     auth_mode: str = Field(default="local", description="Auth mode: 'local' or 'exe'")
+    auth_secret: str = Field(
+        default="",
+        description="Secret for signing session cookies (auto-generated next to the "
+        "database file when unset)",
+    )
 
     # Onshape integration (off by default)
     onshape_access_key: str = Field(default="", description="Onshape API access key")

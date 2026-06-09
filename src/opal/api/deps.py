@@ -3,9 +3,10 @@
 from collections.abc import Generator
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from opal.core.auth import AUTH_COOKIE, verify_user_id
 from opal.db.base import SessionLocal
 from opal.db.models import User
 
@@ -24,13 +25,18 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 
 def get_current_user_id(
+    request: Request,
     x_user_id: Annotated[int | None, Header()] = None,
 ) -> int | None:
-    """Get current user ID from request header.
+    """Get current user ID for the request.
 
-    Note: This is a placeholder for real auth. Currently uses honor system
-    via X-User-Id header.
+    Prefers the signed session cookie (browser sessions, cannot be forged).
+    Falls back to the X-User-Id header for programmatic clients (TUI, MCP),
+    which remain honor-system on the local network.
     """
+    cookie_user_id = verify_user_id(request.cookies.get(AUTH_COOKIE))
+    if cookie_user_id is not None:
+        return cookie_user_id
     return x_user_id
 
 

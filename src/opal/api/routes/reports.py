@@ -30,7 +30,7 @@ class ReportSummary(BaseModel):
 
 
 @router.get("/parts/csv")
-async def export_parts_csv(
+def export_parts_csv(
     db: DbSession,
     category: str | None = Query(None),
     low_stock: bool = Query(False, description="Only parts below minimum stock"),
@@ -100,7 +100,7 @@ async def export_parts_csv(
 
 
 @router.get("/inventory/csv")
-async def export_inventory_csv(
+def export_inventory_csv(
     db: DbSession,
     location: str | None = Query(None),
 ) -> StreamingResponse:
@@ -157,7 +157,7 @@ async def export_inventory_csv(
 
 
 @router.get("/executions/csv")
-async def export_executions_csv(
+def export_executions_csv(
     db: DbSession,
     status: str | None = Query(None),
     procedure_id: int | None = Query(None),
@@ -243,7 +243,7 @@ async def export_executions_csv(
 
 
 @router.get("/issues/csv")
-async def export_issues_csv(
+def export_issues_csv(
     db: DbSession,
     status: str | None = Query(None),
     issue_type: str | None = Query(None),
@@ -310,7 +310,7 @@ async def export_issues_csv(
 
 
 @router.get("/risks/csv")
-async def export_risks_csv(
+def export_risks_csv(
     db: DbSession,
     status: str | None = Query(None),
     min_score: int | None = Query(None, description="Minimum risk score"),
@@ -387,7 +387,7 @@ class ExecutionMetrics(BaseModel):
 
 
 @router.get("/analytics/executions", response_model=ExecutionMetrics)
-async def get_execution_metrics(
+def get_execution_metrics(
     db: DbSession,
     procedure_id: int | None = Query(None),
     from_date: datetime | None = Query(None),
@@ -445,7 +445,7 @@ class IssueMetrics(BaseModel):
 
 
 @router.get("/analytics/issues", response_model=IssueMetrics)
-async def get_issue_metrics(
+def get_issue_metrics(
     db: DbSession,
     from_date: datetime | None = Query(None),
     to_date: datetime | None = Query(None),

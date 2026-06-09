@@ -172,7 +172,7 @@ async def upload_attachment(
 
 
 @router.get("/{attachment_id}/download")
-async def download_attachment(
+def download_attachment(
     db: DbSession,
     attachment_id: int,
 ) -> FileResponse:
@@ -195,7 +195,7 @@ async def download_attachment(
 
 
 @router.get("", response_model=list[AttachmentResponse])
-async def list_attachments(
+def list_attachments(
     db: DbSession,
     procedure_instance_id: int | None = Query(None),
     step_execution_id: int | None = Query(None),
@@ -223,7 +223,7 @@ async def list_attachments(
 
 
 @router.patch("/{attachment_id}", response_model=AttachmentResponse)
-async def patch_attachment(
+def patch_attachment(
     db: DbSession,
     attachment_id: int,
     payload: AttachmentPatchRequest,
@@ -250,7 +250,7 @@ async def patch_attachment(
 
 
 @router.delete("/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_attachment(
+def delete_attachment(
     db: DbSession,
     attachment_id: int,
     user_id: CurrentUserId,

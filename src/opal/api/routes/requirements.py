@@ -93,7 +93,7 @@ def get_requirement_response(pr: PartRequirement) -> PartRequirementResponse:
 
 
 @router.get("/project", response_model=list[ProjectRequirementResponse])
-async def list_project_requirements() -> list[ProjectRequirementResponse]:
+def list_project_requirements() -> list[ProjectRequirementResponse]:
     """List all requirements defined in the project config."""
     project = get_active_project()
     if not project:
@@ -111,7 +111,7 @@ async def list_project_requirements() -> list[ProjectRequirementResponse]:
 
 
 @router.get("/parts/{part_id}", response_model=list[PartRequirementResponse])
-async def list_part_requirements(
+def list_part_requirements(
     db: DbSession,
     part_id: int,
 ) -> list[PartRequirementResponse]:
@@ -130,7 +130,7 @@ async def list_part_requirements(
 @router.post(
     "/parts/{part_id}", response_model=PartRequirementResponse, status_code=status.HTTP_201_CREATED
 )
-async def assign_requirement(
+def assign_requirement(
     db: DbSession,
     part_id: int,
     req_in: RequirementAssign,
@@ -185,7 +185,7 @@ async def assign_requirement(
 
 
 @router.patch("/{requirement_id}", response_model=PartRequirementResponse)
-async def update_part_requirement(
+def update_part_requirement(
     db: DbSession,
     requirement_id: int,
     req_in: RequirementUpdate,
@@ -222,7 +222,7 @@ async def update_part_requirement(
 
 
 @router.post("/{requirement_id}/verify", response_model=PartRequirementResponse)
-async def verify_requirement(
+def verify_requirement(
     db: DbSession,
     requirement_id: int,
     verify_in: RequirementVerify,
@@ -254,7 +254,7 @@ async def verify_requirement(
 
 
 @router.delete("/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def unassign_requirement(
+def unassign_requirement(
     db: DbSession,
     requirement_id: int,
     user_id: CurrentUserId,

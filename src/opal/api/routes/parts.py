@@ -131,7 +131,7 @@ def get_part_with_quantity(db: DbSession, part: Part) -> PartResponse:
 
 
 @router.get("", response_model=PartListResponse)
-async def list_parts(
+def list_parts(
     db: DbSession,
     pagination: PaginationParams,
     search: str | None = Query(None, description="Search in name, external_pn, description"),
@@ -215,7 +215,7 @@ def generate_internal_pn(db: DbSession, tier: int) -> str:
 
 
 @router.post("", response_model=PartResponse, status_code=status.HTTP_201_CREATED)
-async def create_part(
+def create_part(
     db: DbSession,
     part_in: PartCreate,
     user_id: CurrentUserId,
@@ -263,7 +263,7 @@ async def create_part(
 
 
 @router.get("/categories")
-async def list_categories(db: DbSession) -> list[str]:
+def list_categories(db: DbSession) -> list[str]:
     """List all unique part categories."""
     categories = (
         db.query(Part.category)
@@ -275,7 +275,7 @@ async def list_categories(db: DbSession) -> list[str]:
 
 
 @router.get("/{part_id}/qrcode")
-async def get_part_qrcode(
+def get_part_qrcode(
     db: DbSession,
     part_id: int,
     request: Request,
@@ -297,7 +297,7 @@ async def get_part_qrcode(
 
 
 @router.get("/{part_id}", response_model=PartResponse)
-async def get_part(
+def get_part(
     db: DbSession,
     part_id: int,
 ) -> PartResponse:
@@ -313,7 +313,7 @@ async def get_part(
 
 
 @router.patch("/{part_id}", response_model=PartResponse)
-async def update_part(
+def update_part(
     db: DbSession,
     part_id: int,
     part_in: PartUpdate,
@@ -364,7 +364,7 @@ async def update_part(
 
 
 @router.delete("/{part_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_part(
+def delete_part(
     db: DbSession,
     part_id: int,
     user_id: CurrentUserId,
@@ -581,7 +581,7 @@ class ImportRequest(BaseModel):
 
 
 @router.post("/import", response_model=ImportResult)
-async def import_parts(
+def import_parts(
     db: DbSession,
     import_in: ImportRequest,
     user_id: CurrentUserId,

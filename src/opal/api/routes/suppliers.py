@@ -75,7 +75,7 @@ class SupplierListResponse(BaseModel):
 
 
 @router.get("", response_model=SupplierListResponse)
-async def list_suppliers(
+def list_suppliers(
     db: DbSession,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
@@ -133,7 +133,7 @@ async def list_suppliers(
 
 
 @router.post("", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)
-async def create_supplier(
+def create_supplier(
     db: DbSession,
     data: SupplierCreate,
     user_id: CurrentUserId,
@@ -174,7 +174,7 @@ async def create_supplier(
 
 
 @router.get("/{supplier_id}", response_model=SupplierResponse)
-async def get_supplier(
+def get_supplier(
     db: DbSession,
     supplier_id: int,
 ):
@@ -205,7 +205,7 @@ async def get_supplier(
 
 
 @router.patch("/{supplier_id}", response_model=SupplierResponse)
-async def update_supplier(
+def update_supplier(
     db: DbSession,
     supplier_id: int,
     data: SupplierUpdate,
@@ -264,7 +264,7 @@ async def update_supplier(
 
 
 @router.delete("/{supplier_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_supplier(
+def delete_supplier(
     db: DbSession,
     supplier_id: int,
     user_id: CurrentUserId,

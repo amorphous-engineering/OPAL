@@ -12,6 +12,7 @@
     <td>{{ ok.mono(part.unit_of_measure) }}</td>
 </tr>
 {% endfor %}
+{% include 'partials/pagination_row.html' %}
 {% else %}
 <tr>
     <td colspan="8">

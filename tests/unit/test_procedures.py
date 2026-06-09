@@ -427,7 +427,9 @@ def _make_proc_with_step(client) -> tuple[int, int]:
 
 def _login(client, test_user) -> None:
     """Authenticate the web client by setting the local-auth cookie."""
-    client.cookies.set("opal_user_id", str(test_user.id))
+    from opal.core.auth import sign_user_id
+
+    client.cookies.set("opal_user_id", sign_user_id(test_user.id))
 
 
 def test_procedure_detail_default_tab_is_meta(client, test_user):

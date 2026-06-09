@@ -55,7 +55,7 @@ class UserListResponse(BaseModel):
 
 
 @router.get("", response_model=UserListResponse)
-async def list_users(
+def list_users(
     db: DbSession,
     pagination: PaginationParams,
     admin: RequiredAdmin,
@@ -83,7 +83,7 @@ async def list_users(
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(
+def create_user(
     db: DbSession,
     user_in: UserCreate,
     admin: RequiredAdmin,
@@ -109,7 +109,7 @@ async def create_user(
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(
+def get_user(
     db: DbSession,
     user_id: int,
 ) -> UserResponse:
@@ -133,7 +133,7 @@ async def get_user(
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
-async def update_user(
+def update_user(
     db: DbSession,
     user_id: int,
     user_in: UserUpdate,
@@ -209,7 +209,7 @@ async def update_user(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(
+def delete_user(
     db: DbSession,
     user_id: int,
     acting_user: RequiredUser,
@@ -321,7 +321,7 @@ async def heartbeat(
 
 
 @router.get("/online", response_model=list[OnlineUserResponse])
-async def get_online_users(
+def get_online_users(
     db: DbSession,
 ) -> list[OnlineUserResponse]:
     """Get list of currently online users.
@@ -352,7 +352,7 @@ async def get_online_users(
 
 
 @router.get("/{user_id}/presence", response_model=OnlineUserResponse)
-async def get_user_presence(
+def get_user_presence(
     user_id: int,
     db: DbSession,
 ) -> OnlineUserResponse:

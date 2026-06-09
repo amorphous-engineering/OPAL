@@ -116,7 +116,7 @@ class ProjectConfigResponse(BaseModel):
 
 
 @router.get("/config")
-async def get_project_config() -> ProjectConfigResponse:
+def get_project_config() -> ProjectConfigResponse:
     """Get current project configuration."""
     project = get_active_project()
     if not project:
@@ -125,7 +125,7 @@ async def get_project_config() -> ProjectConfigResponse:
 
 
 @router.post("/config")
-async def create_project(data: ProjectConfigCreate, admin: RequiredAdmin) -> ProjectConfigResponse:
+def create_project(data: ProjectConfigCreate, admin: RequiredAdmin) -> ProjectConfigResponse:
     """Create a new project configuration."""
     directory = Path(data.directory).resolve()
 
@@ -186,9 +186,7 @@ async def create_project(data: ProjectConfigCreate, admin: RequiredAdmin) -> Pro
 
 
 @router.put("/config")
-async def update_project_config(
-    data: ProjectConfigUpdate, admin: RequiredAdmin
-) -> ProjectConfigResponse:
+def update_project_config(data: ProjectConfigUpdate, admin: RequiredAdmin) -> ProjectConfigResponse:
     """Update existing project configuration."""
     project = get_active_project()
     if not project:
@@ -255,7 +253,7 @@ class PartNumberPreviewResponse(BaseModel):
 
 
 @router.post("/preview-part-number")
-async def preview_part_number(data: PartNumberPreview) -> PartNumberPreviewResponse:
+def preview_part_number(data: PartNumberPreview) -> PartNumberPreviewResponse:
     """Preview what a part number would look like."""
     project = get_active_project()
     if not project:

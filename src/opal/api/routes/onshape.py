@@ -95,7 +95,7 @@ class DocumentRefResponse(BaseModel):
 
 
 @router.get("/status", response_model=OnshapeStatusResponse)
-async def onshape_status() -> OnshapeStatusResponse:
+def onshape_status() -> OnshapeStatusResponse:
     """Get Onshape integration status."""
     from opal.config import get_active_project, get_active_settings
 
@@ -229,7 +229,7 @@ async def add_document(body: AddDocumentRequest) -> DocumentRefResponse:
     "/documents/{document_id}/{element_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def remove_document(
+def remove_document(
     document_id: str = Path(...),
     element_id: str = Path(...),
 ) -> None:
@@ -405,7 +405,7 @@ async def trigger_push_sync(
 
 
 @router.get("/sync/logs", response_model=list[SyncLogResponse])
-async def get_sync_logs(
+def get_sync_logs(
     db: DbSession,
     limit: int = Query(20, ge=1, le=100),
     direction: str | None = Query(None, description="Filter by 'pull' or 'push'"),
@@ -440,7 +440,7 @@ async def get_sync_logs(
 
 
 @router.get("/links", response_model=list[OnshapeLinkResponse])
-async def get_links(
+def get_links(
     db: DbSession,
     document_id: str | None = Query(None),
     stale: bool | None = Query(None),
@@ -474,7 +474,7 @@ async def get_links(
 
 
 @router.delete("/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_link(
+def delete_link(
     db: DbSession,
     link_id: int,
     user_id: CurrentUserId,

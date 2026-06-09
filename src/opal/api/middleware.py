@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse
 
 from opal.config import get_active_settings
+from opal.core.auth import AUTH_COOKIE, AUTH_COOKIE_MAX_AGE, sign_user_id, verify_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +78,11 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in self.LOCAL_EXEMPT):
             return await call_next(request)
 
-        user_id = request.cookies.get("opal_user_id")
-        if not user_id:
-            return RedirectResponse(url="/login", status_code=302)
+        if verify_user_id(request.cookies.get(AUTH_COOKIE)) is None:
+            # Missing, unsigned or tampered cookie: start a fresh session
+            response = RedirectResponse(url="/login", status_code=302)
+            response.delete_cookie(AUTH_COOKIE)
+            return response
 
         return await call_next(request)
 
@@ -109,25 +112,21 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
         if user["needs_profile_setup"]:
             response = RedirectResponse(url="/setup-profile", status_code=302)
             # Set cookies so the setup page knows who the user is
-            max_age = 365 * 24 * 3600
-            response.set_cookie("opal_user_id", str(user["id"]), max_age=max_age)
-            response.set_cookie("opal_user_name", user["name"], max_age=max_age)
-            response.set_cookie("opal_user_email", user["email"] or "", max_age=max_age)
-            response.set_cookie(
-                "opal_user_is_admin", "1" if user["is_admin"] else "0", max_age=max_age
-            )
+            self._set_user_cookies(response, user)
             return response
 
         # Set cookies so the rest of the app works unchanged
         response = await call_next(request)
+        self._set_user_cookies(response, user)
+        return response
 
-        max_age = 365 * 24 * 3600
-        response.set_cookie("opal_user_id", str(user["id"]), max_age=max_age)
+    @staticmethod
+    def _set_user_cookies(response: Response, user: dict) -> None:
+        max_age = AUTH_COOKIE_MAX_AGE
+        response.set_cookie(AUTH_COOKIE, sign_user_id(user["id"]), max_age=max_age, httponly=True)
         response.set_cookie("opal_user_name", user["name"], max_age=max_age)
         response.set_cookie("opal_user_email", user["email"] or "", max_age=max_age)
         response.set_cookie("opal_user_is_admin", "1" if user["is_admin"] else "0", max_age=max_age)
-
-        return response
 
     async def _get_or_create_exe_user(self, exe_user_id: str, exe_email: str) -> dict | None:
         """Look up user by exe_user_id, auto-create if not found."""

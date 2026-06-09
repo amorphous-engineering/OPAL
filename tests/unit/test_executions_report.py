@@ -15,7 +15,9 @@ from opal.db.models.execution import InstanceStatus, ProcedureInstance
 @pytest.fixture
 def web_client(client: TestClient, test_user: User) -> TestClient:
     """TestClient pre-authenticated with the cookie the auth middleware expects."""
-    client.cookies.set("opal_user_id", str(test_user.id))
+    from opal.core.auth import sign_user_id
+
+    client.cookies.set("opal_user_id", sign_user_id(test_user.id))
     return client
 
 

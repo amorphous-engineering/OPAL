@@ -1,6 +1,7 @@
 """Execution API routes - procedure instances and step execution."""
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -146,7 +147,7 @@ class NonConformanceCreate(BaseModel):
 
 
 @router.get("", response_model=InstanceListResponse)
-async def list_instances(
+def list_instances(
     db: DbSession,
     procedure_id: int | None = Query(None),
     status: str | None = Query(None),
@@ -224,7 +225,7 @@ async def list_instances(
 
 
 @router.post("", response_model=InstanceResponse, status_code=201)
-async def create_instance(
+def create_instance(
     data: InstanceCreate,
     db: DbSession,
     user_id: CurrentUserId,
@@ -384,7 +385,7 @@ async def create_instance(
 
 
 @router.get("/{instance_id}", response_model=InstanceResponse)
-async def get_instance(
+def get_instance(
     instance_id: int,
     db: DbSession,
 ) -> InstanceResponse:
@@ -433,7 +434,7 @@ async def get_instance(
 
 
 @router.patch("/{instance_id}", response_model=InstanceResponse)
-async def update_instance(
+def update_instance(
     instance_id: int,
     data: InstanceUpdate,
     db: DbSession,
@@ -827,7 +828,7 @@ class StepNotesUpdate(BaseModel):
 
 
 @router.patch("/{instance_id}/steps/{step_number}/notes", response_model=StepExecutionResponse)
-async def update_step_notes(
+def update_step_notes(
     instance_id: int,
     step_number: int,
     data: StepNotesUpdate,
@@ -876,7 +877,7 @@ class StepSkip(BaseModel):
 
 
 @router.post("/{instance_id}/steps/{step_number}/skip", response_model=StepExecutionResponse)
-async def skip_step(
+def skip_step(
     instance_id: int,
     step_number: int,
     data: StepSkip,
@@ -1114,7 +1115,7 @@ def _check_instance_completion(instance: ProcedureInstance, db: DbSession) -> No
 
 
 @router.post("/{instance_id}/steps/{step_number}/nc", status_code=201)
-async def log_non_conformance(
+def log_non_conformance(
     instance_id: int,
     step_number: int,
     data: NonConformanceCreate,
@@ -1206,7 +1207,7 @@ async def log_non_conformance(
 
 
 @router.get("/{instance_id}/version-content")
-async def get_instance_version_content(
+def get_instance_version_content(
     instance_id: int,
     db: DbSession,
 ) -> dict:
@@ -1270,7 +1271,7 @@ class ConsumptionResponse(BaseModel):
 
 
 @router.get("/{instance_id}/kit-availability", response_model=KitAvailabilityResponse)
-async def check_kit_availability(
+def check_kit_availability(
     instance_id: int,
     db: DbSession,
 ) -> KitAvailabilityResponse:
@@ -1330,7 +1331,7 @@ async def check_kit_availability(
 
 
 @router.post("/{instance_id}/consume", response_model=list[ConsumptionResponse])
-async def consume_kit(
+def consume_kit(
     instance_id: int,
     data: ConsumeKitRequest,
     db: DbSession,
@@ -1363,8 +1364,9 @@ async def consume_kit(
                 detail=f"Insufficient quantity at {inv_record.location} (have {inv_record.quantity}, need {item.quantity})",
             )
 
-        # Deduct from inventory
-        inv_record.quantity = float(inv_record.quantity) - item.quantity
+        # Deduct from inventory; SQL-side expression so concurrent
+        # consumptions cannot lose updates via read-modify-write
+        inv_record.quantity = InventoryRecord.quantity - Decimal(str(item.quantity))
 
         # Create consumption record
         consumption = InventoryConsumption(
@@ -1410,7 +1412,7 @@ class StepConsumeRequest(BaseModel):
 
 
 @router.post("/{instance_id}/steps/{step_number}/consume", response_model=list[ConsumptionResponse])
-async def consume_step_parts(
+def consume_step_parts(
     instance_id: int,
     step_number: int,
     data: StepConsumeRequest,
@@ -1463,7 +1465,8 @@ async def consume_step_parts(
                     status_code=400,
                     detail=f"Insufficient quantity at {inv_record.location} (have {inv_record.quantity}, need {item.quantity})",
                 )
-            inv_record.quantity = float(inv_record.quantity) - item.quantity
+            # SQL-side decrement avoids lost updates under concurrency
+            inv_record.quantity = InventoryRecord.quantity - Decimal(str(item.quantity))
 
         # Create consumption record linked to step
         consumption = InventoryConsumption(
@@ -1498,7 +1501,7 @@ async def consume_step_parts(
 @router.get(
     "/{instance_id}/steps/{step_number}/consumptions", response_model=list[ConsumptionResponse]
 )
-async def get_step_consumptions(
+def get_step_consumptions(
     instance_id: int,
     step_number: int,
     db: DbSession,
@@ -1532,7 +1535,7 @@ async def get_step_consumptions(
 
 
 @router.get("/{instance_id}/consumptions", response_model=list[ConsumptionResponse])
-async def get_consumptions(
+def get_consumptions(
     instance_id: int,
     db: DbSession,
 ) -> list[ConsumptionResponse]:
@@ -1601,7 +1604,7 @@ class ProductionResponse(BaseModel):
 
 
 @router.get("/{instance_id}/outputs", response_model=list[OutputItem])
-async def get_procedure_outputs(
+def get_procedure_outputs(
     instance_id: int,
     db: DbSession,
 ) -> list[OutputItem]:
@@ -1627,7 +1630,7 @@ async def get_procedure_outputs(
 
 
 @router.post("/{instance_id}/produce", response_model=list[ProductionResponse])
-async def produce_output(
+def produce_output(
     instance_id: int,
     data: ProduceRequest,
     db: DbSession,
@@ -1699,7 +1702,7 @@ async def produce_output(
 
 
 @router.get("/{instance_id}/productions", response_model=list[ProductionResponse])
-async def get_productions(
+def get_productions(
     instance_id: int,
     db: DbSession,
 ) -> list[ProductionResponse]:
@@ -1776,7 +1779,7 @@ class FinalizeRequest(BaseModel):
 
 
 @router.get("/{instance_id}/bom-reconciliation", response_model=BOMReconciliationResponse)
-async def get_bom_reconciliation(
+def get_bom_reconciliation(
     instance_id: int,
     db: DbSession,
 ) -> BOMReconciliationResponse:
@@ -1865,7 +1868,7 @@ def _build_bom_reconciliation(db, instance) -> BOMReconciliationResponse:
 
 
 @router.post("/{instance_id}/finalize", status_code=200)
-async def finalize_production(
+def finalize_production(
     instance_id: int,
     data: FinalizeRequest,
     db: DbSession,
@@ -2059,7 +2062,7 @@ async def leave_execution(
 
 
 @router.get("/{instance_id}/participants", response_model=ParticipantsResponse)
-async def get_participants(
+def get_participants(
     instance_id: int,
     db: DbSession,
 ) -> ParticipantsResponse:
@@ -2173,7 +2176,7 @@ def _redline_op_response(db, op_row: StepExecution) -> AdHocOpResponse:
     response_model=AdHocOpResponse,
     status_code=201,
 )
-async def create_ad_hoc_op(
+def create_ad_hoc_op(
     instance_id: int,
     payload: AdHocOpCreate,
     db: DbSession,
@@ -2284,7 +2287,7 @@ async def create_ad_hoc_op(
 
 
 @router.get("/{instance_id}/ad-hoc-ops", response_model=list[AdHocOpResponse])
-async def list_ad_hoc_ops(
+def list_ad_hoc_ops(
     instance_id: int,
     db: DbSession,
 ) -> list[AdHocOpResponse]:
@@ -2307,7 +2310,7 @@ async def list_ad_hoc_ops(
 
 
 @router.delete("/{instance_id}/ad-hoc-ops/{op_id}", status_code=204)
-async def delete_ad_hoc_op(
+def delete_ad_hoc_op(
     instance_id: int,
     op_id: int,
     db: DbSession,
