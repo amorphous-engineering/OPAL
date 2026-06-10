@@ -534,6 +534,8 @@ async function saveStep(event, stepId) {
         instructions: form.instructions.value || null,
         estimated_duration_minutes: form.estimated_duration_minutes.value ? parseInt(form.estimated_duration_minutes.value) : null,
         requires_signoff: form.requires_signoff ? form.requires_signoff.checked : false,
+        required_role: form.required_role.value || null,
+        caution: form.caution.value || null,
         required_data_schema: schema,
     };
     if (form.is_contingency) data.is_contingency = form.is_contingency.checked;

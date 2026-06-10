@@ -4,6 +4,9 @@ data/
 # local examples
 EXAMPLES/
 
+# Local planning docs (internal references; executable reference data gets vendored into src/ when needed)
+docs/
+
 # Database files
 *.db
 *.db-journal

@@ -172,10 +172,14 @@ PROJECT_CONFIG_FILENAME = "opal.project.yaml"
 
 
 def find_project_config(start_dir: Path | None = None) -> Path | None:
-    """Find opal.project.yaml in the given directory or any parent.
+    """Find opal.project.yaml in the given directory ONLY — never parents.
+
+    Parent-directory walking was removed deliberately: an instance (e.g. a
+    test checkout in a git worktree) must never be affected by config files
+    outside its own directory. Use --project for anything explicit.
 
     Args:
-        start_dir: Directory to start searching from. Defaults to cwd.
+        start_dir: Directory to check. Defaults to cwd.
 
     Returns:
         Path to the config file if found, None otherwise.
@@ -183,17 +187,7 @@ def find_project_config(start_dir: Path | None = None) -> Path | None:
     if start_dir is None:
         start_dir = Path.cwd()
 
-    current = start_dir.resolve()
-
-    # Search up to filesystem root
-    while current != current.parent:
-        config_path = current / PROJECT_CONFIG_FILENAME
-        if config_path.exists():
-            return config_path
-        current = current.parent
-
-    # Check root directory too
-    config_path = current / PROJECT_CONFIG_FILENAME
+    config_path = start_dir.resolve() / PROJECT_CONFIG_FILENAME
     if config_path.exists():
         return config_path
 
@@ -216,8 +210,25 @@ def load_project_config(config_path: Path) -> ProjectConfig:
     if not config_path.exists():
         raise FileNotFoundError(f"Project config not found: {config_path}")
 
-    with open(config_path) as f:
-        data = yaml.safe_load(f) or {}
+    # Files saved by Windows editors are often cp1252 (em-dashes, curly
+    # quotes) rather than UTF-8; tolerate that instead of crashing every
+    # CLI command that auto-detects this file from a parent directory.
+    raw = config_path.read_bytes()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("cp1252")
+        except UnicodeDecodeError as e:
+            raise ValueError(
+                f"Project config {config_path} is neither UTF-8 nor Windows-1252 "
+                "encoded — re-save it as UTF-8"
+            ) from e
+
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in project config {config_path}: {e}") from e
 
     try:
         config = ProjectConfig(**data)

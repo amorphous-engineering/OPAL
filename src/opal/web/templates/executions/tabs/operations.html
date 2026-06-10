@@ -55,9 +55,11 @@
         {% set op = op_data.step %}
         {% if op.order == selected_op_order %}
         <div class="op-block{% if op.is_contingency %} op-contingency{% endif %}" id="op-{{ op.order }}">
+            {% set op_vs = version_steps_map.get(op.order, {}) %}
             <div class="op-header">
                 <span class="op-number mono">OP {{ op.step_number }}</span>
                 {% if op.is_contingency %}{{ ok.status("CONTINGENCY", "warn") }}{% endif %}
+                {% if op_vs.get('required_role') %}{{ ok.status(op_vs.get('required_role'), "info") }}{% endif %}
                 <span class="op-title">{{ op.title }}</span>
                 <span class="op-progress">{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
                 {% if op.status in ['completed', 'signed_off'] and op.execution and op.execution.completed_by_user %}
@@ -72,6 +74,9 @@
                 <button class="btn btn-sm" onclick='showRedlineModal({{ op.order }}, {{ op.step_number | tojson }}, {{ (op_open_ncs_by_order.get(op.order) or []) | map(attribute="id") | list | tojson }}, {{ (op_open_ncs_by_order.get(op.order) or []) | map(attribute="issue_number") | list | tojson }})' style="margin-left: var(--space-sm); border-color: var(--accent-red); color: var(--accent-red);">+ ADD REDLINE OP</button>
                 {% endif %}
             </div>
+            {% if op_vs.get('caution') %}
+            <div class="caution-block">CAUTION: {{ op_vs.get('caution') }}</div>
+            {% endif %}
 
             {% if op_data.sub_steps %}
             {% for step in op_data.sub_steps %}
@@ -83,6 +88,7 @@
                 <summary class="step-summary">
                     <span class="step-number mono">{{ step_display_number }}</span>
                     <span class="step-title">{{ step.title }}</span>
+                    {% if vs.get('required_role') %}{{ ok.status(vs.get('required_role'), "info") }}{% endif %}
                     {% if step.status in ['completed', 'signed_off'] and step.execution and step.execution.completed_by_user %}
                     {{ ok.status("COMPLETED BY " ~ step.execution.completed_by_user.name|upper, "ok") }}
                     {% else %}
@@ -101,6 +107,9 @@
                         <strong>ON HOLD</strong> — awaiting disposition approval on
                         {% for nc in hold_ncs %}<a href="/issues/{{ nc.id }}" class="mono">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
                     </div>
+                    {% endif %}
+                    {% if vs.get('caution') %}
+                    <div class="caution-block">CAUTION: {{ vs.get('caution') }}</div>
                     {% endif %}
                     {% if step.instructions %}
                     <div class="step-instructions" data-markdown>{{ step.instructions }}</div>

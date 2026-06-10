@@ -1,0 +1,31 @@
+{# Baseline readiness panel — rendered server-side from readiness(),
+   re-fetched via GET /requirements/{id}/baseline-panel after field saves.
+   Hidden entirely on baselined/superseded/cancelled rows (the caller decides). #}
+{% set hard_clear = readiness.checks | selectattr("severity", "equalto", "hard") | selectattr("passed", "equalto", false) | list | length == 0 %}
+<div class="baseline-panel mono">
+    <div class="baseline-panel-title">BASELINE READINESS</div>
+    {% for check in readiness.checks %}
+    <div class="baseline-check {% if not check.passed %}{% if check.severity == 'hard' %}baseline-check-fail{% else %}baseline-check-warn{% endif %}{% endif %}">
+        <span class="baseline-check-box">[{{ 'x' if check.passed else ' ' }}]</span>
+        <span class="baseline-check-label">{{ check.label }}</span>
+        {% if not check.passed and check.detail %}
+        <span class="baseline-check-detail">← {{ check.detail }}{% if check.severity == 'warning' %} (warning — does not block){% endif %}</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+    <div class="baseline-panel-rule">──────────────────────────────</div>
+    <button type="button" class="btn btn-primary" id="baseline-btn"
+            {% if not hard_clear %}disabled title="clear the hard blockers above first"{% endif %}
+            onclick="openBaselineConfirm()">
+        BASELINE {{ req.req_number }}
+    </button>
+    <div id="baseline-confirm" class="baseline-confirm" style="display: none;">
+        <div class="baseline-signature">
+            baselining <span class="text-green">{{ req.req_number }} rev {{ req.revision }}</span><br>
+            signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
+            · <span id="baseline-sign-time"></span>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="commitBaseline()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+        <button type="button" class="btn" onclick="document.getElementById('baseline-confirm').style.display='none'">ABORT</button>
+    </div>
+</div>

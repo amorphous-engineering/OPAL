@@ -73,15 +73,24 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _session_user_id(request: Request) -> int | None:
-        """Resolve the session cookie to an active user id, if any."""
+        """Resolve the session cookie to an active user id, if any.
+
+        Covers stale credentials by construction: a session minted before a
+        database switch or factory reset simply does not exist in the new
+        database and resolves to None (logged out). A pre-init or mid-switch
+        database fails closed the same way rather than raising.
+        """
         from opal.db.session import get_session
 
         token = request.cookies.get(SESSION_COOKIE)
         if not token:
             return None
-        with get_session() as db:
-            user = resolve_session(db, token)
-            return user.id if user else None
+        try:
+            with get_session() as db:
+                user = resolve_session(db, token)
+                return user.id if user else None
+        except Exception:
+            return None
 
     async def _dispatch_local(self, request: Request, call_next) -> Response:
         """Local mode: require a valid session for web pages."""
@@ -89,6 +98,8 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in self.LOCAL_EXEMPT):
             return await call_next(request)
 
+        # A session surviving a database switch/reset resolves to None in
+        # the new database — treated as logged out, not as valid.
         if self._session_user_id(request) is None:
             response = RedirectResponse(url="/login", status_code=302)
             response.delete_cookie(SESSION_COOKIE)

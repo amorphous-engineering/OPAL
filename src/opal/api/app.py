@@ -24,29 +24,25 @@ STATIC_DIR = Path(__file__).parent.parent / "web" / "static"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan handler."""
-    settings = get_settings()
-    settings.ensure_directories()
+def start_onshape_polling(app: FastAPI) -> None:
+    """(Re)start the Onshape polling task for the currently active settings.
 
-    # Overlay DB-stored AppSetting values (Onshape credentials edited via
-    # /settings/onshape) on top of env-loaded settings before we read any
-    # integration config.
-    from opal.config import apply_db_overlay, get_active_settings
-    from opal.db.base import SessionLocal
+    Cancels any existing task first — called at startup and again after
+    database switches (demo enter/exit, factory reset).
+    """
+    from opal.config import get_active_settings
 
-    with contextlib.suppress(Exception), SessionLocal() as _db:
-        apply_db_overlay(_db)
+    existing: asyncio.Task | None = getattr(app.state, "onshape_polling_task", None)
+    if existing and not existing.done():
+        existing.cancel()
+    app.state.onshape_polling_task = None
+
     settings = get_active_settings()
-
-    # Start Onshape polling if enabled
-    polling_task: asyncio.Task | None = None
     if settings.onshape_enabled and settings.onshape_poll_interval_minutes > 0:
         try:
             from opal.integrations.onshape.polling import onshape_polling_loop
 
-            polling_task = asyncio.create_task(
+            app.state.onshape_polling_task = asyncio.create_task(
                 onshape_polling_loop(settings.onshape_poll_interval_minutes)
             )
             logging.getLogger(__name__).info(
@@ -56,9 +52,41 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             logging.getLogger(__name__).warning("Failed to start Onshape polling", exc_info=True)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan handler."""
+    from opal.config import apply_db_overlay, bootstrap_project_config, get_active_settings
+    from opal.core import lifecycle
+    from opal.db.base import SessionLocal
+
+    settings = get_active_settings()
+    settings.ensure_directories()
+
+    # The server always boots against the real database; demo switches are
+    # runtime-only. Capture the boot URL so lifecycle knows the way home.
+    lifecycle.set_real_database_url(settings.database_url)
+
+    # Overlay DB-stored AppSetting values (Onshape credentials edited via
+    # /settings/onshape) on top of env-loaded settings before we read any
+    # integration config.
+    with contextlib.suppress(Exception), SessionLocal() as _db:
+        apply_db_overlay(_db)
+
+    # Establish project config: DB blob wins; a cwd opal.project.yaml is
+    # imported once. Failures are logged, not swallowed silently.
+    try:
+        with SessionLocal() as _db:
+            bootstrap_project_config(_db)
+    except Exception:
+        logging.getLogger(__name__).warning("Project config bootstrap failed", exc_info=True)
+
+    start_onshape_polling(app)
+
     yield
 
     # Cancel polling on shutdown
+    polling_task: asyncio.Task | None = getattr(app.state, "onshape_polling_task", None)
     if polling_task and not polling_task.done():
         polling_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):

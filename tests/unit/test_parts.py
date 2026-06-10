@@ -137,3 +137,20 @@ def test_get_categories(client):
     categories = response.json()
     assert "Electronics" in categories
     assert "Mechanical" in categories
+
+
+def test_is_tooling_honored_on_every_tier(client):
+    """is_tooling is an explicit flag; no tier implies it (tiers are project-defined)."""
+    fixture = client.post(
+        "/api/parts",
+        json={"name": "Torque Fixture", "tier": 2, "is_tooling": False},
+    ).json()
+    assert fixture["is_tooling"] is False
+
+    flight = client.post("/api/parts", json={"name": "Flight Bracket", "tier": 1}).json()
+    assert flight["is_tooling"] is False
+
+    loose = client.post(
+        "/api/parts", json={"name": "Bench Meter", "tier": 3, "is_tooling": True}
+    ).json()
+    assert loose["is_tooling"] is True

@@ -1,6 +1,7 @@
 """Web UI routes."""
 
 import contextlib
+import logging
 import math
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -31,6 +32,7 @@ from opal.db.models.execution import InstanceStatus, ProcedureInstance
 from opal.db.models.issue import Issue, IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import MasterProcedure, ProcedureStatus, ProcedureVersion
 from opal.db.models.purchase import PurchaseStatus
+from opal.db.models.requirement import Requirement
 from opal.db.models.risk import Risk, RiskStatus
 from opal.project import DEFAULT_TIERS
 
@@ -133,6 +135,20 @@ def paginate_query(
     return items, pagination
 
 
+def _active_database_path() -> str:
+    """Resolved SQLite path for the footer, evaluated per render.
+
+    Multiple OPAL processes (serve, MCP, installed binaries) can silently
+    resolve different databases; the UI states which one it is serving.
+    """
+    from opal.config import get_active_settings
+
+    return get_active_settings().database_url.removeprefix("sqlite:///")
+
+
+templates.env.globals["active_database_path"] = _active_database_path
+
+
 def _build_change_summary(entry) -> str:
     """Build short text summary of audit log changes."""
     action_val = entry.action.value if hasattr(entry.action, "value") else entry.action
@@ -181,6 +197,8 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
     if current_user:
         is_admin = current_user.is_admin
 
+    from opal.core import lifecycle
+
     return {
         "request": request,
         "title": title,
@@ -191,6 +209,7 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
         "is_admin": is_admin,
         "auth_mode": settings.auth_mode,
         "passkeys_enabled": settings.passkeys_enabled,
+        "demo_active": lifecycle.is_demo_active(),
     }
 
 
@@ -597,6 +616,16 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
     recent_activity = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(15).all()
     context["recent_activity"] = recent_activity
 
+    # Traceability widget — red-only (overdue TBRs, stuck block-lint drafts)
+    # plus exactly one non-red line (ready-to-baseline count).
+    from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs, stale_requirements
+    from opal.se.readiness import ready_requirement_ids
+
+    context["overdue_tbrs"] = overdue_tbrs(db)
+    context["stuck_drafts"] = old_block_lint_drafts(db)
+    context["stale_reqs"] = stale_requirements(db)
+    context["ready_to_baseline"] = len(ready_requirement_ids(db))
+
     return templates.TemplateResponse("index.html", context)
 
 
@@ -857,6 +886,18 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
     step_kit_usages = db.query(StepKit).filter(StepKit.part_id == part.id).all()
     context["step_kit_usages"] = step_kit_usages
 
+    # Allocated requirements (PartRequirement joined to first-class rows)
+    from opal.db.models import PartRequirement
+
+    part_reqs = db.query(PartRequirement).filter(PartRequirement.part_id == part.id).all()
+    context["part_requirements"] = [
+        {
+            "allocation": pr,
+            "req": db.get(Requirement, pr.requirement_ref_id) if pr.requirement_ref_id else None,
+        }
+        for pr in part_reqs
+    ]
+
     # Where Used: consumption history
     from opal.db.models.inventory import InventoryConsumption
 
@@ -900,6 +941,11 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
     except Exception:
         pass
     context["onshape_link"] = onshape_link
+
+    # Supplier catalog entries for this part (hide soft-deleted suppliers)
+    context["supplier_entries"] = [
+        sp for sp in part.supplier_entries if sp.supplier.deleted_at is None
+    ]
 
     return templates.TemplateResponse("parts/detail.html", context)
 
@@ -1263,6 +1309,19 @@ def purchases_detail(request: Request, db: DbSession, purchase_id: int) -> HTMLR
     context = get_base_context(request, db, f"PO-{purchase_id} - OPAL")
     context["purchase"] = purchase
     context["statuses"] = [s.value for s in PurchaseStatus]
+
+    # Expense ledger records (written at receive time)
+    from opal.db.models import PurchaseExpense
+
+    expenses = (
+        db.query(PurchaseExpense)
+        .filter(PurchaseExpense.purchase_id == purchase_id)
+        .order_by(PurchaseExpense.received_at, PurchaseExpense.id)
+        .all()
+    )
+    context["expenses"] = expenses
+    totals = [e.total_cost for e in expenses if e.total_cost is not None]
+    context["expense_total"] = sum(totals) if totals else None
 
     return templates.TemplateResponse("purchases/detail.html", context)
 
@@ -2747,6 +2806,384 @@ def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
     return templates.TemplateResponse("risks/detail.html", context)
 
 
+# ============ REQUIREMENTS ============
+
+
+def _relative_age(dt) -> str:
+    """Dense relative age ('2d') for index rows; full ISO 8601 goes in the tooltip."""
+    if not dt:
+        return "—"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    seconds = (datetime.now(UTC) - dt).total_seconds()
+    if seconds < 60:
+        return "now"
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{int(minutes)}m"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{int(hours)}h"
+    days = hours / 24
+    if days < 14:
+        return f"{int(days)}d"
+    if days < 60:
+        return f"{int(days / 7)}w"
+    if days < 365:
+        return f"{int(days / 30)}mo"
+    return f"{int(days / 365)}y"
+
+
+def _requirement_tree(db: DbSession, root_id: int | None = None) -> tuple[list[dict], int]:
+    """Nested node dicts for the tree page; orphans surface as roots.
+
+    Mirrors the MCP _flowdown_tree children-map logic. Draft/preliminary rows
+    get server-rendered lint underlines (regex lint over the full set is
+    negligible at this scale). With root_id, returns that requirement's
+    children subtrees (the dossier flow-down section).
+    """
+    from opal.db.base import LifecycleState
+    from opal.db.models import PartRequirement
+    from opal.se.lint import lint_statement
+    from opal.web.lint_markup import statement_lint_html
+
+    rows = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.req_number, Requirement.revision)
+        .all()
+    )
+    ids = {r.id for r in rows}
+    by_parent: dict[int | None, list[Requirement]] = {}
+    for r in rows:
+        effective_parent = r.parent_id if r.parent_id in ids else None
+        by_parent.setdefault(effective_parent, []).append(r)
+
+    alloc_map: dict[int, list[str]] = {}
+    alloc_rows = (
+        db.query(PartRequirement.requirement_ref_id, Part.name)
+        .join(Part, PartRequirement.part_id == Part.id)
+        .filter(PartRequirement.requirement_ref_id.isnot(None))
+        .order_by(Part.name)
+        .all()
+    )
+    for ref_id, part_name in alloc_rows:
+        alloc_map.setdefault(ref_id, []).append(part_name)
+
+    def node(r: Requirement, seen: frozenset[int]) -> dict:
+        statement_html = None
+        if r.is_mutable:
+            statement_html = statement_lint_html(r.statement, lint_statement(r.statement))
+        return {
+            "req": r,
+            "statement_html": statement_html,
+            "alloc": alloc_map.get(r.id, []),
+            "age": _relative_age(r.updated_at),
+            "iso": r.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ") if r.updated_at else "",
+            "children": [
+                node(c, seen | {r.id}) for c in by_parent.get(r.id, []) if c.id not in seen
+            ],
+        }
+
+    if root_id is not None:
+        children = [c for c in by_parent.get(root_id, [])]
+        return [node(c, frozenset({root_id, c.id})) for c in children], len(rows)
+    return [node(r, frozenset({r.id})) for r in by_parent.get(None, [])], len(rows)
+
+
+@router.get("/requirements", response_class=HTMLResponse)
+def requirements_tree(request: Request, db: DbSession) -> HTMLResponse:
+    """Requirements tree — the front door for the spec."""
+    from opal.db.base import LifecycleState
+    from opal.se.readiness import ready_requirement_ids
+
+    context = get_base_context(request, db, "Requirements - OPAL")
+    context["tree"], context["total"] = _requirement_tree(db)
+    context["states"] = [s.value for s in LifecycleState]
+    context["queue_count"] = len(ready_requirement_ids(db))
+    return templates.TemplateResponse("requirements/tree.html", context)
+
+
+@router.get("/requirements/list", response_class=HTMLResponse)
+def requirements_list(request: Request, db: DbSession) -> HTMLResponse:
+    """Requirements list page (secondary lens; the tree is the front door)."""
+    from opal.db.base import LifecycleState
+
+    context = get_base_context(request, db, "Requirements - OPAL")
+    context["states"] = [s.value for s in LifecycleState]
+    return templates.TemplateResponse("requirements/list.html", context)
+
+
+@router.get("/requirements/table", response_class=HTMLResponse)
+def requirements_table(
+    request: Request,
+    db: DbSession,
+    search: str | None = Query(None),
+    state: str | None = Query(None),
+    level: str | None = Query(None),
+    show_superseded: str | None = Query(None),
+) -> HTMLResponse:
+    """Requirements table rows (HTMX partial).
+
+    level is str: the filter selects submit level= (empty) for "all", which
+    FastAPI rejects as int | None with a 422.
+    """
+    from opal.db.base import LifecycleState
+
+    query = db.query(Requirement).filter(Requirement.deleted_at.is_(None))
+    if not show_superseded:
+        query = query.filter(Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value)
+    if state:
+        query = query.filter(Requirement.lifecycle_state == state)
+    if level and level.lstrip("-").isdigit():
+        query = query.filter(Requirement.level == int(level))
+    if search:
+        term = f"%{search}%"
+        query = query.filter(
+            Requirement.req_number.ilike(term)
+            | Requirement.title.ilike(term)
+            | Requirement.statement.ilike(term)
+        )
+
+    requirements = query.order_by(Requirement.req_number, Requirement.revision).limit(200).all()
+    return templates.TemplateResponse(
+        "requirements/table_rows.html",
+        {"request": request, "requirements": requirements},
+    )
+
+
+@router.get("/requirements/new", response_class=HTMLResponse)
+def requirements_new(request: Request, db: DbSession) -> HTMLResponse:
+    """New requirement form page."""
+    from opal.db.base import LifecycleState
+
+    context = get_base_context(request, db, "New Requirement - OPAL")
+    context["parents"] = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state.notin_(
+                [LifecycleState.SUPERSEDED.value, LifecycleState.CANCELLED.value]
+            ),
+        )
+        .order_by(Requirement.req_number)
+        .all()
+    )
+    return templates.TemplateResponse("requirements/new.html", context)
+
+
+@router.get("/requirements/queue", response_class=HTMLResponse)
+def requirements_queue(request: Request, db: DbSession) -> HTMLResponse:
+    """Baseline queue review session — one ready requirement per screen."""
+    from opal.db.models import PartRequirement
+    from opal.se.readiness import ready_requirement_ids
+
+    ids = ready_requirement_ids(db)
+    rows = db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
+    rows.sort(key=lambda r: (r.level, r.req_number))
+    by_id = {r.id: r for r in db.query(Requirement).filter(Requirement.deleted_at.is_(None))}
+
+    def root_chain(r: Requirement) -> list[str]:
+        chain: list[str] = []
+        seen = {r.id}
+        cursor = by_id.get(r.parent_id) if r.parent_id else None
+        while cursor is not None and cursor.id not in seen:
+            chain.append(f"{cursor.req_number} {cursor.title}")
+            seen.add(cursor.id)
+            cursor = by_id.get(cursor.parent_id) if cursor.parent_id else None
+        return list(reversed(chain))
+
+    items = []
+    for r in rows:
+        children_count = (
+            db.query(Requirement)
+            .filter(Requirement.parent_id == r.id, Requirement.deleted_at.is_(None))
+            .count()
+        )
+        alloc = (
+            db.query(Part.name)
+            .join(PartRequirement, PartRequirement.part_id == Part.id)
+            .filter(PartRequirement.requirement_ref_id == r.id)
+            .all()
+        )
+        items.append(
+            {
+                "id": r.id,
+                "req_number": r.req_number,
+                "revision": r.revision,
+                "title": r.title,
+                "statement": r.statement,
+                "rationale": r.rationale or "",
+                "level": r.level,
+                "verification_method": r.verification_method or "—",
+                "children_count": children_count,
+                "allocated": [name for (name,) in alloc],
+                "root_chain": root_chain(r),
+            }
+        )
+
+    context = get_base_context(request, db, "Baseline Queue - OPAL")
+    context["queue_items"] = items
+    return templates.TemplateResponse("requirements/queue.html", context)
+
+
+@router.get("/requirements/baselines", response_class=HTMLResponse)
+def requirements_baselines(request: Request, db: DbSession) -> HTMLResponse:
+    """Baseline events history, newest first."""
+    from opal.db.models import BaselineEvent
+
+    events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
+    context = get_base_context(request, db, "Baselines - OPAL")
+    context["events"] = events
+    return templates.TemplateResponse("requirements/baselines.html", context)
+
+
+@router.get("/requirements/baselines/{event_id}", response_class=HTMLResponse)
+def requirements_baseline_event(request: Request, db: DbSession, event_id: int) -> HTMLResponse:
+    """One baseline event: the locked revision set."""
+    from opal.db.models import BaselineEvent
+
+    event = db.query(BaselineEvent).filter(BaselineEvent.id == event_id).first()
+    if not event:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": f"Baseline event {event_id} not found"},
+            status_code=404,
+        )
+    context = get_base_context(request, db, f"Baseline event {event_id} - OPAL")
+    context["event"] = event
+    return templates.TemplateResponse("requirements/baseline_event.html", context)
+
+
+@router.get("/requirements/{req_id}", response_class=HTMLResponse)
+def requirements_detail(request: Request, db: DbSession, req_id: int) -> HTMLResponse:
+    """Requirement detail page."""
+    from opal.db.models import PartRequirement
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": f"Requirement {req_id} not found"},
+            status_code=404,
+        )
+
+    from opal.se.readiness import readiness
+
+    context = get_base_context(request, db, f"{req.req_number} - OPAL")
+    context["req"] = req
+    context["parent"] = req.parent
+
+    # Breadcrumb chain up to the L0 root, root first; cycle-guarded.
+    chain: list[Requirement] = []
+    seen: set[int] = {req.id}
+    cursor = req.parent
+    while cursor is not None and cursor.id not in seen:
+        chain.append(cursor)
+        seen.add(cursor.id)
+        cursor = cursor.parent
+    context["parent_chain"] = list(reversed(chain))
+
+    context["baselined_by"] = (
+        db.query(User).filter(User.id == req.baselined_by_id).first()
+        if req.baselined_by_id
+        else None
+    )
+    context["children_nodes"], _ = _requirement_tree(db, root_id=req.id)
+    context["readiness"] = readiness(db, req)
+    context["allocations"] = (
+        db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).all()
+    )
+    context["revisions"] = (
+        db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .order_by(Requirement.revision)
+        .all()
+    )
+    return templates.TemplateResponse("requirements/detail.html", context)
+
+
+@router.get("/requirements/{req_id}/redline", response_class=HTMLResponse)
+def requirements_redline(
+    request: Request,
+    db: DbSession,
+    req_id: int,
+    rev_a: int | None = Query(None),
+    rev_b: int | None = Query(None),
+) -> HTMLResponse:
+    """Word-diff partial between two revisions of this requirement's number.
+
+    Defaults to this revision vs the one it supersedes.
+    """
+    from opal.se.redline import redline_html
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return HTMLResponse("", status_code=404)
+
+    revisions = {
+        r.revision: r
+        for r in db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .all()
+    }
+    if rev_b is None:
+        rev_b = req.revision
+    if rev_a is None:
+        predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
+        rev_a = predecessor.revision if predecessor else rev_b
+    old = revisions.get(rev_a)
+    new = revisions.get(rev_b)
+    if not old or not new:
+        return HTMLResponse(
+            '<div class="text-muted mono">revision not found</div>', status_code=404
+        )
+    return templates.TemplateResponse(
+        "requirements/_redline.html",
+        {
+            "request": request,
+            "rev_a": old,
+            "rev_b": new,
+            "statement_diff": redline_html(old.statement, new.statement),
+            "rationale_diff": redline_html(old.rationale or "", new.rationale or ""),
+        },
+    )
+
+
+@router.get("/requirements/{req_id}/baseline-panel", response_class=HTMLResponse)
+def requirements_baseline_panel(request: Request, db: DbSession, req_id: int) -> HTMLResponse:
+    """Baseline panel partial — re-fetched by the dossier after field saves."""
+    from opal.se.readiness import readiness
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        "requirements/_baseline_panel.html",
+        {
+            "request": request,
+            "req": req,
+            "readiness": readiness(db, req),
+            "current_user": _get_current_user(request, db),
+        },
+    )
+
+
 # ============ DATASETS ============
 
 
@@ -2949,6 +3386,9 @@ def suppliers_detail(request: Request, db: DbSession, supplier_id: int) -> HTMLR
     context = get_base_context(request, db, f"{supplier.name} - OPAL")
     context["supplier"] = supplier
     context["purchases"] = supplier.purchases
+    context["catalog_entries"] = [
+        sp for sp in supplier.catalog_entries if sp.part.deleted_at is None
+    ]
 
     return templates.TemplateResponse("suppliers/detail.html", context)
 
@@ -3225,8 +3665,6 @@ def docs(request: Request, db: DbSession) -> HTMLResponse:
 @router.get("/project/new", response_class=HTMLResponse)
 def project_new(request: Request, db: DbSession) -> HTMLResponse:
     """New project wizard page. Admin only."""
-    import os
-
     redirect = _require_admin_web(request, db)
     if redirect:
         return redirect
@@ -3235,8 +3673,6 @@ def project_new(request: Request, db: DbSession) -> HTMLResponse:
     context["existing_config"] = None
     context["tiers"] = DEFAULT_TIERS
     context["categories"] = []
-    context["requirements"] = []
-    context["default_directory"] = os.getcwd()
 
     return templates.TemplateResponse("project/wizard.html", context)
 
@@ -3259,7 +3695,6 @@ def project_edit(request: Request, db: DbSession) -> HTMLResponse:
     context["existing_config"] = project
     context["tiers"] = project.tiers
     context["categories"] = project.categories
-    context["requirements"] = project.requirements
 
     return templates.TemplateResponse("project/wizard.html", context)
 
@@ -3325,6 +3760,13 @@ def settings_page(request: Request, db: DbSession) -> HTMLResponse:
         "max_upload_size": max_upload,
     }
 
+    # Instance lifecycle: demo + danger zone
+    from opal.core import lifecycle
+
+    context["demo_active"] = lifecycle.is_demo_active()
+    context["demo_file_exists"] = lifecycle.demo_file_exists()
+    context["demo_db_path"] = str(lifecycle.demo_db_path())
+
     return templates.TemplateResponse("settings/index.html", context)
 
 
@@ -3380,6 +3822,102 @@ def settings_auth_mode_save(
     context["passkeys_enabled"] = passkeys_enabled
     context["save_result"] = {"ok": True, "message": "Authentication settings saved."}
     return templates.TemplateResponse("settings/auth_mode.html", context)
+
+
+# ============ INSTANCE LIFECYCLE: DEMO DATA + FACTORY RESET ============
+
+
+@router.post("/settings/demo/enter")
+def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
+    """Switch the instance to the throwaway demo database (admin only)."""
+    from opal.api.app import start_onshape_polling
+    from opal.api.routes.auth import set_session_cookie
+    from opal.core import lifecycle
+    from opal.core.auth import create_session
+    from opal.db.base import SessionLocal
+    from opal.db.models.user import User as UserModel
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+    current_user = _get_current_user(request, db)
+
+    demo_user_id = lifecycle.enter_demo(current_user)
+    start_onshape_polling(request.app)
+
+    response = RedirectResponse(url="/", status_code=302)
+    if demo_user_id is not None:
+        # Sessions live per-database: mint one in the demo database so the
+        # operator stays logged in across the switch.
+        with SessionLocal() as demo_db:
+            demo_user = demo_db.query(UserModel).filter(UserModel.id == demo_user_id).first()
+            if demo_user:
+                token = create_session(
+                    demo_db,
+                    demo_user,
+                    auth_method="demo",
+                    user_agent=request.headers.get("user-agent"),
+                    ip_address=request.client.host if request.client else None,
+                )
+                demo_db.commit()
+                set_session_cookie(response, request, token)
+    return response
+
+
+@router.post("/settings/demo/exit")
+def settings_demo_exit(request: Request, db: DbSession) -> RedirectResponse:
+    """Exit the demo: switch back to the real database and delete the demo file."""
+    from opal.api.app import start_onshape_polling
+    from opal.api.routes.auth import clear_session_cookie
+    from opal.core import lifecycle
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    lifecycle.exit_demo(delete=True)
+    start_onshape_polling(request.app)
+
+    # Demo-database sessions mean nothing in the real database.
+    response = RedirectResponse(url="/login", status_code=302)
+    clear_session_cookie(response)
+    return response
+
+
+@router.post("/settings/demo/delete")
+def settings_demo_delete(request: Request, db: DbSession) -> RedirectResponse:
+    """Delete an inactive demo database file."""
+    from opal.core import lifecycle
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    # Demo currently active -> no-op; use exit instead
+    with contextlib.suppress(RuntimeError):
+        lifecycle.delete_demo_file()
+    return RedirectResponse(url="/settings", status_code=302)
+
+
+@router.post("/settings/factory-reset")
+def settings_factory_reset(
+    request: Request, db: DbSession, confirm: str = Form("")
+) -> RedirectResponse:
+    """Wipe the instance back to first-run state. Requires typing RESET."""
+    from opal.api.app import start_onshape_polling
+    from opal.api.routes.auth import clear_session_cookie
+    from opal.core import lifecycle
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    if confirm.strip() != "RESET":
+        return RedirectResponse(url="/settings", status_code=302)
+
+    logging.getLogger("opal.web").warning("FACTORY RESET initiated from settings")
+    lifecycle.factory_reset()
+    start_onshape_polling(request.app)
+
+    response = RedirectResponse(url="/setup", status_code=302)
+    clear_session_cookie(response)
+    return response
 
 
 def _onshape_form_context(request: Request, db: DbSession) -> dict[str, Any]:
@@ -3542,13 +4080,13 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
     """HTMX: add an Onshape document from a pasted URL."""
     import asyncio
 
-    from opal.config import get_active_project, get_active_settings
+    from opal.config import get_active_project, get_active_settings, save_project_to_db
     from opal.integrations.onshape.client import (
         OnshapeApiError,
         OnshapeClient,
         parse_onshape_url,
     )
-    from opal.project import OnshapeDocumentRef, save_project_config
+    from opal.project import OnshapeDocumentRef, ProjectConfig
 
     settings = get_active_settings()
     project = get_active_project()
@@ -3569,8 +4107,8 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
         return templates.TemplateResponse("settings/onshape_documents.html", context)
 
     if not project:
-        context["onshape_doc_error"] = "No project configured"
-        return templates.TemplateResponse("settings/onshape_documents.html", context)
+        # Adding an Onshape document shouldn't require the wizard first
+        project = ProjectConfig(name="OPAL")
 
     parsed = parse_onshape_url(url)
     if not parsed:
@@ -3633,7 +4171,8 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
         auto_sync=True,
     )
     project.onshape.documents.append(doc_ref)
-    save_project_config(project)
+    save_project_to_db(db, project)
+    db.commit()
 
     context["onshape_documents"] = project.onshape.documents
     context["onshape_doc_success"] = f"Added '{doc_name}' ({element_type.replace('_', ' ')})"
@@ -3643,8 +4182,7 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
 @router.post("/settings/onshape/documents/remove", response_class=HTMLResponse)
 async def settings_onshape_remove_document(request: Request, db: DbSession) -> HTMLResponse:
     """HTMX: remove an Onshape document from config."""
-    from opal.config import get_active_project, get_active_settings
-    from opal.project import save_project_config
+    from opal.config import get_active_project, get_active_settings, save_project_to_db
 
     settings = get_active_settings()
     project = get_active_project()
@@ -3670,7 +4208,8 @@ async def settings_onshape_remove_document(request: Request, db: DbSession) -> H
             for d in project.onshape.documents
             if not (d.document_id == document_id and d.element_id == element_id)
         ]
-        save_project_config(project)
+        save_project_to_db(db, project)
+        db.commit()
 
         if removed_name:
             context["onshape_doc_success"] = f"Removed '{removed_name}'"

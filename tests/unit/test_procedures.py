@@ -1,5 +1,7 @@
 """Procedures API tests."""
 
+from tests.conftest import user_headers
+
 
 def test_create_procedure(client):
     """Test creating a new procedure."""
@@ -629,7 +631,7 @@ def test_upload_attachment_with_procedure_id(client, test_user):
         "/api/attachments/upload",
         files={"file": ("ref.png", b"\x89PNG\r\n\x1a\nfake", "image/png")},
         data={"procedure_id": str(proc_id)},
-        headers={"X-User-Id": str(test_user.id)},
+        headers=user_headers(test_user),
     )
     assert r.status_code == 201
     data = r.json()
@@ -642,7 +644,7 @@ def test_reference_docs_filter_excludes_inline_images(client, test_user):
     reference-doc uploads, not inline images."""
     proc = client.post("/api/procedures", json={"name": "Docs Test"}).json()
     proc_id = proc["id"]
-    headers = {"X-User-Id": str(test_user.id)}
+    headers = user_headers(test_user)
 
     # Upload one inline image and one reference doc on the same procedure.
     r1 = client.post(
@@ -716,3 +718,60 @@ def test_photo_field_round_trips_through_publish(client):
     assert snap_fields[0]["required"] is True
     assert snap_fields[0]["multiple"] is False
     assert snap_fields[1]["multiple"] is True
+
+
+def test_step_safety_fields_round_trip(client):
+    """required_role and caution persist through create, update, and detail."""
+    proc_id = client.post("/api/procedures", json={"name": "Safety Fields"}).json()["id"]
+
+    step = client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={
+            "title": "Pressurize",
+            "required_role": "QE",
+            "caution": "High voltage present",
+        },
+    ).json()
+    assert step["required_role"] == "QE"
+    assert step["caution"] == "High voltage present"
+
+    # Update both fields
+    r = client.patch(
+        f"/api/procedures/{proc_id}/steps/{step['id']}",
+        json={"required_role": "MFG-LEAD", "caution": "Pinch hazard"},
+    )
+    assert r.status_code == 200
+    assert r.json()["required_role"] == "MFG-LEAD"
+    assert r.json()["caution"] == "Pinch hazard"
+
+    # Round-trip via the procedure detail
+    top = client.get(f"/api/procedures/{proc_id}").json()["steps"]
+    assert top[0]["required_role"] == "MFG-LEAD"
+    assert top[0]["caution"] == "Pinch hazard"
+
+    # Explicit null clears; omitted field is untouched
+    r = client.patch(
+        f"/api/procedures/{proc_id}/steps/{step['id']}",
+        json={"caution": None},
+    )
+    assert r.status_code == 200
+    assert r.json()["caution"] is None
+    assert r.json()["required_role"] == "MFG-LEAD"
+
+
+def test_publish_snapshots_safety_fields(client):
+    """Published version content includes required_role and caution per step."""
+    proc_id = client.post("/api/procedures", json={"name": "Safety Snapshot"}).json()["id"]
+    client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "Hot work", "required_role": "QE", "caution": "Hot surfaces"},
+    )
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "No safety fields"})
+
+    publish = client.post(f"/api/procedures/{proc_id}/publish").json()
+    version = client.get(f"/api/procedures/versions/{publish['id']}").json()
+    steps = version["content"]["steps"]
+    assert steps[0]["required_role"] == "QE"
+    assert steps[0]["caution"] == "Hot surfaces"
+    assert steps[1]["required_role"] is None
+    assert steps[1]["caution"] is None

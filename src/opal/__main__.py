@@ -6,8 +6,13 @@ from pathlib import Path
 
 
 def _setup_project(args: argparse.Namespace) -> None:
-    """Configure project settings from CLI args."""
-    from opal.config import configure_for_project
+    """Configure project settings from CLI args.
+
+    Always reports the resolved database and where it came from, on stderr —
+    stdout is the MCP stdio protocol channel, and a silently-resolved database
+    is how `opal serve` and `opal mcp` end up split across different files.
+    """
+    from opal.config import _default_database_url, configure_for_project, get_active_settings
     from opal.project import get_project_config
 
     project = None
@@ -16,17 +21,40 @@ def _setup_project(args: argparse.Namespace) -> None:
     # Explicit database path takes precedence
     if hasattr(args, "database") and args.database:
         database_path = Path(args.database)
+        source = "--database"
     elif hasattr(args, "project") and args.project:
         project = get_project_config(Path(args.project))
+        source = "--project"
     else:
         # Auto-detect project from current directory
         project = get_project_config()
+        source = "opal.project.yaml auto-detected" if project else ""
 
     if project or database_path:
         settings = configure_for_project(project=project, database_path=database_path)
-        if project:
-            print(f"Using project: {project.name} ({project.project_dir})")
-        print(f"Database: {settings.database_url}")
+    else:
+        settings = get_active_settings()
+        if settings.database_url != _default_database_url():
+            source = "OPAL_DATABASE_URL environment override"
+        else:
+            source = "platform default"
+
+    if project:
+        print(f"Using project: {project.name} ({project.project_dir})", file=sys.stderr)
+    print(f"Database: {settings.database_url} ({source})", file=sys.stderr)
+
+    # The database is the project: pick up DB-stored config (and import a
+    # cwd yaml once) so CLI commands see the same config the server does.
+    # Best-effort — the database may not exist yet (e.g. before `opal init`).
+    try:
+        from opal.config import apply_db_overlay, bootstrap_project_config
+        from opal.db.base import SessionLocal
+
+        with SessionLocal() as db:
+            bootstrap_project_config(db)
+            apply_db_overlay(db)
+    except Exception:
+        pass
 
 
 def cmd_serve(args: argparse.Namespace) -> None:
@@ -39,6 +67,12 @@ def cmd_serve(args: argparse.Namespace) -> None:
     _setup_project(args)
 
     settings = get_active_settings()
+    # Serve must work against a brand-new project the way the launcher
+    # does: create directories and initialize/migrate the schema.
+    settings.ensure_directories()
+    from opal.db.base import get_engine, init_database
+
+    init_database(get_engine())
     host = args.host or settings.host
     port = args.port or settings.port
 
@@ -161,6 +195,61 @@ def cmd_init(args: argparse.Namespace) -> None:
         print(f"Database initialization failed: {e}")
         print("If developing, you can use: opal migrate upgrade")
         sys.exit(1)
+
+
+def cmd_import_requirements(args: argparse.Namespace) -> None:
+    """Import the opal.project.yaml requirement catalog into the database."""
+    _setup_project(args)
+
+    from opal.config import get_active_project
+    from opal.db.base import SessionLocal
+    from opal.se.import_requirements import import_requirements_from_config
+
+    config = get_active_project()
+    if config is None:
+        print("No opal.project.yaml found — nothing to import.")
+        sys.exit(1)
+    if not config.requirements:
+        print(f"Project '{config.name}' defines no requirements in opal.project.yaml.")
+        sys.exit(0)
+
+    db = SessionLocal()
+    try:
+        result = import_requirements_from_config(db, config)
+        db.commit()
+    finally:
+        db.close()
+
+    print(result.summary())
+    for req_number in result.created:
+        print(f"  created {req_number}")
+    for req_number in result.skipped:
+        print(f"  skipped {req_number} (already in database)")
+
+
+def cmd_import_project(args: argparse.Namespace) -> None:
+    """Import an opal.project.yaml into the database (one-shot migration)."""
+    _setup_project(args)
+
+    from opal.config import save_project_to_db
+    from opal.db.base import SessionLocal
+    from opal.project import load_project_config
+
+    yaml_path = Path(args.file) if args.file else Path.cwd() / "opal.project.yaml"
+    if not yaml_path.exists():
+        print(f"No project config found at {yaml_path}")
+        sys.exit(1)
+
+    config = load_project_config(yaml_path)
+    db = SessionLocal()
+    try:
+        save_project_to_db(db, config)
+        db.commit()
+    finally:
+        db.close()
+
+    print(f"Imported project config '{config.name}' from {yaml_path} into the database.")
+    print("The yaml file is no longer read at runtime — you can archive or delete it.")
 
 
 def cmd_tui(args: argparse.Namespace) -> None:
@@ -309,6 +398,25 @@ def main() -> None:
     init_parser = subparsers.add_parser("init", help="Initialize OPAL")
     add_project_args(init_parser)
     init_parser.set_defaults(func=cmd_init)
+
+    # import-requirements command
+    import_req_parser = subparsers.add_parser(
+        "import-requirements",
+        help="Import opal.project.yaml requirements into the database (one-shot, idempotent)",
+    )
+    add_project_args(import_req_parser)
+    import_req_parser.set_defaults(func=cmd_import_requirements)
+
+    # import-project command
+    import_proj_parser = subparsers.add_parser(
+        "import-project",
+        help="Import an opal.project.yaml into the database (one-shot; DB is the source of truth)",
+    )
+    import_proj_parser.add_argument(
+        "--file", type=str, help="Path to the yaml file (default: ./opal.project.yaml)"
+    )
+    add_project_args(import_proj_parser)
+    import_proj_parser.set_defaults(func=cmd_import_project)
 
     # tui command
     tui_parser = subparsers.add_parser("tui", help="Launch the TUI")

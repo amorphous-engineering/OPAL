@@ -287,6 +287,14 @@ select option {
     color: var(--status-ok);
 }
 
+.footer-db {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl; /* long paths truncate on the left, keeping the filename visible */
+    padding: 0 var(--space-md);
+}
+
 /* Tables */
 .data-table {
     width: 100%;
@@ -1603,6 +1611,40 @@ body.procedure-detail .exec-tab-content > div {
     letter-spacing: 0.05em;
 }
 
+.caution-block {
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--accent-red);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--accent-red);
+    letter-spacing: 0.05em;
+}
+
+/* Demo-mode banner: full-width, impossible to miss */
+.demo-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xs) var(--space-md);
+    background: var(--accent-yellow);
+    color: #000;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+.demo-banner-exit {
+    background: #000;
+    color: var(--accent-yellow);
+    border: 1px solid #000;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    padding: 2px 10px;
+    cursor: pointer;
+}
+
 /* Flow tab — operation-dependency node graph */
 .flow-canvas {
     background: var(--bg-secondary);
@@ -2071,4 +2113,369 @@ a.user-menu-link.active {
 .diff-field-changed {
     background: var(--diff-changed-bg);
     padding: 1px 4px;
+}
+
+/* ============ Requirements tree + lint underlines ============ */
+
+.req-tree {
+    font-size: 0.85rem;
+}
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-top: 3px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--bg-tertiary);
+    min-width: 0;
+}
+
+.tree-row.focused {
+    background: var(--bg-tertiary);
+    outline: 1px solid var(--border-color);
+}
+
+.tree-row.dim {
+    opacity: 0.45;
+}
+
+.tree-row.filter-hidden {
+    display: none;
+}
+
+.tree-chevron {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    width: 14px;
+    padding: 0;
+    flex: none;
+    font-size: 0.7rem;
+}
+
+.tree-chevron-leaf {
+    width: 14px;
+    flex: none;
+}
+
+.tree-num {
+    flex: none;
+    width: 90px;
+}
+
+.tree-statement {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.tree-meta {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-left: auto;
+}
+
+.tree-lvl {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    width: 42px;
+    text-align: right;
+}
+
+.tree-age {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    width: 34px;
+    text-align: right;
+}
+
+.tree-row-expand {
+    padding-top: var(--space-xs);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.tree-full-statement {
+    white-space: pre-wrap;
+    margin-bottom: var(--space-xs);
+}
+
+.tree-rationale-preview {
+    font-size: 0.8rem;
+}
+
+.tree-children.collapsed {
+    display: none;
+}
+
+.req-tree.filtering .tree-children {
+    display: block !important;
+}
+
+/* Flag + allocation chips */
+.flag-chip {
+    font-size: 0.65rem;
+    padding: 0 4px;
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.flag-tbd {
+    color: var(--accent-red);
+    border-color: var(--accent-red);
+}
+
+.flag-tbr {
+    color: var(--accent-yellow);
+    border-color: var(--accent-yellow);
+}
+
+.flag-stale {
+    color: var(--accent-yellow);
+    border-style: dashed;
+}
+
+.alloc-chip {
+    font-size: 0.65rem;
+    padding: 0 4px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Ghost rows (inline create) */
+.tree-ghost {
+    display: none;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.tree-children.has-children:not(.collapsed) > .tree-ghost,
+.tree-ghost.force {
+    display: flex;
+}
+
+.req-tree.filtering .tree-ghost {
+    display: none !important;
+}
+
+.tree-ghost-link {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
+}
+
+.tree-ghost-link:hover {
+    color: var(--text-primary);
+}
+
+.tree-ghost-editor {
+    display: flex;
+    flex: 1;
+    gap: var(--space-sm);
+    align-items: center;
+}
+
+.tree-ghost-editor .tree-ghost-title {
+    flex: 0 0 200px;
+}
+
+.tree-ghost-editor .tree-ghost-statement {
+    flex: 1;
+}
+
+.tree-ghost-hint {
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+/* Lint underlines — block vs warn are distinct in SHAPE, not just color
+   (spec §10: "two clearly distinct underline treatments"; color alone
+   fails for colorblind readers). Block = wavy red (the editor-error
+   convention), warn = dotted yellow (advisory). */
+.lint-block {
+    text-decoration: underline wavy var(--accent-red) 1.5px;
+    text-underline-offset: 3px;
+    cursor: help;
+}
+
+.lint-warn {
+    text-decoration: underline dotted var(--accent-yellow) 1px;
+    text-underline-offset: 3px;
+    cursor: help;
+}
+
+/* Lint editor — overlay above the textarea: transparent text, visible
+   underline decorations, pointer events only on the underlined spans. */
+.lint-editor {
+    position: relative;
+}
+
+.lint-textarea,
+.lint-overlay {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.lint-overlay {
+    position: absolute;
+    inset: 0;
+    padding: var(--space-sm);
+    border: 1px solid transparent;
+    color: transparent;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.lint-overlay .lint-block,
+.lint-overlay .lint-warn {
+    pointer-events: auto;
+}
+
+/* Baseline readiness panel */
+.baseline-panel {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    padding: var(--space-md);
+    font-size: 0.85rem;
+}
+
+.baseline-panel-title {
+    color: var(--text-muted);
+    margin-bottom: var(--space-sm);
+    font-size: 0.75rem;
+}
+
+.baseline-check {
+    padding: 1px 0;
+}
+
+.baseline-check-box {
+    color: var(--accent-green);
+}
+
+.baseline-check-fail .baseline-check-box {
+    color: var(--accent-red);
+}
+
+.baseline-check-warn .baseline-check-box {
+    color: var(--accent-yellow);
+}
+
+.baseline-check-detail {
+    color: var(--text-muted);
+    margin-left: var(--space-sm);
+}
+
+.baseline-check-fail .baseline-check-detail {
+    color: var(--accent-red);
+}
+
+.baseline-check-warn .baseline-check-detail {
+    color: var(--accent-yellow);
+}
+
+.baseline-panel-rule {
+    color: var(--text-muted);
+    margin: var(--space-sm) 0;
+}
+
+.baseline-confirm {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--accent-green);
+}
+
+.baseline-signature {
+    margin-bottom: var(--space-sm);
+}
+
+/* Baseline queue review session */
+.queue-review {
+    font-size: 0.9rem;
+}
+
+.queue-header {
+    display: flex;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-md);
+    font-size: 0.85rem;
+}
+
+.queue-chain {
+    font-size: 0.75rem;
+    margin-bottom: var(--space-md);
+}
+
+.queue-statement {
+    font-size: 1.05rem;
+    white-space: pre-wrap;
+    max-width: 70ch;
+    margin-bottom: var(--space-md);
+}
+
+.queue-section {
+    margin-bottom: var(--space-md);
+}
+
+.queue-section > div {
+    max-width: 70ch;
+    white-space: pre-wrap;
+}
+
+.queue-facts {
+    display: flex;
+    gap: var(--space-lg);
+    font-size: 0.8rem;
+    color: var(--text-secondary, inherit);
+    margin-bottom: var(--space-md);
+}
+
+.queue-keys {
+    font-size: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: var(--space-sm);
+}
+
+.queue-staged {
+    font-size: 0.85rem;
+}
+
+/* Revision redlines — strike old / highlight new */
+.redline-body {
+    white-space: pre-wrap;
+    max-width: 80ch;
+    font-size: 0.85rem;
+}
+
+.redline-del {
+    color: var(--accent-red);
+    text-decoration: line-through;
+    background: transparent;
+}
+
+.redline-ins {
+    color: var(--accent-green);
+    background: var(--bg-tertiary);
+    text-decoration: none;
 }

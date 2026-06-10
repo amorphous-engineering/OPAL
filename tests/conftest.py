@@ -154,3 +154,21 @@ def web_client(client: TestClient, db_session: Session, test_user: User) -> Test
     db_session.commit()
     client.cookies.set(SESSION_COOKIE, token)
     return client
+
+
+def login(client: TestClient, user: User) -> None:
+    """Log `user` into the web UI on this client with a real session cookie."""
+    from opal.core.auth import SESSION_COOKIE
+
+    db = Session.object_session(user)
+    token = create_session(db, user)
+    db.commit()
+    client.cookies.set(SESSION_COOKIE, token)
+
+
+def user_headers(user: User) -> dict[str, str]:
+    """Bearer-token headers attributing API requests to `user`."""
+    db = Session.object_session(user)
+    _, raw_token = create_api_token(db, user, "tests-inline")
+    db.commit()
+    return {"Authorization": f"Bearer {raw_token}"}

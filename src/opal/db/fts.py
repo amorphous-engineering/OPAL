@@ -68,6 +68,14 @@ ENTITY_SPECS: tuple[FtsEntity, ...] = (
         "coalesce({row}.reference,'')",
         body="coalesce({row}.notes,'')",
     ),
+    FtsEntity(
+        "requirement",
+        "requirement",
+        "requirement_fts",
+        "{row}.title",
+        "coalesce({row}.req_number,'')",
+        "coalesce({row}.statement,'')",
+    ),
     FtsEntity("dataset", "dataset", "dataset_fts", "{row}.name"),
     FtsEntity(
         "workcenter", "workcenter", "workcenter_fts", "{row}.name", "coalesce({row}.code,'')"

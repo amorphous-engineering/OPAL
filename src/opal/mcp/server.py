@@ -13,10 +13,16 @@ from sqlalchemy import func
 
 from opal.config import get_active_project, get_active_settings
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
-from opal.core.designators import generate_issue_number, generate_risk_number
-from opal.db.base import SessionLocal
+from opal.core.designators import (
+    generate_designator,
+    generate_issue_number,
+    generate_requirement_number,
+    generate_risk_number,
+)
+from opal.db.base import LifecycleState, SessionLocal
 from opal.db.models import (
     BOMLine,
+    InventoryRecord,
     Issue,
     Kit,
     MasterProcedure,
@@ -25,13 +31,22 @@ from opal.db.models import (
     ProcedureOutput,
     ProcedureStep,
     ProcedureVersion,
+    Purchase,
+    PurchaseLine,
+    Requirement,
     Risk,
     StepDependency,
     StepKit,
+    Supplier,
+    User,
+    Workcenter,
 )
 from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
+from opal.db.models.part import TrackingType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
+from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.risk import RiskStatus
+from opal.se import lint as se_lint
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +287,14 @@ async def list_tools() -> list[Tool]:
                         "minimum": 1,
                         "description": "Estimated duration in minutes (optional)",
                     },
+                    "required_role": {
+                        "type": "string",
+                        "description": "Role required for this step, e.g. QE (optional, informational badge)",
+                    },
+                    "caution": {
+                        "type": "string",
+                        "description": "Safety warning text displayed in red during execution (optional)",
+                    },
                     "required_data_schema": {
                         "type": "object",
                         "description": (
@@ -332,9 +355,9 @@ async def list_tools() -> list[Tool]:
             name="update_step",
             description=(
                 "Update a step's title, instructions, is_contingency, "
-                "requires_signoff, estimated_duration_minutes, or "
-                "required_data_schema. Step_number, level, parent, and order "
-                "are not editable here — use reorder_steps for ordering."
+                "requires_signoff, estimated_duration_minutes, required_role, "
+                "caution, or required_data_schema. Step_number, level, parent, "
+                "and order are not editable here — use reorder_steps for ordering."
             ),
             inputSchema={
                 "type": "object",
@@ -346,6 +369,8 @@ async def list_tools() -> list[Tool]:
                     "is_contingency": {"type": "boolean"},
                     "requires_signoff": {"type": "boolean"},
                     "estimated_duration_minutes": {"type": "integer", "minimum": 1},
+                    "required_role": {"type": "string"},
+                    "caution": {"type": "string"},
                     "required_data_schema": {"type": "object"},
                 },
                 "required": ["procedure_id", "step_id"],
@@ -755,7 +780,12 @@ async def list_tools() -> list[Tool]:
         # Project info
         Tool(
             name="get_project_info",
-            description="Get information about the current OPAL project including tiers, requirements, and part numbering config",
+            description=(
+                "Get information about the current OPAL project including the "
+                "connected database URL, tiers, requirements, and part numbering "
+                "config. Call this first to confirm which database you are "
+                "operating on — report its path when asked to verify data."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -782,10 +812,290 @@ async def list_tools() -> list[Tool]:
         # Requirements
         Tool(
             name="list_requirements",
-            description="List all requirements defined in the project config",
+            description=(
+                "List first-class requirements (REQ-XXXX). Superseded revisions "
+                "are hidden unless include_superseded=true."
+            ),
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "state": {
+                        "type": "string",
+                        "enum": ["draft", "preliminary", "baselined", "superseded", "cancelled"],
+                        "description": "Filter by lifecycle state (optional)",
+                    },
+                    "level": {"type": "integer", "description": "Filter by flow-down level"},
+                    "query": {
+                        "type": "string",
+                        "description": "Substring match on number, title, or statement",
+                    },
+                    "include_superseded": {"type": "boolean", "default": False},
+                    "limit": {"type": "integer", "default": 50},
+                },
+            },
+        ),
+        Tool(
+            name="get_requirement",
+            description=(
+                "Get a requirement by ID or REQ number, with children, part "
+                "allocations, and its revision chain."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer", "description": "Database ID"},
+                    "req_number": {
+                        "type": "string",
+                        "description": "REQ number, e.g. REQ-0042 (latest non-superseded revision)",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="create_requirement",
+            description=(
+                "Create a new draft requirement. The REQ number is auto-assigned. "
+                "Statement should be a single shall statement; rationale is "
+                "required before the requirement can be baselined. The response "
+                "includes lint findings — resolve block_baseline ones before "
+                "requesting baseline."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Short name"},
+                    "statement": {"type": "string", "description": "The shall statement"},
+                    "rationale": {"type": "string", "description": "Why this requirement exists"},
+                    "category": {
+                        "type": "string",
+                        "description": "functional, performance, interface, environmental, safety, ...",
+                    },
+                    "parent_id": {
+                        "type": "integer",
+                        "description": "Parent requirement ID for flow-down (level defaults to parent+1)",
+                    },
+                    "level": {
+                        "type": "integer",
+                        "description": "0=mission, 1=system, 2=subsystem...",
+                    },
+                    "verification_method": {
+                        "type": "string",
+                        "enum": ["analysis", "inspection", "demonstration", "test"],
+                    },
+                    "tbd": {"type": "boolean", "default": False},
+                    "tbr": {"type": "boolean", "default": False},
+                },
+                "required": ["title", "statement"],
+            },
+        ),
+        Tool(
+            name="update_requirement",
+            description=(
+                "Update a draft/preliminary requirement in place. Baselined "
+                "requirements are immutable — use revise_requirement instead."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "title": {"type": "string"},
+                    "statement": {"type": "string"},
+                    "rationale": {"type": "string"},
+                    "category": {"type": "string"},
+                    "parent_id": {"type": "integer"},
+                    "level": {"type": "integer"},
+                    "verification_method": {
+                        "type": "string",
+                        "enum": ["analysis", "inspection", "demonstration", "test"],
+                    },
+                    "tbd": {"type": "boolean"},
+                    "tbr": {"type": "boolean"},
+                },
+                "required": ["requirement_id"],
+            },
+        ),
+        Tool(
+            name="baseline_requirement",
+            description=(
+                "Baseline a requirement, locking it as immutable. POLICY: agents "
+                "draft, humans baseline — this requires the user_id of a real "
+                "human user who has approved the baseline. Fails listing the "
+                "blockers if the requirement is not ready (missing rationale, "
+                "unresolved TBD, TBR without owner/due date)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user approving the baseline (required)",
+                    },
+                },
+                "required": ["requirement_id", "user_id"],
+            },
+        ),
+        Tool(
+            name="get_baseline_queue",
+            description=(
+                "The baseline-ready set: draft/preliminary requirements whose "
+                "hard readiness checks all pass. Agents stage analysis for the "
+                "queue; a human commits it via baseline_batch."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="baseline_batch",
+            description=(
+                "Baseline a set of requirements atomically and write one "
+                "baseline event. POLICY: agents draft, humans baseline — "
+                "user_id must belong to a real human user who approved the "
+                "batch. Every item is re-validated at commit time; any "
+                "failure aborts the whole batch and returns the offenders."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Requirement IDs to baseline",
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user approving the batch (required)",
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "Optional event label, e.g. l0-freeze",
+                    },
+                    "note": {"type": "string"},
+                },
+                "required": ["ids", "user_id"],
+            },
+        ),
+        Tool(
+            name="get_baseline_events",
+            description=(
+                "Baseline events history (newest first): who locked which "
+                "requirement revisions, when, under what label."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "event_id": {
+                        "type": "integer",
+                        "description": "Return just this event with its locked set",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="revise_requirement",
+            description=(
+                "Create the next draft revision of a baselined requirement "
+                "(same REQ number, revision + 1). The old revision stays the "
+                "effective baseline until the new one is baselined."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                },
+                "required": ["requirement_id"],
+            },
+        ),
+        Tool(
+            name="reaffirm_requirement",
+            description=(
+                "Clear a requirement's stale flag without editing it — 'the "
+                "parent's change doesn't invalidate this'. POLICY: signature "
+                "act, requires the user_id of a real human user. Staleness is "
+                "set on direct children when their parent's revision "
+                "supersedes; it also clears on any edit."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user re-affirming (required)",
+                    },
+                },
+                "required": ["requirement_id", "user_id"],
+            },
+        ),
+        Tool(
+            name="get_requirement_diff",
+            description=(
+                "Word-level diff of statement and rationale between two "
+                "revisions of a requirement. Defaults to this revision vs "
+                "the one it supersedes."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "req_number": {"type": "string"},
+                    "rev_a": {"type": "integer", "description": "Older revision number"},
+                    "rev_b": {"type": "integer", "description": "Newer revision number"},
+                },
+            },
+        ),
+        Tool(
+            name="cancel_requirement",
+            description="Cancel a requirement (terminal state).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                },
+                "required": ["requirement_id"],
+            },
+        ),
+        Tool(
+            name="lint_requirement",
+            description=(
+                "Lint a requirement against the SP-6105 Appendix C automatable "
+                "subset. Pass requirement_id or req_number to lint a stored row, "
+                "or statement (+ optional fields) to pre-check text before "
+                "creating. block_baseline findings prevent baselining; warns are "
+                "advisory."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer", "description": "Database ID"},
+                    "req_number": {"type": "string", "description": "REQ number, e.g. REQ-0042"},
+                    "statement": {
+                        "type": "string",
+                        "description": "Ad-hoc shall statement to lint instead of a stored row",
+                    },
+                    "rationale": {"type": "string"},
+                    "verification_method": {"type": "string"},
+                    "tbd": {"type": "boolean"},
+                    "tbr": {"type": "boolean"},
+                },
+            },
+        ),
+        Tool(
+            name="flowdown_tree",
+            description=(
+                "Requirement flow-down hierarchy as a nested tree (parent -> "
+                "derived children). No arguments returns all roots. Superseded "
+                "and deleted revisions are excluded; requirements whose parent "
+                "is excluded surface as orphan roots."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {
+                        "type": "integer",
+                        "description": "Root the tree at this requirement",
+                    },
+                    "req_number": {"type": "string", "description": "Root at this REQ number"},
+                },
             },
         ),
         Tool(
@@ -898,6 +1208,241 @@ async def list_tools() -> list[Tool]:
                 "required": ["bom_line_id"],
             },
         ),
+        # Suppliers
+        Tool(
+            name="search_suppliers",
+            description=(
+                "Search suppliers by name substring. Returns matching active "
+                "(non-deleted) suppliers with id, name, code, website, email, "
+                "and is_active."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Name substring filter (optional)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results (default 20)",
+                        "default": 20,
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="create_supplier",
+            description="Create a new supplier/vendor record.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Supplier name"},
+                    "code": {
+                        "type": "string",
+                        "description": "Short code, e.g. SUP-001 (optional)",
+                    },
+                    "website": {"type": "string"},
+                    "email": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "address": {"type": "string"},
+                    "notes": {"type": "string"},
+                },
+                "required": ["name"],
+            },
+        ),
+        # Workcenters
+        Tool(
+            name="create_workcenter",
+            description=(
+                "Create a new workcenter (work location). A unique code is "
+                "required; if omitted, one is derived from the name."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Workcenter name"},
+                    "code": {
+                        "type": "string",
+                        "description": "Short unique code, e.g. AB1 (optional, derived from name if omitted)",
+                    },
+                    "description": {"type": "string"},
+                    "location": {"type": "string", "description": "Physical location (optional)"},
+                },
+                "required": ["name"],
+            },
+        ),
+        # Inventory
+        Tool(
+            name="get_inventory_summary",
+            description=(
+                "Get current stock summary for a part: total quantity on hand, "
+                "record count, breakdown by location, and (for tooling parts) "
+                "calibration status."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "part_id": {"type": "integer", "description": "The part ID"},
+                },
+                "required": ["part_id"],
+            },
+        ),
+        # Bulk parts
+        Tool(
+            name="bulk_create_parts",
+            description=(
+                "Create multiple parts in one transaction. Each entry follows "
+                "the same schema as create_part. Returns the created parts "
+                "with their assigned internal_pn values."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "parts": {
+                        "type": "array",
+                        "description": "List of part objects to create",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "category": {"type": "string"},
+                                "tier": {"type": "integer", "default": 1},
+                                "tracking_type": {
+                                    "type": "string",
+                                    "enum": ["serialized", "bulk"],
+                                    "default": "serialized",
+                                },
+                                "unit_of_measure": {"type": "string", "default": "each"},
+                                "description": {"type": "string"},
+                                "external_pn": {"type": "string"},
+                                "reorder_point": {"type": "number"},
+                                "parent_id": {"type": "integer"},
+                            },
+                            "required": ["name"],
+                        },
+                    },
+                },
+                "required": ["parts"],
+            },
+        ),
+        # Purchase orders
+        Tool(
+            name="create_purchase_order",
+            description=(
+                "Create a purchase order with one or more line items. A PO "
+                "reference (PO-NNNN) is auto-generated. Starts in 'draft' status."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "supplier_id": {"type": "integer", "description": "Supplier ID"},
+                    "notes": {"type": "string"},
+                    "lines": {
+                        "type": "array",
+                        "description": "Line items",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "part_id": {"type": "integer"},
+                                "quantity": {"type": "number", "exclusiveMinimum": 0},
+                                "unit_cost": {"type": "number"},
+                                "notes": {"type": "string"},
+                            },
+                            "required": ["part_id", "quantity"],
+                        },
+                    },
+                },
+                "required": ["supplier_id", "lines"],
+            },
+        ),
+        # Composite procedure build
+        Tool(
+            name="build_procedure",
+            description=(
+                "Create a complete procedure with all steps, step kits, "
+                "procedure-level kit items, and outputs in a single call. "
+                "Equivalent to create_procedure + add_procedure_step (xN) + "
+                "add_step_kit_item (xN) + add_kit_item (xN) + add_output (xN)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Procedure name"},
+                    "procedure_type": {
+                        "type": "string",
+                        "enum": ["op", "build"],
+                        "default": "op",
+                    },
+                    "description": {"type": "string"},
+                    "steps": {
+                        "type": "array",
+                        "description": "Ordered list of top-level steps (OPs)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "instructions": {"type": "string"},
+                                "required_role": {"type": "string"},
+                                "caution": {"type": "string"},
+                                "requires_signoff": {"type": "boolean", "default": False},
+                                "estimated_duration_minutes": {"type": "integer", "minimum": 1},
+                                "workcenter_id": {"type": "integer"},
+                                "step_kits": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "part_id": {"type": "integer"},
+                                            "quantity_required": {
+                                                "type": "number",
+                                                "exclusiveMinimum": 0,
+                                            },
+                                            "usage_type": {
+                                                "type": "string",
+                                                "enum": ["consume", "tooling"],
+                                                "default": "consume",
+                                            },
+                                        },
+                                        "required": ["part_id", "quantity_required"],
+                                    },
+                                },
+                            },
+                            "required": ["title"],
+                        },
+                    },
+                    "kit": {
+                        "type": "array",
+                        "description": "Procedure-level kit items",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "part_id": {"type": "integer"},
+                                "quantity_required": {"type": "number", "exclusiveMinimum": 0},
+                            },
+                            "required": ["part_id", "quantity_required"],
+                        },
+                    },
+                    "outputs": {
+                        "type": "array",
+                        "description": "Output parts produced (build-type procedures)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "part_id": {"type": "integer"},
+                                "quantity_produced": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "default": 1,
+                                },
+                            },
+                            "required": ["part_id"],
+                        },
+                    },
+                },
+                "required": ["name"],
+            },
+        ),
     ]
 
 
@@ -993,6 +1538,32 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Requirements
         elif name == "list_requirements":
             return await _list_requirements(db, arguments)
+        elif name == "get_requirement":
+            return await _get_requirement(db, arguments)
+        elif name == "create_requirement":
+            return await _create_requirement(db, arguments)
+        elif name == "update_requirement":
+            return await _update_requirement(db, arguments)
+        elif name == "baseline_requirement":
+            return await _baseline_requirement(db, arguments)
+        elif name == "get_baseline_queue":
+            return await _get_baseline_queue(db, arguments)
+        elif name == "baseline_batch":
+            return await _baseline_batch(db, arguments)
+        elif name == "get_baseline_events":
+            return await _get_baseline_events(db, arguments)
+        elif name == "revise_requirement":
+            return await _revise_requirement(db, arguments)
+        elif name == "cancel_requirement":
+            return await _cancel_requirement(db, arguments)
+        elif name == "reaffirm_requirement":
+            return await _reaffirm_requirement(db, arguments)
+        elif name == "get_requirement_diff":
+            return await _get_requirement_diff(db, arguments)
+        elif name == "lint_requirement":
+            return await _lint_requirement(db, arguments)
+        elif name == "flowdown_tree":
+            return await _flowdown_tree(db, arguments)
         elif name == "list_part_requirements":
             return await _list_part_requirements(db, arguments)
         elif name == "assign_requirement":
@@ -1007,6 +1578,32 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _add_component(db, arguments)
         elif name == "remove_component":
             return await _remove_component(db, arguments)
+
+        # Suppliers
+        elif name == "search_suppliers":
+            return await _search_suppliers(db, arguments)
+        elif name == "create_supplier":
+            return await _create_supplier(db, arguments)
+
+        # Workcenters
+        elif name == "create_workcenter":
+            return await _create_workcenter(db, arguments)
+
+        # Inventory
+        elif name == "get_inventory_summary":
+            return await _get_inventory_summary(db, arguments)
+
+        # Bulk parts
+        elif name == "bulk_create_parts":
+            return await _bulk_create_parts(db, arguments)
+
+        # Purchase orders
+        elif name == "create_purchase_order":
+            return await _create_purchase_order(db, arguments)
+
+        # Composite procedure build
+        elif name == "build_procedure":
+            return await _build_procedure(db, arguments)
 
         else:
             return json_response({"error": f"Unknown tool: {name}"})
@@ -1133,6 +1730,44 @@ def _generate_internal_pn(db, tier: int) -> str:
     return project.generate_part_number(tier, count + 1)
 
 
+def _tier_name(tier: int) -> str | None:
+    """Look up the configured display name for a tier, if any."""
+    project = get_active_project()
+    if project:
+        tier_config = project.get_tier(tier)
+        if tier_config:
+            return tier_config.name
+    return None
+
+
+def _build_part(db, args: dict) -> Part:
+    """Construct (but do not commit) a Part from tool args.
+
+    Generates the internal_pn. Shared by create_part and bulk_create_parts.
+    The caller is responsible for db.add / flush / log_create / commit.
+    """
+    tier = args.get("tier", 1)
+    internal_pn = _generate_internal_pn(db, tier)
+
+    raw_tracking = args.get("tracking_type")
+    tracking_type = TrackingType(raw_tracking) if raw_tracking else None
+
+    return Part(
+        name=args["name"],
+        internal_pn=internal_pn,
+        category=args.get("category"),
+        description=args.get("description"),
+        external_pn=args.get("external_pn"),
+        unit_of_measure=args.get("unit_of_measure", "each"),
+        tier=tier,
+        parent_id=args.get("parent_id"),
+        reorder_point=Decimal(str(args["reorder_point"]))
+        if args.get("reorder_point") is not None
+        else None,
+        **({"tracking_type": tracking_type} if tracking_type is not None else {}),
+    )
+
+
 async def _create_part(db, args: dict) -> list[TextContent]:
     """Create a new part."""
     # Validate parent if specified
@@ -1143,26 +1778,7 @@ async def _create_part(db, args: dict) -> list[TextContent]:
             return json_response({"error": f"Parent part {parent_id} not found"})
 
     tier = args.get("tier", 1)
-    project = get_active_project()
-    tier_name = None
-    if project:
-        tier_config = project.get_tier(tier)
-        if tier_config:
-            tier_name = tier_config.name
-
-    # Generate internal_pn
-    internal_pn = _generate_internal_pn(db, tier)
-
-    part = Part(
-        name=args["name"],
-        internal_pn=internal_pn,
-        category=args.get("category"),
-        description=args.get("description"),
-        external_pn=args.get("external_pn"),
-        unit_of_measure=args.get("unit_of_measure", "each"),
-        tier=tier,
-        parent_id=parent_id,
-    )
+    part = _build_part(db, args)
     db.add(part)
     db.flush()
     log_create(db, part)
@@ -1172,14 +1788,14 @@ async def _create_part(db, args: dict) -> list[TextContent]:
     return json_response(
         {
             "success": True,
-            "message": f"Created part '{part.name}' with ID {part.id} ({internal_pn})",
+            "message": f"Created part '{part.name}' with ID {part.id} ({part.internal_pn})",
             "part": {
                 "id": part.id,
-                "internal_pn": internal_pn,
+                "internal_pn": part.internal_pn,
                 "name": part.name,
                 "category": part.category,
                 "tier": tier,
-                "tier_name": tier_name,
+                "tier_name": _tier_name(tier),
                 "parent_id": parent_id,
             },
         }
@@ -1441,6 +2057,8 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
         is_contingency=is_contingency,
         requires_signoff=bool(args.get("requires_signoff", False)),
         estimated_duration_minutes=args.get("estimated_duration_minutes"),
+        required_role=args.get("required_role"),
+        caution=args.get("caution"),
     )
     db.add(step)
     db.flush()
@@ -1468,6 +2086,8 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
                 "is_contingency": step.is_contingency,
                 "requires_signoff": step.requires_signoff,
                 "estimated_duration_minutes": step.estimated_duration_minutes,
+                "required_role": step.required_role,
+                "caution": step.caution,
                 "required_data_schema": step.required_data_schema,
             },
         }
@@ -1698,26 +2318,533 @@ async def _preview_part_number(db, args: dict) -> list[TextContent]:
 # ============ REQUIREMENTS TOOLS ============
 
 
-async def _list_requirements(db, args: dict) -> list[TextContent]:
-    """List all project requirements."""
-    project = get_active_project()
-    if not project:
-        return json_response({"error": "No project loaded", "requirements": []})
+def _requirement_dict(req: Requirement) -> dict:
+    return {
+        "id": req.id,
+        "req_number": req.req_number,
+        "revision": req.revision,
+        "lifecycle_state": req.lifecycle_state,
+        "title": req.title,
+        "statement": req.statement,
+        "rationale": req.rationale,
+        "category": req.category,
+        "parent_id": req.parent_id,
+        "level": req.level,
+        "verification_method": req.verification_method,
+        "tbd": req.tbd,
+        "tbr": req.tbr,
+        "stale": req.stale,
+        "baselined_at": req.baselined_at.isoformat() if req.baselined_at else None,
+        "supersedes_id": req.supersedes_id,
+    }
 
+
+def _find_requirement(db, args: dict) -> "Requirement | None":
+    if args.get("requirement_id") is not None:
+        return (
+            db.query(Requirement)
+            .filter(Requirement.id == args["requirement_id"], Requirement.deleted_at.is_(None))
+            .first()
+        )
+    if args.get("req_number"):
+        return (
+            db.query(Requirement)
+            .filter(
+                Requirement.req_number == args["req_number"],
+                Requirement.deleted_at.is_(None),
+                Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+            )
+            .order_by(Requirement.revision.desc())
+            .first()
+        )
+    return None
+
+
+async def _list_requirements(db, args: dict) -> list[TextContent]:
+    """List first-class requirements with filters."""
+    query = db.query(Requirement).filter(Requirement.deleted_at.is_(None))
+    if not args.get("include_superseded"):
+        query = query.filter(Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value)
+    if args.get("state"):
+        query = query.filter(Requirement.lifecycle_state == args["state"])
+    if args.get("level") is not None:
+        query = query.filter(Requirement.level == args["level"])
+    if args.get("query"):
+        term = f"%{args['query']}%"
+        query = query.filter(
+            Requirement.req_number.ilike(term)
+            | Requirement.title.ilike(term)
+            | Requirement.statement.ilike(term)
+        )
+
+    limit = args.get("limit", 50)
+    reqs = query.order_by(Requirement.req_number, Requirement.revision).limit(limit).all()
+    return json_response({"count": len(reqs), "requirements": [_requirement_dict(r) for r in reqs]})
+
+
+async def _get_requirement(db, args: dict) -> list[TextContent]:
+    """Get a requirement with children, allocations, and revision chain."""
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    children = (
+        db.query(Requirement)
+        .filter(Requirement.parent_id == req.id, Requirement.deleted_at.is_(None))
+        .order_by(Requirement.req_number)
+        .all()
+    )
+    allocations = (
+        db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).all()
+    )
+    revisions = (
+        db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .order_by(Requirement.revision)
+        .all()
+    )
+    from opal.se.readiness import readiness
+
+    ready = readiness(db, req)
+    result = _requirement_dict(req)
+    result["readiness"] = {
+        "ready": ready["ready"],
+        "failing_checks": [c["key"] for c in ready["checks"] if not c["passed"]],
+    }
+    result["children"] = [
+        {"id": c.id, "req_number": c.req_number, "title": c.title, "level": c.level}
+        for c in children
+    ]
+    result["allocated_parts"] = [{"part_id": a.part_id, "status": a.status} for a in allocations]
+    result["revisions"] = [
+        {"id": r.id, "revision": r.revision, "lifecycle_state": r.lifecycle_state}
+        for r in revisions
+    ]
+    return json_response(result)
+
+
+async def _create_requirement(db, args: dict) -> list[TextContent]:
+    """Create a new draft requirement."""
+    parent = None
+    if args.get("parent_id") is not None:
+        parent = (
+            db.query(Requirement)
+            .filter(Requirement.id == args["parent_id"], Requirement.deleted_at.is_(None))
+            .first()
+        )
+        if not parent:
+            return json_response({"error": f"Parent requirement {args['parent_id']} not found"})
+
+    level = args.get("level")
+    if level is None:
+        level = parent.level + 1 if parent else 0
+
+    req = Requirement(
+        req_number=generate_requirement_number(db),
+        title=args["title"],
+        statement=args["statement"],
+        rationale=args.get("rationale"),
+        category=args.get("category"),
+        parent_id=args.get("parent_id"),
+        level=level,
+        verification_method=args.get("verification_method"),
+        tbd=bool(args.get("tbd", False)),
+        tbr=bool(args.get("tbr", False)),
+    )
+    db.add(req)
+    db.flush()
+    log_create(db, req)
+    db.commit()
+    db.refresh(req)
     return json_response(
         {
-            "count": len(project.requirements),
-            "requirements": [
+            "success": True,
+            "message": f"Created draft requirement {req.req_number}: {req.title}",
+            "requirement": _requirement_dict(req),
+            "lint": [f.to_dict() for f in se_lint.lint_requirement_row(req)],
+        }
+    )
+
+
+async def _update_requirement(db, args: dict) -> list[TextContent]:
+    """Update a draft/preliminary requirement in place."""
+    from opal.se.lifecycle import LifecycleError, ensure_mutable
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+    try:
+        ensure_mutable(req)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+
+    old_values = get_model_dict(req)
+    for field in (
+        "title",
+        "statement",
+        "rationale",
+        "category",
+        "parent_id",
+        "level",
+        "verification_method",
+        "tbd",
+        "tbr",
+    ):
+        if field in args:
+            setattr(req, field, args[field])
+
+    # Any edit is by definition a fresh look — clear staleness (spec §7).
+    req.stale = False
+
+    log_update(db, req, old_values)
+    db.commit()
+    db.refresh(req)
+    return json_response(
+        {
+            "success": True,
+            "requirement": _requirement_dict(req),
+            "lint": [f.to_dict() for f in se_lint.lint_requirement_row(req)],
+        }
+    )
+
+
+async def _baseline_requirement(db, args: dict) -> list[TextContent]:
+    """Baseline a requirement. Agents draft, humans baseline."""
+    from opal.se.lifecycle import LifecycleError, baseline
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    # Policy: baselining is a human act. The id must belong to a real,
+    # active user who approved this baseline.
+    user_id = args.get("user_id")
+    user = (
+        db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if user_id is not None
+        else None
+    )
+    if not user:
+        return json_response(
+            {
+                "error": "Baselining requires the user_id of an active human user "
+                "who approved it. Ask the operator which user is approving."
+            }
+        )
+
+    old_values = get_model_dict(req)
+    try:
+        baseline(db, req, user.id)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+    from opal.se.baseline import write_baseline_event
+
+    write_baseline_event(db, [req], user.id)
+    log_update(db, req, old_values, user.id)
+    db.commit()
+    db.refresh(req)
+    return json_response(
+        {
+            "success": True,
+            "message": f"{req.req_number} rev {req.revision} baselined by {user.name}",
+            "requirement": _requirement_dict(req),
+        }
+    )
+
+
+def _require_human_user(db, args: dict):
+    """Signature acts demand a real, active user; returns (user, error_response)."""
+    user_id = args.get("user_id")
+    user = (
+        db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if user_id is not None
+        else None
+    )
+    if not user:
+        return None, json_response(
+            {
+                "error": "This action requires the user_id of an active human user "
+                "who approved it. Ask the operator which user is approving."
+            }
+        )
+    return user, None
+
+
+async def _get_baseline_queue(db, args: dict) -> list[TextContent]:
+    """Ready-to-baseline set, ordered level asc then req_number."""
+    from opal.se.readiness import ready_requirement_ids
+
+    ids = ready_requirement_ids(db)
+    rows = db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
+    rows.sort(key=lambda r: (r.level, r.req_number))
+    return json_response(
+        {
+            "count": len(rows),
+            "queue": [
                 {
                     "id": r.id,
+                    "req_number": r.req_number,
+                    "revision": r.revision,
                     "title": r.title,
-                    "description": r.description,
-                    "category": r.category,
+                    "level": r.level,
+                    "statement": r.statement,
                 }
-                for r in project.requirements
+                for r in rows
             ],
         }
     )
+
+
+async def _baseline_batch(db, args: dict) -> list[TextContent]:
+    """Atomic batch baseline. Agents prepare; a human signs."""
+    from opal.se.baseline import baseline_batch
+
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+
+    reqs = []
+    for req_id in dict.fromkeys(args["ids"]):  # dedupe: a repeated id would double-flip
+        req = (
+            db.query(Requirement)
+            .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+            .first()
+        )
+        if not req:
+            return json_response({"error": f"Requirement {req_id} not found"})
+        reqs.append(req)
+
+    old_values = {req.id: get_model_dict(req) for req in reqs}
+    event, offenders = baseline_batch(
+        db, reqs, user.id, label=args.get("label"), note=args.get("note")
+    )
+    if offenders:
+        # baseline_batch validates before any lifecycle flip — nothing to roll back.
+        return json_response(
+            {"error": "batch aborted — items no longer ready", "offenders": offenders}
+        )
+    for req in reqs:
+        log_update(db, req, old_values[req.id], user.id)
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "event_id": event.id,
+            "label": event.label,
+            "message": f"{len(reqs)} requirement(s) baselined by {user.name}",
+            "baselined": [
+                {"id": r.id, "req_number": r.req_number, "revision": r.revision} for r in reqs
+            ],
+        }
+    )
+
+
+async def _get_baseline_events(db, args: dict) -> list[TextContent]:
+    """Baseline events, newest first; event_id narrows to one with its set."""
+    from opal.db.models import BaselineEvent
+
+    def event_dict(e: BaselineEvent) -> dict:
+        return {
+            "id": e.id,
+            "label": e.label,
+            "note": e.note,
+            "signed_by_id": e.signed_by_id,
+            "signed_by": e.signed_by.name if e.signed_by else None,
+            "created_at": e.created_at.isoformat(),
+            "locked": [
+                {
+                    "id": item.requirement.id,
+                    "req_number": item.requirement.req_number,
+                    "revision": item.requirement.revision,
+                }
+                for item in e.items
+            ],
+        }
+
+    if args.get("event_id"):
+        event = db.query(BaselineEvent).filter(BaselineEvent.id == args["event_id"]).first()
+        if not event:
+            return json_response({"error": f"Baseline event {args['event_id']} not found"})
+        return json_response({"event": event_dict(event)})
+
+    events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
+    return json_response({"count": len(events), "events": [event_dict(e) for e in events]})
+
+
+async def _reaffirm_requirement(db, args: dict) -> list[TextContent]:
+    """Clear staleness with a signature. Humans re-affirm; agents prepare."""
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+    if not req.stale:
+        return json_response({"error": f"{req.req_number} is not stale"})
+
+    old_values = get_model_dict(req)
+    req.stale = False
+    log_update(db, req, old_values, user.id)
+    db.commit()
+    db.refresh(req)
+    return json_response(
+        {
+            "success": True,
+            "message": f"{req.req_number} rev {req.revision} re-affirmed by {user.name}",
+            "requirement": _requirement_dict(req),
+        }
+    )
+
+
+async def _get_requirement_diff(db, args: dict) -> list[TextContent]:
+    """Word diff of statement/rationale between two revisions."""
+    from opal.se.redline import redline_segments
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    revisions = {
+        r.revision: r
+        for r in db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .all()
+    }
+    rev_b = args.get("rev_b", req.revision)
+    rev_a = args.get("rev_a")
+    if rev_a is None:
+        predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
+        rev_a = predecessor.revision if predecessor else rev_b
+    old = revisions.get(rev_a)
+    new = revisions.get(rev_b)
+    if not old or not new:
+        return json_response(
+            {"error": f"Revision not found (have: {sorted(revisions)}, asked: {rev_a}, {rev_b})"}
+        )
+    return json_response(
+        {
+            "req_number": req.req_number,
+            "rev_a": rev_a,
+            "rev_b": rev_b,
+            "statement_diff": redline_segments(old.statement, new.statement),
+            "rationale_diff": redline_segments(old.rationale or "", new.rationale or ""),
+        }
+    )
+
+
+async def _revise_requirement(db, args: dict) -> list[TextContent]:
+    """Create the next draft revision of a baselined requirement."""
+    from opal.se.lifecycle import LifecycleError, revise
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+    try:
+        new_req = revise(db, req)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+    log_create(db, new_req)
+    db.commit()
+    db.refresh(new_req)
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created {new_req.req_number} rev {new_req.revision} (draft)",
+            "requirement": _requirement_dict(new_req),
+        }
+    )
+
+
+async def _cancel_requirement(db, args: dict) -> list[TextContent]:
+    """Cancel a requirement (terminal)."""
+    from opal.se.lifecycle import LifecycleError, cancel
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+    old_values = get_model_dict(req)
+    try:
+        cancel(db, req)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+    log_update(db, req, old_values)
+    db.commit()
+    return json_response({"success": True, "requirement": _requirement_dict(req)})
+
+
+async def _lint_requirement(db, args: dict) -> list[TextContent]:
+    """Lint a stored requirement or ad-hoc statement text."""
+    if args.get("requirement_id") or args.get("req_number"):
+        req = _find_requirement(db, args)
+        if not req:
+            return json_response({"error": "Requirement not found"})
+        findings = se_lint.lint_requirement_row(req)
+        subject = f"{req.req_number} rev {req.revision}"
+    elif args.get("statement"):
+        findings = se_lint.lint_requirement(
+            args["statement"],
+            rationale=args.get("rationale"),
+            verification_method=args.get("verification_method"),
+            tbd=bool(args.get("tbd", False)),
+            tbr=bool(args.get("tbr", False)),
+        )
+        subject = "(unsaved statement)"
+    else:
+        return json_response({"error": "Pass requirement_id, req_number, or statement"})
+
+    return json_response(
+        {
+            "subject": subject,
+            "finding_count": len(findings),
+            "would_block_baseline": any(f.severity == "block_baseline" for f in findings),
+            "findings": [f.to_dict() for f in findings],
+        }
+    )
+
+
+async def _flowdown_tree(db, args: dict) -> list[TextContent]:
+    """Requirement flow-down hierarchy as a nested tree."""
+    rows = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.req_number, Requirement.revision)
+        .all()
+    )
+    ids = {r.id for r in rows}
+    by_parent: dict[int | None, list[Requirement]] = {}
+    for r in rows:
+        effective_parent = r.parent_id if r.parent_id in ids else None
+        by_parent.setdefault(effective_parent, []).append(r)
+
+    def node(r: Requirement, seen: frozenset[int]) -> dict:
+        n = {
+            "id": r.id,
+            "req_number": r.req_number,
+            "revision": r.revision,
+            "lifecycle_state": r.lifecycle_state,
+            "level": r.level,
+            "title": r.title,
+            "verification_method": r.verification_method,
+            "children": [
+                node(c, seen | {r.id}) for c in by_parent.get(r.id, []) if c.id not in seen
+            ],
+        }
+        if r.parent_id is not None and r.parent_id not in ids:
+            n["orphan"] = True  # parent superseded/cancelled/deleted — re-parent it
+        return n
+
+    if args.get("requirement_id") or args.get("req_number"):
+        root = _find_requirement(db, args)
+        if not root:
+            return json_response({"error": "Requirement not found"})
+        return json_response({"tree": [node(root, frozenset({root.id}))]})
+
+    roots = by_parent.get(None, [])
+    return json_response({"count": len(rows), "tree": [node(r, frozenset({r.id})) for r in roots]})
 
 
 async def _list_part_requirements(db, args: dict) -> list[TextContent]:
@@ -1773,17 +2900,26 @@ async def _assign_requirement(db, args: dict) -> list[TextContent]:
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
 
-    # Check if requirement exists in project
-    project = get_active_project()
-    req_title = None
-    if project:
-        req_config = project.get_requirement(args["requirement_id"])
+    # Resolve against the first-class table (current revision), then the
+    # deprecated yaml catalog.
+    req_row = (
+        db.query(Requirement)
+        .filter(
+            Requirement.req_number == args["requirement_id"],
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.revision.desc())
+        .first()
+    )
+    req_title = req_row.title if req_row else None
+    if not req_row:
+        project = get_active_project()
+        req_config = project.get_requirement(args["requirement_id"]) if project else None
         if req_config:
             req_title = req_config.title
         else:
-            return json_response(
-                {"error": f"Requirement {args['requirement_id']} not found in project config"}
-            )
+            return json_response({"error": f"Requirement {args['requirement_id']} not found"})
 
     # Check if already assigned
     existing = (
@@ -1805,6 +2941,7 @@ async def _assign_requirement(db, args: dict) -> list[TextContent]:
     pr = PartRequirement(
         part_id=args["part_id"],
         requirement_id=args["requirement_id"],
+        requirement_ref_id=req_row.id if req_row else None,
         notes=args.get("notes"),
     )
     db.add(pr)
@@ -2008,6 +3145,8 @@ def _serialize_step(step: ProcedureStep) -> dict:
         "is_contingency": step.is_contingency,
         "requires_signoff": step.requires_signoff,
         "estimated_duration_minutes": step.estimated_duration_minutes,
+        "required_role": step.required_role,
+        "caution": step.caution,
         "workcenter_id": step.workcenter_id,
     }
 
@@ -2206,6 +3345,10 @@ async def _update_step(db, args: dict) -> list[TextContent]:
         step.requires_signoff = bool(args["requires_signoff"])
     if "estimated_duration_minutes" in args:
         step.estimated_duration_minutes = args["estimated_duration_minutes"]
+    if "required_role" in args:
+        step.required_role = args["required_role"]
+    if "caution" in args:
+        step.caution = args["caution"]
     if "required_data_schema" in args:
         step.required_data_schema = args["required_data_schema"]
 
@@ -2928,6 +4071,8 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
             "is_contingency": step.is_contingency,
             "requires_signoff": step.requires_signoff,
             "estimated_duration_minutes": step.estimated_duration_minutes,
+            "required_role": step.required_role,
+            "caution": step.caution,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
             "step_kit": [
@@ -3064,6 +4209,8 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
             is_contingency=s.is_contingency,
             requires_signoff=s.requires_signoff,
             estimated_duration_minutes=s.estimated_duration_minutes,
+            required_role=s.required_role,
+            caution=s.caution,
             workcenter_id=s.workcenter_id,
         )
         db.add(new_step)
@@ -3133,17 +4280,444 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
     )
 
 
+# ============ SUPPLIERS ============
+
+
+async def _search_suppliers(db, args: dict) -> list[TextContent]:
+    """Search suppliers by name substring (non-deleted)."""
+    query = db.query(Supplier).filter(Supplier.deleted_at.is_(None))
+
+    if args.get("query"):
+        query = query.filter(Supplier.name.ilike(f"%{args['query']}%"))
+
+    limit = args.get("limit", 20)
+    suppliers = query.order_by(Supplier.name).limit(limit).all()
+
+    return json_response(
+        {
+            "count": len(suppliers),
+            "suppliers": [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "code": s.code,
+                    "website": s.website,
+                    "email": s.email,
+                    "is_active": s.is_active,
+                }
+                for s in suppliers
+            ],
+        }
+    )
+
+
+async def _create_supplier(db, args: dict) -> list[TextContent]:
+    """Create a new supplier."""
+    supplier = Supplier(
+        name=args["name"],
+        code=args.get("code"),
+        website=args.get("website"),
+        email=args.get("email"),
+        phone=args.get("phone"),
+        address=args.get("address"),
+        notes=args.get("notes"),
+    )
+    db.add(supplier)
+    db.flush()
+    log_create(db, supplier)
+    db.commit()
+    db.refresh(supplier)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created supplier '{supplier.name}' with ID {supplier.id}",
+            "supplier": {
+                "id": supplier.id,
+                "name": supplier.name,
+                "code": supplier.code,
+                "website": supplier.website,
+                "email": supplier.email,
+                "phone": supplier.phone,
+                "address": supplier.address,
+                "is_active": supplier.is_active,
+            },
+        }
+    )
+
+
+# ============ WORKCENTERS ============
+
+
+def _derive_workcenter_code(name: str) -> str:
+    """Derive a short uppercase code from a workcenter name."""
+    letters = "".join(ch for ch in name.upper() if ch.isalnum())
+    return (letters[:8] or "WC") if letters else "WC"
+
+
+async def _create_workcenter(db, args: dict) -> list[TextContent]:
+    """Create a new workcenter. Code is required+unique; derive if omitted."""
+    # Match API behavior: case-insensitive duplicate check, store uppercased
+    code = (args.get("code") or _derive_workcenter_code(args["name"])).upper()
+
+    existing = db.query(Workcenter).filter(func.lower(Workcenter.code) == code.lower()).first()
+    if existing:
+        return json_response({"error": f"Workcenter code '{code}' already exists"})
+
+    workcenter = Workcenter(
+        name=args["name"],
+        code=code,
+        description=args.get("description"),
+        location=args.get("location"),
+    )
+    db.add(workcenter)
+    db.flush()
+    log_create(db, workcenter)
+    db.commit()
+    db.refresh(workcenter)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created workcenter '{workcenter.name}' ({workcenter.code})",
+            "workcenter": {
+                "id": workcenter.id,
+                "name": workcenter.name,
+                "code": workcenter.code,
+                "description": workcenter.description,
+                "location": workcenter.location,
+                "is_active": workcenter.is_active,
+            },
+        }
+    )
+
+
+# ============ INVENTORY SUMMARY ============
+
+
+async def _get_inventory_summary(db, args: dict) -> list[TextContent]:
+    """Summarize stock for a part: totals, by-location, and calibration."""
+    part = db.query(Part).filter(Part.id == args["part_id"], Part.deleted_at.is_(None)).first()
+    if not part:
+        return json_response({"error": f"Part {args['part_id']} not found"})
+
+    records = db.query(InventoryRecord).filter(InventoryRecord.part_id == part.id).all()
+
+    total_qty = sum((r.quantity for r in records), Decimal(0))
+    by_location = [
+        {
+            "location": r.location,
+            "qty": float(r.quantity),
+            "opal_number": r.opal_number,
+        }
+        for r in records
+    ]
+
+    summary = {
+        "part_id": part.id,
+        "part_name": part.name,
+        "internal_pn": part.internal_pn,
+        "tier": part.tier,
+        "total_qty": float(total_qty),
+        "record_count": len(records),
+        "by_location": by_location,
+        "is_tooling": part.is_tooling,
+    }
+
+    if part.is_tooling:
+        # No stored calibration_status field; compute from calibration_due_at.
+        # The earliest due date across records is the binding one.
+        due_dates = [r.calibration_due_at for r in records if r.calibration_due_at is not None]
+        now = datetime.now(UTC)
+        if not due_dates:
+            calibration_status = "unknown"
+            earliest_due = None
+        else:
+            earliest_due = min(due_dates)
+            # SQLite returns naive datetimes; normalize to UTC for comparison.
+            cmp_due = earliest_due if earliest_due.tzinfo else earliest_due.replace(tzinfo=UTC)
+            calibration_status = "overdue" if cmp_due <= now else "ok"
+        summary["calibration_due_at"] = earliest_due.isoformat() if earliest_due else None
+        summary["calibration_status"] = calibration_status
+        summary["calibration_interval_days"] = part.calibration_interval_days
+
+    return json_response(summary)
+
+
+# ============ BULK PART CREATION ============
+
+
+async def _bulk_create_parts(db, args: dict) -> list[TextContent]:
+    """Create multiple parts in a single transaction."""
+    part_args = args.get("parts") or []
+    if not part_args:
+        return json_response({"error": "No parts provided"})
+
+    # Validate all parent_ids up front so the whole batch is rejected cleanly.
+    for idx, pa in enumerate(part_args):
+        if not pa.get("name"):
+            return json_response({"error": f"Part at index {idx} is missing required 'name'"})
+        parent_id = pa.get("parent_id")
+        if parent_id:
+            parent = db.query(Part).filter(Part.id == parent_id, Part.deleted_at.is_(None)).first()
+            if not parent:
+                return json_response(
+                    {"error": f"Parent part {parent_id} not found (part index {idx})"}
+                )
+
+    created = []
+    for pa in part_args:
+        part = _build_part(db, pa)
+        db.add(part)
+        db.flush()
+        log_create(db, part)
+        created.append(part)
+
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created {len(created)} part(s)",
+            "count": len(created),
+            "parts": [
+                {
+                    "id": p.id,
+                    "internal_pn": p.internal_pn,
+                    "name": p.name,
+                    "category": p.category,
+                    "tier": p.tier,
+                    "tier_name": _tier_name(p.tier),
+                    "is_tooling": p.is_tooling,
+                    "parent_id": p.parent_id,
+                }
+                for p in created
+            ],
+        }
+    )
+
+
+# ============ PURCHASE ORDERS ============
+
+
+async def _create_purchase_order(db, args: dict) -> list[TextContent]:
+    """Create a purchase order with line items."""
+    supplier = (
+        db.query(Supplier)
+        .filter(Supplier.id == args["supplier_id"], Supplier.deleted_at.is_(None))
+        .first()
+    )
+    if not supplier:
+        return json_response({"error": f"Supplier {args['supplier_id']} not found"})
+
+    line_args = args.get("lines") or []
+    if not line_args:
+        return json_response({"error": "A purchase order requires at least one line"})
+
+    # Validate parts before creating anything.
+    for line in line_args:
+        part = db.query(Part).filter(Part.id == line["part_id"], Part.deleted_at.is_(None)).first()
+        if not part:
+            return json_response({"error": f"Part {line['part_id']} not found"})
+
+    # POs created outside this tool (UI, seed data) use the same PO-NNNN
+    # format without consuming the designator sequence — skip past any
+    # already-taken references instead of failing the unique constraint.
+    reference = generate_designator(db, "PO", digits=4)
+    while db.query(Purchase).filter(Purchase.reference == reference).first() is not None:
+        reference = generate_designator(db, "PO", digits=4)
+    purchase = Purchase(
+        reference=reference,
+        supplier=supplier.name,
+        supplier_id=supplier.id,
+        status=PurchaseStatus.DRAFT,
+        notes=args.get("notes"),
+    )
+    db.add(purchase)
+    db.flush()
+
+    for line in line_args:
+        db.add(
+            PurchaseLine(
+                purchase_id=purchase.id,
+                part_id=line["part_id"],
+                qty_ordered=Decimal(str(line["quantity"])),
+                unit_cost=Decimal(str(line["unit_cost"]))
+                if line.get("unit_cost") is not None
+                else None,
+                notes=line.get("notes"),
+            )
+        )
+
+    db.flush()
+    log_create(db, purchase)
+    db.commit()
+    db.refresh(purchase)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created purchase order {reference} with {len(line_args)} line(s)",
+            "purchase_id": purchase.id,
+            "po_number": purchase.reference,
+            "supplier_id": purchase.supplier_id,
+            "line_count": len(line_args),
+            "status": purchase.status.value
+            if hasattr(purchase.status, "value")
+            else purchase.status,
+        }
+    )
+
+
+# ============ COMPOSITE PROCEDURE BUILD ============
+
+
+async def _build_procedure(db, args: dict) -> list[TextContent]:
+    """Create a full procedure (steps, step kits, kit, outputs) in one call."""
+    raw_type = args.get("procedure_type", "op")
+    try:
+        procedure_type = ProcedureType(raw_type)
+    except ValueError:
+        return json_response(
+            {"error": f"Invalid procedure_type {raw_type!r}; expected 'op' or 'build'"}
+        )
+
+    steps_in = args.get("steps") or []
+    kit_in = args.get("kit") or []
+    outputs_in = args.get("outputs") or []
+
+    # Validate all referenced parts and workcenters before mutating anything.
+    def _part_exists(part_id: int) -> bool:
+        return (
+            db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first() is not None
+        )
+
+    for i, step in enumerate(steps_in):
+        if not step.get("title"):
+            return json_response({"error": f"Step at index {i} is missing required 'title'"})
+        wc_id = step.get("workcenter_id")
+        if wc_id and db.query(Workcenter).filter(Workcenter.id == wc_id).first() is None:
+            return json_response({"error": f"Workcenter {wc_id} not found (step index {i})"})
+        for sk in step.get("step_kits") or []:
+            if not _part_exists(sk["part_id"]):
+                return json_response(
+                    {"error": f"Part {sk['part_id']} not found (step index {i} kit)"}
+                )
+            try:
+                UsageType(sk.get("usage_type", "consume"))
+            except ValueError:
+                return json_response({"error": f"Invalid usage_type {sk.get('usage_type')!r}"})
+    for k in kit_in:
+        if not _part_exists(k["part_id"]):
+            return json_response({"error": f"Kit part {k['part_id']} not found"})
+    for o in outputs_in:
+        if not _part_exists(o["part_id"]):
+            return json_response({"error": f"Output part {o['part_id']} not found"})
+
+    procedure = MasterProcedure(
+        name=args["name"],
+        description=args.get("description"),
+        procedure_type=procedure_type.value,
+        status=ProcedureStatus.DRAFT.value,
+    )
+    db.add(procedure)
+    db.flush()
+    log_create(db, procedure)
+
+    step_count = 0
+    step_kit_count = 0
+    for i, step in enumerate(steps_in):
+        ps = ProcedureStep(
+            procedure_id=procedure.id,
+            parent_step_id=None,
+            order=i + 1,
+            step_number=str(i + 1),
+            level=0,
+            title=step["title"],
+            instructions=step.get("instructions"),
+            required_role=step.get("required_role"),
+            caution=step.get("caution"),
+            requires_signoff=bool(step.get("requires_signoff", False)),
+            estimated_duration_minutes=step.get("estimated_duration_minutes"),
+            workcenter_id=step.get("workcenter_id"),
+        )
+        db.add(ps)
+        db.flush()
+        log_create(db, ps)
+        step_count += 1
+
+        for sk in step.get("step_kits") or []:
+            item = StepKit(
+                step_id=ps.id,
+                part_id=sk["part_id"],
+                quantity_required=Decimal(str(sk["quantity_required"])),
+                usage_type=UsageType(sk.get("usage_type", "consume")),
+            )
+            db.add(item)
+            db.flush()
+            log_create(db, item)
+            step_kit_count += 1
+
+    kit_item_count = 0
+    for k in kit_in:
+        item = Kit(
+            procedure_id=procedure.id,
+            part_id=k["part_id"],
+            quantity_required=Decimal(str(k["quantity_required"])),
+        )
+        db.add(item)
+        db.flush()
+        log_create(db, item)
+        kit_item_count += 1
+
+    output_count = 0
+    for o in outputs_in:
+        output = ProcedureOutput(
+            procedure_id=procedure.id,
+            part_id=o["part_id"],
+            quantity_produced=Decimal(str(o.get("quantity_produced", 1))),
+        )
+        db.add(output)
+        db.flush()
+        log_create(db, output)
+        output_count += 1
+
+    db.commit()
+    db.refresh(procedure)
+
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"Built procedure '{procedure.name}' (ID {procedure.id}) with "
+                f"{step_count} step(s), {kit_item_count} kit item(s), "
+                f"{output_count} output(s)"
+            ),
+            "procedure_id": procedure.id,
+            "name": procedure.name,
+            "step_count": step_count,
+            "step_kit_count": step_kit_count,
+            "kit_item_count": kit_item_count,
+            "output_count": output_count,
+        }
+    )
+
+
 # ============ SERVER ENTRY POINT ============
 
 
 async def run_server():
     """Run the MCP server."""
-    logger.info("OPAL MCP Server started")
-    logger.info("Database: %s", get_active_settings().database_url)
+    import sys
+
+    # stderr, not logging: logging is usually unconfigured here, and stdout
+    # carries the MCP protocol. Which database this server is bound to is the
+    # first thing to check when MCP and web UI disagree about the data.
+    print(f"OPAL MCP server | database: {get_active_settings().database_url}", file=sys.stderr)
 
     project = get_active_project()
     if project:
-        logger.info("Project: %s", project.name)
+        print(f"OPAL MCP server | project: {project.name}", file=sys.stderr)
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

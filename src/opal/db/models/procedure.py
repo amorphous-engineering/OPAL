@@ -109,6 +109,16 @@ class ProcedureStep(Base, IdMixin, TimestampMixin):
         default=False, nullable=False, comment="Step requires sign-off to complete"
     )
     estimated_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    required_role: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Role required for this step (informational badge, does not gate execution)",
+    )
+    caution: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Safety warning displayed prominently during editing and execution",
+    )
     workcenter_id: Mapped[int | None] = mapped_column(
         ForeignKey("workcenter.id", ondelete="SET NULL"),
         nullable=True,

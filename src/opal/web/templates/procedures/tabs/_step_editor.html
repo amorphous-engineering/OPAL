@@ -40,6 +40,16 @@
             {% endif %}
         </div>
     </div>
+    <div style="display: flex; gap: var(--space-md);">
+        <div class="form-group" style="flex: 1;">
+            <label class="form-label">REQUIRED ROLE</label>
+            <input type="text" name="required_role" class="form-input" value="{{ step.required_role or '' }}" placeholder="e.g. QE, MFG-LEAD" maxlength="50">
+        </div>
+        <div class="form-group" style="flex: 2;">
+            <label class="form-label">CAUTION</label>
+            <input type="text" name="caution" class="form-input" value="{{ step.caution or '' }}" placeholder="Safety warning text (shown in red during execution)">
+        </div>
+    </div>
 
     <div style="margin-top: var(--space-md);">
         <div class="form-label" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xs);">

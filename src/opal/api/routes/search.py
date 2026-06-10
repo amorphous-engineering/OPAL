@@ -16,6 +16,7 @@ from sqlalchemy import literal_column, or_
 from sqlalchemy.orm import Session
 
 from opal.api.deps import DbSession
+from opal.db.base import LifecycleState
 from opal.db.fts import ENTITY_SPECS, FtsEntity, fts_ready, fts_table
 from opal.db.models import Part, Supplier
 from opal.db.models.dataset import Dataset
@@ -23,6 +24,7 @@ from opal.db.models.execution import ProcedureInstance
 from opal.db.models.issue import Issue
 from opal.db.models.procedure import MasterProcedure
 from opal.db.models.purchase import Purchase
+from opal.db.models.requirement import Requirement
 from opal.db.models.risk import Risk
 from opal.db.models.workcenter import Workcenter
 
@@ -141,6 +143,17 @@ def _workcenter_result(w: Workcenter) -> SearchResult:
     )
 
 
+def _requirement_result(req: Requirement) -> SearchResult:
+    return SearchResult(
+        entity_type="requirement",
+        id=req.id,
+        label=f"{req.req_number} — {req.title}",
+        sublabel=f"rev {req.revision}",
+        url=f"/requirements/{req.id}",
+        status=req.lifecycle_state,
+    )
+
+
 @dataclass(frozen=True)
 class _Searchable:
     """How to search and render one entity type."""
@@ -151,6 +164,7 @@ class _Searchable:
     soft_delete: bool
     ilike_columns: tuple
     order_desc: bool = True  # ILIKE path order: id desc (True) or first column asc (False)
+    filters: tuple = ()  # extra filter clauses applied on both search paths
 
 
 _SEARCHABLES: tuple[_Searchable, ...] = (
@@ -171,6 +185,16 @@ _SEARCHABLES: tuple[_Searchable, ...] = (
         (ProcedureInstance.work_order_number,),
     ),
     _Searchable("risk", Risk, _risk_result, True, (Risk.title, Risk.description)),
+    _Searchable(
+        "requirement",
+        Requirement,
+        _requirement_result,
+        True,
+        (Requirement.req_number, Requirement.title, Requirement.statement),
+        False,
+        # Superseded revisions stay searchable only through their successor
+        (Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,),
+    ),
     _Searchable(
         "supplier", Supplier, _supplier_result, True, (Supplier.name, Supplier.code), False
     ),
@@ -204,6 +228,8 @@ def _search_fts(db: Session, searchable: _Searchable, q: str, limit: int) -> lis
     )
     if searchable.soft_delete:
         query = query.filter(searchable.model.deleted_at.is_(None))
+    if searchable.filters:
+        query = query.filter(*searchable.filters)
     return query.order_by(literal_column(f"{spec.fts_table}.rank")).limit(limit).all()
 
 
@@ -215,6 +241,8 @@ def _search_ilike(db: Session, searchable: _Searchable, q: str, limit: int) -> l
     )
     if searchable.soft_delete:
         query = query.filter(searchable.model.deleted_at.is_(None))
+    if searchable.filters:
+        query = query.filter(*searchable.filters)
     if searchable.order_desc:
         query = query.order_by(searchable.model.id.desc())
     else:

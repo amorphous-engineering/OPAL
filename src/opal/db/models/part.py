@@ -132,6 +132,11 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         "BOMLine", back_populates="component", foreign_keys="BOMLine.component_id"
     )
 
+    # Supplier catalog entries for this part
+    supplier_entries: Mapped[list["SupplierPart"]] = relationship(
+        "SupplierPart", back_populates="part", cascade="all, delete-orphan"
+    )
+
     def __repr__(self) -> str:
         return f"<Part(id={self.id}, name='{self.name}', tier={self.tier})>"
 
@@ -154,6 +159,12 @@ class PartRequirement(Base, IdMixin, TimestampMixin):
         index=True,
         comment="Requirement ID from project config (e.g., REQ-001)",
     )
+    requirement_ref_id: Mapped[int | None] = mapped_column(
+        ForeignKey("requirement.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK to the first-class Requirement row; supersedes the string requirement_id",
+    )
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="open", comment="open, verified, waived, not_applicable"
     )
@@ -164,6 +175,9 @@ class PartRequirement(Base, IdMixin, TimestampMixin):
     # Relationships
     part: Mapped["Part"] = relationship("Part", back_populates="requirements")
     verified_by: Mapped["User | None"] = relationship("User")
+    requirement_ref: Mapped["Requirement | None"] = relationship(
+        "Requirement", back_populates="part_links"
+    )
 
     def __repr__(self) -> str:
         return f"<PartRequirement(part_id={self.part_id}, requirement_id='{self.requirement_id}', status='{self.status}')>"

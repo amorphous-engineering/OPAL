@@ -1,8 +1,5 @@
 """Core business logic tests — designators, audit, and diff."""
 
-from datetime import datetime, timezone
-from decimal import Decimal
-
 import pytest
 from sqlalchemy.orm import Session
 
@@ -17,9 +14,8 @@ from opal.core.designators import (
     parse_designator,
 )
 from opal.core.diff import diff_procedure_versions
-from opal.db.models import AuditLog, Part
+from opal.db.models import Part
 from opal.db.models.audit import AuditAction
-
 
 # ---- Local fixtures ----
 
@@ -261,3 +257,24 @@ def test_diff_procedure_versions_step_modified() -> None:
     assert len(diffs) == 1
     assert diffs[0].status == "modified"
     assert "title" in diffs[0].changed_fields
+
+
+def test_project_config_tolerates_cp1252(tmp_path):
+    """Windows-edited project files (cp1252 em-dashes etc.) must load, not crash."""
+    from opal.project import load_project_config
+
+    config_file = tmp_path / "opal.project.yaml"
+    config_file.write_bytes(b"name: Test \x97 Project\n")  # 0x97 = cp1252 em dash
+
+    config = load_project_config(config_file)
+    assert config.name == "Test — Project"
+
+
+def test_project_config_utf8_bom(tmp_path):
+    """UTF-8 files with a BOM (Notepad default) must load."""
+    from opal.project import load_project_config
+
+    config_file = tmp_path / "opal.project.yaml"
+    config_file.write_bytes(b"\xef\xbb\xbfname: BOM Project\n")
+
+    assert load_project_config(config_file).name == "BOM Project"

@@ -18,6 +18,17 @@
     <script src="/static/js/events.js"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
+    {% if demo_active %}
+    <div class="demo-banner mono">
+        <span>DEMO DATABASE ACTIVE — ALL CHANGES WILL BE DELETED ON EXIT</span>
+        {% if is_admin %}
+        <form method="post" action="/settings/demo/exit" style="display: inline; margin-left: var(--space-md);"
+              onsubmit="return confirm('Exit the demo? The demo database and everything in it will be deleted.');">
+            <button type="submit" class="demo-banner-exit">EXIT DEMO</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
     <header class="header">
         <div class="header-brand">
             <a href="/" class="brand-link">OPAL</a>
@@ -51,12 +62,13 @@
 
             <!-- Quality dropdown -->
             <div class="nav-dropdown">
-                <button class="nav-dropdown-btn{% if request.url.path.startswith('/issues') or request.url.path.startswith('/risks') or request.url.path.startswith('/datasets') %} active{% endif %}">
+                <button class="nav-dropdown-btn{% if request.url.path.startswith('/issues') or request.url.path.startswith('/risks') or request.url.path.startswith('/datasets') or request.url.path.startswith('/requirements') %} active{% endif %}">
                     QUALITY
                 </button>
                 <div class="nav-dropdown-content">
                     <a href="/issues" class="{% if request.url.path.startswith('/issues') %}active{% endif %}">Issues</a>
                     <a href="/risks" class="{% if request.url.path.startswith('/risks') %}active{% endif %}">Risks</a>
+                    <a href="/requirements" class="{% if request.url.path.startswith('/requirements') %}active{% endif %}">Requirements</a>
                     <a href="/datasets" class="{% if request.url.path.startswith('/datasets') %}active{% endif %}">Datasets</a>
                 </div>
             </div>
@@ -126,6 +138,7 @@
 
     <footer class="footer">
         <span class="footer-status">STATUS: READY</span>
+        <span class="footer-db" title="Active database">DB: {{ active_database_path() }}</span>
         <span class="footer-time" id="current-time"></span>
     </footer>
 
@@ -161,6 +174,9 @@
             { type: 'nav', label: 'Go to Workcenters', action: '/workcenters', keywords: 'workcenters stations' },
             { type: 'nav', label: 'Go to Issues', action: '/issues', keywords: 'issues bugs problems nc' },
             { type: 'nav', label: 'Go to Risks', action: '/risks', keywords: 'risks hazards mitigation' },
+            { type: 'nav', label: 'Go to Requirements', action: '/requirements', keywords: 'requirements req shall baseline traceability' },
+            { type: 'nav', label: 'Go to Baseline Queue', action: '/requirements/queue', keywords: 'baseline queue ready requirements freeze' },
+            { type: 'nav', label: 'Go to Baselines', action: '/requirements/baselines', keywords: 'baseline events history locked requirements' },
             { type: 'nav', label: 'Go to Datasets', action: '/datasets', keywords: 'datasets charts graphs data' },
             { type: 'nav', label: 'Go to Home', action: '/', keywords: 'home dashboard' },
             { type: 'nav', label: 'Go to Audit Log', action: '/audit', keywords: 'audit log history changes' },
@@ -175,6 +191,8 @@
             { type: 'action', label: 'New Workcenter', action: '/workcenters/new', keywords: 'create add workcenter station' },
             { type: 'action', label: 'New Issue', action: '/issues/new', keywords: 'create add issue bug nc' },
             { type: 'action', label: 'New Risk', action: '/risks/new', keywords: 'create add risk hazard' },
+            { type: 'action', label: 'New Requirement', action: '/requirements/new', keywords: 'create add requirement req shall' },
+            { type: 'action', label: 'New L0 Requirement', action: '/requirements?new=l0', keywords: 'create add root level 0 requirement req' },
             { type: 'action', label: 'New Dataset', action: '/datasets/new', keywords: 'create add dataset chart' },
             { type: 'action', label: 'New User', action: '/users/new', keywords: 'create add user person' },
             { type: 'action', label: 'New Inventory Record', action: '/inventory/new', keywords: 'create add inventory stock record' },
@@ -273,7 +291,8 @@
                 const typeLabels = {
                     part: 'PARTS', issue: 'ISSUES', procedure: 'PROCEDURES',
                     execution: 'EXECUTIONS', risk: 'RISKS', supplier: 'SUPPLIERS',
-                    purchase: 'PURCHASES', dataset: 'DATASETS', workcenter: 'WORKCENTERS'
+                    purchase: 'PURCHASES', dataset: 'DATASETS', workcenter: 'WORKCENTERS',
+                    requirement: 'REQUIREMENTS'
                 };
 
                 for (const [type, items] of Object.entries(grouped)) {

@@ -1,0 +1,144 @@
+# Requirement lint rules — SP-2016-6105 Rev 2 Appendix C, automatable subset.
+# EXECUTABLE TRUTH — edit here; docs/plans/se-module/lint-rules.yaml is a
+# review mirror (drift-guarded by tests/unit/test_lint_rules_drift.py).
+# Loaded by opal.se.lint as data; check logic lives in Python keyed by `name`.
+# severity: warn (advisory at save) | block_baseline (must clear before the
+# lifecycle state can advance to baselined). Nothing ever blocks save.
+
+rules:
+  - id: LINT-001
+    name: shall_form
+    description: >
+      Statement contains exactly one "shall"; zero means it is not a
+      requirement, two or more means split it.
+    severity: block_baseline
+    source: "App. C.1, C.4 (one thought per statement)"
+
+  - id: LINT-002
+    name: active_subject
+    description: >
+      Statement begins with a concrete subject ("The <product> shall ..."),
+      not an indefinite pronoun (This/These/It/They/There) or a bare "shall".
+    severity: warn
+    source: "App. C.2"
+
+  - id: LINT-003
+    name: banned_ambiguity_terms
+    description: Statement contains none of the banned terms (case-insensitive).
+    severity: block_baseline
+    source: "App. C.4 clarity"
+    terms:
+      - "as appropriate"
+      - "etc."
+      - "and/or"
+      - "but not limited to"
+      - "adequate"
+      - "sufficient"
+      - "appropriate"
+      - "user-friendly"
+      - "maximize"
+      - "minimize"
+      - "easy"
+      - "rapid"
+      - "state of the art"
+    # Sometimes legitimate ("support loads", "robust to single faults" when
+    # quantified elsewhere) — advisory only.
+    warn_terms:
+      - "support"
+      - "robust"
+
+  - id: LINT-004
+    name: single_thought
+    description: >
+      No semicolon-chained requirements; no embedded rationale ("because",
+      "in order to" — move to the rationale field). Multiple shall-clauses
+      are caught by shall_form.
+    severity: warn
+    source: "App. C.4 (one subject, one predicate)"
+
+  - id: LINT-005
+    name: quantitative_has_bounds
+    description: >
+      Every numeric value carries a tolerance or bound (±, <=, >=, <, >,
+      a bound phrase from the list below, or an explicit "X to Y" range).
+      Bare numbers are unverifiable. Symbols and the range pattern are
+      structural and live in the engine; the word vocabulary lives here.
+    severity: block_baseline
+    source: "App. C.2 (complete with tolerances)"
+    bound_phrases:
+      - "within"
+      - "no more than"
+      - "no less than"
+      - "no greater than"
+      - "no fewer than"
+      - "not more than"
+      - "not less than"
+      - "not greater than"
+      - "not fewer than"
+      - "at least"
+      - "at most"
+      - "between"
+      - "under"
+      - "over"
+      - "up to"
+      - "below"
+      - "above"
+      - "max"
+      - "maximum"
+      - "min"
+      - "minimum"
+      - "tolerance"
+      - "exactly"
+
+  - id: LINT-006
+    name: positive_statement
+    description: >
+      Avoid "shall not" — restate positively where possible (negative
+      requirements are hard to verify).
+    severity: warn
+    source: "App. C.3"
+
+  - id: LINT-007
+    name: rationale_present
+    description: rationale is non-empty and is not a restatement of the requirement.
+    severity: block_baseline
+    source: "App. C.3 (intelligible rationale incl. assumptions)"
+
+  - id: LINT-008
+    name: tbd_tbr_discipline
+    description: >
+      tbd=true blocks baseline outright. tbr=true requires tbr_owner and
+      tbr_due; an overdue TBR is flagged.
+    severity: block_baseline
+    source: "App. C.3 (minimize TBD; TBR carries owner, plan, date)"
+
+  - id: LINT-009
+    name: no_implementation_language
+    description: >
+      Heuristic — flag "by using", "via", "implemented as", "by means of".
+      Requirements state WHAT, not HOW. Sometimes the constraint IS the
+      requirement, so advisory only.
+    severity: warn
+    source: "App. C.2 (free of implementation)"
+
+  - id: LINT-010
+    name: no_operations_language
+    description: >
+      Heuristic — flag "The operator/user/crew shall"; operational
+      statements belong in the ConOps, personnel tasks in procedures.
+    severity: warn
+    source: "App. C.1 (operations vs requirements)"
+
+  - id: LINT-011
+    name: verification_method_set
+    description: verification_method (analysis/inspection/demonstration/test) is set.
+    severity: block_baseline
+    source: "App. C.4 (individually verifiable)"
+
+  - id: LINT-012
+    name: unique_reference
+    description: >
+      req_number assigned and unique, never reused (DB-enforced; lint
+      surfaces a missing number on drafts/imports).
+    severity: block_baseline
+    source: "App. C.4 (uniquely referenceable)"

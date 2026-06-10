@@ -1,19 +1,20 @@
-"""Project configuration API routes."""
+"""Project configuration API routes.
 
-from pathlib import Path
+One instance = one project: configuration lives in the database
+(app_setting key 'project_config'), not in a yaml file. The wizard
+configures THIS instance; it never creates directories or switches
+databases.
+"""
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from opal.api.deps import RequiredAdmin
-from opal.config import configure_for_project, get_active_project
+from opal.api.deps import DbSession, RequiredAdmin
+from opal.config import get_active_project, load_project_from_db, save_project_to_db
 from opal.project import (
     PartNumberingConfig,
     ProjectConfig,
-    RequirementConfig,
     TierConfig,
-    create_project_config,
-    save_project_config,
 )
 
 router = APIRouter(prefix="/project", tags=["project"])
@@ -38,7 +39,7 @@ class PartNumberingInput(BaseModel):
 
 
 class RequirementInput(BaseModel):
-    """Requirement configuration input."""
+    """Requirement configuration input (legacy yaml catalog entries)."""
 
     id: str
     title: str
@@ -47,15 +48,13 @@ class RequirementInput(BaseModel):
 
 
 class ProjectConfigCreate(BaseModel):
-    """Request model for creating a new project."""
+    """Request model for configuring this instance's project."""
 
     name: str
     description: str = ""
-    directory: str
     tiers: list[TierInput]
     part_numbering: PartNumberingInput
     categories: list[str] = []
-    requirements: list[RequirementInput] = []
 
 
 class ProjectConfigUpdate(BaseModel):
@@ -66,7 +65,6 @@ class ProjectConfigUpdate(BaseModel):
     tiers: list[TierInput]
     part_numbering: PartNumberingInput
     categories: list[str] = []
-    requirements: list[RequirementInput] = []
 
 
 class ProjectConfigResponse(BaseModel):
@@ -115,6 +113,22 @@ class ProjectConfigResponse(BaseModel):
         )
 
 
+def _tiers_from_input(tiers: list[TierInput]) -> list[TierConfig]:
+    return [
+        TierConfig(level=t.level, name=t.name, code=t.code, description=t.description)
+        for t in tiers
+    ]
+
+
+def _numbering_from_input(pn: PartNumberingInput) -> PartNumberingConfig:
+    return PartNumberingConfig(
+        prefix=pn.prefix,
+        separator=pn.separator,
+        sequence_digits=pn.sequence_digits,
+        format=pn.format,
+    )
+
+
 @router.get("/config")
 def get_project_config() -> ProjectConfigResponse:
     """Get current project configuration."""
@@ -125,115 +139,47 @@ def get_project_config() -> ProjectConfigResponse:
 
 
 @router.post("/config")
-def create_project(data: ProjectConfigCreate, admin: RequiredAdmin) -> ProjectConfigResponse:
-    """Create a new project configuration."""
-    directory = Path(data.directory).resolve()
-
-    # Check if config already exists
-    config_path = directory / "opal.project.yaml"
-    if config_path.exists():
+def create_project(
+    data: ProjectConfigCreate, db: DbSession, admin: RequiredAdmin
+) -> ProjectConfigResponse:
+    """Configure this instance's project (stored in the database)."""
+    if load_project_from_db(db) is not None:
         raise HTTPException(
             status_code=400,
-            detail=f"Project configuration already exists at {config_path}",
+            detail="This instance already has a project configuration — edit it instead",
         )
 
-    # Convert input tiers to TierConfig
-    tiers = [
-        TierConfig(
-            level=t.level,
-            name=t.name,
-            code=t.code,
-            description=t.description,
-        )
-        for t in data.tiers
-    ]
-
-    # Convert input requirements to RequirementConfig
-    requirements = [
-        RequirementConfig(
-            id=r.id,
-            title=r.title,
-            description=r.description,
-            category=r.category,
-        )
-        for r in data.requirements
-    ]
-
-    # Create project
-    config = create_project_config(
-        project_dir=directory,
+    config = ProjectConfig(
         name=data.name,
         description=data.description,
-        prefix=data.part_numbering.prefix,
-        separator=data.part_numbering.separator,
-        sequence_digits=data.part_numbering.sequence_digits,
-        part_number_format=data.part_numbering.format,
-        tiers=tiers,
-        requirements=requirements,
+        tiers=_tiers_from_input(data.tiers),
+        part_numbering=_numbering_from_input(data.part_numbering),
         categories=data.categories,
     )
 
-    # Activate the new project in memory so the UI reflects it immediately
-    configure_for_project(config)
-
-    # Reinitialize DB engine for the new project's database path and ensure tables exist
-    from opal.db.base import init_database, reinitialize_engine
-
-    reinitialize_engine()
-    init_database()
+    save_project_to_db(db, config, user_id=admin.id)
+    db.commit()
 
     return ProjectConfigResponse.from_config(config)
 
 
 @router.put("/config")
-def update_project_config(data: ProjectConfigUpdate, admin: RequiredAdmin) -> ProjectConfigResponse:
+def update_project_config(
+    data: ProjectConfigUpdate, db: DbSession, admin: RequiredAdmin
+) -> ProjectConfigResponse:
     """Update existing project configuration."""
     project = get_active_project()
     if not project:
         raise HTTPException(status_code=404, detail="No active project configuration")
 
-    if not project.project_dir:
-        raise HTTPException(status_code=400, detail="Cannot update project without project_dir")
-
-    # Update configuration
     project.name = data.name
     project.description = data.description
-
-    # Update tiers
-    project.tiers = [
-        TierConfig(
-            level=t.level,
-            name=t.name,
-            code=t.code,
-            description=t.description,
-        )
-        for t in data.tiers
-    ]
-
-    # Update part numbering
-    project.part_numbering = PartNumberingConfig(
-        prefix=data.part_numbering.prefix,
-        separator=data.part_numbering.separator,
-        sequence_digits=data.part_numbering.sequence_digits,
-        format=data.part_numbering.format,
-    )
-
-    # Update categories
+    project.tiers = _tiers_from_input(data.tiers)
+    project.part_numbering = _numbering_from_input(data.part_numbering)
     project.categories = data.categories
 
-    # Update requirements
-    project.requirements = [
-        RequirementConfig(
-            id=r.id,
-            title=r.title,
-            description=r.description,
-            category=r.category,
-        )
-        for r in data.requirements
-    ]
-
-    # Save to file
-    save_project_config(project)
+    save_project_to_db(db, project, user_id=admin.id)
+    db.commit()
 
     return ProjectConfigResponse.from_config(project)
 

@@ -1,6 +1,5 @@
 """Tests for reports API routes."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 

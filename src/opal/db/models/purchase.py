@@ -1,10 +1,10 @@
 """Purchase order models."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -74,6 +74,9 @@ class Purchase(Base, IdMixin, TimestampMixin):
     lines: Mapped[list["PurchaseLine"]] = relationship(
         "PurchaseLine", back_populates="purchase", cascade="all, delete-orphan"
     )
+    expenses: Mapped[list["PurchaseExpense"]] = relationship(
+        "PurchaseExpense", back_populates="purchase", cascade="all, delete-orphan"
+    )
     supplier_rel: Mapped["Supplier | None"] = relationship("Supplier", back_populates="purchases")
     created_by: Mapped["User | None"] = relationship(
         "User", foreign_keys=[created_by_id], back_populates="purchases_created"
@@ -130,3 +133,43 @@ class PurchaseLine(Base, IdMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<PurchaseLine(id={self.id}, part_id={self.part_id}, ordered={self.qty_ordered}, received={self.qty_received})>"
+
+
+class PurchaseExpense(Base, IdMixin, TimestampMixin):
+    """Immutable record of a PO receive event for expense tracking.
+
+    Written once per received line at receive time; never updated. Costs are
+    nullable because a PO line may have no unit cost attached.
+    """
+
+    purchase_id: Mapped[int] = mapped_column(
+        ForeignKey("purchase.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    purchase_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_line.id", ondelete="SET NULL"), nullable=True
+    )
+    part_id: Mapped[int | None] = mapped_column(
+        ForeignKey("part.id", ondelete="SET NULL"), nullable=True
+    )
+    quantity: Mapped[Decimal] = mapped_column(Numeric(precision=15, scale=4), nullable=False)
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(precision=15, scale=4), nullable=True)
+    total_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=15, scale=4), nullable=True
+    )
+    tier: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="Part tier at receive time"
+    )
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    purchase: Mapped["Purchase"] = relationship("Purchase", back_populates="expenses")
+    part: Mapped["Part | None"] = relationship("Part")
+
+    def __repr__(self) -> str:
+        return (
+            f"<PurchaseExpense(id={self.id}, purchase_id={self.purchase_id}, "
+            f"qty={self.quantity}, total={self.total_cost})>"
+        )

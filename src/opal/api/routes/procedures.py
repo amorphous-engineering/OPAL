@@ -42,6 +42,8 @@ class StepSchema(BaseModel):
     is_contingency: bool = False
     requires_signoff: bool = False
     estimated_duration_minutes: int | None = None
+    required_role: str | None = None
+    caution: str | None = None
     workcenter_id: int | None = None
     sub_steps: list["StepSchema"] = []
 
@@ -99,6 +101,8 @@ class StepCreate(BaseModel):
     is_contingency: bool = False
     requires_signoff: bool = False
     estimated_duration_minutes: int | None = Field(None, ge=1)
+    required_role: str | None = Field(None, max_length=50)
+    caution: str | None = None
     parent_step_id: int | None = Field(None, description="Parent op ID for sub-steps")
 
 
@@ -111,6 +115,8 @@ class StepUpdate(BaseModel):
     is_contingency: bool | None = None
     requires_signoff: bool | None = None
     estimated_duration_minutes: int | None = Field(None, ge=1)
+    required_role: str | None = Field(None, max_length=50)
+    caution: str | None = None
 
 
 class StepReorder(BaseModel):
@@ -193,6 +199,8 @@ def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
             is_contingency=step.is_contingency,
             requires_signoff=step.requires_signoff,
             estimated_duration_minutes=step.estimated_duration_minutes,
+            required_role=step.required_role,
+            caution=step.caution,
             workcenter_id=step.workcenter_id,
             sub_steps=[build_schema(s) for s in sorted(sub_steps, key=lambda x: x.order)],
         )
@@ -479,6 +487,8 @@ def add_step(
         is_contingency=is_contingency,
         requires_signoff=data.requires_signoff,
         estimated_duration_minutes=data.estimated_duration_minutes,
+        required_role=data.required_role,
+        caution=data.caution,
     )
     db.add(step)
     db.flush()
@@ -521,6 +531,12 @@ def update_step(
         step.requires_signoff = data.requires_signoff
     if data.estimated_duration_minutes is not None:
         step.estimated_duration_minutes = data.estimated_duration_minutes
+    # Explicit null clears these: a stale safety callout must be removable,
+    # or it re-snapshots into every future published version
+    if "required_role" in data.model_fields_set:
+        step.required_role = data.required_role
+    if "caution" in data.model_fields_set:
+        step.caution = data.caution
 
     log_update(db, step, old_values, user_id)
     db.commit()
@@ -827,6 +843,8 @@ def publish_version(
             "is_contingency": step.is_contingency,
             "requires_signoff": step.requires_signoff,
             "estimated_duration_minutes": step.estimated_duration_minutes,
+            "required_role": step.required_role,
+            "caution": step.caution,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
             "step_kit": [
@@ -973,6 +991,8 @@ def restore_from_version(
                 is_contingency=step_data.get("is_contingency", False),
                 requires_signoff=step_data.get("requires_signoff", False),
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
+                required_role=step_data.get("required_role"),
+                caution=step_data.get("caution"),
                 workcenter_id=step_data.get("workcenter_id"),
             )
             db.add(new_step)
@@ -995,6 +1015,8 @@ def restore_from_version(
                 is_contingency=step_data.get("is_contingency", False),
                 requires_signoff=step_data.get("requires_signoff", False),
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
+                required_role=step_data.get("required_role"),
+                caution=step_data.get("caution"),
                 workcenter_id=step_data.get("workcenter_id"),
             )
             db.add(new_step)
@@ -1625,6 +1647,8 @@ def clone_procedure(
             is_contingency=source_step.is_contingency,
             requires_signoff=source_step.requires_signoff,
             estimated_duration_minutes=source_step.estimated_duration_minutes,
+            required_role=source_step.required_role,
+            caution=source_step.caution,
             workcenter_id=source_step.workcenter_id,
         )
         db.add(new_step)

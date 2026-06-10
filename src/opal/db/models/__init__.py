@@ -4,6 +4,7 @@ from opal.db.models.app_setting import AppSetting
 from opal.db.models.attachment import Attachment
 from opal.db.models.audit import AuditLog
 from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential
+from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
 from opal.db.models.execution import ProcedureInstance, StepExecution
@@ -29,19 +30,24 @@ from opal.db.models.procedure import (
     StepDependency,
     StepKit,
 )
-from opal.db.models.purchase import Purchase, PurchaseLine
+from opal.db.models.purchase import Purchase, PurchaseExpense, PurchaseLine
 from opal.db.models.reference import IssueReference, ReferenceType, RiskReference
+from opal.db.models.requirement import Requirement, VerificationMethod
 from opal.db.models.risk import Risk
-from opal.db.models.supplier import Supplier
+from opal.db.models.supplier import Supplier, SupplierPart
 from opal.db.models.user import User
 from opal.db.models.workcenter import Workcenter
 
 __all__ = [
+    "ApiToken",
     "AppSetting",
     "AssemblyComponent",
     "Attachment",
     "AuditLog",
+    "AuthSession",
     "BOMLine",
+    "BaselineEvent",
+    "BaselineEventItem",
     "DataPoint",
     "Dataset",
     "DesignatorSequence",
@@ -57,13 +63,16 @@ __all__ = [
     "OnshapeSyncLog",
     "Part",
     "PartRequirement",
+    "PasskeyCredential",
     "ProcedureInstance",
     "ProcedureOutput",
     "ProcedureStep",
     "ProcedureVersion",
     "Purchase",
+    "PurchaseExpense",
     "PurchaseLine",
     "ReferenceType",
+    "Requirement",
     "Risk",
     "RiskReference",
     "StepDependency",
@@ -72,10 +81,9 @@ __all__ = [
     "StockTestResult",
     "StockTransfer",
     "Supplier",
+    "SupplierPart",
     "TestTemplate",
-    "ApiToken",
-    "AuthSession",
-    "PasskeyCredential",
     "User",
+    "VerificationMethod",
     "Workcenter",
 ]

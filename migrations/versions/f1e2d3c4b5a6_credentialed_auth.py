@@ -1,6 +1,6 @@
 """Credentialed auth: username/password on user; session, API token and passkey tables
 
-Revision ID: c4d5e6f7a8b9
+Revision ID: f1e2d3c4b5a6
 Revises: b3f2c1d4a5e6
 Create Date: 2026-06-09
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "c4d5e6f7a8b9"
+revision = "f1e2d3c4b5a6"
 down_revision = "b3f2c1d4a5e6"
 branch_labels = None
 depends_on = None

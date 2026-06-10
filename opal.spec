@@ -23,6 +23,9 @@ datas = []
 datas.append((str(src_dir / "web" / "templates"), "opal/web/templates"))
 datas.append((str(src_dir / "web" / "static"), "opal/web/static"))
 
+# SE requirement lint rules (loaded as data by opal.se.lint)
+datas.append((str(src_dir / "se" / "lint_rules.yaml"), "opal/se"))
+
 # TUI styles
 datas.append((str(src_dir / "tui" / "styles.tcss"), "opal/tui"))
 

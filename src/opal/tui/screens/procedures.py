@@ -85,6 +85,16 @@ class StepFormModal(FormModal):
                 value="true" if is_contingency else "false",
             ),
         )
+        required_role_val = self.step.get("required_role") or "" if self.step else ""
+        caution_val = self.step.get("caution") or "" if self.step else ""
+        yield FormGroup(
+            "Required Role",
+            Input(value=required_role_val, id="field-required-role", placeholder="e.g. QE"),
+        )
+        yield FormGroup(
+            "Caution",
+            Input(value=caution_val, id="field-caution", placeholder="Safety warning text"),
+        )
 
     def get_form_data(self) -> dict[str, Any] | None:
         title = self.query_one("#field-title", Input).value.strip()
@@ -93,10 +103,14 @@ class StepFormModal(FormModal):
             return None
         description = self.query_one("#field-description", TextArea).text.strip()
         contingency = self.query_one("#field-contingency", Select).value
+        required_role = self.query_one("#field-required-role", Input).value.strip()
+        caution = self.query_one("#field-caution", Input).value.strip()
         return {
             "title": title,
             "description": description,
             "is_contingency": contingency == "true",
+            "required_role": required_role or None,
+            "caution": caution or None,
         }
 
 
