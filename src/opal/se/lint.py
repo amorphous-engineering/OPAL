@@ -19,15 +19,24 @@ import yaml
 
 @dataclass(frozen=True)
 class LintFinding:
-    """One lint finding. severity is 'warn' or 'block_baseline'."""
+    """One lint finding. severity is 'warn' or 'block_baseline'.
+
+    span is (start, end) character offsets into the *statement* — the only
+    span-bearing field. Field-level findings (rationale, TBD/TBR, verification
+    method, req number) carry no span and surface in the baseline panel only.
+    """
 
     rule: str
     name: str
     severity: str
     message: str
+    span: tuple[int, int] | None = None
 
-    def to_dict(self) -> dict[str, str]:
-        return asdict(self)
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        if self.span is None:
+            del data["span"]
+        return data
 
 
 def _load_rules() -> dict[str, dict[str, Any]]:
@@ -38,13 +47,19 @@ def _load_rules() -> dict[str, dict[str, Any]]:
 _RULES = _load_rules()
 
 
-def _finding(name: str, message: str, severity: str | None = None) -> LintFinding:
+def _finding(
+    name: str,
+    message: str,
+    severity: str | None = None,
+    span: tuple[int, int] | None = None,
+) -> LintFinding:
     rule = _RULES[name]
     return LintFinding(
         rule=rule["id"],
         name=name,
         severity=severity or rule["severity"],
         message=message,
+        span=span,
     )
 
 
@@ -70,7 +85,7 @@ _BOUND_MARKERS = re.compile(
 
 
 def _lint_banned_terms(statement: str) -> list[LintFinding]:
-    """One finding per banned term present; longer phrases shadow their substrings."""
+    """One finding per banned-term occurrence; longer phrases shadow their substrings."""
     rule = _RULES["banned_ambiguity_terms"]
     block_terms = list(rule.get("terms", []))
     warn_terms = list(rule.get("warn_terms", []))
@@ -89,90 +104,115 @@ def _lint_banned_terms(statement: str) -> list[LintFinding]:
             continue
         covered.extend(spans)
         severity = "warn" if term in warn_terms else None
-        findings.append(
+        findings.extend(
             _finding(
                 "banned_ambiguity_terms",
                 f'ambiguous term "{term}" — replace with a verifiable formulation',
                 severity=severity,
+                span=span,
             )
+            for span in spans
         )
     return findings
+
+
+def _unbounded_number_span(statement: str) -> tuple[int, int] | None:
+    """Span of the first numeric value outside a designator, or None.
+
+    Designators are masked by span comparison rather than substitution so the
+    offsets returned index into the original statement.
+    """
+    designator_spans = [m.span() for m in _DESIGNATOR.finditer(statement)]
+    for m in _NUMBER.finditer(statement):
+        if not any(s <= m.start() and m.end() <= e for s, e in designator_spans):
+            return m.span()
+    return None
 
 
 def lint_statement(statement: str) -> list[LintFinding]:
     """Text-only rules over the shall statement."""
     findings: list[LintFinding] = []
-    shall_count = len(_SHALL.findall(statement))
-    if shall_count == 0:
+    shall_matches = list(_SHALL.finditer(statement))
+    if not shall_matches:
         findings.append(
             _finding("shall_form", 'statement contains no "shall" — not a verifiable requirement')
         )
-    elif shall_count > 1:
+    elif len(shall_matches) > 1:
         findings.append(
             _finding(
                 "shall_form",
-                f'statement contains {shall_count} "shall" clauses — split into separate '
+                f'statement contains {len(shall_matches)} "shall" clauses — split into separate '
                 "requirements",
+                span=shall_matches[1].span(),
             )
         )
 
-    if _INDEFINITE_START.match(statement):
+    if m := _INDEFINITE_START.match(statement):
         findings.append(
             _finding(
                 "active_subject",
                 "statement starts with an indefinite pronoun — name the product "
                 '("The <product> shall ...")',
+                span=m.span(),
             )
         )
-    elif _BARE_SHALL_START.match(statement):
-        findings.append(_finding("active_subject", 'statement has no subject before "shall"'))
+    elif m := _BARE_SHALL_START.match(statement):
+        findings.append(
+            _finding("active_subject", 'statement has no subject before "shall"', span=m.span())
+        )
 
     findings.extend(_lint_banned_terms(statement))
 
-    if ";" in statement:
+    if (semi := statement.find(";")) != -1:
         findings.append(
             _finding(
                 "single_thought",
                 "semicolon-chained statement — split into one requirement per thought",
+                span=(semi, semi + 1),
             )
         )
-    if _EMBEDDED_RATIONALE.search(statement):
+    if m := _EMBEDDED_RATIONALE.search(statement):
         findings.append(
             _finding(
                 "single_thought",
                 'embedded rationale ("because" / "in order to") — move it to the rationale field',
+                span=m.span(),
             )
         )
 
-    if _NUMBER.search(_DESIGNATOR.sub("", statement)) and not _BOUND_MARKERS.search(statement):
+    if (number_span := _unbounded_number_span(statement)) and not _BOUND_MARKERS.search(statement):
         findings.append(
             _finding(
                 "quantitative_has_bounds",
                 "numeric value without a tolerance or bound (±, <=, within, ...) is unverifiable",
+                span=number_span,
             )
         )
 
-    if _SHALL_NOT.search(statement):
+    if m := _SHALL_NOT.search(statement):
         findings.append(
             _finding(
                 "positive_statement",
                 '"shall not" is hard to verify — restate positively where possible',
+                span=m.span(),
             )
         )
 
-    if _IMPLEMENTATION.search(statement):
+    if m := _IMPLEMENTATION.search(statement):
         findings.append(
             _finding(
                 "no_implementation_language",
                 "implementation language — state WHAT is required, not HOW it is achieved",
+                span=m.span(),
             )
         )
 
-    if _OPERATIONS_SUBJECT.match(statement):
+    if m := _OPERATIONS_SUBJECT.match(statement):
         findings.append(
             _finding(
                 "no_operations_language",
                 "operations language — operator/user tasks belong in the ConOps or a procedure",
+                span=m.span(),
             )
         )
 
@@ -267,5 +307,10 @@ def lint_requirement_row(req: Any) -> list[LintFinding]:
 
 
 def baseline_lint_blockers(req: Any) -> list[str]:
-    """Messages of block_baseline findings — what lifecycle.baseline() enforces."""
-    return [f.message for f in lint_requirement_row(req) if f.severity == "block_baseline"]
+    """Messages of block_baseline findings — what lifecycle.baseline() enforces.
+
+    Deduplicated: findings are per-occurrence (for span rendering), but a term
+    used twice is still one blocker.
+    """
+    messages = [f.message for f in lint_requirement_row(req) if f.severity == "block_baseline"]
+    return list(dict.fromkeys(messages))

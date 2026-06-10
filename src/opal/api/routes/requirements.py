@@ -23,6 +23,7 @@ from opal.core.designators import generate_requirement_number
 from opal.db.base import LifecycleState
 from opal.db.models import Part, PartRequirement, Requirement
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
+from opal.se.lint import lint_requirement
 
 router = APIRouter()
 
@@ -139,7 +140,44 @@ def _validate_verification_method(value: str | None) -> None:
         )
 
 
+class LintRequest(BaseModel):
+    """Lint arbitrary requirement fields — no stored row required."""
+
+    statement: str
+    rationale: str | None = None
+    verification_method: str | None = None
+    tbd: bool = False
+    tbr: bool = False
+    tbr_owner_id: int | None = None
+    tbr_due: datetime | None = None
+
+
+class LintResponse(BaseModel):
+    """Findings plus whether they would block baseline."""
+
+    findings: list[dict]
+    would_block_baseline: bool
+
+
 # ============ First-class requirement endpoints ============
+
+
+@router.post("/lint", response_model=LintResponse)
+async def lint_requirement_fields(data: LintRequest) -> LintResponse:
+    """Lint requirement fields as typed. Same engine the baseline gate enforces."""
+    findings = lint_requirement(
+        data.statement,
+        rationale=data.rationale,
+        verification_method=data.verification_method,
+        tbd=data.tbd,
+        tbr=data.tbr,
+        tbr_owner_id=data.tbr_owner_id,
+        tbr_due=data.tbr_due,
+    )
+    return LintResponse(
+        findings=[f.to_dict() for f in findings],
+        would_block_baseline=any(f.severity == "block_baseline" for f in findings),
+    )
 
 
 @router.get("", response_model=RequirementListResponse)

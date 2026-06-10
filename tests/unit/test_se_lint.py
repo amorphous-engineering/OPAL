@@ -102,6 +102,36 @@ def test_implementation_and_operations_language_warn():
     )
 
 
+# ============ Spans ============
+
+
+def test_spans_point_at_the_offending_text():
+    stmt = "The GSE shall vent as appropriate."
+    (banned,) = _by_name(lint_statement(stmt), "banned_ambiguity_terms")
+    assert stmt[slice(*banned.span)] == "as appropriate"
+
+    stmt = "The engine shall burn for 8 seconds."
+    (bare,) = _by_name(lint_statement(stmt), "quantitative_has_bounds")
+    assert stmt[slice(*bare.span)] == "8"
+
+    stmt = "The vent shall not open in flight."
+    (neg,) = _by_name(lint_statement(stmt), "positive_statement")
+    assert stmt[slice(*neg.span)] == "shall not"
+
+
+def test_banned_term_used_twice_yields_two_spanned_findings():
+    stmt = "The link shall be rapid and rapid again."
+    findings = _by_name(lint_statement(stmt), "banned_ambiguity_terms")
+    assert len(findings) == 2
+    assert [stmt[slice(*f.span)] for f in findings] == ["rapid", "rapid"]
+
+
+def test_field_rules_carry_no_span():
+    findings = lint_requirement(GOOD)
+    assert all(f.span is None for f in findings)
+    assert all("span" not in f.to_dict() for f in findings)
+
+
 # ============ Requirement-level rules ============
 
 
@@ -148,6 +178,30 @@ def test_verification_method_and_req_number():
 
     clean = lint_requirement(GOOD, rationale="r", verification_method="test", req_number="REQ-0001")
     assert clean == []
+
+
+# ============ Lint endpoint ============
+
+
+def test_lint_endpoint_round_trip(client):
+    stmt = "The GSE shall vent as appropriate."
+    resp = client.post(
+        "/api/requirements/lint",
+        json={"statement": stmt, "rationale": "safety"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["would_block_baseline"]
+    by_name = {f["name"]: f for f in body["findings"]}
+    start = stmt.index("as appropriate")
+    assert by_name["banned_ambiguity_terms"]["span"] == [start, start + len("as appropriate")]
+    assert "span" not in by_name["verification_method_set"]
+
+    clean = client.post(
+        "/api/requirements/lint",
+        json={"statement": GOOD, "rationale": "r", "verification_method": "test"},
+    ).json()
+    assert clean == {"findings": [], "would_block_baseline": False}
 
 
 # ============ Baseline integration ============
