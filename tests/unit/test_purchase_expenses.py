@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from opal.db.models import User
-
+from tests.conftest import login
 
 # ---- Helpers ----
 
@@ -24,9 +24,7 @@ def _create_and_order_po(client: TestClient, auth_headers: dict, lines: list[dic
     assert resp.status_code == 201, resp.text
     po_id = resp.json()["id"]
 
-    resp = client.patch(
-        f"/api/purchases/{po_id}", json={"status": "ordered"}, headers=auth_headers
-    )
+    resp = client.patch(f"/api/purchases/{po_id}", json={"status": "ordered"}, headers=auth_headers)
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -41,7 +39,7 @@ def _receive(client: TestClient, auth_headers: dict, po: dict, lines: list[dict]
 
 @pytest.fixture
 def web_client(client: TestClient, test_user: User) -> TestClient:
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     return client
 
 
@@ -103,12 +101,8 @@ def test_partial_receives_accumulate_records(client, auth_headers):
         [{"part_id": part["id"], "qty_ordered": 10, "unit_cost": "2.00"}],
     )
     line_id = po["lines"][0]["id"]
-    _receive(
-        client, auth_headers, po, [{"line_id": line_id, "qty_received": 3, "location": "A"}]
-    )
-    _receive(
-        client, auth_headers, po, [{"line_id": line_id, "qty_received": 7, "location": "A"}]
-    )
+    _receive(client, auth_headers, po, [{"line_id": line_id, "qty_received": 3, "location": "A"}])
+    _receive(client, auth_headers, po, [{"line_id": line_id, "qty_received": 7, "location": "A"}])
 
     expenses = client.get(f"/api/purchases/{po['id']}/expenses").json()
     assert len(expenses) == 2

@@ -24,9 +24,8 @@ class OpalEvents {
             this.disconnect();
         }
 
-        const userId = localStorage.getItem('opal_user_id');
-        if (!userId) {
-            console.warn('OpalEvents: No user ID set, skipping SSE connection');
+        if (!window.OPAL_USER_ID) {
+            console.warn('OpalEvents: not signed in, skipping SSE connection');
             return;
         }
 
@@ -164,15 +163,13 @@ class OpalEvents {
      * Send heartbeat to server
      */
     async sendHeartbeat() {
-        const userId = localStorage.getItem('opal_user_id');
-        if (!userId) return;
+        if (!window.OPAL_USER_ID) return;
 
         try {
             const response = await fetch('/api/users/heartbeat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-Id': userId,
                 },
                 body: JSON.stringify({
                     activity: this.currentActivity,
@@ -208,7 +205,7 @@ window.opalEvents = new OpalEvents();
 
 // Auto-connect on page load if user is set
 document.addEventListener('DOMContentLoaded', () => {
-    if (localStorage.getItem('opal_user_id')) {
+    if (window.OPAL_USER_ID) {
         window.opalEvents.connect();
     }
 });
@@ -271,15 +268,13 @@ class ExecutionCollaboration {
      * Join this execution
      */
     async join() {
-        const userId = localStorage.getItem('opal_user_id');
-        if (!userId) return;
+        if (!window.OPAL_USER_ID) return;
 
         try {
             const response = await fetch(`/api/procedure-instances/${this.instanceId}/join`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-Id': userId,
                 },
             });
 
@@ -297,15 +292,13 @@ class ExecutionCollaboration {
      * Leave this execution
      */
     async leave() {
-        const userId = localStorage.getItem('opal_user_id');
-        if (!userId) return;
+        if (!window.OPAL_USER_ID) return;
 
         try {
             await fetch(`/api/procedure-instances/${this.instanceId}/leave`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-Id': userId,
                 },
             });
 
@@ -320,11 +313,7 @@ class ExecutionCollaboration {
      */
     async loadParticipants() {
         try {
-            const response = await fetch(`/api/procedure-instances/${this.instanceId}/participants`, {
-                headers: {
-                    'X-User-Id': localStorage.getItem('opal_user_id') || '',
-                },
-            });
+            const response = await fetch(`/api/procedure-instances/${this.instanceId}/participants`);
 
             if (response.ok) {
                 const data = await response.json();
@@ -375,7 +364,7 @@ class ExecutionCollaboration {
             }
 
             // Show who started it (if not current user)
-            const currentUserId = parseInt(localStorage.getItem('opal_user_id'));
+            const currentUserId = window.OPAL_USER_ID;
             if (data.user_id !== currentUserId && data.user_name) {
                 this.showStepActivity(stepEl, `${data.user_name} started this step`);
             }
@@ -409,7 +398,7 @@ class ExecutionCollaboration {
         }
 
         // Flash notification
-        const currentUserId = parseInt(localStorage.getItem('opal_user_id'));
+        const currentUserId = window.OPAL_USER_ID;
         if (data.user_id !== currentUserId) {
             this.showNotification(`Step ${data.step_number} completed${data.user_name ? ` by ${data.user_name}` : ''}`);
         }
@@ -422,7 +411,7 @@ class ExecutionCollaboration {
      * Handle user joined event
      */
     onUserJoined(data) {
-        const currentUserId = parseInt(localStorage.getItem('opal_user_id'));
+        const currentUserId = window.OPAL_USER_ID;
         if (data.user_id !== currentUserId) {
             this.showNotification(`${data.user_name} joined the execution`);
         }

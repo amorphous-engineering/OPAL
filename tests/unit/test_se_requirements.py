@@ -10,6 +10,7 @@ from opal.db.models import Part, PartRequirement, Requirement, User
 from opal.project import ProjectConfig, RequirementConfig
 from opal.se.import_requirements import import_requirements_from_config
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
+from tests.conftest import login, user_headers
 
 
 def _make_requirement(db: Session, **overrides) -> Requirement:
@@ -343,7 +344,7 @@ def test_api_allocation_unknown_number_400(client):
 
 
 def test_web_pages_render(client, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     req = _api_create(client)
     client.post(f"/api/requirements/{req['id']}/baseline")
 
@@ -373,7 +374,7 @@ def test_web_pages_render(client, test_user):
 
 
 def test_baseline_panel_disabled_until_blockers_clear(client, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     blocked = _api_create(client, title="Blocked", verification_method=None)
     clean = _api_create(client, title="Clean")
 
@@ -402,7 +403,7 @@ def test_baseline_panel_disabled_until_blockers_clear(client, test_user):
 def test_delete_button_only_on_stillborn_drafts(client, db_session, test_user):
     """Spec §4.3: DELETE renders only for never-baselined drafts with zero
     children and zero allocations; CANCEL is the path for everything else."""
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
 
     stillborn = _api_create(client, title="Stillborn")
     page = client.get(f"/requirements/{stillborn['id']}")
@@ -421,13 +422,11 @@ def test_delete_button_only_on_stillborn_drafts(client, db_session, test_user):
     client.post(
         f"/api/requirements/parts/{part['id']}",
         json={"requirement_id": allocated["req_number"]},
-        headers={"X-User-Id": str(test_user.id)},
+        headers=user_headers(test_user),
     )
     page = client.get(f"/requirements/{allocated['id']}")
     assert 'onclick="deleteReq()"' not in page.text
-    resp = client.delete(
-        f"/api/requirements/{allocated['id']}", headers={"X-User-Id": str(test_user.id)}
-    )
+    resp = client.delete(f"/api/requirements/{allocated['id']}", headers=user_headers(test_user))
     assert resp.status_code == 409
     assert "allocated" in resp.json()["detail"]
 
@@ -439,7 +438,7 @@ def test_delete_button_only_on_stillborn_drafts(client, db_session, test_user):
 
 
 def test_dossier_breadcrumb_chain_and_flowdown_ghost(client, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     root = _api_create(client, title="Mission")
     mid = _api_create(client, title="System", parent_id=root["id"])
     leaf = _api_create(client, title="Subsystem", parent_id=mid["id"])
@@ -453,7 +452,7 @@ def test_dossier_breadcrumb_chain_and_flowdown_ghost(client, test_user):
 
 
 def test_tree_page_nests_children_and_renders_lint(client, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     parent = _api_create(client, title="Mission")
     child = _api_create(
         client,
@@ -639,7 +638,12 @@ def test_supersede_and_stale_flips_are_audit_logged(client, db_session, test_use
 
     parent = client.post(
         "/api/requirements",
-        json={"title": "Parent", "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.", "rationale": "r", "verification_method": "test"},
+        json={
+            "title": "Parent",
+            "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.",
+            "rationale": "r",
+            "verification_method": "test",
+        },
     ).json()
     child = client.post(
         "/api/requirements",
@@ -676,7 +680,12 @@ def test_baseline_event_is_audit_logged(client, db_session):
 
     req = client.post(
         "/api/requirements",
-        json={"title": "Solo", "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.", "rationale": "r", "verification_method": "test"},
+        json={
+            "title": "Solo",
+            "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.",
+            "rationale": "r",
+            "verification_method": "test",
+        },
     ).json()
     r = client.post("/api/requirements/baseline-batch", json={"ids": [req["id"]]})
     assert r.status_code == 200
@@ -694,7 +703,12 @@ def test_baseline_batch_duplicate_ids_are_deduped(client):
     """A repeated id in a batch must not 500 (double lifecycle flip)."""
     req = client.post(
         "/api/requirements",
-        json={"title": "Dup", "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.", "rationale": "r", "verification_method": "test"},
+        json={
+            "title": "Dup",
+            "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.",
+            "rationale": "r",
+            "verification_method": "test",
+        },
     ).json()
     r = client.post("/api/requirements/baseline-batch", json={"ids": [req["id"], req["id"]]})
     assert r.status_code == 200

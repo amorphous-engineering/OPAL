@@ -3,6 +3,7 @@
 from opal.db.models.app_setting import AppSetting
 from opal.db.models.attachment import Attachment
 from opal.db.models.audit import AuditLog
+from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential
 from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
@@ -38,10 +39,12 @@ from opal.db.models.user import User
 from opal.db.models.workcenter import Workcenter
 
 __all__ = [
+    "ApiToken",
     "AppSetting",
     "AssemblyComponent",
     "Attachment",
     "AuditLog",
+    "AuthSession",
     "BOMLine",
     "BaselineEvent",
     "BaselineEventItem",
@@ -60,6 +63,7 @@ __all__ = [
     "OnshapeSyncLog",
     "Part",
     "PartRequirement",
+    "PasskeyCredential",
     "ProcedureInstance",
     "ProcedureOutput",
     "ProcedureStep",

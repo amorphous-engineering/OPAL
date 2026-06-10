@@ -1,0 +1,26 @@
+{# Shared pagination footer row for HTMX table partials.
+   Expects `pagination` from paginate_query(). Renders nothing for a single page. #}
+{% if pagination and pagination.pages > 1 %}
+<tr class="pagination-row">
+    <td colspan="{{ pagination.colspan }}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="mono text-muted">{{ pagination.start }}-{{ pagination.end }} OF {{ pagination.total }}</span>
+            <span>
+                {% if pagination.has_prev %}
+                <button type="button" class="btn btn-sm"
+                        hx-get="{{ pagination.prev_url }}" hx-target="closest tbody" hx-swap="innerHTML">
+                    &laquo; PREV
+                </button>
+                {% endif %}
+                <span class="mono text-muted" style="margin: 0 8px;">PAGE {{ pagination.page }}/{{ pagination.pages }}</span>
+                {% if pagination.has_next %}
+                <button type="button" class="btn btn-sm"
+                        hx-get="{{ pagination.next_url }}" hx-target="closest tbody" hx-swap="innerHTML">
+                    NEXT &raquo;
+                </button>
+                {% endif %}
+            </span>
+        </div>
+    </td>
+</tr>
+{% endif %}

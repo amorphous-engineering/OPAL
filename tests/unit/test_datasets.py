@@ -40,7 +40,10 @@ def test_get_dataset(client):
     """Test getting a specific dataset."""
     create_response = client.post(
         "/api/datasets",
-        json={"name": "Specific Dataset", "schema": {"fields": [{"name": "value", "type": "number"}]}},
+        json={
+            "name": "Specific Dataset",
+            "schema": {"fields": [{"name": "value", "type": "number"}]},
+        },
     )
     dataset_id = create_response.json()["id"]
 
@@ -208,7 +211,10 @@ def test_filter_datasets_by_procedure(client):
     proc = client.post("/api/procedures", json={"name": "Filter Test"}).json()
 
     # Create datasets
-    client.post("/api/datasets", json={"name": "Linked", "procedure_id": proc["id"], "schema": {"fields": []}})
+    client.post(
+        "/api/datasets",
+        json={"name": "Linked", "procedure_id": proc["id"], "schema": {"fields": []}},
+    )
     client.post("/api/datasets", json={"name": "Unlinked", "schema": {"fields": []}})
 
     response = client.get(f"/api/datasets?procedure_id={proc['id']}")

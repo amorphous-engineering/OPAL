@@ -13,15 +13,11 @@ class TestParseOnshapeUrl:
         assert result == ("abc123def456", "w", "aaa111bbb222", "eee999fff000")
 
     def test_version_url(self) -> None:
-        result = parse_onshape_url(
-            "https://cad.onshape.com/documents/abc123/v/ver456/e/elem789"
-        )
+        result = parse_onshape_url("https://cad.onshape.com/documents/abc123/v/ver456/e/elem789")
         assert result == ("abc123", "v", "ver456", "elem789")
 
     def test_microversion_url(self) -> None:
-        result = parse_onshape_url(
-            "https://cad.onshape.com/documents/abc123/m/micro456/e/elem789"
-        )
+        result = parse_onshape_url("https://cad.onshape.com/documents/abc123/m/micro456/e/elem789")
         assert result == ("abc123", "m", "micro456", "elem789")
 
     def test_enterprise_domain(self) -> None:
@@ -43,9 +39,7 @@ class TestParseOnshapeUrl:
         assert result == ("abc123", "w", "ws456", "elem789")
 
     def test_http_url(self) -> None:
-        result = parse_onshape_url(
-            "http://cad.onshape.com/documents/abc123/w/ws456/e/elem789"
-        )
+        result = parse_onshape_url("http://cad.onshape.com/documents/abc123/w/ws456/e/elem789")
         assert result == ("abc123", "w", "ws456", "elem789")
 
     def test_invalid_url_no_documents(self) -> None:
@@ -58,19 +52,15 @@ class TestParseOnshapeUrl:
         assert parse_onshape_url("not-a-url") is None
 
     def test_invalid_url_missing_element(self) -> None:
-        assert parse_onshape_url(
-            "https://cad.onshape.com/documents/abc123/w/ws456"
-        ) is None
+        assert parse_onshape_url("https://cad.onshape.com/documents/abc123/w/ws456") is None
 
     def test_invalid_url_wrong_wvm_letter(self) -> None:
         """Only w, v, m are valid workspace/version/microversion types."""
-        assert parse_onshape_url(
-            "https://cad.onshape.com/documents/abc123/x/ws456/e/elem789"
-        ) is None
+        assert (
+            parse_onshape_url("https://cad.onshape.com/documents/abc123/x/ws456/e/elem789") is None
+        )
 
     def test_url_with_trailing_slash(self) -> None:
-        result = parse_onshape_url(
-            "https://cad.onshape.com/documents/abc123/w/ws456/e/elem789/"
-        )
+        result = parse_onshape_url("https://cad.onshape.com/documents/abc123/w/ws456/e/elem789/")
         assert result is not None
         assert result[0] == "abc123"

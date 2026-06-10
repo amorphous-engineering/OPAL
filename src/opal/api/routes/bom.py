@@ -75,46 +75,66 @@ def get_bom_line_response(line: BOMLine) -> BOMLineResponse:
 
 
 def build_bom_tree(
-    db: DbSession, part: Part, quantity: int = 1, ref: str | None = None, visited: set | None = None
+    db: DbSession, part: Part, quantity: int = 1, ref: str | None = None
 ) -> BOMTreeNode:
-    """Recursively build BOM tree for a part."""
-    if visited is None:
-        visited = set()
+    """Build the BOM tree for a part.
 
-    # Detect circular references
-    if part.id in visited:
+    Loads all reachable BOM lines breadth-first (one query per tree depth)
+    instead of lazy-loading relationships node by node, then assembles the
+    tree in memory with per-path circular reference detection.
+    """
+    # assembly part id -> [(BOMLine, component Part), ...]
+    lines_by_assembly: dict[int, list[tuple[BOMLine, Part]]] = {}
+    frontier = {part.id}
+    fetched: set[int] = set()
+    while frontier:
+        fetched |= frontier
+        rows = (
+            db.query(BOMLine, Part)
+            .join(Part, BOMLine.component_id == Part.id)
+            .filter(BOMLine.assembly_id.in_(frontier))
+            .all()
+        )
+        next_frontier: set[int] = set()
+        for line, component in rows:
+            lines_by_assembly.setdefault(line.assembly_id, []).append((line, component))
+            if component.id not in fetched:
+                next_frontier.add(component.id)
+        frontier = next_frontier
+
+    def _node(
+        node_part: Part, node_qty: int, node_ref: str | None, visited: frozenset[int]
+    ) -> BOMTreeNode:
+        if node_part.id in visited:
+            return BOMTreeNode(
+                part_id=node_part.id,
+                name=f"{node_part.name} [CIRCULAR REF]",
+                external_pn=node_part.external_pn,
+                tier=node_part.tier,
+                quantity=node_qty,
+                reference_designator=node_ref,
+                children=[],
+            )
+        child_visited = visited | {node_part.id}
+        children = [
+            _node(component, line.quantity, line.reference_designator, child_visited)
+            for line, component in lines_by_assembly.get(node_part.id, [])
+        ]
         return BOMTreeNode(
-            part_id=part.id,
-            name=f"{part.name} [CIRCULAR REF]",
-            external_pn=part.external_pn,
-            tier=part.tier,
-            quantity=quantity,
-            reference_designator=ref,
-            children=[],
+            part_id=node_part.id,
+            name=node_part.name,
+            external_pn=node_part.external_pn,
+            tier=node_part.tier,
+            quantity=node_qty,
+            reference_designator=node_ref,
+            children=children,
         )
 
-    visited = visited | {part.id}
-
-    children = []
-    for line in part.bom_lines:
-        child_node = build_bom_tree(
-            db, line.component, line.quantity, line.reference_designator, visited
-        )
-        children.append(child_node)
-
-    return BOMTreeNode(
-        part_id=part.id,
-        name=part.name,
-        external_pn=part.external_pn,
-        tier=part.tier,
-        quantity=quantity,
-        reference_designator=ref,
-        children=children,
-    )
+    return _node(part, quantity, ref, frozenset())
 
 
 @router.get("/assemblies/{assembly_id}", response_model=list[BOMLineResponse])
-async def get_assembly_bom(
+def get_assembly_bom(
     db: DbSession,
     assembly_id: int,
 ) -> list[BOMLineResponse]:
@@ -131,7 +151,7 @@ async def get_assembly_bom(
 
 
 @router.get("/assemblies/{assembly_id}/tree", response_model=BOMTreeNode)
-async def get_assembly_tree(
+def get_assembly_tree(
     db: DbSession,
     assembly_id: int,
 ) -> BOMTreeNode:
@@ -147,7 +167,7 @@ async def get_assembly_tree(
 
 
 @router.get("/components/{component_id}/used-in", response_model=list[BOMLineResponse])
-async def get_where_used(
+def get_where_used(
     db: DbSession,
     component_id: int,
 ) -> list[BOMLineResponse]:
@@ -166,7 +186,7 @@ async def get_where_used(
 @router.post(
     "/assemblies/{assembly_id}", response_model=BOMLineResponse, status_code=status.HTTP_201_CREATED
 )
-async def add_component_to_assembly(
+def add_component_to_assembly(
     db: DbSession,
     assembly_id: int,
     line_in: BOMLineCreate,
@@ -228,7 +248,7 @@ async def add_component_to_assembly(
 
 
 @router.patch("/{line_id}", response_model=BOMLineResponse)
-async def update_bom_line(
+def update_bom_line(
     db: DbSession,
     line_id: int,
     line_in: BOMLineUpdate,
@@ -268,7 +288,7 @@ async def update_bom_line(
 
 
 @router.delete("/{line_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_component_from_assembly(
+def remove_component_from_assembly(
     db: DbSession,
     line_id: int,
     user_id: CurrentUserId,

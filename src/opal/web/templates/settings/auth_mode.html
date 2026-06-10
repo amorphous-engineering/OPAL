@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("AUTH MODE", max_width="720px") %}
+{% call ok.panel("AUTHENTICATION", max_width="720px") %}
 
     {% call ok.table() %}
         {{ ok.detail_row("CURRENT", ok.status(current_auth_mode | upper, "ok" if current_auth_mode == "exe" else "default")) }}
@@ -27,7 +27,7 @@
             <label style="display: block; margin-bottom: var(--space-sm);">
                 <input type="radio" name="auth_mode" value="local"
                        {% if current_auth_mode != 'exe' %}checked{% endif %}>
-                <strong>LOCAL</strong> &mdash; cookie-based user selection on a trusted LAN.
+                <strong>LOCAL</strong> &mdash; username/password login with sessions.
             </label>
             <label style="display: block;">
                 <input type="radio" name="auth_mode" value="exe"
@@ -45,6 +45,19 @@
                     <code>X-ExeDev-UserID</code>. Without this, anyone reaching OPAL
                     directly can forge headers and impersonate any user.
                     <strong>Required when switching to EXE.</strong>
+                </span>
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">PASSKEYS</label>
+            <label style="display: flex; align-items: flex-start; gap: var(--space-sm);">
+                <input type="checkbox" name="passkeys_enabled" value="true"
+                       {% if passkeys_enabled %}checked{% endif %}>
+                <span class="text-muted" style="font-size: 0.85rem;">
+                    Allow users to register FIDO2 passkeys and sign in with them.
+                    Browsers require HTTPS (or localhost) and a stable hostname for
+                    passkeys to work.
                 </span>
             </label>
         </div>

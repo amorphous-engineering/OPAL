@@ -9,12 +9,23 @@ from opal.db.base import Base, IdMixin, TimestampMixin
 
 
 class User(Base, IdMixin, TimestampMixin):
-    """User model for tracking who performs actions.
+    """User account with credentialed authentication.
 
-    Note: Authentication not implemented yet - users selected via UI dropdown.
+    Authenticated with username + argon2 password hash, optionally with FIDO2
+    passkeys (see PasskeyCredential). Sessions and API tokens live in their
+    own tables so future identity providers (SSO) plug into the same session
+    layer without touching this model.
     """
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    username: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True, comment="Login identifier"
+    )
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Argon2 hash; NULL means the account must set a password on first login",
+    )
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     exe_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
@@ -61,6 +72,15 @@ class User(Base, IdMixin, TimestampMixin):
     )
     test_results: Mapped[list["StockTestResult"]] = relationship(
         "StockTestResult", back_populates="tested_by_user"
+    )
+    sessions: Mapped[list["AuthSession"]] = relationship(
+        "AuthSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    api_tokens: Mapped[list["ApiToken"]] = relationship(
+        "ApiToken", back_populates="user", cascade="all, delete-orphan"
+    )
+    passkeys: Mapped[list["PasskeyCredential"]] = relationship(
+        "PasskeyCredential", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

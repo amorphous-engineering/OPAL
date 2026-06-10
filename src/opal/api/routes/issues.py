@@ -170,25 +170,25 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
 
 
 @router.get("/types", response_model=list[str])
-async def get_issue_types() -> list[str]:
+def get_issue_types() -> list[str]:
     """Get all issue types."""
     return [t.value for t in IssueType]
 
 
 @router.get("/statuses", response_model=list[str])
-async def get_issue_statuses() -> list[str]:
+def get_issue_statuses() -> list[str]:
     """Get all issue statuses."""
     return [s.value for s in IssueStatus]
 
 
 @router.get("/priorities", response_model=list[str])
-async def get_issue_priorities() -> list[str]:
+def get_issue_priorities() -> list[str]:
     """Get all issue priorities."""
     return [p.value for p in IssuePriority]
 
 
 @router.get("/disposition-types", response_model=list[str])
-async def get_disposition_types() -> list[str]:
+def get_disposition_types() -> list[str]:
     """Get all disposition types."""
     return [d.value for d in DispositionType]
 
@@ -197,7 +197,7 @@ async def get_disposition_types() -> list[str]:
 
 
 @router.get("", response_model=IssueListResponse)
-async def list_issues(
+def list_issues(
     db: DbSession,
     search: str | None = Query(None),
     issue_type: str | None = Query(None),
@@ -242,7 +242,7 @@ async def list_issues(
 
 
 @router.post("", response_model=IssueResponse, status_code=201)
-async def create_issue(
+def create_issue(
     data: IssueCreate,
     db: DbSession,
     user_id: CurrentUserId,
@@ -290,7 +290,7 @@ async def create_issue(
 
 
 @router.get("/{issue_id}", response_model=IssueResponse)
-async def get_issue(
+def get_issue(
     issue_id: int,
     db: DbSession,
 ) -> IssueResponse:
@@ -303,7 +303,7 @@ async def get_issue(
 
 
 @router.patch("/{issue_id}", response_model=IssueResponse)
-async def update_issue(
+def update_issue(
     issue_id: int,
     data: IssueUpdate,
     db: DbSession,
@@ -515,7 +515,7 @@ def _maybe_resume_step_after_nc_update(db, issue: "Issue", user_id: int | None) 
 
 
 @router.delete("/{issue_id}", status_code=204)
-async def delete_issue(
+def delete_issue(
     issue_id: int,
     db: DbSession,
     user_id: CurrentUserId,
@@ -534,7 +534,7 @@ async def delete_issue(
 
 
 @router.post("/{issue_id}/comments", response_model=IssueCommentResponse, status_code=201)
-async def create_issue_comment(
+def create_issue_comment(
     issue_id: int,
     data: IssueCommentCreate,
     db: DbSession,
@@ -560,7 +560,7 @@ async def create_issue_comment(
 
 
 @router.get("/{issue_id}/comments", response_model=list[IssueCommentResponse])
-async def list_issue_comments(
+def list_issue_comments(
     issue_id: int,
     db: DbSession,
 ) -> list[IssueCommentResponse]:

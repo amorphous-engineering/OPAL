@@ -25,7 +25,6 @@ from opal.tui.screens.search import SearchScreen
 from opal.tui.screens.settings import SettingsScreen
 from opal.tui.screens.suppliers import SuppliersScreen
 from opal.tui.screens.workcenters import WorkcentersScreen
-from opal.tui.widgets.form import UserPickerModal
 
 
 class OpalApp(App):
@@ -85,25 +84,20 @@ class OpalApp(App):
         yield Footer()
 
     async def on_mount(self) -> None:
-        """Called when app is mounted. Show user picker then dashboard."""
+        """Called when app is mounted. Resolve identity from the API token."""
         client = get_client(self.api_url)
         try:
-            result = client.list_users()
-            users = result.get("items", result) if isinstance(result, dict) else result
-            if isinstance(users, list) and len(users) > 1:
-                self.push_screen(UserPickerModal(users), callback=self._on_user_selected)
-                return
-            elif isinstance(users, list) and len(users) == 1:
-                client.user_id = users[0]["id"]
+            user = client.whoami()
         except Exception:
-            pass
-        self.push_screen("dashboard")
-
-    def _on_user_selected(self, user_id: int | None) -> None:
-        """Handle user selection from picker."""
-        if user_id is not None:
-            client = get_client(self.api_url)
-            client.user_id = user_id
+            user = None
+        if user is None:
+            self.exit(
+                message=(
+                    "Authentication failed. Create an API token on your OPAL profile "
+                    "page (SECURITY > API TOKENS) and set OPAL_API_TOKEN."
+                )
+            )
+            return
         self.push_screen("dashboard")
 
     def action_switch_screen(self, screen_name: str) -> None:

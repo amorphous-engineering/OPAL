@@ -244,7 +244,7 @@ def purchase_to_list_item(purchase: Purchase) -> PurchaseListItem:
 
 
 @router.get("", response_model=PurchaseListResponse)
-async def list_purchases(
+def list_purchases(
     db: DbSession,
     pagination: PaginationParams,
     status_filter: PurchaseStatus | None = Query(None, alias="status"),
@@ -270,7 +270,7 @@ async def list_purchases(
 
 
 @router.post("", response_model=PurchaseResponse, status_code=status.HTTP_201_CREATED)
-async def create_purchase(
+def create_purchase(
     db: DbSession,
     po_in: PurchaseCreate,
     user_id: CurrentUserId,
@@ -340,7 +340,7 @@ async def create_purchase(
 
 
 @router.get("/{purchase_id}", response_model=PurchaseResponse)
-async def get_purchase(
+def get_purchase(
     db: DbSession,
     purchase_id: int,
 ) -> PurchaseResponse:
@@ -356,7 +356,7 @@ async def get_purchase(
 
 
 @router.patch("/{purchase_id}", response_model=PurchaseResponse)
-async def update_purchase(
+def update_purchase(
     db: DbSession,
     purchase_id: int,
     po_in: PurchaseUpdate,
@@ -397,7 +397,7 @@ async def update_purchase(
 @router.post(
     "/{purchase_id}/lines", response_model=PurchaseLineResponse, status_code=status.HTTP_201_CREATED
 )
-async def add_purchase_line(
+def add_purchase_line(
     db: DbSession,
     purchase_id: int,
     line_in: PurchaseLineCreate,
@@ -439,7 +439,7 @@ async def add_purchase_line(
 
 
 @router.patch("/{purchase_id}/lines/{line_id}", response_model=PurchaseLineResponse)
-async def update_purchase_line(
+def update_purchase_line(
     db: DbSession,
     purchase_id: int,
     line_id: int,
@@ -469,7 +469,7 @@ async def update_purchase_line(
 
 
 @router.delete("/{purchase_id}/lines/{line_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_purchase_line(
+def delete_purchase_line(
     db: DbSession,
     purchase_id: int,
     line_id: int,
@@ -498,7 +498,7 @@ async def delete_purchase_line(
 
 
 @router.post("/{purchase_id}/receive", response_model=PurchaseResponse)
-async def receive_purchase(
+def receive_purchase(
     db: DbSession,
     purchase_id: int,
     receive_in: ReceiveRequest,

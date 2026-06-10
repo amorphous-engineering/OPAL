@@ -88,7 +88,7 @@ class UndoResult(BaseModel):
 
 
 @router.get("/last", response_model=UndoPreview)
-async def get_last_undoable(
+def get_last_undoable(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> UndoPreview:
@@ -154,7 +154,7 @@ async def get_last_undoable(
 
 
 @router.post("/last", response_model=UndoResult)
-async def undo_last(
+def undo_last(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> UndoResult:

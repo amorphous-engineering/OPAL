@@ -282,6 +282,65 @@ def cmd_mcp(args: argparse.Namespace) -> None:
     asyncio.run(run_server())
 
 
+def cmd_audit_prune(args: argparse.Namespace) -> None:
+    """Prune (and optionally archive) audit log entries older than a cutoff."""
+    import json
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    # Configure project first
+    _setup_project(args)
+
+    try:
+        cutoff = datetime.strptime(args.before, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        print(f"Invalid date: {args.before!r} (expected YYYY-MM-DD)", file=sys.stderr)
+        sys.exit(1)
+
+    from opal.db.models.audit import AuditLog
+    from opal.db.session import get_session
+
+    with get_session() as db:
+        query = db.query(AuditLog).filter(AuditLog.timestamp < cutoff)
+        total = query.count()
+        if total == 0:
+            print(f"No audit entries older than {args.before}.")
+            return
+
+        if args.dry_run:
+            print(f"Would prune {total} audit entries older than {args.before}.")
+            return
+
+        if args.archive:
+            archive_path = Path(args.archive)
+            with archive_path.open("a", encoding="utf-8") as fh:
+                # Stream in batches so huge tables do not load into memory
+                for entry in query.order_by(AuditLog.id).yield_per(1000):
+                    fh.write(
+                        json.dumps(
+                            {
+                                "id": entry.id,
+                                "timestamp": entry.timestamp.isoformat()
+                                if entry.timestamp
+                                else None,
+                                "table_name": entry.table_name,
+                                "record_id": entry.record_id,
+                                "action": entry.action.value
+                                if hasattr(entry.action, "value")
+                                else entry.action,
+                                "user_id": entry.user_id,
+                                "old_values": entry.old_values,
+                                "new_values": entry.new_values,
+                            }
+                        )
+                        + "\n"
+                    )
+            print(f"Archived {total} entries to {archive_path}")
+
+        deleted = query.delete(synchronize_session=False)
+        print(f"Pruned {deleted} audit entries older than {args.before}.")
+
+
 def main() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -376,6 +435,31 @@ def main() -> None:
     )
     add_project_args(mcp_parser)
     mcp_parser.set_defaults(func=cmd_mcp)
+
+    # audit command
+    audit_parser = subparsers.add_parser("audit", help="Audit log maintenance")
+    audit_sub = audit_parser.add_subparsers(dest="audit_command", required=True)
+    prune_parser = audit_sub.add_parser(
+        "prune",
+        help="Delete audit entries older than a date (optionally archiving to JSONL first)",
+    )
+    prune_parser.add_argument(
+        "--before",
+        required=True,
+        help="Prune entries with a timestamp before this date (YYYY-MM-DD)",
+    )
+    prune_parser.add_argument(
+        "--archive",
+        type=str,
+        help="Append pruned entries to this JSONL file before deleting",
+    )
+    prune_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report how many entries would be pruned without deleting",
+    )
+    add_project_args(prune_parser)
+    prune_parser.set_defaults(func=cmd_audit_prune)
 
     args = parser.parse_args()
 

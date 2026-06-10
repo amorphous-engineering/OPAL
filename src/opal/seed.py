@@ -142,9 +142,37 @@ cad_directories: []
 
 
 def _seed_users(db: Session) -> None:
-    db.add(User(name="Build Lead", email="build@kestrel.local", is_admin=True))
-    db.add(User(name="Test Engineer", email="test@kestrel.local", is_admin=False))
-    db.add(User(name="QA Inspector", email="qa@kestrel.local", is_admin=False))
+    """Create demo users with a known password (demo data, not production)."""
+    from opal.core.auth import hash_password
+
+    demo_hash = hash_password("kestrel-demo")
+    db.add(
+        User(
+            name="Build Lead",
+            username="build",
+            password_hash=demo_hash,
+            email="build@kestrel.local",
+            is_admin=True,
+        )
+    )
+    db.add(
+        User(
+            name="Test Engineer",
+            username="test",
+            password_hash=demo_hash,
+            email="test@kestrel.local",
+            is_admin=False,
+        )
+    )
+    db.add(
+        User(
+            name="QA Inspector",
+            username="qa",
+            password_hash=demo_hash,
+            email="qa@kestrel.local",
+            is_admin=False,
+        )
+    )
     db.flush()
 
 

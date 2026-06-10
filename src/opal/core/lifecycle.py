@@ -151,8 +151,16 @@ def enter_demo(current_user=None) -> int | None:
             if match is None:
                 match = db.query(User).filter(User.name == current_user.name).first()
             if match is None:
+                from opal.core.auth import generate_unique_username
+
                 match = User(
                     name=current_user.name,
+                    username=generate_unique_username(
+                        db, current_user.username or current_user.email or current_user.name
+                    ),
+                    # Same operator, same credential — login keeps working if
+                    # the demo session lapses before exit.
+                    password_hash=current_user.password_hash,
                     email=current_user.email,
                     is_active=True,
                     is_admin=True,

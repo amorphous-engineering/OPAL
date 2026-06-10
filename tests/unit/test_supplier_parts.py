@@ -3,8 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from opal.db.models import Part, Supplier, SupplierPart, User
-
+from opal.db.models import User
+from tests.conftest import login
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -207,9 +207,7 @@ def test_supplier_soft_delete_excludes_catalog_entries(
     assert "SD-001" not in page.text
 
 
-def test_part_soft_delete_excludes_catalog_entries(
-    client: TestClient, auth_headers: dict
-) -> None:
+def test_part_soft_delete_excludes_catalog_entries(client: TestClient, auth_headers: dict) -> None:
     """After a part is soft-deleted, its catalog entries vanish from the supplier views."""
     supplier = _create_supplier(client, auth_headers, name="KeepSupplier")
     part = _create_part(client, auth_headers, name="SoftDelLinkedPart")
@@ -255,13 +253,11 @@ def test_create_supplier_part_invalid_part(client: TestClient, auth_headers: dic
 @pytest.fixture
 def web_client(client: TestClient, test_user: User) -> TestClient:
     """TestClient pre-authenticated with the cookie the auth middleware expects."""
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     return client
 
 
-def test_supplier_detail_renders_catalog_panel(
-    web_client: TestClient, auth_headers: dict
-) -> None:
+def test_supplier_detail_renders_catalog_panel(web_client: TestClient, auth_headers: dict) -> None:
     """Supplier detail page renders the CATALOG NUMBERS panel with the vendor PN."""
     supplier = _create_supplier(web_client, auth_headers, name="RenderCo")
     part = _create_part(web_client, auth_headers, name="RenderPart")

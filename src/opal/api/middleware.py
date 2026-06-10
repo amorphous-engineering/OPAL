@@ -1,55 +1,55 @@
 """FastAPI middleware configuration."""
 
 import logging
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import RedirectResponse
+from starlette.responses import PlainTextResponse, RedirectResponse
 
 from opal.config import get_active_settings
+from opal.core.auth import SESSION_COOKIE, create_session, resolve_session
 
 logger = logging.getLogger(__name__)
 
-
-class UserContextMiddleware(BaseHTTPMiddleware):
-    """Middleware to extract user context from request headers."""
-
-    async def dispatch(self, request: Request, call_next: any) -> Response:
-        # Extract user ID from header if present
-        user_id = request.headers.get("X-User-Id")
-        if user_id:
-            try:
-                request.state.user_id = int(user_id)
-            except ValueError:
-                request.state.user_id = None
-        else:
-            request.state.user_id = None
-
-        response = await call_next(request)
-        return response
+UNSAFE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate limiting middleware (placeholder - disabled by default)."""
+class OriginCheckMiddleware(BaseHTTPMiddleware):
+    """CSRF protection: state-changing browser requests must be same-origin.
 
-    def __init__(self, app: FastAPI, enabled: bool = False):
-        super().__init__(app)
-        self.enabled = enabled
-        # TODO: Implement actual rate limiting when enabled
+    Browsers attach an Origin header to unsafe cross-site requests; we reject
+    any whose host does not match the request host. Requests without an
+    Origin header (curl, the TUI, scripts) pass through — they cannot carry a
+    victim's cookie, and bearer-token requests are immune to CSRF by nature.
+    """
 
-    async def dispatch(self, request: Request, call_next: any) -> Response:
-        # Rate limiting logic would go here when enabled
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if request.method in UNSAFE_METHODS:
+            origin = request.headers.get("origin")
+            if origin and origin != "null":
+                origin_host = urlparse(origin).netloc
+                if origin_host and origin_host != request.headers.get("host", ""):
+                    logger.warning(
+                        "Rejected cross-origin %s %s from origin %s",
+                        request.method,
+                        request.url.path,
+                        origin,
+                    )
+                    return PlainTextResponse("Cross-origin request rejected", status_code=403)
         return await call_next(request)
 
 
 class UserSelectionMiddleware(BaseHTTPMiddleware):
-    """Mode-aware auth middleware.
+    """Mode-aware web auth middleware.
 
-    local mode: redirect to /login if no opal_user_id cookie.
-    exe mode: trust X-ExeDev-UserID / X-ExeDev-Email headers from proxy,
-              auto-provision users, set cookies.
+    local mode: redirect to /login unless a valid session cookie is present.
+    exe mode: trust X-ExeDev-UserID / X-ExeDev-Email headers from the proxy,
+              auto-provision users and mint real sessions.
+
+    The JSON API is exempt here because it enforces auth itself (401 via
+    require_user on every business router).
     """
 
     LOCAL_EXEMPT = ("/setup", "/login", "/logout", "/api/", "/static/", "/docs", "/favicon.ico")
@@ -65,59 +65,50 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
         "/favicon.ico",
     )
 
-    async def dispatch(self, request: Request, call_next: any) -> Response:
+    async def dispatch(self, request: Request, call_next) -> Response:
         settings = get_active_settings()
         if settings.auth_mode == "exe":
             return await self._dispatch_exe(request, call_next)
         return await self._dispatch_local(request, call_next)
 
-    async def _dispatch_local(self, request: Request, call_next: any) -> Response:
-        """Local mode: check cookie, redirect to /login."""
+    @staticmethod
+    def _session_user_id(request: Request) -> int | None:
+        """Resolve the session cookie to an active user id, if any.
+
+        Covers stale credentials by construction: a session minted before a
+        database switch or factory reset simply does not exist in the new
+        database and resolves to None (logged out). A pre-init or mid-switch
+        database fails closed the same way rather than raising.
+        """
+        from opal.db.session import get_session
+
+        token = request.cookies.get(SESSION_COOKIE)
+        if not token:
+            return None
+        try:
+            with get_session() as db:
+                user = resolve_session(db, token)
+                return user.id if user else None
+        except Exception:
+            return None
+
+    async def _dispatch_local(self, request: Request, call_next) -> Response:
+        """Local mode: require a valid session for web pages."""
         path = request.url.path
         if any(path.startswith(p) for p in self.LOCAL_EXEMPT):
             return await call_next(request)
 
-        user_id = request.cookies.get("opal_user_id")
-        if not user_id:
-            return RedirectResponse(url="/login", status_code=302)
-
-        # A cookie surviving a database switch/reset can point at a user
-        # that no longer exists — treat it as logged out, not as valid.
-        if not self._local_user_exists(user_id):
+        # A session surviving a database switch/reset resolves to None in
+        # the new database — treated as logged out, not as valid.
+        if self._session_user_id(request) is None:
             response = RedirectResponse(url="/login", status_code=302)
-            for cookie in (
-                "opal_user_id",
-                "opal_user_name",
-                "opal_user_email",
-                "opal_user_is_admin",
-            ):
-                response.delete_cookie(cookie)
+            response.delete_cookie(SESSION_COOKIE)
             return response
 
         return await call_next(request)
 
-    @staticmethod
-    def _local_user_exists(user_id: str) -> bool:
-        """Best-effort check that the cookie's user exists and is active."""
-        from opal.db.models.user import User
-        from opal.db.session import get_session
-
-        try:
-            uid = int(user_id)
-        except ValueError:
-            return False
-        try:
-            with get_session() as db:
-                return (
-                    db.query(User.id).filter(User.id == uid, User.is_active.is_(True)).first()
-                    is not None
-                )
-        except Exception:
-            # Fail open: pre-init database or mid-switch
-            return True
-
-    async def _dispatch_exe(self, request: Request, call_next: any) -> Response:
-        """Exe mode: trust proxy headers, auto-provision users."""
+    async def _dispatch_exe(self, request: Request, call_next) -> Response:
+        """Exe mode: trust proxy headers, auto-provision users, mint sessions."""
         path = request.url.path
         if any(path.startswith(p) for p in self.EXE_EXEMPT):
             return await call_next(request)
@@ -138,32 +129,40 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
         if not user:
             return RedirectResponse(url="/__exe.dev/login", status_code=302)
 
-        # New users need to set their display name
+        # Reuse an existing valid session; only mint one when absent so we do
+        # not create a session row per request
+        session_user_id = self._session_user_id(request)
+        new_token: str | None = None
+        if session_user_id != user["id"]:
+            from opal.db.session import get_session as db_session
+
+            with db_session() as db:
+                from opal.db.models.user import User
+
+                db_user = db.query(User).filter(User.id == user["id"]).first()
+                if db_user is not None:
+                    new_token = create_session(
+                        db,
+                        db_user,
+                        auth_method="exe",
+                        user_agent=request.headers.get("user-agent"),
+                        ip_address=request.client.host if request.client else None,
+                    )
+
         if user["needs_profile_setup"]:
-            response = RedirectResponse(url="/setup-profile", status_code=302)
-            # Set cookies so the setup page knows who the user is
-            max_age = 365 * 24 * 3600
-            response.set_cookie("opal_user_id", str(user["id"]), max_age=max_age)
-            response.set_cookie("opal_user_name", user["name"], max_age=max_age)
-            response.set_cookie("opal_user_email", user["email"] or "", max_age=max_age)
-            response.set_cookie(
-                "opal_user_is_admin", "1" if user["is_admin"] else "0", max_age=max_age
-            )
-            return response
+            response: Response = RedirectResponse(url="/setup-profile", status_code=302)
+        else:
+            response = await call_next(request)
 
-        # Set cookies so the rest of the app works unchanged
-        response = await call_next(request)
+        if new_token is not None:
+            from opal.api.routes.auth import set_session_cookie
 
-        max_age = 365 * 24 * 3600
-        response.set_cookie("opal_user_id", str(user["id"]), max_age=max_age)
-        response.set_cookie("opal_user_name", user["name"], max_age=max_age)
-        response.set_cookie("opal_user_email", user["email"] or "", max_age=max_age)
-        response.set_cookie("opal_user_is_admin", "1" if user["is_admin"] else "0", max_age=max_age)
-
+            set_session_cookie(response, request, new_token)
         return response
 
     async def _get_or_create_exe_user(self, exe_user_id: str, exe_email: str) -> dict | None:
         """Look up user by exe_user_id, auto-create if not found."""
+        from opal.core.auth import generate_unique_username
         from opal.db.models.user import User
         from opal.db.session import get_session
 
@@ -199,6 +198,7 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
 
             new_user = User(
                 name=name,
+                username=generate_unique_username(db, local_part),
                 email=exe_email,
                 exe_user_id=exe_user_id,
                 is_active=True,
@@ -228,20 +228,32 @@ def setup_middleware(app: FastAPI) -> None:
     settings = get_active_settings()
     logger.info("Auth mode: %s", settings.auth_mode)
 
-    # CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # CORS: only when extra origins are explicitly configured. The default is
+    # same-origin only (no CORS headers at all). A "*" wildcard never gets
+    # credentials — wildcard plus cookies would let any website act as a
+    # logged-in user.
+    origins = settings.cors_origins
+    if origins == ["*"]:
+        # Wildcard without credentials: other origins may read public
+        # endpoints but can never ride a logged-in user's cookie.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    elif origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
-    # User context middleware
-    app.add_middleware(UserContextMiddleware)
+    # CSRF origin check for unsafe methods
+    app.add_middleware(OriginCheckMiddleware)
 
     # User selection middleware (mode-aware: local or exe)
     app.add_middleware(UserSelectionMiddleware)
-
-    # Rate limiting middleware (disabled by default)
-    app.add_middleware(RateLimitMiddleware, enabled=settings.rate_limit_enabled)

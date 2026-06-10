@@ -1,8 +1,5 @@
 """Core business logic tests — designators, audit, and diff."""
 
-from datetime import datetime, timezone
-from decimal import Decimal
-
 import pytest
 from sqlalchemy.orm import Session
 
@@ -17,9 +14,8 @@ from opal.core.designators import (
     parse_designator,
 )
 from opal.core.diff import diff_procedure_versions
-from opal.db.models import AuditLog, Part
+from opal.db.models import Part
 from opal.db.models.audit import AuditAction
-
 
 # ---- Local fixtures ----
 
@@ -84,9 +80,7 @@ def test_generate_serial_number(db_session: Session, sample_part: Part) -> None:
     assert result == "001"
 
 
-def test_generate_serial_number_uses_internal_pn(
-    db_session: Session, sample_part: Part
-) -> None:
+def test_generate_serial_number_uses_internal_pn(db_session: Session, sample_part: Part) -> None:
     generate_serial_number(db_session, sample_part)
     from opal.db.models.designator import DesignatorSequence
 

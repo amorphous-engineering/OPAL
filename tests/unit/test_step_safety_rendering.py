@@ -1,16 +1,6 @@
 """Smoke tests: caution/required_role render in editor + runner, target entity on meta."""
 
-import pytest
 from fastapi.testclient import TestClient
-
-from opal.db.models import User
-
-
-@pytest.fixture
-def web_client(client: TestClient, test_user: User) -> TestClient:
-    """TestClient pre-authenticated with the cookie the auth middleware expects."""
-    client.cookies.set("opal_user_id", str(test_user.id))
-    return client
 
 
 def _build_procedure(client: TestClient) -> int:

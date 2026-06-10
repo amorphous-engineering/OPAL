@@ -14,7 +14,7 @@ class WelcomeResponse(BaseModel):
 
 
 @router.post("/complete", response_model=WelcomeResponse)
-async def complete_onboarding(
+def complete_onboarding(
     db: DbSession,
     user: RequiredUser,
 ) -> WelcomeResponse:
@@ -25,7 +25,7 @@ async def complete_onboarding(
 
 
 @router.post("/load-demo")
-async def load_demo_data(
+def load_demo_data(
     request: Request,
     db: DbSession,
     user: RequiredUser,
@@ -41,7 +41,9 @@ async def load_demo_data(
     db.commit()
 
     from opal.api.app import start_onshape_polling
+    from opal.api.routes.auth import set_session_cookie
     from opal.core import lifecycle
+    from opal.core.auth import create_session
     from opal.db.base import SessionLocal
     from opal.db.models.user import User
 
@@ -50,14 +52,18 @@ async def load_demo_data(
 
     response = JSONResponse({"ok": True})
     if demo_user_id is not None:
+        # The session table lives per-database: mint a fresh session in the
+        # demo database so the operator stays logged in across the switch.
         with SessionLocal() as demo_db:
             demo_user = demo_db.query(User).filter(User.id == demo_user_id).first()
             if demo_user:
-                max_age = 365 * 24 * 3600
-                response.set_cookie("opal_user_id", str(demo_user.id), max_age=max_age)
-                response.set_cookie("opal_user_name", demo_user.name, max_age=max_age)
-                response.set_cookie("opal_user_email", demo_user.email or "", max_age=max_age)
-                response.set_cookie(
-                    "opal_user_is_admin", "1" if demo_user.is_admin else "0", max_age=max_age
+                token = create_session(
+                    demo_db,
+                    demo_user,
+                    auth_method="demo",
+                    user_agent=request.headers.get("user-agent"),
+                    ip_address=request.client.host if request.client else None,
                 )
+                demo_db.commit()
+                set_session_cookie(response, request, token)
     return response

@@ -17,9 +17,15 @@ PRESENCE_TIMEOUT_SECONDS = 30
 
 
 class UserCreate(BaseModel):
-    """Schema for creating a user."""
+    """Schema for creating a user.
+
+    When no password is given the account starts passwordless and its owner
+    sets one on first login (same trust-on-first-use flow as migration).
+    """
 
     name: str
+    username: str | None = None
+    password: str | None = None
     email: EmailStr | None = None
     is_admin: bool = False
 
@@ -38,6 +44,7 @@ class UserResponse(BaseModel):
 
     id: int
     name: str
+    username: str | None = None
     email: str | None
     is_active: bool
     is_admin: bool
@@ -55,7 +62,7 @@ class UserListResponse(BaseModel):
 
 
 @router.get("", response_model=UserListResponse)
-async def list_users(
+def list_users(
     db: DbSession,
     pagination: PaginationParams,
     admin: RequiredAdmin,
@@ -83,13 +90,27 @@ async def list_users(
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(
+def create_user(
     db: DbSession,
     user_in: UserCreate,
     admin: RequiredAdmin,
 ) -> UserResponse:
     """Create a new user. Requires admin."""
-    user = User(name=user_in.name, email=user_in.email, is_admin=user_in.is_admin)
+    from opal.core.auth import generate_unique_username, hash_password, validate_password_strength
+
+    password_hash = None
+    if user_in.password:
+        if error := validate_password_strength(user_in.password):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        password_hash = hash_password(user_in.password)
+    username_source = user_in.username or (user_in.email or "").split("@")[0] or user_in.name
+    user = User(
+        name=user_in.name,
+        username=generate_unique_username(db, username_source),
+        password_hash=password_hash,
+        email=user_in.email,
+        is_admin=user_in.is_admin,
+    )
     db.add(user)
     db.flush()
 
@@ -109,7 +130,7 @@ async def create_user(
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(
+def get_user(
     db: DbSession,
     user_id: int,
 ) -> UserResponse:
@@ -133,7 +154,7 @@ async def get_user(
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
-async def update_user(
+def update_user(
     db: DbSession,
     user_id: int,
     user_in: UserUpdate,
@@ -209,7 +230,7 @@ async def update_user(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(
+def delete_user(
     db: DbSession,
     user_id: int,
     acting_user: RequiredUser,
@@ -254,6 +275,35 @@ async def delete_user(
     db.flush()
     log_update(db, user, old_data, acting_user.id)
     db.commit()
+
+
+@router.post("/{user_id}/reset-password")
+def reset_password(
+    db: DbSession,
+    user_id: int,
+    admin: RequiredAdmin,
+) -> dict:
+    """Clear a user's password and revoke their sessions. Requires admin.
+
+    The user sets a new password on their next login (same trust-on-first-use
+    flow as accounts migrated from the pre-credential era).
+    """
+    from opal.core.auth import revoke_all_sessions
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+
+    old_data = get_model_dict(user)
+    user.password_hash = None
+    revoked = revoke_all_sessions(db, user.id)
+    db.flush()
+    log_update(db, user, old_data, admin.id)
+    db.commit()
+    return {"ok": True, "sessions_revoked": revoked}
 
 
 # ============ Presence Tracking ============
@@ -321,7 +371,7 @@ async def heartbeat(
 
 
 @router.get("/online", response_model=list[OnlineUserResponse])
-async def get_online_users(
+def get_online_users(
     db: DbSession,
 ) -> list[OnlineUserResponse]:
     """Get list of currently online users.
@@ -352,7 +402,7 @@ async def get_online_users(
 
 
 @router.get("/{user_id}/presence", response_model=OnlineUserResponse)
-async def get_user_presence(
+def get_user_presence(
     user_id: int,
     db: DbSession,
 ) -> OnlineUserResponse:

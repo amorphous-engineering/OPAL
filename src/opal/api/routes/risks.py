@@ -72,13 +72,13 @@ class RiskUpdate(BaseModel):
 
 
 @router.get("/statuses", response_model=list[str])
-async def get_risk_statuses() -> list[str]:
+def get_risk_statuses() -> list[str]:
     """Get all risk statuses."""
     return [s.value for s in RiskStatus]
 
 
 @router.get("/matrix")
-async def get_risk_matrix(db: DbSession) -> dict:
+def get_risk_matrix(db: DbSession) -> dict:
     """Get risk matrix data for visualization.
 
     Returns counts of active risks by probability/impact.
@@ -138,7 +138,7 @@ def _risk_to_response(risk: Risk) -> RiskResponse:
 
 
 @router.get("", response_model=RiskListResponse)
-async def list_risks(
+def list_risks(
     db: DbSession,
     search: str | None = Query(None),
     status: str | None = Query(None),
@@ -178,7 +178,7 @@ async def list_risks(
 
 
 @router.post("", response_model=RiskResponse, status_code=201)
-async def create_risk(
+def create_risk(
     data: RiskCreate,
     db: DbSession,
     user_id: CurrentUserId,
@@ -205,7 +205,7 @@ async def create_risk(
 
 
 @router.get("/{risk_id}", response_model=RiskResponse)
-async def get_risk(
+def get_risk(
     risk_id: int,
     db: DbSession,
 ) -> RiskResponse:
@@ -218,7 +218,7 @@ async def get_risk(
 
 
 @router.patch("/{risk_id}", response_model=RiskResponse)
-async def update_risk(
+def update_risk(
     risk_id: int,
     data: RiskUpdate,
     db: DbSession,
@@ -257,7 +257,7 @@ async def update_risk(
 
 
 @router.delete("/{risk_id}", status_code=204)
-async def delete_risk(
+def delete_risk(
     risk_id: int,
     db: DbSession,
     user_id: CurrentUserId,
