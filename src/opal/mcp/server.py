@@ -13,8 +13,12 @@ from sqlalchemy import func
 
 from opal.config import get_active_project, get_active_settings
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
-from opal.core.designators import generate_issue_number, generate_risk_number
-from opal.db.base import SessionLocal
+from opal.core.designators import (
+    generate_issue_number,
+    generate_requirement_number,
+    generate_risk_number,
+)
+from opal.db.base import LifecycleState, SessionLocal
 from opal.db.models import (
     BOMLine,
     Issue,
@@ -25,9 +29,11 @@ from opal.db.models import (
     ProcedureOutput,
     ProcedureStep,
     ProcedureVersion,
+    Requirement,
     Risk,
     StepDependency,
     StepKit,
+    User,
 )
 from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
@@ -792,10 +798,151 @@ async def list_tools() -> list[Tool]:
         # Requirements
         Tool(
             name="list_requirements",
-            description="List all requirements defined in the project config",
+            description=(
+                "List first-class requirements (REQ-XXXX). Superseded revisions "
+                "are hidden unless include_superseded=true."
+            ),
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "state": {
+                        "type": "string",
+                        "enum": ["draft", "preliminary", "baselined", "superseded", "cancelled"],
+                        "description": "Filter by lifecycle state (optional)",
+                    },
+                    "level": {"type": "integer", "description": "Filter by flow-down level"},
+                    "query": {
+                        "type": "string",
+                        "description": "Substring match on number, title, or statement",
+                    },
+                    "include_superseded": {"type": "boolean", "default": False},
+                    "limit": {"type": "integer", "default": 50},
+                },
+            },
+        ),
+        Tool(
+            name="get_requirement",
+            description=(
+                "Get a requirement by ID or REQ number, with children, part "
+                "allocations, and its revision chain."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer", "description": "Database ID"},
+                    "req_number": {
+                        "type": "string",
+                        "description": "REQ number, e.g. REQ-0042 (latest non-superseded revision)",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="create_requirement",
+            description=(
+                "Create a new draft requirement. The REQ number is auto-assigned. "
+                "Statement should be a single shall statement; rationale is "
+                "required before the requirement can be baselined."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Short name"},
+                    "statement": {"type": "string", "description": "The shall statement"},
+                    "rationale": {"type": "string", "description": "Why this requirement exists"},
+                    "category": {
+                        "type": "string",
+                        "description": "functional, performance, interface, environmental, safety, ...",
+                    },
+                    "parent_id": {
+                        "type": "integer",
+                        "description": "Parent requirement ID for flow-down (level defaults to parent+1)",
+                    },
+                    "level": {
+                        "type": "integer",
+                        "description": "0=mission, 1=system, 2=subsystem...",
+                    },
+                    "verification_method": {
+                        "type": "string",
+                        "enum": ["analysis", "inspection", "demonstration", "test"],
+                    },
+                    "tbd": {"type": "boolean", "default": False},
+                    "tbr": {"type": "boolean", "default": False},
+                },
+                "required": ["title", "statement"],
+            },
+        ),
+        Tool(
+            name="update_requirement",
+            description=(
+                "Update a draft/preliminary requirement in place. Baselined "
+                "requirements are immutable — use revise_requirement instead."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "title": {"type": "string"},
+                    "statement": {"type": "string"},
+                    "rationale": {"type": "string"},
+                    "category": {"type": "string"},
+                    "parent_id": {"type": "integer"},
+                    "level": {"type": "integer"},
+                    "verification_method": {
+                        "type": "string",
+                        "enum": ["analysis", "inspection", "demonstration", "test"],
+                    },
+                    "tbd": {"type": "boolean"},
+                    "tbr": {"type": "boolean"},
+                },
+                "required": ["requirement_id"],
+            },
+        ),
+        Tool(
+            name="baseline_requirement",
+            description=(
+                "Baseline a requirement, locking it as immutable. POLICY: agents "
+                "draft, humans baseline — this requires the user_id of a real "
+                "human user who has approved the baseline. Fails listing the "
+                "blockers if the requirement is not ready (missing rationale, "
+                "unresolved TBD, TBR without owner/due date)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user approving the baseline (required)",
+                    },
+                },
+                "required": ["requirement_id", "user_id"],
+            },
+        ),
+        Tool(
+            name="revise_requirement",
+            description=(
+                "Create the next draft revision of a baselined requirement "
+                "(same REQ number, revision + 1). The old revision stays the "
+                "effective baseline until the new one is baselined."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                },
+                "required": ["requirement_id"],
+            },
+        ),
+        Tool(
+            name="cancel_requirement",
+            description="Cancel a requirement (terminal state).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                },
+                "required": ["requirement_id"],
             },
         ),
         Tool(
@@ -1003,6 +1150,18 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Requirements
         elif name == "list_requirements":
             return await _list_requirements(db, arguments)
+        elif name == "get_requirement":
+            return await _get_requirement(db, arguments)
+        elif name == "create_requirement":
+            return await _create_requirement(db, arguments)
+        elif name == "update_requirement":
+            return await _update_requirement(db, arguments)
+        elif name == "baseline_requirement":
+            return await _baseline_requirement(db, arguments)
+        elif name == "revise_requirement":
+            return await _revise_requirement(db, arguments)
+        elif name == "cancel_requirement":
+            return await _cancel_requirement(db, arguments)
         elif name == "list_part_requirements":
             return await _list_part_requirements(db, arguments)
         elif name == "assign_requirement":
@@ -1714,26 +1873,257 @@ async def _preview_part_number(db, args: dict) -> list[TextContent]:
 # ============ REQUIREMENTS TOOLS ============
 
 
-async def _list_requirements(db, args: dict) -> list[TextContent]:
-    """List all project requirements."""
-    project = get_active_project()
-    if not project:
-        return json_response({"error": "No project loaded", "requirements": []})
+def _requirement_dict(req: Requirement) -> dict:
+    return {
+        "id": req.id,
+        "req_number": req.req_number,
+        "revision": req.revision,
+        "lifecycle_state": req.lifecycle_state,
+        "title": req.title,
+        "statement": req.statement,
+        "rationale": req.rationale,
+        "category": req.category,
+        "parent_id": req.parent_id,
+        "level": req.level,
+        "verification_method": req.verification_method,
+        "tbd": req.tbd,
+        "tbr": req.tbr,
+        "baselined_at": req.baselined_at.isoformat() if req.baselined_at else None,
+        "supersedes_id": req.supersedes_id,
+    }
 
+
+def _find_requirement(db, args: dict) -> "Requirement | None":
+    if args.get("requirement_id") is not None:
+        return (
+            db.query(Requirement)
+            .filter(Requirement.id == args["requirement_id"], Requirement.deleted_at.is_(None))
+            .first()
+        )
+    if args.get("req_number"):
+        return (
+            db.query(Requirement)
+            .filter(
+                Requirement.req_number == args["req_number"],
+                Requirement.deleted_at.is_(None),
+                Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+            )
+            .order_by(Requirement.revision.desc())
+            .first()
+        )
+    return None
+
+
+async def _list_requirements(db, args: dict) -> list[TextContent]:
+    """List first-class requirements with filters."""
+    query = db.query(Requirement).filter(Requirement.deleted_at.is_(None))
+    if not args.get("include_superseded"):
+        query = query.filter(Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value)
+    if args.get("state"):
+        query = query.filter(Requirement.lifecycle_state == args["state"])
+    if args.get("level") is not None:
+        query = query.filter(Requirement.level == args["level"])
+    if args.get("query"):
+        term = f"%{args['query']}%"
+        query = query.filter(
+            Requirement.req_number.ilike(term)
+            | Requirement.title.ilike(term)
+            | Requirement.statement.ilike(term)
+        )
+
+    limit = args.get("limit", 50)
+    reqs = query.order_by(Requirement.req_number, Requirement.revision).limit(limit).all()
+    return json_response({"count": len(reqs), "requirements": [_requirement_dict(r) for r in reqs]})
+
+
+async def _get_requirement(db, args: dict) -> list[TextContent]:
+    """Get a requirement with children, allocations, and revision chain."""
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    children = (
+        db.query(Requirement)
+        .filter(Requirement.parent_id == req.id, Requirement.deleted_at.is_(None))
+        .order_by(Requirement.req_number)
+        .all()
+    )
+    allocations = (
+        db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).all()
+    )
+    revisions = (
+        db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .order_by(Requirement.revision)
+        .all()
+    )
+    result = _requirement_dict(req)
+    result["children"] = [
+        {"id": c.id, "req_number": c.req_number, "title": c.title, "level": c.level}
+        for c in children
+    ]
+    result["allocated_parts"] = [{"part_id": a.part_id, "status": a.status} for a in allocations]
+    result["revisions"] = [
+        {"id": r.id, "revision": r.revision, "lifecycle_state": r.lifecycle_state}
+        for r in revisions
+    ]
+    return json_response(result)
+
+
+async def _create_requirement(db, args: dict) -> list[TextContent]:
+    """Create a new draft requirement."""
+    parent = None
+    if args.get("parent_id") is not None:
+        parent = (
+            db.query(Requirement)
+            .filter(Requirement.id == args["parent_id"], Requirement.deleted_at.is_(None))
+            .first()
+        )
+        if not parent:
+            return json_response({"error": f"Parent requirement {args['parent_id']} not found"})
+
+    level = args.get("level")
+    if level is None:
+        level = parent.level + 1 if parent else 0
+
+    req = Requirement(
+        req_number=generate_requirement_number(db),
+        title=args["title"],
+        statement=args["statement"],
+        rationale=args.get("rationale"),
+        category=args.get("category"),
+        parent_id=args.get("parent_id"),
+        level=level,
+        verification_method=args.get("verification_method"),
+        tbd=bool(args.get("tbd", False)),
+        tbr=bool(args.get("tbr", False)),
+    )
+    db.add(req)
+    db.flush()
+    log_create(db, req)
+    db.commit()
+    db.refresh(req)
     return json_response(
         {
-            "count": len(project.requirements),
-            "requirements": [
-                {
-                    "id": r.id,
-                    "title": r.title,
-                    "description": r.description,
-                    "category": r.category,
-                }
-                for r in project.requirements
-            ],
+            "success": True,
+            "message": f"Created draft requirement {req.req_number}: {req.title}",
+            "requirement": _requirement_dict(req),
         }
     )
+
+
+async def _update_requirement(db, args: dict) -> list[TextContent]:
+    """Update a draft/preliminary requirement in place."""
+    from opal.se.lifecycle import LifecycleError, ensure_mutable
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+    try:
+        ensure_mutable(req)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+
+    old_values = get_model_dict(req)
+    for field in (
+        "title",
+        "statement",
+        "rationale",
+        "category",
+        "parent_id",
+        "level",
+        "verification_method",
+        "tbd",
+        "tbr",
+    ):
+        if field in args:
+            setattr(req, field, args[field])
+
+    log_update(db, req, old_values)
+    db.commit()
+    db.refresh(req)
+    return json_response({"success": True, "requirement": _requirement_dict(req)})
+
+
+async def _baseline_requirement(db, args: dict) -> list[TextContent]:
+    """Baseline a requirement. Agents draft, humans baseline."""
+    from opal.se.lifecycle import LifecycleError, baseline
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    # Policy: baselining is a human act. The id must belong to a real,
+    # active user who approved this baseline.
+    user_id = args.get("user_id")
+    user = (
+        db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if user_id is not None
+        else None
+    )
+    if not user:
+        return json_response(
+            {
+                "error": "Baselining requires the user_id of an active human user "
+                "who approved it. Ask the operator which user is approving."
+            }
+        )
+
+    old_values = get_model_dict(req)
+    try:
+        baseline(db, req, user.id)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+    log_update(db, req, old_values, user.id)
+    db.commit()
+    db.refresh(req)
+    return json_response(
+        {
+            "success": True,
+            "message": f"{req.req_number} rev {req.revision} baselined by {user.name}",
+            "requirement": _requirement_dict(req),
+        }
+    )
+
+
+async def _revise_requirement(db, args: dict) -> list[TextContent]:
+    """Create the next draft revision of a baselined requirement."""
+    from opal.se.lifecycle import LifecycleError, revise
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+    try:
+        new_req = revise(db, req)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+    log_create(db, new_req)
+    db.commit()
+    db.refresh(new_req)
+    return json_response(
+        {
+            "success": True,
+            "message": f"Created {new_req.req_number} rev {new_req.revision} (draft)",
+            "requirement": _requirement_dict(new_req),
+        }
+    )
+
+
+async def _cancel_requirement(db, args: dict) -> list[TextContent]:
+    """Cancel a requirement (terminal)."""
+    from opal.se.lifecycle import LifecycleError, cancel
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+    old_values = get_model_dict(req)
+    try:
+        cancel(db, req)
+    except LifecycleError as err:
+        return json_response({"error": str(err)})
+    log_update(db, req, old_values)
+    db.commit()
+    return json_response({"success": True, "requirement": _requirement_dict(req)})
 
 
 async def _list_part_requirements(db, args: dict) -> list[TextContent]:
@@ -1789,17 +2179,26 @@ async def _assign_requirement(db, args: dict) -> list[TextContent]:
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
 
-    # Check if requirement exists in project
-    project = get_active_project()
-    req_title = None
-    if project:
-        req_config = project.get_requirement(args["requirement_id"])
+    # Resolve against the first-class table (current revision), then the
+    # deprecated yaml catalog.
+    req_row = (
+        db.query(Requirement)
+        .filter(
+            Requirement.req_number == args["requirement_id"],
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.revision.desc())
+        .first()
+    )
+    req_title = req_row.title if req_row else None
+    if not req_row:
+        project = get_active_project()
+        req_config = project.get_requirement(args["requirement_id"]) if project else None
         if req_config:
             req_title = req_config.title
         else:
-            return json_response(
-                {"error": f"Requirement {args['requirement_id']} not found in project config"}
-            )
+            return json_response({"error": f"Requirement {args['requirement_id']} not found"})
 
     # Check if already assigned
     existing = (
@@ -1821,6 +2220,7 @@ async def _assign_requirement(db, args: dict) -> list[TextContent]:
     pr = PartRequirement(
         part_id=args["part_id"],
         requirement_id=args["requirement_id"],
+        requirement_ref_id=req_row.id if req_row else None,
         notes=args.get("notes"),
     )
     db.add(pr)

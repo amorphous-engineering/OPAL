@@ -363,3 +363,151 @@ def test_web_pages_render(client, test_user):
     new_page = client.get("/requirements/new")
     assert new_page.status_code == 200
     assert "CREATE DRAFT" in new_page.text
+
+
+# ============ MCP tools ============
+
+
+def _mcp(handler, db, args):
+    import asyncio
+    import json as _json
+
+    result = asyncio.run(handler(db, args))
+    return _json.loads(result[0].text)
+
+
+def test_mcp_create_list_get(db_session):
+    from opal.mcp import server as mcp
+
+    created = _mcp(
+        mcp._create_requirement,
+        db_session,
+        {
+            "title": "Thrust",
+            "statement": "The engine shall produce 2.5 kN ± 0.1 kN of thrust.",
+            "rationale": "Mission delta-v budget.",
+            "category": "performance",
+            "verification_method": "test",
+        },
+    )
+    assert created["success"]
+    req = created["requirement"]
+    assert req["req_number"].startswith("REQ-")
+    assert req["lifecycle_state"] == "draft"
+
+    child = _mcp(
+        mcp._create_requirement,
+        db_session,
+        {
+            "title": "Injector dP",
+            "statement": "The injector shall drop 20%.",
+            "parent_id": req["id"],
+        },
+    )
+    assert child["requirement"]["level"] == 1
+
+    listed = _mcp(mcp._list_requirements, db_session, {"query": "thrust"})
+    assert listed["count"] == 1
+
+    detail = _mcp(mcp._get_requirement, db_session, {"req_number": req["req_number"]})
+    assert len(detail["children"]) == 1
+    assert detail["revisions"][0]["revision"] == 1
+
+
+def test_mcp_baseline_requires_human(db_session, test_user):
+    from opal.mcp import server as mcp
+
+    created = _mcp(
+        mcp._create_requirement,
+        db_session,
+        {"title": "Mass", "statement": "The stage shall mass under 40 kg.", "rationale": "Lift."},
+    )
+    rid = created["requirement"]["id"]
+
+    # No user id → refused with guidance
+    refused = _mcp(mcp._baseline_requirement, db_session, {"requirement_id": rid})
+    assert "human user" in refused["error"]
+
+    # Unknown user id → refused
+    refused = _mcp(mcp._baseline_requirement, db_session, {"requirement_id": rid, "user_id": 99999})
+    assert "error" in refused
+
+    # Real human user → baselined
+    ok = _mcp(
+        mcp._baseline_requirement,
+        db_session,
+        {"requirement_id": rid, "user_id": test_user.id},
+    )
+    assert ok["success"]
+    assert ok["requirement"]["lifecycle_state"] == "baselined"
+
+    # Now immutable via MCP update
+    blocked = _mcp(mcp._update_requirement, db_session, {"requirement_id": rid, "title": "nope"})
+    assert "immutable" in blocked["error"]
+
+
+def test_mcp_baseline_blockers_reported(db_session, test_user):
+    from opal.mcp import server as mcp
+
+    created = _mcp(
+        mcp._create_requirement,
+        db_session,
+        {"title": "Vague", "statement": "The thing shall work.", "tbd": True},
+    )
+    refused = _mcp(
+        mcp._baseline_requirement,
+        db_session,
+        {"requirement_id": created["requirement"]["id"], "user_id": test_user.id},
+    )
+    assert "rationale" in refused["error"]
+    assert "TBD" in refused["error"]
+
+
+def test_mcp_revise_and_cancel(db_session, test_user):
+    from opal.mcp import server as mcp
+
+    created = _mcp(
+        mcp._create_requirement,
+        db_session,
+        {"title": "Burn time", "statement": "The engine shall burn 8 s ± 1 s.", "rationale": "x"},
+    )
+    rid = created["requirement"]["id"]
+    _mcp(mcp._baseline_requirement, db_session, {"requirement_id": rid, "user_id": test_user.id})
+
+    revised = _mcp(mcp._revise_requirement, db_session, {"requirement_id": rid})
+    assert revised["success"]
+    assert revised["requirement"]["revision"] == 2
+    assert revised["requirement"]["lifecycle_state"] == "draft"
+
+    cancelled = _mcp(
+        mcp._cancel_requirement, db_session, {"requirement_id": revised["requirement"]["id"]}
+    )
+    assert cancelled["requirement"]["lifecycle_state"] == "cancelled"
+
+
+def test_mcp_assign_links_first_class_row(db_session, test_user):
+    from opal.db.models import Part
+    from opal.mcp import server as mcp
+
+    part = Part(name="Chamber", tier=1)
+    db_session.add(part)
+    db_session.flush()
+
+    created = _mcp(
+        mcp._create_requirement,
+        db_session,
+        {"title": "Proof", "statement": "The chamber shall survive 1.5x MEOP.", "rationale": "x"},
+    )
+    req = created["requirement"]
+
+    assigned = _mcp(
+        mcp._assign_requirement,
+        db_session,
+        {"part_id": part.id, "requirement_id": req["req_number"]},
+    )
+    assert "error" not in assigned, assigned
+
+    from opal.db.models import PartRequirement
+
+    link = db_session.query(PartRequirement).filter(PartRequirement.part_id == part.id).one()
+    assert link.requirement_ref_id == req["id"]
