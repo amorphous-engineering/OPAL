@@ -1,4 +1,6 @@
 # Requirement lint rules — SP-2016-6105 Rev 2 Appendix C, automatable subset.
+# EXECUTABLE TRUTH — edit here; docs/plans/se-module/lint-rules.yaml is a
+# review mirror (drift-guarded by tests/unit/test_lint_rules_drift.py).
 # Loaded by opal.se.lint as data; check logic lives in Python keyed by `name`.
 # severity: warn (advisory at save) | block_baseline (must clear before the
 # lifecycle state can advance to baselined). Nothing ever blocks save.

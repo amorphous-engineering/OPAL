@@ -2013,7 +2013,14 @@ async def _get_requirement(db, args: dict) -> list[TextContent]:
         .order_by(Requirement.revision)
         .all()
     )
+    from opal.se.readiness import readiness
+
+    ready = readiness(db, req)
     result = _requirement_dict(req)
+    result["readiness"] = {
+        "ready": ready["ready"],
+        "failing_checks": [c["key"] for c in ready["checks"] if not c["passed"]],
+    }
     result["children"] = [
         {"id": c.id, "req_number": c.req_number, "title": c.title, "level": c.level}
         for c in children
