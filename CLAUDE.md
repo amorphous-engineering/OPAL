@@ -20,7 +20,8 @@ uv run opal serve                                    # Start server at http://lo
 uv run opal seed                                     # Seed demo data
 
 # Testing
-uv run pytest                                        # Run all tests (in-memory SQLite)
+uv run pytest                                        # Run all tests (in-memory SQLite, with coverage)
+uv run pytest --no-cov                               # Fast local run — coverage roughly doubles runtime
 uv run pytest tests/unit/test_parts.py               # Run a single test file
 uv run pytest tests/unit/test_parts.py::test_name -v # Run a single test
 

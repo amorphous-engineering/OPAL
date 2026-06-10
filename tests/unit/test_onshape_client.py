@@ -128,6 +128,12 @@ class TestGetBOM:
 class TestRetryBehavior:
     """Test retry and error handling."""
 
+    @pytest.fixture(autouse=True)
+    def no_backoff_sleep(self):
+        """Skip the real exponential-backoff sleeps between retry attempts."""
+        with patch("time.sleep"):
+            yield
+
     def test_raises_on_4xx_error(self, client: OnshapeClient) -> None:
         mock_response = MagicMock()
         mock_response.status_code = 404

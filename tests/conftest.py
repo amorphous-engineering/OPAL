@@ -53,18 +53,29 @@ def db_session(engine, tables) -> Generator[Session, None, None]:
     connection.close()
 
 
+@pytest.fixture(scope="session")
+def app():
+    """Build the FastAPI app once per session — route registration is expensive."""
+    return create_app()
+
+
 @pytest.fixture
-def client(db_session: Session) -> Generator[TestClient, None, None]:
-    """Create test client with overridden database dependency."""
-    app = create_app()
+def client(app, db_session: Session) -> Generator[TestClient, None, None]:
+    """Test client bound to this test's database session.
+
+    The TestClient is created without entering its context manager, so the
+    app lifespan (project-config bootstrap against the real database) never
+    runs — tests always go through the overridden get_db.
+    """
 
     def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-
-    with TestClient(app) as test_client:
-        yield test_client
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
