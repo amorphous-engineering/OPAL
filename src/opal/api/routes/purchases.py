@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
 from opal.core.audit import get_model_dict, log_create, log_update
+from opal.core.designators import generate_serial_number
 from opal.core.inventory import generate_opal_number
 from opal.db.models import InventoryRecord, Part, Purchase, PurchaseLine, Supplier
 from opal.db.models.inventory import SourceType
@@ -525,6 +526,25 @@ async def receive_purchase(
         # Get the part to check tracking type
         part = db.query(Part).filter(Part.id == line.part_id).first()
 
+        # Tier enforcement
+        if part:
+            tier = part.tier
+            tracking = part.tracking_type
+
+            # T1 or T2 bulk (lot-tracked): lot_number is required
+            if tier in (1, 2) and tracking == TrackingType.BULK and not recv.lot_number:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Tier {tier} lot-tracked part '{part.name}' requires a "
+                        f"lot_number when receiving."
+                    ),
+                )
+
+            # T1 serialized: auto-generate serial numbers if not provided —
+            # per physical unit, inside the record loop below
+            auto_serial = tier == 1 and tracking == TrackingType.SERIALIZED and not recv.lot_number
+
         if part and part.tracking_type == TrackingType.SERIALIZED:
             # Serialized parts: create individual inventory records with unique OPAL numbers
             # Each physical unit gets its own OPAL for full traceability
@@ -535,7 +555,7 @@ async def receive_purchase(
                     part_id=line.part_id,
                     quantity=1,  # Individual unit
                     location=recv.location,
-                    lot_number=recv.lot_number,
+                    lot_number=generate_serial_number(db, part) if auto_serial else recv.lot_number,
                     opal_number=opal_number,
                     source_type=SourceType.PURCHASE,
                     source_purchase_line_id=line.id,
