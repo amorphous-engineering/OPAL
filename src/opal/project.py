@@ -216,8 +216,25 @@ def load_project_config(config_path: Path) -> ProjectConfig:
     if not config_path.exists():
         raise FileNotFoundError(f"Project config not found: {config_path}")
 
-    with open(config_path) as f:
-        data = yaml.safe_load(f) or {}
+    # Files saved by Windows editors are often cp1252 (em-dashes, curly
+    # quotes) rather than UTF-8; tolerate that instead of crashing every
+    # CLI command that auto-detects this file from a parent directory.
+    raw = config_path.read_bytes()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("cp1252")
+        except UnicodeDecodeError as e:
+            raise ValueError(
+                f"Project config {config_path} is neither UTF-8 nor Windows-1252 "
+                "encoded — re-save it as UTF-8"
+            ) from e
+
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in project config {config_path}: {e}") from e
 
     try:
         config = ProjectConfig(**data)
