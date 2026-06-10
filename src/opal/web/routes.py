@@ -508,6 +508,15 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
     recent_activity = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(15).all()
     context["recent_activity"] = recent_activity
 
+    # Traceability widget — red-only (overdue TBRs, stuck block-lint drafts)
+    # plus exactly one non-red line (ready-to-baseline count).
+    from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs
+    from opal.se.readiness import ready_requirement_ids
+
+    context["overdue_tbrs"] = overdue_tbrs(db)
+    context["stuck_drafts"] = old_block_lint_drafts(db)
+    context["ready_to_baseline"] = len(ready_requirement_ids(db))
+
     return templates.TemplateResponse("index.html", context)
 
 
@@ -759,6 +768,18 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
     # Where Used: step-level kit usage
     step_kit_usages = db.query(StepKit).filter(StepKit.part_id == part.id).all()
     context["step_kit_usages"] = step_kit_usages
+
+    # Allocated requirements (PartRequirement joined to first-class rows)
+    from opal.db.models import PartRequirement
+
+    part_reqs = db.query(PartRequirement).filter(PartRequirement.part_id == part.id).all()
+    context["part_requirements"] = [
+        {
+            "allocation": pr,
+            "req": db.get(Requirement, pr.requirement_ref_id) if pr.requirement_ref_id else None,
+        }
+        for pr in part_reqs
+    ]
 
     # Where Used: consumption history
     from opal.db.models.inventory import InventoryConsumption
