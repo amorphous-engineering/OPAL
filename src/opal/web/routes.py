@@ -789,6 +789,11 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
         pass
     context["onshape_link"] = onshape_link
 
+    # Supplier catalog entries for this part (hide soft-deleted suppliers)
+    context["supplier_entries"] = [
+        sp for sp in part.supplier_entries if sp.supplier.deleted_at is None
+    ]
+
     return templates.TemplateResponse("parts/detail.html", context)
 
 
@@ -2783,6 +2788,9 @@ async def suppliers_detail(request: Request, db: DbSession, supplier_id: int) ->
     context = get_base_context(request, db, f"{supplier.name} - OPAL")
     context["supplier"] = supplier
     context["purchases"] = supplier.purchases
+    context["catalog_entries"] = [
+        sp for sp in supplier.catalog_entries if sp.part.deleted_at is None
+    ]
 
     return templates.TemplateResponse("suppliers/detail.html", context)
 

@@ -31,7 +31,7 @@ from opal.db.models.procedure import (
 from opal.db.models.purchase import Purchase, PurchaseLine
 from opal.db.models.reference import IssueReference, ReferenceType, RiskReference
 from opal.db.models.risk import Risk
-from opal.db.models.supplier import Supplier
+from opal.db.models.supplier import Supplier, SupplierPart
 from opal.db.models.user import User
 from opal.db.models.workcenter import Workcenter
 
@@ -71,6 +71,7 @@ __all__ = [
     "StockTestResult",
     "StockTransfer",
     "Supplier",
+    "SupplierPart",
     "TestTemplate",
     "User",
     "Workcenter",

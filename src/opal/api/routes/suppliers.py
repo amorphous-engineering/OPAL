@@ -5,10 +5,11 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core.audit import get_model_dict, log_create, log_update
-from opal.db.models import Supplier
+from opal.core.audit import get_model_dict, log_create, log_delete, log_update
+from opal.db.models import Part, Supplier, SupplierPart
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
@@ -71,7 +72,67 @@ class SupplierListResponse(BaseModel):
     per_page: int
 
 
-# --- Routes ---
+class SupplierPartCreate(BaseModel):
+    """Schema for creating a supplier-part catalog entry."""
+
+    part_id: int
+    vendor_pn: str = Field(..., min_length=1, max_length=255)
+    is_preferred: bool = False
+    notes: str | None = None
+
+
+class SupplierPartUpdate(BaseModel):
+    """Schema for updating a supplier-part catalog entry."""
+
+    vendor_pn: str | None = Field(None, min_length=1, max_length=255)
+    is_preferred: bool | None = None
+    notes: str | None = None
+
+
+class SupplierPartResponse(BaseModel):
+    """Schema for supplier-part catalog entry responses."""
+
+    id: int
+    supplier_id: int
+    supplier_name: str
+    part_id: int
+    part_name: str
+    vendor_pn: str
+    is_preferred: bool
+    notes: str | None
+    created_at: str
+
+    model_config = {"from_attributes": True}
+
+
+def _supplier_part_response(sp: SupplierPart) -> SupplierPartResponse:
+    """Build a SupplierPartResponse from a SupplierPart ORM object."""
+    return SupplierPartResponse(
+        id=sp.id,
+        supplier_id=sp.supplier_id,
+        supplier_name=sp.supplier.name,
+        part_id=sp.part_id,
+        part_name=sp.part.name,
+        vendor_pn=sp.vendor_pn,
+        is_preferred=sp.is_preferred,
+        notes=sp.notes,
+        created_at=sp.created_at.strftime("%Y-%m-%dT%H:%M:%S") + "Z",
+    )
+
+
+def _get_active_supplier(db: DbSession, supplier_id: int) -> Supplier:
+    supplier = db.execute(
+        select(Supplier).where(Supplier.id == supplier_id, Supplier.deleted_at.is_(None))
+    ).scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Supplier {supplier_id} not found",
+        )
+    return supplier
+
+
+# --- Supplier CRUD Routes ---
 
 
 @router.get("", response_model=SupplierListResponse)
@@ -179,15 +240,7 @@ async def get_supplier(
     supplier_id: int,
 ):
     """Get a supplier by ID."""
-    supplier = db.execute(
-        select(Supplier).where(Supplier.id == supplier_id, Supplier.deleted_at.is_(None))
-    ).scalar_one_or_none()
-
-    if not supplier:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Supplier {supplier_id} not found",
-        )
+    supplier = _get_active_supplier(db, supplier_id)
 
     return SupplierResponse(
         id=supplier.id,
@@ -212,15 +265,7 @@ async def update_supplier(
     user_id: CurrentUserId,
 ):
     """Update a supplier."""
-    supplier = db.execute(
-        select(Supplier).where(Supplier.id == supplier_id, Supplier.deleted_at.is_(None))
-    ).scalar_one_or_none()
-
-    if not supplier:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Supplier {supplier_id} not found",
-        )
+    supplier = _get_active_supplier(db, supplier_id)
 
     # Check for duplicate code if changing
     if data.code and data.code != supplier.code:
@@ -270,15 +315,7 @@ async def delete_supplier(
     user_id: CurrentUserId,
 ):
     """Soft-delete a supplier."""
-    supplier = db.execute(
-        select(Supplier).where(Supplier.id == supplier_id, Supplier.deleted_at.is_(None))
-    ).scalar_one_or_none()
-
-    if not supplier:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Supplier {supplier_id} not found",
-        )
+    supplier = _get_active_supplier(db, supplier_id)
 
     # Check if supplier has any purchases
     if supplier.purchases:
@@ -291,4 +328,138 @@ async def delete_supplier(
     supplier.deleted_at = datetime.now(UTC)
     db.flush()
     log_update(db, supplier, old_data, user_id)
+    db.commit()
+
+
+# --- Supplier-Part Catalog Sub-Resource Routes ---
+
+
+@router.get("/{supplier_id}/parts", response_model=list[SupplierPartResponse])
+async def list_supplier_parts(
+    db: DbSession,
+    supplier_id: int,
+):
+    """List all catalog entries (vendor PNs) for a supplier."""
+    _get_active_supplier(db, supplier_id)
+
+    entries = (
+        db.execute(
+            select(SupplierPart)
+            .join(Part, SupplierPart.part_id == Part.id)
+            .where(SupplierPart.supplier_id == supplier_id, Part.deleted_at.is_(None))
+            .order_by(SupplierPart.is_preferred.desc(), SupplierPart.id)
+        )
+        .scalars()
+        .all()
+    )
+    return [_supplier_part_response(sp) for sp in entries]
+
+
+@router.post(
+    "/{supplier_id}/parts",
+    response_model=SupplierPartResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_supplier_part(
+    db: DbSession,
+    supplier_id: int,
+    data: SupplierPartCreate,
+    user_id: CurrentUserId,
+):
+    """Add a vendor PN / catalog entry linking a supplier to a part."""
+    _get_active_supplier(db, supplier_id)
+
+    # Validate that the part exists and is not deleted
+    part = db.execute(
+        select(Part).where(Part.id == data.part_id, Part.deleted_at.is_(None))
+    ).scalar_one_or_none()
+    if not part:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Part {data.part_id} not found",
+        )
+
+    sp = SupplierPart(
+        supplier_id=supplier_id,
+        part_id=data.part_id,
+        vendor_pn=data.vendor_pn,
+        is_preferred=data.is_preferred,
+        notes=data.notes,
+    )
+    db.add(sp)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A catalog entry for supplier {supplier_id} and part {data.part_id} already exists",
+        ) from exc
+
+    log_create(db, sp, user_id)
+    db.commit()
+    db.refresh(sp)
+    return _supplier_part_response(sp)
+
+
+@router.put(
+    "/{supplier_id}/parts/{entry_id}",
+    response_model=SupplierPartResponse,
+)
+async def update_supplier_part(
+    db: DbSession,
+    supplier_id: int,
+    entry_id: int,
+    data: SupplierPartUpdate,
+    user_id: CurrentUserId,
+):
+    """Update vendor PN, preferred flag, or notes on a catalog entry."""
+    _get_active_supplier(db, supplier_id)
+
+    sp = db.execute(
+        select(SupplierPart).where(
+            SupplierPart.id == entry_id, SupplierPart.supplier_id == supplier_id
+        )
+    ).scalar_one_or_none()
+    if not sp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Catalog entry {entry_id} not found for supplier {supplier_id}",
+        )
+
+    old_data = get_model_dict(sp)
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(sp, key, value)
+
+    db.flush()
+    log_update(db, sp, old_data, user_id)
+    db.commit()
+    db.refresh(sp)
+    return _supplier_part_response(sp)
+
+
+@router.delete("/{supplier_id}/parts/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_supplier_part(
+    db: DbSession,
+    supplier_id: int,
+    entry_id: int,
+    user_id: CurrentUserId,
+):
+    """Remove a catalog entry linking a supplier to a part."""
+    _get_active_supplier(db, supplier_id)
+
+    sp = db.execute(
+        select(SupplierPart).where(
+            SupplierPart.id == entry_id, SupplierPart.supplier_id == supplier_id
+        )
+    ).scalar_one_or_none()
+    if not sp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Catalog entry {entry_id} not found for supplier {supplier_id}",
+        )
+
+    log_delete(db, sp, user_id)
+    db.delete(sp)
     db.commit()
