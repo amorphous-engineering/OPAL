@@ -39,6 +39,12 @@ def cmd_serve(args: argparse.Namespace) -> None:
     _setup_project(args)
 
     settings = get_active_settings()
+    # Serve must work against a brand-new project the way the launcher
+    # does: create directories and initialize/migrate the schema.
+    settings.ensure_directories()
+    from opal.db.base import get_engine, init_database
+
+    init_database(get_engine())
     host = args.host or settings.host
     port = args.port or settings.port
 

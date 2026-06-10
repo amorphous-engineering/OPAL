@@ -149,9 +149,10 @@ class Settings(BaseSettings):
     def ensure_directories(self) -> None:
         """Create required directories if they don't exist."""
         self.upload_dir.mkdir(parents=True, exist_ok=True)
-        # Ensure data directory exists for SQLite
-        db_path = self.database_url.replace("sqlite:///", "")
-        if db_path.startswith("./"):
+        # Ensure the data directory exists for SQLite — project configs use
+        # absolute paths, so this must not be limited to ./relative ones.
+        if self.database_url.startswith("sqlite") and ":memory:" not in self.database_url:
+            db_path = self.database_url.replace("sqlite:///", "")
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 
