@@ -3,6 +3,7 @@
 from opal.db.models.app_setting import AppSetting
 from opal.db.models.attachment import Attachment
 from opal.db.models.audit import AuditLog
+from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
 from opal.db.models.execution import ProcedureInstance, StepExecution
@@ -72,6 +73,9 @@ __all__ = [
     "StockTransfer",
     "Supplier",
     "TestTemplate",
+    "ApiToken",
+    "AuthSession",
+    "PasskeyCredential",
     "User",
     "Workcenter",
 ]

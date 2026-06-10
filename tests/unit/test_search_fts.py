@@ -35,6 +35,30 @@ def fts_session(fts_engine) -> Generator[Session, None, None]:
     session.close()
 
 
+def _authed_client(fts_session):
+    """App client authenticated with a bearer token (the API requires auth)."""
+    from fastapi.testclient import TestClient
+
+    from opal.api.app import create_app
+    from opal.api.deps import get_db
+    from opal.core.auth import create_api_token
+    from opal.db.models import User
+
+    user = User(name="Search Tester", username="search.tester", is_active=True)
+    fts_session.add(user)
+    fts_session.flush()
+    _, raw = create_api_token(fts_session, user, "tests")
+    fts_session.commit()
+
+    app = create_app()
+
+    def _get_db():
+        yield fts_session
+
+    app.dependency_overrides[get_db] = _get_db
+    return TestClient(app, headers={"Authorization": f"Bearer {raw}"})
+
+
 def test_fts_schema_creates_all_index_tables(fts_engine) -> None:
     inspector = inspect(fts_engine)
     for spec in ENTITY_SPECS:
@@ -66,11 +90,6 @@ def test_fts_index_tracks_insert_update_delete(fts_engine, fts_session) -> None:
 
 
 def test_search_endpoint_uses_fts(fts_engine, fts_session) -> None:
-    from fastapi.testclient import TestClient
-
-    from opal.api.app import create_app
-    from opal.api.deps import get_db
-
     fts_session.add(Part(name="Oscillator Crystal", internal_pn="PN-OSC-1", tier=1))
     fts_session.add(Supplier(name="Oscillator Supply Co", code="OSC"))
     fts_session.add(Issue(title="Oscillator drift over temperature", issue_number="IT-00001"))
@@ -81,13 +100,7 @@ def test_search_endpoint_uses_fts(fts_engine, fts_session) -> None:
     deleted.soft_delete()
     fts_session.commit()
 
-    app = create_app()
-
-    def _get_db():
-        yield fts_session
-
-    app.dependency_overrides[get_db] = _get_db
-    client = TestClient(app)
+    client = _authed_client(fts_session)
 
     r = client.get("/api/search", params={"q": "oscillator"})
     assert r.status_code == 200
@@ -105,11 +118,6 @@ def test_search_endpoint_uses_fts(fts_engine, fts_session) -> None:
 
 
 def test_search_falls_back_without_fts_tables(fts_engine, fts_session) -> None:
-    from fastapi.testclient import TestClient
-
-    from opal.api.app import create_app
-    from opal.api.deps import get_db
-
     fts_session.add(Part(name="Gyroscope Mount", internal_pn="PN-GYRO-1", tier=1))
     fts_session.commit()
 
@@ -117,13 +125,7 @@ def test_search_falls_back_without_fts_tables(fts_engine, fts_session) -> None:
         drop_fts_schema(conn)
     assert not fts_ready(fts_engine)
 
-    app = create_app()
-
-    def _get_db():
-        yield fts_session
-
-    app.dependency_overrides[get_db] = _get_db
-    client = TestClient(app)
+    client = _authed_client(fts_session)
 
     r = client.get("/api/search", params={"q": "gyroscope"})
     assert r.status_code == 200

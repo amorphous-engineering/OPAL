@@ -84,9 +84,7 @@ def test_generate_serial_number(db_session: Session, sample_part: Part) -> None:
     assert result == "001"
 
 
-def test_generate_serial_number_uses_internal_pn(
-    db_session: Session, sample_part: Part
-) -> None:
+def test_generate_serial_number_uses_internal_pn(db_session: Session, sample_part: Part) -> None:
     generate_serial_number(db_session, sample_part)
     from opal.db.models.designator import DesignatorSequence
 

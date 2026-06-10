@@ -12,6 +12,11 @@ from opal.api.deps import CurrentUserId, DbSession
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onshape", tags=["onshape"])
 
+# The webhook is called by Onshape's servers, not by an authenticated user;
+# it lives on its own router (mounted outside session auth) and is verified
+# with the configured HMAC secret instead.
+webhook_router = APIRouter(prefix="/onshape", tags=["onshape"])
+
 
 # ── Response schemas ─────────────────────────────────────────────
 
@@ -492,13 +497,14 @@ def delete_link(
     db.commit()
 
 
-@router.post("/webhook")
+@webhook_router.post("/webhook")
 async def onshape_webhook(
     request: Request,
 ) -> dict[str, str]:
     """Receive Onshape webhook notifications and trigger pull sync.
 
-    Verifies HMAC signature if webhook_secret is configured.
+    Requires the configured webhook HMAC secret; unauthenticated callers
+    cannot trigger sync work.
     """
     import hashlib
     import hmac as hmac_mod
@@ -514,16 +520,21 @@ async def onshape_webhook(
 
     body = await request.body()
 
-    # Verify HMAC signature if secret is configured
-    if settings.onshape_webhook_secret:
-        signature = request.headers.get("X-Onshape-Signature", "")
-        expected = hmac_mod.new(
-            settings.onshape_webhook_secret.encode(),
-            body,
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac_mod.compare_digest(signature, expected):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
+    # The webhook endpoint is unauthenticated by nature, so the HMAC secret
+    # is mandatory: without one configured, reject all webhook calls.
+    if not settings.onshape_webhook_secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Webhook secret not configured; set OPAL_ONSHAPE_WEBHOOK_SECRET",
+        )
+    signature = request.headers.get("X-Onshape-Signature", "")
+    expected = hmac_mod.new(
+        settings.onshape_webhook_secret.encode(),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac_mod.compare_digest(signature, expected):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
 
     # Parse payload to find the document ID
     import json

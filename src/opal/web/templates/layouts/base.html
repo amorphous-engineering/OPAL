@@ -70,18 +70,18 @@
 
             <div class="user-dropdown">
             <button class="user-dropdown-btn" id="user-btn" onclick="toggleUserDropdown()">
-                <span id="user-display">NO USER</span>
+                <span id="user-display">{{ current_user.name if current_user else 'NO USER' }}</span>
                 <span>▼</span>
             </button>
             <div class="user-dropdown-content" id="user-dropdown-content">
                 <div class="user-dropdown-header">
                     <div class="user-profile-section">
                         <div class="user-avatar" id="user-avatar">
-                            <span id="user-initials">?</span>
+                            <span id="user-initials">{% if current_user %}{{ current_user.name.split() | map('first') | join('') | upper | truncate(2, true, '') }}{% else %}?{% endif %}</span>
                         </div>
                         <div class="user-name-display">
-                            <div class="user-fullname" id="user-fullname">No User</div>
-                            <div class="user-username" id="user-username">Select a user</div>
+                            <div class="user-fullname" id="user-fullname">{{ current_user.name if current_user else 'No User' }}</div>
+                            <div class="user-username" id="user-username">{{ current_user.email or current_user.username if current_user else 'Signed out' }}</div>
                         </div>
                     </div>
                 </div>
@@ -348,33 +348,11 @@
             }
         });
 
-        // User selection
-        function setUser(userId, userName, userEmail) {
-            localStorage.setItem('opal_user_id', userId);
-            localStorage.setItem('opal_user_name', userName);
-            localStorage.setItem('opal_user_email', userEmail || '');
-            updateUserDisplay(userName, userEmail);
-        }
+        // Identity is server-rendered from the session
+        window.OPAL_USER_ID = {{ current_user.id if current_user else 'null' }};
 
         function clearUser() {
-            localStorage.removeItem('opal_user_id');
-            localStorage.removeItem('opal_user_name');
-            localStorage.removeItem('opal_user_email');
-            localStorage.removeItem('opal_user_is_admin');
             window.location.href = '/logout';
-        }
-
-        function updateUserDisplay(userName, userEmail) {
-            // Update button display
-            document.getElementById('user-display').textContent = userName;
-
-            // Update dropdown header
-            document.getElementById('user-fullname').textContent = userName;
-            document.getElementById('user-username').textContent = userEmail || 'No email';
-
-            // Update initials
-            const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-            document.getElementById('user-initials').textContent = initials;
         }
 
         // Theme
@@ -410,30 +388,8 @@
             return val;
         }
 
-        // Sync cookies → localStorage and restore user display
         document.addEventListener('DOMContentLoaded', function() {
             syncThemeSelect();
-
-            // Sync cookie values to localStorage (cookies are source of truth)
-            const cookieUserId = getCookie('opal_user_id');
-            const cookieUserName = getCookie('opal_user_name');
-            const cookieUserEmail = getCookie('opal_user_email');
-            if (cookieUserId) {
-                localStorage.setItem('opal_user_id', cookieUserId);
-                localStorage.setItem('opal_user_name', cookieUserName || '');
-                localStorage.setItem('opal_user_email', cookieUserEmail || '');
-                const cookieIsAdmin = getCookie('opal_user_is_admin');
-                localStorage.setItem('opal_user_is_admin', cookieIsAdmin || '0');
-                updateUserDisplay(cookieUserName || 'Unknown', cookieUserEmail);
-            }
-        });
-
-        // Add user header to all HTMX requests
-        document.body.addEventListener('htmx:configRequest', function(event) {
-            const userId = localStorage.getItem('opal_user_id');
-            if (userId) {
-                event.detail.headers['X-User-Id'] = userId;
-            }
         });
 
         // Update time display
@@ -545,8 +501,6 @@
         // delete with the procedure).
         function _mdAuthHeaders() {
             const h = {};
-            const userId = localStorage.getItem('opal_user_id');
-            if (userId) h['X-User-Id'] = userId;
             return h;
         }
         function insertAtCursor(textarea, text) {
@@ -629,11 +583,8 @@
 
         // Undo last action
         async function triggerUndo() {
-            var userId = localStorage.getItem('opal_user_id') || '1';
             try {
-                var resp = await fetch('/api/undo/last', {
-                    headers: { 'X-User-Id': userId }
-                });
+                var resp = await fetch('/api/undo/last');
                 if (resp.status === 404) {
                     alert('No recent actions to undo');
                     return;
@@ -651,10 +602,7 @@
 
                 var undoResp = await fetch('/api/undo/last', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId
-                    }
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 if (undoResp.ok) {
                     var result = await undoResp.json();

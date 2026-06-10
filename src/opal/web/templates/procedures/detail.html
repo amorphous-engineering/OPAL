@@ -352,8 +352,6 @@ window.__allProcedureStepIds = [
 
 function getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
     return headers;
 }
 
@@ -406,8 +404,6 @@ function _docUploadHeaders() {
     // FormData bodies need fetch to set its own multipart Content-Type +
     // boundary, so omit Content-Type here.
     const h = {};
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) h['X-User-Id'] = userId;
     return h;
 }
 

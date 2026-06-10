@@ -69,10 +69,6 @@ async function createSupplier(event) {
         'Content-Type': 'application/json',
     };
 
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) {
-        headers['X-User-Id'] = userId;
-    }
 
     console.log('Submitting supplier data:', JSON.stringify(data, null, 2));
 

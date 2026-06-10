@@ -573,9 +573,7 @@ def test_leave_execution(client, auth_headers):
     assert resp.json()["status"] == "left"
 
     # Verify no participants
-    participants = client.get(
-        f"/api/procedure-instances/{instance_id}/participants"
-    ).json()
+    participants = client.get(f"/api/procedure-instances/{instance_id}/participants").json()
     assert len(participants["participants"]) == 0
 
 
@@ -641,9 +639,7 @@ def test_two_open_ncs_keep_step_on_hold_until_all_resolved(client):
         json={"status": "disposition_approved", "disposition_type": "rework"},
     )
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(
-        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
-    ) == "on_hold"
+    assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "on_hold"
 
     # Approve B — step now resumes.
     client.patch(
@@ -651,9 +647,9 @@ def test_two_open_ncs_keep_step_on_hold_until_all_resolved(client):
         json={"status": "disposition_approved", "disposition_type": "use_as_is"},
     )
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(
-        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
-    ) == "in_progress"
+    assert (
+        next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "in_progress"
+    )
 
 
 def test_cannot_skip_on_hold_step(client):
@@ -677,9 +673,7 @@ def _create_redline_setup(client):
     instance_id = _create_instance(client)
     issue_id, _ = _start_step_and_log_nc(client, instance_id)
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    host_se_id = next(
-        s["id"] for s in inst["step_executions"] if s["step_number"] == 1
-    )
+    host_se_id = next(s["id"] for s in inst["step_executions"] if s["step_number"] == 1)
     return instance_id, issue_id, host_se_id
 
 
@@ -724,9 +718,7 @@ def test_redline_gates_host_op(client):
     )
     # Held step must remain on_hold because the redline isn't complete.
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(
-        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
-    ) == "on_hold"
+    assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "on_hold"
 
 
 def test_redline_completion_releases_held_step(client):
@@ -748,14 +740,10 @@ def test_redline_completion_releases_held_step(client):
         json={"status": "disposition_approved", "disposition_type": "rework"},
     )
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(
-        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
-    ) == "on_hold"
+    assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "on_hold"
 
     # Run the redline sub-step to completion.
-    client.post(
-        f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/start"
-    )
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/start")
     client.post(
         f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/complete",
         json={},
@@ -763,9 +751,9 @@ def test_redline_completion_releases_held_step(client):
 
     # Host step should now have auto-resumed.
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(
-        s["status"] for s in inst["step_executions"] if s["step_number"] == 1
-    ) == "in_progress"
+    assert (
+        next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "in_progress"
+    )
 
 
 def test_redline_orphan_when_nc_soft_deleted(client):
@@ -787,9 +775,7 @@ def test_redline_orphan_when_nc_soft_deleted(client):
     # The redline rows persist as historical record.
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
     redline_op_step_num = op_resp["step_number"]
-    assert any(
-        s["step_number"] == redline_op_step_num for s in inst["step_executions"]
-    )
+    assert any(s["step_number"] == redline_op_step_num for s in inst["step_executions"])
 
     # But the orphan no longer gates the host. We can't directly test start_step
     # here because the host is still on_hold from the NC; the gate logic only
@@ -816,9 +802,7 @@ def test_redline_delete_unstarted(client):
     sub_step_number = op_resp["sub_steps"][0]["step_number"]
 
     # Start the sub-step → delete should now fail.
-    client.post(
-        f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/start"
-    )
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/start")
     fail = client.delete(f"/api/procedure-instances/{instance_id}/ad-hoc-ops/{op_id}")
     assert fail.status_code == 400
 
@@ -872,9 +856,7 @@ def _create_instance_with_sub_steps(client):
         json={"title": "B.1", "parent_step_id": op_b["id"]},
     )
     client.post(f"/api/procedures/{proc_id}/publish")
-    inst_resp = client.post(
-        "/api/procedure-instances", json={"procedure_id": proc_id}
-    )
+    inst_resp = client.post("/api/procedure-instances", json={"procedure_id": proc_id})
     instance_id = inst_resp.json()["id"]
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
     steps = inst["step_executions"]

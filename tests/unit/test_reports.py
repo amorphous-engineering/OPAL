@@ -182,9 +182,7 @@ def test_execution_metrics(client: TestClient):
 
 def test_execution_metrics_with_filters(client: TestClient):
     """Test execution metrics with date filters."""
-    response = client.get(
-        "/api/reports/analytics/executions?from_date=2024-01-01T00:00:00Z"
-    )
+    response = client.get("/api/reports/analytics/executions?from_date=2024-01-01T00:00:00Z")
     assert response.status_code == 200
 
 

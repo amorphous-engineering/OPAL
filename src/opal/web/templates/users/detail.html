@@ -74,6 +74,215 @@ function updateThemeButtons() {
 document.addEventListener('DOMContentLoaded', updateThemeButtons);
 </script>
 
+<!-- Security panel, only visible when viewing own profile -->
+{% call ok.panel("SECURITY", max_width="800px", margin_top="var(--space-md)") %}
+    <div class="security-section">
+        <div class="security-heading mono">CHANGE PASSWORD</div>
+        <form id="password-form" onsubmit="changePassword(event)" style="max-width: 420px;">
+            <div class="form-group">
+                <label class="form-label" for="current-password">CURRENT PASSWORD</label>
+                <input type="password" id="current-password" class="form-input" autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="new-password">NEW PASSWORD</label>
+                <input type="password" id="new-password" class="form-input" minlength="10" required autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="new-password-confirm">CONFIRM NEW PASSWORD</label>
+                <input type="password" id="new-password-confirm" class="form-input" minlength="10" required autocomplete="new-password">
+            </div>
+            <div id="password-result" class="mono" style="font-size: 0.75rem; margin-bottom: var(--space-sm); display: none;"></div>
+            {{ ok.btn("CHANGE PASSWORD", variant="primary", type="submit") }}
+        </form>
+    </div>
+
+    <div class="security-section" id="passkey-section" style="display: none;">
+        <div class="security-heading mono">PASSKEYS</div>
+        <div class="text-muted mono" style="font-size: 0.75rem; margin-bottom: var(--space-sm);">
+            Sign in without a password using your device's authenticator (Touch ID, security key, phone).
+        </div>
+        <table class="table" id="passkey-table" style="margin-bottom: var(--space-sm);"></table>
+        <div style="display: flex; gap: var(--space-sm); align-items: center;">
+            <input type="text" id="passkey-name" class="form-input" placeholder="Label, e.g. 'shop laptop'" style="max-width: 240px;">
+            {{ ok.btn("ADD PASSKEY", attrs='onclick="addPasskey()"') }}
+        </div>
+        <div id="passkey-result" class="mono" style="font-size: 0.75rem; margin-top: var(--space-xs); display: none;"></div>
+    </div>
+    <div class="security-section" id="passkey-unavailable" style="display: none;">
+        <div class="security-heading mono">PASSKEYS</div>
+        <div class="text-muted mono" style="font-size: 0.75rem;">
+            Passkeys need a secure context. Open OPAL over HTTPS (or on localhost) to register one.
+        </div>
+    </div>
+
+    <div class="security-section">
+        <div class="security-heading mono">API TOKENS</div>
+        <div class="text-muted mono" style="font-size: 0.75rem; margin-bottom: var(--space-sm);">
+            For the TUI and scripts: send as <code>Authorization: Bearer &lt;token&gt;</code>. Shown once at creation.
+        </div>
+        <table class="table" id="token-table" style="margin-bottom: var(--space-sm);"></table>
+        <div id="new-token-box" class="mono" style="display: none; font-size: 0.8rem; margin-bottom: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--border-color); word-break: break-all;"></div>
+        <div style="display: flex; gap: var(--space-sm); align-items: center;">
+            <input type="text" id="token-name" class="form-input" placeholder="Label, e.g. 'workshop TUI'" style="max-width: 240px;">
+            {{ ok.btn("CREATE TOKEN", attrs='onclick="createToken()"') }}
+        </div>
+    </div>
+
+    <div class="security-section">
+        <div class="security-heading mono">ACTIVE SESSIONS</div>
+        <table class="table" id="session-table" style="margin-bottom: var(--space-sm);"></table>
+        {{ ok.btn("SIGN OUT OTHER SESSIONS", attrs='onclick="revokeOtherSessions()"') }}
+    </div>
+{% endcall %}
+
+<style>
+.security-section { margin-bottom: var(--space-lg); }
+.security-section:last-child { margin-bottom: 0; }
+.security-heading { font-weight: 600; font-size: 0.8rem; letter-spacing: 0.05em; margin-bottom: var(--space-sm); }
+</style>
+
+<script src="/static/js/webauthn.js"></script>
+<script>
+function showResult(id, ok, message) {
+    var el = document.getElementById(id);
+    el.textContent = message;
+    el.style.display = '';
+    el.style.color = ok ? 'var(--accent-green, #27ae60)' : 'var(--accent-red, #c0392b)';
+}
+
+async function authApi(path, options) {
+    var resp = await fetch('/api/auth' + path, Object.assign({headers: {'Content-Type': 'application/json'}}, options));
+    if (resp.status === 204) return null;
+    var body = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) throw new Error(body.detail || ('Request failed (' + resp.status + ')'));
+    return body;
+}
+
+async function changePassword(event) {
+    event.preventDefault();
+    var newPw = document.getElementById('new-password').value;
+    if (newPw !== document.getElementById('new-password-confirm').value) {
+        showResult('password-result', false, 'Passwords do not match.');
+        return;
+    }
+    try {
+        var result = await authApi('/password', {method: 'POST', body: JSON.stringify({
+            current_password: document.getElementById('current-password').value,
+            new_password: newPw,
+        })});
+        showResult('password-result', true, 'Password changed. Other sessions signed out: ' + result.other_sessions_revoked);
+        document.getElementById('password-form').reset();
+        loadSessions();
+    } catch (e) {
+        showResult('password-result', false, e.message);
+    }
+}
+
+function renderRows(tableId, header, rows) {
+    var table = document.getElementById(tableId);
+    if (!rows.length) {
+        table.innerHTML = '<tr><td class="text-muted mono">None</td></tr>';
+        return;
+    }
+    table.innerHTML = '<tr>' + header.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' +
+        rows.map(function (r) { return '<tr>' + r + '</tr>'; }).join('');
+}
+
+function esc(s) {
+    var div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+}
+
+async function loadPasskeys() {
+    var rows = await authApi('/passkeys', {method: 'GET'});
+    renderRows('passkey-table', ['NAME', 'CREATED', 'LAST USED', ''], rows.map(function (p) {
+        return '<td>' + esc(p.name) + '</td><td class="mono">' + esc(p.created_at.slice(0, 10)) + '</td>' +
+            '<td class="mono">' + esc(p.last_used_at ? p.last_used_at.slice(0, 10) : '-') + '</td>' +
+            '<td><button class="btn btn-sm btn-danger" onclick="removePasskey(' + p.id + ')">REMOVE</button></td>';
+    }));
+}
+
+async function addPasskey() {
+    var name = document.getElementById('passkey-name').value || 'Passkey';
+    try {
+        await opalPasskeyRegister(name);
+        showResult('passkey-result', true, 'Passkey registered.');
+        document.getElementById('passkey-name').value = '';
+        loadPasskeys();
+    } catch (e) {
+        showResult('passkey-result', false, e.message);
+    }
+}
+
+async function removePasskey(id) {
+    if (!confirm('Remove this passkey?')) return;
+    await authApi('/passkeys/' + id, {method: 'DELETE'});
+    loadPasskeys();
+}
+
+async function loadTokens() {
+    var rows = await authApi('/tokens', {method: 'GET'});
+    renderRows('token-table', ['NAME', 'CREATED', 'LAST USED', ''], rows.map(function (t) {
+        return '<td>' + esc(t.name) + '</td><td class="mono">' + esc(t.created_at.slice(0, 10)) + '</td>' +
+            '<td class="mono">' + esc(t.last_used_at ? t.last_used_at.slice(0, 10) : '-') + '</td>' +
+            '<td><button class="btn btn-sm btn-danger" onclick="revokeToken(' + t.id + ')">REVOKE</button></td>';
+    }));
+}
+
+async function createToken() {
+    var name = document.getElementById('token-name').value.trim();
+    if (!name) { alert('Token label is required.'); return; }
+    var result = await authApi('/tokens', {method: 'POST', body: JSON.stringify({name: name})});
+    var box = document.getElementById('new-token-box');
+    box.style.display = '';
+    box.textContent = 'Token (copy now, shown once): ' + result.token;
+    document.getElementById('token-name').value = '';
+    loadTokens();
+}
+
+async function revokeToken(id) {
+    if (!confirm('Revoke this token? Clients using it will stop working.')) return;
+    await authApi('/tokens/' + id, {method: 'DELETE'});
+    loadTokens();
+}
+
+async function loadSessions() {
+    var rows = await authApi('/sessions', {method: 'GET'});
+    renderRows('session-table', ['METHOD', 'LAST SEEN', 'CLIENT', 'IP', ''], rows.map(function (s) {
+        return '<td class="mono">' + esc(s.auth_method) + (s.current ? ' [THIS]' : '') + '</td>' +
+            '<td class="mono">' + esc(s.last_seen_at ? s.last_seen_at.slice(0, 16).replace('T', ' ') : '-') + '</td>' +
+            '<td class="mono" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">' + esc(s.user_agent || '-') + '</td>' +
+            '<td class="mono">' + esc(s.ip_address || '-') + '</td>' +
+            '<td>' + (s.current ? '' : '<button class="btn btn-sm btn-danger" onclick="revokeSession(' + s.id + ')">REVOKE</button>') + '</td>';
+    }));
+}
+
+async function revokeSession(id) {
+    await authApi('/sessions/' + id, {method: 'DELETE'});
+    loadSessions();
+}
+
+async function revokeOtherSessions() {
+    if (!confirm('Sign out all other sessions?')) return;
+    await authApi('/sessions/revoke-others', {method: 'POST', body: '{}'});
+    loadSessions();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    {% if passkeys_enabled %}
+    if (window.isSecureContext && window.PublicKeyCredential) {
+        document.getElementById('passkey-section').style.display = '';
+        loadPasskeys();
+    } else {
+        document.getElementById('passkey-unavailable').style.display = '';
+    }
+    {% endif %}
+    loadTokens();
+    loadSessions();
+});
+</script>
+
 <!-- Delete account panel, only visible when viewing own profile -->
 {% call ok.panel("DANGER ZONE", max_width="800px", margin_top="var(--space-md)") %}
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -90,11 +299,9 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
 async function deleteAccount() {
     if (!confirm('Are you sure you want to delete your account? You will be signed out.')) return;
 
-    var userId = localStorage.getItem('opal_user_id');
     try {
         var resp = await fetch('/api/users/{{ user.id }}', {
             method: 'DELETE',
-            headers: userId ? {'X-User-Id': userId} : {},
         });
         if (resp.ok || resp.status === 204) {
             window.location.href = '/logout';

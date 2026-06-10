@@ -48,9 +48,7 @@ def tooling_part(client: TestClient) -> dict:
 # ============ CRUD ============
 
 
-def test_create_bulk_inventory(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_create_bulk_inventory(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 10, "location": "Shelf A"},
@@ -82,9 +80,7 @@ def test_create_serialized_inventory(
         assert float(item["quantity"]) == 1
 
 
-def test_create_inventory_not_found_part(
-    client: TestClient, auth_headers: dict
-) -> None:
+def test_create_inventory_not_found_part(client: TestClient, auth_headers: dict) -> None:
     resp = client.post(
         "/api/inventory",
         json={"part_id": 99999, "quantity": 1, "location": "X"},
@@ -93,9 +89,7 @@ def test_create_inventory_not_found_part(
     assert resp.status_code == 404
 
 
-def test_list_inventory(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_list_inventory(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 5, "location": "Shelf A"},
@@ -144,9 +138,7 @@ def test_list_inventory_filter_by_location(
         assert item["location"] == "UNIQUE-LOC"
 
 
-def test_get_inventory(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_get_inventory(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 5, "location": "Shelf A"},
@@ -164,9 +156,7 @@ def test_get_inventory_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_update_inventory(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_update_inventory(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 5, "location": "Shelf A"},
@@ -184,9 +174,7 @@ def test_update_inventory(
     assert float(resp.json()["quantity"]) == 8
 
 
-def test_delete_inventory(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_delete_inventory(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 5, "location": "Shelf A"},
@@ -204,9 +192,7 @@ def test_delete_inventory(
 # ============ Operations ============
 
 
-def test_adjust_quantity_found(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_adjust_quantity_found(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 10, "location": "A"},
@@ -223,9 +209,7 @@ def test_adjust_quantity_found(
     assert float(resp.json()["quantity"]) == 15
 
 
-def test_adjust_quantity_damage(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_adjust_quantity_damage(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 10, "location": "A"},
@@ -260,9 +244,7 @@ def test_adjust_quantity_prevents_negative(
     assert resp.status_code == 400
 
 
-def test_physical_count(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_physical_count(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 10, "location": "A"},
@@ -280,9 +262,7 @@ def test_physical_count(
     assert resp.json()["last_counted_at"] is not None
 
 
-def test_calibrate_tooling(
-    client: TestClient, auth_headers: dict, tooling_part: dict
-) -> None:
+def test_calibrate_tooling(client: TestClient, auth_headers: dict, tooling_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": tooling_part["id"], "quantity": 1, "location": "Tool Crib"},
@@ -319,9 +299,7 @@ def test_calibrate_non_tooling_fails(
 # ============ OPAL Lookup ============
 
 
-def test_lookup_by_opal_number(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_lookup_by_opal_number(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 5, "location": "A"},
@@ -339,9 +317,7 @@ def test_lookup_by_opal_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_opal_history(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_opal_history(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 5, "location": "A"},
@@ -360,9 +336,7 @@ def test_opal_history(
 # ============ Transfers ============
 
 
-def test_transfer_stock(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_transfer_stock(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 20, "location": "Warehouse"},
@@ -413,9 +387,7 @@ def test_transfer_insufficient_quantity(
     assert resp.status_code == 400
 
 
-def test_list_transfers(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_list_transfers(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 20, "location": "Warehouse"},
@@ -438,9 +410,7 @@ def test_list_transfers(
     assert len(resp.json()) >= 1
 
 
-def test_get_transfer(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_get_transfer(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     create_resp = client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 20, "location": "Warehouse"},
@@ -481,9 +451,7 @@ def test_create_test_template(
     assert data["required"] is True
 
 
-def test_list_test_templates(
-    client: TestClient, auth_headers: dict, serialized_part: dict
-) -> None:
+def test_list_test_templates(client: TestClient, auth_headers: dict, serialized_part: dict) -> None:
     client.post(
         f"/api/inventory/parts/{serialized_part['id']}/test-templates",
         json={"name": "Test A"},
@@ -500,9 +468,7 @@ def test_list_test_templates(
     assert len(resp.json()) >= 2
 
 
-def test_create_test_result(
-    client: TestClient, auth_headers: dict, serialized_part: dict
-) -> None:
+def test_create_test_result(client: TestClient, auth_headers: dict, serialized_part: dict) -> None:
     # Create inventory record
     inv_resp = client.post(
         "/api/inventory",
@@ -522,9 +488,7 @@ def test_create_test_result(
     assert data["result"] == "pass"
 
 
-def test_update_test_result(
-    client: TestClient, auth_headers: dict, serialized_part: dict
-) -> None:
+def test_update_test_result(client: TestClient, auth_headers: dict, serialized_part: dict) -> None:
     inv_resp = client.post(
         "/api/inventory",
         json={"part_id": serialized_part["id"], "quantity": 1, "location": "Lab"},
@@ -549,9 +513,7 @@ def test_update_test_result(
     assert resp.json()["value"] == "3.3V"
 
 
-def test_delete_test_result(
-    client: TestClient, auth_headers: dict, serialized_part: dict
-) -> None:
+def test_delete_test_result(client: TestClient, auth_headers: dict, serialized_part: dict) -> None:
     inv_resp = client.post(
         "/api/inventory",
         json={"part_id": serialized_part["id"], "quantity": 1, "location": "Lab"},
@@ -570,9 +532,7 @@ def test_delete_test_result(
     assert resp.status_code == 204
 
 
-def test_test_status(
-    client: TestClient, auth_headers: dict, serialized_part: dict
-) -> None:
+def test_test_status(client: TestClient, auth_headers: dict, serialized_part: dict) -> None:
     inv_resp = client.post(
         "/api/inventory",
         json={"part_id": serialized_part["id"], "quantity": 1, "location": "Lab"},
@@ -605,9 +565,7 @@ def test_test_status(
     assert data["total_tests"] == 3
 
 
-def test_locations(
-    client: TestClient, auth_headers: dict, bulk_part: dict
-) -> None:
+def test_locations(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:
     client.post(
         "/api/inventory",
         json={"part_id": bulk_part["id"], "quantity": 5, "location": "LOC-UNIQUE-TEST"},

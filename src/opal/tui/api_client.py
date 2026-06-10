@@ -1,5 +1,11 @@
-"""API client for TUI to communicate with OPAL backend."""
+"""API client for TUI to communicate with OPAL backend.
 
+Authentication: the API requires a bearer token. Create one on your profile
+page (SECURITY > API TOKENS) and provide it via the OPAL_API_TOKEN
+environment variable or the api_token constructor argument.
+"""
+
+import os
 from typing import Any
 
 import httpx
@@ -8,10 +14,11 @@ import httpx
 class OpalAPIClient:
     """HTTP client for OPAL API."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8000"):
+    def __init__(self, base_url: str = "http://127.0.0.1:8000", api_token: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.client = httpx.Client(timeout=30.0)
-        self.user_id = 1  # Default user for TUI operations
+        self.api_token = api_token or os.environ.get("OPAL_API_TOKEN", "")
+        self.user_id: int | None = None  # Resolved from the token via /auth/me
 
     def _url(self, path: str) -> str:
         """Build full URL for API path."""
@@ -19,7 +26,18 @@ class OpalAPIClient:
 
     def _headers(self) -> dict[str, str]:
         """Get request headers."""
-        return {"X-User-ID": str(self.user_id)}
+        if not self.api_token:
+            return {}
+        return {"Authorization": f"Bearer {self.api_token}"}
+
+    def whoami(self) -> dict[str, Any] | None:
+        """Resolve the token's user, or None when unauthenticated."""
+        resp = self.client.get(self._url("/auth/me"), headers=self._headers())
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        self.user_id = data["id"]
+        return data
 
     # ── Parts ──────────────────────────────────────────────────────────
 

@@ -12,7 +12,19 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, or_
 
 from opal.api.deps import DbSession
-from opal.core.auth import AUTH_COOKIE, sign_user_id, verify_user_id
+from opal.core.auth import (
+    SESSION_COOKIE,
+    authenticate_password,
+    create_session,
+    generate_unique_username,
+    hash_password,
+    login_rate_limiter,
+    resolve_session,
+    revoke_session,
+    sign_payload,
+    validate_password_strength,
+    verify_payload,
+)
 from opal.db.models import InventoryRecord, Kit, Part, Purchase, Supplier, User, Workcenter
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.execution import InstanceStatus, ProcedureInstance
@@ -143,11 +155,8 @@ router = APIRouter()
 
 
 def _get_current_user(request: Request, db) -> User | None:
-    """Get current user from the signed auth cookie."""
-    user_id = verify_user_id(request.cookies.get(AUTH_COOKIE))
-    if user_id is None:
-        return None
-    return db.query(User).filter(User.id == user_id, User.is_active == True).first()  # noqa: E712
+    """Get current user from the session cookie."""
+    return resolve_session(db, request.cookies.get(SESSION_COOKIE))
 
 
 def _require_admin_web(request: Request, db) -> RedirectResponse | None:
@@ -181,15 +190,53 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
         "current_user": current_user,
         "is_admin": is_admin,
         "auth_mode": settings.auth_mode,
+        "passkeys_enabled": settings.passkeys_enabled,
     }
 
 
 # ============ LOGIN / LOGOUT ============
 
 
+def _login_rate_key(request: Request, username: str) -> str:
+    client_ip = request.client.host if request.client else "unknown"
+    return f"{client_ip}:{username.strip().lower()}"
+
+
+def _mint_login_session(
+    request: Request, db: DbSession, user: User, auth_method: str
+) -> RedirectResponse:
+    """Create a session for a successful login and redirect appropriately."""
+    from opal.api.routes.auth import set_session_cookie
+
+    token = create_session(
+        db,
+        user,
+        auth_method=auth_method,
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    redirect_url = "/welcome" if user.needs_onboarding else "/"
+    response = RedirectResponse(url=redirect_url, status_code=302)
+    set_session_cookie(response, request, token)
+    return response
+
+
+def _login_context(request: Request, **extra: Any) -> dict[str, Any]:
+    from opal.config import get_active_settings
+
+    settings = get_active_settings()
+    return {
+        "request": request,
+        "auth_mode": settings.auth_mode,
+        "passkeys_enabled": settings.passkeys_enabled,
+        **extra,
+    }
+
+
 @router.get("/login", response_class=HTMLResponse, response_model=None)
 def login_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
-    """User selection page."""
+    """Credentialed login page (username/password, optional passkey)."""
     from opal.config import get_active_settings
 
     settings = get_active_settings()
@@ -204,18 +251,10 @@ def login_page(request: Request, db: DbSession) -> HTMLResponse | RedirectRespon
         return RedirectResponse(url="/__exe.dev/login?redirect=/", status_code=302)
 
     # If already logged in, redirect to home
-    if verify_user_id(request.cookies.get(AUTH_COOKIE)) is not None:
+    if resolve_session(db, request.cookies.get(SESSION_COOKIE)) is not None:
         return RedirectResponse(url="/", status_code=302)
 
-    users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
-    return templates.TemplateResponse(
-        "login.html",
-        {
-            "request": request,
-            "users": users,
-            "auth_mode": settings.auth_mode,
-        },
-    )
+    return templates.TemplateResponse("login.html", _login_context(request))
 
 
 @router.get("/setup", response_class=HTMLResponse, response_model=None)
@@ -243,6 +282,9 @@ def setup_submit(
     auth_mode: str = Form(...),
     name: str = Form(default=""),
     email: str = Form(default=""),
+    username: str = Form(default=""),
+    password: str = Form(default=""),
+    password_confirm: str = Form(default=""),
 ) -> RedirectResponse | HTMLResponse:
     """Lock in the auth mode (and create the first admin in local mode)."""
     if db.query(User).count() > 0:
@@ -262,19 +304,35 @@ def setup_submit(
         # Send them through the proxy login.
         return RedirectResponse(url="/__exe.dev/login?redirect=/", status_code=302)
 
-    # Local mode: create the first admin from the form fields.
-    clean_name = name.strip()
-    if not clean_name:
+    # Local mode: create the first admin with credentials.
+    def _retry(error: str) -> HTMLResponse:
         return templates.TemplateResponse(
             "setup.html",
             {
                 "request": request,
                 "current_auth_mode": "local",
-                "error": "Name is required to create the first admin user.",
+                "error": error,
+                "name": name,
+                "email": email,
+                "username": username,
             },
         )
+
+    clean_name = name.strip()
+    clean_username = username.strip().lower()
+    if not clean_name:
+        return _retry("Name is required to create the first admin user.")
+    if not clean_username:
+        return _retry("Username is required.")
+    if password != password_confirm:
+        return _retry("Passwords do not match.")
+    if error := validate_password_strength(password):
+        return _retry(error)
+
     user = User(
         name=clean_name,
+        username=generate_unique_username(db, clean_username),
+        password_hash=hash_password(password),
         email=(email.strip() or None),
         is_active=True,
         is_admin=True,
@@ -284,69 +342,97 @@ def setup_submit(
     db.commit()
     db.refresh(user)
 
-    response = RedirectResponse(url="/welcome", status_code=302)
-    max_age = 365 * 24 * 3600
-    response.set_cookie(AUTH_COOKIE, sign_user_id(user.id), max_age=max_age, httponly=True)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1", max_age=max_age)
-    return response
+    return _mint_login_session(request, db, user, auth_method="password")
 
 
-@router.post("/login")
-def login_submit(request: Request, db: DbSession, user_id: int = Form(...)) -> RedirectResponse:
-    """Set user identity cookies."""
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()  # noqa: E712
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-
-    redirect_url = "/welcome" if user.needs_onboarding else "/"
-    response = RedirectResponse(url=redirect_url, status_code=302)
-    max_age = 365 * 24 * 3600  # 1 year
-    response.set_cookie(AUTH_COOKIE, sign_user_id(user.id), max_age=max_age, httponly=True)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
-    return response
-
-
-@router.post("/login/new-user")
-def login_new_user(
+@router.post("/login", response_model=None)
+def login_submit(
     request: Request,
     db: DbSession,
-    name: str = Form(...),
-    email: str = Form(""),
-) -> RedirectResponse:
-    """Create a new user and log in. First user auto-becomes admin."""
-    # First user ever created is auto-admin
-    is_first_user = db.query(User).count() == 0
-    user = User(
-        name=name,
-        email=email or None,
-        is_active=True,
-        is_admin=is_first_user,
-        needs_onboarding=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    username: str = Form(...),
+    password: str = Form(...),
+) -> RedirectResponse | HTMLResponse:
+    """Verify credentials and mint a session."""
+    username = username.strip().lower()
+    rate_key = _login_rate_key(request, username)
+    if login_rate_limiter.is_blocked(rate_key):
+        return templates.TemplateResponse(
+            "login.html",
+            _login_context(request, error="Too many failed attempts. Try again in a few minutes."),
+            status_code=429,
+        )
 
-    response = RedirectResponse(url="/welcome", status_code=302)
-    max_age = 365 * 24 * 3600
-    response.set_cookie(AUTH_COOKIE, sign_user_id(user.id), max_age=max_age, httponly=True)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
-    return response
+    # Migrated accounts (no password yet) divert to the set-password flow
+    pending = db.query(User).filter(User.username == username, User.is_active.is_(True)).first()
+    if pending is not None and pending.password_hash is None:
+        state = sign_payload({"kind": "initial-password", "uid": pending.id})
+        return templates.TemplateResponse(
+            "login_set_password.html",
+            _login_context(request, username=username, state=state),
+        )
+
+    user = authenticate_password(db, username, password)
+    if user is None:
+        login_rate_limiter.record_failure(rate_key)
+        return templates.TemplateResponse(
+            "login.html",
+            _login_context(request, error="Invalid username or password.", username=username),
+            status_code=401,
+        )
+
+    login_rate_limiter.reset(rate_key)
+    return _mint_login_session(request, db, user, auth_method="password")
+
+
+@router.post("/login/set-password", response_model=None)
+def login_set_password(
+    request: Request,
+    db: DbSession,
+    state: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+) -> RedirectResponse | HTMLResponse:
+    """First login for a migrated account: set the initial password.
+
+    Accounts created before credentialed auth have no password hash. The
+    signed state token binds this form to the account and expires quickly.
+    Trust-on-first-use: the first person to claim the account sets its
+    password, so upgrade and have users claim accounts promptly.
+    """
+    payload = verify_payload(state)
+    if not payload or payload.get("kind") != "initial-password":
+        return RedirectResponse(url="/login", status_code=302)
+
+    user = db.query(User).filter(User.id == payload["uid"], User.is_active.is_(True)).first()
+    if user is None or user.password_hash is not None:
+        # Account vanished or someone else already claimed it
+        return RedirectResponse(url="/login", status_code=302)
+
+    def _retry(error: str) -> HTMLResponse:
+        return templates.TemplateResponse(
+            "login_set_password.html",
+            _login_context(request, username=user.username, state=state, error=error),
+            status_code=400,
+        )
+
+    if password != password_confirm:
+        return _retry("Passwords do not match.")
+    if error := validate_password_strength(password):
+        return _retry(error)
+
+    user.password_hash = hash_password(password)
+    return _mint_login_session(request, db, user, auth_method="password")
 
 
 @router.get("/logout", response_model=None)
-def logout(request: Request) -> HTMLResponse | RedirectResponse:
-    """Clear user identity cookies."""
+def logout(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
+    """Revoke the session and clear the cookie."""
     from opal.config import get_active_settings
 
-    settings = get_active_settings()
+    revoke_session(db, request.cookies.get(SESSION_COOKIE))
+    db.commit()
 
+    settings = get_active_settings()
     if settings.auth_mode == "exe":
         # Exe logout requires POST to /__exe.dev/logout — serve an auto-submit page
         html = """<!DOCTYPE html>
@@ -356,14 +442,11 @@ def logout(request: Request) -> HTMLResponse | RedirectResponse:
 <form id="exeLogout" method="POST" action="/__exe.dev/logout"></form>
 <script>document.getElementById('exeLogout').submit();</script>
 </body></html>"""
-        response = HTMLResponse(content=html)
+        response: HTMLResponse | RedirectResponse = HTMLResponse(content=html)
     else:
         response = RedirectResponse(url="/login", status_code=302)
 
-    response.delete_cookie(AUTH_COOKIE)
-    response.delete_cookie("opal_user_name")
-    response.delete_cookie("opal_user_email")
-    response.delete_cookie("opal_user_is_admin")
+    response.delete_cookie(SESSION_COOKIE)
     return response
 
 
@@ -400,14 +483,7 @@ def setup_profile_submit(
     user.needs_profile_setup = False
     db.commit()
 
-    # Update cookies with the new name
-    response = RedirectResponse(url="/", status_code=302)
-    max_age = 365 * 24 * 3600
-    response.set_cookie(AUTH_COOKIE, sign_user_id(user.id), max_age=max_age, httponly=True)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
-    return response
+    return RedirectResponse(url="/", status_code=302)
 
 
 @router.get("/welcome", response_class=HTMLResponse)
@@ -3271,9 +3347,10 @@ def settings_auth_mode_save(
     db: DbSession,
     auth_mode: str = Form(...),
     confirm_proxy: bool = Form(default=False),
+    passkeys_enabled: bool = Form(default=False),
 ) -> HTMLResponse | RedirectResponse:
-    """Persist the auth_mode override (db overlay). Switching to exe requires
-    the admin to confirm a reverse proxy is in place — otherwise anyone can
+    """Persist auth settings (db overlay). Switching to exe requires the
+    admin to confirm a reverse proxy is in place — otherwise anyone can
     forge ``X-ExeDev-UserID`` and impersonate any user."""
     if redirect := _require_admin_web(request, db):
         return redirect
@@ -3295,11 +3372,13 @@ def settings_auth_mode_save(
         return templates.TemplateResponse("settings/auth_mode.html", context)
 
     set_app_setting(db, "auth_mode", auth_mode)
+    set_app_setting(db, "passkeys_enabled", "true" if passkeys_enabled else "false")
     db.commit()
     apply_db_overlay(db)
 
     context["current_auth_mode"] = auth_mode
-    context["save_result"] = {"ok": True, "message": f"Auth mode set to {auth_mode}."}
+    context["passkeys_enabled"] = passkeys_enabled
+    context["save_result"] = {"ok": True, "message": "Authentication settings saved."}
     return templates.TemplateResponse("settings/auth_mode.html", context)
 
 

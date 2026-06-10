@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from opal.core.auth import AUTH_COOKIE, verify_user_id
+from opal.core.auth import SESSION_COOKIE, resolve_api_token, resolve_session
 from opal.db.base import SessionLocal
 from opal.db.models import User
 
@@ -24,54 +24,52 @@ def get_db() -> Generator[Session, None, None]:
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-def get_current_user_id(
-    request: Request,
-    x_user_id: Annotated[int | None, Header()] = None,
-) -> int | None:
-    """Get current user ID for the request.
-
-    Prefers the signed session cookie (browser sessions, cannot be forged).
-    Falls back to the X-User-Id header for programmatic clients (TUI, MCP),
-    which remain honor-system on the local network.
-    """
-    cookie_user_id = verify_user_id(request.cookies.get(AUTH_COOKIE))
-    if cookie_user_id is not None:
-        return cookie_user_id
-    return x_user_id
-
-
-# Type alias for user ID dependency
-CurrentUserId = Annotated[int | None, Depends(get_current_user_id)]
-
-
 def get_current_user(
+    request: Request,
     db: DbSession,
-    user_id: CurrentUserId,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> User | None:
-    """Get current user from database.
+    """Resolve the authenticated user for this request.
 
-    Returns None if no user ID provided or user not found.
+    Two credentials are accepted:
+    - the ``opal_session`` cookie (browser sessions minted at login)
+    - ``Authorization: Bearer opal_...`` API tokens (TUI, scripts)
+
+    Returns None when neither is present and valid.
     """
-    if user_id is None:
-        return None
-    return db.query(User).filter(User.id == user_id).first()
+    user = resolve_session(db, request.cookies.get(SESSION_COOKIE))
+    if user is not None:
+        return user
+    if authorization and authorization.lower().startswith("bearer "):
+        return resolve_api_token(db, authorization[7:].strip())
+    return None
 
 
 # Type alias for current user dependency
 CurrentUser = Annotated[User | None, Depends(get_current_user)]
 
 
+def get_current_user_id(user: CurrentUser) -> int | None:
+    """Authenticated user's id, or None (for audit attribution)."""
+    return user.id if user else None
+
+
+# Type alias for user ID dependency
+CurrentUserId = Annotated[int | None, Depends(get_current_user_id)]
+
+
 def require_user(
     user: CurrentUser,
 ) -> User:
-    """Require a valid user for the request.
+    """Require an authenticated user for the request.
 
-    Raises 401 if no user provided.
+    Raises 401 when no valid session cookie or bearer token was presented.
     """
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User identification required (X-User-Id header)",
+            detail="Authentication required (session cookie or bearer API token)",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     return user
 

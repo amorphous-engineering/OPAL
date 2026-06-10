@@ -339,9 +339,7 @@ def _create_assembly_with_bom(client, component_quantities: list[tuple[str, int]
 
 def test_add_output_auto_populates_kit_from_bom(client):
     """Adding an output part with a BOM should auto-populate kit items."""
-    assembly_id, parts = _create_assembly_with_bom(
-        client, [("Resistor", 4), ("Capacitor", 2)]
-    )
+    assembly_id, parts = _create_assembly_with_bom(client, [("Resistor", 4), ("Capacitor", 2)])
     proc = client.post("/api/procedures", json={"name": "Build Proc"}).json()
     proc_id = proc["id"]
 
@@ -425,17 +423,19 @@ def _make_proc_with_step(client) -> tuple[int, int]:
     return proc_id, step_id
 
 
-def _login(client, test_user) -> None:
-    """Authenticate the web client by setting the local-auth cookie."""
-    from opal.core.auth import sign_user_id
+def _login(client, db_session, test_user) -> None:
+    """Authenticate the web client by minting a session."""
+    from opal.core.auth import SESSION_COOKIE, create_session
 
-    client.cookies.set("opal_user_id", sign_user_id(test_user.id))
+    token = create_session(db_session, test_user)
+    db_session.commit()
+    client.cookies.set(SESSION_COOKIE, token)
 
 
-def test_procedure_detail_default_tab_is_meta(client, test_user):
+def test_procedure_detail_default_tab_is_meta(client, db_session, test_user):
     """A bare /procedures/{id} request lands on the Meta tab."""
     proc_id, _ = _make_proc_with_step(client)
-    _login(client, test_user)
+    _login(client, db_session, test_user)
     r = client.get(f"/procedures/{proc_id}")
     assert r.status_code == 200
     body = r.text
@@ -443,10 +443,10 @@ def test_procedure_detail_default_tab_is_meta(client, test_user):
     assert "Tab Test Procedure" in body
 
 
-def test_procedure_detail_tab_query_param_honored(client, test_user):
+def test_procedure_detail_tab_query_param_honored(client, db_session, test_user):
     """?tab=operations renders the Operations sidebar layout."""
     proc_id, _ = _make_proc_with_step(client)
-    _login(client, test_user)
+    _login(client, db_session, test_user)
     r = client.get(f"/procedures/{proc_id}?tab=operations")
     assert r.status_code == 200
     body = r.text
@@ -455,11 +455,11 @@ def test_procedure_detail_tab_query_param_honored(client, test_user):
     assert "step-editor-form" in body
 
 
-def test_legacy_step_edit_url_redirects_to_tab(client, test_user):
+def test_legacy_step_edit_url_redirects_to_tab(client, db_session, test_user):
     """The retired /procedures/{id}/steps/{step_id}/edit URL 302's to the
     inline editor in the Operations tab."""
     proc_id, step_id = _make_proc_with_step(client)
-    _login(client, test_user)
+    _login(client, db_session, test_user)
     r = client.get(
         f"/procedures/{proc_id}/steps/{step_id}/edit",
         follow_redirects=False,
@@ -479,9 +479,7 @@ def _make_proc_with_n_ops(client, n: int = 3) -> tuple[int, list[int]]:
     proc_id = proc["id"]
     op_ids: list[int] = []
     for i in range(1, n + 1):
-        s = client.post(
-            f"/api/procedures/{proc_id}/steps", json={"title": f"OP {i}"}
-        ).json()
+        s = client.post(f"/api/procedures/{proc_id}/steps", json={"title": f"OP {i}"}).json()
         op_ids.append(s["id"])
     return proc_id, op_ids
 
@@ -541,10 +539,12 @@ def test_published_version_snapshots_dependencies(client):
     version = client.get(f"/api/procedures/versions/{version_id}").json()
     steps = version["content"]["steps"]
     op3 = next(s for s in steps if s["title"] == "OP 3")
-    assert sorted(op3["depends_on"]) == sorted([
-        next(s["order"] for s in steps if s["title"] == "OP 1"),
-        next(s["order"] for s in steps if s["title"] == "OP 2"),
-    ])
+    assert sorted(op3["depends_on"]) == sorted(
+        [
+            next(s["order"] for s in steps if s["title"] == "OP 1"),
+            next(s["order"] for s in steps if s["title"] == "OP 2"),
+        ]
+    )
 
 
 def test_reorder_renumbers_step_labels(client):
@@ -562,7 +562,10 @@ def test_reorder_renumbers_step_labels(client):
     ).json()
 
     # Initial labels
-    initial = {s["title"]: s["step_number"] for s in client.get(f"/api/procedures/{proc_id}").json()["steps"]}
+    initial = {
+        s["title"]: s["step_number"]
+        for s in client.get(f"/api/procedures/{proc_id}").json()["steps"]
+    }
     assert initial["A"] == "1"
     assert initial["B"] == "2"
     assert initial["C"] == "3"
@@ -596,28 +599,21 @@ def test_execution_gating_blocks_start_until_prereqs_complete(client):
     )
     client.post(f"/api/procedures/{proc_id}/publish")
 
-    inst = client.post(
-        "/api/procedure-instances", json={"procedure_id": proc_id}
-    ).json()
+    inst = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()
     instance_id = inst["id"]
 
     # Attempt to start OP 2 first → blocked
-    r = client.post(
-        f"/api/procedure-instances/{instance_id}/steps/2/start"
-    )
+    r = client.post(f"/api/procedure-instances/{instance_id}/steps/2/start")
     assert r.status_code == 400
     assert "waiting" in r.json()["detail"].lower()
 
     # Start + complete OP 1, then OP 2 should be startable.
-    assert client.post(
-        f"/api/procedure-instances/{instance_id}/steps/1/start"
-    ).status_code == 200
-    assert client.post(
-        f"/api/procedure-instances/{instance_id}/steps/1/complete", json={}
-    ).status_code == 200
-    assert client.post(
-        f"/api/procedure-instances/{instance_id}/steps/2/start"
-    ).status_code == 200
+    assert client.post(f"/api/procedure-instances/{instance_id}/steps/1/start").status_code == 200
+    assert (
+        client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={}).status_code
+        == 200
+    )
+    assert client.post(f"/api/procedure-instances/{instance_id}/steps/2/start").status_code == 200
 
 
 # ============ Photo / inline-image attachments ============
@@ -669,9 +665,7 @@ def test_reference_docs_filter_excludes_inline_images(client, test_user):
     assert r2.json()["kind"] == "reference"
 
     # Filtered list returns only the reference doc.
-    listing = client.get(
-        f"/api/attachments?procedure_id={proc_id}&kind=reference"
-    ).json()
+    listing = client.get(f"/api/attachments?procedure_id={proc_id}&kind=reference").json()
     ids = {a["id"] for a in listing}
     assert ref_id in ids
     assert inline_id not in ids
@@ -682,16 +676,26 @@ def test_photo_field_round_trips_through_publish(client):
     is included in the published version snapshot."""
     proc = client.post("/api/procedures", json={"name": "Photo Schema Test"}).json()
     proc_id = proc["id"]
-    step = client.post(
-        f"/api/procedures/{proc_id}/steps", json={"title": "Inspect"}
-    ).json()
+    step = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Inspect"}).json()
     step_id = step["id"]
 
     # Save a schema with both a single-photo and a multi-photo field.
     schema = {
         "fields": [
-            {"name": "witness_photo", "label": "Witness Photo", "type": "photo", "required": True, "multiple": False},
-            {"name": "defect_photos", "label": "Defect Photos", "type": "photo", "required": False, "multiple": True},
+            {
+                "name": "witness_photo",
+                "label": "Witness Photo",
+                "type": "photo",
+                "required": True,
+                "multiple": False,
+            },
+            {
+                "name": "defect_photos",
+                "label": "Defect Photos",
+                "type": "photo",
+                "required": False,
+                "multiple": True,
+            },
         ]
     }
     r = client.patch(
