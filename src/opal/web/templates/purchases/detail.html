@@ -151,6 +151,45 @@
 {% endcall %}
 {% endif %}
 
+{% call ok.panel("EXPENSE RECORDS", margin_top="var(--space-md)") %}
+        {% if expenses %}
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("PART") }}
+                    {{ ok.th("QTY", width="80px", align="right") }}
+                    {{ ok.th("UNIT COST", width="100px", align="right") }}
+                    {{ ok.th("TOTAL", width="100px", align="right") }}
+                    {{ ok.th("TIER", width="60px") }}
+                    {{ ok.th("RECEIVED AT", width="180px") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in expenses %}
+                <tr>
+                    <td>{% if e.part %}{{ ok.link(e.part.name, "/parts/" ~ e.part_id) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                    {{ ok.td(e.quantity, mono=true, align="right") }}
+                    {{ ok.td(("%.2f" | format(e.unit_cost)) if e.unit_cost is not none else "—", mono=true, align="right") }}
+                    {{ ok.td(("%.2f" | format(e.total_cost)) if e.total_cost is not none else "—", mono=true, align="right") }}
+                    <td>{% if e.tier is not none %}{{ ok.mono("T" ~ e.tier) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                    <td>{{ ok.timestamp(e.received_at) }}</td>
+                </tr>
+                {% endfor %}
+                <tr style="border-top: 2px solid var(--border-color);">
+                    <td><strong>TOTAL</strong></td>
+                    <td></td>
+                    <td></td>
+                    {{ ok.td(("%.2f" | format(expense_total)) if expense_total is not none else "—", mono=true, align="right") }}
+                    <td></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        {% endcall %}
+        {% else %}
+        {{ ok.empty("No expense records — written automatically when items are received") }}
+        {% endif %}
+{% endcall %}
+
 <!-- Add Line Modal -->
 <div id="add-line-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
