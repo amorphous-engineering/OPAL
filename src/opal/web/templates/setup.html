@@ -24,6 +24,7 @@
         }
         .setup-subtitle { font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-xs); }
         .mode-card {
+            display: block;
             border: 1px solid var(--border-color);
             padding: var(--space-md);
             margin-bottom: var(--space-md);
@@ -71,9 +72,9 @@
                         LOCAL
                     </div>
                     <div class="mode-card-body">
-                        Cookie-based user selection. Anyone on the network with access to
-                        the server picks an identity from a roster. Suitable for trusted
-                        local installs (a single team on a private LAN).
+                        Username and password login with sessions, plus optional FIDO2
+                        passkeys. You create the first admin account below; further users
+                        are added from Settings.
                     </div>
                 </label>
 

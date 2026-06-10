@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
         <div class="text-muted mono" style="font-size: 0.75rem; margin-bottom: var(--space-sm);">
             Sign in without a password using your device's authenticator (Touch ID, security key, phone).
         </div>
-        <table class="table" id="passkey-table" style="margin-bottom: var(--space-sm);"></table>
+        <table class="data-table" id="passkey-table" style="margin-bottom: var(--space-sm);"></table>
         <div style="display: flex; gap: var(--space-sm); align-items: center;">
             <input type="text" id="passkey-name" class="form-input" placeholder="Label, e.g. 'shop laptop'" style="max-width: 240px;">
             {{ ok.btn("ADD PASSKEY", attrs='onclick="addPasskey()"') }}
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
         <div class="text-muted mono" style="font-size: 0.75rem; margin-bottom: var(--space-sm);">
             For the TUI and scripts: send as <code>Authorization: Bearer &lt;token&gt;</code>. Shown once at creation.
         </div>
-        <table class="table" id="token-table" style="margin-bottom: var(--space-sm);"></table>
+        <table class="data-table" id="token-table" style="margin-bottom: var(--space-sm);"></table>
         <div id="new-token-box" class="mono" style="display: none; font-size: 0.8rem; margin-bottom: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--border-color); word-break: break-all;"></div>
         <div style="display: flex; gap: var(--space-sm); align-items: center;">
             <input type="text" id="token-name" class="form-input" placeholder="Label, e.g. 'workshop TUI'" style="max-width: 240px;">
@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
 
     <div class="security-section">
         <div class="security-heading mono">ACTIVE SESSIONS</div>
-        <table class="table" id="session-table" style="margin-bottom: var(--space-sm);"></table>
+        <table class="data-table" id="session-table" style="margin-bottom: var(--space-sm);"></table>
         {{ ok.btn("SIGN OUT OTHER SESSIONS", attrs='onclick="revokeOtherSessions()"') }}
     </div>
 {% endcall %}
@@ -180,12 +180,14 @@ async function changePassword(event) {
 
 function renderRows(tableId, header, rows) {
     var table = document.getElementById(tableId);
-    if (!rows.length) {
-        table.innerHTML = '<tr><td class="text-muted mono">None</td></tr>';
-        return;
+    var head = '<thead><tr>' + header.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead>';
+    var body;
+    if (rows.length) {
+        body = '<tbody>' + rows.map(function (r) { return '<tr>' + r + '</tr>'; }).join('') + '</tbody>';
+    } else {
+        body = '<tbody><tr><td colspan="' + header.length + '" class="text-muted mono">None</td></tr></tbody>';
     }
-    table.innerHTML = '<tr>' + header.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' +
-        rows.map(function (r) { return '<tr>' + r + '</tr>'; }).join('');
+    table.innerHTML = head + body;
 }
 
 function esc(s) {
