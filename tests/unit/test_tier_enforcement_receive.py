@@ -264,3 +264,23 @@ def test_t1_serialized_auto_serial_increments_per_part(
     # Should be "001", "002" (ascending)
     assert serials[0] == "001"
     assert serials[1] == "002"
+
+
+def test_t1_serialized_multi_qty_receive_gets_unique_serials(
+    client: TestClient, auth_headers: dict, t1_serialized_part: dict
+) -> None:
+    """Receiving qty > 1 in one line yields a distinct serial per physical unit."""
+    po = _create_and_order_po(client, auth_headers, t1_serialized_part["id"])
+    line_id = po["lines"][0]["id"]
+    resp = client.post(
+        f"/api/purchases/{po['id']}/receive",
+        json={"lines": [{"line_id": line_id, "qty_received": 3, "location": "Bin A"}]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+    inv_resp = client.get(f"/api/inventory?part_id={t1_serialized_part['id']}")
+    items = inv_resp.json()["items"]
+    serials = [item["lot_number"] for item in items if item["lot_number"]]
+    assert len(serials) == 3
+    assert len(set(serials)) == 3, f"duplicate serials: {serials}"

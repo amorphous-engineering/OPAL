@@ -541,9 +541,9 @@ async def receive_purchase(
                     ),
                 )
 
-            # T1 serialized: auto-generate serial number if not provided
-            if tier == 1 and tracking == TrackingType.SERIALIZED and not recv.lot_number:
-                recv = recv.model_copy(update={"lot_number": generate_serial_number(db, part)})
+            # T1 serialized: auto-generate serial numbers if not provided —
+            # per physical unit, inside the record loop below
+            auto_serial = tier == 1 and tracking == TrackingType.SERIALIZED and not recv.lot_number
 
         if part and part.tracking_type == TrackingType.SERIALIZED:
             # Serialized parts: create individual inventory records with unique OPAL numbers
@@ -555,7 +555,7 @@ async def receive_purchase(
                     part_id=line.part_id,
                     quantity=1,  # Individual unit
                     location=recv.location,
-                    lot_number=recv.lot_number,
+                    lot_number=generate_serial_number(db, part) if auto_serial else recv.lot_number,
                     opal_number=opal_number,
                     source_type=SourceType.PURCHASE,
                     source_purchase_line_id=line.id,
