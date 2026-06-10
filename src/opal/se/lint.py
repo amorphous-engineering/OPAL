@@ -75,13 +75,19 @@ _OPERATIONS_SUBJECT = re.compile(r"^\s*the\s+(operator|user|crew)\b", re.IGNOREC
 #: Designator tokens (REQ-0042, ICD-0007, PO/1-001) are references, not quantities.
 _DESIGNATOR = re.compile(r"\b[A-Z]{2,}[-/][\dA-Z/-]*\d\b")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
-_BOUND_MARKERS = re.compile(
-    r"±|\+/-|<=|>=|≤|≥|<|>"
-    r"|\bwithin\b|\bno (?:more|less|greater|fewer) than\b|\bat (?:least|most)\b"
-    r"|\bbetween\b|\bunder\b|\bover\b|\bup to\b|\bbelow\b|\babove\b"
-    r"|\bmax(?:imum)?\b|\bmin(?:imum)?\b|\btolerance\b|\bexactly\b",
-    re.IGNORECASE,
-)
+#: Structural bound patterns: comparison symbols and "X to Y" numeric ranges.
+#: The word vocabulary (bound_phrases) is data and lives in lint_rules.yaml.
+_BOUND_SYMBOLS = r"±|\+/-|<=|>=|≤|≥|<|>"
+_BOUND_RANGE = r"\d[\d,.]*\s+to\s+\d"
+
+
+def _build_bound_markers() -> re.Pattern[str]:
+    phrases = _RULES["quantitative_has_bounds"].get("bound_phrases", [])
+    parts = [_BOUND_SYMBOLS, _BOUND_RANGE] + [rf"\b{re.escape(p)}\b" for p in phrases]
+    return re.compile("|".join(parts), re.IGNORECASE)
+
+
+_BOUND_MARKERS = _build_bound_markers()
 
 
 def _lint_banned_terms(statement: str) -> list[LintFinding]:

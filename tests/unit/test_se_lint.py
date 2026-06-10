@@ -88,6 +88,44 @@ def test_quantitative_bounds():
     )
 
 
+@pytest.mark.parametrize(
+    "stmt",
+    [
+        # Word-form comparatives + ranges — accepted bound vocabulary.
+        # The first seven are the live PO statements that were wrongly
+        # flagged before bound_phrases gained the "not …" comparatives.
+        "The vehicle shall achieve an apogee of not less than 26,000 ft AGL.",
+        "Injector pressure drop shall be not less than 75 psi and not less than 15% of "
+        "chamber pressure, on both circuits, across the full ENV-01/ENV-02 envelope.",
+        "Liftoff thrust-to-weight ratio shall be not less than 5.",
+        "The combustion chamber shall sustain not less than 1.5× nominal burn duration "
+        "without burn-through.",
+        "Severing or venting the poppet pilot lines shall open both main valves and expel "
+        "all propellant in not more than 60 s.",
+        "The oxidizer tank shall incorporate a permanently unobstructed static vent that "
+        "sets the fill high-water mark, provides not less than 5% ullage, and provides "
+        "passive overpressure relief.",
+        "Oxidizer fill shall complete in not more than 60 s.",
+        "The sensor suite shall include no fewer than 3 thermocouples.",
+        "The regulator shall hold outlet pressure no greater than 35 bar.",
+        "The tank shall operate between 10 and 20 bar.",
+        "The burn shall last 8 to 12 seconds.",
+        "The avionics shall survive at most 12 g axial.",
+    ],
+)
+def test_word_form_bounds_are_accepted(stmt):
+    assert "quantitative_has_bounds" not in _names(lint_statement(stmt)), stmt
+
+
+def test_genuinely_bare_numbers_still_flag():
+    for bad in (
+        "The engine shall produce 265 lbf.",
+        "The tank shall hold 12 kg of oxidizer.",
+    ):
+        flags = _by_name(lint_statement(bad), "quantitative_has_bounds")
+        assert len(flags) == 1 and flags[0].severity == "block_baseline", bad
+
+
 def test_positive_statement_warns_on_shall_not():
     findings = _by_name(lint_statement("The vent shall not open in flight."), "positive_statement")
     assert len(findings) == 1 and findings[0].severity == "warn"

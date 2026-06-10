@@ -24,6 +24,7 @@ def _comparable(path: Path) -> list[dict]:
             "severity": r["severity"],
             "terms": r.get("terms"),
             "warn_terms": r.get("warn_terms"),
+            "bound_phrases": r.get("bound_phrases"),
         }
         for r in rules
     ]

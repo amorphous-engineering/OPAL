@@ -60,10 +60,35 @@ rules:
     name: quantitative_has_bounds
     description: >
       Every numeric value carries a tolerance or bound (±, <=, >=, <, >,
-      "within", "under", "at least", an explicit range, ...). Bare numbers
-      are unverifiable.
+      a bound phrase from the list below, or an explicit "X to Y" range).
+      Bare numbers are unverifiable. Symbols and the range pattern are
+      structural and live in the engine; the word vocabulary lives here.
     severity: block_baseline
     source: "App. C.2 (complete with tolerances)"
+    bound_phrases:
+      - "within"
+      - "no more than"
+      - "no less than"
+      - "no greater than"
+      - "no fewer than"
+      - "not more than"
+      - "not less than"
+      - "not greater than"
+      - "not fewer than"
+      - "at least"
+      - "at most"
+      - "between"
+      - "under"
+      - "over"
+      - "up to"
+      - "below"
+      - "above"
+      - "max"
+      - "maximum"
+      - "min"
+      - "minimum"
+      - "tolerance"
+      - "exactly"
 
   - id: LINT-006
     name: positive_statement
