@@ -771,7 +771,12 @@ async def list_tools() -> list[Tool]:
         # Project info
         Tool(
             name="get_project_info",
-            description="Get information about the current OPAL project including tiers, requirements, and part numbering config",
+            description=(
+                "Get information about the current OPAL project including the "
+                "connected database URL, tiers, requirements, and part numbering "
+                "config. Call this first to confirm which database you are "
+                "operating on — report its path when asked to verify data."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -3564,12 +3569,16 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
 
 async def run_server():
     """Run the MCP server."""
-    logger.info("OPAL MCP Server started")
-    logger.info("Database: %s", get_active_settings().database_url)
+    import sys
+
+    # stderr, not logging: logging is usually unconfigured here, and stdout
+    # carries the MCP protocol. Which database this server is bound to is the
+    # first thing to check when MCP and web UI disagree about the data.
+    print(f"OPAL MCP server | database: {get_active_settings().database_url}", file=sys.stderr)
 
     project = get_active_project()
     if project:
-        logger.info("Project: %s", project.name)
+        print(f"OPAL MCP server | project: {project.name}", file=sys.stderr)
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

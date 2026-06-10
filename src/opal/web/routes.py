@@ -81,6 +81,20 @@ TABLE_DISPLAY_NAMES: dict[str, str] = {
 templates.env.globals["TABLE_DISPLAY_NAMES"] = TABLE_DISPLAY_NAMES
 
 
+def _active_database_path() -> str:
+    """Resolved SQLite path for the footer, evaluated per render.
+
+    Multiple OPAL processes (serve, MCP, installed binaries) can silently
+    resolve different databases; the UI states which one it is serving.
+    """
+    from opal.config import get_active_settings
+
+    return get_active_settings().database_url.removeprefix("sqlite:///")
+
+
+templates.env.globals["active_database_path"] = _active_database_path
+
+
 def _build_change_summary(entry) -> str:
     """Build short text summary of audit log changes."""
     action_val = entry.action.value if hasattr(entry.action, "value") else entry.action

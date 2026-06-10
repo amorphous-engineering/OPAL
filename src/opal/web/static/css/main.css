@@ -287,6 +287,14 @@ select option {
     color: var(--status-ok);
 }
 
+.footer-db {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl; /* long paths truncate on the left, keeping the filename visible */
+    padding: 0 var(--space-md);
+}
+
 /* Tables */
 .data-table {
     width: 100%;
