@@ -1,9 +1,13 @@
 {% extends "layouts/base.html" %}
 {% import 'opalkit/_macros.html' as ok %}
+{% from 'requirements/_tree_row.html' import tree_row, ghost_row %}
 
 {% block breadcrumbs %}
 {{ ok.crumb("HOME", "/") }}
 {{ ok.crumb("REQUIREMENTS", "/requirements") }}
+{% for p in parent_chain %}
+{{ ok.crumb(p.req_number, "/requirements/" ~ p.id) }}
+{% endfor %}
 {{ ok.crumb(req.req_number) }}
 {% endblock %}
 
@@ -12,9 +16,6 @@
 {% set state_variant = "ok" if req.lifecycle_state == 'baselined' else ("info" if req.lifecycle_state == 'preliminary' else ("warn" if req.lifecycle_state == 'superseded' else ("error" if req.lifecycle_state == 'cancelled' else "draft"))) %}
 {% set actions %}
     {{ ok.status(req.lifecycle_state | upper, state_variant) }}
-    {% if mutable %}
-    {{ ok.btn("BASELINE", variant="primary", attrs='onclick="lifecycleAction(\'baseline\')"') }}
-    {% endif %}
     {% if req.lifecycle_state == 'baselined' %}
     {{ ok.btn("REVISE", variant="primary", attrs='onclick="lifecycleAction(\'revise\')"') }}
     {% endif %}
@@ -23,31 +24,34 @@
     {% endif %}
 {% endset %}
 
-{% call ok.panel(req.req_number ~ " rev " ~ req.revision, actions=actions) %}
+{% call ok.panel(req.req_number ~ " · REV " ~ req.revision, actions=actions) %}
         <h2 style="margin-bottom: var(--space-md);">{{ req.title }}</h2>
 
         {% if not mutable %}
         <div class="mono text-muted" style="margin-bottom: var(--space-md); font-size: 0.8rem;">
-            This revision is {{ req.lifecycle_state | upper }} and immutable.
+            ⊠ This revision is {{ req.lifecycle_state | upper }} and immutable.
             {% if req.lifecycle_state == 'baselined' %}Use REVISE to create the next draft revision.{% endif %}
         </div>
         {% endif %}
 
         <div class="form-label">SHALL STATEMENT</div>
         {% if mutable %}
-        <textarea id="statement-text" class="form-textarea mono" rows="3"
-                  onblur="updateReq('statement', this.value)">{{ req.statement }}</textarea>
+        <div class="lint-editor">
+            <div class="lint-overlay mono" id="statement-overlay" aria-hidden="true"></div>
+            <textarea id="statement-text" class="form-textarea mono lint-textarea" rows="3"
+                      onblur="updateReq('statement', this.value)">{{ req.statement }}</textarea>
+        </div>
         {% else %}
         <div class="mono" style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); margin-bottom: var(--space-md);">
             {{ req.statement }}
         </div>
         {% endif %}
 
-        <div class="form-label" style="margin-top: var(--space-md);">RATIONALE <span class="text-muted">(required to baseline)</span></div>
+        <div class="form-label" style="margin-top: var(--space-md);">RATIONALE</div>
         {% if mutable %}
         <textarea id="rationale-text" class="form-textarea" rows="2"
                   onblur="updateReq('rationale', this.value)"
-                  placeholder="Why does this requirement exist?">{{ req.rationale or '' }}</textarea>
+                  placeholder="required to baseline — where did the number come from, what does it protect?">{{ req.rationale or '' }}</textarea>
         {% else %}
         <div style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); margin-bottom: var(--space-md);">
             {{ req.rationale or '—' }}
@@ -109,6 +113,31 @@
                     {% endif %}
                 </td>
             </tr>
+            {% if req.tbr or mutable %}
+            <tr>
+                <th>TBR OWNER</th>
+                <td>
+                    {% if mutable %}
+                    <select class="form-select" style="width: auto;" onchange="updateReq('tbr_owner_id', this.value ? parseInt(this.value) : null)">
+                        <option value="">— not set —</option>
+                        {% for u in users %}
+                        <option value="{{ u.id }}" {% if req.tbr_owner_id == u.id %}selected{% endif %}>{{ u.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}{{ req.tbr_owner.name if req.tbr_owner else '—' }}{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>TBR DUE</th>
+                <td>
+                    {% if mutable %}
+                    <input type="date" class="form-input mono" style="width: auto;"
+                           value="{{ req.tbr_due.strftime('%Y-%m-%d') if req.tbr_due else '' }}"
+                           onblur="updateReq('tbr_due', this.value || null)">
+                    {% else %}{{ req.tbr_due.strftime('%Y-%m-%d') if req.tbr_due else '—' }}{% endif %}
+                </td>
+            </tr>
+            {% endif %}
             {% if req.baselined_at %}
             <tr>
                 <th>BASELINED</th>
@@ -125,6 +154,12 @@
             </tr>
         {% endcall %}
 
+        {% if mutable %}
+        <div id="baseline-panel" style="margin-top: var(--space-md);">
+            {% include 'requirements/_baseline_panel.html' %}
+        </div>
+        {% endif %}
+
         <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-md);">
             {{ ok.btn("BACK", href="/requirements") }}
             {% if mutable %}
@@ -135,27 +170,16 @@
 {% endcall %}
 
 <div class="panel" style="margin-top: var(--space-md);">
-    <div class="panel-header"><span>FLOW-DOWN ({{ children | length }})</span></div>
+    <div class="panel-header"><span>FLOW-DOWN ({{ children_nodes | length }})</span></div>
     <div class="panel-body">
-        {% if children %}
-        {% call ok.table() %}
-            <thead>
-                <tr>{{ ok.th("NUMBER", width="110px") }}{{ ok.th("TITLE") }}{{ ok.th("STATE", width="110px") }}{{ ok.th("LVL", width="50px") }}</tr>
-            </thead>
-            <tbody>
-                {% for c in children %}
-                <tr onclick="window.location='/requirements/{{ c.id }}'" style="cursor: pointer;">
-                    <td>{{ ok.mono(c.req_number) }}</td>
-                    <td>{{ c.title }}</td>
-                    <td>{{ ok.status(c.lifecycle_state | upper, "ok" if c.lifecycle_state == 'baselined' else "draft") }}</td>
-                    <td class="mono text-center">{{ c.level }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        {% endcall %}
-        {% else %}
-        {{ ok.empty("No child requirements flow down from this one") }}
-        {% endif %}
+        <div class="req-tree">
+            {% for node in children_nodes %}
+            {{ tree_row(node) }}
+            {% endfor %}
+            <div class="tree-children has-children">
+                {{ ghost_row(req.id, req.req_number, req.category, req.level + 1, 0) }}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -165,18 +189,20 @@
         {% if allocations %}
         {% call ok.table() %}
             <thead>
-                <tr>{{ ok.th("PART") }}{{ ok.th("INTERNAL PN", width="140px") }}{{ ok.th("STATUS", width="120px") }}</tr>
+                <tr>{{ ok.th("PART") }}{{ ok.th("INTERNAL PN", width="140px") }}{{ ok.th("STATUS", width="120px") }}{{ ok.th("", width="80px") }}</tr>
             </thead>
             <tbody>
                 {% for a in allocations %}
-                <tr onclick="window.location='/parts/{{ a.part_id }}'" style="cursor: pointer;">
-                    <td>{{ a.part.name }}</td>
+                <tr>
+                    <td><a href="/parts/{{ a.part_id }}">{{ a.part.name }}</a></td>
                     <td>{{ ok.mono(a.part.internal_pn or '—') }}</td>
                     <td>{{ ok.status(a.status | upper | replace('_', ' '), "ok" if a.status == 'verified' else "draft") }}</td>
+                    <td><button type="button" class="btn btn-sm" onclick="unlinkAllocation({{ a.id }}, '{{ a.part.name }}')">UNLINK</button></td>
                 </tr>
                 {% endfor %}
             </tbody>
         {% endcall %}
+        <div class="text-muted mono" style="font-size: 0.75rem; margin-top: var(--space-xs);">allocation is created from the part page</div>
         {% else %}
         {{ ok.empty("Not allocated to any part — assign from a part's detail page") }}
         {% endif %}
@@ -195,29 +221,37 @@
                 <tr {% if r.id != req.id %}onclick="window.location='/requirements/{{ r.id }}'" style="cursor: pointer;"{% else %}style="background: var(--bg-tertiary);"{% endif %}>
                     <td class="mono">{{ r.revision }}{% if r.id == req.id %} ◀{% endif %}</td>
                     <td>{{ ok.status(r.lifecycle_state | upper, "ok" if r.lifecycle_state == 'baselined' else ("warn" if r.lifecycle_state == 'superseded' else "draft")) }}</td>
-                    <td class="mono" style="font-size: 0.8rem;">{{ r.statement | truncate(110) }}</td>
+                    <td class="mono" style="font-size: 0.8rem; {% if r.lifecycle_state == 'superseded' %}text-decoration: line-through; opacity: 0.6;{% endif %}">{{ r.statement | truncate(110) }}</td>
                     <td>{% if r.baselined_at %}{{ ok.timestamp(r.baselined_at) }}{% else %}—{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         {% endcall %}
+        <div style="margin-top: var(--space-sm);">
+            {{ ok.link("AUDIT TRAIL →", "/audit", mono=true, muted=true) }}
+        </div>
     </div>
 </div>
 
+<script src="/static/js/requirements.js"></script>
 <script>
 const reqId = {{ req.id }};
 
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
-    return headers;
-}
+function getHeaders() { return getReqHeaders(); }
 
 function showError(msg) {
     const div = document.getElementById('req-error');
     div.textContent = msg;
     div.style.display = 'block';
+}
+
+async function refreshBaselinePanel() {
+    const container = document.getElementById('baseline-panel');
+    if (!container) return;
+    try {
+        const r = await fetch(`/requirements/${reqId}/baseline-panel`);
+        if (r.ok) container.innerHTML = await r.text();
+    } catch (e) { /* panel refresh is cosmetic; the server still enforces */ }
 }
 
 async function updateReq(field, value) {
@@ -230,7 +264,9 @@ async function updateReq(field, value) {
         if (!r.ok) {
             const err = await r.json();
             showError(formatApiError(err.detail, 'Failed to update requirement'));
+            return;
         }
+        refreshBaselinePanel();
     } catch (e) { showError('Network error: ' + e.message); }
 }
 
@@ -262,6 +298,49 @@ async function deleteReq() {
             showError(formatApiError(err.detail, 'Failed to delete'));
         }
     } catch (e) { showError('Network error: ' + e.message); }
+}
+
+async function unlinkAllocation(allocationId, partName) {
+    if (!confirm(`Unlink this requirement from ${partName}?`)) return;
+    try {
+        const r = await fetch(`/api/requirements/allocations/${allocationId}`, {
+            method: 'DELETE', headers: getHeaders(),
+        });
+        if (r.ok) window.location.reload();
+        else {
+            const err = await r.json();
+            showError(formatApiError(err.detail, 'Failed to unlink'));
+        }
+    } catch (e) { showError('Network error: ' + e.message); }
+}
+
+// Baseline confirm: signature line (session user + ISO time), then commit.
+function openBaselineConfirm() {
+    const el = document.getElementById('baseline-confirm');
+    document.getElementById('baseline-sign-time').textContent =
+        new Date().toISOString().substring(0, 19) + 'Z';
+    el.style.display = 'block';
+}
+
+async function commitBaseline() {
+    try {
+        const r = await fetch(`/api/requirements/${reqId}/baseline`, {
+            method: 'POST', headers: getHeaders(),
+        });
+        if (r.ok) {
+            window.location.reload();
+        } else {
+            const err = await r.json();
+            showError(formatApiError(err.detail, 'Failed to baseline'));
+            refreshBaselinePanel();
+        }
+    } catch (e) { showError('Network error: ' + e.message); }
+}
+
+// Lint-while-typing on the statement editor (drafts only).
+const statementTextarea = document.getElementById('statement-text');
+if (statementTextarea) {
+    bindLintEditor(statementTextarea, document.getElementById('statement-overlay'));
 }
 </script>
 {% endblock %}

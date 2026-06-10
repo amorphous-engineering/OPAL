@@ -372,6 +372,47 @@ def test_web_pages_render(client, test_user):
     assert "CREATE DRAFT" in new_page.text
 
 
+def test_baseline_panel_disabled_until_blockers_clear(client, test_user):
+    client.cookies.set("opal_user_id", str(test_user.id))
+    blocked = _api_create(client, title="Blocked", verification_method=None)
+    clean = _api_create(client, title="Clean")
+
+    blocked_page = client.get(f"/requirements/{blocked['id']}")
+    assert "BASELINE READINESS" in blocked_page.text
+    assert "disabled" in blocked_page.text
+    assert "verification method" in blocked_page.text
+
+    clean_page = client.get(f"/requirements/{clean['id']}")
+    assert "BASELINE READINESS" in clean_page.text
+    panel_start = clean_page.text.index("BASELINE READINESS")
+    panel = clean_page.text[panel_start : panel_start + 2500]
+    assert "disabled" not in panel
+
+    # Panel partial is independently fetchable (the dossier re-fetches on save).
+    partial = client.get(f"/requirements/{blocked['id']}/baseline-panel")
+    assert partial.status_code == 200
+    assert "BASELINE READINESS" in partial.text
+
+    # Baselined rows hide the panel entirely.
+    client.post(f"/api/requirements/{clean['id']}/baseline")
+    baselined_page = client.get(f"/requirements/{clean['id']}")
+    assert "BASELINE READINESS" not in baselined_page.text
+
+
+def test_dossier_breadcrumb_chain_and_flowdown_ghost(client, test_user):
+    client.cookies.set("opal_user_id", str(test_user.id))
+    root = _api_create(client, title="Mission")
+    mid = _api_create(client, title="System", parent_id=root["id"])
+    leaf = _api_create(client, title="Subsystem", parent_id=mid["id"])
+
+    page = client.get(f"/requirements/{leaf['id']}")
+    # Chain renders root first, every crumb a link.
+    assert page.text.index(root["req_number"]) < page.text.index(mid["req_number"])
+    assert f'href="/requirements/{root["id"]}"' in page.text
+    # Flow-down section carries the ghost-row creator for this requirement.
+    assert f"flow down from {leaf['req_number']}" in page.text
+
+
 def test_tree_page_nests_children_and_renders_lint(client, test_user):
     client.cookies.set("opal_user_id", str(test_user.id))
     parent = _api_create(client, title="Mission")

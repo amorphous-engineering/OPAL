@@ -52,146 +52,14 @@
     </div>
 {% endcall %}
 
+<script src="/static/js/requirements.js"></script>
 <script>
-// ============ Expansion state (localStorage) ============
-const COLLAPSE_KEY = 'opal_req_tree_collapsed';
-function collapsedSet() {
-    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')); }
-    catch (e) { return new Set(); }
-}
-function saveCollapsed(set) {
-    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set]));
-}
-function setSubtree(id, collapsed) {
-    const container = document.getElementById('children-' + id);
-    const row = document.getElementById('req-row-' + id);
-    if (!container) return;
-    container.classList.toggle('collapsed', collapsed);
-    const chevron = row && row.querySelector('.tree-chevron');
-    if (chevron && !chevron.classList.contains('tree-chevron-leaf')) {
-        chevron.textContent = collapsed ? '▸' : '▾';
-    }
-}
-function toggleSubtree(id, event) {
-    if (event) event.stopPropagation();
-    const set = collapsedSet();
-    const collapsed = !set.has(id);
-    if (collapsed) set.add(id); else set.delete(id);
-    saveCollapsed(set);
-    setSubtree(id, collapsed);
-}
-collapsedSet().forEach(id => setSubtree(id, true));
-
-// ============ Row expand (statement in place) ============
-function toggleRowExpand(id) {
-    const el = document.getElementById('req-expand-' + id);
-    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
-}
-
-// ============ Ghost rows (inline create) ============
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
-    return headers;
-}
-
-function openGhost(linkEl) {
-    const ghost = linkEl.closest('.tree-ghost');
-    linkEl.style.display = 'none';
-    const editor = ghost.querySelector('.tree-ghost-editor');
-    editor.style.display = 'flex';
-    editor.querySelector('.tree-ghost-title').focus();
-}
-
-function closeGhost(editor) {
-    editor.style.display = 'none';
-    editor.querySelector('.tree-ghost-title').value = '';
-    editor.querySelector('.tree-ghost-statement').value = '';
-    const ghost = editor.closest('.tree-ghost');
-    ghost.querySelector('.tree-ghost-link').style.display = '';
-    ghost.classList.remove('force');
-}
-
-function ghostKeydown(event, input) {
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        closeGhost(input.closest('.tree-ghost-editor'));
-    } else if (event.key === 'Enter') {
-        event.preventDefault();
-        createFromGhost(input.closest('.tree-ghost-editor'));
-    }
-    event.stopPropagation();
-}
-
-async function createFromGhost(editor) {
-    const title = editor.querySelector('.tree-ghost-title').value.trim();
-    const statement = editor.querySelector('.tree-ghost-statement').value.trim();
-    if (!title || !statement) return;
-    const body = {
-        title: title,
-        statement: statement,
-        parent_id: editor.dataset.parentId ? parseInt(editor.dataset.parentId) : null,
-        category: editor.dataset.category || null,
-    };
-    try {
-        const r = await fetch('/api/requirements', {
-            method: 'POST', headers: getHeaders(), body: JSON.stringify(body),
-        });
-        if (!r.ok) {
-            const err = await r.json();
-            alert(formatApiError(err.detail, 'Failed to create requirement'));
-            return;
-        }
-        const req = await r.json();
-        insertCreatedRow(editor, req);
-        // Fresh ghost: clear fields, keep editing so decomposition flows.
-        editor.querySelector('.tree-ghost-title').value = '';
-        editor.querySelector('.tree-ghost-statement').value = '';
-        editor.querySelector('.tree-ghost-title').focus();
-    } catch (e) { alert('Network error: ' + e.message); }
-}
-
-function insertCreatedRow(editor, req) {
-    const ghost = editor.closest('.tree-ghost');
-    const depth = Math.round((parseInt(ghost.style.paddingLeft) - 22) / 18);
-    const row = document.createElement('div');
-    row.className = 'tree-row';
-    row.id = 'req-row-' + req.id;
-    row.tabIndex = -1;
-    row.dataset.id = req.id;
-    row.dataset.state = req.lifecycle_state;
-    row.dataset.level = req.level;
-    row.dataset.number = req.req_number;
-    row.dataset.category = req.category || '';
-    row.dataset.text = (req.req_number + ' ' + req.title + ' ' + req.statement).toLowerCase();
-    row.style.paddingLeft = (depth * 18) + 'px';
-    row.innerHTML =
-        '<span class="tree-chevron tree-chevron-leaf"></span>' +
-        '<a class="tree-num mono" href="/requirements/' + req.id + '">' + escapeHtml(req.req_number) + '</a>' +
-        '<span class="tree-statement">' + escapeHtml(req.statement) + '</span>' +
-        '<span class="tree-meta">' +
-        '<span class="status-badge status-draft">DRAFT</span>' +
-        '<span class="tree-lvl mono">L' + req.level + '·' + (req.verification_method || '—')[0].toUpperCase() + '</span>' +
-        '<span class="tree-age mono">now</span></span>';
-    ghost.parentNode.insertBefore(row, ghost);
-}
+applyStoredCollapse();
 
 function openRootGhost() {
     const rootGhost = document.querySelector('#req-tree > .tree-ghost');
     rootGhost.classList.add('force');
     openGhost(rootGhost.querySelector('.tree-ghost-link'));
-}
-
-// `c` on a focused leaf forces its (otherwise hidden) ghost open.
-function openGhostFor(row) {
-    const container = document.getElementById('children-' + row.dataset.id);
-    if (!container) return;
-    setSubtree(parseInt(row.dataset.id), false);
-    const ghost = container.querySelector(':scope > .tree-ghost');
-    if (!ghost) return;
-    ghost.classList.add('force');
-    openGhost(ghost.querySelector('.tree-ghost-link'));
 }
 
 // ============ Filters (client-side dim/hide) ============
@@ -286,9 +154,9 @@ function collapseFocused(row, collapse) {
     const id = parseInt(row.dataset.id);
     const container = document.getElementById('children-' + id);
     if (!container || !container.classList.contains('has-children')) return;
-    const set = collapsedSet();
+    const set = reqCollapsedSet();
     if (collapse) set.add(id); else set.delete(id);
-    saveCollapsed(set);
+    saveReqCollapsed(set);
     setSubtree(id, collapse);
 }
 

@@ -2641,12 +2641,13 @@ def _relative_age(dt) -> str:
     return f"{int(days / 365)}y"
 
 
-def _requirement_tree(db: DbSession) -> tuple[list[dict], int]:
+def _requirement_tree(db: DbSession, root_id: int | None = None) -> tuple[list[dict], int]:
     """Nested node dicts for the tree page; orphans surface as roots.
 
     Mirrors the MCP _flowdown_tree children-map logic. Draft/preliminary rows
     get server-rendered lint underlines (regex lint over the full set is
-    negligible at this scale).
+    negligible at this scale). With root_id, returns that requirement's
+    children subtrees (the dossier flow-down section).
     """
     from opal.db.base import LifecycleState
     from opal.db.models import PartRequirement
@@ -2694,6 +2695,9 @@ def _requirement_tree(db: DbSession) -> tuple[list[dict], int]:
             ],
         }
 
+    if root_id is not None:
+        children = [c for c in by_parent.get(root_id, [])]
+        return [node(c, frozenset({root_id, c.id})) for c in children], len(rows)
     return [node(r, frozenset({r.id})) for r in by_parent.get(None, [])], len(rows)
 
 
@@ -2789,20 +2793,29 @@ async def requirements_detail(request: Request, db: DbSession, req_id: int) -> H
             status_code=404,
         )
 
+    from opal.se.readiness import readiness
+
     context = get_base_context(request, db, f"{req.req_number} - OPAL")
     context["req"] = req
     context["parent"] = req.parent
+
+    # Breadcrumb chain up to the L0 root, root first; cycle-guarded.
+    chain: list[Requirement] = []
+    seen: set[int] = {req.id}
+    cursor = req.parent
+    while cursor is not None and cursor.id not in seen:
+        chain.append(cursor)
+        seen.add(cursor.id)
+        cursor = cursor.parent
+    context["parent_chain"] = list(reversed(chain))
+
     context["baselined_by"] = (
         db.query(User).filter(User.id == req.baselined_by_id).first()
         if req.baselined_by_id
         else None
     )
-    context["children"] = (
-        db.query(Requirement)
-        .filter(Requirement.parent_id == req.id, Requirement.deleted_at.is_(None))
-        .order_by(Requirement.req_number)
-        .all()
-    )
+    context["children_nodes"], _ = _requirement_tree(db, root_id=req.id)
+    context["readiness"] = readiness(db, req)
     context["allocations"] = (
         db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).all()
     )
@@ -2813,6 +2826,31 @@ async def requirements_detail(request: Request, db: DbSession, req_id: int) -> H
         .all()
     )
     return templates.TemplateResponse("requirements/detail.html", context)
+
+
+@router.get("/requirements/{req_id}/baseline-panel", response_class=HTMLResponse)
+async def requirements_baseline_panel(
+    request: Request, db: DbSession, req_id: int
+) -> HTMLResponse:
+    """Baseline panel partial — re-fetched by the dossier after field saves."""
+    from opal.se.readiness import readiness
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        "requirements/_baseline_panel.html",
+        {
+            "request": request,
+            "req": req,
+            "readiness": readiness(db, req),
+            "current_user": _get_current_user(request, db),
+        },
+    )
 
 
 # ============ DATASETS ============

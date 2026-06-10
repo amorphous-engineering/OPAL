@@ -2293,3 +2293,92 @@ a.user-menu-link.active {
     text-underline-offset: 3px;
     cursor: help;
 }
+
+/* Lint editor — overlay above the textarea: transparent text, visible
+   underline decorations, pointer events only on the underlined spans. */
+.lint-editor {
+    position: relative;
+}
+
+.lint-textarea,
+.lint-overlay {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.lint-overlay {
+    position: absolute;
+    inset: 0;
+    padding: var(--space-sm);
+    border: 1px solid transparent;
+    color: transparent;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.lint-overlay .lint-block,
+.lint-overlay .lint-warn {
+    pointer-events: auto;
+}
+
+/* Baseline readiness panel */
+.baseline-panel {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    padding: var(--space-md);
+    font-size: 0.85rem;
+}
+
+.baseline-panel-title {
+    color: var(--text-muted);
+    margin-bottom: var(--space-sm);
+    font-size: 0.75rem;
+}
+
+.baseline-check {
+    padding: 1px 0;
+}
+
+.baseline-check-box {
+    color: var(--accent-green);
+}
+
+.baseline-check-fail .baseline-check-box {
+    color: var(--accent-red);
+}
+
+.baseline-check-warn .baseline-check-box {
+    color: var(--accent-yellow);
+}
+
+.baseline-check-detail {
+    color: var(--text-muted);
+    margin-left: var(--space-sm);
+}
+
+.baseline-check-fail .baseline-check-detail {
+    color: var(--accent-red);
+}
+
+.baseline-check-warn .baseline-check-detail {
+    color: var(--accent-yellow);
+}
+
+.baseline-panel-rule {
+    color: var(--text-muted);
+    margin: var(--space-sm) 0;
+}
+
+.baseline-confirm {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--accent-green);
+}
+
+.baseline-signature {
+    margin-bottom: var(--space-sm);
+}
