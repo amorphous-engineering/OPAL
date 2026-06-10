@@ -24,6 +24,7 @@ from opal.db.base import LifecycleState
 from opal.db.models import Part, PartRequirement, Requirement
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
 from opal.se.lint import lint_requirement
+from opal.se.readiness import readiness
 
 router = APIRouter()
 
@@ -421,6 +422,12 @@ async def cancel_requirement(
     db.commit()
     db.refresh(req)
     return _req_response(db, req)
+
+
+@router.get("/{req_id:int}/readiness")
+async def requirement_readiness(db: DbSession, req_id: int) -> dict:
+    """Structured baseline-readiness checks — what the baseline panel renders."""
+    return readiness(db, _get_requirement(db, req_id))
 
 
 @router.get("/{req_id:int}/revisions", response_model=list[RequirementResponse])
