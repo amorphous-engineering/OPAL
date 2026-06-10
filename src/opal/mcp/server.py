@@ -2604,7 +2604,7 @@ async def _baseline_batch(db, args: dict) -> list[TextContent]:
         return err
 
     reqs = []
-    for req_id in args["ids"]:
+    for req_id in dict.fromkeys(args["ids"]):  # dedupe: a repeated id would double-flip
         req = (
             db.query(Requirement)
             .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))

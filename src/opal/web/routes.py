@@ -2770,10 +2770,14 @@ async def requirements_table(
     db: DbSession,
     search: str | None = Query(None),
     state: str | None = Query(None),
-    level: int | None = Query(None),
+    level: str | None = Query(None),
     show_superseded: str | None = Query(None),
 ) -> HTMLResponse:
-    """Requirements table rows (HTMX partial)."""
+    """Requirements table rows (HTMX partial).
+
+    level is str: the filter selects submit level= (empty) for "all", which
+    FastAPI rejects as int | None with a 422.
+    """
     from opal.db.base import LifecycleState
 
     query = db.query(Requirement).filter(Requirement.deleted_at.is_(None))
@@ -2781,8 +2785,8 @@ async def requirements_table(
         query = query.filter(Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value)
     if state:
         query = query.filter(Requirement.lifecycle_state == state)
-    if level is not None:
-        query = query.filter(Requirement.level == level)
+    if level and level.lstrip("-").isdigit():
+        query = query.filter(Requirement.level == int(level))
     if search:
         term = f"%{search}%"
         query = query.filter(

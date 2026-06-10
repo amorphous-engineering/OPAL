@@ -2,14 +2,16 @@
 
 Every baseline commitment writes one BaselineEvent joined to the exact
 requirement revision rows it locked — the project's configuration history.
-Nothing here commits; callers own the transaction and audit logging,
-matching the opal.se.lifecycle convention.
+Nothing here commits; callers own the transaction and the audit logging
+for the requirements they flip, matching the opal.se.lifecycle convention.
+The event row itself is audit-logged here, its only creation point.
 """
 
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from opal.core.audit import log_create
 from opal.db.models import BaselineEvent, BaselineEventItem, Requirement
 from opal.se.lifecycle import baseline
 from opal.se.readiness import readiness
@@ -26,6 +28,7 @@ def write_baseline_event(
     event = BaselineEvent(label=label, note=note, signed_by_id=user_id)
     db.add(event)
     db.flush()
+    log_create(db, event, user_id)
     for req in reqs:
         db.add(BaselineEventItem(event_id=event.id, requirement_id=req.id))
     db.flush()

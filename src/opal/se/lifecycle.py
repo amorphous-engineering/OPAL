@@ -3,7 +3,10 @@
 Enforcement lives here in one shared helper layer — the API routes and the
 MCP server both call these functions, so the rules cannot drift between
 entry points. Nothing here commits; callers own the transaction and the
-audit logging (log_update/log_create at the call site).
+audit logging for the object they act on (log_update/log_create at the
+call site). Side-effect mutations callers never see — the predecessor
+supersede and dependent stale flips — are audit-logged here, in the same
+transaction, for the same no-drift reason.
 
 State machine (NPR 7123.1D App. F terminology):
 
@@ -24,6 +27,7 @@ from typing import Any
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
+from opal.core.audit import get_model_dict, log_update
 from opal.db.base import LifecycleState
 
 
@@ -105,13 +109,15 @@ def baseline(db: Session, obj: Any, user_id: int | None) -> Any:
     if obj.supersedes_id is not None:
         predecessor = db.get(type(obj), obj.supersedes_id)
         if predecessor is not None and predecessor.is_baselined:
+            old_values = get_model_dict(predecessor)
             predecessor.lifecycle_state = LifecycleState.SUPERSEDED.value
-            mark_dependents_stale(db, predecessor)
+            log_update(db, predecessor, old_values, user_id)
+            mark_dependents_stale(db, predecessor, user_id)
 
     return obj
 
 
-def mark_dependents_stale(db: Session, predecessor: Any) -> None:
+def mark_dependents_stale(db: Session, predecessor: Any, user_id: int | None = None) -> None:
     """Flag everything that depended on a now-superseded revision.
 
     Today: direct flow-down children (UX spec §7). Phase 2 verification
@@ -124,7 +130,9 @@ def mark_dependents_stale(db: Session, predecessor: Any) -> None:
         return
     children = db.query(cls).filter(cls.parent_id == predecessor.id, cls.deleted_at.is_(None)).all()
     for child in children:
+        old_values = get_model_dict(child)
         child.stale = True
+        log_update(db, child, old_values, user_id)
 
 
 def revise(db: Session, obj: Any, **overrides: Any) -> Any:

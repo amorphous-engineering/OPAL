@@ -422,7 +422,7 @@ async def baseline_batch_endpoint(
     """Baseline a set atomically: every item re-validates at commit time;
     any failure aborts the whole batch and returns the offenders."""
     reqs = []
-    for req_id in data.ids:
+    for req_id in dict.fromkeys(data.ids):  # dedupe: a repeated id would double-flip
         reqs.append(_get_requirement(db, req_id))
 
     old_values = {req.id: get_model_dict(req) for req in reqs}

@@ -631,3 +631,77 @@ def test_mcp_assign_links_first_class_row(db_session, test_user):
 
     link = db_session.query(PartRequirement).filter(PartRequirement.part_id == part.id).one()
     assert link.requirement_ref_id == req["id"]
+
+
+def test_supersede_and_stale_flips_are_audit_logged(client, db_session, test_user):
+    """Baselining a revision audit-logs the predecessor supersede and child stale flips."""
+    from opal.db.models import AuditLog
+
+    parent = client.post(
+        "/api/requirements",
+        json={"title": "Parent", "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.", "rationale": "r", "verification_method": "test"},
+    ).json()
+    child = client.post(
+        "/api/requirements",
+        json={
+            "title": "Child",
+            "statement": "The valve shall open within 50 ms \u00b1 5 ms.",
+            "rationale": "r",
+            "verification_method": "test",
+            "parent_id": parent["id"],
+        },
+    ).json()
+    assert client.post(f"/api/requirements/{parent['id']}/baseline").status_code == 200
+    assert client.post(f"/api/requirements/{child['id']}/baseline").status_code == 200
+
+    rev = client.post(f"/api/requirements/{parent['id']}/revise").json()
+    db_session.query(AuditLog).delete()
+    db_session.flush()
+    r = client.post(f"/api/requirements/{rev['id']}/baseline")
+    assert r.status_code == 200
+
+    logged_ids = {
+        row.record_id
+        for row in db_session.query(AuditLog)
+        .filter(AuditLog.table_name == "requirement", AuditLog.action == "update")
+        .all()
+    }
+    assert parent["id"] in logged_ids, "predecessor supersede not audit-logged"
+    assert child["id"] in logged_ids, "child stale flip not audit-logged"
+
+
+def test_baseline_event_is_audit_logged(client, db_session):
+    """Every baseline event row gets an AuditLog create entry."""
+    from opal.db.models import AuditLog
+
+    req = client.post(
+        "/api/requirements",
+        json={"title": "Solo", "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.", "rationale": "r", "verification_method": "test"},
+    ).json()
+    r = client.post("/api/requirements/baseline-batch", json={"ids": [req["id"]]})
+    assert r.status_code == 200
+    event_id = r.json()["event_id"]
+
+    row = (
+        db_session.query(AuditLog)
+        .filter(AuditLog.table_name == "baseline_event", AuditLog.record_id == event_id)
+        .first()
+    )
+    assert row is not None, "baseline event creation not audit-logged"
+
+
+def test_baseline_batch_duplicate_ids_are_deduped(client):
+    """A repeated id in a batch must not 500 (double lifecycle flip)."""
+    req = client.post(
+        "/api/requirements",
+        json={"title": "Dup", "statement": "The engine shall sustain a chamber pressure of 20 bar \u00b1 1 bar.", "rationale": "r", "verification_method": "test"},
+    ).json()
+    r = client.post("/api/requirements/baseline-batch", json={"ids": [req["id"], req["id"]]})
+    assert r.status_code == 200
+    assert len(r.json()["baselined"]) == 1
+
+
+def test_requirements_table_tolerates_empty_level(client):
+    """The HTMX filter selects submit level= for 'all levels'; must not 422."""
+    r = client.get("/requirements/table?search=&state=&level=")
+    assert r.status_code == 200
