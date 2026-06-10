@@ -1,0 +1,267 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS", "/requirements") }}
+{{ ok.crumb(req.req_number) }}
+{% endblock %}
+
+{% block content %}
+{% set mutable = req.lifecycle_state in ['draft', 'preliminary'] %}
+{% set state_variant = "ok" if req.lifecycle_state == 'baselined' else ("info" if req.lifecycle_state == 'preliminary' else ("warn" if req.lifecycle_state == 'superseded' else ("error" if req.lifecycle_state == 'cancelled' else "draft"))) %}
+{% set actions %}
+    {{ ok.status(req.lifecycle_state | upper, state_variant) }}
+    {% if mutable %}
+    {{ ok.btn("BASELINE", variant="primary", attrs='onclick="lifecycleAction(\'baseline\')"') }}
+    {% endif %}
+    {% if req.lifecycle_state == 'baselined' %}
+    {{ ok.btn("REVISE", variant="primary", attrs='onclick="lifecycleAction(\'revise\')"') }}
+    {% endif %}
+    {% if req.lifecycle_state not in ['superseded', 'cancelled'] %}
+    {{ ok.btn("CANCEL REQ", attrs='onclick="lifecycleAction(\'cancel\')" style="color: var(--accent-red);"') }}
+    {% endif %}
+{% endset %}
+
+{% call ok.panel(req.req_number ~ " rev " ~ req.revision, actions=actions) %}
+        <h2 style="margin-bottom: var(--space-md);">{{ req.title }}</h2>
+
+        {% if not mutable %}
+        <div class="mono text-muted" style="margin-bottom: var(--space-md); font-size: 0.8rem;">
+            This revision is {{ req.lifecycle_state | upper }} and immutable.
+            {% if req.lifecycle_state == 'baselined' %}Use REVISE to create the next draft revision.{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="form-label">SHALL STATEMENT</div>
+        {% if mutable %}
+        <textarea id="statement-text" class="form-textarea mono" rows="3"
+                  onblur="updateReq('statement', this.value)">{{ req.statement }}</textarea>
+        {% else %}
+        <div class="mono" style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); margin-bottom: var(--space-md);">
+            {{ req.statement }}
+        </div>
+        {% endif %}
+
+        <div class="form-label" style="margin-top: var(--space-md);">RATIONALE <span class="text-muted">(required to baseline)</span></div>
+        {% if mutable %}
+        <textarea id="rationale-text" class="form-textarea" rows="2"
+                  onblur="updateReq('rationale', this.value)"
+                  placeholder="Why does this requirement exist?">{{ req.rationale or '' }}</textarea>
+        {% else %}
+        <div style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); margin-bottom: var(--space-md);">
+            {{ req.rationale or '—' }}
+        </div>
+        {% endif %}
+
+        {% call ok.table() %}
+            <tr>
+                <th style="width: 160px;">TITLE</th>
+                <td>
+                    {% if mutable %}
+                    <input type="text" class="form-input" value="{{ req.title }}" maxlength="255" onblur="updateReq('title', this.value)">
+                    {% else %}{{ req.title }}{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>CATEGORY</th>
+                <td>
+                    {% if mutable %}
+                    <input type="text" class="form-input" value="{{ req.category or '' }}" maxlength="50" placeholder="functional, performance, interface, ..." onblur="updateReq('category', this.value)">
+                    {% else %}{{ req.category or '—' }}{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>LEVEL</th>
+                <td class="mono">{{ req.level }}</td>
+            </tr>
+            <tr>
+                <th>PARENT</th>
+                <td>
+                    {% if parent %}
+                    {{ ok.link(parent.req_number ~ " — " ~ parent.title, "/requirements/" ~ parent.id) }}
+                    {% else %}<span class="text-muted mono">ROOT (level-0)</span>{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>VERIFICATION METHOD</th>
+                <td>
+                    {% if mutable %}
+                    <select class="form-select" style="width: auto;" onchange="updateReq('verification_method', this.value || null)">
+                        <option value="">— not set —</option>
+                        {% for m in ['analysis', 'inspection', 'demonstration', 'test'] %}
+                        <option value="{{ m }}" {% if req.verification_method == m %}selected{% endif %}>{{ m | upper }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}{{ (req.verification_method or '—') | upper }}{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>TBD / TBR</th>
+                <td>
+                    {% if mutable %}
+                    <label style="margin-right: var(--space-md);"><input type="checkbox" {% if req.tbd %}checked{% endif %} onchange="updateReq('tbd', this.checked)"> <span class="mono">TBD</span></label>
+                    <label><input type="checkbox" {% if req.tbr %}checked{% endif %} onchange="updateReq('tbr', this.checked)"> <span class="mono">TBR</span></label>
+                    {% else %}
+                    {% if req.tbd %}{{ ok.status("TBD", "error") }}{% endif %}
+                    {% if req.tbr %}{{ ok.status("TBR", "warn") }}{% endif %}
+                    {% if not req.tbd and not req.tbr %}<span class="text-muted">none</span>{% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+            {% if req.baselined_at %}
+            <tr>
+                <th>BASELINED</th>
+                <td>{{ ok.timestamp(req.baselined_at) }}{% if baselined_by %} by {{ baselined_by.name }}{% endif %}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <th>CREATED</th>
+                <td>{{ ok.timestamp(req.created_at) }}</td>
+            </tr>
+            <tr>
+                <th>UPDATED</th>
+                <td>{{ ok.timestamp(req.updated_at) }}</td>
+            </tr>
+        {% endcall %}
+
+        <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-md);">
+            {{ ok.btn("BACK", href="/requirements") }}
+            {% if mutable %}
+            {{ ok.btn("DELETE", attrs='onclick="deleteReq()" style="color: var(--accent-red);"') }}
+            {% endif %}
+        </div>
+        <div id="req-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+{% endcall %}
+
+<div class="panel" style="margin-top: var(--space-md);">
+    <div class="panel-header"><span>FLOW-DOWN ({{ children | length }})</span></div>
+    <div class="panel-body">
+        {% if children %}
+        {% call ok.table() %}
+            <thead>
+                <tr>{{ ok.th("NUMBER", width="110px") }}{{ ok.th("TITLE") }}{{ ok.th("STATE", width="110px") }}{{ ok.th("LVL", width="50px") }}</tr>
+            </thead>
+            <tbody>
+                {% for c in children %}
+                <tr onclick="window.location='/requirements/{{ c.id }}'" style="cursor: pointer;">
+                    <td>{{ ok.mono(c.req_number) }}</td>
+                    <td>{{ c.title }}</td>
+                    <td>{{ ok.status(c.lifecycle_state | upper, "ok" if c.lifecycle_state == 'baselined' else "draft") }}</td>
+                    <td class="mono text-center">{{ c.level }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+        {% else %}
+        {{ ok.empty("No child requirements flow down from this one") }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel" style="margin-top: var(--space-md);">
+    <div class="panel-header"><span>ALLOCATED PARTS ({{ allocations | length }})</span></div>
+    <div class="panel-body">
+        {% if allocations %}
+        {% call ok.table() %}
+            <thead>
+                <tr>{{ ok.th("PART") }}{{ ok.th("INTERNAL PN", width="140px") }}{{ ok.th("STATUS", width="120px") }}</tr>
+            </thead>
+            <tbody>
+                {% for a in allocations %}
+                <tr onclick="window.location='/parts/{{ a.part_id }}'" style="cursor: pointer;">
+                    <td>{{ a.part.name }}</td>
+                    <td>{{ ok.mono(a.part.internal_pn or '—') }}</td>
+                    <td>{{ ok.status(a.status | upper | replace('_', ' '), "ok" if a.status == 'verified' else "draft") }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+        {% else %}
+        {{ ok.empty("Not allocated to any part — assign from a part's detail page") }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel" style="margin-top: var(--space-md);">
+    <div class="panel-header"><span>REVISION HISTORY</span></div>
+    <div class="panel-body">
+        {% call ok.table() %}
+            <thead>
+                <tr>{{ ok.th("REV", width="50px") }}{{ ok.th("STATE", width="120px") }}{{ ok.th("STATEMENT") }}{{ ok.th("BASELINED", width="170px") }}</tr>
+            </thead>
+            <tbody>
+                {% for r in revisions %}
+                <tr {% if r.id != req.id %}onclick="window.location='/requirements/{{ r.id }}'" style="cursor: pointer;"{% else %}style="background: var(--bg-tertiary);"{% endif %}>
+                    <td class="mono">{{ r.revision }}{% if r.id == req.id %} ◀{% endif %}</td>
+                    <td>{{ ok.status(r.lifecycle_state | upper, "ok" if r.lifecycle_state == 'baselined' else ("warn" if r.lifecycle_state == 'superseded' else "draft")) }}</td>
+                    <td class="mono" style="font-size: 0.8rem;">{{ r.statement | truncate(110) }}</td>
+                    <td>{% if r.baselined_at %}{{ ok.timestamp(r.baselined_at) }}{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+    </div>
+</div>
+
+<script>
+const reqId = {{ req.id }};
+
+function getHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const userId = localStorage.getItem('opal_user_id');
+    if (userId) headers['X-User-Id'] = userId;
+    return headers;
+}
+
+function showError(msg) {
+    const div = document.getElementById('req-error');
+    div.textContent = msg;
+    div.style.display = 'block';
+}
+
+async function updateReq(field, value) {
+    try {
+        const data = {};
+        data[field] = value === '' ? null : value;
+        const r = await fetch(`/api/requirements/${reqId}`, {
+            method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data),
+        });
+        if (!r.ok) {
+            const err = await r.json();
+            showError(formatApiError(err.detail, 'Failed to update requirement'));
+        }
+    } catch (e) { showError('Network error: ' + e.message); }
+}
+
+async function lifecycleAction(action) {
+    if (action === 'cancel' && !confirm('Cancel this requirement? This is terminal.')) return;
+    try {
+        const r = await fetch(`/api/requirements/${reqId}/${action}`, {
+            method: 'POST', headers: getHeaders(),
+        });
+        if (r.ok) {
+            const data = await r.json();
+            // revise returns the NEW draft revision — jump to it
+            window.location = (action === 'revise') ? `/requirements/${data.id}` : window.location;
+            if (action !== 'revise') window.location.reload();
+        } else {
+            const err = await r.json();
+            showError(formatApiError(err.detail, `Failed to ${action}`));
+        }
+    } catch (e) { showError('Network error: ' + e.message); }
+}
+
+async function deleteReq() {
+    if (!confirm('Delete this requirement?')) return;
+    try {
+        const r = await fetch(`/api/requirements/${reqId}`, { method: 'DELETE', headers: getHeaders() });
+        if (r.ok) window.location = '/requirements';
+        else {
+            const err = await r.json();
+            showError(formatApiError(err.detail, 'Failed to delete'));
+        }
+    } catch (e) { showError('Network error: ' + e.message); }
+}
+</script>
+{% endblock %}

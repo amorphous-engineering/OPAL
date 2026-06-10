@@ -1,0 +1,31 @@
+{% import 'opalkit/_macros.html' as ok %}
+{% for req in requirements %}
+<tr onclick="window.location='/requirements/{{ req.id }}'" style="cursor: pointer;">
+    <td>{{ ok.mono(req.req_number) }}</td>
+    <td class="mono">{{ req.revision }}</td>
+    <td>{{ req.title }}</td>
+    <td>
+        {% if req.lifecycle_state == 'baselined' %}
+            {{ ok.status("BASELINED", "ok") }}
+        {% elif req.lifecycle_state == 'preliminary' %}
+            {{ ok.status("PRELIMINARY", "info") }}
+        {% elif req.lifecycle_state == 'superseded' %}
+            {{ ok.status("SUPERSEDED", "warn") }}
+        {% elif req.lifecycle_state == 'cancelled' %}
+            {{ ok.status("CANCELLED", "error") }}
+        {% else %}
+            {{ ok.status("DRAFT", "draft") }}
+        {% endif %}
+    </td>
+    <td class="mono text-center">{{ req.level }}</td>
+    <td>{{ req.category or '' }}</td>
+    <td class="mono">{{ (req.verification_method or '') | upper }}</td>
+    <td>
+        {% if req.tbd %}{{ ok.status("TBD", "error") }}{% endif %}
+        {% if req.tbr %}{{ ok.status("TBR", "warn") }}{% endif %}
+    </td>
+    <td>{{ ok.timestamp(req.updated_at) }}</td>
+</tr>
+{% else %}
+<tr><td colspan="9">{{ ok.empty("No requirements found — create one or run `opal import-requirements`") }}</td></tr>
+{% endfor %}

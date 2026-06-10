@@ -1,0 +1,64 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS") }}
+{% endblock %}
+
+{% block content %}
+{% set actions %}{{ ok.btn("+ NEW REQUIREMENT", href="/requirements/new", variant="primary") }}{% endset %}
+{% call ok.panel("REQUIREMENTS", actions=actions) %}
+        <div class="toolbar">
+            {{ ok.toolbar_search(name="search", id="search", placeholder="Search number, title, statement...", hx_get="/requirements/table", hx_target="#requirements-table", hx_include="[name='state'], [name='level'], [name='show_superseded']") }}
+            <div class="toolbar-filter">
+                <select name="state" class="form-select"
+                        hx-get="/requirements/table" hx-trigger="change" hx-target="#requirements-table"
+                        hx-include="[name='level'], [name='show_superseded'], #search">
+                    <option value="">All states</option>
+                    {% for s in states %}
+                    <option value="{{ s }}">{{ s | upper }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="toolbar-filter">
+                <select name="level" class="form-select"
+                        hx-get="/requirements/table" hx-trigger="change" hx-target="#requirements-table"
+                        hx-include="[name='state'], [name='show_superseded'], #search">
+                    <option value="">All levels</option>
+                    <option value="0">L0 - Mission</option>
+                    <option value="1">L1 - System</option>
+                    <option value="2">L2 - Subsystem</option>
+                    <option value="3">L3 - Component</option>
+                </select>
+            </div>
+            <div class="toolbar-filter">
+                <label style="display: flex; align-items: center; gap: var(--space-xs); white-space: nowrap;">
+                    <input type="checkbox" name="show_superseded" value="1"
+                           hx-get="/requirements/table" hx-trigger="change" hx-target="#requirements-table"
+                           hx-include="[name='state'], [name='level'], #search">
+                    <span class="mono" style="font-size: 0.75rem;">SHOW SUPERSEDED</span>
+                </label>
+            </div>
+        </div>
+
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("NUMBER", width="110px") }}
+                    {{ ok.th("REV", width="50px") }}
+                    {{ ok.th("TITLE") }}
+                    {{ ok.th("STATE", width="110px") }}
+                    {{ ok.th("LVL", width="50px") }}
+                    {{ ok.th("CATEGORY", width="110px") }}
+                    {{ ok.th("VERIF", width="110px") }}
+                    {{ ok.th("FLAGS", width="100px") }}
+                    {{ ok.th("UPDATED", width="160px") }}
+                </tr>
+            </thead>
+            <tbody id="requirements-table" hx-get="/requirements/table" hx-trigger="load">
+                <tr><td colspan="9" class="text-muted">Loading...</td></tr>
+            </tbody>
+        {% endcall %}
+{% endcall %}
+{% endblock %}

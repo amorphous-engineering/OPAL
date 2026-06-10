@@ -200,3 +200,166 @@ def test_import_is_idempotent(db_session: Session):
     assert second.skipped == ["REQ-010"]
     count = db_session.query(Requirement).filter(Requirement.req_number == "REQ-010").count()
     assert count == 1
+
+
+# ============ API ============
+
+
+def _api_create(client, **overrides):
+    payload = {
+        "title": "Chamber pressure",
+        "statement": "The engine shall sustain a chamber pressure of 20 bar ± 1 bar.",
+        "rationale": "Sized from thrust target.",
+        "category": "performance",
+    }
+    payload.update(overrides)
+    resp = client.post("/api/requirements", json=payload)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def test_api_create_and_get(client):
+    req = _api_create(client)
+    assert req["req_number"] == "REQ-0001"
+    assert req["lifecycle_state"] == "draft"
+    assert req["revision"] == 1
+    assert req["level"] == 0
+
+    got = client.get(f"/api/requirements/{req['id']}").json()
+    assert got["statement"].startswith("The engine shall")
+
+
+def test_api_child_inherits_level(client):
+    root = _api_create(client)
+    child = _api_create(client, title="Injector dP", parent_id=root["id"])
+    assert child["level"] == 1
+    assert child["parent_id"] == root["id"]
+
+    listed = client.get("/api/requirements", params={"parent_id": root["id"]}).json()
+    assert listed["total"] == 1
+    root_detail = client.get(f"/api/requirements/{root['id']}").json()
+    assert root_detail["children_count"] == 1
+
+
+def test_api_update_then_baseline_locks(client):
+    req = _api_create(client)
+    r = client.patch(f"/api/requirements/{req['id']}", json={"verification_method": "test"})
+    assert r.status_code == 200
+    assert r.json()["verification_method"] == "test"
+
+    r = client.post(f"/api/requirements/{req['id']}/baseline")
+    assert r.status_code == 200
+    assert r.json()["lifecycle_state"] == "baselined"
+
+    # Now immutable
+    r = client.patch(f"/api/requirements/{req['id']}", json={"title": "nope"})
+    assert r.status_code == 409
+    assert "immutable" in r.json()["detail"]
+
+    # And undeletable
+    assert client.delete(f"/api/requirements/{req['id']}").status_code == 409
+
+
+def test_api_baseline_blockers_409(client):
+    req = _api_create(client, rationale=None, tbd=True)
+    r = client.post(f"/api/requirements/{req['id']}/baseline")
+    assert r.status_code == 409
+    assert "rationale" in r.json()["detail"]
+    assert "TBD" in r.json()["detail"]
+
+
+def test_api_revise_chain_and_supersede(client):
+    rev1 = _api_create(client)
+    client.post(f"/api/requirements/{rev1['id']}/baseline")
+
+    r = client.post(f"/api/requirements/{rev1['id']}/revise")
+    assert r.status_code == 201
+    rev2 = r.json()
+    assert rev2["revision"] == 2
+    assert rev2["req_number"] == rev1["req_number"]
+    assert rev2["lifecycle_state"] == "draft"
+    assert rev2["supersedes_id"] == rev1["id"]
+
+    # Default list hides nothing yet (rev1 still baselined until rev2 baselines)
+    client.post(f"/api/requirements/{rev2['id']}/baseline")
+    listed = client.get("/api/requirements").json()
+    numbers = [(i["req_number"], i["revision"]) for i in listed["items"]]
+    assert (rev1["req_number"], 2) in numbers
+    assert (rev1["req_number"], 1) not in numbers  # superseded hidden by default
+
+    revs = client.get(f"/api/requirements/{rev2['id']}/revisions").json()
+    assert [r["revision"] for r in revs] == [1, 2]
+    assert revs[0]["lifecycle_state"] == "superseded"
+
+
+def test_api_cancel(client):
+    req = _api_create(client)
+    r = client.post(f"/api/requirements/{req['id']}/cancel")
+    assert r.status_code == 200
+    assert r.json()["lifecycle_state"] == "cancelled"
+    assert client.post(f"/api/requirements/{req['id']}/cancel").status_code == 409
+
+
+def test_api_invalid_verification_method(client):
+    resp = client.post(
+        "/api/requirements",
+        json={"title": "Bad", "statement": "The thing shall work.", "verification_method": "vibes"},
+    )
+    assert resp.status_code == 400
+
+
+def test_api_allocation_by_req_number(client):
+    req = _api_create(client)
+    part = client.post("/api/parts", json={"name": "Injector", "tier": 1}).json()
+
+    r = client.post(
+        f"/api/requirements/parts/{part['id']}", json={"requirement_id": req["req_number"]}
+    )
+    assert r.status_code == 201, r.text
+    alloc = r.json()
+    assert alloc["requirement_ref_id"] == req["id"]
+    assert alloc["requirement_title"] == "Chamber pressure"
+
+    # Cross-check allocation count and verify flow via /allocations
+    detail = client.get(f"/api/requirements/{req['id']}").json()
+    assert detail["allocation_count"] == 1
+
+    r = client.post(f"/api/requirements/allocations/{alloc['id']}/verify", json={})
+    assert r.status_code == 200
+    assert r.json()["status"] == "verified"
+
+    assert client.delete(f"/api/requirements/allocations/{alloc['id']}").status_code == 204
+
+
+def test_api_allocation_unknown_number_400(client):
+    part = client.post("/api/parts", json={"name": "Orphan", "tier": 3}).json()
+    r = client.post(f"/api/requirements/parts/{part['id']}", json={"requirement_id": "REQ-9999"})
+    assert r.status_code == 400
+
+
+# ============ Web pages ============
+
+
+def test_web_pages_render(client, test_user):
+    client.cookies.set("opal_user_id", str(test_user.id))
+    req = _api_create(client)
+    client.post(f"/api/requirements/{req['id']}/baseline")
+
+    page = client.get("/requirements")
+    assert page.status_code == 200
+    assert "REQUIREMENTS" in page.text
+
+    rows = client.get("/requirements/table")
+    assert rows.status_code == 200
+    assert req["req_number"] in rows.text
+    assert "BASELINED" in rows.text
+
+    detail = client.get(f"/requirements/{req['id']}")
+    assert detail.status_code == 200
+    assert "SHALL STATEMENT" in detail.text
+    assert "REVISE" in detail.text
+    assert "REVISION HISTORY" in detail.text
+
+    new_page = client.get("/requirements/new")
+    assert new_page.status_code == 200
+    assert "CREATE DRAFT" in new_page.text

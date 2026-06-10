@@ -1,0 +1,85 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS", "/requirements") }}
+{{ ok.crumb("NEW") }}
+{% endblock %}
+
+{% block content %}
+{% call ok.panel("NEW REQUIREMENT", max_width="700px") %}
+        <form id="new-req-form" onsubmit="createReq(event)">
+            {{ ok.field("title", "TITLE", required=true, placeholder="Short name, e.g. Chamber pressure") }}
+            {{ ok.field("statement", "SHALL STATEMENT", type="textarea", rows=3, required=true, placeholder="The <subject> shall <one thought>, e.g. The engine shall sustain a chamber pressure of 20 bar ± 1 bar.") }}
+            {{ ok.field("rationale", "RATIONALE", type="textarea", rows=2, placeholder="Why this requirement exists (required before baseline)") }}
+
+            {% call ok.grid(cols=2) %}
+                {{ ok.field("category", "CATEGORY", placeholder="functional, performance, ...") }}
+                {{ ok.field("verification_method", "VERIFICATION METHOD", type="select", options=[{"value": "", "label": "— not set —"}, {"value": "analysis", "label": "ANALYSIS"}, {"value": "inspection", "label": "INSPECTION"}, {"value": "demonstration", "label": "DEMONSTRATION"}, {"value": "test", "label": "TEST"}]) }}
+            {% endcall %}
+
+            <div class="form-group">
+                <label class="form-label" for="parent-select">PARENT (flow-down)</label>
+                <select id="parent-select" name="parent_id" class="form-select">
+                    <option value="">None — root (level 0)</option>
+                    {% for p in parents %}
+                    <option value="{{ p.id }}">{{ p.req_number }} (L{{ p.level }}) — {{ p.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label style="margin-right: var(--space-md);"><input type="checkbox" name="tbd"> <span class="mono">TBD</span> <span class="text-muted">value not yet determined</span></label>
+                <label><input type="checkbox" name="tbr"> <span class="mono">TBR</span> <span class="text-muted">value to be reviewed</span></label>
+            </div>
+
+            {{ ok.form_messages() }}
+            {{ ok.form_actions(cancel_href="/requirements", submit_text="CREATE DRAFT") }}
+        </form>
+{% endcall %}
+
+<script>
+function getHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const userId = localStorage.getItem('opal_user_id');
+    if (userId) headers['X-User-Id'] = userId;
+    return headers;
+}
+
+async function createReq(event) {
+    event.preventDefault();
+    const form = document.getElementById('new-req-form');
+    const errorDiv = document.getElementById('form-error');
+    errorDiv.style.display = 'none';
+
+    const data = {
+        title: form.title.value,
+        statement: form.statement.value,
+        rationale: form.rationale.value || null,
+        category: form.category.value || null,
+        verification_method: form.verification_method.value || null,
+        parent_id: form.parent_id.value ? parseInt(form.parent_id.value) : null,
+        tbd: form.tbd.checked,
+        tbr: form.tbr.checked,
+    };
+
+    try {
+        const r = await fetch('/api/requirements', {
+            method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
+        });
+        if (r.ok) {
+            const req = await r.json();
+            window.location.href = '/requirements/' + req.id;
+        } else {
+            const err = await r.json();
+            errorDiv.textContent = formatApiError(err.detail, 'Failed to create requirement');
+            errorDiv.style.display = 'block';
+        }
+    } catch (e) {
+        errorDiv.textContent = 'Network error: ' + e.message;
+        errorDiv.style.display = 'block';
+    }
+}
+</script>
+{% endblock %}
