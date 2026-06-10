@@ -214,11 +214,8 @@ def test_bulk_create_parts_happy(db_session):
     assert data["count"] == 3
     for p in data["parts"]:
         assert p["internal_pn"]
-    # tier-2 forced to tooling
-    tier2 = next(p for p in data["parts"] if p["tier"] == 2)
-    assert tier2["is_tooling"] is True
-    tier1 = next(p for p in data["parts"] if p["tier"] == 1)
-    assert tier1["is_tooling"] is False
+    # no tier implies tooling (tier semantics are project-defined)
+    assert all(p["is_tooling"] is False for p in data["parts"])
 
 
 def test_bulk_create_parts_bad_parent_rejects_batch(db_session):
