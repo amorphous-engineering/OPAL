@@ -1144,6 +1144,19 @@ async def purchases_detail(request: Request, db: DbSession, purchase_id: int) ->
     context["purchase"] = purchase
     context["statuses"] = [s.value for s in PurchaseStatus]
 
+    # Expense ledger records (written at receive time)
+    from opal.db.models import PurchaseExpense
+
+    expenses = (
+        db.query(PurchaseExpense)
+        .filter(PurchaseExpense.purchase_id == purchase_id)
+        .order_by(PurchaseExpense.received_at, PurchaseExpense.id)
+        .all()
+    )
+    context["expenses"] = expenses
+    totals = [e.total_cost for e in expenses if e.total_cost is not None]
+    context["expense_total"] = sum(totals) if totals else None
+
     # Get parts for adding new lines - convert to dicts for JSON serialization in modal
     parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
     context["parts"] = parts  # Keep full objects for template rendering
