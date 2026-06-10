@@ -998,6 +998,44 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="reaffirm_requirement",
+            description=(
+                "Clear a requirement's stale flag without editing it — 'the "
+                "parent's change doesn't invalidate this'. POLICY: signature "
+                "act, requires the user_id of a real human user. Staleness is "
+                "set on direct children when their parent's revision "
+                "supersedes; it also clears on any edit."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user re-affirming (required)",
+                    },
+                },
+                "required": ["requirement_id", "user_id"],
+            },
+        ),
+        Tool(
+            name="get_requirement_diff",
+            description=(
+                "Word-level diff of statement and rationale between two "
+                "revisions of a requirement. Defaults to this revision vs "
+                "the one it supersedes."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "req_number": {"type": "string"},
+                    "rev_a": {"type": "integer", "description": "Older revision number"},
+                    "rev_b": {"type": "integer", "description": "Newer revision number"},
+                },
+            },
+        ),
+        Tool(
             name="cancel_requirement",
             description="Cancel a requirement (terminal state).",
             inputSchema={
@@ -1275,6 +1313,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _revise_requirement(db, arguments)
         elif name == "cancel_requirement":
             return await _cancel_requirement(db, arguments)
+        elif name == "reaffirm_requirement":
+            return await _reaffirm_requirement(db, arguments)
+        elif name == "get_requirement_diff":
+            return await _get_requirement_diff(db, arguments)
         elif name == "lint_requirement":
             return await _lint_requirement(db, arguments)
         elif name == "flowdown_tree":
@@ -2005,6 +2047,7 @@ def _requirement_dict(req: Requirement) -> dict:
         "verification_method": req.verification_method,
         "tbd": req.tbd,
         "tbr": req.tbr,
+        "stale": req.stale,
         "baselined_at": req.baselined_at.isoformat() if req.baselined_at else None,
         "supersedes_id": req.supersedes_id,
     }
@@ -2163,6 +2206,9 @@ async def _update_requirement(db, args: dict) -> list[TextContent]:
     ):
         if field in args:
             setattr(req, field, args[field])
+
+    # Any edit is by definition a fresh look — clear staleness (spec §7).
+    req.stale = False
 
     log_update(db, req, old_values)
     db.commit()
@@ -2337,6 +2383,68 @@ async def _get_baseline_events(db, args: dict) -> list[TextContent]:
 
     events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
     return json_response({"count": len(events), "events": [event_dict(e) for e in events]})
+
+
+async def _reaffirm_requirement(db, args: dict) -> list[TextContent]:
+    """Clear staleness with a signature. Humans re-affirm; agents prepare."""
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+    if not req.stale:
+        return json_response({"error": f"{req.req_number} is not stale"})
+
+    old_values = get_model_dict(req)
+    req.stale = False
+    log_update(db, req, old_values, user.id)
+    db.commit()
+    db.refresh(req)
+    return json_response(
+        {
+            "success": True,
+            "message": f"{req.req_number} rev {req.revision} re-affirmed by {user.name}",
+            "requirement": _requirement_dict(req),
+        }
+    )
+
+
+async def _get_requirement_diff(db, args: dict) -> list[TextContent]:
+    """Word diff of statement/rationale between two revisions."""
+    from opal.se.redline import redline_segments
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    revisions = {
+        r.revision: r
+        for r in db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .all()
+    }
+    rev_b = args.get("rev_b", req.revision)
+    rev_a = args.get("rev_a")
+    if rev_a is None:
+        predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
+        rev_a = predecessor.revision if predecessor else rev_b
+    old = revisions.get(rev_a)
+    new = revisions.get(rev_b)
+    if not old or not new:
+        return json_response(
+            {"error": f"Revision not found (have: {sorted(revisions)}, asked: {rev_a}, {rev_b})"}
+        )
+    return json_response(
+        {
+            "req_number": req.req_number,
+            "rev_a": rev_a,
+            "rev_b": rev_b,
+            "statement_diff": redline_segments(old.statement, new.statement),
+            "rationale_diff": redline_segments(old.rationale or "", new.rationale or ""),
+        }
+    )
 
 
 async def _revise_requirement(db, args: dict) -> list[TextContent]:

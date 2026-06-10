@@ -510,11 +510,12 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
 
     # Traceability widget — red-only (overdue TBRs, stuck block-lint drafts)
     # plus exactly one non-red line (ready-to-baseline count).
-    from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs
+    from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs, stale_requirements
     from opal.se.readiness import ready_requirement_ids
 
     context["overdue_tbrs"] = overdue_tbrs(db)
     context["stuck_drafts"] = old_block_lint_drafts(db)
+    context["stale_reqs"] = stale_requirements(db)
     context["ready_to_baseline"] = len(ready_requirement_ids(db))
 
     return templates.TemplateResponse("index.html", context)
@@ -2936,6 +2937,55 @@ async def requirements_detail(request: Request, db: DbSession, req_id: int) -> H
         .all()
     )
     return templates.TemplateResponse("requirements/detail.html", context)
+
+
+@router.get("/requirements/{req_id}/redline", response_class=HTMLResponse)
+async def requirements_redline(
+    request: Request,
+    db: DbSession,
+    req_id: int,
+    rev_a: int | None = Query(None),
+    rev_b: int | None = Query(None),
+) -> HTMLResponse:
+    """Word-diff partial between two revisions of this requirement's number.
+
+    Defaults to this revision vs the one it supersedes.
+    """
+    from opal.se.redline import redline_html
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return HTMLResponse("", status_code=404)
+
+    revisions = {
+        r.revision: r
+        for r in db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .all()
+    }
+    if rev_b is None:
+        rev_b = req.revision
+    if rev_a is None:
+        predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
+        rev_a = predecessor.revision if predecessor else rev_b
+    old = revisions.get(rev_a)
+    new = revisions.get(rev_b)
+    if not old or not new:
+        return HTMLResponse('<div class="text-muted mono">revision not found</div>', status_code=404)
+    return templates.TemplateResponse(
+        "requirements/_redline.html",
+        {
+            "request": request,
+            "rev_a": old,
+            "rev_b": new,
+            "statement_diff": redline_html(old.statement, new.statement),
+            "rationale_diff": redline_html(old.rationale or "", new.rationale or ""),
+        },
+    )
 
 
 @router.get("/requirements/{req_id}/baseline-panel", response_class=HTMLResponse)

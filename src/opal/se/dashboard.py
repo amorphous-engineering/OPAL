@@ -51,6 +51,20 @@ def overdue_tbrs(db: Session) -> list[dict[str, Any]]:
     return overdue
 
 
+def stale_requirements(db: Session) -> list[Requirement]:
+    """Live rows flagged stale by a parent revision (UX spec §7)."""
+    return (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state.in_(_LIVE_STATES),
+            Requirement.stale.is_(True),
+        )
+        .order_by(Requirement.req_number)
+        .all()
+    )
+
+
 def old_block_lint_drafts(db: Session, older_than_days: int = 7) -> list[Requirement]:
     """Drafts older than the window still carrying block-severity lint."""
     cutoff = datetime.now(UTC) - timedelta(days=older_than_days)

@@ -88,6 +88,7 @@ class RequirementResponse(BaseModel):
     tbr: bool
     tbr_owner_id: int | None = None
     tbr_due: datetime | None = None
+    stale: bool = False
     baselined_at: datetime | None = None
     baselined_by_id: int | None = None
     supersedes_id: int | None = None
@@ -341,6 +342,10 @@ async def update_requirement(
         if value is not None:
             setattr(req, field, value)
 
+    # Any edit is by definition a fresh look — clear staleness (spec §7).
+    if data.model_dump(exclude_unset=True):
+        req.stale = False
+
     log_update(db, req, old_values, user_id)
     db.commit()
     db.refresh(req)
@@ -469,6 +474,28 @@ async def cancel_requirement(
         cancel(db, req)
     except LifecycleError as err:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err)) from err
+    log_update(db, req, old_values, user_id)
+    db.commit()
+    db.refresh(req)
+    return _req_response(db, req)
+
+
+@router.post("/{req_id:int}/reaffirm", response_model=RequirementResponse)
+async def reaffirm_requirement(
+    db: DbSession, req_id: int, user_id: CurrentUserId
+) -> RequirementResponse:
+    """Clear staleness without an edit: 'the parent's change doesn't invalidate this'.
+
+    Signature semantics — audit-logged with the session user. Works on
+    baselined rows too; staleness is metadata, not content.
+    """
+    req = _get_requirement(db, req_id)
+    if not req.stale:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Requirement is not stale"
+        )
+    old_values = get_model_dict(req)
+    req.stale = False
     log_update(db, req, old_values, user_id)
     db.commit()
     db.refresh(req)

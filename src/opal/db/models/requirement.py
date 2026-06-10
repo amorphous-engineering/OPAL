@@ -83,6 +83,16 @@ class Requirement(Base, IdMixin, TimestampMixin, SoftDeleteMixin, LifecycleMixin
     )
     tbr_due: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Staleness (UX spec §7): set on direct children when their parent's
+    # revision supersedes; cleared by any edit or an explicit re-affirm.
+    # Informational only — never blocks anything.
+    stale: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Parent was revised after this row last got a fresh look",
+    )
+
     # Relationships
     parent: Mapped["Requirement | None"] = relationship(
         "Requirement",

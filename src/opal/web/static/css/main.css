@@ -2433,3 +2433,22 @@ a.user-menu-link.active {
 .queue-staged {
     font-size: 0.85rem;
 }
+
+/* Revision redlines — strike old / highlight new */
+.redline-body {
+    white-space: pre-wrap;
+    max-width: 80ch;
+    font-size: 0.85rem;
+}
+
+.redline-del {
+    color: var(--accent-red);
+    text-decoration: line-through;
+    background: transparent;
+}
+
+.redline-ins {
+    color: var(--accent-green);
+    background: var(--bg-tertiary);
+    text-decoration: none;
+}

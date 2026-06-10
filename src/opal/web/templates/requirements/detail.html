@@ -15,6 +15,10 @@
 {% set mutable = req.lifecycle_state in ['draft', 'preliminary'] %}
 {% set state_variant = "ok" if req.lifecycle_state == 'baselined' else ("info" if req.lifecycle_state == 'preliminary' else ("warn" if req.lifecycle_state == 'superseded' else ("error" if req.lifecycle_state == 'cancelled' else "draft"))) %}
 {% set actions %}
+    {% if req.stale %}
+    <span class="flag-chip flag-stale mono" title="parent was revised after this row last got a fresh look">≠ STALE</span>
+    {{ ok.btn("RE-AFFIRM", attrs='onclick="reaffirmReq()"') }}
+    {% endif %}
     {{ ok.status(req.lifecycle_state | upper, state_variant) }}
     {% if req.lifecycle_state == 'baselined' %}
     {{ ok.btn("REVISE", variant="primary", attrs='onclick="lifecycleAction(\'revise\')"') }}
@@ -227,6 +231,24 @@
                 {% endfor %}
             </tbody>
         {% endcall %}
+        {% if revisions | length > 1 %}
+        <div style="display: flex; gap: var(--space-sm); align-items: center; margin-top: var(--space-md);">
+            <span class="form-label" style="margin: 0;">REDLINE</span>
+            <select id="redline-a" class="form-select" style="width: auto;">
+                {% for r in revisions %}
+                <option value="{{ r.revision }}" {% if r.id == req.supersedes_id %}selected{% endif %}>rev {{ r.revision }}</option>
+                {% endfor %}
+            </select>
+            <span class="mono text-muted">→</span>
+            <select id="redline-b" class="form-select" style="width: auto;">
+                {% for r in revisions %}
+                <option value="{{ r.revision }}" {% if r.id == req.id %}selected{% endif %}>rev {{ r.revision }}</option>
+                {% endfor %}
+            </select>
+            {{ ok.btn("COMPARE", attrs='onclick="loadRedline()"') }}
+        </div>
+        <div id="redline-container" style="margin-top: var(--space-sm);"></div>
+        {% endif %}
         <div style="margin-top: var(--space-sm);">
             {{ ok.link("AUDIT TRAIL →", "/audit", mono=true, muted=true) }}
         </div>
@@ -336,6 +358,37 @@ async function commitBaseline() {
         }
     } catch (e) { showError('Network error: ' + e.message); }
 }
+
+// Staleness: re-affirm = signature act, audit-logged with the session user.
+async function reaffirmReq() {
+    const userName = localStorage.getItem('opal_user_name') || '(no session user)';
+    const ts = new Date().toISOString().substring(0, 19) + 'Z';
+    if (!confirm(`Re-affirm: the parent's change does not invalidate this requirement.\n\nsigned: ${userName} · ${ts}`)) return;
+    try {
+        const r = await fetch(`/api/requirements/${reqId}/reaffirm`, {
+            method: 'POST', headers: getHeaders(),
+        });
+        if (r.ok) window.location.reload();
+        else {
+            const err = await r.json();
+            showError(formatApiError(err.detail, 'Failed to re-affirm'));
+        }
+    } catch (e) { showError('Network error: ' + e.message); }
+}
+
+// Revision redlines (word diff, server-rendered partial).
+async function loadRedline() {
+    const a = document.getElementById('redline-a').value;
+    const b = document.getElementById('redline-b').value;
+    try {
+        const r = await fetch(`/requirements/${reqId}/redline?rev_a=${a}&rev_b=${b}`);
+        document.getElementById('redline-container').innerHTML = r.ok
+            ? await r.text()
+            : '<div class="text-muted mono">redline unavailable</div>';
+    } catch (e) { /* informational only */ }
+}
+// Default comparison: this rev vs the one it supersedes.
+{% if req.supersedes_id %}loadRedline();{% endif %}
 
 // Lint-while-typing on the statement editor (drafts only).
 const statementTextarea = document.getElementById('statement-text');
