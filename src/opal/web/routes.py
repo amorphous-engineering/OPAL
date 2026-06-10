@@ -2726,10 +2726,12 @@ def _requirement_tree(db: DbSession, root_id: int | None = None) -> tuple[list[d
 async def requirements_tree(request: Request, db: DbSession) -> HTMLResponse:
     """Requirements tree — the front door for the spec."""
     from opal.db.base import LifecycleState
+    from opal.se.readiness import ready_requirement_ids
 
     context = get_base_context(request, db, "Requirements - OPAL")
     context["tree"], context["total"] = _requirement_tree(db)
     context["states"] = [s.value for s in LifecycleState]
+    context["queue_count"] = len(ready_requirement_ids(db))
     return templates.TemplateResponse("requirements/tree.html", context)
 
 
@@ -2795,6 +2797,93 @@ async def requirements_new(request: Request, db: DbSession) -> HTMLResponse:
         .all()
     )
     return templates.TemplateResponse("requirements/new.html", context)
+
+
+@router.get("/requirements/queue", response_class=HTMLResponse)
+async def requirements_queue(request: Request, db: DbSession) -> HTMLResponse:
+    """Baseline queue review session — one ready requirement per screen."""
+    from opal.db.models import PartRequirement
+    from opal.se.readiness import ready_requirement_ids
+
+    ids = ready_requirement_ids(db)
+    rows = (
+        db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
+    )
+    rows.sort(key=lambda r: (r.level, r.req_number))
+    by_id = {r.id: r for r in db.query(Requirement).filter(Requirement.deleted_at.is_(None))}
+
+    def root_chain(r: Requirement) -> list[str]:
+        chain: list[str] = []
+        seen = {r.id}
+        cursor = by_id.get(r.parent_id) if r.parent_id else None
+        while cursor is not None and cursor.id not in seen:
+            chain.append(f"{cursor.req_number} {cursor.title}")
+            seen.add(cursor.id)
+            cursor = by_id.get(cursor.parent_id) if cursor.parent_id else None
+        return list(reversed(chain))
+
+    items = []
+    for r in rows:
+        children_count = (
+            db.query(Requirement)
+            .filter(Requirement.parent_id == r.id, Requirement.deleted_at.is_(None))
+            .count()
+        )
+        alloc = (
+            db.query(Part.name)
+            .join(PartRequirement, PartRequirement.part_id == Part.id)
+            .filter(PartRequirement.requirement_ref_id == r.id)
+            .all()
+        )
+        items.append(
+            {
+                "id": r.id,
+                "req_number": r.req_number,
+                "revision": r.revision,
+                "title": r.title,
+                "statement": r.statement,
+                "rationale": r.rationale or "",
+                "level": r.level,
+                "verification_method": r.verification_method or "—",
+                "children_count": children_count,
+                "allocated": [name for (name,) in alloc],
+                "root_chain": root_chain(r),
+            }
+        )
+
+    context = get_base_context(request, db, "Baseline Queue - OPAL")
+    context["queue_items"] = items
+    return templates.TemplateResponse("requirements/queue.html", context)
+
+
+@router.get("/requirements/baselines", response_class=HTMLResponse)
+async def requirements_baselines(request: Request, db: DbSession) -> HTMLResponse:
+    """Baseline events history, newest first."""
+    from opal.db.models import BaselineEvent
+
+    events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
+    context = get_base_context(request, db, "Baselines - OPAL")
+    context["events"] = events
+    return templates.TemplateResponse("requirements/baselines.html", context)
+
+
+@router.get("/requirements/baselines/{event_id}", response_class=HTMLResponse)
+async def requirements_baseline_event(
+    request: Request, db: DbSession, event_id: int
+) -> HTMLResponse:
+    """One baseline event: the locked revision set."""
+    from opal.db.models import BaselineEvent
+
+    event = db.query(BaselineEvent).filter(BaselineEvent.id == event_id).first()
+    if not event:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": f"Baseline event {event_id} not found"},
+            status_code=404,
+        )
+    context = get_base_context(request, db, f"Baseline event {event_id} - OPAL")
+    context["event"] = event
+    return templates.TemplateResponse("requirements/baseline_event.html", context)
 
 
 @router.get("/requirements/{req_id}", response_class=HTMLResponse)

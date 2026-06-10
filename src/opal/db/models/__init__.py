@@ -3,6 +3,7 @@
 from opal.db.models.app_setting import AppSetting
 from opal.db.models.attachment import Attachment
 from opal.db.models.audit import AuditLog
+from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
 from opal.db.models.execution import ProcedureInstance, StepExecution
@@ -42,6 +43,8 @@ __all__ = [
     "Attachment",
     "AuditLog",
     "BOMLine",
+    "BaselineEvent",
+    "BaselineEventItem",
     "DataPoint",
     "Dataset",
     "DesignatorSequence",

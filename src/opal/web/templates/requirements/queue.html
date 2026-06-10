@@ -1,0 +1,184 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS", "/requirements") }}
+{{ ok.crumb("BASELINE QUEUE") }}
+{% endblock %}
+
+{% block content %}
+{% call ok.panel("BASELINE QUEUE · " ~ (queue_items | length)) %}
+    {% if not queue_items %}
+    {{ ok.empty("Nothing is ready to baseline — clear blockers in the dossiers first") }}
+    {% else %}
+    <div id="queue-review" class="queue-review mono">
+        <!-- Item screen -->
+        <div id="queue-item-screen">
+            <div class="queue-header">
+                <span id="queue-position"></span>
+                <span id="queue-number" class="text-green"></span>
+                <span class="text-muted">[a]pprove</span>
+            </div>
+            <div id="queue-chain" class="text-muted queue-chain"></div>
+            <div id="queue-statement" class="queue-statement"></div>
+            <div class="queue-section">
+                <span class="text-muted">RATIONALE</span>
+                <div id="queue-rationale"></div>
+            </div>
+            <div class="queue-facts">
+                <span>CHILDREN (<span id="queue-children"></span>)</span>
+                <span>ALLOCATED <span id="queue-allocated"></span></span>
+                <span>LINT <span class="text-green">all clear</span></span>
+                <span>VERIF <span id="queue-verif"></span></span>
+            </div>
+            <div class="queue-keys text-muted">
+                [a] approve &nbsp; [s] skip &nbsp; [e] edit (exits item) &nbsp; j/k move &nbsp; [esc] abandon
+            </div>
+            <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm);">
+                {{ ok.btn("APPROVE (a)", variant="primary", attrs='onclick="disposition(\'approve\')"') }}
+                {{ ok.btn("SKIP (s)", attrs='onclick="disposition(\'skip\')"') }}
+                {{ ok.btn("EDIT (e)", attrs='onclick="editCurrent()"') }}
+            </div>
+        </div>
+
+        <!-- Commit screen -->
+        <div id="queue-commit-screen" style="display: none;">
+            <div class="queue-header"><span>STAGED FOR BASELINE</span></div>
+            <div id="queue-staged-list" class="queue-staged"></div>
+            <div class="form-group" style="margin-top: var(--space-md); max-width: 420px;">
+                <label class="form-label" for="queue-label">LABEL (optional, e.g. l0-freeze)</label>
+                <input type="text" id="queue-label" class="form-input mono" maxlength="100">
+            </div>
+            <div class="form-group" style="max-width: 420px;">
+                <label class="form-label" for="queue-note">NOTE (optional)</label>
+                <textarea id="queue-note" class="form-textarea" rows="2"></textarea>
+            </div>
+            <div class="baseline-signature">
+                signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
+                · <span id="queue-sign-time"></span>
+            </div>
+            <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-sm);">
+                <button type="button" class="btn btn-primary" onclick="commitBatch()" {% if not current_user %}disabled title="select a user first"{% endif %}>
+                    COMMIT BASELINE
+                </button>
+                {{ ok.btn("BACK TO REVIEW", attrs='onclick="showItem(0)"') }}
+                {{ ok.btn("ABANDON", href="/requirements") }}
+            </div>
+            <div id="queue-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </div>
+    </div>
+    {% endif %}
+{% endcall %}
+
+{% if queue_items %}
+<script>
+// The review session is client-state only — abandoning commits nothing.
+const queueItems = {{ queue_items | tojson }};
+const staged = new Set();   // ids approved this session
+const skipped = new Set();
+let cursor = 0;
+
+function showItem(index) {
+    cursor = Math.max(0, Math.min(queueItems.length - 1, index));
+    const item = queueItems[cursor];
+    document.getElementById('queue-commit-screen').style.display = 'none';
+    document.getElementById('queue-item-screen').style.display = 'block';
+    document.getElementById('queue-position').textContent = (cursor + 1) + ' of ' + queueItems.length;
+    document.getElementById('queue-number').textContent =
+        item.req_number + ' · REV ' + item.revision + (staged.has(item.id) ? '  [STAGED]' : '');
+    document.getElementById('queue-chain').textContent =
+        item.root_chain.length ? 'ROOT: ' + item.root_chain.join(' ▸ ') + ' ▸ this' : 'L0 root';
+    document.getElementById('queue-statement').textContent = item.statement;
+    document.getElementById('queue-rationale').textContent = item.rationale || '—';
+    document.getElementById('queue-children').textContent = item.children_count;
+    document.getElementById('queue-allocated').textContent = item.allocated.join(', ') || '—';
+    document.getElementById('queue-verif').textContent = item.verification_method;
+}
+
+function advance() {
+    const next = queueItems.findIndex((it, i) => i > cursor && !staged.has(it.id) && !skipped.has(it.id));
+    if (next !== -1) { showItem(next); return; }
+    const anyUndone = queueItems.findIndex(it => !staged.has(it.id) && !skipped.has(it.id));
+    if (anyUndone !== -1 && anyUndone !== cursor) { showItem(anyUndone); return; }
+    showCommitScreen();
+}
+
+function disposition(kind) {
+    const item = queueItems[cursor];
+    if (kind === 'approve') { staged.add(item.id); skipped.delete(item.id); }
+    else { skipped.add(item.id); staged.delete(item.id); }
+    advance();
+}
+
+function editCurrent() {
+    // Edited text must be read fresh next time — never approved hot.
+    const item = queueItems[cursor];
+    staged.delete(item.id);
+    window.location = '/requirements/' + item.id;
+}
+
+function showCommitScreen() {
+    const list = queueItems.filter(it => staged.has(it.id));
+    if (!list.length) { window.location = '/requirements'; return; }
+    document.getElementById('queue-item-screen').style.display = 'none';
+    document.getElementById('queue-commit-screen').style.display = 'block';
+    document.getElementById('queue-staged-list').innerHTML = list.map(it =>
+        '<div>✓ <span class="text-green">' + escapeHtml(it.req_number) + '</span> rev ' + it.revision +
+        ' — ' + escapeHtml(it.title) + '</div>').join('');
+    document.getElementById('queue-sign-time').textContent =
+        new Date().toISOString().substring(0, 19) + 'Z';
+}
+
+async function commitBatch() {
+    const ids = queueItems.filter(it => staged.has(it.id)).map(it => it.id);
+    const headers = { 'Content-Type': 'application/json' };
+    const userId = localStorage.getItem('opal_user_id');
+    if (userId) headers['X-User-Id'] = userId;
+    try {
+        const r = await fetch('/api/requirements/baseline-batch', {
+            method: 'POST', headers: headers,
+            body: JSON.stringify({
+                ids: ids,
+                label: document.getElementById('queue-label').value.trim() || null,
+                note: document.getElementById('queue-note').value.trim() || null,
+            }),
+        });
+        const data = await r.json();
+        if (r.ok) {
+            window.location = '/requirements/baselines/' + data.event_id;
+        } else {
+            const div = document.getElementById('queue-error');
+            const detail = data.detail;
+            div.textContent = (detail && detail.offenders)
+                ? 'Batch aborted — no longer ready: ' + detail.offenders.map(o => o.req_number).join(', ')
+                : formatApiError(detail, 'Batch failed');
+            div.style.display = 'block';
+        }
+    } catch (e) {
+        const div = document.getElementById('queue-error');
+        div.textContent = 'Network error: ' + e.message;
+        div.style.display = 'block';
+    }
+}
+
+document.addEventListener('keydown', function(event) {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const onItemScreen = document.getElementById('queue-item-screen').style.display !== 'none';
+    if (!onItemScreen) return;
+    switch (event.key) {
+        case 'a': event.preventDefault(); disposition('approve'); break;
+        case 's': event.preventDefault(); disposition('skip'); break;
+        case 'e': event.preventDefault(); editCurrent(); break;
+        case 'j': event.preventDefault(); showItem(cursor + 1); break;
+        case 'k': event.preventDefault(); showItem(cursor - 1); break;
+        case 'Escape': window.location = '/requirements'; break;
+    }
+});
+
+showItem(0);
+</script>
+{% endif %}
+{% endblock %}

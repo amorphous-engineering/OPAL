@@ -928,6 +928,61 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_baseline_queue",
+            description=(
+                "The baseline-ready set: draft/preliminary requirements whose "
+                "hard readiness checks all pass. Agents stage analysis for the "
+                "queue; a human commits it via baseline_batch."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="baseline_batch",
+            description=(
+                "Baseline a set of requirements atomically and write one "
+                "baseline event. POLICY: agents draft, humans baseline — "
+                "user_id must belong to a real human user who approved the "
+                "batch. Every item is re-validated at commit time; any "
+                "failure aborts the whole batch and returns the offenders."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Requirement IDs to baseline",
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user approving the batch (required)",
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "Optional event label, e.g. l0-freeze",
+                    },
+                    "note": {"type": "string"},
+                },
+                "required": ["ids", "user_id"],
+            },
+        ),
+        Tool(
+            name="get_baseline_events",
+            description=(
+                "Baseline events history (newest first): who locked which "
+                "requirement revisions, when, under what label."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "event_id": {
+                        "type": "integer",
+                        "description": "Return just this event with its locked set",
+                    },
+                },
+            },
+        ),
+        Tool(
             name="revise_requirement",
             description=(
                 "Create the next draft revision of a baselined requirement "
@@ -1210,6 +1265,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _update_requirement(db, arguments)
         elif name == "baseline_requirement":
             return await _baseline_requirement(db, arguments)
+        elif name == "get_baseline_queue":
+            return await _get_baseline_queue(db, arguments)
+        elif name == "baseline_batch":
+            return await _baseline_batch(db, arguments)
+        elif name == "get_baseline_events":
+            return await _get_baseline_events(db, arguments)
         elif name == "revise_requirement":
             return await _revise_requirement(db, arguments)
         elif name == "cancel_requirement":
@@ -2144,6 +2205,9 @@ async def _baseline_requirement(db, args: dict) -> list[TextContent]:
         baseline(db, req, user.id)
     except LifecycleError as err:
         return json_response({"error": str(err)})
+    from opal.se.baseline import write_baseline_event
+
+    write_baseline_event(db, [req], user.id)
     log_update(db, req, old_values, user.id)
     db.commit()
     db.refresh(req)
@@ -2154,6 +2218,125 @@ async def _baseline_requirement(db, args: dict) -> list[TextContent]:
             "requirement": _requirement_dict(req),
         }
     )
+
+
+def _require_human_user(db, args: dict):
+    """Signature acts demand a real, active user; returns (user, error_response)."""
+    user_id = args.get("user_id")
+    user = (
+        db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if user_id is not None
+        else None
+    )
+    if not user:
+        return None, json_response(
+            {
+                "error": "This action requires the user_id of an active human user "
+                "who approved it. Ask the operator which user is approving."
+            }
+        )
+    return user, None
+
+
+async def _get_baseline_queue(db, args: dict) -> list[TextContent]:
+    """Ready-to-baseline set, ordered level asc then req_number."""
+    from opal.se.readiness import ready_requirement_ids
+
+    ids = ready_requirement_ids(db)
+    rows = db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
+    rows.sort(key=lambda r: (r.level, r.req_number))
+    return json_response(
+        {
+            "count": len(rows),
+            "queue": [
+                {
+                    "id": r.id,
+                    "req_number": r.req_number,
+                    "revision": r.revision,
+                    "title": r.title,
+                    "level": r.level,
+                    "statement": r.statement,
+                }
+                for r in rows
+            ],
+        }
+    )
+
+
+async def _baseline_batch(db, args: dict) -> list[TextContent]:
+    """Atomic batch baseline. Agents prepare; a human signs."""
+    from opal.se.baseline import baseline_batch
+
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+
+    reqs = []
+    for req_id in args["ids"]:
+        req = (
+            db.query(Requirement)
+            .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+            .first()
+        )
+        if not req:
+            return json_response({"error": f"Requirement {req_id} not found"})
+        reqs.append(req)
+
+    old_values = {req.id: get_model_dict(req) for req in reqs}
+    event, offenders = baseline_batch(
+        db, reqs, user.id, label=args.get("label"), note=args.get("note")
+    )
+    if offenders:
+        # baseline_batch validates before any lifecycle flip — nothing to roll back.
+        return json_response(
+            {"error": "batch aborted — items no longer ready", "offenders": offenders}
+        )
+    for req in reqs:
+        log_update(db, req, old_values[req.id], user.id)
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "event_id": event.id,
+            "label": event.label,
+            "message": f"{len(reqs)} requirement(s) baselined by {user.name}",
+            "baselined": [
+                {"id": r.id, "req_number": r.req_number, "revision": r.revision} for r in reqs
+            ],
+        }
+    )
+
+
+async def _get_baseline_events(db, args: dict) -> list[TextContent]:
+    """Baseline events, newest first; event_id narrows to one with its set."""
+    from opal.db.models import BaselineEvent
+
+    def event_dict(e: BaselineEvent) -> dict:
+        return {
+            "id": e.id,
+            "label": e.label,
+            "note": e.note,
+            "signed_by_id": e.signed_by_id,
+            "signed_by": e.signed_by.name if e.signed_by else None,
+            "created_at": e.created_at.isoformat(),
+            "locked": [
+                {
+                    "id": item.requirement.id,
+                    "req_number": item.requirement.req_number,
+                    "revision": item.requirement.revision,
+                }
+                for item in e.items
+            ],
+        }
+
+    if args.get("event_id"):
+        event = db.query(BaselineEvent).filter(BaselineEvent.id == args["event_id"]).first()
+        if not event:
+            return json_response({"error": f"Baseline event {args['event_id']} not found"})
+        return json_response({"event": event_dict(event)})
+
+    events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
+    return json_response({"count": len(events), "events": [event_dict(e) for e in events]})
 
 
 async def _revise_requirement(db, args: dict) -> list[TextContent]:

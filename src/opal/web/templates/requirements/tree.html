@@ -11,6 +11,10 @@
 {% set actions %}
 <a href="/requirements" class="btn btn-sm" style="border-color: var(--accent-green, #4ade80);">TREE</a>
 <a href="/requirements/list" class="btn btn-sm">LIST</a>
+<a href="/requirements/baselines" class="btn btn-sm">BASELINES</a>
+{% if queue_count %}
+<a href="/requirements/queue" class="btn btn-sm" style="color: var(--accent-green);">BASELINE QUEUE · {{ queue_count }}</a>
+{% endif %}
 {{ ok.btn("NEW L0", variant="primary", attrs='onclick="openRootGhost()"') }}
 {% endset %}
 {% call ok.panel("REQUIREMENTS · " ~ total, actions=actions) %}
@@ -145,7 +149,10 @@ document.addEventListener('keydown', function(event) {
             document.getElementById('tree-search').focus();
             break;
         case 'b':
-            // Reserved for the baseline queue (spec phase 3) — no-op until it ships.
+            {% if queue_count %}
+            event.preventDefault();
+            window.location = '/requirements/queue';
+            {% endif %}
             break;
     }
 });

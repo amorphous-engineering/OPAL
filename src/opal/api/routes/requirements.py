@@ -22,9 +22,10 @@ from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_requirement_number
 from opal.db.base import LifecycleState
 from opal.db.models import Part, PartRequirement, Requirement
+from opal.se.baseline import baseline_batch, write_baseline_event
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
 from opal.se.lint import lint_requirement
-from opal.se.readiness import readiness
+from opal.se.readiness import readiness, ready_requirement_ids
 
 router = APIRouter()
 
@@ -374,17 +375,67 @@ async def delete_requirement(db: DbSession, req_id: int, user_id: CurrentUserId)
 async def baseline_requirement(
     db: DbSession, req_id: int, user_id: CurrentUserId
 ) -> RequirementResponse:
-    """Baseline a requirement. Returns 409 with the list of blockers if not ready."""
+    """Baseline a requirement. Returns 409 with the list of blockers if not ready.
+
+    Single-item baselines write a baseline event too (label null) — one
+    configuration history regardless of which path locked the revision.
+    """
     req = _get_requirement(db, req_id)
     old_values = get_model_dict(req)
     try:
         baseline(db, req, user_id)
     except LifecycleError as err:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err)) from err
+    write_baseline_event(db, [req], user_id)
     log_update(db, req, old_values, user_id)
     db.commit()
     db.refresh(req)
     return _req_response(db, req)
+
+
+class BaselineBatchRequest(BaseModel):
+    """Commit a staged queue session in one transaction."""
+
+    ids: list[int] = Field(..., min_length=1)
+    label: str | None = Field(None, max_length=100)
+    note: str | None = None
+
+
+@router.post("/baseline-batch")
+async def baseline_batch_endpoint(
+    db: DbSession, data: BaselineBatchRequest, user_id: CurrentUserId
+) -> dict:
+    """Baseline a set atomically: every item re-validates at commit time;
+    any failure aborts the whole batch and returns the offenders."""
+    reqs = []
+    for req_id in data.ids:
+        reqs.append(_get_requirement(db, req_id))
+
+    old_values = {req.id: get_model_dict(req) for req in reqs}
+    event, offenders = baseline_batch(db, reqs, user_id, label=data.label, note=data.note)
+    if offenders:
+        # baseline_batch validates before any lifecycle flip — nothing to roll back.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": "batch aborted — items no longer ready", "offenders": offenders},
+        )
+    for req in reqs:
+        log_update(db, req, old_values[req.id], user_id)
+    db.commit()
+    return {
+        "event_id": event.id,
+        "label": event.label,
+        "baselined": [
+            {"id": r.id, "req_number": r.req_number, "revision": r.revision} for r in reqs
+        ],
+    }
+
+
+@router.get("/queue")
+async def baseline_queue(db: DbSession) -> dict:
+    """The ready set — draft/preliminary rows whose hard checks all pass."""
+    ids = ready_requirement_ids(db)
+    return {"count": len(ids), "ids": ids}
 
 
 @router.post(
