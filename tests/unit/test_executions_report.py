@@ -2,21 +2,12 @@
 
 from datetime import UTC, datetime
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from opal.db.models import User
 from opal.db.models.attachment import Attachment
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.execution import InstanceStatus, ProcedureInstance
-
-
-@pytest.fixture
-def web_client(client: TestClient, test_user: User) -> TestClient:
-    """TestClient pre-authenticated with the cookie the auth middleware expects."""
-    client.cookies.set("opal_user_id", str(test_user.id))
-    return client
 
 
 def _create_completed_instance(client: TestClient, db_session: Session) -> ProcedureInstance:

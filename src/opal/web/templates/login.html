@@ -54,6 +54,14 @@
             flex: 1;
             border-top: 1px solid var(--border-color);
         }
+        .login-error {
+            border: 1px solid var(--accent-red, #c0392b);
+            color: var(--accent-red, #c0392b);
+            padding: var(--space-sm);
+            margin-bottom: var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body>
@@ -74,46 +82,53 @@
         {% else %}
 
         <div class="panel">
-            <div class="panel-header">SELECT USER</div>
+            <div class="panel-header">SIGN IN</div>
             <div class="panel-body">
-                {% if users %}
+                {% if error %}
+                <div class="login-error">{{ error }}</div>
+                {% endif %}
                 <form method="POST" action="/login">
                     <div class="form-group">
-                        <label class="form-label" for="user_id">User</label>
-                        <select name="user_id" id="user_id" class="form-select" required>
-                            {% for user in users %}
-                            <option value="{{ user.id }}">{{ user.name }}{% if user.is_admin %} [ADMIN]{% endif %}{% if user.email %} ({{ user.email }}){% endif %}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">GO</button>
-                </form>
-                {% else %}
-                <div class="empty-state" style="padding: var(--space-md);">
-                    <div class="text-muted mono">No users found. Create one below.</div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="login-divider">or</div>
-
-        <div class="panel">
-            <div class="panel-header">CREATE NEW USER</div>
-            <div class="panel-body">
-                <form method="POST" action="/login/new-user">
-                    <div class="form-group">
-                        <label class="form-label" for="name">Name *</label>
-                        <input type="text" name="name" id="name" class="form-input" required placeholder="Full Name">
+                        <label class="form-label" for="username">Username</label>
+                        <input type="text" name="username" id="username" class="form-input mono" required
+                               autocomplete="username webauthn" autocapitalize="none" autofocus
+                               value="{{ username or '' }}">
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="email">Email</label>
-                        <input type="email" name="email" id="email" class="form-input" placeholder="Optional">
+                        <label class="form-label" for="password">Password</label>
+                        <input type="password" name="password" id="password" class="form-input" required
+                               autocomplete="current-password">
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">CREATE</button>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">SIGN IN</button>
                 </form>
             </div>
         </div>
+
+        {% if passkeys_enabled %}
+        <div id="passkey-block" style="display: none;">
+            <div class="login-divider">or</div>
+            <button id="passkey-login" class="btn" style="width: 100%;">SIGN IN WITH PASSKEY</button>
+            <div id="passkey-error" class="login-error" style="display: none; margin-top: var(--space-md);"></div>
+        </div>
+        <script src="/static/js/webauthn.js"></script>
+        <script>
+            // WebAuthn only exists in secure contexts (https or localhost)
+            if (window.isSecureContext && window.PublicKeyCredential) {
+                document.getElementById('passkey-block').style.display = '';
+                document.getElementById('passkey-login').addEventListener('click', async function () {
+                    var errorBox = document.getElementById('passkey-error');
+                    errorBox.style.display = 'none';
+                    try {
+                        await opalPasskeyLogin();
+                        window.location.href = '/';
+                    } catch (err) {
+                        errorBox.textContent = err.message || 'Passkey sign-in failed.';
+                        errorBox.style.display = '';
+                    }
+                });
+            }
+        </script>
+        {% endif %}
 
         {% endif %}
     </div>

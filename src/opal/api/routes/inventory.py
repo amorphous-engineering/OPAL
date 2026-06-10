@@ -172,7 +172,7 @@ def inventory_to_response(record: InventoryRecord) -> InventoryResponse:
 
 
 @router.get("", response_model=InventoryListResponse)
-async def list_inventory(
+def list_inventory(
     db: DbSession,
     pagination: PaginationParams,
     part_id: int | None = Query(None, description="Filter by part ID"),
@@ -228,7 +228,7 @@ async def list_inventory(
 
 
 @router.get("/{inventory_id}/qrcode")
-async def get_inventory_qrcode(
+def get_inventory_qrcode(
     db: DbSession,
     inventory_id: int,
     request: Request,
@@ -255,7 +255,7 @@ async def get_inventory_qrcode(
 
 
 @router.get("/locations")
-async def list_locations(db: DbSession) -> list[LocationSummary]:
+def list_locations(db: DbSession) -> list[LocationSummary]:
     """List all inventory locations with summary."""
     results = (
         db.query(
@@ -300,7 +300,7 @@ class OpalHistoryResponse(BaseModel):
 
 
 @router.get("/opal/{opal_number}", response_model=InventoryResponse)
-async def get_inventory_by_opal(
+def get_inventory_by_opal(
     opal_number: str,
     db: DbSession,
 ) -> InventoryResponse:
@@ -321,7 +321,7 @@ async def get_inventory_by_opal(
 
 
 @router.get("/opal/{opal_number}/history", response_model=OpalHistoryResponse)
-async def get_opal_history(
+def get_opal_history(
     opal_number: str,
     db: DbSession,
 ) -> OpalHistoryResponse:
@@ -444,7 +444,7 @@ class InventoryCreateResponse(BaseModel):
 
 
 @router.post("", response_model=InventoryCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_inventory(
+def create_inventory(
     db: DbSession,
     inv_in: InventoryCreate,
     user_id: CurrentUserId,
@@ -555,7 +555,7 @@ class TransferResponse(BaseModel):
 
 
 @router.post("/transfer", response_model=TransferResponse, status_code=201)
-async def transfer_stock(
+def transfer_stock(
     data: TransferCreate,
     db: DbSession,
     user_id: CurrentUserId,
@@ -601,7 +601,8 @@ async def transfer_stock(
     )
 
     if target:
-        target.quantity = Decimal(str(target.quantity)) + data.quantity
+        # SQL-side increment avoids lost updates under concurrency
+        target.quantity = InventoryRecord.quantity + data.quantity
     else:
         target = InventoryRecord(
             part_id=source.part_id,
@@ -612,8 +613,8 @@ async def transfer_stock(
         db.add(target)
         db.flush()
 
-    # Deduct from source
-    source.quantity = Decimal(str(source.quantity)) - data.quantity
+    # Deduct from source (SQL-side decrement, same as above)
+    source.quantity = InventoryRecord.quantity - data.quantity
 
     # Create transfer record
     transfer = StockTransfer(
@@ -654,7 +655,7 @@ async def transfer_stock(
 
 
 @router.get("/transfers", response_model=list[TransferResponse])
-async def list_transfers(
+def list_transfers(
     db: DbSession,
     part_id: int | None = Query(None),
     location: str | None = Query(None, description="Filter by source or target location"),
@@ -694,7 +695,7 @@ async def list_transfers(
 
 
 @router.get("/transfers/{transfer_id}", response_model=TransferResponse)
-async def get_transfer(
+def get_transfer(
     transfer_id: int,
     db: DbSession,
 ) -> TransferResponse:
@@ -721,7 +722,7 @@ async def get_transfer(
 
 
 @router.get("/{inventory_id}", response_model=InventoryResponse)
-async def get_inventory(
+def get_inventory(
     db: DbSession,
     inventory_id: int,
 ) -> InventoryResponse:
@@ -742,7 +743,7 @@ async def get_inventory(
 
 
 @router.patch("/{inventory_id}", response_model=InventoryResponse)
-async def update_inventory(
+def update_inventory(
     db: DbSession,
     inventory_id: int,
     inv_in: InventoryUpdate,
@@ -777,7 +778,7 @@ async def update_inventory(
 
 
 @router.post("/{inventory_id}/adjust", response_model=InventoryResponse)
-async def adjust_inventory(
+def adjust_inventory(
     db: DbSession,
     inventory_id: int,
     adjust_in: InventoryAdjust,
@@ -881,7 +882,7 @@ async def adjust_inventory(
 
 
 @router.post("/{inventory_id}/count", response_model=InventoryResponse)
-async def record_count(
+def record_count(
     db: DbSession,
     inventory_id: int,
     count_in: InventoryCount,
@@ -914,7 +915,7 @@ async def record_count(
 
 
 @router.post("/{inventory_id}/calibrate", response_model=InventoryResponse)
-async def record_calibration(
+def record_calibration(
     db: DbSession,
     inventory_id: int,
     user_id: CurrentUserId,
@@ -962,7 +963,7 @@ async def record_calibration(
 
 
 @router.delete("/{inventory_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_inventory(
+def delete_inventory(
     db: DbSession,
     inventory_id: int,
     user_id: CurrentUserId,
@@ -1045,7 +1046,7 @@ class TestResultResponse(BaseModel):
 
 
 @router.get("/parts/{part_id}/test-templates", response_model=list[TestTemplateResponse])
-async def list_test_templates(
+def list_test_templates(
     part_id: int,
     db: DbSession,
 ) -> list[TestTemplateResponse]:
@@ -1082,7 +1083,7 @@ async def list_test_templates(
 @router.post(
     "/parts/{part_id}/test-templates", response_model=TestTemplateResponse, status_code=201
 )
-async def create_test_template(
+def create_test_template(
     part_id: int,
     data: TestTemplateCreate,
     db: DbSession,
@@ -1126,7 +1127,7 @@ async def create_test_template(
 
 
 @router.delete("/parts/{part_id}/test-templates/{template_id}", status_code=204)
-async def delete_test_template(
+def delete_test_template(
     part_id: int,
     template_id: int,
     db: DbSession,
@@ -1150,7 +1151,7 @@ async def delete_test_template(
 
 
 @router.get("/{inventory_id}/tests", response_model=list[TestResultResponse])
-async def list_test_results(
+def list_test_results(
     inventory_id: int,
     db: DbSession,
 ) -> list[TestResultResponse]:
@@ -1184,7 +1185,7 @@ async def list_test_results(
 
 
 @router.post("/{inventory_id}/tests", response_model=TestResultResponse, status_code=201)
-async def create_test_result(
+def create_test_result(
     inventory_id: int,
     data: TestResultCreate,
     db: DbSession,
@@ -1242,7 +1243,7 @@ async def create_test_result(
 
 
 @router.patch("/{inventory_id}/tests/{test_id}", response_model=TestResultResponse)
-async def update_test_result(
+def update_test_result(
     inventory_id: int,
     test_id: int,
     data: TestResultCreate,
@@ -1297,7 +1298,7 @@ async def update_test_result(
 
 
 @router.delete("/{inventory_id}/tests/{test_id}", status_code=204)
-async def delete_test_result(
+def delete_test_result(
     inventory_id: int,
     test_id: int,
     db: DbSession,
@@ -1318,7 +1319,7 @@ async def delete_test_result(
 
 
 @router.get("/{inventory_id}/test-status")
-async def get_test_status(
+def get_test_status(
     inventory_id: int,
     db: DbSession,
 ) -> dict:

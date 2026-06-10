@@ -80,8 +80,9 @@ class Settings(BaseSettings):
 
     # Security
     allowed_origins: str = Field(
-        default="*",
-        description="Comma-separated list of allowed CORS origins",
+        default="",
+        description="Comma-separated list of extra allowed CORS origins. Empty "
+        "(default) means same-origin only; '*' allows all origins WITHOUT credentials",
     )
     rate_limit_enabled: bool = Field(default=False, description="Enable rate limiting")
     rate_limit_requests: int = Field(default=100, description="Max requests per window")
@@ -89,6 +90,19 @@ class Settings(BaseSettings):
 
     # Authentication
     auth_mode: str = Field(default="local", description="Auth mode: 'local' or 'exe'")
+    auth_secret: str = Field(
+        default="",
+        description="Secret for signing short-lived auth payloads (auto-generated "
+        "next to the database file when unset)",
+    )
+    passkeys_enabled: bool = Field(
+        default=True,
+        description="Allow FIDO2 passkey registration and login (requires HTTPS or localhost)",
+    )
+    passkey_rp_id: str = Field(
+        default="",
+        description="Pin the WebAuthn RP ID to a hostname; defaults to the request host",
+    )
 
     # Onshape integration (off by default)
     onshape_access_key: str = Field(default="", description="Onshape API access key")
@@ -138,6 +152,8 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         """Parse allowed origins into a list."""
+        if not self.allowed_origins:
+            return []
         if self.allowed_origins == "*":
             return ["*"]
         return [origin.strip() for origin in self.allowed_origins.split(",")]
@@ -264,6 +280,8 @@ def get_active_project() -> "ProjectConfig | None":
 # overlay only touches these; everything else stays env-driven.
 _DB_OVERLAY_FIELDS: tuple[str, ...] = (
     "auth_mode",
+    "passkeys_enabled",
+    "passkey_rp_id",
     "onshape_access_key",
     "onshape_secret_key",
     "onshape_base_url",
@@ -300,6 +318,8 @@ def apply_db_overlay(db: "Session") -> Settings:
                 overrides[row.key] = int(row.value)
             except ValueError:
                 continue
+        elif field.annotation is bool:
+            overrides[row.key] = row.value.strip().lower() in ("1", "true", "yes", "on")
         else:
             overrides[row.key] = row.value
 
@@ -343,9 +363,7 @@ PROJECT_CONFIG_KEY = "project_config"
 logger = logging.getLogger("opal.config")
 
 
-def save_project_to_db(
-    db: "Session", config: "ProjectConfig", user_id: int | None = None
-) -> None:
+def save_project_to_db(db: "Session", config: "ProjectConfig", user_id: int | None = None) -> None:
     """Persist the project config blob, activate it, and write an audit row.
 
     ``user_id`` is the acting admin; pass it from routes that have a resolved
@@ -375,7 +393,9 @@ def save_project_to_db(
         record_id=0,
         action=action,
         user_id=user_id,
-        old_values={"key": PROJECT_CONFIG_KEY, "value": old_value} if old_value is not None else None,
+        old_values={"key": PROJECT_CONFIG_KEY, "value": old_value}
+        if old_value is not None
+        else None,
         new_values={"key": PROJECT_CONFIG_KEY, "value": new_value},
     )
     db.add(audit_entry)

@@ -130,7 +130,7 @@ def _numbering_from_input(pn: PartNumberingInput) -> PartNumberingConfig:
 
 
 @router.get("/config")
-async def get_project_config() -> ProjectConfigResponse:
+def get_project_config() -> ProjectConfigResponse:
     """Get current project configuration."""
     project = get_active_project()
     if not project:
@@ -139,7 +139,7 @@ async def get_project_config() -> ProjectConfigResponse:
 
 
 @router.post("/config")
-async def create_project(
+def create_project(
     data: ProjectConfigCreate, db: DbSession, admin: RequiredAdmin
 ) -> ProjectConfigResponse:
     """Configure this instance's project (stored in the database)."""
@@ -164,7 +164,7 @@ async def create_project(
 
 
 @router.put("/config")
-async def update_project_config(
+def update_project_config(
     data: ProjectConfigUpdate, db: DbSession, admin: RequiredAdmin
 ) -> ProjectConfigResponse:
     """Update existing project configuration."""
@@ -199,7 +199,7 @@ class PartNumberPreviewResponse(BaseModel):
 
 
 @router.post("/preview-part-number")
-async def preview_part_number(data: PartNumberPreview) -> PartNumberPreviewResponse:
+def preview_part_number(data: PartNumberPreview) -> PartNumberPreviewResponse:
     """Preview what a part number would look like."""
     project = get_active_project()
     if not project:

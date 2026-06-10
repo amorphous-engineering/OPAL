@@ -185,13 +185,15 @@ class TestPullSync:
         root = Part(name="Test Assembly", internal_pn="PN-1-0099", tier=1)
         db_session.add(root)
         db_session.flush()
-        db_session.add(OnshapeLink(
-            part_id=root.id,
-            document_id="doc123",
-            element_id="elem789",
-            part_id_onshape=ROOT_ASSEMBLY_MARKER,
-            onshape_name="Test Assembly",
-        ))
+        db_session.add(
+            OnshapeLink(
+                part_id=root.id,
+                document_id="doc123",
+                element_id="elem789",
+                part_id_onshape=ROOT_ASSEMBLY_MARKER,
+                onshape_name="Test Assembly",
+            )
+        )
         db_session.flush()
 
         part = Part(name="Bracket", internal_pn="PN-1-0001", tier=1)
@@ -292,22 +294,26 @@ class TestPullSync:
         db_session.flush()
 
         # Create links (root uses marker, children have matching pull hashes)
-        db_session.add(OnshapeLink(
-            part_id=root.id,
-            document_id="doc123",
-            element_id="elem789",
-            part_id_onshape=ROOT_ASSEMBLY_MARKER,
-            onshape_name="Test Assembly",
-        ))
-        for part, os_id in [(child1, "c1"), (child2, "c2")]:
-            db_session.add(OnshapeLink(
-                part_id=part.id,
+        db_session.add(
+            OnshapeLink(
+                part_id=root.id,
                 document_id="doc123",
                 element_id="elem789",
-                part_id_onshape=os_id,
-                onshape_name=part.name,
-                pull_hash=_compute_pull_hash(part.name, None, None),
-            ))
+                part_id_onshape=ROOT_ASSEMBLY_MARKER,
+                onshape_name="Test Assembly",
+            )
+        )
+        for part, os_id in [(child1, "c1"), (child2, "c2")]:
+            db_session.add(
+                OnshapeLink(
+                    part_id=part.id,
+                    document_id="doc123",
+                    element_id="elem789",
+                    part_id_onshape=os_id,
+                    onshape_name=part.name,
+                    pull_hash=_compute_pull_hash(part.name, None, None),
+                )
+            )
 
         # Create BOM lines: root → child1, root → child2
         db_session.add(BOMLine(assembly_id=root.id, component_id=child1.id, quantity=2))
@@ -395,9 +401,7 @@ class TestPullSync:
         )
         # Return metadata with a "Part Number" property so push can resolve it
         mock_client.get_metadata.return_value = [
-            OnshapeMetadataProperty(
-                name="Part Number", value="", property_id="prop-pn-id"
-            ),
+            OnshapeMetadataProperty(name="Part Number", value="", property_id="prop-pn-id"),
         ]
 
         with patch("opal.config.get_active_project", return_value=None):
@@ -596,9 +600,7 @@ class TestPullSync:
 
         # Sub-assembly should have 1 child (gear)
         subasm_link = (
-            db_session.query(OnshapeLink)
-            .filter(OnshapeLink.part_id_onshape == "subasm")
-            .first()
+            db_session.query(OnshapeLink).filter(OnshapeLink.part_id_onshape == "subasm").first()
         )
         subasm_children = [bl for bl in bom_lines if bl.assembly_id == subasm_link.part_id]
         assert len(subasm_children) == 1
@@ -623,9 +625,7 @@ class TestPullSync:
             ],
         )
         mock_client.get_metadata.return_value = [
-            OnshapeMetadataProperty(
-                name="Part Number", value="", property_id="prop-pn-id"
-            ),
+            OnshapeMetadataProperty(name="Part Number", value="", property_id="prop-pn-id"),
         ]
 
         with patch("opal.config.get_active_project", return_value=None):
@@ -757,9 +757,7 @@ class TestPullSync:
             log1 = pull_sync(db_session, mock_client, doc_ref, user_id=1)
 
         assert log1.status == "success"
-        parts_after_first = (
-            db_session.query(Part).filter(Part.deleted_at.is_(None)).count()
-        )
+        parts_after_first = db_session.query(Part).filter(Part.deleted_at.is_(None)).count()
 
         # Second sync — same BOM
         mock_client.get_bom.return_value = bom
@@ -769,9 +767,7 @@ class TestPullSync:
         assert log2.status == "success"
         assert log2.parts_created == 0  # No new parts on re-sync
 
-        parts_after_second = (
-            db_session.query(Part).filter(Part.deleted_at.is_(None)).count()
-        )
+        parts_after_second = db_session.query(Part).filter(Part.deleted_at.is_(None)).count()
         assert parts_after_second == parts_after_first
 
 
@@ -806,7 +802,9 @@ class TestPullSyncPartStudio:
 
         # get_parts should be called, not get_bom
         mock_client.get_parts.assert_called_once_with(
-            document_id="doc123", workspace_id="ws456", element_id="elem789",
+            document_id="doc123",
+            workspace_id="ws456",
+            element_id="elem789",
         )
         mock_client.get_bom.assert_not_called()
 
@@ -882,14 +880,16 @@ class TestPullSyncPartStudio:
         db_session.flush()
 
         for part, os_id, pn in [(part1, "p1", "BRK-001"), (part2, "p2", "SPC-001")]:
-            db_session.add(OnshapeLink(
-                part_id=part.id,
-                document_id="doc123",
-                element_id="elem789",
-                part_id_onshape=os_id,
-                onshape_name=part.name,
-                pull_hash=_compute_pull_hash(part.name, None, pn),
-            ))
+            db_session.add(
+                OnshapeLink(
+                    part_id=part.id,
+                    document_id="doc123",
+                    element_id="elem789",
+                    part_id_onshape=os_id,
+                    onshape_name=part.name,
+                    pull_hash=_compute_pull_hash(part.name, None, pn),
+                )
+            )
         db_session.flush()
 
         mock_client.get_parts.return_value = [
@@ -914,7 +914,9 @@ class TestPullSyncPartStudio:
         from datetime import UTC, datetime
 
         part = Part(
-            name="Bracket", internal_pn="PN-1-0001", tier=1,
+            name="Bracket",
+            internal_pn="PN-1-0001",
+            tier=1,
             deleted_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
         db_session.add(part)
@@ -1034,9 +1036,7 @@ class TestPullSyncPartStudio:
 class TestMultiElementSync:
     """Test that sync correctly scopes links by element_id."""
 
-    def test_separate_links_per_element(
-        self, db_session: Session, mock_client: MagicMock
-    ) -> None:
+    def test_separate_links_per_element(self, db_session: Session, mock_client: MagicMock) -> None:
         """Two part studios in the same document with colliding part IDs create separate parts."""
         doc_ref_a = OnshapeDocumentRef(
             name="Part Studio A",
@@ -1942,7 +1942,8 @@ class TestSyncBomStructure:
         assert (created, updated, removed) == (0, 0, 0)
 
     def test_bom_line_deletion_creates_audit_log(
-        self, db_session: Session,
+        self,
+        db_session: Session,
     ) -> None:
         """BOM line deletion creates an audit log entry."""
         from opal.db.models.audit import AuditLog
@@ -1982,7 +1983,10 @@ class TestBomParseWarningsInSync:
     """Test that BOM parse warnings surface in sync results."""
 
     def test_empty_names_produce_partial_status(
-        self, db_session: Session, mock_client: MagicMock, doc_ref: OnshapeDocumentRef,
+        self,
+        db_session: Session,
+        mock_client: MagicMock,
+        doc_ref: OnshapeDocumentRef,
     ) -> None:
         """Items with empty names produce status='partial' with error messages."""
         mock_client.get_bom.return_value = OnshapeBOM(
@@ -1999,7 +2003,8 @@ class TestBomParseWarningsInSync:
             ],
             warnings=[
                 BOMParseWarning(
-                    item_index=0, field="part_name",
+                    item_index=0,
+                    field="part_name",
                     message="Empty part_name for non-standard-content item (part_id='p1')",
                 ),
             ],
@@ -2147,11 +2152,7 @@ class TestSyncBomStructureDuplicateGuard:
         )
 
         assert created == 1  # Only one BOM line created, not two
-        bom_lines = (
-            db_session.query(BOMLine)
-            .filter(BOMLine.assembly_id == assembly.id)
-            .all()
-        )
+        bom_lines = db_session.query(BOMLine).filter(BOMLine.assembly_id == assembly.id).all()
         assert len(bom_lines) == 1
         assert bom_lines[0].quantity == 2  # Quantities accumulated (1 + 1)
 
@@ -2194,11 +2195,7 @@ class TestSyncBomStructureDuplicateGuard:
         )
 
         assert created == 1
-        bom_lines = (
-            db_session.query(BOMLine)
-            .filter(BOMLine.assembly_id == assembly.id)
-            .all()
-        )
+        bom_lines = db_session.query(BOMLine).filter(BOMLine.assembly_id == assembly.id).all()
         assert len(bom_lines) == 1
         assert bom_lines[0].quantity == 2
 
@@ -2268,7 +2265,10 @@ class TestPullSyncCrossElementPartId:
     """Test assembly sync with parts from different Part Studios sharing partId."""
 
     def test_cross_element_part_id_collision(
-        self, db_session: Session, mock_client: MagicMock, doc_ref: OnshapeDocumentRef,
+        self,
+        db_session: Session,
+        mock_client: MagicMock,
+        doc_ref: OnshapeDocumentRef,
     ) -> None:
         """Assembly with two parts from different Part Studios sharing partId creates separate parts."""
         mock_client.get_bom.return_value = OnshapeBOM(
@@ -2307,11 +2307,7 @@ class TestPullSyncCrossElementPartId:
         assert "Chamber" in part_names
 
         # Verify two separate OnshapeLinks with different element_ids
-        links = (
-            db_session.query(OnshapeLink)
-            .filter(OnshapeLink.part_id_onshape == "JHD")
-            .all()
-        )
+        links = db_session.query(OnshapeLink).filter(OnshapeLink.part_id_onshape == "JHD").all()
         assert len(links) == 2
         element_ids = {lnk.element_id for lnk in links}
         assert element_ids == {"elemA", "elemB"}

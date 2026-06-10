@@ -11,23 +11,6 @@ def _isolate_active_project(monkeypatch):
     monkeypatch.setattr(config_mod, "_active_project", None)
 
 
-@pytest.fixture
-def admin_headers(db_session):
-    from opal.db.models import User
-
-    admin = User(
-        name="Admin",
-        email="admin@test.local",
-        is_active=True,
-        is_admin=True,
-        needs_profile_setup=False,
-        needs_onboarding=False,
-    )
-    db_session.add(admin)
-    db_session.flush()
-    return {"X-User-Id": str(admin.id)}
-
-
 _PAYLOAD = {
     "name": "Bench Project",
     "description": "test bench",
@@ -76,8 +59,6 @@ def test_update_persists(client, db_session, admin_headers):
     assert "Renamed Project" in (get_app_setting(db_session, PROJECT_CONFIG_KEY) or "")
 
 
-def test_create_requires_admin(client, db_session, test_user):
-    resp = client.post(
-        "/api/project/config", json=_PAYLOAD, headers={"X-User-Id": str(test_user.id)}
-    )
+def test_create_requires_admin(client, auth_headers):
+    resp = client.post("/api/project/config", json=_PAYLOAD, headers=auth_headers)
     assert resp.status_code in (401, 403)

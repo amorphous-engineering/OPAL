@@ -142,9 +142,20 @@ _session_local = None
 
 
 def _setup_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
-    """Enable SQLite foreign key support."""
+    """Configure SQLite for multi-user access.
+
+    - foreign_keys: enforce FK constraints (off by default in SQLite)
+    - journal_mode=WAL: writers no longer block readers; survives across
+      connections since it is a property of the database file
+    - busy_timeout: wait for a lock instead of failing immediately with
+      "database is locked" when another connection is writing
+    - synchronous=NORMAL: safe with WAL, much faster than FULL
+    """
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=10000")
+    cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.close()
 
 
@@ -224,6 +235,13 @@ def init_database(engine=None) -> None:
         # New database: create all tables directly
         logger.info("Creating new database schema...")
         Base.metadata.create_all(engine)
+
+        # FTS index tables/triggers are not part of ORM metadata; create them
+        # here since stamping head below means the FTS migration never runs
+        from opal.db.fts import create_fts_schema
+
+        with engine.begin() as conn:
+            create_fts_schema(conn)
 
         # Stamp alembic version so future migrations know the starting point
         _stamp_alembic_head(engine)

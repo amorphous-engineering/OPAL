@@ -410,7 +410,6 @@ async function submitScrap() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-User-Id': localStorage.getItem('opal_user_id') || '1'
             },
             body: JSON.stringify(body)
         });
@@ -435,7 +434,6 @@ async function recordCalibration() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-User-Id': localStorage.getItem('opal_user_id') || '1'
             }
         });
         if (response.ok) {
@@ -557,8 +555,6 @@ const inventoryId = {{ record.id }};
 
 function getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
     return headers;
 }
 

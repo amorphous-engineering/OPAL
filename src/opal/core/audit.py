@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session
 
 from opal.db.models.audit import AuditAction, AuditLog
 
+# Column names whose values must never appear in audit snapshots
+SENSITIVE_COLUMNS = frozenset({"password_hash", "token_hash", "public_key"})
+
 
 def get_model_dict(instance: Any) -> dict[str, Any]:
     """Convert SQLAlchemy model instance to dictionary.
@@ -17,11 +20,16 @@ def get_model_dict(instance: Any) -> dict[str, Any]:
     Excludes relationship attributes and includes only column values.
     Handles edge cases like column names conflicting with SQLAlchemy internals.
     Converts non-JSON-serializable types (Decimal, Enum, datetime) to serializable forms.
+    Secret material (password/token hashes) is redacted to a presence marker.
     """
     mapper = inspect(instance.__class__)
     result = {}
 
     for column in mapper.columns:
+        if column.name in SENSITIVE_COLUMNS:
+            value = getattr(instance, column.key, None)
+            result[column.name] = "[set]" if value else None
+            continue
         # Use the column key (Python attribute name) to get the value
         attr_name = column.key
         value = getattr(instance, attr_name, None)

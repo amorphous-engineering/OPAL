@@ -119,7 +119,7 @@ def _dataset_to_response(dataset: Dataset) -> DatasetResponse:
 
 
 @router.get("", response_model=DatasetListResponse)
-async def list_datasets(
+def list_datasets(
     db: DbSession,
     search: str | None = Query(None),
     procedure_id: int | None = Query(None),
@@ -151,7 +151,7 @@ async def list_datasets(
 
 
 @router.post("", response_model=DatasetResponse, status_code=201)
-async def create_dataset(
+def create_dataset(
     data: DatasetCreate,
     db: DbSession,
     user_id: CurrentUserId,
@@ -174,7 +174,7 @@ async def create_dataset(
 
 
 @router.get("/{dataset_id}", response_model=DatasetDetailResponse)
-async def get_dataset(
+def get_dataset(
     dataset_id: int,
     db: DbSession,
     include_points: bool = Query(True),
@@ -221,7 +221,7 @@ async def get_dataset(
 
 
 @router.patch("/{dataset_id}", response_model=DatasetResponse)
-async def update_dataset(
+def update_dataset(
     dataset_id: int,
     data: DatasetUpdate,
     db: DbSession,
@@ -253,7 +253,7 @@ async def update_dataset(
 
 
 @router.delete("/{dataset_id}", status_code=204)
-async def delete_dataset(
+def delete_dataset(
     dataset_id: int,
     db: DbSession,
     user_id: CurrentUserId,
@@ -274,7 +274,7 @@ async def delete_dataset(
 
 
 @router.post("/{dataset_id}/points", response_model=DataPointResponse, status_code=201)
-async def add_data_point(
+def add_data_point(
     dataset_id: int,
     data: DataPointCreate,
     db: DbSession,
@@ -310,7 +310,7 @@ async def add_data_point(
 
 
 @router.get("/{dataset_id}/points", response_model=list[DataPointResponse])
-async def list_data_points(
+def list_data_points(
     dataset_id: int,
     db: DbSession,
     start_date: datetime | None = Query(None),
@@ -348,7 +348,7 @@ async def list_data_points(
 
 
 @router.delete("/{dataset_id}/points/{point_id}", status_code=204)
-async def delete_data_point(
+def delete_data_point(
     dataset_id: int,
     point_id: int,
     db: DbSession,
@@ -371,7 +371,7 @@ async def delete_data_point(
 
 
 @router.get("/{dataset_id}/chart", response_model=ChartDataResponse)
-async def get_chart_data(
+def get_chart_data(
     dataset_id: int,
     db: DbSession,
     field: str = Query(..., description="Field name from schema to chart"),
@@ -430,7 +430,7 @@ async def get_chart_data(
 
 
 @router.get("/{dataset_id}/export")
-async def export_dataset_csv(
+def export_dataset_csv(
     dataset_id: int,
     db: DbSession,
 ) -> StreamingResponse:

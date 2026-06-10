@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from opal.core.designators import generate_requirement_number
 from opal.db.models import Requirement
 from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs
+from tests.conftest import login, user_headers
 
 GOOD = "The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
 
@@ -72,7 +73,7 @@ def test_old_block_lint_drafts_window_and_severity(db_session, test_user):
 def test_dashboard_widget_renders_red_lines_and_ready_count(client, db_session, test_user):
     test_user.needs_onboarding = False
     db_session.commit()
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     overdue = _make_req(
         db_session,
         tbr=True,
@@ -93,13 +94,13 @@ def test_dashboard_widget_renders_red_lines_and_ready_count(client, db_session, 
 def test_dashboard_widget_quiet_when_clean(client, db_session, test_user):
     test_user.needs_onboarding = False
     db_session.commit()
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     page = client.get("/")
     assert "traceability: no findings" in page.text
 
 
 def test_part_page_shows_allocated_requirement_with_state(client, db_session, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     part = client.post("/api/parts", json={"name": "Feed Manifold"}).json()
     req = _make_req(db_session, title="Feed pressure")
     db_session.commit()
@@ -107,7 +108,7 @@ def test_part_page_shows_allocated_requirement_with_state(client, db_session, te
     assign = client.post(
         f"/api/requirements/parts/{part['id']}",
         json={"requirement_id": req.req_number},
-        headers={"X-User-Id": str(test_user.id)},
+        headers=user_headers(test_user),
     )
     assert assign.status_code == 201, assign.text
 

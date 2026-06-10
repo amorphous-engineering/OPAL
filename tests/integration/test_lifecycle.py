@@ -77,6 +77,7 @@ def _make_admin(name: str = "Operator") -> User:
     with SessionLocal() as db:
         user = User(
             name=name,
+            username=name.lower(),
             email=f"{name.lower()}@test.local",
             is_active=True,
             is_admin=True,
@@ -291,6 +292,7 @@ def test_enter_demo_user_update_is_audit_logged(real_instance):
             # Not seeded yet — insert a non-admin version.
             non_admin = User(
                 name=admin.name,
+                username=admin.username,
                 email=admin.email,
                 is_active=True,
                 is_admin=False,  # deliberately not admin

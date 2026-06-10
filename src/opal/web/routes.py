@@ -2,6 +2,7 @@
 
 import contextlib
 import logging
+import math
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -9,9 +10,22 @@ from typing import Any
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 
 from opal.api.deps import DbSession
+from opal.core.auth import (
+    SESSION_COOKIE,
+    authenticate_password,
+    create_session,
+    generate_unique_username,
+    hash_password,
+    login_rate_limiter,
+    resolve_session,
+    revoke_session,
+    sign_payload,
+    validate_password_strength,
+    verify_payload,
+)
 from opal.db.models import InventoryRecord, Kit, Part, Purchase, Supplier, User, Workcenter
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.execution import InstanceStatus, ProcedureInstance
@@ -81,6 +95,45 @@ TABLE_DISPLAY_NAMES: dict[str, str] = {
 
 templates.env.globals["TABLE_DISPLAY_NAMES"] = TABLE_DISPLAY_NAMES
 
+# Default rows per page for paginated table partials
+PAGE_SIZE = 100
+
+
+def paginate_query(
+    request: Request,
+    query,
+    page: int,
+    colspan: int,
+    page_size: int = PAGE_SIZE,
+) -> tuple[list, dict[str, Any]]:
+    """Apply offset/limit pagination to a query.
+
+    Returns the page of results plus a context dict for the shared
+    partials/pagination_row.html footer. prev/next URLs preserve all current
+    query parameters (filters, sorting) and only change `page`.
+    """
+    total = query.count()
+    pages = max(1, math.ceil(total / page_size))
+    page = min(max(1, page), pages)
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    def page_url(p: int) -> str:
+        return str(request.url.include_query_params(page=p))
+
+    pagination = {
+        "page": page,
+        "pages": pages,
+        "total": total,
+        "colspan": colspan,
+        "start": (page - 1) * page_size + 1 if total else 0,
+        "end": (page - 1) * page_size + len(items),
+        "has_prev": page > 1,
+        "has_next": page < pages,
+        "prev_url": page_url(page - 1),
+        "next_url": page_url(page + 1),
+    }
+    return items, pagination
+
 
 def _active_database_path() -> str:
     """Resolved SQLite path for the footer, evaluated per render.
@@ -118,14 +171,8 @@ router = APIRouter()
 
 
 def _get_current_user(request: Request, db) -> User | None:
-    """Get current user from cookie."""
-    cookie_user_id = request.cookies.get("opal_user_id")
-    if not cookie_user_id:
-        return None
-    try:
-        return db.query(User).filter(User.id == int(cookie_user_id), User.is_active == True).first()  # noqa: E712
-    except (ValueError, TypeError):
-        return None
+    """Get current user from the session cookie."""
+    return resolve_session(db, request.cookies.get(SESSION_COOKIE))
 
 
 def _require_admin_web(request: Request, db) -> RedirectResponse | None:
@@ -141,21 +188,12 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
     from opal import __version__
     from opal.config import get_active_project, get_active_settings
 
-    users = db.query(User).filter(User.is_active == True).all()  # noqa: E712
     project = get_active_project()
     settings = get_active_settings()
 
-    # Resolve current user from cookie
-    current_user = None
+    # Resolve current user from the signed cookie
     is_admin = False
-    cookie_user_id = request.cookies.get("opal_user_id")
-    if cookie_user_id:
-        with contextlib.suppress(ValueError, TypeError):
-            current_user = (
-                db.query(User)
-                .filter(User.id == int(cookie_user_id), User.is_active.is_(True))
-                .first()
-            )
+    current_user = _get_current_user(request, db)
     if current_user:
         is_admin = current_user.is_admin
 
@@ -163,7 +201,6 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
 
     return {
         "request": request,
-        "users": users,
         "title": title,
         "project_name": project.name if project else None,
         "opal_version": __version__,
@@ -171,6 +208,7 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
         "current_user": current_user,
         "is_admin": is_admin,
         "auth_mode": settings.auth_mode,
+        "passkeys_enabled": settings.passkeys_enabled,
         "demo_active": lifecycle.is_demo_active(),
     }
 
@@ -178,9 +216,46 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
 # ============ LOGIN / LOGOUT ============
 
 
+def _login_rate_key(request: Request, username: str) -> str:
+    client_ip = request.client.host if request.client else "unknown"
+    return f"{client_ip}:{username.strip().lower()}"
+
+
+def _mint_login_session(
+    request: Request, db: DbSession, user: User, auth_method: str
+) -> RedirectResponse:
+    """Create a session for a successful login and redirect appropriately."""
+    from opal.api.routes.auth import set_session_cookie
+
+    token = create_session(
+        db,
+        user,
+        auth_method=auth_method,
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    redirect_url = "/welcome" if user.needs_onboarding else "/"
+    response = RedirectResponse(url=redirect_url, status_code=302)
+    set_session_cookie(response, request, token)
+    return response
+
+
+def _login_context(request: Request, **extra: Any) -> dict[str, Any]:
+    from opal.config import get_active_settings
+
+    settings = get_active_settings()
+    return {
+        "request": request,
+        "auth_mode": settings.auth_mode,
+        "passkeys_enabled": settings.passkeys_enabled,
+        **extra,
+    }
+
+
 @router.get("/login", response_class=HTMLResponse, response_model=None)
-async def login_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
-    """User selection page."""
+def login_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
+    """Credentialed login page (username/password, optional passkey)."""
     from opal.config import get_active_settings
 
     settings = get_active_settings()
@@ -195,22 +270,14 @@ async def login_page(request: Request, db: DbSession) -> HTMLResponse | Redirect
         return RedirectResponse(url="/__exe.dev/login?redirect=/", status_code=302)
 
     # If already logged in, redirect to home
-    if request.cookies.get("opal_user_id"):
+    if resolve_session(db, request.cookies.get(SESSION_COOKIE)) is not None:
         return RedirectResponse(url="/", status_code=302)
 
-    users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
-    return templates.TemplateResponse(
-        "login.html",
-        {
-            "request": request,
-            "users": users,
-            "auth_mode": settings.auth_mode,
-        },
-    )
+    return templates.TemplateResponse("login.html", _login_context(request))
 
 
 @router.get("/setup", response_class=HTMLResponse, response_model=None)
-async def setup_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
+def setup_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
     """First-run auth-mode picker. Bounces home once any user exists."""
     if db.query(User).count() > 0:
         return RedirectResponse(url="/", status_code=302)
@@ -228,12 +295,15 @@ async def setup_page(request: Request, db: DbSession) -> HTMLResponse | Redirect
 
 
 @router.post("/setup", response_model=None)
-async def setup_submit(
+def setup_submit(
     request: Request,
     db: DbSession,
     auth_mode: str = Form(...),
     name: str = Form(default=""),
     email: str = Form(default=""),
+    username: str = Form(default=""),
+    password: str = Form(default=""),
+    password_confirm: str = Form(default=""),
 ) -> RedirectResponse | HTMLResponse:
     """Lock in the auth mode (and create the first admin in local mode)."""
     if db.query(User).count() > 0:
@@ -253,19 +323,35 @@ async def setup_submit(
         # Send them through the proxy login.
         return RedirectResponse(url="/__exe.dev/login?redirect=/", status_code=302)
 
-    # Local mode: create the first admin from the form fields.
-    clean_name = name.strip()
-    if not clean_name:
+    # Local mode: create the first admin with credentials.
+    def _retry(error: str) -> HTMLResponse:
         return templates.TemplateResponse(
             "setup.html",
             {
                 "request": request,
                 "current_auth_mode": "local",
-                "error": "Name is required to create the first admin user.",
+                "error": error,
+                "name": name,
+                "email": email,
+                "username": username,
             },
         )
+
+    clean_name = name.strip()
+    clean_username = username.strip().lower()
+    if not clean_name:
+        return _retry("Name is required to create the first admin user.")
+    if not clean_username:
+        return _retry("Username is required.")
+    if password != password_confirm:
+        return _retry("Passwords do not match.")
+    if error := validate_password_strength(password):
+        return _retry(error)
+
     user = User(
         name=clean_name,
+        username=generate_unique_username(db, clean_username),
+        password_hash=hash_password(password),
         email=(email.strip() or None),
         is_active=True,
         is_admin=True,
@@ -275,71 +361,97 @@ async def setup_submit(
     db.commit()
     db.refresh(user)
 
-    response = RedirectResponse(url="/welcome", status_code=302)
-    max_age = 365 * 24 * 3600
-    response.set_cookie("opal_user_id", str(user.id), max_age=max_age)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1", max_age=max_age)
-    return response
+    return _mint_login_session(request, db, user, auth_method="password")
 
 
-@router.post("/login")
-async def login_submit(
-    request: Request, db: DbSession, user_id: int = Form(...)
-) -> RedirectResponse:
-    """Set user identity cookies."""
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()  # noqa: E712
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-
-    redirect_url = "/welcome" if user.needs_onboarding else "/"
-    response = RedirectResponse(url=redirect_url, status_code=302)
-    max_age = 365 * 24 * 3600  # 1 year
-    response.set_cookie("opal_user_id", str(user.id), max_age=max_age)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
-    return response
-
-
-@router.post("/login/new-user")
-async def login_new_user(
+@router.post("/login", response_model=None)
+def login_submit(
     request: Request,
     db: DbSession,
-    name: str = Form(...),
-    email: str = Form(""),
-) -> RedirectResponse:
-    """Create a new user and log in. First user auto-becomes admin."""
-    # First user ever created is auto-admin
-    is_first_user = db.query(User).count() == 0
-    user = User(
-        name=name,
-        email=email or None,
-        is_active=True,
-        is_admin=is_first_user,
-        needs_onboarding=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    username: str = Form(...),
+    password: str = Form(...),
+) -> RedirectResponse | HTMLResponse:
+    """Verify credentials and mint a session."""
+    username = username.strip().lower()
+    rate_key = _login_rate_key(request, username)
+    if login_rate_limiter.is_blocked(rate_key):
+        return templates.TemplateResponse(
+            "login.html",
+            _login_context(request, error="Too many failed attempts. Try again in a few minutes."),
+            status_code=429,
+        )
 
-    response = RedirectResponse(url="/welcome", status_code=302)
-    max_age = 365 * 24 * 3600
-    response.set_cookie("opal_user_id", str(user.id), max_age=max_age)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
-    return response
+    # Migrated accounts (no password yet) divert to the set-password flow
+    pending = db.query(User).filter(User.username == username, User.is_active.is_(True)).first()
+    if pending is not None and pending.password_hash is None:
+        state = sign_payload({"kind": "initial-password", "uid": pending.id})
+        return templates.TemplateResponse(
+            "login_set_password.html",
+            _login_context(request, username=username, state=state),
+        )
+
+    user = authenticate_password(db, username, password)
+    if user is None:
+        login_rate_limiter.record_failure(rate_key)
+        return templates.TemplateResponse(
+            "login.html",
+            _login_context(request, error="Invalid username or password.", username=username),
+            status_code=401,
+        )
+
+    login_rate_limiter.reset(rate_key)
+    return _mint_login_session(request, db, user, auth_method="password")
+
+
+@router.post("/login/set-password", response_model=None)
+def login_set_password(
+    request: Request,
+    db: DbSession,
+    state: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+) -> RedirectResponse | HTMLResponse:
+    """First login for a migrated account: set the initial password.
+
+    Accounts created before credentialed auth have no password hash. The
+    signed state token binds this form to the account and expires quickly.
+    Trust-on-first-use: the first person to claim the account sets its
+    password, so upgrade and have users claim accounts promptly.
+    """
+    payload = verify_payload(state)
+    if not payload or payload.get("kind") != "initial-password":
+        return RedirectResponse(url="/login", status_code=302)
+
+    user = db.query(User).filter(User.id == payload["uid"], User.is_active.is_(True)).first()
+    if user is None or user.password_hash is not None:
+        # Account vanished or someone else already claimed it
+        return RedirectResponse(url="/login", status_code=302)
+
+    def _retry(error: str) -> HTMLResponse:
+        return templates.TemplateResponse(
+            "login_set_password.html",
+            _login_context(request, username=user.username, state=state, error=error),
+            status_code=400,
+        )
+
+    if password != password_confirm:
+        return _retry("Passwords do not match.")
+    if error := validate_password_strength(password):
+        return _retry(error)
+
+    user.password_hash = hash_password(password)
+    return _mint_login_session(request, db, user, auth_method="password")
 
 
 @router.get("/logout", response_model=None)
-async def logout(request: Request) -> HTMLResponse | RedirectResponse:
-    """Clear user identity cookies."""
+def logout(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
+    """Revoke the session and clear the cookie."""
     from opal.config import get_active_settings
 
-    settings = get_active_settings()
+    revoke_session(db, request.cookies.get(SESSION_COOKIE))
+    db.commit()
 
+    settings = get_active_settings()
     if settings.auth_mode == "exe":
         # Exe logout requires POST to /__exe.dev/logout — serve an auto-submit page
         html = """<!DOCTYPE html>
@@ -349,19 +461,16 @@ async def logout(request: Request) -> HTMLResponse | RedirectResponse:
 <form id="exeLogout" method="POST" action="/__exe.dev/logout"></form>
 <script>document.getElementById('exeLogout').submit();</script>
 </body></html>"""
-        response = HTMLResponse(content=html)
+        response: HTMLResponse | RedirectResponse = HTMLResponse(content=html)
     else:
         response = RedirectResponse(url="/login", status_code=302)
 
-    response.delete_cookie("opal_user_id")
-    response.delete_cookie("opal_user_name")
-    response.delete_cookie("opal_user_email")
-    response.delete_cookie("opal_user_is_admin")
+    response.delete_cookie(SESSION_COOKIE)
     return response
 
 
 @router.get("/setup-profile", response_class=HTMLResponse)
-async def setup_profile_page(request: Request, db: DbSession) -> HTMLResponse:
+def setup_profile_page(request: Request, db: DbSession) -> HTMLResponse:
     """Profile setup page for new exe-auth users to set their display name."""
     user = _get_current_user(request, db)
     if not user:
@@ -379,7 +488,7 @@ async def setup_profile_page(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.post("/setup-profile")
-async def setup_profile_submit(
+def setup_profile_submit(
     request: Request,
     db: DbSession,
     name: str = Form(...),
@@ -393,18 +502,11 @@ async def setup_profile_submit(
     user.needs_profile_setup = False
     db.commit()
 
-    # Update cookies with the new name
-    response = RedirectResponse(url="/", status_code=302)
-    max_age = 365 * 24 * 3600
-    response.set_cookie("opal_user_id", str(user.id), max_age=max_age)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
-    return response
+    return RedirectResponse(url="/", status_code=302)
 
 
 @router.get("/welcome", response_class=HTMLResponse)
-async def welcome_page(request: Request, db: DbSession) -> HTMLResponse:
+def welcome_page(request: Request, db: DbSession) -> HTMLResponse:
     """Welcome / onboarding page."""
     context = get_base_context(request, db, "Welcome")
     current_user = context.get("current_user")
@@ -421,7 +523,7 @@ async def welcome_page(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request, db: DbSession) -> HTMLResponse:
+def index(request: Request, db: DbSession) -> HTMLResponse:
     """Home page."""
     from opal.db.models.audit import AuditLog
 
@@ -451,33 +553,35 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
     context["risks_count"] = (
         db.query(Risk).filter(Risk.deleted_at.is_(None), Risk.status != "closed").count()
     )
-    context["high_risks_count"] = len(
-        [
-            r
-            for r in db.query(Risk).filter(Risk.deleted_at.is_(None), Risk.status != "closed").all()
-            if r.severity == "high"
-        ]
+    context["high_risks_count"] = (
+        db.query(Risk)
+        .filter(
+            Risk.deleted_at.is_(None),
+            Risk.status != "closed",
+            Risk.probability * Risk.impact > 12,
+        )
+        .count()
     )
 
-    # Low stock count
-    low_stock_parts = (
+    # Low stock count: aggregate on-hand quantity per part in one query
+    qty_subq = (
+        db.query(
+            InventoryRecord.part_id.label("part_id"),
+            func.sum(InventoryRecord.quantity).label("total_quantity"),
+        )
+        .group_by(InventoryRecord.part_id)
+        .subquery()
+    )
+    context["low_stock_count"] = (
         db.query(Part)
+        .outerjoin(qty_subq, qty_subq.c.part_id == Part.id)
         .filter(
             Part.deleted_at.is_(None),
             Part.reorder_point.isnot(None),
+            func.coalesce(qty_subq.c.total_quantity, 0) < Part.reorder_point,
         )
-        .all()
+        .count()
     )
-    low_stock_count = 0
-    for p in low_stock_parts:
-        total_qty = (
-            db.query(func.coalesce(func.sum(InventoryRecord.quantity), 0))
-            .filter(InventoryRecord.part_id == p.id)
-            .scalar()
-        ) or 0
-        if total_qty < p.reorder_point:
-            low_stock_count += 1
-    context["low_stock_count"] = low_stock_count
 
     # Expiring soon count (within 30 days)
     today = date.today()
@@ -529,7 +633,7 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/parts", response_class=HTMLResponse)
-async def parts_list(request: Request, db: DbSession) -> HTMLResponse:
+def parts_list(request: Request, db: DbSession) -> HTMLResponse:
     """Parts list page."""
     from opal.config import get_active_project
 
@@ -555,7 +659,7 @@ async def parts_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/parts/table", response_class=HTMLResponse)
-async def parts_table(
+def parts_table(
     request: Request,
     db: DbSession,
     search: str | None = Query(None),
@@ -565,9 +669,26 @@ async def parts_table(
     low_stock: str | None = Query(None),
     sort_by: str | None = Query("id"),
     sort_order: str | None = Query("desc"),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Parts table rows (HTMX partial)."""
-    query = db.query(Part).filter(Part.deleted_at.is_(None))
+    # Aggregate on-hand quantity per part once, then outer-join it so the
+    # whole table renders from a single query instead of one SUM per row.
+    qty_subq = (
+        db.query(
+            InventoryRecord.part_id.label("part_id"),
+            func.sum(InventoryRecord.quantity).label("total_quantity"),
+        )
+        .group_by(InventoryRecord.part_id)
+        .subquery()
+    )
+    total_qty_col = func.coalesce(qty_subq.c.total_quantity, 0)
+
+    query = (
+        db.query(Part, total_qty_col.label("total_quantity"))
+        .outerjoin(qty_subq, qty_subq.c.part_id == Part.id)
+        .filter(Part.deleted_at.is_(None))
+    )
 
     if search:
         search_term = f"%{search}%"
@@ -594,7 +715,11 @@ async def parts_table(
             query = query.filter(Part.parent_id.isnot(None))
 
     if low_stock == "true":
-        query = query.filter(Part.reorder_point.isnot(None))
+        # Filter in SQL so results are correct beyond the page limit
+        query = query.filter(
+            Part.reorder_point.isnot(None),
+            total_qty_col < Part.reorder_point,
+        )
 
     # Apply sorting
     sort_columns = {
@@ -609,19 +734,13 @@ async def parts_table(
 
     sort_col = sort_columns.get(sort_by, Part.id)
     if sort_order == "asc":
-        parts = query.order_by(sort_col.asc()).limit(100).all()
+        query = query.order_by(sort_col.asc())
     else:
-        parts = query.order_by(sort_col.desc()).limit(100).all()
+        query = query.order_by(sort_col.desc())
+    rows, pagination = paginate_query(request, query, page, colspan=8)
 
-    # Calculate total quantities and attach to part-like objects
     parts_with_qty = []
-    for part in parts:
-        total_qty = (
-            db.query(func.coalesce(func.sum(InventoryRecord.quantity), 0))
-            .filter(InventoryRecord.part_id == part.id)
-            .scalar()
-        )
-        # Create a dict with all part attributes plus total_quantity
+    for part, total_qty in rows:
         tq = total_qty or 0
         is_low = bool(part.reorder_point is not None and tq < part.reorder_point)
         part_data = {
@@ -638,10 +757,6 @@ async def parts_table(
         }
         parts_with_qty.append(type("PartWithQty", (), part_data)())
 
-    # Filter low stock parts in Python (stock is computed per-row)
-    if low_stock == "true":
-        parts_with_qty = [p for p in parts_with_qty if p.is_low_stock]
-
     return templates.TemplateResponse(
         "parts/table_rows.html",
         {
@@ -649,12 +764,13 @@ async def parts_table(
             "parts": parts_with_qty,
             "sort_by": sort_by,
             "sort_order": sort_order,
+            "pagination": pagination,
         },
     )
 
 
 @router.get("/parts/search", response_class=HTMLResponse)
-async def parts_search_dropdown(
+def parts_search_dropdown(
     request: Request,
     db: DbSession,
     q: str = Query("", min_length=0),
@@ -687,14 +803,14 @@ async def parts_search_dropdown(
 
 
 @router.get("/parts/import", response_class=HTMLResponse)
-async def parts_import(request: Request, db: DbSession) -> HTMLResponse:
+def parts_import(request: Request, db: DbSession) -> HTMLResponse:
     """CSV import page for parts."""
     context = get_base_context(request, db, "Import Parts - OPAL")
     return templates.TemplateResponse("parts/import.html", context)
 
 
 @router.get("/parts/new", response_class=HTMLResponse)
-async def parts_new(request: Request, db: DbSession) -> HTMLResponse:
+def parts_new(request: Request, db: DbSession) -> HTMLResponse:
     """New part form page."""
     from opal.config import get_active_project
     from opal.project import DEFAULT_TIERS
@@ -719,15 +835,11 @@ async def parts_new(request: Request, db: DbSession) -> HTMLResponse:
     else:
         context["tiers"] = DEFAULT_TIERS
 
-    # Get existing parts for parent selector
-    assemblies = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
-    context["assemblies"] = assemblies
-
     return templates.TemplateResponse("parts/new.html", context)
 
 
 @router.get("/parts/{part_id}", response_class=HTMLResponse)
-async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
+def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
     """Part detail page."""
     from opal.config import get_active_project
 
@@ -839,7 +951,7 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
 
 
 @router.get("/parts/{part_id}/edit", response_class=HTMLResponse)
-async def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
+def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
     """Part edit form page."""
     part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
     if not part:
@@ -875,7 +987,7 @@ async def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLRespo
 
 
 @router.get("/inventory", response_class=HTMLResponse)
-async def inventory_list(request: Request, db: DbSession) -> HTMLResponse:
+def inventory_list(request: Request, db: DbSession) -> HTMLResponse:
     """Inventory list page."""
     context = get_base_context(request, db, "Inventory - OPAL")
 
@@ -887,7 +999,7 @@ async def inventory_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/inventory/new", response_class=HTMLResponse)
-async def inventory_new(
+def inventory_new(
     request: Request,
     db: DbSession,
     part_id: int | None = Query(None),
@@ -909,7 +1021,7 @@ async def inventory_new(
 
 
 @router.get("/inventory/table", response_class=HTMLResponse)
-async def inventory_table(
+def inventory_table(
     request: Request,
     db: DbSession,
     location: str | None = Query(None),
@@ -918,6 +1030,7 @@ async def inventory_table(
     source_type: str | None = Query(None),
     expiration: str | None = Query(None),
     calibration: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Inventory table rows (HTMX partial)."""
     query = db.query(InventoryRecord).join(Part).filter(Part.deleted_at.is_(None))
@@ -951,16 +1064,24 @@ async def inventory_table(
         )
 
     # Order by OPAL number (most recent first)
-    records = query.order_by(InventoryRecord.opal_number.desc()).limit(100).all()
+    records, pagination = paginate_query(
+        request, query.order_by(InventoryRecord.opal_number.desc()), page, colspan=9
+    )
 
     return templates.TemplateResponse(
         "inventory/table_rows.html",
-        {"request": request, "records": records, "today": date.today(), "now": datetime.now(UTC)},
+        {
+            "request": request,
+            "records": records,
+            "today": date.today(),
+            "now": datetime.now(UTC),
+            "pagination": pagination,
+        },
     )
 
 
 @router.get("/inventory/opal/{opal_number}", response_class=HTMLResponse)
-async def inventory_opal_detail(
+def inventory_opal_detail(
     request: Request,
     db: DbSession,
     opal_number: str,
@@ -1091,7 +1212,7 @@ async def inventory_opal_detail(
 
 
 @router.get("/inventory/{inventory_id}/adjust", response_class=HTMLResponse)
-async def inventory_adjust(
+def inventory_adjust(
     request: Request,
     db: DbSession,
     inventory_id: int,
@@ -1119,7 +1240,7 @@ async def inventory_adjust(
 
 
 @router.get("/purchases", response_class=HTMLResponse)
-async def purchases_list(request: Request, db: DbSession) -> HTMLResponse:
+def purchases_list(request: Request, db: DbSession) -> HTMLResponse:
     """Purchases list page."""
     context = get_base_context(request, db, "Purchases - OPAL")
     context["statuses"] = [s.value for s in PurchaseStatus]
@@ -1127,10 +1248,11 @@ async def purchases_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/purchases/table", response_class=HTMLResponse)
-async def purchases_table(
+def purchases_table(
     request: Request,
     db: DbSession,
     status: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Purchases table rows (HTMX partial)."""
     query = db.query(Purchase)
@@ -1138,26 +1260,24 @@ async def purchases_table(
     if status:
         query = query.filter(Purchase.status == status)
 
-    purchases = query.order_by(Purchase.id.desc()).limit(100).all()
+    purchases, pagination = paginate_query(
+        request, query.order_by(Purchase.id.desc()), page, colspan=6
+    )
 
     return templates.TemplateResponse(
         "purchases/table_rows.html",
-        {"request": request, "purchases": purchases},
+        {"request": request, "purchases": purchases, "pagination": pagination},
     )
 
 
 @router.get("/purchases/new", response_class=HTMLResponse)
-async def purchases_new(
+def purchases_new(
     request: Request,
     db: DbSession,
     supplier_id: int | None = None,
 ) -> HTMLResponse:
     """New purchase form page."""
     context = get_base_context(request, db, "New Purchase - OPAL")
-
-    # Get parts for line items - convert to dicts for JSON serialization
-    parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
-    context["parts"] = [{"id": p.id, "name": p.name, "external_pn": p.external_pn} for p in parts]
 
     # Get suppliers for dropdown - convert to dicts for JSON serialization
     suppliers = (
@@ -1176,7 +1296,7 @@ async def purchases_new(
 
 
 @router.get("/purchases/{purchase_id}", response_class=HTMLResponse)
-async def purchases_detail(request: Request, db: DbSession, purchase_id: int) -> HTMLResponse:
+def purchases_detail(request: Request, db: DbSession, purchase_id: int) -> HTMLResponse:
     """Purchase detail page."""
     purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
     if not purchase:
@@ -1203,13 +1323,6 @@ async def purchases_detail(request: Request, db: DbSession, purchase_id: int) ->
     totals = [e.total_cost for e in expenses if e.total_cost is not None]
     context["expense_total"] = sum(totals) if totals else None
 
-    # Get parts for adding new lines - convert to dicts for JSON serialization in modal
-    parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
-    context["parts"] = parts  # Keep full objects for template rendering
-    context["parts_json"] = [
-        {"id": p.id, "name": p.name, "external_pn": p.external_pn} for p in parts
-    ]
-
     return templates.TemplateResponse("purchases/detail.html", context)
 
 
@@ -1217,7 +1330,7 @@ async def purchases_detail(request: Request, db: DbSession, purchase_id: int) ->
 
 
 @router.get("/procedures", response_class=HTMLResponse)
-async def procedures_list(request: Request, db: DbSession) -> HTMLResponse:
+def procedures_list(request: Request, db: DbSession) -> HTMLResponse:
     """Procedures list page."""
     context = get_base_context(request, db, "Procedures - OPAL")
     context["statuses"] = [s.value for s in ProcedureStatus]
@@ -1225,14 +1338,36 @@ async def procedures_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/procedures/table", response_class=HTMLResponse)
-async def procedures_table(
+def procedures_table(
     request: Request,
     db: DbSession,
     search: str | None = Query(None),
     status: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Procedures table rows (HTMX partial)."""
-    query = db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None))
+    from opal.db.models.procedure import ProcedureStep
+
+    # Join version number and step count in one query instead of two extra
+    # queries per row
+    step_count_subq = (
+        db.query(
+            ProcedureStep.procedure_id.label("procedure_id"),
+            func.count(ProcedureStep.id).label("step_count"),
+        )
+        .group_by(ProcedureStep.procedure_id)
+        .subquery()
+    )
+    query = (
+        db.query(
+            MasterProcedure,
+            ProcedureVersion.version_number,
+            func.coalesce(step_count_subq.c.step_count, 0).label("step_count"),
+        )
+        .outerjoin(ProcedureVersion, ProcedureVersion.id == MasterProcedure.current_version_id)
+        .outerjoin(step_count_subq, step_count_subq.c.procedure_id == MasterProcedure.id)
+        .filter(MasterProcedure.deleted_at.is_(None))
+    )
 
     if search:
         search_term = f"%{search}%"
@@ -1241,20 +1376,12 @@ async def procedures_table(
     if status:
         query = query.filter(MasterProcedure.status == status)
 
-    procedures = query.order_by(MasterProcedure.id.desc()).limit(100).all()
+    rows, pagination = paginate_query(
+        request, query.order_by(MasterProcedure.id.desc()), page, colspan=8
+    )
 
-    # Add version number and step count
     procs_with_info = []
-    for p in procedures:
-        version_number = None
-        if p.current_version_id:
-            version = (
-                db.query(ProcedureVersion)
-                .filter(ProcedureVersion.id == p.current_version_id)
-                .first()
-            )
-            if version:
-                version_number = version.version_number
+    for p, version_number, step_count in rows:
         # Handle status - may be enum or string depending on context
         status_val = p.status.value if hasattr(p.status, "value") else p.status
         procs_with_info.append(
@@ -1267,7 +1394,7 @@ async def procedures_table(
                 "status": status_val,
                 "current_version_id": p.current_version_id,
                 "version_number": version_number,
-                "step_count": len(p.steps),
+                "step_count": step_count,
                 "created_at": p.created_at,
                 "updated_at": p.updated_at,
             }
@@ -1275,12 +1402,12 @@ async def procedures_table(
 
     return templates.TemplateResponse(
         "procedures/table_rows.html",
-        {"request": request, "procedures": procs_with_info},
+        {"request": request, "procedures": procs_with_info, "pagination": pagination},
     )
 
 
 @router.get("/procedures/new", response_class=HTMLResponse)
-async def procedures_new(request: Request, db: DbSession) -> HTMLResponse:
+def procedures_new(request: Request, db: DbSession) -> HTMLResponse:
     """New procedure form page."""
     context = get_base_context(request, db, "New Procedure - OPAL")
 
@@ -1297,7 +1424,7 @@ _PROCEDURE_TABS = ("meta", "operations", "flow", "kit", "outputs", "versions")
 
 
 @router.get("/procedures/{procedure_id}", response_class=HTMLResponse)
-async def procedures_detail(
+def procedures_detail(
     request: Request,
     db: DbSession,
     procedure_id: int,
@@ -1378,10 +1505,6 @@ async def procedures_detail(
         }
         for o in output_items
     ]
-
-    # Get parts for kit modal
-    parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
-    context["parts"] = parts
 
     # Organize steps hierarchically
     all_steps = procedure.steps
@@ -1482,7 +1605,7 @@ async def procedures_detail(
 
 
 @router.get("/procedures/{procedure_id}/edit", response_class=HTMLResponse)
-async def procedures_edit(request: Request, db: DbSession, procedure_id: int) -> HTMLResponse:
+def procedures_edit(request: Request, db: DbSession, procedure_id: int) -> HTMLResponse:
     """Procedure edit form page."""
     procedure = (
         db.query(MasterProcedure)
@@ -1502,7 +1625,7 @@ async def procedures_edit(request: Request, db: DbSession, procedure_id: int) ->
 
 
 @router.get("/procedures/{procedure_id}/steps/{step_id}/edit")
-async def procedures_step_edit(db: DbSession, procedure_id: int, step_id: int) -> RedirectResponse:
+def procedures_step_edit(db: DbSession, procedure_id: int, step_id: int) -> RedirectResponse:
     """Redirect the deep-link step editor URL to the inline editor in the
     Operations tab. Keeps old bookmarks working."""
     from opal.db.models.procedure import ProcedureStep
@@ -1529,7 +1652,7 @@ async def procedures_step_edit(db: DbSession, procedure_id: int, step_id: int) -
 
 
 @router.get("/procedures/{proc_id}/versions/{v1_id}/diff/{v2_id}", response_class=HTMLResponse)
-async def procedures_version_diff(
+def procedures_version_diff(
     request: Request, db: DbSession, proc_id: int, v1_id: int, v2_id: int
 ) -> HTMLResponse:
     """Side-by-side diff of two procedure versions."""
@@ -1563,7 +1686,7 @@ async def procedures_version_diff(
 
 
 @router.get("/procedures/{proc_id}/versions/{ver_id}/print", response_class=HTMLResponse)
-async def procedures_version_print(
+def procedures_version_print(
     request: Request, db: DbSession, proc_id: int, ver_id: int
 ) -> HTMLResponse:
     """Print-friendly procedure traveler."""
@@ -1626,9 +1749,7 @@ async def procedures_version_print(
 
 
 @router.get("/procedures/versions/{version_id}", response_class=HTMLResponse)
-async def procedures_version_detail(
-    request: Request, db: DbSession, version_id: int
-) -> HTMLResponse:
+def procedures_version_detail(request: Request, db: DbSession, version_id: int) -> HTMLResponse:
     """View a specific procedure version."""
     version = db.query(ProcedureVersion).filter(ProcedureVersion.id == version_id).first()
     if not version:
@@ -1700,7 +1821,7 @@ async def procedures_version_detail(
 
 
 @router.get("/executions", response_class=HTMLResponse)
-async def executions_list(request: Request, db: DbSession) -> HTMLResponse:
+def executions_list(request: Request, db: DbSession) -> HTMLResponse:
     """Procedure executions list page."""
     context = get_base_context(request, db, "Executions - OPAL")
     context["statuses"] = [s.value for s in InstanceStatus]
@@ -1718,41 +1839,63 @@ async def executions_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/executions/table", response_class=HTMLResponse)
-async def executions_table(
+def executions_table(
     request: Request,
     db: DbSession,
     procedure_id: int | None = Query(None),
     status: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Executions table rows (HTMX partial)."""
-    query = db.query(ProcedureInstance)
+    from opal.db.models.execution import StepExecution, StepStatus
+
+    # Aggregate step progress per instance and join the procedure/version
+    # names so the table renders from a single query
+    step_subq = (
+        db.query(
+            StepExecution.instance_id.label("instance_id"),
+            func.count(StepExecution.id).label("total_steps"),
+            func.sum(case((StepExecution.status == StepStatus.COMPLETED, 1), else_=0)).label(
+                "completed_steps"
+            ),
+        )
+        .group_by(StepExecution.instance_id)
+        .subquery()
+    )
+    query = (
+        db.query(
+            ProcedureInstance,
+            MasterProcedure.name.label("procedure_name"),
+            ProcedureVersion.version_number,
+            func.coalesce(step_subq.c.total_steps, 0).label("total_steps"),
+            func.coalesce(step_subq.c.completed_steps, 0).label("completed_steps"),
+        )
+        .join(MasterProcedure, MasterProcedure.id == ProcedureInstance.procedure_id)
+        .outerjoin(ProcedureVersion, ProcedureVersion.id == ProcedureInstance.version_id)
+        .outerjoin(step_subq, step_subq.c.instance_id == ProcedureInstance.id)
+    )
 
     if procedure_id:
         query = query.filter(ProcedureInstance.procedure_id == procedure_id)
     if status:
         query = query.filter(ProcedureInstance.status == status)
 
-    instances = query.order_by(ProcedureInstance.id.desc()).limit(100).all()
+    rows, pagination = paginate_query(
+        request, query.order_by(ProcedureInstance.id.desc()), page, colspan=7
+    )
 
-    # Build response data
     instances_data = []
-    for inst in instances:
-        version = db.query(ProcedureVersion).filter(ProcedureVersion.id == inst.version_id).first()
+    for inst, procedure_name, version_number, total_steps, completed_steps in rows:
         status_val = inst.status.value if hasattr(inst.status, "value") else inst.status
-        completed_steps = sum(
-            1
-            for se in inst.step_executions
-            if (se.status.value if hasattr(se.status, "value") else se.status) == "completed"
-        )
         instances_data.append(
             {
                 "id": inst.id,
-                "procedure_name": inst.procedure.name,
-                "version_number": version.version_number if version else 0,
+                "procedure_name": procedure_name,
+                "version_number": version_number or 0,
                 "work_order": inst.work_order_number or "-",
                 "status": status_val,
                 "completed_steps": completed_steps,
-                "total_steps": len(inst.step_executions),
+                "total_steps": total_steps,
                 "started_at": inst.started_at,
                 "created_at": inst.created_at,
             }
@@ -1760,12 +1903,12 @@ async def executions_table(
 
     return templates.TemplateResponse(
         "executions/table_rows.html",
-        {"request": request, "instances": instances_data},
+        {"request": request, "instances": instances_data, "pagination": pagination},
     )
 
 
 @router.get("/executions/new", response_class=HTMLResponse)
-async def executions_new(request: Request, db: DbSession) -> HTMLResponse:
+def executions_new(request: Request, db: DbSession) -> HTMLResponse:
     """Start new execution page."""
     context = get_base_context(request, db, "New Execution - OPAL")
 
@@ -1790,7 +1933,7 @@ _EXECUTION_TABS = ("meta", "operations", "data", "bom", "issues", "kitting")
 
 
 @router.get("/executions/{instance_id}", response_class=HTMLResponse)
-async def executions_detail(
+def executions_detail(
     request: Request,
     db: DbSession,
     instance_id: int,
@@ -2215,7 +2358,7 @@ async def executions_detail(
 
 
 @router.get("/executions/{instance_id}/report", response_class=HTMLResponse)
-async def executions_report(request: Request, db: DbSession, instance_id: int) -> HTMLResponse:
+def executions_report(request: Request, db: DbSession, instance_id: int) -> HTMLResponse:
     """Standalone, printable build report for a completed work order."""
     import base64
     import io
@@ -2420,7 +2563,7 @@ async def executions_report(request: Request, db: DbSession, instance_id: int) -
 
 
 @router.get("/issues", response_class=HTMLResponse)
-async def issues_list(request: Request, db: DbSession) -> HTMLResponse:
+def issues_list(request: Request, db: DbSession) -> HTMLResponse:
     """Issues list page."""
     context = get_base_context(request, db, "Issues - OPAL")
     context["types"] = [t.value for t in IssueType]
@@ -2430,13 +2573,14 @@ async def issues_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/issues/table", response_class=HTMLResponse)
-async def issues_table(
+def issues_table(
     request: Request,
     db: DbSession,
     search: str | None = Query(None),
     issue_type: str | None = Query(None),
     status: str | None = Query(None),
     priority: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Issues table rows (HTMX partial)."""
     query = db.query(Issue).filter(Issue.deleted_at.is_(None))
@@ -2451,7 +2595,7 @@ async def issues_table(
     if priority:
         query = query.filter(Issue.priority == priority)
 
-    issues = query.order_by(Issue.id.desc()).limit(100).all()
+    issues, pagination = paginate_query(request, query.order_by(Issue.id.desc()), page, colspan=6)
 
     def get_val(obj, attr):
         val = getattr(obj, attr)
@@ -2474,19 +2618,18 @@ async def issues_table(
 
     return templates.TemplateResponse(
         "issues/table_rows.html",
-        {"request": request, "issues": issues_data},
+        {"request": request, "issues": issues_data, "pagination": pagination},
     )
 
 
 @router.get("/issues/new", response_class=HTMLResponse)
-async def issues_new(request: Request, db: DbSession) -> HTMLResponse:
+def issues_new(request: Request, db: DbSession) -> HTMLResponse:
     """New issue form page."""
     context = get_base_context(request, db, "New Issue - OPAL")
     context["types"] = [t.value for t in IssueType]
     context["priorities"] = [p.value for p in IssuePriority]
 
-    # Get parts, procedures, and users for linking
-    parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).all()
+    # Get procedures and users for linking (parts use the search typeahead)
     procedures = (
         db.query(MasterProcedure)
         .filter(MasterProcedure.deleted_at.is_(None))
@@ -2496,7 +2639,6 @@ async def issues_new(request: Request, db: DbSession) -> HTMLResponse:
     from opal.db.models.user import User
 
     users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
-    context["parts"] = parts
     context["procedures"] = procedures
     context["users"] = users
 
@@ -2504,7 +2646,7 @@ async def issues_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/issues/{issue_id}", response_class=HTMLResponse)
-async def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLResponse:
+def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLResponse:
     """Issue detail page."""
     issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
@@ -2546,7 +2688,7 @@ async def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLR
 
 
 @router.get("/risks", response_class=HTMLResponse)
-async def risks_list(request: Request, db: DbSession) -> HTMLResponse:
+def risks_list(request: Request, db: DbSession) -> HTMLResponse:
     """Risks list page."""
     context = get_base_context(request, db, "Risks - OPAL")
     context["statuses"] = [s.value for s in RiskStatus]
@@ -2554,12 +2696,13 @@ async def risks_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/risks/table", response_class=HTMLResponse)
-async def risks_table(
+def risks_table(
     request: Request,
     db: DbSession,
     search: str | None = Query(None),
     status: str | None = Query(None),
     severity: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Risks table rows (HTMX partial)."""
     query = db.query(Risk).filter(Risk.deleted_at.is_(None))
@@ -2569,21 +2712,27 @@ async def risks_table(
         query = query.filter(Risk.title.ilike(search_term))
     if status:
         query = query.filter(Risk.status == status)
-
-    risks = query.order_by(Risk.id.desc()).limit(100).all()
-
-    # Filter by severity in Python (computed property)
     if severity:
-        risks = [r for r in risks if r.severity == severity]
+        # Mirror Risk.severity thresholds in SQL so the filter applies before
+        # pagination instead of only to the fetched page
+        score = Risk.probability * Risk.impact
+        if severity == "low":
+            query = query.filter(score <= 5)
+        elif severity == "medium":
+            query = query.filter(score > 5, score <= 12)
+        elif severity == "high":
+            query = query.filter(score > 12)
+
+    risks, pagination = paginate_query(request, query.order_by(Risk.id.desc()), page, colspan=8)
 
     return templates.TemplateResponse(
         "risks/table_rows.html",
-        {"request": request, "risks": risks},
+        {"request": request, "risks": risks, "pagination": pagination},
     )
 
 
 @router.get("/risks/matrix", response_class=HTMLResponse)
-async def risks_matrix(request: Request, db: DbSession) -> HTMLResponse:
+def risks_matrix(request: Request, db: DbSession) -> HTMLResponse:
     """Risk matrix page."""
     import json
 
@@ -2622,7 +2771,7 @@ async def risks_matrix(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/risks/new", response_class=HTMLResponse)
-async def risks_new(request: Request, db: DbSession) -> HTMLResponse:
+def risks_new(request: Request, db: DbSession) -> HTMLResponse:
     """New risk form page."""
     context = get_base_context(request, db, "New Risk - OPAL")
 
@@ -2640,7 +2789,7 @@ async def risks_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/risks/{risk_id}", response_class=HTMLResponse)
-async def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
+def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
     """Risk detail page."""
     risk = db.query(Risk).filter(Risk.id == risk_id, Risk.deleted_at.is_(None)).first()
     if not risk:
@@ -2746,7 +2895,7 @@ def _requirement_tree(db: DbSession, root_id: int | None = None) -> tuple[list[d
 
 
 @router.get("/requirements", response_class=HTMLResponse)
-async def requirements_tree(request: Request, db: DbSession) -> HTMLResponse:
+def requirements_tree(request: Request, db: DbSession) -> HTMLResponse:
     """Requirements tree — the front door for the spec."""
     from opal.db.base import LifecycleState
     from opal.se.readiness import ready_requirement_ids
@@ -2759,7 +2908,7 @@ async def requirements_tree(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/requirements/list", response_class=HTMLResponse)
-async def requirements_list(request: Request, db: DbSession) -> HTMLResponse:
+def requirements_list(request: Request, db: DbSession) -> HTMLResponse:
     """Requirements list page (secondary lens; the tree is the front door)."""
     from opal.db.base import LifecycleState
 
@@ -2769,7 +2918,7 @@ async def requirements_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/requirements/table", response_class=HTMLResponse)
-async def requirements_table(
+def requirements_table(
     request: Request,
     db: DbSession,
     search: str | None = Query(None),
@@ -2807,7 +2956,7 @@ async def requirements_table(
 
 
 @router.get("/requirements/new", response_class=HTMLResponse)
-async def requirements_new(request: Request, db: DbSession) -> HTMLResponse:
+def requirements_new(request: Request, db: DbSession) -> HTMLResponse:
     """New requirement form page."""
     from opal.db.base import LifecycleState
 
@@ -2827,15 +2976,13 @@ async def requirements_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/requirements/queue", response_class=HTMLResponse)
-async def requirements_queue(request: Request, db: DbSession) -> HTMLResponse:
+def requirements_queue(request: Request, db: DbSession) -> HTMLResponse:
     """Baseline queue review session — one ready requirement per screen."""
     from opal.db.models import PartRequirement
     from opal.se.readiness import ready_requirement_ids
 
     ids = ready_requirement_ids(db)
-    rows = (
-        db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
-    )
+    rows = db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
     rows.sort(key=lambda r: (r.level, r.req_number))
     by_id = {r.id: r for r in db.query(Requirement).filter(Requirement.deleted_at.is_(None))}
 
@@ -2884,7 +3031,7 @@ async def requirements_queue(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/requirements/baselines", response_class=HTMLResponse)
-async def requirements_baselines(request: Request, db: DbSession) -> HTMLResponse:
+def requirements_baselines(request: Request, db: DbSession) -> HTMLResponse:
     """Baseline events history, newest first."""
     from opal.db.models import BaselineEvent
 
@@ -2895,9 +3042,7 @@ async def requirements_baselines(request: Request, db: DbSession) -> HTMLRespons
 
 
 @router.get("/requirements/baselines/{event_id}", response_class=HTMLResponse)
-async def requirements_baseline_event(
-    request: Request, db: DbSession, event_id: int
-) -> HTMLResponse:
+def requirements_baseline_event(request: Request, db: DbSession, event_id: int) -> HTMLResponse:
     """One baseline event: the locked revision set."""
     from opal.db.models import BaselineEvent
 
@@ -2914,7 +3059,7 @@ async def requirements_baseline_event(
 
 
 @router.get("/requirements/{req_id}", response_class=HTMLResponse)
-async def requirements_detail(request: Request, db: DbSession, req_id: int) -> HTMLResponse:
+def requirements_detail(request: Request, db: DbSession, req_id: int) -> HTMLResponse:
     """Requirement detail page."""
     from opal.db.models import PartRequirement
 
@@ -2966,7 +3111,7 @@ async def requirements_detail(request: Request, db: DbSession, req_id: int) -> H
 
 
 @router.get("/requirements/{req_id}/redline", response_class=HTMLResponse)
-async def requirements_redline(
+def requirements_redline(
     request: Request,
     db: DbSession,
     req_id: int,
@@ -3001,7 +3146,9 @@ async def requirements_redline(
     old = revisions.get(rev_a)
     new = revisions.get(rev_b)
     if not old or not new:
-        return HTMLResponse('<div class="text-muted mono">revision not found</div>', status_code=404)
+        return HTMLResponse(
+            '<div class="text-muted mono">revision not found</div>', status_code=404
+        )
     return templates.TemplateResponse(
         "requirements/_redline.html",
         {
@@ -3015,9 +3162,7 @@ async def requirements_redline(
 
 
 @router.get("/requirements/{req_id}/baseline-panel", response_class=HTMLResponse)
-async def requirements_baseline_panel(
-    request: Request, db: DbSession, req_id: int
-) -> HTMLResponse:
+def requirements_baseline_panel(request: Request, db: DbSession, req_id: int) -> HTMLResponse:
     """Baseline panel partial — re-fetched by the dossier after field saves."""
     from opal.se.readiness import readiness
 
@@ -3043,7 +3188,7 @@ async def requirements_baseline_panel(
 
 
 @router.get("/datasets", response_class=HTMLResponse)
-async def datasets_list(request: Request, db: DbSession) -> HTMLResponse:
+def datasets_list(request: Request, db: DbSession) -> HTMLResponse:
     """Datasets list page."""
     context = get_base_context(request, db, "Datasets - OPAL")
 
@@ -3060,11 +3205,12 @@ async def datasets_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/datasets/table", response_class=HTMLResponse)
-async def datasets_table(
+def datasets_table(
     request: Request,
     db: DbSession,
     search: str | None = Query(None),
     procedure_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Datasets table rows (HTMX partial)."""
     query = db.query(Dataset).filter(Dataset.deleted_at.is_(None))
@@ -3075,16 +3221,18 @@ async def datasets_table(
     if procedure_id:
         query = query.filter(Dataset.procedure_id == procedure_id)
 
-    datasets = query.order_by(Dataset.id.desc()).limit(100).all()
+    datasets, pagination = paginate_query(
+        request, query.order_by(Dataset.id.desc()), page, colspan=5
+    )
 
     return templates.TemplateResponse(
         "datasets/table_rows.html",
-        {"request": request, "datasets": datasets},
+        {"request": request, "datasets": datasets, "pagination": pagination},
     )
 
 
 @router.get("/datasets/new", response_class=HTMLResponse)
-async def datasets_new(request: Request, db: DbSession) -> HTMLResponse:
+def datasets_new(request: Request, db: DbSession) -> HTMLResponse:
     """New dataset form page."""
     context = get_base_context(request, db, "New Dataset - OPAL")
 
@@ -3101,7 +3249,7 @@ async def datasets_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/datasets/{dataset_id}", response_class=HTMLResponse)
-async def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> HTMLResponse:
+def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> HTMLResponse:
     """Dataset detail page with chart."""
     import json
 
@@ -3147,21 +3295,36 @@ async def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> H
 
 
 @router.get("/suppliers", response_class=HTMLResponse)
-async def suppliers_list(request: Request, db: DbSession) -> HTMLResponse:
+def suppliers_list(request: Request, db: DbSession) -> HTMLResponse:
     """Suppliers list page."""
     context = get_base_context(request, db, "Suppliers - OPAL")
     return templates.TemplateResponse("suppliers/list.html", context)
 
 
 @router.get("/suppliers/table", response_class=HTMLResponse)
-async def suppliers_table(
+def suppliers_table(
     request: Request,
     db: DbSession,
     search: str | None = None,
     is_active: str | None = None,
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Suppliers table rows (HTMX partial)."""
-    query = db.query(Supplier).filter(Supplier.deleted_at.is_(None))
+    # Join purchase counts in one query instead of lazy-loading each
+    # supplier's purchases just to count them
+    purchase_count_subq = (
+        db.query(
+            Purchase.supplier_id.label("supplier_id"),
+            func.count(Purchase.id).label("purchase_count"),
+        )
+        .group_by(Purchase.supplier_id)
+        .subquery()
+    )
+    query = (
+        db.query(Supplier, func.coalesce(purchase_count_subq.c.purchase_count, 0))
+        .outerjoin(purchase_count_subq, purchase_count_subq.c.supplier_id == Supplier.id)
+        .filter(Supplier.deleted_at.is_(None))
+    )
 
     if search:
         search_term = f"%{search}%"
@@ -3178,11 +3341,10 @@ async def suppliers_table(
     elif is_active == "false":
         query = query.filter(Supplier.is_active == False)  # noqa: E712
 
-    suppliers = query.order_by(Supplier.name).limit(100).all()
+    rows, pagination = paginate_query(request, query.order_by(Supplier.name), page, colspan=7)
 
-    # Build response with purchase counts
     supplier_data = []
-    for s in suppliers:
+    for s, purchase_count in rows:
         supplier_data.append(
             {
                 "id": s.id,
@@ -3191,25 +3353,25 @@ async def suppliers_table(
                 "email": s.email,
                 "phone": s.phone,
                 "is_active": s.is_active,
-                "purchase_count": len(s.purchases) if s.purchases else 0,
+                "purchase_count": purchase_count,
             }
         )
 
     return templates.TemplateResponse(
         "suppliers/table_rows.html",
-        {"request": request, "suppliers": supplier_data},
+        {"request": request, "suppliers": supplier_data, "pagination": pagination},
     )
 
 
 @router.get("/suppliers/new", response_class=HTMLResponse)
-async def suppliers_new(request: Request, db: DbSession) -> HTMLResponse:
+def suppliers_new(request: Request, db: DbSession) -> HTMLResponse:
     """New supplier form page."""
     context = get_base_context(request, db, "New Supplier - OPAL")
     return templates.TemplateResponse("suppliers/new.html", context)
 
 
 @router.get("/suppliers/{supplier_id}", response_class=HTMLResponse)
-async def suppliers_detail(request: Request, db: DbSession, supplier_id: int) -> HTMLResponse:
+def suppliers_detail(request: Request, db: DbSession, supplier_id: int) -> HTMLResponse:
     """Supplier detail page."""
     supplier = (
         db.query(Supplier).filter(Supplier.id == supplier_id, Supplier.deleted_at.is_(None)).first()
@@ -3232,7 +3394,7 @@ async def suppliers_detail(request: Request, db: DbSession, supplier_id: int) ->
 
 
 @router.get("/suppliers/{supplier_id}/edit", response_class=HTMLResponse)
-async def suppliers_edit(request: Request, db: DbSession, supplier_id: int) -> HTMLResponse:
+def suppliers_edit(request: Request, db: DbSession, supplier_id: int) -> HTMLResponse:
     """Supplier edit page."""
     supplier = (
         db.query(Supplier).filter(Supplier.id == supplier_id, Supplier.deleted_at.is_(None)).first()
@@ -3254,18 +3416,19 @@ async def suppliers_edit(request: Request, db: DbSession, supplier_id: int) -> H
 
 
 @router.get("/workcenters", response_class=HTMLResponse)
-async def workcenters_list(request: Request, db: DbSession) -> HTMLResponse:
+def workcenters_list(request: Request, db: DbSession) -> HTMLResponse:
     """Workcenters list page."""
     context = get_base_context(request, db, "Workcenters - OPAL")
     return templates.TemplateResponse("workcenters/list.html", context)
 
 
 @router.get("/workcenters/table", response_class=HTMLResponse)
-async def workcenters_table(
+def workcenters_table(
     request: Request,
     db: DbSession,
     search: str | None = None,
     is_active: str | None = None,
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Workcenters table rows (HTMX partial)."""
     query = db.query(Workcenter)
@@ -3285,23 +3448,25 @@ async def workcenters_table(
     elif is_active == "false":
         query = query.filter(Workcenter.is_active == False)  # noqa: E712
 
-    workcenters = query.order_by(Workcenter.code).limit(100).all()
+    workcenters, pagination = paginate_query(
+        request, query.order_by(Workcenter.code), page, colspan=5
+    )
 
     return templates.TemplateResponse(
         "workcenters/table_rows.html",
-        {"request": request, "workcenters": workcenters},
+        {"request": request, "workcenters": workcenters, "pagination": pagination},
     )
 
 
 @router.get("/workcenters/new", response_class=HTMLResponse)
-async def workcenters_new(request: Request, db: DbSession) -> HTMLResponse:
+def workcenters_new(request: Request, db: DbSession) -> HTMLResponse:
     """New workcenter form page."""
     context = get_base_context(request, db, "New Workcenter - OPAL")
     return templates.TemplateResponse("workcenters/new.html", context)
 
 
 @router.get("/workcenters/{workcenter_id}", response_class=HTMLResponse)
-async def workcenters_detail(request: Request, db: DbSession, workcenter_id: int) -> HTMLResponse:
+def workcenters_detail(request: Request, db: DbSession, workcenter_id: int) -> HTMLResponse:
     """Workcenter detail page."""
     workcenter = db.query(Workcenter).filter(Workcenter.id == workcenter_id).first()
     if not workcenter:
@@ -3318,7 +3483,7 @@ async def workcenters_detail(request: Request, db: DbSession, workcenter_id: int
 
 
 @router.get("/workcenters/{workcenter_id}/edit", response_class=HTMLResponse)
-async def workcenters_edit(request: Request, db: DbSession, workcenter_id: int) -> HTMLResponse:
+def workcenters_edit(request: Request, db: DbSession, workcenter_id: int) -> HTMLResponse:
     """Workcenter edit page."""
     workcenter = db.query(Workcenter).filter(Workcenter.id == workcenter_id).first()
     if not workcenter:
@@ -3338,17 +3503,18 @@ async def workcenters_edit(request: Request, db: DbSession, workcenter_id: int) 
 
 
 @router.get("/users")
-async def users_list(request: Request, db: DbSession):
+def users_list(request: Request, db: DbSession):
     """Redirect to settings page (user management is now on /settings)."""
     return RedirectResponse(url="/settings", status_code=302)
 
 
 @router.get("/users/table", response_class=HTMLResponse)
-async def users_table(
+def users_table(
     request: Request,
     db: DbSession,
     search: str | None = None,
     is_active: str | None = None,
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Users table rows (HTMX partial)."""
     query = db.query(User)
@@ -3367,16 +3533,16 @@ async def users_table(
     elif is_active == "false":
         query = query.filter(User.is_active == False)  # noqa: E712
 
-    users = query.order_by(User.name).limit(100).all()
+    users, pagination = paginate_query(request, query.order_by(User.name), page, colspan=6)
 
     return templates.TemplateResponse(
         "users/table_rows.html",
-        {"request": request, "users_list": users},
+        {"request": request, "users_list": users, "pagination": pagination},
     )
 
 
 @router.get("/users/new", response_class=HTMLResponse)
-async def users_new(request: Request, db: DbSession) -> HTMLResponse:
+def users_new(request: Request, db: DbSession) -> HTMLResponse:
     """New user form page. Admin only."""
     redirect = _require_admin_web(request, db)
     if redirect:
@@ -3386,7 +3552,7 @@ async def users_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/users/{user_id}", response_class=HTMLResponse)
-async def users_detail(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
+def users_detail(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
     """User detail page. Self-view for all, admin can view anyone."""
     current_user = _get_current_user(request, db)
     is_own_profile = current_user and current_user.id == user_id
@@ -3411,7 +3577,7 @@ async def users_detail(request: Request, db: DbSession, user_id: int) -> HTMLRes
 
 
 @router.get("/users/{user_id}/edit", response_class=HTMLResponse)
-async def users_edit(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
+def users_edit(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
     """User edit page. Self-edit for all, admin can edit anyone."""
     current_user = _get_current_user(request, db)
     is_own_profile = current_user and current_user.id == user_id
@@ -3438,7 +3604,7 @@ async def users_edit(request: Request, db: DbSession, user_id: int) -> HTMLRespo
 
 
 @router.get("/label", response_class=HTMLResponse)
-async def label_print(
+def label_print(
     request: Request,
     db: DbSession,
     type: str = Query(...),
@@ -3487,7 +3653,7 @@ async def label_print(
 
 
 @router.get("/docs", response_class=HTMLResponse)
-async def docs(request: Request, db: DbSession) -> HTMLResponse:
+def docs(request: Request, db: DbSession) -> HTMLResponse:
     """Documentation page."""
     context = get_base_context(request, db, "Documentation - OPAL")
     return templates.TemplateResponse("docs.html", context)
@@ -3497,7 +3663,7 @@ async def docs(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/project/new", response_class=HTMLResponse)
-async def project_new(request: Request, db: DbSession) -> HTMLResponse:
+def project_new(request: Request, db: DbSession) -> HTMLResponse:
     """New project wizard page. Admin only."""
     redirect = _require_admin_web(request, db)
     if redirect:
@@ -3512,7 +3678,7 @@ async def project_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/project/edit", response_class=HTMLResponse)
-async def project_edit(request: Request, db: DbSession) -> HTMLResponse:
+def project_edit(request: Request, db: DbSession) -> HTMLResponse:
     """Edit existing project configuration. Admin only."""
     from opal.config import get_active_project
 
@@ -3537,7 +3703,7 @@ async def project_edit(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request, db: DbSession) -> HTMLResponse:
+def settings_page(request: Request, db: DbSession) -> HTMLResponse:
     """System settings page."""
     import platform
 
@@ -3605,9 +3771,7 @@ async def settings_page(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/settings/auth-mode", response_class=HTMLResponse, response_model=None)
-async def settings_auth_mode_form(
-    request: Request, db: DbSession
-) -> HTMLResponse | RedirectResponse:
+def settings_auth_mode_form(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
     """Admin-only auth-mode edit form."""
     if redirect := _require_admin_web(request, db):
         return redirect
@@ -3620,14 +3784,15 @@ async def settings_auth_mode_form(
 
 
 @router.post("/settings/auth-mode", response_class=HTMLResponse, response_model=None)
-async def settings_auth_mode_save(
+def settings_auth_mode_save(
     request: Request,
     db: DbSession,
     auth_mode: str = Form(...),
     confirm_proxy: bool = Form(default=False),
+    passkeys_enabled: bool = Form(default=False),
 ) -> HTMLResponse | RedirectResponse:
-    """Persist the auth_mode override (db overlay). Switching to exe requires
-    the admin to confirm a reverse proxy is in place — otherwise anyone can
+    """Persist auth settings (db overlay). Switching to exe requires the
+    admin to confirm a reverse proxy is in place — otherwise anyone can
     forge ``X-ExeDev-UserID`` and impersonate any user."""
     if redirect := _require_admin_web(request, db):
         return redirect
@@ -3649,38 +3814,26 @@ async def settings_auth_mode_save(
         return templates.TemplateResponse("settings/auth_mode.html", context)
 
     set_app_setting(db, "auth_mode", auth_mode)
+    set_app_setting(db, "passkeys_enabled", "true" if passkeys_enabled else "false")
     db.commit()
     apply_db_overlay(db)
 
     context["current_auth_mode"] = auth_mode
-    context["save_result"] = {"ok": True, "message": f"Auth mode set to {auth_mode}."}
+    context["passkeys_enabled"] = passkeys_enabled
+    context["save_result"] = {"ok": True, "message": "Authentication settings saved."}
     return templates.TemplateResponse("settings/auth_mode.html", context)
 
 
 # ============ INSTANCE LIFECYCLE: DEMO DATA + FACTORY RESET ============
 
 
-_IDENTITY_COOKIES = ("opal_user_id", "opal_user_name", "opal_user_email", "opal_user_is_admin")
-
-
-def _set_identity_cookies(response: RedirectResponse, user: User) -> None:
-    max_age = 365 * 24 * 3600
-    response.set_cookie("opal_user_id", str(user.id), max_age=max_age)
-    response.set_cookie("opal_user_name", user.name, max_age=max_age)
-    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
-    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
-
-
-def _clear_identity_cookies(response: RedirectResponse) -> None:
-    for cookie in _IDENTITY_COOKIES:
-        response.delete_cookie(cookie)
-
-
 @router.post("/settings/demo/enter")
-async def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
+def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
     """Switch the instance to the throwaway demo database (admin only)."""
     from opal.api.app import start_onshape_polling
+    from opal.api.routes.auth import set_session_cookie
     from opal.core import lifecycle
+    from opal.core.auth import create_session
     from opal.db.base import SessionLocal
     from opal.db.models.user import User as UserModel
 
@@ -3693,17 +3846,28 @@ async def settings_demo_enter(request: Request, db: DbSession) -> RedirectRespon
 
     response = RedirectResponse(url="/", status_code=302)
     if demo_user_id is not None:
+        # Sessions live per-database: mint one in the demo database so the
+        # operator stays logged in across the switch.
         with SessionLocal() as demo_db:
             demo_user = demo_db.query(UserModel).filter(UserModel.id == demo_user_id).first()
             if demo_user:
-                _set_identity_cookies(response, demo_user)
+                token = create_session(
+                    demo_db,
+                    demo_user,
+                    auth_method="demo",
+                    user_agent=request.headers.get("user-agent"),
+                    ip_address=request.client.host if request.client else None,
+                )
+                demo_db.commit()
+                set_session_cookie(response, request, token)
     return response
 
 
 @router.post("/settings/demo/exit")
-async def settings_demo_exit(request: Request, db: DbSession) -> RedirectResponse:
+def settings_demo_exit(request: Request, db: DbSession) -> RedirectResponse:
     """Exit the demo: switch back to the real database and delete the demo file."""
     from opal.api.app import start_onshape_polling
+    from opal.api.routes.auth import clear_session_cookie
     from opal.core import lifecycle
 
     if redirect := _require_admin_web(request, db):
@@ -3712,14 +3876,14 @@ async def settings_demo_exit(request: Request, db: DbSession) -> RedirectRespons
     lifecycle.exit_demo(delete=True)
     start_onshape_polling(request.app)
 
-    # Demo-database identities mean nothing in the real database.
+    # Demo-database sessions mean nothing in the real database.
     response = RedirectResponse(url="/login", status_code=302)
-    _clear_identity_cookies(response)
+    clear_session_cookie(response)
     return response
 
 
 @router.post("/settings/demo/delete")
-async def settings_demo_delete(request: Request, db: DbSession) -> RedirectResponse:
+def settings_demo_delete(request: Request, db: DbSession) -> RedirectResponse:
     """Delete an inactive demo database file."""
     from opal.core import lifecycle
 
@@ -3733,11 +3897,12 @@ async def settings_demo_delete(request: Request, db: DbSession) -> RedirectRespo
 
 
 @router.post("/settings/factory-reset")
-async def settings_factory_reset(
+def settings_factory_reset(
     request: Request, db: DbSession, confirm: str = Form("")
 ) -> RedirectResponse:
     """Wipe the instance back to first-run state. Requires typing RESET."""
     from opal.api.app import start_onshape_polling
+    from opal.api.routes.auth import clear_session_cookie
     from opal.core import lifecycle
 
     if redirect := _require_admin_web(request, db):
@@ -3751,7 +3916,7 @@ async def settings_factory_reset(
     start_onshape_polling(request.app)
 
     response = RedirectResponse(url="/setup", status_code=302)
-    _clear_identity_cookies(response)
+    clear_session_cookie(response)
     return response
 
 
@@ -3773,7 +3938,7 @@ def _onshape_form_context(request: Request, db: DbSession) -> dict[str, Any]:
 
 
 @router.get("/settings/onshape/configure", response_class=HTMLResponse, response_model=None)
-async def settings_onshape_configure_form(
+def settings_onshape_configure_form(
     request: Request, db: DbSession
 ) -> HTMLResponse | RedirectResponse:
     """Render the Onshape credentials form (admin only)."""
@@ -3786,7 +3951,7 @@ async def settings_onshape_configure_form(
 
 
 @router.post("/settings/onshape/configure", response_class=HTMLResponse, response_model=None)
-async def settings_onshape_configure_save(
+def settings_onshape_configure_save(
     request: Request,
     db: DbSession,
     access_key: str = Form(default=""),
@@ -3837,7 +4002,7 @@ async def settings_onshape_configure_save(
 
 
 @router.post("/settings/onshape/test", response_class=HTMLResponse)
-async def settings_onshape_test(request: Request, db: DbSession) -> HTMLResponse:
+def settings_onshape_test(request: Request, db: DbSession) -> HTMLResponse:
     """Run a credential smoke-test against the saved Onshape config.
     Returns an HTMX banner partial."""
     if redirect := _require_admin_web(request, db):
@@ -3883,7 +4048,7 @@ async def settings_onshape_test(request: Request, db: DbSession) -> HTMLResponse
 
 
 @router.get("/settings/onshape/sync-log", response_class=HTMLResponse)
-async def settings_onshape_sync_log(request: Request, db: DbSession) -> HTMLResponse:
+def settings_onshape_sync_log(request: Request, db: DbSession) -> HTMLResponse:
     """HTMX partial: recent Onshape sync log entries."""
     from opal.db.models.onshape_link import OnshapeSyncLog
 
@@ -3895,7 +4060,7 @@ async def settings_onshape_sync_log(request: Request, db: DbSession) -> HTMLResp
 
 
 @router.get("/settings/onshape/documents", response_class=HTMLResponse)
-async def settings_onshape_documents(request: Request, db: DbSession) -> HTMLResponse:
+def settings_onshape_documents(request: Request, db: DbSession) -> HTMLResponse:
     """HTMX partial: Onshape registered documents table + add form."""
     from opal.config import get_active_project, get_active_settings
 
@@ -4068,11 +4233,7 @@ async def settings_onshape_sync_pull(request: Request, db: DbSession) -> HTMLRes
     project = get_active_project()
 
     # Resolve user from cookie
-    user_id: int | None = None
-    cookie_user_id = request.cookies.get("opal_user_id")
-    if cookie_user_id:
-        with contextlib.suppress(ValueError, TypeError):
-            user_id = int(cookie_user_id)
+    user_id = verify_user_id(request.cookies.get(AUTH_COOKIE))
 
     if not settings.onshape_enabled or not project or not project.onshape.documents:
         sync_logs = db.query(OnshapeSyncLog).order_by(OnshapeSyncLog.id.desc()).limit(10).all()
@@ -4162,11 +4323,7 @@ async def settings_onshape_sync_push(request: Request, db: DbSession) -> HTMLRes
     settings = get_active_settings()
     project = get_active_project()
 
-    user_id: int | None = None
-    cookie_user_id = request.cookies.get("opal_user_id")
-    if cookie_user_id:
-        with contextlib.suppress(ValueError, TypeError):
-            user_id = int(cookie_user_id)
+    user_id = verify_user_id(request.cookies.get(AUTH_COOKIE))
 
     if not settings.onshape_enabled or not project or not project.onshape.documents:
         sync_logs = db.query(OnshapeSyncLog).order_by(OnshapeSyncLog.id.desc()).limit(10).all()
@@ -4245,7 +4402,7 @@ async def settings_onshape_sync_push(request: Request, db: DbSession) -> HTMLRes
 
 
 @router.get("/audit", response_class=HTMLResponse)
-async def audit_list(request: Request, db: DbSession) -> HTMLResponse:
+def audit_list(request: Request, db: DbSession) -> HTMLResponse:
     """Audit log list page."""
     from opal.db.models.audit import AuditLog
 
@@ -4262,13 +4419,14 @@ async def audit_list(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/audit/table", response_class=HTMLResponse)
-async def audit_table(
+def audit_table(
     request: Request,
     db: DbSession,
     table_name: str | None = Query(None),
     action: str | None = Query(None),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Audit log table rows (HTMX partial)."""
     from opal.db.models.audit import AuditLog
@@ -4292,7 +4450,9 @@ async def audit_table(
         except ValueError:
             pass
 
-    entries = query.order_by(AuditLog.timestamp.desc()).limit(200).all()
+    entries, pagination = paginate_query(
+        request, query.order_by(AuditLog.timestamp.desc()), page, colspan=6, page_size=200
+    )
 
     # Build user cache to avoid N+1
     user_ids = {e.user_id for e in entries if e.user_id}
@@ -4310,7 +4470,7 @@ async def audit_table(
 
     return templates.TemplateResponse(
         "audit/table_rows.html",
-        {"request": request, "entries": entries},
+        {"request": request, "entries": entries, "pagination": pagination},
     )
 
 
@@ -4318,7 +4478,7 @@ async def audit_table(
 
 
 @router.get("/styleguide", response_class=HTMLResponse)
-async def styleguide(request: Request, db: DbSession) -> HTMLResponse:
+def styleguide(request: Request, db: DbSession) -> HTMLResponse:
     """OPALkit component styleguide page."""
     context = get_base_context(request, db, "Styleguide - OPAL")
     return templates.TemplateResponse("opalkit/styleguide/index.html", context)

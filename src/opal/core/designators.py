@@ -8,6 +8,9 @@ Provides atomic generation of sequential designators for various entity types:
 - Serial numbers: Plain 3-digit numbers (001, 002, ...) per part
 """
 
+from datetime import UTC, datetime
+
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from opal.db.models.designator import DesignatorSequence
@@ -24,6 +27,27 @@ REQUIREMENT = "REQ"
 _SIMPLE_PREFIXES = (OPAL, WORK_ORDER, ISSUE, RISK, REQUIREMENT)
 
 
+def _next_sequence_value(db: Session, designator_type: str) -> int:
+    """Atomically increment and return the sequence for a designator type.
+
+    Uses a single INSERT ... ON CONFLICT DO UPDATE ... RETURNING statement.
+    SELECT ... FOR UPDATE is a no-op on SQLite, so a read-modify-write here
+    would let two concurrent transactions hand out the same number; the
+    upsert acquires the write lock and increments in one statement instead.
+    """
+    now = datetime.now(UTC)
+    stmt = (
+        sqlite_insert(DesignatorSequence)
+        .values(designator_type=designator_type, last_value=1, created_at=now, updated_at=now)
+        .on_conflict_do_update(
+            index_elements=[DesignatorSequence.designator_type],
+            set_={"last_value": DesignatorSequence.last_value + 1, "updated_at": now},
+        )
+        .returning(DesignatorSequence.last_value)
+    )
+    return db.execute(stmt).scalar_one()
+
+
 def generate_designator(db: Session, designator_type: str, digits: int = 5) -> str:
     """Generate the next sequential designator of the given type.
 
@@ -38,26 +62,7 @@ def generate_designator(db: Session, designator_type: str, digits: int = 5) -> s
     Returns:
         The next designator string (e.g., "OPAL-00001", "WO-00042")
     """
-    # Get or create the sequence record
-    seq = (
-        db.query(DesignatorSequence)
-        .filter(DesignatorSequence.designator_type == designator_type)
-        .with_for_update()
-        .first()
-    )
-
-    if seq is None:
-        # First time using this designator type - create sequence
-        seq = DesignatorSequence(designator_type=designator_type, last_value=0)
-        db.add(seq)
-
-    # Increment and return
-    seq.last_value += 1
-    next_num = seq.last_value
-
-    # Flush to ensure the increment is persisted before we return
-    db.flush()
-
+    next_num = _next_sequence_value(db, designator_type)
     return f"{designator_type}-{next_num:0{digits}d}"
 
 
@@ -154,18 +159,8 @@ def generate_serial_number(db: Session, part) -> str:
     """
     part_key = part.internal_pn or str(part.id)
     seq_key = f"SN-{part_key}"
-    seq = (
-        db.query(DesignatorSequence)
-        .filter(DesignatorSequence.designator_type == seq_key)
-        .with_for_update()
-        .first()
-    )
-    if seq is None:
-        seq = DesignatorSequence(designator_type=seq_key, last_value=0)
-        db.add(seq)
-    seq.last_value += 1
-    db.flush()
-    return f"{seq.last_value:03d}"
+    next_num = _next_sequence_value(db, seq_key)
+    return f"{next_num:03d}"
 
 
 def get_designator_type(designator: str) -> str | None:

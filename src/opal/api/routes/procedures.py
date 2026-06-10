@@ -223,7 +223,7 @@ def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
 
 
 @router.get("", response_model=ProcedureListResponse)
-async def list_procedures(
+def list_procedures(
     db: DbSession,
     search: str | None = Query(None),
     status: str | None = Query(None),
@@ -258,7 +258,7 @@ async def list_procedures(
 
 
 @router.post("", response_model=ProcedureResponse, status_code=201)
-async def create_procedure(
+def create_procedure(
     data: ProcedureCreate,
     db: DbSession,
     user_id: CurrentUserId,
@@ -281,7 +281,7 @@ async def create_procedure(
 
 
 @router.get("/{procedure_id}", response_model=ProcedureResponse)
-async def get_procedure(
+def get_procedure(
     procedure_id: int,
     db: DbSession,
 ) -> ProcedureResponse:
@@ -315,7 +315,7 @@ async def get_procedure(
 
 
 @router.patch("/{procedure_id}", response_model=ProcedureResponse)
-async def update_procedure(
+def update_procedure(
     procedure_id: int,
     data: ProcedureUpdate,
     db: DbSession,
@@ -357,7 +357,7 @@ async def update_procedure(
 
 
 @router.delete("/{procedure_id}", status_code=204)
-async def delete_procedure(
+def delete_procedure(
     procedure_id: int,
     db: DbSession,
     user_id: CurrentUserId,
@@ -425,7 +425,7 @@ def _calculate_step_number(
 
 
 @router.post("/{procedure_id}/steps", response_model=StepSchema, status_code=201)
-async def add_step(
+def add_step(
     procedure_id: int,
     data: StepCreate,
     db: DbSession,
@@ -501,7 +501,7 @@ async def add_step(
 
 
 @router.patch("/{procedure_id}/steps/{step_id}", response_model=StepSchema)
-async def update_step(
+def update_step(
     procedure_id: int,
     step_id: int,
     data: StepUpdate,
@@ -546,7 +546,7 @@ async def update_step(
 
 
 @router.delete("/{procedure_id}/steps/{step_id}", status_code=204)
-async def delete_step(
+def delete_step(
     procedure_id: int,
     step_id: int,
     db: DbSession,
@@ -607,7 +607,7 @@ def _renumber_procedure_steps(steps: list[ProcedureStep]) -> None:
 
 
 @router.post("/{procedure_id}/steps/reorder", response_model=list[StepSchema])
-async def reorder_steps(
+def reorder_steps(
     procedure_id: int,
     data: StepReorder,
     db: DbSession,
@@ -658,7 +658,7 @@ class StepDependencyPayload(BaseModel):
 
 
 @router.get("/{procedure_id}/dependencies")
-async def list_dependencies(procedure_id: int, db: DbSession) -> list[dict]:
+def list_dependencies(procedure_id: int, db: DbSession) -> list[dict]:
     """Return all op-level dependency edges for a procedure as
     [{step_id, depends_on_step_id}, ...]."""
     procedure = (
@@ -679,7 +679,7 @@ async def list_dependencies(procedure_id: int, db: DbSession) -> list[dict]:
 
 
 @router.put("/{procedure_id}/steps/{step_id}/dependencies")
-async def set_step_dependencies(
+def set_step_dependencies(
     procedure_id: int,
     step_id: int,
     data: StepDependencyPayload,
@@ -778,7 +778,7 @@ async def set_step_dependencies(
 
 
 @router.post("/{procedure_id}/publish", response_model=VersionResponse, status_code=201)
-async def publish_version(
+def publish_version(
     procedure_id: int,
     db: DbSession,
     user_id: CurrentUserId,
@@ -902,7 +902,7 @@ async def publish_version(
 
 
 @router.get("/{procedure_id}/versions", response_model=list[VersionResponse])
-async def list_versions(
+def list_versions(
     procedure_id: int,
     db: DbSession,
 ) -> list[VersionResponse]:
@@ -926,7 +926,7 @@ async def list_versions(
 
 
 @router.get("/versions/{version_id}", response_model=VersionDetailResponse)
-async def get_version(
+def get_version(
     version_id: int,
     db: DbSession,
 ) -> VersionDetailResponse:
@@ -939,7 +939,7 @@ async def get_version(
 
 
 @router.post("/{procedure_id}/versions/{version_id}/restore", response_model=ProcedureResponse)
-async def restore_from_version(
+def restore_from_version(
     procedure_id: int,
     version_id: int,
     db: DbSession,
@@ -1051,7 +1051,7 @@ async def restore_from_version(
 
 
 @router.get("/{procedure_id}/kit", response_model=list[KitItemResponse])
-async def get_kit(
+def get_kit(
     procedure_id: int,
     db: DbSession,
 ) -> list[KitItemResponse]:
@@ -1081,7 +1081,7 @@ async def get_kit(
 
 
 @router.post("/{procedure_id}/kit", response_model=KitItemResponse, status_code=201)
-async def add_kit_item(
+def add_kit_item(
     procedure_id: int,
     data: KitItemCreate,
     db: DbSession,
@@ -1129,7 +1129,7 @@ async def add_kit_item(
 
 
 @router.patch("/{procedure_id}/kit/{kit_id}", response_model=KitItemResponse)
-async def update_kit_item(
+def update_kit_item(
     procedure_id: int,
     kit_id: int,
     data: KitItemUpdate,
@@ -1157,7 +1157,7 @@ async def update_kit_item(
 
 
 @router.delete("/{procedure_id}/kit/{part_id}", status_code=204)
-async def remove_kit_item(
+def remove_kit_item(
     procedure_id: int,
     part_id: int,
     db: DbSession,
@@ -1204,7 +1204,7 @@ class OutputUpdate(BaseModel):
 
 
 @router.get("/{procedure_id}/outputs", response_model=list[OutputResponse])
-async def get_outputs(
+def get_outputs(
     procedure_id: int,
     db: DbSession,
 ) -> list[OutputResponse]:
@@ -1230,7 +1230,7 @@ async def get_outputs(
 
 
 @router.post("/{procedure_id}/outputs", response_model=OutputResponse, status_code=201)
-async def add_output(
+def add_output(
     procedure_id: int,
     data: OutputCreate,
     db: DbSession,
@@ -1308,7 +1308,7 @@ async def add_output(
 
 
 @router.patch("/{procedure_id}/outputs/{part_id}", response_model=OutputResponse)
-async def update_output(
+def update_output(
     procedure_id: int,
     part_id: int,
     data: OutputUpdate,
@@ -1341,7 +1341,7 @@ async def update_output(
 
 
 @router.delete("/{procedure_id}/outputs/{part_id}", status_code=204)
-async def remove_output(
+def remove_output(
     procedure_id: int,
     part_id: int,
     db: DbSession,
@@ -1397,7 +1397,7 @@ class StepKitUpdate(BaseModel):
 
 
 @router.get("/{procedure_id}/steps/{step_id}/kit", response_model=list[StepKitResponse])
-async def get_step_kit(
+def get_step_kit(
     procedure_id: int,
     step_id: int,
     db: DbSession,
@@ -1427,7 +1427,7 @@ async def get_step_kit(
 
 
 @router.post("/{procedure_id}/steps/{step_id}/kit", response_model=StepKitResponse, status_code=201)
-async def add_step_kit_item(
+def add_step_kit_item(
     procedure_id: int,
     step_id: int,
     data: StepKitCreate,
@@ -1493,7 +1493,7 @@ async def add_step_kit_item(
 
 
 @router.patch("/{procedure_id}/steps/{step_id}/kit/{kit_id}", response_model=StepKitResponse)
-async def update_step_kit_item(
+def update_step_kit_item(
     procedure_id: int,
     step_id: int,
     kit_id: int,
@@ -1548,7 +1548,7 @@ async def update_step_kit_item(
 
 
 @router.delete("/{procedure_id}/steps/{step_id}/kit/{part_id}", status_code=204)
-async def remove_step_kit_item(
+def remove_step_kit_item(
     procedure_id: int,
     step_id: int,
     part_id: int,
@@ -1586,7 +1586,7 @@ class CloneProcedureRequest(BaseModel):
 
 
 @router.post("/{procedure_id}/clone", response_model=ProcedureResponse, status_code=201)
-async def clone_procedure(
+def clone_procedure(
     procedure_id: int,
     data: CloneProcedureRequest,
     db: DbSession,

@@ -9,7 +9,6 @@ Rules enforced in receive_purchase:
 import pytest
 from fastapi.testclient import TestClient
 
-
 # ---- Helpers ----
 
 

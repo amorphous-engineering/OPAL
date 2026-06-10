@@ -89,13 +89,26 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label" for="parent_id">PARENT ASSEMBLY</label>
-                <select id="parent_id" name="parent_id" class="form-select">
-                    <option value="">None (top-level part)</option>
-                    {% for asm in assemblies %}
-                    <option value="{{ asm.id }}">{{ asm.internal_pn }} - {{ asm.name }}</option>
-                    {% endfor %}
-                </select>
+                <label class="form-label" for="parent-part-search">PARENT ASSEMBLY</label>
+                <div class="part-search-container">
+                    <input type="text"
+                           id="parent-part-search"
+                           class="form-input part-search-input"
+                           placeholder="None (top-level part) - search to select..."
+                           autocomplete="off"
+                           hx-get="/parts/search"
+                           hx-trigger="keyup changed delay:200ms"
+                           hx-target="#parent-part-results"
+                           hx-vals='{"limit": 5}'
+                           name="q">
+                    <input type="hidden" id="parent_id" name="parent_id">
+                    <div id="parent-part-results" class="part-search-dropdown"></div>
+                    <div id="parent-part-selected" class="part-search-selected" style="display: none;">
+                        <span class="part-id"></span>
+                        <span class="part-name"></span>
+                        <span class="part-search-clear" onclick="clearPartSelection('parent')">&times;</span>
+                    </div>
+                </div>
                 <small class="form-help">Optional: Select if this part is a sub-component of another assembly</small>
             </div>
 
@@ -110,6 +123,41 @@
 {% endcall %}
 
 <script>
+// Part search component (same contract as the other part typeaheads)
+function selectPart(el) {
+    const partId = el.dataset.partId;
+    const partName = el.dataset.partName;
+    const partPn = el.dataset.partPn;
+    const container = el.closest('.part-search-dropdown').parentElement;
+    const hiddenInput = container.querySelector('input[type="hidden"]');
+    const searchInput = container.querySelector('.part-search-input');
+    const dropdown = container.querySelector('.part-search-dropdown');
+    const selected = container.querySelector('.part-search-selected');
+    hiddenInput.value = partId;
+    selected.querySelector('.part-id').textContent = partId;
+    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
+    selected.style.display = 'flex';
+    searchInput.style.display = 'none';
+    dropdown.classList.remove('active');
+    dropdown.innerHTML = '';
+}
+
+function clearPartSelection(prefix) {
+    const container = document.getElementById(prefix + '-part-search').closest('.part-search-container');
+    container.querySelector('input[type="hidden"]').value = '';
+    container.querySelector('.part-search-input').value = '';
+    container.querySelector('.part-search-input').style.display = 'block';
+    container.querySelector('.part-search-selected').style.display = 'none';
+}
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && evt.detail.target.classList.contains('part-search-dropdown')) {
+        const dropdown = evt.detail.target;
+        if (dropdown.innerHTML.trim()) dropdown.classList.add('active');
+        else dropdown.classList.remove('active');
+    }
+});
+
 function toggleCalibrationFields() {
     var show = document.getElementById('is_tooling').checked;
     document.getElementById('calibration-fields').style.display = show ? '' : 'none';
@@ -150,7 +198,6 @@ async function submitPartForm() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-User-Id': localStorage.getItem('opal_user_id') || '1'
             },
             body: JSON.stringify(body)
         });

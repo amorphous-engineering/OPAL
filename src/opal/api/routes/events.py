@@ -52,7 +52,7 @@ async def event_generator(
 
 
 @router.get("/stream")
-async def event_stream(
+def event_stream(
     request: Request,
     user_id: CurrentUserId,
 ) -> StreamingResponse:
@@ -89,6 +89,6 @@ async def event_stream(
 
 
 @router.get("/stats", response_model=EventStats)
-async def get_event_stats() -> EventStats:
+def get_event_stats() -> EventStats:
     """Get statistics about the event system."""
     return EventStats(connected_clients=event_bus.subscriber_count)

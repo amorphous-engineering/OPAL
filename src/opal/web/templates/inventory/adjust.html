@@ -76,7 +76,6 @@ async function submitAdjust() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-User-Id': localStorage.getItem('opal_user_id') || '1'
             },
             body: JSON.stringify(body)
         });

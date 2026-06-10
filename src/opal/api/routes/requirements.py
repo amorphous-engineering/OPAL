@@ -166,7 +166,7 @@ class LintResponse(BaseModel):
 
 
 @router.post("/lint", response_model=LintResponse)
-async def lint_requirement_fields(data: LintRequest) -> LintResponse:
+def lint_requirement_fields(data: LintRequest) -> LintResponse:
     """Lint requirement fields as typed. Same engine the baseline gate enforces."""
     findings = lint_requirement(
         data.statement,
@@ -184,7 +184,7 @@ async def lint_requirement_fields(data: LintRequest) -> LintResponse:
 
 
 @router.get("", response_model=RequirementListResponse)
-async def list_requirements(
+def list_requirements(
     db: DbSession,
     state: str | None = None,
     category: str | None = None,
@@ -227,7 +227,7 @@ async def list_requirements(
 
 
 @router.post("", response_model=RequirementResponse, status_code=status.HTTP_201_CREATED)
-async def create_requirement(
+def create_requirement(
     db: DbSession,
     data: RequirementCreate,
     user_id: CurrentUserId,
@@ -275,13 +275,13 @@ async def create_requirement(
 
 
 @router.get("/{req_id:int}", response_model=RequirementResponse)
-async def get_requirement(db: DbSession, req_id: int) -> RequirementResponse:
+def get_requirement(db: DbSession, req_id: int) -> RequirementResponse:
     """Get a requirement by ID."""
     return _req_response(db, _get_requirement(db, req_id))
 
 
 @router.patch("/{req_id:int}", response_model=RequirementResponse)
-async def update_requirement(
+def update_requirement(
     db: DbSession,
     req_id: int,
     data: RequirementUpdateSchema,
@@ -353,7 +353,7 @@ async def update_requirement(
 
 
 @router.delete("/{req_id:int}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_requirement(db: DbSession, req_id: int, user_id: CurrentUserId) -> None:
+def delete_requirement(db: DbSession, req_id: int, user_id: CurrentUserId) -> None:
     """Soft-delete a requirement. Baselined rows must be cancelled first."""
     req = _get_requirement(db, req_id)
     if req.is_baselined:
@@ -386,9 +386,7 @@ async def delete_requirement(db: DbSession, req_id: int, user_id: CurrentUserId)
 
 
 @router.post("/{req_id:int}/baseline", response_model=RequirementResponse)
-async def baseline_requirement(
-    db: DbSession, req_id: int, user_id: CurrentUserId
-) -> RequirementResponse:
+def baseline_requirement(db: DbSession, req_id: int, user_id: CurrentUserId) -> RequirementResponse:
     """Baseline a requirement. Returns 409 with the list of blockers if not ready.
 
     Single-item baselines write a baseline event too (label null) — one
@@ -416,7 +414,7 @@ class BaselineBatchRequest(BaseModel):
 
 
 @router.post("/baseline-batch")
-async def baseline_batch_endpoint(
+def baseline_batch_endpoint(
     db: DbSession, data: BaselineBatchRequest, user_id: CurrentUserId
 ) -> dict:
     """Baseline a set atomically: every item re-validates at commit time;
@@ -446,7 +444,7 @@ async def baseline_batch_endpoint(
 
 
 @router.get("/queue")
-async def baseline_queue(db: DbSession) -> dict:
+def baseline_queue(db: DbSession) -> dict:
     """The ready set — draft/preliminary rows whose hard checks all pass."""
     ids = ready_requirement_ids(db)
     return {"count": len(ids), "ids": ids}
@@ -457,9 +455,7 @@ async def baseline_queue(db: DbSession) -> dict:
     response_model=RequirementResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def revise_requirement(
-    db: DbSession, req_id: int, user_id: CurrentUserId
-) -> RequirementResponse:
+def revise_requirement(db: DbSession, req_id: int, user_id: CurrentUserId) -> RequirementResponse:
     """Create the next draft revision of a baselined requirement."""
     req = _get_requirement(db, req_id)
     try:
@@ -473,9 +469,7 @@ async def revise_requirement(
 
 
 @router.post("/{req_id:int}/cancel", response_model=RequirementResponse)
-async def cancel_requirement(
-    db: DbSession, req_id: int, user_id: CurrentUserId
-) -> RequirementResponse:
+def cancel_requirement(db: DbSession, req_id: int, user_id: CurrentUserId) -> RequirementResponse:
     """Cancel a requirement (terminal state)."""
     req = _get_requirement(db, req_id)
     old_values = get_model_dict(req)
@@ -490,9 +484,7 @@ async def cancel_requirement(
 
 
 @router.post("/{req_id:int}/reaffirm", response_model=RequirementResponse)
-async def reaffirm_requirement(
-    db: DbSession, req_id: int, user_id: CurrentUserId
-) -> RequirementResponse:
+def reaffirm_requirement(db: DbSession, req_id: int, user_id: CurrentUserId) -> RequirementResponse:
     """Clear staleness without an edit: 'the parent's change doesn't invalidate this'.
 
     Signature semantics — audit-logged with the session user. Works on
@@ -510,13 +502,13 @@ async def reaffirm_requirement(
 
 
 @router.get("/{req_id:int}/readiness")
-async def requirement_readiness(db: DbSession, req_id: int) -> dict:
+def requirement_readiness(db: DbSession, req_id: int) -> dict:
     """Structured baseline-readiness checks — what the baseline panel renders."""
     return readiness(db, _get_requirement(db, req_id))
 
 
 @router.get("/{req_id:int}/revisions", response_model=list[RequirementResponse])
-async def list_revisions(db: DbSession, req_id: int) -> list[RequirementResponse]:
+def list_revisions(db: DbSession, req_id: int) -> list[RequirementResponse]:
     """All revisions sharing this requirement's number, oldest first."""
     req = _get_requirement(db, req_id)
     revisions = (
@@ -623,7 +615,7 @@ def get_requirement_response(db: DbSession, pr: PartRequirement) -> PartRequirem
 
 
 @router.get("/project", response_model=list[ProjectRequirementResponse])
-async def list_project_requirements() -> list[ProjectRequirementResponse]:
+def list_project_requirements() -> list[ProjectRequirementResponse]:
     """List requirements from the deprecated yaml catalog (use GET /requirements)."""
     project = get_active_project()
     if not project:
@@ -641,7 +633,7 @@ async def list_project_requirements() -> list[ProjectRequirementResponse]:
 
 
 @router.get("/parts/{part_id}", response_model=list[PartRequirementResponse])
-async def list_part_requirements(
+def list_part_requirements(
     db: DbSession,
     part_id: int,
 ) -> list[PartRequirementResponse]:
@@ -660,7 +652,7 @@ async def list_part_requirements(
 @router.post(
     "/parts/{part_id}", response_model=PartRequirementResponse, status_code=status.HTTP_201_CREATED
 )
-async def assign_requirement(
+def assign_requirement(
     db: DbSession,
     part_id: int,
     req_in: RequirementAssign,
@@ -724,7 +716,7 @@ async def assign_requirement(
 
 
 @router.patch("/allocations/{allocation_id}", response_model=PartRequirementResponse)
-async def update_part_requirement(
+def update_part_requirement(
     db: DbSession,
     allocation_id: int,
     req_in: AllocationUpdate,
@@ -761,7 +753,7 @@ async def update_part_requirement(
 
 
 @router.post("/allocations/{allocation_id}/verify", response_model=PartRequirementResponse)
-async def verify_requirement(
+def verify_requirement(
     db: DbSession,
     allocation_id: int,
     verify_in: RequirementVerify,
@@ -793,7 +785,7 @@ async def verify_requirement(
 
 
 @router.delete("/allocations/{allocation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def unassign_requirement(
+def unassign_requirement(
     db: DbSession,
     allocation_id: int,
     user_id: CurrentUserId,

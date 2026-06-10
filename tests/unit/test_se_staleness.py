@@ -5,6 +5,7 @@ import json
 from opal.core.designators import generate_requirement_number
 from opal.db.models import AuditLog, Requirement
 from opal.se.redline import redline_html, redline_segments
+from tests.conftest import login, user_headers
 
 GOOD = "The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
 
@@ -26,11 +27,13 @@ def _make_req(db, **overrides) -> Requirement:
 
 def _baseline_revise_baseline(client, db, test_user):
     """Parent rev 1 baselined with a child; rev 2 baselined → rev 1 supersedes."""
-    headers = {"X-User-Id": str(test_user.id)}
+    headers = user_headers(test_user)
     parent = _make_req(db, level=0)
     child = _make_req(db, level=1, parent_id=parent.id)
     db.commit()
-    assert client.post(f"/api/requirements/{parent.id}/baseline", headers=headers).status_code == 200
+    assert (
+        client.post(f"/api/requirements/{parent.id}/baseline", headers=headers).status_code == 200
+    )
     rev2_id = client.post(f"/api/requirements/{parent.id}/revise", headers=headers).json()["id"]
     client.patch(
         f"/api/requirements/{rev2_id}",
@@ -55,7 +58,7 @@ def test_baselining_without_supersede_marks_nothing(client, db_session, test_use
     parent = _make_req(db_session, level=0)
     child = _make_req(db_session, level=1, parent_id=parent.id)
     db_session.commit()
-    client.post(f"/api/requirements/{parent.id}/baseline", headers={"X-User-Id": str(test_user.id)})
+    client.post(f"/api/requirements/{parent.id}/baseline", headers=user_headers(test_user))
     db_session.expire_all()
     assert child.stale is False
 
@@ -66,7 +69,7 @@ def test_edit_clears_stale(client, db_session, test_user):
     resp = client.patch(
         f"/api/requirements/{child.id}",
         json={"rationale": "Re-derived against parent rev 2."},
-        headers={"X-User-Id": str(test_user.id)},
+        headers=user_headers(test_user),
     )
     assert resp.status_code == 200
     assert resp.json()["stale"] is False
@@ -74,7 +77,7 @@ def test_edit_clears_stale(client, db_session, test_user):
 
 def test_reaffirm_clears_stale_and_audit_logs(client, db_session, test_user):
     _, child, _ = _baseline_revise_baseline(client, db_session, test_user)
-    headers = {"X-User-Id": str(test_user.id)}
+    headers = user_headers(test_user)
 
     resp = client.post(f"/api/requirements/{child.id}/reaffirm", headers=headers)
     assert resp.status_code == 200
@@ -96,7 +99,7 @@ def test_reaffirm_clears_stale_and_audit_logs(client, db_session, test_user):
 
 def test_new_revision_starts_fresh_not_stale(client, db_session, test_user):
     _, child, _ = _baseline_revise_baseline(client, db_session, test_user)
-    headers = {"X-User-Id": str(test_user.id)}
+    headers = user_headers(test_user)
     # Baseline the stale child (stale never blocks), then revise it.
     assert client.post(f"/api/requirements/{child.id}/baseline", headers=headers).status_code == 200
     rev2 = client.post(f"/api/requirements/{child.id}/revise", headers=headers).json()
@@ -125,7 +128,7 @@ def test_redline_html_escapes_and_marks():
 
 
 def test_redline_partial_defaults_to_superseded_revision(client, db_session, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     parent, _, rev2_id = _baseline_revise_baseline(client, db_session, test_user)
     resp = client.get(f"/requirements/{rev2_id}/redline")
     assert resp.status_code == 200

@@ -143,8 +143,6 @@ const instanceId = {{ instance.id }};
 
 function getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
     return headers;
 }
 
@@ -555,8 +553,6 @@ function _stepPhotoUploadHeaders() {
     // FormData bodies need fetch to set its own multipart Content-Type +
     // boundary, so do not include Content-Type in our headers.
     const headers = {};
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
     return headers;
 }
 
@@ -742,7 +738,7 @@ async function loadParticipants() {
 function renderParticipants(participants) {
     const container = document.getElementById('participants-list');
     if (!container) return;
-    const currentUserId = parseInt(localStorage.getItem('opal_user_id'));
+    const currentUserId = window.OPAL_USER_ID;
     if (!participants || participants.length === 0) {
         container.innerHTML = '<span class="text-muted">No active participants</span>';
         updateJoinLeaveButtons(false); return;
@@ -769,7 +765,7 @@ function updateJoinLeaveButtons(participating) {
 }
 
 async function joinExecution() {
-    if (!localStorage.getItem('opal_user_id')) { alert('Please select a user first'); return; }
+    if (!window.OPAL_USER_ID) { alert('You are not signed in'); return; }
     try {
         const response = await fetch(`/api/procedure-instances/${instanceId}/join`, { method: 'POST', headers: getHeaders() });
         if (response.ok) { const data = await response.json(); renderParticipants(data.participants); window.opalEvents.setActivity(`executing:${instanceId}`); }
@@ -823,8 +819,6 @@ async function uploadAttachment() {
     }
     try {
         const headers = {};
-        const userId = localStorage.getItem('opal_user_id');
-        if (userId) headers['X-User-Id'] = userId;
         const response = await fetch('/api/attachments/upload', { method: 'POST', headers, body: formData });
         if (response.ok) {
             fileInput.value = '';
@@ -873,8 +867,7 @@ document.body.addEventListener('htmx:afterSwap', function(e) {
 
 window.addEventListener('beforeunload', function() {
     if (isParticipant) {
-        const userId = localStorage.getItem('opal_user_id');
-        if (userId) { navigator.sendBeacon(`/api/procedure-instances/${instanceId}/leave`, new Blob([JSON.stringify({})], { type: 'application/json' })); }
+        if (window.OPAL_USER_ID) { navigator.sendBeacon(`/api/procedure-instances/${instanceId}/leave`, new Blob([JSON.stringify({})], { type: 'application/json' })); }
     }
 });
 </script>

@@ -5,6 +5,7 @@ import json
 from opal.core.designators import generate_requirement_number
 from opal.db.models import BaselineEvent, BaselineEventItem, Requirement
 from opal.se.readiness import ready_requirement_ids
+from tests.conftest import login, user_headers
 
 GOOD = "The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
 
@@ -35,7 +36,7 @@ def test_batch_baselines_all_and_writes_one_event(client, db_session, test_user)
     resp = client.post(
         "/api/requirements/baseline-batch",
         json={"ids": [a.id, b.id], "label": "l0-freeze", "note": "mini design freeze"},
-        headers={"X-User-Id": str(test_user.id)},
+        headers=user_headers(test_user),
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -59,7 +60,7 @@ def test_batch_atomicity_one_offender_aborts_all(client, db_session, test_user):
     resp = client.post(
         "/api/requirements/baseline-batch",
         json={"ids": [clean.id, dirty.id]},
-        headers={"X-User-Id": str(test_user.id)},
+        headers=user_headers(test_user),
     )
     assert resp.status_code == 409
     offenders = resp.json()["detail"]["offenders"]
@@ -76,9 +77,7 @@ def test_single_dossier_baseline_writes_event_with_null_label(client, db_session
     req = _make_req(db_session)
     db_session.commit()
 
-    resp = client.post(
-        f"/api/requirements/{req.id}/baseline", headers={"X-User-Id": str(test_user.id)}
-    )
+    resp = client.post(f"/api/requirements/{req.id}/baseline", headers=user_headers(test_user))
     assert resp.status_code == 200
 
     (event,) = db_session.query(BaselineEvent).all()
@@ -101,7 +100,7 @@ def test_queue_endpoint_equals_ready_set(client, db_session):
 
 
 def test_queue_and_baselines_pages_render(client, db_session, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     parent = _make_req(db_session, level=0, title="Mission root")
     child = _make_req(db_session, level=1, title="Derived", parent_id=parent.id)
     db_session.commit()
@@ -115,7 +114,7 @@ def test_queue_and_baselines_pages_render(client, db_session, test_user):
     resp = client.post(
         "/api/requirements/baseline-batch",
         json={"ids": [parent.id, child.id], "label": "l0-freeze"},
-        headers={"X-User-Id": str(test_user.id)},
+        headers=user_headers(test_user),
     )
     event_id = resp.json()["event_id"]
 
@@ -135,7 +134,7 @@ def test_queue_and_baselines_pages_render(client, db_session, test_user):
 
 
 def test_tree_header_shows_queue_button_when_ready(client, db_session, test_user):
-    client.cookies.set("opal_user_id", str(test_user.id))
+    login(client, test_user)
     _make_req(db_session)
     db_session.commit()
     page = client.get("/requirements")
@@ -193,13 +192,13 @@ async def test_mcp_queue_batch_and_events_round_trip(db_session, test_user):
 def test_event_items_point_at_exact_revision_rows(client, db_session, test_user):
     req = _make_req(db_session)
     db_session.commit()
-    client.post(f"/api/requirements/{req.id}/baseline", headers={"X-User-Id": str(test_user.id)})
+    client.post(f"/api/requirements/{req.id}/baseline", headers=user_headers(test_user))
 
     # Revise and baseline rev 2: its event must reference the new row, not rev 1.
     rev2_id = client.post(
-        f"/api/requirements/{req.id}/revise", headers={"X-User-Id": str(test_user.id)}
+        f"/api/requirements/{req.id}/revise", headers=user_headers(test_user)
     ).json()["id"]
-    client.post(f"/api/requirements/{rev2_id}/baseline", headers={"X-User-Id": str(test_user.id)})
+    client.post(f"/api/requirements/{rev2_id}/baseline", headers=user_headers(test_user))
 
     items = db_session.query(BaselineEventItem).order_by(BaselineEventItem.id).all()
     assert [i.requirement_id for i in items] == [req.id, rev2_id]

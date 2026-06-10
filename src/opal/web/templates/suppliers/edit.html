@@ -60,10 +60,6 @@ async function updateSupplier(event) {
         'Content-Type': 'application/json',
     };
 
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) {
-        headers['X-User-Id'] = userId;
-    }
 
     try {
         const response = await fetch('/api/suppliers/{{ supplier.id }}', {
