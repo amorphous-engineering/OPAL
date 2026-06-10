@@ -168,15 +168,31 @@ _runtime_settings: Settings | None = None
 _active_project: "ProjectConfig | None" = None
 
 
+def _upload_dir_is_explicit() -> bool:
+    """True when OPAL_UPLOAD_DIR was set explicitly in the environment.
+
+    The upload_dir must not be overwritten by database-path derivation
+    when the operator has pinned it via env var.
+    """
+    import os
+
+    return bool(os.environ.get("OPAL_UPLOAD_DIR"))
+
+
 def configure_for_project(
     project: "ProjectConfig | None" = None,
     database_path: Path | str | None = None,
+    upload_dir: Path | None = None,
 ) -> Settings:
     """Configure settings for a specific project.
 
     Args:
         project: Project configuration to use.
         database_path: Explicit database path (overrides project).
+        upload_dir: Explicit upload directory.  When None the upload dir is
+            derived from ``database_path`` **only if** ``OPAL_UPLOAD_DIR`` is
+            not set in the environment.  A user-configured upload dir is never
+            discarded by a database switch.
 
     Returns:
         Configured Settings instance.
@@ -185,17 +201,29 @@ def configure_for_project(
 
     base = get_settings()
 
-    # Determine database URL
+    # Determine database URL and upload dir.
+    # upload_dir derivation rules:
+    #   1. Caller supplied an explicit upload_dir → use it.
+    #   2. OPAL_UPLOAD_DIR is set in the environment → keep base.upload_dir
+    #      (env-configured dir must survive any DB switch).
+    #   3. project carries its own attachments_dir → use that.
+    #   4. database_path given with no explicit dir → derive next to the DB.
+    #   5. Fallback → keep base.upload_dir.
     if database_path:
         db_path = Path(database_path).resolve()
         database_url = f"sqlite:///{db_path}"
-        upload_dir = db_path.parent / "attachments"
+        if upload_dir is not None:
+            resolved_upload_dir = upload_dir
+        elif _upload_dir_is_explicit():
+            resolved_upload_dir = base.upload_dir
+        else:
+            resolved_upload_dir = db_path.parent / "attachments"
     elif project:
         database_url = project.database_url
-        upload_dir = project.attachments_dir
+        resolved_upload_dir = upload_dir if upload_dir is not None else project.attachments_dir
     else:
         database_url = base.database_url
-        upload_dir = base.upload_dir
+        resolved_upload_dir = upload_dir if upload_dir is not None else base.upload_dir
 
     # Create new settings with overrides
     _runtime_settings = Settings(
@@ -207,7 +235,7 @@ def configure_for_project(
         rate_limit_enabled=base.rate_limit_enabled,
         rate_limit_requests=base.rate_limit_requests,
         rate_limit_window=base.rate_limit_window,
-        upload_dir=upload_dir,
+        upload_dir=resolved_upload_dir,
         max_upload_size=base.max_upload_size,
         allowed_mime_types=base.allowed_mime_types,
         auth_mode=base.auth_mode,
@@ -315,11 +343,43 @@ PROJECT_CONFIG_KEY = "project_config"
 logger = logging.getLogger("opal.config")
 
 
-def save_project_to_db(db: "Session", config: "ProjectConfig") -> None:
-    """Persist the project config blob and activate it. Caller commits."""
+def save_project_to_db(
+    db: "Session", config: "ProjectConfig", user_id: int | None = None
+) -> None:
+    """Persist the project config blob, activate it, and write an audit row.
+
+    ``user_id`` is the acting admin; pass it from routes that have a resolved
+    user.  Callers commit.
+    """
     global _active_project
 
-    set_app_setting(db, PROJECT_CONFIG_KEY, config.model_dump_json(exclude={"project_dir"}))
+    from datetime import UTC, datetime
+
+    from opal.db.models.app_setting import AppSetting
+    from opal.db.models.audit import AuditAction, AuditLog
+
+    new_value = config.model_dump_json(exclude={"project_dir"})
+
+    existing = db.query(AppSetting).filter(AppSetting.key == PROJECT_CONFIG_KEY).first()
+    old_value = existing.value if existing is not None else None
+
+    set_app_setting(db, PROJECT_CONFIG_KEY, new_value)
+    db.flush()  # ensure the row is visible to audit
+
+    action = AuditAction.CREATE if old_value is None else AuditAction.UPDATE
+    audit_entry = AuditLog(
+        timestamp=datetime.now(UTC),
+        table_name=AppSetting.__tablename__,
+        # AppSetting PK is a string key; record_id stores 0 as sentinel.
+        # The actual key is captured in new_values.
+        record_id=0,
+        action=action,
+        user_id=user_id,
+        old_values={"key": PROJECT_CONFIG_KEY, "value": old_value} if old_value is not None else None,
+        new_values={"key": PROJECT_CONFIG_KEY, "value": new_value},
+    )
+    db.add(audit_entry)
+
     _active_project = config
 
 

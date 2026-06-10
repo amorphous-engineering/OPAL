@@ -157,7 +157,7 @@ async def create_project(
         categories=data.categories,
     )
 
-    save_project_to_db(db, config)
+    save_project_to_db(db, config, user_id=admin.id)
     db.commit()
 
     return ProjectConfigResponse.from_config(config)
@@ -178,7 +178,7 @@ async def update_project_config(
     project.part_numbering = _numbering_from_input(data.part_numbering)
     project.categories = data.categories
 
-    save_project_to_db(db, project)
+    save_project_to_db(db, project, user_id=admin.id)
     db.commit()
 
     return ProjectConfigResponse.from_config(project)
