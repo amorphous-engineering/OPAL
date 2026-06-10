@@ -166,13 +166,10 @@ def test_cross_reference_view_from_part(client: TestClient, auth_headers: dict) 
 def test_supplier_soft_delete_excludes_catalog_entries(
     client: TestClient, auth_headers: dict, db_session
 ) -> None:
-    """After a supplier is soft-deleted, its catalog entries are not returned by the part view.
+    """After a supplier is soft-deleted, its catalog entries disappear from every surface.
 
-    Note: Supplier uses soft-delete. The SupplierPart entries still exist in the DB
-    (CASCADE is for hard delete), but the supplier_detail and part detail pages filter
-    by supplier.deleted_at.is_(None) at the web layer. The API GET /parts/{id}/suppliers
-    still returns entries (since SupplierPart has no deleted_at). We verify the supplier
-    itself is gone from the suppliers list and the supplier detail 404s.
+    SupplierPart rows still exist in the DB (CASCADE is for hard delete), but the
+    API and web layers filter entries whose counterpart is soft-deleted.
     """
     supplier = _create_supplier(client, auth_headers, name="SoftDelSupplier")
     part = _create_part(client, auth_headers, name="SoftDelPart")
@@ -199,6 +196,39 @@ def test_supplier_soft_delete_excludes_catalog_entries(
     # Listing supplier's parts also 404s (supplier is gone)
     parts_resp = client.get(f"/api/suppliers/{supplier['id']}/parts")
     assert parts_resp.status_code == 404
+
+    # The part's supplier list no longer includes the soft-deleted supplier
+    part_suppliers = client.get(f"/api/parts/{part['id']}/suppliers")
+    assert part_suppliers.status_code == 200
+    assert part_suppliers.json() == []
+
+    # And the part detail page hides the entry
+    page = client.get(f"/parts/{part['id']}")
+    assert "SD-001" not in page.text
+
+
+def test_part_soft_delete_excludes_catalog_entries(
+    client: TestClient, auth_headers: dict
+) -> None:
+    """After a part is soft-deleted, its catalog entries vanish from the supplier views."""
+    supplier = _create_supplier(client, auth_headers, name="KeepSupplier")
+    part = _create_part(client, auth_headers, name="SoftDelLinkedPart")
+
+    client.post(
+        f"/api/suppliers/{supplier['id']}/parts",
+        json={"part_id": part["id"], "vendor_pn": "SD-002"},
+        headers=auth_headers,
+    )
+
+    del_resp = client.delete(f"/api/parts/{part['id']}", headers=auth_headers)
+    assert del_resp.status_code == 204
+
+    supplier_parts = client.get(f"/api/suppliers/{supplier['id']}/parts")
+    assert supplier_parts.status_code == 200
+    assert supplier_parts.json() == []
+
+    page = client.get(f"/suppliers/{supplier['id']}")
+    assert "SD-002" not in page.text
 
 
 # ---------------------------------------------------------------------------

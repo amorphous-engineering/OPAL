@@ -345,7 +345,8 @@ async def list_supplier_parts(
     entries = (
         db.execute(
             select(SupplierPart)
-            .where(SupplierPart.supplier_id == supplier_id)
+            .join(Part, SupplierPart.part_id == Part.id)
+            .where(SupplierPart.supplier_id == supplier_id, Part.deleted_at.is_(None))
             .order_by(SupplierPart.is_preferred.desc(), SupplierPart.id)
         )
         .scalars()

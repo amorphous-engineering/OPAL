@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
-from opal.db.models import InventoryRecord, Part, SupplierPart
+from opal.db.models import InventoryRecord, Part, Supplier, SupplierPart
 
 router = APIRouter()
 
@@ -674,7 +674,8 @@ async def list_part_suppliers(
     entries = (
         db.execute(
             select(SupplierPart)
-            .where(SupplierPart.part_id == part_id)
+            .join(Supplier, SupplierPart.supplier_id == Supplier.id)
+            .where(SupplierPart.part_id == part_id, Supplier.deleted_at.is_(None))
             .order_by(SupplierPart.is_preferred.desc(), SupplierPart.id)
         )
         .scalars()
