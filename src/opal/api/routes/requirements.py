@@ -371,6 +371,15 @@ async def delete_requirement(db: DbSession, req_id: int, user_id: CurrentUserId)
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Requirement has {children} child requirement(s); re-parent them first",
         )
+    allocations = (
+        db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).count()
+    )
+    if allocations:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Requirement is allocated to {allocations} part(s); "
+            "unassign them first or cancel instead",
+        )
     log_delete(db, req, user_id)
     req.soft_delete()
     db.commit()
@@ -491,9 +500,7 @@ async def reaffirm_requirement(
     """
     req = _get_requirement(db, req_id)
     if not req.stale:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Requirement is not stale"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Requirement is not stale")
     old_values = get_model_dict(req)
     req.stale = False
     log_update(db, req, old_values, user_id)

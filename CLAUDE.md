@@ -83,6 +83,8 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 
 Dense, explicit, functional. Expose state and inner workings. Data tables over cards. Monospace for data-heavy areas (part numbers, IDs, timestamps). No rounded corners, shadows, or gradients. No progressive disclosure — show all relevant information. High-contrast functional color palette (green=good, yellow=warning, red=error).
 
+**One fact, one home.** Every other appearance is a live reference, never a copy. Test: if updating something requires touching two places, the design is wrong — delete one occurrence or derive it. PRs that violate this must argue against it by name.
+
 ## Linting (Ruff)
 
 Configured in `pyproject.toml`: line-length 100, target Python 3.11+, rules E/F/I/UP/B/SIM. Type hints required everywhere.

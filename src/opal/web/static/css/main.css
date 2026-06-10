@@ -2281,9 +2281,12 @@ a.user-menu-link.active {
     white-space: nowrap;
 }
 
-/* Lint underlines — block vs warn must read as two distinct treatments */
+/* Lint underlines — block vs warn are distinct in SHAPE, not just color
+   (spec §10: "two clearly distinct underline treatments"; color alone
+   fails for colorblind readers). Block = wavy red (the editor-error
+   convention), warn = dotted yellow (advisory). */
 .lint-block {
-    text-decoration: underline dotted var(--accent-red) 2px;
+    text-decoration: underline wavy var(--accent-red) 1.5px;
     text-underline-offset: 3px;
     cursor: help;
 }

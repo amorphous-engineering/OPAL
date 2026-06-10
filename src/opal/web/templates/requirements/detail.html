@@ -166,7 +166,9 @@
 
         <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-md);">
             {{ ok.btn("BACK", href="/requirements") }}
-            {% if mutable %}
+            {# Spec §4.3: DELETE is for stillborn drafts only — never-baselined,
+               no children, no allocations. Everything else leaves by CANCEL. #}
+            {% if mutable and not children_nodes and not allocations %}
             {{ ok.btn("DELETE", attrs='onclick="deleteReq()" style="color: var(--accent-red);"') }}
             {% endif %}
         </div>

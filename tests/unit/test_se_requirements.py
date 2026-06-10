@@ -399,6 +399,45 @@ def test_baseline_panel_disabled_until_blockers_clear(client, test_user):
     assert "BASELINE READINESS" not in baselined_page.text
 
 
+def test_delete_button_only_on_stillborn_drafts(client, db_session, test_user):
+    """Spec §4.3: DELETE renders only for never-baselined drafts with zero
+    children and zero allocations; CANCEL is the path for everything else."""
+    client.cookies.set("opal_user_id", str(test_user.id))
+
+    stillborn = _api_create(client, title="Stillborn")
+    page = client.get(f"/requirements/{stillborn['id']}")
+    assert 'onclick="deleteReq()"' in page.text
+
+    # With a child: no DELETE, CANCEL remains.
+    parent = _api_create(client, title="Parent")
+    _api_create(client, title="Child", parent_id=parent["id"])
+    page = client.get(f"/requirements/{parent['id']}")
+    assert 'onclick="deleteReq()"' not in page.text
+    assert "CANCEL REQ" in page.text
+
+    # With an allocation: no DELETE; backend refuses too.
+    allocated = _api_create(client, title="Allocated")
+    part = client.post("/api/parts", json={"name": "Bracket"}).json()
+    client.post(
+        f"/api/requirements/parts/{part['id']}",
+        json={"requirement_id": allocated["req_number"]},
+        headers={"X-User-Id": str(test_user.id)},
+    )
+    page = client.get(f"/requirements/{allocated['id']}")
+    assert 'onclick="deleteReq()"' not in page.text
+    resp = client.delete(
+        f"/api/requirements/{allocated['id']}", headers={"X-User-Id": str(test_user.id)}
+    )
+    assert resp.status_code == 409
+    assert "allocated" in resp.json()["detail"]
+
+    # Baselined: immutable, no DELETE.
+    done = _api_create(client, title="Done")
+    client.post(f"/api/requirements/{done['id']}/baseline")
+    page = client.get(f"/requirements/{done['id']}")
+    assert 'onclick="deleteReq()"' not in page.text
+
+
 def test_dossier_breadcrumb_chain_and_flowdown_ghost(client, test_user):
     client.cookies.set("opal_user_id", str(test_user.id))
     root = _api_create(client, title="Mission")
