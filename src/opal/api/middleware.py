@@ -81,7 +81,40 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
         if not user_id:
             return RedirectResponse(url="/login", status_code=302)
 
+        # A cookie surviving a database switch/reset can point at a user
+        # that no longer exists — treat it as logged out, not as valid.
+        if not self._local_user_exists(user_id):
+            response = RedirectResponse(url="/login", status_code=302)
+            for cookie in (
+                "opal_user_id",
+                "opal_user_name",
+                "opal_user_email",
+                "opal_user_is_admin",
+            ):
+                response.delete_cookie(cookie)
+            return response
+
         return await call_next(request)
+
+    @staticmethod
+    def _local_user_exists(user_id: str) -> bool:
+        """Best-effort check that the cookie's user exists and is active."""
+        from opal.db.models.user import User
+        from opal.db.session import get_session
+
+        try:
+            uid = int(user_id)
+        except ValueError:
+            return False
+        try:
+            with get_session() as db:
+                return (
+                    db.query(User.id).filter(User.id == uid, User.is_active.is_(True)).first()
+                    is not None
+                )
+        except Exception:
+            # Fail open: pre-init database or mid-switch
+            return True
 
     async def _dispatch_exe(self, request: Request, call_next: any) -> Response:
         """Exe mode: trust proxy headers, auto-provision users."""
