@@ -2,9 +2,10 @@
 
 from collections.abc import Generator
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Integer, create_engine, event
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, create_engine, event
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -80,6 +81,59 @@ class IdMixin:
     """Mixin for auto-incrementing integer primary key."""
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+
+class LifecycleState(str, Enum):
+    """Maturity states for baselined work products (NPR 7123.1D App. F terminology).
+
+    draft -> preliminary -> baselined -> superseded | cancelled
+
+    Baselined objects are immutable: changing one creates a new revision row
+    (revision + supersedes_id) rather than mutating in place. Enforcement lives
+    in opal.se.lifecycle, not in the database layer.
+    """
+
+    DRAFT = "draft"
+    PRELIMINARY = "preliminary"
+    BASELINED = "baselined"
+    SUPERSEDED = "superseded"
+    CANCELLED = "cancelled"
+
+
+class LifecycleMixin:
+    """Mixin for objects with a baseline lifecycle (requirements, interfaces, ...).
+
+    Revisions are separate rows sharing the same human-readable number:
+    revision increments and supersedes_id points at the prior row.
+    """
+
+    lifecycle_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=LifecycleState.DRAFT.value
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    baselined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    @declared_attr
+    def baselined_by_id(cls) -> Mapped[int | None]:  # noqa: N805
+        return mapped_column(ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+
+    @declared_attr
+    def supersedes_id(cls) -> Mapped[int | None]:  # noqa: N805
+        return mapped_column(
+            ForeignKey(f"{cls.__tablename__}.id", ondelete="SET NULL"), nullable=True
+        )
+
+    @property
+    def is_baselined(self) -> bool:
+        return self.lifecycle_state == LifecycleState.BASELINED.value
+
+    @property
+    def is_mutable(self) -> bool:
+        """Only draft and preliminary objects may be edited in place."""
+        return self.lifecycle_state in (
+            LifecycleState.DRAFT.value,
+            LifecycleState.PRELIMINARY.value,
+        )
 
 
 # Lazy engine initialization - allows project config to be set before engine creation

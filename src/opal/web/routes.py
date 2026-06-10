@@ -17,6 +17,7 @@ from opal.db.models.execution import InstanceStatus, ProcedureInstance
 from opal.db.models.issue import Issue, IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import MasterProcedure, ProcedureStatus, ProcedureVersion
 from opal.db.models.purchase import PurchaseStatus
+from opal.db.models.requirement import Requirement
 from opal.db.models.risk import Risk, RiskStatus
 from opal.project import DEFAULT_TIERS
 
@@ -2614,6 +2615,116 @@ async def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLRes
     context["statuses"] = [s.value for s in RiskStatus]
 
     return templates.TemplateResponse("risks/detail.html", context)
+
+
+# ============ REQUIREMENTS ============
+
+
+@router.get("/requirements", response_class=HTMLResponse)
+async def requirements_list(request: Request, db: DbSession) -> HTMLResponse:
+    """Requirements list page."""
+    from opal.db.base import LifecycleState
+
+    context = get_base_context(request, db, "Requirements - OPAL")
+    context["states"] = [s.value for s in LifecycleState]
+    return templates.TemplateResponse("requirements/list.html", context)
+
+
+@router.get("/requirements/table", response_class=HTMLResponse)
+async def requirements_table(
+    request: Request,
+    db: DbSession,
+    search: str | None = Query(None),
+    state: str | None = Query(None),
+    level: int | None = Query(None),
+    show_superseded: str | None = Query(None),
+) -> HTMLResponse:
+    """Requirements table rows (HTMX partial)."""
+    from opal.db.base import LifecycleState
+
+    query = db.query(Requirement).filter(Requirement.deleted_at.is_(None))
+    if not show_superseded:
+        query = query.filter(Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value)
+    if state:
+        query = query.filter(Requirement.lifecycle_state == state)
+    if level is not None:
+        query = query.filter(Requirement.level == level)
+    if search:
+        term = f"%{search}%"
+        query = query.filter(
+            Requirement.req_number.ilike(term)
+            | Requirement.title.ilike(term)
+            | Requirement.statement.ilike(term)
+        )
+
+    requirements = query.order_by(Requirement.req_number, Requirement.revision).limit(200).all()
+    return templates.TemplateResponse(
+        "requirements/table_rows.html",
+        {"request": request, "requirements": requirements},
+    )
+
+
+@router.get("/requirements/new", response_class=HTMLResponse)
+async def requirements_new(request: Request, db: DbSession) -> HTMLResponse:
+    """New requirement form page."""
+    from opal.db.base import LifecycleState
+
+    context = get_base_context(request, db, "New Requirement - OPAL")
+    context["parents"] = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state.notin_(
+                [LifecycleState.SUPERSEDED.value, LifecycleState.CANCELLED.value]
+            ),
+        )
+        .order_by(Requirement.req_number)
+        .all()
+    )
+    return templates.TemplateResponse("requirements/new.html", context)
+
+
+@router.get("/requirements/{req_id}", response_class=HTMLResponse)
+async def requirements_detail(request: Request, db: DbSession, req_id: int) -> HTMLResponse:
+    """Requirement detail page."""
+    from opal.db.models import PartRequirement
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": f"Requirement {req_id} not found"},
+            status_code=404,
+        )
+
+    context = get_base_context(request, db, f"{req.req_number} - OPAL")
+    context["req"] = req
+    context["parent"] = req.parent
+    context["baselined_by"] = (
+        db.query(User).filter(User.id == req.baselined_by_id).first()
+        if req.baselined_by_id
+        else None
+    )
+    context["children"] = (
+        db.query(Requirement)
+        .filter(Requirement.parent_id == req.id, Requirement.deleted_at.is_(None))
+        .order_by(Requirement.req_number)
+        .all()
+    )
+    context["allocations"] = (
+        db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).all()
+    )
+    context["revisions"] = (
+        db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .order_by(Requirement.revision)
+        .all()
+    )
+    return templates.TemplateResponse("requirements/detail.html", context)
 
 
 # ============ DATASETS ============
