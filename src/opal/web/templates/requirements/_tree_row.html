@@ -1,0 +1,58 @@
+{# Recursive tree row macro — one row per latest non-superseded revision.
+   Used by the tree page and the dossier flow-down section.
+   node = {req, statement_html, alloc, age, iso, children} #}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% macro state_variant(state) %}{{ "ok" if state == 'baselined' else ("info" if state == 'preliminary' else ("warn" if state == 'superseded' else ("error" if state == 'cancelled' else "draft"))) }}{% endmacro %}
+
+{% macro ghost_row(parent_id, parent_number, parent_category, child_level, depth) %}
+<div class="tree-ghost" data-parent="{{ parent_id }}" style="padding-left: {{ depth * 18 + 22 }}px;">
+    <button type="button" class="tree-ghost-link mono" onclick="openGhost(this)">
+        + {% if parent_number %}flow down from {{ parent_number }}…{% else %}new level-0 requirement…{% endif %}
+    </button>
+    <div class="tree-ghost-editor" style="display: none;"
+         data-parent-id="{{ parent_id }}" data-category="{{ parent_category or '' }}" data-level="{{ child_level }}">
+        <input type="text" class="form-input tree-ghost-title" placeholder="Title"
+               onkeydown="ghostKeydown(event, this)">
+        <input type="text" class="form-input mono tree-ghost-statement"
+               placeholder="The <subject> shall <one thought>"
+               onkeydown="ghostKeydown(event, this)">
+        <span class="text-muted mono tree-ghost-hint">enter create · esc cancel</span>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro tree_row(node, depth=0, with_ghosts=true) %}
+{% set r = node.req %}
+<div class="tree-row" id="req-row-{{ r.id }}" tabindex="-1"
+     data-id="{{ r.id }}" data-state="{{ r.lifecycle_state }}" data-level="{{ r.level }}"
+     data-number="{{ r.req_number }}" data-category="{{ r.category or '' }}"
+     data-text="{{ (r.req_number ~ ' ' ~ r.title ~ ' ' ~ r.statement) | lower }}"
+     style="padding-left: {{ depth * 18 }}px;">
+    {% if node.children %}
+    <button type="button" class="tree-chevron mono" onclick="toggleSubtree({{ r.id }}, event)" tabindex="-1">▾</button>
+    {% else %}
+    <span class="tree-chevron tree-chevron-leaf"></span>
+    {% endif %}
+    <a class="tree-num mono" href="/requirements/{{ r.id }}">{{ r.req_number }}</a>
+    <span class="tree-statement" onclick="toggleRowExpand({{ r.id }})">{{ node.statement_html or r.statement }}</span>
+    <span class="tree-meta">
+        {{ ok.status(r.lifecycle_state | upper, state_variant(r.lifecycle_state) | trim) }}
+        {%- if r.tbd %}<span class="flag-chip flag-tbd mono">TBD</span>{% endif %}
+        {%- if r.tbr %}<span class="flag-chip flag-tbr mono">TBR</span>{% endif %}
+        {%- if r.stale is defined and r.stale %}<span class="flag-chip flag-stale mono">≠ STALE</span>{% endif %}
+        {%- for part_name in node.alloc[:2] %}<span class="alloc-chip mono">{{ part_name }}</span>{% endfor %}
+        {%- if node.alloc | length > 2 %}<span class="alloc-chip mono">+{{ node.alloc | length - 2 }}</span>{% endif %}
+        <span class="tree-lvl mono">L{{ r.level }}·{{ (r.verification_method or '—') | first | upper }}</span>
+        <span class="tree-age mono" title="{{ node.iso }}">{{ node.age }}</span>
+    </span>
+</div>
+<div class="tree-row-expand" id="req-expand-{{ r.id }}" style="display: none; padding-left: {{ depth * 18 + 22 }}px;">
+    <div class="mono tree-full-statement">{{ node.statement_html or r.statement }}</div>
+    <div class="text-muted tree-rationale-preview">{{ (r.rationale or 'no rationale recorded') | truncate(220) }}</div>
+</div>
+<div class="tree-children {% if node.children %}has-children{% endif %}" id="children-{{ r.id }}">
+    {%- for child in node.children %}{{ tree_row(child, depth + 1, with_ghosts) }}{% endfor %}
+    {%- if with_ghosts %}{{ ghost_row(r.id, r.req_number, r.category, r.level + 1, depth + 1) }}{% endif %}
+</div>
+{% endmacro %}

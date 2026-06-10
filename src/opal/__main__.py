@@ -6,8 +6,13 @@ from pathlib import Path
 
 
 def _setup_project(args: argparse.Namespace) -> None:
-    """Configure project settings from CLI args."""
-    from opal.config import configure_for_project
+    """Configure project settings from CLI args.
+
+    Always reports the resolved database and where it came from, on stderr —
+    stdout is the MCP stdio protocol channel, and a silently-resolved database
+    is how `opal serve` and `opal mcp` end up split across different files.
+    """
+    from opal.config import _default_database_url, configure_for_project, get_active_settings
     from opal.project import get_project_config
 
     project = None
@@ -16,17 +21,27 @@ def _setup_project(args: argparse.Namespace) -> None:
     # Explicit database path takes precedence
     if hasattr(args, "database") and args.database:
         database_path = Path(args.database)
+        source = "--database"
     elif hasattr(args, "project") and args.project:
         project = get_project_config(Path(args.project))
+        source = "--project"
     else:
         # Auto-detect project from current directory
         project = get_project_config()
+        source = "opal.project.yaml auto-detected" if project else ""
 
     if project or database_path:
         settings = configure_for_project(project=project, database_path=database_path)
-        if project:
-            print(f"Using project: {project.name} ({project.project_dir})")
-        print(f"Database: {settings.database_url}")
+    else:
+        settings = get_active_settings()
+        if settings.database_url != _default_database_url():
+            source = "OPAL_DATABASE_URL environment override"
+        else:
+            source = "platform default"
+
+    if project:
+        print(f"Using project: {project.name} ({project.project_dir})", file=sys.stderr)
+    print(f"Database: {settings.database_url} ({source})", file=sys.stderr)
 
 
 def cmd_serve(args: argparse.Namespace) -> None:

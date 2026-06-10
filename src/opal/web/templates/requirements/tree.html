@@ -1,0 +1,175 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+{% from 'requirements/_tree_row.html' import tree_row, ghost_row %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS") }}
+{% endblock %}
+
+{% block content %}
+{% set actions %}
+<a href="/requirements" class="btn btn-sm" style="border-color: var(--accent-green, #4ade80);">TREE</a>
+<a href="/requirements/list" class="btn btn-sm">LIST</a>
+<a href="/requirements/baselines" class="btn btn-sm">BASELINES</a>
+{% if queue_count %}
+<a href="/requirements/queue" class="btn btn-sm" style="color: var(--accent-green);">BASELINE QUEUE · {{ queue_count }}</a>
+{% endif %}
+{{ ok.btn("NEW L0", variant="primary", attrs='onclick="openRootGhost()"') }}
+{% endset %}
+{% call ok.panel("REQUIREMENTS · " ~ total, actions=actions) %}
+    <div class="toolbar">
+        <div class="toolbar-search">
+            <input type="text" id="tree-search" class="form-input" placeholder="Filter tree... ( / )"
+                   autocomplete="off" oninput="applyFilters()">
+        </div>
+        <div class="toolbar-filter">
+            <select id="tree-state" class="form-select" onchange="applyFilters()">
+                <option value="">All states</option>
+                {% for s in states if s != 'superseded' %}
+                <option value="{{ s }}">{{ s | upper }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="toolbar-filter">
+            <select id="tree-level" class="form-select" onchange="applyFilters()">
+                <option value="">All levels</option>
+                <option value="0">L0 - Mission</option>
+                <option value="1">L1 - System</option>
+                <option value="2">L2 - Subsystem</option>
+                <option value="3">L3 - Component</option>
+            </select>
+        </div>
+        <span class="text-muted mono" style="font-size: 0.7rem; margin-left: auto; white-space: nowrap;">
+            j/k move · ←/→ fold · enter open · c flow down · / search
+        </span>
+    </div>
+
+    <div id="req-tree" class="req-tree">
+        {% for node in tree %}
+        {{ tree_row(node) }}
+        {% endfor %}
+        {{ ghost_row('', None, None, 0, 0) }}
+        {% if not tree %}
+        {{ ok.empty("No requirements yet — NEW L0 starts the spec") }}
+        {% endif %}
+    </div>
+{% endcall %}
+
+<script src="/static/js/requirements.js"></script>
+<script>
+applyStoredCollapse();
+
+function openRootGhost() {
+    const rootGhost = document.querySelector('#req-tree > .tree-ghost');
+    rootGhost.classList.add('force');
+    openGhost(rootGhost.querySelector('.tree-ghost-link'));
+}
+
+// ============ Filters (client-side dim/hide) ============
+function rowMatches(row, q, state, level) {
+    if (state && row.dataset.state !== state) return false;
+    if (level !== '' && row.dataset.level !== level) return false;
+    if (q && !row.dataset.text.includes(q)) return false;
+    return true;
+}
+
+function applyFilters() {
+    const q = document.getElementById('tree-search').value.toLowerCase().trim();
+    const state = document.getElementById('tree-state').value;
+    const level = document.getElementById('tree-level').value;
+    const tree = document.getElementById('req-tree');
+    const active = q || state || level !== '';
+    tree.classList.toggle('filtering', !!active);
+    if (!active) {
+        tree.querySelectorAll('.tree-row').forEach(r => r.classList.remove('dim', 'filter-hidden'));
+        return;
+    }
+    // A row stays visible when it matches or any descendant matches;
+    // ancestor-of-match renders dimmed, never hidden (keep context).
+    function walk(container) {
+        let anyMatch = false;
+        container.querySelectorAll(':scope > .tree-row').forEach(row => {
+            const kids = document.getElementById('children-' + row.dataset.id);
+            const descMatch = kids ? walk(kids) : false;
+            const selfMatch = rowMatches(row, q, state, level);
+            row.classList.toggle('dim', !selfMatch && descMatch);
+            row.classList.toggle('filter-hidden', !selfMatch && !descMatch);
+            anyMatch = anyMatch || selfMatch || descMatch;
+        });
+        return anyMatch;
+    }
+    walk(tree);
+}
+
+// ============ Keyboard ============
+function visibleRows() {
+    return [...document.querySelectorAll('#req-tree .tree-row')]
+        .filter(r => r.offsetParent !== null && !r.classList.contains('filter-hidden'));
+}
+let focusedId = null;
+function focusRow(row) {
+    document.querySelectorAll('.tree-row.focused').forEach(r => r.classList.remove('focused'));
+    if (!row) { focusedId = null; return; }
+    row.classList.add('focused');
+    focusedId = row.dataset.id;
+    row.scrollIntoView({ block: 'nearest' });
+}
+function moveFocus(delta) {
+    const rows = visibleRows();
+    if (!rows.length) return;
+    const idx = rows.findIndex(r => r.dataset.id === focusedId);
+    const next = idx === -1 ? (delta > 0 ? 0 : rows.length - 1)
+                            : Math.max(0, Math.min(rows.length - 1, idx + delta));
+    focusRow(rows[next]);
+}
+
+document.addEventListener('keydown', function(event) {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const focused = focusedId && document.getElementById('req-row-' + focusedId);
+    switch (event.key) {
+        case 'j': event.preventDefault(); moveFocus(1); break;
+        case 'k': event.preventDefault(); moveFocus(-1); break;
+        case 'ArrowLeft':
+            if (focused) { event.preventDefault(); collapseFocused(focused, true); }
+            break;
+        case 'ArrowRight':
+            if (focused) { event.preventDefault(); collapseFocused(focused, false); }
+            break;
+        case 'Enter':
+            if (focused) { event.preventDefault(); window.location = '/requirements/' + focused.dataset.id; }
+            break;
+        case 'c':
+            if (focused) { event.preventDefault(); openGhostFor(focused); }
+            break;
+        case '/':
+            event.preventDefault();
+            document.getElementById('tree-search').focus();
+            break;
+        case 'b':
+            {% if queue_count %}
+            event.preventDefault();
+            window.location = '/requirements/queue';
+            {% endif %}
+            break;
+    }
+});
+
+function collapseFocused(row, collapse) {
+    const id = parseInt(row.dataset.id);
+    const container = document.getElementById('children-' + id);
+    if (!container || !container.classList.contains('has-children')) return;
+    const set = reqCollapsedSet();
+    if (collapse) set.add(id); else set.delete(id);
+    saveReqCollapsed(set);
+    setSubtree(id, collapse);
+}
+
+// ⌘K "New L0 Requirement" deep-links here with ?new=l0.
+if (new URLSearchParams(window.location.search).get('new') === 'l0') {
+    openRootGhost();
+}
+</script>
+{% endblock %}

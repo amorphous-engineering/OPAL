@@ -1,0 +1,39 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS", "/requirements") }}
+{{ ok.crumb("BASELINES") }}
+{% endblock %}
+
+{% block content %}
+{% call ok.panel("BASELINE EVENTS · " ~ (events | length)) %}
+    {% if events %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("ID", width="60px") }}
+                {{ ok.th("LABEL") }}
+                {{ ok.th("LOCKED", width="80px", align="right") }}
+                {{ ok.th("SIGNED BY", width="160px") }}
+                {{ ok.th("WHEN", width="170px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in events %}
+            <tr onclick="window.location='/requirements/baselines/{{ e.id }}'" style="cursor: pointer;">
+                <td class="mono">{{ e.id }}</td>
+                <td class="mono">{{ e.label or '—' }}</td>
+                <td class="mono" style="text-align: right;">{{ e.items | length }}</td>
+                <td>{{ e.signed_by.name if e.signed_by else '—' }}</td>
+                <td>{{ ok.timestamp(e.created_at) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ok.empty("No baseline events yet — the first baseline writes one") }}
+    {% endif %}
+{% endcall %}
+{% endblock %}

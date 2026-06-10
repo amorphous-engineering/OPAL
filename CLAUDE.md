@@ -73,7 +73,7 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 
 1. **All schema changes via Alembic migrations** — never raw DDL, never `Base.metadata.create_all` in production code
 2. **SQLAlchemy ORM exclusively** — no raw SQL strings
-3. **ISO 8601 timestamps everywhere** — never relative times ("2 hours ago")
+3. **ISO 8601 timestamps everywhere** — never relative times ("2 hours ago"). Exception: dense index rows (e.g. the requirements tree) may show a relative age ("2d") with the full ISO 8601 timestamp in the tooltip.
 4. **Published procedure versions are immutable** — editing master never affects published snapshots
 5. **Soft deletes** via `deleted_at` field on most entities — don't hard-delete
 6. **AuditLog records every CUD** — use `log_create`/`log_update`/`log_delete` from `src/opal/core/audit.py`
@@ -82,6 +82,8 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 ## UI/UX Philosophy (US Graphics Style)
 
 Dense, explicit, functional. Expose state and inner workings. Data tables over cards. Monospace for data-heavy areas (part numbers, IDs, timestamps). No rounded corners, shadows, or gradients. No progressive disclosure — show all relevant information. High-contrast functional color palette (green=good, yellow=warning, red=error).
+
+**One fact, one home.** Every other appearance is a live reference, never a copy. Test: if updating something requires touching two places, the design is wrong — delete one occurrence or derive it. PRs that violate this must argue against it by name.
 
 ## Linting (Ruff)
 

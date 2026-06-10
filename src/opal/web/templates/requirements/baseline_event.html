@@ -1,0 +1,43 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS", "/requirements") }}
+{{ ok.crumb("BASELINES", "/requirements/baselines") }}
+{{ ok.crumb("EVENT " ~ event.id) }}
+{% endblock %}
+
+{% block content %}
+{% call ok.panel("BASELINE EVENT " ~ event.id ~ (" · " ~ event.label if event.label else "")) %}
+    {% call ok.table() %}
+        {{ ok.detail_row("LABEL", ok.mono(event.label or '—')) }}
+        {{ ok.detail_row("SIGNED BY", event.signed_by.name if event.signed_by else '—') }}
+        {{ ok.detail_row("WHEN", ok.timestamp(event.created_at)) }}
+        {{ ok.detail_row("NOTE", event.note or '—') }}
+    {% endcall %}
+
+    <div class="form-label" style="margin-top: var(--space-md);">LOCKED REVISIONS ({{ event.items | length }})</div>
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("NUMBER", width="110px") }}
+                {{ ok.th("REV", width="50px") }}
+                {{ ok.th("TITLE") }}
+                {{ ok.th("STATE NOW", width="120px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in event.items %}
+            {% set r = item.requirement %}
+            <tr onclick="window.location='/requirements/{{ r.id }}'" style="cursor: pointer;">
+                <td>{{ ok.mono(r.req_number) }}</td>
+                <td class="mono">{{ r.revision }}</td>
+                <td>{{ r.title }}</td>
+                <td>{{ ok.status(r.lifecycle_state | upper, "ok" if r.lifecycle_state == 'baselined' else ("warn" if r.lifecycle_state == 'superseded' else "draft")) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+{% endcall %}
+{% endblock %}

@@ -20,6 +20,7 @@ def _make_requirement(db: Session, **overrides) -> Requirement:
         "rationale": "Sized from thrust target and injector pressure drop budget.",
         "category": "performance",
         "level": 1,
+        "verification_method": "test",
     }
     values.update(overrides)
     req = Requirement(**values)
@@ -211,6 +212,7 @@ def _api_create(client, **overrides):
         "statement": "The engine shall sustain a chamber pressure of 20 bar ± 1 bar.",
         "rationale": "Sized from thrust target.",
         "category": "performance",
+        "verification_method": "test",
     }
     payload.update(overrides)
     resp = client.post("/api/requirements", json=payload)
@@ -348,6 +350,11 @@ def test_web_pages_render(client, test_user):
     page = client.get("/requirements")
     assert page.status_code == 200
     assert "REQUIREMENTS" in page.text
+    assert req["req_number"] in page.text  # tree renders rows server-side
+
+    list_page = client.get("/requirements/list")
+    assert list_page.status_code == 200
+    assert "REQUIREMENTS" in list_page.text
 
     rows = client.get("/requirements/table")
     assert rows.status_code == 200
@@ -363,6 +370,109 @@ def test_web_pages_render(client, test_user):
     new_page = client.get("/requirements/new")
     assert new_page.status_code == 200
     assert "CREATE DRAFT" in new_page.text
+
+
+def test_baseline_panel_disabled_until_blockers_clear(client, test_user):
+    client.cookies.set("opal_user_id", str(test_user.id))
+    blocked = _api_create(client, title="Blocked", verification_method=None)
+    clean = _api_create(client, title="Clean")
+
+    blocked_page = client.get(f"/requirements/{blocked['id']}")
+    assert "BASELINE READINESS" in blocked_page.text
+    assert "disabled" in blocked_page.text
+    assert "verification method" in blocked_page.text
+
+    clean_page = client.get(f"/requirements/{clean['id']}")
+    assert "BASELINE READINESS" in clean_page.text
+    panel_start = clean_page.text.index("BASELINE READINESS")
+    panel = clean_page.text[panel_start : panel_start + 2500]
+    assert "disabled" not in panel
+
+    # Panel partial is independently fetchable (the dossier re-fetches on save).
+    partial = client.get(f"/requirements/{blocked['id']}/baseline-panel")
+    assert partial.status_code == 200
+    assert "BASELINE READINESS" in partial.text
+
+    # Baselined rows hide the panel entirely.
+    client.post(f"/api/requirements/{clean['id']}/baseline")
+    baselined_page = client.get(f"/requirements/{clean['id']}")
+    assert "BASELINE READINESS" not in baselined_page.text
+
+
+def test_delete_button_only_on_stillborn_drafts(client, db_session, test_user):
+    """Spec §4.3: DELETE renders only for never-baselined drafts with zero
+    children and zero allocations; CANCEL is the path for everything else."""
+    client.cookies.set("opal_user_id", str(test_user.id))
+
+    stillborn = _api_create(client, title="Stillborn")
+    page = client.get(f"/requirements/{stillborn['id']}")
+    assert 'onclick="deleteReq()"' in page.text
+
+    # With a child: no DELETE, CANCEL remains.
+    parent = _api_create(client, title="Parent")
+    _api_create(client, title="Child", parent_id=parent["id"])
+    page = client.get(f"/requirements/{parent['id']}")
+    assert 'onclick="deleteReq()"' not in page.text
+    assert "CANCEL REQ" in page.text
+
+    # With an allocation: no DELETE; backend refuses too.
+    allocated = _api_create(client, title="Allocated")
+    part = client.post("/api/parts", json={"name": "Bracket"}).json()
+    client.post(
+        f"/api/requirements/parts/{part['id']}",
+        json={"requirement_id": allocated["req_number"]},
+        headers={"X-User-Id": str(test_user.id)},
+    )
+    page = client.get(f"/requirements/{allocated['id']}")
+    assert 'onclick="deleteReq()"' not in page.text
+    resp = client.delete(
+        f"/api/requirements/{allocated['id']}", headers={"X-User-Id": str(test_user.id)}
+    )
+    assert resp.status_code == 409
+    assert "allocated" in resp.json()["detail"]
+
+    # Baselined: immutable, no DELETE.
+    done = _api_create(client, title="Done")
+    client.post(f"/api/requirements/{done['id']}/baseline")
+    page = client.get(f"/requirements/{done['id']}")
+    assert 'onclick="deleteReq()"' not in page.text
+
+
+def test_dossier_breadcrumb_chain_and_flowdown_ghost(client, test_user):
+    client.cookies.set("opal_user_id", str(test_user.id))
+    root = _api_create(client, title="Mission")
+    mid = _api_create(client, title="System", parent_id=root["id"])
+    leaf = _api_create(client, title="Subsystem", parent_id=mid["id"])
+
+    page = client.get(f"/requirements/{leaf['id']}")
+    # Chain renders root first, every crumb a link.
+    assert page.text.index(root["req_number"]) < page.text.index(mid["req_number"])
+    assert f'href="/requirements/{root["id"]}"' in page.text
+    # Flow-down section carries the ghost-row creator for this requirement.
+    assert f"flow down from {leaf['req_number']}" in page.text
+
+
+def test_tree_page_nests_children_and_renders_lint(client, test_user):
+    client.cookies.set("opal_user_id", str(test_user.id))
+    parent = _api_create(client, title="Mission")
+    child = _api_create(
+        client,
+        title="Vague child",
+        statement="The engine shall vent as appropriate.",
+        parent_id=parent["id"],
+    )
+
+    page = client.get("/requirements")
+    assert page.status_code == 200
+    # Parent row precedes the child row, and the child sits inside the
+    # parent's children container.
+    assert page.text.index(parent["req_number"]) < page.text.index(child["req_number"])
+    assert f'id="children-{parent["id"]}"' in page.text
+    # The draft child's banned term renders with a lint underline span.
+    assert 'class="lint-block"' in page.text
+    assert "as appropriate</span>" in page.text
+    # Ghost row offers flow-down from the parent.
+    assert f"flow down from {parent['req_number']}" in page.text
 
 
 # ============ MCP tools ============
@@ -420,7 +530,12 @@ def test_mcp_baseline_requires_human(db_session, test_user):
     created = _mcp(
         mcp._create_requirement,
         db_session,
-        {"title": "Mass", "statement": "The stage shall mass under 40 kg.", "rationale": "Lift."},
+        {
+            "title": "Mass",
+            "statement": "The stage shall mass under 40 kg.",
+            "rationale": "Lift.",
+            "verification_method": "analysis",
+        },
     )
     rid = created["requirement"]["id"]
 
@@ -469,7 +584,12 @@ def test_mcp_revise_and_cancel(db_session, test_user):
     created = _mcp(
         mcp._create_requirement,
         db_session,
-        {"title": "Burn time", "statement": "The engine shall burn 8 s ± 1 s.", "rationale": "x"},
+        {
+            "title": "Burn time",
+            "statement": "The engine shall burn 8 s ± 1 s.",
+            "rationale": "Combustion stability data needs full duration.",
+            "verification_method": "test",
+        },
     )
     rid = created["requirement"]["id"]
     _mcp(mcp._baseline_requirement, db_session, {"requirement_id": rid, "user_id": test_user.id})

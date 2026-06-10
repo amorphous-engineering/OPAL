@@ -32,6 +32,7 @@ class LifecycleError(Exception):
 
 
 #: Columns owned by the lifecycle/identity machinery, never copied on revise.
+#: stale is here because a new revision is by definition a fresh look.
 _NON_COPYABLE = {
     "id",
     "lifecycle_state",
@@ -42,6 +43,7 @@ _NON_COPYABLE = {
     "created_at",
     "updated_at",
     "deleted_at",
+    "stale",
 }
 
 
@@ -55,7 +57,18 @@ def ensure_mutable(obj: Any) -> None:
 
 
 def baseline_blockers(obj: Any) -> list[str]:
-    """Mechanically decidable reasons this object cannot baseline yet."""
+    """Mechanically decidable reasons this object cannot baseline yet.
+
+    Statement-bearing objects (requirements) get the full lint — every
+    block_baseline finding blocks here, so the linter is the single source
+    of truth for what a baselineable requirement looks like. Other lifecycle
+    objects (future interfaces, ...) keep the generic field checks.
+    """
+    if hasattr(obj, "statement"):
+        from opal.se.lint import baseline_lint_blockers
+
+        return baseline_lint_blockers(obj)
+
     blockers: list[str] = []
     if hasattr(obj, "rationale") and not (obj.rationale or "").strip():
         blockers.append("rationale is required to baseline")
@@ -93,8 +106,25 @@ def baseline(db: Session, obj: Any, user_id: int | None) -> Any:
         predecessor = db.get(type(obj), obj.supersedes_id)
         if predecessor is not None and predecessor.is_baselined:
             predecessor.lifecycle_state = LifecycleState.SUPERSEDED.value
+            mark_dependents_stale(db, predecessor)
 
     return obj
+
+
+def mark_dependents_stale(db: Session, predecessor: Any) -> None:
+    """Flag everything that depended on a now-superseded revision.
+
+    Today: direct flow-down children (UX spec §7). Phase 2 verification
+    staleness reuses this hook — VAs closed against the superseded revision
+    get flagged identically, in the same transaction as the supersede.
+    Staleness is informational only; it clears on edit or re-affirm.
+    """
+    cls = type(predecessor)
+    if not (hasattr(predecessor, "stale") and hasattr(predecessor, "parent_id")):
+        return
+    children = db.query(cls).filter(cls.parent_id == predecessor.id, cls.deleted_at.is_(None)).all()
+    for child in children:
+        child.stale = True
 
 
 def revise(db: Session, obj: Any, **overrides: Any) -> Any:

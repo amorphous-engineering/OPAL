@@ -5,12 +5,14 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 
 from opal.api.deps import DbSession
+from opal.db.base import LifecycleState
 from opal.db.models import Part, Supplier
 from opal.db.models.dataset import Dataset
 from opal.db.models.execution import ProcedureInstance
 from opal.db.models.issue import Issue
 from opal.db.models.procedure import MasterProcedure
 from opal.db.models.purchase import Purchase
+from opal.db.models.requirement import Requirement
 from opal.db.models.risk import Risk
 from opal.db.models.workcenter import Workcenter
 
@@ -165,6 +167,34 @@ async def search(
                 sublabel=f"#{r.id}",
                 url=f"/risks/{r.id}",
                 status=status_val,
+            )
+        )
+
+    # Requirements (latest non-superseded revisions; REQ-0007 jumps to the dossier)
+    requirements = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+            or_(
+                Requirement.req_number.ilike(term),
+                Requirement.title.ilike(term),
+                Requirement.statement.ilike(term),
+            ),
+        )
+        .order_by(Requirement.req_number)
+        .limit(limit)
+        .all()
+    )
+    for req in requirements:
+        results.append(
+            SearchResult(
+                entity_type="requirement",
+                id=req.id,
+                label=f"{req.req_number} — {req.title}",
+                sublabel=f"rev {req.revision}",
+                url=f"/requirements/{req.id}",
+                status=req.lifecycle_state,
             )
         )
 

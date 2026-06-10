@@ -22,7 +22,10 @@ from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_requirement_number
 from opal.db.base import LifecycleState
 from opal.db.models import Part, PartRequirement, Requirement
+from opal.se.baseline import baseline_batch, write_baseline_event
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
+from opal.se.lint import lint_requirement
+from opal.se.readiness import readiness, ready_requirement_ids
 
 router = APIRouter()
 
@@ -85,6 +88,7 @@ class RequirementResponse(BaseModel):
     tbr: bool
     tbr_owner_id: int | None = None
     tbr_due: datetime | None = None
+    stale: bool = False
     baselined_at: datetime | None = None
     baselined_by_id: int | None = None
     supersedes_id: int | None = None
@@ -139,7 +143,44 @@ def _validate_verification_method(value: str | None) -> None:
         )
 
 
+class LintRequest(BaseModel):
+    """Lint arbitrary requirement fields — no stored row required."""
+
+    statement: str
+    rationale: str | None = None
+    verification_method: str | None = None
+    tbd: bool = False
+    tbr: bool = False
+    tbr_owner_id: int | None = None
+    tbr_due: datetime | None = None
+
+
+class LintResponse(BaseModel):
+    """Findings plus whether they would block baseline."""
+
+    findings: list[dict]
+    would_block_baseline: bool
+
+
 # ============ First-class requirement endpoints ============
+
+
+@router.post("/lint", response_model=LintResponse)
+async def lint_requirement_fields(data: LintRequest) -> LintResponse:
+    """Lint requirement fields as typed. Same engine the baseline gate enforces."""
+    findings = lint_requirement(
+        data.statement,
+        rationale=data.rationale,
+        verification_method=data.verification_method,
+        tbd=data.tbd,
+        tbr=data.tbr,
+        tbr_owner_id=data.tbr_owner_id,
+        tbr_due=data.tbr_due,
+    )
+    return LintResponse(
+        findings=[f.to_dict() for f in findings],
+        would_block_baseline=any(f.severity == "block_baseline" for f in findings),
+    )
 
 
 @router.get("", response_model=RequirementListResponse)
@@ -301,6 +342,10 @@ async def update_requirement(
         if value is not None:
             setattr(req, field, value)
 
+    # Any edit is by definition a fresh look — clear staleness (spec §7).
+    if data.model_dump(exclude_unset=True):
+        req.stale = False
+
     log_update(db, req, old_values, user_id)
     db.commit()
     db.refresh(req)
@@ -326,6 +371,15 @@ async def delete_requirement(db: DbSession, req_id: int, user_id: CurrentUserId)
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Requirement has {children} child requirement(s); re-parent them first",
         )
+    allocations = (
+        db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).count()
+    )
+    if allocations:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Requirement is allocated to {allocations} part(s); "
+            "unassign them first or cancel instead",
+        )
     log_delete(db, req, user_id)
     req.soft_delete()
     db.commit()
@@ -335,17 +389,67 @@ async def delete_requirement(db: DbSession, req_id: int, user_id: CurrentUserId)
 async def baseline_requirement(
     db: DbSession, req_id: int, user_id: CurrentUserId
 ) -> RequirementResponse:
-    """Baseline a requirement. Returns 409 with the list of blockers if not ready."""
+    """Baseline a requirement. Returns 409 with the list of blockers if not ready.
+
+    Single-item baselines write a baseline event too (label null) — one
+    configuration history regardless of which path locked the revision.
+    """
     req = _get_requirement(db, req_id)
     old_values = get_model_dict(req)
     try:
         baseline(db, req, user_id)
     except LifecycleError as err:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err)) from err
+    write_baseline_event(db, [req], user_id)
     log_update(db, req, old_values, user_id)
     db.commit()
     db.refresh(req)
     return _req_response(db, req)
+
+
+class BaselineBatchRequest(BaseModel):
+    """Commit a staged queue session in one transaction."""
+
+    ids: list[int] = Field(..., min_length=1)
+    label: str | None = Field(None, max_length=100)
+    note: str | None = None
+
+
+@router.post("/baseline-batch")
+async def baseline_batch_endpoint(
+    db: DbSession, data: BaselineBatchRequest, user_id: CurrentUserId
+) -> dict:
+    """Baseline a set atomically: every item re-validates at commit time;
+    any failure aborts the whole batch and returns the offenders."""
+    reqs = []
+    for req_id in data.ids:
+        reqs.append(_get_requirement(db, req_id))
+
+    old_values = {req.id: get_model_dict(req) for req in reqs}
+    event, offenders = baseline_batch(db, reqs, user_id, label=data.label, note=data.note)
+    if offenders:
+        # baseline_batch validates before any lifecycle flip — nothing to roll back.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": "batch aborted — items no longer ready", "offenders": offenders},
+        )
+    for req in reqs:
+        log_update(db, req, old_values[req.id], user_id)
+    db.commit()
+    return {
+        "event_id": event.id,
+        "label": event.label,
+        "baselined": [
+            {"id": r.id, "req_number": r.req_number, "revision": r.revision} for r in reqs
+        ],
+    }
+
+
+@router.get("/queue")
+async def baseline_queue(db: DbSession) -> dict:
+    """The ready set — draft/preliminary rows whose hard checks all pass."""
+    ids = ready_requirement_ids(db)
+    return {"count": len(ids), "ids": ids}
 
 
 @router.post(
@@ -383,6 +487,32 @@ async def cancel_requirement(
     db.commit()
     db.refresh(req)
     return _req_response(db, req)
+
+
+@router.post("/{req_id:int}/reaffirm", response_model=RequirementResponse)
+async def reaffirm_requirement(
+    db: DbSession, req_id: int, user_id: CurrentUserId
+) -> RequirementResponse:
+    """Clear staleness without an edit: 'the parent's change doesn't invalidate this'.
+
+    Signature semantics — audit-logged with the session user. Works on
+    baselined rows too; staleness is metadata, not content.
+    """
+    req = _get_requirement(db, req_id)
+    if not req.stale:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Requirement is not stale")
+    old_values = get_model_dict(req)
+    req.stale = False
+    log_update(db, req, old_values, user_id)
+    db.commit()
+    db.refresh(req)
+    return _req_response(db, req)
+
+
+@router.get("/{req_id:int}/readiness")
+async def requirement_readiness(db: DbSession, req_id: int) -> dict:
+    """Structured baseline-readiness checks — what the baseline panel renders."""
+    return readiness(db, _get_requirement(db, req_id))
 
 
 @router.get("/{req_id:int}/revisions", response_model=list[RequirementResponse])

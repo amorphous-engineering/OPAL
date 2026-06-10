@@ -81,6 +81,20 @@ TABLE_DISPLAY_NAMES: dict[str, str] = {
 templates.env.globals["TABLE_DISPLAY_NAMES"] = TABLE_DISPLAY_NAMES
 
 
+def _active_database_path() -> str:
+    """Resolved SQLite path for the footer, evaluated per render.
+
+    Multiple OPAL processes (serve, MCP, installed binaries) can silently
+    resolve different databases; the UI states which one it is serving.
+    """
+    from opal.config import get_active_settings
+
+    return get_active_settings().database_url.removeprefix("sqlite:///")
+
+
+templates.env.globals["active_database_path"] = _active_database_path
+
+
 def _build_change_summary(entry) -> str:
     """Build short text summary of audit log changes."""
     action_val = entry.action.value if hasattr(entry.action, "value") else entry.action
@@ -494,6 +508,16 @@ async def index(request: Request, db: DbSession) -> HTMLResponse:
     recent_activity = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(15).all()
     context["recent_activity"] = recent_activity
 
+    # Traceability widget — red-only (overdue TBRs, stuck block-lint drafts)
+    # plus exactly one non-red line (ready-to-baseline count).
+    from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs, stale_requirements
+    from opal.se.readiness import ready_requirement_ids
+
+    context["overdue_tbrs"] = overdue_tbrs(db)
+    context["stuck_drafts"] = old_block_lint_drafts(db)
+    context["stale_reqs"] = stale_requirements(db)
+    context["ready_to_baseline"] = len(ready_requirement_ids(db))
+
     return templates.TemplateResponse("index.html", context)
 
 
@@ -745,6 +769,18 @@ async def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLRes
     # Where Used: step-level kit usage
     step_kit_usages = db.query(StepKit).filter(StepKit.part_id == part.id).all()
     context["step_kit_usages"] = step_kit_usages
+
+    # Allocated requirements (PartRequirement joined to first-class rows)
+    from opal.db.models import PartRequirement
+
+    part_reqs = db.query(PartRequirement).filter(PartRequirement.part_id == part.id).all()
+    context["part_requirements"] = [
+        {
+            "allocation": pr,
+            "req": db.get(Requirement, pr.requirement_ref_id) if pr.requirement_ref_id else None,
+        }
+        for pr in part_reqs
+    ]
 
     # Where Used: consumption history
     from opal.db.models.inventory import InventoryConsumption
@@ -2620,9 +2656,107 @@ async def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLRes
 # ============ REQUIREMENTS ============
 
 
+def _relative_age(dt) -> str:
+    """Dense relative age ('2d') for index rows; full ISO 8601 goes in the tooltip."""
+    if not dt:
+        return "—"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    seconds = (datetime.now(UTC) - dt).total_seconds()
+    if seconds < 60:
+        return "now"
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{int(minutes)}m"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{int(hours)}h"
+    days = hours / 24
+    if days < 14:
+        return f"{int(days)}d"
+    if days < 60:
+        return f"{int(days / 7)}w"
+    if days < 365:
+        return f"{int(days / 30)}mo"
+    return f"{int(days / 365)}y"
+
+
+def _requirement_tree(db: DbSession, root_id: int | None = None) -> tuple[list[dict], int]:
+    """Nested node dicts for the tree page; orphans surface as roots.
+
+    Mirrors the MCP _flowdown_tree children-map logic. Draft/preliminary rows
+    get server-rendered lint underlines (regex lint over the full set is
+    negligible at this scale). With root_id, returns that requirement's
+    children subtrees (the dossier flow-down section).
+    """
+    from opal.db.base import LifecycleState
+    from opal.db.models import PartRequirement
+    from opal.se.lint import lint_statement
+    from opal.web.lint_markup import statement_lint_html
+
+    rows = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.req_number, Requirement.revision)
+        .all()
+    )
+    ids = {r.id for r in rows}
+    by_parent: dict[int | None, list[Requirement]] = {}
+    for r in rows:
+        effective_parent = r.parent_id if r.parent_id in ids else None
+        by_parent.setdefault(effective_parent, []).append(r)
+
+    alloc_map: dict[int, list[str]] = {}
+    alloc_rows = (
+        db.query(PartRequirement.requirement_ref_id, Part.name)
+        .join(Part, PartRequirement.part_id == Part.id)
+        .filter(PartRequirement.requirement_ref_id.isnot(None))
+        .order_by(Part.name)
+        .all()
+    )
+    for ref_id, part_name in alloc_rows:
+        alloc_map.setdefault(ref_id, []).append(part_name)
+
+    def node(r: Requirement, seen: frozenset[int]) -> dict:
+        statement_html = None
+        if r.is_mutable:
+            statement_html = statement_lint_html(r.statement, lint_statement(r.statement))
+        return {
+            "req": r,
+            "statement_html": statement_html,
+            "alloc": alloc_map.get(r.id, []),
+            "age": _relative_age(r.updated_at),
+            "iso": r.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ") if r.updated_at else "",
+            "children": [
+                node(c, seen | {r.id}) for c in by_parent.get(r.id, []) if c.id not in seen
+            ],
+        }
+
+    if root_id is not None:
+        children = [c for c in by_parent.get(root_id, [])]
+        return [node(c, frozenset({root_id, c.id})) for c in children], len(rows)
+    return [node(r, frozenset({r.id})) for r in by_parent.get(None, [])], len(rows)
+
+
 @router.get("/requirements", response_class=HTMLResponse)
+async def requirements_tree(request: Request, db: DbSession) -> HTMLResponse:
+    """Requirements tree — the front door for the spec."""
+    from opal.db.base import LifecycleState
+    from opal.se.readiness import ready_requirement_ids
+
+    context = get_base_context(request, db, "Requirements - OPAL")
+    context["tree"], context["total"] = _requirement_tree(db)
+    context["states"] = [s.value for s in LifecycleState]
+    context["queue_count"] = len(ready_requirement_ids(db))
+    return templates.TemplateResponse("requirements/tree.html", context)
+
+
+@router.get("/requirements/list", response_class=HTMLResponse)
 async def requirements_list(request: Request, db: DbSession) -> HTMLResponse:
-    """Requirements list page."""
+    """Requirements list page (secondary lens; the tree is the front door)."""
     from opal.db.base import LifecycleState
 
     context = get_base_context(request, db, "Requirements - OPAL")
@@ -2684,6 +2818,93 @@ async def requirements_new(request: Request, db: DbSession) -> HTMLResponse:
     return templates.TemplateResponse("requirements/new.html", context)
 
 
+@router.get("/requirements/queue", response_class=HTMLResponse)
+async def requirements_queue(request: Request, db: DbSession) -> HTMLResponse:
+    """Baseline queue review session — one ready requirement per screen."""
+    from opal.db.models import PartRequirement
+    from opal.se.readiness import ready_requirement_ids
+
+    ids = ready_requirement_ids(db)
+    rows = (
+        db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
+    )
+    rows.sort(key=lambda r: (r.level, r.req_number))
+    by_id = {r.id: r for r in db.query(Requirement).filter(Requirement.deleted_at.is_(None))}
+
+    def root_chain(r: Requirement) -> list[str]:
+        chain: list[str] = []
+        seen = {r.id}
+        cursor = by_id.get(r.parent_id) if r.parent_id else None
+        while cursor is not None and cursor.id not in seen:
+            chain.append(f"{cursor.req_number} {cursor.title}")
+            seen.add(cursor.id)
+            cursor = by_id.get(cursor.parent_id) if cursor.parent_id else None
+        return list(reversed(chain))
+
+    items = []
+    for r in rows:
+        children_count = (
+            db.query(Requirement)
+            .filter(Requirement.parent_id == r.id, Requirement.deleted_at.is_(None))
+            .count()
+        )
+        alloc = (
+            db.query(Part.name)
+            .join(PartRequirement, PartRequirement.part_id == Part.id)
+            .filter(PartRequirement.requirement_ref_id == r.id)
+            .all()
+        )
+        items.append(
+            {
+                "id": r.id,
+                "req_number": r.req_number,
+                "revision": r.revision,
+                "title": r.title,
+                "statement": r.statement,
+                "rationale": r.rationale or "",
+                "level": r.level,
+                "verification_method": r.verification_method or "—",
+                "children_count": children_count,
+                "allocated": [name for (name,) in alloc],
+                "root_chain": root_chain(r),
+            }
+        )
+
+    context = get_base_context(request, db, "Baseline Queue - OPAL")
+    context["queue_items"] = items
+    return templates.TemplateResponse("requirements/queue.html", context)
+
+
+@router.get("/requirements/baselines", response_class=HTMLResponse)
+async def requirements_baselines(request: Request, db: DbSession) -> HTMLResponse:
+    """Baseline events history, newest first."""
+    from opal.db.models import BaselineEvent
+
+    events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
+    context = get_base_context(request, db, "Baselines - OPAL")
+    context["events"] = events
+    return templates.TemplateResponse("requirements/baselines.html", context)
+
+
+@router.get("/requirements/baselines/{event_id}", response_class=HTMLResponse)
+async def requirements_baseline_event(
+    request: Request, db: DbSession, event_id: int
+) -> HTMLResponse:
+    """One baseline event: the locked revision set."""
+    from opal.db.models import BaselineEvent
+
+    event = db.query(BaselineEvent).filter(BaselineEvent.id == event_id).first()
+    if not event:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": f"Baseline event {event_id} not found"},
+            status_code=404,
+        )
+    context = get_base_context(request, db, f"Baseline event {event_id} - OPAL")
+    context["event"] = event
+    return templates.TemplateResponse("requirements/baseline_event.html", context)
+
+
 @router.get("/requirements/{req_id}", response_class=HTMLResponse)
 async def requirements_detail(request: Request, db: DbSession, req_id: int) -> HTMLResponse:
     """Requirement detail page."""
@@ -2701,20 +2922,29 @@ async def requirements_detail(request: Request, db: DbSession, req_id: int) -> H
             status_code=404,
         )
 
+    from opal.se.readiness import readiness
+
     context = get_base_context(request, db, f"{req.req_number} - OPAL")
     context["req"] = req
     context["parent"] = req.parent
+
+    # Breadcrumb chain up to the L0 root, root first; cycle-guarded.
+    chain: list[Requirement] = []
+    seen: set[int] = {req.id}
+    cursor = req.parent
+    while cursor is not None and cursor.id not in seen:
+        chain.append(cursor)
+        seen.add(cursor.id)
+        cursor = cursor.parent
+    context["parent_chain"] = list(reversed(chain))
+
     context["baselined_by"] = (
         db.query(User).filter(User.id == req.baselined_by_id).first()
         if req.baselined_by_id
         else None
     )
-    context["children"] = (
-        db.query(Requirement)
-        .filter(Requirement.parent_id == req.id, Requirement.deleted_at.is_(None))
-        .order_by(Requirement.req_number)
-        .all()
-    )
+    context["children_nodes"], _ = _requirement_tree(db, root_id=req.id)
+    context["readiness"] = readiness(db, req)
     context["allocations"] = (
         db.query(PartRequirement).filter(PartRequirement.requirement_ref_id == req.id).all()
     )
@@ -2725,6 +2955,80 @@ async def requirements_detail(request: Request, db: DbSession, req_id: int) -> H
         .all()
     )
     return templates.TemplateResponse("requirements/detail.html", context)
+
+
+@router.get("/requirements/{req_id}/redline", response_class=HTMLResponse)
+async def requirements_redline(
+    request: Request,
+    db: DbSession,
+    req_id: int,
+    rev_a: int | None = Query(None),
+    rev_b: int | None = Query(None),
+) -> HTMLResponse:
+    """Word-diff partial between two revisions of this requirement's number.
+
+    Defaults to this revision vs the one it supersedes.
+    """
+    from opal.se.redline import redline_html
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return HTMLResponse("", status_code=404)
+
+    revisions = {
+        r.revision: r
+        for r in db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .all()
+    }
+    if rev_b is None:
+        rev_b = req.revision
+    if rev_a is None:
+        predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
+        rev_a = predecessor.revision if predecessor else rev_b
+    old = revisions.get(rev_a)
+    new = revisions.get(rev_b)
+    if not old or not new:
+        return HTMLResponse('<div class="text-muted mono">revision not found</div>', status_code=404)
+    return templates.TemplateResponse(
+        "requirements/_redline.html",
+        {
+            "request": request,
+            "rev_a": old,
+            "rev_b": new,
+            "statement_diff": redline_html(old.statement, new.statement),
+            "rationale_diff": redline_html(old.rationale or "", new.rationale or ""),
+        },
+    )
+
+
+@router.get("/requirements/{req_id}/baseline-panel", response_class=HTMLResponse)
+async def requirements_baseline_panel(
+    request: Request, db: DbSession, req_id: int
+) -> HTMLResponse:
+    """Baseline panel partial — re-fetched by the dossier after field saves."""
+    from opal.se.readiness import readiness
+
+    req = (
+        db.query(Requirement)
+        .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+        .first()
+    )
+    if not req:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        "requirements/_baseline_panel.html",
+        {
+            "request": request,
+            "req": req,
+            "readiness": readiness(db, req),
+            "current_user": _get_current_user(request, db),
+        },
+    )
 
 
 # ============ DATASETS ============

@@ -46,6 +46,7 @@ from opal.db.models.part import TrackingType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
 from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.risk import RiskStatus
+from opal.se import lint as se_lint
 
 logger = logging.getLogger(__name__)
 
@@ -779,7 +780,12 @@ async def list_tools() -> list[Tool]:
         # Project info
         Tool(
             name="get_project_info",
-            description="Get information about the current OPAL project including tiers, requirements, and part numbering config",
+            description=(
+                "Get information about the current OPAL project including the "
+                "connected database URL, tiers, requirements, and part numbering "
+                "config. Call this first to confirm which database you are "
+                "operating on — report its path when asked to verify data."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -850,7 +856,9 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Create a new draft requirement. The REQ number is auto-assigned. "
                 "Statement should be a single shall statement; rationale is "
-                "required before the requirement can be baselined."
+                "required before the requirement can be baselined. The response "
+                "includes lint findings — resolve block_baseline ones before "
+                "requesting baseline."
             ),
             inputSchema={
                 "type": "object",
@@ -928,6 +936,61 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_baseline_queue",
+            description=(
+                "The baseline-ready set: draft/preliminary requirements whose "
+                "hard readiness checks all pass. Agents stage analysis for the "
+                "queue; a human commits it via baseline_batch."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="baseline_batch",
+            description=(
+                "Baseline a set of requirements atomically and write one "
+                "baseline event. POLICY: agents draft, humans baseline — "
+                "user_id must belong to a real human user who approved the "
+                "batch. Every item is re-validated at commit time; any "
+                "failure aborts the whole batch and returns the offenders."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Requirement IDs to baseline",
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user approving the batch (required)",
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "Optional event label, e.g. l0-freeze",
+                    },
+                    "note": {"type": "string"},
+                },
+                "required": ["ids", "user_id"],
+            },
+        ),
+        Tool(
+            name="get_baseline_events",
+            description=(
+                "Baseline events history (newest first): who locked which "
+                "requirement revisions, when, under what label."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "event_id": {
+                        "type": "integer",
+                        "description": "Return just this event with its locked set",
+                    },
+                },
+            },
+        ),
+        Tool(
             name="revise_requirement",
             description=(
                 "Create the next draft revision of a baselined requirement "
@@ -943,6 +1006,44 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="reaffirm_requirement",
+            description=(
+                "Clear a requirement's stale flag without editing it — 'the "
+                "parent's change doesn't invalidate this'. POLICY: signature "
+                "act, requires the user_id of a real human user. Staleness is "
+                "set on direct children when their parent's revision "
+                "supersedes; it also clears on any edit."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user re-affirming (required)",
+                    },
+                },
+                "required": ["requirement_id", "user_id"],
+            },
+        ),
+        Tool(
+            name="get_requirement_diff",
+            description=(
+                "Word-level diff of statement and rationale between two "
+                "revisions of a requirement. Defaults to this revision vs "
+                "the one it supersedes."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer"},
+                    "req_number": {"type": "string"},
+                    "rev_a": {"type": "integer", "description": "Older revision number"},
+                    "rev_b": {"type": "integer", "description": "Newer revision number"},
+                },
+            },
+        ),
+        Tool(
             name="cancel_requirement",
             description="Cancel a requirement (terminal state).",
             inputSchema={
@@ -951,6 +1052,50 @@ async def list_tools() -> list[Tool]:
                     "requirement_id": {"type": "integer"},
                 },
                 "required": ["requirement_id"],
+            },
+        ),
+        Tool(
+            name="lint_requirement",
+            description=(
+                "Lint a requirement against the SP-6105 Appendix C automatable "
+                "subset. Pass requirement_id or req_number to lint a stored row, "
+                "or statement (+ optional fields) to pre-check text before "
+                "creating. block_baseline findings prevent baselining; warns are "
+                "advisory."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer", "description": "Database ID"},
+                    "req_number": {"type": "string", "description": "REQ number, e.g. REQ-0042"},
+                    "statement": {
+                        "type": "string",
+                        "description": "Ad-hoc shall statement to lint instead of a stored row",
+                    },
+                    "rationale": {"type": "string"},
+                    "verification_method": {"type": "string"},
+                    "tbd": {"type": "boolean"},
+                    "tbr": {"type": "boolean"},
+                },
+            },
+        ),
+        Tool(
+            name="flowdown_tree",
+            description=(
+                "Requirement flow-down hierarchy as a nested tree (parent -> "
+                "derived children). No arguments returns all roots. Superseded "
+                "and deleted revisions are excluded; requirements whose parent "
+                "is excluded surface as orphan roots."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {
+                        "type": "integer",
+                        "description": "Root the tree at this requirement",
+                    },
+                    "req_number": {"type": "string", "description": "Root at this REQ number"},
+                },
             },
         ),
         Tool(
@@ -1401,10 +1546,24 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _update_requirement(db, arguments)
         elif name == "baseline_requirement":
             return await _baseline_requirement(db, arguments)
+        elif name == "get_baseline_queue":
+            return await _get_baseline_queue(db, arguments)
+        elif name == "baseline_batch":
+            return await _baseline_batch(db, arguments)
+        elif name == "get_baseline_events":
+            return await _get_baseline_events(db, arguments)
         elif name == "revise_requirement":
             return await _revise_requirement(db, arguments)
         elif name == "cancel_requirement":
             return await _cancel_requirement(db, arguments)
+        elif name == "reaffirm_requirement":
+            return await _reaffirm_requirement(db, arguments)
+        elif name == "get_requirement_diff":
+            return await _get_requirement_diff(db, arguments)
+        elif name == "lint_requirement":
+            return await _lint_requirement(db, arguments)
+        elif name == "flowdown_tree":
+            return await _flowdown_tree(db, arguments)
         elif name == "list_part_requirements":
             return await _list_part_requirements(db, arguments)
         elif name == "assign_requirement":
@@ -2174,6 +2333,7 @@ def _requirement_dict(req: Requirement) -> dict:
         "verification_method": req.verification_method,
         "tbd": req.tbd,
         "tbr": req.tbr,
+        "stale": req.stale,
         "baselined_at": req.baselined_at.isoformat() if req.baselined_at else None,
         "supersedes_id": req.supersedes_id,
     }
@@ -2243,7 +2403,14 @@ async def _get_requirement(db, args: dict) -> list[TextContent]:
         .order_by(Requirement.revision)
         .all()
     )
+    from opal.se.readiness import readiness
+
+    ready = readiness(db, req)
     result = _requirement_dict(req)
+    result["readiness"] = {
+        "ready": ready["ready"],
+        "failing_checks": [c["key"] for c in ready["checks"] if not c["passed"]],
+    }
     result["children"] = [
         {"id": c.id, "req_number": c.req_number, "title": c.title, "level": c.level}
         for c in children
@@ -2294,6 +2461,7 @@ async def _create_requirement(db, args: dict) -> list[TextContent]:
             "success": True,
             "message": f"Created draft requirement {req.req_number}: {req.title}",
             "requirement": _requirement_dict(req),
+            "lint": [f.to_dict() for f in se_lint.lint_requirement_row(req)],
         }
     )
 
@@ -2325,10 +2493,19 @@ async def _update_requirement(db, args: dict) -> list[TextContent]:
         if field in args:
             setattr(req, field, args[field])
 
+    # Any edit is by definition a fresh look — clear staleness (spec §7).
+    req.stale = False
+
     log_update(db, req, old_values)
     db.commit()
     db.refresh(req)
-    return json_response({"success": True, "requirement": _requirement_dict(req)})
+    return json_response(
+        {
+            "success": True,
+            "requirement": _requirement_dict(req),
+            "lint": [f.to_dict() for f in se_lint.lint_requirement_row(req)],
+        }
+    )
 
 
 async def _baseline_requirement(db, args: dict) -> list[TextContent]:
@@ -2360,6 +2537,9 @@ async def _baseline_requirement(db, args: dict) -> list[TextContent]:
         baseline(db, req, user.id)
     except LifecycleError as err:
         return json_response({"error": str(err)})
+    from opal.se.baseline import write_baseline_event
+
+    write_baseline_event(db, [req], user.id)
     log_update(db, req, old_values, user.id)
     db.commit()
     db.refresh(req)
@@ -2368,6 +2548,187 @@ async def _baseline_requirement(db, args: dict) -> list[TextContent]:
             "success": True,
             "message": f"{req.req_number} rev {req.revision} baselined by {user.name}",
             "requirement": _requirement_dict(req),
+        }
+    )
+
+
+def _require_human_user(db, args: dict):
+    """Signature acts demand a real, active user; returns (user, error_response)."""
+    user_id = args.get("user_id")
+    user = (
+        db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if user_id is not None
+        else None
+    )
+    if not user:
+        return None, json_response(
+            {
+                "error": "This action requires the user_id of an active human user "
+                "who approved it. Ask the operator which user is approving."
+            }
+        )
+    return user, None
+
+
+async def _get_baseline_queue(db, args: dict) -> list[TextContent]:
+    """Ready-to-baseline set, ordered level asc then req_number."""
+    from opal.se.readiness import ready_requirement_ids
+
+    ids = ready_requirement_ids(db)
+    rows = db.query(Requirement).filter(Requirement.id.in_(ids)).all() if ids else []
+    rows.sort(key=lambda r: (r.level, r.req_number))
+    return json_response(
+        {
+            "count": len(rows),
+            "queue": [
+                {
+                    "id": r.id,
+                    "req_number": r.req_number,
+                    "revision": r.revision,
+                    "title": r.title,
+                    "level": r.level,
+                    "statement": r.statement,
+                }
+                for r in rows
+            ],
+        }
+    )
+
+
+async def _baseline_batch(db, args: dict) -> list[TextContent]:
+    """Atomic batch baseline. Agents prepare; a human signs."""
+    from opal.se.baseline import baseline_batch
+
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+
+    reqs = []
+    for req_id in args["ids"]:
+        req = (
+            db.query(Requirement)
+            .filter(Requirement.id == req_id, Requirement.deleted_at.is_(None))
+            .first()
+        )
+        if not req:
+            return json_response({"error": f"Requirement {req_id} not found"})
+        reqs.append(req)
+
+    old_values = {req.id: get_model_dict(req) for req in reqs}
+    event, offenders = baseline_batch(
+        db, reqs, user.id, label=args.get("label"), note=args.get("note")
+    )
+    if offenders:
+        # baseline_batch validates before any lifecycle flip — nothing to roll back.
+        return json_response(
+            {"error": "batch aborted — items no longer ready", "offenders": offenders}
+        )
+    for req in reqs:
+        log_update(db, req, old_values[req.id], user.id)
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "event_id": event.id,
+            "label": event.label,
+            "message": f"{len(reqs)} requirement(s) baselined by {user.name}",
+            "baselined": [
+                {"id": r.id, "req_number": r.req_number, "revision": r.revision} for r in reqs
+            ],
+        }
+    )
+
+
+async def _get_baseline_events(db, args: dict) -> list[TextContent]:
+    """Baseline events, newest first; event_id narrows to one with its set."""
+    from opal.db.models import BaselineEvent
+
+    def event_dict(e: BaselineEvent) -> dict:
+        return {
+            "id": e.id,
+            "label": e.label,
+            "note": e.note,
+            "signed_by_id": e.signed_by_id,
+            "signed_by": e.signed_by.name if e.signed_by else None,
+            "created_at": e.created_at.isoformat(),
+            "locked": [
+                {
+                    "id": item.requirement.id,
+                    "req_number": item.requirement.req_number,
+                    "revision": item.requirement.revision,
+                }
+                for item in e.items
+            ],
+        }
+
+    if args.get("event_id"):
+        event = db.query(BaselineEvent).filter(BaselineEvent.id == args["event_id"]).first()
+        if not event:
+            return json_response({"error": f"Baseline event {args['event_id']} not found"})
+        return json_response({"event": event_dict(event)})
+
+    events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
+    return json_response({"count": len(events), "events": [event_dict(e) for e in events]})
+
+
+async def _reaffirm_requirement(db, args: dict) -> list[TextContent]:
+    """Clear staleness with a signature. Humans re-affirm; agents prepare."""
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+    if not req.stale:
+        return json_response({"error": f"{req.req_number} is not stale"})
+
+    old_values = get_model_dict(req)
+    req.stale = False
+    log_update(db, req, old_values, user.id)
+    db.commit()
+    db.refresh(req)
+    return json_response(
+        {
+            "success": True,
+            "message": f"{req.req_number} rev {req.revision} re-affirmed by {user.name}",
+            "requirement": _requirement_dict(req),
+        }
+    )
+
+
+async def _get_requirement_diff(db, args: dict) -> list[TextContent]:
+    """Word diff of statement/rationale between two revisions."""
+    from opal.se.redline import redline_segments
+
+    req = _find_requirement(db, args)
+    if not req:
+        return json_response({"error": "Requirement not found"})
+
+    revisions = {
+        r.revision: r
+        for r in db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .all()
+    }
+    rev_b = args.get("rev_b", req.revision)
+    rev_a = args.get("rev_a")
+    if rev_a is None:
+        predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
+        rev_a = predecessor.revision if predecessor else rev_b
+    old = revisions.get(rev_a)
+    new = revisions.get(rev_b)
+    if not old or not new:
+        return json_response(
+            {"error": f"Revision not found (have: {sorted(revisions)}, asked: {rev_a}, {rev_b})"}
+        )
+    return json_response(
+        {
+            "req_number": req.req_number,
+            "rev_a": rev_a,
+            "rev_b": rev_b,
+            "statement_diff": redline_segments(old.statement, new.statement),
+            "rationale_diff": redline_segments(old.rationale or "", new.rationale or ""),
         }
     )
 
@@ -2410,6 +2771,80 @@ async def _cancel_requirement(db, args: dict) -> list[TextContent]:
     log_update(db, req, old_values)
     db.commit()
     return json_response({"success": True, "requirement": _requirement_dict(req)})
+
+
+async def _lint_requirement(db, args: dict) -> list[TextContent]:
+    """Lint a stored requirement or ad-hoc statement text."""
+    if args.get("requirement_id") or args.get("req_number"):
+        req = _find_requirement(db, args)
+        if not req:
+            return json_response({"error": "Requirement not found"})
+        findings = se_lint.lint_requirement_row(req)
+        subject = f"{req.req_number} rev {req.revision}"
+    elif args.get("statement"):
+        findings = se_lint.lint_requirement(
+            args["statement"],
+            rationale=args.get("rationale"),
+            verification_method=args.get("verification_method"),
+            tbd=bool(args.get("tbd", False)),
+            tbr=bool(args.get("tbr", False)),
+        )
+        subject = "(unsaved statement)"
+    else:
+        return json_response({"error": "Pass requirement_id, req_number, or statement"})
+
+    return json_response(
+        {
+            "subject": subject,
+            "finding_count": len(findings),
+            "would_block_baseline": any(f.severity == "block_baseline" for f in findings),
+            "findings": [f.to_dict() for f in findings],
+        }
+    )
+
+
+async def _flowdown_tree(db, args: dict) -> list[TextContent]:
+    """Requirement flow-down hierarchy as a nested tree."""
+    rows = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.req_number, Requirement.revision)
+        .all()
+    )
+    ids = {r.id for r in rows}
+    by_parent: dict[int | None, list[Requirement]] = {}
+    for r in rows:
+        effective_parent = r.parent_id if r.parent_id in ids else None
+        by_parent.setdefault(effective_parent, []).append(r)
+
+    def node(r: Requirement, seen: frozenset[int]) -> dict:
+        n = {
+            "id": r.id,
+            "req_number": r.req_number,
+            "revision": r.revision,
+            "lifecycle_state": r.lifecycle_state,
+            "level": r.level,
+            "title": r.title,
+            "verification_method": r.verification_method,
+            "children": [
+                node(c, seen | {r.id}) for c in by_parent.get(r.id, []) if c.id not in seen
+            ],
+        }
+        if r.parent_id is not None and r.parent_id not in ids:
+            n["orphan"] = True  # parent superseded/cancelled/deleted — re-parent it
+        return n
+
+    if args.get("requirement_id") or args.get("req_number"):
+        root = _find_requirement(db, args)
+        if not root:
+            return json_response({"error": "Requirement not found"})
+        return json_response({"tree": [node(root, frozenset({root.id}))]})
+
+    roots = by_parent.get(None, [])
+    return json_response({"count": len(rows), "tree": [node(r, frozenset({r.id})) for r in roots]})
 
 
 async def _list_part_requirements(db, args: dict) -> list[TextContent]:
@@ -4273,12 +4708,16 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
 
 async def run_server():
     """Run the MCP server."""
-    logger.info("OPAL MCP Server started")
-    logger.info("Database: %s", get_active_settings().database_url)
+    import sys
+
+    # stderr, not logging: logging is usually unconfigured here, and stdout
+    # carries the MCP protocol. Which database this server is bound to is the
+    # first thing to check when MCP and web UI disagree about the data.
+    print(f"OPAL MCP server | database: {get_active_settings().database_url}", file=sys.stderr)
 
     project = get_active_project()
     if project:
-        logger.info("Project: %s", project.name)
+        print(f"OPAL MCP server | project: {project.name}", file=sys.stderr)
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
