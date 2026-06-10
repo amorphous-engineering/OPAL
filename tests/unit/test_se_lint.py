@@ -180,6 +180,35 @@ def test_verification_method_and_req_number():
     assert clean == []
 
 
+# ============ Server-side underline markup ============
+
+
+def test_statement_lint_html_wraps_spans_and_escapes():
+    from opal.web.lint_markup import statement_lint_html
+
+    stmt = "The GSE <vent> shall open as appropriate."
+    html = str(statement_lint_html(stmt, lint_statement(stmt)))
+    assert "&lt;vent&gt;" in html  # escaped outside spans
+    assert '<span class="lint-block"' in html
+    assert "as appropriate</span>" in html
+    assert "LINT-003" in html  # rule id in the tooltip
+
+
+def test_statement_lint_html_overlap_block_wins():
+    from opal.se.lint import LintFinding
+    from opal.web.lint_markup import statement_lint_html
+
+    stmt = "abcdef"
+    warn = LintFinding(rule="LINT-X", name="w", severity="warn", message="warn", span=(0, 4))
+    block = LintFinding(
+        rule="LINT-Y", name="b", severity="block_baseline", message="block", span=(2, 6)
+    )
+    html = str(statement_lint_html(stmt, [warn, block]))
+    # Three runs: warn-only, overlap (block wins), block-only.
+    assert html.count("<span") == 3
+    assert html.index('class="lint-warn"') < html.index('class="lint-block"')
+
+
 # ============ Lint endpoint ============
 
 

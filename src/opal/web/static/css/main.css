@@ -2090,3 +2090,206 @@ a.user-menu-link.active {
     background: var(--diff-changed-bg);
     padding: 1px 4px;
 }
+
+/* ============ Requirements tree + lint underlines ============ */
+
+.req-tree {
+    font-size: 0.85rem;
+}
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-top: 3px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--bg-tertiary);
+    min-width: 0;
+}
+
+.tree-row.focused {
+    background: var(--bg-tertiary);
+    outline: 1px solid var(--border-color);
+}
+
+.tree-row.dim {
+    opacity: 0.45;
+}
+
+.tree-row.filter-hidden {
+    display: none;
+}
+
+.tree-chevron {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    width: 14px;
+    padding: 0;
+    flex: none;
+    font-size: 0.7rem;
+}
+
+.tree-chevron-leaf {
+    width: 14px;
+    flex: none;
+}
+
+.tree-num {
+    flex: none;
+    width: 90px;
+}
+
+.tree-statement {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.tree-meta {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-left: auto;
+}
+
+.tree-lvl {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    width: 42px;
+    text-align: right;
+}
+
+.tree-age {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    width: 34px;
+    text-align: right;
+}
+
+.tree-row-expand {
+    padding-top: var(--space-xs);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.tree-full-statement {
+    white-space: pre-wrap;
+    margin-bottom: var(--space-xs);
+}
+
+.tree-rationale-preview {
+    font-size: 0.8rem;
+}
+
+.tree-children.collapsed {
+    display: none;
+}
+
+.req-tree.filtering .tree-children {
+    display: block !important;
+}
+
+/* Flag + allocation chips */
+.flag-chip {
+    font-size: 0.65rem;
+    padding: 0 4px;
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.flag-tbd {
+    color: var(--accent-red);
+    border-color: var(--accent-red);
+}
+
+.flag-tbr {
+    color: var(--accent-yellow);
+    border-color: var(--accent-yellow);
+}
+
+.flag-stale {
+    color: var(--accent-yellow);
+    border-style: dashed;
+}
+
+.alloc-chip {
+    font-size: 0.65rem;
+    padding: 0 4px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Ghost rows (inline create) */
+.tree-ghost {
+    display: none;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.tree-children.has-children:not(.collapsed) > .tree-ghost,
+.tree-ghost.force {
+    display: flex;
+}
+
+.req-tree.filtering .tree-ghost {
+    display: none !important;
+}
+
+.tree-ghost-link {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
+}
+
+.tree-ghost-link:hover {
+    color: var(--text-primary);
+}
+
+.tree-ghost-editor {
+    display: flex;
+    flex: 1;
+    gap: var(--space-sm);
+    align-items: center;
+}
+
+.tree-ghost-editor .tree-ghost-title {
+    flex: 0 0 200px;
+}
+
+.tree-ghost-editor .tree-ghost-statement {
+    flex: 1;
+}
+
+.tree-ghost-hint {
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+/* Lint underlines — block vs warn must read as two distinct treatments */
+.lint-block {
+    text-decoration: underline dotted var(--accent-red) 2px;
+    text-underline-offset: 3px;
+    cursor: help;
+}
+
+.lint-warn {
+    text-decoration: underline dotted var(--accent-yellow) 1px;
+    text-underline-offset: 3px;
+    cursor: help;
+}

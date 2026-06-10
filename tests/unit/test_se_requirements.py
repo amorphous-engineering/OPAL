@@ -350,6 +350,11 @@ def test_web_pages_render(client, test_user):
     page = client.get("/requirements")
     assert page.status_code == 200
     assert "REQUIREMENTS" in page.text
+    assert req["req_number"] in page.text  # tree renders rows server-side
+
+    list_page = client.get("/requirements/list")
+    assert list_page.status_code == 200
+    assert "REQUIREMENTS" in list_page.text
 
     rows = client.get("/requirements/table")
     assert rows.status_code == 200
@@ -365,6 +370,29 @@ def test_web_pages_render(client, test_user):
     new_page = client.get("/requirements/new")
     assert new_page.status_code == 200
     assert "CREATE DRAFT" in new_page.text
+
+
+def test_tree_page_nests_children_and_renders_lint(client, test_user):
+    client.cookies.set("opal_user_id", str(test_user.id))
+    parent = _api_create(client, title="Mission")
+    child = _api_create(
+        client,
+        title="Vague child",
+        statement="The engine shall vent as appropriate.",
+        parent_id=parent["id"],
+    )
+
+    page = client.get("/requirements")
+    assert page.status_code == 200
+    # Parent row precedes the child row, and the child sits inside the
+    # parent's children container.
+    assert page.text.index(parent["req_number"]) < page.text.index(child["req_number"])
+    assert f'id="children-{parent["id"]}"' in page.text
+    # The draft child's banned term renders with a lint underline span.
+    assert 'class="lint-block"' in page.text
+    assert "as appropriate</span>" in page.text
+    # Ghost row offers flow-down from the parent.
+    assert f"flow down from {parent['req_number']}" in page.text
 
 
 # ============ MCP tools ============

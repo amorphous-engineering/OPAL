@@ -2616,9 +2616,101 @@ async def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLRes
 # ============ REQUIREMENTS ============
 
 
+def _relative_age(dt) -> str:
+    """Dense relative age ('2d') for index rows; full ISO 8601 goes in the tooltip."""
+    if not dt:
+        return "—"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    seconds = (datetime.now(UTC) - dt).total_seconds()
+    if seconds < 60:
+        return "now"
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{int(minutes)}m"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{int(hours)}h"
+    days = hours / 24
+    if days < 14:
+        return f"{int(days)}d"
+    if days < 60:
+        return f"{int(days / 7)}w"
+    if days < 365:
+        return f"{int(days / 30)}mo"
+    return f"{int(days / 365)}y"
+
+
+def _requirement_tree(db: DbSession) -> tuple[list[dict], int]:
+    """Nested node dicts for the tree page; orphans surface as roots.
+
+    Mirrors the MCP _flowdown_tree children-map logic. Draft/preliminary rows
+    get server-rendered lint underlines (regex lint over the full set is
+    negligible at this scale).
+    """
+    from opal.db.base import LifecycleState
+    from opal.db.models import PartRequirement
+    from opal.se.lint import lint_statement
+    from opal.web.lint_markup import statement_lint_html
+
+    rows = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.req_number, Requirement.revision)
+        .all()
+    )
+    ids = {r.id for r in rows}
+    by_parent: dict[int | None, list[Requirement]] = {}
+    for r in rows:
+        effective_parent = r.parent_id if r.parent_id in ids else None
+        by_parent.setdefault(effective_parent, []).append(r)
+
+    alloc_map: dict[int, list[str]] = {}
+    alloc_rows = (
+        db.query(PartRequirement.requirement_ref_id, Part.name)
+        .join(Part, PartRequirement.part_id == Part.id)
+        .filter(PartRequirement.requirement_ref_id.isnot(None))
+        .order_by(Part.name)
+        .all()
+    )
+    for ref_id, part_name in alloc_rows:
+        alloc_map.setdefault(ref_id, []).append(part_name)
+
+    def node(r: Requirement, seen: frozenset[int]) -> dict:
+        statement_html = None
+        if r.is_mutable:
+            statement_html = statement_lint_html(r.statement, lint_statement(r.statement))
+        return {
+            "req": r,
+            "statement_html": statement_html,
+            "alloc": alloc_map.get(r.id, []),
+            "age": _relative_age(r.updated_at),
+            "iso": r.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ") if r.updated_at else "",
+            "children": [
+                node(c, seen | {r.id}) for c in by_parent.get(r.id, []) if c.id not in seen
+            ],
+        }
+
+    return [node(r, frozenset({r.id})) for r in by_parent.get(None, [])], len(rows)
+
+
 @router.get("/requirements", response_class=HTMLResponse)
+async def requirements_tree(request: Request, db: DbSession) -> HTMLResponse:
+    """Requirements tree — the front door for the spec."""
+    from opal.db.base import LifecycleState
+
+    context = get_base_context(request, db, "Requirements - OPAL")
+    context["tree"], context["total"] = _requirement_tree(db)
+    context["states"] = [s.value for s in LifecycleState]
+    return templates.TemplateResponse("requirements/tree.html", context)
+
+
+@router.get("/requirements/list", response_class=HTMLResponse)
 async def requirements_list(request: Request, db: DbSession) -> HTMLResponse:
-    """Requirements list page."""
+    """Requirements list page (secondary lens; the tree is the front door)."""
     from opal.db.base import LifecycleState
 
     context = get_base_context(request, db, "Requirements - OPAL")

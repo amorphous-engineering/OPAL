@@ -179,6 +179,7 @@
             { type: 'action', label: 'New Issue', action: '/issues/new', keywords: 'create add issue bug nc' },
             { type: 'action', label: 'New Risk', action: '/risks/new', keywords: 'create add risk hazard' },
             { type: 'action', label: 'New Requirement', action: '/requirements/new', keywords: 'create add requirement req shall' },
+            { type: 'action', label: 'New L0 Requirement', action: '/requirements?new=l0', keywords: 'create add root level 0 requirement req' },
             { type: 'action', label: 'New Dataset', action: '/datasets/new', keywords: 'create add dataset chart' },
             { type: 'action', label: 'New User', action: '/users/new', keywords: 'create add user person' },
             { type: 'action', label: 'New Inventory Record', action: '/inventory/new', keywords: 'create add inventory stock record' },
@@ -277,7 +278,8 @@
                 const typeLabels = {
                     part: 'PARTS', issue: 'ISSUES', procedure: 'PROCEDURES',
                     execution: 'EXECUTIONS', risk: 'RISKS', supplier: 'SUPPLIERS',
-                    purchase: 'PURCHASES', dataset: 'DATASETS', workcenter: 'WORKCENTERS'
+                    purchase: 'PURCHASES', dataset: 'DATASETS', workcenter: 'WORKCENTERS',
+                    requirement: 'REQUIREMENTS'
                 };
 
                 for (const [type, items] of Object.entries(grouped)) {

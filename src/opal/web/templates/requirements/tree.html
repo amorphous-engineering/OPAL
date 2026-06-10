@@ -1,0 +1,300 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+{% from 'requirements/_tree_row.html' import tree_row, ghost_row %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("REQUIREMENTS") }}
+{% endblock %}
+
+{% block content %}
+{% set actions %}
+<a href="/requirements" class="btn btn-sm" style="border-color: var(--accent-green, #4ade80);">TREE</a>
+<a href="/requirements/list" class="btn btn-sm">LIST</a>
+{{ ok.btn("NEW L0", variant="primary", attrs='onclick="openRootGhost()"') }}
+{% endset %}
+{% call ok.panel("REQUIREMENTS · " ~ total, actions=actions) %}
+    <div class="toolbar">
+        <div class="toolbar-search">
+            <input type="text" id="tree-search" class="form-input" placeholder="Filter tree... ( / )"
+                   autocomplete="off" oninput="applyFilters()">
+        </div>
+        <div class="toolbar-filter">
+            <select id="tree-state" class="form-select" onchange="applyFilters()">
+                <option value="">All states</option>
+                {% for s in states if s != 'superseded' %}
+                <option value="{{ s }}">{{ s | upper }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="toolbar-filter">
+            <select id="tree-level" class="form-select" onchange="applyFilters()">
+                <option value="">All levels</option>
+                <option value="0">L0 - Mission</option>
+                <option value="1">L1 - System</option>
+                <option value="2">L2 - Subsystem</option>
+                <option value="3">L3 - Component</option>
+            </select>
+        </div>
+        <span class="text-muted mono" style="font-size: 0.7rem; margin-left: auto; white-space: nowrap;">
+            j/k move · ←/→ fold · enter open · c flow down · / search
+        </span>
+    </div>
+
+    <div id="req-tree" class="req-tree">
+        {% for node in tree %}
+        {{ tree_row(node) }}
+        {% endfor %}
+        {{ ghost_row('', None, None, 0, 0) }}
+        {% if not tree %}
+        {{ ok.empty("No requirements yet — NEW L0 starts the spec") }}
+        {% endif %}
+    </div>
+{% endcall %}
+
+<script>
+// ============ Expansion state (localStorage) ============
+const COLLAPSE_KEY = 'opal_req_tree_collapsed';
+function collapsedSet() {
+    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')); }
+    catch (e) { return new Set(); }
+}
+function saveCollapsed(set) {
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set]));
+}
+function setSubtree(id, collapsed) {
+    const container = document.getElementById('children-' + id);
+    const row = document.getElementById('req-row-' + id);
+    if (!container) return;
+    container.classList.toggle('collapsed', collapsed);
+    const chevron = row && row.querySelector('.tree-chevron');
+    if (chevron && !chevron.classList.contains('tree-chevron-leaf')) {
+        chevron.textContent = collapsed ? '▸' : '▾';
+    }
+}
+function toggleSubtree(id, event) {
+    if (event) event.stopPropagation();
+    const set = collapsedSet();
+    const collapsed = !set.has(id);
+    if (collapsed) set.add(id); else set.delete(id);
+    saveCollapsed(set);
+    setSubtree(id, collapsed);
+}
+collapsedSet().forEach(id => setSubtree(id, true));
+
+// ============ Row expand (statement in place) ============
+function toggleRowExpand(id) {
+    const el = document.getElementById('req-expand-' + id);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ============ Ghost rows (inline create) ============
+function getHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const userId = localStorage.getItem('opal_user_id');
+    if (userId) headers['X-User-Id'] = userId;
+    return headers;
+}
+
+function openGhost(linkEl) {
+    const ghost = linkEl.closest('.tree-ghost');
+    linkEl.style.display = 'none';
+    const editor = ghost.querySelector('.tree-ghost-editor');
+    editor.style.display = 'flex';
+    editor.querySelector('.tree-ghost-title').focus();
+}
+
+function closeGhost(editor) {
+    editor.style.display = 'none';
+    editor.querySelector('.tree-ghost-title').value = '';
+    editor.querySelector('.tree-ghost-statement').value = '';
+    const ghost = editor.closest('.tree-ghost');
+    ghost.querySelector('.tree-ghost-link').style.display = '';
+    ghost.classList.remove('force');
+}
+
+function ghostKeydown(event, input) {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        closeGhost(input.closest('.tree-ghost-editor'));
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        createFromGhost(input.closest('.tree-ghost-editor'));
+    }
+    event.stopPropagation();
+}
+
+async function createFromGhost(editor) {
+    const title = editor.querySelector('.tree-ghost-title').value.trim();
+    const statement = editor.querySelector('.tree-ghost-statement').value.trim();
+    if (!title || !statement) return;
+    const body = {
+        title: title,
+        statement: statement,
+        parent_id: editor.dataset.parentId ? parseInt(editor.dataset.parentId) : null,
+        category: editor.dataset.category || null,
+    };
+    try {
+        const r = await fetch('/api/requirements', {
+            method: 'POST', headers: getHeaders(), body: JSON.stringify(body),
+        });
+        if (!r.ok) {
+            const err = await r.json();
+            alert(formatApiError(err.detail, 'Failed to create requirement'));
+            return;
+        }
+        const req = await r.json();
+        insertCreatedRow(editor, req);
+        // Fresh ghost: clear fields, keep editing so decomposition flows.
+        editor.querySelector('.tree-ghost-title').value = '';
+        editor.querySelector('.tree-ghost-statement').value = '';
+        editor.querySelector('.tree-ghost-title').focus();
+    } catch (e) { alert('Network error: ' + e.message); }
+}
+
+function insertCreatedRow(editor, req) {
+    const ghost = editor.closest('.tree-ghost');
+    const depth = Math.round((parseInt(ghost.style.paddingLeft) - 22) / 18);
+    const row = document.createElement('div');
+    row.className = 'tree-row';
+    row.id = 'req-row-' + req.id;
+    row.tabIndex = -1;
+    row.dataset.id = req.id;
+    row.dataset.state = req.lifecycle_state;
+    row.dataset.level = req.level;
+    row.dataset.number = req.req_number;
+    row.dataset.category = req.category || '';
+    row.dataset.text = (req.req_number + ' ' + req.title + ' ' + req.statement).toLowerCase();
+    row.style.paddingLeft = (depth * 18) + 'px';
+    row.innerHTML =
+        '<span class="tree-chevron tree-chevron-leaf"></span>' +
+        '<a class="tree-num mono" href="/requirements/' + req.id + '">' + escapeHtml(req.req_number) + '</a>' +
+        '<span class="tree-statement">' + escapeHtml(req.statement) + '</span>' +
+        '<span class="tree-meta">' +
+        '<span class="status-badge status-draft">DRAFT</span>' +
+        '<span class="tree-lvl mono">L' + req.level + '·' + (req.verification_method || '—')[0].toUpperCase() + '</span>' +
+        '<span class="tree-age mono">now</span></span>';
+    ghost.parentNode.insertBefore(row, ghost);
+}
+
+function openRootGhost() {
+    const rootGhost = document.querySelector('#req-tree > .tree-ghost');
+    rootGhost.classList.add('force');
+    openGhost(rootGhost.querySelector('.tree-ghost-link'));
+}
+
+// `c` on a focused leaf forces its (otherwise hidden) ghost open.
+function openGhostFor(row) {
+    const container = document.getElementById('children-' + row.dataset.id);
+    if (!container) return;
+    setSubtree(parseInt(row.dataset.id), false);
+    const ghost = container.querySelector(':scope > .tree-ghost');
+    if (!ghost) return;
+    ghost.classList.add('force');
+    openGhost(ghost.querySelector('.tree-ghost-link'));
+}
+
+// ============ Filters (client-side dim/hide) ============
+function rowMatches(row, q, state, level) {
+    if (state && row.dataset.state !== state) return false;
+    if (level !== '' && row.dataset.level !== level) return false;
+    if (q && !row.dataset.text.includes(q)) return false;
+    return true;
+}
+
+function applyFilters() {
+    const q = document.getElementById('tree-search').value.toLowerCase().trim();
+    const state = document.getElementById('tree-state').value;
+    const level = document.getElementById('tree-level').value;
+    const tree = document.getElementById('req-tree');
+    const active = q || state || level !== '';
+    tree.classList.toggle('filtering', !!active);
+    if (!active) {
+        tree.querySelectorAll('.tree-row').forEach(r => r.classList.remove('dim', 'filter-hidden'));
+        return;
+    }
+    // A row stays visible when it matches or any descendant matches;
+    // ancestor-of-match renders dimmed, never hidden (keep context).
+    function walk(container) {
+        let anyMatch = false;
+        container.querySelectorAll(':scope > .tree-row').forEach(row => {
+            const kids = document.getElementById('children-' + row.dataset.id);
+            const descMatch = kids ? walk(kids) : false;
+            const selfMatch = rowMatches(row, q, state, level);
+            row.classList.toggle('dim', !selfMatch && descMatch);
+            row.classList.toggle('filter-hidden', !selfMatch && !descMatch);
+            anyMatch = anyMatch || selfMatch || descMatch;
+        });
+        return anyMatch;
+    }
+    walk(tree);
+}
+
+// ============ Keyboard ============
+function visibleRows() {
+    return [...document.querySelectorAll('#req-tree .tree-row')]
+        .filter(r => r.offsetParent !== null && !r.classList.contains('filter-hidden'));
+}
+let focusedId = null;
+function focusRow(row) {
+    document.querySelectorAll('.tree-row.focused').forEach(r => r.classList.remove('focused'));
+    if (!row) { focusedId = null; return; }
+    row.classList.add('focused');
+    focusedId = row.dataset.id;
+    row.scrollIntoView({ block: 'nearest' });
+}
+function moveFocus(delta) {
+    const rows = visibleRows();
+    if (!rows.length) return;
+    const idx = rows.findIndex(r => r.dataset.id === focusedId);
+    const next = idx === -1 ? (delta > 0 ? 0 : rows.length - 1)
+                            : Math.max(0, Math.min(rows.length - 1, idx + delta));
+    focusRow(rows[next]);
+}
+
+document.addEventListener('keydown', function(event) {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const focused = focusedId && document.getElementById('req-row-' + focusedId);
+    switch (event.key) {
+        case 'j': event.preventDefault(); moveFocus(1); break;
+        case 'k': event.preventDefault(); moveFocus(-1); break;
+        case 'ArrowLeft':
+            if (focused) { event.preventDefault(); collapseFocused(focused, true); }
+            break;
+        case 'ArrowRight':
+            if (focused) { event.preventDefault(); collapseFocused(focused, false); }
+            break;
+        case 'Enter':
+            if (focused) { event.preventDefault(); window.location = '/requirements/' + focused.dataset.id; }
+            break;
+        case 'c':
+            if (focused) { event.preventDefault(); openGhostFor(focused); }
+            break;
+        case '/':
+            event.preventDefault();
+            document.getElementById('tree-search').focus();
+            break;
+        case 'b':
+            // Reserved for the baseline queue (spec phase 3) — no-op until it ships.
+            break;
+    }
+});
+
+function collapseFocused(row, collapse) {
+    const id = parseInt(row.dataset.id);
+    const container = document.getElementById('children-' + id);
+    if (!container || !container.classList.contains('has-children')) return;
+    const set = collapsedSet();
+    if (collapse) set.add(id); else set.delete(id);
+    saveCollapsed(set);
+    setSubtree(id, collapse);
+}
+
+// ⌘K "New L0 Requirement" deep-links here with ?new=l0.
+if (new URLSearchParams(window.location.search).get('new') === 'l0') {
+    openRootGhost();
+}
+</script>
+{% endblock %}
