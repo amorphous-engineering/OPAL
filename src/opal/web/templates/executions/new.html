@@ -22,6 +22,15 @@
 
             {{ ok.field("work_order_number", "WORK ORDER NUMBER", placeholder="Optional - for grouping related executions") }}
 
+            <div class="form-group">
+                <label class="form-label">TARGET ENTITY <span class="text-muted">(optional — what this execution is run against)</span></label>
+                <div style="display: flex; gap: var(--space-sm);">
+                    <input type="text" name="entity_type" class="form-input" placeholder="Type, e.g. part" style="flex: 1;">
+                    <input type="text" name="entity_id" class="form-input" placeholder="ID" style="flex: 1;">
+                    <input type="text" name="entity_label" class="form-input" placeholder="Label, e.g. SN-00042" style="flex: 2;">
+                </div>
+            </div>
+
             {% if not procedures %}
             <div class="text-yellow" style="margin-bottom: var(--space-md);">
                 No procedures with published versions available. Create and publish a procedure first.
@@ -45,6 +54,14 @@ async function startExecution(event) {
         procedure_id: parseInt(form.procedure_id.value),
         work_order_number: form.work_order_number.value || null,
     };
+
+    if (form.entity_type.value || form.entity_id.value || form.entity_label.value) {
+        data.target_entity = {
+            entity_type: form.entity_type.value || null,
+            entity_id: form.entity_id.value || null,
+            entity_label: form.entity_label.value || null,
+        };
+    }
 
     const headers = {
         'Content-Type': 'application/json',

@@ -272,6 +272,14 @@ async def list_tools() -> list[Tool]:
                         "minimum": 1,
                         "description": "Estimated duration in minutes (optional)",
                     },
+                    "required_role": {
+                        "type": "string",
+                        "description": "Role required for this step, e.g. QE (optional, informational badge)",
+                    },
+                    "caution": {
+                        "type": "string",
+                        "description": "Safety warning text displayed in red during execution (optional)",
+                    },
                     "required_data_schema": {
                         "type": "object",
                         "description": (
@@ -332,9 +340,9 @@ async def list_tools() -> list[Tool]:
             name="update_step",
             description=(
                 "Update a step's title, instructions, is_contingency, "
-                "requires_signoff, estimated_duration_minutes, or "
-                "required_data_schema. Step_number, level, parent, and order "
-                "are not editable here — use reorder_steps for ordering."
+                "requires_signoff, estimated_duration_minutes, required_role, "
+                "caution, or required_data_schema. Step_number, level, parent, "
+                "and order are not editable here — use reorder_steps for ordering."
             ),
             inputSchema={
                 "type": "object",
@@ -346,6 +354,8 @@ async def list_tools() -> list[Tool]:
                     "is_contingency": {"type": "boolean"},
                     "requires_signoff": {"type": "boolean"},
                     "estimated_duration_minutes": {"type": "integer", "minimum": 1},
+                    "required_role": {"type": "string"},
+                    "caution": {"type": "string"},
                     "required_data_schema": {"type": "object"},
                 },
                 "required": ["procedure_id", "step_id"],
@@ -1441,6 +1451,8 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
         is_contingency=is_contingency,
         requires_signoff=bool(args.get("requires_signoff", False)),
         estimated_duration_minutes=args.get("estimated_duration_minutes"),
+        required_role=args.get("required_role"),
+        caution=args.get("caution"),
     )
     db.add(step)
     db.flush()
@@ -1468,6 +1480,8 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
                 "is_contingency": step.is_contingency,
                 "requires_signoff": step.requires_signoff,
                 "estimated_duration_minutes": step.estimated_duration_minutes,
+                "required_role": step.required_role,
+                "caution": step.caution,
                 "required_data_schema": step.required_data_schema,
             },
         }
@@ -2008,6 +2022,8 @@ def _serialize_step(step: ProcedureStep) -> dict:
         "is_contingency": step.is_contingency,
         "requires_signoff": step.requires_signoff,
         "estimated_duration_minutes": step.estimated_duration_minutes,
+        "required_role": step.required_role,
+        "caution": step.caution,
         "workcenter_id": step.workcenter_id,
     }
 
@@ -2206,6 +2222,10 @@ async def _update_step(db, args: dict) -> list[TextContent]:
         step.requires_signoff = bool(args["requires_signoff"])
     if "estimated_duration_minutes" in args:
         step.estimated_duration_minutes = args["estimated_duration_minutes"]
+    if "required_role" in args:
+        step.required_role = args["required_role"]
+    if "caution" in args:
+        step.caution = args["caution"]
     if "required_data_schema" in args:
         step.required_data_schema = args["required_data_schema"]
 
@@ -2928,6 +2948,8 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
             "is_contingency": step.is_contingency,
             "requires_signoff": step.requires_signoff,
             "estimated_duration_minutes": step.estimated_duration_minutes,
+            "required_role": step.required_role,
+            "caution": step.caution,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
             "step_kit": [
@@ -3064,6 +3086,8 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
             is_contingency=s.is_contingency,
             requires_signoff=s.requires_signoff,
             estimated_duration_minutes=s.estimated_duration_minutes,
+            required_role=s.required_role,
+            caution=s.caution,
             workcenter_id=s.workcenter_id,
         )
         db.add(new_step)

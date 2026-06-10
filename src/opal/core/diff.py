@@ -19,6 +19,8 @@ _STEP_COMPARE_FIELDS = [
     "instructions",
     "is_contingency",
     "estimated_duration_minutes",
+    "required_role",
+    "caution",
     "required_data_schema",
 ]
 

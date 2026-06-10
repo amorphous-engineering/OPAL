@@ -616,6 +616,7 @@ async def import_parts(
                 tracking_type=part_in.tracking_type or "bulk",
                 tier=part_in.tier,
                 reorder_point=part_in.reorder_point,
+                is_tooling=part_in.is_tooling,
                 metadata_=part_in.metadata,
             )
             db.add(part)
