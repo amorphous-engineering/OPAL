@@ -38,6 +38,7 @@ from opal.db.models import (
 from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
 from opal.db.models.risk import RiskStatus
+from opal.se import lint as se_lint
 
 logger = logging.getLogger(__name__)
 
@@ -847,7 +848,9 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Create a new draft requirement. The REQ number is auto-assigned. "
                 "Statement should be a single shall statement; rationale is "
-                "required before the requirement can be baselined."
+                "required before the requirement can be baselined. The response "
+                "includes lint findings — resolve block_baseline ones before "
+                "requesting baseline."
             ),
             inputSchema={
                 "type": "object",
@@ -948,6 +951,50 @@ async def list_tools() -> list[Tool]:
                     "requirement_id": {"type": "integer"},
                 },
                 "required": ["requirement_id"],
+            },
+        ),
+        Tool(
+            name="lint_requirement",
+            description=(
+                "Lint a requirement against the SP-6105 Appendix C automatable "
+                "subset. Pass requirement_id or req_number to lint a stored row, "
+                "or statement (+ optional fields) to pre-check text before "
+                "creating. block_baseline findings prevent baselining; warns are "
+                "advisory."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {"type": "integer", "description": "Database ID"},
+                    "req_number": {"type": "string", "description": "REQ number, e.g. REQ-0042"},
+                    "statement": {
+                        "type": "string",
+                        "description": "Ad-hoc shall statement to lint instead of a stored row",
+                    },
+                    "rationale": {"type": "string"},
+                    "verification_method": {"type": "string"},
+                    "tbd": {"type": "boolean"},
+                    "tbr": {"type": "boolean"},
+                },
+            },
+        ),
+        Tool(
+            name="flowdown_tree",
+            description=(
+                "Requirement flow-down hierarchy as a nested tree (parent -> "
+                "derived children). No arguments returns all roots. Superseded "
+                "and deleted revisions are excluded; requirements whose parent "
+                "is excluded surface as orphan roots."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "requirement_id": {
+                        "type": "integer",
+                        "description": "Root the tree at this requirement",
+                    },
+                    "req_number": {"type": "string", "description": "Root at this REQ number"},
+                },
             },
         ),
         Tool(
@@ -1167,6 +1214,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _revise_requirement(db, arguments)
         elif name == "cancel_requirement":
             return await _cancel_requirement(db, arguments)
+        elif name == "lint_requirement":
+            return await _lint_requirement(db, arguments)
+        elif name == "flowdown_tree":
+            return await _flowdown_tree(db, arguments)
         elif name == "list_part_requirements":
             return await _list_part_requirements(db, arguments)
         elif name == "assign_requirement":
@@ -2013,6 +2064,7 @@ async def _create_requirement(db, args: dict) -> list[TextContent]:
             "success": True,
             "message": f"Created draft requirement {req.req_number}: {req.title}",
             "requirement": _requirement_dict(req),
+            "lint": [f.to_dict() for f in se_lint.lint_requirement_row(req)],
         }
     )
 
@@ -2047,7 +2099,13 @@ async def _update_requirement(db, args: dict) -> list[TextContent]:
     log_update(db, req, old_values)
     db.commit()
     db.refresh(req)
-    return json_response({"success": True, "requirement": _requirement_dict(req)})
+    return json_response(
+        {
+            "success": True,
+            "requirement": _requirement_dict(req),
+            "lint": [f.to_dict() for f in se_lint.lint_requirement_row(req)],
+        }
+    )
 
 
 async def _baseline_requirement(db, args: dict) -> list[TextContent]:
@@ -2129,6 +2187,80 @@ async def _cancel_requirement(db, args: dict) -> list[TextContent]:
     log_update(db, req, old_values)
     db.commit()
     return json_response({"success": True, "requirement": _requirement_dict(req)})
+
+
+async def _lint_requirement(db, args: dict) -> list[TextContent]:
+    """Lint a stored requirement or ad-hoc statement text."""
+    if args.get("requirement_id") or args.get("req_number"):
+        req = _find_requirement(db, args)
+        if not req:
+            return json_response({"error": "Requirement not found"})
+        findings = se_lint.lint_requirement_row(req)
+        subject = f"{req.req_number} rev {req.revision}"
+    elif args.get("statement"):
+        findings = se_lint.lint_requirement(
+            args["statement"],
+            rationale=args.get("rationale"),
+            verification_method=args.get("verification_method"),
+            tbd=bool(args.get("tbd", False)),
+            tbr=bool(args.get("tbr", False)),
+        )
+        subject = "(unsaved statement)"
+    else:
+        return json_response({"error": "Pass requirement_id, req_number, or statement"})
+
+    return json_response(
+        {
+            "subject": subject,
+            "finding_count": len(findings),
+            "would_block_baseline": any(f.severity == "block_baseline" for f in findings),
+            "findings": [f.to_dict() for f in findings],
+        }
+    )
+
+
+async def _flowdown_tree(db, args: dict) -> list[TextContent]:
+    """Requirement flow-down hierarchy as a nested tree."""
+    rows = (
+        db.query(Requirement)
+        .filter(
+            Requirement.deleted_at.is_(None),
+            Requirement.lifecycle_state != LifecycleState.SUPERSEDED.value,
+        )
+        .order_by(Requirement.req_number, Requirement.revision)
+        .all()
+    )
+    ids = {r.id for r in rows}
+    by_parent: dict[int | None, list[Requirement]] = {}
+    for r in rows:
+        effective_parent = r.parent_id if r.parent_id in ids else None
+        by_parent.setdefault(effective_parent, []).append(r)
+
+    def node(r: Requirement, seen: frozenset[int]) -> dict:
+        n = {
+            "id": r.id,
+            "req_number": r.req_number,
+            "revision": r.revision,
+            "lifecycle_state": r.lifecycle_state,
+            "level": r.level,
+            "title": r.title,
+            "verification_method": r.verification_method,
+            "children": [
+                node(c, seen | {r.id}) for c in by_parent.get(r.id, []) if c.id not in seen
+            ],
+        }
+        if r.parent_id is not None and r.parent_id not in ids:
+            n["orphan"] = True  # parent superseded/cancelled/deleted — re-parent it
+        return n
+
+    if args.get("requirement_id") or args.get("req_number"):
+        root = _find_requirement(db, args)
+        if not root:
+            return json_response({"error": "Requirement not found"})
+        return json_response({"tree": [node(root, frozenset({root.id}))]})
+
+    roots = by_parent.get(None, [])
+    return json_response({"count": len(rows), "tree": [node(r, frozenset({r.id})) for r in roots]})
 
 
 async def _list_part_requirements(db, args: dict) -> list[TextContent]:

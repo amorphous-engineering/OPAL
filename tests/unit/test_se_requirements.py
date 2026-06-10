@@ -20,6 +20,7 @@ def _make_requirement(db: Session, **overrides) -> Requirement:
         "rationale": "Sized from thrust target and injector pressure drop budget.",
         "category": "performance",
         "level": 1,
+        "verification_method": "test",
     }
     values.update(overrides)
     req = Requirement(**values)
@@ -211,6 +212,7 @@ def _api_create(client, **overrides):
         "statement": "The engine shall sustain a chamber pressure of 20 bar ± 1 bar.",
         "rationale": "Sized from thrust target.",
         "category": "performance",
+        "verification_method": "test",
     }
     payload.update(overrides)
     resp = client.post("/api/requirements", json=payload)
@@ -420,7 +422,12 @@ def test_mcp_baseline_requires_human(db_session, test_user):
     created = _mcp(
         mcp._create_requirement,
         db_session,
-        {"title": "Mass", "statement": "The stage shall mass under 40 kg.", "rationale": "Lift."},
+        {
+            "title": "Mass",
+            "statement": "The stage shall mass under 40 kg.",
+            "rationale": "Lift.",
+            "verification_method": "analysis",
+        },
     )
     rid = created["requirement"]["id"]
 
@@ -469,7 +476,12 @@ def test_mcp_revise_and_cancel(db_session, test_user):
     created = _mcp(
         mcp._create_requirement,
         db_session,
-        {"title": "Burn time", "statement": "The engine shall burn 8 s ± 1 s.", "rationale": "x"},
+        {
+            "title": "Burn time",
+            "statement": "The engine shall burn 8 s ± 1 s.",
+            "rationale": "Combustion stability data needs full duration.",
+            "verification_method": "test",
+        },
     )
     rid = created["requirement"]["id"]
     _mcp(mcp._baseline_requirement, db_session, {"requirement_id": rid, "user_id": test_user.id})

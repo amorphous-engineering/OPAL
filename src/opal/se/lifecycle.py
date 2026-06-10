@@ -55,7 +55,18 @@ def ensure_mutable(obj: Any) -> None:
 
 
 def baseline_blockers(obj: Any) -> list[str]:
-    """Mechanically decidable reasons this object cannot baseline yet."""
+    """Mechanically decidable reasons this object cannot baseline yet.
+
+    Statement-bearing objects (requirements) get the full lint — every
+    block_baseline finding blocks here, so the linter is the single source
+    of truth for what a baselineable requirement looks like. Other lifecycle
+    objects (future interfaces, ...) keep the generic field checks.
+    """
+    if hasattr(obj, "statement"):
+        from opal.se.lint import baseline_lint_blockers
+
+        return baseline_lint_blockers(obj)
+
     blockers: list[str] = []
     if hasattr(obj, "rationale") and not (obj.rationale or "").strip():
         blockers.append("rationale is required to baseline")
