@@ -3529,9 +3529,10 @@ def _derive_workcenter_code(name: str) -> str:
 
 async def _create_workcenter(db, args: dict) -> list[TextContent]:
     """Create a new workcenter. Code is required+unique; derive if omitted."""
-    code = args.get("code") or _derive_workcenter_code(args["name"])
+    # Match API behavior: case-insensitive duplicate check, store uppercased
+    code = (args.get("code") or _derive_workcenter_code(args["name"])).upper()
 
-    existing = db.query(Workcenter).filter(Workcenter.code == code).first()
+    existing = db.query(Workcenter).filter(func.lower(Workcenter.code) == code.lower()).first()
     if existing:
         return json_response({"error": f"Workcenter code '{code}' already exists"})
 

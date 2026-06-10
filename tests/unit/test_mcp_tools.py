@@ -128,6 +128,18 @@ def test_create_workcenter_duplicate_code(db_session):
     assert "already exists" in data["error"]
 
 
+def test_create_workcenter_code_case_matches_api(db_session):
+    """MCP mirrors the API: case-insensitive duplicate check, stored uppercased."""
+    db_session.add(Workcenter(name="Existing", code="AB1"))
+    db_session.flush()
+    data = _call(server._create_workcenter, db_session, {"name": "New", "code": "ab1"})
+    assert "error" in data and "already exists" in data["error"]
+
+    data = _call(server._create_workcenter, db_session, {"name": "Other", "code": "cd2"})
+    assert data["success"] is True
+    assert data["workcenter"]["code"] == "CD2"
+
+
 # ============ get_inventory_summary ============
 
 
