@@ -1,7 +1,7 @@
 """add requirement table and part_requirements FK
 
 Revision ID: e6f7a8b9c0d1
-Revises: d5e6f7a8b9c0
+Revises: b3f1c2a9d4e7
 Create Date: 2026-06-09 17:30:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'e6f7a8b9c0d1'
-down_revision: Union[str, None] = 'd5e6f7a8b9c0'
+down_revision: Union[str, None] = 'b3f1c2a9d4e7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
