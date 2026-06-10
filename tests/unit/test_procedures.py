@@ -741,6 +741,15 @@ def test_step_safety_fields_round_trip(client):
     assert top[0]["required_role"] == "MFG-LEAD"
     assert top[0]["caution"] == "Pinch hazard"
 
+    # Explicit null clears; omitted field is untouched
+    r = client.patch(
+        f"/api/procedures/{proc_id}/steps/{step['id']}",
+        json={"caution": None},
+    )
+    assert r.status_code == 200
+    assert r.json()["caution"] is None
+    assert r.json()["required_role"] == "MFG-LEAD"
+
 
 def test_publish_snapshots_safety_fields(client):
     """Published version content includes required_role and caution per step."""

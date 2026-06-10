@@ -531,9 +531,11 @@ async def update_step(
         step.requires_signoff = data.requires_signoff
     if data.estimated_duration_minutes is not None:
         step.estimated_duration_minutes = data.estimated_duration_minutes
-    if data.required_role is not None:
+    # Explicit null clears these: a stale safety callout must be removable,
+    # or it re-snapshots into every future published version
+    if "required_role" in data.model_fields_set:
         step.required_role = data.required_role
-    if data.caution is not None:
+    if "caution" in data.model_fields_set:
         step.caution = data.caution
 
     log_update(db, step, old_values, user_id)
