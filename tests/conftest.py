@@ -20,6 +20,8 @@ from opal.db.base import Base
 from opal.db.models import User
 
 TEST_PASSWORD = "test-password-123"
+# argon2id is deliberately slow; hash the shared test password once, not per fixture.
+TEST_PASSWORD_HASH = hash_password(TEST_PASSWORD)
 
 
 @pytest.fixture(scope="session")
@@ -56,8 +58,14 @@ def db_session(engine, tables) -> Generator[Session, None, None]:
     connection.close()
 
 
+@pytest.fixture(scope="session")
+def app():
+    """Build the FastAPI app once per session — route registration is expensive."""
+    return create_app()
+
+
 @pytest.fixture
-def client(db_session: Session, monkeypatch) -> Generator[TestClient, None, None]:
+def client(app, db_session: Session, monkeypatch) -> Generator[TestClient, None, None]:
     """Create test client with overridden database dependency.
 
     The client is pre-authenticated with a dedicated admin service user via a
@@ -68,14 +76,16 @@ def client(db_session: Session, monkeypatch) -> Generator[TestClient, None, None
     The global session factory is also pointed at the test connection so the
     auth middleware (which resolves sessions outside request dependencies)
     sees the same data as the routes.
+
+    The TestClient is created without entering its context manager, so the
+    app lifespan (project-config bootstrap against the real database) never
+    runs — tests always go through the overridden get_db.
     """
     import opal.db.base as db_base
 
     connection = db_session.get_bind()
     test_factory = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     monkeypatch.setattr(db_base, "_session_local", test_factory)
-
-    app = create_app()
 
     def override_get_db():
         yield db_session
@@ -85,7 +95,7 @@ def client(db_session: Session, monkeypatch) -> Generator[TestClient, None, None
     service_user = User(
         name="Test Client",
         username="test.client",
-        password_hash=hash_password(TEST_PASSWORD),
+        password_hash=TEST_PASSWORD_HASH,
         is_active=True,
         is_admin=True,
     )
@@ -94,8 +104,10 @@ def client(db_session: Session, monkeypatch) -> Generator[TestClient, None, None
     _, raw_token = create_api_token(db_session, service_user, "tests")
     db_session.commit()
 
-    with TestClient(app, headers={"Authorization": f"Bearer {raw_token}"}) as test_client:
-        yield test_client
+    try:
+        yield TestClient(app, headers={"Authorization": f"Bearer {raw_token}"})
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -104,7 +116,7 @@ def test_user(db_session: Session) -> User:
     user = User(
         name="Test User",
         username="testuser",
-        password_hash=hash_password(TEST_PASSWORD),
+        password_hash=TEST_PASSWORD_HASH,
         email="test@example.com",
     )
     db_session.add(user)
@@ -127,7 +139,7 @@ def admin_user(db_session: Session) -> User:
     user = User(
         name="Admin User",
         username="adminuser",
-        password_hash=hash_password(TEST_PASSWORD),
+        password_hash=TEST_PASSWORD_HASH,
         email="admin@example.com",
         is_admin=True,
     )

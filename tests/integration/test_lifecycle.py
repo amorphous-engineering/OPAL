@@ -9,13 +9,33 @@ engine.
 from pathlib import Path
 
 import pytest
-from sqlalchemy import inspect
+from sqlalchemy import event, inspect
+from sqlalchemy.engine import Engine
 
 import opal.config as config_mod
 from opal.config import configure_for_project, get_active_settings
 from opal.core import lifecycle
 from opal.db.base import SessionLocal, get_engine, init_database, reinitialize_engine
 from opal.db.models import Part, User
+
+
+@pytest.fixture(autouse=True, scope="module")
+def fast_sqlite():
+    """Disable fsync for the file-backed databases these tests create.
+
+    Each test runs create_all plus a full demo seed against fresh SQLite
+    files; with default PRAGMA synchronous the suite is fsync-bound
+    (~30s wall for ~7s CPU). Durability is irrelevant under tmp_path.
+    """
+
+    @event.listens_for(Engine, "connect")
+    def _no_fsync(dbapi_conn, _record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA synchronous=OFF")
+        cursor.close()
+
+    yield
+    event.remove(Engine, "connect", _no_fsync)
 
 
 @pytest.fixture
