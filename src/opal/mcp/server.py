@@ -3691,7 +3691,12 @@ async def _create_purchase_order(db, args: dict) -> list[TextContent]:
         if not part:
             return json_response({"error": f"Part {line['part_id']} not found"})
 
+    # POs created outside this tool (UI, seed data) use the same PO-NNNN
+    # format without consuming the designator sequence — skip past any
+    # already-taken references instead of failing the unique constraint.
     reference = generate_designator(db, "PO", digits=4)
+    while db.query(Purchase).filter(Purchase.reference == reference).first() is not None:
+        reference = generate_designator(db, "PO", digits=4)
     purchase = Purchase(
         reference=reference,
         supplier=supplier.name,
