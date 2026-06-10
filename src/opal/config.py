@@ -1,5 +1,6 @@
 """OPAL configuration via environment variables."""
 
+import logging
 import os
 import sys
 from functools import lru_cache
@@ -300,3 +301,78 @@ def get_app_setting(db: "Session", key: str) -> str | None:
 
     row = db.query(AppSetting).filter(AppSetting.key == key).first()
     return row.value if row else None
+
+
+# ============ Project config persistence (one instance = one project) ============
+#
+# The database is the project: live project configuration (name, tiers, part
+# numbering, categories, Onshape documents) is stored as a JSON blob in the
+# app_setting table. opal.project.yaml is a read-once bootstrap, deprecated
+# as a write target.
+
+PROJECT_CONFIG_KEY = "project_config"
+
+logger = logging.getLogger("opal.config")
+
+
+def save_project_to_db(db: "Session", config: "ProjectConfig") -> None:
+    """Persist the project config blob and activate it. Caller commits."""
+    global _active_project
+
+    set_app_setting(db, PROJECT_CONFIG_KEY, config.model_dump_json(exclude={"project_dir"}))
+    _active_project = config
+
+
+def load_project_from_db(db: "Session") -> "ProjectConfig | None":
+    """Load and activate the project config stored in the database, if any."""
+    global _active_project
+
+    from opal.project import ProjectConfig
+
+    raw = get_app_setting(db, PROJECT_CONFIG_KEY)
+    if raw is None:
+        return None
+    try:
+        config = ProjectConfig.model_validate_json(raw)
+    except Exception as e:
+        logger.warning("Stored project config is invalid, ignoring: %s", e)
+        return _active_project
+    _active_project = config
+    return config
+
+
+def bootstrap_project_config(db: "Session") -> "ProjectConfig | None":
+    """Read-once yaml import: establish the active project config.
+
+    Precedence: existing DB blob > yaml already loaded via --project >
+    opal.project.yaml in the current directory > nothing. The yaml import
+    happens once; afterwards the database is the source of truth.
+    """
+    from pathlib import Path as _Path
+
+    from opal.project import PROJECT_CONFIG_FILENAME, load_project_config
+
+    stored = load_project_from_db(db)
+    if stored is not None:
+        if (_Path.cwd() / PROJECT_CONFIG_FILENAME).exists():
+            logger.info(
+                "opal.project.yaml present but project config now lives in the "
+                "database — ignoring the file"
+            )
+        return stored
+
+    config = _active_project
+    if config is None:
+        yaml_path = _Path.cwd() / PROJECT_CONFIG_FILENAME
+        if yaml_path.exists():
+            config = load_project_config(yaml_path)
+
+    if config is None:
+        return None
+
+    save_project_to_db(db, config)
+    db.commit()
+    logger.info(
+        "Imported project config '%s' from opal.project.yaml into the database", config.name
+    )
+    return config

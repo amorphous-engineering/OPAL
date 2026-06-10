@@ -28,6 +28,19 @@ def _setup_project(args: argparse.Namespace) -> None:
             print(f"Using project: {project.name} ({project.project_dir})")
         print(f"Database: {settings.database_url}")
 
+    # The database is the project: pick up DB-stored config (and import a
+    # cwd yaml once) so CLI commands see the same config the server does.
+    # Best-effort — the database may not exist yet (e.g. before `opal init`).
+    try:
+        from opal.config import apply_db_overlay, bootstrap_project_config
+        from opal.db.base import SessionLocal
+
+        with SessionLocal() as db:
+            bootstrap_project_config(db)
+            apply_db_overlay(db)
+    except Exception:
+        pass
+
 
 def cmd_serve(args: argparse.Namespace) -> None:
     """Start the OPAL web server."""
@@ -169,6 +182,31 @@ def cmd_init(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def cmd_import_project(args: argparse.Namespace) -> None:
+    """Import an opal.project.yaml into the database (one-shot migration)."""
+    _setup_project(args)
+
+    from opal.config import save_project_to_db
+    from opal.db.base import SessionLocal
+    from opal.project import load_project_config
+
+    yaml_path = Path(args.file) if args.file else Path.cwd() / "opal.project.yaml"
+    if not yaml_path.exists():
+        print(f"No project config found at {yaml_path}")
+        sys.exit(1)
+
+    config = load_project_config(yaml_path)
+    db = SessionLocal()
+    try:
+        save_project_to_db(db, config)
+        db.commit()
+    finally:
+        db.close()
+
+    print(f"Imported project config '{config.name}' from {yaml_path} into the database.")
+    print("The yaml file is no longer read at runtime — you can archive or delete it.")
+
+
 def cmd_tui(args: argparse.Namespace) -> None:
     """Launch the TUI (Terminal User Interface)."""
     from opal.config import get_active_settings
@@ -256,6 +294,17 @@ def main() -> None:
     init_parser = subparsers.add_parser("init", help="Initialize OPAL")
     add_project_args(init_parser)
     init_parser.set_defaults(func=cmd_init)
+
+    # import-project command
+    import_proj_parser = subparsers.add_parser(
+        "import-project",
+        help="Import an opal.project.yaml into the database (one-shot; DB is the source of truth)",
+    )
+    import_proj_parser.add_argument(
+        "--file", type=str, help="Path to the yaml file (default: ./opal.project.yaml)"
+    )
+    add_project_args(import_proj_parser)
+    import_proj_parser.set_defaults(func=cmd_import_project)
 
     # tui command
     tui_parser = subparsers.add_parser("tui", help="Launch the TUI")

@@ -18,6 +18,17 @@
     <script src="/static/js/events.js"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
+    {% if demo_active %}
+    <div class="demo-banner mono">
+        <span>DEMO DATABASE ACTIVE — ALL CHANGES WILL BE DELETED ON EXIT</span>
+        {% if is_admin %}
+        <form method="post" action="/settings/demo/exit" style="display: inline; margin-left: var(--space-md);"
+              onsubmit="return confirm('Exit the demo? The demo database and everything in it will be deleted.');">
+            <button type="submit" class="demo-banner-exit">EXIT DEMO</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
     <header class="header">
         <div class="header-brand">
             <a href="/" class="brand-link">OPAL</a>
