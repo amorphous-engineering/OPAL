@@ -1621,6 +1621,30 @@ body.procedure-detail .exec-tab-content > div {
     letter-spacing: 0.05em;
 }
 
+/* Demo-mode banner: full-width, impossible to miss */
+.demo-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xs) var(--space-md);
+    background: var(--accent-yellow);
+    color: #000;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+.demo-banner-exit {
+    background: #000;
+    color: var(--accent-yellow);
+    border: 1px solid #000;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    padding: 2px 10px;
+    cursor: pointer;
+}
+
 /* Flow tab — operation-dependency node graph */
 .flow-canvas {
     background: var(--bg-secondary);

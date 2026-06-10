@@ -51,7 +51,8 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 - `src/opal/db/base.py` — `Base` declarative base, `IdMixin`, `TimestampMixin`, `SoftDeleteMixin`
 - `src/opal/web/routes.py` — All HTMX web routes (~85KB single file)
 - `src/opal/config.py` — Settings via pydantic-settings, all env vars use `OPAL_` prefix
-- `src/opal/project.py` — `opal.project.yaml` loader (project-level config: tiers, part numbering, categories)
+- `src/opal/project.py` — `opal.project.yaml` bootstrap loader (read-once, deprecated as a write target); live project config (tiers, part numbering, categories) is stored in the `app_setting` table under the `project_config` key
+- `src/opal/core/lifecycle.py` — demo-database switching (separate throwaway `demo.<name>` file) and factory reset; one instance = one project
 - `src/opal/integrations/onshape/` — Onshape CAD integration (client, sync engine, polling). Supports both assembly BOM sync and part studio sync via `element_type` config field.
 - `src/opal/mcp/server.py` — MCP server for Claude Code integration
 - `src/opal/launcher.py` — Textual TUI desktop launcher

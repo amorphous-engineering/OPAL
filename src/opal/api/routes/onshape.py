@@ -123,14 +123,14 @@ async def onshape_status() -> OnshapeStatusResponse:
 
 
 @router.post("/documents", response_model=DocumentRefResponse)
-async def add_document(body: AddDocumentRequest) -> DocumentRefResponse:
+async def add_document(body: AddDocumentRequest, db: DbSession) -> DocumentRefResponse:
     """Add an Onshape document from a pasted URL.
 
     Parses the URL, auto-detects element type via API, and saves to project config.
     """
-    from opal.config import get_active_project, get_active_settings
+    from opal.config import get_active_project, get_active_settings, save_project_to_db
     from opal.integrations.onshape.client import OnshapeClient, parse_onshape_url
-    from opal.project import OnshapeDocumentRef, save_project_config
+    from opal.project import OnshapeDocumentRef, ProjectConfig
 
     settings = get_active_settings()
     if not settings.onshape_enabled:
@@ -141,10 +141,8 @@ async def add_document(body: AddDocumentRequest) -> DocumentRefResponse:
 
     project = get_active_project()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No project configured",
-        )
+        # Adding an Onshape document shouldn't require the wizard first
+        project = ProjectConfig(name="OPAL")
 
     # Parse URL
     parsed = parse_onshape_url(body.url)
@@ -213,7 +211,8 @@ async def add_document(body: AddDocumentRequest) -> DocumentRefResponse:
         auto_sync=True,
     )
     project.onshape.documents.append(doc_ref)
-    save_project_config(project)
+    save_project_to_db(db, project)
+    db.commit()
 
     return DocumentRefResponse(
         name=doc_ref.name,
@@ -230,12 +229,12 @@ async def add_document(body: AddDocumentRequest) -> DocumentRefResponse:
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def remove_document(
+    db: DbSession,
     document_id: str = Path(...),
     element_id: str = Path(...),
 ) -> None:
     """Remove an Onshape document from the project config."""
-    from opal.config import get_active_project
-    from opal.project import save_project_config
+    from opal.config import get_active_project, save_project_to_db
 
     project = get_active_project()
     if not project:
@@ -257,7 +256,8 @@ async def remove_document(
             detail="Document not found in project config",
         )
 
-    save_project_config(project)
+    save_project_to_db(db, project)
+    db.commit()
 
 
 @router.post("/sync/pull", response_model=SyncResultResponse)

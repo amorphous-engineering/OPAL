@@ -1,6 +1,7 @@
 """Web UI routes."""
 
 import contextlib
+import logging
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -158,6 +159,8 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
     if current_user:
         is_admin = current_user.is_admin
 
+    from opal.core import lifecycle
+
     return {
         "request": request,
         "users": users,
@@ -168,6 +171,7 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
         "current_user": current_user,
         "is_admin": is_admin,
         "auth_mode": settings.auth_mode,
+        "demo_active": lifecycle.is_demo_active(),
     }
 
 
@@ -3495,8 +3499,6 @@ async def docs(request: Request, db: DbSession) -> HTMLResponse:
 @router.get("/project/new", response_class=HTMLResponse)
 async def project_new(request: Request, db: DbSession) -> HTMLResponse:
     """New project wizard page. Admin only."""
-    import os
-
     redirect = _require_admin_web(request, db)
     if redirect:
         return redirect
@@ -3505,8 +3507,6 @@ async def project_new(request: Request, db: DbSession) -> HTMLResponse:
     context["existing_config"] = None
     context["tiers"] = DEFAULT_TIERS
     context["categories"] = []
-    context["requirements"] = []
-    context["default_directory"] = os.getcwd()
 
     return templates.TemplateResponse("project/wizard.html", context)
 
@@ -3529,7 +3529,6 @@ async def project_edit(request: Request, db: DbSession) -> HTMLResponse:
     context["existing_config"] = project
     context["tiers"] = project.tiers
     context["categories"] = project.categories
-    context["requirements"] = project.requirements
 
     return templates.TemplateResponse("project/wizard.html", context)
 
@@ -3595,6 +3594,13 @@ async def settings_page(request: Request, db: DbSession) -> HTMLResponse:
         "max_upload_size": max_upload,
     }
 
+    # Instance lifecycle: demo + danger zone
+    from opal.core import lifecycle
+
+    context["demo_active"] = lifecycle.is_demo_active()
+    context["demo_file_exists"] = lifecycle.demo_file_exists()
+    context["demo_db_path"] = str(lifecycle.demo_db_path())
+
     return templates.TemplateResponse("settings/index.html", context)
 
 
@@ -3649,6 +3655,104 @@ async def settings_auth_mode_save(
     context["current_auth_mode"] = auth_mode
     context["save_result"] = {"ok": True, "message": f"Auth mode set to {auth_mode}."}
     return templates.TemplateResponse("settings/auth_mode.html", context)
+
+
+# ============ INSTANCE LIFECYCLE: DEMO DATA + FACTORY RESET ============
+
+
+_IDENTITY_COOKIES = ("opal_user_id", "opal_user_name", "opal_user_email", "opal_user_is_admin")
+
+
+def _set_identity_cookies(response: RedirectResponse, user: User) -> None:
+    max_age = 365 * 24 * 3600
+    response.set_cookie("opal_user_id", str(user.id), max_age=max_age)
+    response.set_cookie("opal_user_name", user.name, max_age=max_age)
+    response.set_cookie("opal_user_email", user.email or "", max_age=max_age)
+    response.set_cookie("opal_user_is_admin", "1" if user.is_admin else "0", max_age=max_age)
+
+
+def _clear_identity_cookies(response: RedirectResponse) -> None:
+    for cookie in _IDENTITY_COOKIES:
+        response.delete_cookie(cookie)
+
+
+@router.post("/settings/demo/enter")
+async def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
+    """Switch the instance to the throwaway demo database (admin only)."""
+    from opal.api.app import start_onshape_polling
+    from opal.core import lifecycle
+    from opal.db.base import SessionLocal
+    from opal.db.models.user import User as UserModel
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+    current_user = _get_current_user(request, db)
+
+    demo_user_id = lifecycle.enter_demo(current_user)
+    start_onshape_polling(request.app)
+
+    response = RedirectResponse(url="/", status_code=302)
+    if demo_user_id is not None:
+        with SessionLocal() as demo_db:
+            demo_user = demo_db.query(UserModel).filter(UserModel.id == demo_user_id).first()
+            if demo_user:
+                _set_identity_cookies(response, demo_user)
+    return response
+
+
+@router.post("/settings/demo/exit")
+async def settings_demo_exit(request: Request, db: DbSession) -> RedirectResponse:
+    """Exit the demo: switch back to the real database and delete the demo file."""
+    from opal.api.app import start_onshape_polling
+    from opal.core import lifecycle
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    lifecycle.exit_demo(delete=True)
+    start_onshape_polling(request.app)
+
+    # Demo-database identities mean nothing in the real database.
+    response = RedirectResponse(url="/login", status_code=302)
+    _clear_identity_cookies(response)
+    return response
+
+
+@router.post("/settings/demo/delete")
+async def settings_demo_delete(request: Request, db: DbSession) -> RedirectResponse:
+    """Delete an inactive demo database file."""
+    from opal.core import lifecycle
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    # Demo currently active -> no-op; use exit instead
+    with contextlib.suppress(RuntimeError):
+        lifecycle.delete_demo_file()
+    return RedirectResponse(url="/settings", status_code=302)
+
+
+@router.post("/settings/factory-reset")
+async def settings_factory_reset(
+    request: Request, db: DbSession, confirm: str = Form("")
+) -> RedirectResponse:
+    """Wipe the instance back to first-run state. Requires typing RESET."""
+    from opal.api.app import start_onshape_polling
+    from opal.core import lifecycle
+
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    if confirm.strip() != "RESET":
+        return RedirectResponse(url="/settings", status_code=302)
+
+    logging.getLogger("opal.web").warning("FACTORY RESET initiated from settings")
+    lifecycle.factory_reset()
+    start_onshape_polling(request.app)
+
+    response = RedirectResponse(url="/setup", status_code=302)
+    _clear_identity_cookies(response)
+    return response
 
 
 def _onshape_form_context(request: Request, db: DbSession) -> dict[str, Any]:
@@ -3811,13 +3915,13 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
     """HTMX: add an Onshape document from a pasted URL."""
     import asyncio
 
-    from opal.config import get_active_project, get_active_settings
+    from opal.config import get_active_project, get_active_settings, save_project_to_db
     from opal.integrations.onshape.client import (
         OnshapeApiError,
         OnshapeClient,
         parse_onshape_url,
     )
-    from opal.project import OnshapeDocumentRef, save_project_config
+    from opal.project import OnshapeDocumentRef, ProjectConfig
 
     settings = get_active_settings()
     project = get_active_project()
@@ -3838,8 +3942,8 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
         return templates.TemplateResponse("settings/onshape_documents.html", context)
 
     if not project:
-        context["onshape_doc_error"] = "No project configured"
-        return templates.TemplateResponse("settings/onshape_documents.html", context)
+        # Adding an Onshape document shouldn't require the wizard first
+        project = ProjectConfig(name="OPAL")
 
     parsed = parse_onshape_url(url)
     if not parsed:
@@ -3902,7 +4006,8 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
         auto_sync=True,
     )
     project.onshape.documents.append(doc_ref)
-    save_project_config(project)
+    save_project_to_db(db, project)
+    db.commit()
 
     context["onshape_documents"] = project.onshape.documents
     context["onshape_doc_success"] = f"Added '{doc_name}' ({element_type.replace('_', ' ')})"
@@ -3912,8 +4017,7 @@ async def settings_onshape_add_document(request: Request, db: DbSession) -> HTML
 @router.post("/settings/onshape/documents/remove", response_class=HTMLResponse)
 async def settings_onshape_remove_document(request: Request, db: DbSession) -> HTMLResponse:
     """HTMX: remove an Onshape document from config."""
-    from opal.config import get_active_project, get_active_settings
-    from opal.project import save_project_config
+    from opal.config import get_active_project, get_active_settings, save_project_to_db
 
     settings = get_active_settings()
     project = get_active_project()
@@ -3939,7 +4043,8 @@ async def settings_onshape_remove_document(request: Request, db: DbSession) -> H
             for d in project.onshape.documents
             if not (d.document_id == document_id and d.element_id == element_id)
         ]
-        save_project_config(project)
+        save_project_to_db(db, project)
+        db.commit()
 
         if removed_name:
             context["onshape_doc_success"] = f"Removed '{removed_name}'"

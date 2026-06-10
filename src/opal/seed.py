@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -44,7 +43,7 @@ from opal.db.models.risk import RiskStatus
 
 def seed_database(db: Session) -> None:
     """Populate database with Project Kestrel seed data."""
-    _write_project_yaml()
+    _seed_project_config(db)
     _seed_users(db)
     workcenters = _seed_workcenters(db)
     suppliers = _seed_suppliers(db)
@@ -149,16 +148,16 @@ def _seed_users(db: Session) -> None:
     db.flush()
 
 
-def _write_project_yaml() -> None:
-    """Write the Project Kestrel opal.project.yaml next to the running project."""
-    from opal.project import find_project_config
+def _seed_project_config(db: Session) -> None:
+    """Store the Kestrel project config in the database (never on disk)."""
+    import yaml
 
-    config_path = find_project_config()
-    if config_path is None:
-        config_path = Path.cwd() / "opal.project.yaml"
+    from opal.config import save_project_to_db
+    from opal.project import ProjectConfig
 
-    config_path.write_text(_PROJECT_YAML)
-    print(f"  Wrote {config_path}")
+    config = ProjectConfig(**yaml.safe_load(_PROJECT_YAML))
+    save_project_to_db(db, config)
+    print(f"  Stored project config '{config.name}' in the database")
 
 
 # ---------------------------------------------------------------------------

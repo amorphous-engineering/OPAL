@@ -167,8 +167,14 @@ def get_engine():
 
 
 def reinitialize_engine():
-    """Reinitialize the engine (call after configure_for_project)."""
+    """Reinitialize the engine (call after configure_for_project).
+
+    Disposes the old engine first so SQLite file handles are released —
+    required before deleting or replacing a database file.
+    """
     global _engine, _session_local
+    if _engine is not None:
+        _engine.dispose()
     _engine = None
     _session_local = None
 
@@ -227,6 +233,21 @@ def init_database(engine=None) -> None:
         logger.info("Running database migrations...")
         _run_alembic_upgrade(engine)
         logger.info("Database migrations complete.")
+
+
+def stamp_head(engine, purge: bool = False) -> None:
+    """Stamp the alembic version table at head (public wrapper).
+
+    Args:
+        engine: SQLAlchemy engine.
+        purge: Delete existing version rows first (used by factory reset).
+    """
+    from alembic import command
+
+    cfg = _get_alembic_config(engine)
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        command.stamp(cfg, "head", purge=purge)
 
 
 def _get_alembic_config(engine=None):
