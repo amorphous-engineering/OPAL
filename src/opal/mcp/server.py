@@ -1172,8 +1172,6 @@ async def _create_part(db, args: dict) -> list[TextContent]:
         unit_of_measure=args.get("unit_of_measure", "each"),
         tier=tier,
         parent_id=parent_id,
-        # Tier 2 (Ground) parts are tooling/GSE by definition
-        is_tooling=tier == 2,
     )
     db.add(part)
     db.flush()
