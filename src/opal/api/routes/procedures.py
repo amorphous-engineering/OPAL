@@ -10,6 +10,7 @@ from sqlalchemy import func
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import AuditContext, get_model_dict, log_create, log_delete, log_update
+from opal.core.part_lifecycle import DraftPartsBlocked, draft_parts_in
 from opal.db.models import Kit, Part, ProcedureOutput
 from opal.db.models.procedure import (
     MasterProcedure,
@@ -802,6 +803,24 @@ def publish_version(
 
     if not steps:
         raise HTTPException(status_code=400, detail="Cannot publish procedure with no steps")
+
+    # Publish is the procedure's commitment moment — its kit and outputs
+    # must not hold draft parts (authoring with drafts is legal; executing
+    # isn't). Raises DraftPartsBlocked -> 409 with the draft list.
+    publish_step_ids = [s.id for s in steps]
+    referenced_parts = [
+        k.part for k in db.query(Kit).filter(Kit.procedure_id == procedure_id).all()
+    ]
+    referenced_parts += [
+        sk.part for sk in db.query(StepKit).filter(StepKit.step_id.in_(publish_step_ids)).all()
+    ]
+    referenced_parts += [
+        o.part
+        for o in db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == procedure_id)
+    ]
+    drafts = draft_parts_in(referenced_parts)
+    if drafts:
+        raise DraftPartsBlocked(f"publish of procedure {procedure_id}", drafts)
 
     # Get next version number
     max_version = (

@@ -390,7 +390,10 @@ async function addLine(event) {
             window.location.reload();
         } else {
             const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to add line');
+            const cause = 'activated during PO {{ purchase.reference or purchase.id }} line add';
+            if (!renderDraftPartsBlocker(errorDiv, error.detail, cause, () => addLine(event))) {
+                errorDiv.textContent = formatApiError(error.detail, 'Failed to add line');
+            }
             errorDiv.style.display = 'block';
         }
     } catch (e) {
@@ -448,7 +451,10 @@ async function receiveItems(event) {
             window.location.reload();
         } else {
             const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to receive items');
+            const cause = 'activated during receive against PO {{ purchase.reference or purchase.id }}';
+            if (!renderDraftPartsBlocker(errorDiv, error.detail, cause, () => receiveItems(event))) {
+                errorDiv.textContent = formatApiError(error.detail, 'Failed to receive items');
+            }
             errorDiv.style.display = 'block';
         }
     } catch (e) {

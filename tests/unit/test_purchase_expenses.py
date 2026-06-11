@@ -12,7 +12,9 @@ from tests.conftest import login
 def _create_part(client: TestClient, **kwargs: object) -> dict:
     resp = client.post("/api/parts", json=kwargs)
     assert resp.status_code == 201, resp.text
-    return resp.json()
+    part = resp.json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+    return part
 
 
 def _create_and_order_po(client: TestClient, auth_headers: dict, lines: list[dict]) -> dict:

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.orm import Session
 
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
+from opal.core.numbering import next_part_number
 from opal.integrations.onshape.client import OnshapeClient
 from opal.integrations.onshape.models import OnshapeBOMItem
 from opal.project import OnshapeDocumentRef
@@ -40,23 +41,6 @@ def _compute_push_hash(
         sort_keys=True,
     )
     return hashlib.sha256(data.encode()).hexdigest()
-
-
-def _generate_internal_pn(db: Session, tier: int) -> str:
-    """Generate the next internal part number for a given tier.
-
-    Re-uses the same logic as the parts API route.
-    """
-    from opal.config import get_active_project
-    from opal.db.models.part import Part
-
-    project = get_active_project()
-    if not project:
-        count = db.query(Part).filter(Part.tier == tier, Part.deleted_at.is_(None)).count()
-        return f"PN-{tier}-{str(count + 1).zfill(4)}"
-
-    count = db.query(Part).filter(Part.tier == tier, Part.deleted_at.is_(None)).count()
-    return project.generate_part_number(tier, count + 1)
 
 
 def _fetch_part_studio_items(
@@ -365,7 +349,7 @@ def pull_sync(
                     root_part.name = doc_ref.name
                     log_update(db, root_part, old_values, user_id)
             else:
-                internal_pn = _generate_internal_pn(db, default_tier)
+                internal_pn = next_part_number(db, default_tier)
                 root_part = Part(
                     name=doc_ref.name,
                     internal_pn=internal_pn,
@@ -500,7 +484,7 @@ def pull_sync(
                     seen_source_eids.add(source_eid)
                     continue
 
-                internal_pn = _generate_internal_pn(db, default_tier)
+                internal_pn = next_part_number(db, default_tier)
                 part = Part(
                     name=item.part_name,
                     description=item.description or None,

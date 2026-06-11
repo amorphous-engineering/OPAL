@@ -244,7 +244,10 @@ async function createPO(event) {
             window.location.href = '/purchases/' + po.id;
         } else {
             const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to create purchase order');
+            const cause = 'activated during PO ' + (form.reference.value || 'create') + ' line add';
+            if (!renderDraftPartsBlocker(errorDiv, error.detail, cause, () => createPO(event))) {
+                errorDiv.textContent = formatApiError(error.detail, 'Failed to create purchase order');
+            }
             errorDiv.style.display = 'block';
         }
     } catch (e) {

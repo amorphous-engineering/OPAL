@@ -89,7 +89,31 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         comment="Parent assembly this part belongs to",
     )
 
+    # Identity lifecycle: parts are born draft (PN/tier mutable, deletable)
+    # and become active only by a deliberate activation — never as a side
+    # effect. An active part's identity (PN, tier) is immutable forever.
+    lifecycle_state: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="draft",
+        server_default="draft",
+        index=True,
+        comment="draft (identity mutable) or active (identity locked)",
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    activated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    activation_cause: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="What locked this part's identity (a part should explain why it locked)",
+    )
+
     # Relationships
+    activated_by: Mapped["User | None"] = relationship("User", foreign_keys=[activated_by_id])
     inventory_records: Mapped[list["InventoryRecord"]] = relationship(
         "InventoryRecord", back_populates="part", cascade="all, delete-orphan"
     )

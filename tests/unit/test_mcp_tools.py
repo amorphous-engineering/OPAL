@@ -38,6 +38,8 @@ def _make_part(db, **kwargs) -> Part:
         "name": "Widget",
         "internal_pn": f"PN-{kwargs.get('name', 'X')}",
         "tier": 1,
+        # Most tests model already-physical parts; drafts pass lifecycle_state="draft"
+        "lifecycle_state": "active",
     }
     defaults.update(kwargs)
     part = Part(**defaults)

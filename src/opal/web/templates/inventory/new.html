@@ -168,7 +168,14 @@ async function submitInventoryForm() {
             }
         } else {
             const error = await response.json();
-            alert('Error: ' + formatApiError(error.detail, 'Failed to add inventory'));
+            const resultDiv = document.getElementById('result-message');
+            if (renderDraftPartsBlocker(resultDiv, error.detail,
+                    'activated during inventory create', submitInventoryForm)) {
+                resultDiv.style.background = '';
+                resultDiv.style.borderColor = 'var(--status-warn)';
+            } else {
+                alert('Error: ' + formatApiError(error.detail, 'Failed to add inventory'));
+            }
         }
     } catch (e) {
         alert('Network error: ' + e.message);

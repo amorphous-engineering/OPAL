@@ -24,6 +24,7 @@ from opal.core.events import (
     emit_user_left,
 )
 from opal.core.genealogy import record_assembly_genealogy
+from opal.core.part_lifecycle import ensure_parts_active
 from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput
 from opal.db.models.execution import (
     InstanceStatus,
@@ -314,6 +315,13 @@ def create_instance(
             db.query(ProcedureOutput)
             .filter(ProcedureOutput.procedure_id == data.procedure_id)
             .all()
+        )
+        # An as-built allocation is a physical reference — draft output
+        # parts block it (raises DraftPartsBlocked -> 409)
+        ensure_parts_active(
+            db,
+            [output.part_id for output in outputs],
+            f"work order {work_order_number} as-built allocation",
         )
         for output in outputs:
             output_part = db.query(Part).filter(Part.id == output.part_id).first()
@@ -1375,6 +1383,10 @@ def consume_kit(
                 detail=f"Insufficient quantity at {inv_record.location} (have {inv_record.quantity}, need {item.quantity})",
             )
 
+        # Defense-in-depth: inventory only exists for active parts, but a
+        # consumption must never reference a draft
+        ensure_parts_active(db, [inv_record.part_id], "procedure consumption")
+
         # Deduct from inventory; SQL-side expression so concurrent
         # consumptions cannot lose updates via read-modify-write
         inv_record.quantity = InventoryRecord.quantity - Decimal(str(item.quantity))
@@ -1468,6 +1480,10 @@ def consume_step_parts(
             raise HTTPException(
                 status_code=400, detail=f"Invalid usage type: {item.usage_type}"
             ) from err
+
+        # Defense-in-depth: inventory only exists for active parts, but a
+        # consumption must never reference a draft
+        ensure_parts_active(db, [inv_record.part_id], "step consumption")
 
         # Only deduct from inventory if consume type (not tooling)
         if usage == UsageType.CONSUME:
@@ -1661,6 +1677,10 @@ def produce_output(
         part = db.query(Part).filter(Part.id == item.part_id).first()
         if not part:
             raise HTTPException(status_code=404, detail=f"Part {item.part_id} not found")
+
+        # A produced as-built instance is a physical reference — draft
+        # parts block it (raises DraftPartsBlocked -> 409)
+        ensure_parts_active(db, [item.part_id], "production output (as-built)")
 
         opal_num = generate_opal_number(db)
 

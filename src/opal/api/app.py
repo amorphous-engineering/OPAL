@@ -7,13 +7,15 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from opal.api.middleware import setup_middleware
 from opal.api.routes import router as api_router
 from opal.config import get_settings
+from opal.core.part_lifecycle import DraftPartsBlocked
 from opal.web.routes import router as web_router
 
 # Template directory
@@ -110,6 +112,12 @@ def create_app() -> FastAPI:
 
     # Setup middleware
     setup_middleware(app)
+
+    # Draft parts block physical/financial commitments everywhere with one
+    # structured 409 (error=draft_parts_blocked, draft_parts list, remedy)
+    @app.exception_handler(DraftPartsBlocked)
+    async def draft_parts_blocked_handler(request: Request, exc: DraftPartsBlocked) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": exc.payload()})
 
     # Mount static files
     if STATIC_DIR.exists():

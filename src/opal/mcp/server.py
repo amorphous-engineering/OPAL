@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -18,6 +19,20 @@ from opal.core.designators import (
     generate_issue_number,
     generate_requirement_number,
     generate_risk_number,
+)
+from opal.core.numbering import (
+    PartNumberError,
+    next_part_number,
+    peek_next_part_number,
+    pn_exists,
+    register_part_number,
+)
+from opal.core.part_lifecycle import (
+    DraftPartsBlocked,
+    PartLifecycleError,
+    activate_part,
+    draft_parts_in,
+    ensure_parts_active,
 )
 from opal.db.base import LifecycleState, SessionLocal
 from opal.db.models import (
@@ -62,6 +77,14 @@ def get_db():
 def json_response(data: Any) -> list[TextContent]:
     """Create a JSON text response."""
     return [TextContent(type="text", text=json.dumps(data, indent=2, default=str))]
+
+
+# Remedy named in draft_parts_blocked errors so agents resolve the blocker
+# explicitly in-transcript rather than the system mutating state silently.
+_MCP_DRAFT_REMEDY = (
+    "call activate_part(part_id, user_id) for each draft part "
+    "(or bulk_activate_parts), then retry this tool"
+)
 
 
 # ============ TOOLS ============
@@ -110,13 +133,25 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="create_part",
-            description="Create a new part in the system",
+            description=(
+                "Create a new part in the system. Parts are born draft "
+                "(identity mutable); activation is a deliberate human act — "
+                "agents create and structure drafts, a human activates via "
+                "activate_part."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "name": {
                         "type": "string",
                         "description": "Part name",
+                    },
+                    "internal_pn": {
+                        "type": "string",
+                        "description": (
+                            "Optional internal part number override; must match the "
+                            "project numbering format (auto-generated if omitted)"
+                        ),
                     },
                     "category": {
                         "type": "string",
@@ -793,7 +828,11 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="preview_part_number",
-            description="Preview what a part number would look like for a given tier and sequence",
+            description=(
+                "Preview a part number for a tier. Without 'sequence', returns "
+                "the actual next number that would be assigned (without "
+                "consuming it); with 'sequence', formats that specific number."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -803,10 +842,88 @@ async def list_tools() -> list[Tool]:
                     },
                     "sequence": {
                         "type": "integer",
-                        "description": "Sequence number",
+                        "description": "Sequence number (optional — omit to preview the next)",
                     },
                 },
-                "required": ["tier", "sequence"],
+                "required": ["tier"],
+            },
+        ),
+        Tool(
+            name="activate_part",
+            description=(
+                "Activate a draft part, locking its identity (internal_pn, tier) "
+                "permanently. POLICY: agents draft, humans activate — requires "
+                "the user_id of a real human user who approved the activation."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "part_id": {"type": "integer", "description": "The part ID"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user approving the activation",
+                    },
+                    "cause": {
+                        "type": "string",
+                        "description": "Why the identity is locking (recorded in the audit trail)",
+                    },
+                },
+                "required": ["part_id", "user_id"],
+            },
+        ),
+        Tool(
+            name="bulk_activate_parts",
+            description=(
+                "Activate multiple draft parts in one signed act (e.g. import a "
+                "CAD tree as drafts, then bulk-activate the already-built "
+                "subset). Skips parts that are already active, reporting each. "
+                "POLICY: agents draft, humans activate — requires a real "
+                "human user_id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "part_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "IDs of the parts to activate",
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user approving the activation",
+                    },
+                    "cause": {
+                        "type": "string",
+                        "description": "Why these identities are locking (recorded per part)",
+                    },
+                },
+                "required": ["part_ids", "user_id"],
+            },
+        ),
+        Tool(
+            name="reserve_part_numbers",
+            description=(
+                "Reserve a block of part numbers by creating real draft rows "
+                "(named {name_prefix}-{sequence}). Serves label pre-printing "
+                "and vendor pre-allocation; unused reservations are visibly "
+                "stale drafts a human can delete — their numbers never reissue."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tier": {"type": "integer", "default": 1, "description": "Tier level"},
+                    "count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500,
+                        "description": "How many numbers to reserve",
+                    },
+                    "name_prefix": {
+                        "type": "string",
+                        "description": "Name prefix for the draft rows (default: RESERVED)",
+                    },
+                },
+                "required": ["count"],
             },
         ),
         # Requirements
@@ -1294,7 +1411,9 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Create multiple parts in one transaction. Each entry follows "
                 "the same schema as create_part. Returns the created parts "
-                "with their assigned internal_pn values."
+                "with their assigned internal_pn values. Parts are born draft; "
+                "activation is a deliberate human act (activate_part / "
+                "bulk_activate_parts)."
             ),
             inputSchema={
                 "type": "object",
@@ -1306,6 +1425,13 @@ async def list_tools() -> list[Tool]:
                             "type": "object",
                             "properties": {
                                 "name": {"type": "string"},
+                                "internal_pn": {
+                                    "type": "string",
+                                    "description": (
+                                        "Optional PN override; must match the project "
+                                        "numbering format"
+                                    ),
+                                },
                                 "category": {"type": "string"},
                                 "tier": {"type": "integer", "default": 1},
                                 "tracking_type": {
@@ -1534,6 +1660,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _get_project_info(db, arguments)
         elif name == "preview_part_number":
             return await _preview_part_number(db, arguments)
+        elif name == "activate_part":
+            return await _activate_part(db, arguments)
+        elif name == "bulk_activate_parts":
+            return await _bulk_activate_parts(db, arguments)
+        elif name == "reserve_part_numbers":
+            return await _reserve_part_numbers(db, arguments)
 
         # Requirements
         elif name == "list_requirements":
@@ -1645,6 +1777,7 @@ async def _list_parts(db, args: dict) -> list[TextContent]:
                     "description": p.description,
                     "tier": p.tier,
                     "parent_id": p.parent_id,
+                    "lifecycle_state": p.lifecycle_state,
                 }
                 for p in parts
             ],
@@ -1701,6 +1834,9 @@ async def _get_part(db, args: dict) -> list[TextContent]:
             "tier_name": tier_name,
             "parent_id": part.parent_id,
             "unit_of_measure": part.unit_of_measure,
+            "lifecycle_state": part.lifecycle_state,
+            "activated_at": part.activated_at.isoformat() if part.activated_at else None,
+            "activation_cause": part.activation_cause,
             "created_at": part.created_at.isoformat(),
             "children": [
                 {"id": c.id, "internal_pn": c.internal_pn, "name": c.name} for c in children
@@ -1719,17 +1855,6 @@ async def _get_part(db, args: dict) -> list[TextContent]:
     )
 
 
-def _generate_internal_pn(db, tier: int) -> str:
-    """Generate next internal part number for a given tier."""
-    project = get_active_project()
-    if not project:
-        count = db.query(Part).filter(Part.tier == tier, Part.deleted_at.is_(None)).count()
-        return f"PN-{tier}-{str(count + 1).zfill(4)}"
-
-    count = db.query(Part).filter(Part.tier == tier, Part.deleted_at.is_(None)).count()
-    return project.generate_part_number(tier, count + 1)
-
-
 def _tier_name(tier: int) -> str | None:
     """Look up the configured display name for a tier, if any."""
     project = get_active_project()
@@ -1743,11 +1868,23 @@ def _tier_name(tier: int) -> str | None:
 def _build_part(db, args: dict) -> Part:
     """Construct (but do not commit) a Part from tool args.
 
-    Generates the internal_pn. Shared by create_part and bulk_create_parts.
-    The caller is responsible for db.add / flush / log_create / commit.
+    Assigns the internal_pn (validated override or next auto number).
+    Shared by create_part and bulk_create_parts. The caller is responsible
+    for db.add / flush / log_create / commit. Raises PartNumberError on a
+    malformed or already-taken override.
     """
     tier = args.get("tier", 1)
-    internal_pn = _generate_internal_pn(db, tier)
+    override = args.get("internal_pn")
+    if override:
+        if pn_exists(db, override):
+            raise PartNumberError(
+                f"Part number {override} is already taken (numbers are never "
+                "reused, including by deleted parts)"
+            )
+        register_part_number(db, tier, override)
+        internal_pn = override
+    else:
+        internal_pn = next_part_number(db, tier)
 
     raw_tracking = args.get("tracking_type")
     tracking_type = TrackingType(raw_tracking) if raw_tracking else None
@@ -1778,7 +1915,10 @@ async def _create_part(db, args: dict) -> list[TextContent]:
             return json_response({"error": f"Parent part {parent_id} not found"})
 
     tier = args.get("tier", 1)
-    part = _build_part(db, args)
+    try:
+        part = _build_part(db, args)
+    except PartNumberError as e:
+        return json_response({"error": str(e)})
     db.add(part)
     db.flush()
     log_create(db, part)
@@ -1788,7 +1928,7 @@ async def _create_part(db, args: dict) -> list[TextContent]:
     return json_response(
         {
             "success": True,
-            "message": f"Created part '{part.name}' with ID {part.id} ({part.internal_pn})",
+            "message": f"Created draft part '{part.name}' with ID {part.id} ({part.internal_pn})",
             "part": {
                 "id": part.id,
                 "internal_pn": part.internal_pn,
@@ -1797,6 +1937,7 @@ async def _create_part(db, args: dict) -> list[TextContent]:
                 "tier": tier,
                 "tier_name": _tier_name(tier),
                 "parent_id": parent_id,
+                "lifecycle_state": part.lifecycle_state,
             },
         }
     )
@@ -2292,27 +2433,150 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
 
 
 async def _preview_part_number(db, args: dict) -> list[TextContent]:
-    """Preview a part number for a given tier and sequence."""
-    project = get_active_project()
-    if not project:
-        return json_response({"error": "No project loaded"})
+    """Preview a part number: a specific sequence, or the actual next number.
 
+    Never consumes a number — creation (or an explicit reservation) does.
+    """
+    project = get_active_project()
     tier = args["tier"]
-    sequence = args["sequence"]
+    sequence = args.get("sequence")
 
     try:
-        part_number = project.generate_part_number(tier, sequence)
-        tier_config = project.get_tier(tier)
+        if sequence is None:
+            part_number, sequence = peek_next_part_number(db, tier)
+        else:
+            if not project:
+                return json_response({"error": "No project loaded"})
+            part_number = project.generate_part_number(tier, sequence)
         return json_response(
             {
                 "part_number": part_number,
                 "tier": tier,
-                "tier_name": tier_config.name if tier_config else None,
+                "tier_name": _tier_name(tier),
                 "sequence": sequence,
             }
         )
     except ValueError as e:
         return json_response({"error": str(e)})
+
+
+async def _activate_part(db, args: dict) -> list[TextContent]:
+    """Activate a draft part. Agents draft, humans activate."""
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    part = db.query(Part).filter(Part.id == args["part_id"], Part.deleted_at.is_(None)).first()
+    if not part:
+        return json_response({"error": f"Part {args['part_id']} not found"})
+
+    cause = args.get("cause") or f"manual activation via MCP by {user.name}"
+    old_values = get_model_dict(part)
+    try:
+        activate_part(db, part, user.id, cause)
+    except PartLifecycleError as e:
+        return json_response({"error": str(e)})
+    log_update(db, part, old_values, user.id)
+    db.commit()
+    db.refresh(part)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"{part.internal_pn} activated by {user.name}: {part.activation_cause}",
+            "part": {
+                "id": part.id,
+                "internal_pn": part.internal_pn,
+                "name": part.name,
+                "lifecycle_state": part.lifecycle_state,
+                "activated_at": part.activated_at.isoformat(),
+                "activation_cause": part.activation_cause,
+            },
+        }
+    )
+
+
+async def _bulk_activate_parts(db, args: dict) -> list[TextContent]:
+    """Activate multiple draft parts in one signed act."""
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    cause = args.get("cause") or f"bulk activation via MCP by {user.name}"
+    activated: list[dict] = []
+    skipped: list[dict] = []
+    for part_id in args["part_ids"]:
+        part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
+        if not part:
+            skipped.append({"id": part_id, "reason": "not found"})
+            continue
+        old_values = get_model_dict(part)
+        try:
+            activate_part(db, part, user.id, cause)
+        except PartLifecycleError as e:
+            skipped.append({"id": part_id, "internal_pn": part.internal_pn, "reason": str(e)})
+            continue
+        log_update(db, part, old_values, user.id)
+        activated.append({"id": part.id, "internal_pn": part.internal_pn, "name": part.name})
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"{len(activated)} part(s) activated by {user.name}, "
+            f"{len(skipped)} skipped",
+            "activated": activated,
+            "skipped": skipped,
+        }
+    )
+
+
+async def _reserve_part_numbers(db, args: dict) -> list[TextContent]:
+    """Reserve a block of part numbers as real draft rows."""
+    tier = args.get("tier", 1)
+    count = args["count"]
+    if not 1 <= count <= 500:
+        return json_response({"error": "count must be between 1 and 500"})
+    prefix = args.get("name_prefix") or "RESERVED"
+
+    parts: list[Part] = []
+    try:
+        for _ in range(count):
+            pn = next_part_number(db, tier)
+            # Name from the PN's sequence digits so names inherit PN uniqueness
+            seq_match = re.search(r"(\d+)$", pn)
+            part = Part(
+                name=f"{prefix}-{seq_match.group(1) if seq_match else pn}",
+                internal_pn=pn,
+                tier=tier,
+            )
+            db.add(part)
+            db.flush()
+            log_create(db, part)
+            parts.append(part)
+    except ValueError as e:
+        db.rollback()
+        return json_response({"error": str(e)})
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Reserved {len(parts)} draft part number(s) in tier {tier}: "
+            f"{parts[0].internal_pn} .. {parts[-1].internal_pn}",
+            "first_pn": parts[0].internal_pn,
+            "last_pn": parts[-1].internal_pn,
+            "parts": [
+                {
+                    "id": p.id,
+                    "internal_pn": p.internal_pn,
+                    "name": p.name,
+                    "lifecycle_state": p.lifecycle_state,
+                }
+                for p in parts
+            ],
+        }
+    )
 
 
 # ============ REQUIREMENTS TOOLS ============
@@ -4037,6 +4301,23 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
     if not steps:
         return json_response({"error": "Cannot publish procedure with no steps"})
 
+    # Publish is the procedure's commitment moment — its kit and outputs
+    # must not hold draft parts (authoring with drafts is legal; executing
+    # isn't).
+    step_ids_for_kits = [s.id for s in steps]
+    kit_parts = [k.part for k in db.query(Kit).filter(Kit.procedure_id == procedure.id).all()]
+    kit_parts += [
+        sk.part for sk in db.query(StepKit).filter(StepKit.step_id.in_(step_ids_for_kits)).all()
+    ]
+    kit_parts += [
+        o.part
+        for o in db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == procedure.id)
+    ]
+    drafts = draft_parts_in(kit_parts)
+    if drafts:
+        blocked = DraftPartsBlocked(f"publish of procedure {procedure.id}", drafts)
+        return json_response(blocked.payload(remedy=_MCP_DRAFT_REMEDY))
+
     max_version = (
         db.query(func.max(ProcedureVersion.version_number))
         .filter(ProcedureVersion.procedure_id == procedure.id)
@@ -4466,19 +4747,23 @@ async def _bulk_create_parts(db, args: dict) -> list[TextContent]:
                 )
 
     created = []
-    for pa in part_args:
-        part = _build_part(db, pa)
-        db.add(part)
-        db.flush()
-        log_create(db, part)
-        created.append(part)
+    try:
+        for pa in part_args:
+            part = _build_part(db, pa)
+            db.add(part)
+            db.flush()
+            log_create(db, part)
+            created.append(part)
+    except PartNumberError as e:
+        db.rollback()
+        return json_response({"error": f"Part at index {len(created)}: {e} — batch rejected"})
 
     db.commit()
 
     return json_response(
         {
             "success": True,
-            "message": f"Created {len(created)} part(s)",
+            "message": f"Created {len(created)} draft part(s)",
             "count": len(created),
             "parts": [
                 {
@@ -4490,6 +4775,7 @@ async def _bulk_create_parts(db, args: dict) -> list[TextContent]:
                     "tier_name": _tier_name(p.tier),
                     "is_tooling": p.is_tooling,
                     "parent_id": p.parent_id,
+                    "lifecycle_state": p.lifecycle_state,
                 }
                 for p in created
             ],
@@ -4519,6 +4805,13 @@ async def _create_purchase_order(db, args: dict) -> list[TextContent]:
         part = db.query(Part).filter(Part.id == line["part_id"], Part.deleted_at.is_(None)).first()
         if not part:
             return json_response({"error": f"Part {line['part_id']} not found"})
+
+    # A PO line is a financial commitment — draft parts block it; activation
+    # never happens as a side effect.
+    try:
+        ensure_parts_active(db, [line["part_id"] for line in line_args], "purchase order line add")
+    except DraftPartsBlocked as e:
+        return json_response(e.payload(remedy=_MCP_DRAFT_REMEDY))
 
     # POs created outside this tool (UI, seed data) use the same PO-NNNN
     # format without consuming the designator sequence — skip past any

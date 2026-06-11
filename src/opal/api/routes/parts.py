@@ -2,6 +2,7 @@
 
 import csv
 import io
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -11,7 +12,24 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
+from opal.config import get_active_project
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
+from opal.core.numbering import (
+    PartNumberError,
+    next_part_number,
+    peek_next_part_number,
+    pn_exists,
+    register_part_number,
+    validate_part_number,
+)
+from opal.core.part_lifecycle import (
+    PART_DRAFT,
+    PART_LIFECYCLE_STATES,
+    PartLifecycleError,
+    activate_part,
+    ensure_identity_mutable,
+    reference_counts,
+)
 from opal.db.models import InventoryRecord, Part, Supplier, SupplierPart
 
 router = APIRouter()
@@ -73,6 +91,9 @@ class PartResponse(BaseModel):
     calibration_interval_days: int | None = None
     metadata: dict[str, Any] | None
     total_quantity: Decimal
+    lifecycle_state: str
+    activated_at: str | None = None
+    activation_cause: str | None = None
     created_at: str
     updated_at: str
 
@@ -125,6 +146,9 @@ def get_part_with_quantity(db: DbSession, part: Part) -> PartResponse:
         calibration_interval_days=part.calibration_interval_days,
         metadata=part.metadata_,
         total_quantity=total,
+        lifecycle_state=part.lifecycle_state,
+        activated_at=part.activated_at.isoformat() if part.activated_at else None,
+        activation_cause=part.activation_cause,
         created_at=part.created_at.isoformat(),
         updated_at=part.updated_at.isoformat(),
     )
@@ -144,9 +168,18 @@ def list_parts(
         False, description="Only show parts with no parent (top-level assemblies)"
     ),
     low_stock: bool = Query(False, description="Only show parts below reorder point"),
+    state: str | None = Query(None, description="Filter by lifecycle state (draft/active)"),
 ) -> PartListResponse:
     """List all parts with optional filtering."""
     query = db.query(Part).filter(Part.deleted_at.is_(None))
+
+    if state:
+        if state not in PART_LIFECYCLE_STATES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown lifecycle state '{state}' (expected draft or active)",
+            )
+        query = query.filter(Part.lifecycle_state == state)
 
     # Apply search filter
     if search:
@@ -199,19 +232,28 @@ def list_parts(
     )
 
 
-def generate_internal_pn(db: DbSession, tier: int) -> str:
-    """Generate next internal part number for a given tier."""
-    from opal.config import get_active_project
+def assign_internal_pn(db: DbSession, tier: int, override: str | None) -> str:
+    """Resolve a part's internal PN: validated override or the next number.
 
-    project = get_active_project()
-    if not project:
-        # Fallback: simple sequential numbering
-        count = db.query(Part).filter(Part.tier == tier, Part.deleted_at.is_(None)).count()
-        return f"PN-{tier}-{str(count + 1).zfill(4)}"
+    Overrides are validated strictly against the project numbering format and
+    checked for uniqueness across ALL rows including soft-deleted ones —
+    retired numbers never reissue.
+    """
+    if not override:
+        return next_part_number(db, tier)
 
-    # Count existing parts in this tier to get next sequence
-    count = db.query(Part).filter(Part.tier == tier, Part.deleted_at.is_(None)).count()
-    return project.generate_part_number(tier, count + 1)
+    try:
+        validate_part_number(get_active_project(), tier, override)
+    except PartNumberError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    if pn_exists(db, override):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Part number {override} is already taken (numbers are never reused, "
+            "including by deleted parts)",
+        )
+    register_part_number(db, tier, override)
+    return override
 
 
 @router.post("", response_model=PartResponse, status_code=status.HTTP_201_CREATED)
@@ -220,7 +262,7 @@ def create_part(
     part_in: PartCreate,
     user_id: CurrentUserId,
 ) -> PartResponse:
-    """Create a new part."""
+    """Create a new part. Parts are born draft; activation is a deliberate act."""
     # Validate parent exists if specified
     if part_in.parent_id is not None:
         parent = (
@@ -232,10 +274,7 @@ def create_part(
                 detail=f"Parent part {part_in.parent_id} not found",
             )
 
-    # Generate internal_pn if not provided
-    internal_pn = part_in.internal_pn
-    if not internal_pn:
-        internal_pn = generate_internal_pn(db, part_in.tier)
+    internal_pn = assign_internal_pn(db, part_in.tier, part_in.internal_pn)
 
     part = Part(
         name=part_in.name,
@@ -259,6 +298,132 @@ def create_part(
     log_create(db, part, user_id)
     db.commit()
 
+    return get_part_with_quantity(db, part)
+
+
+class NextPnResponse(BaseModel):
+    """Preview of the next part number for a tier."""
+
+    part_number: str
+    sequence: int
+    tier: int
+    tier_name: str | None = None
+
+
+@router.get("/next-pn", response_model=NextPnResponse)
+def preview_next_pn(
+    db: DbSession,
+    tier: int = Query(..., description="Tier level to preview the next number for"),
+) -> NextPnResponse:
+    """Preview the next part number for a tier without consuming it."""
+    try:
+        part_number, sequence = peek_next_part_number(db, tier)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    project = get_active_project()
+    tier_config = project.get_tier(tier) if project else None
+    return NextPnResponse(
+        part_number=part_number,
+        sequence=sequence,
+        tier=tier,
+        tier_name=tier_config.name if tier_config else None,
+    )
+
+
+class ReserveRequest(BaseModel):
+    """Request to reserve a block of part numbers as draft parts."""
+
+    tier: int = 1
+    count: int
+    name_prefix: str | None = None
+
+
+class ReserveResponse(BaseModel):
+    """A reserved block of draft parts."""
+
+    parts: list[PartResponse]
+    first_pn: str
+    last_pn: str
+
+
+@router.post("/reserve", response_model=ReserveResponse, status_code=status.HTTP_201_CREATED)
+def reserve_part_numbers(
+    db: DbSession,
+    reserve_in: ReserveRequest,
+    user_id: CurrentUserId,
+) -> ReserveResponse:
+    """Reserve a block of part numbers as real draft rows.
+
+    Serves label pre-printing and vendor pre-allocation: unused reservations
+    are visibly stale drafts a human can soft-delete, not invisible holes.
+    """
+    if not 1 <= reserve_in.count <= 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="count must be between 1 and 500",
+        )
+
+    prefix = reserve_in.name_prefix or "RESERVED"
+    parts: list[Part] = []
+    try:
+        for _ in range(reserve_in.count):
+            pn = next_part_number(db, reserve_in.tier)
+            # Name from the PN's sequence digits so names inherit PN uniqueness
+            seq_match = re.search(r"(\d+)$", pn)
+            part = Part(
+                name=f"{prefix}-{seq_match.group(1) if seq_match else pn}",
+                internal_pn=pn,
+                tier=reserve_in.tier,
+            )
+            db.add(part)
+            db.flush()
+            log_create(db, part, user_id)
+            parts.append(part)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    db.commit()
+    for part in parts:
+        db.refresh(part)
+
+    return ReserveResponse(
+        parts=[get_part_with_quantity(db, p) for p in parts],
+        first_pn=parts[0].internal_pn,
+        last_pn=parts[-1].internal_pn,
+    )
+
+
+class ActivateRequest(BaseModel):
+    """Request body for part activation."""
+
+    cause: str | None = None
+
+
+@router.post("/{part_id}/activate", response_model=PartResponse)
+def activate_part_endpoint(
+    db: DbSession,
+    part_id: int,
+    user_id: CurrentUserId,
+    activate_in: ActivateRequest | None = None,
+) -> PartResponse:
+    """Activate a draft part, locking its identity permanently."""
+    part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
+    if not part:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Part {part_id} not found",
+        )
+
+    cause = (activate_in.cause if activate_in else None) or "manual activation from part page"
+    old_values = get_model_dict(part)
+    try:
+        activate_part(db, part, user_id, cause)
+    except PartLifecycleError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+    log_update(db, part, old_values, user_id)
+    db.commit()
+    db.refresh(part)
     return get_part_with_quantity(db, part)
 
 
@@ -351,6 +516,23 @@ def update_part(
     if "metadata" in update_data:
         update_data["metadata_"] = update_data.pop("metadata")
 
+    # Identity (PN, tier) is mutable only while draft
+    pn_change = "internal_pn" in update_data and update_data["internal_pn"] != part.internal_pn
+    tier_change = "tier" in update_data and update_data["tier"] != part.tier
+    if pn_change or tier_change:
+        try:
+            ensure_identity_mutable(part)
+        except PartLifecycleError as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+    if tier_change and not pn_change:
+        # Tier re-sync: the draft gets a fresh number from the new tier's
+        # counter; the old number is abandoned permanently (gaps are information)
+        update_data["internal_pn"] = next_part_number(db, update_data["tier"])
+    elif pn_change:
+        new_tier = update_data.get("tier", part.tier)
+        update_data["internal_pn"] = assign_internal_pn(db, new_tier, update_data["internal_pn"])
+
     for field, value in update_data.items():
         setattr(part, field, value)
 
@@ -369,12 +551,31 @@ def delete_part(
     part_id: int,
     user_id: CurrentUserId,
 ) -> None:
-    """Soft delete a part."""
+    """Soft delete a draft part. Its number is permanently retired, never reissued.
+
+    Referenced things leave the world by state transition, stillborn things
+    by soft delete — a part with any reference (even design-time) cannot be
+    deleted, and active parts never can.
+    """
     part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
     if not part:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Part {part_id} not found",
+        )
+
+    if part.lifecycle_state != PART_DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{part.internal_pn or part.id} is active and cannot be deleted",
+        )
+    refs = reference_counts(db, part)
+    if refs:
+        ref_list = ", ".join(f"{count} {name}" for name, count in refs.items())
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Draft part {part.internal_pn or part.id} is referenced ({ref_list}); "
+            "remove the references first",
         )
 
     log_delete(db, part, user_id)
@@ -605,7 +806,7 @@ def import_parts(
             continue
 
         try:
-            internal_pn = generate_internal_pn(db, part_in.tier)
+            internal_pn = next_part_number(db, part_in.tier)
             part = Part(
                 name=part_in.name,
                 internal_pn=internal_pn,
