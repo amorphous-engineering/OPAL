@@ -666,30 +666,33 @@ def _pn_segments(pn: str | None, tier_code: str | None) -> tuple[str, str, str] 
 # ============ PARTS ============
 
 
-@router.get("/parts", response_class=HTMLResponse)
-def parts_list(request: Request, db: DbSession) -> HTMLResponse:
-    """Parts list page."""
+def _parts_list_context(request: Request, db: DbSession) -> dict[str, Any]:
     from opal.config import get_active_project
 
     context = get_base_context(request, db, "Parts - OPAL")
 
-    # Get categories for filter dropdown
+    # Categories for the filter dropdown and the create form datalist
     categories = (
         db.query(Part.category)
         .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
         .distinct()
         .all()
     )
-    context["categories"] = sorted([c[0] for c in categories if c[0]])
-
-    # Get tiers from project config or use defaults
+    category_set = {c[0] for c in categories if c[0]}
     project = get_active_project()
-    if project:
-        context["tiers"] = project.tiers
-    else:
-        context["tiers"] = DEFAULT_TIERS
+    if project and project.categories:
+        category_set |= set(project.categories)
+    context["categories"] = sorted(category_set)
+    context["tiers"] = project.tiers if project else DEFAULT_TIERS
+    context["form_open"] = False
+    context["form_prefill"] = {}
+    return context
 
-    return templates.TemplateResponse("parts/list.html", context)
+
+@router.get("/parts", response_class=HTMLResponse)
+def parts_list(request: Request, db: DbSession) -> HTMLResponse:
+    """Parts list page; hosts the create overlay."""
+    return templates.TemplateResponse("parts/list.html", _parts_list_context(request, db))
 
 
 @router.get("/parts/table", response_class=HTMLResponse)
@@ -849,21 +852,29 @@ def parts_import(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/parts/new", response_class=HTMLResponse)
-def parts_new(request: Request, db: DbSession) -> HTMLResponse:
-    """New part form page — minting asks only what identity needs."""
-    from opal.config import get_active_project
+def parts_new(
+    request: Request, db: DbSession, parent_id: int | None = Query(None)
+) -> HTMLResponse:
+    """Deep link: the parts list with the create overlay open.
 
-    context = get_base_context(request, db, "New Part - OPAL")
+    The form never asks what the invoking context already knows —
+    ?parent_id pre-fills PARENT (create-from-BOM and friends).
+    """
+    context = _parts_list_context(request, db)
+    context["form_open"] = True
+    if parent_id is not None:
+        parent = db.query(Part).filter(Part.id == parent_id, Part.deleted_at.is_(None)).first()
+        if parent:
+            context["form_prefill"] = {
+                "parent_id": parent.id,
+                "parent_label": f"{parent.internal_pn} - {parent.name}",
+            }
+    return templates.TemplateResponse("parts/list.html", context)
 
-    project = get_active_project()
-    context["tiers"] = project.tiers if project else DEFAULT_TIERS
 
-    return templates.TemplateResponse("parts/new.html", context)
-
-
-@router.get("/parts/{part_id}", response_class=HTMLResponse)
-def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
-    """Part detail page."""
+def _parts_detail_response(
+    request: Request, db: DbSession, part_id: int, edit_open: bool = False
+) -> HTMLResponse:
     from opal.config import get_active_project
 
     part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
@@ -991,34 +1002,8 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
     context["part_reference_counts"] = refs
     context["part_is_referenced"] = bool(refs)
 
-    return templates.TemplateResponse("parts/detail.html", context)
-
-
-@router.get("/parts/{part_id}/edit", response_class=HTMLResponse)
-def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
-    """Part editor — identity fields (name/PN/tier) render while draft only;
-    the rest of the meta fields edit here in every state."""
-    from opal.config import get_active_project
-
-    part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
-    if not part:
-        return templates.TemplateResponse(
-            "errors/404.html",
-            {"request": request, "message": f"Part {part_id} not found"},
-            status_code=404,
-        )
-
-    context = get_base_context(request, db, f"{part.internal_pn or part.name} - OPAL")
-    context["part"] = part
-
-    project = get_active_project()
-    tier_config = project.get_tier(part.tier) if project else None
-    context["tier_name"] = tier_config.name if tier_config else None
-    context["pn_segments"] = _pn_segments(
-        part.internal_pn, tier_config.code if tier_config else str(part.tier)
-    )
+    # The edit overlay (shared part form) lives on this page
     context["tiers"] = project.tiers if project else DEFAULT_TIERS
-
     categories = (
         db.query(Part.category)
         .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
@@ -1029,8 +1014,21 @@ def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
     if project and project.categories:
         category_set |= set(project.categories)
     context["categories"] = sorted(category_set)
+    context["form_open"] = edit_open
 
-    return templates.TemplateResponse("parts/edit.html", context)
+    return templates.TemplateResponse("parts/detail.html", context)
+
+
+@router.get("/parts/{part_id}", response_class=HTMLResponse)
+def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
+    """Part detail page; hosts the edit overlay."""
+    return _parts_detail_response(request, db, part_id)
+
+
+@router.get("/parts/{part_id}/edit", response_class=HTMLResponse)
+def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
+    """Deep link: the part page with the edit overlay open."""
+    return _parts_detail_response(request, db, part_id, edit_open=True)
 
 
 # ============ INVENTORY ============

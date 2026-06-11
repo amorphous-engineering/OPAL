@@ -2605,22 +2605,25 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     color: var(--text-muted);
 }
 
-/* Two-column ledger grid on wide viewports */
-.ledger-grid {
+/* Two-column part page: identity left, the ledger right */
+.part-layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 var(--space-lg);
+    grid-template-columns: minmax(380px, 440px) 1fr;
+    gap: var(--space-lg);
     align-items: start;
 }
 
+.part-layout .part-identity {
+    position: sticky;
+    top: var(--space-md);
+}
+
 @media (max-width: 1000px) {
-    .ledger-grid {
-        display: flex;
-        flex-direction: column;
+    .part-layout {
+        display: block;
     }
-    /* Active parts: world-side column first when stacked (§3 emphasis) */
-    .ledger-grid-active .ledger-col-world {
-        order: -1;
+    .part-layout .part-identity {
+        position: static;
     }
 }
 

@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-{% set parts_actions %}{{ ok.btn("IMPORT CSV", href="/parts/import") }} {{ ok.btn("+ NEW PART", href="/parts/new", variant="primary") }}{% endset %}
+{% set parts_actions %}{{ ok.btn("IMPORT CSV", href="/parts/import") }} {{ ok.btn("+ NEW PART", variant="primary", attrs='onclick="openPartForm()"') }}{% endset %}
 {% call ok.panel("PARTS", actions=parts_actions) %}
         <div class="toolbar">
             {{ ok.toolbar_search(name="search", id="search-input", placeholder="SEARCH", hx_get="/parts/table", hx_target="#parts-table-body", hx_include="#category-filter, #tier-filter, #top-level-filter, #low-stock-filter, #state-filter") }}
@@ -27,7 +27,7 @@
                         hx-include="#search-input, #category-filter, #top-level-filter, #low-stock-filter, #state-filter">
                     <option value="">All tiers</option>
                     {% for tier in tiers %}
-                    <option value="{{ tier.number }}">Tier {{ tier.number }} - {{ tier.name }}</option>
+                    <option value="{{ tier.level }}">T{{ tier.level }} {{ tier.name | upper }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -104,4 +104,5 @@
             </tbody>
         {% endcall %}
 {% endcall %}
+{% include 'parts/_part_form.html' %}
 {% endblock %}

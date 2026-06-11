@@ -11,7 +11,11 @@
 {% block content %}
 {% set is_draft = part.lifecycle_state == 'draft' %}
 
-{# ============ HEADER ZONE — what is it? ============ #}
+{# ============ THE PAGE — identity column left (the label and all the
+   other info), the ledger right (instances, hierarchy, obligations).
+   Stacks identity-first under 1000px. ============ #}
+<div class="part-layout">
+<div class="part-identity">
 {{ part_tag('header',
             pn=part.internal_pn,
             name=part.name,
@@ -26,7 +30,7 @@
 
 <div class="part-actions">
     {{ ok.btn("PRINT", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
-    {{ ok.btn("EDIT", href="/parts/" ~ part.id ~ "/edit") }}
+    {{ ok.btn("EDIT", attrs='onclick="openPartForm()"') }}
     {% if is_draft %}
     {{ ok.btn("ACTIVATE", variant="primary", attrs='onclick="openActivateConfirm()"') }}
     {% if not part_is_referenced %}
@@ -74,12 +78,23 @@
     {%- if part.lifecycle_state == 'active' and part.activated_at %} · <span class="ro-label">ACT</span> {{ part.activated_at.date().isoformat() }}{% endif %}
 </div>
 
-{# ============ THE LEDGER — grouping carried by column placement:
-   design-side left, world-side right. Width is an information budget. #}
-<div class="ledger-grid{% if not is_draft %} ledger-grid-active{% endif %}">
-    <div class="ledger-col ledger-col-design">{% include 'parts/_ledger_design.html' %}</div>
-    <div class="ledger-col ledger-col-world">{% include 'parts/_ledger_world.html' %}</div>
 </div>
+
+{# The ledger — one stack, ordered by lifecycle emphasis: drafts lead with
+   design (the live work), active parts with the physical world. #}
+<div class="part-ledger">
+{% if is_draft %}
+{% include 'parts/_ledger_design.html' %}
+{% include 'parts/_ledger_world.html' %}
+{% else %}
+{% include 'parts/_ledger_world.html' %}
+{% include 'parts/_ledger_design.html' %}
+{% endif %}
+</div>
+</div>
+
+{% set form_part = part %}
+{% include 'parts/_part_form.html' %}
 
 {# ============ Modals ============ #}
 <!-- Add Supplier Modal -->
@@ -176,7 +191,12 @@
 <div id="add-component-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
         <div class="panel">
-            <div class="panel-header">ADD COMPONENT TO BOM</div>
+            <div class="panel-header">
+                <span>ADD COMPONENT TO BOM</span>
+                <div class="panel-header-actions">
+                    <a href="/parts/new?parent_id={{ part.id }}" class="mono" style="font-size: 0.75rem;">[+ NEW PART]</a>
+                </div>
+            </div>
             <div class="panel-body">
                 <form id="add-component-form" onsubmit="addComponent(event)">
                     <div class="form-group">

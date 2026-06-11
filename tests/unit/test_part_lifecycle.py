@@ -344,9 +344,10 @@ def test_draft_part_detail_page_renders_activate_confirm(web_client):
     assert "part-tag-state-draft" in page.text
     # The DB row id appears nowhere as a title; the PN is the page's name
     assert f"PART #{part['id']}" not in page.text
-    # Voice rules: the consequence sentence lives only in the confirm dialog
+    # Voice rules: consequence sentences live only in confirm dialogs
+    # (activate confirm, delete confirm, tier-change confirm in the form JS)
     assert "Locks PN and tier permanently." in page.text
-    assert page.text.count("permanently") <= 2  # confirm dialogs only, no ambient copy
+    assert page.text.count("permanently") <= 3
     # Ledger rows render with empty values as facts, not boxes or apologies
     assert "ledger-row" in page.text
     assert "nothing physical yet" not in page.text
@@ -363,9 +364,45 @@ def test_active_part_detail_page_renders_locked(web_client):
     # Locked things look calm: state flips, activation affordance is absent
     assert "part-tag-state-active" in page.text
     assert 'onclick="openActivateConfirm()"' not in page.text
-    # EDIT remains (meta fields stay editable); identity gating lives on the edit page
+    # EDIT remains (meta fields stay editable); identity inputs are absent
+    # once active. /parts/{id}/edit deep-links to the page with the shared
+    # form overlay open — no intermediate menu.
     assert ">EDIT<" in page.text
     edit_page = web_client.get(f"/parts/{part['id']}/edit")
     assert edit_page.status_code == 200
-    assert 'id="internal_pn"' not in edit_page.text
-    assert 'id="d-uom"' in edit_page.text
+    assert 'id="part-form-overlay"' in edit_page.text
+    assert "display: block" in edit_page.text
+    assert 'id="pf-pn"' not in edit_page.text
+    assert 'id="pf-uom"' in edit_page.text
+
+
+def test_parts_new_deep_link_opens_create_overlay(web_client):
+    page = web_client.get("/parts/new")
+    assert page.status_code == 200
+    # The parts list with the shared form overlay open — no intermediate page
+    assert 'id="parts-table-body"' in page.text or "PARTS" in page.text
+    assert 'id="part-form-overlay"' in page.text
+    assert "part-tag-forming" in page.text
+    assert "CREATE DRAFT" in page.text
+
+
+def test_parts_new_prefills_parent_from_context(web_client):
+    parent = web_client.post("/api/parts", json={"name": "Vehicle", "tier": 1}).json()
+    page = web_client.get(f"/parts/new?parent_id={parent['id']}")
+    assert page.status_code == 200
+    assert f'id="pf-parent"\n                                   value="{parent["id"]}"' in page.text.replace("\r", "") or f'value="{parent["id"]}"' in page.text
+    assert parent["internal_pn"] in page.text
+
+
+def test_part_page_two_column_layout(web_client):
+    part = web_client.post("/api/parts", json={"name": "Layout Draft", "tier": 1}).json()
+    page = web_client.get(f"/parts/{part['id']}")
+    assert page.status_code == 200
+    assert 'class="part-layout"' in page.text
+    assert 'class="part-identity"' in page.text
+    assert 'class="part-ledger"' in page.text
+    # Draft: design ledger before world ledger; flips after activation
+    assert page.text.index(">BOM<") < page.text.index(">STOCK<")
+    web_client.post(f"/api/parts/{part['id']}/activate", json={})
+    page2 = web_client.get(f"/parts/{part['id']}")
+    assert page2.text.index(">STOCK<") < page2.text.index(">BOM<")
