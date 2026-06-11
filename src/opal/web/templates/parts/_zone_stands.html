@@ -1,0 +1,138 @@
+{% import 'opalkit/_macros.html' as ok %}
+{# WHERE IT STANDS — physical-world state. Empty sections are one line,
+   never a box; the stock hero number renders only when stock exists. #}
+<div class="zone-label">WHERE IT STANDS</div>
+
+{# --- Stock + inventory records, merged --- #}
+{% if inventory_records %}
+{% call ok.panel("STOCK (" ~ (inventory_records | length) ~ " RECORDS)", actions=ok.btn("+ ADD INVENTORY", href="/inventory/new?part_id=" ~ part.id, variant="primary")) %}
+        {% if part.total_quantity %}
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-sm);">
+            <div class="form-label">TOTAL QUANTITY</div>
+            <div style="font-family: var(--font-mono); font-size: 2rem; font-weight: 600;">
+                {{ '%g' % part.total_quantity }} <span class="text-muted" style="font-size: 1rem;">{{ part.unit_of_measure or 'EA' }}</span>
+            </div>
+        </div>
+        {% endif %}
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("OPAL #") }}
+                    {{ ok.th("LOCATION") }}
+                    {{ ok.th("QTY", align="right") }}
+                    {{ ok.th("LOT") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for inv in inventory_records %}
+                <tr>
+                    <td class="mono"><a href="/inventory/opal/{{ inv.opal_number }}">{{ inv.opal_number }}</a></td>
+                    <td>{{ inv.location or '-' }}</td>
+                    <td class="mono" style="text-align: right;">{{ '%g' % inv.quantity }}</td>
+                    <td>{{ ok.mono(inv.lot_number) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+{% endcall %}
+{% elif part.lifecycle_state == 'draft' %}
+<div class="empty-line mono">stock — draft part, nothing physical yet</div>
+{% else %}
+{{ ok.empty_line("stock", "add inventory", href="/inventory/new?part_id=" ~ part.id) }}
+{% endif %}
+
+{# --- Open PO lines --- #}
+{% if open_po_lines %}
+{% call ok.panel("OPEN PO LINES (" ~ (open_po_lines | length) ~ ")") %}
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("PO") }}
+                    {{ ok.th("STATUS", width="100px") }}
+                    {{ ok.th("ORDERED", width="90px", align="right") }}
+                    {{ ok.th("RECEIVED", width="90px", align="right") }}
+                    {{ ok.th("UNIT COST", width="100px", align="right") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in open_po_lines %}
+                <tr>
+                    <td class="mono"><a href="/purchases/{{ line.purchase_id }}">{{ line.purchase.reference or 'PO-' ~ line.purchase_id }}</a></td>
+                    <td>{{ ok.status(line.purchase.status.value | upper if line.purchase.status.value is defined else line.purchase.status | upper) }}</td>
+                    <td class="mono" style="text-align: right;">{{ '%g' % line.qty_ordered }}</td>
+                    <td class="mono" style="text-align: right;">{{ '%g' % line.qty_received }}</td>
+                    <td class="mono" style="text-align: right;">{{ '%g' % line.unit_cost if line.unit_cost is not none else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+{% endcall %}
+{% else %}
+{{ ok.empty_line("open PO lines") }}
+{% endif %}
+
+{# --- Suppliers --- #}
+{% if supplier_entries %}
+{% call ok.panel("SUPPLIERS (" ~ (supplier_entries | length) ~ ")", actions=ok.btn("+ LINK SUPPLIER", variant="primary", attrs='onclick="showAddSupplier()"')) %}
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("SUPPLIER") }}
+                    {{ ok.th("VENDOR PN", width="160px") }}
+                    {{ ok.th("PREFERRED", width="90px") }}
+                    {{ ok.th("NOTES") }}
+                    {{ ok.th("", width="60px") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in supplier_entries %}
+                <tr>
+                    <td><a href="/suppliers/{{ entry.supplier_id }}">{{ entry.supplier.name }}</a></td>
+                    <td class="mono">{{ entry.vendor_pn }}</td>
+                    <td>{% if entry.is_preferred %}{{ ok.status("YES", "ok") }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td class="text-secondary">{{ entry.notes or '-' }}</td>
+                    <td>
+                        {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="deleteSupplierEntry(' ~ entry.id ~ ', ' ~ entry.supplier_id ~ ')"') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+{% endcall %}
+{% else %}
+{{ ok.empty_line("suppliers", "link supplier", onclick="showAddSupplier()") }}
+{% endif %}
+
+{# --- Consumption history --- #}
+{% if consumption_history %}
+{% call ok.panel("CONSUMPTION HISTORY (" ~ (consumption_history | length) ~ ('+' if consumption_history | length == 50 else '') ~ ")") %}
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("TIMESTAMP", width="160px") }}
+                    {{ ok.th("QTY", width="80px", align="right") }}
+                    {{ ok.th("SOURCE") }}
+                    {{ ok.th("NOTES") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in consumption_history %}
+                <tr>
+                    <td>{{ ok.timestamp(c.created_at) }}</td>
+                    <td class="mono" style="text-align: right;">{{ '%g' % c.quantity }}</td>
+                    <td>
+                        {% if c.procedure_instance_id %}
+                        <a href="/executions/{{ c.procedure_instance_id }}">Execution #{{ c.procedure_instance_id }}</a>
+                        {% else %}
+                        <span class="text-muted">Manual Adjustment</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-secondary">{{ c.notes or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+{% endcall %}
+{% else %}
+{{ ok.empty_line("consumption history") }}
+{% endif %}

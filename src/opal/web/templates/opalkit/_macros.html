@@ -144,6 +144,14 @@
    Usage: {{ ok.empty("No parts found") }}
           {{ ok.empty("No inventory records", action_text="Add Inventory", action_href="/inventory/new") }}
 #}
+{# The empty-state rule: an empty section is one line, never a box.
+   "{Section} — none · [+ action]", muted, 0.5-border row. A section earns
+   vertical space only when populated. #}
+{% macro empty_line(label, action_text=none, href=none, onclick=none) %}
+<div class="empty-line mono">{{ label }} — none{% if action_text %} · <a {% if href %}href="{{ href }}"{% else %}href="#" onclick="{{ onclick }}; return false;"{% endif %}>[+ {{ action_text }}]</a>{% endif %}</div>
+{% endmacro %}
+
+
 {% macro empty(message, action_text=none, action_href=none) %}
 <div class="empty-state">
     <p class="text-muted">{{ message }}</p>

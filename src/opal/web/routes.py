@@ -3,6 +3,7 @@
 import contextlib
 import logging
 import math
+import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,16 @@ from opal.core.auth import (
     validate_password_strength,
     verify_payload,
 )
-from opal.db.models import InventoryRecord, Kit, Part, Purchase, Supplier, User, Workcenter
+from opal.db.models import (
+    InventoryRecord,
+    Kit,
+    Part,
+    Purchase,
+    PurchaseLine,
+    Supplier,
+    User,
+    Workcenter,
+)
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.execution import InstanceStatus, ProcedureInstance
 from opal.db.models.issue import Issue, IssuePriority, IssueStatus, IssueType
@@ -639,6 +649,20 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
     return templates.TemplateResponse("index.html", context)
 
 
+def _pn_segments(pn: str | None, tier_code: str | None) -> tuple[str, str, str] | None:
+    """Split a PN around its tier-code segment so the tag can set it apart.
+
+    Returns (before, tier_code, after), or None when the code isn't a
+    delimited segment of the PN (custom formats, missing config).
+    """
+    if not pn or not tier_code:
+        return None
+    match = re.search(rf"(?<![A-Za-z0-9]){re.escape(tier_code)}(?![A-Za-z0-9])", pn)
+    if not match:
+        return None
+    return pn[: match.start()], pn[match.start() : match.end()], pn[match.end() :]
+
+
 # ============ PARTS ============
 
 
@@ -826,29 +850,13 @@ def parts_import(request: Request, db: DbSession) -> HTMLResponse:
 
 @router.get("/parts/new", response_class=HTMLResponse)
 def parts_new(request: Request, db: DbSession) -> HTMLResponse:
-    """New part form page."""
+    """New part form page — minting asks only what identity needs."""
     from opal.config import get_active_project
-    from opal.project import DEFAULT_TIERS
 
     context = get_base_context(request, db, "New Part - OPAL")
 
-    # Get categories for dropdown
-    categories = (
-        db.query(Part.category)
-        .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
-        .distinct()
-        .all()
-    )
-    context["categories"] = sorted([c[0] for c in categories if c[0]])
-
-    # Get tiers from project config or use defaults
     project = get_active_project()
-    if project:
-        context["tiers"] = project.tiers
-        if project.categories:
-            context["categories"] = sorted(set(context["categories"]) | set(project.categories))
-    else:
-        context["tiers"] = DEFAULT_TIERS
+    context["tiers"] = project.tiers if project else DEFAULT_TIERS
 
     return templates.TemplateResponse("parts/new.html", context)
 
@@ -866,17 +874,29 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
             status_code=404,
         )
 
-    context = get_base_context(request, db, f"Part {part_id} - OPAL")
+    # The PN is the page's name; the DB row id appears nowhere
+    context = get_base_context(request, db, f"{part.internal_pn or part.name} - OPAL")
     context["part"] = part
 
-    # Get tier name from project config
+    # Tier name + PN tier-segment from project config
     project = get_active_project()
-    tier_name = None
-    if project:
-        tier_config = project.get_tier(part.tier)
-        if tier_config:
-            tier_name = tier_config.name
-    context["tier_name"] = tier_name
+    tier_config = project.get_tier(part.tier) if project else None
+    context["tier_name"] = tier_config.name if tier_config else None
+    context["pn_segments"] = _pn_segments(
+        part.internal_pn, tier_config.code if tier_config else str(part.tier)
+    )
+
+    # Categories for the details-disclosure datalist
+    categories = (
+        db.query(Part.category)
+        .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
+        .distinct()
+        .all()
+    )
+    category_set = {c[0] for c in categories if c[0]}
+    if project and project.categories:
+        category_set |= set(project.categories)
+    context["categories"] = sorted(category_set)
 
     # Get inventory records
     inventory_records = db.query(InventoryRecord).filter(InventoryRecord.part_id == part_id).all()
@@ -962,6 +982,20 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
         sp for sp in part.supplier_entries if sp.supplier.deleted_at is None
     ]
 
+    # Where it stands: PO lines not yet fully received on live POs
+    open_po_lines = (
+        db.query(PurchaseLine)
+        .join(Purchase, PurchaseLine.purchase_id == Purchase.id)
+        .filter(
+            PurchaseLine.part_id == part.id,
+            Purchase.status.in_(
+                (PurchaseStatus.DRAFT, PurchaseStatus.ORDERED, PurchaseStatus.PARTIAL)
+            ),
+        )
+        .all()
+    )
+    context["open_po_lines"] = open_po_lines
+
     # Lifecycle: referenced drafts lose the delete control entirely
     from opal.core.part_lifecycle import reference_counts
 
@@ -974,7 +1008,12 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
 
 @router.get("/parts/{part_id}/edit", response_class=HTMLResponse)
 def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
-    """Part edit form page."""
+    """Identity editor — name/PN/tier, mutable while draft only.
+
+    Everything else is edited from the part page's details disclosure.
+    """
+    from opal.config import get_active_project
+
     part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
     if not part:
         return templates.TemplateResponse(
@@ -983,26 +1022,15 @@ def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
             status_code=404,
         )
 
-    context = get_base_context(request, db, f"Edit Part {part_id} - OPAL")
+    context = get_base_context(request, db, f"{part.internal_pn or part.name} - OPAL")
     context["part"] = part
 
-    # Get categories for dropdown
-    categories = (
-        db.query(Part.category)
-        .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
-        .distinct()
-        .all()
-    )
-    context["categories"] = sorted([c[0] for c in categories if c[0]])
-
-    # Merge in project-configured categories
-    from opal.config import get_active_project
-
     project = get_active_project()
-    if project and project.categories:
-        context["categories"] = sorted(set(context["categories"]) | set(project.categories))
-
-    # Tiers for the draft tier selector (identity is mutable while draft)
+    tier_config = project.get_tier(part.tier) if project else None
+    context["tier_name"] = tier_config.name if tier_config else None
+    context["pn_segments"] = _pn_segments(
+        part.internal_pn, tier_config.code if tier_config else str(part.tier)
+    )
     context["tiers"] = project.tiers if project else DEFAULT_TIERS
 
     return templates.TemplateResponse("parts/edit.html", context)
@@ -3657,18 +3685,24 @@ def label_print(
             },
         )
     elif type == "part":
+        from opal.config import get_active_project
+
         part = db.query(Part).filter(Part.id == id, Part.deleted_at.is_(None)).first()
         if not part:
             return HTMLResponse("Not found", status_code=404)
+        # The label IS the tag component in print mode — one identity,
+        # one rendering, everywhere
+        project = get_active_project()
+        tier_config = project.get_tier(part.tier) if project else None
         return templates.TemplateResponse(
-            "label_print.html",
+            "parts/label.html",
             {
                 "request": request,
-                "entity_type": "parts",
-                "entity_id": part.id,
-                "identifier": part.internal_pn or f"PART-{part.id}",
-                "name": part.name,
-                "location": None,
+                "part": part,
+                "tier_name": tier_config.name if tier_config else None,
+                "pn_segments": _pn_segments(
+                    part.internal_pn, tier_config.code if tier_config else str(part.tier)
+                ),
             },
         )
     return HTMLResponse("Invalid type", status_code=400)

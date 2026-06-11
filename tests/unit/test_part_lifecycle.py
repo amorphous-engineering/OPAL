@@ -341,7 +341,11 @@ def test_draft_part_detail_page_renders_activate_panel(web_client):
     page = web_client.get(f"/parts/{part['id']}")
     assert page.status_code == 200
     assert "ACTIVATE" in page.text
-    assert "DRAFT" in page.text
+    assert "DRAFT · PN EDITABLE" in page.text
+    # The DB row id appears nowhere as a title; the PN is the page's name
+    assert f"PART #{part['id']}" not in page.text
+    # Empty draft: stock is a one-line fact, not a box
+    assert "draft part, nothing physical yet" in page.text
 
 
 def test_active_part_detail_page_renders_locked(web_client):
@@ -349,5 +353,7 @@ def test_active_part_detail_page_renders_locked(web_client):
     web_client.post(f"/api/parts/{part['id']}/activate", json={})
     page = web_client.get(f"/parts/{part['id']}")
     assert page.status_code == 200
-    assert "ACTIVATED" in page.text
-    assert 'id="activate-btn"' not in page.text
+    # Locked things look calm: tag footer flips, edit affordance is absent
+    assert "ACTIVE · LOCKED" in page.text
+    assert "EDIT IDENTITY" not in page.text
+    assert "commitActivate" not in page.text or 'onclick="openActivateConfirm()"' not in page.text

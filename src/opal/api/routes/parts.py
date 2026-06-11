@@ -44,7 +44,9 @@ class PartCreate(BaseModel):
     description: str | None = None
     category: str | None = None
     unit_of_measure: str = "ea"
-    tracking_type: str = "bulk"  # "bulk" = one OPAL per batch, "serialized" = one OPAL per unit
+    # "bulk" = one OPAL per batch, "serialized" = one OPAL per unit;
+    # None resolves by tier convention (see default_tracking_for_tier)
+    tracking_type: str | None = None
     tier: int = 1  # 1=Flight, 2=Ground, 3=Loose by default
     parent_id: int | None = None  # Parent assembly if this is a child part
     reorder_point: Decimal | None = None
@@ -232,6 +234,13 @@ def list_parts(
     )
 
 
+def default_tracking_for_tier(tier: int) -> str:
+    """Tracking-type convention: flight and ground hardware (tiers 1-2) get
+    per-unit traceability; loose consumables (tier 3+) are batch-tracked.
+    Editable on the part page afterwards."""
+    return "serialized" if tier <= 2 else "bulk"
+
+
 def assign_internal_pn(db: DbSession, tier: int, override: str | None) -> str:
     """Resolve a part's internal PN: validated override or the next number.
 
@@ -283,7 +292,7 @@ def create_part(
         description=part_in.description,
         category=part_in.category,
         unit_of_measure=part_in.unit_of_measure,
-        tracking_type=part_in.tracking_type,
+        tracking_type=part_in.tracking_type or default_tracking_for_tier(part_in.tier),
         tier=part_in.tier,
         parent_id=part_in.parent_id,
         reorder_point=part_in.reorder_point,
@@ -308,6 +317,7 @@ class NextPnResponse(BaseModel):
     sequence: int
     tier: int
     tier_name: str | None = None
+    default_tracking: str
 
 
 @router.get("/next-pn", response_model=NextPnResponse)
@@ -328,6 +338,7 @@ def preview_next_pn(
         sequence=sequence,
         tier=tier,
         tier_name=tier_config.name if tier_config else None,
+        default_tracking=default_tracking_for_tier(tier),
     )
 
 

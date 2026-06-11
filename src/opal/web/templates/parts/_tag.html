@@ -1,0 +1,43 @@
+{# The part tag — one identity, one rendering, everywhere.
+   Modes: forming (create flow, JS fills it live), header (part page),
+   print (label route). If the screen tag and the printed label ever
+   differ, that is a bug by definition. #}
+{% macro part_tag(mode, pn=none, name=none, tier_level=none, tier_name=none,
+                  uom="EA", tracking="", state="draft", activated_at=none,
+                  qr_url=none, pn_segments=none) %}
+<div class="part-tag part-tag-{{ mode }}">
+    <div class="part-tag-id">
+        <div class="part-tag-pn"{% if mode == 'forming' %} id="tag-pn"{% endif %}>
+            {%- if pn_segments -%}
+                {{ pn_segments[0] }}<span class="part-tag-tier-seg">{{ pn_segments[1] }}</span>{{ pn_segments[2] }}
+            {%- else -%}
+                {{ pn or '· · · · ·' }}
+            {%- endif -%}
+        </div>
+        <div class="part-tag-name"{% if mode == 'forming' %} id="tag-name"{% endif %}>{{ name or '' }}</div>
+    </div>
+    <div class="part-tag-qr">
+        {% if qr_url %}
+        <img src="{{ qr_url }}" alt="QR">
+        {% else %}
+        <div class="part-tag-qr-placeholder">QR</div>
+        {% endif %}
+    </div>
+    <div class="part-tag-footer">
+        <span class="part-tag-meta"{% if mode == 'forming' %} id="tag-meta"{% endif %}>
+            {%- if tier_level is not none -%}
+            TIER {{ tier_level }}{% if tier_name %} · {{ tier_name | upper }}{% endif %} · {{ uom | upper }}{% if tracking %} · {{ tracking | upper }}{% endif %}
+            {%- else -%}
+            TIER — · UOM —
+            {%- endif -%}
+        </span>
+        <span class="part-tag-state {{ 'part-tag-state-draft' if state == 'draft' else 'part-tag-state-active' }}">
+            {%- if state == 'draft' -%}
+            DRAFT · PN EDITABLE
+            {%- else -%}
+            ACTIVE · LOCKED{% if activated_at %} {{ activated_at.date().isoformat() }}{% endif %}
+            {%- endif -%}
+        </span>
+    </div>
+</div>
+{% endmacro %}

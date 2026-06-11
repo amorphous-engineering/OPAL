@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Label - {{ part.internal_pn }}</title>
+    <link rel="stylesheet" href="/static/css/tag.css">
+    <style>
+        /* Print context: same tag component, paper palette. If this label
+           and the on-screen tag ever differ structurally, that is a bug. */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #fff;
+        }
+        .part-tag {
+            --tag-fg: #000;
+            --tag-muted: #555;
+            --tag-border: #000;
+            --tag-warn: #000;
+            --accent-orange: #000;
+            width: 5in;
+        }
+        @media print {
+            body { min-height: auto; }
+            @page { margin: 0.25in; size: 5.5in 2.5in; }
+        }
+    </style>
+</head>
+<body>
+    {% from 'parts/_tag.html' import part_tag %}
+    {{ part_tag('print',
+                pn=part.internal_pn,
+                name=part.name,
+                tier_level=part.tier,
+                tier_name=tier_name,
+                uom=part.unit_of_measure,
+                tracking=part.tracking_type.value if part.tracking_type else '',
+                state=part.lifecycle_state,
+                activated_at=part.activated_at,
+                qr_url='/api/parts/' ~ part.id ~ '/qrcode',
+                pn_segments=pn_segments) }}
+    <script>window.print();</script>
+</body>
+</html>

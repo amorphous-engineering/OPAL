@@ -87,6 +87,8 @@ Dense, explicit, functional. Expose state and inner workings. Data tables over c
 
 **One fact, one home.** Every other appearance is a live reference, never a copy. Test: if updating something requires touching two places, the design is wrong — delete one occurrence or derive it. PRs that violate this must argue against it by name.
 
+**The empty-state rule.** An empty section is one line, never a box: `{Section} — none · [+ action]`, muted text, 0.5-border row (`ok.empty_line` macro). A section earns vertical space only when populated. Empty states are facts, not features; six boxes announcing nothingness is anti-density.
+
 ## Linting (Ruff)
 
 Configured in `pyproject.toml`: line-length 100, target Python 3.11+, rules E/F/I/UP/B/SIM. Type hints required everywhere.

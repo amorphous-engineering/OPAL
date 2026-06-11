@@ -2510,3 +2510,95 @@ a.user-menu-link.active {
     gap: var(--space-sm);
     padding: 2px 0;
 }
+
+/* Segmented control — one button per option, exactly one active */
+.segmented {
+    display: inline-flex;
+}
+
+.segmented button {
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+}
+
+.segmented button + button {
+    border-left: none;
+}
+
+.segmented button.active {
+    border-color: var(--accent-orange);
+    color: var(--accent-orange);
+    font-weight: 600;
+}
+
+/* Inline disclosure — a line that opens, not a box */
+details.disclosure > summary {
+    cursor: pointer;
+    list-style: none;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--space-xs) 0;
+}
+
+details.disclosure > summary::-webkit-details-marker { display: none; }
+details.disclosure[open] > summary { color: var(--text-secondary); }
+
+/* The ledger — part page zones. An empty section is one line, never a box. */
+.part-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin: var(--space-md) 0;
+}
+
+.part-action-note {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.zone-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: var(--space-xs);
+    margin: var(--space-lg) 0 var(--space-sm);
+}
+
+.empty-line {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    padding: var(--space-xs) 2px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+    .empty-line {
+        border-bottom-color: color-mix(in srgb, var(--border-color) 50%, transparent);
+    }
+}
+
+.empty-line a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.part-description {
+    margin: var(--space-md) 0;
+    max-width: 80ch;
+}
