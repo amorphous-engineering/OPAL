@@ -133,8 +133,6 @@ function showCommitScreen() {
 async function commitBatch() {
     const ids = queueItems.filter(it => staged.has(it.id)).map(it => it.id);
     const headers = { 'Content-Type': 'application/json' };
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
     try {
         const r = await fetch('/api/requirements/baseline-batch', {
             method: 'POST', headers: headers,
