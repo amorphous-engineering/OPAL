@@ -2596,7 +2596,7 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 .part-readout {
     font-family: var(--font-mono);
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--text-primary);
     margin: var(--space-sm) 0 var(--space-md);
     line-height: 1.7;
 }
@@ -2612,6 +2612,7 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     grid-template-columns: repeat(2, minmax(0, 640px));
     gap: var(--space-lg);
     align-items: start;
+    justify-content: center;
 }
 
 @media (max-width: 1000px) {
@@ -2631,12 +2632,17 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 }
 
 .ledger-row-empty {
-    opacity: 0.55;
     padding: 2px 2px;
 }
 
-.ledger-row .ledger-label {
+.ledger-row-empty .ledger-label,
+.ledger-row-empty .ledger-value,
+.ledger-row-empty .ledger-add {
     color: var(--text-muted);
+}
+
+.ledger-row .ledger-label {
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -2658,6 +2664,7 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 .ledger-detail {
     font-family: var(--font-mono);
     font-size: 0.8rem;
+    color: var(--text-primary);
     padding: var(--space-xs) 0 var(--space-xs) var(--space-md);
     border-bottom: 1px solid var(--border-color);
 }
