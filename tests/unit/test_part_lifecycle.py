@@ -328,3 +328,26 @@ def test_mcp_create_purchase_order_blocked_by_draft(db_session):
     )
     assert data["error"] == "draft_parts_blocked"
     assert draft.id in {p["id"] for p in data["draft_parts"]}
+
+
+# ---------------------------------------------------------------------------
+# Web rendering — catches missing templates (e.g. the activate panel partial)
+# that only a clean checkout would miss, not a worktree with stray files
+# ---------------------------------------------------------------------------
+
+
+def test_draft_part_detail_page_renders_activate_panel(web_client):
+    part = web_client.post("/api/parts", json={"name": "Web Draft", "tier": 1}).json()
+    page = web_client.get(f"/parts/{part['id']}")
+    assert page.status_code == 200
+    assert "ACTIVATE" in page.text
+    assert "DRAFT" in page.text
+
+
+def test_active_part_detail_page_renders_locked(web_client):
+    part = web_client.post("/api/parts", json={"name": "Web Active", "tier": 1}).json()
+    web_client.post(f"/api/parts/{part['id']}/activate", json={})
+    page = web_client.get(f"/parts/{part['id']}")
+    assert page.status_code == 200
+    assert "ACTIVATED" in page.text
+    assert 'id="activate-btn"' not in page.text
