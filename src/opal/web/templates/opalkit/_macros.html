@@ -376,7 +376,7 @@
           {% call ok.panel("PARTS", actions=ok.btn("+ NEW", href="/new", variant="primary")) %}...{% endcall %}
 #}
 {% macro panel(title, actions=none, max_width=none, margin_top=none, id=none) %}
-<div class="panel"{% if max_width or margin_top or id %} {% if id %}id="{{ id }}" {% endif %}style="{% if max_width %}max-width: {{ max_width }};{% endif %}{% if margin_top %} margin-top: {{ margin_top }};{% endif %}"{% endif %}>
+<div class="panel"{% if max_width or margin_top or id %} {% if id %}id="{{ id }}" {% endif %}style="{% if max_width %}max-width: {{ max_width }}; margin-inline: auto;{% endif %}{% if margin_top %} margin-top: {{ margin_top }};{% endif %}"{% endif %}>
     <div class="panel-header">
         <span>{{ title }}</span>
         {%- if actions -%}
