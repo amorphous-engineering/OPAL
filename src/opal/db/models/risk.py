@@ -89,7 +89,11 @@ class Risk(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     )
 
     disposition: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=RiskDisposition.OPEN.value, index=True
+        String(20),
+        nullable=False,
+        default=RiskDisposition.OPEN.value,
+        server_default=RiskDisposition.OPEN.value,
+        index=True,
     )
     owner_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
@@ -230,7 +234,10 @@ class RiskIssueLink(Base, IdMixin, TimestampMixin):
         ForeignKey("issue.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=RiskIssueRole.MITIGATION.value
+        String(20),
+        nullable=False,
+        default=RiskIssueRole.MITIGATION.value,
+        server_default=RiskIssueRole.MITIGATION.value,
     )
 
     risk: Mapped["Risk"] = relationship("Risk", back_populates="issue_links")

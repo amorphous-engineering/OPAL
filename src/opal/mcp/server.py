@@ -2579,17 +2579,30 @@ def _risk_dict(risk: Risk) -> dict:
 
 async def _list_risks(db, args: dict) -> list[TextContent]:
     """List risks with optional filtering."""
+    from sqlalchemy.orm import selectinload
+
     query = db.query(Risk).filter(Risk.deleted_at.is_(None))
 
     if args.get("disposition"):
         query = query.filter(Risk.disposition == args["disposition"])
 
-    limit = args.get("limit", 50)
-    risks = query.order_by(Risk.id.desc()).limit(limit).all()
+    # Severity in SQL so the limit applies to the filtered set, not before it.
+    score = Risk.probability * Risk.impact
+    severity = args.get("severity")
+    if severity == "low":
+        query = query.filter(score <= 5)
+    elif severity == "medium":
+        query = query.filter(score > 5, score <= 12)
+    elif severity == "high":
+        query = query.filter(score > 12)
 
-    # Filter by severity in Python (computed property)
-    if args.get("severity"):
-        risks = [r for r in risks if r.severity == args["severity"]]
+    limit = args.get("limit", 50)
+    risks = (
+        query.options(selectinload(Risk.owner), selectinload(Risk.asset_part))
+        .order_by(Risk.id.desc())
+        .limit(limit)
+        .all()
+    )
 
     return json_response({"count": len(risks), "risks": [_risk_dict(r) for r in risks]})
 
@@ -2600,6 +2613,27 @@ async def _create_risk(db, args: dict) -> list[TextContent]:
         return json_response(
             {"error": "asset_part_id and asset_text are exclusive — exactly one names the asset"}
         )
+
+    # The inputSchema's 1-5 bounds are advisory to the client; enforce here —
+    # an out-of-range row would 500 every matrix view until hand-fixed.
+    for field in ("probability", "impact", "residual_probability", "residual_impact"):
+        value = args.get(field)
+        if value is not None and not (
+            isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 5
+        ):
+            return json_response({"error": f"{field} must be an integer from 1 to 5"})
+    if args.get("owner_id") is not None and db.get(User, args["owner_id"]) is None:
+        return json_response({"error": f"Owner user {args['owner_id']} not found"})
+    if args.get("asset_part_id") is not None:
+        part = (
+            db.query(Part)
+            .filter(Part.id == args["asset_part_id"], Part.deleted_at.is_(None))
+            .first()
+        )
+        if part is None:
+            return json_response({"error": f"Asset part {args['asset_part_id']} not found"})
+    if args.get("asset_text") is not None and not args["asset_text"].strip():
+        args["asset_text"] = None
 
     risk = Risk(
         risk_number=generate_risk_number(db),
@@ -2681,6 +2715,12 @@ async def _set_risk_disposition(db, args: dict) -> list[TextContent]:
         return json_response({"error": "Risk not found"})
 
     user_id = args.get("user_id")
+    if risk.disposition == RiskDisposition.ACCEPTED.value:
+        # Un-doing a signature is auditable — it cannot be anonymous.
+        user, error = _require_human_user(db, args)
+        if error:
+            return error
+        user_id = user.id
 
     if args.get("realized_issue_id") is not None:
         issue = (
@@ -2799,7 +2839,13 @@ async def _stamp_risk_review(db, args: dict) -> list[TextContent]:
         return error
 
     query = db.query(Risk).filter(Risk.deleted_at.is_(None))
-    if args.get("risk_ids"):
+    if args.get("risk_ids") is not None:
+        # An explicit empty list must NOT silently widen to "stamp everything" —
+        # the stamp is the gate ceremony and would falsely satisfy review checks.
+        if not args["risk_ids"]:
+            return json_response(
+                {"error": "risk_ids is empty — omit it to stamp the whole register"}
+            )
         query = query.filter(Risk.id.in_(args["risk_ids"]))
     risks = query.all()
     if not risks:

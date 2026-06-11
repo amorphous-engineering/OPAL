@@ -83,8 +83,14 @@ async function refreshAcceptancePanel() {
     const container = document.getElementById('acceptance-panel');
     if (!container) return;
     try {
+        // The rationale textarea saves on blur, which lands here right after
+        // the user clicks ACCEPT — re-rendering must not swallow the open
+        // confirm dialog mid-signature.
+        const confirmEl = document.getElementById('accept-confirm');
+        const confirmWasOpen = confirmEl && confirmEl.style.display !== 'none';
         const r = await fetch(`/risks/${riskId}/acceptance-panel`);
         if (r.ok) container.innerHTML = await r.text();
+        if (confirmWasOpen && document.getElementById('accept-confirm')) openAcceptConfirm();
     } catch (e) { /* panel refresh is cosmetic; the next save retries */ }
 }
 
@@ -241,13 +247,20 @@ async function unlinkIssue(issueId) {
 // ============ Register: bulk review stamp ============
 
 async function stampReviewed() {
-    const ids = [...document.querySelectorAll('#risks-table tr[data-risk-id]')]
-        .map(row => parseInt(row.dataset.riskId));
-    if (!ids.length) return;
+    // Send the register's current filters, not the rendered rows — the
+    // ceremony covers every listed risk, including pages beyond this one.
+    const value = (selector) => {
+        const el = document.querySelector(selector);
+        return el && el.value ? el.value : null;
+    };
     const response = await fetch('/api/risks/review-stamp', {
         method: 'POST',
         headers: getRiskHeaders(),
-        body: JSON.stringify({ risk_ids: ids }),
+        body: JSON.stringify({
+            search: value('#search'),
+            disposition: value('[name="disposition"]'),
+            severity: value('[name="severity"]'),
+        }),
     });
     if (response.ok) window.location.reload();
     else alert(formatApiError((await response.json()).detail, 'Failed to stamp review'));

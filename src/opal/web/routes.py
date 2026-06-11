@@ -2790,6 +2790,9 @@ def risks_table(
         elif severity == "high":
             query = query.filter(score > 12)
 
+    from sqlalchemy.orm import selectinload
+
+    query = query.options(selectinload(Risk.owner))
     risks, pagination = paginate_query(request, query.order_by(Risk.id.desc()), page, colspan=6)
 
     rows = [
@@ -2812,7 +2815,6 @@ def risks_table(
 @router.get("/risks/matrix", response_class=HTMLResponse)
 def risks_matrix(request: Request, db: DbSession) -> HTMLResponse:
     """Risk matrix page — current (solid) and residual (hollow) markers."""
-    import json
 
     context = get_base_context(request, db, "Risk Matrix - OPAL")
 
@@ -2837,20 +2839,20 @@ def risks_matrix(request: Request, db: DbSession) -> HTMLResponse:
     context["medium_count"] = sum(1 for r in risks if r.severity == "medium")
     context["low_count"] = sum(1 for r in risks if r.severity == "low")
 
-    context["risks_json"] = json.dumps(
-        [
-            {
-                "id": r.id,
-                "risk_number": r.risk_number,
-                "title": r.title,
-                "probability": r.probability,
-                "impact": r.impact,
-                "residual_probability": r.residual_probability,
-                "residual_impact": r.residual_impact,
-            }
-            for r in risks
-        ]
-    )
+    # Rendered with | tojson in the template — json.dumps + | safe would let
+    # a title containing </script> break out of the inline script block.
+    context["risks_data"] = [
+        {
+            "id": r.id,
+            "risk_number": r.risk_number,
+            "title": r.title,
+            "probability": r.probability,
+            "impact": r.impact,
+            "residual_probability": r.residual_probability,
+            "residual_impact": r.residual_impact,
+        }
+        for r in risks
+    ]
 
     return templates.TemplateResponse("risks/matrix.html", context)
 
@@ -2884,6 +2886,13 @@ def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
     findings = lint_risk_row(risk)
     linked_issue_ids = [link.issue_id for link in risk.issue_links]
 
+    parts = (
+        db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).limit(200).all()
+    )
+    # The dropdown is capped; the set asset must still render as selected.
+    if risk.asset_part is not None and risk.asset_part not in parts:
+        parts.append(risk.asset_part)
+
     context = get_base_context(request, db, f"{risk.risk_number} - OPAL")
     context["risk"] = risk
     context["badge"] = DISPOSITION_BADGES.get(risk.disposition, "draft")
@@ -2895,9 +2904,7 @@ def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
         for field, field_findings in findings.items()
     }
     context["users"] = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
-    context["parts"] = (
-        db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).limit(200).all()
-    )
+    context["parts"] = parts
     context["linkable_issues"] = (
         db.query(Issue)
         .filter(Issue.deleted_at.is_(None), Issue.id.notin_(linked_issue_ids))

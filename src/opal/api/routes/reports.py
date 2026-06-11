@@ -316,7 +316,15 @@ def export_risks_csv(
     min_score: int | None = Query(None, description="Minimum risk score"),
 ) -> StreamingResponse:
     """Export risks as CSV."""
-    query = db.query(Risk).filter(Risk.deleted_at.is_(None))
+    from sqlalchemy.orm import selectinload
+
+    query = (
+        db.query(Risk)
+        .filter(Risk.deleted_at.is_(None))
+        # The row loop touches owner and statement→asset_part on every risk;
+        # the export is unpaginated, so lazy loading would be 2N queries.
+        .options(selectinload(Risk.owner), selectinload(Risk.asset_part))
+    )
 
     if disposition:
         query = query.filter(Risk.disposition == disposition)

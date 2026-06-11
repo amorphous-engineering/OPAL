@@ -151,6 +151,13 @@ def upgrade() -> None:
         batch_op.drop_column('mitigation_plan')
         batch_op.drop_column('linked_issue_id')
 
+    # Batch mode recreated the risk table (twice): SQLite dropped the FTS sync
+    # triggers with the old table. Rebuild the whole FTS schema — idempotent,
+    # and also heals triggers lost the same way in earlier batch migrations.
+    from opal.db.fts import create_fts_schema
+
+    create_fts_schema(conn)
+
 
 def downgrade() -> None:
     conn = op.get_bind()
@@ -182,19 +189,24 @@ def downgrade() -> None:
             {"status": status, "disposition": disposition},
         )
 
-    # Restore the single linked issue from the oldest mitigation link.
+    # Restore the single linked issue from the oldest mitigation link —
+    # research links were never mitigation pointers in the old schema.
     conn.execute(sa.text(
         "UPDATE risk SET linked_issue_id = ("
         "SELECT issue_id FROM risk_issue_link "
-        "WHERE risk_issue_link.risk_id = risk.id ORDER BY id LIMIT 1)"
+        "WHERE risk_issue_link.risk_id = risk.id AND risk_issue_link.role = 'mitigation' "
+        "ORDER BY id LIMIT 1)"
     ))
 
     # Recover the legacy plan text folded into description on upgrade.
+    # rpartition: the upgrade appended the marker at the END, so narrative the
+    # user wrote (or earlier folded blocks) above a later marker stays narrative.
+    marker = 'LEGACY MITIGATION PLAN:\n'
     rows = conn.execute(sa.text(
-        "SELECT id, description FROM risk WHERE description LIKE '%LEGACY MITIGATION PLAN:%'"
-    )).fetchall()
+        "SELECT id, description FROM risk WHERE description LIKE :pattern"
+    ), {"pattern": f"%{marker}%"}).fetchall()
     for risk_id, description in rows:
-        narrative, _, plan = description.partition('LEGACY MITIGATION PLAN:\n')
+        narrative, _, plan = description.rpartition(marker)
         conn.execute(
             sa.text("UPDATE risk SET description = :description, mitigation_plan = :plan "
                     "WHERE id = :id"),
@@ -223,3 +235,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_risk_issue_link_issue_id'), table_name='risk_issue_link')
     op.drop_index(op.f('ix_risk_issue_link_risk_id'), table_name='risk_issue_link')
     op.drop_table('risk_issue_link')
+
+    # Same FTS trigger loss as upgrade: batch mode recreated risk. Rebuild.
+    from opal.db.fts import create_fts_schema
+
+    create_fts_schema(conn)

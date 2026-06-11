@@ -144,10 +144,12 @@ class DashboardScreen(Screen):
             issues_stat = self.query_one("#issues-stat", StatCard)
             issues_stat.update_value(str(issues.get("total", 0)))
 
-            # Open risks
-            risks = client.list_risks(disposition="open", page_size=1)
+            # Open risks — the matrix total uses the shared open-exposure
+            # definition (everything except closed/realized), same as the
+            # web dashboard; a bare disposition=open filter undercounts.
+            matrix = client.get_risk_matrix()
             risks_stat = self.query_one("#risks-stat", StatCard)
-            risks_stat.update_value(str(risks.get("total", 0)))
+            risks_stat.update_value(str(matrix.get("total_risks", 0)))
 
         except Exception as e:
             self.notify(f"Error loading stats: {e}", severity="error")

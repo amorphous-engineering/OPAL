@@ -103,11 +103,15 @@ def lint_scenario(
             "no_response_language", consequence, response_message
         )
         if not _MEASURABLE.search(consequence) and not _NUMBER.search(consequence):
+            # Span covers the whole field: the underline renderers (overlay,
+            # server-side markup) drop span-less findings, and this rule has
+            # no narrower location — the problem is what the text lacks.
             findings["consequence"].append(
                 _finding(
                     "measurable_consequence",
                     "consequence names nothing measurable (loss, delay, overrun, failure, "
                     "damage, injury, scrub, or a number) — impact scores this",
+                    span=(0, len(consequence)),
                 )
             )
 

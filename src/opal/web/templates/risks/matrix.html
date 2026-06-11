@@ -113,7 +113,7 @@
 </style>
 
 <script>
-const risks = {{ risks_json | safe }};
+const risks = {{ risks_data | tojson }};
 
 function filterByCell(prob, impact) {
     const current = risks.filter(r => r.probability === prob && r.impact === impact);

@@ -8,12 +8,15 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import selectinload
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number, generate_risk_number
 from opal.db.models.issue import Issue, IssueStatus, IssueType
+from opal.db.models.part import Part
 from opal.db.models.risk import Risk, RiskDisposition, RiskIssueLink, RiskIssueRole
+from opal.db.models.user import User
 from opal.risks.dispositions import (
     OPEN_DISPOSITIONS,
     RiskDispositionError,
@@ -190,9 +193,19 @@ class SpawnIssueRequest(BaseModel):
 
 
 class ReviewStampRequest(BaseModel):
-    """Bulk review stamp — one click at gate time."""
+    """Bulk review stamp — one click at gate time.
 
-    risk_ids: list[int] = Field(..., min_length=1)
+    Either explicit risk_ids, or filters describing the listed set (the
+    register passes its current filters so every matching risk is stamped,
+    not just the rendered page). No ids and no filters stamps the whole
+    register.
+    """
+
+    risk_ids: list[int] | None = Field(None, min_length=1)
+    search: str | None = None
+    disposition: str | None = None
+    severity: str | None = None
+    min_score: int | None = Field(None, ge=1, le=25)
 
 
 # ============ Helpers ============
@@ -267,6 +280,29 @@ def _validate_asset_pair(risk: Risk) -> None:
         )
 
 
+def _validate_refs(db: DbSession, values: dict) -> None:
+    """Referenced rows must exist — FK enforcement is on in production
+    (pragma) but off in the test engine, so a 500 there is a 404 here."""
+    owner_id = values.get("owner_id")
+    if owner_id is not None and db.get(User, owner_id) is None:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    asset_part_id = values.get("asset_part_id")
+    if asset_part_id is not None:
+        part = (
+            db.query(Part).filter(Part.id == asset_part_id, Part.deleted_at.is_(None)).first()
+        )
+        if part is None:
+            raise HTTPException(status_code=404, detail="Asset part not found")
+
+
+def _normalize_asset_text(values: dict) -> None:
+    """Empty/whitespace asset_text means 'not set' — store NULL, never ''.
+    A '' that slipped through would violate exactly-one-asset at the storage
+    level and register as a phantom scenario change on accepted risks."""
+    if values.get("asset_text") is not None and not values["asset_text"].strip():
+        values["asset_text"] = None
+
+
 # ============ Utility Endpoints ============
 
 
@@ -339,9 +375,14 @@ def review_stamp(
     user_id: CurrentUserId,
 ) -> dict:
     """Stamp last_reviewed_* on the listed risks — the entire review ceremony."""
-    risks = (
-        db.query(Risk).filter(Risk.id.in_(data.risk_ids), Risk.deleted_at.is_(None)).all()
-    )
+    if data.risk_ids is not None:
+        risks = (
+            db.query(Risk).filter(Risk.id.in_(data.risk_ids), Risk.deleted_at.is_(None)).all()
+        )
+    else:
+        risks = _filtered_risks_query(
+            db, data.search, data.disposition, data.severity, data.min_score
+        ).all()
     if not risks:
         raise HTTPException(status_code=404, detail="No matching risks")
     count = stamp_review(db, risks, user_id)
@@ -355,6 +396,48 @@ def review_stamp(
 # ============ Risk CRUD ============
 
 
+def _filtered_risks_query(
+    db: DbSession,
+    search: str | None = None,
+    disposition: str | None = None,
+    severity: str | None = None,
+    min_score: int | None = None,
+):
+    """Shared filter builder — all predicates in SQL so pagination and counts
+    see the filtered set, mirroring Risk.severity thresholds (web register
+    does the same)."""
+    query = db.query(Risk).filter(Risk.deleted_at.is_(None))
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(Risk.title.ilike(search_term) | Risk.risk_number.ilike(search_term))
+    if disposition:
+        query = query.filter(Risk.disposition == disposition)
+
+    score = Risk.probability * Risk.impact
+    if severity == "low":
+        query = query.filter(score <= 5)
+    elif severity == "medium":
+        query = query.filter(score > 5, score <= 12)
+    elif severity == "high":
+        query = query.filter(score > 12)
+    if min_score:
+        query = query.filter(score >= min_score)
+
+    return query
+
+
+def _eager_response_options(query):
+    """Eager-load everything _risk_to_response touches — list contexts would
+    otherwise lazy-load 4+ relationships per row."""
+    return query.options(
+        selectinload(Risk.owner),
+        selectinload(Risk.accepted_by),
+        selectinload(Risk.asset_part),
+        selectinload(Risk.issue_links).selectinload(RiskIssueLink.issue),
+    )
+
+
 @router.get("", response_model=RiskListResponse)
 def list_risks(
     db: DbSession,
@@ -366,31 +449,19 @@ def list_risks(
     page_size: int = Query(50, ge=1, le=100),
 ) -> RiskListResponse:
     """List risks with optional filters."""
-    query = db.query(Risk).filter(Risk.deleted_at.is_(None))
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            Risk.title.ilike(search_term) | Risk.risk_number.ilike(search_term)
-        )
-
-    if disposition:
-        query = query.filter(Risk.disposition == disposition)
-
+    query = _filtered_risks_query(db, search, disposition, severity, min_score)
     total = query.count()
 
-    risks = query.order_by(Risk.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-
-    # Filter by severity/min_score in Python (computed properties)
-    items = [_risk_to_response(r) for r in risks]
-
-    if severity:
-        items = [i for i in items if i.severity == severity]
-    if min_score:
-        items = [i for i in items if i.score >= min_score]
+    risks = (
+        _eager_response_options(query)
+        .order_by(Risk.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
     return RiskListResponse(
-        items=items,
+        items=[_risk_to_response(r) for r in risks],
         total=total,
         page=page,
         page_size=page_size,
@@ -404,12 +475,19 @@ def create_risk(
     user_id: CurrentUserId,
 ) -> RiskResponse:
     """Create a new risk."""
+    values = data.model_dump()
+    _normalize_asset_text(values)
+    if values.get("asset_part_id") is not None and values.get("asset_text") is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="asset_part_id and asset_text are exclusive — exactly one names the asset",
+        )
+    _validate_refs(db, values)
     risk = Risk(
         risk_number=generate_risk_number(db),
         disposition=RiskDisposition.OPEN.value,
-        **data.model_dump(),
+        **values,
     )
-    _validate_asset_pair(risk)
     db.add(risk)
     db.flush()
 
@@ -445,12 +523,27 @@ def update_risk(
     old_values = get_model_dict(risk)
 
     updates = data.model_dump(exclude_unset=True)
-    if updates.get("title") is None and "title" in updates:
-        del updates["title"]  # title is required; explicit null cannot clear it
+    for non_nullable in ("title", "probability", "impact"):
+        if non_nullable in updates and updates[non_nullable] is None:
+            raise HTTPException(
+                status_code=422, detail=f"{non_nullable} cannot be cleared"
+            )
+    if (
+        "acceptance_rationale" in updates
+        and risk.disposition == RiskDisposition.ACCEPTED.value
+        and updates["acceptance_rationale"] != risk.acceptance_rationale
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="the rationale is part of the signature — un-accepting the risk "
+            "(with a note) is how it gets rewritten",
+        )
+    _normalize_asset_text(updates)
+    _validate_refs(db, updates)
     # Setting one asset form clears the other — exactly one names the asset.
     if updates.get("asset_part_id") is not None and "asset_text" not in updates:
         updates["asset_text"] = None
-    if (updates.get("asset_text") or "").strip() and "asset_part_id" not in updates:
+    if updates.get("asset_text") is not None and "asset_part_id" not in updates:
         updates["asset_part_id"] = None
 
     for field, value in updates.items():
@@ -586,6 +679,12 @@ def spawn_issue(
     roles = {r.value for r in RiskIssueRole} | {"realized"}
     if data.role not in roles:
         raise HTTPException(status_code=400, detail=f"Invalid role: {data.role}")
+    if data.role == "realized" and risk.realized_issue is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"already realized as {risk.realized_issue.issue_number} — "
+            "spawning again would orphan it",
+        )
 
     issue = Issue(
         issue_number=generate_issue_number(db),
