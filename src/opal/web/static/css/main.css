@@ -169,6 +169,12 @@ select option {
     color: var(--text-muted);
 }
 
+/* Dev build (running from a git checkout): blue wordmark + version */
+.header-brand.dev .brand-link,
+.header-brand.dev .brand-version {
+    color: var(--accent-blue);
+}
+
 .header-nav {
     display: flex;
     gap: var(--space-xs);

@@ -347,12 +347,12 @@ def main() -> None:
         prog="opal",
         description="OPAL - Operations, Procedures, Assets, Logistics",
     )
-    from opal import __version__
+    from opal.version import get_version_info
 
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {__version__}",
+        version=f"%(prog)s {get_version_info().display}",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
