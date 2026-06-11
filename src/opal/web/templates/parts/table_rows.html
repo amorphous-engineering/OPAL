@@ -2,20 +2,18 @@
 {% if parts %}
 {% for part in parts %}
 <tr>
-    <td>{{ ok.id_cell(part.id, "/parts/" ~ part.id) }}</td>
-    <td class="mono"><a href="/parts/{{ part.id }}">{{ part.internal_pn }}</a>{% if part.lifecycle_state == 'draft' %} {{ ok.status("DRAFT", "warn") }}{% endif %}</td>
+    <td class="mono"><a href="/parts/{{ part.id }}">{{ part.internal_pn }}</a></td>
+    <td><a href="/parts/{{ part.id }}" class="row-link-plain">{{ part.name }}</a></td>
     <td>{{ ok.mono(part.external_pn) }}</td>
-    <td><a href="/parts/{{ part.id }}">{{ part.name }}</a></td>
     <td>{{ part.category or '-' }}</td>
-    <td class="mono" style="text-align: center;">{{ part.tier if part.tier is not none else '-' }}</td>
-    <td class="mono" style="text-align: right;">{{ '%g' % part.total_quantity if part.total_quantity else '0' }}{% if part.is_low_stock %} {{ ok.status("LOW", "warn") }}{% endif %}</td>
-    <td>{{ ok.mono(part.unit_of_measure) }}</td>
+    <td class="mono">{% if part.lifecycle_state == 'draft' %}<span class="ledger-flag">DRAFT</span>{% else %}ACTIVE{% endif %}</td>
+    <td class="mono" style="text-align: right;">{{ '%g' % part.total_quantity if part.total_quantity else '0' }} {{ (part.unit_of_measure or 'ea') | lower }}{% if part.is_low_stock %} {{ ok.status("LOW", "warn") }}{% endif %}</td>
 </tr>
 {% endfor %}
 {% include 'partials/pagination_row.html' %}
 {% else %}
 <tr>
-    <td colspan="8">
+    <td colspan="6">
         {{ ok.empty("No parts found") }}
     </td>
 </tr>

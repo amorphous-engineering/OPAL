@@ -2510,3 +2510,204 @@ a.user-menu-link.active {
     gap: var(--space-sm);
     padding: 2px 0;
 }
+
+/* Segmented control — one button per option, exactly one active */
+.segmented {
+    display: inline-flex;
+}
+
+.segmented button {
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+}
+
+.segmented button + button {
+    border-left: none;
+}
+
+.segmented button.active {
+    border-color: var(--accent-orange);
+    color: var(--accent-orange);
+    font-weight: 600;
+}
+
+/* Inline disclosure — a line that opens, not a box */
+details.disclosure > summary {
+    cursor: pointer;
+    list-style: none;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--space-xs) 0;
+}
+
+details.disclosure > summary::-webkit-details-marker { display: none; }
+details.disclosure[open] > summary { color: var(--text-secondary); }
+
+/* The ledger — part page. An empty section is one line, never a box.
+   Grouping is carried by column placement: design-side left, world-side
+   right. Width is an information budget — never one stretched sparse
+   column. */
+.part-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin: var(--space-md) 0;
+}
+
+.part-actions .part-action-right {
+    margin-left: auto;
+}
+
+.empty-line {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    padding: var(--space-xs) 2px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+    .empty-line {
+        border-bottom-color: color-mix(in srgb, var(--border-color) 50%, transparent);
+    }
+}
+
+.empty-line a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.part-description {
+    margin: var(--space-md) 0;
+    max-width: 80ch;
+}
+
+/* Dense mono readout — labels are nouns, values are facts */
+.part-readout {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    margin: var(--space-sm) 0 var(--space-md);
+    line-height: 1.7;
+}
+
+.part-readout .ro-label {
+    color: var(--text-muted);
+}
+
+/* Two-column part page — each column a bounded information budget;
+   row actions sit at the column edge, adjacent to content */
+.part-layout {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 640px));
+    gap: var(--space-lg);
+    align-items: start;
+    justify-content: center;
+}
+
+@media (max-width: 1000px) {
+    .part-layout {
+        display: block;
+    }
+}
+
+.ledger-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    padding: 5px 2px;
+    border-bottom: 1px solid var(--border-color);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+.ledger-row-empty {
+    padding: 2px 2px;
+}
+
+.ledger-row-empty .ledger-label,
+.ledger-row-empty .ledger-value,
+.ledger-row-empty .ledger-add {
+    color: var(--text-muted);
+}
+
+.ledger-row .ledger-label {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.ledger-row .ledger-value {
+    margin-left: auto;
+    color: var(--text-primary);
+}
+
+.ledger-flag {
+    color: var(--status-warn);
+}
+
+.ledger-row .ledger-add {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.ledger-detail {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    padding: var(--space-xs) 0 var(--space-xs) var(--space-md);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.ledger-detail-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    padding: 1px 0;
+}
+
+.ledger-detail-line .ldl-muted {
+    color: var(--text-muted);
+}
+
+.ledger-detail-line .ldl-actions {
+    margin-left: auto;
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.ledger-detail-line .ldl-actions a {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.ledger-detail-line .ldl-actions a:hover {
+    color: var(--text-primary);
+}
+
+/* Parts list — one line per row, pitch matched to the part-page ledger.
+   Accent color budget: PN only; names render primary. */
+.parts-list td,
+.parts-list th {
+    padding: 5px 8px;
+    white-space: nowrap;
+}
+
+.parts-list .row-link-plain {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.parts-list .row-link-plain:hover {
+    text-decoration: underline;
+}

@@ -1,5 +1,6 @@
 {% extends "layouts/base.html" %}
 {% import 'opalkit/_macros.html' as ok %}
+{% from 'parts/_tag.html' import part_tag %}
 
 {% block breadcrumbs %}
 {{ ok.crumb("HOME", "/") }}
@@ -8,292 +9,86 @@
 {% endblock %}
 
 {% block content %}
-<div class="grid grid-2">
-    <!-- Left Column: Part Details -->
-    {% set part_actions %}
-                {{ ok.btn("PRINT LABEL", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=500,height=300\')"') }}
-                {{ ok.btn("EDIT", href="/parts/" ~ part.id ~ "/edit") }}
-                {# Referenced drafts and active parts have no delete control at all #}
-                {% if part.lifecycle_state == 'draft' and not part_is_referenced %}
-                {{ ok.confirm_btn("DELETE", message="Delete this draft? Its number is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts") }}
-                {% endif %}
-    {% endset %}
-    {% call ok.panel("PART #" ~ part.id, actions=part_actions) %}
-            {% call ok.table() %}
-                {{ ok.detail_row("ID", ok.id_cell(part.id), th_width="180px") }}
-                <tr>
-                    <th style="width: 180px;">INTERNAL PN</th>
-                    <td class="mono"><strong>{{ part.internal_pn }}</strong>
-                        {% if part.lifecycle_state == 'draft' %}
-                        {{ ok.status("DRAFT", "warn") }}
-                        {% else %}
-                        <span class="text-muted" title="identity locked{% if part.activated_at %} {{ part.activated_at.isoformat() }}{% endif %}{% if part.activation_cause %} — {{ part.activation_cause }}{% endif %}">&#x1F512;</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% if part.lifecycle_state == 'active' and part.activated_at %}
-                <tr>
-                    <th style="width: 180px;">ACTIVATED</th>
-                    <td>{{ ok.timestamp(part.activated_at) }}{% if part.activated_by %} by {{ part.activated_by.name }}{% endif %}{% if part.activation_cause %} <span class="text-secondary">— {{ part.activation_cause }}</span>{% endif %}</td>
-                </tr>
-                {% endif %}
-                {{ ok.detail_row("EXTERNAL PN", ok.mono(part.external_pn), th_width="180px") }}
-                {{ ok.detail_row("NAME", part.name, th_width="180px") }}
-                {{ ok.detail_row("CATEGORY", part.category or '-', th_width="180px") }}
-                {{ ok.detail_row("TIER", ok.mono('Tier ' ~ part.tier if part.tier is not none else '-'), th_width="180px") }}
-                {{ ok.detail_row("UNIT OF MEASURE", ok.mono(part.unit_of_measure or 'EA'), th_width="180px") }}
-                {{ ok.detail_row("TRACKING TYPE", ok.status(part.tracking_type.value|upper if part.tracking_type else 'BULK', "info" if part.tracking_type and part.tracking_type.value == 'serialized' else "default"), th_width="180px") }}
-                <tr>
-                    <th>QR CODE</th>
-                    <td><img src="/api/parts/{{ part.id }}/qrcode" alt="QR Code" style="width: 80px; height: 80px; background: white; padding: 4px;"></td>
-                </tr>
-                {% if onshape_link %}
-                <tr>
-                    <th>ONSHAPE</th>
-                    <td>
-                        {{ ok.status("LINKED", "ok") }}
-                        <a href="https://cad.onshape.com/documents/{{ onshape_link.document_id }}" target="_blank" class="mono" style="margin-left: var(--space-sm);">{{ onshape_link.onshape_name or 'Open in Onshape' }}</a>
-                        {% if onshape_link.last_synced_at %}
-                        <span class="text-muted" style="margin-left: var(--space-sm);">synced {{ ok.timestamp(onshape_link.last_synced_at) }}</span>
-                        {% endif %}
-                        {% if onshape_link.stale %}
-                        {{ ok.status("STALE", "warn") }}
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endif %}
-                {% if part.reorder_point is not none %}
-                <tr>
-                    <th>REORDER POINT</th>
-                    <td class="mono">{{ '%g' % part.reorder_point }}</td>
-                </tr>
-                {% endif %}
-                {% if part.is_tooling %}
-                <tr>
-                    <th>TOOLING</th>
-                    <td>{{ ok.status("TOOLING", "info") }}</td>
-                </tr>
-                <tr>
-                    <th>CAL INTERVAL</th>
-                    <td class="mono">{{ part.calibration_interval_days or '-' }}{% if part.calibration_interval_days %} days{% endif %}</td>
-                </tr>
-                {% endif %}
-                {% if part.parent_id %}
-                <tr>
-                    <th>PARENT ASSEMBLY</th>
-                    <td><a href="/parts/{{ part.parent_id }}" class="mono">{{ part.parent.internal_pn }}</a> - {{ part.parent.name }}</td>
-                </tr>
-                {% endif %}
-            {% endcall %}
+{% set is_draft = part.lifecycle_state == 'draft' %}
 
-            {% if part.description %}
-            <div style="margin-top: var(--space-md);">
-                <div class="form-label">DESCRIPTION</div>
-                <div class="markdown-content" style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">{{ part.description }}</div>
-            </div>
-            {% endif %}
+{# ============ THE PAGE — left: what this part IS (tag · actions · desc ·
+   readout · BOM · REQS · TESTS); right: where it came from / where used /
+   how many exist (STOCK · PO LINES · SUPPLIERS · CONSUMED · WHERE-USED ·
+   PROC USE). Order is fixed and global; emphasis is weight, not position.
+   Stacks IS-first under 1000px. ============ #}
+<div class="part-layout">
+<div class="part-col">
+{{ part_tag('header',
+            pn=part.internal_pn,
+            name=part.name,
+            tier_level=part.tier,
+            tier_name=tier_name,
+            uom=part.unit_of_measure,
+            tracking=part.tracking_type.value if part.tracking_type else '',
+            state=part.lifecycle_state,
+            activated_at=part.activated_at,
+            qr_url='/api/parts/' ~ part.id ~ '/qrcode',
+            pn_segments=pn_segments) }}
 
-            {% if part.metadata_ %}
-            <div style="margin-top: var(--space-md);">
-                <div class="form-label">METADATA</div>
-                <pre style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color); font-family: var(--font-mono); font-size: 0.875rem; overflow-x: auto;">{{ part.metadata_ | tojson(indent=2) }}</pre>
-            </div>
-            {% endif %}
-
-            {% call ok.table() %}
-                {{ ok.detail_row("CREATED", ok.timestamp(part.created_at), th_width="180px") }}
-                {{ ok.detail_row("UPDATED", ok.timestamp(part.updated_at), th_width="180px") }}
-            {% endcall %}
-
-            {% if part.lifecycle_state == 'draft' %}
-            {% include 'parts/_activate_panel.html' %}
-            {% endif %}
-    {% endcall %}
-
-    <!-- Right Column: Inventory & Related Data -->
-    <div>
-        <!-- Stock Summary Panel -->
-        {% call ok.panel("STOCK SUMMARY", actions=ok.btn("+ ADD INVENTORY", href="/inventory/new?part_id=" ~ part.id, variant="primary"), margin_top="0") %}
-                <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                    <div class="form-label">TOTAL QUANTITY</div>
-                    <div style="font-family: var(--font-mono); font-size: 2rem; font-weight: 600;">
-                        {{ '%g' % part.total_quantity if part.total_quantity else '0' }}
-                    </div>
-                </div>
-                <div class="text-muted" style="text-align: right; font-family: var(--font-mono);">{{ part.unit_of_measure or 'EA' }}</div>
-        {% endcall %}
-
-        <!-- Inventory Records Panel -->
-        {% call ok.panel("INVENTORY RECORDS (" ~ (inventory_records | length) ~ ")") %}
-                {% if inventory_records %}
-                {% call ok.table() %}
-                    <thead>
-                        <tr>
-                            {{ ok.th("OPAL #") }}
-                            {{ ok.th("LOCATION") }}
-                            {{ ok.th("QTY", align="right") }}
-                            {{ ok.th("LOT") }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for inv in inventory_records %}
-                        <tr>
-                            <td class="mono"><a href="/inventory/opal/{{ inv.opal_number }}">{{ inv.opal_number }}</a></td>
-                            <td>{{ inv.location or '-' }}</td>
-                            <td class="mono" style="text-align: right;">{{ '%g' % inv.quantity }}</td>
-                            <td>{{ ok.mono(inv.lot_number) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                {% endcall %}
-                {% else %}
-                {{ ok.empty("No inventory records") }}
-                {% endif %}
-        {% endcall %}
-
-        <!-- BOM Components (this part as assembly) -->
-        {% call ok.panel("BOM COMPONENTS (" ~ (bom_lines | length) ~ ")", actions=ok.btn("+ ADD COMPONENT", variant="primary", attrs='onclick="showAddComponent()"')) %}
-                {% if bom_lines %}
-                {% call ok.table() %}
-                    <thead>
-                        <tr>
-                            {{ ok.th("COMPONENT PN") }}
-                            {{ ok.th("NAME") }}
-                            {{ ok.th("QTY", width="60px", align="right") }}
-                            {{ ok.th("REF DES", width="120px") }}
-                            {{ ok.th("NOTES") }}
-                            {{ ok.th("", width="120px") }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for line in bom_lines %}
-                        <tr>
-                            <td class="mono"><a href="/parts/{{ line.component.id }}">{{ line.component.internal_pn }}</a></td>
-                            <td><a href="/parts/{{ line.component.id }}">{{ line.component.name }}</a></td>
-                            <td class="mono" style="text-align: right;">{{ line.quantity }}</td>
-                            <td class="mono">{{ line.reference_designator or '-' }}</td>
-                            <td class="text-secondary">{{ line.notes or '-' }}</td>
-                            <td>
-                                {{ ok.btn("EDIT", size="sm", attrs='onclick="editBomLine(' ~ line.id ~ ', ' ~ line.quantity ~ ', \'' ~ (line.reference_designator or '') | replace("'", "\\'") ~ '\', \'' ~ (line.notes or '') | replace("'", "\\'") ~ '\')"') }}
-                                {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="deleteBomLine(' ~ line.id ~ ')"') }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                {% endcall %}
-                {% else %}
-                {{ ok.empty("No BOM components defined") }}
-                {% endif %}
-        {% endcall %}
-
-        {% if bom_lines %}
-        <!-- BOM Tree -->
-        {% call ok.panel("BOM TREE") %}
-                <div id="bom-tree" class="mono" style="font-size: 0.875rem;">
-                    <span class="text-muted">Loading tree...</span>
-                </div>
-        {% endcall %}
-        {% endif %}
-
-        <!-- BOM Where Used (this part as component) -->
-        {% if where_used %}
-        {% call ok.panel("WHERE USED (" ~ (where_used | length) ~ ")") %}
-                {% call ok.table() %}
-                    <thead>
-                        <tr>
-                            {{ ok.th("ASSEMBLY PN") }}
-                            {{ ok.th("ASSEMBLY NAME") }}
-                            {{ ok.th("QTY", width="60px", align="right") }}
-                            {{ ok.th("REF DES", width="120px") }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for line in where_used %}
-                        <tr>
-                            <td class="mono"><a href="/parts/{{ line.assembly.id }}">{{ line.assembly.internal_pn }}</a></td>
-                            <td><a href="/parts/{{ line.assembly.id }}">{{ line.assembly.name }}</a></td>
-                            <td class="mono" style="text-align: right;">{{ line.quantity }}</td>
-                            <td class="mono">{{ line.reference_designator or '-' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                {% endcall %}
-        {% endcall %}
-        {% endif %}
-
-        <!-- Test Templates -->
-        {% call ok.panel("TEST TEMPLATES (" ~ (test_templates | length) ~ ")", actions=ok.btn("+ ADD TEST", variant="primary", attrs='onclick="showAddTest()"')) %}
-                {% if test_templates %}
-                {% call ok.table() %}
-                    <thead>
-                        <tr>
-                            {{ ok.th("NAME") }}
-                            {{ ok.th("TYPE", width="80px") }}
-                            {{ ok.th("REQUIRED", width="70px") }}
-                            {{ ok.th("MIN", width="80px") }}
-                            {{ ok.th("MAX", width="80px") }}
-                            {{ ok.th("UNIT", width="60px") }}
-                            {{ ok.th("", width="60px") }}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for tt in test_templates %}
-                        <tr>
-                            <td>{{ tt.name }}</td>
-                            <td class="mono">{{ tt.test_type | upper }}</td>
-                            <td>{% if tt.required %}{{ ok.status("YES", "ok") }}{% else %}<span class="text-muted">NO</span>{% endif %}</td>
-                            <td class="mono">{{ '%g' % tt.min_value if tt.min_value is not none else '-' }}</td>
-                            <td class="mono">{{ '%g' % tt.max_value if tt.max_value is not none else '-' }}</td>
-                            <td class="mono">{{ tt.unit or '-' }}</td>
-                            <td>
-                                {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="deleteTestTemplate(' ~ tt.id ~ ')"') }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                {% endcall %}
-                {% else %}
-                {{ ok.empty("No test templates defined") }}
-                {% endif %}
-        {% endcall %}
-    </div>
+<div class="part-actions">
+    {{ ok.btn("PRINT", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
+    {{ ok.btn("EDIT", attrs='onclick="openPartForm()"') }}
+    {% if is_draft %}
+    {{ ok.btn("ACTIVATE", variant="primary", attrs='onclick="openActivateConfirm()"') }}
+    {% if not part_is_referenced %}
+    <span class="part-action-right">{{ ok.confirm_btn("DELETE", message="Deletes this draft. " ~ part.internal_pn ~ " is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts") }}</span>
+    {% endif %}
+    {% endif %}
 </div>
 
-<!-- Suppliers Panel -->
-{% set supplier_panel_actions %}
-    {{ ok.btn("+ LINK SUPPLIER", variant="primary", attrs='onclick="showAddSupplier()"') }}
-{% endset %}
-{% call ok.panel("SUPPLIERS (" ~ (supplier_entries | length) ~ ")", actions=supplier_panel_actions, margin_top="var(--space-md)") %}
-    {% if supplier_entries %}
-    {% call ok.table() %}
-        <thead>
-            <tr>
-                {{ ok.th("SUPPLIER") }}
-                {{ ok.th("VENDOR PN", width="160px") }}
-                {{ ok.th("PREFERRED", width="90px") }}
-                {{ ok.th("NOTES") }}
-                {{ ok.th("", width="60px") }}
-            </tr>
-        </thead>
-        <tbody>
-            {% for entry in supplier_entries %}
-            <tr>
-                <td><a href="/suppliers/{{ entry.supplier_id }}">{{ entry.supplier.name }}</a></td>
-                <td class="mono">{{ entry.vendor_pn }}</td>
-                <td>{% if entry.is_preferred %}{{ ok.status("YES", "ok") }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
-                <td class="text-secondary">{{ entry.notes or '-' }}</td>
-                <td>
-                    {{ ok.btn("X", size="sm", variant="danger", attrs='onclick="deleteSupplierEntry(' ~ entry.id ~ ', ' ~ entry.supplier_id ~ ')"') }}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    {% endcall %}
-    {% else %}
-    {{ ok.empty("No suppliers linked to this part") }}
-    {% endif %}
-{% endcall %}
+{% if is_draft %}
+<div id="activate-confirm" class="baseline-confirm" style="display: none;">
+    <div class="baseline-signature">
+        activating <span class="text-green">{{ part.internal_pn }}</span> — Locks PN and tier permanently.<br>
+        signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
+        · <span id="activate-sign-time"></span>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="commitActivate()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+    <button type="button" class="btn" onclick="document.getElementById('activate-confirm').style.display='none'">ABORT</button>
+</div>
+{% endif %}
 
+{% if onshape_link %}
+<div class="mono" style="font-size: 0.8rem; margin: var(--space-sm) 0;">
+    {{ ok.status("ONSHAPE", "ok") }}
+    <a href="https://cad.onshape.com/documents/{{ onshape_link.document_id }}" target="_blank">{{ onshape_link.onshape_name or 'Open in Onshape' }}</a>
+    {% if onshape_link.last_synced_at %}<span class="text-muted">· synced {{ ok.timestamp(onshape_link.last_synced_at) }}</span>{% endif %}
+    {% if onshape_link.stale %}{{ ok.status("STALE", "warn") }}{% endif %}
+</div>
+{% endif %}
+
+{# Dense readout — labels are nouns, values are facts. Edits live behind EDIT. #}
+<div class="part-readout">
+    <span class="ro-label">CAT</span> {{ part.category | upper if part.category else '—' }} ·
+    <span class="ro-label">UOM</span> {{ (part.unit_of_measure or 'EA') | upper }} ·
+    <span class="ro-label">TRK</span> {{ 'SER' if part.tracking_type and part.tracking_type.value == 'serialized' else 'BULK' }} ·
+    <span class="ro-label">REORD</span> {{ '%g' % part.reorder_point if part.reorder_point is not none else '—' }} ·
+    <span class="ro-label">TOOL</span> {{ ('CAL ' ~ part.calibration_interval_days ~ 'D' if part.calibration_interval_days else 'YES') if part.is_tooling else '—' }} ·
+    <span class="ro-label">PARENT</span> {% if part.parent_id %}<a href="/parts/{{ part.parent_id }}">{{ part.parent.internal_pn }}</a>{% else %}—{% endif %} ·
+    <span class="ro-label">EXT</span> {{ part.external_pn or '—' }} ·
+    <span class="ro-label">CRE</span> {{ part.created_at.date().isoformat() }} ·
+    <span class="ro-label">UPD</span> {{ part.updated_at.date().isoformat() }}
+    {%- if part.lifecycle_state == 'active' and part.activated_at %} · <span class="ro-label">ACT</span> {{ part.activated_at.date().isoformat() }}{% endif %}
+    {%- if part.description %}<br><span class="ro-label">DESC</span> {{ part.description }}{% endif %}
+</div>
+
+{% include 'parts/_ledger_is.html' %}
+</div>
+
+<div class="part-col">
+{% include 'parts/_ledger_provenance.html' %}
+</div>
+</div>
+
+{% set form_part = part %}
+{% include 'parts/_part_form.html' %}
+
+{# ============ Modals ============ #}
 <!-- Add Supplier Modal -->
 <div id="add-supplier-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
@@ -303,7 +98,7 @@
                 <form id="add-supplier-form" onsubmit="addSupplierEntry(event)">
                     <div class="form-group">
                         <label class="form-label" for="sup-supplier-id">SUPPLIER ID *</label>
-                        <input type="number" id="sup-supplier-id" name="supplier_id" class="form-input mono" required min="1" placeholder="Enter supplier ID">
+                        <input type="number" id="sup-supplier-id" name="supplier_id" class="form-input mono" required min="1">
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="sup-vendor-pn">VENDOR PN *</label>
@@ -328,140 +123,6 @@
         </div>
     </div>
 </div>
-
-<!-- Allocated requirements — what this part owes the world -->
-{% call ok.panel("REQUIREMENTS (" ~ (part_requirements | length) ~ ")", margin_top="var(--space-md)") %}
-        {% if part_requirements %}
-        {% call ok.table() %}
-            <thead>
-                <tr>
-                    {{ ok.th("NUMBER", width="110px") }}
-                    {{ ok.th("TITLE") }}
-                    {{ ok.th("STATE", width="110px") }}
-                    {{ ok.th("FLAGS", width="110px") }}
-                    {{ ok.th("ALLOCATION", width="120px") }}
-                    {{ ok.th("", width="80px") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in part_requirements %}
-                {% set r = row.req %}
-                {% set a = row.allocation %}
-                <tr>
-                    <td>
-                        {% if r %}{{ ok.link(r.req_number, "/requirements/" ~ r.id, mono=true) }}
-                        {% else %}{{ ok.mono(a.requirement_id) }}{% endif %}
-                    </td>
-                    <td>{{ r.title if r else '(yaml catalog requirement)' }}</td>
-                    <td>
-                        {% if r %}
-                        {{ ok.status(r.lifecycle_state | upper, "ok" if r.lifecycle_state == 'baselined' else ("warn" if r.lifecycle_state == 'superseded' else ("error" if r.lifecycle_state == 'cancelled' else "draft"))) }}
-                        {% else %}—{% endif %}
-                    </td>
-                    <td>
-                        {% if r %}
-                        {% if r.tbd %}<span class="flag-chip flag-tbd mono">TBD</span>{% endif %}
-                        {% if r.tbr %}<span class="flag-chip flag-tbr mono">TBR</span>{% endif %}
-                        {% if r.stale is defined and r.stale %}<span class="flag-chip flag-stale mono">≠ STALE</span>{% endif %}
-                        {% endif %}
-                    </td>
-                    <td>{{ ok.status(a.status | upper | replace('_', ' '), "ok" if a.status == 'verified' else "draft") }}</td>
-                    <td>{{ ok.btn("X", size="sm", variant="danger", attrs='onclick="unassignRequirement(' ~ a.id ~ ')"') }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        {% endcall %}
-        {% else %}
-        {{ ok.empty("No requirements allocated to this part") }}
-        {% endif %}
-        <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-sm); align-items: center;">
-            <input type="text" id="assign-req-number" class="form-input mono" style="width: 180px;"
-                   placeholder="REQ-0007" onkeydown="if(event.key==='Enter')assignRequirement()">
-            {{ ok.btn("ASSIGN", variant="primary", attrs='onclick="assignRequirement()"') }}
-        </div>
-{% endcall %}
-
-<!-- Where Used: Procedure Usage -->
-{% if kit_usages %}
-{% call ok.panel("PROCEDURE USAGE (" ~ (kit_usages | length) ~ ")", margin_top="var(--space-md)") %}
-        {% call ok.table() %}
-            <thead>
-                <tr>
-                    {{ ok.th("PROCEDURE") }}
-                    {{ ok.th("QTY REQUIRED", width="100px", align="right") }}
-                    {{ ok.th("STATUS", width="100px") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for kit in kit_usages %}
-                <tr>
-                    <td><a href="/procedures/{{ kit.procedure.id }}">{{ kit.procedure.name }}</a></td>
-                    <td class="mono" style="text-align: right;">{{ '%g' % kit.quantity_required }}</td>
-                    <td>{{ ok.status(kit.procedure.status.value if kit.procedure.status.value is defined else kit.procedure.status) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        {% endcall %}
-{% endcall %}
-{% endif %}
-
-<!-- Where Used: Step Usage -->
-{% if step_kit_usages %}
-{% call ok.panel("STEP USAGE (" ~ (step_kit_usages | length) ~ ")", margin_top="var(--space-md)") %}
-        {% call ok.table() %}
-            <thead>
-                <tr>
-                    {{ ok.th("PROCEDURE") }}
-                    {{ ok.th("STEP") }}
-                    {{ ok.th("QTY", width="100px", align="right") }}
-                    {{ ok.th("TYPE", width="100px") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for sk in step_kit_usages %}
-                <tr>
-                    <td><a href="/procedures/{{ sk.step.procedure.id }}">{{ sk.step.procedure.name }}</a></td>
-                    <td>{{ ok.mono(sk.step.step_number) }} - {{ sk.step.title }}</td>
-                    <td class="mono" style="text-align: right;">{{ '%g' % sk.quantity_required }}</td>
-                    <td>{{ ok.status(sk.usage_type.value | upper if sk.usage_type.value is defined else sk.usage_type | upper) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        {% endcall %}
-{% endcall %}
-{% endif %}
-
-<!-- Where Used: Consumption History -->
-{% if consumption_history %}
-{% call ok.panel("CONSUMPTION HISTORY (" ~ (consumption_history | length) ~ ('+' if consumption_history | length == 50 else '') ~ ")", margin_top="var(--space-md)") %}
-        {% call ok.table() %}
-            <thead>
-                <tr>
-                    {{ ok.th("TIMESTAMP", width="160px") }}
-                    {{ ok.th("QTY", width="80px", align="right") }}
-                    {{ ok.th("SOURCE") }}
-                    {{ ok.th("NOTES") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for c in consumption_history %}
-                <tr>
-                    <td>{{ ok.timestamp(c.created_at) }}</td>
-                    <td class="mono" style="text-align: right;">{{ '%g' % c.quantity }}</td>
-                    <td>
-                        {% if c.procedure_instance_id %}
-                        <a href="/executions/{{ c.procedure_instance_id }}">Execution #{{ c.procedure_instance_id }}</a>
-                        {% else %}
-                        <span class="text-muted">Manual Adjustment</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-secondary">{{ c.notes or '-' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        {% endcall %}
-{% endcall %}
-{% endif %}
 
 <!-- Add Test Template Modal -->
 <div id="add-test-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
@@ -522,7 +183,12 @@
 <div id="add-component-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
         <div class="panel">
-            <div class="panel-header">ADD COMPONENT TO BOM</div>
+            <div class="panel-header">
+                <span>ADD COMPONENT TO BOM</span>
+                <div class="panel-header-actions">
+                    <a href="/parts/new?parent_id={{ part.id }}" class="mono" style="font-size: 0.75rem;">[+ NEW PART]</a>
+                </div>
+            </div>
             <div class="panel-body">
                 <form id="add-component-form" onsubmit="addComponent(event)">
                     <div class="form-group">
@@ -615,7 +281,7 @@ function escapeHtml(str) {
               .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// Activation — a signature moment: identity locks permanently
+// Activation — a signature moment
 function openActivateConfirm() {
     const el = document.getElementById('activate-confirm');
     document.getElementById('activate-sign-time').textContent =
@@ -669,6 +335,12 @@ async function unassignRequirement(allocationId) {
     } catch (e) { alert('Network error: ' + e.message); }
 }
 
+function showAssignRequirement() {
+    const row = document.getElementById('assign-req-row');
+    row.style.display = 'flex';
+    document.getElementById('assign-req-number').focus();
+}
+
 // Part search component
 function selectPart(el) {
     const partId = el.dataset.partId;
@@ -691,7 +363,9 @@ function selectPart(el) {
 }
 
 function clearPartSelection(prefix) {
-    const container = document.getElementById(prefix + '-part-search').closest('.part-search-container');
+    const container = document.getElementById(prefix + '-part-search')
+        ? document.getElementById(prefix + '-part-search').closest('.part-search-container')
+        : document.getElementById(prefix + '-search').closest('.part-search-container');
     const hiddenInput = container.querySelector('input[type="hidden"]');
     const searchInput = container.querySelector('.part-search-input');
     const selected = container.querySelector('.part-search-selected');
@@ -833,7 +507,8 @@ async function deleteBomLine(lineId) {
     }
 }
 
-// BOM Tree
+// BOM Tree — rendered beneath the direct lines only when it carries
+// information they don't (some component has children of its own)
 async function loadBomTree() {
     try {
         const response = await fetch(`/api/bom/assemblies/${partId}/tree`, {
@@ -841,16 +516,19 @@ async function loadBomTree() {
         });
         if (response.ok) {
             const tree = await response.json();
-            document.getElementById('bom-tree').innerHTML = renderTreeNode(tree, 0, true);
+            const hasDepth = (tree.children || []).some(c => (c.children || []).length > 0);
+            if (hasDepth) {
+                const el = document.getElementById('bom-tree');
+                el.innerHTML = renderTreeNode(tree, 0, true);
+                el.style.display = 'block';
+            }
         }
-    } catch (e) {
-        document.getElementById('bom-tree').innerHTML = '<span class="text-red">Failed to load tree</span>';
-    }
+    } catch (e) { /* the direct lines above remain authoritative */ }
 }
 
 function renderTreeNode(node, depth, isRoot) {
-    const indent = '\u00a0\u00a0'.repeat(depth);
-    const prefix = isRoot ? '' : indent + '\u251c\u2500 ';
+    const indent = '  '.repeat(depth);
+    const prefix = isRoot ? '' : indent + '├─ ';
     const name = escapeHtml(node.name);
     const pn = escapeHtml(node.external_pn || '');
     const label = pn ? `${pn} - ${name}` : name;

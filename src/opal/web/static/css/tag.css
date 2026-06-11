@@ -1,0 +1,103 @@
+/* The part tag — the canonical physical form of a part's identity.
+   One component, three contexts: forming (create flow), header (part page),
+   print (label route). Shared by the app shell and the standalone label
+   page; palette comes from CSS variables with print-safe fallbacks, so the
+   printed label and the on-screen tag are the same rendering by definition. */
+
+.part-tag {
+    /* Natural label scale: fixed max-width, label proportions, never
+       viewport-scaled. Print parity includes proportion. */
+    max-width: 360px;
+    --tag-fg: var(--text-primary, #000);
+    --tag-muted: var(--text-muted, #555);
+    --tag-border: var(--text-primary, #000);
+    --tag-bg: transparent;
+    --tag-warn: var(--status-warn, #8a5a00);
+
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        "id qr"
+        "footer footer";
+    gap: var(--space-sm, 8px) var(--space-md, 16px);
+    padding: var(--space-md, 16px);
+    border: 2px solid var(--tag-border);
+    background: var(--tag-bg);
+    color: var(--tag-fg);
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.part-tag-id {
+    grid-area: id;
+    min-width: 0;
+}
+
+.part-tag-pn {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    word-break: break-all;
+}
+
+.part-tag-tier-seg {
+    color: var(--accent-orange, #8a5a00);
+}
+
+.part-tag-name {
+    margin-top: var(--space-xs, 4px);
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.part-tag-qr {
+    grid-area: qr;
+}
+
+.part-tag-qr img,
+.part-tag-qr-placeholder {
+    width: 72px;
+    height: 72px;
+    display: block;
+    background: #fff;
+    padding: 4px;
+}
+
+.part-tag-qr-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--tag-muted);
+    background: transparent;
+    color: var(--tag-muted);
+    font-size: 0.7rem;
+}
+
+.part-tag-footer {
+    grid-area: footer;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-md, 16px);
+    border-top: 1px solid var(--tag-border);
+    padding-top: var(--space-sm, 8px);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.part-tag-meta {
+    color: var(--tag-muted);
+}
+
+/* Drafts carry the visual weight; locked things look calm */
+.part-tag-state-draft {
+    color: var(--tag-warn);
+    font-weight: 600;
+}
+
+.part-tag-state-active {
+    color: var(--tag-fg);
+}

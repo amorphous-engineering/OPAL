@@ -1,0 +1,345 @@
+{# The one part form — create and edit share it (title + submit differ).
+   Rendered as an overlay on the page the user is already on: no
+   intermediate menus. Deep links (/parts/new, /parts/{id}/edit) render
+   the underlying page with this overlay open.
+
+   Context: form_part (Part | undefined -> create mode), tiers,
+   categories, form_prefill (dict, create mode), form_open (bool),
+   tier_name/pn_segments (edit mode, for the tag). #}
+{% import 'opalkit/_macros.html' as ok %}
+{% from 'parts/_tag.html' import part_tag %}
+{% set fm_edit = form_part is defined and form_part %}
+{% set fm_draft = fm_edit and form_part.lifecycle_state == 'draft' %}
+{% set form_prefill = form_prefill if form_prefill is defined else {} %}
+
+<div id="part-form-overlay" style="display: {{ 'block' if form_open else 'none' }}; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal); overflow-y: auto;">
+    <div style="max-width: 680px; margin: 4vh auto; padding: 0 var(--space-md);">
+        <div class="panel">
+            <div class="panel-header">{{ 'EDIT ' ~ form_part.internal_pn if fm_edit else 'NEW PART' }}</div>
+            <div class="panel-body">
+                {% if fm_edit %}
+                {{ part_tag('header',
+                            pn=form_part.internal_pn,
+                            name=form_part.name,
+                            tier_level=form_part.tier,
+                            tier_name=tier_name,
+                            uom=form_part.unit_of_measure,
+                            tracking=form_part.tracking_type.value if form_part.tracking_type else '',
+                            state=form_part.lifecycle_state,
+                            activated_at=form_part.activated_at,
+                            qr_url='/api/parts/' ~ form_part.id ~ '/qrcode',
+                            pn_segments=pn_segments) }}
+                {% else %}
+                {{ part_tag('forming') }}
+                {% endif %}
+
+                <form id="part-form" onsubmit="event.preventDefault(); submitPartForm();" style="margin-top: var(--space-md);">
+                    {% if not fm_edit or fm_draft %}
+                    {# Identity rows — absent (not disabled) once active #}
+                    <div class="form-group">
+                        <label class="form-label">TIER{% if not fm_edit %} <span class="text-red">*</span>{% endif %}</label>
+                        <div class="segmented" id="pf-tier-segments">
+                            {% for tier in tiers %}
+                            <button type="button" data-tier="{{ tier.level }}"
+                                    class="{{ 'active' if fm_edit and form_part.tier == tier.level }}"
+                                    onclick="pfSelectTier({{ tier.level }}, this)">
+                                T{{ tier.level }} {{ tier.name | upper }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-2" style="gap: var(--space-md);">
+                        <div class="form-group">
+                            <label class="form-label" for="pf-name">NAME <span class="text-red">*</span></label>
+                            <input type="text" id="pf-name" class="form-input" required
+                                   value="{{ form_part.name if fm_edit else (form_prefill.get('name') or '') }}"
+                                   {% if not fm_edit %}oninput="document.getElementById('tag-name').textContent = this.value;"{% endif %}>
+                        </div>
+                        {% if fm_draft %}
+                        <div class="form-group">
+                            <label class="form-label" for="pf-pn">INTERNAL PN</label>
+                            <input type="text" id="pf-pn" class="form-input mono" value="{{ form_part.internal_pn }}" oninput="pfPnEdited = true;">
+                        </div>
+                        {% else %}
+                        <div class="form-group">
+                            <label class="form-label" for="pf-ext">EXTERNAL REF</label>
+                            <input type="text" id="pf-ext" class="form-input"
+                                   value="{{ form_prefill.get('external_pn') or '' }}" placeholder="CAD designator or vendor PN">
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if fm_draft %}
+                    <div class="form-group">
+                        <label class="form-label" for="pf-ext">EXTERNAL REF</label>
+                        <input type="text" id="pf-ext" class="form-input"
+                               value="{{ form_part.external_pn or '' }}" placeholder="CAD designator or vendor PN">
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="form-group">
+                        <label class="form-label" for="pf-ext">EXTERNAL REF</label>
+                        <input type="text" id="pf-ext" class="form-input"
+                               value="{{ form_part.external_pn or '' }}" placeholder="CAD designator or vendor PN">
+                    </div>
+                    {% endif %}
+
+                    {# Dense grid — prefilled defaults; nothing below identity is required #}
+                    <div class="grid grid-2" style="gap: var(--space-md);">
+                        <div class="form-group">
+                            <label class="form-label" for="pf-category">CATEGORY</label>
+                            <input type="text" id="pf-category" class="form-input" list="pf-category-list"
+                                   value="{{ form_part.category or '' if fm_edit else (form_prefill.get('category') or '') }}">
+                            <datalist id="pf-category-list">
+                                {% for cat in categories %}<option value="{{ cat }}">{% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="pf-uom">UOM</label>
+                            <input type="text" id="pf-uom" class="form-input"
+                                   value="{{ form_part.unit_of_measure or 'EA' if fm_edit else 'EA' }}">
+                        </div>
+                    </div>
+                    <div class="grid grid-2" style="gap: var(--space-md);">
+                        <div class="form-group">
+                            <label class="form-label" for="pf-tracking">TRACKING</label>
+                            <select id="pf-tracking" class="form-select" onchange="pfTrackingTouched = true;">
+                                <option value="bulk" {% if fm_edit and form_part.tracking_type and form_part.tracking_type.value == 'bulk' %}selected{% endif %}>BULK</option>
+                                <option value="serialized" {% if not fm_edit or (form_part.tracking_type and form_part.tracking_type.value == 'serialized') %}selected{% endif %}>SERIALIZED</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="pf-reorder">REORDER POINT</label>
+                            <input type="number" id="pf-reorder" class="form-input" step="0.0001" min="0"
+                                   value="{{ '%g' % form_part.reorder_point if fm_edit and form_part.reorder_point is not none else '' }}">
+                        </div>
+                    </div>
+                    <div class="grid grid-2" style="gap: var(--space-md);">
+                        <div class="form-group">
+                            <label class="form-label" for="pf-cal">CALIBRATION (DAYS)</label>
+                            <input type="number" id="pf-cal" class="form-input" min="1"
+                                   value="{{ form_part.calibration_interval_days or '' if fm_edit else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" style="display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-md);">
+                                <input type="checkbox" id="pf-tooling" {% if fm_edit and form_part.is_tooling %}checked{% endif %}>
+                                TOOLING
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="pf-parent-search">PARENT ASSEMBLY</label>
+                        <div class="part-search-container">
+                            <input type="text" id="pf-parent-search" class="form-input part-search-input"
+                                   placeholder="{% if fm_edit and form_part.parent %}{{ form_part.parent.internal_pn }} - {{ form_part.parent.name }}{% elif form_prefill.get('parent_label') %}{{ form_prefill.get('parent_label') }}{% else %}—{% endif %}"
+                                   autocomplete="off"
+                                   hx-get="/parts/search" hx-trigger="keyup changed delay:200ms"
+                                   hx-target="#pf-parent-results" hx-vals='{"limit": 5}' name="q">
+                            <input type="hidden" id="pf-parent"
+                                   value="{{ form_part.parent_id or '' if fm_edit else (form_prefill.get('parent_id') or '') }}">
+                            <div id="pf-parent-results" class="part-search-dropdown"></div>
+                            <div id="pf-parent-selected" class="part-search-selected" style="display: none;">
+                                <span class="part-id"></span>
+                                <span class="part-name"></span>
+                                <span class="part-search-clear" onclick="pfClearParent()">&times;</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="pf-description">DESCRIPTION</label>
+                        <textarea id="pf-description" class="form-input" rows="3" placeholder="markdown">{{ form_part.description or '' if fm_edit else (form_prefill.get('description') or '') }}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="pf-metadata">METADATA (JSON)</label>
+                        <textarea id="pf-metadata" class="form-input mono" rows="2">{{ form_part.metadata_ | tojson if fm_edit and form_part.metadata_ else '' }}</textarea>
+                    </div>
+
+                    <div style="display: flex; gap: var(--space-sm); justify-content: flex-end;">
+                        {{ ok.btn("CANCEL", attrs='onclick="closePartForm()"') }}
+                        {{ ok.btn("SAVE" if fm_edit else "CREATE DRAFT", variant="primary", type="submit") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const pfEdit = {{ 'true' if fm_edit else 'false' }};
+const pfPartId = {{ form_part.id if fm_edit else 'null' }};
+const pfIsDraft = {{ 'true' if fm_draft else 'false' }};
+let pfTier = {{ form_part.tier if fm_edit else (form_prefill.get('tier') or 'null') }};
+const pfOriginalTier = {{ form_part.tier if fm_edit else 'null' }};
+const pfOriginalPn = {{ form_part.internal_pn | tojson if fm_edit else 'null' }};
+const pfOriginalName = {{ form_part.name | tojson if fm_edit else 'null' }};
+let pfPnEdited = false;
+let pfPreviewPn = null;
+let pfTrackingTouched = pfEdit;  // edit mode always sends the value as-is
+
+function openPartForm() {
+    document.getElementById('part-form-overlay').style.display = 'block';
+}
+
+function closePartForm() {
+    document.getElementById('part-form-overlay').style.display = 'none';
+    // Deep-linked opens (/parts/new, /parts/{id}/edit): drop the suffix so
+    // refresh shows the underlying page
+    const path = window.location.pathname;
+    if (path.endsWith('/parts/new')) {
+        history.replaceState(null, '', '/parts');
+    } else if (path.endsWith('/edit')) {
+        history.replaceState(null, '', path.slice(0, -'/edit'.length));
+    }
+}
+
+async function pfSelectTier(tier, btn) {
+    pfTier = tier;
+    document.querySelectorAll('#pf-tier-segments button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    try {
+        const r = await fetch('/api/parts/next-pn?tier=' + tier);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!pfEdit) {
+            document.getElementById('tag-pn').textContent = data.part_number;
+            document.getElementById('tag-meta').textContent =
+                'T' + tier
+                + (data.tier_name ? ' ' + data.tier_name.toUpperCase() : '')
+                + ' · EA · ' + (data.default_tracking === 'serialized' ? 'SER' : 'BULK');
+            if (!pfTrackingTouched) {
+                document.getElementById('pf-tracking').value = data.default_tracking;
+            }
+        } else if (pfIsDraft) {
+            const pnInput = document.getElementById('pf-pn');
+            if (tier === pfOriginalTier) {
+                pnInput.value = pfOriginalPn;
+                pfPreviewPn = null;
+            } else {
+                pnInput.value = data.part_number;
+                pfPreviewPn = data.part_number;
+            }
+            pfPnEdited = false;
+        }
+    } catch (e) { /* preview is best-effort; the server assigns atomically */ }
+}
+
+function pfClearParent() {
+    document.getElementById('pf-parent').value = '';
+    const searchInput = document.getElementById('pf-parent-search');
+    searchInput.value = '';
+    searchInput.style.display = 'block';
+    document.getElementById('pf-parent-selected').style.display = 'none';
+    searchInput.focus();
+}
+
+async function submitPartForm() {
+    const body = {
+        category: document.getElementById('pf-category').value || null,
+        external_pn: document.getElementById('pf-ext').value || null,
+        unit_of_measure: document.getElementById('pf-uom').value || 'EA',
+        reorder_point: document.getElementById('pf-reorder').value ? parseFloat(document.getElementById('pf-reorder').value) : null,
+        calibration_interval_days: document.getElementById('pf-cal').value ? parseInt(document.getElementById('pf-cal').value) : null,
+        is_tooling: document.getElementById('pf-tooling').checked,
+        parent_id: document.getElementById('pf-parent').value ? parseInt(document.getElementById('pf-parent').value) : null,
+        description: document.getElementById('pf-description').value || null,
+    };
+    if (pfTrackingTouched) {
+        body.tracking_type = document.getElementById('pf-tracking').value;
+    }
+    const metadataText = document.getElementById('pf-metadata').value;
+    if (metadataText && metadataText.trim()) {
+        try { body.metadata = JSON.parse(metadataText); }
+        catch (e) { alert('Invalid JSON in metadata.'); return; }
+    } else if (pfEdit) {
+        body.metadata = null;
+    }
+
+    let url, method;
+    if (!pfEdit) {
+        if (pfTier === null) { alert('Select a tier.'); return; }
+        body.name = document.getElementById('pf-name').value;
+        body.tier = pfTier;
+        url = '/api/parts'; method = 'POST';
+    } else {
+        url = '/api/parts/' + pfPartId; method = 'PATCH';
+        if (pfIsDraft) {
+            const name = document.getElementById('pf-name').value;
+            if (name !== pfOriginalName) body.name = name;
+            const pn = document.getElementById('pf-pn').value.trim();
+            if (pfTier !== pfOriginalTier) {
+                // Consequence sentences live in confirmation dialogs — this one's home
+                const next = (pfPnEdited && pn) ? pn : (pfPreviewPn || 'the next number for the new tier');
+                if (!confirm(pfOriginalPn + ' will be abandoned permanently and never reissued. New number: ' + next + '.')) {
+                    return;
+                }
+                body.tier = pfTier;
+            }
+            if (pfPnEdited && pn && pn !== pfOriginalPn) body.internal_pn = pn;
+        }
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (response.ok) {
+            const data = await response.json();
+            window.location.href = '/parts/' + (pfEdit ? pfPartId : data.id);
+        } else {
+            const error = await response.json();
+            alert('Error: ' + formatApiError(error.detail, pfEdit ? 'Failed to update part' : 'Failed to create part'));
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
+
+// Part-search wiring for the parent field; pages with their own selectPart
+// (detail.html) override this with an identical implementation
+if (typeof window.selectPart !== 'function') {
+    window.selectPart = function (el) {
+        const partId = el.dataset.partId;
+        const partName = el.dataset.partName;
+        const partPn = el.dataset.partPn;
+
+        const container = el.closest('.part-search-dropdown').parentElement;
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const searchInput = container.querySelector('.part-search-input');
+        const dropdown = container.querySelector('.part-search-dropdown');
+        const selected = container.querySelector('.part-search-selected');
+
+        hiddenInput.value = partId;
+        selected.querySelector('.part-id').textContent = partId;
+        selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
+        selected.style.display = 'flex';
+        searchInput.style.display = 'none';
+        dropdown.classList.remove('active');
+        dropdown.innerHTML = '';
+    };
+}
+
+if (!window._pfSearchWired) {
+    window._pfSearchWired = true;
+    document.body.addEventListener('htmx:afterSwap', function (evt) {
+        if (evt.detail.target.classList.contains('part-search-dropdown')) {
+            const dropdown = evt.detail.target;
+            if (dropdown.innerHTML.trim()) {
+                dropdown.classList.add('active');
+            } else {
+                dropdown.classList.remove('active');
+            }
+        }
+    });
+    document.addEventListener('click', function (evt) {
+        if (!evt.target.closest('.part-search-container')) {
+            document.querySelectorAll('.part-search-dropdown').forEach(d => d.classList.remove('active'));
+        }
+    });
+}
+
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePartForm();
+});
+</script>
