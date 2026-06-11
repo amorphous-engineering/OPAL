@@ -4,8 +4,6 @@
 
 function getReqHeaders() {
     const headers = { 'Content-Type': 'application/json' };
-    const userId = localStorage.getItem('opal_user_id');
-    if (userId) headers['X-User-Id'] = userId;
     return headers;
 }
 
