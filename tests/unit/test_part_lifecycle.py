@@ -336,16 +336,23 @@ def test_mcp_create_purchase_order_blocked_by_draft(db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_draft_part_detail_page_renders_activate_panel(web_client):
+def test_draft_part_detail_page_renders_activate_confirm(web_client):
     part = web_client.post("/api/parts", json={"name": "Web Draft", "tier": 1}).json()
     page = web_client.get(f"/parts/{part['id']}")
     assert page.status_code == 200
     assert "ACTIVATE" in page.text
-    assert "DRAFT · PN EDITABLE" in page.text
+    assert "part-tag-state-draft" in page.text
     # The DB row id appears nowhere as a title; the PN is the page's name
     assert f"PART #{part['id']}" not in page.text
-    # Empty draft: stock is a one-line fact, not a box
-    assert "draft part, nothing physical yet" in page.text
+    # Voice rules: the consequence sentence lives only in the confirm dialog
+    assert "Locks PN and tier permanently." in page.text
+    assert page.text.count("permanently") <= 2  # confirm dialogs only, no ambient copy
+    # Ledger rows render with empty values as facts, not boxes or apologies
+    assert "ledger-row" in page.text
+    assert "nothing physical yet" not in page.text
+    # Nothing hides behind disclosure: the dense readout is always visible
+    assert "part-readout" in page.text
+    assert "+ details" not in page.text
 
 
 def test_active_part_detail_page_renders_locked(web_client):
@@ -353,7 +360,12 @@ def test_active_part_detail_page_renders_locked(web_client):
     web_client.post(f"/api/parts/{part['id']}/activate", json={})
     page = web_client.get(f"/parts/{part['id']}")
     assert page.status_code == 200
-    # Locked things look calm: tag footer flips, edit affordance is absent
-    assert "ACTIVE · LOCKED" in page.text
-    assert "EDIT IDENTITY" not in page.text
-    assert "commitActivate" not in page.text or 'onclick="openActivateConfirm()"' not in page.text
+    # Locked things look calm: state flips, activation affordance is absent
+    assert "part-tag-state-active" in page.text
+    assert 'onclick="openActivateConfirm()"' not in page.text
+    # EDIT remains (meta fields stay editable); identity gating lives on the edit page
+    assert ">EDIT<" in page.text
+    edit_page = web_client.get(f"/parts/{part['id']}/edit")
+    assert edit_page.status_code == 200
+    assert 'id="internal_pn"' not in edit_page.text
+    assert 'id="d-uom"' in edit_page.text

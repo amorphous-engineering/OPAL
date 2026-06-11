@@ -886,18 +886,6 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
         part.internal_pn, tier_config.code if tier_config else str(part.tier)
     )
 
-    # Categories for the details-disclosure datalist
-    categories = (
-        db.query(Part.category)
-        .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
-        .distinct()
-        .all()
-    )
-    category_set = {c[0] for c in categories if c[0]}
-    if project and project.categories:
-        category_set |= set(project.categories)
-    context["categories"] = sorted(category_set)
-
     # Get inventory records
     inventory_records = db.query(InventoryRecord).filter(InventoryRecord.part_id == part_id).all()
     context["inventory_records"] = inventory_records
@@ -1008,10 +996,8 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
 
 @router.get("/parts/{part_id}/edit", response_class=HTMLResponse)
 def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
-    """Identity editor — name/PN/tier, mutable while draft only.
-
-    Everything else is edited from the part page's details disclosure.
-    """
+    """Part editor — identity fields (name/PN/tier) render while draft only;
+    the rest of the meta fields edit here in every state."""
     from opal.config import get_active_project
 
     part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
@@ -1032,6 +1018,17 @@ def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
         part.internal_pn, tier_config.code if tier_config else str(part.tier)
     )
     context["tiers"] = project.tiers if project else DEFAULT_TIERS
+
+    categories = (
+        db.query(Part.category)
+        .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
+        .distinct()
+        .all()
+    )
+    category_set = {c[0] for c in categories if c[0]}
+    if project and project.categories:
+        category_set |= set(project.categories)
+    context["categories"] = sorted(category_set)
 
     return templates.TemplateResponse("parts/edit.html", context)
 

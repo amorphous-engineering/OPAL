@@ -6,11 +6,11 @@
 {{ ok.crumb("HOME", "/") }}
 {{ ok.crumb("PARTS", "/parts") }}
 {{ ok.crumb(part.internal_pn, "/parts/" ~ part.id) }}
-{{ ok.crumb("EDIT IDENTITY") }}
+{{ ok.crumb("EDIT") }}
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("EDIT IDENTITY", max_width="640px") %}
+{% call ok.panel("EDIT " ~ part.internal_pn, max_width="640px") %}
         {{ part_tag('header',
                     pn=part.internal_pn,
                     name=part.name,
@@ -23,59 +23,120 @@
                     qr_url='/api/parts/' ~ part.id ~ '/qrcode',
                     pn_segments=pn_segments) }}
 
-        {% if part.lifecycle_state == 'draft' %}
-        <form id="identity-form" onsubmit="event.preventDefault(); submitIdentity();" style="margin-top: var(--space-md);">
+        <form id="part-form" onsubmit="event.preventDefault(); submitPartForm();" style="margin-top: var(--space-md);">
+            {% if part.lifecycle_state == 'draft' %}
             <div class="form-group">
                 <label class="form-label" for="name">NAME <span class="text-red">*</span></label>
                 <input type="text" id="name" name="name" class="form-input" value="{{ part.name }}" required>
             </div>
 
+            <div class="grid grid-2" style="gap: var(--space-md);">
+                <div class="form-group">
+                    <label class="form-label" for="internal_pn">INTERNAL PN</label>
+                    <input type="text" id="internal_pn" name="internal_pn" class="form-input mono" value="{{ part.internal_pn }}" oninput="pnEdited = true;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="tier">TIER</label>
+                    <select id="tier" name="tier" class="form-select" onchange="tierChanged()">
+                        {% for tier in tiers %}
+                        <option value="{{ tier.level }}" {% if part.tier == tier.level %}selected{% endif %}>T{{ tier.level }} {{ tier.name | upper }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="grid grid-2" style="gap: var(--space-md);">
+                <div class="form-group">
+                    <label class="form-label" for="d-category">CATEGORY</label>
+                    <input type="text" id="d-category" class="form-input" value="{{ part.category or '' }}" list="category-list">
+                    <datalist id="category-list">
+                        {% for cat in categories %}<option value="{{ cat }}">{% endfor %}
+                    </datalist>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="d-ext">EXTERNAL REF</label>
+                    <input type="text" id="d-ext" class="form-input" value="{{ part.external_pn or '' }}" placeholder="CAD designator or vendor PN">
+                </div>
+            </div>
+            <div class="grid grid-2" style="gap: var(--space-md);">
+                <div class="form-group">
+                    <label class="form-label" for="d-uom">UNIT OF MEASURE</label>
+                    <input type="text" id="d-uom" class="form-input" value="{{ part.unit_of_measure or 'EA' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="d-tracking">TRACKING</label>
+                    <select id="d-tracking" class="form-select">
+                        <option value="bulk" {% if part.tracking_type and part.tracking_type.value == 'bulk' %}selected{% endif %}>BULK</option>
+                        <option value="serialized" {% if part.tracking_type and part.tracking_type.value == 'serialized' %}selected{% endif %}>SERIALIZED</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-2" style="gap: var(--space-md);">
+                <div class="form-group">
+                    <label class="form-label" for="d-reorder">REORDER POINT</label>
+                    <input type="number" id="d-reorder" class="form-input" step="0.0001" min="0"
+                           value="{{ '%g' % part.reorder_point if part.reorder_point is not none else '' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="d-cal">CALIBRATION (DAYS)</label>
+                    <input type="number" id="d-cal" class="form-input" min="1" value="{{ part.calibration_interval_days or '' }}">
+                </div>
+            </div>
             <div class="form-group">
-                <label class="form-label" for="internal_pn">INTERNAL PN</label>
-                <input type="text" id="internal_pn" name="internal_pn" class="form-input mono" value="{{ part.internal_pn }}" oninput="pnEdited = true;">
-                <small class="form-help">Editable while draft (must match the project numbering format); locks permanently on activation. An abandoned number is never reissued.</small>
+                <label class="form-label" style="display: flex; align-items: center; gap: var(--space-sm);">
+                    <input type="checkbox" id="d-tooling" {% if part.is_tooling %}checked{% endif %}>
+                    TOOLING
+                </label>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="d-parent-search">PARENT ASSEMBLY</label>
+                <div class="part-search-container">
+                    <input type="text" id="d-parent-search" class="form-input part-search-input"
+                           placeholder="{% if part.parent %}{{ part.parent.internal_pn }} - {{ part.parent.name }}{% else %}—{% endif %}"
+                           autocomplete="off"
+                           hx-get="/parts/search" hx-trigger="keyup changed delay:200ms"
+                           hx-target="#d-parent-results" hx-vals='{"limit": 5}' name="q">
+                    <input type="hidden" id="d-parent" value="{{ part.parent_id or '' }}">
+                    <div id="d-parent-results" class="part-search-dropdown"></div>
+                    <div id="d-parent-selected" class="part-search-selected" style="display: none;">
+                        <span class="part-id"></span>
+                        <span class="part-name"></span>
+                        <span class="part-search-clear" onclick="clearParentSelection()">&times;</span>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="description">DESCRIPTION</label>
+                <textarea id="description" class="form-input" rows="3" placeholder="markdown">{{ part.description or '' }}</textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="d-metadata">METADATA (JSON)</label>
+                <textarea id="d-metadata" class="form-input mono" rows="3">{{ part.metadata_ | tojson if part.metadata_ else '' }}</textarea>
             </div>
 
-            <div class="form-group">
-                <label class="form-label" for="tier">TIER</label>
-                <select id="tier" name="tier" class="form-select" onchange="tierChanged()">
-                    {% for tier in tiers %}
-                    <option value="{{ tier.level }}" {% if part.tier == tier.level %}selected{% endif %}>Tier {{ tier.level }} - {{ tier.name }}</option>
-                    {% endfor %}
-                </select>
-                <small class="form-help" id="tier-help">Changing tier abandons {{ part.internal_pn }} permanently and assigns the next number from the new tier.</small>
-            </div>
-
-            {{ ok.form_actions(cancel_href="/parts/" ~ part.id, submit_text="SAVE IDENTITY") }}
+            {{ ok.form_actions(cancel_href="/parts/" ~ part.id, submit_text="SAVE") }}
         </form>
-        {% else %}
-        <div class="mono text-muted" style="margin-top: var(--space-md); font-size: 0.85rem;">
-            identity locked {{ part.activated_at.date().isoformat() if part.activated_at }}{% if part.activation_cause %} — {{ part.activation_cause }}{% endif %}.
-            Supersession is the only path to a new identity.
-        </div>
-        <div style="margin-top: var(--space-md);">
-            {{ ok.btn("BACK TO PART", href="/parts/" ~ part.id) }}
-        </div>
-        {% endif %}
 {% endcall %}
 
-{% if part.lifecycle_state == 'draft' %}
 <script>
+const isDraft = {{ 'true' if part.lifecycle_state == 'draft' else 'false' }};
 const originalTier = {{ part.tier }};
 const originalPn = {{ part.internal_pn | tojson }};
 const originalName = {{ part.name | tojson }};
 let pnEdited = false;
+let previewPn = null;
 
 // Tier change on a draft regenerates the PN from the new tier's counter;
-// preview it, but only send internal_pn if the user edits the preview
+// the input previews it. The consequence sentence lives in the submit
+// confirmation — its one home.
 async function tierChanged() {
     const tier = parseInt(document.getElementById('tier').value);
     const pnInput = document.getElementById('internal_pn');
-    const help = document.getElementById('tier-help');
     if (tier === originalTier) {
         pnInput.value = originalPn;
         pnEdited = false;
-        help.textContent = 'Changing tier abandons ' + originalPn + ' permanently and assigns the next number from the new tier.';
+        previewPn = null;
         return;
     }
     try {
@@ -83,25 +144,94 @@ async function tierChanged() {
         if (r.ok) {
             const data = await r.json();
             pnInput.value = data.part_number;
+            previewPn = data.part_number;
             pnEdited = false;
-            help.textContent = originalPn + ' will be abandoned permanently (never reissued); new number: ' + data.part_number;
         }
-    } catch (e) { /* preview is best-effort */ }
+    } catch (e) { /* preview is best-effort; the server assigns atomically */ }
 }
 
-async function submitIdentity() {
-    const body = {};
-    const name = document.getElementById('name').value;
-    if (name !== originalName) body.name = name;
-    const tier = parseInt(document.getElementById('tier').value);
-    if (tier !== originalTier) body.tier = tier;
-    const pn = document.getElementById('internal_pn').value.trim();
-    if (pnEdited && pn && pn !== originalPn) body.internal_pn = pn;
+function selectPart(el) {
+    const partId = el.dataset.partId;
+    const partName = el.dataset.partName;
+    const partPn = el.dataset.partPn;
 
-    if (Object.keys(body).length === 0) {
-        window.location.href = '/parts/{{ part.id }}';
-        return;
+    const container = el.closest('.part-search-dropdown').parentElement;
+    const hiddenInput = container.querySelector('input[type="hidden"]');
+    const searchInput = container.querySelector('.part-search-input');
+    const dropdown = container.querySelector('.part-search-dropdown');
+    const selected = container.querySelector('.part-search-selected');
+
+    hiddenInput.value = partId;
+    selected.querySelector('.part-id').textContent = partId;
+    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
+    selected.style.display = 'flex';
+    searchInput.style.display = 'none';
+    dropdown.classList.remove('active');
+    dropdown.innerHTML = '';
+}
+
+function clearParentSelection() {
+    document.getElementById('d-parent').value = '';
+    const searchInput = document.getElementById('d-parent-search');
+    searchInput.value = '';
+    searchInput.style.display = 'block';
+    document.getElementById('d-parent-selected').style.display = 'none';
+    searchInput.focus();
+}
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.classList.contains('part-search-dropdown')) {
+        const dropdown = evt.detail.target;
+        if (dropdown.innerHTML.trim()) {
+            dropdown.classList.add('active');
+        } else {
+            dropdown.classList.remove('active');
+        }
     }
+});
+
+document.addEventListener('click', function(evt) {
+    if (!evt.target.closest('.part-search-container')) {
+        document.querySelectorAll('.part-search-dropdown').forEach(d => d.classList.remove('active'));
+    }
+});
+
+async function submitPartForm() {
+    const body = {
+        category: document.getElementById('d-category').value || null,
+        external_pn: document.getElementById('d-ext').value || null,
+        unit_of_measure: document.getElementById('d-uom').value || 'EA',
+        tracking_type: document.getElementById('d-tracking').value,
+        reorder_point: document.getElementById('d-reorder').value ? parseFloat(document.getElementById('d-reorder').value) : null,
+        is_tooling: document.getElementById('d-tooling').checked,
+        calibration_interval_days: document.getElementById('d-cal').value ? parseInt(document.getElementById('d-cal').value) : null,
+        parent_id: document.getElementById('d-parent').value ? parseInt(document.getElementById('d-parent').value) : null,
+        description: document.getElementById('description').value || null,
+    };
+    const metadataText = document.getElementById('d-metadata').value;
+    if (metadataText && metadataText.trim()) {
+        try { body.metadata = JSON.parse(metadataText); }
+        catch (e) { alert('Invalid JSON in metadata.'); return; }
+    } else {
+        body.metadata = null;
+    }
+
+    if (isDraft) {
+        const name = document.getElementById('name').value;
+        if (name !== originalName) body.name = name;
+        const tier = parseInt(document.getElementById('tier').value);
+        const pn = document.getElementById('internal_pn').value.trim();
+        if (tier !== originalTier) {
+            // Consequence sentences live in confirmation dialogs — this one's home
+            const next = (pnEdited && pn) ? pn : (previewPn || 'the next number for the new tier');
+            if (!confirm(originalPn + ' will be abandoned permanently and never reissued. New number: ' + next + '.')) {
+                return;
+            }
+            body.tier = tier;
+        }
+        if (pnEdited && pn && pn !== originalPn) body.internal_pn = pn;
+    }
+
     try {
         const response = await fetch('/api/parts/{{ part.id }}', {
             method: 'PATCH',
@@ -112,12 +242,11 @@ async function submitIdentity() {
             window.location.href = '/parts/{{ part.id }}';
         } else {
             const error = await response.json();
-            alert('Error: ' + formatApiError(error.detail, 'Failed to update identity'));
+            alert('Error: ' + formatApiError(error.detail, 'Failed to update part'));
         }
     } catch (e) {
         alert('Network error: ' + e.message);
     }
 }
 </script>
-{% endif %}
 {% endblock %}

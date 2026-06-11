@@ -25,13 +25,12 @@
             pn_segments=pn_segments) }}
 
 <div class="part-actions">
-    {{ ok.btn("PRINT LABEL", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
+    {{ ok.btn("PRINT", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
+    {{ ok.btn("EDIT", href="/parts/" ~ part.id ~ "/edit") }}
     {% if is_draft %}
-    {{ ok.btn("EDIT IDENTITY", href="/parts/" ~ part.id ~ "/edit") }}
-    {{ ok.btn("ACTIVATE " ~ part.internal_pn, variant="primary", attrs='onclick="openActivateConfirm()"') }}
-    <span class="part-action-note">locks PN + tier permanently</span>
+    {{ ok.btn("ACTIVATE", variant="primary", attrs='onclick="openActivateConfirm()"') }}
     {% if not part_is_referenced %}
-    {{ ok.confirm_btn("DELETE", message="Delete this draft? Its number is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts") }}
+    <span class="part-action-right">{{ ok.confirm_btn("DELETE", message="Deletes this draft. " ~ part.internal_pn ~ " is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts") }}</span>
     {% endif %}
     {% endif %}
 </div>
@@ -39,7 +38,7 @@
 {% if is_draft %}
 <div id="activate-confirm" class="baseline-confirm" style="display: none;">
     <div class="baseline-signature">
-        activating <span class="text-green">{{ part.internal_pn }}</span> — identity locks permanently<br>
+        activating <span class="text-green">{{ part.internal_pn }}</span> — Locks PN and tier permanently.<br>
         signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
         · <span id="activate-sign-time"></span>
     </div>
@@ -61,90 +60,26 @@
 </div>
 {% endif %}
 
-<details class="disclosure">
-    <summary>+ details — category · UoM · tracking · reorder · tooling · parent · metadata</summary>
-    <form id="details-form" onsubmit="event.preventDefault(); saveDetails();"
-          style="margin-top: var(--space-sm); max-width: 640px;">
-        <div class="grid grid-2" style="gap: var(--space-md);">
-            <div class="form-group">
-                <label class="form-label" for="d-category">CATEGORY</label>
-                <input type="text" id="d-category" class="form-input" value="{{ part.category or '' }}" list="category-list">
-                <datalist id="category-list">
-                    {% for cat in categories %}<option value="{{ cat }}">{% endfor %}
-                </datalist>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="d-uom">UNIT OF MEASURE</label>
-                <input type="text" id="d-uom" class="form-input" value="{{ part.unit_of_measure or 'EA' }}">
-            </div>
-        </div>
-        <div class="grid grid-2" style="gap: var(--space-md);">
-            <div class="form-group">
-                <label class="form-label" for="d-tracking">TRACKING TYPE</label>
-                <select id="d-tracking" class="form-select">
-                    <option value="bulk" {% if part.tracking_type and part.tracking_type.value == 'bulk' %}selected{% endif %}>BULK - one OPAL per batch</option>
-                    <option value="serialized" {% if part.tracking_type and part.tracking_type.value == 'serialized' %}selected{% endif %}>SERIALIZED - one OPAL per unit</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="d-reorder">REORDER POINT</label>
-                <input type="number" id="d-reorder" class="form-input" step="0.0001" min="0"
-                       value="{{ '%g' % part.reorder_point if part.reorder_point is not none else '' }}">
-            </div>
-        </div>
-        <div class="grid grid-2" style="gap: var(--space-md);">
-            <div class="form-group">
-                <label class="form-label" style="display: flex; align-items: center; gap: var(--space-sm);">
-                    <input type="checkbox" id="d-tooling" {% if part.is_tooling %}checked{% endif %}>
-                    TOOLING ITEM
-                </label>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="d-cal">CALIBRATION INTERVAL (DAYS)</label>
-                <input type="number" id="d-cal" class="form-input" min="1" value="{{ part.calibration_interval_days or '' }}">
-            </div>
-        </div>
-        <div class="form-group">
-            <label class="form-label" for="d-parent-search">PARENT ASSEMBLY</label>
-            <div class="part-search-container">
-                <input type="text" id="d-parent-search" class="form-input part-search-input"
-                       placeholder="{% if part.parent %}{{ part.parent.internal_pn }} - {{ part.parent.name }} (search to change){% else %}None - search to select...{% endif %}"
-                       autocomplete="off"
-                       hx-get="/parts/search" hx-trigger="keyup changed delay:200ms"
-                       hx-target="#d-parent-results" hx-vals='{"limit": 5}' name="q">
-                <input type="hidden" id="d-parent" value="{{ part.parent_id or '' }}">
-                <div id="d-parent-results" class="part-search-dropdown"></div>
-                <div id="d-parent-selected" class="part-search-selected" style="display: none;">
-                    <span class="part-id"></span>
-                    <span class="part-name"></span>
-                    <span class="part-search-clear" onclick="clearPartSelection('d-parent'); document.getElementById('d-parent').value = '';">&times;</span>
-                </div>
-            </div>
-            {% if part.parent_id %}
-            <small class="form-help">current: <a href="/parts/{{ part.parent_id }}" class="mono">{{ part.parent.internal_pn }}</a> — clear with the search, save with parent set to none to detach</small>
-            {% endif %}
-        </div>
-        <div class="form-group">
-            <label class="form-label" for="d-metadata">METADATA (JSON)</label>
-            <textarea id="d-metadata" class="form-input mono" rows="3">{{ part.metadata_ | tojson if part.metadata_ else '' }}</textarea>
-        </div>
-        <div style="display: flex; gap: var(--space-sm); align-items: center;">
-            {{ ok.btn("SAVE DETAILS", variant="primary", type="submit") }}
-            <span id="details-msg" class="mono text-muted" style="font-size: 0.75rem;"></span>
-        </div>
-    </form>
-</details>
+{# Dense readout — labels are nouns, values are facts. Edits live behind EDIT. #}
+<div class="part-readout">
+    <span class="ro-label">CAT</span> {{ part.category | upper if part.category else '—' }} ·
+    <span class="ro-label">UOM</span> {{ (part.unit_of_measure or 'EA') | upper }} ·
+    <span class="ro-label">TRK</span> {{ 'SER' if part.tracking_type and part.tracking_type.value == 'serialized' else 'BULK' }} ·
+    <span class="ro-label">REORD</span> {{ '%g' % part.reorder_point if part.reorder_point is not none else '—' }} ·
+    <span class="ro-label">TOOL</span> {{ ('CAL ' ~ part.calibration_interval_days ~ 'D' if part.calibration_interval_days else 'YES') if part.is_tooling else '—' }} ·
+    <span class="ro-label">PARENT</span> {% if part.parent_id %}<a href="/parts/{{ part.parent_id }}">{{ part.parent.internal_pn }}</a>{% else %}—{% endif %} ·
+    <span class="ro-label">EXT</span> {{ part.external_pn or '—' }} ·
+    <span class="ro-label">CRE</span> {{ part.created_at.date().isoformat() }} ·
+    <span class="ro-label">UPD</span> {{ part.updated_at.date().isoformat() }}
+    {%- if part.lifecycle_state == 'active' and part.activated_at %} · <span class="ro-label">ACT</span> {{ part.activated_at.date().isoformat() }}{% endif %}
+</div>
 
-{# ============ SECTION ZONES — draft leads with owes (design is the live
-   work); active leads with stands (stock and supply are the daily
-   questions). Zone order only, nothing fancier. ============ #}
-{% if is_draft %}
-{% include 'parts/_zone_owes.html' %}
-{% include 'parts/_zone_stands.html' %}
-{% else %}
-{% include 'parts/_zone_stands.html' %}
-{% include 'parts/_zone_owes.html' %}
-{% endif %}
+{# ============ THE LEDGER — grouping carried by column placement:
+   design-side left, world-side right. Width is an information budget. #}
+<div class="ledger-grid{% if not is_draft %} ledger-grid-active{% endif %}">
+    <div class="ledger-col ledger-col-design">{% include 'parts/_ledger_design.html' %}</div>
+    <div class="ledger-col ledger-col-world">{% include 'parts/_ledger_world.html' %}</div>
+</div>
 
 {# ============ Modals ============ #}
 <!-- Add Supplier Modal -->
@@ -156,7 +91,7 @@
                 <form id="add-supplier-form" onsubmit="addSupplierEntry(event)">
                     <div class="form-group">
                         <label class="form-label" for="sup-supplier-id">SUPPLIER ID *</label>
-                        <input type="number" id="sup-supplier-id" name="supplier_id" class="form-input mono" required min="1" placeholder="Enter supplier ID">
+                        <input type="number" id="sup-supplier-id" name="supplier_id" class="form-input mono" required min="1">
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="sup-vendor-pn">VENDOR PN *</label>
@@ -334,7 +269,7 @@ function escapeHtml(str) {
               .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// Activation — a signature moment: identity locks permanently
+// Activation — a signature moment
 function openActivateConfirm() {
     const el = document.getElementById('activate-confirm');
     document.getElementById('activate-sign-time').textContent =
@@ -354,38 +289,6 @@ async function commitActivate() {
             alert(formatApiError(err.detail, 'Failed to activate part'));
         }
     } catch (e) { alert('Network error: ' + e.message); }
-}
-
-// Details disclosure — everything identity doesn't need lives here
-async function saveDetails() {
-    const msg = document.getElementById('details-msg');
-    msg.textContent = '';
-    const body = {
-        category: document.getElementById('d-category').value || null,
-        unit_of_measure: document.getElementById('d-uom').value || 'EA',
-        tracking_type: document.getElementById('d-tracking').value,
-        reorder_point: document.getElementById('d-reorder').value ? parseFloat(document.getElementById('d-reorder').value) : null,
-        is_tooling: document.getElementById('d-tooling').checked,
-        calibration_interval_days: document.getElementById('d-cal').value ? parseInt(document.getElementById('d-cal').value) : null,
-        parent_id: document.getElementById('d-parent').value ? parseInt(document.getElementById('d-parent').value) : null,
-    };
-    const metadataText = document.getElementById('d-metadata').value;
-    if (metadataText && metadataText.trim()) {
-        try { body.metadata = JSON.parse(metadataText); }
-        catch (e) { msg.textContent = 'invalid JSON in metadata'; return; }
-    } else {
-        body.metadata = null;
-    }
-    try {
-        const r = await fetch(`/api/parts/${partId}`, {
-            method: 'PATCH', headers: getHeaders(), body: JSON.stringify(body),
-        });
-        if (r.ok) { window.location.reload(); }
-        else {
-            const err = await r.json();
-            msg.textContent = formatApiError(err.detail, 'failed to save');
-        }
-    } catch (e) { msg.textContent = 'network error: ' + e.message; }
 }
 
 // Requirement allocation (assign here; the dossier is read + unlink only)
@@ -592,7 +495,8 @@ async function deleteBomLine(lineId) {
     }
 }
 
-// BOM Tree
+// BOM Tree — rendered beneath the direct lines only when it carries
+// information they don't (some component has children of its own)
 async function loadBomTree() {
     try {
         const response = await fetch(`/api/bom/assemblies/${partId}/tree`, {
@@ -600,11 +504,14 @@ async function loadBomTree() {
         });
         if (response.ok) {
             const tree = await response.json();
-            document.getElementById('bom-tree').innerHTML = renderTreeNode(tree, 0, true);
+            const hasDepth = (tree.children || []).some(c => (c.children || []).length > 0);
+            if (hasDepth) {
+                const el = document.getElementById('bom-tree');
+                el.innerHTML = renderTreeNode(tree, 0, true);
+                el.style.display = 'block';
+            }
         }
-    } catch (e) {
-        document.getElementById('bom-tree').innerHTML = '<span class="text-red">Failed to load tree</span>';
-    }
+    } catch (e) { /* the direct lines above remain authoritative */ }
 }
 
 function renderTreeNode(node, depth, isRoot) {

@@ -1,0 +1,83 @@
+{% import 'opalkit/_macros.html' as ok %}
+{# World-side ledger column. LABEL left, count/value right, [+] inline;
+   populated sections expand with indented mono detail lines. #}
+
+{# --- Stock + inventory records, merged --- #}
+<div class="ledger-row">
+    <span class="ledger-label">STOCK</span>
+    <span class="ledger-value">
+        {%- if inventory_records -%}
+        {{ '%g' % part.total_quantity }} {{ (part.unit_of_measure or 'EA') | upper }} · {{ inventory_records | length }} REC
+        {%- else -%}—{%- endif -%}
+    </span>
+    <a class="ledger-add" href="/inventory/new?part_id={{ part.id }}">[+]</a>
+</div>
+{% if inventory_records %}
+<div class="ledger-detail">
+    {% for inv in inventory_records %}
+    <div class="ledger-detail-line">
+        <a href="/inventory/opal/{{ inv.opal_number }}">{{ inv.opal_number }}</a>
+        <span>{{ inv.location or '—' }}</span>
+        <span class="ldl-muted">×{{ '%g' % inv.quantity }}{% if inv.lot_number %} · {{ inv.lot_number }}{% endif %}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# --- Open PO lines --- #}
+<div class="ledger-row">
+    <span class="ledger-label">PO LINES</span>
+    <span class="ledger-value">{{ open_po_lines | length if open_po_lines else '—' }}</span>
+</div>
+{% if open_po_lines %}
+<div class="ledger-detail">
+    {% for line in open_po_lines %}
+    <div class="ledger-detail-line">
+        <a href="/purchases/{{ line.purchase_id }}">{{ line.purchase.reference or 'PO-' ~ line.purchase_id }}</a>
+        <span class="ldl-muted">{{ (line.purchase.status.value if line.purchase.status.value is defined else line.purchase.status) | upper }} · {{ '%g' % line.qty_received }}/{{ '%g' % line.qty_ordered }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# --- Suppliers --- #}
+<div class="ledger-row">
+    <span class="ledger-label">SUPPLIERS</span>
+    <span class="ledger-value">{{ supplier_entries | length if supplier_entries else '—' }}</span>
+    <a class="ledger-add" href="#" onclick="showAddSupplier(); return false;">[+]</a>
+</div>
+{% if supplier_entries %}
+<div class="ledger-detail">
+    {% for entry in supplier_entries %}
+    <div class="ledger-detail-line">
+        <a href="/suppliers/{{ entry.supplier_id }}">{{ entry.supplier.name }}</a>
+        <span class="ldl-muted">{{ entry.vendor_pn }}{% if entry.is_preferred %} · PREF{% endif %}</span>
+        <span class="ldl-actions">
+            <a href="#" title="UNLINK" onclick="deleteSupplierEntry({{ entry.id }}, {{ entry.supplier_id }}); return false;">×</a>
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# --- Consumption history --- #}
+<div class="ledger-row">
+    <span class="ledger-label">CONSUMED</span>
+    <span class="ledger-value">{{ (consumption_history | length) ~ ('+' if consumption_history | length == 50 else '') if consumption_history else '—' }}</span>
+</div>
+{% if consumption_history %}
+<div class="ledger-detail">
+    {% for c in consumption_history %}
+    <div class="ledger-detail-line">
+        <span class="ldl-muted" title="{{ c.created_at.isoformat() }}">{{ c.created_at.date().isoformat() }}</span>
+        <span>×{{ '%g' % c.quantity }}</span>
+        {% if c.procedure_instance_id %}
+        <a href="/executions/{{ c.procedure_instance_id }}">EXEC {{ c.procedure_instance_id }}</a>
+        {% else %}
+        <span class="ldl-muted">MANUAL</span>
+        {% endif %}
+        {% if c.notes %}<span class="ldl-muted">{{ c.notes }}</span>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

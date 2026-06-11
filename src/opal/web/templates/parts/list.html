@@ -10,7 +10,7 @@
 {% set parts_actions %}{{ ok.btn("IMPORT CSV", href="/parts/import") }} {{ ok.btn("+ NEW PART", href="/parts/new", variant="primary") }}{% endset %}
 {% call ok.panel("PARTS", actions=parts_actions) %}
         <div class="toolbar">
-            {{ ok.toolbar_search(name="search", id="search-input", placeholder="Search parts by name, PN, description...", hx_get="/parts/table", hx_target="#parts-table-body", hx_include="#category-filter, #tier-filter, #top-level-filter, #low-stock-filter, #state-filter") }}
+            {{ ok.toolbar_search(name="search", id="search-input", placeholder="SEARCH", hx_get="/parts/table", hx_target="#parts-table-body", hx_include="#category-filter, #tier-filter, #top-level-filter, #low-stock-filter, #state-filter") }}
             <div class="toolbar-filter">
                 <select id="category-filter" name="category" class="form-select"
                         hx-get="/parts/table" hx-trigger="change" hx-target="#parts-table-body"
@@ -43,8 +43,7 @@
                         hx-trigger="click"
                         hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #tier-filter, #top-level-filter"
-                        hx-vals='{"sort_by": "id", "sort_order": "{% if sort_by == "id" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'
-                        title="Click to sort by ID">
+                        hx-vals='{"sort_by": "id", "sort_order": "{% if sort_by == "id" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'>
                         ID {% if sort_by == "id" %}<span style="display: inline-block; margin-left: 4px;">{% if sort_order == "asc" %}▲{% else %}▼{% endif %}</span>{% endif %}
                     </th>
                     <th style="width: 120px; cursor: pointer; user-select: none;"
@@ -52,8 +51,7 @@
                         hx-trigger="click"
                         hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #tier-filter, #top-level-filter"
-                        hx-vals='{"sort_by": "internal_pn", "sort_order": "{% if sort_by == "internal_pn" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'
-                        title="Click to sort by Internal PN">
+                        hx-vals='{"sort_by": "internal_pn", "sort_order": "{% if sort_by == "internal_pn" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'>
                         INTERNAL PN {% if sort_by == "internal_pn" %}<span style="display: inline-block; margin-left: 4px;">{% if sort_order == "asc" %}▲{% else %}▼{% endif %}</span>{% endif %}
                     </th>
                     <th style="width: 120px; cursor: pointer; user-select: none;"
@@ -61,8 +59,7 @@
                         hx-trigger="click"
                         hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #tier-filter, #top-level-filter"
-                        hx-vals='{"sort_by": "external_pn", "sort_order": "{% if sort_by == "external_pn" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'
-                        title="Click to sort by External PN">
+                        hx-vals='{"sort_by": "external_pn", "sort_order": "{% if sort_by == "external_pn" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'>
                         EXTERNAL PN {% if sort_by == "external_pn" %}<span style="display: inline-block; margin-left: 4px;">{% if sort_order == "asc" %}▲{% else %}▼{% endif %}</span>{% endif %}
                     </th>
                     <th style="cursor: pointer; user-select: none;"
@@ -70,8 +67,7 @@
                         hx-trigger="click"
                         hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #tier-filter, #top-level-filter"
-                        hx-vals='{"sort_by": "name", "sort_order": "{% if sort_by == "name" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'
-                        title="Click to sort by Name">
+                        hx-vals='{"sort_by": "name", "sort_order": "{% if sort_by == "name" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'>
                         NAME {% if sort_by == "name" %}<span style="display: inline-block; margin-left: 4px;">{% if sort_order == "asc" %}▲{% else %}▼{% endif %}</span>{% endif %}
                     </th>
                     <th style="width: 150px; cursor: pointer; user-select: none;"
@@ -79,8 +75,7 @@
                         hx-trigger="click"
                         hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #tier-filter, #top-level-filter"
-                        hx-vals='{"sort_by": "category", "sort_order": "{% if sort_by == "category" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'
-                        title="Click to sort by Category">
+                        hx-vals='{"sort_by": "category", "sort_order": "{% if sort_by == "category" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'>
                         CATEGORY {% if sort_by == "category" %}<span style="display: inline-block; margin-left: 4px;">{% if sort_order == "asc" %}▲{% else %}▼{% endif %}</span>{% endif %}
                     </th>
                     <th style="width: 60px; cursor: pointer; user-select: none;"
@@ -88,8 +83,7 @@
                         hx-trigger="click"
                         hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #tier-filter, #top-level-filter"
-                        hx-vals='{"sort_by": "tier", "sort_order": "{% if sort_by == "tier" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'
-                        title="Click to sort by Tier">
+                        hx-vals='{"sort_by": "tier", "sort_order": "{% if sort_by == "tier" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'>
                         TIER {% if sort_by == "tier" %}<span style="display: inline-block; margin-left: 4px;">{% if sort_order == "asc" %}▲{% else %}▼{% endif %}</span>{% endif %}
                     </th>
                     <th style="width: 100px; text-align: right;">STOCK QTY</th>
@@ -98,8 +92,7 @@
                         hx-trigger="click"
                         hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #tier-filter, #top-level-filter"
-                        hx-vals='{"sort_by": "unit_of_measure", "sort_order": "{% if sort_by == "unit_of_measure" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'
-                        title="Click to sort by Unit">
+                        hx-vals='{"sort_by": "unit_of_measure", "sort_order": "{% if sort_by == "unit_of_measure" and sort_order == "desc" %}asc{% else %}desc{% endif %}"}'>
                         UNIT {% if sort_by == "unit_of_measure" %}<span style="display: inline-block; margin-left: 4px;">{% if sort_order == "asc" %}▲{% else %}▼{% endif %}</span>{% endif %}
                     </th>
                 </tr>

@@ -114,7 +114,7 @@ def test_part_page_shows_allocated_requirement_with_state(client, db_session, te
 
     page = client.get(f"/parts/{part['id']}")
     assert page.status_code == 200
-    assert "REQUIREMENTS (1)" in page.text
+    assert ">REQS<" in page.text  # ledger row label
     assert req.req_number in page.text
     assert "DRAFT" in page.text
-    assert f"/requirements/{req.id}" in page.text  # row links to the dossier
+    assert f"/requirements/{req.id}" in page.text  # detail line links to the dossier

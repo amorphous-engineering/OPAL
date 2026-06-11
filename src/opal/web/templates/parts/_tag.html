@@ -1,10 +1,12 @@
 {# The part tag — one identity, one rendering, everywhere.
    Modes: forming (create flow, JS fills it live), header (part page),
    print (label route). If the screen tag and the printed label ever
-   differ, that is a bug by definition. #}
+   differ, that is a bug by definition. Labels are nouns, values are
+   facts — the tag narrates nothing. #}
 {% macro part_tag(mode, pn=none, name=none, tier_level=none, tier_name=none,
                   uom="EA", tracking="", state="draft", activated_at=none,
                   qr_url=none, pn_segments=none) %}
+{% set trk = 'SER' if tracking == 'serialized' else ('BULK' if tracking == 'bulk' else tracking | upper) %}
 <div class="part-tag part-tag-{{ mode }}">
     <div class="part-tag-id">
         <div class="part-tag-pn"{% if mode == 'forming' %} id="tag-pn"{% endif %}>
@@ -26,17 +28,13 @@
     <div class="part-tag-footer">
         <span class="part-tag-meta"{% if mode == 'forming' %} id="tag-meta"{% endif %}>
             {%- if tier_level is not none -%}
-            TIER {{ tier_level }}{% if tier_name %} · {{ tier_name | upper }}{% endif %} · {{ uom | upper }}{% if tracking %} · {{ tracking | upper }}{% endif %}
+            T{{ tier_level }}{% if tier_name %} {{ tier_name | upper }}{% endif %} · {{ uom | upper }}{% if trk %} · {{ trk }}{% endif %}
             {%- else -%}
-            TIER — · UOM —
+            T— · EA
             {%- endif -%}
         </span>
         <span class="part-tag-state {{ 'part-tag-state-draft' if state == 'draft' else 'part-tag-state-active' }}">
-            {%- if state == 'draft' -%}
-            DRAFT · PN EDITABLE
-            {%- else -%}
-            ACTIVE · LOCKED{% if activated_at %} {{ activated_at.date().isoformat() }}{% endif %}
-            {%- endif -%}
+            {{- 'DRAFT' if state == 'draft' else 'ACTIVE' -}}
         </span>
     </div>
 </div>

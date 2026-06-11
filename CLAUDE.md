@@ -89,6 +89,8 @@ Dense, explicit, functional. Expose state and inner workings. Data tables over c
 
 **The empty-state rule.** An empty section is one line, never a box: `{Section} — none · [+ action]`, muted text, 0.5-border row (`ok.empty_line` macro). A section earns vertical space only when populated. Empty states are facts, not features; six boxes announcing nothingness is anti-density.
 
+**Voice rules.** Spec prose is rationale for the implementer, never interface copy. (1) No interface copy that explains the interface — absent features are not apologized for. (2) Consequence sentences live only in confirmation dialogs and errors; each such sentence has exactly one home. (3) Labels are nouns, values are facts — no clauses, no narration. (4) Nothing hides behind disclosure: meta fields render always, as dense mono readouts. (5) Width is an information budget — max-width the content or fill the viewport with columns of data, never one stretched sparse column.
+
 ## Linting (Ruff)
 
 Configured in `pyproject.toml`: line-length 100, target Python 3.11+, rules E/F/I/UP/B/SIM. Type hints required everywhere.

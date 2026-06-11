@@ -30,7 +30,7 @@
             <div class="form-group">
                 <label class="form-label" for="name">NAME <span class="text-red">*</span></label>
                 <input type="text" id="name" name="name" class="form-input" required
-                       placeholder="Descriptive part name" oninput="document.getElementById('tag-name').textContent = this.value;">
+                       oninput="document.getElementById('tag-name').textContent = this.value;">
             </div>
 
             <div class="form-group">
@@ -39,16 +39,10 @@
                        placeholder="CAD designator or vendor PN">
             </div>
 
-            <details class="disclosure">
-                <summary>+ description</summary>
-                <div class="form-group" style="margin-top: var(--space-sm);">
-                    <textarea id="description" name="description" class="form-input" rows="4"
-                              placeholder="Detailed part description (supports markdown)"></textarea>
-                </div>
-            </details>
-
-            <div class="mono text-muted" style="margin-top: var(--space-md); font-size: 0.8rem;">
-                everything else — UoM, tracking, parent, reorder, metadata — lives on the part page, after it exists.
+            <div class="form-group">
+                <label class="form-label" for="description">DESCRIPTION</label>
+                <textarea id="description" name="description" class="form-input" rows="3"
+                          placeholder="markdown"></textarea>
             </div>
 
             {{ ok.form_actions(cancel_href="/parts", submit_text="CREATE DRAFT") }}
@@ -68,9 +62,9 @@ async function selectTier(tier, btn) {
             const data = await r.json();
             document.getElementById('tag-pn').textContent = data.part_number;
             document.getElementById('tag-meta').textContent =
-                'TIER ' + tier
-                + (data.tier_name ? ' · ' + data.tier_name.toUpperCase() : '')
-                + ' · EA · ' + data.default_tracking.toUpperCase();
+                'T' + tier
+                + (data.tier_name ? ' ' + data.tier_name.toUpperCase() : '')
+                + ' · EA · ' + (data.default_tracking === 'serialized' ? 'SER' : 'BULK');
         }
     } catch (e) { /* preview is best-effort; the server assigns atomically */ }
 }
