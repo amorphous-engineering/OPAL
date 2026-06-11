@@ -25,7 +25,6 @@ class RiskFormModal(FormModal):
     def build_form(self) -> ComposeResult:
         title_val = self.risk.get("title", "") if self.risk else ""
         desc_val = self.risk.get("description", "") if self.risk else ""
-        mitigation_val = self.risk.get("mitigation_plan", "") if self.risk else ""
 
         yield FormGroup(
             "Title",
@@ -49,32 +48,9 @@ class RiskFormModal(FormModal):
             required=True,
         )
 
-        if self.risk:
-            status_options = [
-                ("Identified", "identified"),
-                ("Analyzing", "analyzing"),
-                ("Mitigating", "mitigating"),
-                ("Monitoring", "monitoring"),
-                ("Accepted", "accepted"),
-                ("Closed", "closed"),
-            ]
-            yield FormGroup(
-                "Status",
-                Select(
-                    status_options,
-                    id="field-status",
-                    value=self.risk.get("status", "identified"),
-                ),
-            )
-
         yield FormGroup(
             "Description",
             TextArea(text=desc_val, id="field-description"),
-        )
-
-        yield FormGroup(
-            "Mitigation Plan",
-            TextArea(text=mitigation_val, id="field-mitigation"),
         )
 
     def get_form_data(self) -> dict[str, Any] | None:
@@ -86,25 +62,13 @@ class RiskFormModal(FormModal):
         probability = self.query_one("#field-probability", Select).value
         impact = self.query_one("#field-impact", Select).value
         description = self.query_one("#field-description", TextArea).text.strip()
-        mitigation = self.query_one("#field-mitigation", TextArea).text.strip()
 
-        data: dict[str, Any] = {
+        return {
             "title": title,
             "probability": int(probability) if probability != Select.BLANK else 3,
             "impact": int(impact) if impact != Select.BLANK else 3,
             "description": description,
-            "mitigation_plan": mitigation,
         }
-
-        if self.risk:
-            try:
-                status = self.query_one("#field-status", Select).value
-                if status != Select.BLANK:
-                    data["status"] = status
-            except Exception:
-                pass
-
-        return data
 
 
 class RiskDetail(Static):
@@ -124,23 +88,35 @@ class RiskDetail(Static):
         content = self.query_one("#risk-detail-content", Container)
         content.remove_children()
 
-        content.mount(Label(f"ID: {risk.get('id', '-')}", classes="detail-row"))
+        content.mount(Label(f"Risk #: {risk.get('risk_number', '-')}", classes="detail-row"))
         content.mount(Label(f"Title: {risk.get('title', '-')}", classes="detail-row"))
 
-        status = risk.get("status", "-")
-        content.mount(Label(f"Status: {status}", classes=f"detail-row status-{status}"))
+        disposition = risk.get("disposition", "-")
+        content.mount(
+            Label(f"Disposition: {disposition}", classes=f"detail-row status-{disposition}")
+        )
 
         # Risk scoring
         probability = risk.get("probability", 0)
         impact = risk.get("impact", 0)
-        score = risk.get("risk_score", 0)
-        level = risk.get("risk_level", "unknown")
+        score = risk.get("score", 0)
+        severity = risk.get("severity", "unknown")
 
         content.mount(Label(f"Probability: {probability}/5", classes="detail-row"))
         content.mount(Label(f"Impact: {impact}/5", classes="detail-row"))
         content.mount(
-            Label(f"Score: {score} ({level.upper()})", classes=f"detail-row risk-{level}")
+            Label(f"Score: {score} ({severity.upper()})", classes=f"detail-row risk-{severity}")
         )
+
+        residual_score = risk.get("residual_score")
+        if residual_score is not None:
+            residual_severity = risk.get("residual_severity", "unknown") or "unknown"
+            content.mount(
+                Label(
+                    f"Residual: {residual_score} ({residual_severity.upper()})",
+                    classes=f"detail-row risk-{residual_severity}",
+                )
+            )
 
         # Description
         description = risk.get("description", "")
@@ -148,19 +124,22 @@ class RiskDetail(Static):
             content.mount(Label("Description:", classes="detail-label"))
             content.mount(Label(description[:200], classes="detail-text"))
 
-        # Mitigation
-        mitigation = risk.get("mitigation_plan", "")
-        if mitigation:
-            content.mount(Label("Mitigation Plan:", classes="detail-label"))
-            content.mount(Label(mitigation[:200], classes="detail-text"))
-
         # Owner
         if risk.get("owner_id"):
-            content.mount(Label(f"Owner: User #{risk['owner_id']}", classes="detail-row"))
+            owner = risk.get("owner_name") or f"User #{risk['owner_id']}"
+            content.mount(Label(f"Owner: {owner}", classes="detail-row"))
 
-        # Linked issue
-        if risk.get("linked_issue_id"):
-            content.mount(Label(f"Linked Issue: #{risk['linked_issue_id']}", classes="detail-row"))
+        # Linked issues
+        linked = risk.get("linked_issues") or []
+        if linked:
+            summary = ", ".join(
+                f"{li.get('issue_number', '?')} ({li.get('role', '?')})" for li in linked
+            )
+            content.mount(Label(f"Linked Issues: {summary}", classes="detail-row"))
+        if risk.get("realized_issue_id"):
+            content.mount(
+                Label(f"Realized Issue: #{risk['realized_issue_id']}", classes="detail-row")
+            )
 
         # Timestamps
         created = risk.get("created_at", "")[:16] if risk.get("created_at") else "-"
@@ -201,14 +180,8 @@ class RiskMatrix(Static):
         content.mount(Label("^ Probability", classes="matrix-footer"))
 
         # Legend
-        summary = matrix_data.get("summary", {})
-        legend_parts = [
-            f"Low:{summary.get('low', 0)}",
-            f"Med:{summary.get('medium', 0)}",
-            f"High:{summary.get('high', 0)}",
-            f"Crit:{summary.get('critical', 0)}",
-        ]
-        content.mount(Label(" ".join(legend_parts), classes="matrix-legend"))
+        total = matrix_data.get("total_risks", 0)
+        content.mount(Label(f"Open risks: {total}", classes="matrix-legend"))
 
 
 class RisksScreen(Screen):
@@ -231,12 +204,13 @@ class RisksScreen(Screen):
             Label("Risks", classes="screen-title"),
             Horizontal(
                 Button("All", id="filter-all", variant="primary"),
-                Button("Identified", id="filter-identified"),
-                Button("Analyzing", id="filter-analyzing"),
-                Button("Mitigating", id="filter-mitigating"),
-                Button("Monitoring", id="filter-monitoring"),
+                Button("Open", id="filter-open"),
+                Button("Mitigate", id="filter-mitigate"),
+                Button("Watch", id="filter-watch"),
+                Button("Research", id="filter-research"),
                 Button("Accepted", id="filter-accepted"),
                 Button("Closed", id="filter-closed"),
+                Button("Realized", id="filter-realized"),
                 classes="filter-bar",
             ),
             Horizontal(
@@ -257,7 +231,7 @@ class RisksScreen(Screen):
     async def on_mount(self) -> None:
         """Initialize the risks table."""
         table = self.query_one("#risks-table", DataTable)
-        table.add_columns("ID", "Title", "P", "I", "Score", "Level", "Status")
+        table.add_columns("Risk #", "Title", "P", "I", "Score", "Sev", "Disposition")
         table.cursor_type = "row"
         await self.load_risks()
         await self.load_matrix()
@@ -322,26 +296,26 @@ class RisksScreen(Screen):
         matrix.display = not matrix.display
         self.notify("Matrix " + ("shown" if matrix.display else "hidden"))
 
-    async def load_risks(self, status: str | None = None) -> None:
+    async def load_risks(self, disposition: str | None = None) -> None:
         """Load risks from API."""
         client = get_client(self.app.api_url)
         table = self.query_one("#risks-table", DataTable)
         detail = self.query_one("#risk-detail", RiskDetail)
 
         try:
-            result = client.list_risks(status=status, page_size=100)
+            result = client.list_risks(disposition=disposition, page_size=100)
             risks = result.get("items", [])
 
             table.clear()
             for risk in risks:
                 table.add_row(
-                    str(risk.get("id", "")),
+                    risk.get("risk_number", ""),
                     risk.get("title", "")[:30],
                     str(risk.get("probability", 0)),
                     str(risk.get("impact", 0)),
-                    str(risk.get("risk_score", 0)),
-                    risk.get("risk_level", "")[:4].upper(),
-                    risk.get("status", ""),
+                    str(risk.get("score", 0)),
+                    risk.get("severity", "")[:4].upper(),
+                    risk.get("disposition", ""),
                     key=str(risk.get("id")),
                 )
 
@@ -366,10 +340,10 @@ class RisksScreen(Screen):
         button_id = event.button.id or ""
 
         if button_id.startswith("filter-"):
-            status = button_id.replace("filter-", "")
-            if status == "all":
-                status = None
-            await self.load_risks(status=status)
+            disposition: str | None = button_id.replace("filter-", "")
+            if disposition == "all":
+                disposition = None
+            await self.load_risks(disposition=disposition)
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection."""

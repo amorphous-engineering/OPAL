@@ -8,10 +8,51 @@
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("NEW RISK", max_width="700px") %}
+{% call ok.panel("NEW RISK", max_width="800px") %}
         <form id="new-risk-form" onsubmit="createRisk(event)">
             {{ ok.field("title", "TITLE", required=true) }}
-            {{ ok.field("description", "DESCRIPTION", type="textarea", rows=3) }}
+
+            <div class="form-label">CONDITION <span class="text-muted">— present fact, true now</span></div>
+            <div class="lint-editor" style="margin-bottom: var(--space-sm);">
+                <div class="lint-overlay mono" id="condition-overlay" aria-hidden="true"></div>
+                <textarea id="condition-text" name="condition" class="form-textarea mono lint-textarea" rows="2"></textarea>
+            </div>
+
+            <div class="form-label">DEPARTURE <span class="text-muted">— future undesired event; probability scores this</span></div>
+            <div class="lint-editor" style="margin-bottom: var(--space-sm);">
+                <div class="lint-overlay mono" id="departure-overlay" aria-hidden="true"></div>
+                <textarea id="departure-text" name="departure" class="form-textarea mono lint-textarea" rows="2"></textarea>
+            </div>
+
+            <div class="form-label">ASSET <span class="text-muted">— what is exposed: a part, or a name (schedule, campaign, ...)</span></div>
+            <div style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm);">
+                <select id="asset-part-select" name="asset_part_id" class="form-select" style="width: auto;"
+                        onchange="if (this.value) document.getElementById('asset-text-input').value = '';">
+                    <option value="">— part —</option>
+                    {% for part in parts %}
+                    <option value="{{ part.id }}">{{ part.name }}{% if part.internal_pn %} ({{ part.internal_pn }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="asset-text-input" name="asset_text" class="form-input" maxlength="255"
+                       placeholder="or: schedule, test campaign, ..."
+                       oninput="if (this.value) document.getElementById('asset-part-select').value = '';">
+            </div>
+
+            <div class="form-label">CONSEQUENCE <span class="text-muted">— measurable impact; impact scores this</span></div>
+            <div class="lint-editor" style="margin-bottom: var(--space-md);">
+                <div class="lint-overlay mono" id="consequence-overlay" aria-hidden="true"></div>
+                <textarea id="consequence-text" name="consequence" class="form-textarea mono lint-textarea" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="owner-select">OWNER</label>
+                <select id="owner-select" name="owner_id" class="form-select" style="width: auto;">
+                    <option value="">—</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
             {% call ok.grid(cols=2) %}
                 {{ ok.field("probability", "PROBABILITY (1-5)", type="select", value="3", options=[{"value": "1", "label": "1 - Rare"}, {"value": "2", "label": "2 - Unlikely"}, {"value": "3", "label": "3 - Possible"}, {"value": "4", "label": "4 - Likely"}, {"value": "5", "label": "5 - Almost Certain"}]) }}
@@ -20,41 +61,27 @@
 
             <div class="form-group">
                 <label class="form-label">CALCULATED SCORE</label>
-                <div id="score-display" style="font-size: 1.5rem; font-weight: 600;">9 (MEDIUM)</div>
+                <div id="score-display" class="mono" style="font-size: 1.5rem; font-weight: 600;"><span class="sev-medium">9</span></div>
             </div>
 
-            {{ ok.field("mitigation_plan", "MITIGATION PLAN", type="textarea", rows=4, placeholder="Describe how this risk will be mitigated...", attrs='id="mitigation"') }}
-
-            <div class="form-group">
-                <label class="form-label" for="linked-issue">LINKED ISSUE (optional)</label>
-                <select id="linked-issue" name="linked_issue_id" class="form-select">
-                    <option value="">No linked issue...</option>
-                    {% for issue in issues %}
-                    <option value="{{ issue.id }}">#{{ issue.id }} - {{ issue.title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            {{ ok.field("description", "NARRATIVE", type="textarea", rows=3, placeholder="context, evidence, suggested responses...") }}
 
             {{ ok.form_messages() }}
             {{ ok.form_actions(cancel_href="/risks", submit_text="CREATE") }}
         </form>
 {% endcall %}
 
+<script src="/static/js/requirements.js"></script>
+<script src="/static/js/risks.js"></script>
 <script>
+bindScenarioLint();
+
 function updateScore() {
     const prob = parseInt(document.getElementById('probability').value);
     const impact = parseInt(document.getElementById('impact').value);
     const score = prob * impact;
-    let severity = 'LOW';
-    let color = 'var(--status-ok)';
-    if (score > 12) {
-        severity = 'HIGH';
-        color = 'var(--status-error)';
-    } else if (score > 5) {
-        severity = 'MEDIUM';
-        color = 'var(--status-warn)';
-    }
-    document.getElementById('score-display').innerHTML = `<span style="color: ${color}">${score} (${severity})</span>`;
+    const sev = score <= 5 ? 'low' : (score <= 12 ? 'medium' : 'high');
+    document.getElementById('score-display').innerHTML = `<span class="sev-${sev}">${score}</span>`;
 }
 
 document.getElementById('probability').addEventListener('change', updateScore);
@@ -69,22 +96,21 @@ async function createRisk(event) {
 
     const data = {
         title: form.title.value,
-        description: form.description.value || null,
+        condition: form.condition.value || null,
+        departure: form.departure.value || null,
+        asset_part_id: form.asset_part_id.value ? parseInt(form.asset_part_id.value) : null,
+        asset_text: form.asset_text.value || null,
+        consequence: form.consequence.value || null,
+        owner_id: form.owner_id.value ? parseInt(form.owner_id.value) : null,
         probability: parseInt(form.probability.value),
         impact: parseInt(form.impact.value),
-        mitigation_plan: form.mitigation_plan.value || null,
-        linked_issue_id: form.linked_issue_id.value ? parseInt(form.linked_issue_id.value) : null,
+        description: form.description.value || null,
     };
-
-    const headers = {
-        'Content-Type': 'application/json',
-    };
-
 
     try {
         const response = await fetch('/api/risks', {
             method: 'POST',
-            headers: headers,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
 

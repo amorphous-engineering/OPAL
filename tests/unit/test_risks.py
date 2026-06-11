@@ -1,171 +1,345 @@
-"""Risks API tests."""
+"""Risks API tests — scenarios, dispositions, acceptance (issue #40)."""
+
+from fastapi.testclient import TestClient
+
+from opal.db.models import User
+
+SCENARIO = {
+    "condition": "Valve seat 3 shows erosion after every hot-fire test",
+    "departure": "the valve fails to seal during a flight burn",
+    "asset_text": "propulsion schedule",
+    "consequence": "loss of vehicle",
+}
 
 
-def test_create_risk(client):
-    """Test creating a new risk."""
+def create_risk(client: TestClient, **overrides) -> dict:
+    payload = {"title": "Test Risk", **overrides}
+    response = client.post("/api/risks", json=payload)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def create_ready_risk(client: TestClient, owner: User, **overrides) -> dict:
+    """A risk passing every acceptance readiness check (rationale included)."""
+    return create_risk(client, **SCENARIO, owner_id=owner.id, **overrides)
+
+
+def make_accepted(client: TestClient, owner: User) -> dict:
+    risk = create_ready_risk(client, owner)
     response = client.post(
-        "/api/risks",
-        json={
-            "title": "Equipment Failure",
-            "description": "Critical equipment may fail during operation",
-            "probability": 3,
-            "impact": 4,
-            "mitigation_plan": "Schedule regular maintenance",
-        },
+        f"/api/risks/{risk['id']}/accept",
+        json={"rationale": "Residual exposure within program tolerance"},
     )
-    assert response.status_code == 201
+    assert response.status_code == 200, response.text
+    return response.json()
 
-    data = response.json()
-    assert data["title"] == "Equipment Failure"
-    assert data["probability"] == 3
-    assert data["impact"] == 4
+
+# ============ CRUD ============
+
+
+def test_create_risk_with_scenario(client: TestClient):
+    data = create_risk(client, **SCENARIO, probability=3, impact=4)
+    assert data["risk_number"].startswith("RISK-")
+    assert data["disposition"] == "open"
+    assert data["condition"] == SCENARIO["condition"]
+    assert data["asset_display"] == "propulsion schedule"
+    assert data["statement"] == (
+        "Given that Valve seat 3 shows erosion after every hot-fire test, "
+        "there is a possibility of the valve fails to seal during a flight burn "
+        "adversely impacting propulsion schedule, thereby leading to loss of vehicle."
+    )
     assert data["score"] == 12
     assert data["severity"] == "medium"
-    assert data["status"] == "identified"
 
 
-def test_list_risks(client):
-    """Test listing risks."""
-    client.post("/api/risks", json={"title": "Risk A", "probability": 2, "impact": 2})
-    client.post("/api/risks", json={"title": "Risk B", "probability": 5, "impact": 5})
-
-    response = client.get("/api/risks")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["total"] >= 2
-
-
-def test_filter_risks_by_status(client):
-    """Test filtering risks by status."""
-    # Create and update one
-    risk1 = client.post("/api/risks", json={"title": "Active Risk"}).json()
-    risk2 = client.post("/api/risks", json={"title": "Closed Risk"}).json()
-    client.patch(f"/api/risks/{risk2['id']}", json={"status": "closed"})
-
-    response = client.get("/api/risks?status=identified")
-    assert response.status_code == 200
-
-    data = response.json()
-    # All returned should be identified status
-    assert all(i["status"] == "identified" for i in data["items"])
-
-
-def test_get_risk(client):
-    """Test getting a specific risk."""
-    create_response = client.post(
+def test_create_rejects_both_asset_forms(client: TestClient):
+    response = client.post(
         "/api/risks",
-        json={"title": "Specific Risk", "probability": 4, "impact": 5},
+        json={"title": "Both assets", "asset_part_id": 999999, "asset_text": "schedule"},
     )
-    risk_id = create_response.json()["id"]
+    assert response.status_code == 400
+    assert "exactly one" in response.json()["detail"]
 
-    response = client.get(f"/api/risks/{risk_id}")
+
+def test_list_risks_with_disposition_filter(client: TestClient):
+    create_risk(client, title="Stays open")
+    watched = create_risk(
+        client,
+        title="Goes to watch",
+        watch_observable="chamber pressure decay",
+        watch_threshold="> 2 psi/s",
+    )
+    response = client.post(f"/api/risks/{watched['id']}/disposition", json={"disposition": "watch"})
     assert response.status_code == 200
-    assert response.json()["title"] == "Specific Risk"
-    assert response.json()["score"] == 20
-    assert response.json()["severity"] == "high"
+
+    response = client.get("/api/risks?disposition=watch")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert all(item["disposition"] == "watch" for item in data["items"])
+    assert data["items"][0]["id"] == watched["id"]
 
 
-def test_update_risk(client):
-    """Test updating a risk."""
-    create_response = client.post(
-        "/api/risks",
-        json={"title": "Original Title", "probability": 3, "impact": 3},
+def test_get_risk_includes_statement_and_scores(client: TestClient):
+    risk = create_risk(
+        client,
+        **SCENARIO,
+        probability=4,
+        impact=5,
+        residual_probability=2,
+        residual_impact=3,
     )
-    risk_id = create_response.json()["id"]
+    response = client.get(f"/api/risks/{risk['id']}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["statement"].startswith("Given that ")
+    assert data["score"] == 20
+    assert data["severity"] == "high"
+    assert data["residual_probability"] == 2
+    assert data["residual_impact"] == 3
+    assert data["residual_score"] == 6
+    assert data["residual_severity"] == "medium"
 
-    response = client.patch(
-        f"/api/risks/{risk_id}",
+
+def test_patch_partial_update(client: TestClient):
+    risk = create_risk(client, **SCENARIO, probability=3, impact=3)
+    response = client.patch(f"/api/risks/{risk['id']}", json={"title": "Renamed"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Renamed"
+    # Untouched fields survive a partial update.
+    assert data["condition"] == SCENARIO["condition"]
+    assert data["probability"] == 3
+    assert data["acceptance_invalidated"] is False
+
+
+def test_delete_risk(client: TestClient):
+    risk = create_risk(client)
+    assert client.delete(f"/api/risks/{risk['id']}").status_code == 204
+    assert client.get(f"/api/risks/{risk['id']}").status_code == 404
+
+
+# ============ Acceptance ============
+
+
+def test_accept_409_when_not_ready(client: TestClient):
+    risk = create_risk(client)  # no scenario, owner, or rationale
+    response = client.post(f"/api/risks/{risk['id']}/accept", json={})
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "missing:" in detail
+    assert "owner" in detail
+
+
+def test_accept_200_when_ready(client: TestClient, test_user: User, auth_headers: dict):
+    risk = create_ready_risk(client, test_user)
+    response = client.post(
+        f"/api/risks/{risk['id']}/accept",
+        json={"rationale": "Within program tolerance"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["disposition"] == "accepted"
+    assert data["accepted_by_id"] == test_user.id
+    assert data["accepted_by_name"] == test_user.name
+    assert data["accepted_at"] is not None
+    assert data["acceptance_rationale"] == "Within program tolerance"
+
+
+def test_patch_accepted_risk_reverts_to_open(client: TestClient, test_user: User):
+    accepted = make_accepted(client, test_user)
+    response = client.patch(f"/api/risks/{accepted['id']}", json={"probability": 5})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["disposition"] == "open"
+    assert data["acceptance_invalidated"] is True
+    # Signature kept as history, not erased.
+    assert data["accepted_by_id"] == accepted["accepted_by_id"]
+    assert data["accepted_at"] is not None
+
+
+# ============ Dispositions ============
+
+
+def test_disposition_watch_happy_path(client: TestClient):
+    risk = create_risk(
+        client,
+        watch_observable="chamber pressure decay",
+        watch_threshold="> 2 psi/s",
+        watch_contingency="hold launch and inspect",
+    )
+    response = client.post(f"/api/risks/{risk['id']}/disposition", json={"disposition": "watch"})
+    assert response.status_code == 200
+    assert response.json()["disposition"] == "watch"
+
+
+def test_disposition_mitigate_409_names_requirement(client: TestClient):
+    risk = create_risk(client)  # no links, no residual
+    response = client.post(f"/api/risks/{risk['id']}/disposition", json={"disposition": "mitigate"})
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "mitigation" in detail
+    assert "residual" in detail
+    # State preservation on refusal is asserted in test_risks_domain — the
+    # route's rollback-on-409 discards this fixture's outer test transaction.
+
+
+def test_get_dispositions_lists_seven(client: TestClient):
+    response = client.get("/api/risks/dispositions")
+    assert response.status_code == 200
+    assert set(response.json()) == {
+        "open",
+        "mitigate",
+        "watch",
+        "research",
+        "accepted",
+        "closed",
+        "realized",
+    }
+
+
+# ============ Linked issues ============
+
+
+def test_link_issue_and_duplicate_409(client: TestClient):
+    risk = create_risk(client)
+    issue = client.post("/api/issues", json={"title": "Add backup seal"}).json()
+
+    response = client.post(
+        f"/api/risks/{risk['id']}/issues",
+        json={"issue_id": issue["id"], "role": "mitigation"},
+    )
+    assert response.status_code == 201
+    linked = response.json()["linked_issues"]
+    assert len(linked) == 1
+    assert linked[0]["issue_id"] == issue["id"]
+    assert linked[0]["role"] == "mitigation"
+    assert linked[0]["status"] == "open"
+
+    duplicate = client.post(
+        f"/api/risks/{risk['id']}/issues",
+        json={"issue_id": issue["id"], "role": "research"},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_spawn_mitigation_issue(client: TestClient):
+    risk = create_risk(client)
+    response = client.post(
+        f"/api/risks/{risk['id']}/issues/spawn",
+        json={"role": "mitigation", "title": "Qualify harder seat material"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["linked_issues"]) == 1
+    link = data["linked_issues"][0]
+    assert link["role"] == "mitigation"
+    assert data["realized_issue_id"] is None
+
+    issue = client.get(f"/api/issues/{link['issue_id']}").json()
+    assert issue["issue_type"] == "task"
+    assert issue["title"] == "Qualify harder seat material"
+
+
+def test_spawn_realized_issue(client: TestClient):
+    risk = create_risk(client)
+    response = client.post(
+        f"/api/risks/{risk['id']}/issues/spawn",
+        json={"role": "realized", "title": "Valve failed to seal on SN004"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["realized_issue_id"] is not None
+    assert data["linked_issues"] == []  # realization is a pointer, not a response link
+
+    issue = client.get(f"/api/issues/{data['realized_issue_id']}").json()
+    assert issue["issue_type"] == "non_conformance"
+
+
+def test_unlink_issue(client: TestClient):
+    risk = create_risk(client)
+    issue = client.post("/api/issues", json={"title": "Linked then removed"}).json()
+    client.post(
+        f"/api/risks/{risk['id']}/issues",
+        json={"issue_id": issue["id"], "role": "mitigation"},
+    )
+
+    response = client.delete(f"/api/risks/{risk['id']}/issues/{issue['id']}")
+    assert response.status_code == 200
+    assert response.json()["linked_issues"] == []
+    # The issue itself is untouched.
+    assert client.get(f"/api/issues/{issue['id']}").status_code == 200
+
+
+# ============ Review stamp, readiness, lint, matrix ============
+
+
+def test_review_stamp_stamps_listed(client: TestClient):
+    stamped = create_risk(client, title="Reviewed")
+    skipped = create_risk(client, title="Not reviewed")
+
+    response = client.post("/api/risks/review-stamp", json={"risk_ids": [stamped["id"]]})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stamped"] == 1
+    assert "T" in data["reviewed_at"]  # ISO 8601
+
+    assert client.get(f"/api/risks/{stamped['id']}").json()["last_reviewed_at"] is not None
+    assert client.get(f"/api/risks/{skipped['id']}").json()["last_reviewed_at"] is None
+
+
+def test_readiness_shape(client: TestClient):
+    risk = create_risk(client)
+    response = client.get(f"/api/risks/{risk['id']}/readiness")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ready"] is False
+    assert {c["key"] for c in data["checks"]} == {
+        "scenario_complete",
+        "owner_assigned",
+        "scored",
+        "rationale_recorded",
+        "lint_clean",
+    }
+    for check in data["checks"]:
+        assert set(check) == {"key", "label", "passed", "severity", "detail"}
+
+
+def test_lint_endpoint(client: TestClient):
+    response = client.post(
+        "/api/risks/lint",
         json={
-            "title": "Updated Title",
-            "status": "mitigating",
-            "probability": 2,
-            "impact": 2,
+            "condition": "the valve might be eroded",
+            "departure": "seal fails unless we add a backup",
+            "consequence": "the team becomes sad",
         },
     )
     assert response.status_code == 200
-
     data = response.json()
-    assert data["title"] == "Updated Title"
-    assert data["status"] == "mitigating"
-    assert data["score"] == 4
-    assert data["severity"] == "low"
+    assert data["would_block_accept"] is True
+    assert [f["rule"] for f in data["findings"]["condition"]] == ["RL-01"]
+    assert [f["rule"] for f in data["findings"]["departure"]] == ["RL-02"]
+    assert [f["rule"] for f in data["findings"]["consequence"]] == ["RL-03"]
+
+    clean = client.post("/api/risks/lint", json=SCENARIO).json()
+    assert clean["would_block_accept"] is False
+    assert all(v == [] for v in clean["findings"].values())
 
 
-def test_delete_risk(client):
-    """Test soft deleting a risk."""
-    create_response = client.post(
-        "/api/risks",
-        json={"title": "To Be Deleted"},
+def test_risk_matrix(client: TestClient):
+    create_risk(client, probability=5, impact=5, residual_probability=2, residual_impact=2)
+    closing = create_risk(client, probability=1, impact=1)
+    client.post(
+        f"/api/risks/{closing['id']}/disposition",
+        json={"disposition": "closed", "note": "no longer credible"},
     )
-    risk_id = create_response.json()["id"]
-
-    response = client.delete(f"/api/risks/{risk_id}")
-    assert response.status_code == 204
-
-    # Should not be found
-    get_response = client.get(f"/api/risks/{risk_id}")
-    assert get_response.status_code == 404
-
-
-def test_risk_score_calculations(client):
-    """Test that risk scores are calculated correctly."""
-    # Low risk (score <= 5)
-    low = client.post("/api/risks", json={"title": "Low", "probability": 1, "impact": 5}).json()
-    assert low["score"] == 5
-    assert low["severity"] == "low"
-
-    # Medium risk (score 6-12)
-    med = client.post("/api/risks", json={"title": "Med", "probability": 3, "impact": 4}).json()
-    assert med["score"] == 12
-    assert med["severity"] == "medium"
-
-    # High risk (score 13-25)
-    high = client.post("/api/risks", json={"title": "High", "probability": 5, "impact": 5}).json()
-    assert high["score"] == 25
-    assert high["severity"] == "high"
-
-
-def test_risk_with_linked_issue(client):
-    """Test creating a risk linked to an issue."""
-    # Create issue
-    issue_response = client.post("/api/issues", json={"title": "Related Issue"})
-    issue_id = issue_response.json()["id"]
-
-    # Create risk linked to issue
-    response = client.post(
-        "/api/risks",
-        json={"title": "Linked Risk", "linked_issue_id": issue_id},
-    )
-    assert response.status_code == 201
-    assert response.json()["linked_issue_id"] == issue_id
-
-
-def test_get_risk_statuses(client):
-    """Test getting risk statuses."""
-    response = client.get("/api/risks/statuses")
-    assert response.status_code == 200
-
-    statuses = response.json()
-    assert "identified" in statuses
-    assert "analyzing" in statuses
-    assert "mitigating" in statuses
-    assert "monitoring" in statuses
-    assert "closed" in statuses
-
-
-def test_get_risk_matrix(client):
-    """Test getting risk matrix data."""
-    # Create some risks
-    client.post("/api/risks", json={"title": "R1", "probability": 1, "impact": 1})
-    client.post("/api/risks", json={"title": "R2", "probability": 5, "impact": 5})
-    client.post("/api/risks", json={"title": "R3", "probability": 3, "impact": 3})
 
     response = client.get("/api/risks/matrix")
     assert response.status_code == 200
-
     data = response.json()
-    assert "matrix" in data
-    assert len(data["matrix"]) == 5  # 5x5 matrix
-    assert len(data["matrix"][0]) == 5
-    assert data["total_risks"] >= 3
+    assert len(data["matrix"]) == 5 and len(data["matrix"][0]) == 5
+    assert data["matrix"][4][4] == 1
+    assert data["residual_matrix"][1][1] == 1
+    assert data["matrix"][0][0] == 0  # closed risks are not live exposure
+    assert data["total_risks"] == 1

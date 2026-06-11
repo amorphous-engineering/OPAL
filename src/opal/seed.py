@@ -27,6 +27,7 @@ from opal.db.models import (
     Purchase,
     PurchaseLine,
     Risk,
+    RiskIssueLink,
     StepExecution,
     Supplier,
     TestTemplate,
@@ -38,13 +39,13 @@ from opal.db.models.inventory import InventoryRecord, SourceType
 from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType
 from opal.db.models.purchase import PurchaseStatus
-from opal.db.models.risk import RiskStatus
+from opal.db.models.risk import RiskDisposition, RiskIssueRole
 
 
 def seed_database(db: Session) -> None:
     """Populate database with Project Kestrel seed data."""
     _seed_project_config(db)
-    _seed_users(db)
+    users = _seed_users(db)
     workcenters = _seed_workcenters(db)
     suppliers = _seed_suppliers(db)
     parts = _seed_parts(db)
@@ -54,8 +55,8 @@ def seed_database(db: Session) -> None:
     procedures = _seed_procedures(db, parts, workcenters)
     _seed_versions_and_executions(db, procedures)
     _seed_purchases(db, parts, suppliers)
-    _seed_issues(db, parts, procedures)
-    _seed_risks(db)
+    issues = _seed_issues(db, parts, procedures)
+    _seed_risks(db, parts, users, issues)
     _seed_test_templates(db, parts)
     db.commit()
 
@@ -141,39 +142,37 @@ cad_directories: []
 """
 
 
-def _seed_users(db: Session) -> None:
+def _seed_users(db: Session) -> dict[str, User]:
     """Create demo users with a known password (demo data, not production)."""
     from opal.core.auth import hash_password
 
     demo_hash = hash_password("kestrel-demo")
-    db.add(
+    items = [
         User(
             name="Build Lead",
             username="build",
             password_hash=demo_hash,
             email="build@kestrel.local",
             is_admin=True,
-        )
-    )
-    db.add(
+        ),
         User(
             name="Test Engineer",
             username="test",
             password_hash=demo_hash,
             email="test@kestrel.local",
             is_admin=False,
-        )
-    )
-    db.add(
+        ),
         User(
             name="QA Inspector",
             username="qa",
             password_hash=demo_hash,
             email="qa@kestrel.local",
             is_admin=False,
-        )
-    )
+        ),
+    ]
+    db.add_all(items)
     db.flush()
+    return {u.username: u for u in items}
 
 
 def _seed_project_config(db: Session) -> None:
@@ -4054,7 +4053,8 @@ def _seed_issues(
     db: Session,
     p: dict[str, Part],
     procs: dict[str, MasterProcedure],
-) -> None:
+) -> dict[str, Issue]:
+    """Create demo issues. Returns dict keyed by short name for cross-referencing."""
     # ── Non-Conformances ────────────────────────────────────────
 
     nc1 = Issue(
@@ -4251,6 +4251,20 @@ def _seed_issues(
     )
 
     db.flush()
+    return {
+        "injector_nc": nc1,
+        "weld_nc": nc2,
+        "oring_groove_nc": nc3,
+        "regulator_nc": nc4,
+        "pyro_reset_bug": bug1,
+        "gps_bug": bug2,
+        "telemetry_bug": bug3,
+        "oring_task": task1,
+        "injector_task": task2,
+        "checklist_task": task3,
+        "altimeter_imp": imp1,
+        "ematch_imp": imp2,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -4258,64 +4272,149 @@ def _seed_issues(
 # ---------------------------------------------------------------------------
 
 
-def _seed_risks(db: Session) -> None:
-    risks = [
+def _seed_risks(
+    db: Session,
+    p: dict[str, Part],
+    users: dict[str, User],
+    issues: dict[str, Issue],
+) -> None:
+    """Four scenario-structured risks, one per common disposition."""
+
+    # ── open — identified, not yet dispositioned ────────────────
+    db.add(
         Risk(
             risk_number=generate_risk_number(db),
-            title="LOX compatibility failure",
-            description="Material in LOX-wetted path ignites or degrades on contact with liquid oxygen, causing fire or contamination.",
-            status=RiskStatus.MITIGATING,
-            probability=3,
-            impact=5,
-            mitigation_plan="1. Review all wetted materials against MSFC-SPEC-106B.\n2. Replace any non-compatible materials (e.g., Buna-N O-rings → Viton).\n3. Oxygen-clean all LOX-side components per CGA G-4.1.\n4. Perform LOX drop-impact test on any questionable materials.",
-        ),
-        Risk(
-            risk_number=generate_risk_number(db),
-            title="Recovery deployment failure",
-            description="Parachute fails to deploy at apogee or main deploy altitude, resulting in ballistic impact.",
-            status=RiskStatus.MONITORING,
+            title="Avionics single-battery brownout",
+            description=(
+                "Bench testing showed the FC resets when an e-match fires (see the pyro "
+                "firing bug) — the bus is sensitive to transients. Candidate responses: "
+                "separate recovery battery, larger bulk capacitance on the pyro board."
+            ),
+            condition=(
+                "the flight computer, telemetry radio, and both pyro channels draw from a "
+                "single 2S LiPo with no independent backup supply."
+            ),
+            departure=(
+                "the bus voltage sags below the flight computer brownout threshold during "
+                "pyro firing or sustained transmit in flight"
+            ),
+            asset_part_id=p["fc"].id,
+            consequence=(
+                "loss of recovery deployment commanding and loss of all flight data from "
+                "the brownout onward"
+            ),
+            disposition=RiskDisposition.OPEN.value,
+            owner_id=users["test"].id,
             probability=2,
             impact=5,
-            mitigation_plan="1. Dual-event recovery (drogue + main) with independent altimeters.\n2. Ground-test ejection charges with flight-weight hardware.\n3. Verify continuity before every flight.\n4. Redundant altimeter triggers both events independently.",
+        )
+    )
+
+    # ── mitigate — open mitigation issue + residual target ─────
+    lox_seal = Risk(
+        risk_number=generate_risk_number(db),
+        title="Buna-N seals in LOX-wetted joints",
+        description=(
+            "Stock -116 Buna-N O-rings were installed in LOX-wetted seal positions during "
+            "initial plumbing fit-up. MSFC-SPEC-106B lists Buna-N as incompatible with "
+            "liquid oxygen. Viton replacements are on order via the linked task; residual "
+            "assumes all wetted seals are swapped and lot-verified before tanking."
         ),
+        condition=(
+            "Buna-N -116 O-rings are installed in LOX-wetted seal positions, and Buna-N "
+            "is not LOX-compatible per MSFC-SPEC-106B."
+        ),
+        departure=(
+            "a seal ignites or embrittles on liquid oxygen contact during tanking or static fire"
+        ),
+        asset_part_id=p["engine_assy"].id,
+        consequence=(
+            "fire damage to the engine and pad hardware and loss of the static fire campaign"
+        ),
+        disposition=RiskDisposition.MITIGATE.value,
+        owner_id=users["build"].id,
+        probability=3,
+        impact=5,
+        residual_probability=1,
+        residual_impact=5,
+    )
+    db.add(lox_seal)
+    db.flush()
+    db.add(
+        RiskIssueLink(
+            risk_id=lox_seal.id,
+            issue_id=issues["oring_task"].id,
+            role=RiskIssueRole.MITIGATION.value,
+        )
+    )
+
+    # ── watch — observable + threshold + contingency ────────────
+    db.add(
         Risk(
             risk_number=generate_risk_number(db),
-            title="Engine hard start / overpressure",
-            description="Propellant accumulation in chamber before ignition causes deflagration-to-detonation event (hard start).",
-            status=RiskStatus.MITIGATING,
-            probability=2,
-            impact=5,
-            mitigation_plan="1. LOX-lead ignition sequence (oxidizer before fuel).\n2. Verified igniter reliability — 10/10 ground tests.\n3. Pressure relief valve on chamber (set to 1.5x MEOP).\n4. Remote operation with 500 ft minimum safe distance.",
-        ),
-        Risk(
-            risk_number=generate_risk_number(db),
-            title="Avionics power loss during flight",
-            description="LiPo battery failure or wiring fault causes total avionics blackout during flight.",
-            status=RiskStatus.ANALYZING,
-            probability=2,
-            impact=4,
-            mitigation_plan="1. Pre-flight voltage check under load.\n2. Strain-relieve all connectors.\n3. Consider adding independent backup battery for recovery altimeter.",
-        ),
-        Risk(
-            risk_number=generate_risk_number(db),
-            title="Schedule slip past launch window",
-            description="Delays in fabrication or testing cause the project to miss the target launch date and site reservation.",
-            status=RiskStatus.IDENTIFIED,
+            title="Umbilical QD backorder threatens launch window",
+            description=(
+                "Swagelok quotes 8-10 weeks on the SS-QC4-B-400 quick-disconnect. Pad "
+                "fill-system integration is on the critical path; every other fill-system "
+                "component is in stock."
+            ),
+            condition=(
+                "the umbilical quick-disconnect (SS-QC4-B-400) is on supplier backorder "
+                "with no confirmed ship date, and pad fill-system integration is on the "
+                "critical path to the reserved launch window."
+            ),
+            departure=(
+                "the quick-disconnect delivery slips past the start of pad fill-system integration"
+            ),
+            asset_text="launch window reservation",
+            consequence=(
+                "a launch delay of at least 3 months to the next available site reservation"
+            ),
+            disposition=RiskDisposition.WATCH.value,
+            owner_id=users["build"].id,
             probability=4,
             impact=3,
-            mitigation_plan="1. Identify critical path items (engine assembly, hot fire test).\n2. Order long-lead items early (Swagelok QD already on backorder).\n3. Maintain schedule buffer for re-work.",
-        ),
+            watch_observable="Supplier order status for the SS-QC4-B-400 quick-disconnect",
+            watch_threshold="No ship confirmation by 2026-07-01",
+            watch_contingency=(
+                "Fabricate an interim manual-disconnect fill fitting and requalify the "
+                "fill procedure without auto-shutoff."
+            ),
+        )
+    )
+
+    # ── accepted — signed, with rationale ───────────────────────
+    db.add(
         Risk(
             risk_number=generate_risk_number(db),
-            title="Propellant handling safety incident",
-            description="Personnel injury during LOX or ethanol handling operations.",
-            status=RiskStatus.MONITORING,
-            probability=1,
-            impact=5,
-            mitigation_plan="1. Written propellant handling procedures with safety briefing.\n2. PPE: face shield, cryogenic gloves, long sleeves for LOX.\n3. Fire extinguisher and first aid kit at pad.\n4. Minimum 2 persons for any propellant operation.",
-        ),
-    ]
-    db.add_all(risks)
+            title="COTS pressurant bottle accepted on vendor cert",
+            description=(
+                "The N2 pressurant bottle is a DOT-rated COTS unit; REQ-002 was verified "
+                "against the vendor certificate rather than an in-house proof test. The "
+                "pad pressure check before propellant load detects leak-down."
+            ),
+            condition=(
+                "the pressurant tank is a COTS nitrogen bottle accepted on vendor "
+                "certification (DOT 3AL3000) without an in-house proof test."
+            ),
+            departure="the bottle valve leaks down during the pre-launch pad hold",
+            asset_part_id=p["press_tank"].id,
+            consequence="a scrub for that window and the loss of one day of range time",
+            disposition=RiskDisposition.ACCEPTED.value,
+            owner_id=users["qa"].id,
+            probability=2,
+            impact=2,
+            accepted_by_id=users["build"].id,
+            accepted_at=datetime.now(UTC),
+            acceptance_rationale=(
+                "Bottle is DOT-rated to 3000 PSI against a 500 PSI working pressure with "
+                "vendor cert on file (REQ-002 verified). Leak-down is detected by the pad "
+                "pressure check before propellant load; worst credible outcome is a "
+                "one-day scrub."
+            ),
+        )
+    )
+
     db.flush()
 
 

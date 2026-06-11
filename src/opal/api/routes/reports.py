@@ -312,14 +312,14 @@ def export_issues_csv(
 @router.get("/risks/csv")
 def export_risks_csv(
     db: DbSession,
-    status: str | None = Query(None),
+    disposition: str | None = Query(None),
     min_score: int | None = Query(None, description="Minimum risk score"),
 ) -> StreamingResponse:
     """Export risks as CSV."""
     query = db.query(Risk).filter(Risk.deleted_at.is_(None))
 
-    if status:
-        query = query.filter(Risk.status == status)
+    if disposition:
+        query = query.filter(Risk.disposition == disposition)
 
     risks = query.order_by(Risk.id.desc()).all()
 
@@ -328,15 +328,20 @@ def export_risks_csv(
 
     writer.writerow(
         [
-            "ID",
+            "Risk",
             "Title",
-            "Status",
+            "Disposition",
             "Probability",
             "Impact",
             "Score",
             "Severity",
-            "Description",
-            "Mitigation Plan",
+            "Residual Probability",
+            "Residual Impact",
+            "Residual Score",
+            "Owner",
+            "Statement",
+            "Narrative",
+            "Last Reviewed At",
             "Created At",
         ]
     )
@@ -347,15 +352,20 @@ def export_risks_csv(
 
         writer.writerow(
             [
-                risk.id,
+                risk.risk_number,
                 risk.title,
-                risk.status.value if hasattr(risk.status, "value") else risk.status,
+                risk.disposition,
                 risk.probability,
                 risk.impact,
                 risk.score,
                 risk.severity,
+                risk.residual_probability if risk.residual_probability is not None else "",
+                risk.residual_impact if risk.residual_impact is not None else "",
+                risk.residual_score if risk.residual_score is not None else "",
+                risk.owner.name if risk.owner else "",
+                risk.statement or "",
                 (risk.description or "")[:200],
-                (risk.mitigation_plan or "")[:200],
+                risk.last_reviewed_at.isoformat() if risk.last_reviewed_at else "",
                 risk.created_at.isoformat() if risk.created_at else "",
             ]
         )

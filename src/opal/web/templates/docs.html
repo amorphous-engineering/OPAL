@@ -126,12 +126,17 @@
                     </ul>
 
                     <h3>Risks</h3>
-                    <p>Proactive risk management with probability x impact scoring:</p>
+                    <p>A risk is a four-part scenario; the statement is generated from the parts:</p>
                     <ul>
-                        <li><strong>Probability</strong>: 1-5 scale</li>
-                        <li><strong>Impact</strong>: 1-5 scale</li>
-                        <li><strong>Severity</strong>: Calculated as P x I (low/medium/high)</li>
-                        <li>View risks on the 5x5 matrix at /risks/matrix</li>
+                        <li><strong>Condition</strong>: a present, fact-based situation — true now</li>
+                        <li><strong>Departure</strong>: the undesired future event — probability scores this</li>
+                        <li><strong>Asset</strong>: what is exposed — a part, or a name (schedule, campaign)</li>
+                        <li><strong>Consequence</strong>: the measurable impact — impact scores this</li>
+                        <li><strong>Disposition</strong>: open | mitigate | watch | research | accepted | closed | realized</li>
+                        <li><strong>Scoring</strong>: P x I (1-5 each), severity low (&le;5) / medium (6-12) / high (13-25); residual P x I records the post-response target</li>
+                        <li>Responses are linked Issues — a mitigation is real when it has an issue with an owner</li>
+                        <li>Acceptance is a signature: scenario complete, owner, score, rationale; scenario or score changes re-open an accepted risk</li>
+                        <li>View risks on the 5x5 matrix at /risks/matrix (solid = current, hollow = residual)</li>
                     </ul>
                 </section>
 

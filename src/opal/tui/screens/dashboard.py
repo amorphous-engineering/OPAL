@@ -77,7 +77,7 @@ class DashboardScreen(Screen):
                 StatCard("Parts", id="parts-stat"),
                 StatCard("Active Executions", id="exec-stat"),
                 StatCard("Open Issues", id="issues-stat"),
-                StatCard("Active Risks", id="risks-stat"),
+                StatCard("Open Risks", id="risks-stat"),
                 classes="stats-row",
             ),
             Horizontal(
@@ -144,8 +144,8 @@ class DashboardScreen(Screen):
             issues_stat = self.query_one("#issues-stat", StatCard)
             issues_stat.update_value(str(issues.get("total", 0)))
 
-            # Active risks
-            risks = client.list_risks(status="identified", page_size=1)
+            # Open risks
+            risks = client.list_risks(disposition="open", page_size=1)
             risks_stat = self.query_one("#risks-stat", StatCard)
             risks_stat.update_value(str(risks.get("total", 0)))
 
