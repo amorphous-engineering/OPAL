@@ -30,7 +30,7 @@
     </div>
     {% endif %}
     <header class="header">
-        <div class="header-brand">
+        <div class="header-brand{% if version_is_dev %} dev{% endif %}" title="{{ version_tooltip }}">
             <a href="/" class="brand-link">OPAL</a>
             <span class="brand-version">{{ app_version }}</span>
         </div>

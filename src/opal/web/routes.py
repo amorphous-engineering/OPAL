@@ -185,8 +185,8 @@ def _require_admin_web(request: Request, db) -> RedirectResponse | None:
 
 def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, Any]:
     """Get base context for all pages."""
-    from opal import __version__
     from opal.config import get_active_project, get_active_settings
+    from opal.version import get_version_info
 
     project = get_active_project()
     settings = get_active_settings()
@@ -199,12 +199,16 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
 
     from opal.core import lifecycle
 
+    version_info = get_version_info()
+
     return {
         "request": request,
         "title": title,
         "project_name": project.name if project else None,
-        "opal_version": __version__,
-        "app_version": f"v{__version__}",
+        "opal_version": version_info.full,
+        "app_version": version_info.display,
+        "version_is_dev": version_info.is_dev,
+        "version_tooltip": version_info.tooltip,
         "current_user": current_user,
         "is_admin": is_admin,
         "auth_mode": settings.auth_mode,
