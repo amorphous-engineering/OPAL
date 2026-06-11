@@ -11,11 +11,18 @@
 {% block content %}
 {% call ok.panel("EDIT PART #" ~ part.id, max_width="800px") %}
         <form id="part-form" onsubmit="event.preventDefault(); submitPartForm();">
+            {% if part.lifecycle_state == 'draft' %}
             <div class="form-group">
-                <label class="form-label">INTERNAL PN (READ-ONLY)</label>
-                <input type="text" class="form-input" value="{{ part.internal_pn }}" disabled style="background: var(--bg-tertiary); color: var(--text-muted);">
-                <small class="form-help">Internal part numbers cannot be changed</small>
+                <label class="form-label" for="internal_pn">INTERNAL PN {{ ok.status("DRAFT", "warn") }}</label>
+                <input type="text" id="internal_pn" name="internal_pn" class="form-input mono" value="{{ part.internal_pn }}" oninput="pnEdited = true;">
+                <small class="form-help">Editable while draft (must match the project numbering format); locks permanently on activation. The abandoned number is never reissued.</small>
             </div>
+            {% else %}
+            <div class="form-group">
+                <label class="form-label">INTERNAL PN</label>
+                <div class="mono" style="padding: var(--space-sm) 0;"><strong>{{ part.internal_pn }}</strong> <span class="text-muted" title="identity locked{% if part.activation_cause %} — {{ part.activation_cause }}{% endif %}">&#x1F512;</span></div>
+            </div>
+            {% endif %}
 
             <div class="form-group">
                 <label class="form-label" for="external_pn">EXTERNAL PART NUMBER</label>
@@ -43,11 +50,22 @@
                     </datalist>
                 </div>
 
+                {% if part.lifecycle_state == 'draft' %}
                 <div class="form-group">
-                    <label class="form-label">TIER (READ-ONLY)</label>
-                    <input type="text" class="form-input" value="Tier {{ part.tier }}" disabled style="background: var(--bg-tertiary); color: var(--text-muted);">
-                    <small class="form-help">Tier cannot be changed after creation</small>
+                    <label class="form-label" for="tier">TIER</label>
+                    <select id="tier" name="tier" class="form-select" onchange="tierChanged()">
+                        {% for tier in tiers %}
+                        <option value="{{ tier.level }}" {% if part.tier == tier.level %}selected{% endif %}>Tier {{ tier.level }} - {{ tier.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-help" id="tier-help">Changing tier abandons {{ part.internal_pn }} permanently and assigns the next number from the new tier.</small>
                 </div>
+                {% else %}
+                <div class="form-group">
+                    <label class="form-label">TIER</label>
+                    <div class="mono" style="padding: var(--space-sm) 0;">Tier {{ part.tier }} <span class="text-muted">&#x1F512;</span></div>
+                </div>
+                {% endif %}
             </div>
 
             <div class="grid grid-2" style="gap: var(--space-md);">
@@ -107,9 +125,37 @@
 {% endcall %}
 
 <script>
+const originalTier = {{ part.tier }};
+const originalPn = {{ part.internal_pn | tojson }};
+const isDraft = {{ 'true' if part.lifecycle_state == 'draft' else 'false' }};
+let pnEdited = false;
+
 function toggleCalibrationFields() {
     var show = document.getElementById('is_tooling').checked;
     document.getElementById('calibration-fields').style.display = show ? '' : 'none';
+}
+
+// Tier change on a draft regenerates the PN from the new tier's counter;
+// preview it, but only send internal_pn if the user edits the preview
+async function tierChanged() {
+    const tier = parseInt(document.getElementById('tier').value);
+    const pnInput = document.getElementById('internal_pn');
+    const help = document.getElementById('tier-help');
+    if (tier === originalTier) {
+        pnInput.value = originalPn;
+        pnEdited = false;
+        help.textContent = 'Changing tier abandons ' + originalPn + ' permanently and assigns the next number from the new tier.';
+        return;
+    }
+    try {
+        const r = await fetch('/api/parts/next-pn?tier=' + tier);
+        if (r.ok) {
+            const data = await r.json();
+            pnInput.value = data.part_number;
+            pnEdited = false;
+            help.textContent = originalPn + ' will be abandoned permanently (never reissued); new number: ' + data.part_number;
+        }
+    } catch (e) { /* preview is best-effort */ }
 }
 
 async function submitPartForm() {
@@ -129,6 +175,14 @@ async function submitPartForm() {
         is_tooling: document.getElementById('is_tooling').checked,
         calibration_interval_days: formData.get('calibration_interval_days') ? parseInt(formData.get('calibration_interval_days')) : null
     };
+
+    // Identity fields: drafts only, and only when actually changed
+    if (isDraft) {
+        const tier = parseInt(formData.get('tier'));
+        if (tier !== originalTier) body.tier = tier;
+        const pn = (formData.get('internal_pn') || '').trim();
+        if (pnEdited && pn && pn !== originalPn) body.internal_pn = pn;
+    }
 
     // Parse metadata if provided
     const metadataText = formData.get('metadata');

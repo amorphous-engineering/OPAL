@@ -3,7 +3,7 @@
 {% for part in parts %}
 <tr>
     <td>{{ ok.id_cell(part.id, "/parts/" ~ part.id) }}</td>
-    <td class="mono"><a href="/parts/{{ part.id }}">{{ part.internal_pn }}</a></td>
+    <td class="mono"><a href="/parts/{{ part.id }}">{{ part.internal_pn }}</a>{% if part.lifecycle_state == 'draft' %} {{ ok.status("DRAFT", "warn") }}{% endif %}</td>
     <td>{{ ok.mono(part.external_pn) }}</td>
     <td><a href="/parts/{{ part.id }}">{{ part.name }}</a></td>
     <td>{{ part.category or '-' }}</td>

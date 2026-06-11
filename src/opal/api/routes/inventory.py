@@ -12,6 +12,7 @@ from sqlalchemy import func
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.inventory import generate_opal_number
+from opal.core.part_lifecycle import ensure_parts_active
 from opal.db.models import InventoryRecord, Part, StockTestResult, StockTransfer, TestTemplate
 from opal.db.models.inventory import (
     ConsumptionType,
@@ -463,6 +464,10 @@ def create_inventory(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Part {inv_in.part_id} not found",
         )
+
+    # Inventory is a physical reference — draft parts block it; activation
+    # never happens as a side effect (raises DraftPartsBlocked -> 409)
+    ensure_parts_active(db, [part.id], "inventory record create")
 
     created_records: list[InventoryRecord] = []
 

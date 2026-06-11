@@ -476,7 +476,65 @@
         function formatApiError(detail, fallback) {
             if (typeof detail === 'string') return detail;
             if (Array.isArray(detail)) return detail.map(e => e.msg).join('; ');
+            if (detail && detail.message) return detail.message;
             return fallback || 'Unknown error';
+        }
+
+        // Draft-parts blocker — physical/financial writes refuse draft parts
+        // with a structured 409 (error=draft_parts_blocked). Renders an inline
+        // amber panel with per-part ACTIVATE & CONTINUE; when the last draft
+        // activates, the original request is retried automatically.
+        // Returns false if the error is not a draft-parts blocker.
+        function renderDraftPartsBlocker(containerEl, detail, cause, retryFn) {
+            if (!detail || detail.error !== 'draft_parts_blocked') return false;
+            containerEl.innerHTML = '';
+            const panel = document.createElement('div');
+            panel.className = 'draft-blocker mono';
+            const title = document.createElement('div');
+            title.className = 'draft-blocker-title';
+            title.textContent = '✗ draft parts block: ' + detail.action;
+            panel.appendChild(title);
+            detail.draft_parts.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'draft-blocker-row';
+                const label = document.createElement('span');
+                label.textContent = (p.internal_pn || ('part ' + p.id)) + ' — ' + p.name;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm';
+                btn.textContent = 'ACTIVATE & CONTINUE';
+                btn.onclick = async () => {
+                    btn.disabled = true;
+                    try {
+                        // Web auth rides the opal_session cookie
+                        const r = await fetch(`/api/parts/${p.id}/activate`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ cause: cause }),
+                        });
+                        if (r.ok) {
+                            row.remove();
+                            if (!panel.querySelector('.draft-blocker-row')) {
+                                panel.remove();
+                                retryFn();
+                            }
+                        } else {
+                            btn.disabled = false;
+                            const err = await r.json();
+                            alert(formatApiError(err.detail, 'Failed to activate part'));
+                        }
+                    } catch (e) {
+                        btn.disabled = false;
+                        alert('Network error: ' + e.message);
+                    }
+                };
+                row.appendChild(label);
+                row.appendChild(btn);
+                panel.appendChild(row);
+            });
+            containerEl.appendChild(panel);
+            containerEl.style.display = 'block';
+            return true;
         }
 
         // Markdown rendering helper

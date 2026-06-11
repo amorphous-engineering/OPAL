@@ -14,7 +14,9 @@ def bulk_part(client: TestClient) -> dict:
         json={"name": "Fasteners M3", "tracking_type": "bulk", "category": "Fasteners"},
     )
     assert resp.status_code == 201
-    return resp.json()
+    part = resp.json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+    return part
 
 
 @pytest.fixture
@@ -25,7 +27,9 @@ def serialized_part(client: TestClient) -> dict:
         json={"name": "PCB Rev C", "tracking_type": "serialized", "category": "Electronics"},
     )
     assert resp.status_code == 201
-    return resp.json()
+    part = resp.json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+    return part
 
 
 @pytest.fixture
@@ -41,7 +45,9 @@ def tooling_part(client: TestClient) -> dict:
         },
     )
     assert resp.status_code == 201
-    return resp.json()
+    part = resp.json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+    return part
 
 
 # ============ CRUD ============

@@ -382,12 +382,21 @@ async function cloneProcedure() {
     } catch (e) { alert('Network error: ' + e.message); }
 }
 
-async function publishVersion() {
-    if (!confirm('Publish current steps as a new version?')) return;
+async function publishVersion(skipConfirm) {
+    if (!skipConfirm && !confirm('Publish current steps as a new version?')) return;
     try {
         const r = await fetch(`/api/procedures/${procedureId}/publish`, { method: 'POST', headers: getHeaders() });
         if (r.ok) window.location.reload();
-        else { const err = await r.json(); alert(formatApiError(err.detail, 'Failed to publish version')); }
+        else {
+            const err = await r.json();
+            // Publish is the procedure's commitment moment — kit/output
+            // drafts surface here with per-part activate
+            const blocker = document.getElementById('publish-blocker');
+            const cause = `activated for publish of procedure ${procedureId}`;
+            if (!(blocker && renderDraftPartsBlocker(blocker, err.detail, cause, () => publishVersion(true)))) {
+                alert(formatApiError(err.detail, 'Failed to publish version'));
+            }
+        }
     } catch (e) { alert('Network error: ' + e.message); }
 }
 

@@ -58,6 +58,7 @@ def test_export_inventory_csv(client: TestClient):
         json={"name": "Inv Test Part", "external_pn": "ITP-001"},
         headers={"X-User-ID": "1"},
     ).json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
 
     client.post(
         "/api/inventory",

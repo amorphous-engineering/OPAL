@@ -43,6 +43,7 @@ def _create_procedure_with_kit(client, auth_headers):
         json={"name": "Kit Resistor", "tracking_type": "bulk", "category": "Electronics"},
     )
     kit_part_id = part_resp.json()["id"]
+    client.post(f"/api/parts/{kit_part_id}/activate", json={"cause": "test setup"})
 
     # Create inventory for the kit part
     inv_resp = client.post(
@@ -92,6 +93,7 @@ def _create_build_procedure(client, auth_headers):
         json={"name": "Assembled Board", "category": "Assemblies"},
     )
     output_part_id = output_resp.json()["id"]
+    client.post(f"/api/parts/{output_part_id}/activate", json={"cause": "test setup"})
 
     # Create BUILD procedure
     proc_resp = client.post(

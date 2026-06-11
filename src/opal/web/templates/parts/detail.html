@@ -13,15 +13,30 @@
     {% set part_actions %}
                 {{ ok.btn("PRINT LABEL", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=500,height=300\')"') }}
                 {{ ok.btn("EDIT", href="/parts/" ~ part.id ~ "/edit") }}
-                {{ ok.confirm_btn("DELETE", message="Delete this part?", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts") }}
+                {# Referenced drafts and active parts have no delete control at all #}
+                {% if part.lifecycle_state == 'draft' and not part_is_referenced %}
+                {{ ok.confirm_btn("DELETE", message="Delete this draft? Its number is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts") }}
+                {% endif %}
     {% endset %}
     {% call ok.panel("PART #" ~ part.id, actions=part_actions) %}
             {% call ok.table() %}
                 {{ ok.detail_row("ID", ok.id_cell(part.id), th_width="180px") }}
                 <tr>
                     <th style="width: 180px;">INTERNAL PN</th>
-                    <td class="mono"><strong>{{ part.internal_pn }}</strong></td>
+                    <td class="mono"><strong>{{ part.internal_pn }}</strong>
+                        {% if part.lifecycle_state == 'draft' %}
+                        {{ ok.status("DRAFT", "warn") }}
+                        {% else %}
+                        <span class="text-muted" title="identity locked{% if part.activated_at %} {{ part.activated_at.isoformat() }}{% endif %}{% if part.activation_cause %} — {{ part.activation_cause }}{% endif %}">&#x1F512;</span>
+                        {% endif %}
+                    </td>
                 </tr>
+                {% if part.lifecycle_state == 'active' and part.activated_at %}
+                <tr>
+                    <th style="width: 180px;">ACTIVATED</th>
+                    <td>{{ ok.timestamp(part.activated_at) }}{% if part.activated_by %} by {{ part.activated_by.name }}{% endif %}{% if part.activation_cause %} <span class="text-secondary">— {{ part.activation_cause }}</span>{% endif %}</td>
+                </tr>
+                {% endif %}
                 {{ ok.detail_row("EXTERNAL PN", ok.mono(part.external_pn), th_width="180px") }}
                 {{ ok.detail_row("NAME", part.name, th_width="180px") }}
                 {{ ok.detail_row("CATEGORY", part.category or '-', th_width="180px") }}
@@ -89,6 +104,10 @@
                 {{ ok.detail_row("CREATED", ok.timestamp(part.created_at), th_width="180px") }}
                 {{ ok.detail_row("UPDATED", ok.timestamp(part.updated_at), th_width="180px") }}
             {% endcall %}
+
+            {% if part.lifecycle_state == 'draft' %}
+            {% include 'parts/_activate_panel.html' %}
+            {% endif %}
     {% endcall %}
 
     <!-- Right Column: Inventory & Related Data -->
@@ -594,6 +613,28 @@ function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
               .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Activation — a signature moment: identity locks permanently
+function openActivateConfirm() {
+    const el = document.getElementById('activate-confirm');
+    document.getElementById('activate-sign-time').textContent =
+        new Date().toISOString().substring(0, 19) + 'Z';
+    el.style.display = 'block';
+}
+
+async function commitActivate() {
+    try {
+        const r = await fetch(`/api/parts/${partId}/activate`, {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ cause: 'manual activation from part page' }),
+        });
+        if (r.ok) { window.location.reload(); }
+        else {
+            const err = await r.json();
+            alert(formatApiError(err.detail, 'Failed to activate part'));
+        }
+    } catch (e) { alert('Network error: ' + e.message); }
 }
 
 // Requirement allocation (assign here; the dossier is read + unlink only)

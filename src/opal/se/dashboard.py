@@ -65,6 +65,34 @@ def stale_requirements(db: Session) -> list[Requirement]:
     )
 
 
+def stale_draft_parts(db: Session, older_than_days: int = 30) -> list["Part"]:
+    """Unreferenced draft parts older than the window.
+
+    Abandoned reservations and forgotten drafts surface themselves here;
+    humans disposition (no scheduled expiry jobs — this line is the nag).
+    """
+    from opal.core.part_lifecycle import PART_DRAFT, is_referenced
+    from opal.db.models import Part
+
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    drafts = (
+        db.query(Part)
+        .filter(Part.deleted_at.is_(None), Part.lifecycle_state == PART_DRAFT)
+        .order_by(Part.id)
+        .all()
+    )
+    result = []
+    for part in drafts:
+        created = (
+            part.created_at if part.created_at.tzinfo else part.created_at.replace(tzinfo=UTC)
+        )
+        if created > cutoff:
+            continue
+        if not is_referenced(db, part):
+            result.append(part)
+    return result
+
+
 def old_block_lint_drafts(db: Session, older_than_days: int = 7) -> list[Requirement]:
     """Drafts older than the window still carrying block-severity lint."""
     cutoff = datetime.now(UTC) - timedelta(days=older_than_days)

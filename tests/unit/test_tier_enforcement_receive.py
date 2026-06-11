@@ -13,10 +13,12 @@ from fastapi.testclient import TestClient
 
 
 def _create_part(client: TestClient, **kwargs: object) -> dict:
-    """Create a part and return its JSON payload."""
+    """Create an active part and return its JSON payload."""
     resp = client.post("/api/parts", json=kwargs)
     assert resp.status_code == 201, resp.text
-    return resp.json()
+    part = resp.json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+    return part
 
 
 def _create_and_order_po(client: TestClient, auth_headers: dict, part_id: int) -> dict:

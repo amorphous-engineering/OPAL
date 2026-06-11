@@ -207,8 +207,12 @@ def test_supplier_soft_delete_excludes_catalog_entries(
     assert "SD-001" not in page.text
 
 
-def test_part_soft_delete_excludes_catalog_entries(client: TestClient, auth_headers: dict) -> None:
+def test_part_soft_delete_excludes_catalog_entries(
+    client: TestClient, auth_headers: dict, db_session
+) -> None:
     """After a part is soft-deleted, its catalog entries vanish from the supplier views."""
+    from opal.db.models import Part
+
     supplier = _create_supplier(client, auth_headers, name="KeepSupplier")
     part = _create_part(client, auth_headers, name="SoftDelLinkedPart")
 
@@ -218,8 +222,14 @@ def test_part_soft_delete_excludes_catalog_entries(client: TestClient, auth_head
         headers=auth_headers,
     )
 
+    # A draft with a catalog entry is referenced and cannot be deleted via the API
     del_resp = client.delete(f"/api/parts/{part['id']}", headers=auth_headers)
-    assert del_resp.status_code == 204
+    assert del_resp.status_code == 409
+
+    # The supplier views must still hide entries of soft-deleted parts,
+    # however the row came to be deleted
+    db_session.query(Part).filter(Part.id == part["id"]).first().soft_delete()
+    db_session.flush()
 
     supplier_parts = client.get(f"/api/suppliers/{supplier['id']}/parts")
     assert supplier_parts.status_code == 200

@@ -10,6 +10,7 @@ from opal.api.deps import CurrentUserId, DbSession, PaginationParams
 from opal.core.audit import get_model_dict, log_create, log_update
 from opal.core.designators import generate_serial_number
 from opal.core.inventory import generate_opal_number
+from opal.core.part_lifecycle import ensure_parts_active
 from opal.db.models import InventoryRecord, Part, Purchase, PurchaseExpense, PurchaseLine, Supplier
 from opal.db.models.inventory import SourceType
 from opal.db.models.part import TrackingType
@@ -298,6 +299,14 @@ def create_purchase(
                 detail=f"PO with reference '{po_in.reference}' already exists",
             )
 
+    # A PO line is a financial commitment — draft parts block it; activation
+    # never happens as a side effect (raises DraftPartsBlocked -> 409)
+    ensure_parts_active(
+        db,
+        [line_in.part_id for line_in in po_in.lines],
+        f"PO {po_in.reference or 'create'} line add",
+    )
+
     purchase = Purchase(
         supplier=po_in.supplier,
         supplier_id=po_in.supplier_id,
@@ -425,6 +434,8 @@ def add_purchase_line(
             detail=f"Part {line_in.part_id} not found",
         )
 
+    ensure_parts_active(db, [line_in.part_id], f"PO {purchase.reference or purchase_id} line add")
+
     line = PurchaseLine(
         purchase_id=purchase_id,
         part_id=line_in.part_id,
@@ -543,6 +554,13 @@ def receive_purchase(
 
         # Get the part to check tracking type
         part = db.query(Part).filter(Part.id == line.part_id).first()
+
+        # Defense-in-depth: line parts are active by construction (line
+        # creation is guarded), but receiving creates inventory — never
+        # against a draft
+        ensure_parts_active(
+            db, [line.part_id], f"receive against PO {purchase.reference or purchase_id}"
+        )
 
         # Tier enforcement
         if part:

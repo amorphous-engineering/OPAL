@@ -40,14 +40,20 @@
 
                 <div class="form-group">
                     <label class="form-label" for="tier">TIER <span class="text-red">*</span></label>
-                    <select id="tier" name="tier" class="form-select" required>
+                    <select id="tier" name="tier" class="form-select" required onchange="previewNextPn()">
                         <option value="">Select tier...</option>
                         {% for tier in tiers %}
                         <option value="{{ tier.level }}">Tier {{ tier.level }} - {{ tier.name }}</option>
                         {% endfor %}
                     </select>
-                    <small class="form-help">Internal PN will be auto-generated based on tier</small>
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="internal_pn">INTERNAL PART NUMBER</label>
+                <input type="text" id="internal_pn" name="internal_pn" class="form-input text-mono"
+                       placeholder="Select a tier to preview" oninput="pnEdited = true;">
+                <small class="form-help">The next number for the selected tier; editable before submit. Untouched, the server assigns it atomically on create.</small>
             </div>
 
             <div class="grid grid-2" style="gap: var(--space-md);">
@@ -163,6 +169,25 @@ function toggleCalibrationFields() {
     document.getElementById('calibration-fields').style.display = show ? '' : 'none';
 }
 
+// Track whether the user touched the PN preview: an untouched preview is NOT
+// sent on submit, so the server assigns the number atomically (no races
+// between two open create forms).
+let pnEdited = false;
+
+async function previewNextPn() {
+    const tier = document.getElementById('tier').value;
+    const pnInput = document.getElementById('internal_pn');
+    if (!tier) { pnInput.value = ''; pnEdited = false; return; }
+    try {
+        const r = await fetch('/api/parts/next-pn?tier=' + tier);
+        if (r.ok) {
+            const data = await r.json();
+            pnInput.value = data.part_number;
+            pnEdited = false;
+        }
+    } catch (e) { /* preview is best-effort */ }
+}
+
 async function submitPartForm() {
     const form = document.getElementById('part-form');
     const formData = new FormData(form);
@@ -181,6 +206,11 @@ async function submitPartForm() {
         is_tooling: document.getElementById('is_tooling').checked,
         calibration_interval_days: formData.get('calibration_interval_days') ? parseInt(formData.get('calibration_interval_days')) : null
     };
+
+    // Only send the PN if the user actually edited the preview
+    if (pnEdited && formData.get('internal_pn')) {
+        body.internal_pn = formData.get('internal_pn').trim();
+    }
 
     // Parse metadata if provided
     const metadataText = formData.get('metadata');

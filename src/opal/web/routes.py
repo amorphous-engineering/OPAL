@@ -622,13 +622,19 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
 
     # Traceability widget — red-only (overdue TBRs, stuck block-lint drafts)
     # plus exactly one non-red line (ready-to-baseline count).
-    from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs, stale_requirements
+    from opal.se.dashboard import (
+        old_block_lint_drafts,
+        overdue_tbrs,
+        stale_draft_parts,
+        stale_requirements,
+    )
     from opal.se.readiness import ready_requirement_ids
 
     context["overdue_tbrs"] = overdue_tbrs(db)
     context["stuck_drafts"] = old_block_lint_drafts(db)
     context["stale_reqs"] = stale_requirements(db)
     context["ready_to_baseline"] = len(ready_requirement_ids(db))
+    context["stale_draft_parts"] = stale_draft_parts(db)
 
     return templates.TemplateResponse("index.html", context)
 
@@ -671,6 +677,7 @@ def parts_table(
     tier: str | None = Query(None),
     top_level: str | None = Query(None),
     low_stock: str | None = Query(None),
+    state: str | None = Query(None),
     sort_by: str | None = Query("id"),
     sort_order: str | None = Query("desc"),
     page: int = Query(1, ge=1),
@@ -693,6 +700,9 @@ def parts_table(
         .outerjoin(qty_subq, qty_subq.c.part_id == Part.id)
         .filter(Part.deleted_at.is_(None))
     )
+
+    if state in ("draft", "active"):
+        query = query.filter(Part.lifecycle_state == state)
 
     if search:
         search_term = f"%{search}%"
@@ -758,6 +768,7 @@ def parts_table(
             "total_quantity": tq,
             "reorder_point": part.reorder_point,
             "is_low_stock": is_low,
+            "lifecycle_state": part.lifecycle_state,
         }
         parts_with_qty.append(type("PartWithQty", (), part_data)())
 
@@ -951,6 +962,13 @@ def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
         sp for sp in part.supplier_entries if sp.supplier.deleted_at is None
     ]
 
+    # Lifecycle: referenced drafts lose the delete control entirely
+    from opal.core.part_lifecycle import reference_counts
+
+    refs = reference_counts(db, part)
+    context["part_reference_counts"] = refs
+    context["part_is_referenced"] = bool(refs)
+
     return templates.TemplateResponse("parts/detail.html", context)
 
 
@@ -983,6 +1001,9 @@ def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
     project = get_active_project()
     if project and project.categories:
         context["categories"] = sorted(set(context["categories"]) | set(project.categories))
+
+    # Tiers for the draft tier selector (identity is mutable while draft)
+    context["tiers"] = project.tiers if project else DEFAULT_TIERS
 
     return templates.TemplateResponse("parts/edit.html", context)
 

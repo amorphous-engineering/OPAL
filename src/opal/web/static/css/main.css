@@ -2485,3 +2485,28 @@ a.user-menu-link.active {
     background: var(--bg-tertiary);
     text-decoration: none;
 }
+
+/* Draft-parts blocker — inline amber panel on commitment forms (PO line,
+   inventory, publish): one row per blocking draft + ACTIVATE & CONTINUE */
+.draft-blocker {
+    margin-top: var(--space-sm);
+    padding: var(--space-sm);
+    border: 1px solid var(--status-warn);
+    font-size: 0.85rem;
+}
+
+.draft-blocker-title {
+    color: var(--status-warn);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-sm);
+}
+
+.draft-blocker-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 2px 0;
+}
