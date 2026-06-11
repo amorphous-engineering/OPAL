@@ -11,11 +11,13 @@
 {% block content %}
 {% set is_draft = part.lifecycle_state == 'draft' %}
 
-{# ============ THE PAGE — identity column left (the label and all the
-   other info), the ledger right (instances, hierarchy, obligations).
-   Stacks identity-first under 1000px. ============ #}
+{# ============ THE PAGE — left: what this part IS (tag · actions · desc ·
+   readout · BOM · REQS · TESTS); right: where it came from / where used /
+   how many exist (STOCK · PO LINES · SUPPLIERS · CONSUMED · WHERE-USED ·
+   PROC USE). Order is fixed and global; emphasis is weight, not position.
+   Stacks IS-first under 1000px. ============ #}
 <div class="part-layout">
-<div class="part-identity">
+<div class="part-col">
 {{ part_tag('header',
             pn=part.internal_pn,
             name=part.name,
@@ -51,10 +53,6 @@
 </div>
 {% endif %}
 
-{% if part.description %}
-<div class="part-description" data-markdown>{{ part.description }}</div>
-{% endif %}
-
 {% if onshape_link %}
 <div class="mono" style="font-size: 0.8rem; margin: var(--space-sm) 0;">
     {{ ok.status("ONSHAPE", "ok") }}
@@ -76,20 +74,14 @@
     <span class="ro-label">CRE</span> {{ part.created_at.date().isoformat() }} ·
     <span class="ro-label">UPD</span> {{ part.updated_at.date().isoformat() }}
     {%- if part.lifecycle_state == 'active' and part.activated_at %} · <span class="ro-label">ACT</span> {{ part.activated_at.date().isoformat() }}{% endif %}
+    {%- if part.description %}<br><span class="ro-label">DESC</span> {{ part.description }}{% endif %}
 </div>
 
+{% include 'parts/_ledger_is.html' %}
 </div>
 
-{# The ledger — one stack, ordered by lifecycle emphasis: drafts lead with
-   design (the live work), active parts with the physical world. #}
-<div class="part-ledger">
-{% if is_draft %}
-{% include 'parts/_ledger_design.html' %}
-{% include 'parts/_ledger_world.html' %}
-{% else %}
-{% include 'parts/_ledger_world.html' %}
-{% include 'parts/_ledger_design.html' %}
-{% endif %}
+<div class="part-col">
+{% include 'parts/_ledger_provenance.html' %}
 </div>
 </div>
 

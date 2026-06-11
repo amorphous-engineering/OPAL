@@ -30,7 +30,7 @@
             {%- if tier_level is not none -%}
             T{{ tier_level }}{% if tier_name %} {{ tier_name | upper }}{% endif %} · {{ uom | upper }}{% if trk %} · {{ trk }}{% endif %}
             {%- else -%}
-            T— · EA
+            — · EA
             {%- endif -%}
         </span>
         <span class="part-tag-state {{ 'part-tag-state-draft' if state == 'draft' else 'part-tag-state-active' }}">

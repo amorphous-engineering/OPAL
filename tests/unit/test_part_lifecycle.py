@@ -399,10 +399,28 @@ def test_part_page_two_column_layout(web_client):
     page = web_client.get(f"/parts/{part['id']}")
     assert page.status_code == 200
     assert 'class="part-layout"' in page.text
-    assert 'class="part-identity"' in page.text
-    assert 'class="part-ledger"' in page.text
-    # Draft: design ledger before world ledger; flips after activation
+    assert page.text.count('class="part-col"') == 2
+    # Order is fixed and global: IS column (BOM/REQS/TESTS) renders before
+    # the provenance column (STOCK first), in both lifecycle states
     assert page.text.index(">BOM<") < page.text.index(">STOCK<")
+    assert page.text.index(">TESTS<") < page.text.index(">STOCK<")
     web_client.post(f"/api/parts/{part['id']}/activate", json={})
     page2 = web_client.get(f"/parts/{part['id']}")
-    assert page2.text.index(">STOCK<") < page2.text.index(">BOM<")
+    assert page2.text.index(">BOM<") < page2.text.index(">STOCK<")
+
+
+def test_parts_list_columns(web_client):
+    part = web_client.post("/api/parts", json={"name": "List Row", "tier": 1}).json()
+    page = web_client.get("/parts")
+    assert "STATE" in page.text
+    # ID and TIER columns are gone from the table header (TIER remains in
+    # the filter dropdown and the create overlay)
+    header = page.text[page.text.index("<thead>") : page.text.index("</thead>")]
+    assert "ID" not in header and "TIER" not in header
+    assert "STATE" in header and "STOCK" in header
+    rows = web_client.get("/parts/table")
+    assert rows.status_code == 200
+    assert part["internal_pn"] in rows.text
+    # State is a column; database ids render nowhere in rows
+    assert "DRAFT" in rows.text
+    assert f'>{part["id"]}<' not in rows.text

@@ -2605,25 +2605,18 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     color: var(--text-muted);
 }
 
-/* Two-column part page: identity left, the ledger right */
+/* Two-column part page — each column a bounded information budget;
+   row actions sit at the column edge, adjacent to content */
 .part-layout {
     display: grid;
-    grid-template-columns: minmax(380px, 440px) 1fr;
+    grid-template-columns: repeat(2, minmax(0, 640px));
     gap: var(--space-lg);
     align-items: start;
-}
-
-.part-layout .part-identity {
-    position: sticky;
-    top: var(--space-md);
 }
 
 @media (max-width: 1000px) {
     .part-layout {
         display: block;
-    }
-    .part-layout .part-identity {
-        position: static;
     }
 }
 
@@ -2635,6 +2628,11 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     border-bottom: 1px solid var(--border-color);
     font-family: var(--font-mono);
     font-size: 0.8rem;
+}
+
+.ledger-row-empty {
+    opacity: 0.55;
+    padding: 2px 2px;
 }
 
 .ledger-row .ledger-label {
@@ -2688,4 +2686,21 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 
 .ledger-detail-line .ldl-actions a:hover {
     color: var(--text-primary);
+}
+
+/* Parts list — one line per row, pitch matched to the part-page ledger.
+   Accent color budget: PN only; names render primary. */
+.parts-list td,
+.parts-list th {
+    padding: 5px 8px;
+    white-space: nowrap;
+}
+
+.parts-list .row-link-plain {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.parts-list .row-link-plain:hover {
+    text-decoration: underline;
 }

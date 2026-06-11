@@ -1,9 +1,10 @@
 {% import 'opalkit/_macros.html' as ok %}
-{# World-side ledger column. LABEL left, count/value right, [+] inline;
-   populated sections expand with indented mono detail lines. #}
+{# Where it came from / where used / how many exist — stock, purchasing,
+   suppliers, consumption, where-used, procedure usage. Order is fixed
+   and global; emphasis is carried by weight only. #}
 
 {# --- Stock + inventory records, merged --- #}
-<div class="ledger-row">
+<div class="ledger-row{% if not (inventory_records) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">STOCK</span>
     <span class="ledger-value">
         {%- if inventory_records -%}
@@ -25,7 +26,7 @@
 {% endif %}
 
 {# --- Open PO lines --- #}
-<div class="ledger-row">
+<div class="ledger-row{% if not (open_po_lines) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">PO LINES</span>
     <span class="ledger-value">{{ open_po_lines | length if open_po_lines else '—' }}</span>
 </div>
@@ -41,7 +42,7 @@
 {% endif %}
 
 {# --- Suppliers --- #}
-<div class="ledger-row">
+<div class="ledger-row{% if not (supplier_entries) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">SUPPLIERS</span>
     <span class="ledger-value">{{ supplier_entries | length if supplier_entries else '—' }}</span>
     <a class="ledger-add" href="#" onclick="showAddSupplier(); return false;">[+]</a>
@@ -61,7 +62,7 @@
 {% endif %}
 
 {# --- Consumption history --- #}
-<div class="ledger-row">
+<div class="ledger-row{% if not (consumption_history) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">CONSUMED</span>
     <span class="ledger-value">{{ (consumption_history | length) ~ ('+' if consumption_history | length == 50 else '') if consumption_history else '—' }}</span>
 </div>
@@ -72,11 +73,50 @@
         <span class="ldl-muted" title="{{ c.created_at.isoformat() }}">{{ c.created_at.date().isoformat() }}</span>
         <span>×{{ '%g' % c.quantity }}</span>
         {% if c.procedure_instance_id %}
-        <a href="/executions/{{ c.procedure_instance_id }}">EXEC {{ c.procedure_instance_id }}</a>
+        <a href="/executions/{{ c.procedure_instance_id }}">{{ c.procedure_instance.work_order_number if c.procedure_instance and c.procedure_instance.work_order_number else 'EXEC' }}</a>
         {% else %}
         <span class="ldl-muted">MANUAL</span>
         {% endif %}
         {% if c.notes %}<span class="ldl-muted">{{ c.notes }}</span>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# --- Where used --- #}
+<div class="ledger-row{% if not (where_used) %} ledger-row-empty{% endif %}">
+    <span class="ledger-label">WHERE-USED</span>
+    <span class="ledger-value">{{ where_used | length if where_used else '—' }}</span>
+</div>
+{% if where_used %}
+<div class="ledger-detail">
+    {% for line in where_used %}
+    <div class="ledger-detail-line">
+        <a href="/parts/{{ line.assembly.id }}">{{ line.assembly.internal_pn }}</a>
+        <span>{{ line.assembly.name }}</span>
+        <span class="ldl-muted">×{{ line.quantity }}{% if line.reference_designator %} [{{ line.reference_designator }}]{% endif %}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# --- Procedure usage (kits reference the design, not the stock) --- #}
+<div class="ledger-row{% if not (kit_usages or step_kit_usages) %} ledger-row-empty{% endif %}">
+    <span class="ledger-label">PROC USE</span>
+    <span class="ledger-value">{{ (kit_usages | length) + (step_kit_usages | length) if kit_usages or step_kit_usages else '—' }}</span>
+</div>
+{% if kit_usages or step_kit_usages %}
+<div class="ledger-detail">
+    {% for kit in kit_usages %}
+    <div class="ledger-detail-line">
+        <a href="/procedures/{{ kit.procedure.id }}">{{ kit.procedure.name }}</a>
+        <span class="ldl-muted">×{{ '%g' % kit.quantity_required }} · {{ (kit.procedure.status.value if kit.procedure.status.value is defined else kit.procedure.status) | upper }}</span>
+    </div>
+    {% endfor %}
+    {% for sk in step_kit_usages %}
+    <div class="ledger-detail-line">
+        <a href="/procedures/{{ sk.step.procedure.id }}">{{ sk.step.procedure.name }}</a>
+        <span class="ldl-muted">{{ sk.step.step_number }} · ×{{ '%g' % sk.quantity_required }} · {{ (sk.usage_type.value if sk.usage_type.value is defined else sk.usage_type) | upper }}</span>
     </div>
     {% endfor %}
 </div>

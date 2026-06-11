@@ -770,6 +770,7 @@ def parts_table(
         "name": Part.name,
         "category": Part.category,
         "tier": Part.tier,
+        "state": Part.lifecycle_state,
         "unit_of_measure": Part.unit_of_measure,
     }
 
@@ -778,7 +779,7 @@ def parts_table(
         query = query.order_by(sort_col.asc())
     else:
         query = query.order_by(sort_col.desc())
-    rows, pagination = paginate_query(request, query, page, colspan=8)
+    rows, pagination = paginate_query(request, query, page, colspan=6)
 
     parts_with_qty = []
     for part, total_qty in rows:

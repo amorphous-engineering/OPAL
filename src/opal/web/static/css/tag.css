@@ -5,6 +5,9 @@
    printed label and the on-screen tag are the same rendering by definition. */
 
 .part-tag {
+    /* Natural label scale: fixed max-width, label proportions, never
+       viewport-scaled. Print parity includes proportion. */
+    max-width: 360px;
     --tag-fg: var(--text-primary, #000);
     --tag-muted: var(--text-muted, #555);
     --tag-border: var(--text-primary, #000);
@@ -30,7 +33,7 @@
 }
 
 .part-tag-pn {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     line-height: 1.1;
@@ -55,8 +58,8 @@
 
 .part-tag-qr img,
 .part-tag-qr-placeholder {
-    width: 88px;
-    height: 88px;
+    width: 72px;
+    height: 72px;
     display: block;
     background: #fff;
     padding: 4px;

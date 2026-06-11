@@ -1,9 +1,10 @@
 {% import 'opalkit/_macros.html' as ok %}
-{# Design-side ledger column. LABEL left, count/value right, [+] inline;
-   populated sections expand with indented mono detail lines. #}
+{# What this part IS — BOM, requirements, tests. LABEL left, count/value
+   right, [+] inline; populated sections expand with indented mono detail
+   lines. Order is fixed and global; emphasis is carried by weight only. #}
 
 {# --- BOM --- #}
-<div class="ledger-row">
+<div class="ledger-row{% if not (bom_lines) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">BOM</span>
     <span class="ledger-value">{{ bom_lines | length if bom_lines else '—' }}</span>
     <a class="ledger-add" href="#" onclick="showAddComponent(); return false;">[+]</a>
@@ -25,29 +26,12 @@
 </div>
 {% endif %}
 
-{# --- Where used --- #}
-<div class="ledger-row">
-    <span class="ledger-label">WHERE-USED</span>
-    <span class="ledger-value">{{ where_used | length if where_used else '—' }}</span>
-</div>
-{% if where_used %}
-<div class="ledger-detail">
-    {% for line in where_used %}
-    <div class="ledger-detail-line">
-        <a href="/parts/{{ line.assembly.id }}">{{ line.assembly.internal_pn }}</a>
-        <span>{{ line.assembly.name }}</span>
-        <span class="ldl-muted">×{{ line.quantity }}{% if line.reference_designator %} [{{ line.reference_designator }}]{% endif %}</span>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
 {# --- Requirements: counts carry state inline, tersely --- #}
 {% set req_rows = part_requirements | selectattr('req') | list %}
 {% set tbd_count = req_rows | selectattr('req.tbd') | list | length %}
 {% set tbr_count = req_rows | selectattr('req.tbr') | list | length %}
 {% set stale_count = req_rows | selectattr('req.stale') | list | length %}
-<div class="ledger-row">
+<div class="ledger-row{% if not (part_requirements) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">REQS</span>
     <span class="ledger-value">
         {{- part_requirements | length if part_requirements else '—' -}}
@@ -88,7 +72,7 @@
 {% endif %}
 
 {# --- Test templates --- #}
-<div class="ledger-row">
+<div class="ledger-row{% if not (test_templates) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">TESTS</span>
     <span class="ledger-value">{{ test_templates | length if test_templates else '—' }}</span>
     <a class="ledger-add" href="#" onclick="showAddTest(); return false;">[+]</a>
@@ -105,28 +89,6 @@
         <span class="ldl-actions">
             <a href="#" title="REMOVE" onclick="deleteTestTemplate({{ tt.id }}); return false;">×</a>
         </span>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
-{# --- Procedure usage (kits reference the design, not the stock) --- #}
-<div class="ledger-row">
-    <span class="ledger-label">PROC USE</span>
-    <span class="ledger-value">{{ (kit_usages | length) + (step_kit_usages | length) if kit_usages or step_kit_usages else '—' }}</span>
-</div>
-{% if kit_usages or step_kit_usages %}
-<div class="ledger-detail">
-    {% for kit in kit_usages %}
-    <div class="ledger-detail-line">
-        <a href="/procedures/{{ kit.procedure.id }}">{{ kit.procedure.name }}</a>
-        <span class="ldl-muted">×{{ '%g' % kit.quantity_required }} · {{ (kit.procedure.status.value if kit.procedure.status.value is defined else kit.procedure.status) | upper }}</span>
-    </div>
-    {% endfor %}
-    {% for sk in step_kit_usages %}
-    <div class="ledger-detail-line">
-        <a href="/procedures/{{ sk.step.procedure.id }}">{{ sk.step.procedure.name }}</a>
-        <span class="ldl-muted">{{ sk.step.step_number }} · ×{{ '%g' % sk.quantity_required }} · {{ (sk.usage_type.value if sk.usage_type.value is defined else sk.usage_type) | upper }}</span>
     </div>
     {% endfor %}
 </div>
