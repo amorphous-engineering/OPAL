@@ -4,22 +4,58 @@
 {% block breadcrumbs %}
 {{ ok.crumb("HOME", "/") }}
 {{ ok.crumb("RISKS", "/risks") }}
-{{ ok.crumb(risk.id) }}
+{{ ok.crumb(risk.risk_number) }}
 {% endblock %}
 
 {% block content %}
-{% set score = risk.probability * risk.impact %}
-{% call ok.panel("RISK #" ~ risk.id, actions=ok.status("SCORE: " ~ score, "ok" if score <= 5 else ("warn" if score <= 12 else "error")), max_width="800px") %}
-        <h2 style="margin-bottom: var(--space-md);">{{ risk.title }}</h2>
+{% set actions %}<span class="mono" id="score-trend"><span class="sev-{{ risk.severity }}">{{ risk.score }}</span>{% if risk.residual_score is not none %} → <span class="sev-{{ risk.residual_severity }}">{{ risk.residual_score }}</span>{% endif %}</span> {{ ok.status(risk.disposition | upper, badge) }}{% endset %}
+{% call ok.panel(risk.risk_number ~ " · " ~ risk.title, actions=actions, max_width="900px") %}
+
+        <div class="risk-statement{% if not risk.statement %} risk-statement-incomplete{% endif %}" id="statement-masthead">
+            {%- if risk.statement %}{{ risk.statement }}{% else %}scenario incomplete — condition · departure · asset · consequence{% endif -%}
+        </div>
+
+        <div class="form-label">CONDITION <span class="text-muted">— present fact, true now</span></div>
+        <div class="lint-editor" style="margin-bottom: var(--space-sm);">
+            <div class="lint-overlay mono" id="condition-overlay" aria-hidden="true">{{ lint_html['condition'] }}</div>
+            <textarea id="condition-text" class="form-textarea mono lint-textarea" rows="2"
+                      onblur="updateRisk('condition', this.value || null)">{{ risk.condition or '' }}</textarea>
+        </div>
+
+        <div class="form-label">DEPARTURE <span class="text-muted">— future undesired event; probability scores this</span></div>
+        <div class="lint-editor" style="margin-bottom: var(--space-sm);">
+            <div class="lint-overlay mono" id="departure-overlay" aria-hidden="true">{{ lint_html['departure'] }}</div>
+            <textarea id="departure-text" class="form-textarea mono lint-textarea" rows="2"
+                      onblur="updateRisk('departure', this.value || null)">{{ risk.departure or '' }}</textarea>
+        </div>
+
+        <div class="form-label">ASSET <span class="text-muted">— what is exposed: a part, or a name (schedule, campaign, ...)</span></div>
+        <div style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm);">
+            <select id="asset-part-select" class="form-select" style="width: auto;" onchange="updateAsset('part', this.value)">
+                <option value="">— part —</option>
+                {% for part in parts %}
+                <option value="{{ part.id }}" {% if risk.asset_part_id == part.id %}selected{% endif %}>{{ part.name }}{% if part.internal_pn %} ({{ part.internal_pn }}){% endif %}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="asset-text-input" class="form-input" maxlength="255" placeholder="or: schedule, test campaign, ..."
+                   value="{{ risk.asset_text or '' }}" onblur="updateAsset('text', this.value)">
+        </div>
+
+        <div class="form-label">CONSEQUENCE <span class="text-muted">— measurable impact; impact scores this</span></div>
+        <div class="lint-editor" style="margin-bottom: var(--space-md);">
+            <div class="lint-overlay mono" id="consequence-overlay" aria-hidden="true">{{ lint_html['consequence'] }}</div>
+            <textarea id="consequence-text" class="form-textarea mono lint-textarea" rows="2"
+                      onblur="updateRisk('consequence', this.value || null)">{{ risk.consequence or '' }}</textarea>
+        </div>
 
         {% call ok.table() %}
             <tr>
-                <th style="width: 120px;">STATUS</th>
+                <th style="width: 160px;">OWNER</th>
                 <td>
-                    <select id="status-select" class="form-select" style="width: auto;" onchange="updateRisk('status', this.value)">
-                        {% for s in statuses %}
-                        {% set status_val = risk.status.value if risk.status.value is defined else risk.status %}
-                        <option value="{{ s }}" {% if status_val == s %}selected{% endif %}>{{ s | upper | replace('_', ' ') }}</option>
+                    <select class="form-select" style="width: auto;" onchange="updateRisk('owner_id', this.value ? parseInt(this.value) : null)">
+                        <option value="">—</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}" {% if risk.owner_id == user.id %}selected{% endif %}>{{ user.name }}</option>
                         {% endfor %}
                     </select>
                 </td>
@@ -27,35 +63,59 @@
             <tr>
                 <th>PROBABILITY</th>
                 <td>
-                    <select id="prob-select" class="form-select" style="width: auto;" onchange="updateRisk('probability', parseInt(this.value))">
-                        <option value="1" {% if risk.probability == 1 %}selected{% endif %}>1 - Rare</option>
-                        <option value="2" {% if risk.probability == 2 %}selected{% endif %}>2 - Unlikely</option>
-                        <option value="3" {% if risk.probability == 3 %}selected{% endif %}>3 - Possible</option>
-                        <option value="4" {% if risk.probability == 4 %}selected{% endif %}>4 - Likely</option>
-                        <option value="5" {% if risk.probability == 5 %}selected{% endif %}>5 - Almost Certain</option>
+                    <select class="form-select" style="width: auto;" onchange="updateRisk('probability', parseInt(this.value))">
+                        {% for value, label in [(1, '1 - Rare'), (2, '2 - Unlikely'), (3, '3 - Possible'), (4, '4 - Likely'), (5, '5 - Almost Certain')] %}
+                        <option value="{{ value }}" {% if risk.probability == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                 </td>
             </tr>
             <tr>
                 <th>IMPACT</th>
                 <td>
-                    <select id="impact-select" class="form-select" style="width: auto;" onchange="updateRisk('impact', parseInt(this.value))">
-                        <option value="1" {% if risk.impact == 1 %}selected{% endif %}>1 - Negligible</option>
-                        <option value="2" {% if risk.impact == 2 %}selected{% endif %}>2 - Minor</option>
-                        <option value="3" {% if risk.impact == 3 %}selected{% endif %}>3 - Moderate</option>
-                        <option value="4" {% if risk.impact == 4 %}selected{% endif %}>4 - Major</option>
-                        <option value="5" {% if risk.impact == 5 %}selected{% endif %}>5 - Severe</option>
+                    <select class="form-select" style="width: auto;" onchange="updateRisk('impact', parseInt(this.value))">
+                        {% for value, label in [(1, '1 - Negligible'), (2, '2 - Minor'), (3, '3 - Moderate'), (4, '4 - Major'), (5, '5 - Severe')] %}
+                        <option value="{{ value }}" {% if risk.impact == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                 </td>
             </tr>
             <tr>
-                <th>SCORE</th>
+                <th>RESIDUAL <span class="text-muted">P × I</span></th>
                 <td>
-                    <span id="score-value">
-                        {{ ok.severity(risk.probability, risk.impact) }}
-                    </span>
+                    <select class="form-select" style="width: auto; display: inline-block;" onchange="updateRisk('residual_probability', this.value ? parseInt(this.value) : null)">
+                        <option value="">—</option>
+                        {% for value in [1, 2, 3, 4, 5] %}
+                        <option value="{{ value }}" {% if risk.residual_probability == value %}selected{% endif %}>{{ value }}</option>
+                        {% endfor %}
+                    </select>
+                    ×
+                    <select class="form-select" style="width: auto; display: inline-block;" onchange="updateRisk('residual_impact', this.value ? parseInt(this.value) : null)">
+                        <option value="">—</option>
+                        {% for value in [1, 2, 3, 4, 5] %}
+                        <option value="{{ value }}" {% if risk.residual_impact == value %}selected{% endif %}>{{ value }}</option>
+                        {% endfor %}
+                    </select>
                 </td>
             </tr>
+            {% if risk.accepted_at %}
+            <tr>
+                <th>ACCEPTED</th>
+                <td class="mono">{{ risk.accepted_by.name if risk.accepted_by else '?' }} · {{ ok.timestamp(risk.accepted_at) }}</td>
+            </tr>
+            {% endif %}
+            {% if risk.realized_issue %}
+            <tr>
+                <th>REALIZED AS</th>
+                <td>{{ ok.link(risk.realized_issue.issue_number ~ " " ~ risk.realized_issue.title, "/issues/" ~ risk.realized_issue.id, mono=true) }}</td>
+            </tr>
+            {% endif %}
+            {% if risk.last_reviewed_at %}
+            <tr>
+                <th>LAST REVIEWED</th>
+                <td class="mono">{{ ok.timestamp(risk.last_reviewed_at) }}{% if risk.last_reviewed_by %} · {{ risk.last_reviewed_by.name }}{% endif %}</td>
+            </tr>
+            {% endif %}
             <tr>
                 <th>CREATED</th>
                 <td>{{ ok.timestamp(risk.created_at) }}</td>
@@ -64,26 +124,72 @@
                 <th>UPDATED</th>
                 <td>{{ ok.timestamp(risk.updated_at) }}</td>
             </tr>
-            {% if risk.linked_issue_id %}
-            <tr>
-                <th>LINKED ISSUE</th>
-                <td>{{ ok.link("Issue #" ~ risk.linked_issue_id, "/issues/" ~ risk.linked_issue_id) }}</td>
-            </tr>
-            {% endif %}
         {% endcall %}
 
-        {% if risk.description %}
-        <div class="form-label">DESCRIPTION</div>
-        <div style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); margin-bottom: var(--space-md);">
-            {{ risk.description }}
+        <div class="form-label" style="margin-top: var(--space-md);">DISPOSITION</div>
+        <div style="margin-bottom: var(--space-sm);">
+            <select id="disposition-select" class="form-select" style="width: auto;" onchange="loadDispositionPanel(this.value)"
+                    {% if risk.disposition == 'realized' %}disabled title="realized is terminal"{% endif %}>
+                <option value="">— transition to —</option>
+                {% for d in dispositions %}
+                {% if d != risk.disposition and d != 'accepted' %}
+                <option value="{{ d }}">{{ d | upper }}</option>
+                {% endif %}
+                {% endfor %}
+            </select>
         </div>
-        {% endif %}
+        <div id="disposition-panel" style="margin-bottom: var(--space-md);"></div>
 
-        <div class="form-label">MITIGATION PLAN</div>
+        <div id="acceptance-panel" style="margin-bottom: var(--space-md);">
+            {% include 'risks/_acceptance_panel.html' %}
+        </div>
+
+        <div class="form-label">LINKED ISSUES</div>
+        {% call ok.table() %}
+            <thead>
+                <tr>
+                    {{ ok.th("ISSUE", width="100px") }}
+                    {{ ok.th("TITLE") }}
+                    {{ ok.th("ROLE", width="110px") }}
+                    {{ ok.th("STATUS", width="140px") }}
+                    {{ ok.th("", width="80px") }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for link in risk.issue_links if link.issue and not link.issue.deleted_at %}
+                <tr>
+                    <td>{{ ok.link(link.issue.issue_number, "/issues/" ~ link.issue.id, mono=true) }}</td>
+                    <td>{{ link.issue.title }}</td>
+                    <td>{{ ok.status(link.role | upper, "info" if link.role == 'research' else "warn") }}</td>
+                    <td>{{ ok.status(link.issue.status | status_value | upper | replace('_', ' '), "ok" if (link.issue.status | status_value) == 'closed' else "draft") }}</td>
+                    <td><button type="button" class="btn btn-sm" onclick="unlinkIssue({{ link.issue.id }})">UNLINK</button></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5">{{ ok.empty("No linked issues") }}</td></tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+        <div style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); flex-wrap: wrap;">
+            <select id="link-issue-select" class="form-select" style="width: auto;">
+                <option value="">— existing issue —</option>
+                {% for issue in linkable_issues %}
+                <option value="{{ issue.id }}">{{ issue.issue_number }} {{ issue.title }}</option>
+                {% endfor %}
+            </select>
+            <select id="link-role-select" class="form-select" style="width: auto;">
+                {% for role in roles %}
+                <option value="{{ role }}">{{ role | upper }}</option>
+                {% endfor %}
+            </select>
+            <button type="button" class="btn" onclick="linkIssue()">LINK</button>
+            <input type="text" id="spawn-title-input" class="form-input" style="width: 260px;" maxlength="255" placeholder="new issue title...">
+            <button type="button" class="btn" onclick="spawnIssue()">SPAWN ISSUE</button>
+        </div>
+
+        <div class="form-label">NARRATIVE <span class="text-muted">— context, evidence, suggested responses</span></div>
         <div style="margin-bottom: var(--space-md);">
-            <textarea id="mitigation-text" class="form-textarea" rows="4"
-                      onblur="updateRisk('mitigation_plan', this.value)"
-                      placeholder="Describe mitigation strategy...">{{ risk.mitigation_plan or '' }}</textarea>
+            <textarea class="form-textarea" rows="4"
+                      onblur="updateRisk('description', this.value || null)">{{ risk.description or '' }}</textarea>
         </div>
 
         <div style="display: flex; gap: var(--space-sm);">
@@ -92,72 +198,10 @@
         </div>
 {% endcall %}
 
+<script src="/static/js/requirements.js"></script>
+<script src="/static/js/risks.js"></script>
 <script>
 const riskId = {{ risk.id }};
-
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
-
-function updateScoreDisplay() {
-    const prob = parseInt(document.getElementById('prob-select').value);
-    const impact = parseInt(document.getElementById('impact-select').value);
-    const score = prob * impact;
-    let severity = 'LOW';
-    let color = 'var(--status-ok)';
-    if (score > 12) {
-        severity = 'HIGH';
-        color = 'var(--status-error)';
-    } else if (score > 5) {
-        severity = 'MEDIUM';
-        color = 'var(--status-warn)';
-    }
-    document.getElementById('score-value').innerHTML = `<span style="color: ${color}">${score} (${severity})</span>`;
-}
-
-async function updateRisk(field, value) {
-    try {
-        const data = {};
-        data[field] = value;
-
-        const response = await fetch(`/api/risks/${riskId}`, {
-            method: 'PATCH',
-            headers: getHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to update risk'));
-            window.location.reload();
-        } else {
-            if (field === 'probability' || field === 'impact') {
-                updateScoreDisplay();
-            }
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-        window.location.reload();
-    }
-}
-
-async function deleteRisk() {
-    if (!confirm('Are you sure you want to delete this risk?')) return;
-
-    try {
-        const response = await fetch(`/api/risks/${riskId}`, {
-            method: 'DELETE',
-            headers: getHeaders(),
-        });
-        if (response.ok) {
-            window.location.href = '/risks';
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to delete risk'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
-}
+bindScenarioLint();
 </script>
 {% endblock %}

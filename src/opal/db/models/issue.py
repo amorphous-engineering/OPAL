@@ -176,7 +176,9 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     containment_step: Mapped["StepExecution | None"] = relationship(
         "StepExecution", foreign_keys=[containment_step_id]
     )
-    risk: Mapped["Risk | None"] = relationship("Risk", back_populates="linked_issue")
+    risk_links: Mapped[list["RiskIssueLink"]] = relationship(
+        "RiskIssueLink", back_populates="issue", cascade="all, delete-orphan"
+    )
     references: Mapped[list["IssueReference"]] = relationship(
         "IssueReference", back_populates="issue", cascade="all, delete-orphan"
     )

@@ -1415,34 +1415,67 @@ Use the **Assigned To** field to track ownership.
 
 #### What is a Risk?
 
-A **Risk** is a potential problem that hasn't happened yet. Risks have unique **RISK numbers**.
+A **Risk** is a *scenario*, not a vibe — a potential problem that hasn't happened yet,
+decomposed into four parts (per NASA/SP-2011-3422):
 
-**Risk Assessment Matrix**:
+> "Given that **[CONDITION]**, there is a possibility of **[DEPARTURE]** adversely
+> impacting **[ASSET]**, thereby leading to **[CONSEQUENCE]**."
 
-| Probability | Impact | Severity |
-|-------------|--------|----------|
-| 1 (Rare) | 1 (Negligible) | LOW |
-| 1 (Rare) | 5 (Catastrophic) | MEDIUM |
-| 5 (Certain) | 1 (Negligible) | MEDIUM |
-| 5 (Certain) | 5 (Catastrophic) | HIGH |
+- **Condition** — a present, fact-based situation. True *now*, independently checkable.
+  No speculation words (the linter blocks *may/might/could/possibly* from acceptance).
+- **Departure** — the undesired *future* event the condition makes credible.
+  **Probability scores this.**
+- **Asset** — what's exposed: a part, or a name ("schedule", "test campaign").
+  Exactly one of the two forms is set.
+- **Consequence** — the credible impact, stated as something measurable.
+  **Impact scores this.**
+
+You write four phrases, never a paragraph — the prose statement is generated.
+Risks have unique **RISK numbers**.
 
 #### Creating a Risk
 
 1. Navigate to **Quality → Risks**
 2. Click **New Risk**
 3. Fill in:
-   - **Title**: What could go wrong
-   - **Description**: Detailed scenario
-   - **Probability**: 1 (rare) to 5 (certain)
-   - **Impact**: 1 (negligible) to 5 (catastrophic)
-   - **Mitigation Plan**: How to prevent or handle it
-   - **Status**: IDENTIFIED / ANALYZING / MITIGATING / ACCEPTED / RESOLVED
-   - **Linked Issue**: Optional issue for mitigation work
+   - **Title**: short handle
+   - **Condition / Departure / Asset / Consequence**: the scenario (lint underlines
+     speculation and response language inline)
+   - **Owner**: exactly one, required for acceptance
+   - **Probability**: 1 (rare) to 5 (almost certain)
+   - **Impact**: 1 (negligible) to 5 (severe)
+   - **Narrative**: context, evidence, suggested responses
 4. Click **Create**
 
 OPAL auto-calculates:
 - **Score**: probability × impact (1-25)
-- **Severity**: LOW (1-4), MEDIUM (5-15), HIGH (16-25)
+- **Severity**: LOW (1-5), MEDIUM (6-12), HIGH (13-25)
+- **Residual score**: the post-response target, displayed as the pair `8 → 4`
+
+#### Dispositions
+
+Freeform status is replaced by a disposition state machine; each state names its
+entry requirements and the system refuses transitions that don't meet them:
+
+| Disposition | Meaning | Requires |
+|---|---|---|
+| `open` | identified, undispositioned (default) | — |
+| `mitigate` | positive action being taken | ≥1 open linked issue (role: mitigation) + residual score |
+| `watch` | monitoring an observable | watch observable + threshold (contingency optional) |
+| `research` | investigating to reduce uncertainty | a linked issue (role: research), or a narrative note |
+| `accepted` | living with it — the signature moment | acceptance readiness (below) |
+| `closed` | drivers no longer exist | one-line close note |
+| `realized` | the departure happened — terminal | a linked issue; the risk's afterlife is a problem record |
+
+Un-accepting a signed risk requires a note and is itself audited.
+
+#### Acceptance
+
+The acceptance readiness panel mirrors requirement baselining: scenario complete,
+owner assigned, scored, rationale recorded, lint clean. The ACCEPT button signs with
+the session user and timestamp. **If the scenario or score changes after acceptance,
+the disposition flips back to `open`** — the signature covered the risk *as scored*,
+and an old signature is never allowed to cover a new scenario.
 
 #### Risk Matrix Visualization
 
@@ -1472,18 +1505,21 @@ Y
 
 Click any risk to view details.
 
-#### Linking Risks to Issues
+#### Responses are Issues
 
-When mitigating a risk requires work:
-
-1. Create an issue (type: TASK)
-2. Describe the mitigation action
-3. Link the issue to the risk
+Responses live in linked Issues — OPAL's existing action tracker — never in an
+embedded checklist. A mitigation is real when it has an issue with an owner; it
+completes when the issue closes. The risk page lists linked issues with their
+statuses inline, and offers LINK (existing issue) or SPAWN (new issue) with a
+role: **mitigation** or **research**.
 
 **Example**:
-- **Risk**: RISK-0005 "Battery cell short circuit during assembly"
-- **Mitigation**: "Add insulation step between cells"
-- **Linked Issue**: IT-0067 "Update battery procedure to include insulation"
+- **Risk**: RISK-00005 "Battery cell short circuit during assembly"
+- **Linked Issue** (mitigation): IT-00067 "Update battery procedure to include insulation"
+
+The matrix view plots current scores (solid) and residual targets (hollow). The
+register's **REVIEWED ✓** action stamps every listed risk with the review date —
+one click at gate time; that stamp is the entire review ceremony.
 
 ---
 

@@ -68,7 +68,9 @@ from opal.db.models.issue import (
 from opal.db.models.part import TrackingType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
 from opal.db.models.purchase import PurchaseStatus
-from opal.db.models.risk import RiskStatus
+from opal.db.models.risk import RiskDisposition, RiskIssueLink, RiskIssueRole
+from opal.risks import dispositions as risk_dispositions
+from opal.risks import lint as risk_lint
 from opal.se import lint as se_lint
 
 logger = logging.getLogger(__name__)
@@ -180,7 +182,10 @@ async def list_tools() -> list[Tool]:
                     },
                     "tier": {
                         "type": "integer",
-                        "description": "Inventory tier (1=Flight, 2=Ground, 3=Loose). Default: 1",
+                        "description": (
+                            "Inventory tier level, as configured in the project "
+                            "(see get_project_info for the tier list). Default: 1"
+                        ),
                         "default": 1,
                     },
                     "parent_id": {
@@ -884,34 +889,87 @@ async def list_tools() -> list[Tool]:
         # Risks
         Tool(
             name="list_risks",
-            description="List risks, optionally filtered by status",
+            description=(
+                "List risks, optionally filtered by disposition or severity. "
+                "Each row carries the generated scenario statement, current and "
+                "residual scores, and owner. Agents draft scenarios; acceptance "
+                "is a human signature."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "status": {
+                    "disposition": {
                         "type": "string",
-                        "description": "Filter by status: identified, analyzing, mitigating, monitoring, closed",
+                        "description": (
+                            "Filter by disposition: open, mitigate, watch, "
+                            "research, accepted, closed, realized"
+                        ),
                     },
                     "severity": {
                         "type": "string",
                         "description": "Filter by severity: low, medium, high",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results (default 50)",
+                        "default": 50,
                     },
                 },
             },
         ),
         Tool(
             name="create_risk",
-            description="Create a new risk to track potential problems",
+            description=(
+                "Create a risk as a four-part scenario: 'Given that CONDITION, "
+                "there is a possibility of DEPARTURE adversely impacting ASSET, "
+                "thereby leading to CONSEQUENCE.' The prose statement is "
+                "generated from the parts, never stored. The asset is "
+                "asset_part_id (hardware) or asset_text (schedule, budget, ...) "
+                "— exactly one. The risk is born with disposition open; use "
+                "set_risk_disposition / link_risk_issue afterwards. Agents draft "
+                "scenarios; acceptance is a human signature."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Risk title",
+                        "description": "Short handle for the risk",
                     },
                     "description": {
                         "type": "string",
-                        "description": "Risk description (optional)",
+                        "description": (
+                            "Narrative: context, evidence, suggested responses (optional)"
+                        ),
+                    },
+                    "condition": {
+                        "type": "string",
+                        "description": "Present-tense fact, independently checkable now",
+                    },
+                    "departure": {
+                        "type": "string",
+                        "description": "Undesired future event — probability scores this",
+                    },
+                    "asset_part_id": {
+                        "type": "integer",
+                        "description": (
+                            "Exposed asset when it is hardware (exclusive with asset_text)"
+                        ),
+                    },
+                    "asset_text": {
+                        "type": "string",
+                        "description": (
+                            'Exposed asset when not hardware, e.g. "schedule" '
+                            "(exclusive with asset_part_id)"
+                        ),
+                    },
+                    "consequence": {
+                        "type": "string",
+                        "description": "Credible measurable impact — impact scores this",
+                    },
+                    "owner_id": {
+                        "type": "integer",
+                        "description": "Owning user ID (optional; required before acceptance)",
                     },
                     "probability": {
                         "type": "integer",
@@ -925,12 +983,195 @@ async def list_tools() -> list[Tool]:
                         "minimum": 1,
                         "maximum": 5,
                     },
-                    "mitigation_plan": {
+                    "residual_probability": {
+                        "type": "integer",
+                        "description": "Post-response target probability 1-5 (optional)",
+                        "minimum": 1,
+                        "maximum": 5,
+                    },
+                    "residual_impact": {
+                        "type": "integer",
+                        "description": "Post-response target impact 1-5 (optional)",
+                        "minimum": 1,
+                        "maximum": 5,
+                    },
+                    "watch_observable": {
                         "type": "string",
-                        "description": "Mitigation plan (optional)",
+                        "description": "What is being monitored (watch disposition)",
+                    },
+                    "watch_threshold": {
+                        "type": "string",
+                        "description": "When the watch trips (watch disposition)",
+                    },
+                    "watch_contingency": {
+                        "type": "string",
+                        "description": "What happens when the watch trips (optional)",
                     },
                 },
                 "required": ["title", "probability", "impact"],
+            },
+        ),
+        Tool(
+            name="lint_risk",
+            description=(
+                "Lint a risk scenario for statement discipline: speculation "
+                "words in the condition (blocks acceptance), response language "
+                "in departure/consequence, unmeasurable consequence (warnings). "
+                "Pass risk_id or risk_number to lint a stored risk, or raw "
+                "condition/departure/consequence to pre-check text before "
+                "creating. Agents draft scenarios; acceptance is a human "
+                "signature."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "risk_id": {"type": "integer", "description": "Database ID"},
+                    "risk_number": {
+                        "type": "string",
+                        "description": "Risk number, e.g. RISK-00001",
+                    },
+                    "condition": {
+                        "type": "string",
+                        "description": "Ad-hoc condition text to lint",
+                    },
+                    "departure": {
+                        "type": "string",
+                        "description": "Ad-hoc departure text to lint",
+                    },
+                    "consequence": {
+                        "type": "string",
+                        "description": "Ad-hoc consequence text to lint",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="set_risk_disposition",
+            description=(
+                "Transition a risk's disposition: open, mitigate, watch, "
+                "research, closed, realized. Each target names its "
+                "requirements — mitigate needs an open mitigation-role issue "
+                "link and a residual score; watch needs an observable and a "
+                "threshold; research needs a research-role link or a narrative; "
+                "closed needs a note; realized needs realized_issue_id and is "
+                "terminal. accepted is NOT reachable here — use accept_risk: "
+                "acceptance is a human signature."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "risk_id": {"type": "integer", "description": "Database ID"},
+                    "risk_number": {
+                        "type": "string",
+                        "description": "Risk number, e.g. RISK-00001",
+                    },
+                    "disposition": {
+                        "type": "string",
+                        "description": (
+                            "Target disposition: open, mitigate, watch, research, closed, realized"
+                        ),
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": (
+                            "Transition note — required to close or to leave accepted; "
+                            "recorded in the audit trail"
+                        ),
+                    },
+                    "realized_issue_id": {
+                        "type": "integer",
+                        "description": (
+                            "Issue the departure became — set before transitioning to realized"
+                        ),
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Acting user ID for the audit trail (optional)",
+                    },
+                },
+                "required": ["disposition"],
+            },
+        ),
+        Tool(
+            name="accept_risk",
+            description=(
+                "Accept a risk — the signature moment. Agents draft scenarios "
+                "and link mitigations; acceptance is a human signature. Requires "
+                "the user_id of a real, active human user who approved the "
+                "acceptance; refuses unless the scenario is complete, owned, "
+                "scored, lint-clean, and a rationale is recorded."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "risk_id": {"type": "integer", "description": "Database ID"},
+                    "risk_number": {
+                        "type": "string",
+                        "description": "Risk number, e.g. RISK-00001",
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user signing the acceptance (required)",
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Acceptance rationale (stored on the risk)",
+                    },
+                },
+                "required": ["user_id"],
+            },
+        ),
+        Tool(
+            name="link_risk_issue",
+            description=(
+                "Link an existing issue to a risk as a response. role "
+                "mitigation = reduction work (a mitigation is real when it has "
+                "an issue with an owner); role research = uncertainty-reduction "
+                "work. Agents link mitigations; acceptance is a human signature."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "risk_id": {"type": "integer", "description": "Risk database ID"},
+                    "risk_number": {
+                        "type": "string",
+                        "description": "Risk number, e.g. RISK-00001",
+                    },
+                    "issue_id": {"type": "integer", "description": "Issue database ID"},
+                    "issue_number": {
+                        "type": "string",
+                        "description": "Issue number, e.g. ISS-00012",
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "mitigation or research (default mitigation)",
+                        "default": "mitigation",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="stamp_risk_review",
+            description=(
+                "Stamp last_reviewed on risks — the register review ceremony. "
+                "Omit risk_ids to stamp every non-deleted risk. Requires the "
+                "user_id of the human who performed the review; agents prepare "
+                "the register, humans review it."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user who performed the review (required)",
+                    },
+                    "risk_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Risk IDs to stamp (omit to stamp all non-deleted risks)",
+                    },
+                },
+                "required": ["user_id"],
             },
         ),
         # Project info
@@ -1781,6 +2022,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _list_risks(db, arguments)
         elif name == "create_risk":
             return await _create_risk(db, arguments)
+        elif name == "lint_risk":
+            return await _lint_risk(db, arguments)
+        elif name == "set_risk_disposition":
+            return await _set_risk_disposition(db, arguments)
+        elif name == "accept_risk":
+            return await _accept_risk(db, arguments)
+        elif name == "link_risk_issue":
+            return await _link_risk_issue(db, arguments)
+        elif name == "stamp_risk_review":
+            return await _stamp_risk_review(db, arguments)
 
         # Project
         elif name == "get_project_info":
@@ -2583,47 +2834,113 @@ async def _get_holds(db, args: dict) -> list[TextContent]:
     return json_response(get_holds_payload(db, args["execution_id"]))
 
 
+def _find_risk(db, args: dict) -> "Risk | None":
+    """Resolve a non-deleted risk from risk_id or risk_number args."""
+    if args.get("risk_id") is not None:
+        return db.query(Risk).filter(Risk.id == args["risk_id"], Risk.deleted_at.is_(None)).first()
+    if args.get("risk_number"):
+        return (
+            db.query(Risk)
+            .filter(Risk.risk_number == args["risk_number"], Risk.deleted_at.is_(None))
+            .first()
+        )
+    return None
+
+
+def _risk_dict(risk: Risk) -> dict:
+    """Risk summary — risk_number leads; id kept for tool chaining."""
+    return {
+        "risk_number": risk.risk_number,
+        "id": risk.id,
+        "title": risk.title,
+        "disposition": risk.disposition,
+        "statement": risk.statement,
+        "probability": risk.probability,
+        "impact": risk.impact,
+        "score": risk.score,
+        "severity": risk.severity,
+        "residual_score": risk.residual_score,
+        "residual_severity": risk.residual_severity,
+        "owner": risk.owner.name if risk.owner else None,
+    }
+
+
 async def _list_risks(db, args: dict) -> list[TextContent]:
     """List risks with optional filtering."""
+    from sqlalchemy.orm import selectinload
+
     query = db.query(Risk).filter(Risk.deleted_at.is_(None))
 
-    if args.get("status"):
-        query = query.filter(Risk.status == args["status"])
+    if args.get("disposition"):
+        query = query.filter(Risk.disposition == args["disposition"])
 
-    risks = query.order_by(Risk.id.desc()).limit(50).all()
+    # Severity in SQL so the limit applies to the filtered set, not before it.
+    score = Risk.probability * Risk.impact
+    severity = args.get("severity")
+    if severity == "low":
+        query = query.filter(score <= 5)
+    elif severity == "medium":
+        query = query.filter(score > 5, score <= 12)
+    elif severity == "high":
+        query = query.filter(score > 12)
 
-    # Filter by severity in Python (computed property)
-    if args.get("severity"):
-        risks = [r for r in risks if r.severity == args["severity"]]
-
-    return json_response(
-        {
-            "count": len(risks),
-            "risks": [
-                {
-                    "id": r.id,
-                    "title": r.title,
-                    "probability": r.probability,
-                    "impact": r.impact,
-                    "severity": r.severity,
-                    "status": r.status.value if hasattr(r.status, "value") else r.status,
-                }
-                for r in risks
-            ],
-        }
+    limit = args.get("limit", 50)
+    risks = (
+        query.options(selectinload(Risk.owner), selectinload(Risk.asset_part))
+        .order_by(Risk.id.desc())
+        .limit(limit)
+        .all()
     )
+
+    return json_response({"count": len(risks), "risks": [_risk_dict(r) for r in risks]})
 
 
 async def _create_risk(db, args: dict) -> list[TextContent]:
-    """Create a new risk."""
+    """Create a new risk — born open; scenario fields may arrive incrementally."""
+    if args.get("asset_part_id") is not None and (args.get("asset_text") or "").strip():
+        return json_response(
+            {"error": "asset_part_id and asset_text are exclusive — exactly one names the asset"}
+        )
+
+    # The inputSchema's 1-5 bounds are advisory to the client; enforce here —
+    # an out-of-range row would 500 every matrix view until hand-fixed.
+    for field in ("probability", "impact", "residual_probability", "residual_impact"):
+        value = args.get(field)
+        if value is not None and not (
+            isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 5
+        ):
+            return json_response({"error": f"{field} must be an integer from 1 to 5"})
+    if args.get("owner_id") is not None and db.get(User, args["owner_id"]) is None:
+        return json_response({"error": f"Owner user {args['owner_id']} not found"})
+    if args.get("asset_part_id") is not None:
+        part = (
+            db.query(Part)
+            .filter(Part.id == args["asset_part_id"], Part.deleted_at.is_(None))
+            .first()
+        )
+        if part is None:
+            return json_response({"error": f"Asset part {args['asset_part_id']} not found"})
+    if args.get("asset_text") is not None and not args["asset_text"].strip():
+        args["asset_text"] = None
+
     risk = Risk(
         risk_number=generate_risk_number(db),
+        disposition=RiskDisposition.OPEN.value,
         title=args["title"],
         description=args.get("description"),
+        condition=args.get("condition"),
+        departure=args.get("departure"),
+        asset_part_id=args.get("asset_part_id"),
+        asset_text=args.get("asset_text"),
+        consequence=args.get("consequence"),
+        owner_id=args.get("owner_id"),
         probability=args["probability"],
         impact=args["impact"],
-        mitigation_plan=args.get("mitigation_plan"),
-        status=RiskStatus.IDENTIFIED,
+        residual_probability=args.get("residual_probability"),
+        residual_impact=args.get("residual_impact"),
+        watch_observable=args.get("watch_observable"),
+        watch_threshold=args.get("watch_threshold"),
+        watch_contingency=args.get("watch_contingency"),
     )
     db.add(risk)
     db.flush()
@@ -2635,14 +2952,201 @@ async def _create_risk(db, args: dict) -> list[TextContent]:
         {
             "success": True,
             "message": f"Created risk '{risk.title}' ({risk.risk_number}) with ID {risk.id}",
-            "risk": {
-                "id": risk.id,
-                "risk_number": risk.risk_number,
-                "title": risk.title,
-                "probability": risk.probability,
-                "impact": risk.impact,
-                "severity": risk.severity,
+            "risk": _risk_dict(risk),
+        }
+    )
+
+
+async def _lint_risk(db, args: dict) -> list[TextContent]:
+    """Lint a stored risk's scenario, or ad-hoc scenario text."""
+    if args.get("risk_id") is not None or args.get("risk_number"):
+        risk = _find_risk(db, args)
+        if not risk:
+            return json_response({"error": "Risk not found"})
+        findings = risk_lint.lint_risk_row(risk)
+        subject = risk.risk_number
+    elif any(args.get(field) for field in ("condition", "departure", "consequence")):
+        findings = risk_lint.lint_scenario(
+            condition=args.get("condition"),
+            departure=args.get("departure"),
+            consequence=args.get("consequence"),
+        )
+        subject = "(unsaved scenario)"
+    else:
+        return json_response(
+            {
+                "error": "Pass risk_id, risk_number, or scenario text "
+                "(condition/departure/consequence)"
+            }
+        )
+
+    return json_response(
+        {
+            "subject": subject,
+            "findings": {
+                field: [f.to_dict() for f in field_findings]
+                for field, field_findings in findings.items()
             },
+            "would_block_accept": any(
+                f.severity == "block_accept"
+                for field_findings in findings.values()
+                for f in field_findings
+            ),
+        }
+    )
+
+
+async def _set_risk_disposition(db, args: dict) -> list[TextContent]:
+    """Transition a risk's disposition; the state machine names unmet requirements."""
+    risk = _find_risk(db, args)
+    if not risk:
+        return json_response({"error": "Risk not found"})
+
+    user_id = args.get("user_id")
+    if risk.disposition == RiskDisposition.ACCEPTED.value:
+        # Un-doing a signature is auditable — it cannot be anonymous.
+        user, error = _require_human_user(db, args)
+        if error:
+            return error
+        user_id = user.id
+
+    if args.get("realized_issue_id") is not None:
+        issue = (
+            db.query(Issue)
+            .filter(Issue.id == args["realized_issue_id"], Issue.deleted_at.is_(None))
+            .first()
+        )
+        if not issue:
+            return json_response({"error": f"Issue {args['realized_issue_id']} not found"})
+        old_values = get_model_dict(risk)
+        risk.realized_issue_id = issue.id
+        log_update(db, risk, old_values, user_id)
+
+    try:
+        risk_dispositions.set_disposition(
+            db, risk, args["disposition"], user_id, note=args.get("note")
+        )
+    except risk_dispositions.RiskDispositionError as err:
+        db.rollback()
+        return json_response({"error": str(err)})
+
+    db.commit()
+    db.refresh(risk)
+    return json_response(
+        {
+            "success": True,
+            "message": f"{risk.risk_number} disposition set to {risk.disposition}",
+            "risk": _risk_dict(risk),
+        }
+    )
+
+
+async def _accept_risk(db, args: dict) -> list[TextContent]:
+    """Accept a risk — the signature moment; demands a real human user."""
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    risk = _find_risk(db, args)
+    if not risk:
+        return json_response({"error": "Risk not found"})
+
+    try:
+        risk_dispositions.accept(db, risk, user.id, rationale=args.get("rationale"))
+    except risk_dispositions.RiskDispositionError as err:
+        db.rollback()
+        return json_response({"error": str(err)})
+
+    db.commit()
+    db.refresh(risk)
+    return json_response(
+        {
+            "success": True,
+            "message": f"{risk.risk_number} accepted by {user.name}",
+            "accepted_at": risk.accepted_at.isoformat(),
+            "risk": _risk_dict(risk),
+        }
+    )
+
+
+async def _link_risk_issue(db, args: dict) -> list[TextContent]:
+    """Link an existing issue to a risk as a mitigation or research response."""
+    risk = _find_risk(db, args)
+    if not risk:
+        return json_response({"error": "Risk not found"})
+
+    role = args.get("role", RiskIssueRole.MITIGATION.value)
+    if role not in {r.value for r in RiskIssueRole}:
+        return json_response({"error": f"Invalid role '{role}' — use mitigation or research"})
+
+    issue = None
+    if args.get("issue_id") is not None:
+        issue = (
+            db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+        )
+    elif args.get("issue_number"):
+        issue = (
+            db.query(Issue)
+            .filter(Issue.issue_number == args["issue_number"], Issue.deleted_at.is_(None))
+            .first()
+        )
+    if not issue:
+        return json_response({"error": "Issue not found — pass issue_id or issue_number"})
+
+    if any(link.issue_id == issue.id for link in risk.issue_links):
+        return json_response(
+            {"error": f"{issue.issue_number} is already linked to {risk.risk_number}"}
+        )
+
+    link = RiskIssueLink(risk_id=risk.id, issue_id=issue.id, role=role)
+    db.add(link)
+    db.flush()
+    log_create(db, link)
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Linked {issue.issue_number} to {risk.risk_number} (role: {role})",
+            "link": {
+                "id": link.id,
+                "risk_number": risk.risk_number,
+                "risk_id": risk.id,
+                "issue_number": issue.issue_number,
+                "issue_id": issue.id,
+                "role": role,
+            },
+        }
+    )
+
+
+async def _stamp_risk_review(db, args: dict) -> list[TextContent]:
+    """Stamp last_reviewed on risks — the register review ceremony."""
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    query = db.query(Risk).filter(Risk.deleted_at.is_(None))
+    if args.get("risk_ids") is not None:
+        # An explicit empty list must NOT silently widen to "stamp everything" —
+        # the stamp is the gate ceremony and would falsely satisfy review checks.
+        if not args["risk_ids"]:
+            return json_response(
+                {"error": "risk_ids is empty — omit it to stamp the whole register"}
+            )
+        query = query.filter(Risk.id.in_(args["risk_ids"]))
+    risks = query.all()
+    if not risks:
+        return json_response({"error": "No matching risks"})
+
+    count = risk_dispositions.stamp_review(db, risks, user.id)
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "stamped": count,
+            "reviewed_at": risks[0].last_reviewed_at.isoformat(),
+            "message": f"{count} risk(s) review-stamped by {user.name}",
         }
     )
 
@@ -2663,11 +3167,12 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
         )
         .count()
     )
-    active_risks = (
+    # Open exposure: dispositions in OPEN_DISPOSITIONS (closed/realized excluded)
+    open_risks = (
         db.query(Risk)
         .filter(
             Risk.deleted_at.is_(None),
-            Risk.status != "closed",
+            Risk.disposition.in_(risk_dispositions.OPEN_DISPOSITIONS),
         )
         .count()
     )
@@ -2678,7 +3183,7 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
             "parts": part_count,
             "procedures": procedure_count,
             "open_issues": open_issues,
-            "active_risks": active_risks,
+            "open_risks": open_risks,
         },
     }
 
@@ -2693,6 +3198,9 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
                     "name": t.name,
                     "code": t.code,
                     "description": t.description,
+                    "default_tracking": t.default_tracking,
+                    "require_lot": t.require_lot,
+                    "auto_serial": t.auto_serial,
                 }
                 for t in project.tiers
             ],

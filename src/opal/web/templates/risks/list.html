@@ -7,39 +7,39 @@
 {% endblock %}
 
 {% block content %}
-{% set actions %}{{ ok.btn("MATRIX VIEW", href="/risks/matrix") }} {{ ok.btn("+ NEW RISK", href="/risks/new", variant="primary") }}{% endset %}
+{% set actions %}{{ ok.btn("REVIEWED", attrs='onclick="stampReviewed()" title="stamp last reviewed on all listed risks"') }} {{ ok.btn("MATRIX VIEW", href="/risks/matrix") }} {{ ok.btn("+ NEW RISK", href="/risks/new", variant="primary") }}{% endset %}
 {% call ok.panel("RISK REGISTER", actions=actions) %}
         <div class="toolbar">
-            {{ ok.toolbar_search(name="search", id="search", placeholder="Search risks...", hx_get="/risks/table", hx_target="#risks-table", hx_include="[name='status'], [name='severity']") }}
+            {{ ok.toolbar_search(name="search", id="search", placeholder="Search risks...", hx_get="/risks/table", hx_target="#risks-table", hx_include="[name='disposition'], [name='severity']") }}
             <div class="toolbar-filter">
-                <select name="status" class="form-select"
+                <select name="disposition" class="form-select"
                         hx-get="/risks/table" hx-trigger="change" hx-target="#risks-table"
                         hx-include="[name='severity'], #search">
-                    <option value="">All statuses</option>
-                    {% for s in statuses %}
-                    <option value="{{ s }}">{{ s | upper | replace('_', ' ') }}</option>
+                    <option value="">All dispositions</option>
+                    {% for d in dispositions %}
+                    <option value="{{ d }}">{{ d | upper }}</option>
                     {% endfor %}
                 </select>
             </div>
-            {{ ok.toolbar_filter("severity", [{"value": "", "label": "All severities"}, {"value": "low", "label": "LOW (1-5)"}, {"value": "medium", "label": "MEDIUM (6-12)"}, {"value": "high", "label": "HIGH (13-25)"}], hx_get="/risks/table", hx_target="#risks-table", hx_include="[name='status'], #search") }}
+            {{ ok.toolbar_filter("severity", [{"value": "", "label": "All severities"}, {"value": "low", "label": "LOW (1-5)"}, {"value": "medium", "label": "MEDIUM (6-12)"}, {"value": "high", "label": "HIGH (13-25)"}], hx_get="/risks/table", hx_target="#risks-table", hx_include="[name='disposition'], #search") }}
         </div>
 
         {% call ok.table() %}
             <thead>
                 <tr>
-                    {{ ok.th("ID", width="50px") }}
+                    {{ ok.th("RISK", width="110px") }}
                     {{ ok.th("TITLE") }}
-                    {{ ok.th("STATUS", width="100px") }}
-                    {{ ok.th("PROB", width="60px") }}
-                    {{ ok.th("IMPACT", width="60px") }}
-                    {{ ok.th("SCORE", width="80px") }}
-                    {{ ok.th("SEVERITY", width="100px") }}
-                    {{ ok.th("UPDATED", width="160px") }}
+                    {{ ok.th("DISP", width="110px") }}
+                    {{ ok.th("SCORE", width="90px") }}
+                    {{ ok.th("OWNER", width="140px") }}
+                    {{ ok.th("REVIEWED", width="90px") }}
                 </tr>
             </thead>
             <tbody id="risks-table" hx-get="/risks/table" hx-trigger="load">
-                <tr><td colspan="8" class="text-muted">Loading...</td></tr>
+                <tr><td colspan="6" class="text-muted">Loading...</td></tr>
             </tbody>
         {% endcall %}
 {% endcall %}
+
+<script src="/static/js/risks.js"></script>
 {% endblock %}

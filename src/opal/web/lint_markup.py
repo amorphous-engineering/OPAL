@@ -33,7 +33,11 @@ def statement_lint_html(statement: str, findings: list[LintFinding]) -> Markup:
         covering = marks[run_start]
         if covering:
             here = [spanned[i] for i in sorted(covering)]
-            css = "lint-block" if any(f.severity == "block_baseline" for f in here) else "lint-warn"
+            css = (
+                "lint-block"
+                if any(f.severity.startswith("block") for f in here)
+                else "lint-warn"
+            )
             title = escape("; ".join(f"{f.rule}: {f.message}" for f in here))
             parts.append(f'<span class="{css}" title="{title}">{text}</span>')
         else:

@@ -1,38 +1,15 @@
 {% import 'opalkit/_macros.html' as ok %}
-{% for risk in risks %}
-<tr onclick="window.location='/risks/{{ risk.id }}'" style="cursor: pointer;">
-    <td>{{ risk.id }}</td>
+{% for row in rows %}
+{% set risk = row.risk %}
+<tr onclick="window.location='/risks/{{ risk.id }}'" style="cursor: pointer;" data-risk-id="{{ risk.id }}">
+    <td class="mono text-green">{{ risk.risk_number }}</td>
     <td>{{ risk.title }}</td>
-    <td>
-        {% set status_val = risk.status.value if risk.status.value is defined else risk.status %}
-        {% if status_val == 'closed' %}
-            {{ ok.status(status_val | upper | replace('_', ' '), "ok") }}
-        {% elif status_val == 'mitigating' %}
-            {{ ok.status(status_val | upper | replace('_', ' '), "warn") }}
-        {% elif status_val == 'analyzing' %}
-            {{ ok.status(status_val | upper | replace('_', ' '), "info") }}
-        {% else %}
-            {{ ok.status(status_val | upper | replace('_', ' '), "draft") }}
-        {% endif %}
-    </td>
-    <td class="text-center">{{ risk.probability }}</td>
-    <td class="text-center">{{ risk.impact }}</td>
-    <td class="text-center">
-        <strong>{{ risk.probability * risk.impact }}</strong>
-    </td>
-    <td>
-        {% set score = risk.probability * risk.impact %}
-        {% if score <= 5 %}
-        {{ ok.status("LOW", "ok") }}
-        {% elif score <= 12 %}
-        {{ ok.status("MEDIUM", "warn") }}
-        {% else %}
-        {{ ok.status("HIGH", "error") }}
-        {% endif %}
-    </td>
-    <td>{{ ok.timestamp(risk.updated_at) }}</td>
+    <td>{{ ok.status(risk.disposition | upper, row.badge) }}</td>
+    <td class="mono"><span class="sev-{{ risk.severity }}">{{ risk.score }}</span>{% if risk.residual_score is not none %} → <span class="sev-{{ risk.residual_severity }}">{{ risk.residual_score }}</span>{% endif %}</td>
+    <td>{{ risk.owner.name if risk.owner else '—' }}</td>
+    <td class="mono" title="{{ row.reviewed_iso }}">{{ row.reviewed_age }}</td>
 </tr>
 {% else %}
-<tr><td colspan="8">{{ ok.empty("No risks found") }}</td></tr>
+<tr><td colspan="6">{{ ok.empty("No risks found") }}</td></tr>
 {% endfor %}
 {% include 'partials/pagination_row.html' %}
