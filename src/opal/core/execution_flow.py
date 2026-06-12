@@ -374,6 +374,26 @@ def clear_focus(db: Session, instance_id: int, user_id: int) -> None:
     ).delete()
 
 
+PRESENCE_TOUCH_SECONDS = 30
+
+
+def touch_user_presence(db: Session, user_id: int | None) -> None:
+    """The 5s state poll doubles as the presence heartbeat; writes are
+    throttled so polling stays read-mostly."""
+    if user_id is None:
+        return
+    user = db.get(User, user_id)
+    if user is None:
+        return
+    now = datetime.now(UTC)
+    last = user.last_seen_at
+    if last is not None and last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    if last is None or (now - last).total_seconds() > PRESENCE_TOUCH_SECONDS:
+        user.last_seen_at = now
+        db.commit()
+
+
 def mark_instance_in_work(db: Session, instance: ProcedureInstance) -> bool:
     """First completed/skipped work moves the WO out of CUT. Derived from
     the event — there is no separate start moment."""

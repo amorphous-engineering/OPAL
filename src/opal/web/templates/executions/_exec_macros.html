@@ -4,44 +4,50 @@
 
 {% macro hm(dt) %}{% if dt %}<span title="{{ dt.strftime('%Y-%m-%dT%H:%M:%S') }}Z">{{ dt.strftime('%H:%M') }}</span>{% endif %}{% endmacro %}
 
-{# Exactly one of: claimed · complete · hold · skipped · blocker text · START. #}
-{% macro presence_cell(step, claims_by_se, bound_holds_by_se, step_holding_ncs, inst_status, gate_text, op_on_hold) %}
+{# State cell: words in state colors, never a symbol. Exactly one of:
+   complete · skipped · hold · awaiting sign-off · blocker text · nothing. #}
+{% macro state_cell(step, bound_holds_by_se, step_holding_ncs, gate_text, op_on_hold) %}
 {% set exec = step.execution %}
 {% set se_id = exec.id if exec else none %}
-{% set claim_info = claims_by_se.get(se_id) if se_id else none %}
 {% set bound = bound_holds_by_se.get(se_id, []) if se_id else [] %}
 {% set raised = step_holding_ncs.get(se_id, []) if se_id else [] %}
-{% set active_inst = inst_status in ['cut', 'in_work'] %}
 {% if step.status in ['completed', 'signed_off'] %}
-    <span class="pres pres-done mono">✓ {% if exec and exec.completed_by_user %}{{ exec.completed_by_user.name | initials }}{% endif %} {{ hm(exec.completed_at) if exec else '' }}</span>
+    <span class="pres pres-done mono">{% if exec and exec.completed_by_user %}{{ exec.completed_by_user.name | initials }}{% endif %} {{ hm(exec.completed_at) if exec else '' }}</span>
 {% elif step.status == 'skipped' %}
     <span class="pres pres-skip mono">SKIPPED{% if exec and exec.completed_by_user %} {{ exec.completed_by_user.name | initials }}{% endif %}</span>
 {% elif step.status == 'on_hold' %}
-    <span class="pres pres-hold mono">⛔ {% for nc in raised %}<a href="/issues/{{ nc.id }}">{{ nc.issue_number }}</a>{% if not loop.last %} {% endif %}{% else %}HOLD{% endfor %}</span>
+    <span class="pres pres-hold mono">HOLD{% for nc in raised %} · <a href="/issues/{{ nc.id }}">{{ nc.issue_number }}</a>{% endfor %}</span>
 {% elif bound %}
-    <span class="pres pres-hold mono">⛔ HOLD {% for i in bound %}<a href="/issues/{{ i.id }}">{{ i.issue_number }}</a>{% if not loop.last %} {% endif %}{% endfor %}</span>
-{% elif step.status == 'in_progress' and claim_info %}
-    <span class="pres pres-active mono{% if claim_info.user and claim_info.user.id == (current_user.id if current_user else none) %} pres-self{% endif %}">● {{ claim_info.user.name | initials if claim_info.user else '?' }}</span>
+    <span class="pres pres-hold mono">HOLD{% for i in bound %} · <a href="/issues/{{ i.id }}">{{ i.issue_number }}</a>{% endfor %}</span>
 {% elif step.status == 'awaiting_signoff' %}
-    {% if active_inst %}<button class="btn btn-sm btn-signoff" onclick="event.stopPropagation(); signoffStep({{ step.order }})">SIGN OFF</button>{% else %}<span class="pres mono text-muted">AWAITING SIGN-OFF</span>{% endif %}
+    <span class="pres pres-gated mono">AWAITING SIGN-OFF</span>
 {% elif gate_text %}
     <span class="pres pres-gated mono text-yellow">{{ gate_text }}</span>
 {% elif op_on_hold and step.status == 'pending' %}
     <span class="pres pres-gated mono text-yellow">OP ON HOLD</span>
-{% elif step.status in ['pending', 'in_progress'] and active_inst %}
-    <button class="btn btn-sm btn-primary doc-start" onclick="event.stopPropagation(); startStep({{ step.order }})">START</button>
 {% endif %}
 {% endmacro %}
 
-{# Row indicators: counts, not content. #}
+{# Row indicators: counts as words, absent when zero (empty-state rule). #}
 {% macro indicators(step, attach_counts, vs) %}
 {% set exec = step.execution %}
 {% set n_att = attach_counts.get(exec.id, 0) if exec else 0 %}
-{% set schema = step.required_data_schema or vs.get('required_data_schema') %}
+{% set n_note = 1 if exec and exec.notes else 0 %}
+{% if n_att or n_note %}
 <span class="doc-ind mono" data-ind>
-    {%- if n_att %}<span class="ind" title="{{ n_att }} attachment(s)" onclick="event.stopPropagation(); railFocusStep({{ step.order }})">⎙{{ n_att }}</span>{% endif -%}
-    {%- if exec and exec.notes %}<span class="ind" title="Operator notes">✎1</span>{% endif -%}
-    {%- if schema and schema.get('fields') %}<span class="ind" title="Data capture required">⌗</span>{% endif -%}
+    {%- if n_att %}<span class="ind" title="{{ n_att }} attachment(s)" onclick="event.stopPropagation(); railFocusStep({{ step.order }})">{{ n_att }} ATT</span>{% endif -%}
+    {%- if n_att and n_note %}<span class="ind-sep"> · </span>{% endif -%}
+    {%- if n_note %}<span class="ind" title="Operator notes">1 NOTE</span>{% endif -%}
+</span>
+{% endif %}
+{% endmacro %}
+
+{# Presence cursors for one row — bordered initials chips in the right
+   gutter; the session user's own chip renders filled/inverted. #}
+{% macro cursor_chips(step, cursors_by_se, current_user) %}
+{% set exec = step.execution %}
+<span class="step-cursors" data-cursors>
+{%- if exec %}{% for c in cursors_by_se.get(exec.id, []) %}<span class="cursor-chip mono{% if current_user and c.user and c.user.id == current_user.id %} is-self{% endif %}" title="{{ c.user.name if c.user else '' }}">{{ (c.user.name if c.user else none) | initials }}</span>{% endfor %}{% endif -%}
 </span>
 {% endmacro %}
 

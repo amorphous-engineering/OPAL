@@ -21,18 +21,18 @@
         <div class="mono" style="font-size: 0.85rem;">
             {% if stale_draft_parts %}
             <div class="text-red">
-                ✗ stale draft parts (&gt;30d, unreferenced): <a href="/parts?state=draft" class="text-red">{{ stale_draft_parts | length }}</a>
+                stale draft parts (&gt;30d, unreferenced): <a href="/parts?state=draft" class="text-red">{{ stale_draft_parts | length }}</a>
             </div>
             {% endif %}
             {% for item in overdue_tbrs %}
             <div class="text-red">
-                ✗ <a href="/requirements/{{ item.req.id }}" class="text-red">{{ item.req.req_number }}</a>
+                <a href="/requirements/{{ item.req.id }}" class="text-red">{{ item.req.req_number }}</a>
                 TBR overdue {{ item.days_over }}d — {{ item.owner_name }}
             </div>
             {% endfor %}
             {% for req in stuck_drafts %}
             <div class="text-red">
-                ✗ <a href="/requirements/{{ req.id }}" class="text-red">{{ req.req_number }}</a>
+                <a href="/requirements/{{ req.id }}" class="text-red">{{ req.req_number }}</a>
                 draft &gt;7d with block-severity lint
             </div>
             {% endfor %}
@@ -44,7 +44,7 @@
             {% endfor %}
             {% if ready_to_baseline %}
             <div class="text-green">
-                ✓ ready to baseline: <a href="/requirements/queue" class="text-green">{{ ready_to_baseline }} →</a>
+                ready to baseline: <a href="/requirements/queue" class="text-green">{{ ready_to_baseline }} →</a>
             </div>
             {% endif %}
         </div>

@@ -124,7 +124,7 @@ function showCommitScreen() {
     document.getElementById('queue-item-screen').style.display = 'none';
     document.getElementById('queue-commit-screen').style.display = 'block';
     document.getElementById('queue-staged-list').innerHTML = list.map(it =>
-        '<div>✓ <span class="text-green">' + escapeHtml(it.req_number) + '</span> rev ' + it.revision +
+        '<div><span class="text-green">' + escapeHtml(it.req_number) + '</span> rev ' + it.revision +
         ' — ' + escapeHtml(it.title) + '</div>').join('');
     document.getElementById('queue-sign-time').textContent =
         new Date().toISOString().substring(0, 19) + 'Z';

@@ -13,7 +13,7 @@
                 <tr class="rail-hold{% if h.disposition_state == 'undispositioned' %} rail-hold-active{% endif %}">
                     <td class="mono"><a href="/issues/{{ h.issue_id }}">{{ h.issue_number }}</a></td>
                     <td class="mono">{% if h.blocks %}→ blocks {{ h.blocks | join(', ') }}{% endif %}</td>
-                    <td class="mono rail-disp rail-disp-{{ h.disposition_state }}">{{ '⛔ UNDISPOSITIONED' if h.disposition_state == 'undispositioned' else h.disposition_state | upper }}</td>
+                    <td class="mono rail-disp rail-disp-{{ h.disposition_state }}">{{ h.disposition_state | upper }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

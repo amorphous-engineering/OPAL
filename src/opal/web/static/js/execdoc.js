@@ -6,8 +6,10 @@
  *   mutations only surface through the poll)
  * - in-place row/presence updates (spatial stability: rows swap, the
  *   document never reflows)
- * - claim / release / complete / skip / sign-off actions
- * - anomaly capture, evidence attach, lightbox, docked MY STEP bar
+ * - presence = focus: the cursor moves with arrows/j/k/click, is broadcast,
+ *   and records no event; complete / skip / sign-off / issue act on the
+ *   focused step from the docked bar
+ * - issue capture, evidence attach, lightbox, docked bar
  */
 
 /* global formatApiError, renderMarkdown, htmx */
@@ -142,22 +144,23 @@
         } catch (e) { console.error('execdoc: row refresh failed', e); }
     }
 
-    async function refreshMystep() {
+    async function refreshDockbar() {
         try {
-            const resp = await fetch(pageUrl('/mystep'));
+            const url = pageUrl('/dockbar') + (focusedOrder !== null ? `?step=${focusedOrder}` : '');
+            const resp = await fetch(url);
             if (!resp.ok) return;
             const html = await resp.text();
-            const node = document.getElementById('mystep');
+            const node = document.getElementById('dockbar');
             if (!node) return;
             const tpl = document.createElement('template');
             tpl.innerHTML = html.trim();
             const fresh = tpl.content.firstElementChild;
             if (fresh) node.replaceWith(fresh);
             document.body.classList.toggle(
-                'has-mystep',
-                !!document.querySelector('#mystep .mystep-bar')
+                'has-dockbar',
+                !!document.querySelector('#dockbar .dockbar')
             );
-        } catch (e) { console.error('execdoc: mystep refresh failed', e); }
+        } catch (e) { console.error('execdoc: dockbar refresh failed', e); }
     }
 
     async function refreshRail() {
@@ -179,12 +182,17 @@
     function stepSignature(s) {
         return JSON.stringify([
             s.status,
-            s.claim && s.claim.user_id,
-            s.claim && s.claim.stale,
+            s.cursors.map((c) => [c.user_id, c.stale]),
             s.holds.map((h) => h.issue_number + h.disposition_state),
             s.attachments,
             s.has_notes,
         ]);
+    }
+
+    // The bar refetches only when the focused step's commitment state moves —
+    // never on presence/evidence churn (half-entered field values survive).
+    function barSignature(s) {
+        return JSON.stringify([s.status, s.holds.map((h) => h.issue_number + h.disposition_state)]);
     }
 
     function applyState(state) {
@@ -201,7 +209,7 @@
             fill.style.width = `${(state.instance.progress.done / state.instance.progress.total) * 100}%`;
         }
 
-        renderRoster(state.roster);
+        renderPresence(state);
 
         // Step diffs → swap changed rows in place.
         if (prev) {
@@ -219,25 +227,18 @@
             const prevHoldsSig = JSON.stringify(prev.holds);
             const prevAttachSig = JSON.stringify(prev.steps.map((s) => s.attachments));
             if (holdsSig !== prevHoldsSig || attachSig !== prevAttachSig) refreshRail();
+
+            // The focused step's commitment state moved remotely → refetch bar.
+            if (focusedOrder !== null) {
+                const prevFocused = prev.steps.find((s) => s.order === focusedOrder);
+                const liveFocused = state.steps.find((s) => s.order === focusedOrder);
+                if (prevFocused && liveFocused
+                    && barSignature(prevFocused) !== barSignature(liveFocused)) {
+                    refreshDockbar();
+                }
+            }
         } else {
             updateOpProgress(state);
-        }
-
-        // My claim moved (claimed elsewhere / completed / force-released).
-        const myId = window.OPAL_USER_ID;
-        const mine = state.steps.find((s) => s.claim && s.claim.user_id === myId);
-        const barNode = document.getElementById('mystep');
-        const barOrder = barNode ? barNode.dataset.claimOrder : '';
-        const liveOrder = mine ? String(mine.order) : '';
-        if (barOrder !== liveOrder) refreshMystep();
-
-        // Observer join/leave buttons.
-        const joinBtn = document.getElementById('join-btn');
-        const leaveBtn = document.getElementById('leave-btn');
-        if (joinBtn && leaveBtn) {
-            const present = state.roster.some((r) => r.user_id === myId);
-            joinBtn.hidden = present;
-            leaveBtn.hidden = !present || !!mine; // claimants leave by releasing
         }
     }
 
@@ -257,7 +258,13 @@
             if (!el) continue;
             const bucket = leavesByParent[s.order] || { done: ['completed', 'signed_off', 'skipped'].includes(s.status) ? 1 : 0, total: 1 };
             const done = ['completed', 'signed_off', 'skipped'].includes(s.status);
-            el.textContent = `${bucket.done}/${bucket.total}${done ? ' ✓' : ''}`;
+            el.textContent = `${bucket.done}/${bucket.total}`;
+            el.classList.toggle('is-done', done);
+            const mini = document.querySelector(`[data-minimap-op="${s.order}"] [data-minimap-prog]`);
+            if (mini) {
+                mini.textContent = `${bucket.done}/${bucket.total}`;
+                mini.classList.toggle('is-done', done);
+            }
         }
     }
 
@@ -266,31 +273,71 @@
         return Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
     }
 
-    function renderRoster(roster) {
-        const container = document.querySelector('[data-roster]');
-        if (!container) return;
+    function rosterRow(r, myId) {
+        const row = document.createElement('div');
+        row.className = 'roster-row mono'
+            + (r.stale ? ' is-stale' : '')
+            + (r.user_id === myId ? ' is-self' : '');
+        let label = r.name || r.initials || '?';
+        if (r.step_number) label += ` @${r.step_number}`;
+        row.textContent = label;
+        if (r.step_order !== null && r.step_order !== undefined) {
+            row.onclick = () => jumpToStep(r.step_order);
+        }
+        return row;
+    }
+
+    function renderPresence(state) {
         const myId = window.OPAL_USER_ID;
-        container.innerHTML = '';
-        for (const r of roster) {
-            const chip = document.createElement('span');
-            chip.className = 'roster-chip mono'
-                + (r.stale ? ' is-stale' : '')
-                + (r.observer ? ' is-observer' : '')
-                + (r.user_id === myId ? ' is-self' : '');
-            let label = r.initials || '?';
-            if (r.step_number) {
-                label += ` @${r.step_number}`;
-                const mins = minutesSince(r.claimed_at);
-                if (mins >= 5) label += ` · ${mins}m`;
+        const roster = state.roster;
+        const online = roster.filter((r) => !r.stale).length;
+
+        const counter = document.querySelector('[data-online]');
+        if (counter) counter.textContent = `${online} ONLINE`;
+
+        const pop = document.getElementById('exec-roster-pop');
+        if (pop) {
+            pop.innerHTML = '';
+            for (const r of roster) pop.appendChild(rosterRow(r, myId));
+        }
+
+        const railRoster = document.querySelector('[data-rail-roster]');
+        if (railRoster) {
+            railRoster.innerHTML = '';
+            if (!roster.length) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-line mono';
+                empty.textContent = 'Online — none';
+                railRoster.appendChild(empty);
+            } else {
+                for (const r of roster) railRoster.appendChild(rosterRow(r, myId));
             }
-            chip.textContent = label;
-            chip.title = (r.name || '') + (r.observer ? ' — observing' : '');
-            if (r.step_order !== null && r.step_order !== undefined) {
-                chip.onclick = () => jumpToStep(r.step_order);
+        }
+
+        // Per-step cursor chips in the right gutter.
+        for (const s of state.steps) {
+            const row = document.getElementById(`step-${s.order}`);
+            if (!row) continue;
+            const slot = row.querySelector('[data-cursors]');
+            if (!slot) continue;
+            slot.innerHTML = '';
+            for (const c of s.cursors) {
+                const chip = document.createElement('span');
+                chip.className = 'cursor-chip mono'
+                    + (c.user_id === myId ? ' is-self' : '')
+                    + (c.stale ? ' is-stale' : '');
+                chip.textContent = c.initials || '?';
+                chip.title = c.name || '';
+                slot.appendChild(chip);
             }
-            container.appendChild(chip);
         }
     }
+
+    window.toggleRosterPop = function (event) {
+        event.stopPropagation();
+        const pop = document.getElementById('exec-roster-pop');
+        if (pop) pop.hidden = !pop.hidden;
+    };
 
     async function pollState() {
         try {
@@ -336,38 +383,70 @@
         }
     };
 
+    // ---------- focus (presence) ----------
+
+    let focusedOrder = null;
+    let focusPostTimer = null;
+
+    function focusableRows() {
+        return Array.from(document.querySelectorAll('#exec-doc .doc-step[data-order]'));
+    }
+
+    function postFocus(order) {
+        clearTimeout(focusPostTimer);
+        focusPostTimer = setTimeout(async () => {
+            try {
+                await fetch(apiUrl('/focus'), {
+                    method: 'POST', headers: getHeaders(),
+                    body: JSON.stringify({ step_number: order }),
+                });
+            } catch (e) { /* presence is best-effort; the next move retries */ }
+        }, 250);
+    }
+
+    function setFocus(order, opts = {}) {
+        const row = document.getElementById(`step-${order}`);
+        if (!row) return;
+        if (focusedOrder !== null && focusedOrder !== order) {
+            const prevRow = document.getElementById(`step-${focusedOrder}`);
+            if (prevRow) prevRow.classList.remove('is-focused');
+        }
+        const moved = focusedOrder !== order;
+        focusedOrder = order;
+        row.classList.add('is-focused');
+        const card = row.closest('.op-card');
+        if (card && card.classList.contains('is-collapsed')) setOpExpanded(card, true, false);
+        if (opts.scroll) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (moved || opts.force) {
+            refreshDockbar();
+            if (opts.post !== false) postFocus(order);
+        }
+    }
+
+    window.onStepRowClick = function (order) {
+        setFocus(order);
+        toggleStepBody(order);
+    };
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) return;
+        if (document.querySelector('.execdoc-modal:not([hidden])')) return;
+        const down = e.key === 'j' || e.key === 'ArrowDown';
+        const up = e.key === 'k' || e.key === 'ArrowUp';
+        if (!down && !up) return;
+        e.preventDefault();
+        const rows = focusableRows();
+        if (!rows.length) return;
+        let idx = rows.findIndex((r) => parseInt(r.dataset.order) === focusedOrder);
+        if (idx === -1) idx = down ? -1 : rows.length;
+        idx = Math.min(rows.length - 1, Math.max(0, idx + (down ? 1 : -1)));
+        setFocus(parseInt(rows[idx].dataset.order), { scroll: true });
+    });
+
     // ---------- step actions ----------
 
-    window.startStep = async function (order) {
-        try {
-            const resp = await fetch(apiUrl(`/steps/${order}/start`), { method: 'POST', headers: getHeaders() });
-            if (resp.ok) {
-                await refreshMystep();
-                await refreshStepRow(order);
-                pollNow();
-            } else {
-                const err = await resp.json();
-                toastError(err.detail, 'Failed to start step');
-            }
-        } catch (e) { toastError(null, 'Network error'); }
-    };
-
-    window.releaseStep = async function (order) {
-        try {
-            const resp = await fetch(apiUrl(`/steps/${order}/release`), { method: 'POST', headers: getHeaders() });
-            if (resp.ok) {
-                await refreshMystep();
-                await refreshStepRow(order);
-                pollNow();
-            } else {
-                const err = await resp.json();
-                toastError(err.detail, 'Failed to release step');
-            }
-        } catch (e) { toastError(null, 'Network error'); }
-    };
-
     function collectBarData() {
-        const bar = document.getElementById('mystep-fields');
+        const bar = document.getElementById('dockbar-fields');
         if (!bar) return { data: null, errors: [] };
         const fields = bar.querySelectorAll('[data-capture-field]');
         if (!fields.length) return { data: null, errors: [] };
@@ -404,15 +483,15 @@
 
     window.completeStep = async function (order) {
         const body = {};
-        const bar = document.getElementById('mystep');
-        if (bar && bar.dataset.claimOrder === String(order)) {
+        const bar = document.getElementById('dockbar');
+        if (bar && bar.dataset.barOrder === String(order)) {
             const { data, errors } = collectBarData();
             if (errors.length) {
                 toastError(errors, 'Cannot complete');
                 return;
             }
             if (data) body.data_captured = data;
-            const notesEl = document.querySelector('#mystep .step-notes-input');
+            const notesEl = document.querySelector('#dockbar .step-notes-input');
             if (notesEl && notesEl.value.trim()) body.notes = notesEl.value.trim();
         }
         try {
@@ -420,7 +499,7 @@
                 method: 'POST', headers: getHeaders(), body: JSON.stringify(body),
             });
             if (resp.ok) {
-                await refreshMystep();
+                await refreshDockbar({ force: true });
                 await refreshStepRow(order);
                 pollNow();
             } else {
@@ -434,6 +513,7 @@
         try {
             const resp = await fetch(apiUrl(`/steps/${order}/signoff`), { method: 'POST', headers: getHeaders() });
             if (resp.ok) {
+                await refreshDockbar();
                 await refreshStepRow(order);
                 pollNow();
             } else {
@@ -467,19 +547,15 @@
         } catch (e) { toastError(null, 'Network error'); }
     };
 
-    window.joinExecution = async function () {
-        try {
-            const resp = await fetch(apiUrl('/join'), { method: 'POST', headers: getHeaders() });
-            if (resp.ok) pollNow();
-        } catch (e) { toastError(null, 'Network error'); }
-    };
+    async function ensureJoined() {
+        // Opening the document is presence — no JOIN ceremony.
+        try { await fetch(apiUrl('/join'), { method: 'POST', headers: getHeaders() }); }
+        catch (e) { /* presence is best-effort */ }
+    }
 
-    window.leaveExecution = async function () {
-        try {
-            await fetch(apiUrl('/leave'), { method: 'POST', headers: getHeaders() });
-            pollNow();
-        } catch (e) { /* leaving is best-effort */ }
-    };
+    window.addEventListener('pagehide', () => {
+        navigator.sendBeacon(apiUrl('/leave'));
+    });
 
     // ---------- meta popover ----------
 
@@ -496,9 +572,9 @@
         }
     });
 
-    // ---------- anomaly capture ----------
+    // ---------- issue capture ----------
 
-    window.showAnomalyModal = function (order, label) {
+    window.showIssueModal = function (order, label) {
         document.getElementById('anomaly-step').value = order;
         document.getElementById('anomaly-step-label').textContent = `at ${label}`;
         document.getElementById('anomaly-form').reset();
@@ -511,6 +587,7 @@
     window.hideAnomalyModal = function () {
         document.getElementById('anomaly-modal').hidden = true;
     };
+    window.showAnomalyModal = window.showIssueModal;
 
     window.submitAnomaly = async function (event) {
         event.preventDefault();
@@ -533,7 +610,7 @@
             });
             if (!resp.ok) {
                 const err = await resp.json();
-                errorDiv.textContent = formatApiError(err.detail, 'Failed to raise anomaly');
+                errorDiv.textContent = formatApiError(err.detail, 'Failed to raise issue');
                 errorDiv.hidden = false;
                 return;
             }
@@ -1005,6 +1082,24 @@
 
     // ---------- wiring ----------
 
+    window.toggleDockbarMenu = function (event) {
+        event.stopPropagation();
+        const menu = document.getElementById('dockbar-menu');
+        if (menu) menu.hidden = !menu.hidden;
+    };
+
+    window.hideDockbarMenu = function () {
+        const menu = document.getElementById('dockbar-menu');
+        if (menu) menu.hidden = true;
+    };
+
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('dockbar-menu');
+        if (menu && !menu.hidden && !menu.contains(e.target)) menu.hidden = true;
+        const pop = document.getElementById('exec-roster-pop');
+        if (pop && !pop.hidden && !pop.contains(e.target)) pop.hidden = true;
+    });
+
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             window.hideAnomalyModal();
@@ -1012,8 +1107,11 @@
             window.hideAttachModal();
             window.hideRedlineModal();
             window.closeLightbox();
+            window.hideDockbarMenu();
             const pop = document.getElementById('exec-meta-popover');
             if (pop) pop.hidden = true;
+            const roster = document.getElementById('exec-roster-pop');
+            if (roster) roster.hidden = true;
         }
     });
 
@@ -1022,19 +1120,35 @@
         loadKitAvailability();
         loadStepKitAvailability();
         document.body.classList.toggle(
-            'has-mystep',
-            !!document.querySelector('#mystep .mystep-bar')
+            'has-dockbar',
+            !!document.querySelector('#dockbar .dockbar')
         );
-        if (lastState) renderRoster(lastState.roster);
+        if (lastState) renderPresence(lastState);
+
+        // Place the cursor: the server already resolved my cursor or the
+        // first actionable row into the bar — adopt it locally.
+        const bar = document.getElementById('dockbar');
+        const initial = cfg.myCursorOrder !== null && cfg.myCursorOrder !== undefined
+            ? cfg.myCursorOrder
+            : (bar && bar.dataset.barOrder ? parseInt(bar.dataset.barOrder) : null);
+        if (initial !== null && focusedOrder === null) {
+            const row = document.getElementById(`step-${initial}`);
+            if (row) {
+                focusedOrder = initial;
+                row.classList.add('is-focused');
+                postFocus(initial);
+            }
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         initExecDoc();
+        ensureJoined();
         startPolling();
 
         // SSE accelerates the poll; the poll remains the source of truth.
         if (window.opalEvents) {
-            ['step_started', 'step_completed', 'user_joined', 'user_left'].forEach((type) => {
+            ['cursor_moved', 'step_completed', 'user_joined', 'user_left'].forEach((type) => {
                 window.opalEvents.on(type, (data) => {
                     if (data && data.instance_id === instanceId) pollNow();
                 });

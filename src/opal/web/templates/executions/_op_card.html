@@ -17,21 +17,16 @@
         <span class="op-card-num mono">OP {{ op.step_number }}</span>
         <span class="op-card-title">{{ op.title }}</span>
         {% if op.is_contingency %}{{ ok.status("CONTINGENCY", "warn") }}{% endif %}
-        {% if op_vs.get('strict_sequence') %}<span class="role-chip mono" title="Sub-steps start in order">SEQ</span>{% endif %}
+        {% if op_vs.get('strict_sequence') %}<span class="role-chip mono" title="Sub-steps complete in order">SEQ</span>{% endif %}
         {{ ex.role_chip(op_vs.get('required_role')) }}
-        {% if op_vs.get('caution') %}<span class="mono text-red" title="{{ op_vs.get('caution') }}">⚠</span>{% endif %}
+        {% if op_vs.get('caution') %}<span class="role-chip mono op-caution-chip" title="{{ op_vs.get('caution') }}">CAUTION</span>{% endif %}
         <span class="op-card-spacer"></span>
-        <span class="op-card-progress mono" data-op-progress>{{ op_data.completed_steps }}/{{ op_data.total_steps }}{% if op_terminal %} ✓{% endif %}</span>
+        <span class="op-card-progress mono{% if op_terminal %} is-done{% endif %}" data-op-progress>{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
         {% if inst_status in ['cut', 'in_work'] %}
             {% if op_holds %}
-            <span class="op-card-blockline mono text-yellow" title="OP COMPLETE is held until disposition">⛔ {% for i in op_holds %}<a href="/issues/{{ i.id }}" onclick="event.stopPropagation()">{{ i.issue_number }}</a>{% if not loop.last %} {% endif %}{% endfor %}</span>
+            <span class="op-card-blockline mono text-yellow" title="OP COMPLETE is held until disposition">HELD BY {% for i in op_holds %}<a href="/issues/{{ i.id }}" onclick="event.stopPropagation()">{{ i.issue_number }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</span>
             {% elif op_gated %}
             <span class="op-card-blockline mono text-yellow">WAITING ON OP {{ op_gated | join(', ') }}</span>
-            {% elif op.status in ['awaiting_signoff', 'in_progress'] and op_data.sub_steps %}
-            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); completeStep({{ op.order }})">COMPLETE</button>
-            {% endif %}
-            {% if not op_data.is_ad_hoc and op_open_ncs_by_order and op_open_ncs_by_order.get(op.order) %}
-            <button class="btn btn-sm op-redline-btn" onclick='event.stopPropagation(); showRedlineModal({{ op.order }}, {{ op.step_number | tojson }}, {{ (op_open_ncs_by_order.get(op.order) or []) | map(attribute="id") | list | tojson }}, {{ (op_open_ncs_by_order.get(op.order) or []) | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
             {% endif %}
         {% endif %}
     </header>

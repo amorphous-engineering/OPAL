@@ -2539,12 +2539,16 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
         "title": row["title"],
         "status": row["status"],
         "is_op": is_op,
+        "has_children": is_op and bool(op_data["sub_steps"]),
         "schema": row.get("required_data_schema") or vs.get("required_data_schema"),
         "caution": vs.get("caution"),
         "op_order": op_data["step"]["order"],
+        "op_number": op_data["step"]["step_number"],
+        "op_is_ad_hoc": bool(op_data.get("is_ad_hoc")),
         "op_open_ncs": (context.get("op_open_ncs_by_order") or {}).get(
             op_data["step"]["order"], []
         ),
+        "step_kit": vs.get("step_kit") or [],
     }
 
 

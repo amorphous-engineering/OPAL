@@ -41,7 +41,7 @@ def test_register_columns_no_id_column(web_client):
         assert column in page.text
     # No ID column; the bulk review stamp is in the header
     assert ">ID<" not in page.text
-    assert "REVIEWED ✓" in page.text
+    assert "REVIEWED" in page.text
     assert "stampReviewed()" in page.text
 
     rows = web_client.get("/risks/table")

@@ -25,22 +25,21 @@
     <span class="exec-head-progress mono" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span>
     <span class="exec-progressbar"><span class="exec-progressbar-fill" data-progress-fill
         style="width: {{ (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 }}%"></span></span>
-    <span class="exec-roster" data-roster></span>
+    <span class="exec-online mono" data-online onclick="toggleRosterPop(event)">0 ONLINE</span>
     <span class="exec-head-spacer"></span>
     <span class="exec-head-actions">
-        {% if inst_status in ['cut', 'in_work'] %}
-        <button class="btn btn-sm" id="join-btn" onclick="joinExecution()" hidden>JOIN</button>
-        <button class="btn btn-sm" id="leave-btn" onclick="leaveExecution()" hidden>LEAVE</button>
-        {% endif %}
         {% if inst_status == 'completed' %}
         {{ ok.btn("REPORT", href="/executions/" ~ instance.id ~ "/report", size="sm", attrs='target="_blank" rel="noopener"') }}
         {% endif %}
         {% if inst_status in ['cut', 'in_work'] %}
         <button class="btn btn-sm btn-danger" onclick="abortExecution()">ABORT</button>
         {% endif %}
-        <button class="btn btn-sm" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">⋯</button>
+        <button class="btn btn-sm" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">···</button>
     </span>
 </div>
+
+{# Roster popover — the only roster when the rails are hidden. #}
+<div class="exec-roster-pop part-readout mono" id="exec-roster-pop" hidden></div>
 
 {# Compact meta readout — every fact the META tab held. #}
 <div class="exec-meta-popover part-readout mono" id="exec-meta-popover" hidden>
@@ -86,17 +85,17 @@
     {% include 'executions/tabs/' ~ tab ~ '.html' %}
 </div>
 
-{# Docked MY STEP bar — present only while the session user holds a claim. #}
-{% include 'executions/_mystep.html' %}
+{# Docked bar — all controls for the focused step. #}
+{% include 'executions/_dockbar.html' %}
 
 {# ============ Modals ============ #}
 
-<!-- Anomaly capture (the ANOMALY flow — creates an NC with containment) -->
+<!-- Issue capture (creates an NC with containment) -->
 <div id="anomaly-modal" class="execdoc-modal" hidden>
     <div class="execdoc-modal-box">
         <div class="panel">
             <div class="panel-header">
-                <span>ANOMALY</span>
+                <span>ISSUE</span>
                 <span class="mono text-muted" id="anomaly-step-label"></span>
             </div>
             <div class="panel-body">
@@ -135,7 +134,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="anomaly-blocks">BLOCKS START AT</label>
+                        <label class="form-label" for="anomaly-blocks">HOLDS COMPLETE AT</label>
                         <select id="anomaly-blocks" class="form-select" multiple size="4">
                             {% for op_data in ops %}{% for sub in (op_data.sub_steps or [op_data.step]) %}{% if sub.status == 'pending' %}
                             <option value="{{ sub.order }}">{{ sub.step_number if '.' in sub.step_number else (op_data.step.step_number ~ ('.' ~ sub.step_number if sub.order != op_data.step.order else '')) }} {{ sub.title }}</option>
@@ -266,6 +265,7 @@ window.OPAL_EXEC = {
     instanceId: {{ instance.id }},
     workOrder: {{ (instance.work_order_number or '') | tojson }},
     status: {{ inst_status | tojson }},
+    myCursorOrder: {{ my_cursor_order if my_cursor_order is not none else 'null' }},
 };
 </script>
 <script src="{{ static_url('js/execdoc.js') }}"></script>

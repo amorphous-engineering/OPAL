@@ -34,6 +34,7 @@ from opal.core.execution_flow import (
     held_scope_blockers,
     mark_instance_in_work,
     maybe_resume_step_after_nc_update,
+    touch_user_presence,
 )
 from opal.core.genealogy import record_assembly_genealogy
 from opal.core.part_lifecycle import ensure_parts_active
@@ -612,6 +613,7 @@ async def move_focus(
     if not user:
         raise HTTPException(status_code=401, detail="Unknown user")
 
+    user.last_seen_at = datetime.now(UTC)
     focus = focus_step(db, instance, step_exec, user)
     db.commit()
 
@@ -627,15 +629,17 @@ async def move_focus(
 def get_execution_state(
     instance_id: int,
     db: DbSession,
+    user_id: CurrentUserId,
 ) -> dict:
     """Full document state: steps, presence, holds — the controller's view.
 
     Polled by the execution document every 5s; identical payload to the MCP
-    get_execution_state tool.
+    get_execution_state tool. The poll doubles as the presence heartbeat.
     """
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
+    touch_user_presence(db, user_id)
     return build_execution_state(db, instance)
 
 
