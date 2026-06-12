@@ -1,0 +1,101 @@
+{% import 'opalkit/_macros.html' as ok %}
+{# DESIGN — requirements and tests (always relevant). A populated section
+   is a panel + headed table; an empty one is one line. Emptiness is
+   information only where content is expected. #}
+
+{# --- Requirements --- #}
+{% set req_rows = part_requirements | selectattr('req') | list %}
+{% set tbd_count = req_rows | selectattr('req.tbd') | list | length %}
+{% set tbr_count = req_rows | selectattr('req.tbr') | list | length %}
+{% set stale_count = req_rows | selectattr('req.stale') | list | length %}
+{% if part_requirements %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>REQUIREMENTS</span>
+        <span class="header-count">
+            {{- part_requirements | length -}}
+            {%- if tbd_count %} <span class="ledger-flag">· {{ tbd_count }} TBD</span>{% endif -%}
+            {%- if tbr_count %} <span class="ledger-flag">· {{ tbr_count }} TBR</span>{% endif -%}
+            {%- if stale_count %} <span class="ledger-flag">· {{ stale_count }} STALE</span>{% endif -%}
+        </span>
+        <div class="panel-header-actions">
+            <a class="ledger-add" href="#" onclick="showAssignRequirement(); return false;">+ ADD</a>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("REQ", width="110px") }}
+                {{ ok.th("STATE", width="100px") }}
+                {{ ok.th("TITLE") }}
+                {{ ok.th("ALLOCATION", width="120px") }}
+                {{ ok.th("", width="40px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in part_requirements %}
+            {% set r = row.req %}
+            {% set a = row.allocation %}
+            <tr>
+                {% if r %}
+                <td><a href="/requirements/{{ r.id }}">{{ r.req_number }}</a></td>
+                <td class="text-muted">{{ r.lifecycle_state | upper }}</td>
+                <td>{{ r.title }}
+                    {%- if r.tbd %} <span class="ledger-flag">TBD</span>{% endif %}
+                    {%- if r.tbr %} <span class="ledger-flag">TBR</span>{% endif %}
+                    {%- if r.stale %} <span class="ledger-flag">≠ STALE</span>{% endif %}</td>
+                {% else %}
+                <td>{{ a.requirement_id }}</td>
+                <td class="text-muted">—</td>
+                <td class="text-muted">—</td>
+                {% endif %}
+                <td class="text-muted">{{ a.status | upper | replace('_', ' ') }}</td>
+                <td class="row-actions"><a href="#" class="act-remove" title="UNASSIGN" onclick="unassignRequirement({{ a.id }}); return false;">×</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ ok.empty_line("REQUIREMENTS", onclick="showAssignRequirement()") }}
+{% endif %}
+<div id="assign-req-row" class="inline-add-row">
+    <input type="text" id="assign-req-number" class="form-input mono" style="width: 160px;"
+           placeholder="REQ-0007" onkeydown="if(event.key==='Enter')assignRequirement()">
+    {{ ok.btn("ASSIGN", variant="primary", size="sm", attrs='onclick="assignRequirement()"') }}
+</div>
+
+{# --- Test templates --- #}
+{% if test_templates %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>TESTS</span>
+        <span class="header-count">{{ test_templates | length }}</span>
+        <div class="panel-header-actions">
+            <a class="ledger-add" href="#" onclick="showAddTest(); return false;">+ ADD</a>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("NAME") }}
+                {{ ok.th("TYPE", width="120px") }}
+                {{ ok.th("RANGE", width="140px") }}
+                {{ ok.th("", width="40px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for tt in test_templates %}
+            <tr>
+                <td>{{ tt.name }}</td>
+                <td class="text-muted">{{ tt.test_type | upper }}{% if tt.required %} · REQ{% endif %}</td>
+                <td class="text-muted">{% if tt.test_type == 'numeric' %}{{ '%g' % tt.min_value if tt.min_value is not none else '' }}–{{ '%g' % tt.max_value if tt.max_value is not none else '' }}{{ ' ' ~ tt.unit if tt.unit else '' }}{% else %}—{% endif %}</td>
+                <td class="row-actions"><a href="#" class="act-remove" title="REMOVE" onclick="deleteTestTemplate({{ tt.id }}); return false;">×</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ ok.empty_line("TESTS", onclick="showAddTest()") }}
+{% endif %}

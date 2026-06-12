@@ -35,7 +35,7 @@
             </tbody>
         </table>
         {% else %}
-        {{ ok.empty_line("Issues", "+ new issue", href="/issues/new?procedure_instance_id=" ~ instance.id) }}
+        {{ ok.empty_line("Issues", href="/issues/new?procedure_instance_id=" ~ instance.id) }}
         {% endif %}
     </div>
 </div>

@@ -87,7 +87,7 @@
             {% endif %}
         </div>
         {% else %}
-        {{ ok.empty_line("Attachments", "attach", onclick="showAttachModal(null, 'WO')") }}
+        {{ ok.empty_line("Attachments", onclick="showAttachModal(null, 'WO')") }}
         {% endif %}
         {% if (capture_attachments or wo_attachments) and inst_status in ['cut', 'in_work', 'completed'] %}
         <div class="rail-attach-add">

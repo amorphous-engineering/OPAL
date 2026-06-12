@@ -56,6 +56,7 @@ def export_parts_csv(
             "Category",
             "Description",
             "Unit",
+            "Procurement",
             "Total Quantity",
             "Locations",
         ]
@@ -80,6 +81,7 @@ def export_parts_csv(
                 part.category or "",
                 (part.description or "")[:100],
                 part.unit_of_measure or "",
+                part.procurement.value if hasattr(part.procurement, "value") else part.procurement,
                 total_qty,
                 locations,
             ]

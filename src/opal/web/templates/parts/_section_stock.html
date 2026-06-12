@@ -1,0 +1,281 @@
+{% import 'opalkit/_macros.html' as ok %}
+{# STOCK & USE — composition, stock, purchasing, suppliers, usage, and the
+   consumption log (last: it is the one unbounded section). Relevance is
+   declared by procurement: BOM expects content on make|both, SUPPLIERS and
+   PO LINES on buy|both; the rest always. An irrelevant empty section is
+   absent; DATA WINS — any section with rows renders regardless. An empty
+   relevant section is one line. #}
+{% set bom_relevant = part.procurement in ('make', 'both') %}
+{% set buy_relevant = part.procurement in ('buy', 'both') %}
+
+{# --- BOM --- #}
+{% if bom_lines %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>BOM</span>
+        <span class="header-count">{{ bom_lines | length }}</span>
+        <div class="panel-header-actions">
+            <a class="ledger-add" href="#" onclick="showAddComponent(); return false;">+ ADD</a>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("PN", width="130px") }}
+                {{ ok.th("NAME") }}
+                {{ ok.th("QTY", width="60px", align="right") }}
+                {{ ok.th("REFDES", width="90px") }}
+                {{ ok.th("NOTES") }}
+                {{ ok.th("", width="64px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in bom_lines %}
+            <tr>
+                <td><a href="/parts/{{ line.component.id }}">{{ line.component.internal_pn }}</a></td>
+                <td>{{ line.component.name }}</td>
+                <td style="text-align: right;">{{ line.quantity }}</td>
+                <td class="text-muted">{{ line.reference_designator or '—' }}</td>
+                <td class="text-muted">{{ line.notes or '—' }}</td>
+                <td class="row-actions">
+                    <a href="#" onclick="editBomLine({{ line.id }}, {{ line.quantity }}, '{{ (line.reference_designator or '') | replace("'", "\\'") }}', '{{ (line.notes or '') | replace("'", "\\'") }}'); return false;">EDIT</a>
+                    <a href="#" class="act-remove" title="REMOVE" onclick="deleteBomLine({{ line.id }}); return false;">×</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {# Tree renders only when it carries depth the direct lines don't #}
+    <div id="bom-tree" class="bom-tree" style="display: none;"></div>
+</div>
+{% elif bom_relevant %}
+{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
+{% endif %}
+
+{# --- Stock — always relevant; the on-hand figure is the section's value;
+   LOW derives from the reorder point as on the parts list #}
+{% set on_hand = part.total_quantity or 0 %}
+{% set stock_low = part.reorder_point is not none and on_hand < part.reorder_point %}
+{% if inventory_records %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>STOCK</span>
+        <span class="header-count">
+            <span class="stock-figure">{{ '%g' % on_hand }} {{ (part.unit_of_measure or 'EA') | upper }}</span>
+            · {{ inventory_records | length }} REC
+            {%- if stock_low %} <span class="ledger-flag">· LOW</span>{% endif %}
+        </span>
+        <div class="panel-header-actions">
+            <a class="ledger-add" href="#" onclick="toggleReceiveStock(); return false;">+ ADD</a>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("OPAL #", width="120px") }}
+                {{ ok.th("LOCATION") }}
+                {{ ok.th("QTY", width="70px", align="right") }}
+                {{ ok.th("LOT", width="140px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for inv in inventory_records %}
+            <tr>
+                <td><a href="/inventory/opal/{{ inv.opal_number }}">{{ inv.opal_number }}</a></td>
+                <td>{{ inv.location or '—' }}</td>
+                <td style="text-align: right;">{{ '%g' % inv.quantity }}</td>
+                <td class="text-muted">{{ inv.lot_number or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ ok.empty_line("STOCK", onclick="toggleReceiveStock()", flag="LOW" if stock_low else none) }}
+{% endif %}
+<div id="receive-stock-row" class="inline-add-row">
+    <input type="number" id="rs-qty" class="form-input mono" style="width: 90px;" placeholder="QTY" step="any" min="0">
+    <input type="text" id="rs-location" class="form-input mono" style="width: 130px;" placeholder="LOCATION" onkeydown="if(event.key==='Enter')submitReceiveStock()">
+    <input type="text" id="rs-lot" class="form-input mono" style="width: 140px;" placeholder="LOT" onkeydown="if(event.key==='Enter')submitReceiveStock()">
+    {{ ok.btn("RECEIVE", variant="primary", size="sm", attrs='onclick="submitReceiveStock()"') }}
+    <a href="/inventory/new?part_id={{ part.id }}" class="ledger-add">FULL RECORD</a>
+    <span id="rs-error" class="text-red" style="display: none;"></span>
+</div>
+
+{# --- Open PO lines --- #}
+{% if open_po_lines %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>PO LINES</span>
+        <span class="header-count">{{ open_po_lines | length }}</span>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("PO", width="120px") }}
+                {{ ok.th("STATUS") }}
+                {{ ok.th("RECEIVED", width="100px", align="right") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in open_po_lines %}
+            <tr>
+                <td><a href="/purchases/{{ line.purchase_id }}">{{ line.purchase.reference or 'PO-' ~ line.purchase_id }}</a></td>
+                <td class="text-muted">{{ (line.purchase.status.value if line.purchase.status.value is defined else line.purchase.status) | upper }}</td>
+                <td style="text-align: right;">{{ '%g' % line.qty_received }}/{{ '%g' % line.qty_ordered }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif buy_relevant %}
+{{ ok.empty_line("PO LINES") }}
+{% endif %}
+
+{# --- Suppliers --- #}
+{% if supplier_entries %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>SUPPLIERS</span>
+        <span class="header-count">{{ supplier_entries | length }}</span>
+        <div class="panel-header-actions">
+            <a class="ledger-add" href="#" onclick="showAddSupplier(); return false;">+ ADD</a>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("SUPPLIER") }}
+                {{ ok.th("VENDOR PN", width="140px") }}
+                {{ ok.th("PREFERRED", width="100px") }}
+                {{ ok.th("", width="40px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in supplier_entries %}
+            <tr>
+                <td><a href="/suppliers/{{ entry.supplier_id }}">{{ entry.supplier.name }}</a></td>
+                <td>{{ entry.vendor_pn }}</td>
+                <td class="text-muted">{{ 'YES' if entry.is_preferred else '—' }}</td>
+                <td class="row-actions"><a href="#" class="act-remove" title="UNLINK" onclick="deleteSupplierEntry({{ entry.id }}, {{ entry.supplier_id }}); return false;">×</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif buy_relevant %}
+{{ ok.empty_line("SUPPLIERS", onclick="showAddSupplier()") }}
+{% endif %}
+
+{# --- Where used --- #}
+{% if where_used %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>WHERE USED</span>
+        <span class="header-count">{{ where_used | length }}</span>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("PN", width="130px") }}
+                {{ ok.th("NAME") }}
+                {{ ok.th("QTY", width="60px", align="right") }}
+                {{ ok.th("REFDES", width="90px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in where_used %}
+            <tr>
+                <td><a href="/parts/{{ line.assembly.id }}">{{ line.assembly.internal_pn }}</a></td>
+                <td>{{ line.assembly.name }}</td>
+                <td style="text-align: right;">{{ line.quantity }}</td>
+                <td class="text-muted">{{ line.reference_designator or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ ok.empty_line("WHERE USED") }}
+{% endif %}
+
+{# --- Procedure usage (kits reference the design, not the stock) --- #}
+{% if kit_usages or step_kit_usages %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>PROCEDURE USE</span>
+        <span class="header-count">{{ (kit_usages | length) + (step_kit_usages | length) }}</span>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("PROCEDURE") }}
+                {{ ok.th("STEP", width="60px", align="right") }}
+                {{ ok.th("QTY", width="60px", align="right") }}
+                {{ ok.th("USAGE", width="100px") }}
+                {{ ok.th("STATUS", width="110px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for kit in kit_usages %}
+            <tr>
+                <td><a href="/procedures/{{ kit.procedure.id }}">{{ kit.procedure.name }}</a></td>
+                <td class="text-muted" style="text-align: right;">—</td>
+                <td style="text-align: right;">{{ '%g' % kit.quantity_required }}</td>
+                <td class="text-muted">—</td>
+                <td class="text-muted">{{ (kit.procedure.status.value if kit.procedure.status.value is defined else kit.procedure.status) | upper }}</td>
+            </tr>
+            {% endfor %}
+            {% for sk in step_kit_usages %}
+            <tr>
+                <td><a href="/procedures/{{ sk.step.procedure.id }}">{{ sk.step.procedure.name }}</a></td>
+                <td style="text-align: right;">{{ sk.step.step_number }}</td>
+                <td style="text-align: right;">{{ '%g' % sk.quantity_required }}</td>
+                <td class="text-muted">{{ (sk.usage_type.value if sk.usage_type.value is defined else sk.usage_type) | upper }}</td>
+                <td class="text-muted">{{ (sk.step.procedure.status.value if sk.step.procedure.status.value is defined else sk.step.procedure.status) | upper }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ ok.empty_line("PROCEDURE USE") }}
+{% endif %}
+
+{# --- Consumption history --- #}
+{% if consumption_history %}
+<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>CONSUMED</span>
+        <span class="header-count">{{ consumption_history | length }}{{ '+' if consumption_history | length == 50 }}</span>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("DATE", width="110px") }}
+                {{ ok.th("QTY", width="60px", align="right") }}
+                {{ ok.th("SOURCE", width="140px") }}
+                {{ ok.th("NOTES") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in consumption_history %}
+            <tr>
+                <td title="{{ c.created_at.isoformat() }}">{{ c.created_at.date().isoformat() }}</td>
+                <td style="text-align: right;">{{ '%g' % c.quantity }}</td>
+                <td>
+                    {% if c.procedure_instance_id %}
+                    <a href="/executions/{{ c.procedure_instance_id }}">{{ c.procedure_instance.work_order_number if c.procedure_instance and c.procedure_instance.work_order_number else 'EXEC' }}</a>
+                    {% else %}
+                    <span class="text-muted">MANUAL</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted">{{ c.notes or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ ok.empty_line("CONSUMED") }}
+{% endif %}
