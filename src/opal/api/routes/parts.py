@@ -16,7 +16,9 @@ from opal.config import get_active_project
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.numbering import (
     PartNumberError,
+    format_has_variant,
     next_part_number,
+    next_variant_part_number,
     peek_next_part_number,
     pn_exists,
     register_part_number,
@@ -30,7 +32,7 @@ from opal.core.part_lifecycle import (
     ensure_identity_mutable,
     reference_counts,
 )
-from opal.db.models import InventoryRecord, Part, Supplier, SupplierPart
+from opal.db.models import BOMLine, InventoryRecord, Part, Supplier, SupplierPart
 
 router = APIRouter()
 
@@ -308,6 +310,76 @@ def create_part(
     db.commit()
 
     return get_part_with_quantity(db, part)
+
+
+@router.post(
+    "/{part_id}/variants", response_model=PartResponse, status_code=status.HTTP_201_CREATED
+)
+def create_part_variant(
+    db: DbSession,
+    part_id: int,
+    user_id: CurrentUserId,
+) -> PartResponse:
+    """Mint the next variant of a part: a draft sibling copying attributes and BOM.
+
+    The variant shares the source's tier+sequence base with the next variant
+    code; the tier sequence counter does not advance.
+    """
+    part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
+    if not part:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Part {part_id} not found"
+        )
+    if not format_has_variant(get_active_project()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Part numbering format has no {variant} placeholder",
+        )
+    if not part.internal_pn:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Part has no internal part number, so its variant family cannot be derived",
+        )
+
+    try:
+        new_pn = next_variant_part_number(db, part.tier, part.internal_pn)
+    except PartNumberError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+    variant = Part(
+        name=part.name,
+        internal_pn=new_pn,
+        external_pn=part.external_pn,
+        description=part.description,
+        category=part.category,
+        unit_of_measure=part.unit_of_measure,
+        tracking_type=part.tracking_type,
+        tier=part.tier,
+        parent_id=part.parent_id,
+        reorder_point=part.reorder_point,
+        is_tooling=part.is_tooling,
+        calibration_interval_days=part.calibration_interval_days,
+        metadata_=dict(part.metadata_) if part.metadata_ else None,
+    )
+    db.add(variant)
+    db.flush()
+    log_create(db, variant, user_id)
+
+    for line in part.bom_lines:
+        bom_copy = BOMLine(
+            assembly_id=variant.id,
+            component_id=line.component_id,
+            quantity=line.quantity,
+            reference_designator=line.reference_designator,
+            notes=line.notes,
+        )
+        db.add(bom_copy)
+        db.flush()
+        log_create(db, bom_copy, user_id)
+
+    db.commit()
+    db.refresh(variant)
+    return get_part_with_quantity(db, variant)
 
 
 class NextPnResponse(BaseModel):

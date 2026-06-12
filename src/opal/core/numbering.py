@@ -62,6 +62,8 @@ def part_number_regex(project: ProjectConfig | None, tier_level: int) -> re.Patt
         token = match.group(1)
         if token == "sequence":
             pattern += rf"(?P<sequence>\d{{{project.part_numbering.sequence_digits},}})"
+        elif token == "variant":
+            pattern += rf"(?P<variant>\d{{{project.part_numbering.variant_digits},}})"
         elif token in values:
             pattern += re.escape(values[token])
         else:
@@ -125,6 +127,45 @@ def next_part_number(db: Session, tier_level: int) -> str:
             break
     db.flush()
     return pn
+
+
+def format_has_variant(project: ProjectConfig | None) -> bool:
+    """True when the numbering format mints variant codes."""
+    return project is not None and "{variant}" in project.part_numbering.format
+
+
+def next_variant_part_number(db: Session, tier_level: int, source_pn: str) -> str:
+    """Mint the next variant of an existing part number.
+
+    Variants share the source's tier+sequence base; the next code is
+    max(existing)+1 across ALL rows including soft-deleted ones — variant
+    codes are never reused. The tier sequence counter is not touched:
+    a variant is a sibling, not a new sequence.
+    """
+    from opal.config import get_active_project
+
+    project = get_active_project()
+    if project is None or not format_has_variant(project):
+        raise PartNumberError("Part numbering format has no {variant} placeholder")
+
+    regex = part_number_regex(project, tier_level)
+    match = regex.match(source_pn)
+    if not match:
+        example = _format_part_number(project, tier_level, 1)
+        raise PartNumberError(
+            f"'{source_pn}' does not match the tier-{tier_level} part number format "
+            f"(e.g. {example}), so its variant family cannot be derived"
+        )
+    sequence = int(match.group("sequence"))
+
+    # Full-column scan + regex match: correct for arbitrary token order and
+    # fine at single-instance SQLite scale.
+    max_variant = 0
+    for (pn,) in db.query(Part.internal_pn).filter(Part.internal_pn.isnot(None)).all():
+        m = regex.match(pn)
+        if m and int(m.group("sequence")) == sequence:
+            max_variant = max(max_variant, int(m.group("variant")))
+    return project.generate_part_number(tier_level, sequence, max_variant + 1)
 
 
 def peek_next_part_number(db: Session, tier_level: int) -> tuple[str, int]:

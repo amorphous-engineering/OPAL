@@ -1,14 +1,28 @@
 """Part number generation and identity lifecycle tests.
 
-No project config is loaded under test, so numbers use the fallback
-format PN-{tier}-{seq:04d}. Counters never roll back: soft-deleted and
-abandoned numbers stay consumed forever.
+No project config is loaded under test (the variant tests activate one
+explicitly), so numbers use the fallback format PN-{tier}-{seq:04d}.
+Counters never roll back: soft-deleted and abandoned numbers stay
+consumed forever.
 """
 
 from datetime import UTC, datetime
 
-from opal.core.numbering import next_part_number, peek_next_part_number, pn_exists
+import pytest
+
+import opal.config as config_mod
+from opal.core.numbering import (
+    PartNumberError,
+    format_has_variant,
+    next_part_number,
+    next_variant_part_number,
+    part_number_regex,
+    peek_next_part_number,
+    pn_exists,
+    validate_part_number,
+)
 from opal.db.models import Part
+from opal.project import PartNumberingConfig, ProjectConfig, TierConfig
 
 
 def _create(client, name: str, tier: int = 1, **extra) -> dict:
@@ -115,6 +129,105 @@ def test_reserve_block_creates_contiguous_drafts(client):
 def test_reserve_count_zero_rejected(client):
     response = client.post("/api/parts/reserve", json={"tier": 2, "count": 0})
     assert response.status_code == 400
+
+
+# ============ Variants ============
+
+
+def _variant_project(**numbering_overrides) -> ProjectConfig:
+    numbering = {
+        "prefix": "RV",
+        "separator": "-",
+        "sequence_digits": 4,
+        "variant_digits": 3,
+        "format": "{prefix}{sep}{tier_code}{sep}{sequence}{sep}{variant}",
+    } | numbering_overrides
+    return ProjectConfig(
+        name="Variant Project",
+        tiers=[TierConfig(level=1, name="Flight", code="F")],
+        part_numbering=PartNumberingConfig(**numbering),
+    )
+
+
+@pytest.fixture
+def variant_project(monkeypatch) -> ProjectConfig:
+    project = _variant_project()
+    monkeypatch.setattr(config_mod, "_active_project", project)
+    return project
+
+
+def test_format_has_variant():
+    assert not format_has_variant(None)
+    no_variant = _variant_project(format="{prefix}{sep}{tier_code}{sep}{sequence}")
+    assert not format_has_variant(no_variant)
+    assert format_has_variant(_variant_project())
+
+
+def test_variant_generation_and_regex_round_trip(variant_project):
+    assert variant_project.generate_part_number(1, 7) == "RV-F-0007-001"
+    assert variant_project.generate_part_number(1, 7, 12) == "RV-F-0007-012"
+
+    match = part_number_regex(variant_project, 1).match("RV-F-0007-012")
+    assert match
+    assert match.group("sequence") == "0007"
+    assert match.group("variant") == "012"
+    assert validate_part_number(variant_project, 1, "RV-F-0007-012") == 7
+
+
+def test_new_parts_get_variant_001(db_session, variant_project):
+    assert next_part_number(db_session, 1) == "RV-F-0001-001"
+    assert next_part_number(db_session, 1) == "RV-F-0002-001"
+
+
+def test_next_variant_increments_and_never_recycles(db_session, variant_project):
+    db_session.add(Part(name="Base", internal_pn="RV-F-0001-001", tier=1))
+    db_session.flush()
+    assert next_variant_part_number(db_session, 1, "RV-F-0001-001") == "RV-F-0001-002"
+
+    # Soft-deleted variants keep their codes consumed
+    db_session.add(
+        Part(name="Dead", internal_pn="RV-F-0001-002", tier=1, deleted_at=datetime.now(UTC))
+    )
+    db_session.flush()
+    assert next_variant_part_number(db_session, 1, "RV-F-0001-001") == "RV-F-0001-003"
+
+    # Next code is max+1, and any family member is a valid source
+    db_session.add(Part(name="Five", internal_pn="RV-F-0001-005", tier=1))
+    db_session.flush()
+    assert next_variant_part_number(db_session, 1, "RV-F-0001-005") == "RV-F-0001-006"
+
+
+def test_variant_creation_never_advances_sequence_counter(db_session, variant_project):
+    base_pn = next_part_number(db_session, 1)
+    db_session.add(Part(name="Base", internal_pn=base_pn, tier=1))
+    db_session.flush()
+
+    next_variant_part_number(db_session, 1, base_pn)
+    assert peek_next_part_number(db_session, 1) == ("RV-F-0002-001", 2)
+
+
+def test_next_variant_requires_variant_format(db_session, monkeypatch):
+    monkeypatch.setattr(
+        config_mod,
+        "_active_project",
+        _variant_project(format="{prefix}{sep}{tier_code}{sep}{sequence}"),
+    )
+    with pytest.raises(PartNumberError):
+        next_variant_part_number(db_session, 1, "RV-F-0001")
+
+
+def test_next_variant_rejects_pn_from_older_format(db_session, variant_project):
+    # Numbered before {variant} entered the format: family underivable
+    with pytest.raises(PartNumberError):
+        next_variant_part_number(db_session, 1, "RV-F-0001")
+
+
+def test_variant_override_bumps_sequence_counter(client, variant_project):
+    override = _create(client, "Overridden", internal_pn="RV-F-0500-004")
+    assert override["internal_pn"] == "RV-F-0500-004"
+
+    auto = _create(client, "After Override")
+    assert auto["internal_pn"] == "RV-F-0501-001"
 
 
 def test_draft_tier_change_regenerates_pn_and_abandons_old(client):

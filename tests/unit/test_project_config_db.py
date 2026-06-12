@@ -42,6 +42,23 @@ def test_save_and_load_round_trip(db_session):
     assert config_mod.get_active_project() is loaded
 
 
+def test_legacy_blob_without_variant_digits_defaults_to_3(db_session):
+    """Blobs persisted before variant support load with the field defaulted."""
+    from opal.config import set_app_setting
+
+    legacy_blob = (
+        '{"name": "Legacy", "tiers": [{"level": 1, "name": "FLIGHT", "code": "F"}], '
+        '"part_numbering": {"prefix": "TST", "separator": "-", "sequence_digits": 4, '
+        '"format": "{prefix}{sep}{tier_code}{sep}{sequence}"}}'
+    )
+    set_app_setting(db_session, PROJECT_CONFIG_KEY, legacy_blob)
+    db_session.flush()
+
+    loaded = load_project_from_db(db_session)
+    assert loaded is not None
+    assert loaded.part_numbering.variant_digits == 3
+
+
 def test_load_returns_none_when_absent(db_session):
     assert load_project_from_db(db_session) is None
 

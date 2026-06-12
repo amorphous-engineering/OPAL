@@ -956,6 +956,39 @@ def _parts_detail_response(
     where_used = db.query(BOMLine).filter(BOMLine.component_id == part.id).all()
     context["where_used"] = where_used
 
+    # Variants: live siblings sharing this PN's tier+sequence base, derived
+    # from the PN itself — no stored relation
+    from opal.core.numbering import format_has_variant, part_number_regex
+
+    can_variant = False
+    variant_rows: list[Part] = []
+    if format_has_variant(project) and part.internal_pn and tier_config:
+        regex = part_number_regex(project, part.tier)
+        match = regex.match(part.internal_pn)
+        if match:
+            can_variant = True
+            sequence = int(match.group("sequence"))
+            siblings = (
+                db.query(Part)
+                .filter(
+                    Part.deleted_at.is_(None),
+                    Part.id != part.id,
+                    Part.tier == part.tier,
+                    Part.internal_pn.isnot(None),
+                )
+                .all()
+            )
+            variant_rows = sorted(
+                (
+                    sib
+                    for sib in siblings
+                    if (m := regex.match(sib.internal_pn)) and int(m.group("sequence")) == sequence
+                ),
+                key=lambda p: p.internal_pn,
+            )
+    context["can_variant"] = can_variant
+    context["variant_rows"] = variant_rows
+
     # Test templates
     from opal.db.models.inventory import TestTemplate
 
