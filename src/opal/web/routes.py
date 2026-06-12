@@ -2765,8 +2765,11 @@ def issues_new(
 
 
 @router.get("/issues/{issue_id}", response_class=HTMLResponse)
-def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLResponse:
-    """Issue detail page."""
+def issues_detail(
+    request: Request, db: DbSession, issue_id: int, edit: bool = Query(False)
+) -> HTMLResponse:
+    """Issue detail page. Opens read-only; ?edit=1 renders the in-place
+    editors, DONE returns to view."""
     issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         return templates.TemplateResponse(
@@ -2777,6 +2780,7 @@ def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLRespons
 
     context = get_base_context(request, db, f"Issue {issue.issue_number} - OPAL")
     context["issue"] = issue
+    context["editing"] = edit
     context["types"] = [t.value for t in IssueType]
     context["priorities"] = [p.value for p in IssuePriority]
     context["containments"] = [c.value for c in Containment]
@@ -2811,6 +2815,25 @@ def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLRespons
 
     # RAISED AT is scope-named, never a bare number ("OP 4" / "4.1").
     context["raised_at_label"] = scope_label(issue.raised_step) if issue.raised_step else None
+
+    # Linking goes both directions: the LINKS panel can attach a work order
+    # and a containment boundary step from the issue side.
+    from opal.db.models.execution import StepExecution
+
+    context["instances"] = db.query(ProcedureInstance).order_by(ProcedureInstance.id.desc()).all()
+    instance_steps = []
+    if issue.procedure_instance_id is not None:
+        steps = (
+            db.query(StepExecution)
+            .filter(StepExecution.instance_id == issue.procedure_instance_id)
+            .order_by(StepExecution.step_number)
+            .all()
+        )
+        instance_steps = [{"id": s.id, "label": scope_label(s), "title": s.title} for s in steps]
+    context["instance_steps"] = instance_steps
+    context["containment_step_label"] = (
+        scope_label(issue.containment_step) if issue.containment_step else None
+    )
 
     return templates.TemplateResponse("issues/detail.html", context)
 

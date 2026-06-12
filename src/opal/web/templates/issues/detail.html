@@ -11,41 +11,43 @@
 {% set type_val = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
 {% set containment_val = issue.containment.value if issue.containment.value is defined else issue.containment %}
 {% set disposition_val = issue.disposition_type.value if issue.disposition_type and issue.disposition_type.value is defined else (issue.disposition_type or '') %}
-{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: 600; margin-left: var(--space-md);">SAVED</span>{% if issue.disp_state == 'closed' %}<span class="mono text-muted">CLOSED</span>{% elif issue.disp_state == 'undispositioned' %}{{ ok.status("UNDISPOSITIONED", "error") }}{% elif issue.disp_state == 'dispositioned' %}{{ ok.status("DISPOSITIONED", "ok") }}{% endif %}<span class="mono text-secondary">{{ type_val | upper | replace('_', ' ') }}</span>{% endset %}
+{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: 600; margin-left: var(--space-md);">SAVED</span>{% if issue.disp_state == 'closed' %}<span class="mono text-muted">CLOSED</span>{% elif issue.disp_state == 'undispositioned' %}{{ ok.status("UNDISPOSITIONED", "error") }}{% elif issue.disp_state == 'dispositioned' %}{{ ok.status("DISPOSITIONED", "ok") }}{% endif %}<span class="mono text-secondary">{{ type_val | upper | replace('_', ' ') }}</span>{% if editing %}{{ ok.btn("DONE", href="/issues/" ~ issue.id, size="sm", variant="primary") }}{% else %}{{ ok.btn("EDIT", href="/issues/" ~ issue.id ~ "?edit=1", size="sm") }}{% endif %}{% endset %}
 {% call ok.panel(issue.issue_number, max_width="1100px", actions=issue_actions) %}
         <div style="display: flex; gap: var(--space-lg);">
             <!-- LEFT COLUMN -->
             <div style="flex: 3; min-width: 0;">
-                <!-- Title (inline edit) -->
+                {# View mode renders facts; ?edit=1 renders the in-place
+                   editors. Each editor saves on blur; DONE returns to view. #}
+                {% macro text_field(label, field, value, rows=2) %}
+                <div class="form-label">{{ label }}</div>
+                {% if editing %}
+                <textarea class="form-textarea" rows="{{ rows }}" style="width: 100%;" onblur="updateIssue('{{ field }}', this.value || null)">{{ value or '' }}</textarea>
+                {% else %}
+                <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color); white-space: pre-wrap;{% if not value %} color: var(--text-muted);{% endif %}">{{ value or '—' }}</div>
+                {% endif %}
+                {% endmacro %}
+
+                <!-- Title -->
                 <div style="margin-bottom: var(--space-md);">
-                    <h2 id="issue-title-display" style="cursor: pointer; margin: 0;" onclick="startEditTitle()" title="Click to edit">{{ issue.title }}</h2>
-                    <div id="issue-title-edit" style="display: none;">
-                        <input type="text" id="title-input" class="form-input" value="{{ issue.title }}" style="font-size: 1.2rem; font-weight: 600; width: 100%;" onkeydown="if(event.key==='Enter') saveTitle(); if(event.key==='Escape') cancelEditTitle();" onblur="saveTitle()">
-                    </div>
+                    {% if editing %}
+                    <input type="text" id="title-input" class="form-input" value="{{ issue.title }}" style="font-size: 1.2rem; font-weight: 600; width: 100%;" onkeydown="if(event.key==='Enter') this.blur();" onblur="saveTitle(this)">
+                    {% else %}
+                    <h2 style="margin: 0;">{{ issue.title }}</h2>
+                    {% endif %}
                 </div>
 
-                <!-- Description (inline edit) -->
+                <!-- Description -->
                 <div style="margin-bottom: var(--space-md);">
-                    <div class="form-label">DESCRIPTION</div>
-                    <div id="desc-display" style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); cursor: pointer; min-height: 40px; white-space: pre-wrap;" onclick="startEditDesc()" title="Click to edit">{{ issue.description or '—' }}</div>
-                    <div id="desc-edit" style="display: none;">
-                        <textarea id="desc-input" class="form-textarea" rows="4" style="width: 100%;" onkeydown="if(event.key==='Escape') cancelEditDesc();">{{ issue.description or '' }}</textarea>
-                        <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-xs);">
-                            {{ ok.btn("SAVE", variant="primary", attrs='onclick="saveDesc()"') }}
-                            {{ ok.btn("CANCEL", attrs='onclick="cancelEditDesc()"') }}
-                        </div>
-                    </div>
+                    {{ text_field("DESCRIPTION", "description", issue.description, rows=4) }}
                 </div>
 
                 <!-- Should-be / Is — the NC pair, captured at discovery -->
                 <div style="margin-bottom: var(--space-md); display: flex; gap: var(--space-md);">
                     <div style="flex: 1;">
-                        <div class="form-label">SHOULD BE</div>
-                        <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('should_be', this.value || null)">{{ issue.should_be or '' }}</textarea>
+                        {{ text_field("SHOULD BE", "should_be", issue.should_be) }}
                     </div>
                     <div style="flex: 1;">
-                        <div class="form-label">IS</div>
-                        <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('actual', this.value || null)">{{ issue.actual or '' }}</textarea>
+                        {{ text_field("IS", "actual", issue.actual) }}
                     </div>
                 </div>
 
@@ -53,24 +55,20 @@
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">BUG DETAILS</div>
                     <div style="margin-bottom: var(--space-sm);">
-                        <div class="form-label">STEPS TO REPRODUCE</div>
-                        <textarea class="form-textarea" rows="3" style="width: 100%;" onblur="updateIssue('steps_to_reproduce', this.value || null)">{{ issue.steps_to_reproduce or '' }}</textarea>
+                        {{ text_field("STEPS TO REPRODUCE", "steps_to_reproduce", issue.steps_to_reproduce, rows=3) }}
                     </div>
                     <div style="margin-bottom: var(--space-sm);">
-                        <div class="form-label">EXPECTED BEHAVIOR</div>
-                        <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('expected_behavior', this.value || null)">{{ issue.expected_behavior or '' }}</textarea>
+                        {{ text_field("EXPECTED BEHAVIOR", "expected_behavior", issue.expected_behavior) }}
                     </div>
                     <div>
-                        <div class="form-label">ACTUAL BEHAVIOR</div>
-                        <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('actual_behavior', this.value || null)">{{ issue.actual_behavior or '' }}</textarea>
+                        {{ text_field("ACTUAL BEHAVIOR", "actual_behavior", issue.actual_behavior) }}
                     </div>
                 </div>
                 {% elif type_val == 'improvement' %}
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">IMPROVEMENT DETAILS</div>
                     <div>
-                        <div class="form-label">EXPECTED BENEFIT</div>
-                        <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('expected_benefit', this.value || null)">{{ issue.expected_benefit or '' }}</textarea>
+                        {{ text_field("EXPECTED BENEFIT", "expected_benefit", issue.expected_benefit) }}
                     </div>
                 </div>
                 {% endif %}
@@ -111,7 +109,7 @@
                     <div style="display: flex; gap: var(--space-md); margin-bottom: var(--space-sm);">
                         <div style="flex: 1;">
                             <div class="form-label">TYPE</div>
-                            <select id="disposition-type-select" class="form-select" style="width: 100%;" onchange="updateIssue('disposition_type', this.value || ''); updateReadiness();">
+                            <select id="disposition-type-select" class="form-select" style="width: 100%;" onchange="updateIssue('disposition_type', this.value || ''); updateDispositionReady();">
                                 <option value="">—</option>
                                 {% for dt in disposition_types %}
                                 <option value="{{ dt }}" {% if disposition_val == dt %}selected{% endif %}>{{ dt | upper | replace('_', ' ') }}</option>
@@ -121,30 +119,17 @@
                     </div>
                     <div style="margin-bottom: var(--space-sm);">
                         <div class="form-label">RATIONALE</div>
-                        <textarea id="disposition-rationale-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_rationale', this.value || null)" oninput="updateReadiness()">{{ issue.disposition_rationale or '' }}</textarea>
+                        <textarea id="disposition-rationale-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_rationale', this.value || null)" oninput="updateDispositionReady()">{{ issue.disposition_rationale or '' }}</textarea>
                     </div>
-                    <div class="baseline-panel mono">
-                        <div class="baseline-panel-title">DISPOSITION READINESS</div>
-                        <div class="baseline-check" id="check-type">
-                            <span class="baseline-check-box">[ ]</span>
-                            <span class="baseline-check-label">type selected</span>
+                    <button type="button" class="btn btn-primary" id="disposition-btn" disabled onclick="openDispositionConfirm()">DISPOSITION</button>
+                    <div id="disposition-confirm" class="baseline-confirm" style="display: none;">
+                        <div class="baseline-signature">
+                            <span class="text-green" id="disposition-type-label"></span> on {{ issue.issue_number }} — releases: <span id="disposition-releases"></span><br>
+                            signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
+                            · <span id="disposition-time"></span>
                         </div>
-                        <div class="baseline-check" id="check-rationale">
-                            <span class="baseline-check-box">[ ]</span>
-                            <span class="baseline-check-label">rationale recorded</span>
-                        </div>
-                        <div class="baseline-panel-rule">──────────────────────────────</div>
-                        <button type="button" class="btn btn-primary" id="sign-disposition-btn" disabled onclick="openSignConfirm()">SIGN DISPOSITION</button>
-                        <div id="sign-confirm" class="baseline-confirm" style="display: none;">
-                            <div class="baseline-signature">
-                                signing <span class="text-green" id="sign-type-label"></span> on {{ issue.issue_number }}<br>
-                                releases: <span id="sign-releases"></span><br>
-                                signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
-                                · <span id="sign-time"></span>
-                            </div>
-                            <button type="button" class="btn btn-primary" onclick="commitSignDisposition()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
-                            <button type="button" class="btn" onclick="document.getElementById('sign-confirm').style.display='none'">ABORT</button>
-                        </div>
+                        <button type="button" class="btn btn-primary" onclick="commitDisposition()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+                        <button type="button" class="btn" onclick="document.getElementById('disposition-confirm').style.display='none'">ABORT</button>
                     </div>
                     {% endif %}
                 </div>
@@ -178,12 +163,10 @@
                 <!-- Root cause + corrective action — required at NC closure, not at disposition -->
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div style="margin-bottom: var(--space-sm);">
-                        <div class="form-label">ROOT CAUSE</div>
-                        <textarea id="root-cause-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('root_cause', this.value || null)">{{ issue.root_cause or '' }}</textarea>
+                        {{ text_field("ROOT CAUSE", "root_cause", issue.root_cause) }}
                     </div>
                     <div>
-                        <div class="form-label">CORRECTIVE ACTION</div>
-                        <textarea id="corrective-action-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('corrective_action', this.value || null)">{{ issue.corrective_action or '' }}</textarea>
+                        {{ text_field("CORRECTIVE ACTION", "corrective_action", issue.corrective_action) }}
                     </div>
                 </div>
 
@@ -219,6 +202,8 @@
 
             <!-- RIGHT RAIL -->
             <div style="flex: 2; min-width: 220px;">
+                {% set priority_val = issue.priority.value if issue.priority.value is defined else issue.priority %}
+                {% if editing %}
                 {% call ok.table() %}
                     <tr>
                         {{ ok.th("TYPE", width="120px") }}
@@ -235,7 +220,6 @@
                         <td>
                             <select id="priority-select" class="form-select" style="width: 100%;" onchange="updateIssue('priority', this.value)">
                                 {% for p in priorities %}
-                                {% set priority_val = issue.priority.value if issue.priority.value is defined else issue.priority %}
                                 <option value="{{ p }}" {% if priority_val == p %}selected{% endif %}>{{ p | upper }}</option>
                                 {% endfor %}
                             </select>
@@ -266,6 +250,17 @@
                     {{ ok.detail_row("CREATED", ok.timestamp(issue.created_at)) }}
                     {{ ok.detail_row("UPDATED", ok.timestamp(issue.updated_at)) }}
                 {% endcall %}
+                {% else %}
+                {% call ok.table() %}
+                    {{ ok.detail_row("TYPE", type_val | upper | replace('_', ' '), mono=true, th_width="120px") }}
+                    {{ ok.detail_row("PRIORITY", priority_val | upper, mono=true) }}
+                    {{ ok.detail_row("CONTAINMENT", containment_val | upper, mono=true) }}
+                    {{ ok.detail_row("ASSIGNED TO", issue.assigned_to.name if issue.assigned_to else '—') }}
+                    {{ ok.detail_row("RAISED BY", issue.raised_by.name if issue.raised_by else '—') }}
+                    {{ ok.detail_row("CREATED", ok.timestamp(issue.created_at)) }}
+                    {{ ok.detail_row("UPDATED", ok.timestamp(issue.updated_at)) }}
+                {% endcall %}
+                {% endif %}
 
                 {% set status_val = issue.status.value if issue.status.value is defined else issue.status %}
                 <div style="margin-top: var(--space-sm);">
@@ -276,8 +271,9 @@
                     {% endif %}
                 </div>
 
-                <!-- Links -->
-                {% if issue.part_id or issue.procedure_id or issue.procedure_instance_id or issue.raised_step_id %}
+                <!-- Links — both directions: an issue can attach its work order
+                     and containment boundary step from here. -->
+                {% if editing or issue.part_id or issue.procedure_id or issue.procedure_instance_id or issue.raised_step_id or issue.containment_step_id %}
                 <div style="margin-top: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">LINKS</div>
                     {% call ok.table() %}
@@ -287,8 +283,36 @@
                         {% if issue.procedure_id %}
                         {{ ok.detail_row("TEMPLATE", ok.link(issue.procedure.name if issue.procedure else '—', "/procedures/" ~ issue.procedure_id), th_width="100px") }}
                         {% endif %}
+                        {% if editing %}
+                        <tr>
+                            <th style="width: 100px;">EXECUTION</th>
+                            <td>
+                                <select id="execution-select" class="form-select" style="width: 100%;" onchange="linkExecution(this.value)">
+                                    <option value="">—</option>
+                                    {% for inst in instances %}
+                                    <option value="{{ inst.id }}" {% if issue.procedure_instance_id == inst.id %}selected{% endif %}>{{ inst.work_order_number or 'WO #' ~ inst.id }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                        </tr>
                         {% if issue.procedure_instance_id %}
+                        <tr>
+                            <th>BOUNDARY</th>
+                            <td>
+                                <select id="boundary-step-select" class="form-select" style="width: 100%;" onchange="linkBoundaryStep(this.value)">
+                                    <option value="">—</option>
+                                    {% for s in instance_steps %}
+                                    <option value="{{ s.id }}" {% if issue.containment_step_id == s.id %}selected{% endif %}>{{ s.label }} — {{ s.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% elif issue.procedure_instance_id %}
                         {{ ok.detail_row("EXECUTION", ok.link(issue.procedure_instance.work_order_number if issue.procedure_instance and issue.procedure_instance.work_order_number else 'execution', "/executions/" ~ issue.procedure_instance_id, mono=true), th_width="100px") }}
+                        {% if containment_step_label %}
+                        {{ ok.detail_row("BOUNDARY", ok.mono(containment_step_label), th_width="100px") }}
+                        {% endif %}
                         {% endif %}
                         {% if issue.raised_step %}
                         {{ ok.detail_row("RAISED AT", ok.link(raised_at_label, "/executions/" ~ issue.procedure_instance_id ~ "?tab=operations&op=" ~ (redline_op_order if redline_op_order is not none else issue.raised_step.step_number), mono=true), th_width="100px") }}
@@ -303,6 +327,7 @@
 <script>
 const issueId = {{ issue.id }};
 const HOLDING = {{ holding | tojson }};
+const CONTAINMENT = {{ containment_val | tojson }};
 
 function getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
@@ -339,44 +364,34 @@ function showSaveFlash() {
     setTimeout(() => { el.style.display = 'none'; }, 1500);
 }
 
-// ---- Disposition: readiness + signature (baseline pattern) ----
-function setCheck(id, passed) {
-    const row = document.getElementById(id);
-    if (!row) return;
-    row.classList.toggle('baseline-check-fail', !passed);
-    row.querySelector('.baseline-check-box').textContent = passed ? '[x]' : '[ ]';
-}
-
-function updateReadiness() {
+// ---- Disposition: the button carries the gate (grayed until type +
+// rationale are filled); the confirm block is the one home for the
+// consequence sentence. ----
+function updateDispositionReady() {
     const typeSel = document.getElementById('disposition-type-select');
     const rationale = document.getElementById('disposition-rationale-input');
-    const btn = document.getElementById('sign-disposition-btn');
+    const btn = document.getElementById('disposition-btn');
     if (!typeSel || !rationale || !btn) return;
-    const typeOk = !!typeSel.value;
-    const rationaleOk = !!rationale.value.trim();
-    setCheck('check-type', typeOk);
-    setCheck('check-rationale', rationaleOk);
-    const blockers = [];
-    if (!typeOk) blockers.push('type not selected');
-    if (!rationaleOk) blockers.push('rationale not recorded');
-    btn.disabled = blockers.length > 0;
-    btn.title = blockers.join('; ');
-    if (blockers.length) document.getElementById('sign-confirm').style.display = 'none';
+    const missing = [];
+    if (!typeSel.value) missing.push('type');
+    if (!rationale.value.trim()) missing.push('rationale');
+    btn.disabled = missing.length > 0;
+    btn.title = missing.length ? 'missing: ' + missing.join(', ') : '';
+    if (missing.length) document.getElementById('disposition-confirm').style.display = 'none';
 }
-document.addEventListener('DOMContentLoaded', updateReadiness);
+document.addEventListener('DOMContentLoaded', updateDispositionReady);
 
-function openSignConfirm() {
+function openDispositionConfirm() {
     const typeSel = document.getElementById('disposition-type-select');
-    // The confirm block is the one home for the consequence sentence.
-    document.getElementById('sign-type-label').textContent = typeSel.options[typeSel.selectedIndex].text;
-    document.getElementById('sign-releases').textContent =
+    document.getElementById('disposition-type-label').textContent = typeSel.options[typeSel.selectedIndex].text;
+    document.getElementById('disposition-releases').textContent =
         HOLDING.length ? HOLDING.map(t => t.label).join(' · ') : '—';
-    document.getElementById('sign-time').textContent =
+    document.getElementById('disposition-time').textContent =
         new Date().toISOString().substring(0, 19) + 'Z';
-    document.getElementById('sign-confirm').style.display = 'block';
+    document.getElementById('disposition-confirm').style.display = 'block';
 }
 
-async function commitSignDisposition() {
+async function commitDisposition() {
     const typeSel = document.getElementById('disposition-type-select');
     const rationale = document.getElementById('disposition-rationale-input');
     if (!typeSel.value || !rationale.value.trim()) return;
@@ -469,51 +484,35 @@ async function uploadIssueAttachments() {
     window.location.reload();
 }
 
-// Inline title editing
-function startEditTitle() {
-    document.getElementById('issue-title-display').style.display = 'none';
-    document.getElementById('issue-title-edit').style.display = 'block';
-    const input = document.getElementById('title-input');
-    input.focus();
-    input.select();
-}
-
-function cancelEditTitle() {
-    document.getElementById('issue-title-display').style.display = '';
-    document.getElementById('issue-title-edit').style.display = 'none';
-    document.getElementById('title-input').value = document.getElementById('issue-title-display').textContent.trim();
-}
-
-async function saveTitle() {
-    const input = document.getElementById('title-input');
+// Title saves on blur in edit mode; empty reverts.
+async function saveTitle(input) {
     const newTitle = input.value.trim();
-    if (!newTitle) { cancelEditTitle(); return; }
-
-    document.getElementById('issue-title-display').textContent = newTitle;
-    document.getElementById('issue-title-display').style.display = '';
-    document.getElementById('issue-title-edit').style.display = 'none';
+    if (!newTitle) { input.value = input.defaultValue; return; }
+    if (newTitle === input.defaultValue) return;
     await updateIssue('title', newTitle);
+    input.defaultValue = newTitle;
 }
 
-// Inline description editing
-function startEditDesc() {
-    document.getElementById('desc-display').style.display = 'none';
-    document.getElementById('desc-edit').style.display = 'block';
-    document.getElementById('desc-input').focus();
+// ---- Links: attach a work order / containment boundary from the issue side ----
+async function linkExecution(value) {
+    if (!value) return;
+    await updateIssue('procedure_instance_id', parseInt(value));
+    window.location.reload();
 }
 
-function cancelEditDesc() {
-    document.getElementById('desc-display').style.display = '';
-    document.getElementById('desc-edit').style.display = 'none';
-}
-
-async function saveDesc() {
-    const input = document.getElementById('desc-input');
-    const newDesc = input.value;
-    document.getElementById('desc-display').textContent = newDesc || '—';
-    document.getElementById('desc-display').style.display = '';
-    document.getElementById('desc-edit').style.display = 'none';
-    await updateIssue('description', newDesc);
+async function linkBoundaryStep(value) {
+    if (!value) return;
+    const response = await fetch(`/api/issues/${issueId}/containment`, {
+        method: 'POST', headers: getHeaders(),
+        body: JSON.stringify({ containment: CONTAINMENT, containment_step_id: parseInt(value) }),
+    });
+    if (response.ok) {
+        window.location.reload();
+    } else {
+        const error = await response.json();
+        alert(formatApiError(error.detail, 'Failed to set boundary step'));
+        window.location.reload();
+    }
 }
 
 // Comments

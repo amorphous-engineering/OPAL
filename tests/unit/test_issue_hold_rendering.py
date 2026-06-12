@@ -84,17 +84,78 @@ def test_issue_page_holding_readout(web_client):
     assert "OP 1 COMPLETE" in page.text
     assert "UNDISPOSITIONED" in page.text
     assert "⛔" not in page.text
-    assert "SIGN DISPOSITION" in page.text
-    assert "DISPOSITION READINESS" in page.text
+    # The disposition box carries no readiness ceremony: one button, gated.
+    assert 'id="disposition-btn"' in page.text
+    assert "DISPOSITION READINESS" not in page.text
+    assert "SIGN DISPOSITION" not in page.text
 
     advisory = web_client.post("/api/issues", json={"title": "Note only"}).json()
     page = web_client.get(f"/issues/{advisory['id']}")
     assert page.status_code == 200
     assert "Holding — none" in page.text
     # No disposition gate above advisory: no panel, no state badge, CLOSE free.
-    assert "SIGN DISPOSITION" not in page.text
+    assert 'id="disposition-btn"' not in page.text
     assert "UNDISPOSITIONED" not in page.text
     assert "closeIssue()" in page.text
+
+
+def test_issue_page_view_mode_default(web_client):
+    """The issue page opens read-only: facts, an EDIT control, no field
+    editors. ?edit=1 renders the in-place editors and a DONE control."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+    nc = _raise_nc(web_client, instance_id, by_label["1.1"])
+
+    page = web_client.get(f"/issues/{nc['id']}")
+    assert page.status_code == 200
+    assert "?edit=1" in page.text
+    assert 'id="type-select"' not in page.text
+    assert 'id="title-input"' not in page.text
+    assert 'id="execution-select"' not in page.text
+
+    page = web_client.get(f"/issues/{nc['id']}?edit=1")
+    assert page.status_code == 200
+    assert ">DONE<" in page.text
+    assert 'id="type-select"' in page.text
+    assert 'id="title-input"' in page.text
+
+
+def test_issue_page_links_work_order_and_boundary(web_client):
+    """The LINKS panel attaches a work order and a containment boundary step
+    from the issue side."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+
+    issue = web_client.post("/api/issues", json={"title": "Manual", "containment": "step"}).json()
+    page = web_client.get(f"/issues/{issue['id']}?edit=1")
+    assert 'id="execution-select"' in page.text
+    assert 'id="boundary-step-select"' not in page.text  # no WO linked yet
+
+    # Link the WO; the boundary select appears with the WO's steps.
+    r = web_client.patch(
+        f"/api/issues/{issue['id']}", json={"procedure_instance_id": instance_id}
+    )
+    assert r.status_code == 200
+    page = web_client.get(f"/issues/{issue['id']}?edit=1")
+    assert 'id="boundary-step-select"' in page.text
+    assert "OP 1 —" in page.text
+
+    # Set the boundary; containment becomes anchored and renders in view mode.
+    step_id = None
+    import re
+
+    m = re.search(r'value="(\d+)" >1\.1 —', page.text.replace("\n", " "))
+    if m:
+        step_id = int(m.group(1))
+    if step_id is None:
+        # fall back: any option value inside the boundary select
+        seg = page.text.split('id="boundary-step-select"', 1)[1].split("</select>", 1)[0]
+        step_id = int(re.search(r'value="(\d+)"', seg).group(1))
+    r = web_client.post(
+        f"/api/issues/{issue['id']}/containment",
+        json={"containment": "step", "containment_step_id": step_id},
+    )
+    assert r.status_code == 200
+    page = web_client.get(f"/issues/{issue['id']}")
+    assert "BOUNDARY" in page.text
 
 
 def test_issues_list_state_column(web_client):
