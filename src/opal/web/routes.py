@@ -43,8 +43,9 @@ from opal.db.models.issue import Issue, IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import MasterProcedure, ProcedureStatus, ProcedureVersion
 from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.requirement import Requirement
-from opal.db.models.risk import Risk, RiskStatus
+from opal.db.models.risk import Risk, RiskDisposition, RiskIssueRole
 from opal.project import DEFAULT_TIERS
+from opal.risks.dispositions import OPEN_DISPOSITIONS
 
 # Template directory
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -565,13 +566,15 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
         db.query(ProcedureInstance).filter(ProcedureInstance.status == "in_progress").count()
     )
     context["risks_count"] = (
-        db.query(Risk).filter(Risk.deleted_at.is_(None), Risk.status != "closed").count()
+        db.query(Risk)
+        .filter(Risk.deleted_at.is_(None), Risk.disposition.in_(OPEN_DISPOSITIONS))
+        .count()
     )
     context["high_risks_count"] = (
         db.query(Risk)
         .filter(
             Risk.deleted_at.is_(None),
-            Risk.status != "closed",
+            Risk.disposition.in_(OPEN_DISPOSITIONS),
             Risk.probability * Risk.impact > 12,
         )
         .count()
@@ -2735,12 +2738,27 @@ def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLRespons
 
 # ============ RISKS ============
 
+#: Functional palette for disposition badges (ok.status variants).
+DISPOSITION_BADGES: dict[str, str] = {
+    "open": "draft",
+    "mitigate": "warn",
+    "watch": "info",
+    "research": "info",
+    "accepted": "ok",
+    "closed": "ok",
+    "realized": "error",
+}
+
+
+def _risk_or_404(db: DbSession, risk_id: int) -> Risk | None:
+    return db.query(Risk).filter(Risk.id == risk_id, Risk.deleted_at.is_(None)).first()
+
 
 @router.get("/risks", response_class=HTMLResponse)
 def risks_list(request: Request, db: DbSession) -> HTMLResponse:
-    """Risks list page."""
+    """Risk register page."""
     context = get_base_context(request, db, "Risks - OPAL")
-    context["statuses"] = [s.value for s in RiskStatus]
+    context["dispositions"] = [d.value for d in RiskDisposition]
     return templates.TemplateResponse("risks/list.html", context)
 
 
@@ -2749,18 +2767,18 @@ def risks_table(
     request: Request,
     db: DbSession,
     search: str | None = Query(None),
-    status: str | None = Query(None),
+    disposition: str | None = Query(None),
     severity: str | None = Query(None),
     page: int = Query(1, ge=1),
 ) -> HTMLResponse:
-    """Risks table rows (HTMX partial)."""
+    """Risk register rows (HTMX partial)."""
     query = db.query(Risk).filter(Risk.deleted_at.is_(None))
 
     if search:
         search_term = f"%{search}%"
-        query = query.filter(Risk.title.ilike(search_term))
-    if status:
-        query = query.filter(Risk.status == status)
+        query = query.filter(Risk.title.ilike(search_term) | Risk.risk_number.ilike(search_term))
+    if disposition:
+        query = query.filter(Risk.disposition == disposition)
     if severity:
         # Mirror Risk.severity thresholds in SQL so the filter applies before
         # pagination instead of only to the fetched page
@@ -2772,75 +2790,92 @@ def risks_table(
         elif severity == "high":
             query = query.filter(score > 12)
 
-    risks, pagination = paginate_query(request, query.order_by(Risk.id.desc()), page, colspan=8)
+    from sqlalchemy.orm import selectinload
 
+    query = query.options(selectinload(Risk.owner))
+    risks, pagination = paginate_query(request, query.order_by(Risk.id.desc()), page, colspan=6)
+
+    rows = [
+        {
+            "risk": r,
+            "badge": DISPOSITION_BADGES.get(r.disposition, "draft"),
+            "reviewed_age": _relative_age(r.last_reviewed_at) if r.last_reviewed_at else "—",
+            "reviewed_iso": r.last_reviewed_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if r.last_reviewed_at
+            else "never reviewed",
+        }
+        for r in risks
+    ]
     return templates.TemplateResponse(
         "risks/table_rows.html",
-        {"request": request, "risks": risks, "pagination": pagination},
+        {"request": request, "rows": rows, "pagination": pagination},
     )
 
 
 @router.get("/risks/matrix", response_class=HTMLResponse)
 def risks_matrix(request: Request, db: DbSession) -> HTMLResponse:
-    """Risk matrix page."""
-    import json
+    """Risk matrix page — current (solid) and residual (hollow) markers."""
 
     context = get_base_context(request, db, "Risk Matrix - OPAL")
 
-    # Get active risks
     risks = (
         db.query(Risk)
         .filter(Risk.deleted_at.is_(None))
-        .filter(Risk.status != RiskStatus.CLOSED)
+        .filter(Risk.disposition.in_(OPEN_DISPOSITIONS))
         .all()
     )
 
-    # Build 5x5 matrix
     matrix = [[0 for _ in range(5)] for _ in range(5)]
+    residual_matrix = [[0 for _ in range(5)] for _ in range(5)]
     for risk in risks:
-        prob_idx = risk.probability - 1
-        impact_idx = risk.impact - 1
-        matrix[prob_idx][impact_idx] += 1
+        matrix[risk.probability - 1][risk.impact - 1] += 1
+        if risk.residual_probability is not None and risk.residual_impact is not None:
+            residual_matrix[risk.residual_probability - 1][risk.residual_impact - 1] += 1
 
     context["matrix"] = matrix
+    context["residual_matrix"] = residual_matrix
     context["total_risks"] = len(risks)
     context["high_count"] = sum(1 for r in risks if r.severity == "high")
     context["medium_count"] = sum(1 for r in risks if r.severity == "medium")
     context["low_count"] = sum(1 for r in risks if r.severity == "low")
 
-    # Convert risks to JSON for filtering
-    context["risks_json"] = json.dumps(
-        [
-            {"id": r.id, "title": r.title, "probability": r.probability, "impact": r.impact}
-            for r in risks
-        ]
-    )
+    # Rendered with | tojson in the template — json.dumps + | safe would let
+    # a title containing </script> break out of the inline script block.
+    context["risks_data"] = [
+        {
+            "id": r.id,
+            "risk_number": r.risk_number,
+            "title": r.title,
+            "probability": r.probability,
+            "impact": r.impact,
+            "residual_probability": r.residual_probability,
+            "residual_impact": r.residual_impact,
+        }
+        for r in risks
+    ]
 
     return templates.TemplateResponse("risks/matrix.html", context)
 
 
 @router.get("/risks/new", response_class=HTMLResponse)
 def risks_new(request: Request, db: DbSession) -> HTMLResponse:
-    """New risk form page."""
+    """New risk form page — the four scenario phrases, never a paragraph."""
     context = get_base_context(request, db, "New Risk - OPAL")
-
-    # Get issues for linking
-    issues = (
-        db.query(Issue)
-        .filter(Issue.deleted_at.is_(None))
-        .order_by(Issue.id.desc())
-        .limit(100)
-        .all()
+    context["users"] = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
+    context["parts"] = (
+        db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).limit(200).all()
     )
-    context["issues"] = issues
-
     return templates.TemplateResponse("risks/new.html", context)
 
 
 @router.get("/risks/{risk_id}", response_class=HTMLResponse)
 def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
-    """Risk detail page."""
-    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.deleted_at.is_(None)).first()
+    """Risk detail page — the generated statement is the masthead."""
+    from opal.risks.lint import lint_risk_row
+    from opal.risks.readiness import readiness
+    from opal.web.lint_markup import statement_lint_html
+
+    risk = _risk_or_404(db, risk_id)
     if not risk:
         return templates.TemplateResponse(
             "errors/404.html",
@@ -2848,11 +2883,87 @@ def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
             status_code=404,
         )
 
-    context = get_base_context(request, db, f"Risk {risk_id} - OPAL")
-    context["risk"] = risk
-    context["statuses"] = [s.value for s in RiskStatus]
+    findings = lint_risk_row(risk)
+    linked_issue_ids = [link.issue_id for link in risk.issue_links]
 
+    parts = (
+        db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).limit(200).all()
+    )
+    # The dropdown is capped; the set asset must still render as selected.
+    if risk.asset_part is not None and risk.asset_part not in parts:
+        parts.append(risk.asset_part)
+
+    context = get_base_context(request, db, f"{risk.risk_number} - OPAL")
+    context["risk"] = risk
+    context["badge"] = DISPOSITION_BADGES.get(risk.disposition, "draft")
+    context["dispositions"] = [d.value for d in RiskDisposition]
+    context["roles"] = [r.value for r in RiskIssueRole]
+    context["readiness"] = readiness(db, risk)
+    context["lint_html"] = {
+        field: statement_lint_html(getattr(risk, field) or "", field_findings)
+        for field, field_findings in findings.items()
+    }
+    context["users"] = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
+    context["parts"] = parts
+    context["linkable_issues"] = (
+        db.query(Issue)
+        .filter(Issue.deleted_at.is_(None), Issue.id.notin_(linked_issue_ids))
+        .order_by(Issue.id.desc())
+        .limit(100)
+        .all()
+    )
     return templates.TemplateResponse("risks/detail.html", context)
+
+
+@router.get("/risks/{risk_id}/acceptance-panel", response_class=HTMLResponse)
+def risks_acceptance_panel(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
+    """Acceptance panel partial — re-fetched after field saves."""
+    from opal.risks.readiness import readiness
+
+    risk = _risk_or_404(db, risk_id)
+    if not risk:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        "risks/_acceptance_panel.html",
+        {
+            "request": request,
+            "risk": risk,
+            "readiness": readiness(db, risk),
+            "current_user": _get_current_user(request, db),
+        },
+    )
+
+
+@router.get("/risks/{risk_id}/disposition-panel", response_class=HTMLResponse)
+def risks_disposition_panel(
+    request: Request,
+    db: DbSession,
+    risk_id: int,
+    target: str = Query(...),
+) -> HTMLResponse:
+    """Disposition panel partial for one target state.
+
+    Per-disposition required fields are rendered only for the selected
+    target — unselected dispositions' fields don't exist in the DOM.
+    """
+    from opal.risks.dispositions import disposition_blockers, open_links
+
+    risk = _risk_or_404(db, risk_id)
+    if not risk:
+        return HTMLResponse("", status_code=404)
+    # note="pending": the panel renders its own note input, so note-required
+    # rules don't belong in the pre-flight blocker list — the POST enforces them.
+    return templates.TemplateResponse(
+        "risks/_disposition_panel.html",
+        {
+            "request": request,
+            "risk": risk,
+            "target": target,
+            "blockers": disposition_blockers(db, risk, target, note="pending"),
+            "open_mitigations": len(open_links(risk, RiskIssueRole.MITIGATION.value)),
+            "open_research": len(open_links(risk, RiskIssueRole.RESEARCH.value)),
+        },
+    )
 
 
 # ============ REQUIREMENTS ============

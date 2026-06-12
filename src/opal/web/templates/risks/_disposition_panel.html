@@ -1,0 +1,63 @@
+{# Per-target disposition requirements — only the selected target's fields
+   exist in the DOM. Required values whose home is elsewhere on the page
+   (residual scores, linked issues, narrative) appear as live status lines,
+   never as duplicate inputs. #}
+<div class="disposition-target mono">
+    {% if target == 'mitigate' %}
+    <div>open mitigation issues: <span class="{{ 'text-green' if open_mitigations else 'text-red' }}">{{ open_mitigations }}</span> — link below</div>
+    <div>residual score: {% if risk.residual_score is not none %}<span class="sev-{{ risk.residual_severity }}">{{ risk.residual_score }}</span>{% else %}<span class="text-red">not set</span> — set above{% endif %}</div>
+    {% elif target == 'watch' %}
+    <div class="form-group">
+        <label class="form-label" for="watch-observable">WATCH OBSERVABLE</label>
+        <input type="text" id="watch-observable" class="form-input mono" maxlength="255"
+               value="{{ risk.watch_observable or '' }}" onblur="updateRisk('watch_observable', this.value || null)">
+    </div>
+    <div class="form-group">
+        <label class="form-label" for="watch-threshold">WATCH THRESHOLD</label>
+        <input type="text" id="watch-threshold" class="form-input mono" maxlength="255"
+               value="{{ risk.watch_threshold or '' }}" onblur="updateRisk('watch_threshold', this.value || null)">
+    </div>
+    <div class="form-group">
+        <label class="form-label" for="watch-contingency">WATCH CONTINGENCY <span class="text-muted">(optional)</span></label>
+        <input type="text" id="watch-contingency" class="form-input mono"
+               value="{{ risk.watch_contingency or '' }}" onblur="updateRisk('watch_contingency', this.value || null)">
+    </div>
+    {% elif target == 'research' %}
+    <div>open research issues: <span class="{{ 'text-green' if open_research else 'text-muted' }}">{{ open_research }}</span> — link below</div>
+    <div>narrative: <span class="{{ 'text-green' if risk.description else 'text-muted' }}">{{ 'present' if risk.description else 'empty' }}</span></div>
+    {% elif target == 'closed' %}
+    <div class="form-group">
+        <label class="form-label" for="disposition-note">CLOSE NOTE</label>
+        <input type="text" id="disposition-note" class="form-input mono" required maxlength="255">
+    </div>
+    {% elif target == 'realized' %}
+    <div>realized issue: {% if risk.realized_issue %}<span class="text-green">{{ risk.realized_issue.issue_number }}</span>{% else %}<span class="text-red">none</span>{% endif %}</div>
+    {% if not risk.realized_issue %}
+    <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-xs);">
+        <input type="text" id="realized-title-input" class="form-input" style="width: 280px;" maxlength="255" placeholder="what happened...">
+        <button type="button" class="btn btn-sm" onclick="spawnRealizedIssue()">SPAWN ISSUE</button>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if risk.disposition == 'accepted' and target != 'closed' %}
+    <div class="form-group" style="margin-top: var(--space-sm);">
+        <label class="form-label" for="disposition-note">UN-ACCEPT NOTE</label>
+        <input type="text" id="disposition-note" class="form-input mono" required maxlength="255">
+    </div>
+    {% endif %}
+
+    {% if blockers %}
+    <div style="margin-top: var(--space-sm);">
+        {% for blocker in blockers %}
+        <div class="text-red">✗ {{ blocker }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div id="disposition-error" class="text-red" style="display: none; margin-top: var(--space-sm);"></div>
+    <button type="button" class="btn btn-primary" style="margin-top: var(--space-sm);"
+            onclick="applyDisposition('{{ target }}')">
+        SET {{ target | upper }}
+    </button>
+</div>

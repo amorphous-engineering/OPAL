@@ -489,12 +489,12 @@ class OpalAPIClient:
     # ── Risks ──────────────────────────────────────────────────────────
 
     def list_risks(
-        self, status: str | None = None, page: int = 1, page_size: int = 50
+        self, disposition: str | None = None, page: int = 1, page_size: int = 50
     ) -> dict[str, Any]:
         """List risks."""
         params: dict[str, Any] = {"page": page, "page_size": page_size}
-        if status:
-            params["status"] = status
+        if disposition:
+            params["disposition"] = disposition
         resp = self.client.get(self._url("/risks"), params=params)
         resp.raise_for_status()
         return resp.json()
