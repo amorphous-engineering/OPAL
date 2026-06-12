@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, SoftDeleteMixin, TimestampMixin
@@ -142,6 +142,40 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         order_by="IssueComment.created_at",
     )
     attachments: Mapped[list["Attachment"]] = relationship("Attachment", back_populates="issue")
+    step_blocks: Mapped[list["IssueStepBlock"]] = relationship(
+        "IssueStepBlock", back_populates="issue", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Issue(id={self.id}, type={self.issue_type}, title='{self.title}', status={self.status})>"
+
+
+class IssueStepBlock(Base, IdMixin, TimestampMixin):
+    """Hold point: this issue blocks the bound step from starting.
+
+    The hold is derived state — it is active while the issue is open
+    (status not disposition_approved/closed, not soft-deleted) and lifts
+    the moment the issue terminates. One issue may block many steps.
+    """
+
+    __tablename__ = "issue_step_block"
+    __table_args__ = (
+        UniqueConstraint("issue_id", "step_execution_id", name="uq_issue_step_block"),
+    )
+
+    issue_id: Mapped[int] = mapped_column(
+        ForeignKey("issue.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    step_execution_id: Mapped[int] = mapped_column(
+        ForeignKey("step_execution.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # Relationships
+    issue: Mapped["Issue"] = relationship("Issue", back_populates="step_blocks")
+    step_execution: Mapped["StepExecution"] = relationship("StepExecution")
+
+    def __repr__(self) -> str:
+        return (
+            f"<IssueStepBlock(issue_id={self.issue_id}, "
+            f"step_execution_id={self.step_execution_id})>"
+        )

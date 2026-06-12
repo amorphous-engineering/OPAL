@@ -1,0 +1,31 @@
+{# Docked MY STEP bar — the focused-executor surface. Rendered only while the
+   session user holds a claim; observers get the whole viewport. #}
+{% import 'executions/_exec_macros.html' as ex with context %}
+<div id="mystep" data-claim-order="{{ my_step.order if my_step else '' }}">
+{% if my_step %}
+    <div class="mystep-bar">
+        <div class="mystep-id">
+            <span class="mono mystep-num">{{ my_step.number }}</span>
+            <span class="mystep-title">{{ my_step.title }}</span>
+            <button class="btn btn-sm mystep-jump" onclick="jumpToStep({{ my_step.order }})" title="Scroll to step">⌖</button>
+        </div>
+        {% if my_step.caution %}
+        <div class="caution-block mystep-caution">CAUTION: {{ my_step.caution }}</div>
+        {% endif %}
+        <div class="mystep-fields" id="mystep-fields">
+            {{ ex.data_fields_editable(my_step) }}
+            <div class="bar-field bar-field-notes">
+                <label class="bar-field-label mono">NOTES</label>
+                <textarea class="form-textarea step-notes-input" rows="1"
+                          onblur="saveNotes({{ my_step.order }}, this.value)">{% if my_step.exec.notes %}{{ my_step.exec.notes }}{% endif %}</textarea>
+            </div>
+        </div>
+        <div class="mystep-actions">
+            <button class="btn btn-sm" onclick="showAttachModal({{ my_step.exec.id }}, {{ my_step.number | tojson }})">⎙ ATTACH</button>
+            <button class="btn btn-sm" onclick="showAnomalyModal({{ my_step.order }}, {{ my_step.number | tojson }})">ANOMALY</button>
+            <button class="btn btn-sm btn-primary" onclick="completeStep({{ my_step.order }})">COMPLETE</button>
+            <button class="btn btn-sm mystep-release" onclick="releaseStep({{ my_step.order }})" title="Release this step back to pending">✕</button>
+        </div>
+    </div>
+{% endif %}
+</div>

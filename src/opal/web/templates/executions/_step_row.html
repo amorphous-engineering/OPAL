@@ -1,0 +1,112 @@
+{# One step row of the document. Context: step (dict), op_data, row_is_op,
+   plus the page context (claims_by_se, bound_holds_by_se, step_holding_ncs,
+   version_steps_map, attach_counts, step_consumptions, gated_ops_by_order,
+   seq_blockers_by_order, inst_status, current_user). Spatial stability: this
+   node is replaced in place when the step changes remotely. #}
+{% import 'opalkit/_macros.html' as ok %}
+{% import 'executions/_exec_macros.html' as ex with context %}
+{% set op = op_data.step %}
+{% set exec = step.execution %}
+{% set vs = version_steps_map.get(step.order, {}) %}
+{% set is_terminal = step.status in ['completed', 'signed_off', 'skipped'] %}
+{% set claim_info = claims_by_se.get(exec.id) if exec else none %}
+{% set is_mine = claim_info and claim_info.user and current_user and claim_info.user.id == current_user.id %}
+{% set step_display_number = step.step_number if '.' in step.step_number or row_is_op else (op.step_number ~ '.' ~ step.step_number) %}
+{% if row_is_op %}
+    {% set gate_text = 'WAITING ON OP ' ~ gated_ops_by_order[step.order] | join(', ') if gated_ops_by_order.get(step.order) else none %}
+    {% set parent_held = false %}
+{% else %}
+    {% set gate_text = ('WAITING ON OP ' ~ gated_ops_by_order[op.order] | join(', ')) if gated_ops_by_order.get(op.order) else seq_blockers_by_order.get(step.order) %}
+    {% set parent_held = op.status == 'on_hold' %}
+{% endif %}
+<div class="doc-step{% if is_terminal %} is-done{% endif %}{% if step.status == 'skipped' %} is-skipped{% endif %}{% if claim_info %} is-claimed{% endif %}{% if is_mine %} is-mine{% endif %}"
+     id="step-{{ step.order }}" data-order="{{ step.order }}" data-se-id="{{ exec.id if exec else '' }}" data-status="{{ step.status }}">
+    <div class="doc-step-line" onclick="toggleStepBody({{ step.order }})">
+        {{ ex.role_chip(vs.get('required_role')) }}
+        <span class="doc-step-num mono">{{ step_display_number }}</span>
+        <span class="doc-step-title">{{ step.title }}</span>
+        {{ ex.indicators(step, attach_counts, vs) }}
+        <span class="doc-step-presence" data-presence>
+            {{ ex.presence_cell(step, claims_by_se, bound_holds_by_se, step_holding_ncs, inst_status, gate_text, parent_held) }}
+        </span>
+    </div>
+    <div class="doc-step-body" hidden>
+        {% if step.status == 'on_hold' and exec %}
+        {% set hold_ncs = step_holding_ncs.get(exec.id, []) %}
+        <div class="step-hold-banner">
+            <strong>ON HOLD</strong> — awaiting disposition on
+            {% for nc in hold_ncs %}<a href="/issues/{{ nc.id }}" class="mono">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if vs.get('caution') %}
+        <div class="caution-block">CAUTION: {{ vs.get('caution') }}</div>
+        {% endif %}
+        {% if step.instructions %}
+        <div class="step-instructions" data-markdown>{{ step.instructions }}</div>
+        {% endif %}
+        {{ ex.step_images(vs) }}
+
+        {% set step_kit = vs.get('step_kit', []) %}
+        {% set step_cons = step_consumptions.get(exec.id, []) if exec else [] %}
+        {% if step_kit or step_cons %}
+        <div class="step-kit-panel">
+            <div class="form-label">STEP PARTS{% if step_cons %} {{ ok.status("CONSUMED " ~ step_cons|length, "ok") }}{% endif %}</div>
+            {% if step_kit %}
+            <table class="data-table" data-step-kit="{{ step.order }}">
+                <thead><tr>
+                    <th>PART</th>
+                    <th style="width:60px;text-align:right;">QTY</th>
+                    <th style="width:80px;">TYPE</th>
+                    <th style="width:180px;">SOURCE</th>
+                    <th style="width:80px;">QTY</th>
+                </tr></thead>
+                <tbody>
+                    {% for sk in step_kit %}
+                    <tr data-part-id="{{ sk.part_id }}" data-required="{{ sk.quantity_required }}">
+                        <td>{{ sk.part_name }}{% if sk.notes %} <span class="text-muted">({{ sk.notes }})</span>{% endif %}</td>
+                        <td class="mono" style="text-align:right;">{{ sk.quantity_required }}</td>
+                        <td>{{ ok.status(sk.usage_type|upper, "info" if sk.usage_type == 'tooling' else "default") }}</td>
+                        <td><select class="form-select form-select-sm sk-inv-select" data-part-id="{{ sk.part_id }}"><option>Loading...</option></select></td>
+                        <td><input type="number" class="form-input sk-qty-input" data-part-id="{{ sk.part_id }}" step="0.0001" min="0" value="{{ sk.quantity_required }}" style="width:70px;"></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if step.status == 'in_progress' and inst_status == 'in_progress' %}
+            <div class="step-kit-actions">
+                <button class="btn btn-sm btn-primary" onclick="consumeStepParts({{ step.order }})">CONSUME</button>
+            </div>
+            {% endif %}
+            {% endif %}
+            {% if step_cons %}
+            <div class="step-kit-consumed">
+                {% for c in step_cons %}
+                <span class="mono text-muted">{{ c.inventory_record.part.name }} x{{ c.quantity }} from {{ c.inventory_record.location }}{% if c.usage_type.value == 'tooling' %} (TOOLING){% endif %}</span><br>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {{ ex.data_readout(step) }}
+
+        {% if exec and exec.notes %}
+        <div class="step-notes-readout">
+            <span class="ro-label mono">NOTES</span>
+            <div class="ro-notes mono">{{ exec.notes }}</div>
+        </div>
+        {% endif %}
+
+        {% if inst_status in ['pending', 'in_progress'] %}
+        <div class="step-actions">
+            {% if step.status in ['pending', 'in_progress'] %}
+            <button class="btn btn-sm" onclick="showAnomalyModal({{ step.order }}, {{ step_display_number | tojson }})">ANOMALY</button>
+            <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, {{ step.title | tojson }})">SKIP</button>
+            {% endif %}
+            {% if exec %}
+            <button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">⎙ ATTACH</button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>

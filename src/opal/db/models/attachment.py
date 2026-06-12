@@ -1,6 +1,6 @@
 """Attachment model."""
 
-from sqlalchemy import BigInteger, ForeignKey, String
+from sqlalchemy import BigInteger, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -21,7 +21,13 @@ class Attachment(Base, IdMixin, TimestampMixin):
         String(20),
         nullable=True,
         index=True,
-        comment="'inline' = embedded in markdown content; 'reference' = downloadable doc; 'closeout' = end-item closeout photo surfaced in build reports; null = legacy/unscoped",
+        comment="'inline' = embedded in markdown content; 'reference' = downloadable doc; 'closeout' = end-item closeout photo surfaced in build reports; 'capture' = execution evidence captured at a step; 'step_image' = authored step reference image; null = legacy/unscoped",
+    )
+    note: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Capturer's note on an execution capture"
+    )
+    uploaded_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # Optional links - attachment can belong to instance, step, issue, procedure, or neither
@@ -49,6 +55,7 @@ class Attachment(Base, IdMixin, TimestampMixin):
         "StepExecution", back_populates="attachments"
     )
     issue: Mapped["Issue | None"] = relationship("Issue", back_populates="attachments")
+    uploaded_by: Mapped["User | None"] = relationship("User")
 
     def __repr__(self) -> str:
         return f"<Attachment(id={self.id}, filename='{self.original_filename}', type='{self.mime_type}')>"

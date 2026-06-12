@@ -8,12 +8,14 @@ from pydantic import BaseModel, Field
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
-from opal.db.models.execution import StepExecution, StepStatus
+from opal.core.execution_flow import maybe_resume_step_after_nc_update
+from opal.db.models.execution import ProcedureInstance, StepExecution
 from opal.db.models.issue import (
     DispositionType,
     Issue,
     IssuePriority,
     IssueStatus,
+    IssueStepBlock,
     IssueType,
 )
 from opal.db.models.issue_comment import IssueComment
@@ -399,119 +401,12 @@ def update_issue(
     log_update(db, issue, old_values, user_id)
 
     # Auto-resume step on hold once all linked NCs reach a terminal disposition.
-    _maybe_resume_step_after_nc_update(db, issue, user_id)
+    maybe_resume_step_after_nc_update(db, issue, user_id)
 
     db.commit()
     db.refresh(issue)
 
     return _issue_to_response(issue)
-
-
-def _maybe_resume_step_after_nc_update(db, issue: "Issue", user_id: int | None) -> None:
-    """If this NC just reached a terminal state and no other open NCs remain on
-    its step, pop the step back to IN_PROGRESS."""
-    if issue.step_execution_id is None:
-        return
-    issue_type = issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type
-    if issue_type != IssueType.NON_CONFORMANCE.value:
-        return
-    issue_status = issue.status.value if hasattr(issue.status, "value") else issue.status
-    if issue_status not in (IssueStatus.DISPOSITION_APPROVED.value, IssueStatus.CLOSED.value):
-        return
-
-    step_exec = db.get(StepExecution, issue.step_execution_id)
-    if step_exec is None:
-        return
-    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-    if step_status != StepStatus.ON_HOLD.value:
-        return
-
-    remaining = (
-        db.query(Issue)
-        .filter(
-            Issue.step_execution_id == step_exec.id,
-            Issue.issue_type == IssueType.NON_CONFORMANCE,
-            Issue.id != issue.id,
-            Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-            Issue.deleted_at.is_(None),
-        )
-        .count()
-    )
-    if remaining != 0:
-        return
-
-    # Hold back if any redline op authorized by an NC on this step is still
-    # outstanding. Approving the disposition isn't enough — the rework itself
-    # has to be completed before the held step can resume.
-    terminal_states = (
-        StepStatus.COMPLETED,
-        StepStatus.SIGNED_OFF,
-        StepStatus.SKIPPED,
-    )
-    open_redlines = (
-        db.query(StepExecution)
-        .join(Issue, Issue.id == StepExecution.ad_hoc_issue_id)
-        .filter(
-            StepExecution.instance_id == step_exec.instance_id,
-            StepExecution.level == 0,
-            Issue.step_execution_id == step_exec.id,
-            Issue.deleted_at.is_(None),
-            StepExecution.status.notin_(terminal_states),
-        )
-        .count()
-    )
-    if open_redlines:
-        return
-
-    step_old = get_model_dict(step_exec)
-    step_exec.status = StepStatus.IN_PROGRESS
-    log_update(db, step_exec, step_old, user_id)
-
-    # Propagate resume up: when an NC was logged on a sub-step we also flipped
-    # the parent op to ON_HOLD so the whole operation paused. Now that this
-    # sub-step is clear, resume the parent too — but only if no other
-    # sub-step of that parent has any open NC remaining.
-    if step_exec.level > 0 and step_exec.parent_step_order is not None:
-        parent_exec = (
-            db.query(StepExecution)
-            .filter(
-                StepExecution.instance_id == step_exec.instance_id,
-                StepExecution.step_number == step_exec.parent_step_order,
-                StepExecution.level == 0,
-            )
-            .first()
-        )
-        if parent_exec is not None:
-            parent_status = (
-                parent_exec.status.value
-                if hasattr(parent_exec.status, "value")
-                else parent_exec.status
-            )
-            if parent_status == StepStatus.ON_HOLD.value:
-                sibling_se_ids = [
-                    se.id
-                    for se in db.query(StepExecution)
-                    .filter(
-                        StepExecution.instance_id == step_exec.instance_id,
-                        StepExecution.parent_step_order == parent_exec.step_number,
-                    )
-                    .all()
-                ]
-                sibling_se_ids.append(parent_exec.id)
-                siblings_open = (
-                    db.query(Issue)
-                    .filter(
-                        Issue.step_execution_id.in_(sibling_se_ids),
-                        Issue.issue_type == IssueType.NON_CONFORMANCE,
-                        Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-                        Issue.deleted_at.is_(None),
-                    )
-                    .count()
-                )
-                if siblings_open == 0:
-                    parent_old = get_model_dict(parent_exec)
-                    parent_exec.status = StepStatus.IN_PROGRESS
-                    log_update(db, parent_exec, parent_old, user_id)
 
 
 @router.delete("/{issue_id}", status_code=204)
@@ -527,6 +422,120 @@ def delete_issue(
 
     issue.deleted_at = datetime.now(UTC)
     log_delete(db, issue, user_id)
+    db.commit()
+
+
+# ============ Step blocks (hold points) ============
+
+
+class StepBlockCreate(BaseModel):
+    """Bind a hold point: the step cannot START while this issue is
+    undispositioned."""
+
+    procedure_instance_id: int
+    step_number: int
+
+
+class StepBlockResponse(BaseModel):
+    """A bound hold point."""
+
+    id: int
+    issue_id: int
+    step_execution_id: int
+    procedure_instance_id: int
+    step_number: int
+    step_number_str: str
+    work_order_number: str | None = None
+
+
+def _step_block_response(db: DbSession, block: IssueStepBlock) -> StepBlockResponse:
+    step_exec = db.get(StepExecution, block.step_execution_id)
+    instance = db.get(ProcedureInstance, step_exec.instance_id) if step_exec else None
+    return StepBlockResponse(
+        id=block.id,
+        issue_id=block.issue_id,
+        step_execution_id=block.step_execution_id,
+        procedure_instance_id=step_exec.instance_id if step_exec else 0,
+        step_number=step_exec.step_number if step_exec else 0,
+        step_number_str=(step_exec.step_number_str or str(step_exec.step_number))
+        if step_exec
+        else "",
+        work_order_number=instance.work_order_number if instance else None,
+    )
+
+
+@router.get("/{issue_id}/step-blocks", response_model=list[StepBlockResponse])
+def list_step_blocks(
+    issue_id: int,
+    db: DbSession,
+) -> list[StepBlockResponse]:
+    """List the steps this issue blocks from starting."""
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return [_step_block_response(db, b) for b in issue.step_blocks]
+
+
+@router.post("/{issue_id}/step-blocks", response_model=StepBlockResponse, status_code=201)
+def create_step_block(
+    issue_id: int,
+    data: StepBlockCreate,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> StepBlockResponse:
+    """Bind this issue as a hold on a step."""
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    step_exec = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.instance_id == data.procedure_instance_id,
+            StepExecution.step_number == data.step_number,
+        )
+        .first()
+    )
+    if not step_exec:
+        raise HTTPException(status_code=404, detail="Step not found")
+
+    existing = (
+        db.query(IssueStepBlock)
+        .filter(
+            IssueStepBlock.issue_id == issue_id,
+            IssueStepBlock.step_execution_id == step_exec.id,
+        )
+        .first()
+    )
+    if existing:
+        return _step_block_response(db, existing)
+
+    block = IssueStepBlock(issue_id=issue_id, step_execution_id=step_exec.id)
+    db.add(block)
+    db.flush()
+    log_create(db, block, user_id)
+    db.commit()
+    return _step_block_response(db, block)
+
+
+@router.delete("/{issue_id}/step-blocks/{block_id}", status_code=204)
+def delete_step_block(
+    issue_id: int,
+    block_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> None:
+    """Unbind a hold point. Releasing a hold is a decision — it is audited."""
+    block = (
+        db.query(IssueStepBlock)
+        .filter(IssueStepBlock.id == block_id, IssueStepBlock.issue_id == issue_id)
+        .first()
+    )
+    if not block:
+        raise HTTPException(status_code=404, detail="Step block not found")
+
+    log_delete(db, block, user_id)
+    db.delete(block)
     db.commit()
 
 

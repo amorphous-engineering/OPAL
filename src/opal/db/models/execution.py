@@ -215,6 +215,9 @@ class StepExecution(Base, IdMixin, TimestampMixin):
     consumptions: Mapped[list["InventoryConsumption"]] = relationship(
         "InventoryConsumption", back_populates="step_execution"
     )
+    claims: Mapped[list["StepClaim"]] = relationship(
+        "StepClaim", back_populates="step_execution", cascade="all, delete-orphan"
+    )
 
     @property
     def duration_seconds(self) -> int | None:
@@ -225,3 +228,49 @@ class StepExecution(Base, IdMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<StepExecution(id={self.id}, instance_id={self.instance_id}, step={self.step_number}, status={self.status})>"
+
+
+class ClaimReleaseReason(str, Enum):
+    """Why a step claim ended."""
+
+    COMPLETED = "completed"  # Step was completed by the claimant
+    RELEASED = "released"  # Claimant explicitly un-claimed
+    SUPERSEDED = "superseded"  # Claimant claimed another step (one active step per user)
+    SKIPPED = "skipped"  # Step was skipped while claimed
+
+
+class StepClaim(Base, IdMixin, TimestampMixin):
+    """A user actively working a step. released_at IS NULL = active claim.
+
+    One active claim per step; one active claim per user per instance
+    (claiming another step supersedes the previous claim). Rows are never
+    deleted — the claim history is the who-worked-what audit trail.
+    """
+
+    instance_id: Mapped[int] = mapped_column(
+        ForeignKey("procedure_instance.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    step_execution_id: Mapped[int] = mapped_column(
+        ForeignKey("step_execution.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    release_reason: Mapped[ClaimReleaseReason | None] = mapped_column(
+        String(20), nullable=True, comment="Set when released_at is set"
+    )
+
+    # Relationships
+    instance: Mapped["ProcedureInstance"] = relationship("ProcedureInstance")
+    step_execution: Mapped["StepExecution"] = relationship(
+        "StepExecution", back_populates="claims"
+    )
+    user: Mapped["User"] = relationship("User")
+
+    def __repr__(self) -> str:
+        return (
+            f"<StepClaim(id={self.id}, step_execution_id={self.step_execution_id}, "
+            f"user_id={self.user_id}, active={self.released_at is None})>"
+        )

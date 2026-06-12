@@ -17,6 +17,7 @@
     <script src="/static/js/htmx.min.js"></script>
     <script src="/static/js/marked.min.js"></script>
     <script src="/static/js/events.js"></script>
+    {% block head_extra %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% if demo_active %}

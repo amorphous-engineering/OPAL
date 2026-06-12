@@ -1,0 +1,25 @@
+{# The document: one vertical scroll of OP cards in procedure order, plus the
+   rail. Single wrapper div (display:contents) — .exec-doc-layout becomes a
+   direct flex child of .exec-tab-content. #}
+<div>
+<div class="exec-doc-layout" id="exec-doc-layout">
+    <button class="btn btn-sm rail-toggle" onclick="toggleRail()" aria-label="Issues and attachments">≡</button>
+    <div class="exec-doc" id="exec-doc">
+        {% for op_data in ops %}
+        {% include 'executions/_op_card.html' %}
+        {% endfor %}
+        {% if contingency_ops %}
+        <div class="exec-doc-divider mono">CONTINGENCY</div>
+        {% for op_data in contingency_ops %}
+        {% include 'executions/_op_card.html' %}
+        {% endfor %}
+        {% endif %}
+        {% if not ops and not contingency_ops %}
+        <div class="empty-line mono">Operations — none</div>
+        {% endif %}
+    </div>
+    <aside class="exec-rail" id="exec-rail" aria-label="Issues, attachments, reference">
+        {% include 'executions/_rail.html' %}
+    </aside>
+</div>
+</div>

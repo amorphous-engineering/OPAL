@@ -7,7 +7,7 @@ from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential
 from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
-from opal.db.models.execution import ProcedureInstance, StepExecution
+from opal.db.models.execution import ProcedureInstance, StepClaim, StepExecution
 from opal.db.models.genealogy import AssemblyComponent
 from opal.db.models.inventory import (
     InventoryConsumption,
@@ -17,7 +17,7 @@ from opal.db.models.inventory import (
     StockTransfer,
     TestTemplate,
 )
-from opal.db.models.issue import Issue
+from opal.db.models.issue import Issue, IssueStepBlock
 from opal.db.models.issue_comment import IssueComment
 from opal.db.models.onshape_link import OnshapeLink, OnshapeSyncLog
 from opal.db.models.part import BOMLine, Part, PartRequirement
@@ -28,6 +28,7 @@ from opal.db.models.procedure import (
     ProcedureStep,
     ProcedureVersion,
     StepDependency,
+    StepImage,
     StepKit,
 )
 from opal.db.models.purchase import Purchase, PurchaseExpense, PurchaseLine
@@ -57,6 +58,7 @@ __all__ = [
     "Issue",
     "IssueComment",
     "IssueReference",
+    "IssueStepBlock",
     "Kit",
     "MasterProcedure",
     "OnshapeLink",
@@ -75,8 +77,10 @@ __all__ = [
     "Requirement",
     "Risk",
     "RiskReference",
+    "StepClaim",
     "StepDependency",
     "StepExecution",
+    "StepImage",
     "StepKit",
     "StockTestResult",
     "StockTransfer",
