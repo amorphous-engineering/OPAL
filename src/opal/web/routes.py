@@ -7,6 +7,7 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -853,9 +854,7 @@ def parts_import(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/parts/new", response_class=HTMLResponse)
-def parts_new(
-    request: Request, db: DbSession, parent_id: int | None = Query(None)
-) -> HTMLResponse:
+def parts_new(request: Request, db: DbSession, parent_id: int | None = Query(None)) -> HTMLResponse:
     """Deep link: the parts list with the create overlay open.
 
     The form never asks what the invoking context already knows —
@@ -874,17 +873,13 @@ def parts_new(
 
 
 def _parts_detail_response(
-    request: Request, db: DbSession, part_id: int, edit_open: bool = False
+    request: Request,
+    db: DbSession,
+    part: Part,
+    edit_open: bool = False,
+    variant_pn: str | None = None,
 ) -> HTMLResponse:
     from opal.config import get_active_project
-
-    part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
-    if not part:
-        return templates.TemplateResponse(
-            "errors/404.html",
-            {"request": request, "message": f"Part {part_id} not found"},
-            status_code=404,
-        )
 
     # The PN is the page's name; the DB row id appears nowhere
     context = get_base_context(request, db, f"{part.internal_pn or part.name} - OPAL")
@@ -899,7 +894,7 @@ def _parts_detail_response(
     )
 
     # Get inventory records
-    inventory_records = db.query(InventoryRecord).filter(InventoryRecord.part_id == part_id).all()
+    inventory_records = db.query(InventoryRecord).filter(InventoryRecord.part_id == part.id).all()
     context["inventory_records"] = inventory_records
 
     # Calculate total quantity for display
@@ -1050,19 +1045,93 @@ def _parts_detail_response(
     context["categories"] = sorted(category_set)
     context["form_open"] = edit_open
 
+    if variant_pn is not None:
+        # The shared form renders in variant mode: next code as a locked fact
+        context["form_variant"] = True
+        context["variant_pn"] = variant_pn
+        context["variant_pn_segments"] = _pn_segments(
+            variant_pn, tier_config.code if tier_config else str(part.tier)
+        )
+        context["form_open"] = True
+
     return templates.TemplateResponse("parts/detail.html", context)
 
 
-@router.get("/parts/{part_id}", response_class=HTMLResponse)
-def parts_detail(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
-    """Part detail page; hosts the edit overlay."""
-    return _parts_detail_response(request, db, part_id)
+def _resolve_part_ref(db: DbSession, ref: str) -> Part | None:
+    """Resolve /parts/{ref}: exact PN match first, then numeric id.
+
+    PN-first means a purely numeric part number wins over an id collision.
+    """
+    part = db.query(Part).filter(Part.internal_pn == ref, Part.deleted_at.is_(None)).first()
+    if part is None and ref.isdigit():
+        part = db.query(Part).filter(Part.id == int(ref), Part.deleted_at.is_(None)).first()
+    return part
 
 
-@router.get("/parts/{part_id}/edit", response_class=HTMLResponse)
-def parts_edit(request: Request, db: DbSession, part_id: int) -> HTMLResponse:
+# PNs the literal sibling routes would shadow; those parts stay id-addressed
+_PN_SHADOWED_BY_ROUTES = {"new", "table", "search", "import"}
+
+
+def _canonical_part_redirect(part: Part, ref: str, suffix: str = "") -> RedirectResponse | None:
+    """302 an id-addressed request to the canonical PN URL.
+
+    No redirect when the part has no PN, when the PN can't live in a single
+    path segment ('/'), or when a literal sibling route shadows it.
+    """
+    pn = part.internal_pn
+    if not pn or pn == ref or "/" in pn or pn in _PN_SHADOWED_BY_ROUTES:
+        return None
+    return RedirectResponse(url=f"/parts/{quote(pn, safe='')}{suffix}", status_code=302)
+
+
+def _parts_404(request: Request, ref: str) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "errors/404.html",
+        {"request": request, "message": f"Part {ref} not found"},
+        status_code=404,
+    )
+
+
+@router.get("/parts/{part_ref}", response_class=HTMLResponse, response_model=None)
+def parts_detail(request: Request, db: DbSession, part_ref: str) -> HTMLResponse | RedirectResponse:
+    """Part detail page; hosts the edit overlay. The PN is the canonical URL."""
+    part = _resolve_part_ref(db, part_ref)
+    if not part:
+        return _parts_404(request, part_ref)
+    if redirect := _canonical_part_redirect(part, part_ref):
+        return redirect
+    return _parts_detail_response(request, db, part)
+
+
+@router.get("/parts/{part_ref}/edit", response_class=HTMLResponse, response_model=None)
+def parts_edit(request: Request, db: DbSession, part_ref: str) -> HTMLResponse | RedirectResponse:
     """Deep link: the part page with the edit overlay open."""
-    return _parts_detail_response(request, db, part_id, edit_open=True)
+    part = _resolve_part_ref(db, part_ref)
+    if not part:
+        return _parts_404(request, part_ref)
+    if redirect := _canonical_part_redirect(part, part_ref, "/edit"):
+        return redirect
+    return _parts_detail_response(request, db, part, edit_open=True)
+
+
+@router.get("/parts/{part_ref}/variant", response_class=HTMLResponse, response_model=None)
+def parts_new_variant(
+    request: Request, db: DbSession, part_ref: str
+) -> HTMLResponse | RedirectResponse:
+    """Deep link: the part page with the variant form open (next code minted on save)."""
+    from opal.core.numbering import PartNumberError, next_variant_part_number
+
+    part = _resolve_part_ref(db, part_ref)
+    if not part:
+        return _parts_404(request, part_ref)
+    if redirect := _canonical_part_redirect(part, part_ref, "/variant"):
+        return redirect
+    try:
+        variant_pn = next_variant_part_number(db, part.tier, part.internal_pn or "")
+    except PartNumberError:
+        # Format mints no variants (or the PN predates it): bounce to the page
+        return RedirectResponse(url=f"/parts/{quote(part_ref, safe='')}", status_code=302)
+    return _parts_detail_response(request, db, part, variant_pn=variant_pn)
 
 
 # ============ INVENTORY ============

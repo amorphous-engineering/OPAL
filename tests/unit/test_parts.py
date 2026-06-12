@@ -225,6 +225,54 @@ def test_create_variant_copies_attributes_and_bom(client, db_session, variant_pr
     assert after["internal_pn"] == "RV-F-0003-001"
 
 
+def test_create_variant_body_overrides(client, db_session, variant_project):
+    component = client.post("/api/parts", json={"name": "Bolt", "tier": 1}).json()
+    source = client.post(
+        "/api/parts",
+        json={
+            "name": "Bracket Assembly",
+            "tier": 1,
+            "category": "Structures",
+            "external_pn": "EXT-77",
+        },
+    ).json()
+    db_session.add(BOMLine(assembly_id=source["id"], component_id=component["id"], quantity=2))
+    db_session.commit()
+
+    response = client.post(
+        f"/api/parts/{source['id']}/variants",
+        json={"name": "Bracket Assembly, Lightened", "description": "Pocketed variant"},
+    )
+    assert response.status_code == 201, response.text
+    variant = response.json()
+
+    assert variant["name"] == "Bracket Assembly, Lightened"
+    assert variant["description"] == "Pocketed variant"
+    # Omitted fields copy from the source; BOM still copies
+    assert variant["category"] == "Structures"
+    assert variant["external_pn"] == "EXT-77"
+    assert db_session.query(BOMLine).filter(BOMLine.assembly_id == variant["id"]).count() == 1
+
+
+def test_create_variant_explicit_null_clears(client, variant_project):
+    source = client.post(
+        "/api/parts", json={"name": "Src", "tier": 1, "external_pn": "EXT-1"}
+    ).json()
+
+    response = client.post(f"/api/parts/{source['id']}/variants", json={"external_pn": None})
+    assert response.status_code == 201
+    variant = response.json()
+    assert variant["external_pn"] is None
+    # A null name is "no opinion", never a cleared NOT NULL column
+    assert variant["name"] == "Src"
+
+
+def test_create_variant_bad_parent_rejected(client, variant_project):
+    source = client.post("/api/parts", json={"name": "Src", "tier": 1}).json()
+    response = client.post(f"/api/parts/{source['id']}/variants", json={"parent_id": 99999})
+    assert response.status_code == 400
+
+
 def test_create_variant_rejected_without_variant_format(client):
     # Fallback numbering (no project config) has no {variant} placeholder
     source = client.post("/api/parts", json={"name": "Plain", "tier": 1}).json()

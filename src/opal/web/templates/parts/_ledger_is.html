@@ -32,7 +32,7 @@
 <div class="ledger-row{% if not (variant_rows) %} ledger-row-empty{% endif %}">
     <span class="ledger-label">VAR</span>
     <span class="ledger-value">{{ variant_rows | length if variant_rows else '—' }}</span>
-    <a class="ledger-add" href="#" onclick="createVariant(); return false;">[+]</a>
+    <a class="ledger-add" href="/parts/{{ part.id }}/variant">[+]</a>
 </div>
 {% if variant_rows %}
 <div class="ledger-detail">

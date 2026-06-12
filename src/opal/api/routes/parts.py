@@ -75,6 +75,26 @@ class PartUpdate(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class PartVariantCreate(BaseModel):
+    """Overrides for a new variant; omitted fields copy from the source part.
+
+    Identity (tier, internal_pn) is derived from the source and never
+    overridable — a variant is a sibling, not a new sequence.
+    """
+
+    name: str | None = None
+    description: str | None = None
+    category: str | None = None
+    unit_of_measure: str | None = None
+    tracking_type: str | None = None  # "bulk" or "serialized"
+    external_pn: str | None = None
+    reorder_point: Decimal | None = None
+    is_tooling: bool | None = None
+    calibration_interval_days: int | None = None
+    parent_id: int | None = None
+    metadata: dict[str, Any] | None = None
+
+
 class PartResponse(BaseModel):
     """Schema for part response."""
 
@@ -319,11 +339,13 @@ def create_part_variant(
     db: DbSession,
     part_id: int,
     user_id: CurrentUserId,
+    variant_in: PartVariantCreate | None = None,
 ) -> PartResponse:
     """Mint the next variant of a part: a draft sibling copying attributes and BOM.
 
     The variant shares the source's tier+sequence base with the next variant
-    code; the tier sequence counter does not advance.
+    code; the tier sequence counter does not advance. Body fields override
+    the copied attributes; omitted fields copy, explicit nulls clear.
     """
     part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
     if not part:
@@ -341,25 +363,46 @@ def create_part_variant(
             detail="Part has no internal part number, so its variant family cannot be derived",
         )
 
+    overrides = variant_in.model_dump(exclude_unset=True) if variant_in else {}
+    parent_id = overrides.get("parent_id", part.parent_id)
+    if parent_id is not None and parent_id != part.parent_id:
+        parent = db.query(Part).filter(Part.id == parent_id, Part.deleted_at.is_(None)).first()
+        if not parent:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Parent part {parent_id} not found",
+            )
+
     try:
         new_pn = next_variant_part_number(db, part.tier, part.internal_pn)
     except PartNumberError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
+    if "metadata" in overrides:
+        metadata = overrides["metadata"]
+    else:
+        metadata = dict(part.metadata_) if part.metadata_ else None
+
     variant = Part(
-        name=part.name,
+        # name is NOT NULL: a null/empty override falls back to the source name
+        name=overrides.get("name") or part.name,
         internal_pn=new_pn,
-        external_pn=part.external_pn,
-        description=part.description,
-        category=part.category,
-        unit_of_measure=part.unit_of_measure,
-        tracking_type=part.tracking_type,
+        external_pn=overrides.get("external_pn", part.external_pn),
+        description=overrides.get("description", part.description),
+        category=overrides.get("category", part.category),
+        unit_of_measure=overrides.get("unit_of_measure") or part.unit_of_measure,
+        tracking_type=overrides.get("tracking_type") or part.tracking_type,
         tier=part.tier,
-        parent_id=part.parent_id,
-        reorder_point=part.reorder_point,
-        is_tooling=part.is_tooling,
-        calibration_interval_days=part.calibration_interval_days,
-        metadata_=dict(part.metadata_) if part.metadata_ else None,
+        parent_id=parent_id,
+        reorder_point=overrides.get("reorder_point", part.reorder_point),
+        # NOT NULL: a null override means "no opinion", not "clear"
+        is_tooling=(
+            part.is_tooling if overrides.get("is_tooling") is None else overrides["is_tooling"]
+        ),
+        calibration_interval_days=overrides.get(
+            "calibration_interval_days", part.calibration_interval_days
+        ),
+        metadata_=metadata,
     )
     db.add(variant)
     db.flush()

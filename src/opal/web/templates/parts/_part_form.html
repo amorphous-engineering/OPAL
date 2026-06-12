@@ -1,23 +1,36 @@
-{# The one part form — create and edit share it (title + submit differ).
-   Rendered as an overlay on the page the user is already on: no
-   intermediate menus. Deep links (/parts/new, /parts/{id}/edit) render
-   the underlying page with this overlay open.
+{# The one part form — create, edit, and variant share it (title + submit
+   differ). Rendered as an overlay on the page the user is already on: no
+   intermediate menus. Deep links (/parts/new, /parts/{ref}/edit,
+   /parts/{ref}/variant) render the underlying page with this overlay open.
 
    Context: form_part (Part | undefined -> create mode), tiers,
    categories, form_prefill (dict, create mode), form_open (bool),
-   tier_name/pn_segments (edit mode, for the tag). #}
+   tier_name/pn_segments (edit mode, for the tag). Variant mode:
+   form_variant (bool) + variant_pn/variant_pn_segments — form_part is the
+   SOURCE part; identity (PN, tier) is a locked fact, the rest prefills. #}
 {% import 'opalkit/_macros.html' as ok %}
 {% from 'parts/_tag.html' import part_tag %}
-{% set fm_edit = form_part is defined and form_part %}
+{% set fm_variant = form_variant is defined and form_variant %}
+{% set fm_edit = form_part is defined and form_part and not fm_variant %}
 {% set fm_draft = fm_edit and form_part.lifecycle_state == 'draft' %}
+{% set fm_filled = fm_edit or fm_variant %}
 {% set form_prefill = form_prefill if form_prefill is defined else {} %}
 
 <div id="part-form-overlay" style="display: {{ 'block' if form_open else 'none' }}; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal); overflow-y: auto;">
     <div style="max-width: 680px; margin: 4vh auto; padding: 0 var(--space-md);">
         <div class="panel">
-            <div class="panel-header">{{ 'EDIT ' ~ form_part.internal_pn if fm_edit else 'NEW PART' }}</div>
+            <div class="panel-header">{{ 'VARIANT ' ~ variant_pn if fm_variant else ('EDIT ' ~ form_part.internal_pn if fm_edit else 'NEW PART') }}</div>
             <div class="panel-body">
-                {% if fm_edit %}
+                {% if fm_variant %}
+                {{ part_tag('forming',
+                            pn=variant_pn,
+                            name=form_part.name,
+                            tier_level=form_part.tier,
+                            tier_name=tier_name,
+                            uom=form_part.unit_of_measure,
+                            tracking=form_part.tracking_type.value if form_part.tracking_type else '',
+                            pn_segments=variant_pn_segments) }}
+                {% elif fm_edit %}
                 {{ part_tag('header',
                             pn=form_part.internal_pn,
                             name=form_part.name,
@@ -34,7 +47,22 @@
                 {% endif %}
 
                 <form id="part-form" onsubmit="event.preventDefault(); submitPartForm();" style="margin-top: var(--space-md);">
-                    {% if not fm_edit or fm_draft %}
+                    {% if fm_variant %}
+                    {# Identity is derived from the source — PN and tier live in the tag only #}
+                    <div class="grid grid-2" style="gap: var(--space-md);">
+                        <div class="form-group">
+                            <label class="form-label" for="pf-name">NAME <span class="text-red">*</span></label>
+                            <input type="text" id="pf-name" class="form-input" required
+                                   value="{{ form_part.name }}"
+                                   oninput="document.getElementById('tag-name').textContent = this.value;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="pf-ext">EXTERNAL REF</label>
+                            <input type="text" id="pf-ext" class="form-input"
+                                   value="{{ form_part.external_pn or '' }}" placeholder="CAD designator or vendor PN">
+                        </div>
+                    </div>
+                    {% elif not fm_edit or fm_draft %}
                     {# Identity rows — absent (not disabled) once active #}
                     <div class="form-group">
                         <label class="form-label">TIER{% if not fm_edit %} <span class="text-red">*</span>{% endif %}</label>
@@ -89,7 +117,7 @@
                         <div class="form-group">
                             <label class="form-label" for="pf-category">CATEGORY</label>
                             <input type="text" id="pf-category" class="form-input" list="pf-category-list"
-                                   value="{{ form_part.category or '' if fm_edit else (form_prefill.get('category') or '') }}">
+                                   value="{{ form_part.category or '' if fm_filled else (form_prefill.get('category') or '') }}">
                             <datalist id="pf-category-list">
                                 {% for cat in categories %}<option value="{{ cat }}">{% endfor %}
                             </datalist>
@@ -97,32 +125,32 @@
                         <div class="form-group">
                             <label class="form-label" for="pf-uom">UOM</label>
                             <input type="text" id="pf-uom" class="form-input"
-                                   value="{{ form_part.unit_of_measure or 'EA' if fm_edit else 'EA' }}">
+                                   value="{{ form_part.unit_of_measure or 'EA' if fm_filled else 'EA' }}">
                         </div>
                     </div>
                     <div class="grid grid-2" style="gap: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label" for="pf-tracking">TRACKING</label>
                             <select id="pf-tracking" class="form-select" onchange="pfTrackingTouched = true;">
-                                <option value="bulk" {% if fm_edit and form_part.tracking_type and form_part.tracking_type.value == 'bulk' %}selected{% endif %}>BULK</option>
-                                <option value="serialized" {% if not fm_edit or (form_part.tracking_type and form_part.tracking_type.value == 'serialized') %}selected{% endif %}>SERIALIZED</option>
+                                <option value="bulk" {% if fm_filled and form_part.tracking_type and form_part.tracking_type.value == 'bulk' %}selected{% endif %}>BULK</option>
+                                <option value="serialized" {% if not fm_filled or (form_part.tracking_type and form_part.tracking_type.value == 'serialized') %}selected{% endif %}>SERIALIZED</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="pf-reorder">REORDER POINT</label>
                             <input type="number" id="pf-reorder" class="form-input" step="0.0001" min="0"
-                                   value="{{ '%g' % form_part.reorder_point if fm_edit and form_part.reorder_point is not none else '' }}">
+                                   value="{{ '%g' % form_part.reorder_point if fm_filled and form_part.reorder_point is not none else '' }}">
                         </div>
                     </div>
                     <div class="grid grid-2" style="gap: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label" for="pf-cal">CALIBRATION (DAYS)</label>
                             <input type="number" id="pf-cal" class="form-input" min="1"
-                                   value="{{ form_part.calibration_interval_days or '' if fm_edit else '' }}">
+                                   value="{{ form_part.calibration_interval_days or '' if fm_filled else '' }}">
                         </div>
                         <div class="form-group">
                             <label class="form-label" style="display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-md);">
-                                <input type="checkbox" id="pf-tooling" {% if fm_edit and form_part.is_tooling %}checked{% endif %}>
+                                <input type="checkbox" id="pf-tooling" {% if fm_filled and form_part.is_tooling %}checked{% endif %}>
                                 TOOLING
                             </label>
                         </div>
@@ -131,12 +159,12 @@
                         <label class="form-label" for="pf-parent-search">PARENT ASSEMBLY</label>
                         <div class="part-search-container">
                             <input type="text" id="pf-parent-search" class="form-input part-search-input"
-                                   placeholder="{% if fm_edit and form_part.parent %}{{ form_part.parent.internal_pn }} - {{ form_part.parent.name }}{% elif form_prefill.get('parent_label') %}{{ form_prefill.get('parent_label') }}{% else %}—{% endif %}"
+                                   placeholder="{% if fm_filled and form_part.parent %}{{ form_part.parent.internal_pn }} - {{ form_part.parent.name }}{% elif form_prefill.get('parent_label') %}{{ form_prefill.get('parent_label') }}{% else %}—{% endif %}"
                                    autocomplete="off"
                                    hx-get="/parts/search" hx-trigger="keyup changed delay:200ms"
                                    hx-target="#pf-parent-results" hx-vals='{"limit": 5}' name="q">
                             <input type="hidden" id="pf-parent"
-                                   value="{{ form_part.parent_id or '' if fm_edit else (form_prefill.get('parent_id') or '') }}">
+                                   value="{{ form_part.parent_id or '' if fm_filled else (form_prefill.get('parent_id') or '') }}">
                             <div id="pf-parent-results" class="part-search-dropdown"></div>
                             <div id="pf-parent-selected" class="part-search-selected" style="display: none;">
                                 <span class="part-id"></span>
@@ -147,16 +175,16 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="pf-description">DESCRIPTION</label>
-                        <textarea id="pf-description" class="form-input" rows="3" placeholder="markdown">{{ form_part.description or '' if fm_edit else (form_prefill.get('description') or '') }}</textarea>
+                        <textarea id="pf-description" class="form-input" rows="3" placeholder="markdown">{{ form_part.description or '' if fm_filled else (form_prefill.get('description') or '') }}</textarea>
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="pf-metadata">METADATA (JSON)</label>
-                        <textarea id="pf-metadata" class="form-input mono" rows="2">{{ form_part.metadata_ | tojson if fm_edit and form_part.metadata_ else '' }}</textarea>
+                        <textarea id="pf-metadata" class="form-input mono" rows="2">{{ form_part.metadata_ | tojson if fm_filled and form_part.metadata_ else '' }}</textarea>
                     </div>
 
                     <div style="display: flex; gap: var(--space-sm); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="closePartForm()"') }}
-                        {{ ok.btn("SAVE" if fm_edit else "CREATE DRAFT", variant="primary", type="submit") }}
+                        {{ ok.btn("SAVE" if fm_edit else ("CREATE VARIANT" if fm_variant else "CREATE DRAFT"), variant="primary", type="submit") }}
                     </div>
                 </form>
             </div>
@@ -166,15 +194,16 @@
 
 <script>
 const pfEdit = {{ 'true' if fm_edit else 'false' }};
-const pfPartId = {{ form_part.id if fm_edit else 'null' }};
+const pfVariant = {{ 'true' if fm_variant else 'false' }};
+const pfPartId = {{ form_part.id if fm_filled else 'null' }};
 const pfIsDraft = {{ 'true' if fm_draft else 'false' }};
-let pfTier = {{ form_part.tier if fm_edit else (form_prefill.get('tier') or 'null') }};
+let pfTier = {{ form_part.tier if fm_filled else (form_prefill.get('tier') or 'null') }};
 const pfOriginalTier = {{ form_part.tier if fm_edit else 'null' }};
 const pfOriginalPn = {{ form_part.internal_pn | tojson if fm_edit else 'null' }};
 const pfOriginalName = {{ form_part.name | tojson if fm_edit else 'null' }};
 let pfPnEdited = false;
 let pfPreviewPn = null;
-let pfTrackingTouched = pfEdit;  // edit mode always sends the value as-is
+let pfTrackingTouched = pfEdit || pfVariant;  // filled modes always send the value as-is
 
 function openPartForm() {
     document.getElementById('part-form-overlay').style.display = 'block';
@@ -189,6 +218,8 @@ function closePartForm() {
         history.replaceState(null, '', '/parts');
     } else if (path.endsWith('/edit')) {
         history.replaceState(null, '', path.slice(0, -'/edit'.length));
+    } else if (path.endsWith('/variant')) {
+        history.replaceState(null, '', path.slice(0, -'/variant'.length));
     }
 }
 
@@ -250,12 +281,17 @@ async function submitPartForm() {
     if (metadataText && metadataText.trim()) {
         try { body.metadata = JSON.parse(metadataText); }
         catch (e) { alert('Invalid JSON in metadata.'); return; }
-    } else if (pfEdit) {
+    } else if (pfEdit || pfVariant) {
         body.metadata = null;
     }
 
     let url, method;
-    if (!pfEdit) {
+    if (pfVariant) {
+        // The server mints the PN and copies the BOM; the body carries the
+        // edited attributes (explicit nulls clear cleared fields)
+        body.name = document.getElementById('pf-name').value;
+        url = '/api/parts/' + pfPartId + '/variants'; method = 'POST';
+    } else if (!pfEdit) {
         if (pfTier === null) { alert('Select a tier.'); return; }
         body.name = document.getElementById('pf-name').value;
         body.tier = pfTier;
