@@ -4074,11 +4074,11 @@ def _seed_issues(
         title="Injector plate hole pattern out of tolerance",
         description='During QA inspection, bolt circle measured 0.005" outside tolerance.',
         issue_type=IssueType.NON_CONFORMANCE,
-        status=IssueStatus.INVESTIGATING,
+        status=IssueStatus.OPEN,
         priority=IssuePriority.HIGH,
         part_id=p["injector"].id,
         should_be='32x 0.040" holes on 1.500" bolt circle ±0.002"',
-        is_condition='Holes measured at 1.505" bolt circle — 0.005" outside tolerance on 3 of 4 quadrants',
+        actual='Holes measured at 1.505" bolt circle — 0.005" outside tolerance on 3 of 4 quadrants',
     )
     db.add(nc1)
     db.flush()
@@ -4088,11 +4088,11 @@ def _seed_issues(
         title="LOX tank circumferential weld porosity",
         description="Radiographic inspection revealed pores in weld at station 14.",
         issue_type=IssueType.NON_CONFORMANCE,
-        status=IssueStatus.DISPOSITION_PENDING,
+        status=IssueStatus.OPEN,
         priority=IssuePriority.CRITICAL,
         part_id=p["lox_tank"].id,
         should_be="Full-penetration weld with no porosity per AWS D17.1 Class A",
-        is_condition="Three pores detected: 0.8 mm, 0.6 mm, 0.5 mm in circumferential weld at station 14. Total aggregate porosity exceeds Class A limit.",
+        actual="Three pores detected: 0.8 mm, 0.6 mm, 0.5 mm in circumferential weld at station 14. Total aggregate porosity exceeds Class A limit.",
     )
     db.add(nc2)
 
@@ -4105,7 +4105,7 @@ def _seed_issues(
         priority=IssuePriority.MEDIUM,
         part_id=p["bulkhead_aft"].id,
         should_be="16 µin Ra max per AS568 gland specification for static radial seal",
-        is_condition="Profilometer measured 32 µin Ra on aft bulkhead bore — 2x allowable roughness",
+        actual="Profilometer measured 32 µin Ra on aft bulkhead bore — 2x allowable roughness",
     )
     db.add(nc3)
 
@@ -4118,7 +4118,7 @@ def _seed_issues(
         priority=IssuePriority.HIGH,
         part_id=p["ground_reg"].id,
         should_be="Regulate to 450 PSI ±10 PSI with zero external leakage",
-        is_condition="Bubble test shows steady stream at outlet NPT fitting at 400 PSI. Leak rate ~5 cc/min.",
+        actual="Bubble test shows steady stream at outlet NPT fitting at 400 PSI. Leak rate ~5 cc/min.",
     )
     db.add(nc4)
 
@@ -4129,7 +4129,7 @@ def _seed_issues(
         title="Flight computer resets during pyro channel firing",
         description="FC reboots when e-match is fired on either pyro channel.",
         issue_type=IssueType.BUG,
-        status=IssueStatus.INVESTIGATING,
+        status=IssueStatus.OPEN,
         priority=IssuePriority.HIGH,
         part_id=p["fc"].id,
         steps_to_reproduce="1. Power on flight computer via LiPo\n2. Arm both pyro channels via software command\n3. Fire channel 1 e-match\n4. Observe FC status LED and telemetry stream",

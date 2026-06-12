@@ -597,89 +597,182 @@ def test_leave_execution(client, auth_headers):
     assert len(participants["participants"]) == 0
 
 
-# ============ NC step-hold tests ============
+# ============ Containment / hold tests (Issues R2) ============
+#
+# Holds are derived from undispositioned issues, never stored on the step.
+# The blocking predicate is `undispositioned`, not `open`.
 
 
-def _log_nc(client, instance_id, step_number=1, title="NC A"):
-    """Log an NC against a step. Returns (issue_id, step_status_after)."""
+def _log_nc(client, instance_id, step_number=1, title="NC A", **extra):
+    """Log an NC against a step. Returns (issue_id, nc_body)."""
     resp = client.post(
         f"/api/procedure-instances/{instance_id}/steps/{step_number}/nc",
-        json={"title": title, "description": "x", "priority": "medium"},
+        json={"title": title, "priority": "medium", **extra},
     )
-    assert resp.status_code == 201
-    issue_id = resp.json()["id"]
-    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    step_status = next(
-        s["status"] for s in inst["step_executions"] if s["step_number"] == step_number
-    )
-    return issue_id, step_status
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    return body["id"], body
 
 
-def test_log_nc_puts_step_on_hold(client):
-    """Logging an NC against a step transitions it to on_hold."""
+def _sign(client, issue_id, dtype="use_as_is", rationale="acceptable as built"):
+    resp = client.post(
+        f"/api/issues/{issue_id}/disposition",
+        json={"disposition_type": dtype, "disposition_rationale": rationale},
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test_nc_capture_prefills_context(client):
+    """(§10.1) Capture carries the should-be/is pair and containment, and
+    links back to the raising step — the form asks nothing the context knows."""
     instance_id = _create_instance(client)
-    _, step_status = _log_nc(client, instance_id)
-    assert step_status == "on_hold"
+    issue_id, body = _log_nc(
+        client, instance_id, should_be='1.500" bolt circle', actual='1.505" measured'
+    )
+    assert body["issue_number"].startswith("IT-")
+    assert body["containment"] == "step"
+
+    issue = client.get(f"/api/issues/{issue_id}").json()
+    assert issue["procedure_instance_id"] == instance_id
+    assert issue["raised_step_id"] is not None
+    assert issue["should_be"] == '1.500" bolt circle'
+    assert issue["actual"] == '1.505" measured'
+    assert issue["disp_state"] == "undispositioned"
 
 
-def test_approving_nc_disposition_resumes_step(client):
-    """Approving the sole NC's disposition pops the step back to pending."""
+def test_undispositioned_nc_blocks_step_complete(client):
+    """(§10.2) COMPLETE is a commitment moment: an undispositioned
+    step-containment issue makes it impossible, and the 400 names the issue."""
     instance_id = _create_instance(client)
-    issue_id, _ = _log_nc(client, instance_id)
+    _, body = _log_nc(client, instance_id)
 
-    resp = client.patch(
-        f"/api/issues/{issue_id}",
-        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
-    )
-    assert resp.status_code == 200
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 400
+    assert "IT-" in resp.json()["detail"]
 
-    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    step_status = next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1)
-    assert step_status == "pending"
-
-
-def test_two_open_ncs_keep_step_on_hold_until_all_resolved(client):
-    """With two open NCs on a step, the step stays held until both reach a
-    terminal disposition state."""
-    instance_id = _create_instance(client)
-    issue_a, _ = _log_nc(client, instance_id, title="NC A")
-
-    # Log a second NC on the same step via the API (UI hides the button while held).
-    resp_b = client.post(
-        f"/api/procedure-instances/{instance_id}/steps/1/nc",
-        json={"title": "NC B", "description": "y", "priority": "medium"},
-    )
-    assert resp_b.status_code == 201
-    issue_b = resp_b.json()["id"]
-
-    # Approve A only — step must remain on hold for B.
-    client.patch(
-        f"/api/issues/{issue_a}",
-        json={"status": "disposition_approved", "disposition_type": "rework"},
-    )
-    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "on_hold"
-
-    # Approve B — step now resumes to pending.
-    client.patch(
-        f"/api/issues/{issue_b}",
-        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
-    )
+    # The step's stored status is untouched — the hold is derived.
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
     assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "pending"
 
 
-def test_cannot_skip_on_hold_step(client):
-    """The /skip endpoint refuses a step that is on hold for an open NC."""
+def test_undispositioned_nc_blocks_skip(client):
+    """SKIP is a terminal commitment — skipping held work would sweep the hold."""
     instance_id = _create_instance(client)
-    _log_nc(client, instance_id)
+    _, body = _log_nc(client, instance_id)
 
     resp = client.post(
         f"/api/procedure-instances/{instance_id}/steps/1/skip",
         json={"reason": "trying to bypass"},
     )
     assert resp.status_code == 400
-    assert "on hold" in resp.json()["detail"].lower()
+    assert body["issue_number"] in resp.json()["detail"]
+
+
+def test_sign_disposition_releases_hold_issue_stays_open(client):
+    """(§10.3) Signing releases the containment immediately; the issue stays
+    open for corrective-action tracking."""
+    instance_id = _create_instance(client)
+    issue_id, _ = _log_nc(client, instance_id)
+
+    signed = _sign(client, issue_id)
+    assert signed["disp_state"] == "dispositioned"
+    assert signed["status"] == "open"
+
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 200
+
+
+def test_two_ncs_both_must_be_dispositioned(client):
+    """With two undispositioned NCs on a step, COMPLETE stays absent until
+    both are signed."""
+    instance_id = _create_instance(client)
+    issue_a, _ = _log_nc(client, instance_id, title="NC A")
+    issue_b, _ = _log_nc(client, instance_id, title="NC B")
+
+    _sign(client, issue_a, "rework", "rework per redline")
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 400
+
+    _sign(client, issue_b)
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 200
+
+
+def test_advisory_issue_blocks_nothing(client):
+    instance_id = _create_instance(client)
+    _log_nc(client, instance_id, containment="advisory")
+
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 200
+
+
+def test_get_holds_endpoint(client):
+    """(§7) get_holds answers 'are we held and why' instantly."""
+    instance_id = _create_instance(client)
+    issue_id, body = _log_nc(client, instance_id)
+
+    holds = client.get(f"/api/procedure-instances/{instance_id}/holds").json()
+    assert holds["held"] is True
+    assert holds["holds"][0]["issue_number"] == body["issue_number"]
+    assert holds["holds"][0]["containment"] == "step"
+    assert any("COMPLETE" in b for b in holds["holds"][0]["blocks"])
+
+    _sign(client, issue_id)
+    holds = client.get(f"/api/procedure-instances/{instance_id}/holds").json()
+    assert holds["held"] is False
+    assert holds["holds"] == []
+
+
+def test_wo_containment_blocks_instance_completion(client):
+    """wo containment: every step runs, but the work order cannot close out
+    until the disposition is signed — at which point it completes."""
+    instance_id = _create_instance(client)
+    issue_id, _ = _log_nc(client, instance_id, containment="wo")
+
+    for step in (1, 2, 3):
+        resp = client.post(
+            f"/api/procedure-instances/{instance_id}/steps/{step}/complete", json={}
+        )
+        assert resp.status_code == 200, resp.text
+
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    assert inst["status"] == "in_work"
+
+    _sign(client, issue_id)
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    assert inst["status"] == "completed"
+
+
+def test_bound_future_step_blocks_complete(client):
+    """containment_step_id bound to a future step ('resolve by 3'): work
+    continues up to the boundary, whose COMPLETE is blocked until disposition."""
+    instance_id = _create_instance(client)
+    issue_id, _ = _log_nc(client, instance_id)
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
+
+    # Bind the boundary to step 3 (widen from the raised step).
+    resp = client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[3]},
+    )
+    assert resp.status_code == 200
+
+    # The raised step can now complete (the hold moved to the boundary)...
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 200
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/2/complete", json={})
+    assert resp.status_code == 200
+
+    # ...but the boundary step cannot COMPLETE.
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/3/complete", json={})
+    assert resp.status_code == 400
+    assert "IT-" in resp.json()["detail"]
+
+    _sign(client, issue_id)
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/3/complete", json={})
+    assert resp.status_code == 200
 
 
 # ============ Redline / ad-hoc op tests ============
@@ -717,29 +810,11 @@ def test_redline_creation_and_step_numbering(client):
     assert body["issue_id"] == issue_id
 
 
-def test_redline_gates_host_op(client):
-    """A snapshot op can't restart while a redline op tied to its NC is incomplete."""
-    instance_id, issue_id, _ = _create_redline_setup(client)
-    client.post(
-        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
-        json={
-            "issue_id": issue_id,
-            "title": "Rework",
-            "steps": [{"title": "Do rework"}],
-        },
-    )
-    # Approve the NC's disposition.
-    client.patch(
-        f"/api/issues/{issue_id}",
-        json={"status": "disposition_approved", "disposition_type": "rework"},
-    )
-    # Held step must remain on_hold because the redline isn't complete.
-    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "on_hold"
-
-
-def test_redline_completion_releases_held_step(client):
-    """Completing the last redline sub-step (with NC disposition approved) auto-resumes the host."""
+def test_redline_rides_completion(client):
+    """The disposition authorizes the deviation; the redline records the
+    recovery. An undispositioned NC blocks the raised step's COMPLETE; signing
+    releases the NC hold but the pending redline op still gates the step.
+    The WO cannot complete until the redline sub-step is executed."""
     instance_id, issue_id, _ = _create_redline_setup(client)
     op_resp = client.post(
         f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
@@ -751,23 +826,28 @@ def test_redline_completion_releases_held_step(client):
     ).json()
     sub_step_number = op_resp["sub_steps"][0]["step_number"]
 
-    # Approve the NC dispo first — step should NOT yet resume.
-    client.patch(
-        f"/api/issues/{issue_id}",
-        json={"status": "disposition_approved", "disposition_type": "rework"},
-    )
-    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "on_hold"
+    # Undispositioned: the raised step's COMPLETE is absent.
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 400
 
-    # Run the redline sub-step to completion.
+    # Sign the disposition — the NC hold releases, but the pending redline op
+    # still gates step 1 (incomplete redline op blocks host-step COMPLETE).
+    _sign(client, issue_id, "rework", "rework per redline 1R1")
+
+    # Complete the redline sub-step first → the redline op auto-completes,
+    # clearing the redline gate; step 1 can then complete.
     client.post(
         f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/complete",
         json={},
     )
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 200
 
-    # Host step should now have auto-resumed to pending.
+    # Finish the snapshot steps → WO completes.
+    for step in (2, 3):
+        client.post(f"/api/procedure-instances/{instance_id}/steps/{step}/complete", json={})
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1) == "pending"
+    assert inst["status"] == "completed"
 
 
 def test_redline_orphan_when_nc_soft_deleted(client):
@@ -791,11 +871,10 @@ def test_redline_orphan_when_nc_soft_deleted(client):
     redline_op_step_num = op_resp["step_number"]
     assert any(s["step_number"] == redline_op_step_num for s in inst["step_executions"])
 
-    # But the orphan no longer gates the host. We can't directly test start_step
-    # here because the host is still on_hold from the NC; the gate logic only
-    # fires when something tries to start the host. Instead verify the list
-    # endpoint still returns it (no crashes) and start_step's redline-gate
-    # excludes orphans (covered by the issue-soft-delete filter).
+    # The orphan no longer gates anything: the soft-deleted NC stops deriving
+    # a hold, so the host step completes freely.
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 200
     list_resp = client.get(f"/api/procedure-instances/{instance_id}/ad-hoc-ops")
     assert list_resp.status_code == 200
     assert len(list_resp.json()) == 1
@@ -847,7 +926,7 @@ def test_redline_requires_nc(client):
     assert bad.status_code == 400
 
 
-# ============ NC propagates ON_HOLD to whole op (issue #3) ============
+# ============ Containment scope across the op hierarchy ============
 
 
 def _create_instance_with_sub_steps(client):
@@ -885,47 +964,95 @@ def _create_instance_with_sub_steps(client):
     )
 
 
-def test_nc_on_sub_step_puts_parent_op_on_hold(client):
-    """Logging an NC on a sub-step also marks the parent op ON_HOLD."""
+def test_nc_on_sub_step_blocks_parent_op_complete(client):
+    """(§10.2) A step-containment issue makes both the raised step's COMPLETE
+    and its OP's COMPLETE absent — the 400 names the issue."""
     instance_id, op_a, a1, _a2, _op_b = _create_instance_with_sub_steps(client)
-    client.post(
+    nc = client.post(
         f"/api/procedure-instances/{instance_id}/steps/{a1}/nc",
-        json={"title": "NC on A.1", "description": "x", "priority": "medium"},
-    )
-    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
-    by_num = {s["step_number"]: s["status"] for s in inst["step_executions"]}
-    assert by_num[a1] == "on_hold"
-    assert by_num[op_a] == "on_hold"
+        json={"title": "NC on A.1", "priority": "medium"},
+    ).json()
+
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
+    assert resp.status_code == 400
+    assert nc["issue_number"] in resp.json()["detail"]
+
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
+    assert resp.status_code == 400
+    assert nc["issue_number"] in resp.json()["detail"]
 
 
-def test_sibling_sub_step_cannot_complete_while_op_on_hold(client):
-    """A sibling sub-step of an NC'd step cannot be completed — the whole op is held."""
+def test_sibling_sub_step_can_start_under_step_containment(client):
+    """Step containment holds only its scope — sibling work continues."""
     instance_id, _op_a, a1, a2, _op_b = _create_instance_with_sub_steps(client)
     client.post(
         f"/api/procedure-instances/{instance_id}/steps/{a1}/nc",
-        json={"title": "NC", "description": "x", "priority": "medium"},
+        json={"title": "NC", "priority": "medium"},
     )
     resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
-    assert resp.status_code == 400
-    assert "on hold" in resp.json()["detail"].lower()
+    assert resp.status_code == 200
 
 
-def test_nc_resolution_resumes_both_sub_step_and_parent_op(client):
-    """Disposing the NC pops both the sub-step and the parent op back to pending."""
-    instance_id, op_a, a1, _a2, _op_b = _create_instance_with_sub_steps(client)
-    nc_resp = client.post(
+def test_disposition_releases_sub_step_and_op(client):
+    """Signing the disposition releases the raised step and the op completes
+    when its children do."""
+    instance_id, op_a, a1, a2, _op_b = _create_instance_with_sub_steps(client)
+    nc = client.post(
         f"/api/procedure-instances/{instance_id}/steps/{a1}/nc",
-        json={"title": "NC", "description": "x", "priority": "medium"},
+        json={"title": "NC", "priority": "medium"},
+    ).json()
+    _sign(client, nc["id"])
+
+    assert (
+        client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
+        .status_code
+        == 200
     )
-    issue_id = nc_resp.json()["id"]
-    client.patch(
-        f"/api/issues/{issue_id}",
-        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
+    assert (
+        client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
+        .status_code
+        == 200
     )
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
     by_num = {s["step_number"]: s["status"] for s in inst["step_executions"]}
-    assert by_num[a1] == "pending"
-    assert by_num[op_a] == "pending"
+    assert by_num[op_a] == "completed"
+
+
+def test_op_containment_blocks_op_complete_not_steps(client):
+    """(§10.5) op containment: every step in the OP may run, but the OP
+    cannot COMPLETE until the disposition is signed."""
+    instance_id, op_a, a1, a2, _op_b = _create_instance_with_sub_steps(client)
+    nc = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{a1}/nc",
+        json={"title": "Resolve by end of OP", "priority": "medium", "containment": "op"},
+    ).json()
+
+    # Steps inside the OP run and complete freely...
+    assert (
+        client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
+        .status_code
+        == 200
+    )
+    assert (
+        client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
+        .status_code
+        == 200
+    )
+
+    # ...but the OP does not auto-complete and cannot be completed.
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    by_num = {s["step_number"]: s["status"] for s in inst["step_executions"]}
+    assert by_num[op_a] != "completed"
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
+    assert resp.status_code == 400
+    assert nc["issue_number"] in resp.json()["detail"]
+
+    # Signing releases the OP — with all children already done, it
+    # auto-completes on release.
+    _sign(client, nc["id"])
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    by_num = {s["step_number"]: s["status"] for s in inst["step_executions"]}
+    assert by_num[op_a] == "completed"
 
 
 # ============ Sub-steps on gated ops are not completable (issue #2) ============

@@ -85,6 +85,7 @@
 
         {% set body_schema = step.required_data_schema or vs.get('required_data_schema') %}
         {% set workable = inst_status in ['cut', 'in_work'] and step.status in ['pending', 'in_progress'] %}
+        {% set step_raised_holds = step_holding_ncs.get(exec.id, []) if exec else [] %}
         {% if workable and exec %}
         {# The expanded step is a control surface: fields, notes, actions. #}
         <div class="step-controls">
@@ -98,19 +99,25 @@
             </div>
             <div class="step-actions">
                 <button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>
-                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
+                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ANOMALY</button>
+                {% if not step_raised_holds %}
                 <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, {{ step.title | tojson }})">SKIP</button>
+                {% endif %}
                 {% if step_kit %}
                 <button class="btn btn-sm" onclick="consumeStepParts({{ step.order }})">CONSUME PARTS</button>
                 {% endif %}
+                {% if step_raised_holds %}
+                <span class="mono text-yellow">COMPLETE — held by {% for nc in step_raised_holds %}<a href="/issues/{{ nc.id }}">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>
+                {% else %}
                 <button class="btn btn-sm btn-primary" onclick="completeStep({{ step.order }}, this)">COMPLETE</button>
+                {% endif %}
             </div>
         </div>
         {% elif inst_status in ['cut', 'in_work'] and step.status == 'awaiting_signoff' %}
         <div class="step-controls">
             <div class="step-actions">
                 {% if exec %}<button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>{% endif %}
-                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
+                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ANOMALY</button>
                 <button class="btn btn-sm btn-primary" onclick="signoffStep({{ step.order }})">SIGN OFF</button>
             </div>
         </div>

@@ -96,7 +96,7 @@
     <div class="execdoc-modal-box">
         <div class="panel">
             <div class="panel-header">
-                <span>ISSUE</span>
+                <span>ANOMALY</span>
                 <span class="mono text-muted" id="anomaly-step-label"></span>
             </div>
             <div class="panel-body">
@@ -129,14 +129,17 @@
                         <div class="form-group">
                             <label class="form-label" for="anomaly-containment">CONTAINMENT</label>
                             <select id="anomaly-containment" class="form-select">
-                                <option value="step" selected>STEP — holds this step until disposition</option>
+                                <option value="step" selected>STEP — holds this step's COMPLETE</option>
+                                <option value="op">OP — holds the operation's COMPLETE</option>
+                                <option value="wo">WO — holds work order close-out</option>
                                 <option value="advisory">ADVISORY — holds nothing</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="anomaly-blocks">HOLDS COMPLETE AT</label>
-                        <select id="anomaly-blocks" class="form-select" multiple size="4">
+                        <label class="form-label" for="anomaly-boundary">RESOLVE BY</label>
+                        <select id="anomaly-boundary" class="form-select">
+                            <option value="" selected>— this step</option>
                             {% for op_data in ops %}{% for sub in (op_data.sub_steps or [op_data.step]) %}{% if sub.status == 'pending' %}
                             <option value="{{ sub.order }}">{{ sub.step_number if '.' in sub.step_number else (op_data.step.step_number ~ ('.' ~ sub.step_number if sub.order != op_data.step.order else '')) }} {{ sub.title }}</option>
                             {% endif %}{% endfor %}{% endfor %}

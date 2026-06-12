@@ -333,12 +333,20 @@ def test_add_step_note_appends(client, db_session):
 
 
 def test_bind_issue_hold_blocks_complete_and_is_idempotent(client, db_session, test_user):
+    """bind_issue_hold sets containment boundary on the issue (R2 semantics).
+    Re-binding to the same step is idempotent. COMPLETE on the bound step
+    refuses while undispositioned."""
     instance_id, _ = _create_instance(client)
 
     issue_data = _call(
-        server._create_issue,
+        server._raise_issue,
         db_session,
-        {"title": "Cracked bracket found in stores", "issue_type": "non_conformance"},
+        {
+            "title": "Cracked bracket found in stores",
+            "issue_type": "non_conformance",
+            "containment": "step",
+            "procedure_instance_id": instance_id,
+        },
     )
     assert issue_data["success"] is True
     issue_id = issue_data["issue"]["id"]
@@ -353,29 +361,26 @@ def test_bind_issue_hold_blocks_complete_and_is_idempotent(client, db_session, t
     assert data["success"] is True
     assert issue_number in data["message"]
     assert "until disposition" in data["message"]
-    block_id = data["block_id"]
 
-    # Idempotent re-bind returns the same block.
+    # Idempotent re-bind to the same step — returns success with "already holds" message.
     data = _call(
         server._bind_issue_hold,
         db_session,
         {"execution_id": instance_id, "step_number": 2, "issue_id": issue_id},
     )
     assert data["success"] is True
-    assert data["block_id"] == block_id
-    assert "already blocks" in data["message"]
+    assert "already holds" in data["message"]
 
     # The state document surfaces the hold on the step and in the rail.
+    # bind_issue_hold sets containment_step_id with no raised_step_id, so the
+    # issue appears in complete_blocked → kind="raised" in the step's holds list.
     state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     step2 = next(s for s in state["steps"] if s["order"] == 2)
-    assert step2["holds"] == [
-        {
-            "issue_id": issue_id,
-            "issue_number": issue_number,
-            "kind": "bound",
-            "disposition_state": "undispositioned",
-        }
-    ]
+    assert len(step2["holds"]) == 1
+    h = step2["holds"][0]
+    assert h["issue_id"] == issue_id
+    assert h["issue_number"] == issue_number
+    assert h["disposition_state"] == "undispositioned"
     assert len(state["holds"]) == 1
     assert state["holds"][0]["issue_number"] == issue_number
     assert "2" in state["holds"][0]["blocks"]
@@ -398,16 +403,23 @@ def test_bind_issue_hold_blocks_complete_and_is_idempotent(client, db_session, t
     )
     assert "error" in data
     assert data["error"].startswith("Cannot complete:")
-    assert f"Blocked by {issue_number}" in data["error"]
+    assert issue_number in data["error"]
 
 
 def test_bind_issue_hold_lifted_by_disposition(client, db_session, test_user, admin_user):
+    """Signing a disposition via the API releases the bound hold; the step
+    becomes completable."""
     instance_id, _ = _create_instance(client)
 
     issue_data = _call(
-        server._create_issue,
+        server._raise_issue,
         db_session,
-        {"title": "Scratch on housing", "issue_type": "non_conformance"},
+        {
+            "title": "Scratch on housing",
+            "issue_type": "non_conformance",
+            "containment": "step",
+            "procedure_instance_id": instance_id,
+        },
     )
     issue_id = issue_data["issue"]["id"]
 
@@ -418,10 +430,10 @@ def test_bind_issue_hold_lifted_by_disposition(client, db_session, test_user, ad
     )
     assert data["success"] is True
 
-    # Disposition the issue via the API; the bound step becomes completable.
-    resp = client.patch(
-        f"/api/issues/{issue_id}",
-        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
+    # Disposition the issue via the API (R2: POST /disposition).
+    resp = client.post(
+        f"/api/issues/{issue_id}/disposition",
+        json={"disposition_type": "use_as_is", "disposition_rationale": "acceptable"},
         headers=user_headers(admin_user),
     )
     assert resp.status_code == 200

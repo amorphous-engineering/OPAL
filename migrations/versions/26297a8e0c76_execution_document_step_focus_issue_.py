@@ -1,7 +1,7 @@
-"""Execution document: step focus (cursor presence), issue step blocks, step images, capture attribution, strict_sequence
+"""Execution document: step focus (cursor presence), step images, capture attribution, strict_sequence
 
 Revision ID: 26297a8e0c76
-Revises: a7b9c1d3e5f7
+Revises: 52973e130a6f
 Create Date: 2026-06-12 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '26297a8e0c76'
-down_revision: Union[str, None] = 'a7b9c1d3e5f7'
+down_revision: Union[str, None] = '52973e130a6f'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -49,29 +49,6 @@ def upgrade() -> None:
             comment='Soft telemetry: first cursor focus; never rendered as state',
         ))
 
-    # Issue step blocks — hold points. The hold is derived from the issue's
-    # disposition state; this table only records the binding.
-    op.create_table(
-        'issue_step_block',
-        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('issue_id', sa.Integer(), nullable=False),
-        sa.Column('step_execution_id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(['issue_id'], ['issue.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['step_execution_id'], ['step_execution.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('issue_id', 'step_execution_id', name='uq_issue_step_block'),
-    )
-    op.create_index(
-        op.f('ix_issue_step_block_issue_id'), 'issue_step_block', ['issue_id'], unique=False
-    )
-    op.create_index(
-        op.f('ix_issue_step_block_step_execution_id'),
-        'issue_step_block',
-        ['step_execution_id'],
-        unique=False,
-    )
 
     # Authored step reference images — procedure content, snapshotted at publish.
     op.create_table(
@@ -129,9 +106,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_step_image_step_id'), table_name='step_image')
     op.drop_table('step_image')
 
-    op.drop_index(op.f('ix_issue_step_block_step_execution_id'), table_name='issue_step_block')
-    op.drop_index(op.f('ix_issue_step_block_issue_id'), table_name='issue_step_block')
-    op.drop_table('issue_step_block')
 
     with op.batch_alter_table('step_execution', schema=None) as batch_op:
         batch_op.drop_column('first_focused_at')

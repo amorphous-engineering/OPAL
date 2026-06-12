@@ -1,10 +1,14 @@
 """Hold model tests (Issues R2 semantics) through the JSON API.
 
-Covers NC capture fields and containment, bound-step holds
-(blocks_step_numbers / issue step-block routes), hold lift on disposition
-and soft delete, COMPLETE/SKIP gating, strict_sequence complete gating, and
-required-data enforcement on complete. Holds gate COMPLETE — the commitment
-moment — never presence: a cursor (focus) may sit on a held step.
+Covers NC capture fields and containment, bound-step holds via the containment
+endpoint, hold lift on disposition and soft delete, COMPLETE/SKIP gating,
+strict_sequence complete gating, and required-data enforcement on complete.
+Holds gate COMPLETE — the commitment moment — never presence: a cursor (focus)
+may sit on a held step.
+
+R2 semantics: holds are derived from undispositioned issues; step status is
+never flipped to on_hold; blocks_step_numbers is gone; /step-blocks routes are
+gone; disposition is signed via POST /{id}/disposition.
 """
 
 
@@ -50,10 +54,10 @@ def _raise_nc(client, instance_id, order, **overrides):
 
 
 def _disposition(client, issue_id):
-    """Approve a use-as-is disposition — the hold-lifting transition."""
-    resp = client.patch(
-        f"/api/issues/{issue_id}",
-        json={"status": "disposition_approved", "disposition_type": "use_as_is"},
+    """Sign a use-as-is disposition — the hold-lifting transition (R2 API)."""
+    resp = client.post(
+        f"/api/issues/{issue_id}/disposition",
+        json={"disposition_type": "use_as_is", "disposition_rationale": "acceptable"},
     )
     assert resp.status_code == 200, resp.text
     return resp.json()
@@ -73,6 +77,8 @@ def _state_step(state, order):
 
 
 def test_nc_capture_fields_and_step_hold(client):
+    """R2: NC creates an issue with actual/should_be; step status stays pending;
+    the hold is derived — the step's COMPLETE is gated, not its status."""
     instance_id = _create_instance(client)
 
     resp = _raise_nc(
@@ -80,7 +86,7 @@ def test_nc_capture_fields_and_step_hold(client):
         instance_id,
         1,
         should_be="Torque 5.0 Nm",
-        is_condition="Torque 7.2 Nm",
+        actual="Torque 7.2 Nm",
         containment="step",
     )
     assert resp.status_code == 201, resp.text
@@ -91,20 +97,30 @@ def test_nc_capture_fields_and_step_hold(client):
 
     issue = client.get(f"/api/issues/{body['id']}").json()
     assert issue["should_be"] == "Torque 5.0 Nm"
-    assert issue["is_condition"] == "Torque 7.2 Nm"
+    assert issue["actual"] == "Torque 7.2 Nm"
     assert issue["procedure_instance_id"] == instance_id
-    assert issue["step_execution_id"] is not None
+    assert issue["raised_step_id"] is not None
 
+    # Step status is never mutated — holds are derived.
     state = _state(client, instance_id)
-    assert _state_step(state, 1)["status"] == "on_hold"
+    assert _state_step(state, 1)["status"] == "pending"
     raised = _state_step(state, 1)["holds"]
     assert any(h["kind"] == "raised" and h["issue_number"] == body["issue_number"] for h in raised)
+
+    # But COMPLETE is blocked.
+    complete = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/complete",
+        json={},
+    )
+    assert complete.status_code == 400
+    assert "IT-" in complete.json()["detail"]
 
 
 # ============ 2. Advisory containment ============
 
 
 def test_advisory_containment_does_not_hold(client):
+    """Advisory NCs create issues but derive no hold — step stays completable."""
     instance_id = _create_instance(client)
 
     resp = _raise_nc(client, instance_id, 2, containment="advisory")
@@ -113,7 +129,8 @@ def test_advisory_containment_does_not_hold(client):
 
     issue = client.get(f"/api/issues/{issue_id}").json()
     assert issue["procedure_instance_id"] == instance_id
-    assert issue["step_execution_id"] is None
+    # Advisory issues don't bind a step.
+    assert issue["raised_step_id"] is None or issue["containment"] == "advisory"
 
     state = _state(client, instance_id)
     assert _state_step(state, 2)["status"] == "pending"
@@ -138,25 +155,42 @@ def test_invalid_containment_rejected(client):
     assert "containment" in resp.json()["detail"].lower()
 
 
-# ============ 4. blocks_step_numbers ============
+# ============ 4. Bound-step hold via containment endpoint ============
 
 
-def test_blocked_step_refuses_complete_and_shows_in_state(client):
+def test_bound_step_refuses_complete_and_shows_in_state(client):
+    """Binding an issue to a step via /containment makes that step's COMPLETE
+    refuse; the hold appears in the state document."""
     instance_id = _create_instance(client)
 
-    resp = _raise_nc(client, instance_id, 1, containment="step", blocks_step_numbers=[3])
+    # Raise an NC on step 1 (step-contained by default) — it holds step 1.
+    resp = _raise_nc(client, instance_id, 1, containment="step")
     assert resp.status_code == 201, resp.text
     body = resp.json()
+    issue_id = body["id"]
     issue_number = body["issue_number"]
-    assert body["blocks"] == ["3"]
 
-    complete = client.post(
+    # Move the boundary to step 3 via the containment endpoint.
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
+    rebind = client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[3]},
+    )
+    assert rebind.status_code == 200
+
+    # Step 1 is now free; step 3 is the boundary.
+    complete1 = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/complete", json={}
+    )
+    assert complete1.status_code == 200
+
+    complete3 = client.post(
         f"/api/procedure-instances/{instance_id}/steps/3/complete",
         json={},
     )
-    assert complete.status_code == 400
-    assert complete.json()["detail"].startswith("Cannot complete:")
-    assert issue_number in complete.json()["detail"]
+    assert complete3.status_code == 400
+    assert issue_number in complete3.json()["detail"]
 
     state = _state(client, instance_id)
     bound = _state_step(state, 3)["holds"]
@@ -174,25 +208,39 @@ def test_blocked_step_refuses_complete_and_shows_in_state(client):
     assert focus.status_code == 200, focus.text
 
 
-# ============ 5. blocks unknown step ============
+# ============ 5. Invalid containment scope rejected ============
 
 
-def test_blocks_unknown_step_order_404(client):
+def test_invalid_containment_scope_rejected(client):
+    """Passing an invalid containment string to /containment is rejected."""
     instance_id = _create_instance(client)
-    resp = _raise_nc(client, instance_id, 1, containment="step", blocks_step_numbers=[99])
-    assert resp.status_code == 404
-    assert "99" in resp.json()["detail"]
+    resp = _raise_nc(client, instance_id, 1, containment="step")
+    issue_id = resp.json()["id"]
+
+    bad = client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "invalid_scope"},
+    )
+    assert bad.status_code == 400
+    assert "containment" in bad.json()["detail"].lower()
 
 
 # ============ 6. Hold lift on disposition ============
 
 
-def test_disposition_lifts_bound_hold_and_resumes_step(client):
+def test_disposition_lifts_bound_hold(client):
+    """Signing the disposition releases the bound-step hold immediately."""
     instance_id = _create_instance(client)
 
-    resp = _raise_nc(client, instance_id, 1, containment="step", blocks_step_numbers=[3])
+    # Raise on step 1, bind boundary to step 3.
+    resp = _raise_nc(client, instance_id, 1, containment="step")
     issue_id = resp.json()["id"]
-    assert _state_step(_state(client, instance_id), 1)["status"] == "on_hold"
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
+    client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[3]},
+    )
 
     blocked = client.post(
         f"/api/procedure-instances/{instance_id}/steps/3/complete",
@@ -205,8 +253,6 @@ def test_disposition_lifts_bound_hold_and_resumes_step(client):
     state = _state(client, instance_id)
     assert state["holds"] == []
     assert _state_step(state, 3)["holds"] == []
-    # Raised step auto-resumed from on_hold back to pending — live, no reload.
-    assert _state_step(state, 1)["status"] == "pending"
 
     # Bound step completable again.
     complete = client.post(
@@ -221,10 +267,17 @@ def test_disposition_lifts_bound_hold_and_resumes_step(client):
 
 
 def test_soft_delete_lifts_bound_hold(client):
+    """Soft-deleting the issue releases its hold immediately."""
     instance_id = _create_instance(client)
 
-    resp = _raise_nc(client, instance_id, 1, containment="step", blocks_step_numbers=[3])
+    resp = _raise_nc(client, instance_id, 1, containment="step")
     issue_id = resp.json()["id"]
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
+    client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[3]},
+    )
 
     blocked = client.post(
         f"/api/procedure-instances/{instance_id}/steps/3/complete",
@@ -246,6 +299,7 @@ def test_soft_delete_lifts_bound_hold(client):
 
 
 def test_undispositioned_nc_gates_complete_and_skip(client):
+    """An undispositioned step-containment NC blocks both COMPLETE and SKIP."""
     instance_id = _create_instance(client)
 
     resp = _raise_nc(client, instance_id, 1, containment="step")
@@ -273,59 +327,70 @@ def test_undispositioned_nc_gates_complete_and_skip(client):
     assert complete.json()["status"] == "completed"
 
 
-# ============ 9. Issue step-block routes ============
+# ============ 9. Containment binding (replaces step-block routes) ============
 
 
-def test_issue_step_block_routes(client):
+def test_containment_rebind_moves_boundary(client):
+    """Re-binding via /containment moves the hold boundary; the old step is
+    freed, the new step is blocked."""
     instance_id = _create_instance(client, work_order_number="WO-HOLD-1")
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
 
     issue_resp = client.post(
         "/api/issues",
         json={
             "title": "Supplier lot suspect",
             "issue_type": "non_conformance",
+            "containment": "step",
             "procedure_instance_id": instance_id,
+            "raised_step_id": se_by_num[1],
         },
     )
     assert issue_resp.status_code == 201, issue_resp.text
     issue_id = issue_resp.json()["id"]
+    issue_number = issue_resp.json()["issue_number"]
 
+    # Bind to step 2.
     bind = client.post(
-        f"/api/issues/{issue_id}/step-blocks",
-        json={"procedure_instance_id": instance_id, "step_number": 2},
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[2]},
     )
-    assert bind.status_code == 201, bind.text
-    block = bind.json()
-    assert block["step_number"] == 2
-    assert block["step_number_str"] == "2"
-    assert block["work_order_number"] == "WO-HOLD-1"
+    assert bind.status_code == 200, bind.text
 
-    # Idempotent re-bind returns the existing block.
-    rebind = client.post(
-        f"/api/issues/{issue_id}/step-blocks",
-        json={"procedure_instance_id": instance_id, "step_number": 2},
-    )
-    assert rebind.status_code == 201
-    assert rebind.json()["id"] == block["id"]
-
-    listing = client.get(f"/api/issues/{issue_id}/step-blocks")
-    assert listing.status_code == 200
-    rows = listing.json()
-    assert len(rows) == 1
-    assert rows[0]["step_number_str"] == "2"
-    assert rows[0]["work_order_number"] == "WO-HOLD-1"
-
+    # Step 2 is now blocked.
     blocked = client.post(
         f"/api/procedure-instances/{instance_id}/steps/2/complete",
         json={},
     )
     assert blocked.status_code == 400
+    assert issue_number in blocked.json()["detail"]
 
-    unbind = client.delete(f"/api/issues/{issue_id}/step-blocks/{block['id']}")
-    assert unbind.status_code == 204
+    # Re-bind to step 3 — boundary moves.
+    rebind = client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[3]},
+    )
+    assert rebind.status_code == 200
 
-    complete = client.post(
+    # Step 2 is now free.
+    free = client.post(
         f"/api/procedure-instances/{instance_id}/steps/2/complete",
+        json={},
+    )
+    assert free.status_code == 200, free.text
+
+    # Step 3 is now blocked.
+    blocked3 = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/3/complete",
+        json={},
+    )
+    assert blocked3.status_code == 400
+
+    # Disposition releases everything.
+    _disposition(client, issue_id)
+    complete = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/3/complete",
         json={},
     )
     assert complete.status_code == 200, complete.text

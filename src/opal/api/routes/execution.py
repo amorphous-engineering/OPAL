@@ -28,15 +28,14 @@ from opal.core.execution_flow import (
     build_execution_state,
     check_instance_completion,
     clear_focus,
-    complete_blockers,
     complete_step_flow,
     focus_step,
     held_scope_blockers,
     mark_instance_in_work,
-    maybe_resume_step_after_nc_update,
     touch_user_presence,
 )
 from opal.core.genealogy import record_assembly_genealogy
+from opal.core.holds import get_hold_state, get_holds_payload
 from opal.core.part_lifecycle import ensure_parts_active
 from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput
 from opal.db.models.execution import (
@@ -53,7 +52,13 @@ from opal.db.models.inventory import (
     SourceType,
     UsageType,
 )
-from opal.db.models.issue import Issue, IssuePriority, IssueStatus, IssueType
+from opal.db.models.issue import (
+    Containment,
+    Issue,
+    IssuePriority,
+    IssueStatus,
+    IssueType,
+)
 from opal.db.models.procedure import MasterProcedure, ProcedureType, ProcedureVersion
 
 router = APIRouter(prefix="/procedure-instances", tags=["execution"])
@@ -159,24 +164,32 @@ class StepComplete(BaseModel):
 
 
 class NonConformanceCreate(BaseModel):
-    """Anomaly capture during step execution (creates an Issue).
+    """Capture an issue at the moment of discovery during step execution.
 
-    containment 'step' holds the raised step (and its OP) until disposition;
-    'advisory' records the anomaly without holding anything.
-    blocks_step_numbers binds additional hold points: those steps cannot
-    COMPLETE while this issue is undispositioned.
+    The invoking context already knows WO, OP, step, and operator — the
+    payload only carries what the crew observed. containment decides what
+    the issue holds while undispositioned (step | op | wo | advisory); an
+    optional boundary ("resolve by") binds a step-contained hold to a later
+    step, which cannot COMPLETE until disposition.
     """
 
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     priority: str = "medium"
-    should_be: str | None = Field(None, description="Expected condition")
-    is_condition: str | None = Field(None, description="Actual condition")
-    containment: str = Field("step", description="step | advisory")
-    blocks_step_numbers: list[int] = Field(
-        default_factory=list,
-        description="Snapshot step orders this issue blocks from starting",
+    should_be: str | None = None
+    actual: str | None = None
+    containment: str = "step"
+    containment_step_number: int | None = Field(
+        None,
+        description="Boundary step order ('resolve by'); None anchors at the raised step",
     )
+    assigned_to_id: int | None = None
+
+
+def _hold_blocker_detail(action: str, blockers: list[Issue]) -> str:
+    """400 detail naming the holding issue(s) — the blocker line's server twin."""
+    names = ", ".join(f"{i.issue_number} {i.title}" for i in blockers)
+    return f"Cannot {action}: held by {names} (undispositioned)"
 
 
 # ============ Instance CRUD ============
@@ -806,12 +819,12 @@ async def skip_step(
     step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
     if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
         raise HTTPException(status_code=400, detail="Cannot skip completed step")
-    if step_status == StepStatus.ON_HOLD.value:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot skip a step that is on hold for an open NC; "
-            "resolve the NC disposition first.",
-        )
+
+    # Containment gate: SKIP is a terminal commitment, same scope check as
+    # COMPLETE — skipping held work would sweep the hold.
+    skip_blockers = get_hold_state(db, instance_id).blockers_for_complete(step_exec)
+    if skip_blockers:
+        raise HTTPException(status_code=400, detail=_hold_blocker_detail("skip", skip_blockers))
 
     # Skip is a commitment moment too — held work cannot be skipped around.
     holds = held_scope_blockers(db, instance, step_exec)
@@ -900,12 +913,12 @@ async def signoff_step(
                 status_code=400, detail=f"Cannot sign off step in {step_status} status"
             )
 
-    # Sign-off is the OP's COMPLETE — undispositioned issues in scope gate it.
-    holds = complete_blockers(db, instance, step_exec)
-    if holds:
+    # Containment gate: sign-off is a terminal commitment, same scope check
+    # as COMPLETE.
+    signoff_blockers = get_hold_state(db, instance_id).blockers_for_complete(step_exec)
+    if signoff_blockers:
         raise HTTPException(
-            status_code=400,
-            detail="Cannot sign off: " + "; ".join(b.message for b in holds),
+            status_code=400, detail=_hold_blocker_detail("sign off", signoff_blockers)
         )
 
     step_exec.status = StepStatus.SIGNED_OFF
@@ -919,17 +932,6 @@ async def signoff_step(
 
     # Check if procedure is complete
     check_instance_completion(db, instance)
-
-    # If this signoff terminates a redline step, re-evaluate the held host
-    # step's auto-resume — it may now be unblocked.
-    if step_exec.ad_hoc_issue_id is not None:
-        redline_issue = (
-            db.query(Issue)
-            .filter(Issue.id == step_exec.ad_hoc_issue_id, Issue.deleted_at.is_(None))
-            .first()
-        )
-        if redline_issue is not None:
-            maybe_resume_step_after_nc_update(db, redline_issue, user_id)
 
     db.commit()
     db.refresh(step_exec)
@@ -971,7 +973,11 @@ def log_non_conformance(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> dict:
-    """Log a non-conformance during step execution, creates an Issue."""
+    """Capture a non-conformance during step execution, creates an Issue.
+
+    The hold is the issue itself: an undispositioned issue with step
+    containment makes the step's COMPLETE absent. Step status is not touched.
+    """
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -984,93 +990,58 @@ def log_non_conformance(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    # Create issue
     try:
         priority = IssuePriority(data.priority)
     except ValueError:
         priority = IssuePriority.MEDIUM
 
-    if data.containment not in ("step", "advisory"):
-        raise HTTPException(status_code=400, detail=f"Invalid containment: {data.containment}")
-    holds_step = data.containment == "step"
+    try:
+        containment = Containment(data.containment)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid containment: {data.containment}"
+        ) from err
+
+    # Optional boundary ("resolve by"): a step-contained hold may bind to a
+    # later step; None anchors at the raised step.
+    containment_step_id = None
+    if data.containment_step_number is not None:
+        boundary = (
+            db.query(StepExecution)
+            .filter(
+                StepExecution.instance_id == instance_id,
+                StepExecution.step_number == data.containment_step_number,
+            )
+            .first()
+        )
+        if boundary is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Boundary step {data.containment_step_number} not found",
+            )
+        containment_step_id = boundary.id
 
     issue = Issue(
         issue_number=generate_issue_number(db),
         title=data.title,
         description=data.description,
-        should_be=data.should_be,
-        is_condition=data.is_condition,
         issue_type=IssueType.NON_CONFORMANCE,
         status=IssueStatus.OPEN,
         priority=priority,
+        containment=containment,
+        containment_step_id=containment_step_id,
+        should_be=data.should_be,
+        actual=data.actual,
         procedure_id=instance.procedure_id,
         procedure_instance_id=instance_id,
-        # Advisory anomalies record the WO link only — a step binding would
-        # derive a hold (the binding IS the containment fact).
-        step_execution_id=step_exec.id if holds_step else None,
+        raised_step_id=step_exec.id,
+        raised_by_id=user_id,
+        assigned_to_id=data.assigned_to_id,
     )
     db.add(issue)
     db.flush()
 
     log_create(db, issue, user_id)
-
-    if holds_step:
-        # Put the step on hold until the NC disposition is approved or the
-        # issue closed.
-        step_status_now = (
-            step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-        )
-        if step_status_now != StepStatus.ON_HOLD.value:
-            step_old = get_model_dict(step_exec)
-            step_exec.status = StepStatus.ON_HOLD
-            log_update(db, step_exec, step_old, user_id)
-
-        # Propagate hold to the parent op so the whole operation stalls — not
-        # just the offending sub-step. Other sub-steps in the same op must not
-        # be startable while an NC is open anywhere inside it.
-        if step_exec.level > 0 and step_exec.parent_step_order is not None:
-            parent_exec = (
-                db.query(StepExecution)
-                .filter(
-                    StepExecution.instance_id == instance_id,
-                    StepExecution.step_number == step_exec.parent_step_order,
-                    StepExecution.level == 0,
-                )
-                .first()
-            )
-            if parent_exec is not None:
-                parent_status = (
-                    parent_exec.status.value
-                    if hasattr(parent_exec.status, "value")
-                    else parent_exec.status
-                )
-                if parent_status != StepStatus.ON_HOLD.value:
-                    parent_old = get_model_dict(parent_exec)
-                    parent_exec.status = StepStatus.ON_HOLD
-                    log_update(db, parent_exec, parent_old, user_id)
-
-    # Bind hold points: the named steps cannot COMPLETE while this issue is
-    # undispositioned.
-    from opal.db.models.issue import IssueStepBlock
-
-    bound_numbers: list[str] = []
-    for block_order in dict.fromkeys(data.blocks_step_numbers):
-        target = (
-            db.query(StepExecution)
-            .filter(
-                StepExecution.instance_id == instance_id,
-                StepExecution.step_number == block_order,
-            )
-            .first()
-        )
-        if target is None:
-            raise HTTPException(status_code=404, detail=f"Blocked step {block_order} not found")
-        block = IssueStepBlock(issue_id=issue.id, step_execution_id=target.id)
-        db.add(block)
-        db.flush()
-        log_create(db, block, user_id)
-        bound_numbers.append(target.step_number_str or str(target.step_number))
-
     db.commit()
     db.refresh(issue)
 
@@ -1083,11 +1054,25 @@ def log_non_conformance(
         else issue.issue_type,
         "status": issue.status.value if hasattr(issue.status, "value") else issue.status,
         "priority": issue.priority.value if hasattr(issue.priority, "value") else issue.priority,
-        "containment": data.containment,
-        "blocks": bound_numbers,
+        "containment": issue.containment.value
+        if hasattr(issue.containment, "value")
+        else issue.containment,
         "procedure_instance_id": instance_id,
         "step_number": step_number,
     }
+
+
+@router.get("/{instance_id}/holds")
+def get_instance_holds(
+    instance_id: int,
+    db: DbSession,
+) -> dict:
+    """The controller's blocking state: every undispositioned issue holding
+    this work order and what it blocks."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    return get_holds_payload(db, instance_id)
 
 
 @router.get("/{instance_id}/version-content")
@@ -2092,12 +2077,12 @@ def create_ad_hoc_op(
     issue_type = issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type
     if issue_type != IssueType.NON_CONFORMANCE.value:
         raise HTTPException(status_code=400, detail="Redlines can only be attached to an NC")
-    if issue.step_execution_id is None:
+    if issue.raised_step_id is None:
         raise HTTPException(
             status_code=400, detail="NC is not attached to a step; cannot create redline"
         )
 
-    host_exec = db.get(StepExecution, issue.step_execution_id)
+    host_exec = db.get(StepExecution, issue.raised_step_id)
     if not host_exec or host_exec.instance_id != instance.id:
         raise HTTPException(status_code=400, detail="NC does not belong to this execution")
 

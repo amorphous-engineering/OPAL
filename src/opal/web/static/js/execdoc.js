@@ -636,15 +636,14 @@
         const errorDiv = document.getElementById('anomaly-error');
         errorDiv.hidden = true;
         const order = document.getElementById('anomaly-step').value;
-        const blocks = Array.from(document.getElementById('anomaly-blocks').selectedOptions)
-            .map((o) => parseInt(o.value));
+        const boundary = document.getElementById('anomaly-boundary').value;
         const payload = {
             title: document.getElementById('anomaly-title').value,
             priority: document.getElementById('anomaly-priority').value,
             should_be: document.getElementById('anomaly-should-be').value || null,
-            is_condition: document.getElementById('anomaly-is').value || null,
+            actual: document.getElementById('anomaly-is').value || null,
             containment: document.getElementById('anomaly-containment').value,
-            blocks_step_numbers: blocks,
+            containment_step_number: boundary ? parseInt(boundary) : null,
         };
         try {
             const resp = await fetch(apiUrl(`/steps/${order}/nc`), {

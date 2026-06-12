@@ -11,10 +11,11 @@ never "open". A hold is derived state — it lifts the moment its issue reaches
 a terminal disposition, with no status choreography. Two gate kinds exist
 today, both gating COMPLETE (a hold cannot physically prevent starting work,
 so it does not pretend to):
-- raised-on-step (containment "step"): undispositioned NCs raised on a step
-  block that step's COMPLETE, and the containing OP's COMPLETE.
-- bound-step (``issue_step_block``): an issue bound to a future step blocks
-  that step's COMPLETE.
+- containment scope (step/op/wo): an undispositioned issue holds its scope's
+  COMPLETE — the raised step and its OP, the whole OP, or WO close-out.
+- boundary ("resolve by", ``containment_step_id``): a step-contained issue
+  bound to a later step holds that step's COMPLETE.
+The blocking computation has one home: core/holds.
 """
 
 from dataclasses import dataclass, field
@@ -25,7 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from opal.core.audit import get_model_dict, log_update
+from opal.core.holds import get_hold_state
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
     InstanceStatus,
@@ -35,7 +36,7 @@ from opal.db.models.execution import (
     StepStatus,
 )
 from opal.db.models.inventory import InventoryProduction, ProductionStatus
-from opal.db.models.issue import Issue, IssueStatus, IssueStepBlock, IssueType
+from opal.db.models.issue import Issue
 from opal.db.models.procedure import ProcedureVersion
 from opal.db.models.user import User
 
@@ -64,26 +65,6 @@ def _status_value(obj: Any) -> str:
     return obj.value if hasattr(obj, "value") else obj
 
 
-def undispositioned(issue: Issue) -> bool:
-    """The blocking predicate (Issues R2): a hold lifts at disposition, not
-    closure. On the current schema a terminal disposition is the
-    disposition_approved or closed status."""
-    return _status_value(issue.status) not in (
-        IssueStatus.DISPOSITION_APPROVED.value,
-        IssueStatus.CLOSED.value,
-    )
-
-
-def disposition_state(issue: Issue) -> str:
-    """undispositioned | dispositioned | closed — the issue's gate position."""
-    status = _status_value(issue.status)
-    if status == IssueStatus.CLOSED.value:
-        return "closed"
-    if status == IssueStatus.DISPOSITION_APPROVED.value:
-        return "dispositioned"
-    return "undispositioned"
-
-
 def user_initials(name: str | None) -> str:
     if not name:
         return "?"
@@ -109,43 +90,23 @@ def step_display(step_exec: StepExecution) -> str:
 
 
 def holding_ncs_by_step(db: Session, instance_id: int) -> dict[int, list[Issue]]:
-    """Undispositioned NCs raised on a step, keyed by step_execution_id.
-    These block COMPLETE of their step and of the containing OP."""
-    issues = (
-        db.query(Issue)
-        .filter(
-            Issue.procedure_instance_id == instance_id,
-            Issue.step_execution_id.isnot(None),
-            Issue.issue_type == IssueType.NON_CONFORMANCE,
-            Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-            Issue.deleted_at.is_(None),
-        )
-        .all()
-    )
-    result: dict[int, list[Issue]] = {}
-    for issue in issues:
-        result.setdefault(issue.step_execution_id, []).append(issue)
-    return result
+    """Issues holding each row's COMPLETE (step/op containment), keyed by
+    step_execution_id. Derived from containment — the one home for the
+    blocking computation is core/holds."""
+    state = get_hold_state(db, instance_id)
+    merged: dict[int, list[Issue]] = {}
+    for se_id, issues in state.complete_blocked.items():
+        merged.setdefault(se_id, []).extend(issues)
+    for se_id, issues in state.op_complete_blocked.items():
+        bucket = merged.setdefault(se_id, [])
+        bucket.extend(i for i in issues if all(x.id != i.id for x in bucket))
+    return merged
 
 
 def bound_blocks_by_step(db: Session, instance_id: int) -> dict[int, list[Issue]]:
-    """Undispositioned issues bound to steps via issue_step_block, keyed by
-    step_execution_id. These block COMPLETE of the bound step."""
-    rows = (
-        db.query(IssueStepBlock, Issue)
-        .join(Issue, Issue.id == IssueStepBlock.issue_id)
-        .join(StepExecution, StepExecution.id == IssueStepBlock.step_execution_id)
-        .filter(
-            StepExecution.instance_id == instance_id,
-            Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-            Issue.deleted_at.is_(None),
-        )
-        .all()
-    )
-    result: dict[int, list[Issue]] = {}
-    for block, issue in rows:
-        result.setdefault(block.step_execution_id, []).append(issue)
-    return result
+    """Boundary holds ("resolve by"): issues holding a future step's COMPLETE,
+    keyed by that step's execution id."""
+    return dict(get_hold_state(db, instance_id).start_blocked)
 
 
 # ============ Gating ============
@@ -170,24 +131,13 @@ def sequence_blockers(
     instance: ProcedureInstance,
     step_exec: StepExecution,
 ) -> list[Blocker]:
-    """Structural gates on this step's COMPLETE: bound-step holds, parent-OP
-    holds, strict_sequence order, declared OP dependencies, open redlines."""
+    """Structural gates on this step's COMPLETE: strict_sequence order,
+    declared OP dependencies, open redlines. Containment holds live in
+    held_scope_blockers."""
     blockers: list[Blocker] = []
     exec_lookup = _exec_lookup(instance)
     version = db.get(ProcedureVersion, instance.version_id)
     vs_map = version_step_map(version)
-
-    # Bound-step holds on the step itself.
-    bound = bound_blocks_by_step(db, instance.id)
-    for issue in bound.get(step_exec.id, []):
-        blockers.append(
-            Blocker(
-                kind="hold",
-                message=f"Blocked by {issue.issue_number}",
-                issue_id=issue.id,
-                issue_number=issue.issue_number,
-            )
-        )
 
     # Gate against the op-level entry — for sub-steps that's the parent op.
     gate_op_order: int | None = None
@@ -195,28 +145,6 @@ def sequence_blockers(
         gate_op_order = step_exec.step_number
     elif step_exec.parent_step_order is not None:
         gate_op_order = step_exec.parent_step_order
-        parent_exec = next(
-            (
-                se
-                for se in instance.step_executions
-                if se.step_number == gate_op_order and se.level == 0
-            ),
-            None,
-        )
-        if parent_exec is not None:
-            if _status_value(parent_exec.status) == StepStatus.ON_HOLD.value:
-                blockers.append(
-                    Blocker(kind="parent_hold", message="Parent OP is on hold (open NC)")
-                )
-            for issue in bound.get(parent_exec.id, []):
-                blockers.append(
-                    Blocker(
-                        kind="hold",
-                        message=f"OP blocked by {issue.issue_number}",
-                        issue_id=issue.id,
-                        issue_number=issue.issue_number,
-                    )
-                )
 
         # strict_sequence: sub-step N requires N-1 terminal.
         parent_vs = vs_map.get(gate_op_order) or {}
@@ -285,35 +213,28 @@ def held_scope_blockers(
     instance: ProcedureInstance,
     step_exec: StepExecution,
 ) -> list[Blocker]:
-    """Undispositioned NCs holding this step's (or OP's) scope.
+    """Undispositioned issues holding this row's scope.
 
-    Step scope: NCs raised on the step itself. OP scope: NCs raised on the
-    OP or any of its sub-steps — held work cannot be completed or skipped
-    around.
+    Containment-derived (core/holds): step/op containment in the row's
+    scope, plus a boundary hold bound to this row ("resolve by") — held
+    work cannot be completed or skipped around.
     """
-    raised = holding_ncs_by_step(db, instance.id)
-    scope_ids = [step_exec.id]
-    if step_exec.level == 0:
-        scope_ids += [
-            se.id
-            for se in instance.step_executions
-            if se.parent_step_order == step_exec.step_number
-        ]
+    state = get_hold_state(db, instance.id)
+    issues = state.blockers_for_complete(step_exec) + state.blockers_for_start(step_exec)
     blockers: list[Blocker] = []
     seen: set[int] = set()
-    for se_id in scope_ids:
-        for issue in raised.get(se_id, []):
-            if issue.id in seen:
-                continue
-            seen.add(issue.id)
-            blockers.append(
-                Blocker(
-                    kind="nc",
-                    message=f"Undispositioned {issue.issue_number}",
-                    issue_id=issue.id,
-                    issue_number=issue.issue_number,
-                )
+    for issue in issues:
+        if issue.id in seen:
+            continue
+        seen.add(issue.id)
+        blockers.append(
+            Blocker(
+                kind="nc",
+                message=f"Undispositioned {issue.issue_number}",
+                issue_id=issue.id,
+                issue_number=issue.issue_number,
             )
+        )
     return blockers
 
 
@@ -543,14 +464,6 @@ def complete_step_flow(
     old_instance_status = _status_value(instance.status)
     check_instance_completion(db, instance)
 
-    if step_exec.ad_hoc_issue_id is not None:
-        redline_issue = (
-            db.query(Issue)
-            .filter(Issue.id == step_exec.ad_hoc_issue_id, Issue.deleted_at.is_(None))
-            .first()
-        )
-        if redline_issue is not None:
-            maybe_resume_step_after_nc_update(db, redline_issue, user_id)
 
     instance_completed = (
         old_instance_status != InstanceStatus.COMPLETED.value
@@ -575,7 +488,7 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
 
     version_steps = {s["order"]: s for s in version.content.get("steps", [])}
     all_steps = db.query(StepExecution).filter(StepExecution.instance_id == instance.id).all()
-    raised = holding_ncs_by_step(db, instance.id)
+    hold_state = get_hold_state(db, instance.id)
 
     for step_exec in all_steps:
         if step_exec.level == 0:
@@ -588,8 +501,8 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
                         in (StepStatus.COMPLETED.value, StepStatus.SKIPPED.value)
                         for c in children
                     )
-                    scope_held = bool(raised.get(step_exec.id)) or any(
-                        raised.get(c.id) for c in children
+                    scope_held = bool(hold_state.blockers_for_complete(step_exec)) or any(
+                        hold_state.blockers_for_complete(c) for c in children
                     )
                     if all_children_done and not scope_held:
                         step_exec.status = StepStatus.COMPLETED
@@ -621,109 +534,13 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
         ):
             return
 
+    # WO containment holds close-out: every step may be terminal while an
+    # undispositioned wo-scoped issue keeps the work order open.
+    if hold_state.wo_blocked:
+        return
+
     instance.status = InstanceStatus.COMPLETED
     instance.completed_at = datetime.now(UTC)
-
-
-def maybe_resume_step_after_nc_update(db: Session, issue: Issue, user_id: int | None) -> None:
-    """If this NC just reached a terminal state and no other open NCs remain on
-    its step, pop the step back to PENDING. Propagates the resume to a held
-    parent op when no sibling holds remain."""
-    if issue.step_execution_id is None:
-        return
-    if _status_value(issue.issue_type) != IssueType.NON_CONFORMANCE.value:
-        return
-    if undispositioned(issue):
-        return
-
-    step_exec = db.get(StepExecution, issue.step_execution_id)
-    if step_exec is None:
-        return
-    if _status_value(step_exec.status) != StepStatus.ON_HOLD.value:
-        return
-
-    remaining = (
-        db.query(Issue)
-        .filter(
-            Issue.step_execution_id == step_exec.id,
-            Issue.issue_type == IssueType.NON_CONFORMANCE,
-            Issue.id != issue.id,
-            Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-            Issue.deleted_at.is_(None),
-        )
-        .count()
-    )
-    if remaining != 0:
-        return
-
-    # Hold back if any redline op authorized by an NC on this step is still
-    # outstanding. Approving the disposition isn't enough — the rework itself
-    # has to be completed before the held step can resume.
-    open_redlines = (
-        db.query(StepExecution)
-        .join(Issue, Issue.id == StepExecution.ad_hoc_issue_id)
-        .filter(
-            StepExecution.instance_id == step_exec.instance_id,
-            StepExecution.level == 0,
-            Issue.step_execution_id == step_exec.id,
-            Issue.deleted_at.is_(None),
-            StepExecution.status.notin_(
-                [StepStatus.COMPLETED, StepStatus.SIGNED_OFF, StepStatus.SKIPPED]
-            ),
-        )
-        .count()
-    )
-    if open_redlines:
-        return
-
-    step_old = get_model_dict(step_exec)
-    step_exec.status = StepStatus.PENDING
-    log_update(db, step_exec, step_old, user_id)
-
-    # When an NC was logged on a sub-step the parent op was also flipped to
-    # ON_HOLD. Resume the parent too — but only if no other sub-step of that
-    # parent has any open NC remaining.
-    if step_exec.level > 0 and step_exec.parent_step_order is not None:
-        parent_exec = (
-            db.query(StepExecution)
-            .filter(
-                StepExecution.instance_id == step_exec.instance_id,
-                StepExecution.step_number == step_exec.parent_step_order,
-                StepExecution.level == 0,
-            )
-            .first()
-        )
-        if (
-            parent_exec is not None
-            and _status_value(parent_exec.status) == StepStatus.ON_HOLD.value
-        ):
-            sibling_se_ids = [
-                se.id
-                for se in db.query(StepExecution)
-                .filter(
-                    StepExecution.instance_id == step_exec.instance_id,
-                    StepExecution.parent_step_order == parent_exec.step_number,
-                )
-                .all()
-            ]
-            sibling_se_ids.append(parent_exec.id)
-            siblings_open = (
-                db.query(Issue)
-                .filter(
-                    Issue.step_execution_id.in_(sibling_se_ids),
-                    Issue.issue_type == IssueType.NON_CONFORMANCE,
-                    # Exclude the issue being dispositioned — its in-memory
-                    # status change may not be flushed yet.
-                    Issue.id != issue.id,
-                    Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-                    Issue.deleted_at.is_(None),
-                )
-                .count()
-            )
-            if siblings_open == 0:
-                parent_old = get_model_dict(parent_exec)
-                parent_exec.status = StepStatus.PENDING
-                log_update(db, parent_exec, parent_old, user_id)
 
 
 # ============ Document state ============
@@ -754,8 +571,14 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
     cursors_by_step: dict[int, list[StepFocus]] = {}
     for cursor in sorted(cursors, key=lambda c: c.focused_at):
         cursors_by_step.setdefault(cursor.step_execution_id, []).append(cursor)
-    raised = holding_ncs_by_step(db, instance.id)
-    bound = bound_blocks_by_step(db, instance.id)
+    hold_state = get_hold_state(db, instance.id)
+    raised: dict[int, list[Issue]] = {}
+    for se_id, issues in hold_state.complete_blocked.items():
+        raised.setdefault(se_id, []).extend(issues)
+    for se_id, issues in hold_state.op_complete_blocked.items():
+        bucket = raised.setdefault(se_id, [])
+        bucket.extend(i for i in issues if all(x.id != i.id for x in bucket))
+    bound = hold_state.start_blocked
 
     user_ids = {c.user_id for c in cursors}
     for p in instance.participants or []:
@@ -844,7 +667,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                         "issue_id": i.id,
                         "issue_number": i.issue_number,
                         "kind": "bound",
-                        "disposition_state": disposition_state(i),
+                        "disposition_state": i.disp_state,
                     }
                     for i in bound.get(se.id, [])
                 ]
@@ -853,7 +676,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                         "issue_id": i.id,
                         "issue_number": i.issue_number,
                         "kind": "raised",
-                        "disposition_state": disposition_state(i),
+                        "disposition_state": i.disp_state,
                     }
                     for i in raised.get(se.id, [])
                 ],
@@ -909,7 +732,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                     "issue_id": issue.id,
                     "issue_number": issue.issue_number,
                     "title": issue.title,
-                    "disposition_state": disposition_state(issue),
+                    "disposition_state": issue.disp_state,
                     "blocks": [],
                 },
             )

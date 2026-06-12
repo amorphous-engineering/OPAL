@@ -15,6 +15,9 @@
     <span class="pres pres-done mono">{% if exec and exec.completed_by_user %}{{ exec.completed_by_user.name | initials }}{% endif %} {{ hm(exec.completed_at) if exec else '' }}</span>
 {% elif step.status == 'skipped' %}
     <span class="pres pres-skip mono">SKIPPED{% if exec and exec.completed_by_user %} {{ exec.completed_by_user.name | initials }}{% endif %}</span>
+{% elif raised %}
+    {# R2 derived hold: step stays pending, hold derived from undispositioned issue. #}
+    {% for nc in raised %}<a href="/issues/{{ nc.id }}" class="pres pres-hold mono">HELD — {{ nc.issue_number }}</a>{% endfor %}
 {% elif step.status == 'on_hold' %}
     <span class="pres pres-hold mono">HOLD{% for nc in raised %} · <a href="/issues/{{ nc.id }}">{{ nc.issue_number }}</a>{% endfor %}</span>
 {% elif bound %}

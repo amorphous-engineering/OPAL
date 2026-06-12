@@ -28,6 +28,7 @@ from opal.core.auth import (
     validate_password_strength,
     verify_payload,
 )
+from opal.core.holds import get_hold_state, holding_readout, scope_label
 from opal.db.models import (
     InventoryRecord,
     Kit,
@@ -40,7 +41,7 @@ from opal.db.models import (
 )
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.execution import InstanceStatus, ProcedureInstance, StepExecution
-from opal.db.models.issue import Issue, IssuePriority, IssueStatus, IssueType
+from opal.db.models.issue import Containment, Issue, IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import MasterProcedure, ProcedureStatus, ProcedureVersion
 from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.requirement import Requirement
@@ -578,7 +579,7 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
         db.query(Issue)
         .filter(
             Issue.deleted_at.is_(None),
-            Issue.status.in_(["open", "investigating", "disposition_pending"]),
+            Issue.status == IssueStatus.OPEN,
         )
         .count()
     )
@@ -668,6 +669,19 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
     context["stale_reqs"] = stale_requirements(db)
     context["ready_to_baseline"] = len(ready_requirement_ids(db))
     context["stale_draft_parts"] = stale_draft_parts(db)
+
+    # Undispositioned holds — the is_blocking predicate in SQL: open,
+    # containment-bearing, unsigned.
+    context["undispositioned_holds_count"] = (
+        db.query(Issue)
+        .filter(
+            Issue.deleted_at.is_(None),
+            Issue.status != IssueStatus.CLOSED,
+            Issue.containment != Containment.ADVISORY,
+            (Issue.disposition_type.is_(None)) | (Issue.dispositioned_at.is_(None)),
+        )
+        .count()
+    )
 
     return templates.TemplateResponse("index.html", context)
 
@@ -876,9 +890,7 @@ def parts_import(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/parts/new", response_class=HTMLResponse)
-def parts_new(
-    request: Request, db: DbSession, parent_id: int | None = Query(None)
-) -> HTMLResponse:
+def parts_new(request: Request, db: DbSession, parent_id: int | None = Query(None)) -> HTMLResponse:
     """Deep link: the parts list with the create overlay open.
 
     The form never asks what the invoking context already knows —
@@ -2280,7 +2292,7 @@ def _execution_detail_context(
     )
     context["can_finalize"] = inst_status == "completed" and has_wip
 
-    # Linked issues
+    # Linked issues — undispositioned holds sort first (rail ISSUES section)
     linked_issues = (
         db.query(Issue)
         .filter(
@@ -2289,24 +2301,34 @@ def _execution_detail_context(
         )
         .all()
     )
+    disp_rank = {"undispositioned": 0, "open": 1, "dispositioned": 2, "closed": 3}
+    linked_issues.sort(key=lambda i: (not i.is_blocking, disp_rank.get(i.disp_state, 4), -i.id))
     context["linked_issues"] = linked_issues
 
-    # Step-hold lookup: open NCs that put their step on hold, keyed by step_execution_id.
-    holding_ncs_by_step: dict[int, list[Issue]] = {}
-    for iss in linked_issues:
-        iss_type = iss.issue_type.value if hasattr(iss.issue_type, "value") else iss.issue_type
-        iss_status = iss.status.value if hasattr(iss.status, "value") else iss.status
-        if (
-            iss_type == "non_conformance"
-            and iss.step_execution_id
-            and iss_status not in ("disposition_approved", "closed")
-        ):
-            holding_ncs_by_step.setdefault(iss.step_execution_id, []).append(iss)
-    context["step_holding_ncs"] = holding_ncs_by_step
+    # Containment-derived hold state: which controls are absent, and which
+    # issues replace them. Keyed by step_execution_id.
+    hold_state = get_hold_state(db, instance.id)
+    step_complete_blockers: dict[int, list[Issue]] = {}
+    step_start_blockers: dict[int, list[Issue]] = {}
+    for se in instance.step_executions:
+        complete_blockers = hold_state.blockers_for_complete(se)
+        if complete_blockers:
+            step_complete_blockers[se.id] = complete_blockers
+        start_blockers = hold_state.blockers_for_start(se)
+        if start_blockers:
+            step_start_blockers[se.id] = start_blockers
+    context["step_complete_blockers"] = step_complete_blockers
+    context["step_start_blockers"] = step_start_blockers
 
     # Per-op aggregate of open NCs (op-level + any of its sub-steps). Used to
     # decide when to show the "+ ADD REDLINE OP" button and to populate the
     # modal's NC dropdown. Keyed by op.order.
+    open_ncs_by_step_exec: dict[int, list[Issue]] = {}
+    for iss in linked_issues:
+        iss_type = iss.issue_type.value if hasattr(iss.issue_type, "value") else iss.issue_type
+        iss_status = iss.status.value if hasattr(iss.status, "value") else iss.status
+        if iss_type == "non_conformance" and iss.raised_step_id and iss_status != "closed":
+            open_ncs_by_step_exec.setdefault(iss.raised_step_id, []).append(iss)
     open_ncs_by_op_order: dict[int, list[Issue]] = {}
     for op_data in ops + contingency_ops:
         op_step = op_data["step"]
@@ -2315,14 +2337,21 @@ def _execution_detail_context(
         op_exec = op_step.get("execution")
         bucket: list[Issue] = []
         if op_exec is not None:
-            bucket.extend(holding_ncs_by_step.get(op_exec.id, []))
+            bucket.extend(open_ncs_by_step_exec.get(op_exec.id, []))
         for sub in op_data.get("sub_steps", []):
             sub_exec = sub.get("execution")
             if sub_exec is not None:
-                bucket.extend(holding_ncs_by_step.get(sub_exec.id, []))
+                bucket.extend(open_ncs_by_step_exec.get(sub_exec.id, []))
         if bucket:
             open_ncs_by_op_order[op_step["order"]] = bucket
     context["op_open_ncs_by_order"] = open_ncs_by_op_order
+
+    # Capture pre-fill: assignable users for the anomaly modal.
+    from opal.db.models.user import User as _User
+
+    context["users"] = (
+        db.query(_User).filter(_User.is_active == True).order_by(_User.name).all()  # noqa: E712
+    )
 
     # Gating lookup: top-level ops whose prerequisite ops haven't reached
     # a terminal status yet. Keyed by op.order → list of blocking step_number_str.
@@ -2433,6 +2462,10 @@ def _execution_detail_context(
 
     # Bound hold points (issue_step_block) — hold COMPLETE of the bound step.
     context["bound_holds_by_se"] = exec_flow.bound_blocks_by_step(db, instance.id)
+
+    # Undispositioned NC holds per step execution id — derived from containment.
+    holding_ncs_by_step = exec_flow.holding_ncs_by_step(db, instance.id)
+    context["step_holding_ncs"] = holding_ncs_by_step
 
     # Undispositioned scope per op order — gates the OP's COMPLETE/sign-off
     # control (absent + blocker line, never present-but-failing).
@@ -2840,13 +2873,22 @@ def executions_report(request: Request, db: DbSession, instance_id: int) -> HTML
 
 
 @router.get("/issues", response_class=HTMLResponse)
-def issues_list(request: Request, db: DbSession) -> HTMLResponse:
-    """Issues list page."""
+def issues_list(request: Request, db: DbSession, state: str | None = Query(None)) -> HTMLResponse:
+    """Issues list page. `?state=` deep-links a STATE filter preselection."""
     context = get_base_context(request, db, "Issues - OPAL")
     context["types"] = [t.value for t in IssueType]
-    context["statuses"] = [s.value for s in IssueStatus]
+    context["states"] = ["open", "undispositioned", "dispositioned", "closed"]
     context["priorities"] = [p.value for p in IssuePriority]
+    context["state_selected"] = state if state in context["states"] else None
     return templates.TemplateResponse("issues/list.html", context)
+
+
+ISSUE_TYPE_ABBREV = {
+    "non_conformance": "NC",
+    "bug": "BUG",
+    "task": "TASK",
+    "improvement": "IMPR",
+}
 
 
 @router.get("/issues/table", response_class=HTMLResponse)
@@ -2855,7 +2897,7 @@ def issues_table(
     db: DbSession,
     search: str | None = Query(None),
     issue_type: str | None = Query(None),
-    status: str | None = Query(None),
+    state: str | None = Query(None),
     priority: str | None = Query(None),
     page: int = Query(1, ge=1),
 ) -> HTMLResponse:
@@ -2867,28 +2909,56 @@ def issues_table(
         query = query.filter(Issue.title.ilike(search_term))
     if issue_type:
         query = query.filter(Issue.issue_type == issue_type)
-    if status:
-        query = query.filter(Issue.status == status)
     if priority:
         query = query.filter(Issue.priority == priority)
 
-    issues, pagination = paginate_query(request, query.order_by(Issue.id.desc()), page, colspan=6)
+    # Four-value STATE filter, matching what the column renders: open =
+    # advisory-open; undispositioned / dispositioned = containment-bearing only.
+    signed = (Issue.disposition_type.isnot(None)) & (Issue.dispositioned_at.isnot(None))
+    bearing = Issue.containment != Containment.ADVISORY
+    if state == "closed":
+        query = query.filter(Issue.status == IssueStatus.CLOSED)
+    elif state == "open":
+        query = query.filter(
+            Issue.status != IssueStatus.CLOSED, Issue.containment == Containment.ADVISORY
+        )
+    elif state == "dispositioned":
+        query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, signed)
+    elif state == "undispositioned":
+        query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, ~signed)
+
+    # Undispositioned-with-containment sorts first — the only warning-weight
+    # on the page.
+    blocking = (Issue.status != IssueStatus.CLOSED) & bearing & ~signed
+    query = query.order_by(case((blocking, 0), else_=1), Issue.id.desc())
+
+    issues, pagination = paginate_query(request, query, page, colspan=6)
 
     def get_val(obj, attr):
         val = getattr(obj, attr)
         return val.value if hasattr(val, "value") else val
+
+    def age(dt: datetime) -> str:
+        """Dense relative age for index rows; full ISO 8601 in the tooltip."""
+        aware = dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+        delta = datetime.now(UTC) - aware
+        if delta.days >= 1:
+            return f"{delta.days}d"
+        hours = delta.seconds // 3600
+        if hours:
+            return f"{hours}h"
+        return f"{max(delta.seconds // 60, 0)}m"
 
     issues_data = [
         {
             "id": i.id,
             "issue_number": i.issue_number,
             "title": i.title,
-            "issue_type": get_val(i, "issue_type"),
-            "status": get_val(i, "status"),
+            "issue_type": ISSUE_TYPE_ABBREV.get(get_val(i, "issue_type"), get_val(i, "issue_type")),
+            "disp_state": i.disp_state,
             "priority": get_val(i, "priority"),
             "created_at": i.created_at,
-            "procedure_id": i.procedure_id,
-            "procedure_instance_id": i.procedure_instance_id,
+            "age": age(i.created_at),
         }
         for i in issues
     ]
@@ -2900,11 +2970,15 @@ def issues_table(
 
 
 @router.get("/issues/new", response_class=HTMLResponse)
-def issues_new(request: Request, db: DbSession) -> HTMLResponse:
+def issues_new(
+    request: Request, db: DbSession, procedure_instance_id: int | None = Query(None)
+) -> HTMLResponse:
     """New issue form page."""
     context = get_base_context(request, db, "New Issue - OPAL")
     context["types"] = [t.value for t in IssueType]
     context["priorities"] = [p.value for p in IssuePriority]
+    context["containments"] = [c.value for c in Containment]
+    context["procedure_instance_id"] = procedure_instance_id
 
     # Get procedures and users for linking (parts use the search typeahead)
     procedures = (
@@ -2923,8 +2997,11 @@ def issues_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/issues/{issue_id}", response_class=HTMLResponse)
-def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLResponse:
-    """Issue detail page."""
+def issues_detail(
+    request: Request, db: DbSession, issue_id: int, edit: bool = Query(False)
+) -> HTMLResponse:
+    """Issue detail page. Opens read-only; ?edit=1 renders the in-place
+    editors, DONE returns to view."""
     issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         return templates.TemplateResponse(
@@ -2933,11 +3010,12 @@ def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLRespons
             status_code=404,
         )
 
-    context = get_base_context(request, db, f"Issue {issue_id} - OPAL")
+    context = get_base_context(request, db, f"Issue {issue.issue_number} - OPAL")
     context["issue"] = issue
+    context["editing"] = edit
     context["types"] = [t.value for t in IssueType]
-    context["statuses"] = [s.value for s in IssueStatus]
     context["priorities"] = [p.value for p in IssuePriority]
+    context["containments"] = [c.value for c in Containment]
 
     from opal.db.models.attachment import Attachment
     from opal.db.models.issue import DispositionType
@@ -2957,6 +3035,37 @@ def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLRespons
     context["attachments"] = attachments
     context["users"] = users
     context["disposition_types"] = [d.value for d in DispositionType]
+    # HOLDING — the consequence readout: what this issue is stopping.
+    context["holding"] = holding_readout(db, issue)
+
+    # Spawn-redline target: the op (level-0 order) hosting the raised step.
+    redline_op_order = None
+    if issue.raised_step is not None and issue.procedure_instance_id is not None:
+        raised = issue.raised_step
+        redline_op_order = raised.step_number if raised.level == 0 else raised.parent_step_order
+    context["redline_op_order"] = redline_op_order
+
+    # RAISED AT is scope-named, never a bare number ("OP 4" / "4.1").
+    context["raised_at_label"] = scope_label(issue.raised_step) if issue.raised_step else None
+
+    # Linking goes both directions: the LINKS panel can attach a work order
+    # and a containment boundary step from the issue side.
+    from opal.db.models.execution import StepExecution
+
+    context["instances"] = db.query(ProcedureInstance).order_by(ProcedureInstance.id.desc()).all()
+    instance_steps = []
+    if issue.procedure_instance_id is not None:
+        steps = (
+            db.query(StepExecution)
+            .filter(StepExecution.instance_id == issue.procedure_instance_id)
+            .order_by(StepExecution.step_number)
+            .all()
+        )
+        instance_steps = [{"id": s.id, "label": scope_label(s), "title": s.title} for s in steps]
+    context["instance_steps"] = instance_steps
+    context["containment_step_label"] = (
+        scope_label(issue.containment_step) if issue.containment_step else None
+    )
 
     return templates.TemplateResponse("issues/detail.html", context)
 

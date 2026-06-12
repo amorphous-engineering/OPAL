@@ -17,7 +17,7 @@ from opal.db.models.inventory import (
     StockTransfer,
     TestTemplate,
 )
-from opal.db.models.issue import Issue, IssueStepBlock
+from opal.db.models.issue import Issue
 from opal.db.models.issue_comment import IssueComment
 from opal.db.models.onshape_link import OnshapeLink, OnshapeSyncLog
 from opal.db.models.part import BOMLine, Part, PartRequirement
@@ -58,7 +58,6 @@ __all__ = [
     "Issue",
     "IssueComment",
     "IssueReference",
-    "IssueStepBlock",
     "Kit",
     "MasterProcedure",
     "OnshapeLink",
