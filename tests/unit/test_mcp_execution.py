@@ -59,7 +59,7 @@ def test_get_execution_state_by_execution_id(client, db_session):
     assert data["instance"]["progress"] == {"done": 0, "total": 3}
     assert [s["order"] for s in data["steps"]] == [1, 2, 3]
     assert all(s["status"] == "pending" for s in data["steps"])
-    assert all(s["claim"] is None for s in data["steps"])
+    assert all(s["cursors"] == [] for s in data["steps"])
     assert data["roster"] == []
     assert data["holds"] == []
     assert data["generated_at"]  # ISO timestamp present
@@ -112,85 +112,81 @@ def test_join_execution_requires_user_and_registers_observer(client, db_session,
     assert data["success"] is True
     assert len(data["participants"]) == 1
 
-    # A joined user with no claim appears in the roster as observer.
+    # A joined user with no cursor appears in the roster, step_order None.
     state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     assert len(state["roster"]) == 1
     assert state["roster"][0]["user_id"] == test_user.id
-    assert state["roster"][0]["observer"] is True
+    assert state["roster"][0]["step_order"] is None
+    assert state["roster"][0]["focused_at"] is None
 
 
-# ============ claim_step ============
+# ============ focus_step ============
 
 
-def test_claim_step_requires_user_id(client, db_session):
+def test_focus_step_requires_user_id(client, db_session):
     instance_id, _ = _create_instance(client)
 
-    data = _call(server._claim_step, db_session, {"execution_id": instance_id, "step_number": 1})
+    data = _call(server._focus_step, db_session, {"execution_id": instance_id, "step_number": 1})
     assert "error" in data
     assert "user_id" in data["error"]
 
 
-def test_claim_step_happy(client, db_session, test_user):
+def test_focus_step_happy(client, db_session, test_user):
     instance_id, _ = _create_instance(client)
 
     data = _call(
-        server._claim_step,
+        server._focus_step,
         db_session,
         {"execution_id": instance_id, "step_number": 1, "user_id": test_user.id},
     )
     assert data["success"] is True
-    assert "claimed step" in data["message"]
     assert test_user.name in data["message"]
-    assert data["status"] == "in_progress"
-    assert data["instance_started"] is True  # first claim starts a cut instance
+    assert data["step_number"] == 1
+    assert data["focused_at"]
 
     state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     step1 = next(s for s in state["steps"] if s["order"] == 1)
-    assert step1["status"] == "in_progress"
-    assert step1["claim"]["user_id"] == test_user.id
-    assert state["instance"]["status"] == "in_work"
+    assert [c["user_id"] for c in step1["cursors"]] == [test_user.id]
+    # Focus is presence only: no status change, the WO stays cut.
+    assert step1["status"] == "pending"
+    assert state["instance"]["status"] == "cut"
+    # Cursor holders lead the roster with their step.
+    assert state["roster"][0]["user_id"] == test_user.id
+    assert state["roster"][0]["step_order"] == 1
 
 
-def test_claim_step_conflict_second_user(client, db_session, test_user, admin_user):
+def test_focus_step_shared_by_two_users(client, db_session, test_user, admin_user):
+    """Several users may sit on the same step — both cursors render."""
     instance_id, _ = _create_instance(client)
-    # The conflict path calls db.rollback(), which under the pysqlite test
-    # harness unwinds the whole outer transaction — capture plain values
-    # first and make the conflicting claim the last DB action of the test.
-    holder_name = test_user.name
-    admin_id = admin_user.id
 
-    data = _call(
-        server._claim_step,
-        db_session,
-        {"execution_id": instance_id, "step_number": 1, "user_id": test_user.id},
-    )
-    assert data["success"] is True
+    for uid in (test_user.id, admin_user.id):
+        data = _call(
+            server._focus_step,
+            db_session,
+            {"execution_id": instance_id, "step_number": 1, "user_id": uid},
+        )
+        assert data["success"] is True
 
-    data = _call(
-        server._claim_step,
-        db_session,
-        {"execution_id": instance_id, "step_number": 1, "user_id": admin_id},
-    )
-    assert "error" in data
-    assert "claimed by" in data["error"]
-    assert holder_name in data["error"]
+    state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
+    step1 = next(s for s in state["steps"] if s["order"] == 1)
+    assert {c["user_id"] for c in step1["cursors"]} == {test_user.id, admin_user.id}
 
 
-def test_claim_step_supersedes_own_previous_claim(client, db_session, test_user):
-    """One active step per user: claiming step 2 returns step 1 to pending."""
+def test_focus_step_moves_own_cursor(client, db_session, test_user):
+    """One cursor per (instance, user): focusing step 2 leaves step 1."""
     instance_id, _ = _create_instance(client)
     args = {"execution_id": instance_id, "user_id": test_user.id}
 
-    assert _call(server._claim_step, db_session, {**args, "step_number": 1})["success"] is True
-    assert _call(server._claim_step, db_session, {**args, "step_number": 2})["success"] is True
+    assert _call(server._focus_step, db_session, {**args, "step_number": 1})["success"] is True
+    assert _call(server._focus_step, db_session, {**args, "step_number": 2})["success"] is True
 
     state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     step1 = next(s for s in state["steps"] if s["order"] == 1)
     step2 = next(s for s in state["steps"] if s["order"] == 2)
+    assert step1["cursors"] == []
+    assert [c["user_id"] for c in step2["cursors"]] == [test_user.id]
     assert step1["status"] == "pending"
-    assert step1["claim"] is None
-    assert step2["status"] == "in_progress"
-    assert step2["claim"]["user_id"] == test_user.id
+    assert step2["status"] == "pending"
 
 
 # ============ complete_step ============
@@ -227,55 +223,21 @@ def test_complete_step_reports_instance_completed_on_last_step(client, db_sessio
     assert step1["completed"]["by"] == test_user.name
 
 
-def test_complete_step_releases_claim(client, db_session, test_user):
+def test_complete_step_records_completion(client, db_session, test_user):
     instance_id, _ = _create_instance(client)
     args = {"execution_id": instance_id, "user_id": test_user.id}
 
-    assert _call(server._claim_step, db_session, {**args, "step_number": 1})["success"] is True
+    assert _call(server._focus_step, db_session, {**args, "step_number": 1})["success"] is True
     data = _call(server._complete_step, db_session, {**args, "step_number": 1})
     assert data["success"] is True
 
     state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     step1 = next(s for s in state["steps"] if s["order"] == 1)
     assert step1["status"] == "completed"
-    assert step1["claim"] is None
-
-
-# ============ release_step ============
-
-
-def test_release_step_wrong_user_then_owner(client, db_session, test_user, admin_user):
-    instance_id, _ = _create_instance(client)
-
-    data = _call(
-        server._claim_step,
-        db_session,
-        {"execution_id": instance_id, "step_number": 1, "user_id": test_user.id},
-    )
-    assert data["success"] is True
-
-    # Another (active, human) user cannot release someone else's claim.
-    data = _call(
-        server._release_step,
-        db_session,
-        {"execution_id": instance_id, "step_number": 1, "user_id": admin_user.id},
-    )
-    assert "error" in data
-    assert "No active claim" in data["error"]
-
-    # The claim holder releases: step returns to pending.
-    data = _call(
-        server._release_step,
-        db_session,
-        {"execution_id": instance_id, "step_number": 1, "user_id": test_user.id},
-    )
-    assert data["success"] is True
-    assert data["status"] == "pending"
-
-    state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
-    step1 = next(s for s in state["steps"] if s["order"] == 1)
-    assert step1["status"] == "pending"
-    assert step1["claim"] is None
+    assert step1["completed"]["by"] == test_user.name
+    assert step1["completed"]["initials"] == "TU"
+    # Completing releases nothing — the cursor stays where the user is.
+    assert [c["user_id"] for c in step1["cursors"]] == [test_user.id]
 
 
 # ============ attach_to_step ============
@@ -370,7 +332,7 @@ def test_add_step_note_appends(client, db_session):
 # ============ bind_issue_hold ============
 
 
-def test_bind_issue_hold_blocks_claim_and_is_idempotent(client, db_session, test_user):
+def test_bind_issue_hold_blocks_complete_and_is_idempotent(client, db_session, test_user):
     instance_id, _ = _create_instance(client)
 
     issue_data = _call(
@@ -418,15 +380,24 @@ def test_bind_issue_hold_blocks_claim_and_is_idempotent(client, db_session, test
     assert state["holds"][0]["issue_number"] == issue_number
     assert "2" in state["holds"][0]["blocks"]
 
-    # The bound step's START (claim) refuses while undispositioned. This is
-    # the FlowError → db.rollback() path, which unwinds the outer test
+    # Focus is ungated — a cursor may sit on the bound step.
+    data = _call(
+        server._focus_step,
+        db_session,
+        {"execution_id": instance_id, "step_number": 2, "user_id": test_user.id},
+    )
+    assert data["success"] is True
+
+    # The bound step's COMPLETE refuses while undispositioned. This is the
+    # FlowError → db.rollback() path, which unwinds the outer test
     # transaction under pysqlite — keep it as the last DB action.
     data = _call(
-        server._claim_step,
+        server._complete_step,
         db_session,
         {"execution_id": instance_id, "step_number": 2, "user_id": test_user.id},
     )
     assert "error" in data
+    assert data["error"].startswith("Cannot complete:")
     assert f"Blocked by {issue_number}" in data["error"]
 
 
@@ -447,7 +418,7 @@ def test_bind_issue_hold_lifted_by_disposition(client, db_session, test_user, ad
     )
     assert data["success"] is True
 
-    # Disposition the issue via the API; the bound step becomes claimable again.
+    # Disposition the issue via the API; the bound step becomes completable.
     resp = client.patch(
         f"/api/issues/{issue_id}",
         json={"status": "disposition_approved", "disposition_type": "use_as_is"},
@@ -456,12 +427,12 @@ def test_bind_issue_hold_lifted_by_disposition(client, db_session, test_user, ad
     assert resp.status_code == 200
 
     data = _call(
-        server._claim_step,
+        server._complete_step,
         db_session,
         {"execution_id": instance_id, "step_number": 1, "user_id": test_user.id},
     )
     assert data["success"] is True
-    assert data["status"] == "in_progress"
+    assert f"completed by {test_user.name}" in data["message"]
 
 
 def test_bind_issue_hold_unknown_issue(client, db_session):

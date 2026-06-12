@@ -592,8 +592,8 @@ def test_reorder_renumbers_step_labels(client):
     assert labels["B.1"] == "3.1"
 
 
-def test_execution_gating_blocks_start_until_prereqs_complete(client):
-    """OP 2 (deps on OP 1) cannot be started until OP 1 is completed."""
+def test_execution_gating_blocks_complete_until_prereqs_complete(client):
+    """OP 2 (deps on OP 1) cannot be completed until OP 1 is completed."""
     proc_id, op_ids = _make_proc_with_n_ops(client, 2)
     client.put(
         f"/api/procedures/{proc_id}/steps/{op_ids[1]}/dependencies",
@@ -604,18 +604,20 @@ def test_execution_gating_blocks_start_until_prereqs_complete(client):
     inst = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()
     instance_id = inst["id"]
 
-    # Attempt to start OP 2 first → blocked
-    r = client.post(f"/api/procedure-instances/{instance_id}/steps/2/start")
+    # Attempt to complete OP 2 first → blocked on the declared dependency.
+    r = client.post(f"/api/procedure-instances/{instance_id}/steps/2/complete", json={})
     assert r.status_code == 400
-    assert "waiting" in r.json()["detail"].lower()
+    assert "Waiting on OP" in r.json()["detail"]
 
-    # Start + complete OP 1, then OP 2 should be startable.
-    assert client.post(f"/api/procedure-instances/{instance_id}/steps/1/start").status_code == 200
+    # Complete OP 1, then OP 2's COMPLETE succeeds.
     assert (
         client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={}).status_code
         == 200
     )
-    assert client.post(f"/api/procedure-instances/{instance_id}/steps/2/start").status_code == 200
+    assert (
+        client.post(f"/api/procedure-instances/{instance_id}/steps/2/complete", json={}).status_code
+        == 200
+    )
 
 
 # ============ Photo / inline-image attachments ============

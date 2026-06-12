@@ -2272,6 +2272,9 @@ def _execution_detail_context(
 
     # Can finalize: instance completed + has WIP productions
     inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
+    # Partials (_dockbar, _op_card, _rail) read inst_status from context —
+    # only detail.html re-derives it with {% set %}.
+    context["inst_status"] = inst_status
     has_wip = any(
         (p.status.value if hasattr(p.status, "value") else p.status) == "wip" for p in productions
     )

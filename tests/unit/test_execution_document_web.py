@@ -3,8 +3,8 @@
 Identity note: API auth resolves the session cookie BEFORE the bearer header
 (see opal.api.deps.get_current_user), so API mutations issued through
 ``web_client`` are attributed to ``test_user`` — the same identity the web
-page renders as ``current_user``. The mystep test verifies this explicitly
-via /state.
+page renders as ``current_user``. The dockbar cursor test verifies this
+explicitly via /state.
 """
 
 from datetime import UTC, datetime
@@ -100,6 +100,11 @@ def _op_section_body(html: str, order: int) -> str:
     return html.split(f'id="op-{order}"')[1].split("</section>")[0]
 
 
+def _doc_column(html: str) -> str:
+    """Markup between id="exec-doc" and the right rail's <aside>."""
+    return html.split('id="exec-doc"')[1].split("<aside")[0]
+
+
 # ============ 1. document page renders ============
 
 
@@ -114,9 +119,10 @@ def test_document_page_renders(web_client: TestClient):
     assert "op-card" in body
     assert "execdoc.js" in body
     assert "execdoc.css" in body
-    # The META and OPERATIONS tabs are gone.
-    assert ">META<" not in body
-    assert ">OPERATIONS<" not in body
+    # Exit criteria: every control lives in the docked bar — the multi-step
+    # document column renders zero <button> elements.
+    assert 'id="dockbar"' in body
+    assert "<button" not in _doc_column(body)
 
 
 # ============ 2. legacy tab aliases ============
@@ -183,12 +189,7 @@ def test_role_chip_and_caution_render(web_client: TestClient):
 def test_bound_hold_renders_in_document_and_rail(web_client: TestClient, auth_headers: dict):
     instance_id = _create_instance(web_client)
 
-    # Claim step 1 and raise a step-contained NC that also blocks step 3.
-    start = web_client.post(
-        f"/api/procedure-instances/{instance_id}/steps/1/start",
-        headers=auth_headers,
-    )
-    assert start.status_code == 200, start.text
+    # Raise a step-contained NC on step 1 that also blocks step 3's COMPLETE.
     nc = web_client.post(
         f"/api/procedure-instances/{instance_id}/steps/1/nc",
         json={
@@ -203,7 +204,7 @@ def test_bound_hold_renders_in_document_and_rail(web_client: TestClient, auth_he
 
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
-    assert "⛔" in page.text
+    assert "HOLD" in page.text
     assert issue_number in page.text
 
     rail = web_client.get(f"/executions/{instance_id}/rail")
@@ -213,39 +214,52 @@ def test_bound_hold_renders_in_document_and_rail(web_client: TestClient, auth_he
     assert "blocks" in rail.text
 
 
-# ============ 6. mystep partial ============
+# ============ 6. dockbar partial ============
 
 
-def test_mystep_empty_without_claim(web_client: TestClient):
+def test_dockbar_serves_requested_step(web_client: TestClient):
     instance_id = _create_instance(web_client)
 
-    resp = web_client.get(f"/executions/{instance_id}/mystep")
-    assert resp.status_code == 200
-    assert "mystep-bar" not in resp.text
-
-
-def test_mystep_renders_for_claimant_with_data_fields(web_client: TestClient, test_user):
-    instance_id = _create_schema_instance(web_client)
-
-    # web_client carries test_user's session cookie; the cookie wins over the
-    # bearer header in API auth, so this claim belongs to test_user.
-    start = web_client.post(f"/api/procedure-instances/{instance_id}/steps/1/start")
-    assert start.status_code == 200, start.text
-
-    state = web_client.get(f"/api/procedure-instances/{instance_id}/state").json()
-    step1 = next(s for s in state["steps"] if s["order"] == 1)
-    assert step1["claim"] is not None
-    assert step1["claim"]["user_id"] == test_user.id
-
-    resp = web_client.get(f"/executions/{instance_id}/mystep")
+    resp = web_client.get(f"/executions/{instance_id}/dockbar?step=2")
     assert resp.status_code == 200
     body = resp.text
-    assert "mystep-bar" in body
-    assert 'mystep-num">1</span>' in body
+    assert 'data-bar-order="2"' in body
+    assert 'dockbar-num">2</span>' in body
+    # The bar is the only control surface of an actionable step.
+    assert "ATTACH" in body
+    assert "ISSUE" in body
     assert "COMPLETE" in body
-    assert "ANOMALY" in body
-    # Schema'd step → editable capture field in the docked bar.
-    assert 'data-capture-field="torque"' in body
+
+
+def test_dockbar_follows_cursor_with_data_fields(web_client: TestClient, test_user):
+    instance_id = _create_schema_instance(web_client)
+
+    # Without a cursor the bar falls back to the first actionable step,
+    # whose schema renders as editable capture fields.
+    resp = web_client.get(f"/executions/{instance_id}/dockbar")
+    assert resp.status_code == 200
+    assert 'data-bar-order="1"' in resp.text
+    assert 'data-capture-field="torque"' in resp.text
+
+    # web_client carries test_user's session cookie; the cookie wins over the
+    # bearer header in API auth, so this cursor belongs to test_user.
+    focus = web_client.post(
+        f"/api/procedure-instances/{instance_id}/focus", json={"step_number": 2}
+    )
+    assert focus.status_code == 200, focus.text
+
+    state = web_client.get(f"/api/procedure-instances/{instance_id}/state").json()
+    step2 = next(s for s in state["steps"] if s["order"] == 2)
+    assert [c["user_id"] for c in step2["cursors"]] == [test_user.id]
+    assert step2["status"] == "pending"  # focus is presence, not a start
+
+    bar = web_client.get(f"/executions/{instance_id}/dockbar")
+    assert bar.status_code == 200
+    assert 'data-bar-order="2"' in bar.text
+
+    # The document renders the session user's cursor chip server-side.
+    page = web_client.get(f"/executions/{instance_id}")
+    assert '<span class="cursor-chip mono is-self"' in page.text
 
 
 # ============ 7. rail partial: attachments + reference docs ============
@@ -288,9 +302,9 @@ def test_step_row_partial_returns_row_or_404(web_client: TestClient):
 def test_meta_facts_abort_and_report_visibility(web_client: TestClient, db_session: Session):
     instance_id = _create_instance(web_client)
 
-    # Flip the instance to in_progress by starting a step.
-    start = web_client.post(f"/api/procedure-instances/{instance_id}/steps/1/start")
-    assert start.status_code == 200, start.text
+    # Flip the instance cut -> in_work by completing a step.
+    complete = web_client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert complete.status_code == 200, complete.text
 
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
@@ -322,4 +336,4 @@ def test_attachment_indicator_on_step_row(web_client: TestClient):
 
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
-    assert "⎙1" in page.text
+    assert "1 ATT" in page.text
