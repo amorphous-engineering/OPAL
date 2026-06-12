@@ -1,3 +1,4 @@
+{% import 'opalkit/_macros.html' as ok %}
 <div>
 <div class="panel">
     <div class="panel-header"><span>BOM RECONCILIATION</span></div>
@@ -17,7 +18,7 @@
             </tbody>
         </table>
         {% else %}
-        <p class="text-muted">No BOM items defined for this procedure.</p>
+        {{ ok.empty_line("BOM") }}
         {% endif %}
 
         {% if unplanned_consumptions %}

@@ -99,7 +99,7 @@
             </div>
             <div class="step-actions">
                 <button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>
-                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ANOMALY</button>
+                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
                 {% if not step_raised_holds %}
                 <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, {{ step.title | tojson }})">SKIP</button>
                 {% endif %}
@@ -117,7 +117,7 @@
         <div class="step-controls">
             <div class="step-actions">
                 {% if exec %}<button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>{% endif %}
-                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ANOMALY</button>
+                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
                 <button class="btn btn-sm btn-primary" onclick="signoffStep({{ step.order }})">SIGN OFF</button>
             </div>
         </div>

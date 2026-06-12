@@ -2487,7 +2487,7 @@ def _execution_detail_context(
     # Display-only — the claim API gate in core/execution_flow is authoritative.
     terminal = {"completed", "signed_off", "skipped"}
     seq_blockers_by_order: dict[int, str] = {}
-    for op_data in ops:
+    for op_data in ops + contingency_ops:
         op_vs = context["version_steps_map"].get(op_data["step"]["order"]) or {}
         if not op_vs.get("strict_sequence"):
             continue
@@ -2585,6 +2585,11 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
             op_data["step"]["order"], []
         ),
         "step_kit": vs.get("step_kit") or [],
+        "raised_holds": (
+            context.get("step_holding_ncs", {}).get(row["execution"].id, [])
+            if row.get("execution") is not None
+            else []
+        ),
     }
 
 
