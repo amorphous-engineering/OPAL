@@ -134,10 +134,14 @@
     top: var(--space-sm);
     max-height: calc(100vh - 9rem);
     overflow-y: auto;
-    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
 }
 
-.exec-rail-left { width: 230px; }
+.exec-rail-left {
+    width: 230px;
+    padding: var(--space-sm);
+}
 
 @media (max-width: 1279px) {
     .exec-rail-left { display: none; }
@@ -446,14 +450,14 @@
 
 #dockbar {
     position: fixed;
-    bottom: 0;
+    bottom: var(--opal-footer-h, 0px); /* docked above the status footer */
     left: 50%;
     transform: translateX(-50%);
     width: min(900px, 100vw);
     z-index: var(--z-dropdown);
 }
 
-body.has-dockbar .main { padding-bottom: 7rem; }
+body.has-dockbar .main { padding-bottom: 5.5rem; }
 
 .dockbar {
     display: flex;

@@ -1115,7 +1115,16 @@
         }
     });
 
+    function setFooterOffset() {
+        const footer = document.querySelector('.footer');
+        document.documentElement.style.setProperty(
+            '--opal-footer-h', footer ? `${footer.offsetHeight}px` : '0px'
+        );
+    }
+    window.addEventListener('resize', setFooterOffset);
+
     function initExecDoc() {
+        setFooterOffset();
         applyStoredToggles();
         loadKitAvailability();
         loadStepKitAvailability();
