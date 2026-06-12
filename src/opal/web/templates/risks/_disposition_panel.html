@@ -57,7 +57,7 @@
 
     <div id="disposition-error" class="text-red" style="display: none; margin-top: var(--space-sm);"></div>
     <button type="button" class="btn btn-primary" style="margin-top: var(--space-sm);"
-            onclick="applyDisposition('{{ target }}')">
+            onclick='applyDisposition({{ target | tojson }})'>
         SET {{ target | upper }}
     </button>
 </div>
