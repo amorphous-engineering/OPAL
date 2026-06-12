@@ -69,14 +69,35 @@ def test_detail_incomplete_scenario_masthead_placeholder(web_client):
     assert f"RISK #{risk['id']}" not in page.text
     assert "risk-statement-incomplete" in page.text
     assert "scenario incomplete" in page.text
-    # The four scenario editors exist with lint overlays
+
+
+def test_detail_view_mode_default(web_client):
+    """The risk page opens read-only: facts, an EDIT control, no editors,
+    no acceptance form. ?edit=1 renders the editors and the gated ACCEPT."""
+    risk = _create_risk(web_client)
+
+    page = web_client.get(f"/risks/{risk['id']}")
+    assert page.status_code == 200
+    assert "?edit=1" in page.text
+    for field in ("condition", "departure", "consequence"):
+        assert f'id="{field}-text"' not in page.text
+    assert 'id="asset-part-select"' not in page.text
+    assert 'id="disposition-select"' not in page.text
+    assert f"ACCEPT {risk['risk_number']}" not in page.text
+    assert "ACCEPTANCE READINESS" not in page.text
+
+    page = web_client.get(f"/risks/{risk['id']}?edit=1")
+    assert page.status_code == 200
+    assert ">DONE<" in page.text
+    # The scenario editors exist with lint overlays
     for field in ("condition", "departure", "consequence"):
         assert f'id="{field}-text"' in page.text
         assert f'id="{field}-overlay"' in page.text
-    # Acceptance panel renders with unmet checks and a disabled accept button
-    assert "ACCEPTANCE READINESS" in page.text
+    assert 'id="disposition-select"' in page.text
+    # No readiness checklist: one gated button, the tooltip names the missing
+    assert "ACCEPTANCE READINESS" not in page.text
     assert f"ACCEPT {risk['risk_number']}" in page.text
-    assert "disabled" in page.text
+    assert 'disabled title="missing:' in page.text
 
 
 def test_detail_complete_scenario_statement_is_masthead(web_client, test_user):
@@ -92,7 +113,7 @@ def test_detail_complete_scenario_statement_is_masthead(web_client, test_user):
 
 def test_detail_lint_underline_renders_server_side(web_client):
     risk = _create_risk(web_client, condition="the valve might stick open")
-    page = web_client.get(f"/risks/{risk['id']}")
+    page = web_client.get(f"/risks/{risk['id']}?edit=1")
     assert page.status_code == 200
     assert "lint-block" in page.text  # RL-01 is block_accept severity
     assert "RL-01" in page.text
@@ -102,17 +123,20 @@ def test_acceptance_panel_partial_and_accept_flow(web_client, test_user):
     risk = _create_risk(web_client)
     _complete_scenario(web_client, risk, test_user.id)
 
-    panel = web_client.get(f"/risks/{risk['id']}/acceptance-panel")
+    panel = web_client.get(f"/risks/{risk['id']}/acceptance-panel?edit=1")
     assert panel.status_code == 200
-    assert "[x]" in panel.text
     assert "openAcceptConfirm()" in panel.text
+    assert "ACCEPTANCE READINESS" not in panel.text
 
     accepted = web_client.post(f"/api/risks/{risk['id']}/accept", json={})
     assert accepted.status_code == 200, accepted.text
 
+    # Signature facts live in the rail: ACCEPTED · RATIONALE; the form is gone.
     page = web_client.get(f"/risks/{risk['id']}")
-    assert "accepted:" in page.text
+    assert "ACCEPTED" in page.text
     assert test_user.name in page.text
+    assert "heritage hardware, uncrewed, site rated" in page.text
+    assert f"ACCEPT {risk['risk_number']}" not in web_client.get(f"/risks/{risk['id']}?edit=1").text
 
 
 def test_disposition_panel_fields_only_for_selected_target(web_client):

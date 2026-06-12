@@ -1,48 +1,35 @@
-{# Acceptance readiness panel — mirrors requirements/_baseline_panel.html and
-   reuses its CSS. Rendered server-side from opal.risks.readiness, re-fetched
-   via GET /risks/{id}/acceptance-panel after field saves. All checks are
-   hard — acceptance is a signature. #}
-<div class="baseline-panel mono">
-    <div class="baseline-panel-title">ACCEPTANCE READINESS</div>
-    {% for check in readiness.checks %}
-    <div class="baseline-check {% if not check.passed %}baseline-check-fail{% endif %}">
-        <span class="baseline-check-box">[{{ 'x' if check.passed else ' ' }}]</span>
-        <span class="baseline-check-label">{{ check.label }}</span>
-        {% if not check.passed and check.detail %}
-        <span class="baseline-check-detail">← {{ check.detail }}</span>
-        {% endif %}
-    </div>
-    {% endfor %}
-    <div class="baseline-panel-rule">──────────────────────────</div>
-    {% if risk.disposition == 'accepted' %}
-    <div class="baseline-signature">
-        accepted: <span class="text-green">{{ risk.accepted_by.name if risk.accepted_by else '?' }}</span>
-        {% if risk.accepted_at %}· <span class="mono">{{ risk.accepted_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}</span>{% endif %}<br>
-        rationale: {{ risk.acceptance_rationale }}
-    </div>
-    {% elif risk.disposition == 'realized' %}
-    <div class="baseline-signature text-muted">realized — terminal</div>
-    {% else %}
-    <div class="form-group" style="margin-bottom: var(--space-sm);">
-        <label class="form-label" for="acceptance-rationale">ACCEPTANCE RATIONALE</label>
-        <textarea id="acceptance-rationale" class="form-textarea mono" rows="2"
-                  onblur="updateRisk('acceptance_rationale', this.value || null)">{{ risk.acceptance_rationale or '' }}</textarea>
-    </div>
-    <button type="button" class="btn btn-primary" id="accept-btn"
-            {% if not readiness.ready %}disabled title="clear the blockers above first"{% endif %}
-            onclick="openAcceptConfirm()">
-        ACCEPT {{ risk.risk_number }}
-    </button>
-    <div id="accept-confirm" class="baseline-confirm" style="display: none;">
-        <div class="baseline-signature">
-            accepting <span class="text-green">{{ risk.risk_number }}</span>
-            at <span class="sev-{{ risk.severity }}">{{ risk.score }}</span>{% if risk.residual_score is not none %} → <span class="sev-{{ risk.residual_severity }}">{{ risk.residual_score }}</span>{% endif %}<br>
-            rationale: {{ risk.acceptance_rationale or '' }}<br>
-            signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
-            · <span id="accept-sign-time"></span>
-        </div>
-        <button type="button" class="btn btn-primary" onclick="commitAccept()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
-        <button type="button" class="btn" onclick="document.getElementById('accept-confirm').style.display='none'">ABORT</button>
-    </div>
-    {% endif %}
+{# Acceptance — the ACCEPT button carries the gate: grayed until every hard
+   check passes, the tooltip names what is missing (opal.risks.readiness is
+   the one source; the gate and accept() cannot drift). Re-fetched via
+   GET /risks/{id}/acceptance-panel?edit=… after field saves. Signature
+   facts (ACCEPTED · RATIONALE) live in the detail rail once signed. #}
+{% if risk.disposition not in ('accepted', 'realized') %}
+{% if editing %}
+<div class="form-group" style="margin-bottom: var(--space-sm);">
+    <label class="form-label" for="acceptance-rationale">ACCEPTANCE RATIONALE</label>
+    <textarea id="acceptance-rationale" class="form-textarea mono" rows="2"
+              onblur="updateRisk('acceptance_rationale', this.value || null)">{{ risk.acceptance_rationale or '' }}</textarea>
 </div>
+{% set short = {'scenario_complete': 'scenario', 'owner_assigned': 'owner', 'scored': 'score', 'rationale_recorded': 'rationale', 'lint_clean': 'lint'} %}
+{% set failing = readiness.checks | rejectattr('passed') | map(attribute='key') | list %}
+<button type="button" class="btn btn-primary" id="accept-btn"
+        {% if not readiness.ready %}disabled title="missing: {% for k in failing %}{{ short.get(k, k) }}{% if not loop.last %}, {% endif %}{% endfor %}"{% endif %}
+        onclick="openAcceptConfirm()">
+    ACCEPT {{ risk.risk_number }}
+</button>
+<div id="accept-confirm" class="baseline-confirm" style="display: none;">
+    <div class="baseline-signature">
+        accepting <span class="text-green">{{ risk.risk_number }}</span>
+        at <span class="sev-{{ risk.severity }}">{{ risk.score }}</span>{% if risk.residual_score is not none %} → <span class="sev-{{ risk.residual_severity }}">{{ risk.residual_score }}</span>{% endif %}<br>
+        rationale: {{ risk.acceptance_rationale or '' }}<br>
+        signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
+        · <span id="accept-sign-time"></span>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="commitAccept()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+    <button type="button" class="btn" onclick="document.getElementById('accept-confirm').style.display='none'">ABORT</button>
+</div>
+{% elif risk.acceptance_rationale %}
+<div class="form-label">ACCEPTANCE RATIONALE</div>
+<div class="mono" style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color); white-space: pre-wrap;">{{ risk.acceptance_rationale }}</div>
+{% endif %}
+{% endif %}
