@@ -2556,21 +2556,9 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 /* The part page — data renders in tables: detail rows for facts, headed
    tables for collections. An empty section is one line, never a box; a
    populated section promotes to the panel grammar at ledger pitch. */
-.part-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-    margin: var(--space-md) 0;
-}
-
-.part-actions .part-action-right {
-    margin-left: auto;
-}
-
 /* Identity readout table — every meta fact, always rendered */
 .part-identity {
-    margin: var(--space-sm) 0 var(--space-md);
+    margin: var(--space-md) 0 0;
 }
 
 .part-identity th {

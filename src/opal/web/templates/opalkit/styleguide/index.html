@@ -285,39 +285,61 @@
         </div>
         <div class="panel-body">
             <p class="text-muted" style="margin-bottom: var(--space-md);">
-                An empty section is one line, never a box: label secondary, dash muted,
-                half-strength rule. The add affordance never renders at muted.
+                An empty section keeps its structure: the panel header bar, the table's
+                column heads, and one muted dash row as the body. No tall boxes, no
+                narration — absence is a dash, never a sentence.
+            </p>
+            <div class="panel panel-ledger" style="margin-bottom: var(--space-md);">
+                <div class="panel-header">
+                    <span>SUPPLIERS</span>
+                    <span class="header-count">0</span>
+                    <div class="panel-header-actions"><a class="ledger-add" href="#">+ ADD</a></div>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            {{ ok.th("SUPPLIER") }}
+                            {{ ok.th("VENDOR PN", width="140px") }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="2" class="text-muted">—</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-bottom: var(--space-md);">
+<pre style="margin: 0;">{% raw %}{% for row in rows %}
+<tr>…</tr>
+{% else %}
+<tr><td colspan="N" class="text-muted">—</td></tr>
+{% endfor %}{% endraw %}</pre>
+            </div>
+            <p class="text-muted" style="margin-bottom: var(--space-md);">
+                ok.empty_line is the one-line primitive for index rows outside section
+                panels. ok.empty is legacy — full-page zero states only, never sections.
             </p>
             <div style="margin-bottom: var(--space-md);">
                 {{ ok.empty_line("BOM", href="#") }}
-                {{ ok.empty_line("PO LINES") }}
             </div>
-            <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-bottom: var(--space-md);">
-<pre style="margin: 0;">{% raw %}{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
-{{ ok.empty_line("PO LINES") }}{% endraw %}</pre>
-            </div>
-            <p class="text-muted" style="margin-bottom: var(--space-md);">
-                ok.empty is legacy — full-page zero states only, never sections.
-            </p>
             <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem;">
-<pre style="margin: 0;">{% raw %}{{ ok.empty("No parts found") }}{% endraw %}</pre>
+<pre style="margin: 0;">{% raw %}{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
+{{ ok.empty("No parts found") }}{% endraw %}</pre>
             </div>
         </div>
     </div>
 
-    <!-- State-dependent section -->
+    <!-- Section panel -->
     <div class="panel" style="margin-bottom: var(--space-lg);">
         <div class="panel-header">
-            <span>STATE-DEPENDENT SECTION (PANEL-LEDGER)</span>
+            <span>SECTION (PANEL-LEDGER)</span>
         </div>
         <div class="panel-body">
             <p class="text-muted" style="margin-bottom: var(--space-md);">
-                A section's structure follows its population. Empty: the one-line empty
-                state. Populated: a panel at ledger pitch — header bar with the count
-                (and its flags) in the value slot, body a headed data table.
+                Sections render as panels at ledger pitch — header bar with the count
+                (and its flags) in the value slot, body a headed data table. Empty
+                sections keep the same structure with a dash row.
             </p>
-            {{ ok.empty_line("TESTS", href="#") }}
-            <div class="panel panel-ledger" style="margin-top: var(--space-md);">
+            <div class="panel panel-ledger">
                 <div class="panel-header">
                     <span>STOCK</span>
                     <span class="header-count"><span class="stock-figure">42 EA</span> · 3 REC <span class="ledger-flag">· LOW</span></span>
@@ -341,18 +363,21 @@
                 </table>
             </div>
             <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-top: var(--space-md);">
-<pre style="margin: 0;">{% raw %}{% if records %}
-<div class="panel panel-ledger">
+<pre style="margin: 0;">{% raw %}<div class="panel panel-ledger">
     <div class="panel-header">
         <span>STOCK</span>
         <span class="header-count">…count · flags…</span>
         <div class="panel-header-actions"><a class="ledger-add" …>+ ADD</a></div>
     </div>
-    <table class="data-table">…</table>
-</div>
-{% else %}
-{{ ok.empty_line("STOCK", onclick="…") }}
-{% endif %}{% endraw %}</pre>
+    <table class="data-table">
+        <thead>…</thead>
+        <tbody>
+        {% for row in rows %}<tr>…</tr>
+        {% else %}<tr><td colspan="N" class="text-muted">—</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>{% endraw %}</pre>
             </div>
         </div>
     </div>

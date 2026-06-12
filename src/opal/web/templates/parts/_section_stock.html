@@ -1,10 +1,10 @@
 {% import 'opalkit/_macros.html' as ok %}
 {# STOCK & USE — composition, stock, purchasing, suppliers, usage, and the
-   consumption log (last: it is the one unbounded section). Empty: one
-   line. Populated: panel + headed table at ledger pitch. #}
+   consumption log (last: it is the one unbounded section). Sections always
+   render their structure: panel header (label · count · add) + headed
+   table; an empty body is one muted dash row, never a box or narration. #}
 
 {# --- BOM --- #}
-{% if bom_lines %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>BOM</span>
@@ -37,26 +37,27 @@
                     <a href="#" class="act-remove" title="REMOVE" onclick="deleteBomLine({{ line.id }}); return false;">×</a>
                 </td>
             </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-muted">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
+    {% if bom_lines %}
     {# Tree renders only when it carries depth the direct lines don't #}
     <div id="bom-tree" class="bom-tree" style="display: none;"></div>
+    {% endif %}
 </div>
-{% else %}
-{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
-{% endif %}
 
-{# --- Stock — the on-hand figure is the section's value; LOW derives
-   from the reorder point #}
-{% if inventory_records %}
+{# --- Stock — the on-hand figure is the section's value; LOW derives from
+   the reorder point the same way the parts list derives it #}
+{% set on_hand = part.total_quantity or 0 %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>STOCK</span>
         <span class="header-count">
-            <span class="stock-figure">{{ '%g' % part.total_quantity }} {{ (part.unit_of_measure or 'EA') | upper }}</span>
+            <span class="stock-figure">{{ '%g' % on_hand }} {{ (part.unit_of_measure or 'EA') | upper }}</span>
             · {{ inventory_records | length }} REC
-            {%- if part.reorder_point is not none and part.total_quantity < part.reorder_point %} <span class="ledger-flag">· LOW</span>{% endif %}
+            {%- if part.reorder_point is not none and on_hand < part.reorder_point %} <span class="ledger-flag">· LOW</span>{% endif %}
         </span>
         <div class="panel-header-actions">
             <a class="ledger-add" href="#" onclick="toggleReceiveStock(); return false;">+ ADD</a>
@@ -79,19 +80,12 @@
                 <td style="text-align: right;">{{ '%g' % inv.quantity }}</td>
                 <td class="text-muted">{{ inv.lot_number or '—' }}</td>
             </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-{% else %}
-{# Inlined empty row: LOW derives the same way the parts list derives it
-   (coalesce(total, 0) < reorder) — zero records is the most-low state #}
-<div class="ledger-row ledger-row-empty">
-    <span class="ledger-label">STOCK</span>
-    <span class="ledger-value">—{% if part.reorder_point is not none and (part.total_quantity or 0) < part.reorder_point %} <span class="ledger-flag">· LOW</span>{% endif %}</span>
-    <a class="ledger-add" href="#" onclick="toggleReceiveStock(); return false;">[+]</a>
-</div>
-{% endif %}
 <div id="receive-stock-row" class="inline-add-row">
     <input type="number" id="rs-qty" class="form-input mono" style="width: 90px;" placeholder="QTY" step="any" min="0">
     <input type="text" id="rs-location" class="form-input mono" style="width: 130px;" placeholder="LOCATION" onkeydown="if(event.key==='Enter')submitReceiveStock()">
@@ -102,7 +96,6 @@
 </div>
 
 {# --- Open PO lines --- #}
-{% if open_po_lines %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>PO LINES</span>
@@ -123,16 +116,14 @@
                 <td class="text-muted">{{ (line.purchase.status.value if line.purchase.status.value is defined else line.purchase.status) | upper }}</td>
                 <td style="text-align: right;">{{ '%g' % line.qty_received }}/{{ '%g' % line.qty_ordered }}</td>
             </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-{% else %}
-{{ ok.empty_line("PO LINES") }}
-{% endif %}
 
 {# --- Suppliers --- #}
-{% if supplier_entries %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>SUPPLIERS</span>
@@ -158,16 +149,14 @@
                 <td class="text-muted">{{ '✓' if entry.is_preferred else '—' }}</td>
                 <td class="row-actions"><a href="#" class="act-remove" title="UNLINK" onclick="deleteSupplierEntry({{ entry.id }}, {{ entry.supplier_id }}); return false;">×</a></td>
             </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-{% else %}
-{{ ok.empty_line("SUPPLIERS", onclick="showAddSupplier()") }}
-{% endif %}
 
 {# --- Where used --- #}
-{% if where_used %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>WHERE USED</span>
@@ -190,16 +179,14 @@
                 <td style="text-align: right;">{{ line.quantity }}</td>
                 <td class="text-muted">{{ line.reference_designator or '—' }}</td>
             </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-{% else %}
-{{ ok.empty_line("WHERE USED") }}
-{% endif %}
 
 {# --- Procedure usage (kits reference the design, not the stock) --- #}
-{% if kit_usages or step_kit_usages %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>PROCEDURE USE</span>
@@ -234,15 +221,14 @@
                 <td class="text-muted">{{ (sk.step.procedure.status.value if sk.step.procedure.status.value is defined else sk.step.procedure.status) | upper }}</td>
             </tr>
             {% endfor %}
+            {% if not (kit_usages or step_kit_usages) %}
+            <tr><td colspan="5" class="text-muted">—</td></tr>
+            {% endif %}
         </tbody>
     </table>
 </div>
-{% else %}
-{{ ok.empty_line("PROCEDURE USE") }}
-{% endif %}
 
 {# --- Consumption history --- #}
-{% if consumption_history %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>CONSUMED</span>
@@ -271,10 +257,9 @@
                 </td>
                 <td class="text-muted">{{ c.notes or '—' }}</td>
             </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-{% else %}
-{{ ok.empty_line("CONSUMED") }}
-{% endif %}

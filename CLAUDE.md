@@ -87,7 +87,7 @@ Dense, explicit, functional. Expose state and inner workings. Data tables over c
 
 **One fact, one home.** Every other appearance is a live reference, never a copy. Test: if updating something requires touching two places, the design is wrong — delete one occurrence or derive it. PRs that violate this must argue against it by name.
 
-**The empty-state rule.** An empty section is one line, never a box: `LABEL — [+]` (`ok.empty_line` macro) — label secondary, dash muted, half-strength rule, add affordance never muted. A section earns vertical space only when populated: it then promotes to the panel grammar at ledger pitch (`panel-ledger` — header bar carrying the count and its flags in the value slot, body a headed `data-table`). Empty states are facts, not features; six boxes announcing nothingness is anti-density.
+**The empty-state rule.** An empty section keeps its structure: the `panel-ledger` header bar (label, zero count, add affordance) and the table's column heads, with one muted dash row as the body. No tall boxes, no narration — "No X defined" is banned; absence is a dash, never a sentence. Sections never vanish when empty. (`ok.empty_line` remains the one-line primitive for index rows outside section panels.)
 
 **Structure and register are separate layers.** Structure — panels, header bars, column-headed tables, full-width grids — is the app's shared grammar and may not be deleted by a register pass. Register — row pitch, accent budget, voice, contrast ladder — is where density lives. Data renders in tables: detail rows (`ok.detail_row`) for facts, headed `data-table`s for collections; a register amendment tightens a table's pitch, it does not dissolve the table. The parts list and part page are the reference implementations.
 

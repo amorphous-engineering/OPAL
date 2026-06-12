@@ -19,6 +19,23 @@
    under 1000px. ============ #}
 <div class="part-layout">
 <div class="part-col">
+{# The window — the part page frames like every other OPAL view: a panel
+   with the actions in its header bar #}
+<div class="panel">
+    <div class="panel-header">
+        <span>PART</span>
+        <div class="panel-header-actions">
+            {{ ok.btn("PRINT LABEL", size="sm", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
+            {{ ok.btn("EDIT", size="sm", attrs='onclick="openPartForm()"') }}
+            {% if is_draft %}
+            {{ ok.btn("ACTIVATE", variant="primary", size="sm", attrs='onclick="openActivateConfirm()"') }}
+            {% if not part_is_referenced %}
+            {{ ok.confirm_btn("DELETE", message="Deletes this draft. " ~ part.internal_pn ~ " is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts", size="sm") }}
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+    <div class="panel-body">
 {{ part_tag('header',
             pn=part.internal_pn,
             name=part.name,
@@ -29,17 +46,6 @@
             state=part.lifecycle_state,
             qr_url='/api/parts/' ~ part.id ~ '/qrcode',
             pn_segments=pn_segments) }}
-
-<div class="part-actions">
-    {{ ok.btn("PRINT LABEL", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
-    {{ ok.btn("EDIT", attrs='onclick="openPartForm()"') }}
-    {% if is_draft %}
-    {{ ok.btn("ACTIVATE", variant="primary", attrs='onclick="openActivateConfirm()"') }}
-    {% if not part_is_referenced %}
-    <span class="part-action-right">{{ ok.confirm_btn("DELETE", message="Deletes this draft. " ~ part.internal_pn ~ " is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts") }}</span>
-    {% endif %}
-    {% endif %}
-</div>
 
 {% if is_draft %}
 <div id="activate-confirm" class="baseline-confirm" style="display: none;">
@@ -79,6 +85,8 @@
         <tr><th>DESCRIPTION</th><td>{% if part.description %}{{ part.description }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
     </tbody>
 </table>
+    </div>
+</div>
 
 <div class="zone-caption">DESIGN</div>
 {% include 'parts/_section_design.html' %}

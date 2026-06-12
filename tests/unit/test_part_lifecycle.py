@@ -348,8 +348,9 @@ def test_draft_part_detail_page_renders_activate_confirm(web_client):
     # (activate confirm, delete confirm, tier-change confirm in the form JS)
     assert "Locks PN and tier permanently." in page.text
     assert page.text.count("permanently") <= 3
-    # Ledger rows render with empty values as facts, not boxes or apologies
-    assert "ledger-row" in page.text
+    # Empty sections keep their table structure — a dash row, no narration
+    assert page.text.count('class="panel panel-ledger"') == 9
+    assert "No BOM components" not in page.text
     assert "nothing physical yet" not in page.text
     # Nothing hides behind disclosure: the identity table is always visible
     assert "part-identity" in page.text
