@@ -6,7 +6,8 @@ and their containment scope:
 
     containment   while undispositioned…
     step          the raised/bound step cannot COMPLETE (and its OP cannot
-                  COMPLETE over it); a bound *future* step cannot START
+                  COMPLETE over it); a bound future step ("resolve by")
+                  cannot COMPLETE either — there is no start moment to gate
     op            every step in the OP may run, but the OP cannot COMPLETE
     wo            the work order cannot COMPLETE/close out
     advisory      blocks nothing
@@ -53,7 +54,9 @@ class HoldState:
 
     # step_execution_id -> issues blocking that step's COMPLETE (and SKIP)
     complete_blocked: dict[int, list[Issue]] = field(default_factory=dict)
-    # step_execution_id -> issues blocking that step's START (bound future step)
+    # step_execution_id -> issues holding a bound future step ("resolve by").
+    # Named start_blocked for its R2 lineage; under the focus model these
+    # gate the bound step's COMPLETE (execution_flow folds them in).
     start_blocked: dict[int, list[Issue]] = field(default_factory=dict)
     # op-level step_execution_id -> issues blocking that OP's COMPLETE
     op_complete_blocked: dict[int, list[Issue]] = field(default_factory=dict)
@@ -71,7 +74,8 @@ class HoldState:
         return blockers
 
     def blockers_for_start(self, step_exec: StepExecution) -> list[Issue]:
-        """Issues that make this row's START absent."""
+        """Boundary holds bound to this row — gate its COMPLETE (no start
+        moment exists to gate)."""
         return list(self.start_blocked.get(step_exec.id, []))
 
 
@@ -121,7 +125,7 @@ def get_hold_state(db: Session, instance_id: int) -> HoldState:
         )
         if bound_elsewhere:
             # "resolve by 3.7": work continues up to the boundary, which
-            # cannot START.
+            # cannot COMPLETE until disposition.
             state.start_blocked.setdefault(anchor.id, []).append(issue)
         else:
             state.complete_blocked.setdefault(anchor.id, []).append(issue)
@@ -207,7 +211,7 @@ def holding_readout(db: Session, issue: Issue) -> list[dict]:
     if bound_elsewhere:
         return [
             {
-                "label": f"{scope_label(anchor)} START",
+                "label": f"{scope_label(anchor)} COMPLETE",
                 "scope": scope_label(anchor),
                 "href": exec_href(op_row.step_number),
             }

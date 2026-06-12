@@ -356,17 +356,26 @@ def test_bind_issue_hold_blocks_complete_and_is_idempotent(client, db_session, t
     data = _call(
         server._bind_issue_hold,
         db_session,
-        {"execution_id": instance_id, "step_number": 2, "issue_id": issue_id},
+        {
+            "execution_id": instance_id,
+            "step_number": 2,
+            "issue_id": issue_id,
+            "user_id": test_user.id,
+        },
     )
     assert data["success"] is True
-    assert issue_number in data["message"]
-    assert "until disposition" in data["message"]
+    assert data["issue"]["containment"] == "step"
 
     # Idempotent re-bind to the same step — returns success with "already holds" message.
     data = _call(
         server._bind_issue_hold,
         db_session,
-        {"execution_id": instance_id, "step_number": 2, "issue_id": issue_id},
+        {
+            "execution_id": instance_id,
+            "step_number": 2,
+            "issue_id": issue_id,
+            "user_id": test_user.id,
+        },
     )
     assert data["success"] is True
     assert "already holds" in data["message"]
@@ -426,7 +435,12 @@ def test_bind_issue_hold_lifted_by_disposition(client, db_session, test_user, ad
     data = _call(
         server._bind_issue_hold,
         db_session,
-        {"execution_id": instance_id, "step_number": 1, "issue_id": issue_id},
+        {
+            "execution_id": instance_id,
+            "step_number": 1,
+            "issue_id": issue_id,
+            "user_id": test_user.id,
+        },
     )
     assert data["success"] is True
 

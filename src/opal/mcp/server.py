@@ -2092,6 +2092,10 @@ async def list_tools() -> list[Tool]:
                     "work_order": {"type": "string"},
                     "step_number": {"type": "integer"},
                     "note": {"type": "string"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Operator appending the note (optional, for attribution)",
+                    },
                 },
                 "required": ["step_number", "note"],
             },
@@ -2111,8 +2115,16 @@ async def list_tools() -> list[Tool]:
                     "execution_id": {"type": "integer"},
                     "work_order": {"type": "string"},
                     "step_number": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Human user binding the hold (containment is a gate change)",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "Required when the bind narrows a blocking issue's containment",
+                    },
                 },
-                "required": ["issue_id", "step_number"],
+                "required": ["issue_id", "step_number", "user_id"],
             },
         ),
     ]
@@ -6252,18 +6264,25 @@ async def _add_step_note(db, args: dict) -> list[TextContent]:
 
 
 async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
+    """Bind = step containment with the bound step as the boundary. Delegates
+    to _set_containment — the narrowing-note rule, audit comment, and the
+    completion recheck all live there (one home)."""
     instance = _load_instance(db, args)
     if not instance:
         return _instance_error(args)
     step_exec = _load_step(db, instance, args)
     if not step_exec:
         return json_response({"error": f"Step {args['step_number']} not found"})
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
     issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
     if not issue:
         return json_response({"error": f"Issue {args['issue_id']} not found"})
 
-    label = step_exec.step_number_str or str(step_exec.step_number)
-    if issue.containment_step_id == step_exec.id:
+    containment = issue.containment.value if hasattr(issue.containment, "value") else issue.containment
+    if containment == Containment.STEP.value and issue.containment_step_id == step_exec.id:
+        label = step_exec.step_number_str or str(step_exec.step_number)
         return json_response(
             {
                 "success": True,
@@ -6271,19 +6290,15 @@ async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
             }
         )
 
-    old = get_model_dict(issue)
-    issue.containment = Containment.STEP
-    issue.containment_step_id = step_exec.id
-    log_update(db, issue, old, args.get("user_id"))
-    db.commit()
-
-    return json_response(
+    return await _set_containment(
+        db,
         {
-            "success": True,
-            "message": (
-                f"{issue.issue_number} holds COMPLETE of step {label} until disposition"
-            ),
-        }
+            "issue_id": issue.id,
+            "containment": Containment.STEP.value,
+            "containment_step_id": step_exec.id,
+            "note": args.get("note"),
+            "user_id": user.id,
+        },
     )
 
 async def run_server():

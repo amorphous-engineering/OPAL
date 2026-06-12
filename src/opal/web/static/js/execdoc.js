@@ -26,6 +26,7 @@
 
     let lastState = null;
     let pollTimer = null;
+    const appliedRowSigs = {};
 
     // ---------- helpers ----------
 
@@ -55,7 +56,10 @@
         }
         const note = document.createElement('div');
         note.className = 'execdoc-toast mono' + (opts && opts.error ? ' is-error' : '');
-        note.innerHTML = html;
+        // Server error details can echo user input (issue titles) — text by
+        // default; opts.html is reserved for trusted, server-generated markup.
+        if (opts && opts.html) note.innerHTML = html;
+        else note.textContent = html;
         container.appendChild(note);
         setTimeout(() => {
             note.classList.add('fade-out');
@@ -139,6 +143,9 @@
                 if (body) body.hidden = false;
             }
             row.replaceWith(fresh);
+            if (focusedOrder !== null && parseInt(fresh.dataset.order) === focusedOrder) {
+                fresh.classList.add('is-focused');
+            }
             if (typeof renderMarkdown === 'function') renderMarkdown();
             loadStepKitAvailability();
         } catch (e) { console.error('execdoc: row refresh failed', e); }
@@ -176,8 +183,8 @@
     }
     window.addEventListener('resize', positionDockbar);
 
-    async function refreshDockbar() {
-        if (!dockbarVisible()) return;
+    async function refreshDockbar(opts = {}) {
+        if (!dockbarVisible() && !opts.force) return;
         try {
             const url = pageUrl('/dockbar') + (focusedOrder !== null ? `?step=${focusedOrder}` : '');
             const resp = await fetch(url);
@@ -214,13 +221,30 @@
     // ---------- state poll ----------
 
     function stepSignature(s) {
+        // Cursors are NOT part of the row signature: presence chips update
+        // in place (renderPresence) — a colleague's cursor move must never
+        // re-render a row someone is typing into.
         return JSON.stringify([
             s.status,
-            s.cursors.map((c) => [c.user_id, c.stale]),
             s.holds.map((h) => h.issue_number + h.disposition_state),
             s.attachments,
             s.has_notes,
         ]);
+    }
+
+    // A row is busy while its control surface holds focus or unsaved input —
+    // swapping it would destroy the operator's half-entered data.
+    function rowBusy(order) {
+        const row = document.getElementById(`step-${order}`);
+        if (!row) return false;
+        const active = document.activeElement;
+        if (active && row.contains(active)
+            && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return true;
+        return Array.from(row.querySelectorAll('input, textarea')).some((f) => {
+            if (f.type === 'checkbox') return f.checked !== f.defaultChecked;
+            if (f.type === 'hidden') return false;
+            return f.value !== f.defaultValue;
+        });
     }
 
     // The bar refetches only when the focused step's commitment state moves —
@@ -245,13 +269,18 @@
 
         renderPresence(state);
 
-        // Step diffs → swap changed rows in place.
+        // Step diffs → swap changed rows in place. appliedRowSigs tracks what
+        // each DOM row currently reflects: a swap skipped while the operator
+        // types retries on the next poll instead of being lost.
         if (prev) {
-            const prevByOrder = {};
-            prev.steps.forEach((s) => { prevByOrder[s.order] = stepSignature(s); });
             for (const s of state.steps) {
                 if (!document.getElementById(`step-${s.order}`)) continue;
-                if (prevByOrder[s.order] !== stepSignature(s)) refreshStepRow(s.order);
+                const sig = stepSignature(s);
+                if (appliedRowSigs[s.order] === undefined) { appliedRowSigs[s.order] = sig; continue; }
+                if (appliedRowSigs[s.order] !== sig && !rowBusy(s.order)) {
+                    appliedRowSigs[s.order] = sig;
+                    refreshStepRow(s.order);
+                }
             }
             // OP progress counters.
             updateOpProgress(state);
@@ -272,6 +301,7 @@
                 }
             }
         } else {
+            state.steps.forEach((s) => { appliedRowSigs[s.order] = stepSignature(s); });
             updateOpProgress(state);
         }
     }
@@ -679,7 +709,7 @@
             }
 
             hideAnomalyModal();
-            toast(`<a href="/issues/${issue.id}">${issue.issue_number}</a> →`, { sticky: true });
+            toast(`<a href="/issues/${issue.id}">${issue.issue_number}</a> →`, { sticky: true, html: true });
             await refreshStepRow(parseInt(order));
             refreshRail();
             pollNow();
