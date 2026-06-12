@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
@@ -72,6 +72,15 @@ class PartUpdate(BaseModel):
     is_tooling: bool | None = None
     calibration_interval_days: int | None = None
     metadata: dict[str, Any] | None = None
+
+    @field_validator("name", "unit_of_measure", "tracking_type", "tier", "is_tooling")
+    @classmethod
+    def _reject_explicit_null(cls, value: Any) -> Any:
+        # None here means the client sent an explicit null (defaults are not
+        # validated), which would land in a NOT NULL column
+        if value is None:
+            raise ValueError("field is not nullable; omit it to leave unchanged")
+        return value
 
 
 class PartResponse(BaseModel):
