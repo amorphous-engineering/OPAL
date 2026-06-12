@@ -17,7 +17,7 @@
         <span>{{ line.component.name }}</span>
         <span class="ldl-muted">×{{ line.quantity }}{% if line.reference_designator %} [{{ line.reference_designator }}]{% endif %}</span>
         <span class="ldl-actions">
-            <a href="#" title="EDIT" onclick="editBomLine({{ line.id }}, {{ line.quantity }}, '{{ (line.reference_designator or '') | replace("'", "\\'") }}', '{{ (line.notes or '') | replace("'", "\\'") }}'); return false;">✎</a>
+            <a href="#" onclick="editBomLine({{ line.id }}, {{ line.quantity }}, '{{ (line.reference_designator or '') | replace("'", "\\'") }}', '{{ (line.notes or '') | replace("'", "\\'") }}'); return false;">EDIT</a>
             <a href="#" title="REMOVE" onclick="deleteBomLine({{ line.id }}); return false;">×</a>
         </span>
     </div>

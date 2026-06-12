@@ -50,7 +50,7 @@
     {% if blockers %}
     <div style="margin-top: var(--space-sm);">
         {% for blocker in blockers %}
-        <div class="text-red">✗ {{ blocker }}</div>
+        <div class="text-red">{{ blocker }}</div>
         {% endfor %}
     </div>
     {% endif %}

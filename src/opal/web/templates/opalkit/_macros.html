@@ -47,6 +47,21 @@
 <span class="status-badge {{ variant_class }}">{{ value }}</span>
 {%- endmacro %}
 
+{# Issue STATE register — the one home for every issue index row (issues list,
+   execution issues tab). UNDISP carries warning weight only because it is
+   exceptional and actionable; everything else is calm plain text. #}
+{% macro issue_state(disp_state) %}
+{%- if disp_state == 'undispositioned' -%}
+{{ status("UNDISP", "error") }}
+{%- elif disp_state == 'dispositioned' -%}
+<span class="text-secondary">DISP'D</span>
+{%- elif disp_state == 'closed' -%}
+<span class="text-muted">CLOSED</span>
+{%- else -%}
+<span class="text-secondary">open</span>
+{%- endif -%}
+{% endmacro %}
+
 {# Form field macro
    Usage: {{ ok.field("name", "Part Name", required=true) }}
           {{ ok.field("description", "Description", type="textarea", rows=4) }}

@@ -470,6 +470,14 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
+    def sign_disposition(self, issue_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        """Sign an issue disposition (releases its holds)."""
+        resp = self.client.post(
+            self._url(f"/issues/{issue_id}/disposition"), json=data, headers=self._headers()
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def list_comments(self, issue_id: int) -> list[dict[str, Any]]:
         """List comments on an issue."""
         resp = self.client.get(self._url(f"/issues/{issue_id}/comments"))
