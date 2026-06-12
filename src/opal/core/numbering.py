@@ -42,7 +42,26 @@ def part_number_regex(project: ProjectConfig | None, tier_level: int) -> re.Patt
     """
     if project is None:
         return re.compile(rf"PN-{tier_level}-(?P<sequence>\d{{{_FALLBACK_SEQUENCE_DIGITS},}})$")
+    return _compile_format_regex(project, tier_level, project.part_numbering.format)
 
+
+def base_part_number_regex(project: ProjectConfig, tier_level: int) -> re.Pattern[str]:
+    """Regex for the format with its {variant} segment stripped.
+
+    Matches part numbers minted before {variant} entered the format; those
+    legacy bases anchor a variant family without being renumbered.
+    """
+    template = project.part_numbering.format
+    if "{sep}{variant}" in template:
+        template = template.replace("{sep}{variant}", "")
+    else:
+        template = template.replace("{variant}", "")
+    return _compile_format_regex(project, tier_level, template)
+
+
+def _compile_format_regex(
+    project: ProjectConfig, tier_level: int, template: str
+) -> re.Pattern[str]:
     tier = project.get_tier(tier_level)
     if tier is None:
         raise PartNumberError(f"Unknown tier level: {tier_level}")
@@ -54,7 +73,6 @@ def part_number_regex(project: ProjectConfig | None, tier_level: int) -> re.Patt
         "tier_name": tier.name,
         "tier_level": str(tier.level),
     }
-    template = project.part_numbering.format
     pattern = ""
     pos = 0
     for match in re.finditer(r"\{(\w+)\}", template):
@@ -134,6 +152,27 @@ def format_has_variant(project: ProjectConfig | None) -> bool:
     return project is not None and "{variant}" in project.part_numbering.format
 
 
+def variant_family_key(
+    project: ProjectConfig | None, tier_level: int, pn: str
+) -> tuple[int, int] | None:
+    """(sequence, variant) placing a PN in its variant family, or None.
+
+    A PN matching the format with the {variant} segment stripped is a legacy
+    base — numbered before {variant} entered the format. It counts as
+    variant 1 of its family: 001-0001 IS configuration 1, so its first
+    explicit variant mints -002 and code 001 stays a permanent gap.
+    """
+    if not format_has_variant(project):
+        return None
+    match = part_number_regex(project, tier_level).match(pn)
+    if match:
+        return int(match.group("sequence")), int(match.group("variant"))
+    match = base_part_number_regex(project, tier_level).match(pn)
+    if match:
+        return int(match.group("sequence")), 1
+    return None
+
+
 def next_variant_part_number(db: Session, tier_level: int, source_pn: str) -> str:
     """Mint the next variant of an existing part number.
 
@@ -148,23 +187,22 @@ def next_variant_part_number(db: Session, tier_level: int, source_pn: str) -> st
     if project is None or not format_has_variant(project):
         raise PartNumberError("Part numbering format has no {variant} placeholder")
 
-    regex = part_number_regex(project, tier_level)
-    match = regex.match(source_pn)
-    if not match:
+    key = variant_family_key(project, tier_level, source_pn)
+    if key is None:
         example = _format_part_number(project, tier_level, 1)
         raise PartNumberError(
             f"'{source_pn}' does not match the tier-{tier_level} part number format "
             f"(e.g. {example}), so its variant family cannot be derived"
         )
-    sequence = int(match.group("sequence"))
+    sequence = key[0]
 
     # Full-column scan + regex match: correct for arbitrary token order and
     # fine at single-instance SQLite scale.
     max_variant = 0
     for (pn,) in db.query(Part.internal_pn).filter(Part.internal_pn.isnot(None)).all():
-        m = regex.match(pn)
-        if m and int(m.group("sequence")) == sequence:
-            max_variant = max(max_variant, int(m.group("variant")))
+        k = variant_family_key(project, tier_level, pn)
+        if k and k[0] == sequence:
+            max_variant = max(max_variant, k[1])
     return project.generate_part_number(tier_level, sequence, max_variant + 1)
 
 

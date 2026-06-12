@@ -216,10 +216,23 @@ def test_next_variant_requires_variant_format(db_session, monkeypatch):
         next_variant_part_number(db_session, 1, "RV-F-0001")
 
 
-def test_next_variant_rejects_pn_from_older_format(db_session, variant_project):
-    # Numbered before {variant} entered the format: family underivable
+def test_legacy_base_counts_as_variant_one(db_session, variant_project):
+    # Numbered before {variant} entered the format: the base IS configuration
+    # 1, so its first explicit variant mints -002 (001 is a permanent gap)
+    db_session.add(Part(name="Legacy", internal_pn="RV-F-0001", tier=1))
+    db_session.flush()
+    assert next_variant_part_number(db_session, 1, "RV-F-0001") == "RV-F-0001-002"
+
+    db_session.add(Part(name="Var 2", internal_pn="RV-F-0001-002", tier=1))
+    db_session.flush()
+    # Both the base and a variant are valid sources for the next code
+    assert next_variant_part_number(db_session, 1, "RV-F-0001") == "RV-F-0001-003"
+    assert next_variant_part_number(db_session, 1, "RV-F-0001-002") == "RV-F-0001-003"
+
+
+def test_next_variant_rejects_unparseable_pn(db_session, variant_project):
     with pytest.raises(PartNumberError):
-        next_variant_part_number(db_session, 1, "RV-F-0001")
+        next_variant_part_number(db_session, 1, "WIDGET-9")
 
 
 def test_variant_override_bumps_sequence_counter(client, variant_project):

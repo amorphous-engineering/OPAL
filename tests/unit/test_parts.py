@@ -286,11 +286,22 @@ def test_create_variant_unknown_part_404(client, variant_project):
     assert response.status_code == 404
 
 
-def test_create_variant_rejects_pn_from_older_format(client, db_session, variant_project):
+def test_create_variant_from_legacy_base_pn(client, db_session, variant_project):
+    # Pre-variant PN: the base is implicit variant 1, first variant mints -002
     legacy = Part(name="Legacy", internal_pn="RV-F-0001", tier=1)
     db_session.add(legacy)
     db_session.commit()
 
     response = client.post(f"/api/parts/{legacy.id}/variants")
+    assert response.status_code == 201, response.text
+    assert response.json()["internal_pn"] == "RV-F-0001-002"
+
+
+def test_create_variant_rejects_unparseable_pn(client, db_session, variant_project):
+    odd = Part(name="Odd", internal_pn="WIDGET-9", tier=1)
+    db_session.add(odd)
+    db_session.commit()
+
+    response = client.post(f"/api/parts/{odd.id}/variants")
     assert response.status_code == 422
-    assert "RV-F-0001" in response.json()["detail"]
+    assert "WIDGET-9" in response.json()["detail"]

@@ -952,17 +952,17 @@ def _parts_detail_response(
     context["where_used"] = where_used
 
     # Variants: live siblings sharing this PN's tier+sequence base, derived
-    # from the PN itself — no stored relation
-    from opal.core.numbering import format_has_variant, part_number_regex
+    # from the PN itself — no stored relation. Legacy bases (numbered before
+    # {variant} entered the format) anchor their family as implicit variant 1.
+    from opal.core.numbering import format_has_variant, variant_family_key
 
     can_variant = False
     variant_rows: list[Part] = []
     if format_has_variant(project) and part.internal_pn and tier_config:
-        regex = part_number_regex(project, part.tier)
-        match = regex.match(part.internal_pn)
-        if match:
+        key = variant_family_key(project, part.tier, part.internal_pn)
+        if key:
             can_variant = True
-            sequence = int(match.group("sequence"))
+            sequence = key[0]
             siblings = (
                 db.query(Part)
                 .filter(
@@ -977,7 +977,8 @@ def _parts_detail_response(
                 (
                     sib
                     for sib in siblings
-                    if (m := regex.match(sib.internal_pn)) and int(m.group("sequence")) == sequence
+                    if (k := variant_family_key(project, part.tier, sib.internal_pn))
+                    and k[0] == sequence
                 ),
                 key=lambda p: p.internal_pn,
             )
