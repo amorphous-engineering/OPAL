@@ -12,6 +12,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from sqlalchemy import func
 
+from opal.api.routes.issues import _recheck_instance_completion
 from opal.config import get_active_project, get_active_settings
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import (
@@ -20,6 +21,7 @@ from opal.core.designators import (
     generate_requirement_number,
     generate_risk_number,
 )
+from opal.core.holds import get_holds_payload, holding_readout
 from opal.core.numbering import (
     PartNumberError,
     next_part_number,
@@ -56,7 +58,13 @@ from opal.db.models import (
     User,
     Workcenter,
 )
-from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
+from opal.db.models.issue import (
+    Containment,
+    DispositionType,
+    IssuePriority,
+    IssueStatus,
+    IssueType,
+)
 from opal.db.models.part import ProcurementType, TrackingType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
 from opal.db.models.purchase import PurchaseStatus
@@ -726,13 +734,21 @@ async def list_tools() -> list[Tool]:
         # Issues
         Tool(
             name="list_issues",
-            description="List issues, optionally filtered by status or type",
+            description="List issues, optionally filtered by status, disposition state, or type",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "status": {
                         "type": "string",
-                        "description": "Filter by status: open, investigating, disposition_pending, disposition_approved, closed",
+                        "description": "Filter by status: open, closed",
+                    },
+                    "disp_state": {
+                        "type": "string",
+                        "enum": ["open", "undispositioned", "dispositioned", "closed"],
+                        "description": (
+                            "Filter by state: open (advisory-open), undispositioned, "
+                            "dispositioned (containment-bearing only), closed"
+                        ),
                     },
                     "issue_type": {
                         "type": "string",
@@ -747,8 +763,13 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="create_issue",
-            description="Create a new issue to track a problem, task, or improvement",
+            name="raise_issue",
+            description=(
+                "Raise an issue (problem, task, improvement, or non-conformance). "
+                "Containment declares what the issue holds while undispositioned: "
+                "step | op | wo | advisory (default advisory; execution-raised "
+                "issues should use step and set raised_step_id)."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -770,8 +791,108 @@ async def list_tools() -> list[Tool]:
                         "description": "Priority: low, medium, high, critical (default: medium)",
                         "default": "medium",
                     },
+                    "containment": {
+                        "type": "string",
+                        "description": "What this issue holds while undispositioned: step, op, wo, advisory (default: advisory)",
+                        "default": "advisory",
+                    },
+                    "should_be": {
+                        "type": "string",
+                        "description": "Expected condition (the NC pair, captured at discovery)",
+                    },
+                    "actual": {
+                        "type": "string",
+                        "description": "Actual condition",
+                    },
+                    "procedure_instance_id": {
+                        "type": "integer",
+                        "description": "Work order this issue belongs to (required for non-advisory containment)",
+                    },
+                    "raised_step_id": {
+                        "type": "integer",
+                        "description": "Step execution ID where it was found",
+                    },
+                    "containment_step_id": {
+                        "type": "integer",
+                        "description": "Boundary step execution ID ('resolve by 3.7'); blocks that step's START",
+                    },
+                    "part_id": {"type": "integer"},
+                    "assigned_to_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Human user raising the issue",
+                    },
                 },
                 "required": ["title"],
+            },
+        ),
+        Tool(
+            name="sign_disposition",
+            description=(
+                "Sign an issue's disposition — the signature releases every "
+                "containment the issue holds, immediately. user_id must be the "
+                "human making the decision."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Human user signing the disposition",
+                    },
+                    "disposition_type": {
+                        "type": "string",
+                        "description": "use_as_is, rework, repair, scrap, return_to_supplier, no_defect",
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Disposition rationale",
+                    },
+                },
+                "required": ["issue_id", "user_id", "disposition_type", "rationale"],
+            },
+        ),
+        Tool(
+            name="set_containment",
+            description=(
+                "Change an issue's containment scope. Narrowing (e.g. op → step, "
+                "or anything → advisory) releases a hold and requires a note, "
+                "which is recorded on the issue."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "integer"},
+                    "containment": {
+                        "type": "string",
+                        "description": "step, op, wo, advisory",
+                    },
+                    "containment_step_id": {"type": "integer"},
+                    "note": {
+                        "type": "string",
+                        "description": "Required when narrowing scope",
+                    },
+                    "user_id": {"type": "integer"},
+                },
+                "required": ["issue_id", "containment"],
+            },
+        ),
+        Tool(
+            name="get_holds",
+            description=(
+                "Blocking state for a work order: every undispositioned issue "
+                "holding it and what each blocks (are we held and why)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "integer",
+                        "description": "Procedure instance (work order) ID",
+                    },
+                },
+                "required": ["execution_id"],
             },
         ),
         # Risks
@@ -1904,8 +2025,14 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Issues
         elif name == "list_issues":
             return await _list_issues(db, arguments)
-        elif name == "create_issue":
-            return await _create_issue(db, arguments)
+        elif name in ("raise_issue", "create_issue"):
+            return await _raise_issue(db, arguments)
+        elif name == "sign_disposition":
+            return await _sign_disposition(db, arguments)
+        elif name == "set_containment":
+            return await _set_containment(db, arguments)
+        elif name == "get_holds":
+            return await _get_holds(db, arguments)
 
         # Risks
         elif name == "list_risks":
@@ -2508,12 +2635,48 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
     )
 
 
+def _issue_summary(db, issue: Issue) -> dict:
+    """Issue facts shared by the MCP issue tools."""
+    return {
+        "id": issue.id,
+        "issue_number": issue.issue_number,
+        "title": issue.title,
+        "type": issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type,
+        "status": issue.status.value if hasattr(issue.status, "value") else issue.status,
+        "disp_state": issue.disp_state,
+        "priority": issue.priority.value if hasattr(issue.priority, "value") else issue.priority,
+        "containment": issue.containment.value
+        if hasattr(issue.containment, "value")
+        else issue.containment,
+        "holding": [t["label"] for t in holding_readout(db, issue)],
+    }
+
+
 async def _list_issues(db, args: dict) -> list[TextContent]:
     """List issues with optional filtering."""
     query = db.query(Issue).filter(Issue.deleted_at.is_(None))
 
     if args.get("status"):
         query = query.filter(Issue.status == args["status"])
+
+    if args.get("disp_state"):
+        # Four-value STATE filter, mirroring the API: open = advisory-open;
+        # undispositioned / dispositioned = containment-bearing only.
+        signed = (Issue.disposition_type.isnot(None)) & (Issue.dispositioned_at.isnot(None))
+        bearing = Issue.containment != Containment.ADVISORY
+        disp_state = args["disp_state"]
+        if disp_state == "closed":
+            query = query.filter(Issue.status == IssueStatus.CLOSED)
+        elif disp_state == "open":
+            query = query.filter(
+                Issue.status != IssueStatus.CLOSED, Issue.containment == Containment.ADVISORY
+            )
+        elif disp_state == "dispositioned":
+            query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, signed)
+        elif disp_state == "undispositioned":
+            query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, ~signed)
+        else:
+            return json_response({"success": False, "error": f"Invalid disp_state: {disp_state}"})
 
     if args.get("issue_type"):
         query = query.filter(Issue.issue_type == args["issue_type"])
@@ -2527,9 +2690,14 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
             "issues": [
                 {
                     "id": i.id,
+                    "issue_number": i.issue_number,
                     "title": i.title,
                     "type": i.issue_type.value if hasattr(i.issue_type, "value") else i.issue_type,
                     "status": i.status.value if hasattr(i.status, "value") else i.status,
+                    "disp_state": i.disp_state,
+                    "containment": i.containment.value
+                    if hasattr(i.containment, "value")
+                    else i.containment,
                     "priority": i.priority.value if hasattr(i.priority, "value") else i.priority,
                 }
                 for i in issues
@@ -2538,10 +2706,11 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
     )
 
 
-async def _create_issue(db, args: dict) -> list[TextContent]:
-    """Create a new issue."""
+async def _raise_issue(db, args: dict) -> list[TextContent]:
+    """Raise a new issue with the capture fields."""
     issue_type = args.get("issue_type", "task")
     priority = args.get("priority", "medium")
+    containment = args.get("containment", "advisory")
 
     issue = Issue(
         issue_number=generate_issue_number(db),
@@ -2550,25 +2719,141 @@ async def _create_issue(db, args: dict) -> list[TextContent]:
         issue_type=IssueType(issue_type),
         status=IssueStatus.OPEN,
         priority=IssuePriority(priority),
+        containment=Containment(containment),
+        containment_step_id=args.get("containment_step_id"),
+        should_be=args.get("should_be"),
+        actual=args.get("actual"),
+        procedure_instance_id=args.get("procedure_instance_id"),
+        raised_step_id=args.get("raised_step_id"),
+        raised_by_id=args.get("user_id"),
+        part_id=args.get("part_id"),
+        assigned_to_id=args.get("assigned_to_id"),
     )
     db.add(issue)
     db.flush()
-    log_create(db, issue)
+    log_create(db, issue, args.get("user_id"))
     db.commit()
     db.refresh(issue)
 
     return json_response(
         {
             "success": True,
-            "message": f"Created issue '{issue.title}' with ID {issue.id}",
-            "issue": {
-                "id": issue.id,
-                "title": issue.title,
-                "type": issue_type,
-                "priority": priority,
-            },
+            "message": f"Raised {issue.issue_number} '{issue.title}'",
+            "issue": _issue_summary(db, issue),
         }
     )
+
+
+async def _sign_disposition(db, args: dict) -> list[TextContent]:
+    """Sign a disposition — releases every containment the issue holds."""
+    issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+    if not issue:
+        return json_response({"success": False, "error": "Issue not found"})
+
+    status = issue.status.value if hasattr(issue.status, "value") else issue.status
+    if status == IssueStatus.CLOSED.value:
+        return json_response({"success": False, "error": "Issue is closed"})
+    if issue.dispositioned:
+        return json_response({"success": False, "error": "Disposition already signed"})
+    if not issue.containment_bearing:
+        return json_response(
+            {
+                "success": False,
+                "error": f"{issue.issue_number} is advisory; there is no disposition to sign",
+            }
+        )
+
+    try:
+        disposition_type = DispositionType(args["disposition_type"])
+    except ValueError:
+        return json_response(
+            {"success": False, "error": f"Invalid disposition type: {args['disposition_type']}"}
+        )
+
+    released = [t["label"] for t in holding_readout(db, issue)]
+
+    old_values = get_model_dict(issue)
+    issue.disposition_type = disposition_type
+    issue.disposition_rationale = args["rationale"]
+    issue.dispositioned_by_id = args["user_id"]
+    issue.dispositioned_at = datetime.now(UTC)
+    log_update(db, issue, old_values, args["user_id"])
+    db.flush()
+    _recheck_instance_completion(db, issue)
+    db.commit()
+    db.refresh(issue)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Disposition {disposition_type.value} signed on {issue.issue_number}",
+            "released": released,
+            "self_dispositioned": issue.self_dispositioned,
+            "issue": _issue_summary(db, issue),
+        }
+    )
+
+
+async def _set_containment(db, args: dict) -> list[TextContent]:
+    """Change containment scope; narrowing requires a note (audited)."""
+    from opal.db.models.issue import CONTAINMENT_RANK
+    from opal.db.models.issue_comment import IssueComment
+
+    issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+    if not issue:
+        return json_response({"success": False, "error": "Issue not found"})
+
+    try:
+        new_containment = Containment(args["containment"])
+    except ValueError:
+        return json_response(
+            {"success": False, "error": f"Invalid containment: {args['containment']}"}
+        )
+
+    old_containment = (
+        issue.containment.value if hasattr(issue.containment, "value") else issue.containment
+    )
+    narrowing = CONTAINMENT_RANK[new_containment.value] < CONTAINMENT_RANK[old_containment]
+    note = (args.get("note") or "").strip()
+    if narrowing and issue.is_blocking and not note:
+        return json_response(
+            {
+                "success": False,
+                "error": f"Narrowing containment {old_containment} → {new_containment.value} "
+                "releases a hold; a note is required",
+            }
+        )
+
+    user_id = args.get("user_id")
+    old_values = get_model_dict(issue)
+    issue.containment = new_containment
+    if args.get("containment_step_id") is not None:
+        issue.containment_step_id = args["containment_step_id"]
+    log_update(db, issue, old_values, user_id)
+
+    if narrowing and note:
+        comment = IssueComment(
+            issue_id=issue.id,
+            user_id=user_id,
+            body=f"Containment narrowed {old_containment} → {new_containment.value}: {note}",
+        )
+        db.add(comment)
+        db.flush()
+        log_create(db, comment, user_id)
+
+    if narrowing:
+        db.flush()
+        _recheck_instance_completion(db, issue)
+
+    db.commit()
+    db.refresh(issue)
+
+    return json_response({"success": True, "issue": _issue_summary(db, issue)})
+
+
+async def _get_holds(db, args: dict) -> list[TextContent]:
+    """The controller's blocking state for a work order, as JSON."""
+    return json_response(get_holds_payload(db, args["execution_id"]))
 
 
 def _find_risk(db, args: dict) -> "Risk | None":
@@ -2900,7 +3185,7 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
         db.query(Issue)
         .filter(
             Issue.deleted_at.is_(None),
-            Issue.status.in_(["open", "investigating"]),
+            Issue.status == IssueStatus.OPEN,
         )
         .count()
     )

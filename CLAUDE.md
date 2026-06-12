@@ -93,6 +93,8 @@ Dense, explicit, functional. Expose state and inner workings. Data tables over c
 
 **Voice rules.** Spec prose is rationale for the implementer, never interface copy. (1) No interface copy that explains the interface — absent features are not apologized for. (2) Consequence sentences live only in confirmation dialogs and errors; each such sentence has exactly one home. (3) Labels are nouns, values are facts — no clauses, no narration. (4) Nothing hides behind disclosure: meta fields render always, as detail-row tables; absence is a muted dash, never an omitted row. (5) Width is an information budget — max-width the content or fill the viewport with columns of data, never one stretched sparse column. (6) Context pre-fill: the form never asks what the invoking context already knows. (7) Database ids never render in lists, headers, or titles.
 
+**Register rules.** (1) No emoji or pictographs — state words in state colors carry state. Arrows (→ ←), box-drawing rules (──), and geometric chevrons are typography and stay. (2) State badges only where the state is exceptional or actionable — a state badge on every row is information about nothing. (3) Accent color = identifier + action, never content. (4) Consequence renders where it lands, not where it's filed — a column earns its place by the question the page answers.
+
 ## Linting (Ruff)
 
 Configured in `pyproject.toml`: line-length 100, target Python 3.11+, rules E/F/I/UP/B/SIM. Type hints required everywhere.

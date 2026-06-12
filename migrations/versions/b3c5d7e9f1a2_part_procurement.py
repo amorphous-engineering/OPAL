@@ -1,7 +1,7 @@
 """Part procurement declaration (Amendment 6)
 
 Revision ID: b3c5d7e9f1a2
-Revises: a7b9c1d3e5f7
+Revises: 52973e130a6f
 Create Date: 2026-06-12 19:00:00.000000
 
 Part gains procurement: make | buy | both. The declaration governs which
@@ -21,7 +21,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'b3c5d7e9f1a2'
-down_revision: Union[str, None] = 'a7b9c1d3e5f7'
+down_revision: Union[str, None] = '52973e130a6f'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
