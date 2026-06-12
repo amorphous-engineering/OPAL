@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from opal.core.audit import get_model_dict, log_update
@@ -345,26 +346,32 @@ def focus_step(
     """Move a user's cursor to a step. Presence only: no gate checks, no
     audit event — the only durable side effect is first-focus telemetry."""
     now = datetime.now(UTC)
-    focus = (
-        db.query(StepFocus)
-        .filter(StepFocus.instance_id == instance.id, StepFocus.user_id == user.id)
-        .first()
-    )
-    if focus is None:
-        focus = StepFocus(
+    # Atomic upsert: two tabs posting the same user's first focus must not
+    # race the unique (instance, user) row into an IntegrityError.
+    stmt = (
+        sqlite_insert(StepFocus)
+        .values(
             instance_id=instance.id,
             user_id=user.id,
             step_execution_id=step_exec.id,
             focused_at=now,
+            created_at=now,
+            updated_at=now,
         )
-        db.add(focus)
-    else:
-        focus.step_execution_id = step_exec.id
-        focus.focused_at = now
+        .on_conflict_do_update(
+            index_elements=[StepFocus.instance_id, StepFocus.user_id],
+            set_={"step_execution_id": step_exec.id, "focused_at": now, "updated_at": now},
+        )
+    )
+    db.execute(stmt)
     if step_exec.first_focused_at is None:
         step_exec.first_focused_at = now
     db.flush()
-    return focus
+    return (
+        db.query(StepFocus)
+        .filter(StepFocus.instance_id == instance.id, StepFocus.user_id == user.id)
+        .one()
+    )
 
 
 def clear_focus(db: Session, instance_id: int, user_id: int) -> None:
@@ -379,7 +386,11 @@ PRESENCE_TOUCH_SECONDS = 30
 
 def touch_user_presence(db: Session, user_id: int | None) -> None:
     """The 5s state poll doubles as the presence heartbeat; writes are
-    throttled so polling stays read-mostly."""
+    throttled so polling stays read-mostly.
+
+    Commits the request session: callers must invoke this only at a point
+    where the transaction holds no unrelated pending writes (the state GET
+    calls it before building the payload)."""
     if user_id is None:
         return
     user = db.get(User, user_id)
@@ -496,12 +507,34 @@ def complete_step_flow(
 
     instance_started = mark_instance_in_work(db, instance)
 
-    if step_status == StepStatus.PENDING.value:
-        step_exec.started_at = datetime.now(UTC)
+    # Re-assert the precondition as a guarded UPDATE: two users completing
+    # the same step inside one poll window serialize at the write, and the
+    # loser gets a clean refusal instead of double-writing completed_by.
+    now = datetime.now(UTC)
+    flipped = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.id == step_exec.id,
+            StepExecution.status.in_(
+                [StepStatus.PENDING, StepStatus.IN_PROGRESS, StepStatus.AWAITING_SIGNOFF]
+            ),
+        )
+        .update(
+            {
+                StepExecution.status: StepStatus.COMPLETED,
+                StepExecution.completed_at: now,
+                StepExecution.completed_by_id: user_id,
+            },
+            synchronize_session=False,
+        )
+    )
+    if not flipped:
+        db.rollback()
+        raise FlowError("Step already completed")
+    db.expire(step_exec)
 
-    step_exec.status = StepStatus.COMPLETED
-    step_exec.completed_at = datetime.now(UTC)
-    step_exec.completed_by_id = user_id
+    if step_status == StepStatus.PENDING.value and step_exec.started_at is None:
+        step_exec.started_at = now
     if data_captured:
         step_exec.data_captured = data_captured
     if notes is not None:
@@ -580,7 +613,12 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
 
         if not is_contingency and step_status not in TERMINAL_STEP_STATUSES:
             return
-        if is_contingency and step_status == StepStatus.IN_PROGRESS.value:
+        # A touched contingency step (worked or held) blocks completion;
+        # an untouched one does not.
+        if is_contingency and step_status in (
+            StepStatus.IN_PROGRESS.value,
+            StepStatus.ON_HOLD.value,
+        ):
             return
 
     instance.status = InstanceStatus.COMPLETED

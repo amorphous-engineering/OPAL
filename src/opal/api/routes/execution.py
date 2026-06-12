@@ -164,7 +164,7 @@ class NonConformanceCreate(BaseModel):
     containment 'step' holds the raised step (and its OP) until disposition;
     'advisory' records the anomaly without holding anything.
     blocks_step_numbers binds additional hold points: those steps cannot
-    START while this issue is undispositioned.
+    COMPLETE while this issue is undispositioned.
     """
 
     title: str = Field(..., min_length=1, max_length=255)
@@ -510,15 +510,24 @@ def update_instance(
     if data.status is not None:
         try:
             new_status = InstanceStatus(data.status)
-            instance.status = new_status
-
-            # Set timestamps based on status
-            if new_status == InstanceStatus.IN_WORK and not instance.started_at:
-                instance.started_at = datetime.now(UTC)
-            elif new_status in [InstanceStatus.COMPLETED, InstanceStatus.ABORTED]:
-                instance.completed_at = datetime.now(UTC)
         except ValueError as err:
             raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
+
+        # Status is derived from events (first COMPLETE/SKIP starts, last
+        # completion completes); the only settable transition is the abort.
+        current = instance.status.value if hasattr(instance.status, "value") else instance.status
+        if new_status != instance.status:
+            if new_status != InstanceStatus.ABORTED or current not in (
+                InstanceStatus.CUT.value,
+                InstanceStatus.IN_WORK.value,
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot set status {current} -> {new_status.value}; "
+                    "status is derived from events, only an active work order can be aborted",
+                )
+            instance.status = new_status
+            instance.completed_at = datetime.now(UTC)
 
     if data.work_order_number is not None:
         instance.work_order_number = data.work_order_number
@@ -770,7 +779,7 @@ class StepSkip(BaseModel):
 
 
 @router.post("/{instance_id}/steps/{step_number}/skip", response_model=StepExecutionResponse)
-def skip_step(
+async def skip_step(
     instance_id: int,
     step_number: int,
     data: StepSkip,
@@ -782,6 +791,10 @@ def skip_step(
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
+    inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
+    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
+        raise HTTPException(status_code=400, detail="Instance is not active")
+
     step_exec = (
         db.query(StepExecution)
         .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
@@ -791,7 +804,7 @@ def skip_step(
         raise HTTPException(status_code=404, detail="Step not found")
 
     step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-    if step_status == StepStatus.COMPLETED.value:
+    if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
         raise HTTPException(status_code=400, detail="Cannot skip completed step")
     if step_status == StepStatus.ON_HOLD.value:
         raise HTTPException(
@@ -808,7 +821,7 @@ def skip_step(
             detail="Cannot skip: " + "; ".join(b.message for b in holds),
         )
 
-    mark_instance_in_work(db, instance)
+    instance_started = mark_instance_in_work(db, instance)
 
     step_exec.status = StepStatus.SKIPPED
     step_exec.completed_at = datetime.now(UTC)
@@ -821,6 +834,9 @@ def skip_step(
 
     db.commit()
     db.refresh(step_exec)
+
+    if instance_started:
+        await emit_instance_started(instance_id, instance.procedure_id, user_id, None)
 
     return StepExecutionResponse(
         id=step_exec.id,
@@ -856,6 +872,10 @@ async def signoff_step(
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
+
+    inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
+    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
+        raise HTTPException(status_code=400, detail="Instance is not active")
 
     step_exec = (
         db.query(StepExecution)
@@ -1029,7 +1049,7 @@ def log_non_conformance(
                     parent_exec.status = StepStatus.ON_HOLD
                     log_update(db, parent_exec, parent_old, user_id)
 
-    # Bind hold points: the named steps cannot START while this issue is
+    # Bind hold points: the named steps cannot COMPLETE while this issue is
     # undispositioned.
     from opal.db.models.issue import IssueStepBlock
 

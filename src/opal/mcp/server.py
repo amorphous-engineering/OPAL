@@ -1961,7 +1961,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="bind_issue_hold",
             description=(
-                "Bind an issue as a hold point on a step: the step cannot START "
+                "Bind an issue as a hold point on a step: the step cannot COMPLETE "
                 "while the issue is undispositioned. The hold lifts the moment "
                 "the issue reaches a terminal disposition."
             ),
