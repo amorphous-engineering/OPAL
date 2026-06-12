@@ -146,11 +146,10 @@ def test_export_issues_csv_with_filters(client: TestClient):
 def test_export_risks_csv(client: TestClient):
     """Test risks CSV export."""
     # Create a risk
-    client.post(
+    created = client.post(
         "/api/risks",
         json={"title": "Test Risk", "probability": 3, "impact": 4},
-        headers={"X-User-ID": "1"},
-    )
+    ).json()
 
     # Export as CSV
     response = client.get("/api/reports/risks/csv")
@@ -158,13 +157,29 @@ def test_export_risks_csv(client: TestClient):
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
 
     content = response.text
+    header = content.splitlines()[0]
+    assert header.startswith("Risk,")  # first column is the risk_number
+    for column in ("Disposition", "Statement", "Owner", "Residual Score"):
+        assert column in header
+    assert "Mitigation Plan" not in header
+    assert created["risk_number"] in content
     assert "Test Risk" in content
 
 
-def test_export_risks_csv_with_min_score(client: TestClient):
-    """Test risks CSV export with minimum score filter."""
-    response = client.get("/api/reports/risks/csv?min_score=10")
+def test_export_risks_csv_with_filters(client: TestClient):
+    """Test risks CSV export with disposition and min_score filters."""
+    client.post("/api/risks", json={"title": "Open low", "probability": 1, "impact": 1})
+    client.post("/api/risks", json={"title": "Open high", "probability": 5, "impact": 5})
+
+    response = client.get("/api/reports/risks/csv?disposition=open&min_score=10")
     assert response.status_code == 200
+    content = response.text
+    assert "Open high" in content
+    assert "Open low" not in content
+
+    empty = client.get("/api/reports/risks/csv?disposition=closed")
+    assert empty.status_code == 200
+    assert "Open high" not in empty.text
 
 
 def test_execution_metrics(client: TestClient):

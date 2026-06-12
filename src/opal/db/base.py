@@ -316,10 +316,33 @@ def _stamp_alembic_head(engine) -> None:
 
 
 def _run_alembic_upgrade(engine) -> None:
-    """Run alembic upgrade to head programmatically."""
+    """Run alembic upgrade to head programmatically.
+
+    Migrations run on a plain engine WITHOUT the foreign_keys=ON pragma
+    listener: alembic batch mode recreates tables via copy/DROP/RENAME, and
+    under FK enforcement the DROP cascade-deletes every referencing row
+    (ON DELETE CASCADE children silently emptied). FK off during migrations
+    is alembic's documented requirement for SQLite batch mode; the CLI
+    `opal migrate upgrade` path (env.py engine) already behaves this way.
+    """
     from alembic import command
 
-    cfg = _get_alembic_config(engine)
-    with engine.begin() as conn:
-        cfg.attributes["connection"] = conn
-        command.upgrade(cfg, "head")
+    if engine.url.database in (None, ":memory:"):
+        # A fresh engine on :memory: would migrate a different, empty database.
+        # In-memory databases are created via create_all, never migrated.
+        migration_engine = engine
+        dispose = False
+    else:
+        migration_engine = create_engine(
+            engine.url, connect_args={"check_same_thread": False}
+        )
+        dispose = True
+
+    try:
+        cfg = _get_alembic_config(migration_engine)
+        with migration_engine.begin() as conn:
+            cfg.attributes["connection"] = conn
+            command.upgrade(cfg, "head")
+    finally:
+        if dispose:
+            migration_engine.dispose()

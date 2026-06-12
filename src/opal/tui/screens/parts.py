@@ -7,6 +7,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import DataTable, Input, Label, Select, Static, TextArea
 
+from opal.project import DEFAULT_TIERS
 from opal.tui.api_client import get_client
 from opal.tui.widgets.form import ConfirmModal, FormGroup, FormModal
 
@@ -18,11 +19,15 @@ class PartFormModal(FormModal):
         self,
         part: dict[str, Any] | None = None,
         categories: list[str] | None = None,
+        tiers: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.part = part
         self.categories = categories or []
+        # Configured project tiers; DEFAULT_TIERS when the server has no
+        # project config (or it couldn't be fetched)
+        self.tiers = tiers or [t.model_dump() for t in DEFAULT_TIERS]
 
     @property
     def form_title(self) -> str:
@@ -66,13 +71,13 @@ class PartFormModal(FormModal):
             Select(unit_options, id="field-unit", value=current_unit),
         )
 
-        tier_options = [
-            ("Tier 1 - Flight/Critical", "1"),
-            ("Tier 2 - Prototype", "2"),
-            ("Tier 3 - Development", "3"),
-            ("Tier 4 - COTS/Consumable", "4"),
-        ]
-        current_tier = str(self.part.get("tier", "3")) if self.part else "3"
+        tier_options = [(f"Tier {t['level']} - {t['name']}", str(t["level"])) for t in self.tiers]
+        # Default to the last (least critical) tier on create; keep the
+        # part's tier on edit, even when it predates the current tier set
+        default_level = tier_options[-1][1] if tier_options else "1"
+        current_tier = str(self.part.get("tier", default_level)) if self.part else default_level
+        if current_tier not in [v for _, v in tier_options]:
+            tier_options.append((f"Tier {current_tier}", current_tier))
         yield FormGroup(
             "Tier",
             Select(tier_options, id="field-tier", value=current_tier),
@@ -126,7 +131,7 @@ class PartFormModal(FormModal):
             "name": name,
             "category": category,
             "unit_of_measure": unit if unit != Select.BLANK else "each",
-            "tier": int(tier) if tier != Select.BLANK else 3,
+            "tier": int(tier) if tier != Select.BLANK else int(self.tiers[-1]["level"]),
             "tracking_type": tracking if tracking != Select.BLANK else "none",
             "description": description,
             "minimum_stock": min_stock,
@@ -236,7 +241,13 @@ class PartsScreen(Screen):
             categories = client.list_categories()
         except Exception:
             categories = []
-        self.app.push_screen(PartFormModal(categories=categories), callback=self._on_part_created)
+        try:
+            tiers = client.list_tiers()
+        except Exception:
+            tiers = []
+        self.app.push_screen(
+            PartFormModal(categories=categories, tiers=tiers), callback=self._on_part_created
+        )
 
     def _on_part_created(self, data: dict[str, Any] | None) -> None:
         """Handle part creation result."""
@@ -262,9 +273,13 @@ class PartsScreen(Screen):
             categories = client.list_categories()
         except Exception:
             categories = []
+        try:
+            tiers = client.list_tiers()
+        except Exception:
+            tiers = []
 
         self.app.push_screen(
-            PartFormModal(part=detail.part_data, categories=categories),
+            PartFormModal(part=detail.part_data, categories=categories, tiers=tiers),
             callback=self._on_part_edited,
         )
 
