@@ -78,6 +78,12 @@
     padding: 0;
 }
 
+/* The hidden attribute must win over any class that sets display
+   (author display rules override the UA's [hidden] default). */
+[hidden] {
+    display: none !important;
+}
+
 html {
     font-size: 14px;
 }
