@@ -53,13 +53,14 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         comment="bulk = one OPAL per batch, serialized = one OPAL per unit (default)",
     )
 
-    # Tiered inventory classification (1=Flight, 2=Ground, 3=Loose by default)
+    # Tiered inventory classification; levels and their semantics are
+    # project-configured (TierConfig in opal.project)
     tier: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         default=1,
         index=True,
-        comment="Inventory tier level (1=Flight, 2=Ground, 3=Loose)",
+        comment="Inventory tier level, as configured in the project",
     )
 
     # Low stock threshold

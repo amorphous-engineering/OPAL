@@ -81,6 +81,12 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
+    def list_tiers(self) -> list[dict[str, Any]]:
+        """List the project's configured inventory tiers."""
+        resp = self.client.get(self._url("/project/config"), headers=self._headers())
+        resp.raise_for_status()
+        return resp.json().get("tiers", [])
+
     # ── BOM ────────────────────────────────────────────────────────────
 
     def get_bom(self, assembly_id: int) -> list[dict[str, Any]]:
