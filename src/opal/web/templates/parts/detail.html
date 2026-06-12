@@ -11,11 +11,12 @@
 {% block content %}
 {% set is_draft = part.lifecycle_state == 'draft' %}
 
-{# ============ THE PAGE — left: what this part IS (tag · actions · desc ·
-   readout · BOM · REQS · TESTS); right: where it came from / where used /
-   how many exist (STOCK · PO LINES · SUPPLIERS · CONSUMED · WHERE-USED ·
-   PROC USE). Order is fixed and global; emphasis is weight, not position.
-   Stacks IS-first under 1000px. ============ #}
+{# ============ THE PAGE — left: identity (tag · actions · identity table)
+   + DESIGN (REQUIREMENTS · TESTS); right: STOCK & USE (BOM · STOCK ·
+   PO LINES · SUPPLIERS · WHERE USED · PROCEDURE USE · CONSUMED). Order is
+   fixed and global. Data renders in tables: detail rows for facts, headed
+   tables for collections; absence is one line. Stacks identity-first
+   under 1000px. ============ #}
 <div class="part-layout">
 <div class="part-col">
 {{ part_tag('header',
@@ -26,12 +27,11 @@
             uom=part.unit_of_measure,
             tracking=part.tracking_type.value if part.tracking_type else '',
             state=part.lifecycle_state,
-            activated_at=part.activated_at,
             qr_url='/api/parts/' ~ part.id ~ '/qrcode',
             pn_segments=pn_segments) }}
 
 <div class="part-actions">
-    {{ ok.btn("PRINT", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
+    {{ ok.btn("PRINT LABEL", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
     {{ ok.btn("EDIT", attrs='onclick="openPartForm()"') }}
     {% if is_draft %}
     {{ ok.btn("ACTIVATE", variant="primary", attrs='onclick="openActivateConfirm()"') }}
@@ -62,26 +62,31 @@
 </div>
 {% endif %}
 
-{# Dense readout — labels are nouns, values are facts. Edits live behind EDIT. #}
-<div class="part-readout">
-    <span class="ro-label">CAT</span> {{ part.category | upper if part.category else '—' }} ·
-    <span class="ro-label">UOM</span> {{ (part.unit_of_measure or 'EA') | upper }} ·
-    <span class="ro-label">TRK</span> {{ 'SER' if part.tracking_type and part.tracking_type.value == 'serialized' else 'BULK' }} ·
-    <span class="ro-label">REORD</span> {{ '%g' % part.reorder_point if part.reorder_point is not none else '—' }} ·
-    <span class="ro-label">TOOL</span> {{ ('CAL ' ~ part.calibration_interval_days ~ 'D' if part.calibration_interval_days else 'YES') if part.is_tooling else '—' }} ·
-    <span class="ro-label">PARENT</span> {% if part.parent_id %}<a href="/parts/{{ part.parent_id }}">{{ part.parent.internal_pn }}</a>{% else %}—{% endif %} ·
-    <span class="ro-label">EXT</span> {{ part.external_pn or '—' }} ·
-    <span class="ro-label">CRE</span> {{ part.created_at.date().isoformat() }} ·
-    <span class="ro-label">UPD</span> {{ part.updated_at.date().isoformat() }}
-    {%- if part.lifecycle_state == 'active' and part.activated_at %} · <span class="ro-label">ACT</span> {{ part.activated_at.date().isoformat() }}{% endif %}
-    {%- if part.description %}<br><span class="ro-label">DESC</span> {{ part.description }}{% endif %}
-</div>
+{# Identity readout — every meta fact, always rendered; absence is a
+   muted dash. Labels are nouns, values are facts. Edits live behind EDIT. #}
+<table class="data-table part-identity">
+    <tbody>
+        <tr><th>CATEGORY</th><td>{% if part.category %}{{ part.category | upper }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+        <tr><th>UOM</th><td>{{ (part.unit_of_measure or 'EA') | upper }}</td></tr>
+        <tr><th>TRACKING</th><td>{{ 'SERIALIZED' if part.tracking_type and part.tracking_type.value == 'serialized' else 'BULK' }}</td></tr>
+        <tr><th>REORDER</th><td>{% if part.reorder_point is not none %}{{ '%g' % part.reorder_point }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+        <tr><th>TOOLING</th><td>{% if part.is_tooling %}{{ 'CAL ' ~ part.calibration_interval_days ~ 'D' if part.calibration_interval_days else 'YES' }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+        <tr><th>PARENT</th><td>{% if part.parent_id %}<a href="/parts/{{ part.parent_id }}">{{ part.parent.internal_pn }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+        <tr><th>EXTERNAL PN</th><td>{% if part.external_pn %}{{ part.external_pn }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+        <tr><th>CREATED</th><td title="{{ part.created_at.isoformat() }}">{{ part.created_at.date().isoformat() }}</td></tr>
+        <tr><th>UPDATED</th><td title="{{ part.updated_at.isoformat() }}">{{ part.updated_at.date().isoformat() }}</td></tr>
+        <tr><th>ACTIVATED</th><td>{% if part.activated_at %}<span title="{{ part.activated_at.isoformat() }}">{{ part.activated_at.date().isoformat() }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+        <tr><th>DESCRIPTION</th><td>{% if part.description %}{{ part.description }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+    </tbody>
+</table>
 
-{% include 'parts/_ledger_is.html' %}
+<div class="zone-caption">DESIGN</div>
+{% include 'parts/_section_design.html' %}
 </div>
 
 <div class="part-col">
-{% include 'parts/_ledger_provenance.html' %}
+<div class="zone-caption">STOCK &amp; USE</div>
+{% include 'parts/_section_stock.html' %}
 </div>
 </div>
 
@@ -339,6 +344,46 @@ function showAssignRequirement() {
     const row = document.getElementById('assign-req-row');
     row.style.display = 'flex';
     document.getElementById('assign-req-number').focus();
+}
+
+// Inline stock receive — the quick path; FULL RECORD is the long form
+function toggleReceiveStock() {
+    const row = document.getElementById('receive-stock-row');
+    const visible = row.style.display === 'flex';
+    row.style.display = visible ? 'none' : 'flex';
+    if (!visible) document.getElementById('rs-qty').focus();
+}
+
+async function submitReceiveStock() {
+    const errorEl = document.getElementById('rs-error');
+    errorEl.style.display = 'none';
+    const qty = parseFloat(document.getElementById('rs-qty').value);
+    const location = document.getElementById('rs-location').value.trim();
+    if (!qty || qty <= 0 || !location) {
+        errorEl.textContent = 'Quantity and location are required.';
+        errorEl.style.display = 'inline';
+        return;
+    }
+    try {
+        const r = await fetch('/api/inventory', {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({
+                part_id: partId,
+                quantity: qty,
+                location: location,
+                lot_number: document.getElementById('rs-lot').value.trim() || null,
+            }),
+        });
+        if (r.ok) { window.location.reload(); }
+        else {
+            const err = await r.json();
+            errorEl.textContent = formatApiError(err.detail, 'Failed to create inventory record');
+            errorEl.style.display = 'inline';
+        }
+    } catch (e) {
+        errorEl.textContent = 'Network error: ' + e.message;
+        errorEl.style.display = 'inline';
+    }
 }
 
 // Part search component

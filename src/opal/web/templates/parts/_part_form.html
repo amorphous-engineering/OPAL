@@ -26,7 +26,6 @@
                             uom=form_part.unit_of_measure,
                             tracking=form_part.tracking_type.value if form_part.tracking_type else '',
                             state=form_part.lifecycle_state,
-                            activated_at=form_part.activated_at,
                             qr_url='/api/parts/' ~ form_part.id ~ '/qrcode',
                             pn_segments=pn_segments) }}
                 {% else %}
@@ -38,6 +37,19 @@
                     {# Identity rows — absent (not disabled) once active #}
                     <div class="form-group">
                         <label class="form-label">TIER{% if not fm_edit %} <span class="text-red">*</span>{% endif %}</label>
+                        {# Tiers are project config, not a fixed trio — the
+                           segmented control holds to five, then a select #}
+                        {% if tiers | length > 5 %}
+                        <select class="form-select mono" id="pf-tier-select"
+                                onchange="if (this.value) pfSelectTier(parseInt(this.value), null)">
+                            <option value="" {% if not fm_edit %}selected{% endif %} disabled>—</option>
+                            {% for tier in tiers %}
+                            <option value="{{ tier.level }}" {% if fm_edit and form_part.tier == tier.level %}selected{% endif %}>
+                                T{{ tier.level }} {{ tier.name | upper }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
                         <div class="segmented" id="pf-tier-segments">
                             {% for tier in tiers %}
                             <button type="button" data-tier="{{ tier.level }}"
@@ -47,6 +59,7 @@
                             </button>
                             {% endfor %}
                         </div>
+                        {% endif %}
                     </div>
 
                     <div class="grid grid-2" style="gap: var(--space-md);">
@@ -194,8 +207,10 @@ function closePartForm() {
 
 async function pfSelectTier(tier, btn) {
     pfTier = tier;
-    document.querySelectorAll('#pf-tier-segments button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    if (btn) {
+        document.querySelectorAll('#pf-tier-segments button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
     try {
         const r = await fetch('/api/parts/next-pn?tier=' + tier);
         if (!r.ok) return;

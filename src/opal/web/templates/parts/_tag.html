@@ -4,7 +4,7 @@
    differ, that is a bug by definition. Labels are nouns, values are
    facts — the tag narrates nothing. #}
 {% macro part_tag(mode, pn=none, name=none, tier_level=none, tier_name=none,
-                  uom="EA", tracking="", state="draft", activated_at=none,
+                  uom="EA", tracking="", state="draft",
                   qr_url=none, pn_segments=none) %}
 {% set trk = 'SER' if tracking == 'serialized' else ('BULK' if tracking == 'bulk' else tracking | upper) %}
 <div class="part-tag part-tag-{{ mode }}">

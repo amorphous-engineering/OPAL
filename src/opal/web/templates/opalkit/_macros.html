@@ -145,10 +145,17 @@
           {{ ok.empty("No inventory records", action_text="Add Inventory", action_href="/inventory/new") }}
 #}
 {# The empty-state rule: an empty section is one line, never a box.
-   "{Section} — none · [+ action]", muted, 0.5-border row. A section earns
-   vertical space only when populated. #}
-{% macro empty_line(label, action_text=none, href=none, onclick=none) %}
-<div class="empty-line mono">{{ label }} — none{% if action_text %} · <a {% if href %}href="{{ href }}"{% else %}href="#" onclick="{{ onclick }}; return false;"{% endif %}>[+ {{ action_text }}]</a>{% endif %}</div>
+   "LABEL — [+]": label secondary, dash muted, half-strength rule,
+   add affordance never muted. A section earns vertical space (a panel
+   with a table) only when populated. #}
+{% macro empty_line(label, href=none, onclick=none) %}
+<div class="ledger-row ledger-row-empty">
+    <span class="ledger-label">{{ label }}</span>
+    <span class="ledger-value">—</span>
+    {%- if href or onclick %}
+    <a class="ledger-add" {% if href %}href="{{ href }}"{% else %}href="#" onclick="{{ onclick }}; return false;"{% endif %}>[+]</a>
+    {%- endif %}
+</div>
 {% endmacro %}
 
 
