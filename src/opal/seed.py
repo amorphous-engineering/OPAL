@@ -295,6 +295,7 @@ def _seed_parts(db: Session) -> dict[str, Part]:
             tracking_type=tracking,
             unit_of_measure=uom,
             parent_id=p[parent_key].id if parent_key else None,
+            procurement="buy" if epn else "make",
             reorder_point=Decimal(str(reorder)) if reorder is not None else None,
             is_tooling=is_tooling,
             calibration_interval_days=cal_days,

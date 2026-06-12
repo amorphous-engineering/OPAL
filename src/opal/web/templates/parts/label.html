@@ -39,7 +39,6 @@
                 uom=part.unit_of_measure,
                 tracking=part.tracking_type.value if part.tracking_type else '',
                 state=part.lifecycle_state,
-                activated_at=part.activated_at,
                 qr_url='/api/parts/' ~ part.id ~ '/qrcode',
                 pn_segments=pn_segments) }}
     <script>window.print();</script>

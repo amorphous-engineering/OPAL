@@ -394,6 +394,7 @@ A **Part** in OPAL represents a design-level component - the abstract definition
 | **Description** | No | Detailed specifications |
 | **Parent Part** | No | For assemblies - what this is part of |
 | **Tracking Type** | Yes | BULK (counted by quantity) or SERIALIZED (each item tracked) |
+| **Procurement** | Auto | MAKE / BUY / BOTH — defaults to BUY when an External PN is given, else MAKE; decides which part-page sections expect content |
 | **Metadata** | No | Custom JSON fields for extra data |
 
 4. Click **Create Part**

@@ -485,6 +485,9 @@ def pull_sync(
                     continue
 
                 internal_pn = next_part_number(db, default_tier)
+                # procurement stays at its default (make): external_pn here is
+                # the CAD part number, not a vendor PN — the buy-when-external
+                # creation heuristic does not apply to CAD-synced geometry
                 part = Part(
                     name=item.part_name,
                     description=item.description or None,

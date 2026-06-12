@@ -97,7 +97,8 @@ def test_issue_page_holding_readout(web_client):
     advisory = web_client.post("/api/issues", json={"title": "Note only"}).json()
     page = web_client.get(f"/issues/{advisory['id']}")
     assert page.status_code == 200
-    assert "Holding — none" in page.text
+    # The empty-line macro wraps the label in a span (Amendment 6 grammar)
+    assert 'Holding</span> — none' in page.text
     # No disposition gate above advisory: no panel, no state badge, CLOSE free.
     assert 'id="disposition-btn"' not in page.text
     assert "UNDISPOSITIONED" not in page.text
