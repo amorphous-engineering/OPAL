@@ -4,16 +4,43 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TierConfig(BaseModel):
-    """Inventory tier configuration."""
+    """Inventory tier configuration.
+
+    The semantic fields drive backend behavior per tier:
+
+    - ``default_tracking``: tracking type a new part gets when none is given
+    - ``require_lot``: bulk receipts must carry a lot_number
+    - ``auto_serial``: serialized receipts without a lot_number get
+      auto-generated serials, one per physical unit
+
+    Config blobs and yaml files written before these fields existed omit
+    them; the validator derives the historical level-based rules so stored
+    projects keep their behavior unchanged.
+    """
 
     level: int
     name: str
     code: str
     description: str = ""
+    default_tracking: Literal["serialized", "bulk"] = "bulk"
+    require_lot: bool = False
+    auto_serial: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_legacy_semantics(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            level = data.get("level")
+            if isinstance(level, int) and not isinstance(level, bool):
+                data = {**data}
+                data.setdefault("default_tracking", "serialized" if level <= 2 else "bulk")
+                data.setdefault("require_lot", level in (1, 2))
+                data.setdefault("auto_serial", level == 1)
+        return data
 
 
 class PartNumberingConfig(BaseModel):
@@ -68,20 +95,43 @@ DEFAULT_TIERS = [
         name="Flight",
         code="F",
         description="Flight-critical hardware requiring full traceability",
+        default_tracking="serialized",
+        require_lot=True,
+        auto_serial=True,
     ),
     TierConfig(
         level=2,
         name="Ground",
         code="G",
         description="Ground support equipment",
+        default_tracking="serialized",
+        require_lot=True,
+        auto_serial=False,
     ),
     TierConfig(
         level=3,
         name="Loose",
         code="L",
         description="Consumables and non-critical items",
+        default_tracking="bulk",
+        require_lot=False,
+        auto_serial=False,
     ),
 ]
+
+
+def tier_semantics(project: "ProjectConfig | None", level: int) -> TierConfig:
+    """Resolve the tier whose semantic fields govern behavior for ``level``.
+
+    Falls back to a synthesized tier carrying the legacy level-based rules
+    when no project is active or the level isn't configured — existing part
+    rows can hold levels that predate the current tier set.
+    """
+    if project is not None:
+        tier = project.get_tier(level)
+        if tier is not None:
+            return tier
+    return TierConfig(level=level, name=f"Tier {level}", code=str(level))
 
 
 class ProjectConfig(BaseModel):
@@ -351,6 +401,9 @@ def save_project_config(config: ProjectConfig) -> None:
                 "name": t.name,
                 "code": t.code,
                 "description": t.description,
+                "default_tracking": t.default_tracking,
+                "require_lot": t.require_lot,
+                "auto_serial": t.auto_serial,
             }
             for t in config.tiers
         ],

@@ -164,7 +164,7 @@ function lintMarkupHtml(text, findings) {
         const covering = marks[runStart];
         if (covering) {
             const here = [...covering].sort((a, b) => a - b).map(i => spanned[i]);
-            const css = here.some(f => f.severity === 'block_baseline') ? 'lint-block' : 'lint-warn';
+            const css = here.some(f => f.severity.startsWith('block')) ? 'lint-block' : 'lint-warn';
             const title = escapeHtml(here.map(f => f.rule + ': ' + f.message).join('; '));
             html += '<span class="' + css + '" title="' + title + '">' + chunk + '</span>';
         } else {

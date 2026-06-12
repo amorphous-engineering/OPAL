@@ -18,63 +18,23 @@
                     </div>
                     <div>
                         <table class="data-table" style="width: 400px;">
+                            {% for prob in [5, 4, 3, 2, 1] %}
                             <tr>
-                                <td style="width: 40px; text-align: right; border: none; font-size: 0.75rem;">5</td>
+                                <td style="width: 40px; text-align: right; border: none; font-size: 0.75rem;">{{ prob }}</td>
                                 {% for i in range(5) %}
-                                {% set score = 5 * (i + 1) %}
+                                {% set score = prob * (i + 1) %}
                                 <td class="matrix-cell matrix-{% if score <= 5 %}low{% elif score <= 12 %}med{% else %}high{% endif %}"
-                                    onclick="filterByCell(5, {{ i + 1 }})">
-                                    {{ matrix[4][i] if matrix[4][i] > 0 else '' }}
+                                    onclick="filterByCell({{ prob }}, {{ i + 1 }})">
+                                    {{ matrix[prob - 1][i] if matrix[prob - 1][i] > 0 else '' }}{% if residual_matrix[prob - 1][i] > 0 %}<span class="matrix-residual">{{ residual_matrix[prob - 1][i] }}</span>{% endif %}
                                 </td>
                                 {% endfor %}
                             </tr>
-                            <tr>
-                                <td style="width: 40px; text-align: right; border: none; font-size: 0.75rem;">4</td>
-                                {% for i in range(5) %}
-                                {% set score = 4 * (i + 1) %}
-                                <td class="matrix-cell matrix-{% if score <= 5 %}low{% elif score <= 12 %}med{% else %}high{% endif %}"
-                                    onclick="filterByCell(4, {{ i + 1 }})">
-                                    {{ matrix[3][i] if matrix[3][i] > 0 else '' }}
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            <tr>
-                                <td style="width: 40px; text-align: right; border: none; font-size: 0.75rem;">3</td>
-                                {% for i in range(5) %}
-                                {% set score = 3 * (i + 1) %}
-                                <td class="matrix-cell matrix-{% if score <= 5 %}low{% elif score <= 12 %}med{% else %}high{% endif %}"
-                                    onclick="filterByCell(3, {{ i + 1 }})">
-                                    {{ matrix[2][i] if matrix[2][i] > 0 else '' }}
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            <tr>
-                                <td style="width: 40px; text-align: right; border: none; font-size: 0.75rem;">2</td>
-                                {% for i in range(5) %}
-                                {% set score = 2 * (i + 1) %}
-                                <td class="matrix-cell matrix-{% if score <= 5 %}low{% elif score <= 12 %}med{% else %}high{% endif %}"
-                                    onclick="filterByCell(2, {{ i + 1 }})">
-                                    {{ matrix[1][i] if matrix[1][i] > 0 else '' }}
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            <tr>
-                                <td style="width: 40px; text-align: right; border: none; font-size: 0.75rem;">1</td>
-                                {% for i in range(5) %}
-                                {% set score = 1 * (i + 1) %}
-                                <td class="matrix-cell matrix-{% if score <= 5 %}low{% elif score <= 12 %}med{% else %}high{% endif %}"
-                                    onclick="filterByCell(1, {{ i + 1 }})">
-                                    {{ matrix[0][i] if matrix[0][i] > 0 else '' }}
-                                </td>
-                                {% endfor %}
-                            </tr>
+                            {% endfor %}
                             <tr>
                                 <td style="border: none;"></td>
-                                <td style="border: none; text-align: center; font-size: 0.75rem;">1</td>
-                                <td style="border: none; text-align: center; font-size: 0.75rem;">2</td>
-                                <td style="border: none; text-align: center; font-size: 0.75rem;">3</td>
-                                <td style="border: none; text-align: center; font-size: 0.75rem;">4</td>
-                                <td style="border: none; text-align: center; font-size: 0.75rem;">5</td>
+                                {% for i in range(5) %}
+                                <td style="border: none; text-align: center; font-size: 0.75rem;">{{ i + 1 }}</td>
+                                {% endfor %}
                             </tr>
                         </table>
                         <div style="text-align: center; font-weight: 600; margin-top: var(--space-xs);">IMPACT</div>
@@ -94,6 +54,10 @@
                     <div style="display: flex; align-items: center; gap: var(--space-xs);">
                         <div style="width: 20px; height: 20px; background: var(--status-error); border: 1px solid var(--border-color);"></div>
                         <span>HIGH (13-25)</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: var(--space-xs);">
+                        <span class="mono">N</span><span>current</span>
+                        <span class="matrix-residual" style="border-color: var(--border-color);">N</span><span>residual target</span>
                     </div>
                 </div>
             </div>
@@ -149,24 +113,27 @@
 </style>
 
 <script>
-const risks = {{ risks_json | safe }};
+const risks = {{ risks_data | tojson }};
 
 function filterByCell(prob, impact) {
-    const cellRisks = risks.filter(r => r.probability === prob && r.impact === impact);
+    const current = risks.filter(r => r.probability === prob && r.impact === impact);
+    const residual = risks.filter(r => r.residual_probability === prob && r.residual_impact === impact);
     const container = document.getElementById('cell-risks');
     const list = document.getElementById('cell-risks-list');
 
-    if (cellRisks.length === 0) {
+    if (current.length === 0 && residual.length === 0) {
         container.style.display = 'none';
         return;
     }
 
-    container.style.display = 'block';
-    list.innerHTML = cellRisks.map(r => `
+    const row = (r, tag) => `
         <div style="padding: var(--space-xs); border-bottom: 1px solid var(--border-color);">
-            <a href="/risks/${r.id}">#${r.id} - ${r.title}</a>
-        </div>
-    `).join('');
+            <a href="/risks/${r.id}" class="mono">${r.risk_number}</a> ${escapeHtml(r.title)}${tag}
+        </div>`;
+    container.style.display = 'block';
+    list.innerHTML =
+        current.map(r => row(r, '')).join('') +
+        residual.map(r => row(r, ' <span class="text-muted">(residual)</span>')).join('');
 }
 </script>
 {% endblock %}

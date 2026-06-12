@@ -127,7 +127,9 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     procedure_instance: Mapped["ProcedureInstance | None"] = relationship(
         "ProcedureInstance", back_populates="issues"
     )
-    risk: Mapped["Risk | None"] = relationship("Risk", back_populates="linked_issue")
+    risk_links: Mapped[list["RiskIssueLink"]] = relationship(
+        "RiskIssueLink", back_populates="issue", cascade="all, delete-orphan"
+    )
     references: Mapped[list["IssueReference"]] = relationship(
         "IssueReference", back_populates="issue", cascade="all, delete-orphan"
     )
