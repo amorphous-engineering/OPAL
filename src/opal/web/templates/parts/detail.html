@@ -75,6 +75,7 @@
         <tr><th>CATEGORY</th><td>{% if part.category %}{{ part.category | upper }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
         <tr><th>UOM</th><td>{{ (part.unit_of_measure or 'EA') | upper }}</td></tr>
         <tr><th>TRACKING</th><td>{{ 'SERIALIZED' if part.tracking_type and part.tracking_type.value == 'serialized' else 'BULK' }}</td></tr>
+        <tr><th>PROCUREMENT</th><td>{{ (part.procurement.value if part.procurement.value is defined else part.procurement) | upper }}</td></tr>
         <tr><th>REORDER</th><td>{% if part.reorder_point is not none %}{{ '%g' % part.reorder_point }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
         <tr><th>TOOLING</th><td>{% if part.is_tooling %}{{ 'CAL ' ~ part.calibration_interval_days ~ 'D' if part.calibration_interval_days else 'YES' }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
         <tr><th>PARENT</th><td>{% if part.parent_id %}<a href="/parts/{{ part.parent_id }}">{{ part.parent.internal_pn }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>

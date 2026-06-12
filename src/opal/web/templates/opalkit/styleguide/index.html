@@ -285,42 +285,28 @@
         </div>
         <div class="panel-body">
             <p class="text-muted" style="margin-bottom: var(--space-md);">
-                An empty section keeps its panel header bar and goes quiet below it:
-                one centered muted dash row, no column heads — heads render only over
-                data. No tall boxes, no narration — absence is a dash, never a sentence.
-            </p>
-            <div class="panel panel-ledger" style="margin-bottom: var(--space-md);">
-                <div class="panel-header">
-                    <span>SUPPLIERS</span>
-                    <span class="header-count">0</span>
-                    <div class="panel-header-actions"><a class="ledger-add" href="#">+ ADD</a></div>
-                </div>
-                <table class="data-table">
-                    <tbody>
-                        <tr><td class="text-muted section-empty">—</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-bottom: var(--space-md);">
-<pre style="margin: 0;">{% raw %}{% if rows %}<thead>…</thead>{% endif %}
-<tbody>
-{% for row in rows %}
-<tr>…</tr>
-{% else %}
-<tr><td colspan="N" class="text-muted section-empty">—</td></tr>
-{% endfor %}
-</tbody>{% endraw %}</pre>
-            </div>
-            <p class="text-muted" style="margin-bottom: var(--space-md);">
-                ok.empty_line is the one-line primitive for index rows outside section
-                panels. ok.empty is legacy — full-page zero states only, never sections.
+                Emptiness is information only where content is expected. Declared
+                intent decides where it's expected; data always renders. An empty
+                relevant section is one line; an irrelevant empty section is absent —
+                not collapsed, absent. Never a header bar over an empty box, never
+                narration.
             </p>
             <div style="margin-bottom: var(--space-md);">
                 {{ ok.empty_line("BOM", href="#") }}
+                {{ ok.empty_line("CONSUMED") }}
             </div>
+            <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-bottom: var(--space-md);">
+<pre style="margin: 0;">{% raw %}{% if rows %}
+…panel + headed data-table…
+{% elif relevant %}
+{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
+{% endif %}{% endraw %}</pre>
+            </div>
+            <p class="text-muted" style="margin-bottom: var(--space-md);">
+                ok.empty is legacy — full-page zero states only, never sections.
+            </p>
             <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem;">
-<pre style="margin: 0;">{% raw %}{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
-{{ ok.empty("No parts found") }}{% endraw %}</pre>
+<pre style="margin: 0;">{% raw %}{{ ok.empty("No parts found") }}{% endraw %}</pre>
             </div>
         </div>
     </div>
@@ -332,9 +318,9 @@
         </div>
         <div class="panel-body">
             <p class="text-muted" style="margin-bottom: var(--space-md);">
-                Sections render as panels at ledger pitch — header bar with the count
-                (and its flags) in the value slot, body a headed data table. Empty
-                sections keep the same structure with a dash row.
+                A populated section renders as a panel at ledger pitch — header bar
+                with the count (and its flags) in the value slot, body a headed data
+                table. Empty sections are one line or absent (see EMPTY STATE).
             </p>
             <div class="panel panel-ledger">
                 <div class="panel-header">
@@ -367,11 +353,9 @@
         <div class="panel-header-actions"><a class="ledger-add" …>+ ADD</a></div>
     </div>
     <table class="data-table">
-        {% if rows %}<thead>…</thead>{% endif %}
+        <thead>…</thead>
         <tbody>
-        {% for row in rows %}<tr>…</tr>
-        {% else %}<tr><td colspan="N" class="text-muted section-empty">—</td></tr>
-        {% endfor %}
+        {% for row in rows %}<tr>…</tr>{% endfor %}
         </tbody>
     </table>
 </div>{% endraw %}</pre>

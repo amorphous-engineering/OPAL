@@ -1,13 +1,14 @@
 {% import 'opalkit/_macros.html' as ok %}
-{# DESIGN — requirements and tests. Sections always render their structure:
-   panel header (label · count · add) + headed table; an empty body is one
-   muted dash row, never a tall box, never narration. #}
+{# DESIGN — requirements and tests (always relevant). A populated section
+   is a panel + headed table; an empty one is one line. Emptiness is
+   information only where content is expected. #}
 
 {# --- Requirements --- #}
 {% set req_rows = part_requirements | selectattr('req') | list %}
 {% set tbd_count = req_rows | selectattr('req.tbd') | list | length %}
 {% set tbr_count = req_rows | selectattr('req.tbr') | list | length %}
 {% set stale_count = req_rows | selectattr('req.stale') | list | length %}
+{% if part_requirements %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>REQUIREMENTS</span>
@@ -22,7 +23,6 @@
         </div>
     </div>
     <table class="data-table">
-        {% if part_requirements %}
         <thead>
             <tr>
                 {{ ok.th("REQ", width="110px") }}
@@ -32,7 +32,6 @@
                 {{ ok.th("", width="40px") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for row in part_requirements %}
             {% set r = row.req %}
@@ -53,12 +52,13 @@
                 <td class="text-muted">{{ a.status | upper | replace('_', ' ') }}</td>
                 <td class="row-actions"><a href="#" class="act-remove" title="UNASSIGN" onclick="unassignRequirement({{ a.id }}); return false;">×</a></td>
             </tr>
-            {% else %}
-            <tr><td colspan="5" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% else %}
+{{ ok.empty_line("REQUIREMENTS", onclick="showAssignRequirement()") }}
+{% endif %}
 <div id="assign-req-row" class="inline-add-row">
     <input type="text" id="assign-req-number" class="form-input mono" style="width: 160px;"
            placeholder="REQ-0007" onkeydown="if(event.key==='Enter')assignRequirement()">
@@ -66,6 +66,7 @@
 </div>
 
 {# --- Test templates --- #}
+{% if test_templates %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>TESTS</span>
@@ -75,7 +76,6 @@
         </div>
     </div>
     <table class="data-table">
-        {% if test_templates %}
         <thead>
             <tr>
                 {{ ok.th("NAME") }}
@@ -84,7 +84,6 @@
                 {{ ok.th("", width="40px") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for tt in test_templates %}
             <tr>
@@ -93,9 +92,10 @@
                 <td class="text-muted">{% if tt.test_type == 'numeric' %}{{ '%g' % tt.min_value if tt.min_value is not none else '' }}–{{ '%g' % tt.max_value if tt.max_value is not none else '' }}{{ ' ' ~ tt.unit if tt.unit else '' }}{% else %}—{% endif %}</td>
                 <td class="row-actions"><a href="#" class="act-remove" title="REMOVE" onclick="deleteTestTemplate({{ tt.id }}); return false;">×</a></td>
             </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% else %}
+{{ ok.empty_line("TESTS", onclick="showAddTest()") }}
+{% endif %}

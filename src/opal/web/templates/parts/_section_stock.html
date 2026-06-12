@@ -1,10 +1,15 @@
 {% import 'opalkit/_macros.html' as ok %}
 {# STOCK & USE — composition, stock, purchasing, suppliers, usage, and the
-   consumption log (last: it is the one unbounded section). Sections always
-   render their structure: panel header (label · count · add) + headed
-   table; an empty body is one muted dash row, never a box or narration. #}
+   consumption log (last: it is the one unbounded section). Relevance is
+   declared by procurement: BOM expects content on make|both, SUPPLIERS and
+   PO LINES on buy|both; the rest always. An irrelevant empty section is
+   absent; DATA WINS — any section with rows renders regardless. An empty
+   relevant section is one line. #}
+{% set bom_relevant = part.procurement in ('make', 'both') %}
+{% set buy_relevant = part.procurement in ('buy', 'both') %}
 
 {# --- BOM --- #}
+{% if bom_lines %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>BOM</span>
@@ -14,7 +19,6 @@
         </div>
     </div>
     <table class="data-table">
-        {% if bom_lines %}
         <thead>
             <tr>
                 {{ ok.th("PN", width="130px") }}
@@ -25,7 +29,6 @@
                 {{ ok.th("", width="64px") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for line in bom_lines %}
             <tr>
@@ -39,34 +42,34 @@
                     <a href="#" class="act-remove" title="REMOVE" onclick="deleteBomLine({{ line.id }}); return false;">×</a>
                 </td>
             </tr>
-            {% else %}
-            <tr><td colspan="6" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
-    {% if bom_lines %}
     {# Tree renders only when it carries depth the direct lines don't #}
     <div id="bom-tree" class="bom-tree" style="display: none;"></div>
-    {% endif %}
 </div>
+{% elif bom_relevant %}
+{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
+{% endif %}
 
-{# --- Stock — the on-hand figure is the section's value; LOW derives from
-   the reorder point the same way the parts list derives it #}
+{# --- Stock — always relevant; the on-hand figure is the section's value;
+   LOW derives from the reorder point as on the parts list #}
 {% set on_hand = part.total_quantity or 0 %}
+{% set stock_low = part.reorder_point is not none and on_hand < part.reorder_point %}
+{% if inventory_records %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>STOCK</span>
         <span class="header-count">
             <span class="stock-figure">{{ '%g' % on_hand }} {{ (part.unit_of_measure or 'EA') | upper }}</span>
             · {{ inventory_records | length }} REC
-            {%- if part.reorder_point is not none and on_hand < part.reorder_point %} <span class="ledger-flag">· LOW</span>{% endif %}
+            {%- if stock_low %} <span class="ledger-flag">· LOW</span>{% endif %}
         </span>
         <div class="panel-header-actions">
             <a class="ledger-add" href="#" onclick="toggleReceiveStock(); return false;">+ ADD</a>
         </div>
     </div>
     <table class="data-table">
-        {% if inventory_records %}
         <thead>
             <tr>
                 {{ ok.th("OPAL #", width="120px") }}
@@ -75,7 +78,6 @@
                 {{ ok.th("LOT", width="140px") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for inv in inventory_records %}
             <tr>
@@ -84,12 +86,13 @@
                 <td style="text-align: right;">{{ '%g' % inv.quantity }}</td>
                 <td class="text-muted">{{ inv.lot_number or '—' }}</td>
             </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% else %}
+{{ ok.empty_line("STOCK", onclick="toggleReceiveStock()", flag="LOW" if stock_low else none) }}
+{% endif %}
 <div id="receive-stock-row" class="inline-add-row">
     <input type="number" id="rs-qty" class="form-input mono" style="width: 90px;" placeholder="QTY" step="any" min="0">
     <input type="text" id="rs-location" class="form-input mono" style="width: 130px;" placeholder="LOCATION" onkeydown="if(event.key==='Enter')submitReceiveStock()">
@@ -100,13 +103,13 @@
 </div>
 
 {# --- Open PO lines --- #}
+{% if open_po_lines %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>PO LINES</span>
         <span class="header-count">{{ open_po_lines | length }}</span>
     </div>
     <table class="data-table">
-        {% if open_po_lines %}
         <thead>
             <tr>
                 {{ ok.th("PO", width="120px") }}
@@ -114,7 +117,6 @@
                 {{ ok.th("RECEIVED", width="100px", align="right") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for line in open_po_lines %}
             <tr>
@@ -122,14 +124,16 @@
                 <td class="text-muted">{{ (line.purchase.status.value if line.purchase.status.value is defined else line.purchase.status) | upper }}</td>
                 <td style="text-align: right;">{{ '%g' % line.qty_received }}/{{ '%g' % line.qty_ordered }}</td>
             </tr>
-            {% else %}
-            <tr><td colspan="3" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% elif buy_relevant %}
+{{ ok.empty_line("PO LINES") }}
+{% endif %}
 
 {# --- Suppliers --- #}
+{% if supplier_entries %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>SUPPLIERS</span>
@@ -139,7 +143,6 @@
         </div>
     </div>
     <table class="data-table">
-        {% if supplier_entries %}
         <thead>
             <tr>
                 {{ ok.th("SUPPLIER") }}
@@ -148,7 +151,6 @@
                 {{ ok.th("", width="40px") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for entry in supplier_entries %}
             <tr>
@@ -157,21 +159,22 @@
                 <td class="text-muted">{{ '✓' if entry.is_preferred else '—' }}</td>
                 <td class="row-actions"><a href="#" class="act-remove" title="UNLINK" onclick="deleteSupplierEntry({{ entry.id }}, {{ entry.supplier_id }}); return false;">×</a></td>
             </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% elif buy_relevant %}
+{{ ok.empty_line("SUPPLIERS", onclick="showAddSupplier()") }}
+{% endif %}
 
 {# --- Where used --- #}
+{% if where_used %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>WHERE USED</span>
         <span class="header-count">{{ where_used | length }}</span>
     </div>
     <table class="data-table">
-        {% if where_used %}
         <thead>
             <tr>
                 {{ ok.th("PN", width="130px") }}
@@ -180,7 +183,6 @@
                 {{ ok.th("REFDES", width="90px") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for line in where_used %}
             <tr>
@@ -189,21 +191,22 @@
                 <td style="text-align: right;">{{ line.quantity }}</td>
                 <td class="text-muted">{{ line.reference_designator or '—' }}</td>
             </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% else %}
+{{ ok.empty_line("WHERE USED") }}
+{% endif %}
 
 {# --- Procedure usage (kits reference the design, not the stock) --- #}
+{% if kit_usages or step_kit_usages %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>PROCEDURE USE</span>
         <span class="header-count">{{ (kit_usages | length) + (step_kit_usages | length) }}</span>
     </div>
     <table class="data-table">
-        {% if kit_usages or step_kit_usages %}
         <thead>
             <tr>
                 {{ ok.th("PROCEDURE") }}
@@ -213,7 +216,6 @@
                 {{ ok.th("STATUS", width="110px") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for kit in kit_usages %}
             <tr>
@@ -233,21 +235,21 @@
                 <td class="text-muted">{{ (sk.step.procedure.status.value if sk.step.procedure.status.value is defined else sk.step.procedure.status) | upper }}</td>
             </tr>
             {% endfor %}
-            {% if not (kit_usages or step_kit_usages) %}
-            <tr><td colspan="5" class="text-muted section-empty">—</td></tr>
-            {% endif %}
         </tbody>
     </table>
 </div>
+{% else %}
+{{ ok.empty_line("PROCEDURE USE") }}
+{% endif %}
 
 {# --- Consumption history --- #}
+{% if consumption_history %}
 <div class="panel panel-ledger">
     <div class="panel-header">
         <span>CONSUMED</span>
         <span class="header-count">{{ consumption_history | length }}{{ '+' if consumption_history | length == 50 }}</span>
     </div>
     <table class="data-table">
-        {% if consumption_history %}
         <thead>
             <tr>
                 {{ ok.th("DATE", width="110px") }}
@@ -256,7 +258,6 @@
                 {{ ok.th("NOTES") }}
             </tr>
         </thead>
-        {% endif %}
         <tbody>
             {% for c in consumption_history %}
             <tr>
@@ -271,9 +272,10 @@
                 </td>
                 <td class="text-muted">{{ c.notes or '—' }}</td>
             </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% else %}
+{{ ok.empty_line("CONSUMED") }}
+{% endif %}

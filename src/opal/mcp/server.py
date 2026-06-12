@@ -57,7 +57,7 @@ from opal.db.models import (
     Workcenter,
 )
 from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
-from opal.db.models.part import TrackingType
+from opal.db.models.part import ProcurementType, TrackingType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
 from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.risk import RiskDisposition, RiskIssueLink, RiskIssueRole
@@ -166,6 +166,15 @@ async def list_tools() -> list[Tool]:
                     "external_pn": {
                         "type": "string",
                         "description": "External/manufacturer part number (optional)",
+                    },
+                    "procurement": {
+                        "type": "string",
+                        "enum": ["make", "buy", "both"],
+                        "description": (
+                            "How the part comes to exist; governs which part-page "
+                            "sections expect content. Default: buy when external_pn "
+                            "is given, else make"
+                        ),
                     },
                     "unit_of_measure": {
                         "type": "string",
@@ -1683,6 +1692,14 @@ async def list_tools() -> list[Tool]:
                                 "unit_of_measure": {"type": "string", "default": "each"},
                                 "description": {"type": "string"},
                                 "external_pn": {"type": "string"},
+                                "procurement": {
+                                    "type": "string",
+                                    "enum": ["make", "buy", "both"],
+                                    "description": (
+                                        "Default: buy when external_pn is given, "
+                                        "else make"
+                                    ),
+                                },
                                 "reorder_point": {"type": "number"},
                                 "parent_id": {"type": "integer"},
                             },
@@ -2085,6 +2102,7 @@ async def _get_part(db, args: dict) -> list[TextContent]:
             "tier_name": tier_name,
             "parent_id": part.parent_id,
             "unit_of_measure": part.unit_of_measure,
+            "procurement": part.procurement.value if hasattr(part.procurement, "value") else part.procurement,
             "lifecycle_state": part.lifecycle_state,
             "activated_at": part.activated_at.isoformat() if part.activated_at else None,
             "activation_cause": part.activation_cause,
@@ -2152,6 +2170,9 @@ def _build_part(db, args: dict) -> Part:
         reorder_point=Decimal(str(args["reorder_point"]))
         if args.get("reorder_point") is not None
         else None,
+        procurement=ProcurementType(args["procurement"]).value
+        if args.get("procurement")
+        else ("buy" if args.get("external_pn") else "make"),
         **({"tracking_type": tracking_type} if tracking_type is not None else {}),
     )
 
@@ -2188,6 +2209,7 @@ async def _create_part(db, args: dict) -> list[TextContent]:
                 "tier": tier,
                 "tier_name": _tier_name(tier),
                 "parent_id": parent_id,
+                "procurement": part.procurement.value if hasattr(part.procurement, "value") else part.procurement,
                 "lifecycle_state": part.lifecycle_state,
             },
         }

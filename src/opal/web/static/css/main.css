@@ -2591,37 +2591,27 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     }
 }
 
-/* Empty section — one ruled line at half strength; the dash is the only
-   muted element, the add affordance never is */
-.ledger-row {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-sm);
-    padding: 5px 2px;
-    border-bottom: 1px solid var(--border-color);
+/* The empty-state rule — an empty relevant section is one line at half
+   strength: "LABEL — none · + ADD". Irrelevant empty sections are absent;
+   data always renders. The add affordance never renders muted. */
+.empty-line {
     font-family: var(--font-mono);
     font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 5px 2px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 @supports (color: color-mix(in srgb, red 50%, transparent)) {
-    .ledger-row-empty {
+    .empty-line {
         border-bottom-color: color-mix(in srgb, var(--border-color) 50%, transparent);
     }
 }
 
-.ledger-row .ledger-label {
+.empty-line .ledger-label {
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-}
-
-.ledger-row .ledger-value {
-    margin-left: auto;
-    color: var(--text-primary);
-}
-
-.ledger-row-empty .ledger-value {
-    color: var(--text-muted);
 }
 
 .ledger-flag {
@@ -2671,11 +2661,6 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 .panel-ledger .data-table th,
 .panel-ledger .data-table td {
     padding: 5px 8px;
-}
-
-/* Empty body — one quiet centered dash; column heads render only over data */
-.panel-ledger .data-table .section-empty {
-    text-align: center;
 }
 
 .panel-ledger .data-table .row-actions {
