@@ -4,11 +4,11 @@
 {% block breadcrumbs %}
 {{ ok.crumb("HOME", "/") }}
 {{ ok.crumb("EXECUTIONS", "/executions") }}
-{{ ok.crumb("NEW") }}
+{{ ok.crumb("CUT") }}
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("NEW EXECUTION", max_width="600px") %}
+{% call ok.panel("CUT WORK ORDERS", max_width="600px") %}
         <form id="new-execution-form" onsubmit="startExecution(event)">
             <div class="form-group">
                 <label class="form-label" for="procedure">PROCEDURE *</label>
@@ -20,7 +20,13 @@
                 </select>
             </div>
 
-            {{ ok.field("work_order_number", "WORK ORDER NUMBER", placeholder="Optional - for grouping related executions") }}
+            {{ ok.field("work_order_number", "WORK ORDER NUMBER", placeholder="Optional - generated if blank") }}
+
+            <div class="form-group">
+                <label class="form-label" for="quantity">QUANTITY</label>
+                <input type="number" id="quantity" name="quantity" class="form-input"
+                       value="1" min="1" max="100" step="1" required style="width: 100px;">
+            </div>
 
             <div class="form-group">
                 <label class="form-label">TARGET ENTITY <span class="text-muted">(optional — what this execution is run against)</span></label>
@@ -38,7 +44,7 @@
             {% endif %}
 
             {{ ok.form_messages() }}
-            {{ ok.form_actions(cancel_href="/executions", submit_text="START") }}
+            {{ ok.form_actions(cancel_href="/executions", submit_text="CUT") }}
         </form>
 {% endcall %}
 
@@ -50,9 +56,11 @@ async function startExecution(event) {
     const errorDiv = document.getElementById('form-error');
     errorDiv.style.display = 'none';
 
+    const quantity = parseInt(form.quantity.value, 10) || 1;
     const data = {
         procedure_id: parseInt(form.procedure_id.value),
         work_order_number: form.work_order_number.value || null,
+        quantity: quantity,
     };
 
     if (form.entity_type.value || form.entity_id.value || form.entity_label.value) {
@@ -77,7 +85,7 @@ async function startExecution(event) {
 
         if (response.ok) {
             const instance = await response.json();
-            window.location.href = '/executions/' + instance.id;
+            window.location.href = quantity > 1 ? '/executions' : '/executions/' + instance.id;
         } else {
             const error = await response.json();
             errorDiv.textContent = formatApiError(error.detail, 'Failed to start execution');

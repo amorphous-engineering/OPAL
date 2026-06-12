@@ -1,0 +1,116 @@
+{# The rail: issues/holds, attachments (evidence), reference docs.
+   Heavy content renders here, never inline in the document (Abby's rule). #}
+{% import 'opalkit/_macros.html' as ok %}
+<div class="exec-rail-content" id="exec-rail-content">
+    <div class="rail-section">
+        <div class="rail-head mono">ISSUES / HOLDS</div>
+        {% set hold_entries = exec_state.holds %}
+        {% set hold_issue_ids = hold_entries | map(attribute='issue_id') | list %}
+        {% if hold_entries %}
+        <table class="data-table rail-table">
+            <tbody>
+                {% for h in hold_entries %}
+                <tr class="rail-hold{% if h.disposition_state == 'undispositioned' %} rail-hold-active{% endif %}">
+                    <td class="mono"><a href="/issues/{{ h.issue_id }}">{{ h.issue_number }}</a></td>
+                    <td class="mono">{% if h.blocks %}→ blocks {{ h.blocks | join(', ') }}{% endif %}</td>
+                    <td class="mono rail-disp rail-disp-{{ h.disposition_state }}">{{ h.disposition_state | upper }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% set other_issues = linked_issues | rejectattr('id', 'in', hold_issue_ids) | list %}
+        {% if other_issues %}
+        <table class="data-table rail-table">
+            <tbody>
+                {% for iss in other_issues %}
+                <tr>
+                    <td class="mono"><a href="/issues/{{ iss.id }}">{{ iss.issue_number or '—' }}</a></td>
+                    <td class="rail-issue-title">{{ iss.title }}</td>
+                    <td class="mono rail-disp">{{ (iss.status.value if iss.status.value is defined else iss.status) | upper | replace('_', ' ') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if not hold_entries and not other_issues %}
+        {{ ok.empty_line("Issues") }}
+        {% endif %}
+    </div>
+
+    <div class="rail-section">
+        <div class="rail-head mono">ATTACHMENTS</div>
+        {% set wo_attachments = [] %}
+        {% for att in instance.attachments %}{% if not att.step_execution_id %}{% set _ = wo_attachments.append(att) %}{% endif %}{% endfor %}
+        {% set step_orders = {} %}
+        {% if capture_attachments or wo_attachments %}
+        <div class="rail-attachments">
+            {% for se in instance.step_executions | sort(attribute='step_number') %}
+            {% set atts = capture_attachments.get(se.id, []) %}
+            {% if atts %}
+            <div class="rail-attach-group" data-step-order="{{ se.step_number }}" id="rail-step-{{ se.step_number }}">
+                <div class="rail-attach-step mono">{{ se.step_number_str or se.step_number }}</div>
+                {% for att in atts %}
+                <div class="rail-attach-item">
+                    {% if att.mime_type.startswith('image/') %}
+                    <img class="rail-thumb" src="/api/attachments/{{ att.id }}/download" alt="{{ att.original_filename }}"
+                         onclick="openLightbox('/api/attachments/{{ att.id }}/download', {{ (att.note or att.original_filename) | tojson }})">
+                    {% else %}
+                    <a href="/api/attachments/{{ att.id }}/download" target="_blank" class="mono rail-file">{{ att.original_filename }}</a>
+                    {% endif %}
+                    <div class="rail-attach-meta mono">
+                        {% if att.uploaded_by %}{{ att.uploaded_by.name }} · {% endif %}<span class="timestamp" title="{{ att.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">{{ att.created_at.strftime('%H:%M') }}</span>
+                    </div>
+                    {% if att.note %}<div class="rail-attach-note">{{ att.note }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% if wo_attachments %}
+            <div class="rail-attach-group">
+                <div class="rail-attach-step mono">WORK ORDER</div>
+                {% for att in wo_attachments %}
+                <div class="rail-attach-item">
+                    {% if att.mime_type.startswith('image/') %}
+                    <img class="rail-thumb" src="/api/attachments/{{ att.id }}/download" alt="{{ att.original_filename }}"
+                         onclick="openLightbox('/api/attachments/{{ att.id }}/download', {{ (att.note or att.original_filename) | tojson }})">
+                    {% else %}
+                    <a href="/api/attachments/{{ att.id }}/download" target="_blank" class="mono rail-file">{{ att.original_filename }}</a>
+                    {% endif %}
+                    <div class="rail-attach-meta mono">
+                        {% if att.kind == 'closeout' %}<span class="text-green">CLOSEOUT</span> · {% endif %}{% if att.uploaded_by %}{{ att.uploaded_by.name }} · {% endif %}<span class="timestamp" title="{{ att.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">{{ att.created_at.strftime('%H:%M') }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        {{ ok.empty_line("Attachments", onclick="showAttachModal(null, 'WO')") }}
+        {% endif %}
+        {% if (capture_attachments or wo_attachments) and inst_status in ['cut', 'in_work', 'completed'] %}
+        <div class="rail-attach-add">
+            <button class="btn btn-sm" onclick="showAttachModal(null, 'WO')">+ ATTACH</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="rail-section">
+        <div class="rail-head mono">REFERENCE DOCS</div>
+        {% if reference_attachments %}
+        <table class="data-table rail-table">
+            <tbody>
+                {% for a in reference_attachments %}
+                <tr>
+                    <td><a href="/api/attachments/{{ a.id }}/download" target="_blank" class="mono">{{ a.original_filename }}</a></td>
+                    <td class="mono" style="text-align: right;">{{ '{:.1f}'.format(a.size_bytes / 1024) }} KB</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        {{ ok.empty_line("Reference documents") }}
+        {% endif %}
+    </div>
+</div>

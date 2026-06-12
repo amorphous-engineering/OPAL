@@ -21,6 +21,12 @@ from opal.core.designators import (
     generate_requirement_number,
     generate_risk_number,
 )
+from opal.core.execution_flow import (
+    FlowError,
+    build_execution_state,
+    complete_step_flow,
+    focus_step,
+)
 from opal.core.holds import get_holds_payload, holding_readout
 from opal.core.numbering import (
     PartNumberError,
@@ -58,6 +64,7 @@ from opal.db.models import (
     User,
     Workcenter,
 )
+from opal.db.models.execution import ProcedureInstance, StepExecution
 from opal.db.models.issue import (
     Containment,
     DispositionType,
@@ -352,6 +359,11 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Safety warning text displayed in red during execution (optional)",
                     },
+                    "strict_sequence": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "OP-level: sub-steps must start in order",
+                    },
                     "required_data_schema": {
                         "type": "object",
                         "description": (
@@ -428,6 +440,7 @@ async def list_tools() -> list[Tool]:
                     "estimated_duration_minutes": {"type": "integer", "minimum": 1},
                     "required_role": {"type": "string"},
                     "caution": {"type": "string"},
+                    "strict_sequence": {"type": "boolean"},
                     "required_data_schema": {"type": "object"},
                 },
                 "required": ["procedure_id", "step_id"],
@@ -1948,6 +1961,172 @@ async def list_tools() -> list[Tool]:
                 "required": ["name"],
             },
         ),
+        # Execution document (multiplayer work orders)
+        Tool(
+            name="get_execution_state",
+            description=(
+                "Full document state of a running work order: every step with "
+                "status/cursors/holds/evidence counts, the presence roster, and "
+                "active hold points — the controller's view as JSON. Poll this "
+                "to observe a live test."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {
+                        "type": "string",
+                        "description": "Alternative lookup, e.g. 'WO-00002'",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="join_execution",
+            description=(
+                "Join a work order as an observer participant (appears in the "
+                "presence roster before placing a cursor)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Active user joining the execution",
+                    },
+                },
+                "required": ["user_id"],
+            },
+        ),
+        Tool(
+            name="focus_step",
+            description=(
+                "Move a user's cursor to a step. Presence = focus: the cursor "
+                "is broadcast to everyone in the document, several users may "
+                "focus the same step, and moving records no event."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {
+                        "type": "integer",
+                        "description": "Snapshot step order (the 'order' field in execution state)",
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user at the step",
+                    },
+                },
+                "required": ["step_number", "user_id"],
+            },
+        ),
+        Tool(
+            name="complete_step",
+            description=(
+                "Complete a step with optional captured data. Requires the "
+                "user_id of the human who performed the work — agents observe, "
+                "attach, and file anomalies, but completion carries a human "
+                "signature."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user who performed the step",
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "Captured values matching the step's data schema",
+                    },
+                    "notes": {"type": "string"},
+                },
+                "required": ["step_number", "user_id"],
+            },
+        ),
+        Tool(
+            name="attach_to_step",
+            description=(
+                "Attach evidence to a step of a running work order (execution "
+                "capture). Provide a server-readable file_path, or content "
+                "(text) with a filename."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "file_path": {
+                        "type": "string",
+                        "description": "Absolute path of a file to ingest",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Inline text content to store as a file",
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "Filename when using content",
+                    },
+                    "note": {"type": "string", "description": "Capturer's note"},
+                    "user_id": {"type": "integer", "description": "Capturing user, if any"},
+                },
+                "required": ["step_number"],
+            },
+        ),
+        Tool(
+            name="add_step_note",
+            description="Append a line to a step's operator notes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "note": {"type": "string"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Operator appending the note (optional, for attribution)",
+                    },
+                },
+                "required": ["step_number", "note"],
+            },
+        ),
+        Tool(
+            name="bind_issue_hold",
+            description=(
+                "Bind an issue's containment boundary to a step ('resolve by'): "
+                "that step cannot COMPLETE while the issue is undispositioned. "
+                "One boundary per issue; re-binding moves it. The hold lifts the "
+                "moment the disposition is signed."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "integer"},
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Human user binding the hold (containment is a gate change)",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "Required when the bind narrows a blocking issue's containment",
+                    },
+                },
+                "required": ["issue_id", "step_number", "user_id"],
+            },
+        ),
     ]
 
 
@@ -2131,6 +2310,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Composite procedure build
         elif name == "build_procedure":
             return await _build_procedure(db, arguments)
+
+        # Execution document
+        elif name == "get_execution_state":
+            return await _get_execution_state(db, arguments)
+        elif name == "join_execution":
+            return await _join_execution(db, arguments)
+        elif name == "focus_step":
+            return await _focus_step(db, arguments)
+        elif name == "complete_step":
+            return await _complete_step(db, arguments)
+        elif name == "attach_to_step":
+            return await _attach_to_step(db, arguments)
+        elif name == "add_step_note":
+            return await _add_step_note(db, arguments)
+        elif name == "bind_issue_hold":
+            return await _bind_issue_hold(db, arguments)
 
         else:
             return json_response({"error": f"Unknown tool: {name}"})
@@ -2600,6 +2795,7 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
         estimated_duration_minutes=args.get("estimated_duration_minutes"),
         required_role=args.get("required_role"),
         caution=args.get("caution"),
+        strict_sequence=args.get("strict_sequence", False),
     )
     db.add(step)
     db.flush()
@@ -4427,6 +4623,8 @@ async def _update_step(db, args: dict) -> list[TextContent]:
         step.required_role = args["required_role"]
     if "caution" in args:
         step.caution = args["caution"]
+    if "strict_sequence" in args:
+        step.strict_sequence = bool(args["strict_sequence"])
     if "required_data_schema" in args:
         step.required_data_schema = args["required_data_schema"]
 
@@ -5153,6 +5351,18 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
         if prereq_order is not None:
             depends_on_map.setdefault(d.step_id, []).append(prereq_order)
 
+    from opal.db.models.procedure import StepImage
+
+    all_images = (
+        db.query(StepImage)
+        .filter(StepImage.step_id.in_(step_ids))
+        .order_by(StepImage.position)
+        .all()
+    )
+    images_map: dict[int, list[StepImage]] = {}
+    for img in all_images:
+        images_map.setdefault(img.step_id, []).append(img)
+
     def step_to_dict(step: ProcedureStep) -> dict:
         return {
             "id": step.id,
@@ -5168,8 +5378,13 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "required_role": step.required_role,
             "caution": step.caution,
+            "strict_sequence": step.strict_sequence,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
+            "images": [
+                {"attachment_id": img.attachment_id, "caption": img.caption}
+                for img in images_map.get(step.id, [])
+            ],
             "step_kit": [
                 {
                     "part_id": sk.part_id,
@@ -5744,6 +5959,7 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
             instructions=step.get("instructions"),
             required_role=step.get("required_role"),
             caution=step.get("caution"),
+            strict_sequence=step.get("strict_sequence", False),
             requires_signoff=bool(step.get("requires_signoff", False)),
             estimated_duration_minutes=step.get("estimated_duration_minutes"),
             workcenter_id=step.get("workcenter_id"),
@@ -5810,8 +6026,280 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
     )
 
 
-# ============ SERVER ENTRY POINT ============
+# ============ EXECUTION DOCUMENT TOOLS ============
 
+
+def _load_instance(db, args: dict) -> ProcedureInstance | None:
+    """Resolve an execution by execution_id or work_order string."""
+    if args.get("execution_id") is not None:
+        return (
+            db.query(ProcedureInstance).filter(ProcedureInstance.id == args["execution_id"]).first()
+        )
+    if args.get("work_order"):
+        return (
+            db.query(ProcedureInstance)
+            .filter(ProcedureInstance.work_order_number == args["work_order"])
+            .first()
+        )
+    return None
+
+
+def _instance_error(args: dict) -> list[TextContent]:
+    ref = args.get("execution_id") or args.get("work_order") or "(none given)"
+    return json_response({"error": f"Execution {ref} not found"})
+
+
+def _load_step(db, instance: ProcedureInstance, args: dict) -> StepExecution | None:
+    return (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.instance_id == instance.id,
+            StepExecution.step_number == args["step_number"],
+        )
+        .first()
+    )
+
+
+async def _get_execution_state(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    return json_response(build_execution_state(db, instance))
+
+
+async def _join_execution(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    participants = list(instance.participants or [])
+    existing = next((p for p in participants if p.get("user_id") == user.id), None)
+    if existing:
+        existing["last_active"] = datetime.now(UTC).isoformat()
+    else:
+        participants.append(
+            {
+                "user_id": user.id,
+                "user_name": user.name,
+                "joined_at": datetime.now(UTC).isoformat(),
+                "last_step": None,
+            }
+        )
+    instance.participants = participants
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"{user.name} joined {instance.work_order_number or instance.id}",
+            "participants": instance.participants,
+        }
+    )
+
+
+async def _focus_step(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    focus = focus_step(db, instance, step_exec, user)
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"{user.name} at step {step_exec.step_number_str or step_exec.step_number}"
+            ),
+            "step_number": step_exec.step_number,
+            "focused_at": focus.focused_at.isoformat(),
+        }
+    )
+
+
+async def _complete_step(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+    # Completing a step carries a human signature — declared trust.
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    try:
+        result = complete_step_flow(
+            db,
+            instance,
+            step_exec,
+            user.id,
+            data_captured=args.get("data"),
+            notes=args.get("notes"),
+        )
+    except FlowError as err:
+        db.rollback()
+        return json_response({"error": err.message})
+    if result.validation_errors:
+        db.rollback()
+        return json_response({"error": "Validation failed", "details": result.validation_errors})
+
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"Step {step_exec.step_number_str or step_exec.step_number} "
+                f"completed by {user.name}"
+            ),
+            "step_number": step_exec.step_number,
+            "instance_completed": result.instance_completed,
+        }
+    )
+
+
+async def _attach_to_step(db, args: dict) -> list[TextContent]:
+    import mimetypes
+    import uuid
+    from pathlib import Path
+
+    from opal.db.models import Attachment
+
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+
+    file_path = args.get("file_path")
+    content = args.get("content")
+    if not file_path and content is None:
+        return json_response({"error": "Provide file_path or content"})
+
+    if file_path:
+        src = Path(file_path)
+        if not src.is_file():
+            return json_response({"error": f"File not found: {file_path}"})
+        data = src.read_bytes()
+        original_name = src.name
+        mime = mimetypes.guess_type(src.name)[0] or "application/octet-stream"
+    else:
+        data = content.encode()
+        original_name = args.get("filename") or "note.txt"
+        mime = mimetypes.guess_type(original_name)[0] or "text/plain"
+
+    settings = get_active_settings()
+    if len(data) > settings.max_upload_size:
+        return json_response(
+            {"error": f"File too large ({len(data)} bytes, max {settings.max_upload_size})"}
+        )
+
+    stored_name = f"{uuid.uuid4()}{Path(original_name).suffix}"
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    (settings.upload_dir / stored_name).write_bytes(data)
+
+    user_id = args.get("user_id")
+    attachment = Attachment(
+        original_filename=original_name.replace("/", "_").replace("\\", "_")[:200],
+        stored_filename=stored_name,
+        mime_type=mime,
+        size_bytes=len(data),
+        procedure_instance_id=instance.id,
+        step_execution_id=step_exec.id,
+        kind="capture",
+        note=args.get("note"),
+        uploaded_by_id=user_id,
+    )
+    db.add(attachment)
+    db.flush()
+    log_create(db, attachment, user_id)
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"Attached {attachment.original_filename} to step "
+                f"{step_exec.step_number_str or step_exec.step_number}"
+            ),
+            "attachment_id": attachment.id,
+        }
+    )
+
+
+async def _add_step_note(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+
+    note = args["note"].strip()
+    if not note:
+        return json_response({"error": "Note is empty"})
+
+    old = get_model_dict(step_exec)
+    step_exec.notes = f"{step_exec.notes}\n{note}" if step_exec.notes else note
+    log_update(db, step_exec, old, args.get("user_id"))
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": (f"Note added to step {step_exec.step_number_str or step_exec.step_number}"),
+            "notes": step_exec.notes,
+        }
+    )
+
+
+async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
+    """Bind = step containment with the bound step as the boundary. Delegates
+    to _set_containment — the narrowing-note rule, audit comment, and the
+    completion recheck all live there (one home)."""
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+    issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+    if not issue:
+        return json_response({"error": f"Issue {args['issue_id']} not found"})
+
+    containment = issue.containment.value if hasattr(issue.containment, "value") else issue.containment
+    if containment == Containment.STEP.value and issue.containment_step_id == step_exec.id:
+        label = step_exec.step_number_str or str(step_exec.step_number)
+        return json_response(
+            {
+                "success": True,
+                "message": f"{issue.issue_number} already holds COMPLETE of step {label}",
+            }
+        )
+
+    return await _set_containment(
+        db,
+        {
+            "issue_id": issue.id,
+            "containment": Containment.STEP.value,
+            "containment_step_id": step_exec.id,
+            "note": args.get("note"),
+            "user_id": user.id,
+        },
+    )
 
 async def run_server():
     """Run the MCP server."""

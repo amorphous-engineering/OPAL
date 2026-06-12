@@ -16,12 +16,23 @@ from opal.core.designators import (
     generate_work_order_number,
 )
 from opal.core.events import (
+    emit_cursor_moved,
     emit_instance_completed,
     emit_instance_started,
     emit_step_completed,
-    emit_step_started,
     emit_user_joined,
     emit_user_left,
+)
+from opal.core.execution_flow import (
+    FlowError,
+    build_execution_state,
+    check_instance_completion,
+    clear_focus,
+    complete_step_flow,
+    focus_step,
+    held_scope_blockers,
+    mark_instance_in_work,
+    touch_user_presence,
 )
 from opal.core.genealogy import record_assembly_genealogy
 from opal.core.holds import get_hold_state, get_holds_payload
@@ -116,6 +127,9 @@ class InstanceCreate(BaseModel):
     procedure_id: int
     version_id: int | None = Field(None, description="If not provided, uses current version")
     work_order_number: str | None = None
+    quantity: int = Field(
+        1, ge=1, le=100, description="Number of identical work orders to cut (batch cut)"
+    )
     scheduled_start_at: datetime | None = None
     target_completion_at: datetime | None = None
     priority: int = 0
@@ -153,7 +167,10 @@ class NonConformanceCreate(BaseModel):
     """Capture an issue at the moment of discovery during step execution.
 
     The invoking context already knows WO, OP, step, and operator — the
-    payload only carries what the crew observed.
+    payload only carries what the crew observed. containment decides what
+    the issue holds while undispositioned (step | op | wo | advisory); an
+    optional boundary ("resolve by") binds a step-contained hold to a later
+    step, which cannot COMPLETE until disposition.
     """
 
     title: str = Field(..., min_length=1, max_length=255)
@@ -162,6 +179,10 @@ class NonConformanceCreate(BaseModel):
     should_be: str | None = None
     actual: str | None = None
     containment: str = "step"
+    containment_step_number: int | None = Field(
+        None,
+        description="Boundary step order ('resolve by'); None anchors at the raised step",
+    )
     assigned_to_id: int | None = None
 
 
@@ -259,7 +280,11 @@ def create_instance(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> InstanceResponse:
-    """Start a new procedure instance."""
+    """Cut work order(s) from a procedure version.
+
+    quantity > 1 cuts a batch of identical work orders, each with its own
+    generated WO number; the response carries the first cut.
+    """
     # Validate procedure exists
     procedure = (
         db.query(MasterProcedure)
@@ -284,66 +309,71 @@ def create_instance(
             .first()
         )
 
-    # Generate work order number if not provided
-    work_order_number = data.work_order_number or generate_work_order_number(db)
+    if data.work_order_number and data.quantity > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Explicit work order number only applies to a single cut",
+        )
 
-    # Create instance
-    instance = ProcedureInstance(
-        procedure_id=data.procedure_id,
-        version_id=version.id,
-        work_order_number=work_order_number,
-        status=InstanceStatus.PENDING,
-        started_by_id=user_id,
-        scheduled_start_at=data.scheduled_start_at,
-        target_completion_at=data.target_completion_at,
-        priority=data.priority,
-        target_entity=data.target_entity,
-    )
-    db.add(instance)
-    db.flush()
-
-    # Create step executions from version snapshot, preserving hierarchy
+    # Step hierarchy from the version snapshot — shared by every cut.
     steps = version.content.get("steps", [])
-
-    # Build a map of step order -> parent step order for hierarchy
     order_to_parent: dict[int, int | None] = {}
     for step in steps:
         parent_id = step.get("parent_step_id")
         if parent_id:
-            # Find parent's order
             parent_step = next((s for s in steps if s.get("id") == parent_id), None)
             order_to_parent[step["order"]] = parent_step["order"] if parent_step else None
         else:
             order_to_parent[step["order"]] = None
 
-    for step in steps:
-        step_exec = StepExecution(
-            instance_id=instance.id,
-            step_number=step["order"],
-            step_number_str=step.get("step_number", str(step["order"])),
-            level=step.get("level", 0),
-            parent_step_order=order_to_parent.get(step["order"]),
-            status=StepStatus.PENDING,
-        )
-        db.add(step_exec)
-
-    # Auto-allocate output assemblies for BUILD procedures
+    # BUILD procedures auto-allocate output assemblies. An as-built
+    # allocation is a physical reference — draft output parts block the
+    # whole cut (raises DraftPartsBlocked -> 409) before anything exists.
     proc_type = procedure.procedure_type
     if hasattr(proc_type, "value"):
         proc_type = proc_type.value
+    outputs = []
     if proc_type == ProcedureType.BUILD.value:
         outputs = (
             db.query(ProcedureOutput)
             .filter(ProcedureOutput.procedure_id == data.procedure_id)
             .all()
         )
-        # An as-built allocation is a physical reference — draft output
-        # parts block it (raises DraftPartsBlocked -> 409)
         ensure_parts_active(
             db,
             [output.part_id for output in outputs],
-            f"work order {work_order_number} as-built allocation",
+            f"{procedure.name} as-built allocation",
         )
+
+    first_instance: ProcedureInstance | None = None
+    for _ in range(data.quantity):
+        work_order_number = data.work_order_number or generate_work_order_number(db)
+
+        instance = ProcedureInstance(
+            procedure_id=data.procedure_id,
+            version_id=version.id,
+            work_order_number=work_order_number,
+            status=InstanceStatus.CUT,
+            started_by_id=user_id,
+            scheduled_start_at=data.scheduled_start_at,
+            target_completion_at=data.target_completion_at,
+            priority=data.priority,
+            target_entity=data.target_entity,
+        )
+        db.add(instance)
+        db.flush()
+
+        for step in steps:
+            step_exec = StepExecution(
+                instance_id=instance.id,
+                step_number=step["order"],
+                step_number_str=step.get("step_number", str(step["order"])),
+                level=step.get("level", 0),
+                parent_step_order=order_to_parent.get(step["order"]),
+                status=StepStatus.PENDING,
+            )
+            db.add(step_exec)
+
         for output in outputs:
             output_part = db.query(Part).filter(Part.id == output.part_id).first()
             if not output_part:
@@ -380,7 +410,11 @@ def create_instance(
             # Link inventory record to its production
             inv_record.source_production_id = production.id
 
-    log_create(db, instance, user_id)
+        log_create(db, instance, user_id)
+        if first_instance is None:
+            first_instance = instance
+
+    instance = first_instance
     db.commit()
     db.refresh(instance)
 
@@ -489,15 +523,24 @@ def update_instance(
     if data.status is not None:
         try:
             new_status = InstanceStatus(data.status)
-            instance.status = new_status
-
-            # Set timestamps based on status
-            if new_status == InstanceStatus.IN_PROGRESS and not instance.started_at:
-                instance.started_at = datetime.now(UTC)
-            elif new_status in [InstanceStatus.COMPLETED, InstanceStatus.ABORTED]:
-                instance.completed_at = datetime.now(UTC)
         except ValueError as err:
             raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
+
+        # Status is derived from events (first COMPLETE/SKIP starts, last
+        # completion completes); the only settable transition is the abort.
+        current = instance.status.value if hasattr(instance.status, "value") else instance.status
+        if new_status != instance.status:
+            if new_status != InstanceStatus.ABORTED or current not in (
+                InstanceStatus.CUT.value,
+                InstanceStatus.IN_WORK.value,
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot set status {current} -> {new_status.value}; "
+                    "status is derived from events, only an active work order can be aborted",
+                )
+            instance.status = new_status
+            instance.completed_at = datetime.now(UTC)
 
     if data.work_order_number is not None:
         instance.work_order_number = data.work_order_number
@@ -557,156 +600,69 @@ def update_instance(
 # ============ Step Execution ============
 
 
-@router.post("/{instance_id}/steps/{step_number}/start", response_model=StepExecutionResponse)
-async def start_step(
+class FocusMove(BaseModel):
+    """Move the caller's cursor to a step. Presence, not an event."""
+
+    step_number: int
+
+
+@router.post("/{instance_id}/focus")
+async def move_focus(
     instance_id: int,
-    step_number: int,
+    data: FocusMove,
     db: DbSession,
     user_id: CurrentUserId,
-) -> StepExecutionResponse:
-    """Start a step execution."""
+) -> dict:
+    """Move the caller's cursor. Broadcast to the document; never recorded."""
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
-    # Check instance is in progress
-    status_val = instance.status.value if hasattr(instance.status, "value") else instance.status
-    if status_val not in [InstanceStatus.PENDING.value, InstanceStatus.IN_PROGRESS.value]:
-        raise HTTPException(status_code=400, detail="Instance is not active")
-
-    # Start instance if pending
-    if status_val == InstanceStatus.PENDING.value:
-        instance.status = InstanceStatus.IN_PROGRESS
-        instance.started_at = datetime.now(UTC)
-
-        # Transition planned production records to WIP
-        db.query(InventoryProduction).filter(
-            InventoryProduction.procedure_instance_id == instance_id,
-            InventoryProduction.status == ProductionStatus.PLANNED,
-        ).update({InventoryProduction.status: ProductionStatus.WIP})
-
     step_exec = (
         db.query(StepExecution)
-        .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
+        .filter(
+            StepExecution.instance_id == instance_id,
+            StepExecution.step_number == data.step_number,
+        )
         .first()
     )
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-    if step_status != StepStatus.PENDING.value:
-        raise HTTPException(status_code=400, detail="Step already started or completed")
-
-    # Containment gate: a bound future step ("resolve by 3.7") cannot START
-    # while its issue is undispositioned.
-    start_blockers = get_hold_state(db, instance_id).blockers_for_start(step_exec)
-    if start_blockers:
-        raise HTTPException(status_code=400, detail=_hold_blocker_detail("start", start_blockers))
-
-    # Gating. We evaluate against the op-level entry — for sub-steps, that's
-    # the parent op.
-    gate_op_order: int | None = None
-    if step_exec.level == 0:
-        gate_op_order = step_number
-    elif step_exec.parent_step_order is not None:
-        gate_op_order = step_exec.parent_step_order
-
-    if gate_op_order is not None:
-        version = (
-            db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
-        )
-        if version is not None:
-            version_step = next(
-                (s for s in version.content.get("steps", []) if s.get("order") == gate_op_order),
-                None,
-            )
-            dep_orders = (version_step or {}).get("depends_on") or []
-            if dep_orders:
-                terminal = {
-                    StepStatus.COMPLETED.value,
-                    StepStatus.SIGNED_OFF.value,
-                    StepStatus.SKIPPED.value,
-                }
-                exec_lookup = {se.step_number: se for se in instance.step_executions}
-                blockers: list[str] = []
-                for dep_order in dep_orders:
-                    prereq = exec_lookup.get(dep_order)
-                    if prereq is None:
-                        continue
-                    prereq_status = (
-                        prereq.status.value if hasattr(prereq.status, "value") else prereq.status
-                    )
-                    if prereq_status not in terminal:
-                        blockers.append(prereq.step_number_str or str(dep_order))
-                if blockers:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Cannot start: waiting on OP " + ", ".join(blockers),
-                    )
-
-        # Redline gate: any incomplete ad-hoc op attached to the gate op must
-        # finish first. Orphans (NC soft-deleted) are ignored.
-        terminal_redline = {
-            StepStatus.COMPLETED.value,
-            StepStatus.SIGNED_OFF.value,
-            StepStatus.SKIPPED.value,
-        }
-        redline_blockers: list[str] = []
-        redline_rows = (
-            db.query(StepExecution)
-            .join(Issue, Issue.id == StepExecution.ad_hoc_issue_id)
-            .filter(
-                StepExecution.instance_id == instance.id,
-                StepExecution.ad_hoc_host_order == gate_op_order,
-                StepExecution.level == 0,
-                Issue.deleted_at.is_(None),
-            )
-            .all()
-        )
-        for r in redline_rows:
-            r_status = r.status.value if hasattr(r.status, "value") else r.status
-            if r_status not in terminal_redline:
-                redline_blockers.append(r.step_number_str or f"#{r.id}")
-        if redline_blockers:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot start: waiting on redline op " + ", ".join(redline_blockers),
-            )
-
-    step_exec.status = StepStatus.IN_PROGRESS
-    step_exec.started_at = datetime.now(UTC)
-
-    # Get user name for event
     from opal.db.models import User
 
     user = db.query(User).filter(User.id == user_id).first()
-    user_name = user.name if user else None
+    if not user:
+        raise HTTPException(status_code=401, detail="Unknown user")
 
+    user.last_seen_at = datetime.now(UTC)
+    focus = focus_step(db, instance, step_exec, user)
     db.commit()
-    db.refresh(step_exec)
 
-    # Emit real-time events
-    await emit_step_started(instance_id, step_number, user_id, user_name)
-    if status_val == InstanceStatus.PENDING.value:
-        # Instance just started
-        await emit_instance_started(instance_id, instance.procedure_id, user_id, user_name)
+    await emit_cursor_moved(instance_id, data.step_number, user_id, user.name)
 
-    return StepExecutionResponse(
-        id=step_exec.id,
-        step_number=step_exec.step_number,
-        step_number_str=step_exec.step_number_str,
-        level=step_exec.level,
-        parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
-        data_captured=step_exec.data_captured,
-        started_at=step_exec.started_at,
-        completed_at=step_exec.completed_at,
-        completed_by_id=step_exec.completed_by_id,
-        signed_off_at=step_exec.signed_off_at,
-        notes=step_exec.notes,
-        signed_off_by_id=step_exec.signed_off_by_id,
-        duration_seconds=step_exec.duration_seconds,
-    )
+    return {
+        "step_number": data.step_number,
+        "focused_at": focus.focused_at.isoformat(),
+    }
+
+
+@router.get("/{instance_id}/state")
+def get_execution_state(
+    instance_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> dict:
+    """Full document state: steps, presence, holds — the controller's view.
+
+    Polled by the execution document every 5s; identical payload to the MCP
+    get_execution_state tool. The poll doubles as the presence heartbeat.
+    """
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    touch_user_presence(db, user_id)
+    return build_execution_state(db, instance)
 
 
 @router.post("/{instance_id}/steps/{step_number}/complete", response_model=StepExecutionResponse)
@@ -730,83 +686,24 @@ async def complete_step(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-    if step_status in [StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value]:
-        raise HTTPException(status_code=400, detail="Step already completed")
-
-    # Accept PENDING, IN_PROGRESS, or AWAITING_SIGNOFF (parent OPs whose children are done)
-    if step_status not in [
-        StepStatus.PENDING.value,
-        StepStatus.IN_PROGRESS.value,
-        StepStatus.AWAITING_SIGNOFF.value,
-    ]:
-        raise HTTPException(status_code=400, detail=f"Cannot complete step in {step_status} status")
-
-    # Containment gate: COMPLETE is a commitment moment — it checks the
-    # undispositioned-issue state of its scope. A signed disposition releases
-    # this immediately.
-    complete_blockers = get_hold_state(db, instance_id).blockers_for_complete(step_exec)
-    if complete_blockers:
-        raise HTTPException(
-            status_code=400, detail=_hold_blocker_detail("complete", complete_blockers)
+    try:
+        result = complete_step_flow(
+            db,
+            instance,
+            step_exec,
+            user_id,
+            data_captured=data.data_captured,
+            notes=data.notes,
         )
+    except FlowError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.message) from err
+    if result.validation_errors:
+        raise HTTPException(status_code=422, detail=result.validation_errors)
 
-    # If step wasn't started, start it now
-    if step_status == StepStatus.PENDING.value:
-        step_exec.started_at = datetime.now(UTC)
-
-    # Server-side data capture validation
-    version = db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
-    if data.data_captured and version:
-        step_data = next(
-            (s for s in version.content.get("steps", []) if s["order"] == step_number), {}
-        )
-        schema = step_data.get("required_data_schema") or {}
-        fields = schema.get("fields", [])
-        errors: list[str] = []
-        for field in fields:
-            name = field.get("name")
-            val = data.data_captured.get(name)
-            if field.get("required") and (val is None or val == ""):
-                errors.append(f"{field.get('label', name)} is required")
-            if field.get("type") == "number" and val is not None and val != "":
-                try:
-                    num_val = float(val)
-                except (TypeError, ValueError):
-                    errors.append(f"{field.get('label', name)}: invalid number")
-                    continue
-                if field.get("min") is not None and num_val < field["min"]:
-                    errors.append(
-                        f"{field.get('label', name)}: {num_val} below minimum {field['min']}"
-                    )
-                if field.get("max") is not None and num_val > field["max"]:
-                    errors.append(
-                        f"{field.get('label', name)}: {num_val} above maximum {field['max']}"
-                    )
-        if errors:
-            raise HTTPException(status_code=422, detail=errors)
-
-    step_exec.status = StepStatus.COMPLETED
-    step_exec.completed_at = datetime.now(UTC)
-    step_exec.completed_by_id = user_id
-    if data.data_captured:
-        step_exec.data_captured = data.data_captured
-    if data.notes is not None:
-        step_exec.notes = data.notes
-
-    # Get user name for event
     from opal.db.models import User
 
     user = db.query(User).filter(User.id == user_id).first()
     user_name = user.name if user else None
-
-    # Track old status to detect completion
-    old_instance_status = (
-        instance.status.value if hasattr(instance.status, "value") else instance.status
-    )
-
-    # Check if procedure is complete (considering contingency rules)
-    _check_instance_completion(instance, db)
 
     db.commit()
     db.refresh(step_exec)
@@ -814,16 +711,12 @@ async def complete_step(
 
     # Emit real-time events
     await emit_step_completed(instance_id, step_number, user_id, user_name)
-
-    # Check if instance just completed
-    new_instance_status = (
-        instance.status.value if hasattr(instance.status, "value") else instance.status
-    )
-    if (
-        old_instance_status != InstanceStatus.COMPLETED.value
-        and new_instance_status == InstanceStatus.COMPLETED.value
-    ):
-        await emit_instance_completed(instance_id, instance.procedure_id, new_instance_status)
+    if result.instance_started:
+        await emit_instance_started(instance_id, instance.procedure_id, user_id, user_name)
+    if result.instance_completed:
+        await emit_instance_completed(
+            instance_id, instance.procedure_id, InstanceStatus.COMPLETED.value
+        )
 
     return StepExecutionResponse(
         id=step_exec.id,
@@ -899,7 +792,7 @@ class StepSkip(BaseModel):
 
 
 @router.post("/{instance_id}/steps/{step_number}/skip", response_model=StepExecutionResponse)
-def skip_step(
+async def skip_step(
     instance_id: int,
     step_number: int,
     data: StepSkip,
@@ -911,6 +804,10 @@ def skip_step(
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
+    inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
+    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
+        raise HTTPException(status_code=400, detail="Instance is not active")
+
     step_exec = (
         db.query(StepExecution)
         .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
@@ -920,7 +817,7 @@ def skip_step(
         raise HTTPException(status_code=404, detail="Step not found")
 
     step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-    if step_status == StepStatus.COMPLETED.value:
+    if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
         raise HTTPException(status_code=400, detail="Cannot skip completed step")
 
     # Containment gate: SKIP is a terminal commitment, same scope check as
@@ -929,6 +826,16 @@ def skip_step(
     if skip_blockers:
         raise HTTPException(status_code=400, detail=_hold_blocker_detail("skip", skip_blockers))
 
+    # Skip is a commitment moment too — held work cannot be skipped around.
+    holds = held_scope_blockers(db, instance, step_exec)
+    if holds:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot skip: " + "; ".join(b.message for b in holds),
+        )
+
+    instance_started = mark_instance_in_work(db, instance)
+
     step_exec.status = StepStatus.SKIPPED
     step_exec.completed_at = datetime.now(UTC)
     step_exec.completed_by_id = user_id
@@ -936,10 +843,13 @@ def skip_step(
         step_exec.data_captured = {"skip_reason": data.reason}
 
     # Check if procedure is complete (considering contingency rules)
-    _check_instance_completion(instance, db)
+    check_instance_completion(db, instance)
 
     db.commit()
     db.refresh(step_exec)
+
+    if instance_started:
+        await emit_instance_started(instance_id, instance.procedure_id, user_id, None)
 
     return StepExecutionResponse(
         id=step_exec.id,
@@ -975,6 +885,10 @@ async def signoff_step(
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
+
+    inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
+    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
+        raise HTTPException(status_code=400, detail="Instance is not active")
 
     step_exec = (
         db.query(StepExecution)
@@ -1017,7 +931,7 @@ async def signoff_step(
     )
 
     # Check if procedure is complete
-    _check_instance_completion(instance, db)
+    check_instance_completion(db, instance)
 
     db.commit()
     db.refresh(step_exec)
@@ -1049,96 +963,6 @@ async def signoff_step(
         signed_off_by_id=step_exec.signed_off_by_id,
         duration_seconds=step_exec.duration_seconds,
     )
-
-
-def _check_instance_completion(instance: ProcedureInstance, db: DbSession) -> None:
-    """Check if instance should be marked as completed.
-
-    Rules:
-    - All non-contingency steps must be completed, signed_off, or skipped
-    - Parent steps auto-complete to COMPLETED when all children are done
-    - All step types accept COMPLETED, SIGNED_OFF, or SKIPPED as done
-    - Contingency steps are optional (only required if explicitly started)
-    """
-    version = db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
-    if not version:
-        return
-
-    version_steps = {s["order"]: s for s in version.content.get("steps", [])}
-    all_steps = db.query(StepExecution).filter(StepExecution.instance_id == instance.id).all()
-
-    # Containment gate: held OPs must not auto-complete, and a held WO must
-    # not close out, even when every step is terminal.
-    hold_state = get_hold_state(db, instance.id)
-
-    # First pass: check if any parent steps should auto-complete when all children are done
-    for step_exec in all_steps:
-        if step_exec.level == 0:  # This is a parent OP
-            # Find all children of this parent
-            children = [s for s in all_steps if s.parent_step_order == step_exec.step_number]
-
-            if children:  # Has sub-steps
-                step_status = (
-                    step_exec.status.value
-                    if hasattr(step_exec.status, "value")
-                    else step_exec.status
-                )
-
-                # If parent is still PENDING or IN_PROGRESS, check if all children are done
-                if step_status in [StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value]:
-                    if hold_state.blockers_for_complete(step_exec):
-                        continue
-                    all_children_done = all(
-                        (c.status.value if hasattr(c.status, "value") else c.status)
-                        in [StepStatus.COMPLETED.value, StepStatus.SKIPPED.value]
-                        for c in children
-                    )
-                    if all_children_done:
-                        step_exec.status = StepStatus.COMPLETED
-                        step_exec.completed_at = datetime.now(UTC)
-
-                        # Use the last child's completer
-                        def _to_aware(dt: datetime) -> datetime:
-                            return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
-
-                        last_child = max(
-                            (c for c in children if c.completed_at),
-                            key=lambda c: _to_aware(c.completed_at),
-                            default=None,
-                        )
-                        if last_child and last_child.completed_by_id:
-                            step_exec.completed_by_id = last_child.completed_by_id
-
-    # Second pass: check instance completion
-    for step_exec in all_steps:
-        step_data = version_steps.get(step_exec.step_number, {})
-        is_contingency = step_data.get("is_contingency", False)
-        step_status = (
-            step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-        )
-
-        # All step types accept COMPLETED, SIGNED_OFF, or SKIPPED as done
-        done_statuses = [
-            StepStatus.COMPLETED.value,
-            StepStatus.SIGNED_OFF.value,
-            StepStatus.SKIPPED.value,
-        ]
-
-        # Non-contingency steps must be done
-        if not is_contingency and step_status not in done_statuses:
-            return  # Not complete yet
-
-        # Contingency steps that were started must be completed
-        if is_contingency and step_status == StepStatus.IN_PROGRESS.value:
-            return  # In-progress contingency blocks completion
-
-    # An undispositioned wo-containment issue holds the close-out.
-    if hold_state.wo_blocked:
-        return
-
-    # All required steps are done
-    instance.status = InstanceStatus.COMPLETED
-    instance.completed_at = datetime.now(UTC)
 
 
 @router.post("/{instance_id}/steps/{step_number}/nc", status_code=201)
@@ -1178,6 +1002,25 @@ def log_non_conformance(
             status_code=400, detail=f"Invalid containment: {data.containment}"
         ) from err
 
+    # Optional boundary ("resolve by"): a step-contained hold may bind to a
+    # later step; None anchors at the raised step.
+    containment_step_id = None
+    if data.containment_step_number is not None:
+        boundary = (
+            db.query(StepExecution)
+            .filter(
+                StepExecution.instance_id == instance_id,
+                StepExecution.step_number == data.containment_step_number,
+            )
+            .first()
+        )
+        if boundary is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Boundary step {data.containment_step_number} not found",
+            )
+        containment_step_id = boundary.id
+
     issue = Issue(
         issue_number=generate_issue_number(db),
         title=data.title,
@@ -1186,6 +1029,7 @@ def log_non_conformance(
         status=IssueStatus.OPEN,
         priority=priority,
         containment=containment,
+        containment_step_id=containment_step_id,
         should_be=data.should_be,
         actual=data.actual,
         procedure_id=instance.procedure_id,
@@ -2087,8 +1931,9 @@ async def leave_execution(
     leaving_user = next((p for p in participants if p.get("user_id") == user_id), None)
     user_name = leaving_user.get("user_name", "Unknown") if leaving_user else "Unknown"
 
-    # Remove user from participants
+    # Remove user from participants and drop their cursor
     instance.participants = [p for p in participants if p.get("user_id") != user_id]
+    clear_focus(db, instance_id, user_id)
     db.commit()
 
     # Emit user left event

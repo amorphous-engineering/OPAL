@@ -3,30 +3,75 @@
 
 {% block body_class %}exec-detail{% endblock %}
 
+{% block head_extra %}
+<link rel="stylesheet" href="{{ static_url('css/execdoc.css') }}">
+{% endblock %}
+
 {% block breadcrumbs %}
 {{ ok.crumb("HOME", "/") }}
 {{ ok.crumb("EXECUTIONS", "/executions") }}
-{{ ok.crumb(instance.work_order_number or ("#" ~ instance.id)) }}
+{{ ok.crumb(instance.work_order_number or "EXECUTION") }}
 {% endblock %}
 
 {% block content %}
 {% set inst_status = instance.status.value if instance.status.value is defined else instance.status %}
 
-{# Tab navigation #}
+{# ============ Header: identity · progress · presence · actions ============ #}
+<div class="exec-head">
+    <span class="exec-head-wo mono">{{ instance.work_order_number or 'EXECUTION' }}</span>
+    <a class="exec-head-proc" href="/procedures/{{ instance.procedure_id }}">{{ instance.procedure.name }}</a>
+    <span class="mono text-muted">v{{ version.version_number if version else '—' }}</span>
+    {{ ok.status(inst_status | upper | replace('_', ' ')) }}
+    <span class="exec-head-progress mono" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span>
+    <span class="exec-progressbar"><span class="exec-progressbar-fill" data-progress-fill
+        style="width: {{ (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 }}%"></span></span>
+    <span class="exec-online mono" data-online onclick="toggleRosterPop(event)">0 ONLINE</span>
+    <span class="exec-head-spacer"></span>
+    <span class="exec-head-actions">
+        {% if inst_status == 'completed' %}
+        {{ ok.btn("REPORT", href="/executions/" ~ instance.id ~ "/report", size="sm", attrs='target="_blank" rel="noopener"') }}
+        {% endif %}
+        {% if inst_status in ['cut', 'in_work'] %}
+        <button class="btn btn-sm btn-danger" onclick="abortExecution()">ABORT</button>
+        {% endif %}
+        <button class="btn btn-sm" id="dockbar-toggle" onclick="toggleDockbar()" title="Docked current-step bar">BAR</button>
+        <button class="btn btn-sm" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">···</button>
+    </span>
+</div>
+
+{# Roster popover — the only roster when the rails are hidden. #}
+<div class="exec-roster-pop part-readout mono" id="exec-roster-pop" hidden></div>
+
+{# Compact meta readout — every fact the META tab held. #}
+<div class="exec-meta-popover part-readout mono" id="exec-meta-popover" hidden>
+    <div class="ro-row"><span class="ro-label">STATUS</span><span>{{ inst_status | upper | replace('_', ' ') }}</span></div>
+    <div class="ro-row"><span class="ro-label">PROCEDURE</span><span>{{ instance.procedure.name }}</span></div>
+    <div class="ro-row"><span class="ro-label">VERSION</span><span>v{{ version.version_number if version else '—' }}</span></div>
+    <div class="ro-row"><span class="ro-label">CREATED</span><span>{{ instance.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>
+    <div class="ro-row"><span class="ro-label">STARTED</span><span>{% if instance.started_at %}{{ instance.started_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
+    <div class="ro-row"><span class="ro-label">COMPLETED</span><span>{% if instance.completed_at %}{{ instance.completed_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
+    <div class="ro-row"><span class="ro-label">LAST ACTIVITY</span><span>{% if last_activity_at %}{{ last_activity_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
+    <div class="ro-row"><span class="ro-label">STARTED BY</span><span>{{ instance.started_by_user.name if instance.started_by_user else '—' }}</span></div>
+    <div class="ro-row"><span class="ro-label">VERSION AUTHOR</span><span>{{ version.created_by_user.name if version and version.created_by_user else '—' }}</span></div>
+    <div class="ro-row"><span class="ro-label">VERSION CREATED</span><span>{% if version %}{{ version.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
+    {% if instance.scheduled_start_at %}<div class="ro-row"><span class="ro-label">SCHEDULED START</span><span>{{ instance.scheduled_start_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
+    {% if instance.target_completion_at %}<div class="ro-row"><span class="ro-label">TARGET COMPLETION</span><span>{{ instance.target_completion_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
+    {% if instance.target_entity %}<div class="ro-row"><span class="ro-label">TARGET ENTITY</span><span>[{{ (instance.target_entity.entity_type or '?') | upper }}] {{ instance.target_entity.entity_label or instance.target_entity.entity_id }}</span></div>{% endif %}
+</div>
+
+{# Tab navigation — the document is the landing; META and OPERATIONS are gone. #}
 <div class="exec-tabs" role="tablist">
     {% set tabs = [
-        ('meta',       'META'),
-        ('operations', 'OPERATIONS'),
-        ('data',       'DATA'),
-        ('bom',        'BOM'),
-        ('issues',     'ISSUES' ~ (' (' ~ linked_issues|length ~ ')' if linked_issues else '')),
-        ('kitting',    'KITTING'),
+        ('document', 'DOCUMENT'),
+        ('data',     'DATA'),
+        ('bom',      'BOM'),
+        ('issues',   'ISSUES' ~ (' (' ~ linked_issues|length ~ ')' if linked_issues else '')),
+        ('kitting',  'KITTING'),
     ] %}
     {% for slug, label in tabs %}
-    {% set href = '?tab=' ~ slug ~ ('&op=' ~ selected_op_order if slug == 'operations' and selected_op_order else '') %}
-    <a href="{{ href }}"
+    <a href="?tab={{ slug }}"
        class="exec-tab{% if tab == slug %} active{% endif %}"
-       hx-get="{{ href }}"
+       hx-get="?tab={{ slug }}"
        hx-target=".exec-tab-content"
        hx-select=".exec-tab-content > *"
        hx-swap="innerHTML scroll:false"
@@ -41,86 +86,150 @@
     {% include 'executions/tabs/' ~ tab ~ '.html' %}
 </div>
 
-<!-- Anomaly capture modal (§3) — context pre-filled; the form asks nothing the
-     invoking step already knows. Confirmation is the state change itself. -->
-<div id="nc-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 560px; max-height: 90vh; overflow-y: auto;">
+{# Docked bar — all controls for the focused step. #}
+{% include 'executions/_dockbar.html' %}
+
+{# ============ Modals ============ #}
+
+<!-- Issue capture (creates an NC with containment) -->
+<div id="anomaly-modal" class="execdoc-modal" hidden>
+    <div class="execdoc-modal-box">
         <div class="panel">
-            <div class="panel-header">ANOMALY <span class="mono text-muted" id="nc-context-label" style="font-size: 0.75rem;"></span></div>
+            <div class="panel-header">
+                <span>ANOMALY</span>
+                <span class="mono text-muted" id="anomaly-step-label"></span>
+            </div>
             <div class="panel-body">
-                <form id="nc-form" onsubmit="submitNC(event)">
-                    <input type="hidden" id="nc-step" name="step_number">
-                    <input type="hidden" id="nc-step-execution-id">
+                <form id="anomaly-form" onsubmit="submitAnomaly(event)">
+                    <input type="hidden" id="anomaly-step" name="step_number">
                     <div class="form-group">
-                        <label class="form-label" for="nc-title">TITLE *</label>
-                        <input type="text" id="nc-title" name="title" class="form-input" required maxlength="255">
+                        <label class="form-label" for="anomaly-title">TITLE *</label>
+                        <input type="text" id="anomaly-title" class="form-input" maxlength="255" required>
                     </div>
-                    <div style="display: flex; gap: var(--space-md);">
-                        <div class="form-group" style="flex: 1;">
-                            <label class="form-label" for="nc-should-be">SHOULD BE</label>
-                            <textarea id="nc-should-be" class="form-textarea" rows="2"></textarea>
+                    <div class="anomaly-pair">
+                        <div class="form-group">
+                            <label class="form-label" for="anomaly-should-be">SHOULD BE</label>
+                            <input type="text" id="anomaly-should-be" class="form-input">
                         </div>
-                        <div class="form-group" style="flex: 1;">
-                            <label class="form-label" for="nc-actual">IS</label>
-                            <textarea id="nc-actual" class="form-textarea" rows="2"></textarea>
+                        <div class="form-group">
+                            <label class="form-label" for="anomaly-is">IS</label>
+                            <input type="text" id="anomaly-is" class="form-input">
                         </div>
                     </div>
-                    <div style="display: flex; gap: var(--space-md);">
-                        <div class="form-group" style="flex: 1;">
-                            <label class="form-label" for="nc-priority">PRIORITY</label>
-                            <select id="nc-priority" name="priority" class="form-select">
+                    <div class="anomaly-pair">
+                        <div class="form-group">
+                            <label class="form-label" for="anomaly-priority">PRIORITY</label>
+                            <select id="anomaly-priority" class="form-select">
                                 <option value="low">LOW</option>
                                 <option value="medium" selected>MEDIUM</option>
                                 <option value="high">HIGH</option>
                                 <option value="critical">CRITICAL</option>
                             </select>
                         </div>
-                        <div class="form-group" style="flex: 1;">
-                            <label class="form-label" for="nc-containment">HOLDS</label>
-                            <select id="nc-containment" name="containment" class="form-select">
-                                <option value="step" selected>STEP</option>
-                                <option value="op">OP</option>
-                                <option value="wo">WO</option>
-                                <option value="advisory">ADVISORY</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="flex: 1;">
-                            <label class="form-label" for="nc-assign">ASSIGN</label>
-                            <select id="nc-assign" name="assigned_to_id" class="form-select">
-                                <option value="">(unassigned)</option>
-                                {% for u in users %}
-                                <option value="{{ u.id }}">{{ u.name or u.email }}</option>
-                                {% endfor %}
+                        <div class="form-group">
+                            <label class="form-label" for="anomaly-containment">CONTAINMENT</label>
+                            <select id="anomaly-containment" class="form-select">
+                                <option value="step" selected>STEP — holds this step's COMPLETE</option>
+                                <option value="op">OP — holds the operation's COMPLETE</option>
+                                <option value="wo">WO — holds work order close-out</option>
+                                <option value="advisory">ADVISORY — holds nothing</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="nc-file">ATTACHMENTS</label>
-                        <div style="display: flex; gap: var(--space-sm); align-items: center;">
-                            <input type="file" id="nc-file" class="form-input" multiple style="flex: 1;">
-                            <button type="button" class="btn" onclick="document.getElementById('nc-camera').click()">CAMERA</button>
-                            <span id="nc-camera-count" class="mono text-muted" style="display: none;"></span>
-                        </div>
-                        <input type="file" id="nc-camera" accept="image/*" capture="environment" style="display: none;">
+                        <label class="form-label" for="anomaly-boundary">RESOLVE BY</label>
+                        <select id="anomaly-boundary" class="form-select">
+                            <option value="" selected>— this step</option>
+                            {% for op_data in ops %}{% for sub in (op_data.sub_steps or [op_data.step]) %}{% if sub.status == 'pending' %}
+                            <option value="{{ sub.order }}">{{ sub.step_number if '.' in sub.step_number else (op_data.step.step_number ~ ('.' ~ sub.step_number if sub.order != op_data.step.order else '')) }} {{ sub.title }}</option>
+                            {% endif %}{% endfor %}{% endfor %}
+                        </select>
                     </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        <button type="button" class="btn" onclick="hideNCModal()">CANCEL</button>
-                        <button type="submit" class="btn btn-primary" id="nc-submit">RAISE</button>
+                    <div class="form-group">
+                        <label class="form-label" for="anomaly-photos">EVIDENCE</label>
+                        <input type="file" id="anomaly-photos" class="form-input" accept="image/*" capture="environment" multiple>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="anomaly-assign">ASSIGN</label>
+                        <select id="anomaly-assign" class="form-select">
+                            <option value="">—</option>
+                            {% for u in active_users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="execdoc-modal-actions">
+                        <button type="button" class="btn" onclick="hideAnomalyModal()">CANCEL</button>
+                        <button type="submit" class="btn btn-primary">RAISE</button>
                     </div>
                 </form>
-                <div id="nc-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+                <div id="anomaly-error" class="text-red" hidden></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Redline Op Modal -->
-<div id="redline-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 640px; max-height: 86vh; overflow-y: auto;">
+<!-- Skip -->
+<div id="skip-modal" class="execdoc-modal" hidden>
+    <div class="execdoc-modal-box execdoc-modal-sm">
+        <div class="panel">
+            <div class="panel-header">SKIP STEP</div>
+            <div class="panel-body">
+                <form id="skip-form" onsubmit="submitSkip(event)">
+                    <input type="hidden" id="skip-step" name="step_number">
+                    <p class="skip-target">Skip <strong id="skip-step-title"></strong></p>
+                    <div class="form-group">
+                        <label class="form-label" for="skip-reason">REASON</label>
+                        <textarea id="skip-reason" class="form-textarea" rows="2"></textarea>
+                    </div>
+                    <div class="execdoc-modal-actions">
+                        <button type="button" class="btn" onclick="hideSkipModal()">CANCEL</button>
+                        <button type="submit" class="btn text-yellow">SKIP STEP</button>
+                    </div>
+                </form>
+                <div id="skip-error" class="text-red" hidden></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Attach (execution capture: evidence) -->
+<div id="attach-modal" class="execdoc-modal" hidden>
+    <div class="execdoc-modal-box execdoc-modal-sm">
+        <div class="panel">
+            <div class="panel-header">
+                <span>ATTACH</span>
+                <span class="mono text-muted" id="attach-step-label"></span>
+            </div>
+            <div class="panel-body">
+                <form id="attach-form" onsubmit="submitAttach(event)">
+                    <input type="hidden" id="attach-se-id">
+                    <div class="form-group">
+                        <input type="file" id="attach-file" class="form-input" capture="environment" multiple required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="attach-note">NOTE</label>
+                        <input type="text" id="attach-note" class="form-input" maxlength="500">
+                    </div>
+                    <label class="bar-check" id="attach-closeout-row">
+                        <input type="checkbox" id="attach-closeout"> <span class="mono">CLOSEOUT</span>
+                    </label>
+                    <div class="execdoc-modal-actions">
+                        <button type="button" class="btn" onclick="hideAttachModal()">CANCEL</button>
+                        <button type="submit" class="btn btn-primary">UPLOAD</button>
+                    </div>
+                </form>
+                <div id="attach-error" class="text-red" hidden></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Redline Op -->
+<div id="redline-modal" class="execdoc-modal" hidden>
+    <div class="execdoc-modal-box">
         <div class="panel">
             <div class="panel-header">
                 <span>ADD REDLINE OP</span>
-                <span class="mono text-muted" id="redline-host-label" style="font-size: 0.75rem;"></span>
+                <span class="mono text-muted" id="redline-host-label"></span>
             </div>
             <div class="panel-body">
                 <form id="redline-form" onsubmit="submitRedline(event)">
@@ -131,885 +240,37 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="redline-title">REDLINE OP TITLE</label>
-                        <input type="text" id="redline-title" class="form-input" maxlength="255" placeholder="e.g. Rework defective fastener" required>
+                        <input type="text" id="redline-title" class="form-input" maxlength="255" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">SUB-STEPS</label>
                         <div id="redline-steps"></div>
-                        <button type="button" class="btn btn-sm" onclick="addRedlineStep()" style="margin-top: var(--space-xs);">+ ADD STEP</button>
+                        <button type="button" class="btn btn-sm" onclick="addRedlineStep()">+ ADD STEP</button>
                     </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end; margin-top: var(--space-md);">
+                    <div class="execdoc-modal-actions">
                         <button type="button" class="btn" onclick="hideRedlineModal()">CANCEL</button>
                         <button type="submit" class="btn btn-primary">CREATE REDLINE</button>
                     </div>
                 </form>
-                <div id="redline-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+                <div id="redline-error" class="text-red" hidden></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Skip Modal -->
-<div id="skip-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">SKIP STEP</div>
-            <div class="panel-body">
-                <form id="skip-form" onsubmit="submitSkip(event)">
-                    <input type="hidden" id="skip-step" name="step_number">
-                    <p style="margin-bottom: var(--space-md);">
-                        Skip step: <strong id="skip-step-title"></strong>
-                    </p>
-                    <div class="form-group">
-                        <label class="form-label" for="skip-reason">REASON (optional)</label>
-                        <textarea id="skip-reason" name="reason" class="form-textarea" rows="2" placeholder="Why is this step being skipped?"></textarea>
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        <button type="button" class="btn" onclick="hideSkipModal()">CANCEL</button>
-                        <button type="submit" class="btn text-yellow">SKIP STEP</button>
-                    </div>
-                </form>
-                <div id="skip-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
-    </div>
+<!-- Lightbox -->
+<div id="lightbox" class="execdoc-lightbox" hidden onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+    <div id="lightbox-caption" class="mono"></div>
 </div>
 
 <script>
-const instanceId = {{ instance.id }};
-
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
-
-async function startStep(stepNumber) {
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/start`, {
-            method: 'POST',
-            headers: getHeaders(),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to start step'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
-}
-
-async function completeStep(stepNumber) {
-    const data = {};
-
-    const stepEl = document.getElementById('step-' + stepNumber);
-    if (stepEl) {
-        const fields = stepEl.querySelectorAll('[data-capture-field]');
-        if (fields.length > 0) {
-            data.data_captured = {};
-            fields.forEach(f => {
-                const name = f.dataset.captureField;
-                if (f.type === 'checkbox') data.data_captured[name] = f.checked;
-                else if (f.type === 'number') data.data_captured[name] = f.value ? parseFloat(f.value) : null;
-                else if (f.dataset.captureFieldType === 'photo') {
-                    // Photo fields store a JSON array of attachment ids
-                    // (single-photo fields are still a 1-element array).
-                    let ids = [];
-                    try { ids = JSON.parse(f.value || '[]'); } catch (_) { ids = []; }
-                    if (!Array.isArray(ids)) ids = ids ? [ids] : [];
-                    data.data_captured[name] = ids.length ? ids : null;
-                }
-                else data.data_captured[name] = f.value || null;
-            });
-
-            let errors = [];
-            fields.forEach(f => {
-                const name = f.dataset.captureField;
-                const val = data.data_captured[name];
-                if (f.hasAttribute('required')
-                    && (val === null || val === '' || val === undefined
-                        || (Array.isArray(val) && val.length === 0))) {
-                    const label = f.closest('.form-group')?.querySelector('.form-label');
-                    const fieldName = label ? label.textContent.replace(/\s*\*\s*$/, '').replace(/\s*\(.*\)\s*$/, '').trim() : name;
-                    errors.push(fieldName + ' is required');
-                }
-                if (f.type === 'number' && val !== null && val !== undefined && val !== '') {
-                    const numVal = parseFloat(val);
-                    if (f.hasAttribute('min') && numVal < parseFloat(f.min)) {
-                        errors.push(name + ': value ' + numVal + ' below minimum ' + f.min);
-                    }
-                    if (f.hasAttribute('max') && numVal > parseFloat(f.max)) {
-                        errors.push(name + ': value ' + numVal + ' above maximum ' + f.max);
-                    }
-                }
-            });
-            if (errors.length > 0) {
-                alert('Cannot complete step:\n' + errors.join('\n'));
-                return;
-            }
-        }
-
-        const notesEl = stepEl.querySelector('.step-notes-input');
-        if (notesEl && notesEl.value.trim()) {
-            data.notes = notesEl.value.trim();
-        }
-    }
-
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/complete`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to complete step'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
-}
-
-async function signoffStep(stepNumber) {
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/signoff`, {
-            method: 'POST',
-            headers: getHeaders(),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to sign off step'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
-}
-
-async function saveNotes(stepNumber, value) {
-    try {
-        await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/notes`, {
-            method: 'PATCH',
-            headers: getHeaders(),
-            body: JSON.stringify({ notes: value.trim() || null }),
-        });
-    } catch (e) {
-        console.error('Failed to save notes:', e);
-    }
-}
-
-async function abortExecution() {
-    if (!confirm('Are you sure you want to abort this execution?')) return;
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}`, {
-            method: 'PATCH',
-            headers: getHeaders(),
-            body: JSON.stringify({ status: 'aborted' }),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(formatApiError(error.detail, 'Failed to abort execution'));
-        }
-    } catch (e) {
-        alert('Network error: ' + e.message);
-    }
-}
-
-function showNCModal(stepNumber, stepExecutionId, stepLabel) {
-    document.getElementById('nc-step').value = stepNumber;
-    document.getElementById('nc-step-execution-id').value = stepExecutionId || '';
-    document.getElementById('nc-context-label').textContent = stepLabel ? ('STEP ' + stepLabel) : '';
-    document.getElementById('nc-error').style.display = 'none';
-    document.getElementById('nc-modal').style.display = 'block';
-    document.getElementById('nc-title').focus();
-}
-function hideNCModal() {
-    document.getElementById('nc-modal').style.display = 'none';
-    document.getElementById('nc-form').reset();
-    ncCameraShots.length = 0;
-    document.getElementById('nc-camera-count').style.display = 'none';
-}
-
-// Camera shots accumulate across captures; the count is the readout.
-const ncCameraShots = [];
-document.getElementById('nc-camera').addEventListener('change', function () {
-    for (const f of this.files) ncCameraShots.push(f);
-    this.value = '';
-    const counter = document.getElementById('nc-camera-count');
-    counter.textContent = ncCameraShots.length + ' captured';
-    counter.style.display = 'inline';
-});
-
-// ---- Toast: the capture confirmation is the state change itself; the toast
-// just names the ticket. Survives the reload via sessionStorage. ----
-function showToast(text, href) {
-    const el = document.createElement('div');
-    el.className = 'mono';
-    el.style.cssText = 'position:fixed;bottom:16px;right:16px;background:var(--bg-secondary);'
-        + 'border:1px solid var(--accent-green);padding:8px 14px;z-index:10000;font-size:0.85rem;';
-    if (href) {
-        const a = document.createElement('a');
-        a.href = href;
-        a.textContent = text + ' →';
-        el.appendChild(a);
-    } else {
-        el.textContent = text;
-    }
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 8000);
-}
-
-function queueToast(text, href) {
-    sessionStorage.setItem('opal-toast', JSON.stringify({ text, href }));
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const queued = sessionStorage.getItem('opal-toast');
-    if (queued) {
-        sessionStorage.removeItem('opal-toast');
-        try { const t = JSON.parse(queued); showToast(t.text, t.href); } catch (_) {}
-    }
-    // Disposition signing releases holds live: held rows recover their
-    // controls without user action.
-    if (window.opalEvents) {
-        window.opalEvents.on('issue_dispositioned', (data) => {
-            if (data.instance_id === instanceId) window.location.reload();
-        });
-    }
-    // Spawn-redline deep link from the issue page: open the modal with the
-    // authorizing NC preselected.
-    const redlineIssue = new URLSearchParams(window.location.search).get('redline_issue');
-    if (redlineIssue) {
-        const btn = document.getElementById('redline-open-btn');
-        if (btn) {
-            btn.click();
-            const sel = document.getElementById('redline-issue-id');
-            if (sel) sel.value = redlineIssue;
-        }
-    }
-});
-
-async function submitNC(event) {
-    event.preventDefault();
-    const form = document.getElementById('nc-form');
-    const errorDiv = document.getElementById('nc-error');
-    const submitBtn = document.getElementById('nc-submit');
-    errorDiv.style.display = 'none';
-    submitBtn.disabled = true;
-    const stepNumber = form.step_number.value;
-    const assignVal = document.getElementById('nc-assign').value;
-    const data = {
-        title: document.getElementById('nc-title').value,
-        priority: document.getElementById('nc-priority').value,
-        should_be: document.getElementById('nc-should-be').value || null,
-        actual: document.getElementById('nc-actual').value || null,
-        containment: document.getElementById('nc-containment').value,
-        assigned_to_id: assignVal ? parseInt(assignVal) : null,
-    };
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/nc`, {
-            method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to raise issue');
-            errorDiv.style.display = 'block';
-            submitBtn.disabled = false;
-            return;
-        }
-        const issue = await response.json();
-
-        // Evidence at discovery: upload everything attached, linked to the
-        // new issue and the raising step.
-        const stepExecutionId = document.getElementById('nc-step-execution-id').value;
-        const files = [
-            ...document.getElementById('nc-file').files,
-            ...ncCameraShots,
-        ];
-        const failed = [];
-        for (const file of files) {
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('issue_id', issue.id);
-            fd.append('procedure_instance_id', instanceId);
-            if (stepExecutionId) fd.append('step_execution_id', stepExecutionId);
-            try {
-                const up = await fetch('/api/attachments/upload', { method: 'POST', body: fd });
-                if (!up.ok) failed.push(file.name);
-            } catch (_) { failed.push(file.name); }
-        }
-        if (failed.length) {
-            errorDiv.textContent = 'Issue ' + issue.issue_number + ' raised; upload failed: ' + failed.join(', ');
-            errorDiv.style.display = 'block';
-            submitBtn.disabled = false;
-            return;
-        }
-
-        queueToast(issue.issue_number + ' raised', '/issues/' + issue.id);
-        window.location.reload();
-    } catch (e) {
-        errorDiv.textContent = 'Network error: ' + e.message;
-        errorDiv.style.display = 'block';
-        submitBtn.disabled = false;
-    }
-}
-
-function showSkipModal(stepNumber, stepTitle) {
-    document.getElementById('skip-step').value = stepNumber;
-    document.getElementById('skip-step-title').textContent = stepTitle;
-    document.getElementById('skip-modal').style.display = 'block';
-}
-function hideSkipModal() {
-    document.getElementById('skip-modal').style.display = 'none';
-    document.getElementById('skip-form').reset();
-}
-
-async function submitSkip(event) {
-    event.preventDefault();
-    const form = document.getElementById('skip-form');
-    const errorDiv = document.getElementById('skip-error');
-    errorDiv.style.display = 'none';
-    const stepNumber = form.step_number.value;
-    const data = { reason: form.reason.value || null };
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/skip`, {
-            method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to skip step');
-            errorDiv.style.display = 'block';
-        }
-    } catch (e) {
-        errorDiv.textContent = 'Network error: ' + e.message;
-        errorDiv.style.display = 'block';
-    }
-}
-
-// ---- Redline / ad-hoc op modal -----------------------------------------
-
-function showRedlineModal(hostOrder, hostNumberStr, issueIds, issueNumbers) {
-    document.getElementById('redline-host-order').value = hostOrder;
-    document.getElementById('redline-host-label').textContent = 'on OP ' + hostNumberStr;
-    const sel = document.getElementById('redline-issue-id');
-    sel.innerHTML = '';
-    (issueIds || []).forEach((id, i) => {
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = (issueNumbers && issueNumbers[i]) || ('NC #' + id);
-        sel.appendChild(opt);
-    });
-    document.getElementById('redline-title').value = '';
-    document.getElementById('redline-steps').innerHTML = '';
-    addRedlineStep();
-    document.getElementById('redline-error').style.display = 'none';
-    document.getElementById('redline-modal').style.display = 'block';
-}
-
-function hideRedlineModal() {
-    document.getElementById('redline-modal').style.display = 'none';
-}
-
-function addRedlineStep() {
-    const container = document.getElementById('redline-steps');
-    const idx = container.children.length + 1;
-    const row = document.createElement('div');
-    row.className = 'redline-step-row';
-    row.style.border = '1px solid var(--border-color)';
-    row.style.padding = 'var(--space-sm)';
-    row.style.marginBottom = 'var(--space-xs)';
-    row.innerHTML = `
-        <div style="display: flex; gap: var(--space-sm); align-items: center; margin-bottom: var(--space-xs);">
-            <span class="mono text-muted" style="font-size: 0.75rem; min-width: 30px;">${idx}.</span>
-            <input type="text" class="form-input redline-step-title" placeholder="Step title" required style="flex: 1;" maxlength="255">
-            <label style="display: flex; align-items: center; gap: var(--space-xs); white-space: nowrap;">
-                <input type="checkbox" class="redline-step-signoff"> <span class="mono" style="font-size: 0.75rem;">SIGN-OFF</span>
-            </label>
-            <button type="button" class="btn btn-sm" onclick="removeRedlineStep(this)">REMOVE</button>
-        </div>
-        <textarea class="form-textarea redline-step-instructions" rows="2" placeholder="Instructions (optional, markdown)" style="width: 100%;"></textarea>
-    `;
-    container.appendChild(row);
-}
-
-function removeRedlineStep(btn) {
-    const row = btn.closest('.redline-step-row');
-    const container = row.parentElement;
-    if (container.children.length <= 1) return;  // need at least one
-    row.remove();
-    // Renumber labels
-    Array.from(container.children).forEach((r, i) => {
-        const label = r.querySelector('.mono');
-        if (label) label.textContent = (i + 1) + '.';
-    });
-}
-
-async function submitRedline(event) {
-    event.preventDefault();
-    const errorDiv = document.getElementById('redline-error');
-    errorDiv.style.display = 'none';
-    const issueId = parseInt(document.getElementById('redline-issue-id').value);
-    const title = document.getElementById('redline-title').value.trim();
-    const steps = Array.from(document.querySelectorAll('#redline-steps .redline-step-row')).map(r => ({
-        title: r.querySelector('.redline-step-title').value.trim(),
-        instructions: r.querySelector('.redline-step-instructions').value || null,
-        requires_signoff: r.querySelector('.redline-step-signoff').checked,
-    }));
-    if (!issueId || !title || steps.length === 0 || steps.some(s => !s.title)) {
-        errorDiv.textContent = 'NC, title, and at least one sub-step (with a title) are required.';
-        errorDiv.style.display = 'block';
-        return;
-    }
-    try {
-        const r = await fetch(`/api/procedure-instances/${instanceId}/ad-hoc-ops`, {
-            method: 'POST', headers: getHeaders(),
-            body: JSON.stringify({ issue_id: issueId, title, steps }),
-        });
-        if (r.ok) {
-            window.location.reload();
-        } else {
-            const err = await r.json();
-            errorDiv.textContent = formatApiError(err.detail, 'Failed to create redline');
-            errorDiv.style.display = 'block';
-        }
-    } catch (e) {
-        errorDiv.textContent = 'Network error: ' + e.message;
-        errorDiv.style.display = 'block';
-    }
-}
-
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { hideNCModal(); hideSkipModal(); hideRedlineModal(); }
-});
-
-async function loadKitAvailability() {
-    if (!document.getElementById('kit-table')) return;
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/kit-availability`, { headers: getHeaders() });
-        if (response.ok) {
-            const data = await response.json();
-            populateKitTable(data.items);
-        }
-    } catch (e) { console.error('Failed to load kit availability:', e); }
-}
-
-function populateKitTable(items) {
-    for (const item of items) {
-        const row = document.querySelector(`tr[data-part-id="${item.part_id}"]`);
-        if (!row) continue;
-        const availCell = row.querySelector('.availability-cell');
-        if (!availCell) continue;
-        availCell.textContent = item.quantity_available.toFixed(4);
-        if (!item.is_available) availCell.classList.add('text-red');
-        const select = row.querySelector('.inv-select');
-        if (!select) continue;
-        select.innerHTML = '<option value="">Select location...</option>';
-        for (const loc of item.available_locations) {
-            const opt = document.createElement('option');
-            opt.value = loc.inventory_record_id;
-            opt.textContent = `${loc.location} (${loc.quantity.toFixed(4)})${loc.lot_number ? ' - Lot: ' + loc.lot_number : ''}`;
-            select.appendChild(opt);
-        }
-        const required = parseFloat(row.dataset.required);
-        for (const loc of item.available_locations) {
-            if (loc.quantity >= required) { select.value = loc.inventory_record_id; break; }
-        }
-    }
-}
-
-async function consumeParts() {
-    const errorDiv = document.getElementById('consume-error');
-    errorDiv.style.display = 'none';
-    const items = [];
-    const rows = document.querySelectorAll('#kit-table tbody tr');
-    for (const row of rows) {
-        const select = row.querySelector('.inv-select');
-        const qtyInput = row.querySelector('.qty-input');
-        if (!select.value) { errorDiv.textContent = 'Please select a location for all parts'; errorDiv.style.display = 'block'; return; }
-        const qty = parseFloat(qtyInput.value);
-        if (qty <= 0) continue;
-        items.push({ inventory_record_id: parseInt(select.value), quantity: qty });
-    }
-    if (items.length === 0) { errorDiv.textContent = 'No parts to consume'; errorDiv.style.display = 'block'; return; }
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/consume`, {
-            method: 'POST', headers: getHeaders(), body: JSON.stringify({ items }),
-        });
-        if (response.ok) { window.location.reload(); }
-        else { const error = await response.json(); errorDiv.textContent = formatApiError(error.detail, 'Failed to consume parts'); errorDiv.style.display = 'block'; }
-    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
-}
-
-async function produceOutput() {
-    const errorDiv = document.getElementById('produce-error');
-    errorDiv.style.display = 'none';
-    const items = [];
-    const rows = document.querySelectorAll('#output-table tbody tr');
-    for (const row of rows) {
-        const partId = row.dataset.partId;
-        const qty = parseFloat(row.querySelector(`input[name="out_${partId}_qty"]`).value);
-        const loc = row.querySelector(`input[name="out_${partId}_loc"]`).value.trim();
-        if (qty > 0) {
-            if (!loc) { errorDiv.textContent = 'Please enter a location for all output items'; errorDiv.style.display = 'block'; return; }
-            items.push({ part_id: parseInt(partId), quantity: qty, location: loc,
-                lot_number: row.querySelector(`input[name="out_${partId}_lot"]`).value.trim() || null,
-                serial_number: row.querySelector(`input[name="out_${partId}_serial"]`).value.trim() || null });
-        }
-    }
-    if (items.length === 0) { errorDiv.textContent = 'No output items to record'; errorDiv.style.display = 'block'; return; }
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/produce`, {
-            method: 'POST', headers: getHeaders(), body: JSON.stringify({ items }),
-        });
-        if (response.ok) { window.location.reload(); }
-        else { const error = await response.json(); errorDiv.textContent = formatApiError(error.detail, 'Failed to record output'); errorDiv.style.display = 'block'; }
-    } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
-}
-
-async function finalizeProduction() {
-    const locationInput = document.getElementById('finalize-location');
-    const errorDiv = document.getElementById('finalize-error');
-    if (errorDiv) errorDiv.style.display = 'none';
-    const location = locationInput ? locationInput.value.trim() : '';
-    if (!location) { if (errorDiv) { errorDiv.textContent = 'Please enter a storage location'; errorDiv.style.display = 'block'; } return; }
-    if (!confirm('Finalize production? This will set output quantities and record assembly genealogy.')) return;
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/finalize`, {
-            method: 'POST', headers: getHeaders(), body: JSON.stringify({ location }),
-        });
-        if (response.ok) { window.location.reload(); }
-        else { const error = await response.json(); const msg = formatApiError(error.detail, 'Failed to finalize production'); if (errorDiv) { errorDiv.textContent = msg; errorDiv.style.display = 'block'; } else alert(msg); }
-    } catch (e) { const msg = 'Network error: ' + e.message; if (errorDiv) { errorDiv.textContent = msg; errorDiv.style.display = 'block'; } else alert(msg); }
-}
-
-function _stepPhotoUploadHeaders() {
-    // FormData bodies need fetch to set its own multipart Content-Type +
-    // boundary, so do not include Content-Type in our headers.
-    const headers = {};
-    return headers;
-}
-
-function _renderStepPhotoGallery(container, ids, fieldName) {
-    const gallery = container.querySelector('.step-photo-gallery');
-    if (!gallery) return;
-    gallery.innerHTML = '';
-    for (const id of ids) {
-        const item = document.createElement('div');
-        item.className = 'step-photo-item';
-        item.dataset.attachmentId = String(id);
-        const link = document.createElement('a');
-        link.href = `/api/attachments/${id}/download`;
-        link.target = '_blank';
-        const img = document.createElement('img');
-        img.className = 'step-photo-thumb';
-        img.alt = fieldName;
-        img.src = `/api/attachments/${id}/download`;
-        link.appendChild(img);
-        item.appendChild(link);
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-sm';
-        btn.textContent = 'REMOVE';
-        btn.onclick = function() { removeStepPhoto(btn); };
-        item.appendChild(btn);
-        gallery.appendChild(item);
-    }
-    // Sync the hidden capture-field value.
-    const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
-    if (hidden) hidden.value = JSON.stringify(ids);
-}
-
-async function uploadStepPhotos(input) {
-    if (!input.files.length) return;
-    const container = input.closest('.step-photo-capture');
-    if (!container) return;
-    const stepExecutionId = container.dataset.stepExecutionId;
-    const fieldName = container.dataset.fieldName;
-    const isMultiple = container.dataset.multiple === 'true';
-    const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
-    let existing = [];
-    try { existing = JSON.parse(hidden.value || '[]'); } catch (_) { existing = []; }
-    if (!Array.isArray(existing)) existing = existing ? [existing] : [];
-
-    const newIds = [];
-    for (const file of input.files) {
-        if (!file.type.startsWith('image/')) continue;
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('step_execution_id', stepExecutionId);
-        try {
-            const r = await fetch('/api/attachments/upload', {
-                method: 'POST',
-                headers: _stepPhotoUploadHeaders(),
-                body: fd,
-            });
-            if (!r.ok) {
-                const err = await r.json().catch(() => ({}));
-                const msg = typeof err.detail === 'string'
-                    ? err.detail
-                    : JSON.stringify(err.detail || {status: r.status});
-                alert('Photo upload failed: ' + msg);
-                continue;
-            }
-            const data = await r.json();
-            newIds.push(data.id);
-        } catch (e) { alert('Network error: ' + e.message); }
-    }
-    const updated = isMultiple ? [...existing, ...newIds] : newIds.slice(-1);
-    _renderStepPhotoGallery(container, updated, fieldName);
-    // Allow re-selecting the same file (helps if the user re-attaches the same image).
-    input.value = '';
-}
-
-function removeStepPhoto(buttonOrItem) {
-    const item = buttonOrItem.closest('.step-photo-item');
-    if (!item) return;
-    const container = item.closest('.step-photo-capture');
-    const removeId = parseInt(item.dataset.attachmentId);
-    const hidden = container.querySelector('input[type="hidden"][data-capture-field]');
-    let existing = [];
-    try { existing = JSON.parse(hidden.value || '[]'); } catch (_) { existing = []; }
-    if (!Array.isArray(existing)) existing = existing ? [existing] : [];
-    const updated = existing.filter(id => id !== removeId);
-    _renderStepPhotoGallery(container, updated, container.dataset.fieldName);
-}
-
-async function loadStepKitAvailability() {
-    const tables = document.querySelectorAll('[data-step-kit]');
-    if (!tables.length) return;
-    const partIds = new Set();
-    tables.forEach(t => t.querySelectorAll('tbody tr[data-part-id]').forEach(r => partIds.add(r.dataset.partId)));
-    const inventoryByPart = {};
-    await Promise.all([...partIds].map(async (pid) => {
-        try {
-            const resp = await fetch(`/api/inventory?part_id=${pid}&page_size=100`, { headers: getHeaders() });
-            if (resp.ok) { inventoryByPart[pid] = await resp.json(); }
-        } catch (e) { console.error('Failed to load inventory for part', pid, e); }
-    }));
-    document.querySelectorAll('.sk-inv-select').forEach(select => {
-        const pid = select.dataset.partId;
-        const records = inventoryByPart[pid];
-        select.innerHTML = '<option value="">Select...</option>';
-        if (!records) return;
-        const items = records.items || records;
-        for (const rec of items) {
-            if (parseFloat(rec.quantity) <= 0) continue;
-            const opt = document.createElement('option');
-            opt.value = rec.id;
-            opt.textContent = `${rec.location} (${parseFloat(rec.quantity).toFixed(4)})${rec.lot_number ? ' - Lot: ' + rec.lot_number : ''}`;
-            select.appendChild(opt);
-        }
-        const row = select.closest('tr');
-        const required = parseFloat(row?.dataset.required || 0);
-        for (const rec of items) {
-            if (parseFloat(rec.quantity) >= required) { select.value = rec.id; break; }
-        }
-    });
-}
-
-async function consumeStepParts(stepNumber) {
-    const table = document.querySelector(`[data-step-kit="${stepNumber}"]`);
-    if (!table) return;
-    const items = [];
-    const rows = table.querySelectorAll('tbody tr');
-    for (const row of rows) {
-        const select = row.querySelector('.sk-inv-select');
-        const qtyInput = row.querySelector('.sk-qty-input');
-        if (!select || !select.value) { alert('Please select a source location for all parts'); return; }
-        const qty = parseFloat(qtyInput.value);
-        if (qty <= 0) continue;
-        const typeBadge = row.querySelector('.status');
-        const usageType = typeBadge && typeBadge.textContent.trim().toLowerCase() === 'tooling' ? 'tooling' : 'consume';
-        items.push({ inventory_record_id: parseInt(select.value), quantity: qty, usage_type: usageType });
-    }
-    if (items.length === 0) { alert('No parts to consume'); return; }
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/consume`, {
-            method: 'POST', headers: getHeaders(), body: JSON.stringify({ items }),
-        });
-        if (response.ok) { window.location.reload(); }
-        else { const error = await response.json(); alert(formatApiError(error.detail, 'Failed to consume step parts')); }
-    } catch (e) { alert('Network error: ' + e.message); }
-}
-
-// ============ Collaboration (singleton) ============
-let collaboration = null;
-let isParticipant = false;
-let collaborationInitialized = false;
-
-function initCollaboration() {
-    if (collaborationInitialized) {
-        loadParticipants();
-        updateConnectionStatus();
-        return;
-    }
-    if (!document.getElementById('connection-status')) return;
-    collaborationInitialized = true;
-    collaboration = new ExecutionCollaboration(instanceId);
-    window.opalEvents.on('connected', updateConnectionStatus);
-    window.opalEvents.on('disconnected', updateConnectionStatus);
-    loadParticipants();
-    updateConnectionStatus();
-}
-
-function updateConnectionStatus() {
-    const statusEl = document.getElementById('connection-status');
-    const textEl = document.getElementById('connection-text');
-    if (!statusEl || !textEl) return;
-    if (window.opalEvents.isConnected) { statusEl.classList.add('connected'); textEl.textContent = 'LIVE'; }
-    else { statusEl.classList.remove('connected'); textEl.textContent = 'OFFLINE'; }
-}
-
-async function loadParticipants() {
-    if (!document.getElementById('participants-list')) return;
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/participants`, { headers: getHeaders() });
-        if (response.ok) { const data = await response.json(); renderParticipants(data.participants); }
-    } catch (e) { console.error('Failed to load participants:', e); }
-}
-
-function renderParticipants(participants) {
-    const container = document.getElementById('participants-list');
-    if (!container) return;
-    const currentUserId = window.OPAL_USER_ID;
-    if (!participants || participants.length === 0) {
-        container.innerHTML = '<span class="text-muted">No active participants</span>';
-        updateJoinLeaveButtons(false); return;
-    }
-    isParticipant = participants.some(p => p.user_id === currentUserId);
-    updateJoinLeaveButtons(isParticipant);
-    container.innerHTML = participants.map(p => {
-        const isSelf = p.user_id === currentUserId;
-        return `<div class="participant ${isSelf ? 'self' : ''}" data-user-id="${p.user_id}">
-            <span class="participant-avatar">${p.user_name.charAt(0).toUpperCase()}</span>
-            <span class="participant-name">${p.user_name}${isSelf ? ' (you)' : ''}</span>
-            ${p.last_step ? `<span class="participant-step">Step ${p.last_step}</span>` : ''}
-        </div>`;
-    }).join('');
-}
-
-function updateJoinLeaveButtons(participating) {
-    const joinBtn = document.getElementById('join-btn');
-    const leaveBtn = document.getElementById('leave-btn');
-    if (joinBtn && leaveBtn) {
-        joinBtn.style.display = participating ? 'none' : 'inline-block';
-        leaveBtn.style.display = participating ? 'inline-block' : 'none';
-    }
-}
-
-async function joinExecution() {
-    if (!window.OPAL_USER_ID) { alert('You are not signed in'); return; }
-    try {
-        const response = await fetch(`/api/procedure-instances/${instanceId}/join`, { method: 'POST', headers: getHeaders() });
-        if (response.ok) { const data = await response.json(); renderParticipants(data.participants); window.opalEvents.setActivity(`executing:${instanceId}`); }
-        else { const error = await response.json(); alert(formatApiError(error.detail, 'Failed to join execution')); }
-    } catch (e) { alert('Network error: ' + e.message); }
-}
-
-async function leaveExecution() {
-    try { await fetch(`/api/procedure-instances/${instanceId}/leave`, { method: 'POST', headers: getHeaders() }); window.opalEvents.setActivity(null); loadParticipants(); }
-    catch (e) { alert('Network error: ' + e.message); }
-}
-
-// ============ Attachments ============
-async function loadAttachments() {
-    if (!document.getElementById('attachments-list')) return;
-    try {
-        const response = await fetch(`/api/attachments?procedure_instance_id=${instanceId}`, { headers: getHeaders() });
-        if (response.ok) { const data = await response.json(); renderAttachments(data); }
-    } catch (e) { console.error('Failed to load attachments:', e); }
-}
-
-function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
-
-function renderAttachments(attachments) {
-    const container = document.getElementById('attachments-list');
-    const countEl = document.getElementById('attachment-count');
-    if (!container || !countEl) return;
-    countEl.textContent = attachments.length;
-    if (attachments.length === 0) { container.innerHTML = '<span class="text-muted">No attachments</span>'; return; }
-    let html = '<table class="data-table"><thead><tr><th>FILENAME</th><th style="width:100px;">SIZE</th><th style="width:120px;">TYPE</th><th style="width:90px;">CLOSEOUT</th><th style="width:180px;">UPLOADED</th><th style="width:60px;"></th></tr></thead><tbody>';
-    for (const att of attachments) {
-        const sizeKb = (att.size_bytes / 1024).toFixed(1);
-        const isCloseout = att.kind === 'closeout';
-        const closeoutLabel = isCloseout ? 'YES' : '-';
-        const closeoutAction = isCloseout ? 'unset' : 'set';
-        html += `<tr><td><a href="/api/attachments/${att.id}/download" class="mono">${escapeHtml(att.original_filename)}</a></td><td class="mono" style="text-align:right;">${sizeKb} KB</td><td class="mono">${escapeHtml(att.mime_type)}</td><td class="mono"><button class="btn btn-sm" onclick="toggleCloseout(${att.id}, '${closeoutAction}')" title="Toggle closeout flag">${closeoutLabel}</button></td><td class="timestamp">${att.created_at.replace('T', ' ').substring(0, 19)}Z</td><td><button class="btn btn-sm" style="color:var(--accent-red);" onclick="deleteAttachment(${att.id})">X</button></td></tr>`;
-    }
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
-async function uploadAttachment() {
-    const fileInput = document.getElementById('attachment-file');
-    if (!fileInput.files.length) { alert('Please select a file'); return; }
-    const closeoutBox = document.getElementById('attachment-closeout');
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    formData.append('procedure_instance_id', instanceId);
-    if (closeoutBox && closeoutBox.checked) {
-        formData.append('kind', 'closeout');
-    }
-    try {
-        const headers = {};
-        const response = await fetch('/api/attachments/upload', { method: 'POST', headers, body: formData });
-        if (response.ok) {
-            fileInput.value = '';
-            if (closeoutBox) closeoutBox.checked = false;
-            loadAttachments();
-        }
-        else { const error = await response.json(); alert('Error: ' + (error.detail || 'Failed to upload file')); }
-    } catch (e) { alert('Network error: ' + e.message); }
-}
-
-async function toggleCloseout(attachmentId, action) {
-    const newKind = action === 'set' ? 'closeout' : null;
-    try {
-        const response = await fetch(`/api/attachments/${attachmentId}`, {
-            method: 'PATCH',
-            headers: getHeaders(),
-            body: JSON.stringify({ kind: newKind }),
-        });
-        if (response.ok) { loadAttachments(); }
-        else { const error = await response.json(); alert('Error: ' + (error.detail || 'Failed to update attachment')); }
-    } catch (e) { alert('Network error: ' + e.message); }
-}
-
-async function deleteAttachment(attachmentId) {
-    if (!confirm('Delete this attachment?')) return;
-    try {
-        const response = await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', headers: getHeaders() });
-        if (response.ok) { loadAttachments(); }
-        else { const error = await response.json(); alert('Error: ' + (error.detail || 'Failed to delete attachment')); }
-    } catch (e) { alert('Network error: ' + e.message); }
-}
-
-function initExecTab() {
-    loadKitAvailability();
-    loadStepKitAvailability();
-    initCollaboration();
-    loadAttachments();
-}
-
-document.addEventListener('DOMContentLoaded', initExecTab);
-document.body.addEventListener('htmx:afterSwap', function(e) {
-    if (e.target && e.target.classList && e.target.classList.contains('exec-tab-content')) {
-        initExecTab();
-    }
-});
-
-window.addEventListener('beforeunload', function() {
-    if (isParticipant) {
-        if (window.OPAL_USER_ID) { navigator.sendBeacon(`/api/procedure-instances/${instanceId}/leave`, new Blob([JSON.stringify({})], { type: 'application/json' })); }
-    }
-});
+window.OPAL_EXEC = {
+    instanceId: {{ instance.id }},
+    workOrder: {{ (instance.work_order_number or '') | tojson }},
+    status: {{ inst_status | tojson }},
+    myCursorOrder: {{ my_cursor_order if my_cursor_order is not none else 'null' }},
+};
 </script>
+<script src="{{ static_url('js/execdoc.js') }}"></script>
 {% endblock %}

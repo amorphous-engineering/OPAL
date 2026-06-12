@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
 .security-heading { font-weight: 600; font-size: 0.8rem; letter-spacing: 0.05em; margin-bottom: var(--space-sm); }
 </style>
 
-<script src="/static/js/webauthn.js"></script>
+<script src="{{ static_url('js/webauthn.js') }}"></script>
 <script>
 function showResult(id, ok, message) {
     var el = document.getElementById(id);

@@ -399,8 +399,8 @@ class ExecutionMetrics(BaseModel):
 
     total_executions: int
     completed: int
-    in_progress: int
-    pending: int
+    in_work: int
+    cut: int
     aborted: int
     avg_duration_minutes: float | None
     completion_rate: float
@@ -427,8 +427,8 @@ def get_execution_metrics(
 
     total = len(instances)
     completed = sum(1 for i in instances if _get_status(i) == "completed")
-    in_progress = sum(1 for i in instances if _get_status(i) == "in_progress")
-    pending = sum(1 for i in instances if _get_status(i) == "pending")
+    in_work = sum(1 for i in instances if _get_status(i) == "in_work")
+    cut = sum(1 for i in instances if _get_status(i) == "cut")
     aborted = sum(1 for i in instances if _get_status(i) == "aborted")
 
     # Calculate average duration for completed instances
@@ -443,8 +443,8 @@ def get_execution_metrics(
     return ExecutionMetrics(
         total_executions=total,
         completed=completed,
-        in_progress=in_progress,
-        pending=pending,
+        in_work=in_work,
+        cut=cut,
         aborted=aborted,
         avg_duration_minutes=round(avg_duration, 1) if avg_duration else None,
         completion_rate=round(completion_rate, 1),

@@ -17,7 +17,14 @@ from opal.db.models.issue import Issue
 router = APIRouter(prefix="/attachments", tags=["attachments"])
 
 
-ALLOWED_KINDS: set[str | None] = {None, "inline", "reference", "closeout"}
+ALLOWED_KINDS: set[str | None] = {
+    None,
+    "inline",
+    "reference",
+    "closeout",
+    "capture",
+    "step_image",
+}
 
 
 class AttachmentResponse(BaseModel):
@@ -33,6 +40,9 @@ class AttachmentResponse(BaseModel):
     issue_id: int | None = None
     procedure_id: int | None = None
     kind: str | None = None
+    note: str | None = None
+    uploaded_by_id: int | None = None
+    uploaded_by_name: str | None = None
     created_at: str
 
     model_config = {"from_attributes": True}
@@ -56,6 +66,9 @@ def _attachment_to_response(att: Attachment) -> AttachmentResponse:
         issue_id=att.issue_id,
         procedure_id=att.procedure_id,
         kind=att.kind,
+        note=att.note,
+        uploaded_by_id=att.uploaded_by_id,
+        uploaded_by_name=att.uploaded_by.name if att.uploaded_by else None,
         created_at=att.created_at.isoformat(),
     )
 
@@ -70,6 +83,7 @@ async def upload_attachment(
     issue_id: int | None = Form(default=None),
     procedure_id: int | None = Form(default=None),
     kind: str | None = Form(default=None),
+    note: str | None = Form(default=None),
 ) -> AttachmentResponse:
     """Upload a file attachment.
 
@@ -150,6 +164,13 @@ async def upload_attachment(
     file_path = settings.upload_dir / stored_name
     file_path.write_bytes(content)
 
+    # Captures linked only to a step inherit the step's instance so
+    # instance-level listings (rail, build report) see them.
+    if step_execution_id and not procedure_instance_id:
+        step_exec = db.query(StepExecution).filter(StepExecution.id == step_execution_id).first()
+        if step_exec:
+            procedure_instance_id = step_exec.instance_id
+
     # Create DB record
     attachment = Attachment(
         original_filename=original_name,
@@ -161,6 +182,8 @@ async def upload_attachment(
         issue_id=issue_id,
         procedure_id=procedure_id,
         kind=kind,
+        note=note,
+        uploaded_by_id=user_id,
     )
     db.add(attachment)
     db.flush()

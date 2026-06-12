@@ -135,7 +135,7 @@ class DashboardScreen(Screen):
             parts_stat.update_value(str(parts.get("total", 0)))
 
             # Active executions
-            executions = client.list_instances(status="in_progress", page_size=1)
+            executions = client.list_instances(status="in_work", page_size=1)
             exec_stat = self.query_one("#exec-stat", StatCard)
             exec_stat.update_value(str(executions.get("total", 0)))
 

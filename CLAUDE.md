@@ -68,8 +68,8 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 
 ### Test infrastructure
 - Fixtures in `tests/conftest.py`: in-memory SQLite engine, per-test rollback transactions
-- `client` fixture provides `TestClient` with dependency overrides
-- `auth_headers` fixture provides `{"X-User-Id": str(test_user.id)}`
+- `client` fixture provides `TestClient` pre-authenticated as an admin service user (Bearer token)
+- `auth_headers` fixture provides `{"Authorization": "Bearer <token>"}` for `test_user`; `web_client` adds the session cookie for web-page GETs
 
 ## Critical Rules
 

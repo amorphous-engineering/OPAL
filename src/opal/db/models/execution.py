@@ -4,17 +4,17 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
 
 
 class InstanceStatus(str, Enum):
-    """Procedure instance status."""
+    """Procedure instance (work order) status."""
 
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
+    CUT = "cut"  # Untouched since cut from the master procedure
+    IN_WORK = "in_work"
     COMPLETED = "completed"
     ABORTED = "aborted"
 
@@ -47,7 +47,7 @@ class ProcedureInstance(Base, IdMixin, TimestampMixin):
         String(100), nullable=True, index=True, comment="For grouping related instances"
     )
     status: Mapped[InstanceStatus] = mapped_column(
-        String(20), nullable=False, default=InstanceStatus.PENDING
+        String(20), nullable=False, default=InstanceStatus.CUT
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -134,6 +134,11 @@ class StepExecution(Base, IdMixin, TimestampMixin):
         JSON, nullable=True, comment="Values matching step's required_data_schema"
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_focused_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Soft telemetry: first cursor focus; never rendered as state",
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
@@ -215,6 +220,9 @@ class StepExecution(Base, IdMixin, TimestampMixin):
     consumptions: Mapped[list["InventoryConsumption"]] = relationship(
         "InventoryConsumption", back_populates="step_execution"
     )
+    focuses: Mapped[list["StepFocus"]] = relationship(
+        "StepFocus", back_populates="step_execution", cascade="all, delete-orphan"
+    )
 
     @property
     def duration_seconds(self) -> int | None:
@@ -225,3 +233,38 @@ class StepExecution(Base, IdMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<StepExecution(id={self.id}, instance_id={self.instance_id}, step={self.step_number}, status={self.status})>"
+
+
+class StepFocus(Base, IdMixin, TimestampMixin):
+    """A user's cursor position in the execution document.
+
+    Presence = focus: one row per (instance, user), upserted as the cursor
+    moves. Moving the cursor records no event — this is ephemeral presence,
+    not history. Several users may focus the same step.
+    """
+
+    __table_args__ = (UniqueConstraint("instance_id", "user_id", name="uq_step_focus_user"),)
+
+    instance_id: Mapped[int] = mapped_column(
+        ForeignKey("procedure_instance.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    step_execution_id: Mapped[int] = mapped_column(
+        ForeignKey("step_execution.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    focused_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Relationships
+    instance: Mapped["ProcedureInstance"] = relationship("ProcedureInstance")
+    step_execution: Mapped["StepExecution"] = relationship(
+        "StepExecution", back_populates="focuses"
+    )
+    user: Mapped["User"] = relationship("User")
+
+    def __repr__(self) -> str:
+        return (
+            f"<StepFocus(id={self.id}, step_execution_id={self.step_execution_id}, "
+            f"user_id={self.user_id})>"
+        )

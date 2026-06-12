@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, or_
 
 from opal.api.deps import DbSession
+from opal.core import execution_flow as exec_flow
 from opal.core.auth import (
     SESSION_COOKIE,
     authenticate_password,
@@ -39,7 +40,7 @@ from opal.db.models import (
     Workcenter,
 )
 from opal.db.models.dataset import DataPoint, Dataset
-from opal.db.models.execution import InstanceStatus, ProcedureInstance
+from opal.db.models.execution import InstanceStatus, ProcedureInstance, StepExecution
 from opal.db.models.issue import Containment, Issue, IssuePriority, IssueStatus, IssueType
 from opal.db.models.procedure import MasterProcedure, ProcedureStatus, ProcedureVersion
 from opal.db.models.purchase import PurchaseStatus
@@ -52,6 +53,24 @@ from opal.risks.dispositions import OPEN_DISPOSITIONS
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+def static_url(path: str) -> str:
+    """/static URL with an mtime cache-buster.
+
+    Pages stay open for days on shop-floor tablets; without a version
+    in the URL a normal reload can keep serving stale CSS/JS forever.
+    """
+    try:
+        version = int((STATIC_DIR / path).stat().st_mtime)
+    except OSError:
+        return f"/static/{path}"
+    return f"/static/{path}?v={version}"
+
+
+templates.env.globals["static_url"] = static_url
+
 
 def status_value(status) -> str:
     """Get string value from status (handles both enum and string)."""
@@ -62,6 +81,7 @@ def status_value(status) -> str:
 
 # Register custom filter
 templates.env.filters["status_value"] = status_value
+templates.env.filters["initials"] = exec_flow.user_initials
 
 # Audit log display helpers
 _TABLE_URL_MAP: dict[str, str] = {
@@ -564,7 +584,7 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
         .count()
     )
     context["in_progress_count"] = (
-        db.query(ProcedureInstance).filter(ProcedureInstance.status == "in_progress").count()
+        db.query(ProcedureInstance).filter(ProcedureInstance.status == "in_work").count()
     )
     context["risks_count"] = (
         db.query(Risk)
@@ -1911,7 +1931,7 @@ def executions_table(
     page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """Executions table rows (HTMX partial)."""
-    from opal.db.models.execution import StepExecution, StepStatus
+    from opal.db.models.execution import StepStatus
 
     # Aggregate step progress per instance and join the procedure/version
     # names so the table renders from a single query
@@ -1945,7 +1965,7 @@ def executions_table(
         query = query.filter(ProcedureInstance.status == status)
 
     rows, pagination = paginate_query(
-        request, query.order_by(ProcedureInstance.id.desc()), page, colspan=7
+        request, query.order_by(ProcedureInstance.id.desc()), page, colspan=6
     )
 
     instances_data = []
@@ -1993,29 +2013,24 @@ def executions_new(request: Request, db: DbSession) -> HTMLResponse:
     return templates.TemplateResponse("executions/new.html", context)
 
 
-_EXECUTION_TABS = ("meta", "operations", "data", "bom", "issues", "kitting")
+_EXECUTION_TABS = ("document", "data", "bom", "issues", "kitting")
+# Old bookmarks/links: both dissolved tabs land on the document.
+_EXECUTION_TAB_ALIASES = {"meta": "document", "operations": "document"}
 
 
-@router.get("/executions/{instance_id}", response_class=HTMLResponse)
-def executions_detail(
+def _execution_detail_context(
     request: Request,
     db: DbSession,
-    instance_id: int,
-    op: int | None = None,
-    tab: str = "meta",
-) -> HTMLResponse:
-    """Execution detail/run page."""
-    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
-    if not instance:
-        return templates.TemplateResponse(
-            "errors/404.html",
-            {"request": request, "message": f"Execution {instance_id} not found"},
-            status_code=404,
-        )
-
+    instance: ProcedureInstance,
+) -> dict:
+    """Full context for the execution page and its partials (document rows,
+    rail, docked bar). One builder — partial routes render fragments of the
+    same facts."""
     version = db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
 
-    context = get_base_context(request, db, f"Execution {instance_id} - OPAL")
+    context = get_base_context(
+        request, db, f"{instance.work_order_number or 'Execution'} - OPAL"
+    )
     context["instance"] = instance
     context["version"] = version
     context["statuses"] = [s.value for s in InstanceStatus]
@@ -2178,25 +2193,6 @@ def executions_detail(
     context["ops"] = ops
     context["contingency_ops"] = contingency_ops
 
-    # Pick which op's steps to render on the right pane.
-    all_ops = ops + contingency_ops
-    valid_orders = {o["step"]["order"] for o in all_ops}
-
-    def _pick_default_order() -> int | None:
-        if not all_ops:
-            return None
-        for o in all_ops:
-            if o["step"]["status"] == "in_progress":
-                return o["step"]["order"]
-        for o in all_ops:
-            if o["step"]["status"] not in ("completed", "signed_off", "skipped"):
-                return o["step"]["order"]
-        return all_ops[0]["step"]["order"]
-
-    context["selected_op_order"] = op if op in valid_orders else _pick_default_order()
-
-    context["tab"] = tab if tab in _EXECUTION_TABS else "meta"
-
     # Map step order -> version step data (for data capture schemas, requires_signoff)
     context["version_steps_map"] = {s["order"]: s for s in version_steps}
 
@@ -2213,7 +2209,7 @@ def executions_detail(
 
     consumptions = (
         db.query(InventoryConsumption)
-        .filter(InventoryConsumption.procedure_instance_id == instance_id)
+        .filter(InventoryConsumption.procedure_instance_id == instance.id)
         .all()
     )
     context["consumptions"] = consumptions
@@ -2242,7 +2238,7 @@ def executions_detail(
     # Get existing productions
     productions = (
         db.query(InventoryProduction)
-        .filter(InventoryProduction.procedure_instance_id == instance_id)
+        .filter(InventoryProduction.procedure_instance_id == instance.id)
         .all()
     )
     context["productions"] = productions
@@ -2288,6 +2284,9 @@ def executions_detail(
 
     # Can finalize: instance completed + has WIP productions
     inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
+    # Partials (_dockbar, _op_card, _rail) read inst_status from context —
+    # only detail.html re-derives it with {% set %}.
+    context["inst_status"] = inst_status
     has_wip = any(
         (p.status.value if hasattr(p.status, "value") else p.status) == "wip" for p in productions
     )
@@ -2435,7 +2434,242 @@ def executions_detail(
     data_rows.sort(key=lambda r: (r["step_sort"], r["field"]))
     context["data_rows"] = data_rows
 
+    # ---- Document layer: cursors, holds, evidence counts, presence ----
+
+    cursors = exec_flow.instance_cursors(db, instance.id)
+    cursor_user_ids = {c.user_id for c in cursors}
+    cursor_users = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(cursor_user_ids)).all()}
+        if cursor_user_ids
+        else {}
+    )
+    cursors_by_se: dict[int, list[dict]] = {}
+    for c in sorted(cursors, key=lambda c: c.focused_at):
+        cursors_by_se.setdefault(c.step_execution_id, []).append(
+            {"cursor": c, "user": cursor_users.get(c.user_id)}
+        )
+    context["cursors_by_se"] = cursors_by_se
+
+    current_user = context.get("current_user")
+    my_cursor = next(
+        (c for c in cursors if current_user and c.user_id == current_user.id), None
+    )
+    context["my_cursor_order"] = (
+        my_cursor.step_execution.step_number
+        if my_cursor is not None and my_cursor.step_execution is not None
+        else None
+    )
+
+    # Bound hold points (issue_step_block) — hold COMPLETE of the bound step.
+    context["bound_holds_by_se"] = exec_flow.bound_blocks_by_step(db, instance.id)
+
+    # Undispositioned NC holds per step execution id — derived from containment.
+    holding_ncs_by_step = exec_flow.holding_ncs_by_step(db, instance.id)
+    context["step_holding_ncs"] = holding_ncs_by_step
+
+    # Undispositioned scope per op order — gates the OP's COMPLETE/sign-off
+    # control (absent + blocker line, never present-but-failing).
+    op_holds_by_order: dict[int, list] = {}
+    for op_data in ops + contingency_ops:
+        op_exec = op_data["step"].get("execution")
+        bucket = list(holding_ncs_by_step.get(op_exec.id, [])) if op_exec is not None else []
+        for sub in op_data.get("sub_steps", []):
+            sub_exec = sub.get("execution")
+            if sub_exec is not None:
+                bucket.extend(holding_ncs_by_step.get(sub_exec.id, []))
+        seen_ids: set[int] = set()
+        unique = [b for b in bucket if not (b.id in seen_ids or seen_ids.add(b.id))]
+        if unique:
+            op_holds_by_order[op_data["step"]["order"]] = unique
+    context["op_holds_by_order"] = op_holds_by_order
+
+    # strict_sequence display gating: sub-step N waits on its prior siblings.
+    # Display-only — the claim API gate in core/execution_flow is authoritative.
+    terminal = {"completed", "signed_off", "skipped"}
+    seq_blockers_by_order: dict[int, str] = {}
+    for op_data in ops + contingency_ops:
+        op_vs = context["version_steps_map"].get(op_data["step"]["order"]) or {}
+        if not op_vs.get("strict_sequence"):
+            continue
+        for sub in op_data["sub_steps"]:
+            if sub["status"] != "pending":
+                continue
+            unmet = [
+                s["step_number"]
+                for s in op_data["sub_steps"]
+                if s["order"] < sub["order"] and s["status"] not in terminal
+            ]
+            if unmet:
+                seq_blockers_by_order[sub["order"]] = "WAITING ON " + ", ".join(unmet)
+    context["seq_blockers_by_order"] = seq_blockers_by_order
+
+    # Evidence counts (⎙n) per step execution id.
+    from opal.db.models.attachment import Attachment as _Att
+
+    se_ids = [se.id for se in instance.step_executions]
+    attach_counts: dict[int, int] = {}
+    capture_attachments: dict[int, list] = {}
+    if se_ids:
+        for att in (
+            db.query(_Att)
+            .filter(_Att.step_execution_id.in_(se_ids))
+            .order_by(_Att.created_at.desc())
+            .all()
+        ):
+            attach_counts[att.step_execution_id] = attach_counts.get(att.step_execution_id, 0) + 1
+            capture_attachments.setdefault(att.step_execution_id, []).append(att)
+    context["attach_counts"] = attach_counts
+    context["capture_attachments"] = capture_attachments
+
+    # Presence/progress snapshot for first paint; the page then polls /state.
+    context["exec_state"] = exec_flow.build_execution_state(db, instance)
+
+    # Active users for the issue capture's optional assignee.
+    context["active_users"] = (
+        db.query(User).filter(User.is_active.is_(True)).order_by(User.name.asc()).all()
+    )
+
+    return context
+
+
+_BAR_ACTIONABLE = {"pending", "in_progress", "awaiting_signoff"}
+
+
+def _set_bar_step(context: dict, step_order: int | None) -> None:
+    """Resolve the docked bar's step: the requested order, else the session
+    user's cursor, else the first actionable row of the document."""
+    rows: list[tuple[dict, dict]] = []
+    for op_data in context["ops"] + context["contingency_ops"]:
+        rows.append((op_data, op_data["step"]))
+        rows.extend((op_data, sub) for sub in op_data["sub_steps"])
+
+    target = None
+    if step_order is not None:
+        target = next(((od, r) for od, r in rows if r["order"] == step_order), None)
+    if target is None and context.get("my_cursor_order") is not None:
+        target = next(
+            ((od, r) for od, r in rows if r["order"] == context["my_cursor_order"]), None
+        )
+    if target is None:
+        leaf_rows = [
+            (od, r) for od, r in rows if not od["sub_steps"] or r is not od["step"]
+        ]
+        target = next(
+            ((od, r) for od, r in leaf_rows if r["status"] in _BAR_ACTIONABLE), None
+        ) or (leaf_rows[0] if leaf_rows else None)
+
+    if target is None:
+        context["bar_step"] = None
+        return
+
+    op_data, row = target
+    vs = context["version_steps_map"].get(row["order"], {})
+    is_op = row is op_data["step"]
+    number = row["step_number"]
+    if "." not in number and not is_op:
+        number = f"{op_data['step']['step_number']}.{number}"
+    context["bar_step"] = {
+        "exec": row.get("execution"),
+        "order": row["order"],
+        "number": number,
+        "title": row["title"],
+        "status": row["status"],
+        "is_op": is_op,
+        "has_children": is_op and bool(op_data["sub_steps"]),
+        "schema": row.get("required_data_schema") or vs.get("required_data_schema"),
+        "caution": vs.get("caution"),
+        "op_order": op_data["step"]["order"],
+        "op_number": op_data["step"]["step_number"],
+        "op_is_ad_hoc": bool(op_data.get("is_ad_hoc")),
+        "op_open_ncs": (context.get("op_open_ncs_by_order") or {}).get(
+            op_data["step"]["order"], []
+        ),
+        "step_kit": vs.get("step_kit") or [],
+        "raised_holds": (
+            context.get("step_holding_ncs", {}).get(row["execution"].id, [])
+            if row.get("execution") is not None
+            else []
+        ),
+    }
+
+
+@router.get("/executions/{instance_id}", response_class=HTMLResponse)
+def executions_detail(
+    request: Request,
+    db: DbSession,
+    instance_id: int,
+    op: int | None = None,
+    tab: str = "document",
+) -> HTMLResponse:
+    """Execution page — the multiplayer document."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": f"Execution {instance_id} not found"},
+            status_code=404,
+        )
+
+    context = _execution_detail_context(request, db, instance)
+    _set_bar_step(context, None)
+    tab = _EXECUTION_TAB_ALIASES.get(tab, tab)
+    context["tab"] = tab if tab in _EXECUTION_TABS else "document"
     return templates.TemplateResponse("executions/detail.html", context)
+
+
+@router.get("/executions/{instance_id}/dockbar", response_class=HTMLResponse)
+def executions_dockbar(
+    request: Request, db: DbSession, instance_id: int, step: int | None = None
+) -> HTMLResponse:
+    """Docked bar partial for the focused step — refetched as focus moves."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        return HTMLResponse("", status_code=404)
+    context = _execution_detail_context(request, db, instance)
+    _set_bar_step(context, step)
+    return templates.TemplateResponse("executions/_dockbar.html", context)
+
+
+@router.get("/executions/{instance_id}/rail", response_class=HTMLResponse)
+def executions_rail(request: Request, db: DbSession, instance_id: int) -> HTMLResponse:
+    """Rail partial (issues/holds, attachments, reference docs)."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        return HTMLResponse("", status_code=404)
+    context = _execution_detail_context(request, db, instance)
+    return templates.TemplateResponse("executions/_rail.html", context)
+
+
+@router.get("/executions/{instance_id}/step-row/{step_order}", response_class=HTMLResponse)
+def executions_step_row(
+    request: Request, db: DbSession, instance_id: int, step_order: int
+) -> HTMLResponse:
+    """One rendered step row — swapped in place when a step changes remotely
+    (spatial stability: the row updates, the document never reflows)."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        return HTMLResponse("", status_code=404)
+    context = _execution_detail_context(request, db, instance)
+
+    for op_data in context["ops"] + context["contingency_ops"]:
+        if op_data["step"]["order"] == step_order and not op_data["sub_steps"]:
+            context["op_data"] = op_data
+            context["step"] = op_data["step"]
+            context["row_is_op"] = True
+            break
+        for sub in op_data["sub_steps"]:
+            if sub["order"] == step_order:
+                context["op_data"] = op_data
+                context["step"] = sub
+                context["row_is_op"] = False
+                break
+        else:
+            continue
+        break
+    else:
+        return HTMLResponse("", status_code=404)
+
+    return templates.TemplateResponse("executions/_step_row.html", context)
 
 
 @router.get("/executions/{instance_id}/report", response_class=HTMLResponse)

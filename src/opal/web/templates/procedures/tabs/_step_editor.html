@@ -37,6 +37,10 @@
                 <input type="checkbox" name="is_contingency"{% if step.is_contingency %} checked{% endif %}>
                 <span>Contingency operation</span>
             </label>
+            <label style="display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-sm);">
+                <input type="checkbox" name="strict_sequence"{% if step.strict_sequence %} checked{% endif %}>
+                <span>Strict sequence (sub-steps start in order)</span>
+            </label>
             {% endif %}
         </div>
     </div>
@@ -76,6 +80,27 @@
             {% else %}
             <span class="text-muted">No step parts defined</span>
             {% endif %}
+        </div>
+    </div>
+
+    <div style="margin-top: var(--space-md);">
+        <div class="form-label" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xs);">
+            <span>REFERENCE IMAGES</span>
+            <label class="btn btn-sm" style="cursor: pointer;">
+                + ADD IMAGE<input type="file" accept="image/*" style="display: none;" onchange="uploadStepImage(this, {{ step.id }})">
+            </label>
+        </div>
+        <div id="step-images-{{ step.id }}" class="step-image-strip">
+            {% for img in step.images %}
+            <figure class="step-image" data-image-id="{{ img.id }}">
+                <img src="/api/attachments/{{ img.attachment_id }}/download" alt="{{ img.caption or 'Reference image' }}" style="max-height: 90px; max-width: 140px; border: 1px solid var(--border-color); display: block;">
+                <input type="text" class="form-input" value="{{ img.caption or '' }}" placeholder="Caption" maxlength="255"
+                       onblur="saveStepImageCaption({{ step.id }}, {{ img.id }}, this.value)" style="width: 140px; font-size: 0.7rem; padding: 1px 4px;">
+                <button type="button" class="btn btn-sm" style="color: var(--accent-red);" onclick="removeStepImage({{ step.id }}, {{ img.id }})">X</button>
+            </figure>
+            {% else %}
+            <span class="text-muted">No reference images</span>
+            {% endfor %}
         </div>
     </div>
 

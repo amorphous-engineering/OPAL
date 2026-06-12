@@ -23,7 +23,6 @@ def _build_instance_with_sub_steps(client: TestClient) -> tuple[int, dict[str, i
 
 
 def _raise_nc(client: TestClient, instance_id: int, step_number: int, **extra) -> dict:
-    client.post(f"/api/procedure-instances/{instance_id}/steps/{step_number}/start")
     resp = client.post(
         f"/api/procedure-instances/{instance_id}/steps/{step_number}/nc",
         json={"title": "Torque out of spec", "priority": "high", **extra},
@@ -68,7 +67,7 @@ def test_signed_disposition_restores_controls(web_client):
     page = web_client.get(f"/executions/{instance_id}?tab=operations&op={by_label['1']}")
     assert page.status_code == 200
     assert "COMPLETE — held by" not in page.text
-    assert f"completeStep({by_label['1.1']})" in page.text
+    assert f"completeStep({by_label['1.1']}," in page.text
 
 
 def test_issue_page_holding_readout(web_client):

@@ -490,6 +490,7 @@ def update_issue(
         issue.assigned_to_id = data.assigned_to_id
 
     log_update(db, issue, old_values, user_id)
+
     db.commit()
     db.refresh(issue)
 
@@ -502,12 +503,12 @@ def _recheck_instance_completion(db, issue: Issue) -> None:
     finished) — re-evaluate."""
     if issue.procedure_instance_id is None:
         return
-    from opal.api.routes.execution import _check_instance_completion
+    from opal.core.execution_flow import check_instance_completion
     from opal.db.models.execution import ProcedureInstance
 
     instance = db.get(ProcedureInstance, issue.procedure_instance_id)
     if instance is not None:
-        _check_instance_completion(instance, db)
+        check_instance_completion(db, instance)
 
 
 def _validate_close(issue: Issue, data: IssueUpdate | None = None) -> None:

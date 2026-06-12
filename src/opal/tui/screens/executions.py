@@ -391,8 +391,8 @@ class ExecutionsScreen(Screen):
             Label("Executions", classes="screen-title"),
             Horizontal(
                 Button("All", id="filter-all", variant="primary"),
-                Button("Pending", id="filter-pending"),
-                Button("In Progress", id="filter-in_progress"),
+                Button("Cut", id="filter-cut"),
+                Button("In Work", id="filter-in_work"),
                 Button("Completed", id="filter-completed"),
                 classes="filter-bar",
             ),

@@ -1,0 +1,74 @@
+{# Docked bar — the only control surface of the document. Renders the
+   FOCUSED step (cursor position); every action on a step happens here:
+   [notes] [ATTACH] [ISSUE] [COMPLETE], SKIP and the rarer actions in the
+   overflow. Refetched as the cursor moves. #}
+{% import 'executions/_exec_macros.html' as ex with context %}
+<div id="dockbar" data-bar-order="{{ bar_step.order if bar_step else '' }}">
+{% if bar_step %}
+    {% set actionable = inst_status in ['cut', 'in_work'] %}
+    {% set bs = bar_step.status %}
+    {% set workable = actionable and bs in ['pending', 'in_progress'] %}
+    {% set menu_skip = workable and not bar_step.raised_holds %}
+    {% set menu_consume = workable and bar_step.step_kit and not bar_step.has_children %}
+    {% set menu_redline = bar_step.op_open_ncs and not bar_step.op_is_ad_hoc %}
+    <div class="dockbar">
+        <div class="dockbar-id" onclick="jumpToStep({{ bar_step.order }})" title="Scroll to step">
+            <span class="mono dockbar-num">{{ bar_step.number }}</span>
+            <span class="dockbar-title">{{ bar_step.title }}</span>
+            {% if bs in ['completed', 'signed_off'] %}
+            <span class="pres-done mono">COMPLETE{% if bar_step.exec and bar_step.exec.completed_by_user %} {{ bar_step.exec.completed_by_user.name | initials }}{% endif %} {{ ex.hm(bar_step.exec.completed_at) if bar_step.exec else '' }}</span>
+            {% elif bs == 'skipped' %}
+            <span class="pres-skip mono">SKIPPED</span>
+            {% elif bs == 'on_hold' %}
+            <span class="pres-hold mono">HOLD</span>
+            {% endif %}
+        </div>
+        {% if bar_step.caution %}
+        <div class="caution-block dockbar-caution">CAUTION: {{ bar_step.caution }}</div>
+        {% endif %}
+        {% if workable and bar_step.exec and not bar_step.has_children %}
+        <div class="dockbar-fields" id="dockbar-fields">
+            {{ ex.data_fields_editable(bar_step) }}
+            <div class="bar-field bar-field-notes">
+                <label class="bar-field-label mono">NOTES</label>
+                <textarea class="form-textarea step-notes-input" rows="1"
+                          onblur="saveNotes({{ bar_step.order }}, this.value)">{% if bar_step.exec.notes %}{{ bar_step.exec.notes }}{% endif %}</textarea>
+            </div>
+        </div>
+        {% endif %}
+        <div class="dockbar-actions">
+            {% if bar_step.exec %}
+            <button class="btn btn-sm" onclick="showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})">ATTACH</button>
+            {% endif %}
+            {% if actionable %}
+            <button class="btn btn-sm" onclick="showIssueModal({{ bar_step.order }}, {{ bar_step.number | tojson }})">ISSUE</button>
+            {% if menu_skip or menu_consume or menu_redline %}
+            <div class="dockbar-overflow">
+                <button class="btn btn-sm" onclick="toggleDockbarMenu(event)" aria-label="More actions">···</button>
+                <div class="dockbar-menu" id="dockbar-menu" hidden>
+                    {% if menu_skip %}
+                    <button class="btn btn-sm" onclick="hideDockbarMenu(); showSkipModal({{ bar_step.order }}, {{ bar_step.title | tojson }})">SKIP</button>
+                    {% endif %}
+                    {% if menu_consume %}
+                    <button class="btn btn-sm" onclick="hideDockbarMenu(); consumeStepParts({{ bar_step.order }})">CONSUME PARTS</button>
+                    {% endif %}
+                    {% if menu_redline %}
+                    <button class="btn btn-sm" onclick='hideDockbarMenu(); showRedlineModal({{ bar_step.op_order }}, {{ bar_step.op_number | tojson }}, {{ bar_step.op_open_ncs | map(attribute="id") | list | tojson }}, {{ bar_step.op_open_ncs | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if actionable and bs == 'awaiting_signoff' %}
+            <button class="btn btn-sm btn-primary" onclick="signoffStep({{ bar_step.order }})">SIGN OFF</button>
+            {% elif workable and not bar_step.has_children %}
+            {% if bar_step.raised_holds %}
+            <span class="mono text-yellow">COMPLETE — held by {% for nc in bar_step.raised_holds %}<a href="/issues/{{ nc.id }}">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>
+            {% else %}
+            <button class="btn btn-sm btn-primary" onclick="completeStep({{ bar_step.order }}, this)">COMPLETE</button>
+            {% endif %}
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+</div>

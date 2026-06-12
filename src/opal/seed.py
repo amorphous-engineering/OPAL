@@ -3767,6 +3767,12 @@ def _seed_versions_and_executions(
         db.flush()
         proc.current_version_id = version.id
 
+        # step order -> parent step order (for StepExecution.parent_step_order)
+        _id_to_order = {s["id"]: s["order"] for s in content["steps"]}
+        parent_order_of = {
+            s["order"]: _id_to_order.get(s["parent_step_id"]) for s in content["steps"]
+        }
+
         # Create executions for hydro (completed) and hotfire (in-progress)
         if proc_key == "hydro":
             inst = ProcedureInstance(
@@ -3787,6 +3793,7 @@ def _seed_versions_and_executions(
                     step_number=s["order"],
                     step_number_str=s["step_number"],
                     level=s["level"],
+                    parent_step_order=parent_order_of.get(s["order"]),
                     status=StepStatus.SIGNED_OFF if s["requires_signoff"] else StepStatus.COMPLETED,
                     started_at=now
                     - timedelta(days=10, hours=3)
@@ -3810,7 +3817,7 @@ def _seed_versions_and_executions(
                 procedure_id=proc.id,
                 version_id=version.id,
                 work_order_number=generate_work_order_number(db),
-                status=InstanceStatus.IN_PROGRESS,
+                status=InstanceStatus.IN_WORK,
                 started_at=now - timedelta(hours=2),
                 priority=1,
             )
@@ -3826,6 +3833,7 @@ def _seed_versions_and_executions(
                         step_number=s["order"],
                         step_number_str=s["step_number"],
                         level=s["level"],
+                        parent_step_order=parent_order_of.get(s["order"]),
                         status=StepStatus.SIGNED_OFF
                         if s["requires_signoff"]
                         else StepStatus.COMPLETED,
@@ -3836,13 +3844,16 @@ def _seed_versions_and_executions(
                     )
                     db.add(se)
                 elif s["order"] == 13:
+                    # The crew's position is presence (cursor), not status —
+                    # the step ahead of the completed work stays PENDING.
                     se = StepExecution(
                         instance_id=inst.id,
                         step_number=s["order"],
                         step_number_str=s["step_number"],
                         level=s["level"],
-                        status=StepStatus.IN_PROGRESS,
-                        started_at=now - timedelta(minutes=15),
+                        parent_step_order=parent_order_of.get(s["order"]),
+                        status=StepStatus.PENDING,
+                        first_focused_at=now - timedelta(minutes=15),
                     )
                     db.add(se)
                 else:
@@ -3851,6 +3862,7 @@ def _seed_versions_and_executions(
                         step_number=s["order"],
                         step_number_str=s["step_number"],
                         level=s["level"],
+                        parent_step_order=parent_order_of.get(s["order"]),
                         status=StepStatus.PENDING,
                     )
                     db.add(se)

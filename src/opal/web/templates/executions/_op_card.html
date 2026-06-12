@@ -1,0 +1,51 @@
+{# One OP card. Context: op_data plus page context. Expansion policy
+   (Abby's rule): nothing loads collapsed unless it is complete. #}
+{% import 'opalkit/_macros.html' as ok %}
+{% import 'executions/_exec_macros.html' as ex with context %}
+{% set op = op_data.step %}
+{% set op_vs = version_steps_map.get(op.order, {}) %}
+{% set op_terminal = op.status in ['completed', 'signed_off', 'skipped'] %}
+{% set op_holds = op_holds_by_order.get(op.order, []) %}
+{% set op_gated = gated_ops_by_order.get(op.order) %}
+{% if op_data.is_ad_hoc and op.ad_hoc_issue %}
+<a class="exec-redline-banner mono" href="/issues/{{ op.ad_hoc_issue.id }}" title="Open NC {{ op.ad_hoc_issue.issue_number }}">REDLINE — {{ op.ad_hoc_issue.issue_number }}</a>
+{% endif %}
+<section class="op-card{% if op_terminal %} is-collapsed is-done{% endif %}{% if op_data.is_ad_hoc %} is-redline{% endif %}{% if op.is_contingency %} is-contingency{% endif %}"
+         id="op-{{ op.order }}" data-op-order="{{ op.order }}" data-op-status="{{ op.status }}">
+    <header class="op-card-head" onclick="toggleOp({{ op.order }})">
+        <span class="op-card-caret mono" data-caret>{{ '▸' if op_terminal else '▾' }}</span>
+        <span class="op-card-num mono">OP {{ op.step_number }}</span>
+        <span class="op-card-title">{{ op.title }}</span>
+        {% if op.is_contingency %}{{ ok.status("CONTINGENCY", "warn") }}{% endif %}
+        {% if op_vs.get('strict_sequence') %}<span class="role-chip mono" title="Sub-steps complete in order">SEQ</span>{% endif %}
+        {{ ex.role_chip(op_vs.get('required_role')) }}
+        {% if op_vs.get('caution') %}<span class="role-chip mono op-caution-chip" title="{{ op_vs.get('caution') }}">CAUTION</span>{% endif %}
+        <span class="op-card-spacer"></span>
+        <span class="op-card-progress mono{% if op_terminal %} is-done{% endif %}" data-op-progress>{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
+        {% if inst_status in ['cut', 'in_work'] %}
+            {% if op_holds %}
+            <span class="op-card-blockline mono text-yellow" title="OP COMPLETE is held until disposition">HELD BY {% for i in op_holds %}<a href="/issues/{{ i.id }}" onclick="event.stopPropagation()">{{ i.issue_number }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</span>
+            {% elif op_gated %}
+            <span class="op-card-blockline mono text-yellow">WAITING ON OP {{ op_gated | join(', ') }}</span>
+            {% endif %}
+        {% endif %}
+    </header>
+    <div class="op-card-body" {% if op_terminal %}hidden{% endif %}>
+        {% if op_vs.get('caution') %}
+        <div class="caution-block">CAUTION: {{ op_vs.get('caution') }}</div>
+        {% endif %}
+        {% if op_data.sub_steps %}
+            {% if op.instructions %}
+            <div class="step-instructions op-instructions" data-markdown>{{ op.instructions }}</div>
+            {% endif %}
+            {% for step in op_data.sub_steps %}
+            {% set row_is_op = false %}
+            {% include 'executions/_step_row.html' %}
+            {% endfor %}
+        {% else %}
+            {% set step = op %}
+            {% set row_is_op = true %}
+            {% include 'executions/_step_row.html' %}
+        {% endif %}
+    </div>
+</section>
