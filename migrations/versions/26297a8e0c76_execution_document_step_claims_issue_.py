@@ -1,7 +1,7 @@
 """Execution document: step claims, issue step blocks, step images, capture attribution, strict_sequence
 
 Revision ID: 26297a8e0c76
-Revises: ccf93c36170a
+Revises: a7b9c1d3e5f7
 Create Date: 2026-06-12 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '26297a8e0c76'
-down_revision: Union[str, None] = 'ccf93c36170a'
+down_revision: Union[str, None] = 'a7b9c1d3e5f7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
