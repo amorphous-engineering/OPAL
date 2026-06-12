@@ -11,12 +11,12 @@
             if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
         })();
     </script>
-    <link rel="icon" type="image/png" href="/static/favicon.png">
-    <link rel="stylesheet" href="/static/css/main.css">
-    <link rel="stylesheet" href="/static/css/tag.css">
-    <script src="/static/js/htmx.min.js"></script>
-    <script src="/static/js/marked.min.js"></script>
-    <script src="/static/js/events.js"></script>
+    <link rel="icon" type="image/png" href="{{ static_url('favicon.png') }}">
+    <link rel="stylesheet" href="{{ static_url('css/main.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/tag.css') }}">
+    <script src="{{ static_url('js/htmx.min.js') }}"></script>
+    <script src="{{ static_url('js/marked.min.js') }}"></script>
+    <script src="{{ static_url('js/events.js') }}"></script>
     {% block head_extra %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">

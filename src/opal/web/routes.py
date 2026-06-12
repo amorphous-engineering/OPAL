@@ -52,6 +52,24 @@ from opal.risks.dispositions import OPEN_DISPOSITIONS
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+def static_url(path: str) -> str:
+    """/static URL with an mtime cache-buster.
+
+    Pages stay open for days on shop-floor tablets; without a version
+    in the URL a normal reload can keep serving stale CSS/JS forever.
+    """
+    try:
+        version = int((STATIC_DIR / path).stat().st_mtime)
+    except OSError:
+        return f"/static/{path}"
+    return f"/static/{path}?v={version}"
+
+
+templates.env.globals["static_url"] = static_url
+
 
 def status_value(status) -> str:
     """Get string value from status (handles both enum and string)."""

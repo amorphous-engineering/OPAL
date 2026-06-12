@@ -10,7 +10,7 @@
             if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
         })();
     </script>
-    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="{{ static_url('css/main.css') }}">
     <style>
         body {
             display: flex;
@@ -110,7 +110,7 @@
             <button id="passkey-login" class="btn" style="width: 100%;">SIGN IN WITH PASSKEY</button>
             <div id="passkey-error" class="login-error" style="display: none; margin-top: var(--space-md);"></div>
         </div>
-        <script src="/static/js/webauthn.js"></script>
+        <script src="{{ static_url('js/webauthn.js') }}"></script>
         <script>
             // WebAuthn only exists in secure contexts (https or localhost)
             if (window.isSecureContext && window.PublicKeyCredential) {
