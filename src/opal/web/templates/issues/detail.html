@@ -4,15 +4,17 @@
 {% block breadcrumbs %}
 {{ ok.crumb("HOME", "/") }}
 {{ ok.crumb("ISSUES", "/issues") }}
-{{ ok.crumb(issue.issue_number or issue.id) }}
+{{ ok.crumb(issue.issue_number) }}
 {% endblock %}
 
 {% block content %}
-{% set type_val_header = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
-{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: 600; margin-left: var(--space-md);">SAVED</span>{{ ok.status(type_val_header | upper | replace('_', ' '), "error" if type_val_header == 'non_conformance' else ("warn" if type_val_header == 'bug' else ("info" if type_val_header == 'improvement' else "draft"))) }}{% endset %}
-{% call ok.panel("ISSUE " ~ (issue.issue_number or issue.id), max_width="1100px", actions=issue_actions) %}
+{% set type_val = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
+{% set containment_val = issue.containment.value if issue.containment.value is defined else issue.containment %}
+{% set disposition_val = issue.disposition_type.value if issue.disposition_type and issue.disposition_type.value is defined else (issue.disposition_type or '') %}
+{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: 600; margin-left: var(--space-md);">SAVED</span>{% if issue.disp_state == 'undispositioned' %}{{ ok.status("⛔ UNDISPOSITIONED", "error") }}{% elif issue.disp_state == 'dispositioned' %}{{ ok.status("DISPOSITIONED", "ok") }}{% else %}{{ ok.status("CLOSED", "default") }}{% endif %}{{ ok.status(type_val | upper | replace('_', ' '), "error" if type_val == 'non_conformance' else ("warn" if type_val == 'bug' else ("info" if type_val == 'improvement' else "draft"))) }}{% endset %}
+{% call ok.panel(issue.issue_number, max_width="1100px", actions=issue_actions) %}
         <div style="display: flex; gap: var(--space-lg);">
-            <!-- LEFT COLUMN (60%) -->
+            <!-- LEFT COLUMN -->
             <div style="flex: 3; min-width: 0;">
                 <!-- Title (inline edit) -->
                 <div style="margin-bottom: var(--space-md);">
@@ -23,9 +25,9 @@
                 </div>
 
                 <!-- Description (inline edit) -->
-                <div style="margin-bottom: var(--space-lg);">
+                <div style="margin-bottom: var(--space-md);">
                     <div class="form-label">DESCRIPTION</div>
-                    <div id="desc-display" style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); cursor: pointer; min-height: 40px; white-space: pre-wrap;" onclick="startEditDesc()" title="Click to edit">{{ issue.description or '(none)' }}</div>
+                    <div id="desc-display" style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color); cursor: pointer; min-height: 40px; white-space: pre-wrap;" onclick="startEditDesc()" title="Click to edit">{{ issue.description or '—' }}</div>
                     <div id="desc-edit" style="display: none;">
                         <textarea id="desc-input" class="form-textarea" rows="4" style="width: 100%;" onkeydown="if(event.key==='Escape') cancelEditDesc();">{{ issue.description or '' }}</textarea>
                         <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-xs);">
@@ -35,22 +37,20 @@
                     </div>
                 </div>
 
-                <!-- Type-specific fields -->
-                {% set type_val = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
-                {% if type_val == 'non_conformance' %}
-                <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">NON-CONFORMANCE DETAILS</div>
-                    <div style="margin-bottom: var(--space-sm);">
+                <!-- Should-be / Is — the NC pair, captured at discovery -->
+                <div style="margin-bottom: var(--space-md); display: flex; gap: var(--space-md);">
+                    <div style="flex: 1;">
                         <div class="form-label">SHOULD BE</div>
                         <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('should_be', this.value || null)">{{ issue.should_be or '' }}</textarea>
                     </div>
-                    <div>
+                    <div style="flex: 1;">
                         <div class="form-label">IS</div>
-                        <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('is_condition', this.value || null)">{{ issue.is_condition or '' }}</textarea>
+                        <textarea class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('actual', this.value || null)">{{ issue.actual or '' }}</textarea>
                     </div>
                 </div>
-                {% elif type_val == 'bug' %}
-                <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
+
+                {% if type_val == 'bug' %}
+                <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">BUG DETAILS</div>
                     <div style="margin-bottom: var(--space-sm);">
                         <div class="form-label">STEPS TO REPRODUCE</div>
@@ -66,7 +66,7 @@
                     </div>
                 </div>
                 {% elif type_val == 'improvement' %}
-                <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
+                <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">IMPROVEMENT DETAILS</div>
                     <div>
                         <div class="form-label">EXPECTED BENEFIT</div>
@@ -75,54 +75,108 @@
                 </div>
                 {% endif %}
 
-                <!-- Disposition section -->
-                <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">DISPOSITION</div>
+                <!-- HOLDING — the consequence readout: what this issue is stopping -->
+                <div style="margin-bottom: var(--space-md); border: 1px solid {% if holding %}var(--accent-red){% else %}var(--border-color){% endif %}; padding: var(--space-md);">
+                    <div class="form-label" style="margin-bottom: var(--space-xs); font-weight: 600;">HOLDING</div>
+                    {% if holding %}
+                    <div class="mono">
+                        {% for t in holding %}<a href="{{ t.href }}">{{ t.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+                    </div>
+                    {% elif containment_val == 'advisory' %}
+                    <div class="mono text-muted">— (advisory)</div>
+                    {% else %}
+                    <div class="mono text-muted">—</div>
+                    {% endif %}
+                </div>
 
+                <!-- Disposition (§4) — the signature moment -->
+                <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">
+                        DISPOSITION
+                        {% if issue.self_dispositioned %}{{ ok.status("SELF-DISPOSITIONED", "warn") }}{% endif %}
+                    </div>
+
+                    {% if issue.dispositioned %}
+                    {% call ok.table() %}
+                        {{ ok.detail_row("TYPE", disposition_val | upper | replace('_', ' '), mono=true, th_width="120px") }}
+                        {{ ok.detail_row("RATIONALE", issue.disposition_rationale) }}
+                        {{ ok.detail_row("SIGNATURE", (issue.dispositioned_by.name if issue.dispositioned_by else '—') ~ ' · ' ~ (issue.dispositioned_at.strftime('%Y-%m-%dT%H:%M:%SZ') if issue.dispositioned_at else '—'), mono=true) }}
+                    {% endcall %}
+                    {% if disposition_val in ['rework', 'repair'] and issue.procedure_instance_id and redline_op_order is not none %}
+                    <div style="margin-top: var(--space-sm);">
+                        {{ ok.btn("SPAWN REDLINE OP", href="/executions/" ~ issue.procedure_instance_id ~ "?tab=operations&op=" ~ redline_op_order ~ "&redline_issue=" ~ issue.id) }}
+                    </div>
+                    {% endif %}
+                    {% elif issue.disp_state == 'closed' %}
+                    <div class="mono text-muted">—</div>
+                    {% else %}
                     <div style="display: flex; gap: var(--space-md); margin-bottom: var(--space-sm);">
                         <div style="flex: 1;">
                             <div class="form-label">TYPE</div>
-                            <select id="disposition-type-select" class="form-select" style="width: 100%;" onchange="updateIssue('disposition_type', this.value || null)">
-                                <option value="">(none)</option>
+                            <select id="disposition-type-select" class="form-select" style="width: 100%;" onchange="updateIssue('disposition_type', this.value || ''); updateReadiness();">
+                                <option value="">—</option>
                                 {% for dt in disposition_types %}
-                                {% set current_dt = issue.disposition_type.value if issue.disposition_type and issue.disposition_type.value is defined else (issue.disposition_type or '') %}
-                                <option value="{{ dt }}" {% if current_dt == dt %}selected{% endif %}>{{ dt | upper | replace('_', ' ') }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div style="flex: 1;">
-                            <div class="form-label">APPROVED BY</div>
-                            <select id="disposition-approved-by-select" class="form-select" style="width: 100%;" onchange="updateIssue('disposition_approved_by_id', parseInt(this.value) || null)">
-                                <option value="">(none)</option>
-                                {% for u in users %}
-                                <option value="{{ u.id }}" {% if issue.disposition_approved_by_id == u.id %}selected{% endif %}>{{ u.name or u.email }}</option>
+                                <option value="{{ dt }}" {% if disposition_val == dt %}selected{% endif %}>{{ dt | upper | replace('_', ' ') }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
+                    <div style="margin-bottom: var(--space-sm);">
+                        <div class="form-label">RATIONALE</div>
+                        <textarea id="disposition-rationale-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_rationale', this.value || null)" oninput="updateReadiness()">{{ issue.disposition_rationale or '' }}</textarea>
+                    </div>
+                    <div class="mono" style="margin-bottom: var(--space-sm); font-size: 0.8rem;">
+                        READINESS
+                        <span id="readiness-type" style="margin-left: var(--space-sm);">[ ] type selected</span>
+                        <span id="readiness-rationale" style="margin-left: var(--space-sm);">[ ] rationale recorded</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: var(--space-md);">
+                        <button class="btn btn-primary" id="sign-disposition-btn" onclick="signDisposition()" disabled>SIGN DISPOSITION</button>
+                        <span class="mono text-muted" style="font-size: 0.8rem;">signature: {{ current_user.name if current_user else '—' }}</span>
+                    </div>
+                    {% endif %}
+                </div>
 
+                <!-- Attachments -->
+                <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
+                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">ATTACHMENTS</div>
+                    {% if attachments %}
+                    {% call ok.table() %}
+                        {% for att in attachments %}
+                        <tr>
+                            <td>{{ ok.mono(att.original_filename) }}</td>
+                            <td>{{ ok.muted(att.mime_type) }}</td>
+                            <td class="mono">{{ (att.size_bytes / 1024) | round(1) }} KB</td>
+                            {{ ok.td("Download", align="right", href="/api/attachments/" ~ att.id ~ "/download") }}
+                        </tr>
+                        {% endfor %}
+                    {% endcall %}
+                    {% endif %}
+                    <div style="display: flex; gap: var(--space-sm); align-items: center;{% if attachments %} margin-top: var(--space-sm);{% endif %}">
+                        <input type="file" id="att-photo" class="form-input" accept="image/*" capture="environment" multiple style="flex: 1;">
+                        <input type="file" id="att-file" class="form-input" multiple style="flex: 1;">
+                        {{ ok.btn("UPLOAD", variant="primary", attrs='onclick="uploadIssueAttachments()"') }}
+                    </div>
+                    <div id="att-error" class="text-red" style="display: none; margin-top: var(--space-xs);"></div>
+                </div>
+
+                <!-- Root cause + corrective action — required at NC closure, not at disposition -->
+                <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div style="margin-bottom: var(--space-sm);">
                         <div class="form-label">ROOT CAUSE</div>
                         <textarea id="root-cause-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('root_cause', this.value || null)">{{ issue.root_cause or '' }}</textarea>
                     </div>
-
-                    <div style="margin-bottom: var(--space-sm);">
+                    <div>
                         <div class="form-label">CORRECTIVE ACTION</div>
                         <textarea id="corrective-action-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('corrective_action', this.value || null)">{{ issue.corrective_action or '' }}</textarea>
                     </div>
-
-                    <div>
-                        <div class="form-label">DISPOSITION NOTES</div>
-                        <textarea id="disposition-notes-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_notes', this.value || null)">{{ issue.disposition_notes or '' }}</textarea>
-                    </div>
                 </div>
 
-                <!-- Comments section -->
-                <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
+                <!-- Activity log -->
+                <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">ACTIVITY LOG</div>
 
                     <div id="comments-list">
-                        {% if comments %}
                         {% for comment in comments %}
                         <div style="padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
                             <div style="display: flex; justify-content: space-between; margin-bottom: var(--space-xs);">
@@ -132,9 +186,6 @@
                             <div style="white-space: pre-wrap;">{{ comment.body }}</div>
                         </div>
                         {% endfor %}
-                        {% else %}
-                        <div class="text-muted" style="padding: var(--space-sm) 0;">No comments yet.</div>
-                        {% endif %}
                     </div>
 
                     <div style="margin-top: var(--space-md);">
@@ -145,41 +196,21 @@
                     </div>
                 </div>
 
-                <!-- Attachments section -->
-                <div style="margin-bottom: var(--space-lg); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">ATTACHMENTS</div>
-
-                    {% if attachments %}
-                    {% call ok.table() %}
-                        {% for att in attachments %}
-                        <tr>
-                            <td>{{ ok.mono(att.original_filename) }}</td>
-                            <td>{{ ok.muted(att.mime_type) }}</td>
-                            {{ ok.td("Download", align="right", href="/api/attachments/" ~ att.id ~ "/download") }}
-                        </tr>
-                        {% endfor %}
-                    {% endcall %}
-                    {% else %}
-                    <div class="text-muted" style="padding: var(--space-sm) 0;">No attachments.</div>
-                    {% endif %}
-                </div>
-
                 <div style="display: flex; gap: var(--space-sm);">
                     {{ ok.btn("BACK", href="/issues") }}
                     {{ ok.btn("DELETE", variant="danger", attrs='onclick="deleteIssue()"') }}
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN (40%) -->
-            <div style="flex: 2; min-width: 200px;">
+            <!-- RIGHT RAIL -->
+            <div style="flex: 2; min-width: 220px;">
                 {% call ok.table() %}
                     <tr>
-                        {{ ok.th("STATUS", width="110px") }}
+                        {{ ok.th("TYPE", width="120px") }}
                         <td>
-                            <select id="status-select" class="form-select" style="width: 100%;" onchange="updateIssue('status', this.value)">
-                                {% for s in statuses %}
-                                {% set status_val = issue.status.value if issue.status.value is defined else issue.status %}
-                                <option value="{{ s }}" {% if status_val == s %}selected{% endif %}>{{ s | upper | replace('_', ' ') }}</option>
+                            <select id="type-select" class="form-select" style="width: 100%;" onchange="updateIssue('issue_type', this.value)">
+                                {% for t in types %}
+                                <option value="{{ t }}" {% if type_val == t %}selected{% endif %}>{{ t | upper | replace('_', ' ') }}</option>
                                 {% endfor %}
                             </select>
                         </td>
@@ -196,12 +227,11 @@
                         </td>
                     </tr>
                     <tr>
-                        <th>TYPE</th>
+                        <th>CONTAINMENT</th>
                         <td>
-                            <select id="type-select" class="form-select" style="width: 100%;" onchange="updateIssue('issue_type', this.value)">
-                                {% for t in types %}
-                                {% set type_val = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
-                                <option value="{{ t }}" {% if type_val == t %}selected{% endif %}>{{ t | upper | replace('_', ' ') }}</option>
+                            <select id="containment-select" class="form-select" style="width: 100%;" onchange="setContainment(this.value)">
+                                {% for c in containments %}
+                                <option value="{{ c }}" {% if containment_val == c %}selected{% endif %}>{{ c | upper }}</option>
                                 {% endfor %}
                             </select>
                         </td>
@@ -217,23 +247,36 @@
                             </select>
                         </td>
                     </tr>
+                    {{ ok.detail_row("RAISED BY", issue.raised_by.name if issue.raised_by else '—') }}
                     {{ ok.detail_row("CREATED", ok.timestamp(issue.created_at)) }}
                     {{ ok.detail_row("UPDATED", ok.timestamp(issue.updated_at)) }}
                 {% endcall %}
 
+                {% set status_val = issue.status.value if issue.status.value is defined else issue.status %}
+                <div style="margin-top: var(--space-sm);">
+                    {% if status_val == 'open' and issue.dispositioned %}
+                    {{ ok.btn("CLOSE", attrs='onclick="closeIssue()"') }}
+                    {% elif status_val == 'closed' %}
+                    {{ ok.btn("REOPEN", attrs='onclick="updateIssue(\'status\', \'open\').then(() => window.location.reload())"') }}
+                    {% endif %}
+                </div>
+
                 <!-- Links -->
-                {% if issue.part_id or issue.procedure_id or issue.procedure_instance_id %}
+                {% if issue.part_id or issue.procedure_id or issue.procedure_instance_id or issue.raised_step_id %}
                 <div style="margin-top: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">LINKS</div>
                     {% call ok.table() %}
                         {% if issue.part_id %}
-                        {{ ok.detail_row("PART", ok.link(issue.part.name if issue.part else ('Part #' ~ issue.part_id), "/parts/" ~ issue.part_id), th_width="80px") }}
+                        {{ ok.detail_row("PART", ok.link(issue.part.name if issue.part else '—', "/parts/" ~ issue.part_id), th_width="100px") }}
                         {% endif %}
                         {% if issue.procedure_id %}
-                        {{ ok.detail_row("TEMPLATE", ok.link(issue.procedure.name if issue.procedure else ('Procedure #' ~ issue.procedure_id), "/procedures/" ~ issue.procedure_id)) }}
+                        {{ ok.detail_row("TEMPLATE", ok.link(issue.procedure.name if issue.procedure else '—', "/procedures/" ~ issue.procedure_id), th_width="100px") }}
                         {% endif %}
                         {% if issue.procedure_instance_id %}
-                        {{ ok.detail_row("EXECUTION", ok.link("Execution #" ~ issue.procedure_instance_id, "/executions/" ~ issue.procedure_instance_id)) }}
+                        {{ ok.detail_row("EXECUTION", ok.link(issue.procedure_instance.work_order_number if issue.procedure_instance and issue.procedure_instance.work_order_number else 'execution', "/executions/" ~ issue.procedure_instance_id, mono=true), th_width="100px") }}
+                        {% endif %}
+                        {% if issue.raised_step %}
+                        {{ ok.detail_row("RAISED AT", ok.link(issue.raised_step.step_number_str or issue.raised_step.step_number, "/executions/" ~ issue.procedure_instance_id ~ "?tab=operations&op=" ~ (redline_op_order if redline_op_order is not none else issue.raised_step.step_number), mono=true), th_width="100px") }}
                         {% endif %}
                     {% endcall %}
                 </div>
@@ -244,6 +287,7 @@
 
 <script>
 const issueId = {{ issue.id }};
+const HOLDING = {{ holding | tojson }};
 
 function getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
@@ -278,6 +322,109 @@ function showSaveFlash() {
     el.textContent = 'SAVED';
     el.style.display = 'inline';
     setTimeout(() => { el.style.display = 'none'; }, 1500);
+}
+
+// ---- Disposition: readiness + signature ----
+function updateReadiness() {
+    const typeSel = document.getElementById('disposition-type-select');
+    const rationale = document.getElementById('disposition-rationale-input');
+    const btn = document.getElementById('sign-disposition-btn');
+    if (!typeSel || !rationale || !btn) return;
+    const typeOk = !!typeSel.value;
+    const rationaleOk = !!rationale.value.trim();
+    document.getElementById('readiness-type').textContent = (typeOk ? '[x]' : '[ ]') + ' type selected';
+    document.getElementById('readiness-rationale').textContent = (rationaleOk ? '[x]' : '[ ]') + ' rationale recorded';
+    btn.disabled = !(typeOk && rationaleOk);
+}
+document.addEventListener('DOMContentLoaded', updateReadiness);
+
+async function signDisposition() {
+    const typeSel = document.getElementById('disposition-type-select');
+    const rationale = document.getElementById('disposition-rationale-input');
+    if (!typeSel.value || !rationale.value.trim()) return;
+
+    // The confirm dialog is the one home for the consequence sentence.
+    const releases = HOLDING.length ? HOLDING.map(t => t.label).join(', ') : '—';
+    const label = typeSel.options[typeSel.selectedIndex].text;
+    if (!confirm(`Sign disposition ${label}.\nReleases: ${releases}`)) return;
+
+    try {
+        const response = await fetch(`/api/issues/${issueId}/disposition`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                disposition_type: typeSel.value,
+                disposition_rationale: rationale.value.trim(),
+            }),
+        });
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            alert(formatApiError(error.detail, 'Failed to sign disposition'));
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
+
+// ---- Containment: widening is one click; narrowing is audited with a note ----
+async function setContainment(value) {
+    let body = { containment: value };
+    let response = await fetch(`/api/issues/${issueId}/containment`, {
+        method: 'POST', headers: getHeaders(), body: JSON.stringify(body),
+    });
+    if (response.status === 400) {
+        const error = await response.json();
+        if (typeof error.detail === 'string' && error.detail.includes('note is required')) {
+            const note = prompt('Narrowing containment releases a hold — note:');
+            if (note === null || !note.trim()) { window.location.reload(); return; }
+            body.note = note.trim();
+            response = await fetch(`/api/issues/${issueId}/containment`, {
+                method: 'POST', headers: getHeaders(), body: JSON.stringify(body),
+            });
+        }
+    }
+    if (response.ok) {
+        window.location.reload();
+    } else {
+        const error = await response.json();
+        alert(formatApiError(error.detail, 'Failed to change containment'));
+        window.location.reload();
+    }
+}
+
+// ---- Close (disposition first, always) ----
+async function closeIssue() {
+    await updateIssue('status', 'closed');
+    window.location.reload();
+}
+
+// ---- Attachments ----
+async function uploadIssueAttachments() {
+    const errorDiv = document.getElementById('att-error');
+    errorDiv.style.display = 'none';
+    const files = [
+        ...document.getElementById('att-photo').files,
+        ...document.getElementById('att-file').files,
+    ];
+    if (!files.length) return;
+    const failed = [];
+    for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('issue_id', issueId);
+        try {
+            const r = await fetch('/api/attachments/upload', { method: 'POST', body: fd });
+            if (!r.ok) failed.push(file.name);
+        } catch (_) { failed.push(file.name); }
+    }
+    if (failed.length) {
+        errorDiv.textContent = 'Upload failed: ' + failed.join(', ');
+        errorDiv.style.display = 'block';
+        return;
+    }
+    window.location.reload();
 }
 
 // Inline title editing
@@ -321,7 +468,7 @@ function cancelEditDesc() {
 async function saveDesc() {
     const input = document.getElementById('desc-input');
     const newDesc = input.value;
-    document.getElementById('desc-display').textContent = newDesc || '(none)';
+    document.getElementById('desc-display').textContent = newDesc || '—';
     document.getElementById('desc-display').style.display = '';
     document.getElementById('desc-edit').style.display = 'none';
     await updateIssue('description', newDesc);

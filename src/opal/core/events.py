@@ -26,6 +26,9 @@ class EventType(str, Enum):
     INSTANCE_STARTED = "instance_started"
     INSTANCE_COMPLETED = "instance_completed"
 
+    # Issue events
+    ISSUE_DISPOSITIONED = "issue_dispositioned"
+
     # Collaboration events
     USER_JOINED = "user_joined"
     USER_LEFT = "user_left"
@@ -205,6 +208,24 @@ async def emit_instance_completed(
         },
     )
     await event_bus.publish(event)
+
+
+async def emit_issue_dispositioned(
+    instance_id: int,
+    issue_id: int,
+    issue_number: str,
+) -> None:
+    """Emit an issue_dispositioned event — held rows on execution pages
+    recover their controls without reload."""
+    event = Event(
+        type=EventType.ISSUE_DISPOSITIONED,
+        data={
+            "instance_id": instance_id,
+            "issue_id": issue_id,
+            "issue_number": issue_number,
+        },
+    )
+    await event_bus.publish_to_instance(instance_id, event)
 
 
 async def emit_user_joined(

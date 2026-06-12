@@ -41,34 +41,70 @@
     {% include 'executions/tabs/' ~ tab ~ '.html' %}
 </div>
 
-<!-- NC Modal -->
+<!-- Anomaly capture modal (§3) — context pre-filled; the form asks nothing the
+     invoking step already knows. Confirmation is the state change itself. -->
 <div id="nc-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 560px; max-height: 90vh; overflow-y: auto;">
         <div class="panel">
-            <div class="panel-header">LOG NON-CONFORMANCE</div>
+            <div class="panel-header">ANOMALY <span class="mono text-muted" id="nc-context-label" style="font-size: 0.75rem;"></span></div>
             <div class="panel-body">
                 <form id="nc-form" onsubmit="submitNC(event)">
                     <input type="hidden" id="nc-step" name="step_number">
+                    <input type="hidden" id="nc-step-execution-id">
                     <div class="form-group">
                         <label class="form-label" for="nc-title">TITLE *</label>
-                        <input type="text" id="nc-title" name="title" class="form-input" required>
+                        <input type="text" id="nc-title" name="title" class="form-input" required maxlength="255">
+                    </div>
+                    <div style="display: flex; gap: var(--space-md);">
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label" for="nc-should-be">SHOULD BE</label>
+                            <textarea id="nc-should-be" class="form-textarea" rows="2"></textarea>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label" for="nc-actual">IS</label>
+                            <textarea id="nc-actual" class="form-textarea" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: var(--space-md);">
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label" for="nc-priority">PRIORITY</label>
+                            <select id="nc-priority" name="priority" class="form-select">
+                                <option value="low">LOW</option>
+                                <option value="medium" selected>MEDIUM</option>
+                                <option value="high">HIGH</option>
+                                <option value="critical">CRITICAL</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label" for="nc-containment">HOLDS</label>
+                            <select id="nc-containment" name="containment" class="form-select">
+                                <option value="step" selected>STEP</option>
+                                <option value="op">OP</option>
+                                <option value="wo">WO</option>
+                                <option value="advisory">ADVISORY</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label" for="nc-assign">ASSIGN</label>
+                            <select id="nc-assign" name="assigned_to_id" class="form-select">
+                                <option value="">(unassigned)</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}">{{ u.name or u.email }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="nc-description">DESCRIPTION</label>
-                        <textarea id="nc-description" name="description" class="form-textarea" rows="3"></textarea>
+                        <label class="form-label" for="nc-photo">PHOTO</label>
+                        <input type="file" id="nc-photo" class="form-input" accept="image/*" capture="environment" multiple>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="nc-priority">PRIORITY</label>
-                        <select id="nc-priority" name="priority" class="form-select">
-                            <option value="low">LOW</option>
-                            <option value="medium" selected>MEDIUM</option>
-                            <option value="high">HIGH</option>
-                            <option value="critical">CRITICAL</option>
-                        </select>
+                        <label class="form-label" for="nc-file">FILE</label>
+                        <input type="file" id="nc-file" class="form-input" multiple>
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         <button type="button" class="btn" onclick="hideNCModal()">CANCEL</button>
-                        <button type="submit" class="btn btn-primary">LOG NC</button>
+                        <button type="submit" class="btn btn-primary" id="nc-submit">RAISE</button>
                     </div>
                 </form>
                 <div id="nc-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
@@ -284,38 +320,130 @@ async function abortExecution() {
     }
 }
 
-function showNCModal(stepNumber) {
+function showNCModal(stepNumber, stepExecutionId, stepLabel) {
     document.getElementById('nc-step').value = stepNumber;
+    document.getElementById('nc-step-execution-id').value = stepExecutionId || '';
+    document.getElementById('nc-context-label').textContent = stepLabel ? ('STEP ' + stepLabel) : '';
+    document.getElementById('nc-error').style.display = 'none';
     document.getElementById('nc-modal').style.display = 'block';
+    document.getElementById('nc-title').focus();
 }
 function hideNCModal() {
     document.getElementById('nc-modal').style.display = 'none';
     document.getElementById('nc-form').reset();
 }
 
+// ---- Toast: the capture confirmation is the state change itself; the toast
+// just names the ticket. Survives the reload via sessionStorage. ----
+function showToast(text, href) {
+    const el = document.createElement('div');
+    el.className = 'mono';
+    el.style.cssText = 'position:fixed;bottom:16px;right:16px;background:var(--bg-secondary);'
+        + 'border:1px solid var(--accent-green);padding:8px 14px;z-index:10000;font-size:0.85rem;';
+    if (href) {
+        const a = document.createElement('a');
+        a.href = href;
+        a.textContent = text + ' →';
+        el.appendChild(a);
+    } else {
+        el.textContent = text;
+    }
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 8000);
+}
+
+function queueToast(text, href) {
+    sessionStorage.setItem('opal-toast', JSON.stringify({ text, href }));
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const queued = sessionStorage.getItem('opal-toast');
+    if (queued) {
+        sessionStorage.removeItem('opal-toast');
+        try { const t = JSON.parse(queued); showToast(t.text, t.href); } catch (_) {}
+    }
+    // Disposition signing releases holds live: held rows recover their
+    // controls without user action.
+    if (window.opalEvents) {
+        window.opalEvents.on('issue_dispositioned', (data) => {
+            if (data.instance_id === instanceId) window.location.reload();
+        });
+    }
+    // Spawn-redline deep link from the issue page: open the modal with the
+    // authorizing NC preselected.
+    const redlineIssue = new URLSearchParams(window.location.search).get('redline_issue');
+    if (redlineIssue) {
+        const btn = document.getElementById('redline-open-btn');
+        if (btn) {
+            btn.click();
+            const sel = document.getElementById('redline-issue-id');
+            if (sel) sel.value = redlineIssue;
+        }
+    }
+});
+
 async function submitNC(event) {
     event.preventDefault();
     const form = document.getElementById('nc-form');
     const errorDiv = document.getElementById('nc-error');
+    const submitBtn = document.getElementById('nc-submit');
     errorDiv.style.display = 'none';
+    submitBtn.disabled = true;
     const stepNumber = form.step_number.value;
-    const data = { title: form.title.value, description: form.description.value || null, priority: form.priority.value };
+    const assignVal = document.getElementById('nc-assign').value;
+    const data = {
+        title: document.getElementById('nc-title').value,
+        priority: document.getElementById('nc-priority').value,
+        should_be: document.getElementById('nc-should-be').value || null,
+        actual: document.getElementById('nc-actual').value || null,
+        containment: document.getElementById('nc-containment').value,
+        assigned_to_id: assignVal ? parseInt(assignVal) : null,
+    };
     try {
         const response = await fetch(`/api/procedure-instances/${instanceId}/steps/${stepNumber}/nc`, {
             method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
         });
-        if (response.ok) {
-            const issue = await response.json();
-            alert(`NC logged as Issue #${issue.id}`);
-            hideNCModal();
-        } else {
+        if (!response.ok) {
             const error = await response.json();
-            errorDiv.textContent = formatApiError(error.detail, 'Failed to log NC');
+            errorDiv.textContent = formatApiError(error.detail, 'Failed to raise issue');
             errorDiv.style.display = 'block';
+            submitBtn.disabled = false;
+            return;
         }
+        const issue = await response.json();
+
+        // Evidence at discovery: upload everything attached, linked to the
+        // new issue and the raising step.
+        const stepExecutionId = document.getElementById('nc-step-execution-id').value;
+        const files = [
+            ...document.getElementById('nc-photo').files,
+            ...document.getElementById('nc-file').files,
+        ];
+        const failed = [];
+        for (const file of files) {
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('issue_id', issue.id);
+            fd.append('procedure_instance_id', instanceId);
+            if (stepExecutionId) fd.append('step_execution_id', stepExecutionId);
+            try {
+                const up = await fetch('/api/attachments/upload', { method: 'POST', body: fd });
+                if (!up.ok) failed.push(file.name);
+            } catch (_) { failed.push(file.name); }
+        }
+        if (failed.length) {
+            errorDiv.textContent = 'Issue ' + issue.issue_number + ' raised; upload failed: ' + failed.join(', ');
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = false;
+            return;
+        }
+
+        queueToast(issue.issue_number + ' raised', '/issues/' + issue.id);
+        window.location.reload();
     } catch (e) {
         errorDiv.textContent = 'Network error: ' + e.message;
         errorDiv.style.display = 'block';
+        submitBtn.disabled = false;
     }
 }
 

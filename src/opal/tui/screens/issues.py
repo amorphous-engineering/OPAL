@@ -60,9 +60,6 @@ class IssueFormModal(FormModal):
         if self.issue:
             status_options = [
                 ("Open", "open"),
-                ("Investigating", "investigating"),
-                ("Disposition Pending", "disposition_pending"),
-                ("Disposition Approved", "disposition_approved"),
                 ("Closed", "closed"),
             ]
             yield FormGroup(
@@ -137,10 +134,16 @@ class DispositionModal(FormModal):
             ("Repair", "repair"),
             ("Scrap", "scrap"),
             ("Return to Supplier", "return_to_supplier"),
+            ("No Defect", "no_defect"),
         ]
         yield FormGroup(
             "Disposition Type",
             Select(disp_options, id="field-disposition", prompt="Select..."),
+            required=True,
+        )
+        yield FormGroup(
+            "Rationale",
+            TextArea(id="field-rationale"),
             required=True,
         )
         yield FormGroup(
@@ -158,12 +161,17 @@ class DispositionModal(FormModal):
             self.show_error("Disposition type is required")
             return None
 
+        rationale = self.query_one("#field-rationale", TextArea).text.strip()
+        if not rationale:
+            self.show_error("Rationale is required")
+            return None
+
         root_cause = self.query_one("#field-root-cause", TextArea).text.strip()
         corrective_action = self.query_one("#field-corrective-action", TextArea).text.strip()
 
         data: dict[str, Any] = {
-            "status": "disposition_approved",
             "disposition_type": disposition,
+            "disposition_rationale": rationale,
         }
         if root_cause:
             data["root_cause"] = root_cause
@@ -291,9 +299,6 @@ class IssuesScreen(Screen):
             Horizontal(
                 Button("All", id="filter-all", variant="primary"),
                 Button("Open", id="filter-open"),
-                Button("Investigating", id="filter-investigating"),
-                Button("Disp Pending", id="filter-disposition_pending"),
-                Button("Disp Approved", id="filter-disposition_approved"),
                 Button("Closed", id="filter-closed"),
                 classes="filter-bar",
             ),
@@ -409,8 +414,18 @@ class IssuesScreen(Screen):
             return
         client = get_client(self.app.api_url)
         try:
-            client.update_issue(detail.issue_data["id"], data)
-            self.notify("Disposition recorded")
+            issue_id = detail.issue_data["id"]
+            extras = {k: v for k, v in data.items() if k in ("root_cause", "corrective_action")}
+            if extras:
+                client.update_issue(issue_id, extras)
+            client.sign_disposition(
+                issue_id,
+                {
+                    "disposition_type": data["disposition_type"],
+                    "disposition_rationale": data["disposition_rationale"],
+                },
+            )
+            self.notify("Disposition signed")
             self.run_worker(self.load_issues())
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")

@@ -1,4 +1,10 @@
-"""Issues API routes."""
+"""Issues API routes.
+
+Two gates, not one: raised → UNDISPOSITIONED → DISPOSITIONED → CLOSED.
+The blocking predicate is `undispositioned`, never `open`. Signing a
+disposition (POST /{id}/disposition) releases every containment the issue
+holds, live; closure is bookkeeping that follows at its own pace.
+"""
 
 from datetime import UTC, datetime
 
@@ -8,8 +14,11 @@ from pydantic import BaseModel, Field
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
-from opal.db.models.execution import StepExecution, StepStatus
+from opal.core.events import emit_issue_dispositioned
+from opal.core.holds import holding_readout
 from opal.db.models.issue import (
+    CONTAINMENT_RANK,
+    Containment,
     DispositionType,
     Issue,
     IssuePriority,
@@ -40,12 +49,17 @@ class IssueResponse(BaseModel):
     issue_type: str
     status: str
     priority: str
+    containment: str
+    containment_step_id: int | None = None
+    disp_state: str
+    dispositioned: bool
     part_id: int | None = None
     procedure_id: int | None = None
     procedure_instance_id: int | None = None
-    step_execution_id: int | None = None
+    raised_step_id: int | None = None
+    raised_by_id: int | None = None
     should_be: str | None = None
-    is_condition: str | None = None
+    actual: str | None = None
     steps_to_reproduce: str | None = None
     expected_behavior: str | None = None
     actual_behavior: str | None = None
@@ -53,9 +67,10 @@ class IssueResponse(BaseModel):
     root_cause: str | None = None
     corrective_action: str | None = None
     disposition_type: str | None = None
-    disposition_notes: str | None = None
+    disposition_rationale: str | None = None
     assigned_to_id: int | None = None
-    disposition_approved_by_id: int | None = None
+    dispositioned_by_id: int | None = None
+    dispositioned_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -78,8 +93,10 @@ class IssueCreate(BaseModel):
     description: str | None = None
     issue_type: str = "task"
     priority: str = "medium"
+    containment: str = "advisory"
+    containment_step_id: int | None = None
     should_be: str | None = None
-    is_condition: str | None = None
+    actual: str | None = None
     steps_to_reproduce: str | None = None
     expected_behavior: str | None = None
     actual_behavior: str | None = None
@@ -87,11 +104,13 @@ class IssueCreate(BaseModel):
     part_id: int | None = None
     procedure_id: int | None = None
     procedure_instance_id: int | None = None
+    raised_step_id: int | None = None
     assigned_to_id: int | None = None
 
 
 class IssueUpdate(BaseModel):
-    """Update issue request."""
+    """Update issue request. Disposition is signed via POST /{id}/disposition,
+    not patched; containment changes go through POST /{id}/containment."""
 
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
@@ -99,7 +118,7 @@ class IssueUpdate(BaseModel):
     status: str | None = None
     priority: str | None = None
     should_be: str | None = None
-    is_condition: str | None = None
+    actual: str | None = None
     steps_to_reproduce: str | None = None
     expected_behavior: str | None = None
     actual_behavior: str | None = None
@@ -110,9 +129,24 @@ class IssueUpdate(BaseModel):
     root_cause: str | None = None
     corrective_action: str | None = None
     disposition_type: str | None = None
-    disposition_notes: str | None = None
+    disposition_rationale: str | None = None
     assigned_to_id: int | None = None
-    disposition_approved_by_id: int | None = None
+
+
+class DispositionSign(BaseModel):
+    """Sign a disposition — the signature moment."""
+
+    disposition_type: str
+    disposition_rationale: str = Field(..., min_length=1)
+
+
+class ContainmentChange(BaseModel):
+    """Change containment scope. Narrowing releases a hold and is audited
+    with a note."""
+
+    containment: str
+    containment_step_id: int | None = None
+    note: str | None = None
 
 
 class IssueCommentResponse(BaseModel):
@@ -143,12 +177,17 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
         issue_type=_get_enum_val(issue, "issue_type"),
         status=_get_enum_val(issue, "status"),
         priority=_get_enum_val(issue, "priority"),
+        containment=_get_enum_val(issue, "containment"),
+        containment_step_id=issue.containment_step_id,
+        disp_state=issue.disp_state,
+        dispositioned=issue.dispositioned,
         part_id=issue.part_id,
         procedure_id=issue.procedure_id,
         procedure_instance_id=issue.procedure_instance_id,
-        step_execution_id=issue.step_execution_id,
+        raised_step_id=issue.raised_step_id,
+        raised_by_id=issue.raised_by_id,
         should_be=issue.should_be,
-        is_condition=issue.is_condition,
+        actual=issue.actual,
         steps_to_reproduce=issue.steps_to_reproduce,
         expected_behavior=issue.expected_behavior,
         actual_behavior=issue.actual_behavior,
@@ -158,9 +197,10 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
         disposition_type=_get_enum_val(issue, "disposition_type")
         if issue.disposition_type
         else None,
-        disposition_notes=issue.disposition_notes,
+        disposition_rationale=issue.disposition_rationale,
         assigned_to_id=issue.assigned_to_id,
-        disposition_approved_by_id=issue.disposition_approved_by_id,
+        dispositioned_by_id=issue.dispositioned_by_id,
+        dispositioned_at=issue.dispositioned_at,
         created_at=issue.created_at,
         updated_at=issue.updated_at,
     )
@@ -193,6 +233,12 @@ def get_disposition_types() -> list[str]:
     return [d.value for d in DispositionType]
 
 
+@router.get("/containments", response_model=list[str])
+def get_containments() -> list[str]:
+    """Get all containment scopes."""
+    return [c.value for c in Containment]
+
+
 # ============ Issue CRUD ============
 
 
@@ -202,6 +248,7 @@ def list_issues(
     search: str | None = Query(None),
     issue_type: str | None = Query(None),
     status: str | None = Query(None),
+    disp_state: str | None = Query(None),
     priority: str | None = Query(None),
     part_id: int | None = Query(None),
     procedure_id: int | None = Query(None),
@@ -220,6 +267,8 @@ def list_issues(
         query = query.filter(Issue.issue_type == issue_type)
     if status:
         query = query.filter(Issue.status == status)
+    if disp_state:
+        query = _filter_disp_state(query, disp_state)
     if priority:
         query = query.filter(Issue.priority == priority)
     if part_id:
@@ -239,6 +288,23 @@ def list_issues(
         page=page,
         page_size=page_size,
     )
+
+
+def _filter_disp_state(query, disp_state: str):
+    """Filter by derived disposition state."""
+    from sqlalchemy import and_, or_
+
+    signed = and_(Issue.disposition_type.isnot(None), Issue.dispositioned_at.isnot(None))
+    if disp_state == "closed":
+        return query.filter(Issue.status == IssueStatus.CLOSED)
+    if disp_state == "dispositioned":
+        return query.filter(Issue.status != IssueStatus.CLOSED, signed)
+    if disp_state == "undispositioned":
+        return query.filter(
+            Issue.status != IssueStatus.CLOSED,
+            or_(Issue.disposition_type.is_(None), Issue.dispositioned_at.is_(None)),
+        )
+    raise HTTPException(status_code=400, detail=f"Invalid disp_state: {disp_state}")
 
 
 @router.post("", response_model=IssueResponse, status_code=201)
@@ -261,6 +327,13 @@ def create_issue(
     except ValueError as err:
         raise HTTPException(status_code=400, detail=f"Invalid priority: {data.priority}") from err
 
+    try:
+        containment = Containment(data.containment)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid containment: {data.containment}"
+        ) from err
+
     issue = Issue(
         issue_number=generate_issue_number(db),
         title=data.title,
@@ -268,8 +341,10 @@ def create_issue(
         issue_type=issue_type,
         status=IssueStatus.OPEN,
         priority=priority,
+        containment=containment,
+        containment_step_id=data.containment_step_id,
         should_be=data.should_be,
-        is_condition=data.is_condition,
+        actual=data.actual,
         steps_to_reproduce=data.steps_to_reproduce,
         expected_behavior=data.expected_behavior,
         actual_behavior=data.actual_behavior,
@@ -277,6 +352,8 @@ def create_issue(
         part_id=data.part_id,
         procedure_id=data.procedure_id,
         procedure_instance_id=data.procedure_instance_id,
+        raised_step_id=data.raised_step_id,
+        raised_by_id=user_id,
         assigned_to_id=data.assigned_to_id,
     )
     db.add(issue)
@@ -300,6 +377,21 @@ def get_issue(
         raise HTTPException(status_code=404, detail="Issue not found")
 
     return _issue_to_response(issue)
+
+
+@router.get("/{issue_id}/holding", response_model=list[dict])
+def get_issue_holding(
+    issue_id: int,
+    db: DbSession,
+) -> list[dict]:
+    """What this issue is stopping: [{label, href}], empty for advisory or
+    dispositioned issues. The disposition confirm dialog reads its consequence
+    sentence from here."""
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    return holding_readout(db, issue)
 
 
 @router.patch("/{issue_id}", response_model=IssueResponse)
@@ -332,16 +424,8 @@ def update_issue(
             new_status = IssueStatus(data.status)
         except ValueError as err:
             raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
-        # Disposition approval requires disposition_type to be set
-        if new_status == IssueStatus.DISPOSITION_APPROVED:
-            effective_disposition_type = data.disposition_type or (
-                _get_enum_val(issue, "disposition_type") if issue.disposition_type else None
-            )
-            if not effective_disposition_type:
-                raise HTTPException(
-                    status_code=400,
-                    detail="disposition_type is required when approving disposition",
-                )
+        if new_status == IssueStatus.CLOSED:
+            _validate_close(issue, data)
         issue.status = new_status
     if data.priority is not None:
         try:
@@ -352,8 +436,8 @@ def update_issue(
             ) from err
     if data.should_be is not None:
         issue.should_be = data.should_be
-    if data.is_condition is not None:
-        issue.is_condition = data.is_condition
+    if data.actual is not None:
+        issue.actual = data.actual
     if data.steps_to_reproduce is not None:
         issue.steps_to_reproduce = data.steps_to_reproduce
     if data.expected_behavior is not None:
@@ -372,146 +456,171 @@ def update_issue(
         issue.root_cause = data.root_cause
     if data.corrective_action is not None:
         issue.corrective_action = data.corrective_action
-    if data.disposition_type is not None:
-        if data.disposition_type == "":
-            # Clearing disposition_type — block if status is disposition_approved
-            current_status = _get_enum_val(issue, "status") if issue.status else None
-            if current_status == "disposition_approved":
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot clear disposition_type while status is disposition_approved",
-                )
-            issue.disposition_type = None
-        else:
-            try:
-                issue.disposition_type = DispositionType(data.disposition_type)
-            except ValueError as err:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid disposition type: {data.disposition_type}"
-                ) from err
-    if data.disposition_notes is not None:
-        issue.disposition_notes = data.disposition_notes
+    if data.disposition_type is not None or data.disposition_rationale is not None:
+        # Drafting the disposition panel is a PATCH; the signature is not.
+        # A signed disposition is immutable — a different decision is a new
+        # signature, not an edit.
+        if issue.dispositioned:
+            raise HTTPException(
+                status_code=400,
+                detail="Disposition already signed; it cannot be edited",
+            )
+        if data.disposition_type is not None:
+            if data.disposition_type == "":
+                issue.disposition_type = None
+            else:
+                try:
+                    issue.disposition_type = DispositionType(data.disposition_type)
+                except ValueError as err:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid disposition type: {data.disposition_type}",
+                    ) from err
+        if data.disposition_rationale is not None:
+            issue.disposition_rationale = data.disposition_rationale
     if data.assigned_to_id is not None:
         issue.assigned_to_id = data.assigned_to_id
-    if data.disposition_approved_by_id is not None:
-        issue.disposition_approved_by_id = data.disposition_approved_by_id
 
     log_update(db, issue, old_values, user_id)
-
-    # Auto-resume step on hold once all linked NCs reach a terminal disposition.
-    _maybe_resume_step_after_nc_update(db, issue, user_id)
-
     db.commit()
     db.refresh(issue)
 
     return _issue_to_response(issue)
 
 
-def _maybe_resume_step_after_nc_update(db, issue: "Issue", user_id: int | None) -> None:
-    """If this NC just reached a terminal state and no other open NCs remain on
-    its step, pop the step back to IN_PROGRESS."""
-    if issue.step_execution_id is None:
+def _recheck_instance_completion(db, issue: Issue) -> None:
+    """Releasing a hold may have been the last thing standing between a work
+    order and completion (e.g. wo/op containment signed after every step
+    finished) — re-evaluate."""
+    if issue.procedure_instance_id is None:
         return
-    issue_type = issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type
-    if issue_type != IssueType.NON_CONFORMANCE.value:
-        return
-    issue_status = issue.status.value if hasattr(issue.status, "value") else issue.status
-    if issue_status not in (IssueStatus.DISPOSITION_APPROVED.value, IssueStatus.CLOSED.value):
-        return
+    from opal.api.routes.execution import _check_instance_completion
+    from opal.db.models.execution import ProcedureInstance
 
-    step_exec = db.get(StepExecution, issue.step_execution_id)
-    if step_exec is None:
-        return
-    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-    if step_status != StepStatus.ON_HOLD.value:
-        return
+    instance = db.get(ProcedureInstance, issue.procedure_instance_id)
+    if instance is not None:
+        _check_instance_completion(instance, db)
 
-    remaining = (
-        db.query(Issue)
-        .filter(
-            Issue.step_execution_id == step_exec.id,
-            Issue.issue_type == IssueType.NON_CONFORMANCE,
-            Issue.id != issue.id,
-            Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-            Issue.deleted_at.is_(None),
+
+def _validate_close(issue: Issue, data: IssueUpdate | None = None) -> None:
+    """Closing an undispositioned issue is impossible — disposition first,
+    always. NC-type issues additionally require corrective action text."""
+    if not issue.dispositioned:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{issue.issue_number} is undispositioned; sign a disposition before closing",
         )
-        .count()
-    )
-    if remaining != 0:
-        return
-
-    # Hold back if any redline op authorized by an NC on this step is still
-    # outstanding. Approving the disposition isn't enough — the rework itself
-    # has to be completed before the held step can resume.
-    terminal_states = (
-        StepStatus.COMPLETED,
-        StepStatus.SIGNED_OFF,
-        StepStatus.SKIPPED,
-    )
-    open_redlines = (
-        db.query(StepExecution)
-        .join(Issue, Issue.id == StepExecution.ad_hoc_issue_id)
-        .filter(
-            StepExecution.instance_id == step_exec.instance_id,
-            StepExecution.level == 0,
-            Issue.step_execution_id == step_exec.id,
-            Issue.deleted_at.is_(None),
-            StepExecution.status.notin_(terminal_states),
-        )
-        .count()
-    )
-    if open_redlines:
-        return
-
-    step_old = get_model_dict(step_exec)
-    step_exec.status = StepStatus.IN_PROGRESS
-    log_update(db, step_exec, step_old, user_id)
-
-    # Propagate resume up: when an NC was logged on a sub-step we also flipped
-    # the parent op to ON_HOLD so the whole operation paused. Now that this
-    # sub-step is clear, resume the parent too — but only if no other
-    # sub-step of that parent has any open NC remaining.
-    if step_exec.level > 0 and step_exec.parent_step_order is not None:
-        parent_exec = (
-            db.query(StepExecution)
-            .filter(
-                StepExecution.instance_id == step_exec.instance_id,
-                StepExecution.step_number == step_exec.parent_step_order,
-                StepExecution.level == 0,
+    issue_type = _get_enum_val(issue, "issue_type")
+    if issue_type == IssueType.NON_CONFORMANCE.value:
+        corrective = issue.corrective_action
+        if data is not None and data.corrective_action is not None:
+            corrective = data.corrective_action
+        if not (corrective or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"{issue.issue_number} is a non-conformance; "
+                "corrective action is required to close",
             )
-            .first()
+
+
+@router.post("/{issue_id}/disposition", response_model=IssueResponse)
+async def sign_disposition(
+    issue_id: int,
+    data: DispositionSign,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> IssueResponse:
+    """Sign the disposition — sets the signature and releases every
+    containment this issue holds, live."""
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    if _get_enum_val(issue, "status") == IssueStatus.CLOSED.value:
+        raise HTTPException(status_code=400, detail="Issue is closed")
+    if issue.dispositioned:
+        raise HTTPException(status_code=400, detail="Disposition already signed")
+
+    try:
+        disposition_type = DispositionType(data.disposition_type)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid disposition type: {data.disposition_type}"
+        ) from err
+
+    old_values = get_model_dict(issue)
+    issue.disposition_type = disposition_type
+    issue.disposition_rationale = data.disposition_rationale
+    issue.dispositioned_by_id = user_id
+    issue.dispositioned_at = datetime.now(UTC)
+
+    log_update(db, issue, old_values, user_id)
+    db.flush()
+    _recheck_instance_completion(db, issue)
+    db.commit()
+    db.refresh(issue)
+
+    # Held rows recover their controls without reload.
+    if issue.procedure_instance_id is not None:
+        await emit_issue_dispositioned(issue.procedure_instance_id, issue.id, issue.issue_number)
+
+    return _issue_to_response(issue)
+
+
+@router.post("/{issue_id}/containment", response_model=IssueResponse)
+def set_containment(
+    issue_id: int,
+    data: ContainmentChange,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> IssueResponse:
+    """Change containment scope. Widening is one click; narrowing (or
+    downgrading to advisory) releases a hold — a decision, not an edit — and
+    is audited with a note."""
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    try:
+        new_containment = Containment(data.containment)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid containment: {data.containment}"
+        ) from err
+
+    old_containment = _get_enum_val(issue, "containment")
+    narrowing = CONTAINMENT_RANK[new_containment.value] < CONTAINMENT_RANK[old_containment]
+    if narrowing and issue.is_blocking and not (data.note or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Narrowing containment {old_containment} → {new_containment.value} "
+            "releases a hold; a note is required",
         )
-        if parent_exec is not None:
-            parent_status = (
-                parent_exec.status.value
-                if hasattr(parent_exec.status, "value")
-                else parent_exec.status
-            )
-            if parent_status == StepStatus.ON_HOLD.value:
-                sibling_se_ids = [
-                    se.id
-                    for se in db.query(StepExecution)
-                    .filter(
-                        StepExecution.instance_id == step_exec.instance_id,
-                        StepExecution.parent_step_order == parent_exec.step_number,
-                    )
-                    .all()
-                ]
-                sibling_se_ids.append(parent_exec.id)
-                siblings_open = (
-                    db.query(Issue)
-                    .filter(
-                        Issue.step_execution_id.in_(sibling_se_ids),
-                        Issue.issue_type == IssueType.NON_CONFORMANCE,
-                        Issue.status.notin_([IssueStatus.DISPOSITION_APPROVED, IssueStatus.CLOSED]),
-                        Issue.deleted_at.is_(None),
-                    )
-                    .count()
-                )
-                if siblings_open == 0:
-                    parent_old = get_model_dict(parent_exec)
-                    parent_exec.status = StepStatus.IN_PROGRESS
-                    log_update(db, parent_exec, parent_old, user_id)
+
+    old_values = get_model_dict(issue)
+    issue.containment = new_containment
+    if data.containment_step_id is not None:
+        issue.containment_step_id = data.containment_step_id
+    log_update(db, issue, old_values, user_id)
+
+    if narrowing and (data.note or "").strip():
+        comment = IssueComment(
+            issue_id=issue.id,
+            user_id=user_id,
+            body=f"Containment narrowed {old_containment} → {new_containment.value}: {data.note}",
+        )
+        db.add(comment)
+        db.flush()
+        log_create(db, comment, user_id)
+
+    if narrowing:
+        db.flush()
+        _recheck_instance_completion(db, issue)
+
+    db.commit()
+    db.refresh(issue)
+
+    return _issue_to_response(issue)
 
 
 @router.delete("/{issue_id}", status_code=204)
@@ -527,6 +636,8 @@ def delete_issue(
 
     issue.deleted_at = datetime.now(UTC)
     log_delete(db, issue, user_id)
+    db.flush()
+    _recheck_instance_completion(db, issue)
     db.commit()
 
 
