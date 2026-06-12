@@ -89,7 +89,7 @@
         {% else %}
         {{ ok.empty_line("Attachments", "attach", onclick="showAttachModal(null, 'WO')") }}
         {% endif %}
-        {% if (capture_attachments or wo_attachments) and inst_status in ['pending', 'in_progress', 'completed'] %}
+        {% if (capture_attachments or wo_attachments) and inst_status in ['cut', 'in_work', 'completed'] %}
         <div class="rail-attach-add">
             <button class="btn btn-sm" onclick="showAttachModal(null, 'WO')">+ ATTACH</button>
         </div>

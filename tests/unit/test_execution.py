@@ -141,8 +141,38 @@ def test_create_instance(client):
     assert data["procedure_id"] == proc_id
     assert data["version_id"] == version_id
     assert data["work_order_number"] == "WO-001"
-    assert data["status"] == "pending"
+    assert data["status"] == "cut"
     assert len(data["step_executions"]) == 3
+
+
+def test_batch_cut_creates_n_instances(client):
+    """quantity > 1 cuts a batch of identical work orders with distinct WO numbers."""
+    proc_id, _ = _create_procedure_with_steps(client)
+
+    response = client.post(
+        "/api/procedure-instances",
+        json={"procedure_id": proc_id, "quantity": 3},
+    )
+    assert response.status_code == 201
+    assert response.json()["status"] == "cut"
+
+    resp = client.get(f"/api/procedure-instances?procedure_id={proc_id}")
+    items = resp.json()["items"]
+    assert len(items) == 3
+    assert len({i["work_order_number"] for i in items}) == 3
+    assert all(i["status"] == "cut" for i in items)
+    assert all(len(i["step_executions"]) == 3 for i in items)
+
+
+def test_batch_cut_rejects_explicit_work_order_number(client):
+    """An explicit WO number identifies a single cut; batches must generate."""
+    proc_id, _ = _create_procedure_with_steps(client)
+
+    response = client.post(
+        "/api/procedure-instances",
+        json={"procedure_id": proc_id, "quantity": 2, "work_order_number": "WO-X"},
+    )
+    assert response.status_code == 400
 
 
 def test_list_instances(client):
@@ -192,7 +222,7 @@ def test_start_step(client):
 
     # Instance should now be in_progress
     instance = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert instance["status"] == "in_progress"
+    assert instance["status"] == "in_work"
 
 
 def test_complete_step(client):
@@ -394,11 +424,11 @@ def test_list_instances_filter_by_status(client):
     # Start the instance
     client.post(f"/api/procedure-instances/{instance_id}/steps/1/start")
 
-    resp = client.get("/api/procedure-instances?status=in_progress")
+    resp = client.get("/api/procedure-instances?status=in_work")
     assert resp.status_code == 200
     data = resp.json()
     for item in data["items"]:
-        assert item["status"] == "in_progress"
+        assert item["status"] == "in_work"
 
 
 # ============ New tests — Kit & Consumption ============

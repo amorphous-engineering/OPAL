@@ -54,7 +54,7 @@ def test_get_execution_state_by_execution_id(client, db_session):
     data = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     assert data["instance"]["id"] == instance_id
     assert data["instance"]["work_order"] == work_order
-    assert data["instance"]["status"] == "pending"
+    assert data["instance"]["status"] == "cut"
     assert data["instance"]["procedure_name"] == "Test Procedure"
     assert data["instance"]["progress"] == {"done": 0, "total": 3}
     assert [s["order"] for s in data["steps"]] == [1, 2, 3]
@@ -142,13 +142,13 @@ def test_claim_step_happy(client, db_session, test_user):
     assert "claimed step" in data["message"]
     assert test_user.name in data["message"]
     assert data["status"] == "in_progress"
-    assert data["instance_started"] is True  # first claim starts a pending instance
+    assert data["instance_started"] is True  # first claim starts a cut instance
 
     state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     step1 = next(s for s in state["steps"] if s["order"] == 1)
     assert step1["status"] == "in_progress"
     assert step1["claim"]["user_id"] == test_user.id
-    assert state["instance"]["status"] == "in_progress"
+    assert state["instance"]["status"] == "in_work"
 
 
 def test_claim_step_conflict_second_user(client, db_session, test_user, admin_user):

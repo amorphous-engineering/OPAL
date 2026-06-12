@@ -11,10 +11,10 @@ from opal.db.base import Base, IdMixin, TimestampMixin
 
 
 class InstanceStatus(str, Enum):
-    """Procedure instance status."""
+    """Procedure instance (work order) status."""
 
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
+    CUT = "cut"  # Untouched since cut from the master procedure
+    IN_WORK = "in_work"
     COMPLETED = "completed"
     ABORTED = "aborted"
 
@@ -47,7 +47,7 @@ class ProcedureInstance(Base, IdMixin, TimestampMixin):
         String(100), nullable=True, index=True, comment="For grouping related instances"
     )
     status: Mapped[InstanceStatus] = mapped_column(
-        String(20), nullable=False, default=InstanceStatus.PENDING
+        String(20), nullable=False, default=InstanceStatus.CUT
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -300,11 +300,11 @@ def test_complete_pending_unclaimed_step_still_works(client):
 # ============ 9. first claim flips instance ============
 
 
-def test_first_claim_flips_instance_to_in_progress(client, auth_headers):
+def test_first_claim_flips_instance_to_in_work(client, auth_headers):
     instance_id = _create_instance(client)
 
     before = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert before["status"] == "pending"
+    assert before["status"] == "cut"
 
     client.post(
         f"/api/procedure-instances/{instance_id}/steps/1/start",
@@ -312,10 +312,10 @@ def test_first_claim_flips_instance_to_in_progress(client, auth_headers):
     )
 
     after = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert after["status"] == "in_progress"
+    assert after["status"] == "in_work"
 
     state = _state(client, instance_id)
-    assert state["instance"]["status"] == "in_progress"
+    assert state["instance"]["status"] == "in_work"
 
 
 # ============ 10. progress counts ============

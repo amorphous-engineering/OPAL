@@ -22,7 +22,7 @@
         {% if op_vs.get('caution') %}<span class="mono text-red" title="{{ op_vs.get('caution') }}">⚠</span>{% endif %}
         <span class="op-card-spacer"></span>
         <span class="op-card-progress mono" data-op-progress>{{ op_data.completed_steps }}/{{ op_data.total_steps }}{% if op_terminal %} ✓{% endif %}</span>
-        {% if inst_status in ['pending', 'in_progress'] %}
+        {% if inst_status in ['cut', 'in_work'] %}
             {% if op_holds %}
             <span class="op-card-blockline mono text-yellow" title="OP COMPLETE is held until disposition">⛔ {% for i in op_holds %}<a href="/issues/{{ i.id }}" onclick="event.stopPropagation()">{{ i.issue_number }}</a>{% if not loop.last %} {% endif %}{% endfor %}</span>
             {% elif op_gated %}

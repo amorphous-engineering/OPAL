@@ -407,7 +407,7 @@ def claim_step(
     """Claim = START. One user per step; one active step per user (claiming
     another supersedes the first). Checks the start gates."""
     inst_status = _status_value(instance.status)
-    if inst_status not in (InstanceStatus.PENDING.value, InstanceStatus.IN_PROGRESS.value):
+    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
         raise FlowError("Instance is not active")
 
     existing = active_claim_for_step(db, step_exec.id)
@@ -431,8 +431,8 @@ def claim_step(
     release_user_claims(db, instance.id, user.id, ClaimReleaseReason.SUPERSEDED)
 
     instance_started = False
-    if inst_status == InstanceStatus.PENDING.value:
-        instance.status = InstanceStatus.IN_PROGRESS
+    if inst_status == InstanceStatus.CUT.value:
+        instance.status = InstanceStatus.IN_WORK
         instance.started_at = datetime.now(UTC)
         db.query(InventoryProduction).filter(
             InventoryProduction.procedure_instance_id == instance.id,

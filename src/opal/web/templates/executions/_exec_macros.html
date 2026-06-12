@@ -11,7 +11,7 @@
 {% set claim_info = claims_by_se.get(se_id) if se_id else none %}
 {% set bound = bound_holds_by_se.get(se_id, []) if se_id else [] %}
 {% set raised = step_holding_ncs.get(se_id, []) if se_id else [] %}
-{% set active_inst = inst_status in ['pending', 'in_progress'] %}
+{% set active_inst = inst_status in ['cut', 'in_work'] %}
 {% if step.status in ['completed', 'signed_off'] %}
     <span class="pres pres-done mono">✓ {% if exec and exec.completed_by_user %}{{ exec.completed_by_user.name | initials }}{% endif %} {{ hm(exec.completed_at) if exec else '' }}</span>
 {% elif step.status == 'skipped' %}

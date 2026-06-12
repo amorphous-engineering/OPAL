@@ -565,7 +565,7 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
         .count()
     )
     context["in_progress_count"] = (
-        db.query(ProcedureInstance).filter(ProcedureInstance.status == "in_progress").count()
+        db.query(ProcedureInstance).filter(ProcedureInstance.status == "in_work").count()
     )
     context["risks_count"] = (
         db.query(Risk)
@@ -1935,7 +1935,7 @@ def executions_table(
         query = query.filter(ProcedureInstance.status == status)
 
     rows, pagination = paginate_query(
-        request, query.order_by(ProcedureInstance.id.desc()), page, colspan=7
+        request, query.order_by(ProcedureInstance.id.desc()), page, colspan=6
     )
 
     instances_data = []

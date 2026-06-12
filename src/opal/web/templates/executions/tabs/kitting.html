@@ -66,12 +66,12 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% if inst_status in ['in_progress', 'completed'] %}
+        {% if inst_status in ['in_work', 'completed'] %}
         <div style="display: flex; justify-content: flex-end; margin-top: var(--space-md);">
             <button class="btn btn-primary" onclick="consumeParts()">CONSUME PARTS</button>
         </div>
         <div id="consume-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-        {% elif inst_status == 'pending' %}
+        {% elif inst_status == 'cut' %}
         <p class="text-muted" style="margin-top: var(--space-md);">Parts can be consumed after the execution is started.</p>
         {% endif %}
         {% endif %}
@@ -158,12 +158,12 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% if inst_status in ['in_progress', 'completed'] %}
+        {% if inst_status in ['in_work', 'completed'] %}
         <div style="display: flex; justify-content: flex-end; margin-top: var(--space-md);">
             <button class="btn btn-primary" onclick="produceOutput()">RECORD OUTPUT</button>
         </div>
         <div id="produce-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-        {% elif inst_status == 'pending' %}
+        {% elif inst_status == 'cut' %}
         <p class="text-muted" style="margin-top: var(--space-md);">Output can be recorded after the execution is started.</p>
         {% endif %}
     </div>

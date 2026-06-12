@@ -28,14 +28,14 @@
     <span class="exec-roster" data-roster></span>
     <span class="exec-head-spacer"></span>
     <span class="exec-head-actions">
-        {% if inst_status in ['pending', 'in_progress'] %}
+        {% if inst_status in ['cut', 'in_work'] %}
         <button class="btn btn-sm" id="join-btn" onclick="joinExecution()" hidden>JOIN</button>
         <button class="btn btn-sm" id="leave-btn" onclick="leaveExecution()" hidden>LEAVE</button>
         {% endif %}
         {% if inst_status == 'completed' %}
         {{ ok.btn("REPORT", href="/executions/" ~ instance.id ~ "/report", size="sm", attrs='target="_blank" rel="noopener"') }}
         {% endif %}
-        {% if inst_status in ['pending', 'in_progress'] %}
+        {% if inst_status in ['cut', 'in_work'] %}
         <button class="btn btn-sm btn-danger" onclick="abortExecution()">ABORT</button>
         {% endif %}
         <button class="btn btn-sm" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">⋯</button>

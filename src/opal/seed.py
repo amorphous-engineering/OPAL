@@ -3816,7 +3816,7 @@ def _seed_versions_and_executions(
                 procedure_id=proc.id,
                 version_id=version.id,
                 work_order_number=generate_work_order_number(db),
-                status=InstanceStatus.IN_PROGRESS,
+                status=InstanceStatus.IN_WORK,
                 started_at=now - timedelta(hours=2),
                 priority=1,
             )

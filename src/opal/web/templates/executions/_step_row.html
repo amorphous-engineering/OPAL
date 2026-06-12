@@ -72,7 +72,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-            {% if step.status == 'in_progress' and inst_status == 'in_progress' %}
+            {% if step.status == 'in_progress' and inst_status == 'in_work' %}
             <div class="step-kit-actions">
                 <button class="btn btn-sm btn-primary" onclick="consumeStepParts({{ step.order }})">CONSUME</button>
             </div>
@@ -97,7 +97,7 @@
         </div>
         {% endif %}
 
-        {% if inst_status in ['pending', 'in_progress'] %}
+        {% if inst_status in ['cut', 'in_work'] %}
         <div class="step-actions">
             {% if step.status in ['pending', 'in_progress'] %}
             <button class="btn btn-sm" onclick="showAnomalyModal({{ step.order }}, {{ step_display_number | tojson }})">ANOMALY</button>

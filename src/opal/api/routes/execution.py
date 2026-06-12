@@ -122,6 +122,9 @@ class InstanceCreate(BaseModel):
     procedure_id: int
     version_id: int | None = Field(None, description="If not provided, uses current version")
     work_order_number: str | None = None
+    quantity: int = Field(
+        1, ge=1, le=100, description="Number of identical work orders to cut (batch cut)"
+    )
     scheduled_start_at: datetime | None = None
     target_completion_at: datetime | None = None
     priority: int = 0
@@ -264,7 +267,11 @@ def create_instance(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> InstanceResponse:
-    """Start a new procedure instance."""
+    """Cut work order(s) from a procedure version.
+
+    quantity > 1 cuts a batch of identical work orders, each with its own
+    generated WO number; the response carries the first cut.
+    """
     # Validate procedure exists
     procedure = (
         db.query(MasterProcedure)
@@ -289,66 +296,71 @@ def create_instance(
             .first()
         )
 
-    # Generate work order number if not provided
-    work_order_number = data.work_order_number or generate_work_order_number(db)
+    if data.work_order_number and data.quantity > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Explicit work order number only applies to a single cut",
+        )
 
-    # Create instance
-    instance = ProcedureInstance(
-        procedure_id=data.procedure_id,
-        version_id=version.id,
-        work_order_number=work_order_number,
-        status=InstanceStatus.PENDING,
-        started_by_id=user_id,
-        scheduled_start_at=data.scheduled_start_at,
-        target_completion_at=data.target_completion_at,
-        priority=data.priority,
-        target_entity=data.target_entity,
-    )
-    db.add(instance)
-    db.flush()
-
-    # Create step executions from version snapshot, preserving hierarchy
+    # Step hierarchy from the version snapshot — shared by every cut.
     steps = version.content.get("steps", [])
-
-    # Build a map of step order -> parent step order for hierarchy
     order_to_parent: dict[int, int | None] = {}
     for step in steps:
         parent_id = step.get("parent_step_id")
         if parent_id:
-            # Find parent's order
             parent_step = next((s for s in steps if s.get("id") == parent_id), None)
             order_to_parent[step["order"]] = parent_step["order"] if parent_step else None
         else:
             order_to_parent[step["order"]] = None
 
-    for step in steps:
-        step_exec = StepExecution(
-            instance_id=instance.id,
-            step_number=step["order"],
-            step_number_str=step.get("step_number", str(step["order"])),
-            level=step.get("level", 0),
-            parent_step_order=order_to_parent.get(step["order"]),
-            status=StepStatus.PENDING,
-        )
-        db.add(step_exec)
-
-    # Auto-allocate output assemblies for BUILD procedures
+    # BUILD procedures auto-allocate output assemblies. An as-built
+    # allocation is a physical reference — draft output parts block the
+    # whole cut (raises DraftPartsBlocked -> 409) before anything exists.
     proc_type = procedure.procedure_type
     if hasattr(proc_type, "value"):
         proc_type = proc_type.value
+    outputs = []
     if proc_type == ProcedureType.BUILD.value:
         outputs = (
             db.query(ProcedureOutput)
             .filter(ProcedureOutput.procedure_id == data.procedure_id)
             .all()
         )
-        # An as-built allocation is a physical reference — draft output
-        # parts block it (raises DraftPartsBlocked -> 409)
         ensure_parts_active(
             db,
             [output.part_id for output in outputs],
-            f"work order {work_order_number} as-built allocation",
+            f"{procedure.name} as-built allocation",
         )
+
+    first_instance: ProcedureInstance | None = None
+    for _ in range(data.quantity):
+        work_order_number = data.work_order_number or generate_work_order_number(db)
+
+        instance = ProcedureInstance(
+            procedure_id=data.procedure_id,
+            version_id=version.id,
+            work_order_number=work_order_number,
+            status=InstanceStatus.CUT,
+            started_by_id=user_id,
+            scheduled_start_at=data.scheduled_start_at,
+            target_completion_at=data.target_completion_at,
+            priority=data.priority,
+            target_entity=data.target_entity,
+        )
+        db.add(instance)
+        db.flush()
+
+        for step in steps:
+            step_exec = StepExecution(
+                instance_id=instance.id,
+                step_number=step["order"],
+                step_number_str=step.get("step_number", str(step["order"])),
+                level=step.get("level", 0),
+                parent_step_order=order_to_parent.get(step["order"]),
+                status=StepStatus.PENDING,
+            )
+            db.add(step_exec)
+
         for output in outputs:
             output_part = db.query(Part).filter(Part.id == output.part_id).first()
             if not output_part:
@@ -385,7 +397,11 @@ def create_instance(
             # Link inventory record to its production
             inv_record.source_production_id = production.id
 
-    log_create(db, instance, user_id)
+        log_create(db, instance, user_id)
+        if first_instance is None:
+            first_instance = instance
+
+    instance = first_instance
     db.commit()
     db.refresh(instance)
 
@@ -497,7 +513,7 @@ def update_instance(
             instance.status = new_status
 
             # Set timestamps based on status
-            if new_status == InstanceStatus.IN_PROGRESS and not instance.started_at:
+            if new_status == InstanceStatus.IN_WORK and not instance.started_at:
                 instance.started_at = datetime.now(UTC)
             elif new_status in [InstanceStatus.COMPLETED, InstanceStatus.ABORTED]:
                 instance.completed_at = datetime.now(UTC)
