@@ -285,9 +285,9 @@
         </div>
         <div class="panel-body">
             <p class="text-muted" style="margin-bottom: var(--space-md);">
-                An empty section keeps its structure: the panel header bar, the table's
-                column heads, and one muted dash row as the body. No tall boxes, no
-                narration — absence is a dash, never a sentence.
+                An empty section keeps its panel header bar and goes quiet below it:
+                one centered muted dash row, no column heads — heads render only over
+                data. No tall boxes, no narration — absence is a dash, never a sentence.
             </p>
             <div class="panel panel-ledger" style="margin-bottom: var(--space-md);">
                 <div class="panel-header">
@@ -296,23 +296,20 @@
                     <div class="panel-header-actions"><a class="ledger-add" href="#">+ ADD</a></div>
                 </div>
                 <table class="data-table">
-                    <thead>
-                        <tr>
-                            {{ ok.th("SUPPLIER") }}
-                            {{ ok.th("VENDOR PN", width="140px") }}
-                        </tr>
-                    </thead>
                     <tbody>
-                        <tr><td colspan="2" class="text-muted">—</td></tr>
+                        <tr><td class="text-muted section-empty">—</td></tr>
                     </tbody>
                 </table>
             </div>
             <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-bottom: var(--space-md);">
-<pre style="margin: 0;">{% raw %}{% for row in rows %}
+<pre style="margin: 0;">{% raw %}{% if rows %}<thead>…</thead>{% endif %}
+<tbody>
+{% for row in rows %}
 <tr>…</tr>
 {% else %}
-<tr><td colspan="N" class="text-muted">—</td></tr>
-{% endfor %}{% endraw %}</pre>
+<tr><td colspan="N" class="text-muted section-empty">—</td></tr>
+{% endfor %}
+</tbody>{% endraw %}</pre>
             </div>
             <p class="text-muted" style="margin-bottom: var(--space-md);">
                 ok.empty_line is the one-line primitive for index rows outside section
@@ -370,10 +367,10 @@
         <div class="panel-header-actions"><a class="ledger-add" …>+ ADD</a></div>
     </div>
     <table class="data-table">
-        <thead>…</thead>
+        {% if rows %}<thead>…</thead>{% endif %}
         <tbody>
         {% for row in rows %}<tr>…</tr>
-        {% else %}<tr><td colspan="N" class="text-muted">—</td></tr>
+        {% else %}<tr><td colspan="N" class="text-muted section-empty">—</td></tr>
         {% endfor %}
         </tbody>
     </table>

@@ -14,6 +14,7 @@
         </div>
     </div>
     <table class="data-table">
+        {% if bom_lines %}
         <thead>
             <tr>
                 {{ ok.th("PN", width="130px") }}
@@ -24,6 +25,7 @@
                 {{ ok.th("", width="64px") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for line in bom_lines %}
             <tr>
@@ -38,7 +40,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="text-muted">—</td></tr>
+            <tr><td colspan="6" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -64,6 +66,7 @@
         </div>
     </div>
     <table class="data-table">
+        {% if inventory_records %}
         <thead>
             <tr>
                 {{ ok.th("OPAL #", width="120px") }}
@@ -72,6 +75,7 @@
                 {{ ok.th("LOT", width="140px") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for inv in inventory_records %}
             <tr>
@@ -81,7 +85,7 @@
                 <td class="text-muted">{{ inv.lot_number or '—' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="text-muted">—</td></tr>
+            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -102,6 +106,7 @@
         <span class="header-count">{{ open_po_lines | length }}</span>
     </div>
     <table class="data-table">
+        {% if open_po_lines %}
         <thead>
             <tr>
                 {{ ok.th("PO", width="120px") }}
@@ -109,6 +114,7 @@
                 {{ ok.th("RECEIVED", width="100px", align="right") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for line in open_po_lines %}
             <tr>
@@ -117,7 +123,7 @@
                 <td style="text-align: right;">{{ '%g' % line.qty_received }}/{{ '%g' % line.qty_ordered }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="3" class="text-muted">—</td></tr>
+            <tr><td colspan="3" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -133,6 +139,7 @@
         </div>
     </div>
     <table class="data-table">
+        {% if supplier_entries %}
         <thead>
             <tr>
                 {{ ok.th("SUPPLIER") }}
@@ -141,6 +148,7 @@
                 {{ ok.th("", width="40px") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for entry in supplier_entries %}
             <tr>
@@ -150,7 +158,7 @@
                 <td class="row-actions"><a href="#" class="act-remove" title="UNLINK" onclick="deleteSupplierEntry({{ entry.id }}, {{ entry.supplier_id }}); return false;">×</a></td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="text-muted">—</td></tr>
+            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -163,6 +171,7 @@
         <span class="header-count">{{ where_used | length }}</span>
     </div>
     <table class="data-table">
+        {% if where_used %}
         <thead>
             <tr>
                 {{ ok.th("PN", width="130px") }}
@@ -171,6 +180,7 @@
                 {{ ok.th("REFDES", width="90px") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for line in where_used %}
             <tr>
@@ -180,7 +190,7 @@
                 <td class="text-muted">{{ line.reference_designator or '—' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="text-muted">—</td></tr>
+            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -193,6 +203,7 @@
         <span class="header-count">{{ (kit_usages | length) + (step_kit_usages | length) }}</span>
     </div>
     <table class="data-table">
+        {% if kit_usages or step_kit_usages %}
         <thead>
             <tr>
                 {{ ok.th("PROCEDURE") }}
@@ -202,6 +213,7 @@
                 {{ ok.th("STATUS", width="110px") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for kit in kit_usages %}
             <tr>
@@ -222,7 +234,7 @@
             </tr>
             {% endfor %}
             {% if not (kit_usages or step_kit_usages) %}
-            <tr><td colspan="5" class="text-muted">—</td></tr>
+            <tr><td colspan="5" class="text-muted section-empty">—</td></tr>
             {% endif %}
         </tbody>
     </table>
@@ -235,6 +247,7 @@
         <span class="header-count">{{ consumption_history | length }}{{ '+' if consumption_history | length == 50 }}</span>
     </div>
     <table class="data-table">
+        {% if consumption_history %}
         <thead>
             <tr>
                 {{ ok.th("DATE", width="110px") }}
@@ -243,6 +256,7 @@
                 {{ ok.th("NOTES") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for c in consumption_history %}
             <tr>
@@ -258,7 +272,7 @@
                 <td class="text-muted">{{ c.notes or '—' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="text-muted">—</td></tr>
+            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>

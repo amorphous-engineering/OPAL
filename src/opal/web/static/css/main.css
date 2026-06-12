@@ -2673,6 +2673,11 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     padding: 5px 8px;
 }
 
+/* Empty body — one quiet centered dash; column heads render only over data */
+.panel-ledger .data-table .section-empty {
+    text-align: center;
+}
+
 .panel-ledger .data-table .row-actions {
     white-space: nowrap;
     text-align: right;

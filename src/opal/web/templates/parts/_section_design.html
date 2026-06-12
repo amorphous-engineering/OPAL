@@ -22,6 +22,7 @@
         </div>
     </div>
     <table class="data-table">
+        {% if part_requirements %}
         <thead>
             <tr>
                 {{ ok.th("REQ", width="110px") }}
@@ -31,6 +32,7 @@
                 {{ ok.th("", width="40px") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for row in part_requirements %}
             {% set r = row.req %}
@@ -52,7 +54,7 @@
                 <td class="row-actions"><a href="#" class="act-remove" title="UNASSIGN" onclick="unassignRequirement({{ a.id }}); return false;">×</a></td>
             </tr>
             {% else %}
-            <tr><td colspan="5" class="text-muted">—</td></tr>
+            <tr><td colspan="5" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -73,6 +75,7 @@
         </div>
     </div>
     <table class="data-table">
+        {% if test_templates %}
         <thead>
             <tr>
                 {{ ok.th("NAME") }}
@@ -81,6 +84,7 @@
                 {{ ok.th("", width="40px") }}
             </tr>
         </thead>
+        {% endif %}
         <tbody>
             {% for tt in test_templates %}
             <tr>
@@ -90,7 +94,7 @@
                 <td class="row-actions"><a href="#" class="act-remove" title="REMOVE" onclick="deleteTestTemplate({{ tt.id }}); return false;">×</a></td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="text-muted">—</td></tr>
+            <tr><td colspan="4" class="text-muted section-empty">—</td></tr>
             {% endfor %}
         </tbody>
     </table>
