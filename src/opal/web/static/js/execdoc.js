@@ -431,6 +431,11 @@
     document.addEventListener('keydown', (e) => {
         if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) return;
         if (document.querySelector('.execdoc-modal:not([hidden])')) return;
+        if (e.key === 'Enter' && focusedOrder !== null) {
+            e.preventDefault();
+            toggleStepBody(focusedOrder);
+            return;
+        }
         const down = e.key === 'j' || e.key === 'ArrowDown';
         const up = e.key === 'k' || e.key === 'ArrowUp';
         if (!down && !up) return;
