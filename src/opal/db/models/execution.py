@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -134,6 +134,11 @@ class StepExecution(Base, IdMixin, TimestampMixin):
         JSON, nullable=True, comment="Values matching step's required_data_schema"
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_focused_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Soft telemetry: first cursor focus; never rendered as state",
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
@@ -215,8 +220,8 @@ class StepExecution(Base, IdMixin, TimestampMixin):
     consumptions: Mapped[list["InventoryConsumption"]] = relationship(
         "InventoryConsumption", back_populates="step_execution"
     )
-    claims: Mapped[list["StepClaim"]] = relationship(
-        "StepClaim", back_populates="step_execution", cascade="all, delete-orphan"
+    focuses: Mapped[list["StepFocus"]] = relationship(
+        "StepFocus", back_populates="step_execution", cascade="all, delete-orphan"
     )
 
     @property
@@ -230,22 +235,15 @@ class StepExecution(Base, IdMixin, TimestampMixin):
         return f"<StepExecution(id={self.id}, instance_id={self.instance_id}, step={self.step_number}, status={self.status})>"
 
 
-class ClaimReleaseReason(str, Enum):
-    """Why a step claim ended."""
+class StepFocus(Base, IdMixin, TimestampMixin):
+    """A user's cursor position in the execution document.
 
-    COMPLETED = "completed"  # Step was completed by the claimant
-    RELEASED = "released"  # Claimant explicitly un-claimed
-    SUPERSEDED = "superseded"  # Claimant claimed another step (one active step per user)
-    SKIPPED = "skipped"  # Step was skipped while claimed
-
-
-class StepClaim(Base, IdMixin, TimestampMixin):
-    """A user actively working a step. released_at IS NULL = active claim.
-
-    One active claim per step; one active claim per user per instance
-    (claiming another step supersedes the previous claim). Rows are never
-    deleted — the claim history is the who-worked-what audit trail.
+    Presence = focus: one row per (instance, user), upserted as the cursor
+    moves. Moving the cursor records no event — this is ephemeral presence,
+    not history. Several users may focus the same step.
     """
+
+    __table_args__ = (UniqueConstraint("instance_id", "user_id", name="uq_step_focus_user"),)
 
     instance_id: Mapped[int] = mapped_column(
         ForeignKey("procedure_instance.id", ondelete="CASCADE"), nullable=False, index=True
@@ -256,21 +254,17 @@ class StepClaim(Base, IdMixin, TimestampMixin):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    release_reason: Mapped[ClaimReleaseReason | None] = mapped_column(
-        String(20), nullable=True, comment="Set when released_at is set"
-    )
+    focused_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Relationships
     instance: Mapped["ProcedureInstance"] = relationship("ProcedureInstance")
     step_execution: Mapped["StepExecution"] = relationship(
-        "StepExecution", back_populates="claims"
+        "StepExecution", back_populates="focuses"
     )
     user: Mapped["User"] = relationship("User")
 
     def __repr__(self) -> str:
         return (
-            f"<StepClaim(id={self.id}, step_execution_id={self.step_execution_id}, "
-            f"user_id={self.user_id}, active={self.released_at is None})>"
+            f"<StepFocus(id={self.id}, step_execution_id={self.step_execution_id}, "
+            f"user_id={self.user_id})>"
         )

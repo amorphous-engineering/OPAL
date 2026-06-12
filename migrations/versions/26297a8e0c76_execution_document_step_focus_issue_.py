@@ -1,4 +1,4 @@
-"""Execution document: step claims, issue step blocks, step images, capture attribution, strict_sequence
+"""Execution document: step focus (cursor presence), issue step blocks, step images, capture attribution, strict_sequence
 
 Revision ID: 26297a8e0c76
 Revises: a7b9c1d3e5f7
@@ -19,31 +19,35 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Step claims — who is actively working which step. Active = released_at IS NULL.
+    # Cursor presence — one row per (instance, user), upserted as the cursor
+    # moves. Ephemeral presence, not history: moving records no event.
     op.create_table(
-        'step_claim',
+        'step_focus',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('instance_id', sa.Integer(), nullable=False),
         sa.Column('step_execution_id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('claimed_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('released_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            'release_reason', sa.String(length=20), nullable=True,
-            comment='Set when released_at is set',
-        ),
+        sa.Column('focused_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(['instance_id'], ['procedure_instance.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['step_execution_id'], ['step_execution.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['user_id'], ['user.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('instance_id', 'user_id', name='uq_step_focus_user'),
     )
-    op.create_index(op.f('ix_step_claim_instance_id'), 'step_claim', ['instance_id'], unique=False)
+    op.create_index(op.f('ix_step_focus_instance_id'), 'step_focus', ['instance_id'], unique=False)
     op.create_index(
-        op.f('ix_step_claim_step_execution_id'), 'step_claim', ['step_execution_id'], unique=False
+        op.f('ix_step_focus_step_execution_id'), 'step_focus', ['step_execution_id'], unique=False
     )
-    op.create_index(op.f('ix_step_claim_user_id'), 'step_claim', ['user_id'], unique=False)
+    op.create_index(op.f('ix_step_focus_user_id'), 'step_focus', ['user_id'], unique=False)
+
+    # Soft telemetry: first cursor focus per step; never rendered as state.
+    with op.batch_alter_table('step_execution', schema=None) as batch_op:
+        batch_op.add_column(sa.Column(
+            'first_focused_at', sa.DateTime(timezone=True), nullable=True,
+            comment='Soft telemetry: first cursor focus; never rendered as state',
+        ))
 
     # Issue step blocks — hold points. The hold is derived from the issue's
     # disposition state; this table only records the binding.
@@ -129,7 +133,10 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_issue_step_block_issue_id'), table_name='issue_step_block')
     op.drop_table('issue_step_block')
 
-    op.drop_index(op.f('ix_step_claim_user_id'), table_name='step_claim')
-    op.drop_index(op.f('ix_step_claim_step_execution_id'), table_name='step_claim')
-    op.drop_index(op.f('ix_step_claim_instance_id'), table_name='step_claim')
-    op.drop_table('step_claim')
+    with op.batch_alter_table('step_execution', schema=None) as batch_op:
+        batch_op.drop_column('first_focused_at')
+
+    op.drop_index(op.f('ix_step_focus_user_id'), table_name='step_focus')
+    op.drop_index(op.f('ix_step_focus_step_execution_id'), table_name='step_focus')
+    op.drop_index(op.f('ix_step_focus_instance_id'), table_name='step_focus')
+    op.drop_table('step_focus')

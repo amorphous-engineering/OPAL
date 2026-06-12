@@ -1,18 +1,20 @@
-"""Execution flow: claims, hold gating, completion, document state.
+"""Execution flow: presence, hold gating, completion, document state.
 
 The single home for the commitment-moment rules of the execution document.
-START/claim and COMPLETE are commitment moments — each checks its
-dependencies' states here, and both the JSON API routes and the MCP tools
-call these functions rather than carrying their own copies.
+COMPLETE is the commitment moment — it checks its dependencies' states here,
+and both the JSON API routes and the MCP tools call these functions rather
+than carrying their own copies. Presence is focus: a user's cursor position
+is broadcast state, never an event — moving it records nothing.
 
 Hold doctrine (Issues R2 §2/§9): the blocking predicate is *undispositioned*,
 never "open". A hold is derived state — it lifts the moment its issue reaches
 a terminal disposition, with no status choreography. Two gate kinds exist
-today:
+today, both gating COMPLETE (a hold cannot physically prevent starting work,
+so it does not pretend to):
 - raised-on-step (containment "step"): undispositioned NCs raised on a step
   block that step's COMPLETE, and the containing OP's COMPLETE.
 - bound-step (``issue_step_block``): an issue bound to a future step blocks
-  that step's START.
+  that step's COMPLETE.
 """
 
 from dataclasses import dataclass, field
@@ -22,14 +24,13 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from opal.core.audit import get_model_dict, log_create, log_update
+from opal.core.audit import get_model_dict, log_update
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
-    ClaimReleaseReason,
     InstanceStatus,
     ProcedureInstance,
-    StepClaim,
     StepExecution,
+    StepFocus,
     StepStatus,
 )
 from opal.db.models.inventory import InventoryProduction, ProductionStatus
@@ -44,7 +45,7 @@ TERMINAL_STEP_STATUSES = {
 }
 
 # Roster chips gray out when a participant's heartbeat goes quiet (tablets
-# sleep; the claim persists).
+# sleep; the cursor persists).
 PRESENCE_STALE_SECONDS = 60
 
 
@@ -56,12 +57,6 @@ class FlowError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
-
-
-class ClaimConflict(FlowError):
-    """The step is actively claimed by someone else."""
-
-    status_code = 409
 
 
 def _status_value(obj: Any) -> str:
@@ -134,7 +129,7 @@ def holding_ncs_by_step(db: Session, instance_id: int) -> dict[int, list[Issue]]
 
 def bound_blocks_by_step(db: Session, instance_id: int) -> dict[int, list[Issue]]:
     """Undispositioned issues bound to steps via issue_step_block, keyed by
-    step_execution_id. These block START of the bound step."""
+    step_execution_id. These block COMPLETE of the bound step."""
     rows = (
         db.query(IssueStepBlock, Issue)
         .join(Issue, Issue.id == IssueStepBlock.issue_id)
@@ -169,12 +164,13 @@ def _exec_lookup(instance: ProcedureInstance) -> dict[int, StepExecution]:
     return {se.step_number: se for se in instance.step_executions}
 
 
-def start_blockers(
+def sequence_blockers(
     db: Session,
     instance: ProcedureInstance,
     step_exec: StepExecution,
 ) -> list[Blocker]:
-    """Everything stopping this step from being claimed/started."""
+    """Structural gates on this step's COMPLETE: bound-step holds, parent-OP
+    holds, strict_sequence order, declared OP dependencies, open redlines."""
     blockers: list[Blocker] = []
     exec_lookup = _exec_lookup(instance)
     version = db.get(ProcedureVersion, instance.version_id)
@@ -283,15 +279,16 @@ def start_blockers(
     return blockers
 
 
-def complete_blockers(
+def held_scope_blockers(
     db: Session,
     instance: ProcedureInstance,
     step_exec: StepExecution,
 ) -> list[Blocker]:
-    """Undispositioned issues holding this step's (or OP's) COMPLETE.
+    """Undispositioned NCs holding this step's (or OP's) scope.
 
     Step scope: NCs raised on the step itself. OP scope: NCs raised on the
-    OP or any of its sub-steps — an OP cannot complete around held work.
+    OP or any of its sub-steps — held work cannot be completed or skipped
+    around.
     """
     raised = holding_ncs_by_step(db, instance.id)
     scope_ids = [step_exec.id]
@@ -319,144 +316,76 @@ def complete_blockers(
     return blockers
 
 
-# ============ Claims ============
-
-
-def active_claims(db: Session, instance_id: int) -> list[StepClaim]:
-    return (
-        db.query(StepClaim)
-        .filter(StepClaim.instance_id == instance_id, StepClaim.released_at.is_(None))
-        .all()
-    )
-
-
-def active_claim_for_step(db: Session, step_execution_id: int) -> StepClaim | None:
-    return (
-        db.query(StepClaim)
-        .filter(
-            StepClaim.step_execution_id == step_execution_id,
-            StepClaim.released_at.is_(None),
-        )
-        .first()
-    )
-
-
-def release_claim(
+def complete_blockers(
     db: Session,
-    claim: StepClaim,
-    reason: ClaimReleaseReason,
-    user_id: int | None,
-) -> None:
-    """End a claim. Releasing un-finished work returns the step to pending —
-    no zombie claims, no zombie in-progress rows."""
-    old = get_model_dict(claim)
-    claim.released_at = datetime.now(UTC)
-    claim.release_reason = reason
-    log_update(db, claim, old, user_id)
-
-    step_exec = claim.step_execution
-    if reason in (ClaimReleaseReason.RELEASED, ClaimReleaseReason.SUPERSEDED):
-        others = (
-            db.query(StepClaim)
-            .filter(
-                StepClaim.step_execution_id == step_exec.id,
-                StepClaim.released_at.is_(None),
-                StepClaim.id != claim.id,
-            )
-            .count()
-        )
-        if others == 0 and _status_value(step_exec.status) == StepStatus.IN_PROGRESS.value:
-            step_old = get_model_dict(step_exec)
-            step_exec.status = StepStatus.PENDING
-            step_exec.started_at = None
-            log_update(db, step_exec, step_old, user_id)
-
-
-def release_user_claims(
-    db: Session,
-    instance_id: int,
-    user_id: int,
-    reason: ClaimReleaseReason,
-) -> list[StepClaim]:
-    claims = (
-        db.query(StepClaim)
-        .filter(
-            StepClaim.instance_id == instance_id,
-            StepClaim.user_id == user_id,
-            StepClaim.released_at.is_(None),
-        )
-        .all()
+    instance: ProcedureInstance,
+    step_exec: StepExecution,
+) -> list[Blocker]:
+    """Everything holding this step's (or OP's) COMPLETE: the held scope
+    plus the structural sequence gates. SKIP checks only the held scope —
+    sequencing gates COMPLETE alone."""
+    return held_scope_blockers(db, instance, step_exec) + sequence_blockers(
+        db, instance, step_exec
     )
-    for claim in claims:
-        release_claim(db, claim, reason, user_id)
-    return claims
 
 
-@dataclass
-class ClaimResult:
-    claim: StepClaim
-    instance_started: bool = False
+# ============ Presence (focus) ============
 
 
-def claim_step(
+def instance_cursors(db: Session, instance_id: int) -> list[StepFocus]:
+    return db.query(StepFocus).filter(StepFocus.instance_id == instance_id).all()
+
+
+def focus_step(
     db: Session,
     instance: ProcedureInstance,
     step_exec: StepExecution,
     user: User,
-) -> ClaimResult:
-    """Claim = START. One user per step; one active step per user (claiming
-    another supersedes the first). Checks the start gates."""
-    inst_status = _status_value(instance.status)
-    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
-        raise FlowError("Instance is not active")
-
-    existing = active_claim_for_step(db, step_exec.id)
-    if existing is not None:
-        if existing.user_id == user.id:
-            return ClaimResult(claim=existing)
-        holder = existing.user.name if existing.user else "another user"
-        raise ClaimConflict(f"Step {step_display(step_exec)} is claimed by {holder}")
-
-    step_status = _status_value(step_exec.status)
-    if step_status == StepStatus.PENDING.value:
-        blockers = start_blockers(db, instance, step_exec)
-        if blockers:
-            raise FlowError("Cannot start: " + "; ".join(b.message for b in blockers))
-    elif step_status != StepStatus.IN_PROGRESS.value:
-        # IN_PROGRESS without an active claim is adoptable (legacy starts);
-        # anything terminal or held is not claimable.
-        raise FlowError(f"Cannot claim step in {step_status} status")
-
-    # One active step per user: supersede the previous claim.
-    release_user_claims(db, instance.id, user.id, ClaimReleaseReason.SUPERSEDED)
-
-    instance_started = False
-    if inst_status == InstanceStatus.CUT.value:
-        instance.status = InstanceStatus.IN_WORK
-        instance.started_at = datetime.now(UTC)
-        db.query(InventoryProduction).filter(
-            InventoryProduction.procedure_instance_id == instance.id,
-            InventoryProduction.status == ProductionStatus.PLANNED,
-        ).update({InventoryProduction.status: ProductionStatus.WIP})
-        instance_started = True
-
-    if _status_value(step_exec.status) == StepStatus.PENDING.value:
-        step_old = get_model_dict(step_exec)
-        step_exec.status = StepStatus.IN_PROGRESS
-        step_exec.started_at = datetime.now(UTC)
-        log_update(db, step_exec, step_old, user.id)
-
-    claim = StepClaim(
-        instance_id=instance.id,
-        step_execution_id=step_exec.id,
-        user_id=user.id,
-        claimed_at=datetime.now(UTC),
+) -> StepFocus:
+    """Move a user's cursor to a step. Presence only: no gate checks, no
+    audit event — the only durable side effect is first-focus telemetry."""
+    now = datetime.now(UTC)
+    focus = (
+        db.query(StepFocus)
+        .filter(StepFocus.instance_id == instance.id, StepFocus.user_id == user.id)
+        .first()
     )
-    db.add(claim)
+    if focus is None:
+        focus = StepFocus(
+            instance_id=instance.id,
+            user_id=user.id,
+            step_execution_id=step_exec.id,
+            focused_at=now,
+        )
+        db.add(focus)
+    else:
+        focus.step_execution_id = step_exec.id
+        focus.focused_at = now
+    if step_exec.first_focused_at is None:
+        step_exec.first_focused_at = now
     db.flush()
-    log_create(db, claim, user.id)
+    return focus
 
-    return ClaimResult(claim=claim, instance_started=instance_started)
+
+def clear_focus(db: Session, instance_id: int, user_id: int) -> None:
+    """Drop a user's cursor (leaving the document)."""
+    db.query(StepFocus).filter(
+        StepFocus.instance_id == instance_id, StepFocus.user_id == user_id
+    ).delete()
+
+
+def mark_instance_in_work(db: Session, instance: ProcedureInstance) -> bool:
+    """First completed/skipped work moves the WO out of CUT. Derived from
+    the event — there is no separate start moment."""
+    if _status_value(instance.status) != InstanceStatus.CUT.value:
+        return False
+    instance.status = InstanceStatus.IN_WORK
+    instance.started_at = datetime.now(UTC)
+    db.query(InventoryProduction).filter(
+        InventoryProduction.procedure_instance_id == instance.id,
+        InventoryProduction.status == ProductionStatus.PLANNED,
+    ).update({InventoryProduction.status: ProductionStatus.WIP})
+    return True
 
 
 # ============ Completion ============
@@ -507,6 +436,7 @@ def validate_data_captured(
 class CompleteResult:
     step_exec: StepExecution
     instance_completed: bool = False
+    instance_started: bool = False  # this event moved the WO out of CUT
     validation_errors: list[str] = field(default_factory=list)
 
 
@@ -518,9 +448,13 @@ def complete_step_flow(
     data_captured: dict[str, Any] | None = None,
     notes: str | None = None,
 ) -> CompleteResult:
-    """COMPLETE is a commitment moment: it checks the undispositioned-issue
-    state of its scope, validates required data, releases the claim, and
-    cascades instance completion."""
+    """COMPLETE is the commitment moment: it checks the undispositioned-issue
+    and sequence state of its scope, validates required data, and cascades
+    instance completion."""
+    inst_status = _status_value(instance.status)
+    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
+        raise FlowError("Instance is not active")
+
     step_status = _status_value(step_exec.status)
     if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
         raise FlowError("Step already completed")
@@ -531,11 +465,6 @@ def complete_step_flow(
     ):
         raise FlowError(f"Cannot complete step in {step_status} status")
 
-    existing = active_claim_for_step(db, step_exec.id)
-    if existing is not None and existing.user_id != user_id:
-        holder = existing.user.name if existing.user else "another user"
-        raise ClaimConflict(f"Step {step_display(step_exec)} is claimed by {holder}")
-
     holds = complete_blockers(db, instance, step_exec)
     if holds:
         raise FlowError("Cannot complete: " + "; ".join(b.message for b in holds))
@@ -544,6 +473,8 @@ def complete_step_flow(
     errors = validate_data_captured(version, step_exec, data_captured)
     if errors:
         return CompleteResult(step_exec=step_exec, validation_errors=errors)
+
+    instance_started = mark_instance_in_work(db, instance)
 
     if step_status == StepStatus.PENDING.value:
         step_exec.started_at = datetime.now(UTC)
@@ -555,13 +486,6 @@ def complete_step_flow(
         step_exec.data_captured = data_captured
     if notes is not None:
         step_exec.notes = notes
-
-    for claim in (
-        db.query(StepClaim)
-        .filter(StepClaim.step_execution_id == step_exec.id, StepClaim.released_at.is_(None))
-        .all()
-    ):
-        release_claim(db, claim, ClaimReleaseReason.COMPLETED, user_id)
 
     old_instance_status = _status_value(instance.status)
     check_instance_completion(db, instance)
@@ -579,7 +503,11 @@ def complete_step_flow(
         old_instance_status != InstanceStatus.COMPLETED.value
         and _status_value(instance.status) == InstanceStatus.COMPLETED.value
     )
-    return CompleteResult(step_exec=step_exec, instance_completed=instance_completed)
+    return CompleteResult(
+        step_exec=step_exec,
+        instance_completed=instance_completed,
+        instance_started=instance_started,
+    )
 
 
 def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
@@ -641,8 +569,8 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
 
 def maybe_resume_step_after_nc_update(db: Session, issue: Issue, user_id: int | None) -> None:
     """If this NC just reached a terminal state and no other open NCs remain on
-    its step, pop the step back to IN_PROGRESS. Propagates the resume to a
-    held parent op when no sibling holds remain."""
+    its step, pop the step back to PENDING. Propagates the resume to a held
+    parent op when no sibling holds remain."""
     if issue.step_execution_id is None:
         return
     if _status_value(issue.issue_type) != IssueType.NON_CONFORMANCE.value:
@@ -691,7 +619,7 @@ def maybe_resume_step_after_nc_update(db: Session, issue: Issue, user_id: int | 
         return
 
     step_old = get_model_dict(step_exec)
-    step_exec.status = StepStatus.IN_PROGRESS
+    step_exec.status = StepStatus.PENDING
     log_update(db, step_exec, step_old, user_id)
 
     # When an NC was logged on a sub-step the parent op was also flipped to
@@ -736,7 +664,7 @@ def maybe_resume_step_after_nc_update(db: Session, issue: Issue, user_id: int | 
             )
             if siblings_open == 0:
                 parent_old = get_model_dict(parent_exec)
-                parent_exec.status = StepStatus.IN_PROGRESS
+                parent_exec.status = StepStatus.PENDING
                 log_update(db, parent_exec, parent_old, user_id)
 
 
@@ -764,12 +692,14 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
             return se.parent_step_order
         return snapshot_parent.get(se.step_number)
 
-    claims = active_claims(db, instance.id)
-    claims_by_step: dict[int, StepClaim] = {c.step_execution_id: c for c in claims}
+    cursors = instance_cursors(db, instance.id)
+    cursors_by_step: dict[int, list[StepFocus]] = {}
+    for cursor in sorted(cursors, key=lambda c: c.focused_at):
+        cursors_by_step.setdefault(cursor.step_execution_id, []).append(cursor)
     raised = holding_ncs_by_step(db, instance.id)
     bound = bound_blocks_by_step(db, instance.id)
 
-    user_ids = {c.user_id for c in claims}
+    user_ids = {c.user_id for c in cursors}
     for p in instance.participants or []:
         if p.get("user_id"):
             user_ids.add(p["user_id"])
@@ -792,7 +722,17 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
             last_seen = last_seen.replace(tzinfo=UTC)
         return (now - last_seen).total_seconds() > PRESENCE_STALE_SECONDS
 
-    # Attachment counts per step (evidence indicator ⎙n).
+    def _cursor_entry(cursor: StepFocus) -> dict[str, Any]:
+        user = user_lookup.get(cursor.user_id)
+        return {
+            "user_id": cursor.user_id,
+            "name": user.name if user else None,
+            "initials": user_initials(user.name if user else None),
+            "focused_at": _iso(cursor.focused_at),
+            "stale": _stale(user),
+        }
+
+    # Attachment counts per step (evidence indicator "n ATT").
     step_exec_ids = [se.id for se in instance.step_executions]
     attach_counts: dict[int, int] = {}
     if step_exec_ids:
@@ -810,8 +750,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
     for se in sorted(instance.step_executions, key=lambda s: s.step_number):
         vs = vs_map.get(se.step_number) or {}
         status = _status_value(se.status)
-        claim = claims_by_step.get(se.id)
-        claim_user = user_lookup.get(claim.user_id) if claim else None
+        step_cursors = cursors_by_step.get(se.id, [])
         completer = user_lookup.get(se.completed_by_id) if se.completed_by_id else None
 
         is_leaf = se.level > 0 or not any(
@@ -834,15 +773,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                 "status": status,
                 "role": vs.get("required_role"),
                 "is_ad_hoc": se.ad_hoc_issue_id is not None,
-                "claim": {
-                    "user_id": claim.user_id,
-                    "name": claim_user.name if claim_user else None,
-                    "initials": user_initials(claim_user.name if claim_user else None),
-                    "claimed_at": _iso(claim.claimed_at),
-                    "stale": _stale(claim_user),
-                }
-                if claim
-                else None,
+                "cursors": [_cursor_entry(c) for c in step_cursors],
                 "completed": {
                     "by": completer.name if completer else None,
                     "initials": user_initials(completer.name if completer else None),
@@ -873,28 +804,28 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
             }
         )
 
-    # Roster: active claimants first, then claim-less joined observers.
+    # Roster: cursor holders first ("name @step"), then joined users whose
+    # cursor isn't placed yet.
     roster: list[dict[str, Any]] = []
     step_by_id = {se.id: se for se in instance.step_executions}
-    for claim in sorted(claims, key=lambda c: c.claimed_at):
-        user = user_lookup.get(claim.user_id)
-        se = step_by_id.get(claim.step_execution_id)
+    for cursor in sorted(cursors, key=lambda c: c.focused_at):
+        user = user_lookup.get(cursor.user_id)
+        se = step_by_id.get(cursor.step_execution_id)
         roster.append(
             {
-                "user_id": claim.user_id,
+                "user_id": cursor.user_id,
                 "name": user.name if user else None,
                 "initials": user_initials(user.name if user else None),
                 "step_order": se.step_number if se else None,
                 "step_number": step_display(se) if se else None,
-                "claimed_at": _iso(claim.claimed_at),
+                "focused_at": _iso(cursor.focused_at),
                 "stale": _stale(user),
-                "observer": False,
             }
         )
-    claimant_ids = {c.user_id for c in claims}
+    cursor_user_ids = {c.user_id for c in cursors}
     for p in instance.participants or []:
         uid = p.get("user_id")
-        if uid is None or uid in claimant_ids:
+        if uid is None or uid in cursor_user_ids:
             continue
         user = user_lookup.get(uid)
         roster.append(
@@ -904,9 +835,8 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                 "initials": user_initials(user.name if user else p.get("user_name")),
                 "step_order": None,
                 "step_number": None,
-                "claimed_at": None,
+                "focused_at": None,
                 "stale": _stale(user),
-                "observer": True,
             }
         )
 

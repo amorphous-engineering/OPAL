@@ -16,25 +16,24 @@ from opal.core.designators import (
     generate_work_order_number,
 )
 from opal.core.events import (
+    emit_cursor_moved,
     emit_instance_completed,
     emit_instance_started,
     emit_step_completed,
-    emit_step_started,
     emit_user_joined,
     emit_user_left,
 )
 from opal.core.execution_flow import (
-    ClaimReleaseReason,
     FlowError,
-    active_claim_for_step,
     build_execution_state,
     check_instance_completion,
-    claim_step,
+    clear_focus,
     complete_blockers,
     complete_step_flow,
+    focus_step,
+    held_scope_blockers,
+    mark_instance_in_work,
     maybe_resume_step_after_nc_update,
-    release_claim,
-    step_display,
 )
 from opal.core.genealogy import record_assembly_genealogy
 from opal.core.part_lifecycle import ensure_parts_active
@@ -578,21 +577,30 @@ def update_instance(
 # ============ Step Execution ============
 
 
-@router.post("/{instance_id}/steps/{step_number}/start", response_model=StepExecutionResponse)
-async def start_step(
+class FocusMove(BaseModel):
+    """Move the caller's cursor to a step. Presence, not an event."""
+
+    step_number: int
+
+
+@router.post("/{instance_id}/focus")
+async def move_focus(
     instance_id: int,
-    step_number: int,
+    data: FocusMove,
     db: DbSession,
     user_id: CurrentUserId,
-) -> StepExecutionResponse:
-    """Start a step execution — claims it for the current user."""
+) -> dict:
+    """Move the caller's cursor. Broadcast to the document; never recorded."""
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
     step_exec = (
         db.query(StepExecution)
-        .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
+        .filter(
+            StepExecution.instance_id == instance_id,
+            StepExecution.step_number == data.step_number,
+        )
         .first()
     )
     if not step_exec:
@@ -604,81 +612,15 @@ async def start_step(
     if not user:
         raise HTTPException(status_code=401, detail="Unknown user")
 
-    try:
-        result = claim_step(db, instance, step_exec, user)
-    except FlowError as err:
-        raise HTTPException(status_code=err.status_code, detail=err.message) from err
-
+    focus = focus_step(db, instance, step_exec, user)
     db.commit()
-    db.refresh(step_exec)
 
-    # Emit real-time events
-    await emit_step_started(instance_id, step_number, user_id, user.name)
-    if result.instance_started:
-        await emit_instance_started(instance_id, instance.procedure_id, user_id, user.name)
+    await emit_cursor_moved(instance_id, data.step_number, user_id, user.name)
 
-    return StepExecutionResponse(
-        id=step_exec.id,
-        step_number=step_exec.step_number,
-        step_number_str=step_exec.step_number_str,
-        level=step_exec.level,
-        parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
-        data_captured=step_exec.data_captured,
-        started_at=step_exec.started_at,
-        completed_at=step_exec.completed_at,
-        completed_by_id=step_exec.completed_by_id,
-        signed_off_at=step_exec.signed_off_at,
-        notes=step_exec.notes,
-        signed_off_by_id=step_exec.signed_off_by_id,
-        duration_seconds=step_exec.duration_seconds,
-    )
-
-
-@router.post("/{instance_id}/steps/{step_number}/release", response_model=StepExecutionResponse)
-async def release_step(
-    instance_id: int,
-    step_number: int,
-    db: DbSession,
-    user_id: CurrentUserId,
-) -> StepExecutionResponse:
-    """Release the current user's claim on a step (un-claim)."""
-    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
-
-    step_exec = (
-        db.query(StepExecution)
-        .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
-        .first()
-    )
-    if not step_exec:
-        raise HTTPException(status_code=404, detail="Step not found")
-
-    claim = active_claim_for_step(db, step_exec.id)
-    if claim is None or claim.user_id != user_id:
-        raise HTTPException(status_code=404, detail="No active claim by you on this step")
-
-    release_claim(db, claim, ClaimReleaseReason.RELEASED, user_id)
-    db.commit()
-    db.refresh(step_exec)
-
-    return StepExecutionResponse(
-        id=step_exec.id,
-        step_number=step_exec.step_number,
-        step_number_str=step_exec.step_number_str,
-        level=step_exec.level,
-        parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
-        data_captured=step_exec.data_captured,
-        started_at=step_exec.started_at,
-        completed_at=step_exec.completed_at,
-        completed_by_id=step_exec.completed_by_id,
-        signed_off_at=step_exec.signed_off_at,
-        notes=step_exec.notes,
-        signed_off_by_id=step_exec.signed_off_by_id,
-        duration_seconds=step_exec.duration_seconds,
-    )
+    return {
+        "step_number": data.step_number,
+        "focused_at": focus.focused_at.isoformat(),
+    }
 
 
 @router.get("/{instance_id}/state")
@@ -743,6 +685,8 @@ async def complete_step(
 
     # Emit real-time events
     await emit_step_completed(instance_id, step_number, user_id, user_name)
+    if result.instance_started:
+        await emit_instance_started(instance_id, instance.procedure_id, user_id, user_name)
     if result.instance_completed:
         await emit_instance_completed(
             instance_id, instance.procedure_id, InstanceStatus.COMPLETED.value
@@ -853,28 +797,20 @@ def skip_step(
         )
 
     # Skip is a commitment moment too — held work cannot be skipped around.
-    holds = complete_blockers(db, instance, step_exec)
+    holds = held_scope_blockers(db, instance, step_exec)
     if holds:
         raise HTTPException(
             status_code=400,
             detail="Cannot skip: " + "; ".join(b.message for b in holds),
         )
-    claim = active_claim_for_step(db, step_exec.id)
-    if claim is not None and claim.user_id != user_id:
-        holder = claim.user.name if claim.user else "another user"
-        raise HTTPException(
-            status_code=409,
-            detail=f"Step {step_display(step_exec)} is claimed by {holder}",
-        )
+
+    mark_instance_in_work(db, instance)
 
     step_exec.status = StepStatus.SKIPPED
     step_exec.completed_at = datetime.now(UTC)
     step_exec.completed_by_id = user_id
     if data.reason:
         step_exec.data_captured = {"skip_reason": data.reason}
-
-    if claim is not None:
-        release_claim(db, claim, ClaimReleaseReason.SKIPPED, user_id)
 
     # Check if procedure is complete (considering contingency rules)
     check_instance_completion(db, instance)
@@ -1986,8 +1922,9 @@ async def leave_execution(
     leaving_user = next((p for p in participants if p.get("user_id") == user_id), None)
     user_name = leaving_user.get("user_name", "Unknown") if leaving_user else "Unknown"
 
-    # Remove user from participants
+    # Remove user from participants and drop their cursor
     instance.participants = [p for p in participants if p.get("user_id") != user_id]
+    clear_focus(db, instance_id, user_id)
     db.commit()
 
     # Emit user left event

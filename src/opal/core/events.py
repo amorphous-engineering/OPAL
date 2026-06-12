@@ -21,7 +21,7 @@ class EventType(str, Enum):
     """Types of real-time events."""
 
     # Execution events
-    STEP_STARTED = "step_started"
+    CURSOR_MOVED = "cursor_moved"
     STEP_COMPLETED = "step_completed"
     INSTANCE_STARTED = "instance_started"
     INSTANCE_COMPLETED = "instance_completed"
@@ -133,15 +133,15 @@ event_bus = EventBus()
 # Helper functions for publishing common events
 
 
-async def emit_step_started(
+async def emit_cursor_moved(
     instance_id: int,
     step_number: int,
     user_id: int | None = None,
     user_name: str | None = None,
 ) -> None:
-    """Emit a step_started event."""
+    """Emit a cursor_moved presence event (broadcast only — never recorded)."""
     event = Event(
-        type=EventType.STEP_STARTED,
+        type=EventType.CURSOR_MOVED,
         data={
             "instance_id": instance_id,
             "step_number": step_number,

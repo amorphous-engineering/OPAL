@@ -2402,43 +2402,33 @@ def _execution_detail_context(
     data_rows.sort(key=lambda r: (r["step_sort"], r["field"]))
     context["data_rows"] = data_rows
 
-    # ---- Document layer: claims, holds, evidence counts, presence ----
+    # ---- Document layer: cursors, holds, evidence counts, presence ----
 
-    claims = exec_flow.active_claims(db, instance.id)
-    claim_user_ids = {c.user_id for c in claims}
-    claim_users = (
-        {u.id: u for u in db.query(User).filter(User.id.in_(claim_user_ids)).all()}
-        if claim_user_ids
+    cursors = exec_flow.instance_cursors(db, instance.id)
+    cursor_user_ids = {c.user_id for c in cursors}
+    cursor_users = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(cursor_user_ids)).all()}
+        if cursor_user_ids
         else {}
     )
-    context["claims_by_se"] = {
-        c.step_execution_id: {"claim": c, "user": claim_users.get(c.user_id)} for c in claims
-    }
+    cursors_by_se: dict[int, list[dict]] = {}
+    for c in sorted(cursors, key=lambda c: c.focused_at):
+        cursors_by_se.setdefault(c.step_execution_id, []).append(
+            {"cursor": c, "user": cursor_users.get(c.user_id)}
+        )
+    context["cursors_by_se"] = cursors_by_se
 
     current_user = context.get("current_user")
-    my_claim = next(
-        (c for c in claims if current_user and c.user_id == current_user.id), None
+    my_cursor = next(
+        (c for c in cursors if current_user and c.user_id == current_user.id), None
     )
-    context["my_claim"] = my_claim
-    my_step = None
-    if my_claim is not None:
-        my_se = next(
-            (se for se in instance.step_executions if se.id == my_claim.step_execution_id),
-            None,
-        )
-        if my_se is not None:
-            vs = context["version_steps_map"].get(my_se.step_number, {})
-            my_step = {
-                "exec": my_se,
-                "order": my_se.step_number,
-                "number": my_se.step_number_str or str(my_se.step_number),
-                "title": my_se.title or vs.get("title", ""),
-                "schema": my_se.required_data_schema or vs.get("required_data_schema"),
-                "caution": vs.get("caution"),
-            }
-    context["my_step"] = my_step
+    context["my_cursor_order"] = (
+        my_cursor.step_execution.step_number
+        if my_cursor is not None and my_cursor.step_execution is not None
+        else None
+    )
 
-    # Bound hold points (issue_step_block) — block START of the bound step.
+    # Bound hold points (issue_step_block) — hold COMPLETE of the bound step.
     context["bound_holds_by_se"] = exec_flow.bound_blocks_by_step(db, instance.id)
 
     # Undispositioned scope per op order — gates the OP's COMPLETE/sign-off
@@ -2498,12 +2488,64 @@ def _execution_detail_context(
     # Presence/progress snapshot for first paint; the page then polls /state.
     context["exec_state"] = exec_flow.build_execution_state(db, instance)
 
-    # Active users for the anomaly capture's optional assignee.
+    # Active users for the issue capture's optional assignee.
     context["active_users"] = (
         db.query(User).filter(User.is_active.is_(True)).order_by(User.name.asc()).all()
     )
 
     return context
+
+
+_BAR_ACTIONABLE = {"pending", "in_progress", "awaiting_signoff"}
+
+
+def _set_bar_step(context: dict, step_order: int | None) -> None:
+    """Resolve the docked bar's step: the requested order, else the session
+    user's cursor, else the first actionable row of the document."""
+    rows: list[tuple[dict, dict]] = []
+    for op_data in context["ops"] + context["contingency_ops"]:
+        rows.append((op_data, op_data["step"]))
+        rows.extend((op_data, sub) for sub in op_data["sub_steps"])
+
+    target = None
+    if step_order is not None:
+        target = next(((od, r) for od, r in rows if r["order"] == step_order), None)
+    if target is None and context.get("my_cursor_order") is not None:
+        target = next(
+            ((od, r) for od, r in rows if r["order"] == context["my_cursor_order"]), None
+        )
+    if target is None:
+        leaf_rows = [
+            (od, r) for od, r in rows if not od["sub_steps"] or r is not od["step"]
+        ]
+        target = next(
+            ((od, r) for od, r in leaf_rows if r["status"] in _BAR_ACTIONABLE), None
+        ) or (leaf_rows[0] if leaf_rows else None)
+
+    if target is None:
+        context["bar_step"] = None
+        return
+
+    op_data, row = target
+    vs = context["version_steps_map"].get(row["order"], {})
+    is_op = row is op_data["step"]
+    number = row["step_number"]
+    if "." not in number and not is_op:
+        number = f"{op_data['step']['step_number']}.{number}"
+    context["bar_step"] = {
+        "exec": row.get("execution"),
+        "order": row["order"],
+        "number": number,
+        "title": row["title"],
+        "status": row["status"],
+        "is_op": is_op,
+        "schema": row.get("required_data_schema") or vs.get("required_data_schema"),
+        "caution": vs.get("caution"),
+        "op_order": op_data["step"]["order"],
+        "op_open_ncs": (context.get("op_open_ncs_by_order") or {}).get(
+            op_data["step"]["order"], []
+        ),
+    }
 
 
 @router.get("/executions/{instance_id}", response_class=HTMLResponse)
@@ -2524,19 +2566,23 @@ def executions_detail(
         )
 
     context = _execution_detail_context(request, db, instance)
+    _set_bar_step(context, None)
     tab = _EXECUTION_TAB_ALIASES.get(tab, tab)
     context["tab"] = tab if tab in _EXECUTION_TABS else "document"
     return templates.TemplateResponse("executions/detail.html", context)
 
 
-@router.get("/executions/{instance_id}/mystep", response_class=HTMLResponse)
-def executions_mystep(request: Request, db: DbSession, instance_id: int) -> HTMLResponse:
-    """Docked MY STEP bar partial — refetched after claim/complete/release."""
+@router.get("/executions/{instance_id}/dockbar", response_class=HTMLResponse)
+def executions_dockbar(
+    request: Request, db: DbSession, instance_id: int, step: int | None = None
+) -> HTMLResponse:
+    """Docked bar partial for the focused step — refetched as focus moves."""
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         return HTMLResponse("", status_code=404)
     context = _execution_detail_context(request, db, instance)
-    return templates.TemplateResponse("executions/_mystep.html", context)
+    _set_bar_step(context, step)
+    return templates.TemplateResponse("executions/_dockbar.html", context)
 
 
 @router.get("/executions/{instance_id}/rail", response_class=HTMLResponse)

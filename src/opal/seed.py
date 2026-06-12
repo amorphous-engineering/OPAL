@@ -3843,14 +3843,16 @@ def _seed_versions_and_executions(
                     )
                     db.add(se)
                 elif s["order"] == 13:
+                    # The crew's position is presence (cursor), not status —
+                    # the step ahead of the completed work stays PENDING.
                     se = StepExecution(
                         instance_id=inst.id,
                         step_number=s["order"],
                         step_number_str=s["step_number"],
                         level=s["level"],
                         parent_step_order=parent_order_of.get(s["order"]),
-                        status=StepStatus.IN_PROGRESS,
-                        started_at=now - timedelta(minutes=15),
+                        status=StepStatus.PENDING,
+                        first_focused_at=now - timedelta(minutes=15),
                     )
                     db.add(se)
                 else:

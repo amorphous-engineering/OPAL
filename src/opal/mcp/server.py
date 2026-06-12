@@ -21,13 +21,10 @@ from opal.core.designators import (
     generate_risk_number,
 )
 from opal.core.execution_flow import (
-    ClaimReleaseReason,
     FlowError,
-    active_claim_for_step,
     build_execution_state,
-    claim_step,
     complete_step_flow,
-    release_claim,
+    focus_step,
 )
 from opal.core.numbering import (
     PartNumberError,
@@ -1831,7 +1828,7 @@ async def list_tools() -> list[Tool]:
             name="get_execution_state",
             description=(
                 "Full document state of a running work order: every step with "
-                "status/claim/holds/evidence counts, the presence roster, and "
+                "status/cursors/holds/evidence counts, the presence roster, and "
                 "active hold points — the controller's view as JSON. Poll this "
                 "to observe a live test."
             ),
@@ -1850,7 +1847,7 @@ async def list_tools() -> list[Tool]:
             name="join_execution",
             description=(
                 "Join a work order as an observer participant (appears in the "
-                "presence roster without claiming a step)."
+                "presence roster before placing a cursor)."
             ),
             inputSchema={
                 "type": "object",
@@ -1866,12 +1863,11 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="claim_step",
+            name="focus_step",
             description=(
-                "Claim (START) a step for a user. One user per step; one active "
-                "step per user — claiming another auto-releases the previous "
-                "claim. Refuses when the step is held, gated, or claimed by "
-                "someone else."
+                "Move a user's cursor to a step. Presence = focus: the cursor "
+                "is broadcast to everyone in the document, several users may "
+                "focus the same step, and moving records no event."
             ),
             inputSchema={
                 "type": "object",
@@ -1884,22 +1880,8 @@ async def list_tools() -> list[Tool]:
                     },
                     "user_id": {
                         "type": "integer",
-                        "description": "ID of the human user doing the work",
+                        "description": "ID of the human user at the step",
                     },
-                },
-                "required": ["step_number", "user_id"],
-            },
-        ),
-        Tool(
-            name="release_step",
-            description="Release a user's claim on a step (un-claim, back to pending).",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "execution_id": {"type": "integer"},
-                    "work_order": {"type": "string"},
-                    "step_number": {"type": "integer"},
-                    "user_id": {"type": "integer", "description": "The claim holder"},
                 },
                 "required": ["step_number", "user_id"],
             },
@@ -2177,10 +2159,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _get_execution_state(db, arguments)
         elif name == "join_execution":
             return await _join_execution(db, arguments)
-        elif name == "claim_step":
-            return await _claim_step(db, arguments)
-        elif name == "release_step":
-            return await _release_step(db, arguments)
+        elif name == "focus_step":
+            return await _focus_step(db, arguments)
         elif name == "complete_step":
             return await _complete_step(db, arguments)
         elif name == "attach_to_step":
@@ -5800,7 +5780,7 @@ async def _join_execution(db, args: dict) -> list[TextContent]:
     )
 
 
-async def _claim_step(db, args: dict) -> list[TextContent]:
+async def _focus_step(db, args: dict) -> list[TextContent]:
     instance = _load_instance(db, args)
     if not instance:
         return _instance_error(args)
@@ -5811,53 +5791,16 @@ async def _claim_step(db, args: dict) -> list[TextContent]:
     if error:
         return error
 
-    try:
-        result = claim_step(db, instance, step_exec, user)
-    except FlowError as err:
-        db.rollback()
-        return json_response({"error": err.message})
-
+    focus = focus_step(db, instance, step_exec, user)
     db.commit()
     return json_response(
         {
             "success": True,
             "message": (
-                f"{user.name} claimed step {step_exec.step_number_str or step_exec.step_number}"
+                f"{user.name} at step {step_exec.step_number_str or step_exec.step_number}"
             ),
             "step_number": step_exec.step_number,
-            "status": step_exec.status.value
-            if hasattr(step_exec.status, "value")
-            else step_exec.status,
-            "instance_started": result.instance_started,
-        }
-    )
-
-
-async def _release_step(db, args: dict) -> list[TextContent]:
-    instance = _load_instance(db, args)
-    if not instance:
-        return _instance_error(args)
-    step_exec = _load_step(db, instance, args)
-    if not step_exec:
-        return json_response({"error": f"Step {args['step_number']} not found"})
-    user, error = _require_human_user(db, args)
-    if error:
-        return error
-
-    claim = active_claim_for_step(db, step_exec.id)
-    if claim is None or claim.user_id != user.id:
-        return json_response({"error": "No active claim by that user on this step"})
-
-    release_claim(db, claim, ClaimReleaseReason.RELEASED, user.id)
-    db.commit()
-    return json_response(
-        {
-            "success": True,
-            "message": (f"Released step {step_exec.step_number_str or step_exec.step_number}"),
-            "step_number": step_exec.step_number,
-            "status": step_exec.status.value
-            if hasattr(step_exec.status, "value")
-            else step_exec.status,
+            "focused_at": focus.focused_at.isoformat(),
         }
     )
 
