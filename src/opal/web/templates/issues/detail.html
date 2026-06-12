@@ -36,11 +36,6 @@
                     {% endif %}
                 </div>
 
-                <!-- Description -->
-                <div style="margin-bottom: var(--space-md);">
-                    {{ text_field("DESCRIPTION", "description", issue.description, rows=4) }}
-                </div>
-
                 <!-- Should-be / Is — the NC pair, captured at discovery -->
                 <div style="margin-bottom: var(--space-md); display: flex; gap: var(--space-md);">
                     <div style="flex: 1;">
@@ -49,6 +44,11 @@
                     <div style="flex: 1;">
                         {{ text_field("IS", "actual", issue.actual) }}
                     </div>
+                </div>
+
+                <!-- Description -->
+                <div style="margin-bottom: var(--space-md);">
+                    {{ text_field("DESCRIPTION", "description", issue.description, rows=4) }}
                 </div>
 
                 {% if type_val == 'bug' %}
@@ -105,7 +105,7 @@
                         {{ ok.btn("SPAWN REDLINE OP", href="/executions/" ~ issue.procedure_instance_id ~ "?tab=operations&op=" ~ redline_op_order ~ "&redline_issue=" ~ issue.id) }}
                     </div>
                     {% endif %}
-                    {% else %}
+                    {% elif editing %}
                     <div style="display: flex; gap: var(--space-md); margin-bottom: var(--space-sm);">
                         <div style="flex: 1;">
                             <div class="form-label">TYPE</div>
@@ -131,6 +131,11 @@
                         <button type="button" class="btn btn-primary" onclick="commitDisposition()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
                         <button type="button" class="btn" onclick="document.getElementById('disposition-confirm').style.display='none'">ABORT</button>
                     </div>
+                    {% else %}
+                    {% call ok.table() %}
+                        {{ ok.detail_row("TYPE", (disposition_val | upper | replace('_', ' ')) if disposition_val else '—', mono=true, th_width="120px") }}
+                        {{ ok.detail_row("RATIONALE", issue.disposition_rationale or '—') }}
+                    {% endcall %}
                     {% endif %}
                 </div>
                 {% endif %}

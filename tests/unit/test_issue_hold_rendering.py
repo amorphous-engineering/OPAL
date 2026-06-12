@@ -84,7 +84,12 @@ def test_issue_page_holding_readout(web_client):
     assert "OP 1 COMPLETE" in page.text
     assert "UNDISPOSITIONED" in page.text
     assert "⛔" not in page.text
-    # The disposition box carries no readiness ceremony: one button, gated.
+    # View mode shows the disposition draft as facts; the form is an edit.
+    assert "DISPOSITION" in page.text
+    assert 'id="disposition-btn"' not in page.text
+
+    # Edit mode carries the form with no readiness ceremony: one gated button.
+    page = web_client.get(f"/issues/{nc['id']}?edit=1")
     assert 'id="disposition-btn"' in page.text
     assert "DISPOSITION READINESS" not in page.text
     assert "SIGN DISPOSITION" not in page.text
@@ -97,6 +102,7 @@ def test_issue_page_holding_readout(web_client):
     assert 'id="disposition-btn"' not in page.text
     assert "UNDISPOSITIONED" not in page.text
     assert "closeIssue()" in page.text
+    assert 'id="disposition-btn"' not in web_client.get(f"/issues/{advisory['id']}?edit=1").text
 
 
 def test_issue_page_view_mode_default(web_client):
@@ -111,12 +117,14 @@ def test_issue_page_view_mode_default(web_client):
     assert 'id="type-select"' not in page.text
     assert 'id="title-input"' not in page.text
     assert 'id="execution-select"' not in page.text
+    assert 'id="disposition-type-select"' not in page.text
 
     page = web_client.get(f"/issues/{nc['id']}?edit=1")
     assert page.status_code == 200
     assert ">DONE<" in page.text
     assert 'id="type-select"' in page.text
     assert 'id="title-input"' in page.text
+    assert 'id="disposition-type-select"' in page.text
 
 
 def test_issue_page_links_work_order_and_boundary(web_client):

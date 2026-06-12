@@ -438,6 +438,16 @@ select option {
     color: var(--bg-primary);
 }
 
+/* Disabled buttons gray out regardless of variant — the gate must be
+   visible, not just functional. */
+.btn:disabled,
+.btn:disabled:hover {
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
 .btn-danger {
     border-color: var(--accent-red);
     color: var(--accent-red);
