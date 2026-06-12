@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
+from opal.config import get_active_project
 from opal.core.audit import get_model_dict, log_create, log_update
 from opal.core.designators import generate_serial_number
 from opal.core.inventory import generate_opal_number
@@ -15,6 +16,7 @@ from opal.db.models import InventoryRecord, Part, Purchase, PurchaseExpense, Pur
 from opal.db.models.inventory import SourceType
 from opal.db.models.part import TrackingType
 from opal.db.models.purchase import PurchaseStatus
+from opal.project import tier_semantics
 
 router = APIRouter()
 
@@ -562,24 +564,27 @@ def receive_purchase(
             db, [line.part_id], f"receive against PO {purchase.reference or purchase_id}"
         )
 
-        # Tier enforcement
+        # Tier enforcement, driven by the configured tier's semantic fields
+        auto_serial = False
         if part:
-            tier = part.tier
+            tier_cfg = tier_semantics(get_active_project(), part.tier)
             tracking = part.tracking_type
 
-            # T1 or T2 bulk (lot-tracked): lot_number is required
-            if tier in (1, 2) and tracking == TrackingType.BULK and not recv.lot_number:
+            # Lot-tracked tiers: bulk receipts must carry a lot_number
+            if tier_cfg.require_lot and tracking == TrackingType.BULK and not recv.lot_number:
                 raise HTTPException(
                     status_code=422,
                     detail=(
-                        f"Tier {tier} lot-tracked part '{part.name}' requires a "
+                        f"Tier {part.tier} lot-tracked part '{part.name}' requires a "
                         f"lot_number when receiving."
                     ),
                 )
 
-            # T1 serialized: auto-generate serial numbers if not provided —
+            # Serial-issuing tiers: auto-generate serial numbers if not provided —
             # per physical unit, inside the record loop below
-            auto_serial = tier == 1 and tracking == TrackingType.SERIALIZED and not recv.lot_number
+            auto_serial = (
+                tier_cfg.auto_serial and tracking == TrackingType.SERIALIZED and not recv.lot_number
+            )
 
         if part and part.tracking_type == TrackingType.SERIALIZED:
             # Serialized parts: create individual inventory records with unique OPAL numbers

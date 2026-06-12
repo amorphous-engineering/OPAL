@@ -172,7 +172,10 @@ async def list_tools() -> list[Tool]:
                     },
                     "tier": {
                         "type": "integer",
-                        "description": "Inventory tier (1=Flight, 2=Ground, 3=Loose). Default: 1",
+                        "description": (
+                            "Inventory tier level, as configured in the project "
+                            "(see get_project_info for the tier list). Default: 1"
+                        ),
                         "default": 1,
                     },
                     "parent_id": {
@@ -2408,6 +2411,9 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
                     "name": t.name,
                     "code": t.code,
                     "description": t.description,
+                    "default_tracking": t.default_tracking,
+                    "require_lot": t.require_lot,
+                    "auto_serial": t.auto_serial,
                 }
                 for t in project.tiers
             ],
@@ -2523,8 +2529,7 @@ async def _bulk_activate_parts(db, args: dict) -> list[TextContent]:
     return json_response(
         {
             "success": True,
-            "message": f"{len(activated)} part(s) activated by {user.name}, "
-            f"{len(skipped)} skipped",
+            "message": f"{len(activated)} part(s) activated by {user.name}, {len(skipped)} skipped",
             "activated": activated,
             "skipped": skipped,
         }
