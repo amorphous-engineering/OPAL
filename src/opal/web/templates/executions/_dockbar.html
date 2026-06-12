@@ -58,7 +58,7 @@
             {% if actionable and bs == 'awaiting_signoff' %}
             <button class="btn btn-sm btn-primary" onclick="signoffStep({{ bar_step.order }})">SIGN OFF</button>
             {% elif workable and not bar_step.has_children %}
-            <button class="btn btn-sm btn-primary" onclick="completeStep({{ bar_step.order }})">COMPLETE</button>
+            <button class="btn btn-sm btn-primary" onclick="completeStep({{ bar_step.order }}, this)">COMPLETE</button>
             {% endif %}
             {% endif %}
         </div>

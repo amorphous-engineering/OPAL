@@ -396,6 +396,23 @@
 }
 
 .step-kit-panel { margin: var(--space-xs) 0; }
+
+/* Expanded-step control surface: fields, notes, actions. */
+.step-controls { margin-top: var(--space-sm); }
+
+.step-controls-fields {
+    display: flex;
+    gap: var(--space-md);
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: var(--space-xs);
+}
+
+.step-actions {
+    display: flex;
+    gap: var(--space-xs);
+    justify-content: flex-end;
+}
 .step-kit-actions { display: flex; justify-content: flex-end; margin-top: var(--space-xs); }
 .step-kit-consumed { margin-top: var(--space-xs); font-size: 0.75rem; }
 
@@ -450,7 +467,7 @@
 
 #dockbar {
     position: fixed;
-    bottom: var(--opal-footer-h, 0px); /* docked above the status footer */
+    bottom: calc(var(--opal-footer-h, 0px) + var(--space-sm)); /* clear of the footer */
     left: 50%;
     transform: translateX(-50%);
     width: min(900px, 100vw);
@@ -458,6 +475,8 @@
 }
 
 body.has-dockbar .main { padding-bottom: 5.5rem; }
+body.dockbar-off #dockbar { display: none; }
+body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 
 .dockbar {
     display: flex;

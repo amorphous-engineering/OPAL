@@ -34,6 +34,7 @@
         {% if inst_status in ['cut', 'in_work'] %}
         <button class="btn btn-sm btn-danger" onclick="abortExecution()">ABORT</button>
         {% endif %}
+        <button class="btn btn-sm" id="dockbar-toggle" onclick="toggleDockbar()" title="Docked current-step bar">BAR</button>
         <button class="btn btn-sm" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">···</button>
     </span>
 </div>

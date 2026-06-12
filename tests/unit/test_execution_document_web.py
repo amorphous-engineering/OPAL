@@ -105,6 +105,37 @@ def _doc_column(html: str) -> str:
     return html.split('id="exec-doc"')[1].split("<aside")[0]
 
 
+def _buttons_outside_step_bodies(doc_html: str) -> int:
+    """Count <button> elements in the document column that are NOT inside a
+    .doc-step-body (the expanded-step control surface)."""
+    from html.parser import HTMLParser
+
+    class Counter(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.body_depth = 0
+            self.div_is_body: list[bool] = []
+            self.outside = 0
+
+        def handle_starttag(self, tag: str, attrs: list) -> None:
+            if tag == "div":
+                cls = dict(attrs).get("class") or ""
+                is_body = "doc-step-body" in cls
+                self.div_is_body.append(is_body)
+                if is_body:
+                    self.body_depth += 1
+            elif tag == "button" and self.body_depth == 0:
+                self.outside += 1
+
+        def handle_endtag(self, tag: str) -> None:
+            if tag == "div" and self.div_is_body and self.div_is_body.pop():
+                self.body_depth -= 1
+
+    counter = Counter()
+    counter.feed(doc_html)
+    return counter.outside
+
+
 # ============ 1. document page renders ============
 
 
@@ -119,10 +150,12 @@ def test_document_page_renders(web_client: TestClient):
     assert "op-card" in body
     assert "execdoc.js" in body
     assert "execdoc.css" in body
-    # Exit criteria: every control lives in the docked bar — the multi-step
-    # document column renders zero <button> elements.
+    # Exit criteria (amended): collapsed rows carry zero controls — every
+    # <button> in the document column lives inside an expandable step body.
     assert 'id="dockbar"' in body
-    assert "<button" not in _doc_column(body)
+    doc = _doc_column(body)
+    assert _buttons_outside_step_bodies(doc) == 0
+    assert "<button" in doc  # the control surface exists, inside step bodies
 
 
 # ============ 2. legacy tab aliases ============

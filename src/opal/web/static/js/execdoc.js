@@ -144,7 +144,40 @@
         } catch (e) { console.error('execdoc: row refresh failed', e); }
     }
 
+    function dockbarVisible() {
+        return localStorage.getItem('opal_dockbar') === '1';
+    }
+
+    function applyDockbarPref() {
+        document.body.classList.toggle('dockbar-off', !dockbarVisible());
+    }
+
+    window.toggleDockbar = function () {
+        localStorage.setItem('opal_dockbar', dockbarVisible() ? '0' : '1');
+        applyDockbarPref();
+        if (dockbarVisible()) refreshDockbar();
+    };
+
+    function positionDockbar() {
+        const bar = document.getElementById('dockbar');
+        if (!bar) return;
+        const doc = document.getElementById('exec-doc');
+        if (doc) {
+            // Align the bar with the document column, not the viewport.
+            const rect = doc.getBoundingClientRect();
+            bar.style.left = `${rect.left}px`;
+            bar.style.width = `${rect.width}px`;
+            bar.style.transform = 'none';
+        } else {
+            bar.style.left = '';
+            bar.style.width = '';
+            bar.style.transform = '';
+        }
+    }
+    window.addEventListener('resize', positionDockbar);
+
     async function refreshDockbar() {
+        if (!dockbarVisible()) return;
         try {
             const url = pageUrl('/dockbar') + (focusedOrder !== null ? `?step=${focusedOrder}` : '');
             const resp = await fetch(url);
@@ -160,6 +193,7 @@
                 'has-dockbar',
                 !!document.querySelector('#dockbar .dockbar')
             );
+            positionDockbar();
         } catch (e) { console.error('execdoc: dockbar refresh failed', e); }
     }
 
@@ -450,10 +484,9 @@
 
     // ---------- step actions ----------
 
-    function collectBarData() {
-        const bar = document.getElementById('dockbar-fields');
-        if (!bar) return { data: null, errors: [] };
-        const fields = bar.querySelectorAll('[data-capture-field]');
+    function collectCaptureData(container) {
+        if (!container) return { data: null, errors: [] };
+        const fields = container.querySelectorAll('[data-capture-field]');
         if (!fields.length) return { data: null, errors: [] };
         const data = {};
         const errors = [];
@@ -486,17 +519,21 @@
         return { data, errors };
     }
 
-    window.completeStep = async function (order) {
+    window.completeStep = async function (order, btn) {
         const body = {};
-        const bar = document.getElementById('dockbar');
-        if (bar && bar.dataset.barOrder === String(order)) {
-            const { data, errors } = collectBarData();
+        let container = btn ? btn.closest('.doc-step-body, .dockbar') : null;
+        if (!container) {
+            const bar = document.getElementById('dockbar');
+            if (bar && bar.dataset.barOrder === String(order)) container = bar.querySelector('.dockbar');
+        }
+        if (container) {
+            const { data, errors } = collectCaptureData(container);
             if (errors.length) {
                 toastError(errors, 'Cannot complete');
                 return;
             }
             if (data) body.data_captured = data;
-            const notesEl = document.querySelector('#dockbar .step-notes-input');
+            const notesEl = container.querySelector('.step-notes-input');
             if (notesEl && notesEl.value.trim()) body.notes = notesEl.value.trim();
         }
         try {
@@ -1130,6 +1167,8 @@
 
     function initExecDoc() {
         setFooterOffset();
+        applyDockbarPref();
+        positionDockbar();
         applyStoredToggles();
         loadKitAvailability();
         loadStepKitAvailability();

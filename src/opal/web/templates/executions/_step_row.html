@@ -83,6 +83,38 @@
         </div>
         {% endif %}
 
+        {% set body_schema = step.required_data_schema or vs.get('required_data_schema') %}
+        {% set workable = inst_status in ['cut', 'in_work'] and step.status in ['pending', 'in_progress'] %}
+        {% if workable and exec %}
+        {# The expanded step is a control surface: fields, notes, actions. #}
+        <div class="step-controls">
+            <div class="step-controls-fields">
+                {{ ex.data_fields_editable({'exec': exec, 'schema': body_schema}) }}
+                <div class="bar-field bar-field-notes">
+                    <label class="bar-field-label mono">NOTES</label>
+                    <textarea class="form-textarea step-notes-input" rows="1"
+                              onblur="saveNotes({{ step.order }}, this.value)">{% if exec.notes %}{{ exec.notes }}{% endif %}</textarea>
+                </div>
+            </div>
+            <div class="step-actions">
+                <button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>
+                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
+                <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, {{ step.title | tojson }})">SKIP</button>
+                {% if step_kit %}
+                <button class="btn btn-sm" onclick="consumeStepParts({{ step.order }})">CONSUME PARTS</button>
+                {% endif %}
+                <button class="btn btn-sm btn-primary" onclick="completeStep({{ step.order }}, this)">COMPLETE</button>
+            </div>
+        </div>
+        {% elif inst_status in ['cut', 'in_work'] and step.status == 'awaiting_signoff' %}
+        <div class="step-controls">
+            <div class="step-actions">
+                {% if exec %}<button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>{% endif %}
+                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
+                <button class="btn btn-sm btn-primary" onclick="signoffStep({{ step.order }})">SIGN OFF</button>
+            </div>
+        </div>
+        {% else %}
         {{ ex.data_readout(step) }}
 
         {% if exec and exec.notes %}
@@ -90,6 +122,7 @@
             <span class="ro-label mono">NOTES</span>
             <div class="ro-notes mono">{{ exec.notes }}</div>
         </div>
+        {% endif %}
         {% endif %}
     </div>
 </div>
