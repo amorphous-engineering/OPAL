@@ -27,7 +27,7 @@ from opal.core.auth import (
     validate_password_strength,
     verify_payload,
 )
-from opal.core.holds import get_hold_state, holding_readout
+from opal.core.holds import get_hold_state, holding_readout, scope_label
 from opal.db.models import (
     InventoryRecord,
     Kit,
@@ -646,6 +646,19 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
     context["stale_reqs"] = stale_requirements(db)
     context["ready_to_baseline"] = len(ready_requirement_ids(db))
     context["stale_draft_parts"] = stale_draft_parts(db)
+
+    # Undispositioned holds — the is_blocking predicate in SQL: open,
+    # containment-bearing, unsigned.
+    context["undispositioned_holds_count"] = (
+        db.query(Issue)
+        .filter(
+            Issue.deleted_at.is_(None),
+            Issue.status != IssueStatus.CLOSED,
+            Issue.containment != Containment.ADVISORY,
+            (Issue.disposition_type.is_(None)) | (Issue.dispositioned_at.is_(None)),
+        )
+        .count()
+    )
 
     return templates.TemplateResponse("index.html", context)
 
@@ -2286,10 +2299,9 @@ def executions_detail(
         )
         .all()
     )
-    disp_rank = {"undispositioned": 0, "dispositioned": 1, "closed": 2}
-    linked_issues.sort(key=lambda i: (not i.is_blocking, disp_rank.get(i.disp_state, 3), -i.id))
+    disp_rank = {"undispositioned": 0, "open": 1, "dispositioned": 2, "closed": 3}
+    linked_issues.sort(key=lambda i: (not i.is_blocking, disp_rank.get(i.disp_state, 4), -i.id))
     context["linked_issues"] = linked_issues
-    context["issue_holding_counts"] = {i.id: len(holding_readout(db, i)) for i in linked_issues}
 
     # Containment-derived hold state: which controls are absent, and which
     # issues replace them. Keyed by step_execution_id.
@@ -2629,13 +2641,22 @@ def executions_report(request: Request, db: DbSession, instance_id: int) -> HTML
 
 
 @router.get("/issues", response_class=HTMLResponse)
-def issues_list(request: Request, db: DbSession) -> HTMLResponse:
-    """Issues list page."""
+def issues_list(request: Request, db: DbSession, state: str | None = Query(None)) -> HTMLResponse:
+    """Issues list page. `?state=` deep-links a STATE filter preselection."""
     context = get_base_context(request, db, "Issues - OPAL")
     context["types"] = [t.value for t in IssueType]
-    context["disp_states"] = ["undispositioned", "dispositioned", "closed"]
+    context["states"] = ["open", "undispositioned", "dispositioned", "closed"]
     context["priorities"] = [p.value for p in IssuePriority]
+    context["state_selected"] = state if state in context["states"] else None
     return templates.TemplateResponse("issues/list.html", context)
+
+
+ISSUE_TYPE_ABBREV = {
+    "non_conformance": "NC",
+    "bug": "BUG",
+    "task": "TASK",
+    "improvement": "IMPR",
+}
 
 
 @router.get("/issues/table", response_class=HTMLResponse)
@@ -2644,7 +2665,7 @@ def issues_table(
     db: DbSession,
     search: str | None = Query(None),
     issue_type: str | None = Query(None),
-    disp_state: str | None = Query(None),
+    state: str | None = Query(None),
     priority: str | None = Query(None),
     page: int = Query(1, ge=1),
 ) -> HTMLResponse:
@@ -2659,22 +2680,27 @@ def issues_table(
     if priority:
         query = query.filter(Issue.priority == priority)
 
+    # Four-value STATE filter, matching what the column renders: open =
+    # advisory-open; undispositioned / dispositioned = containment-bearing only.
     signed = (Issue.disposition_type.isnot(None)) & (Issue.dispositioned_at.isnot(None))
-    if disp_state == "closed":
+    bearing = Issue.containment != Containment.ADVISORY
+    if state == "closed":
         query = query.filter(Issue.status == IssueStatus.CLOSED)
-    elif disp_state == "dispositioned":
-        query = query.filter(Issue.status != IssueStatus.CLOSED, signed)
-    elif disp_state == "undispositioned":
-        query = query.filter(Issue.status != IssueStatus.CLOSED, ~signed)
+    elif state == "open":
+        query = query.filter(
+            Issue.status != IssueStatus.CLOSED, Issue.containment == Containment.ADVISORY
+        )
+    elif state == "dispositioned":
+        query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, signed)
+    elif state == "undispositioned":
+        query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, ~signed)
 
     # Undispositioned-with-containment sorts first — the only warning-weight
     # on the page.
-    blocking = (
-        (Issue.status != IssueStatus.CLOSED) & (Issue.containment != Containment.ADVISORY) & ~signed
-    )
+    blocking = (Issue.status != IssueStatus.CLOSED) & bearing & ~signed
     query = query.order_by(case((blocking, 0), else_=1), Issue.id.desc())
 
-    issues, pagination = paginate_query(request, query, page, colspan=7)
+    issues, pagination = paginate_query(request, query, page, colspan=6)
 
     def get_val(obj, attr):
         val = getattr(obj, attr)
@@ -2696,9 +2722,8 @@ def issues_table(
             "id": i.id,
             "issue_number": i.issue_number,
             "title": i.title,
-            "issue_type": get_val(i, "issue_type"),
+            "issue_type": ISSUE_TYPE_ABBREV.get(get_val(i, "issue_type"), get_val(i, "issue_type")),
             "disp_state": i.disp_state,
-            "holding": len(holding_readout(db, i)) if i.is_blocking else 0,
             "priority": get_val(i, "priority"),
             "created_at": i.created_at,
             "age": age(i.created_at),
@@ -2783,6 +2808,9 @@ def issues_detail(request: Request, db: DbSession, issue_id: int) -> HTMLRespons
         raised = issue.raised_step
         redline_op_order = raised.step_number if raised.level == 0 else raised.parent_step_order
     context["redline_op_order"] = redline_op_order
+
+    # RAISED AT is scope-named, never a bare number ("OP 4" / "4.1").
+    context["raised_at_label"] = scope_label(issue.raised_step) if issue.raised_step else None
 
     return templates.TemplateResponse("issues/detail.html", context)
 

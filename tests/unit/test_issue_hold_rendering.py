@@ -72,53 +72,93 @@ def test_signed_disposition_restores_controls(web_client):
 
 
 def test_issue_page_holding_readout(web_client):
-    """(§10.6) The HOLDING section states the issue's consequences in one
-    glance; an advisory issue states the dash."""
+    """(§10.6) The holds line states the issue's consequences in one glance;
+    an advisory issue gets the one-line empty state and no disposition panel."""
     instance_id, by_label = _build_instance_with_sub_steps(web_client)
     nc = _raise_nc(web_client, instance_id, by_label["1.1"])
 
     page = web_client.get(f"/issues/{nc['id']}")
     assert page.status_code == 200
-    assert "HOLDING" in page.text
+    assert "holds:" in page.text
     assert "1.1 COMPLETE" in page.text
     assert "OP 1 COMPLETE" in page.text
-    assert "⛔ UNDISPOSITIONED" in page.text
+    assert "UNDISPOSITIONED" in page.text
+    assert "⛔" not in page.text
     assert "SIGN DISPOSITION" in page.text
+    assert "DISPOSITION READINESS" in page.text
 
     advisory = web_client.post("/api/issues", json={"title": "Note only"}).json()
     page = web_client.get(f"/issues/{advisory['id']}")
     assert page.status_code == 200
-    assert "— (advisory)" in page.text
+    assert "Holding — none" in page.text
+    # No disposition gate above advisory: no panel, no state badge, CLOSE free.
+    assert "SIGN DISPOSITION" not in page.text
+    assert "UNDISPOSITIONED" not in page.text
+    assert "closeIssue()" in page.text
 
 
-def test_issues_list_disp_state_and_holding(web_client):
-    """(§6) Disp-state and holding count render; undispositioned-with-
-    containment sorts first."""
+def test_issues_list_state_column(web_client):
+    """(§6) The STATE column renders; undispositioned-with-containment sorts
+    first; the HOLDS column is gone."""
     instance_id, by_label = _build_instance_with_sub_steps(web_client)
     nc = _raise_nc(web_client, instance_id, by_label["1.1"])
     web_client.post("/api/issues", json={"title": "Plain task"})
 
     rows = web_client.get("/issues/table")
     assert rows.status_code == 200
-    assert "⛔ UNDISPOSITIONED" in rows.text
+    assert "UNDISP" in rows.text
+    assert "⛔" not in rows.text
     # The blocking issue leads the table.
     assert rows.text.find(nc["issue_number"]) < rows.text.find("Plain task")
 
     page = web_client.get("/issues")
     assert page.status_code == 200
-    assert "DISP-STATE" in page.text
-    assert "HOLDING" in page.text
+    assert "STATE" in page.text
+    assert "DISP-STATE" not in page.text
+    assert "HOLDING" not in page.text
 
 
-def test_execution_issues_tab_disp_state(web_client):
-    """(§9.4) The execution ISSUES section shows disp-state, holds first."""
+def test_issues_list_mixed_register(web_client):
+    """(exit 7) In a mixed register only the bearing-undispositioned row
+    carries warning weight: one error badge, the TASK row calm plain text,
+    titles one-line."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+    _raise_nc(web_client, instance_id, by_label["1.1"])
+    web_client.post("/api/issues", json={"title": "Plain task"})
+
+    rows = web_client.get("/issues/table")
+    assert rows.status_code == 200
+    # Exactly one warning-weight badge: the bearing-undispositioned row.
+    assert rows.text.count("status-error") == 1
+    assert ">UNDISP<" in rows.text
+    # The advisory TASK row is calm: plain text state, plain unboxed type.
+    assert ">open<" in rows.text
+    assert ">TASK<" in rows.text
+    # One-line rows: title cells clip.
+    assert rows.text.count("cell-clip") == 2
+
+
+def test_issues_list_state_filter_deep_link(web_client):
+    """?state= preselects the STATE filter and the tbody includes it on load."""
+    page = web_client.get("/issues?state=undispositioned")
+    assert page.status_code == 200
+    assert 'value="undispositioned" selected' in page.text
+
+    rows = web_client.get("/issues/table?state=open")
+    assert rows.status_code == 200
+
+
+def test_execution_issues_tab_state(web_client):
+    """(§9.4) The execution ISSUES section shows the STATE column, holds
+    first, same register as the issues list."""
     instance_id, by_label = _build_instance_with_sub_steps(web_client)
     _raise_nc(web_client, instance_id, by_label["1.1"])
 
     page = web_client.get(f"/executions/{instance_id}?tab=issues")
     assert page.status_code == 200
-    assert "DISP-STATE" in page.text
-    assert "⛔ UNDISPOSITIONED" in page.text
+    assert "DISP-STATE" not in page.text
+    assert "UNDISP" in page.text
+    assert "⛔" not in page.text
 
 
 def test_new_issue_page_renders(web_client):

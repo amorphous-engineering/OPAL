@@ -493,7 +493,7 @@
             panel.className = 'draft-blocker mono';
             const title = document.createElement('div');
             title.className = 'draft-blocker-title';
-            title.textContent = '✗ draft parts block: ' + detail.action;
+            title.textContent = 'draft parts block: ' + detail.action;
             panel.appendChild(title);
             detail.draft_parts.forEach(p => {
                 const row = document.createElement('div');

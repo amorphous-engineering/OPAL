@@ -14,8 +14,7 @@
                     <th style="width: 110px;">ISSUE</th>
                     <th>TITLE</th>
                     <th style="width: 110px;">TYPE</th>
-                    <th style="width: 140px;">DISP-STATE</th>
-                    <th style="width: 90px;">HOLDING</th>
+                    <th style="width: 100px;">STATE</th>
                     <th style="width: 100px;">PRIORITY</th>
                     <th style="width: 180px;">OPENED</th>
                 </tr>
@@ -24,13 +23,11 @@
                 {% for issue in linked_issues %}
                 {% set itype = issue.issue_type.value if issue.issue_type and issue.issue_type.value is defined else (issue.issue_type or '') %}
                 {% set ipriority = issue.priority.value if issue.priority and issue.priority.value is defined else (issue.priority or '') %}
-                {% set holding_count = issue_holding_counts.get(issue.id, 0) %}
                 <tr>
                     <td class="mono"><a href="/issues/{{ issue.id }}">{{ issue.issue_number }}</a></td>
-                    <td>{{ issue.title }}</td>
+                    <td class="cell-clip"><a href="/issues/{{ issue.id }}" class="row-link-plain">{{ issue.title }}</a></td>
                     <td class="mono">{{ itype | upper | replace('_', ' ') }}</td>
-                    <td>{% if issue.disp_state == 'undispositioned' %}{{ ok.status("⛔ UNDISPOSITIONED", "error") }}{% elif issue.disp_state == 'dispositioned' %}{{ ok.status("DISPOSITIONED", "ok") }}{% else %}{{ ok.status("CLOSED", "default") }}{% endif %}</td>
-                    <td class="mono"{% if holding_count %} style="color: var(--accent-red);"{% endif %}>{{ holding_count if holding_count else '—' }}</td>
+                    <td>{{ ok.issue_state(issue.disp_state) }}</td>
                     <td class="mono">{{ ipriority | upper }}</td>
                     <td>{{ ok.timestamp(issue.created_at) }}</td>
                 </tr>

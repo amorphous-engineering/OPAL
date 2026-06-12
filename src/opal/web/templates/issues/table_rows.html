@@ -3,14 +3,9 @@
 {% for issue in issues %}
 <tr>
     <td>{{ ok.id_cell(issue.issue_number, "/issues/" ~ issue.id) }}</td>
-    <td><a href="/issues/{{ issue.id }}">{{ issue.title }}</a></td>
-    <td>
-        {{ ok.status(issue.issue_type | upper | replace('_', ' '), "error" if issue.issue_type == 'non_conformance' else ("warn" if issue.issue_type == 'bug' else ("info" if issue.issue_type == 'improvement' else "draft"))) }}
-    </td>
-    <td>
-        {% if issue.disp_state == 'undispositioned' %}{{ ok.status("⛔ UNDISPOSITIONED", "error" if issue.holding else "warn") }}{% elif issue.disp_state == 'dispositioned' %}{{ ok.status("DISPOSITIONED", "ok") }}{% else %}{{ ok.status("CLOSED", "default") }}{% endif %}
-    </td>
-    <td class="mono"{% if issue.holding %} style="color: var(--accent-red);"{% endif %}>{{ issue.holding if issue.holding else '—' }}</td>
+    <td class="cell-clip"><a href="/issues/{{ issue.id }}" class="row-link-plain">{{ issue.title }}</a></td>
+    <td>{{ issue.issue_type }}</td>
+    <td>{{ ok.issue_state(issue.disp_state) }}</td>
     <td>
         <span class="{% if issue.priority == 'critical' %}text-red{% elif issue.priority == 'high' %}text-yellow{% else %}text-secondary{% endif %}">
             {{ issue.priority | upper }}
@@ -21,7 +16,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="7">
+    <td colspan="6">
         {{ ok.empty_line("Issues", "new issue", href="/issues/new") }}
     </td>
 </tr>

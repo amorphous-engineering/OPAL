@@ -11,7 +11,7 @@
 {% set type_val = issue.issue_type.value if issue.issue_type.value is defined else issue.issue_type %}
 {% set containment_val = issue.containment.value if issue.containment.value is defined else issue.containment %}
 {% set disposition_val = issue.disposition_type.value if issue.disposition_type and issue.disposition_type.value is defined else (issue.disposition_type or '') %}
-{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: 600; margin-left: var(--space-md);">SAVED</span>{% if issue.disp_state == 'undispositioned' %}{{ ok.status("⛔ UNDISPOSITIONED", "error") }}{% elif issue.disp_state == 'dispositioned' %}{{ ok.status("DISPOSITIONED", "ok") }}{% else %}{{ ok.status("CLOSED", "default") }}{% endif %}{{ ok.status(type_val | upper | replace('_', ' '), "error" if type_val == 'non_conformance' else ("warn" if type_val == 'bug' else ("info" if type_val == 'improvement' else "draft"))) }}{% endset %}
+{% set issue_actions %}<span id="save-flash" style="display: none; color: var(--accent-green); font-weight: 600; margin-left: var(--space-md);">SAVED</span>{% if issue.disp_state == 'closed' %}<span class="mono text-muted">CLOSED</span>{% elif issue.disp_state == 'undispositioned' %}{{ ok.status("UNDISPOSITIONED", "error") }}{% elif issue.disp_state == 'dispositioned' %}{{ ok.status("DISPOSITIONED", "ok") }}{% endif %}<span class="mono text-secondary">{{ type_val | upper | replace('_', ' ') }}</span>{% endset %}
 {% call ok.panel(issue.issue_number, max_width="1100px", actions=issue_actions) %}
         <div style="display: flex; gap: var(--space-lg);">
             <!-- LEFT COLUMN -->
@@ -76,20 +76,20 @@
                 {% endif %}
 
                 <!-- HOLDING — the consequence readout: what this issue is stopping -->
-                <div style="margin-bottom: var(--space-md); border: 1px solid {% if holding %}var(--accent-red){% else %}var(--border-color){% endif %}; padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-xs); font-weight: 600;">HOLDING</div>
-                    {% if holding %}
+                {% if holding %}
+                <div style="margin-bottom: var(--space-md); border: 1px solid var(--accent-red); padding: var(--space-md);">
                     <div class="mono">
-                        {% for t in holding %}<a href="{{ t.href }}">{{ t.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+                        holds: {% for t in holding %}<a href="{{ t.href }}">{{ t.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
                     </div>
-                    {% elif containment_val == 'advisory' %}
-                    <div class="mono text-muted">— (advisory)</div>
-                    {% else %}
-                    <div class="mono text-muted">—</div>
-                    {% endif %}
                 </div>
+                {% else %}
+                <div style="margin-bottom: var(--space-md);">{{ ok.empty_line("Holding") }}</div>
+                {% endif %}
 
-                <!-- Disposition (§4) — the signature moment -->
+                <!-- Disposition (§4) — the signature moment. Renders only where
+                     a disposition exists or is owed: signed records stay visible
+                     (even after an advisory downgrade); advisory issues carry none. -->
+                {% if issue.dispositioned or (issue.containment_bearing and issue.disp_state != 'closed') %}
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
                     <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">
                         DISPOSITION
@@ -107,8 +107,6 @@
                         {{ ok.btn("SPAWN REDLINE OP", href="/executions/" ~ issue.procedure_instance_id ~ "?tab=operations&op=" ~ redline_op_order ~ "&redline_issue=" ~ issue.id) }}
                     </div>
                     {% endif %}
-                    {% elif issue.disp_state == 'closed' %}
-                    <div class="mono text-muted">—</div>
                     {% else %}
                     <div style="display: flex; gap: var(--space-md); margin-bottom: var(--space-sm);">
                         <div style="flex: 1;">
@@ -125,17 +123,32 @@
                         <div class="form-label">RATIONALE</div>
                         <textarea id="disposition-rationale-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_rationale', this.value || null)" oninput="updateReadiness()">{{ issue.disposition_rationale or '' }}</textarea>
                     </div>
-                    <div class="mono" style="margin-bottom: var(--space-sm); font-size: 0.8rem;">
-                        READINESS
-                        <span id="readiness-type" style="margin-left: var(--space-sm);">[ ] type selected</span>
-                        <span id="readiness-rationale" style="margin-left: var(--space-sm);">[ ] rationale recorded</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: var(--space-md);">
-                        <button class="btn btn-primary" id="sign-disposition-btn" onclick="signDisposition()" disabled>SIGN DISPOSITION</button>
-                        <span class="mono text-muted" style="font-size: 0.8rem;">signature: {{ current_user.name if current_user else '—' }}</span>
+                    <div class="baseline-panel mono">
+                        <div class="baseline-panel-title">DISPOSITION READINESS</div>
+                        <div class="baseline-check" id="check-type">
+                            <span class="baseline-check-box">[ ]</span>
+                            <span class="baseline-check-label">type selected</span>
+                        </div>
+                        <div class="baseline-check" id="check-rationale">
+                            <span class="baseline-check-box">[ ]</span>
+                            <span class="baseline-check-label">rationale recorded</span>
+                        </div>
+                        <div class="baseline-panel-rule">──────────────────────────────</div>
+                        <button type="button" class="btn btn-primary" id="sign-disposition-btn" disabled onclick="openSignConfirm()">SIGN DISPOSITION</button>
+                        <div id="sign-confirm" class="baseline-confirm" style="display: none;">
+                            <div class="baseline-signature">
+                                signing <span class="text-green" id="sign-type-label"></span> on {{ issue.issue_number }}<br>
+                                releases: <span id="sign-releases"></span><br>
+                                signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
+                                · <span id="sign-time"></span>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="commitSignDisposition()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+                            <button type="button" class="btn" onclick="document.getElementById('sign-confirm').style.display='none'">ABORT</button>
+                        </div>
                     </div>
                     {% endif %}
                 </div>
+                {% endif %}
 
                 <!-- Attachments -->
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
@@ -153,10 +166,12 @@
                     {% endcall %}
                     {% endif %}
                     <div style="display: flex; gap: var(--space-sm); align-items: center;{% if attachments %} margin-top: var(--space-sm);{% endif %}">
-                        <input type="file" id="att-photo" class="form-input" accept="image/*" capture="environment" multiple style="flex: 1;">
                         <input type="file" id="att-file" class="form-input" multiple style="flex: 1;">
+                        <button type="button" class="btn" onclick="document.getElementById('att-camera').click()">CAMERA</button>
+                        <span id="att-camera-count" class="mono text-muted" style="display: none;"></span>
                         {{ ok.btn("UPLOAD", variant="primary", attrs='onclick="uploadIssueAttachments()"') }}
                     </div>
+                    <input type="file" id="att-camera" accept="image/*" capture="environment" style="display: none;">
                     <div id="att-error" class="text-red" style="display: none; margin-top: var(--space-xs);"></div>
                 </div>
 
@@ -254,7 +269,7 @@
 
                 {% set status_val = issue.status.value if issue.status.value is defined else issue.status %}
                 <div style="margin-top: var(--space-sm);">
-                    {% if status_val == 'open' and issue.dispositioned %}
+                    {% if status_val == 'open' and (issue.dispositioned or not issue.containment_bearing) %}
                     {{ ok.btn("CLOSE", attrs='onclick="closeIssue()"') }}
                     {% elif status_val == 'closed' %}
                     {{ ok.btn("REOPEN", attrs='onclick="updateIssue(\'status\', \'open\').then(() => window.location.reload())"') }}
@@ -276,7 +291,7 @@
                         {{ ok.detail_row("EXECUTION", ok.link(issue.procedure_instance.work_order_number if issue.procedure_instance and issue.procedure_instance.work_order_number else 'execution', "/executions/" ~ issue.procedure_instance_id, mono=true), th_width="100px") }}
                         {% endif %}
                         {% if issue.raised_step %}
-                        {{ ok.detail_row("RAISED AT", ok.link(issue.raised_step.step_number_str or issue.raised_step.step_number, "/executions/" ~ issue.procedure_instance_id ~ "?tab=operations&op=" ~ (redline_op_order if redline_op_order is not none else issue.raised_step.step_number), mono=true), th_width="100px") }}
+                        {{ ok.detail_row("RAISED AT", ok.link(raised_at_label, "/executions/" ~ issue.procedure_instance_id ~ "?tab=operations&op=" ~ (redline_op_order if redline_op_order is not none else issue.raised_step.step_number), mono=true), th_width="100px") }}
                         {% endif %}
                     {% endcall %}
                 </div>
@@ -324,7 +339,14 @@ function showSaveFlash() {
     setTimeout(() => { el.style.display = 'none'; }, 1500);
 }
 
-// ---- Disposition: readiness + signature ----
+// ---- Disposition: readiness + signature (baseline pattern) ----
+function setCheck(id, passed) {
+    const row = document.getElementById(id);
+    if (!row) return;
+    row.classList.toggle('baseline-check-fail', !passed);
+    row.querySelector('.baseline-check-box').textContent = passed ? '[x]' : '[ ]';
+}
+
 function updateReadiness() {
     const typeSel = document.getElementById('disposition-type-select');
     const rationale = document.getElementById('disposition-rationale-input');
@@ -332,21 +354,32 @@ function updateReadiness() {
     if (!typeSel || !rationale || !btn) return;
     const typeOk = !!typeSel.value;
     const rationaleOk = !!rationale.value.trim();
-    document.getElementById('readiness-type').textContent = (typeOk ? '[x]' : '[ ]') + ' type selected';
-    document.getElementById('readiness-rationale').textContent = (rationaleOk ? '[x]' : '[ ]') + ' rationale recorded';
-    btn.disabled = !(typeOk && rationaleOk);
+    setCheck('check-type', typeOk);
+    setCheck('check-rationale', rationaleOk);
+    const blockers = [];
+    if (!typeOk) blockers.push('type not selected');
+    if (!rationaleOk) blockers.push('rationale not recorded');
+    btn.disabled = blockers.length > 0;
+    btn.title = blockers.join('; ');
+    if (blockers.length) document.getElementById('sign-confirm').style.display = 'none';
 }
 document.addEventListener('DOMContentLoaded', updateReadiness);
 
-async function signDisposition() {
+function openSignConfirm() {
+    const typeSel = document.getElementById('disposition-type-select');
+    // The confirm block is the one home for the consequence sentence.
+    document.getElementById('sign-type-label').textContent = typeSel.options[typeSel.selectedIndex].text;
+    document.getElementById('sign-releases').textContent =
+        HOLDING.length ? HOLDING.map(t => t.label).join(' · ') : '—';
+    document.getElementById('sign-time').textContent =
+        new Date().toISOString().substring(0, 19) + 'Z';
+    document.getElementById('sign-confirm').style.display = 'block';
+}
+
+async function commitSignDisposition() {
     const typeSel = document.getElementById('disposition-type-select');
     const rationale = document.getElementById('disposition-rationale-input');
     if (!typeSel.value || !rationale.value.trim()) return;
-
-    // The confirm dialog is the one home for the consequence sentence.
-    const releases = HOLDING.length ? HOLDING.map(t => t.label).join(', ') : '—';
-    const label = typeSel.options[typeSel.selectedIndex].text;
-    if (!confirm(`Sign disposition ${label}.\nReleases: ${releases}`)) return;
 
     try {
         const response = await fetch(`/api/issues/${issueId}/disposition`, {
@@ -400,13 +433,22 @@ async function closeIssue() {
     window.location.reload();
 }
 
-// ---- Attachments ----
+// ---- Attachments: one file input; camera shots accumulate across captures ----
+const cameraShots = [];
+document.getElementById('att-camera').addEventListener('change', function () {
+    for (const f of this.files) cameraShots.push(f);
+    this.value = '';
+    const counter = document.getElementById('att-camera-count');
+    counter.textContent = cameraShots.length + ' captured';
+    counter.style.display = 'inline';
+});
+
 async function uploadIssueAttachments() {
     const errorDiv = document.getElementById('att-error');
     errorDiv.style.display = 'none';
     const files = [
-        ...document.getElementById('att-photo').files,
         ...document.getElementById('att-file').files,
+        ...cameraShots,
     ];
     if (!files.length) return;
     const failed = [];

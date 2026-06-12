@@ -199,23 +199,31 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         return self.disposition_type is not None and self.dispositioned_at is not None
 
     @property
+    def containment_bearing(self) -> bool:
+        """Disposition state exists only above advisory containment."""
+        containment = (
+            self.containment.value if hasattr(self.containment, "value") else self.containment
+        )
+        return containment != Containment.ADVISORY.value
+
+    @property
     def disp_state(self) -> str:
-        """undispositioned | dispositioned | closed."""
+        """Containment-bearing: undispositioned | dispositioned | closed.
+        Advisory issues carry plain open | closed."""
         status = self.status.value if hasattr(self.status, "value") else self.status
         if status == IssueStatus.CLOSED.value:
             return "closed"
+        if not self.containment_bearing:
+            return status
         return "dispositioned" if self.dispositioned else "undispositioned"
 
     @property
     def is_blocking(self) -> bool:
         """True when this issue currently holds work: undispositioned with
         non-advisory containment."""
-        containment = (
-            self.containment.value if hasattr(self.containment, "value") else self.containment
-        )
         return (
             self.deleted_at is None
-            and containment != Containment.ADVISORY.value
+            and self.containment_bearing
             and self.disp_state == "undispositioned"
         )
 

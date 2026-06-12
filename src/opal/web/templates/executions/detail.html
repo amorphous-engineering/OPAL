@@ -95,12 +95,13 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="nc-photo">PHOTO</label>
-                        <input type="file" id="nc-photo" class="form-input" accept="image/*" capture="environment" multiple>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="nc-file">FILE</label>
-                        <input type="file" id="nc-file" class="form-input" multiple>
+                        <label class="form-label" for="nc-file">ATTACHMENTS</label>
+                        <div style="display: flex; gap: var(--space-sm); align-items: center;">
+                            <input type="file" id="nc-file" class="form-input" multiple style="flex: 1;">
+                            <button type="button" class="btn" onclick="document.getElementById('nc-camera').click()">CAMERA</button>
+                            <span id="nc-camera-count" class="mono text-muted" style="display: none;"></span>
+                        </div>
+                        <input type="file" id="nc-camera" accept="image/*" capture="environment" style="display: none;">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         <button type="button" class="btn" onclick="hideNCModal()">CANCEL</button>
@@ -331,7 +332,19 @@ function showNCModal(stepNumber, stepExecutionId, stepLabel) {
 function hideNCModal() {
     document.getElementById('nc-modal').style.display = 'none';
     document.getElementById('nc-form').reset();
+    ncCameraShots.length = 0;
+    document.getElementById('nc-camera-count').style.display = 'none';
 }
+
+// Camera shots accumulate across captures; the count is the readout.
+const ncCameraShots = [];
+document.getElementById('nc-camera').addEventListener('change', function () {
+    for (const f of this.files) ncCameraShots.push(f);
+    this.value = '';
+    const counter = document.getElementById('nc-camera-count');
+    counter.textContent = ncCameraShots.length + ' captured';
+    counter.style.display = 'inline';
+});
 
 // ---- Toast: the capture confirmation is the state change itself; the toast
 // just names the ticket. Survives the reload via sessionStorage. ----
@@ -416,8 +429,8 @@ async function submitNC(event) {
         // new issue and the raising step.
         const stepExecutionId = document.getElementById('nc-step-execution-id').value;
         const files = [
-            ...document.getElementById('nc-photo').files,
             ...document.getElementById('nc-file').files,
+            ...ncCameraShots,
         ];
         const failed = [];
         for (const file of files) {

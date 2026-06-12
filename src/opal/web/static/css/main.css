@@ -2703,11 +2703,21 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     white-space: nowrap;
 }
 
-.parts-list .row-link-plain {
+/* Accent color budget, globally: identifiers and actions only — row content
+   links render primary. */
+.row-link-plain {
     color: var(--text-primary);
     text-decoration: none;
 }
 
-.parts-list .row-link-plain:hover {
+.row-link-plain:hover {
     text-decoration: underline;
+}
+
+/* One-line index rows: content cells clip, never wrap. */
+.data-table td.cell-clip {
+    max-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

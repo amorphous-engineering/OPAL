@@ -730,7 +730,11 @@ async def list_tools() -> list[Tool]:
                     },
                     "disp_state": {
                         "type": "string",
-                        "description": "Filter by disposition state: undispositioned, dispositioned, closed",
+                        "enum": ["open", "undispositioned", "dispositioned", "closed"],
+                        "description": (
+                            "Filter by state: open (advisory-open), undispositioned, "
+                            "dispositioned (containment-bearing only), closed"
+                        ),
                     },
                     "issue_type": {
                         "type": "string",
@@ -2383,14 +2387,23 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
         query = query.filter(Issue.status == args["status"])
 
     if args.get("disp_state"):
+        # Four-value STATE filter, mirroring the API: open = advisory-open;
+        # undispositioned / dispositioned = containment-bearing only.
         signed = (Issue.disposition_type.isnot(None)) & (Issue.dispositioned_at.isnot(None))
+        bearing = Issue.containment != Containment.ADVISORY
         disp_state = args["disp_state"]
         if disp_state == "closed":
             query = query.filter(Issue.status == IssueStatus.CLOSED)
+        elif disp_state == "open":
+            query = query.filter(
+                Issue.status != IssueStatus.CLOSED, Issue.containment == Containment.ADVISORY
+            )
         elif disp_state == "dispositioned":
-            query = query.filter(Issue.status != IssueStatus.CLOSED, signed)
+            query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, signed)
         elif disp_state == "undispositioned":
-            query = query.filter(Issue.status != IssueStatus.CLOSED, ~signed)
+            query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, ~signed)
+        else:
+            return json_response({"success": False, "error": f"Invalid disp_state: {disp_state}"})
 
     if args.get("issue_type"):
         query = query.filter(Issue.issue_type == args["issue_type"])
@@ -2469,6 +2482,13 @@ async def _sign_disposition(db, args: dict) -> list[TextContent]:
         return json_response({"success": False, "error": "Issue is closed"})
     if issue.dispositioned:
         return json_response({"success": False, "error": "Disposition already signed"})
+    if not issue.containment_bearing:
+        return json_response(
+            {
+                "success": False,
+                "error": f"{issue.issue_number} is advisory; there is no disposition to sign",
+            }
+        )
 
     try:
         disposition_type = DispositionType(args["disposition_type"])

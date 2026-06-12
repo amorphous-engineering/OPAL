@@ -12,7 +12,8 @@ def _sign(client, issue_id, dtype="use_as_is", rationale="acceptable as built"):
 
 
 def test_create_issue(client):
-    """Test creating a new issue."""
+    """Test creating a new issue. Advisory issues carry plain open|closed —
+    the disposition gate exists only above advisory containment."""
     response = client.post(
         "/api/issues",
         json={
@@ -31,7 +32,17 @@ def test_create_issue(client):
     assert data["priority"] == "high"
     assert data["status"] == "open"
     assert data["containment"] == "advisory"
-    assert data["disp_state"] == "undispositioned"
+    assert data["disp_state"] == "open"
+
+
+def test_create_containment_bearing_issue(client):
+    """Containment-bearing issues enter the disposition gate at creation."""
+    response = client.post(
+        "/api/issues",
+        json={"title": "Bearing", "containment": "wo"},
+    )
+    assert response.status_code == 201
+    assert response.json()["disp_state"] == "undispositioned"
 
 
 def test_list_issues(client):
@@ -59,19 +70,32 @@ def test_filter_issues_by_type(client):
 
 
 def test_filter_issues_by_disp_state(client):
-    """disp_state is derived: undispositioned until signed, then dispositioned."""
-    client.post("/api/issues", json={"title": "Undispositioned Issue"})
-    issue2 = client.post("/api/issues", json={"title": "Dispositioned Issue"}).json()
-    assert _sign(client, issue2["id"]).status_code == 200
+    """The four-value STATE filter: open = advisory-open; undispositioned /
+    dispositioned = containment-bearing only; closed = closed."""
+    advisory = client.post("/api/issues", json={"title": "Advisory Open"}).json()
+    bearing = client.post("/api/issues", json={"title": "Bearing", "containment": "wo"}).json()
+    signed = client.post("/api/issues", json={"title": "Signed", "containment": "wo"}).json()
+    assert _sign(client, signed["id"]).status_code == 200
+
+    response = client.get("/api/issues?disp_state=open")
+    assert response.status_code == 200
+    ids = [i["id"] for i in response.json()["items"]]
+    assert advisory["id"] in ids
+    assert bearing["id"] not in ids
+    assert signed["id"] not in ids
 
     response = client.get("/api/issues?disp_state=undispositioned")
-    assert response.status_code == 200
-    items = response.json()["items"]
-    assert all(i["disp_state"] == "undispositioned" for i in items)
-    assert not any(i["id"] == issue2["id"] for i in items)
+    ids = [i["id"] for i in response.json()["items"]]
+    assert bearing["id"] in ids
+    assert advisory["id"] not in ids
+    assert signed["id"] not in ids
 
     response = client.get("/api/issues?disp_state=dispositioned")
-    assert any(i["id"] == issue2["id"] for i in response.json()["items"])
+    ids = [i["id"] for i in response.json()["items"]]
+    assert signed["id"] in ids
+    assert advisory["id"] not in ids
+
+    assert client.get("/api/issues?disp_state=bogus").status_code == 400
 
 
 def test_get_issue(client):
@@ -242,7 +266,9 @@ def test_list_issue_comments(client):
 
 def test_sign_disposition(client):
     """Signing sets the derived gate; the issue remains open."""
-    issue = client.post("/api/issues", json={"title": "Disposition Test"}).json()
+    issue = client.post(
+        "/api/issues", json={"title": "Disposition Test", "containment": "wo"}
+    ).json()
     assert issue["dispositioned"] is False
 
     response = _sign(client, issue["id"], "rework", "rework per redline")
@@ -259,7 +285,7 @@ def test_sign_disposition(client):
 
 
 def test_sign_disposition_requires_rationale(client):
-    issue = client.post("/api/issues", json={"title": "No Rationale"}).json()
+    issue = client.post("/api/issues", json={"title": "No Rationale", "containment": "wo"}).json()
     response = client.post(
         f"/api/issues/{issue['id']}/disposition",
         json={"disposition_type": "use_as_is", "disposition_rationale": ""},
@@ -267,9 +293,17 @@ def test_sign_disposition_requires_rationale(client):
     assert response.status_code == 422
 
 
+def test_cannot_sign_advisory_issue(client):
+    """Advisory issues carry no disposition to sign."""
+    issue = client.post("/api/issues", json={"title": "Advisory Sign"}).json()
+    response = _sign(client, issue["id"])
+    assert response.status_code == 400
+    assert "advisory" in response.json()["detail"]
+
+
 def test_signed_disposition_is_immutable(client):
     """A different decision is a new signature, not an edit."""
-    issue = client.post("/api/issues", json={"title": "Immutable"}).json()
+    issue = client.post("/api/issues", json={"title": "Immutable", "containment": "wo"}).json()
     assert _sign(client, issue["id"]).status_code == 200
 
     response = client.patch(
@@ -285,7 +319,7 @@ def test_signed_disposition_is_immutable(client):
 def test_disposition_draft_via_patch(client):
     """Type and rationale can be drafted before the signature; drafting alone
     does not disposition the issue."""
-    issue = client.post("/api/issues", json={"title": "Draft Test"}).json()
+    issue = client.post("/api/issues", json={"title": "Draft Test", "containment": "op"}).json()
 
     response = client.patch(
         f"/api/issues/{issue['id']}",
@@ -309,8 +343,9 @@ def test_disposition_draft_via_patch(client):
 
 
 def test_close_requires_disposition(client):
-    """(§10.4) Closing an undispositioned issue is impossible."""
-    issue = client.post("/api/issues", json={"title": "Close Attempt"}).json()
+    """(§10.4) Closing an undispositioned containment-bearing issue is
+    impossible — disposition first, always."""
+    issue = client.post("/api/issues", json={"title": "Close Attempt", "containment": "wo"}).json()
     response = client.patch(f"/api/issues/{issue['id']}", json={"status": "closed"})
     assert response.status_code == 400
     assert "undispositioned" in response.json()["detail"]
@@ -321,10 +356,21 @@ def test_close_requires_disposition(client):
     assert response.json()["disp_state"] == "closed"
 
 
+def test_advisory_issue_closes_freely(client):
+    """Advisory issues carry no disposition gate — close is one step."""
+    issue = client.post("/api/issues", json={"title": "Advisory Close"}).json()
+    assert issue["disp_state"] == "open"
+    response = client.patch(f"/api/issues/{issue['id']}", json={"status": "closed"})
+    assert response.status_code == 200
+    assert response.json()["disp_state"] == "closed"
+
+
 def test_nc_close_requires_corrective_action(client):
-    """(§10.4) NC-type issues require corrective action text to close."""
+    """(§10.4) NC-type issues require corrective action text to close —
+    type-based, regardless of containment."""
     issue = client.post(
-        "/api/issues", json={"title": "NC Close", "issue_type": "non_conformance"}
+        "/api/issues",
+        json={"title": "NC Close", "issue_type": "non_conformance", "containment": "wo"},
     ).json()
     assert _sign(client, issue["id"]).status_code == 200
 
@@ -338,9 +384,17 @@ def test_nc_close_requires_corrective_action(client):
     )
     assert response.status_code == 200
 
+    # Advisory NC: no disposition gate, but the corrective-action rule holds.
+    advisory_nc = client.post(
+        "/api/issues", json={"title": "Advisory NC", "issue_type": "non_conformance"}
+    ).json()
+    response = client.patch(f"/api/issues/{advisory_nc['id']}", json={"status": "closed"})
+    assert response.status_code == 400
+    assert "corrective action" in response.json()["detail"]
+
 
 def test_cannot_sign_closed_issue(client):
-    issue = client.post("/api/issues", json={"title": "Closed Sign"}).json()
+    issue = client.post("/api/issues", json={"title": "Closed Sign", "containment": "wo"}).json()
     assert _sign(client, issue["id"]).status_code == 200
     client.patch(f"/api/issues/{issue['id']}", json={"status": "closed"})
 

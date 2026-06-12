@@ -291,17 +291,25 @@ def list_issues(
 
 
 def _filter_disp_state(query, disp_state: str):
-    """Filter by derived disposition state."""
+    """The four-value STATE filter, matching what the list column renders:
+    open = advisory-open; undispositioned / dispositioned = containment-bearing
+    only; closed = closed."""
     from sqlalchemy import and_, or_
 
     signed = and_(Issue.disposition_type.isnot(None), Issue.dispositioned_at.isnot(None))
+    bearing = Issue.containment != Containment.ADVISORY
     if disp_state == "closed":
         return query.filter(Issue.status == IssueStatus.CLOSED)
+    if disp_state == "open":
+        return query.filter(
+            Issue.status != IssueStatus.CLOSED, Issue.containment == Containment.ADVISORY
+        )
     if disp_state == "dispositioned":
-        return query.filter(Issue.status != IssueStatus.CLOSED, signed)
+        return query.filter(Issue.status != IssueStatus.CLOSED, bearing, signed)
     if disp_state == "undispositioned":
         return query.filter(
             Issue.status != IssueStatus.CLOSED,
+            bearing,
             or_(Issue.disposition_type.is_(None), Issue.dispositioned_at.is_(None)),
         )
     raise HTTPException(status_code=400, detail=f"Invalid disp_state: {disp_state}")
@@ -384,9 +392,9 @@ def get_issue_holding(
     issue_id: int,
     db: DbSession,
 ) -> list[dict]:
-    """What this issue is stopping: [{label, href}], empty for advisory or
-    dispositioned issues. The disposition confirm dialog reads its consequence
-    sentence from here."""
+    """What this issue is stopping: [{label, scope, href}], empty for advisory
+    or dispositioned issues. The disposition confirm dialog reads its
+    consequence sentence from here."""
     issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
@@ -503,9 +511,10 @@ def _recheck_instance_completion(db, issue: Issue) -> None:
 
 
 def _validate_close(issue: Issue, data: IssueUpdate | None = None) -> None:
-    """Closing an undispositioned issue is impossible — disposition first,
-    always. NC-type issues additionally require corrective action text."""
-    if not issue.dispositioned:
+    """Closing an undispositioned containment-bearing issue is impossible —
+    disposition first, always. Advisory issues close freely. NC-type issues
+    additionally require corrective action text (type-based, any containment)."""
+    if issue.containment_bearing and not issue.dispositioned:
         raise HTTPException(
             status_code=400,
             detail=f"{issue.issue_number} is undispositioned; sign a disposition before closing",
@@ -540,6 +549,11 @@ async def sign_disposition(
         raise HTTPException(status_code=400, detail="Issue is closed")
     if issue.dispositioned:
         raise HTTPException(status_code=400, detail="Disposition already signed")
+    if not issue.containment_bearing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{issue.issue_number} is advisory; there is no disposition to sign",
+        )
 
     try:
         disposition_type = DispositionType(data.disposition_type)

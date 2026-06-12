@@ -432,10 +432,13 @@ def get_execution_metrics(
 
 
 class IssueMetrics(BaseModel):
-    """Issue tracking metrics."""
+    """Issue tracking metrics. The disposition gate exists only above
+    advisory containment, so open = advisory_open + undispositioned +
+    dispositioned."""
 
     total_issues: int
     open: int
+    advisory_open: int
     undispositioned: int
     dispositioned: int
     closed: int
@@ -461,6 +464,7 @@ def get_issue_metrics(
 
     total = len(issues)
     open_count = sum(1 for i in issues if _get_issue_status(i) == "open")
+    advisory_open = sum(1 for i in issues if i.disp_state == "open")
     undispositioned = sum(1 for i in issues if i.disp_state == "undispositioned")
     dispositioned = sum(1 for i in issues if i.disp_state == "dispositioned")
     closed = sum(1 for i in issues if _get_issue_status(i) == "closed")
@@ -480,6 +484,7 @@ def get_issue_metrics(
     return IssueMetrics(
         total_issues=total,
         open=open_count,
+        advisory_open=advisory_open,
         undispositioned=undispositioned,
         dispositioned=dispositioned,
         closed=closed,

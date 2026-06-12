@@ -9,29 +9,29 @@
 {% block content %}
 {% call ok.panel("ISSUES", actions=ok.btn("+ NEW ISSUE", href="/issues/new", variant="primary")) %}
         {% call ok.toolbar() %}
-            {{ ok.toolbar_search(name="search", id="search-input", placeholder="Search issues by title...", hx_get="/issues/table", hx_target="#issues-table-body", hx_include="#type-filter, #disp-state-filter, #priority-filter") }}
+            {{ ok.toolbar_search(name="search", id="search-input", placeholder="Search issues by title...", hx_get="/issues/table", hx_target="#issues-table-body", hx_include="#type-filter, #state-filter, #priority-filter") }}
             <select id="type-filter"
                     name="issue_type"
                     class="form-select toolbar-filter"
                     hx-get="/issues/table"
                     hx-trigger="change"
                     hx-target="#issues-table-body"
-                    hx-include="#search-input, #disp-state-filter, #priority-filter">
+                    hx-include="#search-input, #state-filter, #priority-filter">
                 <option value="">All types</option>
                 {% for t in types %}
                 <option value="{{ t }}">{{ t | upper | replace('_', ' ') }}</option>
                 {% endfor %}
             </select>
-            <select id="disp-state-filter"
-                    name="disp_state"
+            <select id="state-filter"
+                    name="state"
                     class="form-select toolbar-filter"
                     hx-get="/issues/table"
                     hx-trigger="change"
                     hx-target="#issues-table-body"
                     hx-include="#search-input, #type-filter, #priority-filter">
-                <option value="">All disp-states</option>
-                {% for s in disp_states %}
-                <option value="{{ s }}">{{ s | upper }}</option>
+                <option value="">All states</option>
+                {% for s in states %}
+                <option value="{{ s }}"{% if s == state_selected %} selected{% endif %}>{{ s | upper }}</option>
                 {% endfor %}
             </select>
             <select id="priority-filter"
@@ -40,7 +40,7 @@
                     hx-get="/issues/table"
                     hx-trigger="change"
                     hx-target="#issues-table-body"
-                    hx-include="#search-input, #type-filter, #disp-state-filter">
+                    hx-include="#search-input, #type-filter, #state-filter">
                 <option value="">All priorities</option>
                 {% for p in priorities %}
                 <option value="{{ p }}">{{ p | upper }}</option>
@@ -52,16 +52,18 @@
                 <tr>
                     {{ ok.th("IT", width="110px") }}
                     {{ ok.th("TITLE") }}
-                    {{ ok.th("TYPE", width="130px") }}
-                    {{ ok.th("DISP-STATE", width="150px") }}
-                    {{ ok.th("HOLDING", width="80px") }}
-                    {{ ok.th("PRIORITY", width="90px") }}
+                    {{ ok.th("TYPE", width="60px") }}
+                    {{ ok.th("STATE", width="100px") }}
+                    {{ ok.th("PRI", width="90px") }}
                     {{ ok.th("AGE", width="70px") }}
                 </tr>
             </thead>
-            <tbody id="issues-table-body" hx-get="/issues/table" hx-trigger="load">
+            <tbody id="issues-table-body"
+                   hx-get="/issues/table"
+                   hx-trigger="load"
+                   hx-include="#search-input, #type-filter, #state-filter, #priority-filter">
                 <tr>
-                    <td colspan="7" class="text-muted">Loading...</td>
+                    <td colspan="6" class="text-muted">Loading...</td>
                 </tr>
             </tbody>
         {% endcall %}

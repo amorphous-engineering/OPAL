@@ -140,9 +140,15 @@ def _op_label(step_exec: StepExecution) -> str:
     return f"OP {_step_label(step_exec)}"
 
 
+def scope_label(step_exec: StepExecution) -> str:
+    """Scope name, never a bare number: 'OP 4' for op rows, '4.1' for steps."""
+    return _op_label(step_exec) if step_exec.level == 0 else _step_label(step_exec)
+
+
 def holding_readout(db: Session, issue: Issue) -> list[dict]:
-    """What this issue is stopping, as [{label, href}] — the HOLDING section,
-    the disposition confirm sentence, and MCP holds all read from here."""
+    """What this issue is stopping, as [{label, scope, href}] — the HOLDING
+    panel, the disposition confirm sentence, and MCP holds all read from here.
+    Labels are scope + verb ('OP 4 COMPLETE', '4.1 COMPLETE')."""
     if not issue.is_blocking:
         return []
 
@@ -169,7 +175,7 @@ def holding_readout(db: Session, issue: Issue) -> list[dict]:
         anchor = db.query(StepExecution).filter(StepExecution.id == anchor_id).first()
 
     if containment == Containment.WO.value or anchor is None:
-        return [{"label": f"{wo_label} COMPLETE", "href": exec_href()}]
+        return [{"label": f"{wo_label} COMPLETE", "scope": wo_label, "href": exec_href()}]
 
     op_row = anchor
     if anchor.level != 0 and anchor.parent_step_order is not None:
@@ -184,7 +190,13 @@ def holding_readout(db: Session, issue: Issue) -> list[dict]:
         ) or anchor
 
     if containment == Containment.OP.value:
-        return [{"label": f"{_op_label(op_row)} COMPLETE", "href": exec_href(op_row.step_number)}]
+        return [
+            {
+                "label": f"{_op_label(op_row)} COMPLETE",
+                "scope": _op_label(op_row),
+                "href": exec_href(op_row.step_number),
+            }
+        ]
 
     # step containment
     bound_elsewhere = (
@@ -193,12 +205,28 @@ def holding_readout(db: Session, issue: Issue) -> list[dict]:
         and issue.containment_step_id != issue.raised_step_id
     )
     if bound_elsewhere:
-        return [{"label": f"{_step_label(anchor)} START", "href": exec_href(op_row.step_number)}]
+        return [
+            {
+                "label": f"{scope_label(anchor)} START",
+                "scope": scope_label(anchor),
+                "href": exec_href(op_row.step_number),
+            }
+        ]
 
-    targets = [{"label": f"{_step_label(anchor)} COMPLETE", "href": exec_href(op_row.step_number)}]
+    targets = [
+        {
+            "label": f"{scope_label(anchor)} COMPLETE",
+            "scope": scope_label(anchor),
+            "href": exec_href(op_row.step_number),
+        }
+    ]
     if op_row.id != anchor.id:
         targets.append(
-            {"label": f"{_op_label(op_row)} COMPLETE", "href": exec_href(op_row.step_number)}
+            {
+                "label": f"{_op_label(op_row)} COMPLETE",
+                "scope": _op_label(op_row),
+                "href": exec_href(op_row.step_number),
+            }
         )
     return targets
 
