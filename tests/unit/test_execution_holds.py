@@ -447,6 +447,25 @@ def test_strict_sequence_gates_sub_step_complete(client):
     assert complete2.json()["status"] == "completed"
 
 
+# ============ 11a. Holding readout links to the live document (F11) ============
+
+
+def test_holding_readout_links_to_document_op_param(client):
+    """The HOLDING link targets the live document shape (/executions/{id}?op=N),
+    not the dissolved operations tab."""
+    instance_id = _create_instance(client)
+    resp = _raise_nc(client, instance_id, 1, containment="step")
+    issue_id = resp.json()["id"]
+
+    holding = client.get(f"/api/issues/{issue_id}/holding")
+    assert holding.status_code == 200, holding.text
+    targets = holding.json()
+    assert targets, "an undispositioned step-contained NC holds something"
+    for target in targets:
+        assert "tab=operations" not in target["href"]
+        assert target["href"].startswith(f"/executions/{instance_id}?op=")
+
+
 # ============ 11. Required-data enforcement ============
 
 
