@@ -10,6 +10,28 @@ from textual.widgets import Button, DataTable, Input, Label, Select, Static, Tex
 from opal.tui.api_client import get_client
 from opal.tui.widgets.form import ConfirmModal, FormGroup, FormModal
 
+# Terminal step statuses in the focus/document model: work has committed and
+# no further step action applies. IN_PROGRESS is never written by the server.
+TERMINAL_STEP_STATUSES = {"completed", "skipped", "signed_off"}
+
+
+def _err_detail(exc: Exception) -> str:
+    """Human-readable detail from an httpx error, unwrapping the API's 400/422
+    body (a hold-blocker string, or a list of validation messages)."""
+    resp = getattr(exc, "response", None)
+    if resp is not None:
+        try:
+            detail = resp.json().get("detail")
+        except Exception:
+            detail = None
+        if isinstance(detail, list):
+            return "; ".join(
+                str(d.get("msg", d)) if isinstance(d, dict) else str(d) for d in detail
+            )
+        if detail:
+            return str(detail)
+    return str(exc)
+
 
 class StepNotesModal(FormModal):
     """Modal for editing step notes."""
@@ -167,8 +189,11 @@ class StepExecution(Static):
         status_icon = {
             "pending": "[ ]",
             "in_progress": "[>]",
+            "awaiting_signoff": "[?]",
             "completed": "[x]",
+            "signed_off": "[x]",
             "skipped": "[-]",
+            "on_hold": "[!]",
         }.get(status, "[ ]")
 
         prefix = "[C] " if is_contingency else ""
@@ -179,7 +204,7 @@ class StepExecution(Static):
             line += " [N]"
 
         # Show signoff indicator
-        if self.step_exec and self.step_exec.get("signed_off_by"):
+        if self.step_exec and self.step_exec.get("signed_off_by_id"):
             line += " [S]"
 
         yield Label(line, classes=f"step-line {status}")
@@ -199,7 +224,7 @@ class ExecutionDetail(Static):
         yield Label("Steps", classes="section-title")
         yield VerticalScroll(id="steps-execution")
         yield Horizontal(
-            Button("Start Step", id="btn-start", variant="primary"),
+            Button("Focus Step", id="btn-focus", variant="primary"),
             Button("Complete Step", id="btn-complete", variant="success"),
             Button("Skip Step", id="btn-skip", variant="default"),
             Button("Sign Off", id="btn-signoff", variant="warning"),
@@ -244,7 +269,9 @@ class ExecutionDetail(Static):
 
         # Progress
         step_executions = instance.get("step_executions", [])
-        completed = sum(1 for s in step_executions if s.get("status") in ["completed", "skipped"])
+        completed = sum(
+            1 for s in step_executions if s.get("status") in TERMINAL_STEP_STATUSES
+        )
         total = len(step_executions)
         progress = (completed / total * 100) if total > 0 else 0
         content.mount(
@@ -282,25 +309,33 @@ class ExecutionDetail(Static):
             widget = StepExecution(step, step_exec)
             steps_container.mount(widget)
 
-    def get_current_step(self) -> int | None:
-        """Get the current step number to work on."""
+    def get_current_step_data(self) -> dict[str, Any] | None:
+        """The next actionable step: the first non-terminal step still awaiting
+        work. In the focus model there is no "in progress" — the cursor rests on
+        the first step whose COMPLETE/SKIP has not yet committed. Steps awaiting
+        sign-off are excluded (they belong to the sign-off action)."""
         if not self.instance_data:
             return None
-
         step_executions = self.instance_data.get("step_executions", [])
         for step in sorted(step_executions, key=lambda s: s.get("step_number", 0)):
-            if step.get("status") in ["pending", "in_progress"]:
-                return step["step_number"]
+            status = step.get("status")
+            if status not in TERMINAL_STEP_STATUSES and status != "awaiting_signoff":
+                return step
         return None
 
-    def get_in_progress_step(self) -> dict[str, Any] | None:
-        """Get the in-progress step execution data."""
+    def get_current_step(self) -> int | None:
+        """Step number of the next actionable step (focus/complete/skip target)."""
+        step = self.get_current_step_data()
+        return step["step_number"] if step else None
+
+    def get_signoff_step(self) -> int | None:
+        """Step number of the first step awaiting sign-off, if any."""
         if not self.instance_data:
             return None
         step_executions = self.instance_data.get("step_executions", [])
-        for step in step_executions:
-            if step.get("status") == "in_progress":
-                return step
+        for step in sorted(step_executions, key=lambda s: s.get("step_number", 0)):
+            if step.get("status") == "awaiting_signoff":
+                return step["step_number"]
         return None
 
     def clear(self) -> None:
@@ -381,7 +416,7 @@ class ExecutionsScreen(Screen):
 
     BINDINGS = [
         ("r", "refresh", "Refresh"),
-        ("space", "start_step", "Start"),
+        ("space", "focus_step", "Focus"),
         ("enter", "complete_step", "Complete"),
         ("escape", "go_back", "Back"),
     ]
@@ -423,8 +458,8 @@ class ExecutionsScreen(Screen):
         """Go back to dashboard."""
         self.app.switch_screen("dashboard")
 
-    async def action_start_step(self) -> None:
-        """Start the current step."""
+    async def action_focus_step(self) -> None:
+        """Move the cursor to the current actionable step (presence)."""
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             self.notify("Select an execution first", severity="warning")
@@ -432,33 +467,30 @@ class ExecutionsScreen(Screen):
 
         step_number = detail.get_current_step()
         if step_number is None:
-            self.notify("No step to start", severity="warning")
+            self.notify("No step to focus", severity="warning")
             return
 
         client = get_client(self.app.api_url)
         try:
-            client.start_step(detail.instance_data["id"], step_number)
-            self.notify(f"Started step {step_number}")
+            client.focus_step(detail.instance_data["id"], step_number)
+            self.notify(f"Focused step {step_number}")
             await self._reload_selected()
         except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            self.notify(f"Error: {_err_detail(e)}", severity="error")
 
     async def action_complete_step(self) -> None:
-        """Complete the current step."""
+        """Complete the current actionable step."""
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             self.notify("Select an execution first", severity="warning")
             return
 
-        # Find in-progress step
-        step_executions = detail.instance_data.get("step_executions", [])
-        in_progress = [s for s in step_executions if s.get("status") == "in_progress"]
-
-        if not in_progress:
-            self.notify("No step in progress", severity="warning")
+        # The focus model has no "in progress" status; the target is the first
+        # non-terminal step still awaiting work.
+        step_number = detail.get_current_step()
+        if step_number is None:
+            self.notify("No step to complete", severity="warning")
             return
-
-        step_number = in_progress[0]["step_number"]
 
         client = get_client(self.app.api_url)
         try:
@@ -467,7 +499,7 @@ class ExecutionsScreen(Screen):
             await self._reload_selected()
             await self.load_executions()
         except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            self.notify(f"Error: {_err_detail(e)}", severity="error")
 
     async def _skip_step(self) -> None:
         """Skip the current step."""
@@ -488,41 +520,42 @@ class ExecutionsScreen(Screen):
             await self._reload_selected()
             await self.load_executions()
         except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            self.notify(f"Error: {_err_detail(e)}", severity="error")
 
     async def _signoff_step(self) -> None:
-        """Sign off on the in-progress step."""
+        """Sign off on the step awaiting sign-off."""
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             self.notify("Select an execution first", severity="warning")
             return
 
-        step = detail.get_in_progress_step()
-        if not step:
-            self.notify("No step in progress to sign off", severity="warning")
+        step_number = detail.get_signoff_step()
+        if step_number is None:
+            self.notify("No step awaiting sign-off", severity="warning")
             return
 
         client = get_client(self.app.api_url)
         try:
-            client.signoff_step(detail.instance_data["id"], step["step_number"])
-            self.notify(f"Signed off step {step['step_number']}")
+            client.signoff_step(detail.instance_data["id"], step_number)
+            self.notify(f"Signed off step {step_number}")
             await self._reload_selected()
+            await self.load_executions()
         except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            self.notify(f"Error: {_err_detail(e)}", severity="error")
 
     async def _edit_notes(self) -> None:
-        """Edit notes for the in-progress step."""
+        """Edit notes for the current actionable step."""
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             self.notify("Select an execution first", severity="warning")
             return
 
-        step = detail.get_in_progress_step()
+        step = detail.get_current_step_data()
         if not step:
-            self.notify("No step in progress", severity="warning")
+            self.notify("No actionable step", severity="warning")
             return
 
-        current_notes = step.get("notes", "")
+        current_notes = step.get("notes", "") or ""
         self.app.push_screen(
             StepNotesModal(current_notes=current_notes),
             callback=self._on_notes_saved,
@@ -535,7 +568,7 @@ class ExecutionsScreen(Screen):
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             return
-        step = detail.get_in_progress_step()
+        step = detail.get_current_step_data()
         if not step:
             return
         client = get_client(self.app.api_url)
@@ -544,18 +577,18 @@ class ExecutionsScreen(Screen):
             self.notify("Notes updated")
             self.run_worker(self._reload_selected())
         except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            self.notify(f"Error: {_err_detail(e)}", severity="error")
 
     async def _log_nc(self) -> None:
-        """Log a non-conformance for the current step."""
+        """Log a non-conformance for the current actionable step."""
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             self.notify("Select an execution first", severity="warning")
             return
 
-        step = detail.get_in_progress_step()
+        step = detail.get_current_step_data()
         if not step:
-            self.notify("No step in progress", severity="warning")
+            self.notify("No actionable step", severity="warning")
             return
 
         self.app.push_screen(NCLogModal(), callback=self._on_nc_logged)
@@ -567,7 +600,7 @@ class ExecutionsScreen(Screen):
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             return
-        step = detail.get_in_progress_step()
+        step = detail.get_current_step_data()
         if not step:
             return
         client = get_client(self.app.api_url)
@@ -575,8 +608,9 @@ class ExecutionsScreen(Screen):
             result = client.log_nc(detail.instance_data["id"], step["step_number"], data)
             issue_id = result.get("id", result.get("issue_id", "?"))
             self.notify(f"NC logged as issue #{issue_id}")
+            self.run_worker(self._reload_selected())
         except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            self.notify(f"Error: {_err_detail(e)}", severity="error")
 
     async def _reload_selected(self) -> None:
         """Reload the currently selected execution."""
@@ -604,7 +638,7 @@ class ExecutionsScreen(Screen):
             for inst in instances:
                 step_execs = inst.get("step_executions", [])
                 completed = sum(
-                    1 for s in step_execs if s.get("status") in ["completed", "skipped"]
+                    1 for s in step_execs if s.get("status") in TERMINAL_STEP_STATUSES
                 )
                 total = len(step_execs)
                 progress = f"{completed}/{total}"
@@ -632,8 +666,8 @@ class ExecutionsScreen(Screen):
             if status == "all":
                 status = None
             await self.load_executions(status=status)
-        elif button_id == "btn-start":
-            await self.action_start_step()
+        elif button_id == "btn-focus":
+            await self.action_focus_step()
         elif button_id == "btn-complete":
             await self.action_complete_step()
         elif button_id == "btn-skip":
