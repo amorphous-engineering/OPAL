@@ -81,6 +81,12 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
+    def list_tiers(self) -> list[dict[str, Any]]:
+        """List the project's configured inventory tiers."""
+        resp = self.client.get(self._url("/project/config"), headers=self._headers())
+        resp.raise_for_status()
+        return resp.json().get("tiers", [])
+
     # ── BOM ────────────────────────────────────────────────────────────
 
     def get_bom(self, assembly_id: int) -> list[dict[str, Any]]:
@@ -483,12 +489,12 @@ class OpalAPIClient:
     # ── Risks ──────────────────────────────────────────────────────────
 
     def list_risks(
-        self, status: str | None = None, page: int = 1, page_size: int = 50
+        self, disposition: str | None = None, page: int = 1, page_size: int = 50
     ) -> dict[str, Any]:
         """List risks."""
         params: dict[str, Any] = {"page": page, "page_size": page_size}
-        if status:
-            params["status"] = status
+        if disposition:
+            params["disposition"] = disposition
         resp = self.client.get(self._url("/risks"), params=params)
         resp.raise_for_status()
         return resp.json()

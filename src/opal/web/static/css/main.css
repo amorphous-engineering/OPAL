@@ -2711,3 +2711,39 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 .parts-list .row-link-plain:hover {
     text-decoration: underline;
 }
+
+/* Risk module — severity-colored scores, statement masthead, residual markers */
+.sev-low { color: var(--status-ok); }
+.sev-medium { color: var(--status-warn); }
+.sev-high { color: var(--status-error); }
+
+.risk-statement {
+    font-size: 1.05rem;
+    max-width: 80ch;
+    padding: var(--space-md);
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--accent-green);
+    margin-bottom: var(--space-md);
+}
+
+.risk-statement-incomplete {
+    border-left-color: var(--accent-yellow);
+    color: var(--text-muted);
+}
+
+.matrix-residual {
+    display: inline-block;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    border: 1px solid var(--bg-primary);
+    padding: 0 3px;
+    margin-left: 3px;
+    vertical-align: middle;
+}
+
+.disposition-target {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    padding: var(--space-md);
+    font-size: 0.85rem;
+}

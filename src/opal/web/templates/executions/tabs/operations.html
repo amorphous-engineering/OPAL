@@ -255,11 +255,11 @@
                             <span class="text-yellow mono">PENDING — OP waiting on {{ parent_blockers | join(', ') }}</span>
                             {% elif step.status == 'pending' %}
                             <button class="btn btn-sm btn-primary" onclick="startStep({{ step.order }})">START</button>
-                            <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, '{{ step.title | e }}')">SKIP</button>
+                            <button class="btn btn-sm" onclick='showSkipModal({{ step.order }}, {{ step.title | tojson }})'>SKIP</button>
                             {% elif step.status == 'in_progress' %}
                             <button class="btn btn-sm btn-primary" onclick="completeStep({{ step.order }})">COMPLETE</button>
                             <button class="btn btn-sm text-yellow" onclick="showNCModal({{ step.order }})">LOG NC</button>
-                            <button class="btn btn-sm" onclick="showSkipModal({{ step.order }}, '{{ step.title | e }}')">SKIP</button>
+                            <button class="btn btn-sm" onclick='showSkipModal({{ step.order }}, {{ step.title | tojson }})'>SKIP</button>
                             {% elif step.status == 'awaiting_signoff' %}
                             <button class="btn btn-sm btn-primary" onclick="completeStep({{ step.order }})">COMPLETE</button>
                             {% endif %}
@@ -423,11 +423,11 @@
                             <span class="text-yellow mono">PENDING — waiting on OP {{ op_blockers | join(', ') }}</span>
                             {% elif op.status == 'pending' %}
                             <button class="btn btn-primary" onclick="startStep({{ op.order }})">START</button>
-                            <button class="btn" onclick="showSkipModal({{ op.order }}, '{{ op.title | e }}')">SKIP</button>
+                            <button class="btn" onclick='showSkipModal({{ op.order }}, {{ op.title | tojson }})'>SKIP</button>
                             {% elif op.status == 'in_progress' %}
                             <button class="btn btn-primary" onclick="completeStep({{ op.order }})">COMPLETE</button>
                             <button class="btn text-yellow" onclick="showNCModal({{ op.order }})">LOG NC</button>
-                            <button class="btn" onclick="showSkipModal({{ op.order }}, '{{ op.title | e }}')">SKIP</button>
+                            <button class="btn" onclick='showSkipModal({{ op.order }}, {{ op.title | tojson }})'>SKIP</button>
                             {% elif op.status == 'awaiting_signoff' %}
                             <button class="btn btn-primary" onclick="completeStep({{ op.order }})">COMPLETE</button>
                             {% endif %}

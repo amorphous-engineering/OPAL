@@ -115,6 +115,37 @@ def test_update_part(client):
     assert data["category"] == "New Category"
 
 
+def test_update_part_rejects_explicit_null_on_non_nullable_fields(client):
+    """Explicit JSON null on a NOT NULL column is a 422, not a 500."""
+    create_response = client.post("/api/parts", json={"name": "Null Probe"})
+    part_id = create_response.json()["id"]
+
+    for field in ("name", "unit_of_measure", "tracking_type", "tier", "is_tooling"):
+        response = client.patch(f"/api/parts/{part_id}", json={field: None})
+        assert response.status_code == 422, f"{field}: expected 422, got {response.status_code}"
+
+    # The part is untouched
+    data = client.get(f"/api/parts/{part_id}").json()
+    assert data["name"] == "Null Probe"
+
+
+def test_update_part_explicit_null_clears_nullable_fields(client):
+    """Explicit null remains the way to clear nullable fields."""
+    parent_id = client.post("/api/parts", json={"name": "Parent Assembly"}).json()["id"]
+    create_response = client.post(
+        "/api/parts",
+        json={"name": "Clearable", "category": "Electronics", "parent_id": parent_id},
+    )
+    part_id = create_response.json()["id"]
+
+    response = client.patch(f"/api/parts/{part_id}", json={"parent_id": None, "category": None})
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["parent_id"] is None
+    assert data["category"] is None
+
+
 def test_delete_part(client):
     """Test soft deleting a part."""
     create_response = client.post(

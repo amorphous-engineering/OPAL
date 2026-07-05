@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
@@ -33,6 +33,7 @@ from opal.core.part_lifecycle import (
     reference_counts,
 )
 from opal.db.models import BOMLine, InventoryRecord, Part, Supplier, SupplierPart
+from opal.project import tier_semantics
 
 router = APIRouter()
 
@@ -49,7 +50,7 @@ class PartCreate(BaseModel):
     # "bulk" = one OPAL per batch, "serialized" = one OPAL per unit;
     # None resolves by tier convention (see default_tracking_for_tier)
     tracking_type: str | None = None
-    tier: int = 1  # 1=Flight, 2=Ground, 3=Loose by default
+    tier: int = 1  # Tier level; must be one of the project's configured tiers
     parent_id: int | None = None  # Parent assembly if this is a child part
     reorder_point: Decimal | None = None
     is_tooling: bool = False
@@ -73,6 +74,15 @@ class PartUpdate(BaseModel):
     is_tooling: bool | None = None
     calibration_interval_days: int | None = None
     metadata: dict[str, Any] | None = None
+
+    @field_validator("name", "unit_of_measure", "tracking_type", "tier", "is_tooling")
+    @classmethod
+    def _reject_explicit_null(cls, value: Any) -> Any:
+        # None here means the client sent an explicit null (defaults are not
+        # validated), which would land in a NOT NULL column
+        if value is None:
+            raise ValueError("field is not nullable; omit it to leave unchanged")
+        return value
 
 
 class PartVariantCreate(BaseModel):
@@ -185,7 +195,7 @@ def list_parts(
     search: str | None = Query(None, description="Search in name, external_pn, description"),
     category: str | None = Query(None, description="Filter by category"),
     tier: int | None = Query(
-        None, description="Filter by tier level (1=Flight, 2=Ground, 3=Loose)"
+        None, description="Filter by tier level (as configured in the project)"
     ),
     parent_id: int | None = Query(None, description="Filter by parent assembly ID"),
     top_level: bool = Query(
@@ -257,10 +267,23 @@ def list_parts(
 
 
 def default_tracking_for_tier(tier: int) -> str:
-    """Tracking-type convention: flight and ground hardware (tiers 1-2) get
-    per-unit traceability; loose consumables (tier 3+) are batch-tracked.
+    """Tracking type a part gets when none is given: the configured tier's
+    default_tracking (legacy level rules when the tier isn't configured).
     Editable on the part page afterwards."""
-    return "serialized" if tier <= 2 else "bulk"
+    return tier_semantics(get_active_project(), tier).default_tracking
+
+
+def require_configured_tier(tier: int) -> None:
+    """422 when an active project is configured and ``tier`` isn't one of its
+    levels. Without a project config any tier is accepted (fallback numbering
+    imposes no tier set)."""
+    project = get_active_project()
+    if project is not None and project.get_tier(tier) is None:
+        levels = ", ".join(str(t.level) for t in project.tiers)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown tier {tier} (configured tiers: {levels})",
+        )
 
 
 def assign_internal_pn(db: DbSession, tier: int, override: str | None) -> str:
@@ -305,6 +328,7 @@ def create_part(
                 detail=f"Parent part {part_in.parent_id} not found",
             )
 
+    require_configured_tier(part_in.tier)
     internal_pn = assign_internal_pn(db, part_in.tier, part_in.internal_pn)
 
     part = Part(
@@ -490,6 +514,7 @@ def reserve_part_numbers(
             detail="count must be between 1 and 500",
         )
 
+    require_configured_tier(reserve_in.tier)
     prefix = reserve_in.name_prefix or "RESERVED"
     parts: list[Part] = []
     try:
@@ -650,6 +675,8 @@ def update_part(
             ensure_identity_mutable(part)
         except PartLifecycleError as e:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    if tier_change:
+        require_configured_tier(update_data["tier"])
 
     if tier_change and not pn_change:
         # Tier re-sync: the draft gets a fresh number from the new tier's
@@ -832,7 +859,9 @@ async def import_preview(
     ):
         existing_external_pns.add(row[0].lower())
 
-    valid_tiers = {1, 2, 3, 4, 5}  # Reasonable tier range
+    project = get_active_project()
+    # Without a project config there is no configured set; keep the legacy range
+    valid_tiers = {t.level for t in project.tiers} if project else {1, 2, 3, 4, 5}
     valid_tracking = {"bulk", "serialized"}
 
     rows: list[ImportRowPreview] = []
@@ -874,7 +903,8 @@ async def import_preview(
             preview.errors.append("Name is required")
 
         if preview.tier is not None and preview.tier not in valid_tiers:
-            preview.errors.append(f"Tier must be 1-5, got {preview.tier}")
+            levels = ", ".join(str(level) for level in sorted(valid_tiers))
+            preview.errors.append(f"Tier must be one of {levels}, got {preview.tier}")
 
         if preview.tracking_type and preview.tracking_type.lower() not in valid_tracking:
             preview.errors.append(

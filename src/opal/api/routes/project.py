@@ -6,6 +6,8 @@ configures THIS instance; it never creates directories or switches
 databases.
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -21,12 +23,19 @@ router = APIRouter(prefix="/project", tags=["project"])
 
 
 class TierInput(BaseModel):
-    """Tier configuration input."""
+    """Tier configuration input.
+
+    The semantic fields are optional: None means "not specified", which on
+    update keeps the stored value for that level and on create derives the
+    legacy level-based defaults (see TierConfig)."""
 
     level: int
     name: str
     code: str
     description: str = ""
+    default_tracking: Literal["serialized", "bulk"] | None = None
+    require_lot: bool | None = None
+    auto_serial: bool | None = None
 
 
 class PartNumberingInput(BaseModel):
@@ -92,6 +101,9 @@ class ProjectConfigResponse(BaseModel):
                     name=t.name,
                     code=t.code,
                     description=t.description,
+                    default_tracking=t.default_tracking,
+                    require_lot=t.require_lot,
+                    auto_serial=t.auto_serial,
                 )
                 for t in config.tiers
             ],
@@ -115,11 +127,26 @@ class ProjectConfigResponse(BaseModel):
         )
 
 
-def _tiers_from_input(tiers: list[TierInput]) -> list[TierConfig]:
-    return [
-        TierConfig(level=t.level, name=t.name, code=t.code, description=t.description)
-        for t in tiers
-    ]
+def _tiers_from_input(
+    tiers: list[TierInput], existing: list[TierConfig] | None = None
+) -> list[TierConfig]:
+    """Build TierConfigs, resolving unspecified semantic fields.
+
+    A None semantic field falls back to the stored tier of the same level
+    (an edit that doesn't mention them must not reset them), then to the
+    legacy level-based derivation inside TierConfig.
+    """
+    current = {t.level: t for t in existing or []}
+    result = []
+    for t in tiers:
+        data = t.model_dump(exclude_none=True)
+        prev = current.get(t.level)
+        if prev is not None:
+            data.setdefault("default_tracking", prev.default_tracking)
+            data.setdefault("require_lot", prev.require_lot)
+            data.setdefault("auto_serial", prev.auto_serial)
+        result.append(TierConfig(**data))
+    return result
 
 
 def _numbering_from_input(pn: PartNumberingInput) -> PartNumberingConfig:
@@ -177,7 +204,7 @@ def update_project_config(
 
     project.name = data.name
     project.description = data.description
-    project.tiers = _tiers_from_input(data.tiers)
+    project.tiers = _tiers_from_input(data.tiers, existing=project.tiers)
     project.part_numbering = _numbering_from_input(data.part_numbering)
     project.categories = data.categories
 
