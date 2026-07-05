@@ -26,7 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from opal.core.holds import get_hold_state
+from opal.core.holds import blocking_issues_for_instance, get_hold_state
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
     InstanceStatus,
@@ -490,6 +490,12 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
     all_steps = db.query(StepExecution).filter(StepExecution.instance_id == instance.id).all()
     hold_state = get_hold_state(db, instance.id)
 
+    def _row_held(se: StepExecution) -> bool:
+        # A bound "resolve by" hold (start_blocked) gates a row's COMPLETE just
+        # as a raised/op hold does — fold both so an OP never auto-completes,
+        # and the WO never closes, over an open hold anchored on a terminal row.
+        return bool(hold_state.blockers_for_complete(se) or hold_state.blockers_for_start(se))
+
     for step_exec in all_steps:
         if step_exec.level == 0:
             children = [s for s in all_steps if s.parent_step_order == step_exec.step_number]
@@ -501,9 +507,7 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
                         in (StepStatus.COMPLETED.value, StepStatus.SKIPPED.value)
                         for c in children
                     )
-                    scope_held = bool(hold_state.blockers_for_complete(step_exec)) or any(
-                        hold_state.blockers_for_complete(c) for c in children
-                    )
+                    scope_held = _row_held(step_exec) or any(_row_held(c) for c in children)
                     if all_children_done and not scope_held:
                         step_exec.status = StepStatus.COMPLETED
                         step_exec.completed_at = datetime.now(UTC)
@@ -534,9 +538,14 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
         ):
             return
 
-    # WO containment holds close-out: every step may be terminal while an
-    # undispositioned wo-scoped issue keeps the work order open.
-    if hold_state.wo_blocked:
+    # Close-out is authoritative on the issue set, not on per-row hold buckets:
+    # ANY non-advisory, containment-bearing, undispositioned issue open on this
+    # work order keeps it open — a wo-scoped hold, an op/step hold whose anchor
+    # already went terminal, or a "resolve by" boundary bound to a terminal or
+    # OP row. Inferring close-out from wo_blocked alone let those slip through
+    # (a WO closing COMPLETED over an open NC). Dispositioned/advisory issues
+    # are excluded here, so legitimate completion is never deadlocked.
+    if blocking_issues_for_instance(db, instance.id):
         return
 
     instance.status = InstanceStatus.COMPLETED

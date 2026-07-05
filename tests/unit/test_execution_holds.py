@@ -447,6 +447,129 @@ def test_strict_sequence_gates_sub_step_complete(client):
     assert complete2.json()["status"] == "completed"
 
 
+def _sub_step_instance(client):
+    """OP 1 (sub-steps 1.1, 1.2) + flat step 2; orders OP=1, 1.1=2, 1.2=3,
+    step2=4. Returns instance_id."""
+    proc_id = client.post("/api/procedures", json={"name": "Sub-step WO"}).json()["id"]
+    op = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP 1"}).json()
+    client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "Sub 1.1", "parent_step_id": op["id"]},
+    )
+    client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "Sub 1.2", "parent_step_id": op["id"]},
+    )
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step 2"})
+    client.post(f"/api/procedures/{proc_id}/publish")
+    resp = client.post("/api/procedure-instances", json={"procedure_id": proc_id})
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+def _complete(client, instance_id, order, **body):
+    return client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{order}/complete", json=body
+    )
+
+
+def _inst_status(client, instance_id):
+    return client.get(f"/api/procedure-instances/{instance_id}").json()["status"]
+
+
+# ============ F2: close-out authoritative on the issue set ============
+
+
+def test_wo_stays_open_under_boundary_bound_to_terminal_step(client):
+    """F2(a): a 'resolve by' boundary bound to an already-terminal step lands
+    in start_blocked, which the old close-out gate never consulted — the WO
+    closed COMPLETED over the open NC. Now the issue set is authoritative."""
+    instance_id = _create_instance(client)  # flat 3 steps
+
+    assert _complete(client, instance_id, 1).status_code == 200
+    assert _complete(client, instance_id, 2).status_code == 200
+
+    # Raise an NC on step 3, boundary bound to the already-terminal step 1.
+    nc = _raise_nc(
+        client, instance_id, 3, containment="step", containment_step_number=1
+    )
+    assert nc.status_code == 201, nc.text
+    issue_id = nc.json()["id"]
+
+    # Step 3 isn't the boundary, so it completes; every step is now terminal.
+    assert _complete(client, instance_id, 3).status_code == 200
+
+    # The open NC must keep the work order out of COMPLETED.
+    assert _inst_status(client, instance_id) != "completed"
+
+    # Signing the disposition releases it and the WO closes.
+    _disposition(client, issue_id)
+    assert _inst_status(client, instance_id) == "completed"
+
+
+def test_wo_stays_open_under_op_hold_on_terminal_op(client):
+    """F2(b): an op-containment NC set onto an OP that already auto-completed
+    lands only in op_complete_blocked on a terminal row nothing revisits. The
+    close-out gate must still see the open issue."""
+    instance_id = _sub_step_instance(client)
+
+    # Finish OP 1's sub-steps -> OP 1 auto-completes.
+    assert _complete(client, instance_id, 2).status_code == 200
+    assert _complete(client, instance_id, 3).status_code == 200
+
+    # Now raise an advisory issue on a (terminal) sub-step and widen to op.
+    issue = client.post(
+        "/api/issues",
+        json={
+            "title": "Late finding on OP 1",
+            "issue_type": "non_conformance",
+            "containment": "advisory",
+            "procedure_instance_id": instance_id,
+        },
+    ).json()
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
+    widen = client.post(
+        f"/api/issues/{issue['id']}/containment",
+        json={"containment": "op", "containment_step_id": se_by_num[2]},
+    )
+    assert widen.status_code == 200, widen.text
+
+    # Finish the last flat step; the op-NC must keep the WO open.
+    assert _complete(client, instance_id, 4).status_code == 200
+    assert _inst_status(client, instance_id) != "completed"
+
+    _disposition(client, issue["id"])
+    assert _inst_status(client, instance_id) == "completed"
+
+
+def test_op_does_not_auto_complete_over_bound_hold_on_op_row(client):
+    """F2: a boundary bound to the OP row (start_blocked on the OP) must block
+    the OP's auto-complete — folding blockers_for_start into the gate."""
+    instance_id = _sub_step_instance(client)
+
+    # NC raised on sub 1.1 (order 2), boundary bound to the OP row (order 1).
+    nc = _raise_nc(
+        client, instance_id, 2, containment="step", containment_step_number=1
+    )
+    assert nc.status_code == 201, nc.text
+    issue_id = nc.json()["id"]
+
+    # Sub-steps complete (neither is the boundary) but OP 1 must stay open.
+    assert _complete(client, instance_id, 2).status_code == 200
+    assert _complete(client, instance_id, 3).status_code == 200
+
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    op_status = next(s["status"] for s in inst["step_executions"] if s["step_number"] == 1)
+    assert op_status not in ("completed", "signed_off", "skipped")
+    assert _inst_status(client, instance_id) != "completed"
+
+    # Disposition releases the OP; finishing the last step closes the WO.
+    _disposition(client, issue_id)
+    assert _complete(client, instance_id, 4).status_code == 200
+    assert _inst_status(client, instance_id) == "completed"
+
+
 # ============ 11a. Holding readout links to the live document (F11) ============
 
 
