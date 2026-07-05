@@ -220,6 +220,11 @@ class IssueDetail(Static):
         priority = issue.get("priority", "-")
         content.mount(Label(f"Priority: {priority}", classes=f"detail-row priority-{priority}"))
 
+        containment = issue.get("containment", "-")
+        content.mount(
+            Label(f"Containment: {containment}", classes=f"detail-row containment-{containment}")
+        )
+
         # Disposition info
         if issue.get("disposition_type"):
             content.mount(Label(f"Disposition: {issue['disposition_type']}", classes="detail-row"))
@@ -399,6 +404,14 @@ class IssuesScreen(Screen):
         detail = self.query_one("#issue-detail", IssueDetail)
         if not detail.issue_data:
             self.notify("Select an issue first", severity="warning")
+            return
+        # Advisory issues hold nothing, so there is no disposition to sign
+        # (the API 400s). They are resolved by closing — press 'c'.
+        if detail.issue_data.get("containment", "advisory") == "advisory":
+            self.notify(
+                "Advisory issue has no disposition — press 'c' to close",
+                severity="warning",
+            )
             return
         self.app.push_screen(
             DispositionModal(issue=detail.issue_data),
