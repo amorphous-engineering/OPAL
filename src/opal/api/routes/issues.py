@@ -657,8 +657,25 @@ def set_containment(
 
     old_values = get_model_dict(issue)
     issue.containment = new_containment
-    if data.containment_step_id is not None:
-        issue.containment_step_id = data.containment_step_id
+    # Boundary re-binding uses explicit presence, not None-skip: an omitted
+    # containment_step_id leaves the boundary untouched, while an explicit null
+    # clears it (a mis-bound boundary was previously immutable — F8). A non-null
+    # boundary must belong to this issue's work order; it seeds the WO on a
+    # still-unlinked issue and is rejected when it names a different one.
+    if "containment_step_id" in data.model_fields_set:
+        new_step_id = data.containment_step_id
+        if new_step_id is not None:
+            step = db.query(StepExecution).filter(StepExecution.id == new_step_id).first()
+            if step is None:
+                raise HTTPException(status_code=404, detail=f"Step {new_step_id} not found")
+            if issue.procedure_instance_id is None:
+                issue.procedure_instance_id = step.instance_id
+            elif step.instance_id != issue.procedure_instance_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Step {new_step_id} belongs to a different work order than this issue",
+                )
+        issue.containment_step_id = new_step_id
     log_update(db, issue, old_values, user_id)
 
     if narrowing and (data.note or "").strip():

@@ -461,6 +461,42 @@ def test_bind_issue_hold_lifted_by_disposition(client, db_session, test_user, ad
     assert f"completed by {test_user.name}" in data["message"]
 
 
+def test_set_containment_rejects_foreign_step(client, db_session, test_user):
+    """F8 (MCP mirror): a boundary step from another WO is rejected."""
+    instance_a, _ = _create_instance(client)
+    instance_b, _ = _create_instance(client)
+    foreign_step = (
+        db_session.query(server.StepExecution)
+        .filter(server.StepExecution.instance_id == instance_b)
+        .first()
+    )
+
+    issue_data = _call(
+        server._raise_issue,
+        db_session,
+        {
+            "title": "NC on A",
+            "issue_type": "non_conformance",
+            "containment": "step",
+            "procedure_instance_id": instance_a,
+        },
+    )
+    issue_id = issue_data["issue"]["id"]
+
+    data = _call(
+        server._set_containment,
+        db_session,
+        {
+            "issue_id": issue_id,
+            "containment": "step",
+            "containment_step_id": foreign_step.id,
+            "user_id": test_user.id,
+        },
+    )
+    assert data["success"] is False
+    assert "different work order" in data["error"]
+
+
 def test_bind_issue_hold_rejects_foreign_work_order(client, db_session, test_user):
     """F3: an issue that names work order A cannot be bound into B's step —
     the cross-WO bind would report success and block nothing."""

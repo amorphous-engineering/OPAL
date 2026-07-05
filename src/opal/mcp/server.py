@@ -3046,8 +3046,28 @@ async def _set_containment(db, args: dict) -> list[TextContent]:
     user_id = args.get("user_id")
     old_values = get_model_dict(issue)
     issue.containment = new_containment
-    if args.get("containment_step_id") is not None:
-        issue.containment_step_id = args["containment_step_id"]
+    # Explicit presence, not None-skip: an omitted containment_step_id leaves
+    # the boundary untouched; an explicit null clears it (F8). A non-null
+    # boundary must belong to this issue's work order.
+    if "containment_step_id" in args:
+        new_step_id = args["containment_step_id"]
+        if new_step_id is not None:
+            step = db.query(StepExecution).filter(StepExecution.id == new_step_id).first()
+            if step is None:
+                return json_response(
+                    {"success": False, "error": f"Step {new_step_id} not found"}
+                )
+            if issue.procedure_instance_id is None:
+                issue.procedure_instance_id = step.instance_id
+            elif step.instance_id != issue.procedure_instance_id:
+                return json_response(
+                    {
+                        "success": False,
+                        "error": f"Step {new_step_id} belongs to a different work order "
+                        "than this issue",
+                    }
+                )
+        issue.containment_step_id = new_step_id
     log_update(db, issue, old_values, user_id)
 
     if narrowing and note:

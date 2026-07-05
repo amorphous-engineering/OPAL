@@ -570,6 +570,56 @@ def test_op_does_not_auto_complete_over_bound_hold_on_op_row(client):
     assert _inst_status(client, instance_id) == "completed"
 
 
+# ============ F8: boundary clear semantics + WO membership ============
+
+
+def test_set_containment_clears_boundary_with_explicit_null(client):
+    """F8: an explicit null clears a mis-bound boundary (previously immutable,
+    since the endpoint applied containment_step_id only when non-null)."""
+    instance_id = _create_instance(client)
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
+
+    # Raise on step 1, bind the boundary to step 3.
+    resp = _raise_nc(client, instance_id, 1, containment="step")
+    issue_id = resp.json()["id"]
+    client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[3]},
+    )
+    assert _complete(client, instance_id, 3).status_code == 400
+
+    # Clear the boundary — the hold falls back to the raised step (step 1).
+    clear = client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": None},
+    )
+    assert clear.status_code == 200, clear.text
+    assert clear.json()["containment_step_id"] is None
+
+    # Step 3 is free again; step 1 is now the held anchor.
+    assert _complete(client, instance_id, 3).status_code == 200
+    assert _complete(client, instance_id, 1).status_code == 400
+
+
+def test_set_containment_rejects_foreign_step(client):
+    """F8: the posted boundary must belong to the issue's work order."""
+    instance_a = _create_instance(client)
+    instance_b = _create_instance(client)
+    inst_b = client.get(f"/api/procedure-instances/{instance_b}").json()
+    foreign_step = inst_b["step_executions"][0]["id"]
+
+    resp = _raise_nc(client, instance_a, 1, containment="step")
+    issue_id = resp.json()["id"]
+
+    bad = client.post(
+        f"/api/issues/{issue_id}/containment",
+        json={"containment": "step", "containment_step_id": foreign_step},
+    )
+    assert bad.status_code == 400
+    assert "different work order" in bad.json()["detail"]
+
+
 # ============ F3: containment issue reconciled against its work order ============
 
 
