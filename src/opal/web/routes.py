@@ -3137,7 +3137,6 @@ def risks_table(
     rows = [
         {
             "risk": r,
-            "badge": DISPOSITION_BADGES.get(r.disposition, "draft"),
             "reviewed_age": _relative_age(r.last_reviewed_at) if r.last_reviewed_at else "—",
             "reviewed_iso": r.last_reviewed_at.strftime("%Y-%m-%dT%H:%M:%SZ")
             if r.last_reviewed_at
@@ -3208,8 +3207,11 @@ def risks_new(request: Request, db: DbSession) -> HTMLResponse:
 
 
 @router.get("/risks/{risk_id}", response_class=HTMLResponse)
-def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
-    """Risk detail page — the generated statement is the masthead."""
+def risks_detail(
+    request: Request, db: DbSession, risk_id: int, edit: bool = Query(False)
+) -> HTMLResponse:
+    """Risk detail page — the generated statement is the masthead. Opens
+    read-only; ?edit=1 renders the in-place editors, DONE returns to view."""
     from opal.risks.lint import lint_risk_row
     from opal.risks.readiness import readiness
     from opal.web.lint_markup import statement_lint_html
@@ -3225,15 +3227,14 @@ def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
     findings = lint_risk_row(risk)
     linked_issue_ids = [link.issue_id for link in risk.issue_links]
 
-    parts = (
-        db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).limit(200).all()
-    )
+    parts = db.query(Part).filter(Part.deleted_at.is_(None)).order_by(Part.name).limit(200).all()
     # The dropdown is capped; the set asset must still render as selected.
     if risk.asset_part is not None and risk.asset_part not in parts:
         parts.append(risk.asset_part)
 
     context = get_base_context(request, db, f"{risk.risk_number} - OPAL")
     context["risk"] = risk
+    context["editing"] = edit
     context["badge"] = DISPOSITION_BADGES.get(risk.disposition, "draft")
     context["dispositions"] = [d.value for d in RiskDisposition]
     context["roles"] = [r.value for r in RiskIssueRole]
@@ -3255,7 +3256,9 @@ def risks_detail(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
 
 
 @router.get("/risks/{risk_id}/acceptance-panel", response_class=HTMLResponse)
-def risks_acceptance_panel(request: Request, db: DbSession, risk_id: int) -> HTMLResponse:
+def risks_acceptance_panel(
+    request: Request, db: DbSession, risk_id: int, edit: bool = Query(False)
+) -> HTMLResponse:
     """Acceptance panel partial — re-fetched after field saves."""
     from opal.risks.readiness import readiness
 
@@ -3267,6 +3270,7 @@ def risks_acceptance_panel(request: Request, db: DbSession, risk_id: int) -> HTM
         {
             "request": request,
             "risk": risk,
+            "editing": edit,
             "readiness": readiness(db, risk),
             "current_user": _get_current_user(request, db),
         },

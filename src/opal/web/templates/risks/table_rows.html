@@ -4,7 +4,7 @@
 <tr onclick="window.location='/risks/{{ risk.id }}'" style="cursor: pointer;" data-risk-id="{{ risk.id }}">
     <td class="mono text-green">{{ risk.risk_number }}</td>
     <td>{{ risk.title }}</td>
-    <td>{{ ok.status(risk.disposition | upper, row.badge) }}</td>
+    <td>{% if risk.disposition == 'realized' %}{{ ok.status("REALIZED", "error") }}{% elif risk.disposition == 'closed' %}<span class="text-muted">CLOSED</span>{% else %}<span class="text-secondary">{{ risk.disposition | upper }}</span>{% endif %}</td>
     <td class="mono"><span class="sev-{{ risk.severity }}">{{ risk.score }}</span>{% if risk.residual_score is not none %} → <span class="sev-{{ risk.residual_severity }}">{{ risk.residual_score }}</span>{% endif %}</td>
     <td>{{ risk.owner.name if risk.owner else '—' }}</td>
     <td class="mono" title="{{ row.reviewed_iso }}">{{ row.reviewed_age }}</td>
