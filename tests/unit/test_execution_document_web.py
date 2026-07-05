@@ -158,6 +158,38 @@ def test_document_page_renders(web_client: TestClient):
     assert "<button" in doc  # the control surface exists, inside step bodies
 
 
+def test_hostile_step_title_does_not_inject_attribute(web_client: TestClient):
+    """A step title with a double quote must not break out of the SKIP
+    onclick attribute. Regression for the tojson-in-double-quoted-attribute
+    XSS: | tojson does not escape ", so the handlers must be single-quoted."""
+    from html.parser import HTMLParser
+
+    proc_id = web_client.post("/api/procedures", json={"name": "XSS Doc Proc"}).json()["id"]
+    hostile = 'Torque "final" x" onmouseover="alert(document.cookie)'
+    web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": hostile})
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+
+    class _AttrHunt(HTMLParser):
+        injected = False
+
+        def handle_starttag(self, tag: str, attrs: list) -> None:
+            if any(k == "onmouseover" for k, _ in attrs):
+                _AttrHunt.injected = True
+
+    parser = _AttrHunt()
+    parser.feed(page.text)
+    # onmouseover appears only as literal text inside the single-quoted
+    # onclick JS string — never as a parsed HTML attribute.
+    assert not _AttrHunt.injected, "hostile step title injected an onmouseover handler"
+    assert "showSkipModal(" in page.text
+
+
 # ============ 2. legacy tab aliases ============
 
 

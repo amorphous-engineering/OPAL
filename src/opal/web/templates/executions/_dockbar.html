@@ -47,7 +47,7 @@
                 <button class="btn btn-sm" onclick="toggleDockbarMenu(event)" aria-label="More actions">···</button>
                 <div class="dockbar-menu" id="dockbar-menu" hidden>
                     {% if menu_skip %}
-                    <button class="btn btn-sm" onclick="hideDockbarMenu(); showSkipModal({{ bar_step.order }}, {{ bar_step.title | tojson }})">SKIP</button>
+                    <button class="btn btn-sm" onclick='hideDockbarMenu(); showSkipModal({{ bar_step.order }}, {{ bar_step.title | tojson }})'>SKIP</button>
                     {% endif %}
                     {% if menu_consume %}
                     <button class="btn btn-sm" onclick="hideDockbarMenu(); consumeStepParts({{ bar_step.order }})">CONSUME PARTS</button>

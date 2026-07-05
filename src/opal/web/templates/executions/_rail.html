@@ -54,7 +54,7 @@
                 <div class="rail-attach-item">
                     {% if att.mime_type.startswith('image/') %}
                     <img class="rail-thumb" src="/api/attachments/{{ att.id }}/download" alt="{{ att.original_filename }}"
-                         onclick="openLightbox('/api/attachments/{{ att.id }}/download', {{ (att.note or att.original_filename) | tojson }})">
+                         onclick='openLightbox("/api/attachments/{{ att.id }}/download", {{ (att.note or att.original_filename) | tojson }})'>
                     {% else %}
                     <a href="/api/attachments/{{ att.id }}/download" target="_blank" class="mono rail-file">{{ att.original_filename }}</a>
                     {% endif %}
@@ -74,7 +74,7 @@
                 <div class="rail-attach-item">
                     {% if att.mime_type.startswith('image/') %}
                     <img class="rail-thumb" src="/api/attachments/{{ att.id }}/download" alt="{{ att.original_filename }}"
-                         onclick="openLightbox('/api/attachments/{{ att.id }}/download', {{ (att.note or att.original_filename) | tojson }})">
+                         onclick='openLightbox("/api/attachments/{{ att.id }}/download", {{ (att.note or att.original_filename) | tojson }})'>
                     {% else %}
                     <a href="/api/attachments/{{ att.id }}/download" target="_blank" class="mono rail-file">{{ att.original_filename }}</a>
                     {% endif %}

@@ -62,7 +62,7 @@
     {% for img in images %}
     <figure class="step-image">
         <img src="/api/attachments/{{ img.attachment_id }}/download" alt="{{ img.caption or 'Reference image' }}"
-             onclick="openLightbox('/api/attachments/{{ img.attachment_id }}/download', {{ (img.caption or '') | tojson }})">
+             onclick='openLightbox("/api/attachments/{{ img.attachment_id }}/download", {{ (img.caption or "") | tojson }})'>
         {% if img.caption %}<figcaption class="mono">{{ img.caption }}</figcaption>{% endif %}
     </figure>
     {% endfor %}
@@ -85,7 +85,7 @@
             <span class="ro-value">
                 {% for att_id in ids %}
                 <img class="step-photo-thumb" src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}"
-                     onclick="openLightbox('/api/attachments/{{ att_id }}/download', {{ field.label | tojson }})">
+                     onclick='openLightbox("/api/attachments/{{ att_id }}/download", {{ field.label | tojson }})'>
                 {% else %}<span class="text-muted mono">—</span>{% endfor %}
             </span>
         {% elif field.type == 'checkbox' %}
@@ -128,7 +128,7 @@
         <div class="step-photo-gallery">
             {% for att_id in ids %}
             <div class="step-photo-item" data-attachment-id="{{ att_id }}">
-                <img class="step-photo-thumb" src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" onclick="openLightbox('/api/attachments/{{ att_id }}/download', {{ field.label | tojson }})">
+                <img class="step-photo-thumb" src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" onclick='openLightbox("/api/attachments/{{ att_id }}/download", {{ field.label | tojson }})'>
                 <button type="button" class="btn btn-sm" onclick="removeStepPhoto(this)">REMOVE</button>
             </div>
             {% endfor %}

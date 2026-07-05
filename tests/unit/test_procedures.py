@@ -777,3 +777,29 @@ def test_publish_snapshots_safety_fields(client):
     assert steps[0]["caution"] == "Hot surfaces"
     assert steps[1]["required_role"] is None
     assert steps[1]["caution"] is None
+
+
+def test_add_step_image_upload(client):
+    """POST .../steps/{id}/images uploads an authored reference image.
+
+    Regression: add_step_image calls upload_attachment as a plain function,
+    so the omitted Form(...) parameters must be passed as explicit None —
+    otherwise the truthy Form sentinels reach the entity-validation queries
+    and every upload 500s.
+    """
+    proc_id = client.post("/api/procedures", json={"name": "Img Proc"}).json()["id"]
+    step_id = client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Step with image"}
+    ).json()["id"]
+
+    resp = client.post(
+        f"/api/procedures/{proc_id}/steps/{step_id}/images",
+        files={"file": ("diagram.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        data={"caption": "wiring diagram"},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["caption"] == "wiring diagram"
+
+    listed = client.get(f"/api/procedures/{proc_id}/steps/{step_id}/images").json()
+    assert len(listed) == 1
+    assert listed[0]["caption"] == "wiring diagram"

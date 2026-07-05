@@ -655,12 +655,19 @@ async def add_step_image(
 
     from opal.api.routes.attachments import upload_attachment
 
+    # Called as a plain function, not through FastAPI: the omitted Form(...)
+    # parameters would otherwise default to truthy sentinel objects, so pass
+    # them explicitly as None.
     attachment = await upload_attachment(
         db=db,
         user_id=user_id,
         file=file,
+        procedure_instance_id=None,
+        step_execution_id=None,
+        issue_id=None,
         procedure_id=procedure_id,
         kind="step_image",
+        note=None,
     )
 
     max_position = (
@@ -695,9 +702,7 @@ def update_step_image(
     """Update a step image's caption."""
     _get_procedure_step(db, procedure_id, step_id)
     image = (
-        db.query(StepImage)
-        .filter(StepImage.id == image_id, StepImage.step_id == step_id)
-        .first()
+        db.query(StepImage).filter(StepImage.id == image_id, StepImage.step_id == step_id).first()
     )
     if not image:
         raise HTTPException(status_code=404, detail="Step image not found")
@@ -726,9 +731,7 @@ def delete_step_image(
     """
     _get_procedure_step(db, procedure_id, step_id)
     image = (
-        db.query(StepImage)
-        .filter(StepImage.id == image_id, StepImage.step_id == step_id)
-        .first()
+        db.query(StepImage).filter(StepImage.id == image_id, StepImage.step_id == step_id).first()
     )
     if not image:
         raise HTTPException(status_code=404, detail="Step image not found")

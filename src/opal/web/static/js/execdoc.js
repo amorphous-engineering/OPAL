@@ -1230,7 +1230,7 @@
 
         // SSE accelerates the poll; the poll remains the source of truth.
         if (window.opalEvents) {
-            ['cursor_moved', 'step_completed', 'user_joined', 'user_left'].forEach((type) => {
+            ['cursor_moved', 'step_completed', 'user_joined', 'user_left', 'issue_dispositioned'].forEach((type) => {
                 window.opalEvents.on(type, (data) => {
                     if (data && data.instance_id === instanceId) pollNow();
                 });
