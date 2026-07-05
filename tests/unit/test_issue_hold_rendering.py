@@ -53,6 +53,38 @@ def test_held_step_renders_blocker_line_not_complete_button(web_client):
     assert "alert(`NC logged" not in page.text
 
 
+def test_bound_hold_row_renders_no_active_complete(web_client):
+    """F4: a 'resolve by' boundary (start_blocked) — which the server refuses to
+    COMPLETE — must not render an active COMPLETE button; the control is absent,
+    replaced by the blocker line. Previously the row derived 'held' from raised
+    NCs only and showed a button the server then 400'd."""
+    proc_id = web_client.post("/api/procedures", json={"name": "Bound gate"}).json()["id"]
+    for title in ("S1", "S2", "S3"):
+        web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": title})
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+    inst = web_client.get(f"/api/procedure-instances/{instance_id}").json()
+    se_by_num = {s["step_number"]: s["id"] for s in inst["step_executions"]}
+
+    # Raise on step 1, bind the boundary to step 3 (start_blocked on step 3).
+    nc = web_client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/nc", json={"title": "Bound NC"}
+    ).json()
+    web_client.post(
+        f"/api/issues/{nc['id']}/containment",
+        json={"containment": "step", "containment_step_id": se_by_num[3]},
+    )
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    # Step 3's COMPLETE control is absent — the server would 400 the bound hold.
+    assert "completeStep(3, this)" not in page.text
+    # The blocker line names the issue instead.
+    assert nc["issue_number"] in page.text
+
+
 def test_signed_disposition_restores_controls(web_client):
     """(§10.3) Signing releases the containment; the controls return."""
     instance_id, by_label = _build_instance_with_sub_steps(web_client)

@@ -28,7 +28,7 @@ from opal.core.auth import (
     validate_password_strength,
     verify_payload,
 )
-from opal.core.holds import get_hold_state, holding_readout, scope_label
+from opal.core.holds import holding_readout, scope_label
 from opal.db.models import (
     InventoryRecord,
     Kit,
@@ -2305,20 +2305,24 @@ def _execution_detail_context(
     linked_issues.sort(key=lambda i: (not i.is_blocking, disp_rank.get(i.disp_state, 4), -i.id))
     context["linked_issues"] = linked_issues
 
-    # Containment-derived hold state: which controls are absent, and which
-    # issues replace them. Keyed by step_execution_id.
-    hold_state = get_hold_state(db, instance.id)
-    step_complete_blockers: dict[int, list[Issue]] = {}
-    step_start_blockers: dict[int, list[Issue]] = {}
+    # One authoritative answer per step execution for the COMPLETE and SKIP
+    # controls: the full fold the server enforces (held scope + sequence for
+    # COMPLETE; held scope + redline for SKIP), so a control never renders
+    # active where the server would 400 it (F4/F5). Templates render the
+    # controls from these — they do not re-derive gating. Keyed by
+    # step_execution_id; a present, non-empty list means the control is absent
+    # and replaced by a blocker line.
+    complete_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
+    skip_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
     for se in instance.step_executions:
-        complete_blockers = hold_state.blockers_for_complete(se)
-        if complete_blockers:
-            step_complete_blockers[se.id] = complete_blockers
-        start_blockers = hold_state.blockers_for_start(se)
-        if start_blockers:
-            step_start_blockers[se.id] = start_blockers
-    context["step_complete_blockers"] = step_complete_blockers
-    context["step_start_blockers"] = step_start_blockers
+        cg = exec_flow.complete_blockers(db, instance, se)
+        if cg:
+            complete_gate_by_se[se.id] = cg
+        sg = exec_flow.skip_blockers(db, instance, se)
+        if sg:
+            skip_gate_by_se[se.id] = sg
+    context["complete_gate_by_se"] = complete_gate_by_se
+    context["skip_gate_by_se"] = skip_gate_by_se
 
     # Per-op aggregate of open NCs (op-level + any of its sub-steps). Used to
     # decide when to show the "+ ADD REDLINE OP" button and to populate the
@@ -2585,8 +2589,16 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
             op_data["step"]["order"], []
         ),
         "step_kit": vs.get("step_kit") or [],
-        "raised_holds": (
-            context.get("step_holding_ncs", {}).get(row["execution"].id, [])
+        # Single per-row gate answer (F4): the COMPLETE/SKIP controls render
+        # from these, never re-derived in the template. Non-empty => control
+        # absent, blocker line shown.
+        "complete_blockers": (
+            context.get("complete_gate_by_se", {}).get(row["execution"].id, [])
+            if row.get("execution") is not None
+            else []
+        ),
+        "skip_blockers": (
+            context.get("skip_gate_by_se", {}).get(row["execution"].id, [])
             if row.get("execution") is not None
             else []
         ),
