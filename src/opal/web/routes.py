@@ -2028,9 +2028,7 @@ def _execution_detail_context(
     same facts."""
     version = db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
 
-    context = get_base_context(
-        request, db, f"{instance.work_order_number or 'Execution'} - OPAL"
-    )
+    context = get_base_context(request, db, f"{instance.work_order_number or 'Execution'} - OPAL")
     context["instance"] = instance
     context["version"] = version
     context["statuses"] = [s.value for s in InstanceStatus]
@@ -2350,16 +2348,8 @@ def _execution_detail_context(
             open_ncs_by_op_order[op_step["order"]] = bucket
     context["op_open_ncs_by_order"] = open_ncs_by_op_order
 
-    # Capture pre-fill: assignable users for the anomaly modal.
-    from opal.db.models.user import User as _User
-
-    context["users"] = (
-        db.query(_User).filter(_User.is_active == True).order_by(_User.name).all()  # noqa: E712
-    )
-
     # Gating lookup: top-level ops whose prerequisite ops haven't reached
     # a terminal status yet. Keyed by op.order → list of blocking step_number_str.
-    terminal_step_statuses = {"completed", "signed_off", "skipped"}
     exec_by_order = {se.step_number: se for se in instance.step_executions}
     gated_ops_by_order: dict[int, list[str]] = {}
     version_steps_for_gating = version.content.get("steps", []) if version else []
@@ -2377,7 +2367,7 @@ def _execution_detail_context(
             prereq_status = (
                 prereq.status.value if hasattr(prereq.status, "value") else prereq.status
             )
-            if prereq_status not in terminal_step_statuses:
+            if prereq_status not in exec_flow.TERMINAL_STEP_STATUSES:
                 blockers.append(prereq.step_number_str or str(dep_order))
         if blockers:
             gated_ops_by_order[vs["order"]] = blockers
@@ -2455,9 +2445,7 @@ def _execution_detail_context(
     context["cursors_by_se"] = cursors_by_se
 
     current_user = context.get("current_user")
-    my_cursor = next(
-        (c for c in cursors if current_user and c.user_id == current_user.id), None
-    )
+    my_cursor = next((c for c in cursors if current_user and c.user_id == current_user.id), None)
     context["my_cursor_order"] = (
         my_cursor.step_execution.step_number
         if my_cursor is not None and my_cursor.step_execution is not None
@@ -2489,7 +2477,7 @@ def _execution_detail_context(
 
     # strict_sequence display gating: sub-step N waits on its prior siblings.
     # Display-only — the claim API gate in core/execution_flow is authoritative.
-    terminal = {"completed", "signed_off", "skipped"}
+    terminal = exec_flow.TERMINAL_STEP_STATUSES
     seq_blockers_by_order: dict[int, str] = {}
     for op_data in ops + contingency_ops:
         op_vs = context["version_steps_map"].get(op_data["step"]["order"]) or {}
@@ -2551,16 +2539,12 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
     if step_order is not None:
         target = next(((od, r) for od, r in rows if r["order"] == step_order), None)
     if target is None and context.get("my_cursor_order") is not None:
-        target = next(
-            ((od, r) for od, r in rows if r["order"] == context["my_cursor_order"]), None
-        )
+        target = next(((od, r) for od, r in rows if r["order"] == context["my_cursor_order"]), None)
     if target is None:
-        leaf_rows = [
-            (od, r) for od, r in rows if not od["sub_steps"] or r is not od["step"]
-        ]
-        target = next(
-            ((od, r) for od, r in leaf_rows if r["status"] in _BAR_ACTIONABLE), None
-        ) or (leaf_rows[0] if leaf_rows else None)
+        leaf_rows = [(od, r) for od, r in rows if not od["sub_steps"] or r is not od["step"]]
+        target = next(((od, r) for od, r in leaf_rows if r["status"] in _BAR_ACTIONABLE), None) or (
+            leaf_rows[0] if leaf_rows else None
+        )
 
     if target is None:
         context["bar_step"] = None

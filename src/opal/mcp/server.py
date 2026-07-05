@@ -3054,9 +3054,7 @@ async def _set_containment(db, args: dict) -> list[TextContent]:
         if new_step_id is not None:
             step = db.query(StepExecution).filter(StepExecution.id == new_step_id).first()
             if step is None:
-                return json_response(
-                    {"success": False, "error": f"Step {new_step_id} not found"}
-                )
+                return json_response({"success": False, "error": f"Step {new_step_id} not found"})
             if issue.procedure_instance_id is None:
                 issue.procedure_instance_id = step.instance_id
             elif step.instance_id != issue.procedure_instance_id:

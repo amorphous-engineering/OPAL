@@ -26,6 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from opal.core.holds import _val as _status_value  # enum-unwrap, one home in core/holds
 from opal.core.holds import blocking_issues_for_instance, get_hold_state
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
@@ -59,10 +60,6 @@ class FlowError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
-
-
-def _status_value(obj: Any) -> str:
-    return obj.value if hasattr(obj, "value") else obj
 
 
 def user_initials(name: str | None) -> str:
@@ -245,9 +242,7 @@ def complete_blockers(
 ) -> list[Blocker]:
     """Everything holding this step's (or OP's) COMPLETE: the held scope
     plus the structural sequence gates."""
-    return held_scope_blockers(db, instance, step_exec) + sequence_blockers(
-        db, instance, step_exec
-    )
+    return held_scope_blockers(db, instance, step_exec) + sequence_blockers(db, instance, step_exec)
 
 
 def skip_blockers(
@@ -480,7 +475,6 @@ def complete_step_flow(
 
     old_instance_status = _status_value(instance.status)
     check_instance_completion(db, instance)
-
 
     instance_completed = (
         old_instance_status != InstanceStatus.COMPLETED.value
