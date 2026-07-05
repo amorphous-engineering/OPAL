@@ -926,6 +926,67 @@ def test_redline_requires_nc(client):
     assert bad.status_code == 400
 
 
+def test_skip_blocked_by_open_redline_after_disposition(client):
+    """F5: after the disposition is signed the NC hold releases, but an open
+    redline-rework op still gates the host step. SKIP must refuse just as
+    COMPLETE does — skipping the host step cannot strand authorized rework."""
+    instance_id, issue_id, _ = _create_redline_setup(client)
+    op_resp = client.post(
+        f"/api/procedure-instances/{instance_id}/ad-hoc-ops",
+        json={"issue_id": issue_id, "title": "Rework", "steps": [{"title": "Do rework"}]},
+    ).json()
+    sub_step_number = op_resp["sub_steps"][0]["step_number"]
+
+    _sign(client, issue_id, "rework", "rework per redline")
+
+    # COMPLETE refuses on the open redline...
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 400
+    assert "redline" in resp.json()["detail"].lower()
+
+    # ...and so must SKIP (F5): the redline gate applies to both.
+    skip = client.post(f"/api/procedure-instances/{instance_id}/steps/1/skip", json={})
+    assert skip.status_code == 400
+    assert "redline" in skip.json()["detail"].lower()
+
+    # Once the redline sub-step is executed, the gate clears and SKIP works.
+    client.post(
+        f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/complete", json={}
+    )
+    skip = client.post(f"/api/procedure-instances/{instance_id}/steps/1/skip", json={})
+    assert skip.status_code == 200, skip.text
+    assert skip.json()["status"] == "skipped"
+
+
+def test_skip_not_blocked_by_strict_sequence_predecessor(client):
+    """F5 (scope boundary): SKIP deliberately omits strict_sequence predecessor
+    ordering — a later sub-step may be skipped even with its predecessors still
+    pending. Only the held scope and the redline class gate SKIP."""
+    proc_id = client.post("/api/procedures", json={"name": "Strict skip"}).json()["id"]
+    op = client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "Strict OP", "strict_sequence": True},
+    ).json()
+    client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 1", "parent_step_id": op["id"]}
+    )
+    client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 2", "parent_step_id": op["id"]}
+    )
+    client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+    # Orders: OP=1, 1.1=2, 1.2=3. COMPLETE on 1.2 is sequence-gated...
+    blocked = client.post(f"/api/procedure-instances/{instance_id}/steps/3/complete", json={})
+    assert blocked.status_code == 400
+    assert "Waiting on" in blocked.json()["detail"]
+    # ...but SKIP on 1.2 is allowed with 1.1 still pending.
+    skip = client.post(f"/api/procedure-instances/{instance_id}/steps/3/skip", json={})
+    assert skip.status_code == 200, skip.text
+    assert skip.json()["status"] == "skipped"
+
+
 # ============ Containment scope across the op hierarchy ============
 
 
