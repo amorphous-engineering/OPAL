@@ -33,6 +33,9 @@
 <div class="part-actions">
     {{ ok.btn("PRINT", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
     {{ ok.btn("EDIT", attrs='onclick="openPartForm()"') }}
+    {% if can_variant %}
+    {{ ok.btn("VARIANT", attrs='onclick="window.location=\'/parts/' ~ part.id ~ '/variant\'"') }}
+    {% endif %}
     {% if is_draft %}
     {{ ok.btn("ACTIVATE", variant="primary", attrs='onclick="openActivateConfirm()"') }}
     {% if not part_is_referenced %}

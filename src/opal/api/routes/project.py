@@ -44,6 +44,7 @@ class PartNumberingInput(BaseModel):
     prefix: str = ""
     separator: str = "-"
     sequence_digits: int = 4
+    variant_digits: int = 3
     format: str = "{prefix}{sep}{tier_code}{sep}{sequence}"
 
 
@@ -110,6 +111,7 @@ class ProjectConfigResponse(BaseModel):
                 prefix=config.part_numbering.prefix,
                 separator=config.part_numbering.separator,
                 sequence_digits=config.part_numbering.sequence_digits,
+                variant_digits=config.part_numbering.variant_digits,
                 format=config.part_numbering.format,
             ),
             categories=config.categories,
@@ -152,6 +154,7 @@ def _numbering_from_input(pn: PartNumberingInput) -> PartNumberingConfig:
         prefix=pn.prefix,
         separator=pn.separator,
         sequence_digits=pn.sequence_digits,
+        variant_digits=pn.variant_digits,
         format=pn.format,
     )
 

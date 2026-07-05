@@ -1,5 +1,11 @@
 """Parts API tests."""
 
+import pytest
+
+import opal.config as config_mod
+from opal.db.models import BOMLine, Part
+from opal.project import PartNumberingConfig, ProjectConfig, TierConfig
+
 
 def test_create_part(client):
     """Test creating a new part."""
@@ -185,3 +191,148 @@ def test_is_tooling_honored_on_every_tier(client):
         "/api/parts", json={"name": "Bench Meter", "tier": 3, "is_tooling": True}
     ).json()
     assert loose["is_tooling"] is True
+
+
+# ============ Variants ============
+
+
+@pytest.fixture
+def variant_project(monkeypatch) -> ProjectConfig:
+    project = ProjectConfig(
+        name="Variant Project",
+        tiers=[TierConfig(level=1, name="Flight", code="F")],
+        part_numbering=PartNumberingConfig(
+            prefix="RV",
+            format="{prefix}{sep}{tier_code}{sep}{sequence}{sep}{variant}",
+        ),
+    )
+    monkeypatch.setattr(config_mod, "_active_project", project)
+    return project
+
+
+def test_create_variant_copies_attributes_and_bom(client, db_session, variant_project):
+    component = client.post("/api/parts", json={"name": "Bolt", "tier": 1}).json()
+    source = client.post(
+        "/api/parts",
+        json={
+            "name": "Bracket Assembly",
+            "tier": 1,
+            "category": "Structures",
+            "description": "Primary bracket",
+            "external_pn": "EXT-77",
+        },
+    ).json()
+    assert source["internal_pn"] == "RV-F-0002-001"
+
+    db_session.add(
+        BOMLine(
+            assembly_id=source["id"],
+            component_id=component["id"],
+            quantity=4,
+            reference_designator="B1-B4",
+        )
+    )
+    db_session.commit()
+
+    response = client.post(f"/api/parts/{source['id']}/variants")
+    assert response.status_code == 201, response.text
+    variant = response.json()
+
+    assert variant["internal_pn"] == "RV-F-0002-002"
+    assert variant["id"] != source["id"]
+    assert variant["name"] == "Bracket Assembly"
+    assert variant["category"] == "Structures"
+    assert variant["description"] == "Primary bracket"
+    assert variant["external_pn"] == "EXT-77"
+    assert variant["lifecycle_state"] == "draft"
+
+    copied = db_session.query(BOMLine).filter(BOMLine.assembly_id == variant["id"]).all()
+    assert [(line.component_id, line.quantity, line.reference_designator) for line in copied] == [
+        (component["id"], 4, "B1-B4")
+    ]
+
+    # The tier sequence counter did not advance: the next new part takes 0003
+    after = client.post("/api/parts", json={"name": "Next New", "tier": 1}).json()
+    assert after["internal_pn"] == "RV-F-0003-001"
+
+
+def test_create_variant_body_overrides(client, db_session, variant_project):
+    component = client.post("/api/parts", json={"name": "Bolt", "tier": 1}).json()
+    source = client.post(
+        "/api/parts",
+        json={
+            "name": "Bracket Assembly",
+            "tier": 1,
+            "category": "Structures",
+            "external_pn": "EXT-77",
+        },
+    ).json()
+    db_session.add(BOMLine(assembly_id=source["id"], component_id=component["id"], quantity=2))
+    db_session.commit()
+
+    response = client.post(
+        f"/api/parts/{source['id']}/variants",
+        json={"name": "Bracket Assembly, Lightened", "description": "Pocketed variant"},
+    )
+    assert response.status_code == 201, response.text
+    variant = response.json()
+
+    assert variant["name"] == "Bracket Assembly, Lightened"
+    assert variant["description"] == "Pocketed variant"
+    # Omitted fields copy from the source; BOM still copies
+    assert variant["category"] == "Structures"
+    assert variant["external_pn"] == "EXT-77"
+    assert db_session.query(BOMLine).filter(BOMLine.assembly_id == variant["id"]).count() == 1
+
+
+def test_create_variant_explicit_null_clears(client, variant_project):
+    source = client.post(
+        "/api/parts", json={"name": "Src", "tier": 1, "external_pn": "EXT-1"}
+    ).json()
+
+    response = client.post(f"/api/parts/{source['id']}/variants", json={"external_pn": None})
+    assert response.status_code == 201
+    variant = response.json()
+    assert variant["external_pn"] is None
+    # A null name is "no opinion", never a cleared NOT NULL column
+    assert variant["name"] == "Src"
+
+
+def test_create_variant_bad_parent_rejected(client, variant_project):
+    source = client.post("/api/parts", json={"name": "Src", "tier": 1}).json()
+    response = client.post(f"/api/parts/{source['id']}/variants", json={"parent_id": 99999})
+    assert response.status_code == 400
+
+
+def test_create_variant_rejected_without_variant_format(client):
+    # Fallback numbering (no project config) has no {variant} placeholder
+    source = client.post("/api/parts", json={"name": "Plain", "tier": 1}).json()
+    response = client.post(f"/api/parts/{source['id']}/variants")
+    assert response.status_code == 400
+    assert "{variant}" in response.json()["detail"]
+
+
+def test_create_variant_unknown_part_404(client, variant_project):
+    response = client.post("/api/parts/99999/variants")
+    assert response.status_code == 404
+
+
+def test_create_variant_from_legacy_base_pn(client, db_session, variant_project):
+    # Pre-variant PN: the base is implicit variant 1, first variant mints -002
+    legacy = Part(name="Legacy", internal_pn="RV-F-0001", tier=1)
+    db_session.add(legacy)
+    db_session.commit()
+
+    response = client.post(f"/api/parts/{legacy.id}/variants")
+    assert response.status_code == 201, response.text
+    assert response.json()["internal_pn"] == "RV-F-0001-002"
+
+
+def test_create_variant_rejects_unparseable_pn(client, db_session, variant_project):
+    odd = Part(name="Odd", internal_pn="WIDGET-9", tier=1)
+    db_session.add(odd)
+    db_session.commit()
+
+    response = client.post(f"/api/parts/{odd.id}/variants")
+    assert response.status_code == 422
+    assert "WIDGET-9" in response.json()["detail"]

@@ -16,7 +16,9 @@ from opal.config import get_active_project
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.numbering import (
     PartNumberError,
+    format_has_variant,
     next_part_number,
+    next_variant_part_number,
     peek_next_part_number,
     pn_exists,
     register_part_number,
@@ -30,7 +32,7 @@ from opal.core.part_lifecycle import (
     ensure_identity_mutable,
     reference_counts,
 )
-from opal.db.models import InventoryRecord, Part, Supplier, SupplierPart
+from opal.db.models import BOMLine, InventoryRecord, Part, Supplier, SupplierPart
 from opal.project import tier_semantics
 
 router = APIRouter()
@@ -81,6 +83,26 @@ class PartUpdate(BaseModel):
         if value is None:
             raise ValueError("field is not nullable; omit it to leave unchanged")
         return value
+
+
+class PartVariantCreate(BaseModel):
+    """Overrides for a new variant; omitted fields copy from the source part.
+
+    Identity (tier, internal_pn) is derived from the source and never
+    overridable — a variant is a sibling, not a new sequence.
+    """
+
+    name: str | None = None
+    description: str | None = None
+    category: str | None = None
+    unit_of_measure: str | None = None
+    tracking_type: str | None = None  # "bulk" or "serialized"
+    external_pn: str | None = None
+    reorder_point: Decimal | None = None
+    is_tooling: bool | None = None
+    calibration_interval_days: int | None = None
+    parent_id: int | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class PartResponse(BaseModel):
@@ -332,6 +354,99 @@ def create_part(
     db.commit()
 
     return get_part_with_quantity(db, part)
+
+
+@router.post(
+    "/{part_id}/variants", response_model=PartResponse, status_code=status.HTTP_201_CREATED
+)
+def create_part_variant(
+    db: DbSession,
+    part_id: int,
+    user_id: CurrentUserId,
+    variant_in: PartVariantCreate | None = None,
+) -> PartResponse:
+    """Mint the next variant of a part: a draft sibling copying attributes and BOM.
+
+    The variant shares the source's tier+sequence base with the next variant
+    code; the tier sequence counter does not advance. Body fields override
+    the copied attributes; omitted fields copy, explicit nulls clear.
+    """
+    part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
+    if not part:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Part {part_id} not found"
+        )
+    if not format_has_variant(get_active_project()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Part numbering format has no {variant} placeholder",
+        )
+    if not part.internal_pn:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Part has no internal part number, so its variant family cannot be derived",
+        )
+
+    overrides = variant_in.model_dump(exclude_unset=True) if variant_in else {}
+    parent_id = overrides.get("parent_id", part.parent_id)
+    if parent_id is not None and parent_id != part.parent_id:
+        parent = db.query(Part).filter(Part.id == parent_id, Part.deleted_at.is_(None)).first()
+        if not parent:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Parent part {parent_id} not found",
+            )
+
+    try:
+        new_pn = next_variant_part_number(db, part.tier, part.internal_pn)
+    except PartNumberError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+    if "metadata" in overrides:
+        metadata = overrides["metadata"]
+    else:
+        metadata = dict(part.metadata_) if part.metadata_ else None
+
+    variant = Part(
+        # name is NOT NULL: a null/empty override falls back to the source name
+        name=overrides.get("name") or part.name,
+        internal_pn=new_pn,
+        external_pn=overrides.get("external_pn", part.external_pn),
+        description=overrides.get("description", part.description),
+        category=overrides.get("category", part.category),
+        unit_of_measure=overrides.get("unit_of_measure") or part.unit_of_measure,
+        tracking_type=overrides.get("tracking_type") or part.tracking_type,
+        tier=part.tier,
+        parent_id=parent_id,
+        reorder_point=overrides.get("reorder_point", part.reorder_point),
+        # NOT NULL: a null override means "no opinion", not "clear"
+        is_tooling=(
+            part.is_tooling if overrides.get("is_tooling") is None else overrides["is_tooling"]
+        ),
+        calibration_interval_days=overrides.get(
+            "calibration_interval_days", part.calibration_interval_days
+        ),
+        metadata_=metadata,
+    )
+    db.add(variant)
+    db.flush()
+    log_create(db, variant, user_id)
+
+    for line in part.bom_lines:
+        bom_copy = BOMLine(
+            assembly_id=variant.id,
+            component_id=line.component_id,
+            quantity=line.quantity,
+            reference_designator=line.reference_designator,
+            notes=line.notes,
+        )
+        db.add(bom_copy)
+        db.flush()
+        log_create(db, bom_copy, user_id)
+
+    db.commit()
+    db.refresh(variant)
+    return get_part_with_quantity(db, variant)
 
 
 class NextPnResponse(BaseModel):

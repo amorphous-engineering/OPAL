@@ -49,6 +49,7 @@ class PartNumberingConfig(BaseModel):
     prefix: str = ""
     separator: str = "-"
     sequence_digits: int = 4
+    variant_digits: int = 3
     format: str = "{prefix}{sep}{tier_code}{sep}{sequence}"
 
 
@@ -190,12 +191,13 @@ class ProjectConfig(BaseModel):
                 return req
         return None
 
-    def generate_part_number(self, tier_level: int, sequence: int) -> str:
+    def generate_part_number(self, tier_level: int, sequence: int, variant: int = 1) -> str:
         """Generate a part number according to project config.
 
         Args:
             tier_level: The tier level (1, 2, 3, etc.)
             sequence: The sequence number for this part.
+            variant: The variant code, used only when the format includes {variant}.
 
         Returns:
             Formatted part number string.
@@ -214,6 +216,7 @@ class ProjectConfig(BaseModel):
             tier_name=tier.name,
             tier_level=tier.level,
             sequence=str(sequence).zfill(self.part_numbering.sequence_digits),
+            variant=str(variant).zfill(self.part_numbering.variant_digits),
         )
 
 
@@ -330,6 +333,7 @@ def create_project_config(
     prefix: str = "",
     separator: str = "-",
     sequence_digits: int = 4,
+    variant_digits: int = 3,
     part_number_format: str = "{prefix}{sep}{tier_code}{sep}{sequence}",
     tiers: list[TierConfig] | None = None,
     requirements: list[RequirementConfig] | None = None,
@@ -345,6 +349,7 @@ def create_project_config(
         prefix: Part number prefix.
         separator: Part number separator (default: "-").
         sequence_digits: Number of digits in sequence (default: 4).
+        variant_digits: Number of digits in the variant code (default: 3).
         part_number_format: Format string for part numbers.
         tiers: List of inventory tiers (defaults to Flight/Ground/Loose).
         requirements: List of project requirements.
@@ -365,6 +370,7 @@ def create_project_config(
             prefix=prefix,
             separator=separator,
             sequence_digits=sequence_digits,
+            variant_digits=variant_digits,
             format=part_number_format,
         ),
         requirements=requirements or [],
@@ -411,6 +417,7 @@ def save_project_config(config: ProjectConfig) -> None:
             "prefix": config.part_numbering.prefix,
             "separator": config.part_numbering.separator,
             "sequence_digits": config.part_numbering.sequence_digits,
+            "variant_digits": config.part_numbering.variant_digits,
             "format": config.part_numbering.format,
         },
         "requirements": [
