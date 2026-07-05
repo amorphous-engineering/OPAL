@@ -30,8 +30,8 @@ from opal.core.execution_flow import (
     clear_focus,
     complete_step_flow,
     focus_step,
-    held_scope_blockers,
     mark_instance_in_work,
+    skip_blockers,
     touch_user_presence,
 )
 from opal.core.genealogy import record_assembly_genealogy
@@ -820,14 +820,12 @@ async def skip_step(
     if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
         raise HTTPException(status_code=400, detail="Cannot skip completed step")
 
-    # Containment gate: SKIP is a terminal commitment, same scope check as
-    # COMPLETE — skipping held work would sweep the hold.
-    skip_blockers = get_hold_state(db, instance_id).blockers_for_complete(step_exec)
-    if skip_blockers:
-        raise HTTPException(status_code=400, detail=_hold_blocker_detail("skip", skip_blockers))
-
-    # Skip is a commitment moment too — held work cannot be skipped around.
-    holds = held_scope_blockers(db, instance, step_exec)
+    # SKIP is a terminal commitment: it inherits the held scope (a hold cannot
+    # be skipped around) and any open redline-rework op on the gate — skipping
+    # the host step must not strand authorized rework (F5). It does not inherit
+    # strict_sequence/dependency ordering: skipping legitimately need not wait
+    # on predecessors.
+    holds = skip_blockers(db, instance, step_exec)
     if holds:
         raise HTTPException(
             status_code=400,

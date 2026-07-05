@@ -2908,6 +2908,29 @@ async def _raise_issue(db, args: dict) -> list[TextContent]:
     priority = args.get("priority", "medium")
     containment = args.get("containment", "advisory")
 
+    # A non-advisory containment holds a specific work order (core/holds filters
+    # on procedure_instance_id). Derive it from any step anchor, reject anchors
+    # naming a different WO — otherwise the hold blocks nothing or the wrong WO
+    # (F3). A bare draft (no anchor, no WO) is still allowed.
+    procedure_instance_id = args.get("procedure_instance_id")
+    if containment != Containment.ADVISORY.value:
+        for step_id in (args.get("containment_step_id"), args.get("raised_step_id")):
+            if step_id is None:
+                continue
+            step = db.query(StepExecution).filter(StepExecution.id == step_id).first()
+            if step is None:
+                return json_response({"success": False, "error": f"Step {step_id} not found"})
+            if procedure_instance_id is None:
+                procedure_instance_id = step.instance_id
+            elif step.instance_id != procedure_instance_id:
+                return json_response(
+                    {
+                        "success": False,
+                        "error": f"Step {step_id} belongs to a different work order "
+                        "than procedure_instance_id",
+                    }
+                )
+
     issue = Issue(
         issue_number=generate_issue_number(db),
         title=args["title"],
@@ -2919,7 +2942,7 @@ async def _raise_issue(db, args: dict) -> list[TextContent]:
         containment_step_id=args.get("containment_step_id"),
         should_be=args.get("should_be"),
         actual=args.get("actual"),
-        procedure_instance_id=args.get("procedure_instance_id"),
+        procedure_instance_id=procedure_instance_id,
         raised_step_id=args.get("raised_step_id"),
         raised_by_id=args.get("user_id"),
         part_id=args.get("part_id"),
@@ -3023,8 +3046,26 @@ async def _set_containment(db, args: dict) -> list[TextContent]:
     user_id = args.get("user_id")
     old_values = get_model_dict(issue)
     issue.containment = new_containment
-    if args.get("containment_step_id") is not None:
-        issue.containment_step_id = args["containment_step_id"]
+    # Explicit presence, not None-skip: an omitted containment_step_id leaves
+    # the boundary untouched; an explicit null clears it (F8). A non-null
+    # boundary must belong to this issue's work order.
+    if "containment_step_id" in args:
+        new_step_id = args["containment_step_id"]
+        if new_step_id is not None:
+            step = db.query(StepExecution).filter(StepExecution.id == new_step_id).first()
+            if step is None:
+                return json_response({"success": False, "error": f"Step {new_step_id} not found"})
+            if issue.procedure_instance_id is None:
+                issue.procedure_instance_id = step.instance_id
+            elif step.instance_id != issue.procedure_instance_id:
+                return json_response(
+                    {
+                        "success": False,
+                        "error": f"Step {new_step_id} belongs to a different work order "
+                        "than this issue",
+                    }
+                )
+        issue.containment_step_id = new_step_id
     log_update(db, issue, old_values, user_id)
 
     if narrowing and note:
@@ -6279,6 +6320,21 @@ async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
     issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
     if not issue:
         return json_response({"error": f"Issue {args['issue_id']} not found"})
+
+    # A hold that names one work order cannot be bound into another's step — the
+    # containment filter is per-instance, so a cross-WO bind would report
+    # success and block nothing (F3). Adopt the target WO when the issue names
+    # none yet; reject when it names a different one.
+    if issue.procedure_instance_id is None:
+        issue.procedure_instance_id = instance.id
+        db.flush()
+    elif issue.procedure_instance_id != instance.id:
+        return json_response(
+            {
+                "error": f"{issue.issue_number} belongs to work order "
+                f"{issue.procedure_instance_id}, not this execution ({instance.id})"
+            }
+        )
 
     containment = issue.containment.value if hasattr(issue.containment, "value") else issue.containment
     if containment == Containment.STEP.value and issue.containment_step_id == step_exec.id:

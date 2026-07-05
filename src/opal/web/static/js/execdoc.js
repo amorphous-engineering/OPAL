@@ -1221,6 +1221,14 @@
                 postFocus(initial);
             }
         }
+
+        // A HOLDING link (holds.py exec_href) lands here with ?op=N — jump to
+        // that step, expanding its collapsed OP card. jumpToStep is idempotent.
+        const opParam = new URLSearchParams(window.location.search).get('op');
+        if (opParam !== null && opParam !== '') {
+            const opOrder = parseInt(opParam, 10);
+            if (!Number.isNaN(opOrder)) jumpToStep(opOrder);
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {

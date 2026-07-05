@@ -28,7 +28,7 @@ from opal.core.auth import (
     validate_password_strength,
     verify_payload,
 )
-from opal.core.holds import get_hold_state, holding_readout, scope_label
+from opal.core.holds import holding_readout, scope_label
 from opal.db.models import (
     InventoryRecord,
     Kit,
@@ -2028,9 +2028,7 @@ def _execution_detail_context(
     same facts."""
     version = db.query(ProcedureVersion).filter(ProcedureVersion.id == instance.version_id).first()
 
-    context = get_base_context(
-        request, db, f"{instance.work_order_number or 'Execution'} - OPAL"
-    )
+    context = get_base_context(request, db, f"{instance.work_order_number or 'Execution'} - OPAL")
     context["instance"] = instance
     context["version"] = version
     context["statuses"] = [s.value for s in InstanceStatus]
@@ -2305,20 +2303,24 @@ def _execution_detail_context(
     linked_issues.sort(key=lambda i: (not i.is_blocking, disp_rank.get(i.disp_state, 4), -i.id))
     context["linked_issues"] = linked_issues
 
-    # Containment-derived hold state: which controls are absent, and which
-    # issues replace them. Keyed by step_execution_id.
-    hold_state = get_hold_state(db, instance.id)
-    step_complete_blockers: dict[int, list[Issue]] = {}
-    step_start_blockers: dict[int, list[Issue]] = {}
+    # One authoritative answer per step execution for the COMPLETE and SKIP
+    # controls: the full fold the server enforces (held scope + sequence for
+    # COMPLETE; held scope + redline for SKIP), so a control never renders
+    # active where the server would 400 it (F4/F5). Templates render the
+    # controls from these — they do not re-derive gating. Keyed by
+    # step_execution_id; a present, non-empty list means the control is absent
+    # and replaced by a blocker line.
+    complete_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
+    skip_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
     for se in instance.step_executions:
-        complete_blockers = hold_state.blockers_for_complete(se)
-        if complete_blockers:
-            step_complete_blockers[se.id] = complete_blockers
-        start_blockers = hold_state.blockers_for_start(se)
-        if start_blockers:
-            step_start_blockers[se.id] = start_blockers
-    context["step_complete_blockers"] = step_complete_blockers
-    context["step_start_blockers"] = step_start_blockers
+        cg = exec_flow.complete_blockers(db, instance, se)
+        if cg:
+            complete_gate_by_se[se.id] = cg
+        sg = exec_flow.skip_blockers(db, instance, se)
+        if sg:
+            skip_gate_by_se[se.id] = sg
+    context["complete_gate_by_se"] = complete_gate_by_se
+    context["skip_gate_by_se"] = skip_gate_by_se
 
     # Per-op aggregate of open NCs (op-level + any of its sub-steps). Used to
     # decide when to show the "+ ADD REDLINE OP" button and to populate the
@@ -2346,16 +2348,8 @@ def _execution_detail_context(
             open_ncs_by_op_order[op_step["order"]] = bucket
     context["op_open_ncs_by_order"] = open_ncs_by_op_order
 
-    # Capture pre-fill: assignable users for the anomaly modal.
-    from opal.db.models.user import User as _User
-
-    context["users"] = (
-        db.query(_User).filter(_User.is_active == True).order_by(_User.name).all()  # noqa: E712
-    )
-
     # Gating lookup: top-level ops whose prerequisite ops haven't reached
     # a terminal status yet. Keyed by op.order → list of blocking step_number_str.
-    terminal_step_statuses = {"completed", "signed_off", "skipped"}
     exec_by_order = {se.step_number: se for se in instance.step_executions}
     gated_ops_by_order: dict[int, list[str]] = {}
     version_steps_for_gating = version.content.get("steps", []) if version else []
@@ -2373,7 +2367,7 @@ def _execution_detail_context(
             prereq_status = (
                 prereq.status.value if hasattr(prereq.status, "value") else prereq.status
             )
-            if prereq_status not in terminal_step_statuses:
+            if prereq_status not in exec_flow.TERMINAL_STEP_STATUSES:
                 blockers.append(prereq.step_number_str or str(dep_order))
         if blockers:
             gated_ops_by_order[vs["order"]] = blockers
@@ -2451,9 +2445,7 @@ def _execution_detail_context(
     context["cursors_by_se"] = cursors_by_se
 
     current_user = context.get("current_user")
-    my_cursor = next(
-        (c for c in cursors if current_user and c.user_id == current_user.id), None
-    )
+    my_cursor = next((c for c in cursors if current_user and c.user_id == current_user.id), None)
     context["my_cursor_order"] = (
         my_cursor.step_execution.step_number
         if my_cursor is not None and my_cursor.step_execution is not None
@@ -2485,7 +2477,7 @@ def _execution_detail_context(
 
     # strict_sequence display gating: sub-step N waits on its prior siblings.
     # Display-only — the claim API gate in core/execution_flow is authoritative.
-    terminal = {"completed", "signed_off", "skipped"}
+    terminal = exec_flow.TERMINAL_STEP_STATUSES
     seq_blockers_by_order: dict[int, str] = {}
     for op_data in ops + contingency_ops:
         op_vs = context["version_steps_map"].get(op_data["step"]["order"]) or {}
@@ -2547,16 +2539,12 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
     if step_order is not None:
         target = next(((od, r) for od, r in rows if r["order"] == step_order), None)
     if target is None and context.get("my_cursor_order") is not None:
-        target = next(
-            ((od, r) for od, r in rows if r["order"] == context["my_cursor_order"]), None
-        )
+        target = next(((od, r) for od, r in rows if r["order"] == context["my_cursor_order"]), None)
     if target is None:
-        leaf_rows = [
-            (od, r) for od, r in rows if not od["sub_steps"] or r is not od["step"]
-        ]
-        target = next(
-            ((od, r) for od, r in leaf_rows if r["status"] in _BAR_ACTIONABLE), None
-        ) or (leaf_rows[0] if leaf_rows else None)
+        leaf_rows = [(od, r) for od, r in rows if not od["sub_steps"] or r is not od["step"]]
+        target = next(((od, r) for od, r in leaf_rows if r["status"] in _BAR_ACTIONABLE), None) or (
+            leaf_rows[0] if leaf_rows else None
+        )
 
     if target is None:
         context["bar_step"] = None
@@ -2585,8 +2573,16 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
             op_data["step"]["order"], []
         ),
         "step_kit": vs.get("step_kit") or [],
-        "raised_holds": (
-            context.get("step_holding_ncs", {}).get(row["execution"].id, [])
+        # Single per-row gate answer (F4): the COMPLETE/SKIP controls render
+        # from these, never re-derived in the template. Non-empty => control
+        # absent, blocker line shown.
+        "complete_blockers": (
+            context.get("complete_gate_by_se", {}).get(row["execution"].id, [])
+            if row.get("execution") is not None
+            else []
+        ),
+        "skip_blockers": (
+            context.get("skip_gate_by_se", {}).get(row["execution"].id, [])
             if row.get("execution") is not None
             else []
         ),

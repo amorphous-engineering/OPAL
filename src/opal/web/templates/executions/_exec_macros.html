@@ -31,6 +31,19 @@
 {% endif %}
 {% endmacro %}
 
+{# The COMPLETE control, from the single server-computed gate (F4): the button
+   when nothing holds the step, else the absent-control blocker line naming the
+   reason. `blockers` is a list of core.execution_flow.Blocker — issue-backed
+   ones link, structural ones (sequence/redline) render their message. Never
+   re-derive gating here. #}
+{% macro complete_control(order, blockers) %}
+{%- if blockers %}
+<span class="mono text-yellow">COMPLETE — {% for b in blockers %}{% if b.issue_number %}held by <a href="/issues/{{ b.issue_id }}">{{ b.issue_number }}</a>{% else %}{{ b.message }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</span>
+{%- else %}
+<button class="btn btn-sm btn-primary" onclick="completeStep({{ order }}, this)">COMPLETE</button>
+{%- endif %}
+{% endmacro %}
+
 {# Row indicators: counts as words, absent when zero (empty-state rule). #}
 {% macro indicators(step, attach_counts, vs) %}
 {% set exec = step.execution %}

@@ -170,8 +170,8 @@ def holding_readout(db: Session, issue: Issue) -> list[dict]:
     wo_label = instance.work_order_number or f"WO #{instance.id}"
 
     def exec_href(op_order: int | None = None) -> str:
-        base = f"/executions/{instance.id}?tab=operations"
-        return f"{base}&op={op_order}" if op_order is not None else base
+        base = f"/executions/{instance.id}"
+        return f"{base}?op={op_order}" if op_order is not None else base
 
     anchor = None
     anchor_id = issue.containment_step_id or issue.raised_step_id

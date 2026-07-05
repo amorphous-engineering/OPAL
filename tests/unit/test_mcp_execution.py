@@ -461,6 +461,105 @@ def test_bind_issue_hold_lifted_by_disposition(client, db_session, test_user, ad
     assert f"completed by {test_user.name}" in data["message"]
 
 
+def test_set_containment_rejects_foreign_step(client, db_session, test_user):
+    """F8 (MCP mirror): a boundary step from another WO is rejected."""
+    instance_a, _ = _create_instance(client)
+    instance_b, _ = _create_instance(client)
+    foreign_step = (
+        db_session.query(server.StepExecution)
+        .filter(server.StepExecution.instance_id == instance_b)
+        .first()
+    )
+
+    issue_data = _call(
+        server._raise_issue,
+        db_session,
+        {
+            "title": "NC on A",
+            "issue_type": "non_conformance",
+            "containment": "step",
+            "procedure_instance_id": instance_a,
+        },
+    )
+    issue_id = issue_data["issue"]["id"]
+
+    data = _call(
+        server._set_containment,
+        db_session,
+        {
+            "issue_id": issue_id,
+            "containment": "step",
+            "containment_step_id": foreign_step.id,
+            "user_id": test_user.id,
+        },
+    )
+    assert data["success"] is False
+    assert "different work order" in data["error"]
+
+
+def test_bind_issue_hold_rejects_foreign_work_order(client, db_session, test_user):
+    """F3: an issue that names work order A cannot be bound into B's step —
+    the cross-WO bind would report success and block nothing."""
+    instance_a, _ = _create_instance(client)
+    instance_b, _ = _create_instance(client)
+
+    issue_data = _call(
+        server._raise_issue,
+        db_session,
+        {
+            "title": "Cross-WO NC",
+            "issue_type": "non_conformance",
+            "containment": "step",
+            "procedure_instance_id": instance_a,
+        },
+    )
+    issue_id = issue_data["issue"]["id"]
+
+    data = _call(
+        server._bind_issue_hold,
+        db_session,
+        {
+            "execution_id": instance_b,
+            "step_number": 1,
+            "issue_id": issue_id,
+            "user_id": test_user.id,
+        },
+    )
+    assert "error" in data
+    assert str(instance_a) in data["error"]
+
+
+def test_bind_issue_hold_adopts_work_order_when_unset(client, db_session, test_user):
+    """F3: binding a WO-less draft adopts the target work order so the hold
+    actually blocks the bound step."""
+    instance_id, _ = _create_instance(client)
+
+    issue_data = _call(
+        server._raise_issue,
+        db_session,
+        {"title": "Draft NC", "issue_type": "non_conformance", "containment": "step"},
+    )
+    issue_id = issue_data["issue"]["id"]
+    assert db_session.get(Issue, issue_id).procedure_instance_id is None
+
+    data = _call(
+        server._bind_issue_hold,
+        db_session,
+        {
+            "execution_id": instance_id,
+            "step_number": 2,
+            "issue_id": issue_id,
+            "user_id": test_user.id,
+        },
+    )
+    assert data["success"] is True
+    assert db_session.get(Issue, issue_id).procedure_instance_id == instance_id
+
+    state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
+    step2 = next(s for s in state["steps"] if s["order"] == 2)
+    assert len(step2["holds"]) == 1
+
+
 def test_bind_issue_hold_unknown_issue(client, db_session):
     instance_id, _ = _create_instance(client)
 
