@@ -16,6 +16,7 @@ from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
 from opal.core.events import emit_issue_dispositioned
 from opal.core.holds import holding_readout
+from opal.db.models.execution import StepExecution
 from opal.db.models.issue import (
     CONTAINMENT_RANK,
     Containment,
@@ -34,6 +35,39 @@ def _get_enum_val(obj: object, attr: str) -> str:
     """Extract the string value from a potentially-enum attribute."""
     val = getattr(obj, attr)
     return val.value if hasattr(val, "value") else val
+
+
+def _resolve_containment_instance(
+    db,
+    containment: Containment,
+    containment_step_id: int | None,
+    raised_step_id: int | None,
+    procedure_instance_id: int | None,
+) -> int | None:
+    """Reconcile a non-advisory issue's work order against its step anchors.
+
+    Derives procedure_instance_id from a step anchor when unset, and rejects a
+    procedure_instance_id (or a second anchor) that names a different work order
+    (F3). Advisory issues pass through untouched — they hold nothing.
+    """
+    if containment == Containment.ADVISORY:
+        return procedure_instance_id
+    resolved = procedure_instance_id
+    for step_id in (containment_step_id, raised_step_id):
+        if step_id is None:
+            continue
+        step = db.query(StepExecution).filter(StepExecution.id == step_id).first()
+        if step is None:
+            raise HTTPException(status_code=400, detail=f"Step {step_id} not found")
+        if resolved is None:
+            resolved = step.instance_id
+        elif step.instance_id != resolved:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Step {step_id} belongs to a different work order "
+                "than procedure_instance_id",
+            )
+    return resolved
 
 
 # ============ Schemas ============
@@ -342,6 +376,15 @@ def create_issue(
             status_code=400, detail=f"Invalid containment: {data.containment}"
         ) from err
 
+    # A non-advisory containment holds a specific work order via the anchor's
+    # procedure_instance_id (core/holds filters on it). Derive it from any step
+    # anchor and reject anchors that name a different work order — otherwise the
+    # hold reports success but blocks nothing, or blocks the wrong WO (F3). A
+    # bare draft (no anchor, no WO) is still allowed; the WO is linked later.
+    procedure_instance_id = _resolve_containment_instance(
+        db, containment, data.containment_step_id, data.raised_step_id, data.procedure_instance_id
+    )
+
     issue = Issue(
         issue_number=generate_issue_number(db),
         title=data.title,
@@ -359,7 +402,7 @@ def create_issue(
         expected_benefit=data.expected_benefit,
         part_id=data.part_id,
         procedure_id=data.procedure_id,
-        procedure_instance_id=data.procedure_instance_id,
+        procedure_instance_id=procedure_instance_id,
         raised_step_id=data.raised_step_id,
         raised_by_id=user_id,
         assigned_to_id=data.assigned_to_id,

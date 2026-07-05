@@ -570,6 +570,55 @@ def test_op_does_not_auto_complete_over_bound_hold_on_op_row(client):
     assert _inst_status(client, instance_id) == "completed"
 
 
+# ============ F3: containment issue reconciled against its work order ============
+
+
+def test_create_issue_rejects_anchor_in_different_wo(client):
+    """F3: a step-containment issue whose raised step belongs to WO A cannot
+    claim procedure_instance_id = WO B."""
+    instance_a = _create_instance(client)
+    instance_b = _create_instance(client)
+    inst_a = client.get(f"/api/procedure-instances/{instance_a}").json()
+    step_a = inst_a["step_executions"][0]["id"]
+
+    resp = client.post(
+        "/api/issues",
+        json={
+            "title": "Mismatch",
+            "issue_type": "non_conformance",
+            "containment": "step",
+            "raised_step_id": step_a,
+            "procedure_instance_id": instance_b,
+        },
+    )
+    assert resp.status_code == 400
+    assert "different work order" in resp.json()["detail"]
+
+
+def test_create_issue_derives_wo_from_anchor(client):
+    """F3: omitting procedure_instance_id derives it from the anchor step so the
+    hold binds to the right WO (rather than blocking nothing)."""
+    instance_id = _create_instance(client)
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    step = inst["step_executions"][0]
+
+    resp = client.post(
+        "/api/issues",
+        json={
+            "title": "Derive",
+            "issue_type": "non_conformance",
+            "containment": "step",
+            "raised_step_id": step["id"],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["procedure_instance_id"] == instance_id
+
+    # The derived link means the hold actually holds the anchor step's COMPLETE.
+    blocked = _complete(client, instance_id, step["step_number"])
+    assert blocked.status_code == 400
+
+
 # ============ 11a. Holding readout links to the live document (F11) ============
 
 
