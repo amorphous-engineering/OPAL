@@ -21,6 +21,7 @@ from sqlalchemy.engine import Connection
 logger = logging.getLogger("opal.db.fts")
 
 FTS_COLUMNS = ("title", "subtitle", "body")
+TRIGGER_SUFFIXES = ("ai", "au", "ad")
 
 
 @dataclass(frozen=True)
@@ -100,12 +101,17 @@ def fts_table(spec: FtsEntity) -> Table:
     return _fts_tables[spec.fts_table]
 
 
+def expected_triggers(spec: FtsEntity) -> tuple[str, ...]:
+    """Names of the sync triggers that keep an entity's FTS index current."""
+    return tuple(f"{spec.fts_table}_{suffix}" for suffix in TRIGGER_SUFFIXES)
+
+
 def _schema_statements(spec: FtsEntity) -> Iterator[str]:
     cols = ", ".join(FTS_COLUMNS)
     t, fts = spec.table, spec.fts_table
 
-    for trigger in ("ai", "au", "ad"):
-        yield f"DROP TRIGGER IF EXISTS {fts}_{trigger}"
+    for trigger in expected_triggers(spec):
+        yield f"DROP TRIGGER IF EXISTS {trigger}"
     yield f"DROP TABLE IF EXISTS {fts}"
 
     yield (
@@ -169,6 +175,59 @@ def create_fts_schema(conn: Connection) -> bool:
 def drop_fts_schema(conn: Connection) -> None:
     """Drop all FTS tables and triggers."""
     for spec in ENTITY_SPECS:
-        for trigger in ("ai", "au", "ad"):
-            conn.exec_driver_sql(f"DROP TRIGGER IF EXISTS {spec.fts_table}_{trigger}")
+        for trigger in expected_triggers(spec):
+            conn.exec_driver_sql(f"DROP TRIGGER IF EXISTS {trigger}")
         conn.exec_driver_sql(f"DROP TABLE IF EXISTS {spec.fts_table}")
+
+
+def missing_fts_objects(conn: Connection) -> list[str]:
+    """FTS tables and sync triggers expected from ENTITY_SPECS but absent.
+
+    Compares sqlite_master against the expected schema. Alembic batch-mode
+    table recreates silently drop a table's triggers; a missing sync trigger
+    means the search index for that entity goes stale from that point on.
+    Returns the missing object names (empty when the schema is intact).
+    """
+    rows = conn.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'trigger')"
+    ).fetchall()
+    present = {row[0] for row in rows}
+    missing: list[str] = []
+    for spec in ENTITY_SPECS:
+        if spec.fts_table not in present:
+            missing.append(spec.fts_table)
+        missing.extend(t for t in expected_triggers(spec) if t not in present)
+    return missing
+
+
+def check_fts_integrity(conn: Connection) -> list[str]:
+    """Verify the FTS schema is complete; rebuild it if anything is missing.
+
+    Called at startup after migrations. A batch migration that recreated a
+    source table drops its FTS sync triggers (SQLite drops triggers with the
+    table); the index then silently misses every subsequent change. This
+    detects that state, warns naming the missing objects, and heals by
+    rebuilding the full FTS schema with backfill (create_fts_schema is a
+    drop-and-rebuild, so it is safe to run on a partially intact schema).
+
+    No-op when the SQLite build lacks FTS5 (search falls back to LIKE).
+    Returns the missing object names for callers/tests; never raises.
+    """
+    try:
+        if not fts5_available(conn):
+            return []
+        missing = missing_fts_objects(conn)
+        if missing:
+            logger.warning(
+                "FTS schema incomplete (stale search index): missing %s. "
+                "Likely cause: a batch migration recreated a source table, dropping "
+                "its sync triggers. Rebuilding FTS index tables and triggers now.",
+                ", ".join(missing),
+            )
+            create_fts_schema(conn)
+            logger.warning("FTS schema rebuilt and backfilled.")
+        return missing
+    except Exception:
+        # Search degradation must never block startup.
+        logger.exception("FTS integrity check failed; search index may be stale")
+        return []
