@@ -203,7 +203,7 @@
                     <td><a href="/parts/{{ a.part_id }}">{{ a.part.name }}</a></td>
                     <td>{{ ok.mono(a.part.internal_pn or '—') }}</td>
                     <td>{{ ok.status(a.status | upper | replace('_', ' '), "ok" if a.status == 'verified' else "draft") }}</td>
-                    <td><button type="button" class="btn btn-sm" onclick="unlinkAllocation({{ a.id }}, '{{ a.part.name }}')">UNLINK</button></td>
+                    <td><button type="button" class="btn btn-sm" onclick='unlinkAllocation({{ a.id }}, {{ a.part.name | tojson }})'>UNLINK</button></td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -38,7 +38,7 @@
                 <td class="text-muted">{{ line.reference_designator or '—' }}</td>
                 <td class="text-muted">{{ line.notes or '—' }}</td>
                 <td class="row-actions">
-                    <a href="#" onclick="editBomLine({{ line.id }}, {{ line.quantity }}, '{{ (line.reference_designator or '') | replace("'", "\\'") }}', '{{ (line.notes or '') | replace("'", "\\'") }}'); return false;">EDIT</a>
+                    <a href="#" onclick='editBomLine({{ line.id }}, {{ line.quantity }}, {{ (line.reference_designator or "") | tojson }}, {{ (line.notes or "") | tojson }}); return false;'>EDIT</a>
                     <a href="#" class="act-remove" title="REMOVE" onclick="deleteBomLine({{ line.id }}); return false;">×</a>
                 </td>
             </tr>

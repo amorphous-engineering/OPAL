@@ -361,7 +361,7 @@
 {% macro confirm_btn(text, message, action=none, method="POST", redirect=none, size="md") %}
 {%- set classes = ["btn", "btn-danger"] -%}
 {%- if size == "sm" %}{% set classes = classes + ["btn-sm"] %}{% endif -%}
-<button type="button" class="{{ classes | join(' ') }}" onclick="if(confirm('{{ message }}')) { {% if action %}fetch('{{ action }}', {method: '{{ method }}', headers: {'Content-Type': 'application/json'}}).then(r => { if(r.ok) { {% if redirect %}window.location.href='{{ redirect }}'{% else %}window.location.reload(){% endif %} } else { r.json().then(e => alert(e.detail || 'Operation failed')) } }){% endif %} }">{{ text }}</button>
+<button type="button" class="{{ classes | join(' ') }}" onclick='if(confirm({{ message | tojson }})) { {% if action %}fetch({{ action | tojson }}, {method: {{ method | tojson }}, headers: {"Content-Type": "application/json"}}).then(r => { if(r.ok) { {% if redirect %}window.location.href={{ redirect | tojson }}{% else %}window.location.reload(){% endif %} } else { r.json().then(e => alert(e.detail || "Operation failed")) } }){% endif %} }'>{{ text }}</button>
 {%- endmacro %}
 
 {# Panel macro - full panel wrapper
