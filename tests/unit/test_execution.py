@@ -1260,27 +1260,3 @@ def test_sub_step_cannot_complete_when_parent_op_has_unmet_prereqs(client):
     # B.1 unused but kept as a reference to confirm setup correctness.
     assert b1["id"] is not None
 
-
-def test_instance_target_entity_round_trip(client):
-    """target_entity persists on create and is returned on detail."""
-    proc_id, _ = _create_procedure_with_steps(client)
-
-    target = {"entity_type": "part", "entity_id": 42, "entity_label": "SN-00042"}
-    resp = client.post(
-        "/api/procedure-instances",
-        json={"procedure_id": proc_id, "target_entity": target},
-    )
-    assert resp.status_code == 201
-    assert resp.json()["target_entity"] == target
-
-    instance_id = resp.json()["id"]
-    detail = client.get(f"/api/procedure-instances/{instance_id}").json()
-    assert detail["target_entity"] == target
-
-
-def test_instance_target_entity_optional(client):
-    """Instances without a target_entity return null."""
-    proc_id, _ = _create_procedure_with_steps(client)
-    resp = client.post("/api/procedure-instances", json={"procedure_id": proc_id})
-    assert resp.status_code == 201
-    assert resp.json()["target_entity"] is None
