@@ -288,6 +288,46 @@ def test_serialized_stock_is_unit_records(seeded):
     assert all(float(r.quantity) in (0.0, 1.0) for r in rows)
 
 
+def test_completed_wos_consumed_their_serialized_kit(seeded):
+    """WO-1 built SN 001 — its serialized kit components (bulkheads, ring,
+    valves, TCA parts...) must appear in its consumption set as distinct
+    unit records, not sit untouched in stock."""
+    from opal.db.models.inventory import InventoryConsumption, InventoryRecord
+
+    serialized_ids = {
+        p.id for p in seeded.query(Part).filter(Part.tracking_type == "serialized").all()
+    }
+    completed = (
+        seeded.query(ProcedureInstance)
+        .filter(ProcedureInstance.status == InstanceStatus.COMPLETED)
+        .all()
+    )
+    assert completed
+    exercised = 0
+    for wo in completed:
+        version = seeded.get(ProcedureVersion, wo.version_id)
+        consumed: dict[int, float] = {}
+        rows = (
+            seeded.query(InventoryConsumption, InventoryRecord)
+            .join(InventoryRecord, InventoryConsumption.inventory_record_id == InventoryRecord.id)
+            .filter(InventoryConsumption.procedure_instance_id == wo.id)
+            .all()
+        )
+        for cons, rec in rows:
+            consumed[rec.part_id] = consumed.get(rec.part_id, 0) + float(cons.quantity)
+            if rec.part_id in serialized_ids:
+                assert float(cons.quantity) == 1.0  # one consumption per unit
+                assert float(rec.quantity) == 0.0  # the unit is gone from stock
+        for item in version.content["kit_items"]:
+            if item["part_id"] in serialized_ids:
+                exercised += 1
+                assert consumed.get(item["part_id"], 0) == item["quantity_required"], (
+                    f"{wo.work_order_number}: serialized part {item['part_id']} required "
+                    f"{item['quantity_required']}, consumed {consumed.get(item['part_id'], 0)}"
+                )
+    assert exercised >= 10  # the vehicle kit carries the serialized components
+
+
 def test_po_sourced_stock_never_exceeds_received(seeded):
     """A stock record citing a PO line must be covered by what that line
     received — including what was already consumed out of the record."""

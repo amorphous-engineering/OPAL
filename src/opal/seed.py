@@ -766,10 +766,11 @@ _LOT_PARTS = {
 }
 
 
-def _stock_location(entry: dict, part: Part) -> str:
+def _stock_location(part: Part) -> str:
+    procurement = part.procurement.value if hasattr(part.procurement, "value") else part.procurement
     return (
         "SHOP-RACK"
-        if entry["procurement"] == "make"
+        if procurement == "make"
         else _LOCATION_BY_CATEGORY.get(part.category, "STORE-A1")
     )
 
@@ -807,7 +808,7 @@ def _seed_inventory(
                 part_id=part.id,
                 opal_number=generate_opal_number(db),
                 quantity=qty,
-                location=_stock_location(entry, part),
+                location=_stock_location(part),
                 lot_number=_LOT_PARTS.get(key),
                 source_type=SourceType.PURCHASE if po_line else SourceType.MANUAL,
                 source_purchase_line_id=po_line.id if po_line else None,
@@ -932,6 +933,62 @@ _WO1_NOTES = [
 ]
 
 
+def _consume_kit(
+    db: Session,
+    wo: ProcedureInstance,
+    kit_items: list[Kit],
+    parts: dict[str, Part],
+    part_key_by_id: dict[int, str],
+    inventory: dict[str, list[InventoryRecord]],
+    user: User,
+) -> None:
+    """Consume a completed WO's kit from stock.
+
+    Bulk lines draw down the shelf record. Serialized lines consume distinct
+    unit records created here — the physical units that went into the build —
+    so genealogy is complete while the shelf units stay for the open demand.
+    """
+    for item in kit_items:
+        key = part_key_by_id[item.part_id]
+        part = parts[key]
+        tracking = part.tracking_type
+        tracking = tracking.value if hasattr(tracking, "value") else tracking
+        if tracking == "serialized":
+            for _ in range(int(item.quantity_required)):
+                rec = InventoryRecord(
+                    part_id=part.id,
+                    opal_number=generate_opal_number(db),
+                    quantity=Decimal("0"),
+                    location=_stock_location(part),
+                    source_type=SourceType.MANUAL,
+                )
+                db.add(rec)
+                db.flush()
+                db.add(
+                    InventoryConsumption(
+                        inventory_record_id=rec.id,
+                        quantity=Decimal("1"),
+                        procedure_instance_id=wo.id,
+                        consumed_by_id=user.id,
+                    )
+                )
+        else:
+            recs = inventory.get(key)
+            if not recs:
+                continue
+            rec = recs[0]
+            qty = min(item.quantity_required, rec.quantity)
+            rec.quantity -= qty
+            db.add(
+                InventoryConsumption(
+                    inventory_record_id=rec.id,
+                    quantity=qty,
+                    procedure_instance_id=wo.id,
+                    consumed_by_id=user.id,
+                )
+            )
+
+
 def _seed_executions(
     db: Session,
     procs: dict[str, MasterProcedure],
@@ -972,27 +1029,11 @@ def _seed_executions(
             )
         )
 
-    # Consume the vehicle kit from bulk stock (WO-1 built SN 001).
+    # Consume the vehicle kit (WO-1 built SN 001): bulk from the shelf,
+    # serialized as the distinct units that went into the vehicle.
     kit_items = db.query(Kit).filter(Kit.procedure_id == veh_proc.id).all()
     part_key_by_id = {p.id: k for k, p in parts.items()}
-    for item in kit_items:
-        key = part_key_by_id[item.part_id]
-        recs = inventory.get(key)
-        tracking = parts[key].tracking_type
-        tracking = tracking.value if hasattr(tracking, "value") else tracking
-        if not recs or tracking == "serialized":
-            continue
-        rec = recs[0]
-        qty = min(item.quantity_required, rec.quantity)
-        rec.quantity -= qty
-        db.add(
-            InventoryConsumption(
-                inventory_record_id=rec.id,
-                quantity=qty,
-                procedure_instance_id=wo1.id,
-                consumed_by_id=build.id,
-            )
-        )
+    _consume_kit(db, wo1, kit_items, parts, part_key_by_id, inventory, build)
 
     # Produced vehicle SN 001.
     veh_part = parts["vehicle"]
@@ -1120,24 +1161,8 @@ def _seed_executions(
     for s in valve_version.content["steps"]:
         _complete_step(wo4_steps[s["step_number"]], s, t, test)
         t += timedelta(minutes=13)
-    for item in db.query(Kit).filter(Kit.procedure_id == valve_proc.id).all():
-        key = part_key_by_id[item.part_id]
-        recs = inventory.get(key)
-        tracking = parts[key].tracking_type
-        tracking = tracking.value if hasattr(tracking, "value") else tracking
-        if not recs or tracking == "serialized":
-            continue
-        rec = recs[0]
-        qty = min(item.quantity_required, rec.quantity)
-        rec.quantity -= qty
-        db.add(
-            InventoryConsumption(
-                inventory_record_id=rec.id,
-                quantity=qty,
-                procedure_instance_id=wo4.id,
-                consumed_by_id=test.id,
-            )
-        )
+    valve_kit = db.query(Kit).filter(Kit.procedure_id == valve_proc.id).all()
+    _consume_kit(db, wo4, valve_kit, parts, part_key_by_id, inventory, test)
     valve_part = parts["sabv_assy"]
     valve_rec = InventoryRecord(
         part_id=valve_part.id,
