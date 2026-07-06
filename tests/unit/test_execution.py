@@ -1144,6 +1144,38 @@ def test_parent_op_complete_refused_while_children_open(client):
     assert op_row["status"] == "completed"  # auto-completed with the last child
 
 
+def test_parent_op_skip_refused_while_children_open(client):
+    """SKIP is a terminal commitment like COMPLETE: skipping an OP row over
+    non-terminal sub-steps would strand them under a terminal parent, so the
+    children gate holds SKIP too (F5)."""
+    instance_id, op_a, a1, a2, _op_b = _create_instance_with_sub_steps(client)
+
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/skip", json={})
+    assert resp.status_code == 400
+    assert "Waiting on sub-steps 1.1, 1.2" in resp.json()["detail"]
+
+    # Children terminal (one skipped, one completed) → the OP auto-completes;
+    # the refusal never deadlocks the document.
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/skip", json={})
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    op_row = next(s for s in inst["step_executions"] if s["step_number"] == op_a)
+    assert op_row["status"] == "completed"
+
+
+def test_childless_op_skip_unaffected_by_children_gate(client):
+    """A leaf OP (no sub-steps) carries no children blocker — SKIP commits."""
+    proc_id = client.post("/api/procedures", json={"name": "Leaf skip"}).json()["id"]
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Only OP"})
+    client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
+        "id"
+    ]
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/skip", json={})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "skipped"
+
+
 def test_nc_on_sub_step_blocks_parent_op_complete(client):
     """(§10.2) A step-containment issue makes both the raised step's COMPLETE
     and its OP's COMPLETE absent — the 400 names the issue."""

@@ -271,17 +271,24 @@ def skip_blockers(
     instance: ProcedureInstance,
     step_exec: StepExecution,
 ) -> list[Blocker]:
-    """Everything holding this step's SKIP: the held scope plus any open
-    redline-rework op on the gate.
+    """Everything holding this step's SKIP: the held scope, any open
+    redline-rework op on the gate, and — for a parent OP row — its open
+    children.
 
     SKIP is a terminal commitment, so it inherits the held scope (a hold
-    cannot be skipped around) and the redline gate — skipping the host step
-    must not strand an authorized rework op (F5). It deliberately omits
-    strict_sequence and OP-dependency ordering: skipping legitimately does
-    not require predecessors to be done."""
+    cannot be skipped around), the redline gate — skipping the host step
+    must not strand an authorized rework op — and the children gate: a
+    terminal parent over live children strands them, exactly the state
+    COMPLETE refuses. It deliberately omits strict_sequence and
+    OP-dependency ordering: skipping legitimately does not require
+    predecessors to be done."""
     scope = held_scope_blockers(db, instance, step_exec)
-    redlines = [b for b in sequence_blockers(db, instance, step_exec) if b.kind == "redline"]
-    return scope + redlines
+    structural = [
+        b
+        for b in sequence_blockers(db, instance, step_exec)
+        if b.kind in ("redline", "children")
+    ]
+    return scope + structural
 
 
 # ============ Presence (focus) ============
