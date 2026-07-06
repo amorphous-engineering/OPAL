@@ -1534,6 +1534,7 @@ def procedures_detail(
             "id": k.id,
             "part_id": k.part_id,
             "part_name": k.part.name,
+            "part_internal_pn": k.part.internal_pn,
             "part_external_pn": k.part.external_pn,
             "quantity_required": float(k.quantity_required),
         }
@@ -1555,6 +1556,7 @@ def procedures_detail(
             "id": o.id,
             "part_id": o.part_id,
             "part_name": o.part.name,
+            "part_internal_pn": o.part.internal_pn,
             "part_external_pn": o.part.external_pn,
             "quantity_produced": float(o.quantity_produced),
         }
