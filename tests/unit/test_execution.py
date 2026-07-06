@@ -1129,11 +1129,14 @@ def test_parent_op_complete_refused_while_children_open(client):
 
     resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
     assert resp.status_code == 400
-    assert "Waiting on sub-steps" in resp.json()["detail"]
+    # Display numbers, never the document-global snapshot order: the children
+    # live at global orders 2 and 3 but render as 1.1 and 1.2 (F1).
+    assert "Waiting on sub-steps 1.1, 1.2" in resp.json()["detail"]
 
     client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
     resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
     assert resp.status_code == 400  # one child still open
+    assert "Waiting on sub-steps 1.2" in resp.json()["detail"]
 
     client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()

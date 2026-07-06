@@ -146,13 +146,18 @@ def sequence_blockers(
         # OP row with open children is refused (the auto-complete path already
         # requires all children terminal — the manual path must agree).
         open_children = sorted(
-            se.step_number
-            for se in instance.step_executions
-            if se.parent_step_order == step_exec.step_number
-            and _status_value(se.status) not in TERMINAL_STEP_STATUSES
+            (
+                se
+                for se in instance.step_executions
+                if se.parent_step_order == step_exec.step_number
+                and _status_value(se.status) not in TERMINAL_STEP_STATUSES
+            ),
+            key=lambda se: se.step_number,
         )
         if open_children:
-            labels = ", ".join(f"{step_exec.step_number}.{n}" for n in open_children)
+            # Display numbers (step_display), never the document-global order —
+            # a child stored at global order 6 renders as 5.1.
+            labels = ", ".join(step_display(se) for se in open_children)
             blockers.append(
                 Blocker(kind="children", message=f"Waiting on sub-steps {labels}")
             )
