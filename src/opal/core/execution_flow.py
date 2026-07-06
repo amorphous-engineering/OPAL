@@ -146,16 +146,19 @@ def sequence_blockers(
         # OP row with open children is refused (the auto-complete path already
         # requires all children terminal — the manual path must agree).
         open_children = sorted(
-            se.step_number
-            for se in instance.step_executions
-            if se.parent_step_order == step_exec.step_number
-            and _status_value(se.status) not in TERMINAL_STEP_STATUSES
+            (
+                se
+                for se in instance.step_executions
+                if se.parent_step_order == step_exec.step_number
+                and _status_value(se.status) not in TERMINAL_STEP_STATUSES
+            ),
+            key=lambda se: se.step_number,
         )
         if open_children:
-            labels = ", ".join(f"{step_exec.step_number}.{n}" for n in open_children)
-            blockers.append(
-                Blocker(kind="children", message=f"Waiting on sub-steps {labels}")
-            )
+            # Display numbers (step_display), never the document-global order —
+            # a child stored at global order 6 renders as 5.1.
+            labels = ", ".join(step_display(se) for se in open_children)
+            blockers.append(Blocker(kind="children", message=f"Waiting on sub-steps {labels}"))
     elif step_exec.parent_step_order is not None:
         gate_op_order = step_exec.parent_step_order
 
@@ -266,17 +269,22 @@ def skip_blockers(
     instance: ProcedureInstance,
     step_exec: StepExecution,
 ) -> list[Blocker]:
-    """Everything holding this step's SKIP: the held scope plus any open
-    redline-rework op on the gate.
+    """Everything holding this step's SKIP: the held scope, any open
+    redline-rework op on the gate, and — for a parent OP row — its open
+    children.
 
     SKIP is a terminal commitment, so it inherits the held scope (a hold
-    cannot be skipped around) and the redline gate — skipping the host step
-    must not strand an authorized rework op (F5). It deliberately omits
-    strict_sequence and OP-dependency ordering: skipping legitimately does
-    not require predecessors to be done."""
+    cannot be skipped around), the redline gate — skipping the host step
+    must not strand an authorized rework op — and the children gate: a
+    terminal parent over live children strands them, exactly the state
+    COMPLETE refuses. It deliberately omits strict_sequence and
+    OP-dependency ordering: skipping legitimately does not require
+    predecessors to be done."""
     scope = held_scope_blockers(db, instance, step_exec)
-    redlines = [b for b in sequence_blockers(db, instance, step_exec) if b.kind == "redline"]
-    return scope + redlines
+    structural = [
+        b for b in sequence_blockers(db, instance, step_exec) if b.kind in ("redline", "children")
+    ]
+    return scope + structural
 
 
 # ============ Presence (focus) ============

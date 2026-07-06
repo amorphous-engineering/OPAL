@@ -295,6 +295,24 @@ def test_issue_boundary_select_carries_consequence(web_client):
     assert "Blocks that step's COMPLETE until disposition" in page.text
 
 
+def test_issue_boundary_dash_option_sends_explicit_null(web_client):
+    """The '—' option must clear the boundary, not silently no-op: the page
+    JS sends an explicit containment_step_id null (the API distinguishes
+    omitted from null — F9). Tripwire on the inline handler; the API-side
+    clear is covered by test_set_containment_clears_boundary_with_explicit_null."""
+    instance_id, _ = _build_instance_with_sub_steps(web_client)
+    issue = web_client.post("/api/issues", json={"title": "Bound", "containment": "step"}).json()
+    r = web_client.patch(f"/api/issues/{issue['id']}", json={"procedure_instance_id": instance_id})
+    assert r.status_code == 200
+
+    page = web_client.get(f"/issues/{issue['id']}?edit=1")
+    assert 'onchange="linkBoundaryStep(this.value)"' in page.text
+    assert '<option value="">—</option>' in page.text
+    assert "containment_step_id: value ? parseInt(value) : null" in page.text
+    # The silent no-op guard is gone.
+    assert "if (!value) return;" not in page.text.split("linkBoundaryStep")[1].split("}")[0]
+
+
 def test_issues_list_state_column(web_client):
     """(§6) The STATE column renders; undispositioned-with-containment sorts
     first; the HOLDS column is gone."""

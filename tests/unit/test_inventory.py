@@ -648,6 +648,46 @@ def test_opal_page_facts_render_as_detail_rows(web_client: TestClient, bulk_part
     assert "Quantity:" not in body
 
 
+def test_opal_page_po_source_renders_reference_verbatim(
+    web_client: TestClient, auth_headers: dict, bulk_part: dict
+) -> None:
+    """Purchase.reference is already the identifier ('PO-0001') — the SOURCE
+    fact and the history CONTEXT render it verbatim, never re-prefixed to
+    'PO-PO-0001' (F8; purchases/detail.html precedent)."""
+    po = web_client.post(
+        "/api/purchases",
+        json={
+            "supplier": "Opal Page Supplier",
+            "reference": "PO-0424",
+            "lines": [{"part_id": bulk_part["id"], "qty_ordered": 4}],
+        },
+        headers=auth_headers,
+    ).json()
+    web_client.patch(f"/api/purchases/{po['id']}", json={"status": "ordered"})
+    recv = web_client.post(
+        f"/api/purchases/{po['id']}/receive",
+        json={
+            "lines": [
+                {
+                    "line_id": po["lines"][0]["id"],
+                    "qty_received": 4,
+                    "location": "A1",
+                    "lot_number": "LOT-0424-A",
+                }
+            ]
+        },
+    )
+    assert recv.status_code == 200, recv.text
+
+    inv = web_client.get(f"/api/inventory?part_id={bulk_part['id']}").json()["items"][0]
+    page = web_client.get(f"/inventory/opal/{inv['opal_number']}")
+    assert page.status_code == 200
+    body = page.text
+    assert "PO-PO" not in body
+    reference = po["reference"]
+    assert reference and body.count(reference) >= 2  # SOURCE fact + history CONTEXT
+
+
 def test_opal_page_consumption_links_work_order_not_db_id(
     web_client: TestClient, bulk_part: dict
 ) -> None:

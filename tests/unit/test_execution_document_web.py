@@ -201,6 +201,35 @@ def test_bom_kitting_tabs_absent_without_kit(web_client: TestClient):
     assert "tab=document" in page.text
 
 
+def test_output_only_procedure_shows_kitting_tab(web_client: TestClient):
+    """KITTING is also home to PRODUCTIONS + FINALIZE PRODUCTION: an
+    output-only procedure (ProcedureOutput, no kit) must show it or WIP
+    productions are stranded with FINALIZE unreachable (F7). BOM stays
+    absent — reconciliation is meaningless without a kit side."""
+    part = web_client.post(
+        "/api/parts",
+        json={"name": "Widget Output", "tracking_type": "bulk", "category": "Assemblies"},
+    ).json()
+    web_client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+
+    proc_id = web_client.post("/api/procedures", json={"name": "Output only"}).json()["id"]
+    web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Assemble"})
+    out = web_client.post(
+        f"/api/procedures/{proc_id}/outputs",
+        json={"part_id": part["id"], "quantity_produced": 1},
+    )
+    assert out.status_code == 201, out.text
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    assert "tab=kitting" in page.text
+    assert "tab=bom" not in page.text
+
+
 # ============ 2. legacy tab aliases ============
 
 
@@ -290,6 +319,46 @@ def test_bound_hold_renders_in_document_and_rail(web_client: TestClient, auth_he
     assert "blocks" in rail.text
 
 
+def test_bound_hold_on_child_renders_in_op_header_at_ssr(
+    web_client: TestClient, auth_headers: dict
+):
+    """A bound "resolve by" hold on a child gates that child's COMPLETE and
+    holds its OP's completion, so it renders in the op-card HELD BY blockline
+    at SSR time — one derivation with the client poll (F4), no flicker."""
+    proc_id = web_client.post("/api/procedures", json={"name": "Bound op header"}).json()["id"]
+    op1 = web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP One"}).json()
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 1.1", "parent_step_id": op1["id"]}
+    )
+    op2 = web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP Two"}).json()
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 2.1", "parent_step_id": op2["id"]}
+    )
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+
+    # Orders: OP1=1, 1.1=2, OP2=3, 2.1=4. NC raised at 1.1, resolve by 2.1:
+    # the hold anchors on the boundary (start_blocked), not the raised step.
+    nc = web_client.post(
+        f"/api/procedure-instances/{instance_id}/steps/2/nc",
+        json={"title": "Resolve downstream", "containment": "step", "containment_step_number": 4},
+        headers=auth_headers,
+    )
+    assert nc.status_code == 201, nc.text
+    issue_number = nc.json()["issue_number"]
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    op2_body = _op_section_body(page.text, 3)
+    assert "HELD BY" in op2_body
+    assert issue_number in op2_body
+    # The raised op's own scope is not held — the hold moved to the boundary.
+    op1_body = _op_section_body(page.text, 1)
+    assert "HELD BY" not in op1_body
+
+
 # ============ 6. dockbar partial ============
 
 
@@ -336,6 +405,32 @@ def test_dockbar_follows_cursor_with_data_fields(web_client: TestClient, test_us
     # The document renders the session user's cursor chip server-side.
     page = web_client.get(f"/executions/{instance_id}")
     assert '<span class="cursor-chip mono is-self"' in page.text
+
+
+def test_dockbar_op_row_renders_inert_complete_with_children_reason(web_client: TestClient):
+    """An OP row over open children shows the standard gated control — an
+    inert COMPLETE with the children reason beside it — never an absent
+    control (F11: inert + reason, the pre-amendment hide pattern is banned)."""
+    proc_id = web_client.post("/api/procedures", json={"name": "Dockbar OP gate"}).json()["id"]
+    op = web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Parent OP"}).json()
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 1", "parent_step_id": op["id"]}
+    )
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 2", "parent_step_id": op["id"]}
+    )
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+
+    resp = web_client.get(f"/executions/{instance_id}/dockbar?step=1")
+    assert resp.status_code == 200
+    body = resp.text
+    assert 'data-bar-order="1"' in body
+    # Inert control + reason, display numbers (F1).
+    assert '<button class="btn btn-sm btn-primary" disabled>COMPLETE</button>' in body
+    assert "Waiting on sub-steps 1.1, 1.2" in body
 
 
 # ============ 7. rail partial: attachments + reference docs ============

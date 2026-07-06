@@ -189,6 +189,46 @@ def test_list_instances(client):
     assert data["total"] >= 2
 
 
+def test_list_instances_query_count_does_not_grow_with_rows(client, db_session):
+    """The LIST endpoint serializes every step's notes + each note's author;
+    without eager loading that lazy-loads O(steps+notes) per refresh (F10).
+    Eager-loaded, the query count is flat as instances/notes grow."""
+    from sqlalchemy import event
+
+    proc_id, _ = _create_procedure_with_steps(client)
+
+    def _cut_with_notes() -> None:
+        iid = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()["id"]
+        for order in (1, 2, 3):
+            r = client.post(
+                f"/api/procedure-instances/{iid}/steps/{order}/notes",
+                json={"body": f"note on {order}"},
+            )
+            assert r.status_code == 201, r.text
+
+    def _counted_get() -> int:
+        statements: list[str] = []
+        engine = db_session.get_bind().engine
+
+        def _record(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _record)
+        try:
+            resp = client.get("/api/procedure-instances")
+            assert resp.status_code == 200
+        finally:
+            event.remove(engine, "before_cursor_execute", _record)
+        return len(statements)
+
+    _cut_with_notes()
+    baseline = _counted_get()
+
+    for _ in range(3):
+        _cut_with_notes()
+    assert _counted_get() == baseline  # flat: 1 vs 4 instances, 3 vs 12 notes
+
+
 def test_get_instance(client):
     """Test getting a specific instance."""
     proc_id, _ = _create_procedure_with_steps(client)
@@ -1129,16 +1169,51 @@ def test_parent_op_complete_refused_while_children_open(client):
 
     resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
     assert resp.status_code == 400
-    assert "Waiting on sub-steps" in resp.json()["detail"]
+    # Display numbers, never the document-global snapshot order: the children
+    # live at global orders 2 and 3 but render as 1.1 and 1.2 (F1).
+    assert "Waiting on sub-steps 1.1, 1.2" in resp.json()["detail"]
 
     client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
     resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
     assert resp.status_code == 400  # one child still open
+    assert "Waiting on sub-steps 1.2" in resp.json()["detail"]
 
     client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
     op_row = next(s for s in inst["step_executions"] if s["step_number"] == op_a)
     assert op_row["status"] == "completed"  # auto-completed with the last child
+
+
+def test_parent_op_skip_refused_while_children_open(client):
+    """SKIP is a terminal commitment like COMPLETE: skipping an OP row over
+    non-terminal sub-steps would strand them under a terminal parent, so the
+    children gate holds SKIP too (F5)."""
+    instance_id, op_a, a1, a2, _op_b = _create_instance_with_sub_steps(client)
+
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/skip", json={})
+    assert resp.status_code == 400
+    assert "Waiting on sub-steps 1.1, 1.2" in resp.json()["detail"]
+
+    # Children terminal (one skipped, one completed) → the OP auto-completes;
+    # the refusal never deadlocks the document.
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/skip", json={})
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    op_row = next(s for s in inst["step_executions"] if s["step_number"] == op_a)
+    assert op_row["status"] == "completed"
+
+
+def test_childless_op_skip_unaffected_by_children_gate(client):
+    """A leaf OP (no sub-steps) carries no children blocker — SKIP commits."""
+    proc_id = client.post("/api/procedures", json={"name": "Leaf skip"}).json()["id"]
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Only OP"})
+    client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
+        "id"
+    ]
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/skip", json={})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "skipped"
 
 
 def test_nc_on_sub_step_blocks_parent_op_complete(client):

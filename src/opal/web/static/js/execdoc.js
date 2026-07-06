@@ -339,8 +339,10 @@
                 mini.textContent = `${bucket.done}/${bucket.total}`;
                 mini.classList.toggle('is-done', done);
             }
-            // HELD BY blockline: own + child holds, deduped; hidden when the
-            // last disposition is signed (mirrors op_holds_by_order server-side).
+            // HELD BY blockline: own + child holds, both kinds ('raised'
+            // containment and 'bound' resolve-by — a bound child hold gates
+            // the OP's completion), deduped; hidden when the last disposition
+            // is signed. Same derivation as op_holds_by_order server-side (F4).
             const holdEl = card.querySelector('[data-op-holds]');
             if (holdEl) {
                 const seen = new Set();

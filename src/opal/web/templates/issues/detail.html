@@ -500,10 +500,15 @@ async function linkExecution(value) {
 }
 
 async function linkBoundaryStep(value) {
-    if (!value) return;
+    // The '—' option ('' value) clears the boundary: the API distinguishes an
+    // omitted containment_step_id (untouched) from an explicit null (cleared),
+    // so send the null rather than silently no-oping (F9).
     const response = await fetch(`/api/issues/${issueId}/containment`, {
         method: 'POST', headers: getHeaders(),
-        body: JSON.stringify({ containment: CONTAINMENT, containment_step_id: parseInt(value) }),
+        body: JSON.stringify({
+            containment: CONTAINMENT,
+            containment_step_id: value ? parseInt(value) : null,
+        }),
     });
     if (response.ok) {
         window.location.reload();
