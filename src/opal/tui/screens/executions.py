@@ -15,6 +15,41 @@ from opal.tui.widgets.form import ConfirmModal, FormGroup, FormModal
 TERMINAL_STEP_STATUSES = {"completed", "skipped", "signed_off"}
 
 
+def _execution_label(instance: dict[str, Any]) -> str:
+    """A work order's name for interface copy: the work order number, else the
+    procedure name + cut date — never the bare database id (F12)."""
+    wo = instance.get("work_order_number")
+    if wo:
+        return str(wo)
+    name = instance.get("procedure_name") or "execution"
+    cut = (instance.get("created_at") or "")[:10]
+    return f"{name} (cut {cut})" if cut else str(name)
+
+
+def _kit_row_label(item: dict[str, Any]) -> str:
+    """One kit-availability row: readiness, part, need/have, OPAL numbers.
+
+    Field names follow the API's KitAvailabilityItem (quantity_required /
+    quantity_available / is_available) — the previous required_quantity /
+    available_quantity spellings matched nothing and rendered 0/'?' always.
+    """
+    pid = item.get("part_id", "?")
+    part = item.get("part_name", f"#{pid}")
+    required = item.get("quantity_required", 0)
+    available = item.get("quantity_available")
+    req_str = f"{required:g}" if isinstance(required, int | float) else str(required)
+    avail_str = f"{available:g}" if isinstance(available, int | float) else "?"
+    ready = item.get("is_available", False)
+    icon = "[OK]" if ready else "[!!]"
+    label = f"  {icon} {part}: need {req_str}, have {avail_str}"
+    opals = [
+        loc["opal_number"] for loc in item.get("available_locations", []) if loc.get("opal_number")
+    ]
+    if opals:
+        label += " @ " + ", ".join(opals)
+    return label
+
+
 def _err_detail(exc: Exception) -> str:
     """Human-readable detail from an httpx error, unwrapping the API's 400/422
     body (a hold-blocker string, or a list of validation messages)."""
@@ -265,9 +300,7 @@ class ExecutionDetail(Static):
 
         # Progress
         step_executions = instance.get("step_executions", [])
-        completed = sum(
-            1 for s in step_executions if s.get("status") in TERMINAL_STEP_STATUSES
-        )
+        completed = sum(1 for s in step_executions if s.get("status") in TERMINAL_STEP_STATUSES)
         total = len(step_executions)
         progress = (completed / total * 100) if total > 0 else 0
         content.mount(
@@ -306,16 +339,28 @@ class ExecutionDetail(Static):
             steps_container.mount(widget)
 
     def get_current_step_data(self) -> dict[str, Any] | None:
-        """The next actionable step: the first non-terminal step still awaiting
-        work. In the focus model there is no "in progress" — the cursor rests on
-        the first step whose COMPLETE/SKIP has not yet committed. Steps awaiting
-        sign-off are excluded (they belong to the sign-off action)."""
+        """The next actionable LEAF: the first non-terminal sub-step (or
+        childless op) still awaiting work — mirrors how the web dockbar picks
+        bar_step. An OP header over children is never the target: its COMPLETE
+        is children-gated (the server refuses it), and SKIP on it would commit
+        the whole OP. In the focus model there is no "in progress" — the cursor
+        rests on the first leaf whose COMPLETE/SKIP has not yet committed.
+        Steps awaiting sign-off are excluded (they belong to the sign-off
+        action)."""
         if not self.instance_data:
             return None
         step_executions = self.instance_data.get("step_executions", [])
+        parent_orders = {
+            s.get("parent_step_order")
+            for s in step_executions
+            if s.get("parent_step_order") is not None
+        }
         for step in sorted(step_executions, key=lambda s: s.get("step_number", 0)):
             status = step.get("status")
-            if status not in TERMINAL_STEP_STATUSES and status != "awaiting_signoff":
+            if status in TERMINAL_STEP_STATUSES or status == "awaiting_signoff":
+                continue
+            is_leaf = (step.get("level") or 0) > 0 or step.get("step_number") not in parent_orders
+            if is_leaf:
                 return step
         return None
 
@@ -361,18 +406,7 @@ class ExecutionDetail(Static):
             return
 
         for item in items:
-            pid = item.get("part_id", "?")
-            part = item.get("part_name", item.get("part_number", f"#{pid}"))
-            required = item.get("required_quantity", item.get("quantity", 0))
-            available = item.get("available_quantity", item.get("available", "?"))
-            if isinstance(available, (int, float)):
-                ready = item.get("is_available", available >= required)
-            else:
-                ready = item.get("is_available", False)
-            icon = "[OK]" if ready else "[!!]"
-            panel.mount(
-                Label(f"  {icon} {part}: need {required}, have {available}", classes="detail-row")
-            )
+            panel.mount(Label(_kit_row_label(item), classes="detail-row"))
 
     def show_productions(self, productions: list[dict[str, Any]]) -> None:
         """Display production records in the panel."""
@@ -629,9 +663,7 @@ class ExecutionsScreen(Screen):
             table.clear()
             for inst in instances:
                 step_execs = inst.get("step_executions", [])
-                completed = sum(
-                    1 for s in step_execs if s.get("status") in TERMINAL_STEP_STATUSES
-                )
+                completed = sum(1 for s in step_execs if s.get("status") in TERMINAL_STEP_STATUSES)
                 total = len(step_execs)
                 progress = f"{completed}/{total}"
 
@@ -751,7 +783,9 @@ class ExecutionsScreen(Screen):
         self.app.push_screen(
             ConfirmModal(
                 title="Finalize Execution",
-                message=f"Finalize execution #{detail.instance_data['id']}? This locks all records.",
+                message=(
+                    f"Finalize {_execution_label(detail.instance_data)}? This locks all records."
+                ),
                 confirm_label="Finalize",
             ),
             callback=self._on_finalize_confirmed,
