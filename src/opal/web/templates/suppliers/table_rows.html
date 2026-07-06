@@ -2,8 +2,7 @@
 {% if suppliers %}
 {% for s in suppliers %}
 <tr>
-    <td>{{ ok.id_cell(s.id, "/suppliers/" ~ s.id) }}</td>
-    <td>{{ ok.mono(s.code) }}</td>
+    <td><a href="/suppliers/{{ s.id }}" class="mono">{{ s.code }}</a></td>
     <td><a href="/suppliers/{{ s.id }}">{{ s.name }}</a></td>
     <td>{{ ok.mono(s.email) }}</td>
     <td>{{ ok.mono(s.phone) }}</td>
@@ -19,7 +18,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="7">{{ ok.empty("No suppliers found") }}</td>
+    <td colspan="6">{{ ok.empty("No suppliers found") }}</td>
 </tr>
 {% endif %}
 {% include 'partials/pagination_row.html' %}

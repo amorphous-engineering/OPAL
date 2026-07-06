@@ -80,7 +80,7 @@
             {% call ok.table() %}
                 <thead>
                     <tr>
-                        {{ ok.th("PART", width="60px") }}
+                        {{ ok.th("PART", width="120px") }}
                         {{ ok.th("NAME") }}
                         {{ ok.th("ORDERED", width="80px", align="right") }}
                         {{ ok.th("RECEIVED", width="80px", align="right") }}
@@ -90,7 +90,7 @@
                 <tbody>
                     {% for line in purchase.lines %}
                     <tr>
-                        <td>{{ ok.id_cell(line.part_id, "/parts/" ~ line.part_id) }}</td>
+                        <td class="mono"><a href="/parts/{{ line.part_id }}">{{ line.part.internal_pn }}</a></td>
                         <td>{{ ok.link(line.part.name, "/parts/" ~ line.part_id) }}</td>
                         {{ ok.td(line.qty_ordered, mono=true, align="right") }}
                         {{ ok.td(line.qty_received, mono=true, align="right") }}

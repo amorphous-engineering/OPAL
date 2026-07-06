@@ -2,7 +2,6 @@
 {% if users_list %}
 {% for u in users_list %}
 <tr>
-    <td>{{ ok.id_cell(u.id, "/users/" ~ u.id) }}</td>
     <td><a href="/users/{{ u.id }}">{{ u.name }}</a></td>
     <td>{{ ok.mono(u.email) }}</td>
     <td>
@@ -24,7 +23,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="6">{{ ok.empty("No users found") }}</td>
+    <td colspan="5">{{ ok.empty("No users found") }}</td>
 </tr>
 {% endif %}
 {% include 'partials/pagination_row.html' %}

@@ -15,7 +15,6 @@
         {% call ok.table() %}
             <thead>
                 <tr>
-                    {{ ok.th("ID", width="60px") }}
                     {{ ok.th("CODE", width="100px") }}
                     {{ ok.th("NAME") }}
                     {{ ok.th("EMAIL", width="200px") }}
@@ -26,7 +25,7 @@
             </thead>
             <tbody id="suppliers-table-body" hx-get="/suppliers/table?is_active=true" hx-trigger="load">
                 <tr>
-                    <td colspan="7" class="text-muted">Loading...</td>
+                    <td colspan="6" class="text-muted">Loading...</td>
                 </tr>
             </tbody>
         {% endcall %}

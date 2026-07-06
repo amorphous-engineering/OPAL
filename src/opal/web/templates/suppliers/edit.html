@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("EDIT SUPPLIER #" ~ supplier.id, max_width="600px") %}
+{% call ok.panel("EDIT SUPPLIER: " ~ supplier.name, max_width="600px") %}
         <form id="supplier-form" onsubmit="updateSupplier(event)">
             {{ ok.field("name", "NAME", value=supplier.name, required=true, attrs='maxlength="255"') }}
             {{ ok.field("code", "CODE", value=supplier.code or '', placeholder="SUP001", help="Short unique code for quick reference", attrs='maxlength="50" class="form-input mono"') }}
