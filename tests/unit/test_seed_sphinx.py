@@ -228,3 +228,32 @@ def test_requirement_lifecycle_variety(seeded):
 
 def test_step_notes_exist(seeded):
     assert seeded.query(StepNote).count() >= 5
+
+
+def test_po_sourced_stock_never_exceeds_received(seeded):
+    """A stock record citing a PO line must be covered by what that line
+    received — including what was already consumed out of the record."""
+    from decimal import Decimal
+
+    from opal.db.models import PurchaseLine
+    from opal.db.models.inventory import InventoryRecord
+
+    records = (
+        seeded.query(InventoryRecord)
+        .filter(InventoryRecord.source_purchase_line_id.isnot(None))
+        .all()
+    )
+    assert len(records) > 20  # the McMaster kit order feeds most of the shelf
+
+    received_claim: dict[int, Decimal] = {}
+    for rec in records:
+        consumed = sum((c.quantity for c in rec.consumptions), Decimal(0))
+        received_claim[rec.source_purchase_line_id] = (
+            received_claim.get(rec.source_purchase_line_id, Decimal(0)) + rec.quantity + consumed
+        )
+    for line_id, claimed in received_claim.items():
+        line = seeded.get(PurchaseLine, line_id)
+        assert claimed <= line.qty_received, (
+            f"PO line {line_id} (part {line.part_id}) received {line.qty_received} "
+            f"but sourced stock accounts for {claimed}"
+        )
