@@ -229,7 +229,8 @@ class NonConformanceCreate(BaseModel):
 
 
 def _hold_blocker_detail(action: str, blockers: list[Issue]) -> str:
-    """400 detail naming the holding issue(s) — the blocker line's server twin."""
+    """400 detail naming the holding issue(s) — the gated control's reason
+    line, server side."""
     names = ", ".join(f"{i.issue_number} {i.title}" for i in blockers)
     return f"Cannot {action}: held by {names} (undispositioned)"
 

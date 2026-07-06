@@ -2279,8 +2279,8 @@ def _execution_detail_context(
     # COMPLETE; held scope + redline for SKIP), so a control never renders
     # active where the server would 400 it (F4/F5). Templates render the
     # controls from these — they do not re-derive gating. Keyed by
-    # step_execution_id; a present, non-empty list means the control is absent
-    # and replaced by a blocker line.
+    # step_execution_id; a present, non-empty list means the control renders
+    # inert (disabled) with the reason line beside it naming the blockers.
     complete_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
     skip_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
     for se in instance.step_executions:
@@ -2302,9 +2302,11 @@ def _execution_detail_context(
             step_issue_history.setdefault(iss.raised_step_id, []).append(iss)
     context["step_issue_history"] = step_issue_history
 
-    # Per-op aggregate of open NCs (op-level + any of its sub-steps). Used to
-    # decide when to show the "+ ADD REDLINE OP" button and to populate the
-    # modal's NC dropdown. Keyed by op.order.
+    # Per-op aggregate of open NCs (op-level + any of its sub-steps) — the one
+    # redline-visibility predicate: + REDLINE renders wherever this is
+    # non-empty (step action rows and the dockbar overflow), and it populates
+    # the modal's NC dropdown. Keyed by op.order; ad-hoc (redline) ops are
+    # excluded below, so consumers never re-check is_ad_hoc.
     open_ncs_by_step_exec: dict[int, list[Issue]] = {}
     for iss in linked_issues:
         iss_type = iss.issue_type.value if hasattr(iss.issue_type, "value") else iss.issue_type
@@ -2440,7 +2442,7 @@ def _execution_detail_context(
     context["step_holding_ncs"] = holding_ncs_by_step
 
     # Undispositioned scope per op order — gates the OP's COMPLETE/sign-off
-    # control (absent + blocker line, never present-but-failing).
+    # control (inert + reason, never active-but-failing).
     op_holds_by_order: dict[int, list] = {}
     for op_data in ops + contingency_ops:
         op_exec = op_data["step"].get("execution")
@@ -2558,7 +2560,7 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
         "step_kit": vs.get("step_kit") or [],
         # Single per-row gate answer (F4): the COMPLETE/SKIP controls render
         # from these, never re-derived in the template. Non-empty => control
-        # absent, blocker line shown.
+        # inert (disabled), reason line beside it.
         "complete_blockers": (
             context.get("complete_gate_by_se", {}).get(row["execution"].id, [])
             if row.get("execution") is not None
@@ -2955,16 +2957,23 @@ def issues_table(
 
 @router.get("/issues/new", response_class=HTMLResponse)
 def issues_new(
-    request: Request, db: DbSession, procedure_instance_id: int | None = Query(None)
+    request: Request,
+    db: DbSession,
+    procedure_instance_id: int | None = Query(None),
+    execution: int | None = Query(None),
 ) -> HTMLResponse:
-    """New issue form page."""
+    """New issue form page. Context pre-fill: ?execution= (or the older
+    ?procedure_instance_id=) pre-selects the work-order link."""
     context = get_base_context(request, db, "New Issue - OPAL")
     context["types"] = [t.value for t in IssueType]
     context["priorities"] = [p.value for p in IssuePriority]
     context["containments"] = [c.value for c in Containment]
-    context["procedure_instance_id"] = procedure_instance_id
+    context["procedure_instance_id"] = (
+        procedure_instance_id if procedure_instance_id is not None else execution
+    )
 
-    # Get procedures and users for linking (parts use the search typeahead)
+    # Get procedures, executions and users for linking (parts use the search
+    # typeahead). The EXECUTION select mirrors the issue page's LINKS panel.
     procedures = (
         db.query(MasterProcedure)
         .filter(MasterProcedure.deleted_at.is_(None))
@@ -2975,6 +2984,7 @@ def issues_new(
 
     users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
     context["procedures"] = procedures
+    context["instances"] = db.query(ProcedureInstance).order_by(ProcedureInstance.id.desc()).all()
     context["users"] = users
 
     return templates.TemplateResponse("issues/new.html", context)

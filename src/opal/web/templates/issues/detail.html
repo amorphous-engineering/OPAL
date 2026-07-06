@@ -121,12 +121,11 @@
                         <textarea id="disposition-rationale-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_rationale', this.value || null)" oninput="updateDispositionReady()">{{ issue.disposition_rationale or '' }}</textarea>
                     </div>
                     <button type="button" class="btn btn-primary" id="disposition-btn" disabled onclick="openDispositionConfirm()">DISPOSITION</button>
-                    <div id="disposition-confirm" class="baseline-confirm" style="display: none;">
-                        <div class="baseline-signature">
-                            <span class="text-green" id="disposition-type-label"></span> on {{ issue.issue_number }} — releases: <span id="disposition-releases"></span><br>
-                            signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
-                            · <span id="disposition-time"></span>
-                        </div>
+                    {# Slim confirm: one consequence sentence (what signing
+                       releases — its one home) + CONFIRM/ABORT inline. Type
+                       and rationale stay in the form right above. #}
+                    <div id="disposition-confirm" class="sign-confirm" style="display: none;">
+                        <span class="mono">releases <span id="disposition-releases"></span> — signed <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span></span>
                         <button type="button" class="btn btn-primary" onclick="commitDisposition()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
                         <button type="button" class="btn" onclick="document.getElementById('disposition-confirm').style.display='none'">ABORT</button>
                     </div>
@@ -301,9 +300,9 @@
                         </tr>
                         {% if issue.procedure_instance_id %}
                         <tr>
-                            <th>BOUNDARY</th>
+                            <th title="Blocks that step's COMPLETE until disposition">BOUNDARY</th>
                             <td>
-                                <select id="boundary-step-select" class="form-select" style="width: 100%;" onchange="linkBoundaryStep(this.value)">
+                                <select id="boundary-step-select" class="form-select" style="width: 100%;" title="Blocks that step's COMPLETE until disposition" onchange="linkBoundaryStep(this.value)">
                                     <option value="">—</option>
                                     {% for s in instance_steps %}
                                     <option value="{{ s.id }}" {% if issue.containment_step_id == s.id %}selected{% endif %}>{{ s.label }} — {{ s.title }}</option>
@@ -386,13 +385,9 @@ function updateDispositionReady() {
 document.addEventListener('DOMContentLoaded', updateDispositionReady);
 
 function openDispositionConfirm() {
-    const typeSel = document.getElementById('disposition-type-select');
-    document.getElementById('disposition-type-label').textContent = typeSel.options[typeSel.selectedIndex].text;
     document.getElementById('disposition-releases').textContent =
         HOLDING.length ? HOLDING.map(t => t.label).join(' · ') : '—';
-    document.getElementById('disposition-time').textContent =
-        new Date().toISOString().substring(0, 19) + 'Z';
-    document.getElementById('disposition-confirm').style.display = 'block';
+    document.getElementById('disposition-confirm').style.display = 'flex';
 }
 
 async function commitDisposition() {

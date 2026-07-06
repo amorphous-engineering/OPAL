@@ -1,5 +1,6 @@
-"""Smoke tests: containment holds render as absent controls + blocker lines
-(§10 exit criteria, template level)."""
+"""Smoke tests: containment holds render as inert controls + reason lines
+(§10 exit criteria, template level) — the gated button is disabled with the
+blockers named beside it, never absent."""
 
 from fastapi.testclient import TestClient
 
@@ -31,33 +32,38 @@ def _raise_nc(client: TestClient, instance_id: int, step_number: int, **extra) -
     return resp.json()
 
 
-def test_held_step_renders_blocker_line_not_complete_button(web_client):
-    """(§10.2) Step and OP COMPLETE controls are absent, replaced by blocker
-    lines naming the issue; the hold chip appears on the row."""
+def test_held_step_renders_inert_complete_with_reason(web_client):
+    """(§10.2, amended) Step and OP COMPLETE controls render disabled with a
+    reason line naming the issue beside them; the hold chip appears on the
+    row."""
     instance_id, by_label = _build_instance_with_sub_steps(web_client)
     nc = _raise_nc(web_client, instance_id, by_label["1.1"])
 
     page = web_client.get(f"/executions/{instance_id}?tab=operations&op={by_label['1']}")
     assert page.status_code == 200
-    # Blocker lines name the issue (step actions + OP header).
+    # Reason lines name the issue (step actions + OP header).
     assert page.text.count(nc["issue_number"]) >= 2
-    assert "COMPLETE — held by" in page.text
+    assert "disabled>COMPLETE</button>" in page.text
+    assert "held by" in page.text
+    # SKIP is gated by the same hold: inert + reason, still in the actions.
+    assert "disabled>SKIP</button>" in page.text
     # The hold chip is the capture confirmation.
     assert "HELD — " + nc["issue_number"] in page.text
-    # The held step's COMPLETE control is absent.
-    assert f"completeStep({by_label['1.1']})" not in page.text
-    # The OP header COMPLETE control is absent too.
-    assert f"completeStep({by_label['1']})" not in page.text
+    # The held step's COMPLETE control is inert — no active handler.
+    assert f"completeStep({by_label['1.1']}," not in page.text
+    # The OP header COMPLETE control is inert too.
+    assert f"completeStep({by_label['1']}," not in page.text
     # The capture surface is the anomaly flow, not an alert.
     assert "ANOMALY" in page.text
     assert "alert(`NC logged" not in page.text
 
 
-def test_bound_hold_row_renders_no_active_complete(web_client):
-    """F4: a 'resolve by' boundary (start_blocked) — which the server refuses to
-    COMPLETE — must not render an active COMPLETE button; the control is absent,
-    replaced by the blocker line. Previously the row derived 'held' from raised
-    NCs only and showed a button the server then 400'd."""
+def test_bound_hold_row_renders_inert_complete(web_client):
+    """F4: a 'resolve by' boundary (start_blocked) — which the server refuses
+    to COMPLETE — must not render an active COMPLETE button; the control is
+    inert (disabled) with the reason line beside it. Previously the row
+    derived 'held' from raised NCs only and showed a button the server then
+    400'd."""
     proc_id = web_client.post("/api/procedures", json={"name": "Bound gate"}).json()["id"]
     for title in ("S1", "S2", "S3"):
         web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": title})
@@ -79,10 +85,50 @@ def test_bound_hold_row_renders_no_active_complete(web_client):
 
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
-    # Step 3's COMPLETE control is absent — the server would 400 the bound hold.
+    # Step 3's COMPLETE control is inert — the server would 400 the bound hold.
     assert "completeStep(3, this)" not in page.text
-    # The blocker line names the issue instead.
+    assert "disabled>COMPLETE</button>" in page.text
+    # The reason line names the issue beside the disabled button.
     assert nc["issue_number"] in page.text
+
+
+def test_dockbar_gated_step_renders_inert_controls(web_client):
+    """The docked bar mirrors the row register: a held step's COMPLETE and
+    SKIP render disabled with the reason attached, never absent."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+    nc = _raise_nc(web_client, instance_id, by_label["1.1"])
+
+    bar = web_client.get(f"/executions/{instance_id}/dockbar?step={by_label['1.1']}")
+    assert bar.status_code == 200
+    assert "disabled>COMPLETE</button>" in bar.text
+    assert "disabled>SKIP</button>" in bar.text
+    assert nc["issue_number"] in bar.text
+    assert f"completeStep({by_label['1.1']}," not in bar.text
+
+
+def test_redline_control_renders_in_step_actions(web_client):
+    """(rehearsal) + REDLINE is discoverable: once an op carries an open NC,
+    the op's step action rows render + REDLINE next to ATTACH/ISSUE — not
+    only the dockbar overflow, which keeps its entry. No open NC, no
+    control."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    assert "showRedlineModal(" not in page.text
+
+    nc = _raise_nc(web_client, instance_id, by_label["1.1"])
+    page = web_client.get(f"/executions/{instance_id}")
+    assert "+ REDLINE" in page.text
+    # The document column carries it (step action rows), not just the bar.
+    assert f"showRedlineModal({by_label['1']}," in page.text
+    assert nc["issue_number"] in page.text
+
+    # The dockbar overflow keeps its entry — same predicate, same entry point.
+    bar = web_client.get(f"/executions/{instance_id}/dockbar?step={by_label['1.1']}")
+    assert bar.status_code == 200
+    assert "+ REDLINE" in bar.text
+    assert f"showRedlineModal({by_label['1']}," in bar.text
 
 
 def test_signed_disposition_restores_controls(web_client):
@@ -98,7 +144,8 @@ def test_signed_disposition_restores_controls(web_client):
 
     page = web_client.get(f"/executions/{instance_id}?tab=operations&op={by_label['1']}")
     assert page.status_code == 200
-    assert "COMPLETE — held by" not in page.text
+    assert "disabled>COMPLETE</button>" not in page.text
+    assert "disabled>SKIP</button>" not in page.text
     assert f"completeStep({by_label['1.1']}," in page.text
 
 
@@ -135,6 +182,27 @@ def test_issue_page_holding_readout(web_client):
     assert "UNDISPOSITIONED" not in page.text
     assert "closeIssue()" in page.text
     assert 'id="disposition-btn"' not in web_client.get(f"/issues/{advisory['id']}?edit=1").text
+
+
+def test_disposition_confirm_is_one_line(web_client):
+    """The disposition confirm is the slim signature register (risk-accept
+    parity): one consequence sentence — what signing releases — with
+    CONFIRM/ABORT inline; no box-in-box, no restatement of the type and
+    rationale sitting in the form right above."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+    nc = _raise_nc(web_client, instance_id, by_label["1.1"])
+
+    page = web_client.get(f"/issues/{nc['id']}?edit=1")
+    assert page.status_code == 200
+    assert 'id="disposition-confirm"' in page.text
+    assert "sign-confirm" in page.text
+    assert "releases" in page.text
+    # De-ceremonied: no boxed signature block, no restated type, no client
+    # timestamp (the server stamps the signature).
+    assert "baseline-confirm" not in page.text
+    assert "baseline-signature" not in page.text
+    assert 'id="disposition-type-label"' not in page.text
+    assert 'id="disposition-time"' not in page.text
 
 
 def test_issue_page_view_mode_default(web_client):
@@ -196,6 +264,35 @@ def test_issue_page_links_work_order_and_boundary(web_client):
     assert r.status_code == 200
     page = web_client.get(f"/issues/{issue['id']}")
     assert "BOUNDARY" in page.text
+
+
+def test_anomaly_modal_states_raised_step_and_boundary_consequence(web_client):
+    """(rehearsal) Raise at 5.3, block 6.2: the modal states the raised step
+    as a labeled fact (RAISED AT) and RESOLVE BY carries its consequence —
+    both ends are expressible (raised_step_id + containment_step_id), the
+    labels now say so."""
+    instance_id, _ = _build_instance_with_sub_steps(web_client)
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    assert "RAISED AT" in page.text
+    assert "RESOLVE BY" in page.text
+    assert "Blocks that step's COMPLETE until disposition" in page.text
+    # The default boundary is the raised step, consequence named.
+    assert "this step — holds its COMPLETE" in page.text
+
+
+def test_issue_boundary_select_carries_consequence(web_client):
+    """The issue page's BOUNDARY select mirrors the anomaly modal's
+    RESOLVE BY consequence labeling."""
+    instance_id, _ = _build_instance_with_sub_steps(web_client)
+    issue = web_client.post("/api/issues", json={"title": "Manual", "containment": "step"}).json()
+    r = web_client.patch(f"/api/issues/{issue['id']}", json={"procedure_instance_id": instance_id})
+    assert r.status_code == 200
+
+    page = web_client.get(f"/issues/{issue['id']}?edit=1")
+    assert 'id="boundary-step-select"' in page.text
+    assert "Blocks that step's COMPLETE until disposition" in page.text
 
 
 def test_issues_list_state_column(web_client):
@@ -266,3 +363,22 @@ def test_new_issue_page_renders(web_client):
     page = web_client.get("/issues/new?procedure_instance_id=1")
     assert page.status_code == 200
     assert "CONTAINMENT" in page.text
+
+
+def test_new_issue_form_links_execution(web_client):
+    """/issues/new offers the work-order link — same select as the issue
+    page's LINKS panel; ?execution= (and the older ?procedure_instance_id=)
+    pre-selects it (context pre-fill)."""
+    instance_id, _ = _build_instance_with_sub_steps(web_client)
+
+    page = web_client.get("/issues/new")
+    assert page.status_code == 200
+    assert 'id="execution-select"' in page.text
+    assert f'value="{instance_id}" selected' not in page.text
+
+    for param in ("execution", "procedure_instance_id"):
+        page = web_client.get(f"/issues/new?{param}={instance_id}")
+        assert page.status_code == 200
+        assert f'value="{instance_id}" selected' in page.text
+    # The form posts the selected work order to the create API.
+    assert 'name="procedure_instance_id"' in page.text

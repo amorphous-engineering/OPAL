@@ -457,6 +457,14 @@
     gap: var(--space-xs);
     justify-content: flex-end;
 }
+/* Gated control (F4/F5): the disabled button with its reason beside it —
+   inert + reason, never an absent control. */
+.gated-control {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 0.75rem;
+}
 .step-kit-actions { display: flex; justify-content: flex-end; margin-top: var(--space-xs); }
 .step-kit-consumed { margin-top: var(--space-xs); font-size: 0.75rem; }
 

@@ -142,6 +142,20 @@ def sequence_blockers(
     gate_op_order: int | None = None
     if step_exec.level == 0:
         gate_op_order = step_exec.step_number
+        # A parent OP commits only after its sub-steps: manual COMPLETE of an
+        # OP row with open children is refused (the auto-complete path already
+        # requires all children terminal — the manual path must agree).
+        open_children = sorted(
+            se.step_number
+            for se in instance.step_executions
+            if se.parent_step_order == step_exec.step_number
+            and _status_value(se.status) not in TERMINAL_STEP_STATUSES
+        )
+        if open_children:
+            labels = ", ".join(f"{step_exec.step_number}.{n}" for n in open_children)
+            blockers.append(
+                Blocker(kind="children", message=f"Waiting on sub-steps {labels}")
+            )
     elif step_exec.parent_step_order is not None:
         gate_op_order = step_exec.parent_step_order
 
