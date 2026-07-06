@@ -26,13 +26,14 @@
         {% if bar_step.caution %}
         <div class="caution-block dockbar-caution">CAUTION: {{ bar_step.caution }}</div>
         {% endif %}
-        {% if bar_step.exec %}
+        {% if workable and bar_step.exec and not bar_step.has_children %}
         <div class="dockbar-fields" id="dockbar-fields">
-            {% if workable and not bar_step.has_children %}{{ ex.data_fields_editable(bar_step) }}{% endif %}
-            {# Append-only note input: available in any status — a record, not a control. #}
-            {{ ex.note_input(bar_step.order) }}
+            {{ ex.data_fields_editable(bar_step) }}
         </div>
         {% endif %}
+        {# The notes log: separate from the capture-field stack so it never
+           reads as required data — available in any status. #}
+        {% if bar_step.exec %}{{ ex.notes_block(bar_step.exec, bar_step.order) }}{% endif %}
         <div class="dockbar-actions">
             {% if bar_step.exec %}
             <button class="btn btn-sm" onclick='showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})'>ATTACH</button>

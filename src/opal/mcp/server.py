@@ -6291,10 +6291,10 @@ async def _add_step_note(db, args: dict) -> list[TextContent]:
         return json_response({"error": f"Step {args['step_number']} not found"})
 
     # One creation path: core add_step_note (also used by the JSON API).
+    # FlowError (empty body) raises before any write — nothing to roll back.
     try:
         note = flow_add_step_note(db, step_exec, args["note"], args.get("user_id"))
     except FlowError as err:
-        db.rollback()
         return json_response({"error": err.message})
     db.commit()
     db.refresh(note)

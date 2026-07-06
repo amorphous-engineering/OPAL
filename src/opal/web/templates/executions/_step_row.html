@@ -123,9 +123,9 @@
         {{ ex.data_readout(step) }}
         {% endif %}
 
-        {# Note trail + append input: a record, not a control — present in
-           every status, including on completed/aborted work orders. #}
-        {{ ex.notes_readout(exec) }}
-        {% if exec %}{{ ex.note_input(step.order) }}{% endif %}
+        {# The notes log: its own block below the capture fields — a record,
+           not a control; present in every status, including on
+           completed/aborted work orders. #}
+        {% if exec %}{{ ex.notes_block(exec, step.order) }}{% endif %}
     </div>
 </div>

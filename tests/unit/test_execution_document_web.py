@@ -402,3 +402,62 @@ def test_attachment_indicator_on_step_row(web_client: TestClient):
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
     assert "1 ATT" in page.text
+
+
+# ============ 11. step notes: readout + append affordance ============
+
+
+def test_step_notes_render_with_timestamp_tooltip(web_client: TestClient):
+    """A note renders in the step body: HH:MM short form with the full
+    ISO-8601 in the title tooltip, author initials, body — and the row
+    indicator counts notes."""
+    instance_id = _create_instance(web_client)
+
+    resp = web_client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/notes",
+        json={"body": "coolant pressure drifting"},
+    )
+    assert resp.status_code == 201, resp.text
+    created = resp.json()["created_at"]
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    html = page.text
+
+    assert "coolant pressure drifting" in html
+    assert "1 NOTE" in html
+    # Dense-row timestamp rule: short HH:MM shown, full ISO-8601 in the tooltip.
+    assert f'title="{created[:19]}Z"' in html
+
+    web_client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/notes",
+        json={"body": "second observation"},
+    )
+    html = web_client.get(f"/executions/{instance_id}").text
+    assert "2 NOTES" in html
+    assert html.index("coolant pressure drifting") < html.index("second observation")
+
+
+def test_step_note_input_is_separate_block_and_survives_closeout(
+    web_client: TestClient, db_session: Session
+):
+    """The append input is its own labeled NOTES block (never inside the
+    capture-field stack) and stays available on a closed work order."""
+    instance_id = _create_schema_instance(web_client)
+
+    html = web_client.get(f"/executions/{instance_id}").text
+    # The notes log is its own labeled block: the append input sits after the
+    # block's NOTES label, never among the capture fields.
+    assert 'class="step-notes-block"' in html
+    first_block = html.split('class="step-notes-block"', 1)[1]
+    assert "NOTES" in first_block.split("step-note-add", 1)[0]
+
+    # Close the WO out-of-band; the note affordance must survive (post-mortem).
+    instance = db_session.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).one()
+    instance.status = InstanceStatus.COMPLETED
+    instance.completed_at = datetime.now(UTC)
+    db_session.commit()
+
+    closed = web_client.get(f"/executions/{instance_id}").text
+    assert "step-note-add" in closed
+    assert "addStepNote(" in closed

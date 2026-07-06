@@ -333,16 +333,105 @@ def test_cannot_complete_completed_step(client):
 # ============ New tests — Step Operations ============
 
 
-def test_update_step_notes(client):
-    """Test updating notes on a step."""
+def test_step_notes_append_ordering_and_author(client):
+    """Notes append (never overwrite), stay chronological, carry the author
+    and an ISO-8601 timestamp, and flow through instance + state payloads."""
+    from datetime import datetime
+
+    instance_id = _create_instance(client)
+    url = f"/api/procedure-instances/{instance_id}/steps/1/notes"
+
+    r1 = client.post(url, json={"body": "first"})
+    assert r1.status_code == 201
+    note1 = r1.json()
+    assert note1["body"] == "first"
+    assert note1["author_id"] is not None
+    assert note1["author"]
+    datetime.fromisoformat(note1["created_at"])  # ISO 8601 or raises
+
+    r2 = client.post(url, json={"body": "second"})
+    assert r2.status_code == 201
+    assert r2.json()["id"] != note1["id"]
+
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    step1 = next(s for s in inst["step_executions"] if s["step_number"] == 1)
+    assert [n["body"] for n in step1["notes"]] == ["first", "second"]
+
+    state = client.get(f"/api/procedure-instances/{instance_id}/state").json()
+    s1 = next(s for s in state["steps"] if s["order"] == 1)
+    assert [n["body"] for n in s1["notes"]] == ["first", "second"]
+    assert s1["notes"][0]["author"] == note1["author"]
+    datetime.fromisoformat(s1["notes"][0]["created_at"])
+
+
+def test_step_note_empty_body_rejected(client):
+    instance_id = _create_instance(client)
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/notes",
+        json={"body": "   "},
+    )
+    assert resp.status_code == 400
+
+
+def test_step_note_create_is_audited(client, db_session):
+    from opal.db.models import AuditLog
+
+    instance_id = _create_instance(client)
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/notes",
+        json={"body": "audited"},
+    )
+    assert resp.status_code == 201
+    note_id = resp.json()["id"]
+    entry = (
+        db_session.query(AuditLog)
+        .filter(AuditLog.table_name == "step_note", AuditLog.record_id == note_id)
+        .one()
+    )
+    action = entry.action.value if hasattr(entry.action, "value") else entry.action
+    assert action == "create"
+    assert entry.new_values["body"] == "audited"
+
+
+def test_step_note_allowed_on_terminal_step_and_closed_instance(client):
+    """Notes are a record, not a control: terminal steps and closed work
+    orders still take notes (post-mortem debugging)."""
     instance_id = _create_instance(client)
 
-    resp = client.patch(
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
+    assert resp.status_code == 200
+
+    r = client.post(
         f"/api/procedure-instances/{instance_id}/steps/1/notes",
-        json={"notes": "Check torque value"},
+        json={"body": "observed after completion"},
+    )
+    assert r.status_code == 201
+
+    resp = client.patch(f"/api/procedure-instances/{instance_id}", json={"status": "aborted"})
+    assert resp.status_code == 200
+
+    r = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/2/notes",
+        json={"body": "post-mortem on aborted WO"},
+    )
+    assert r.status_code == 201
+
+
+def test_complete_with_notes_appends_note(client):
+    """The complete flow's optional notes ride the same append path."""
+    instance_id = _create_instance(client)
+
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/complete",
+        json={"notes": "torque within spec"},
     )
     assert resp.status_code == 200
-    assert resp.json()["notes"] == "Check torque value"
+    assert [n["body"] for n in resp.json()["notes"]] == ["torque within spec"]
+
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    step1 = next(s for s in inst["step_executions"] if s["step_number"] == 1)
+    assert [n["body"] for n in step1["notes"]] == ["torque within spec"]
+    assert step1["notes"][0]["author_id"] is not None
 
 
 def test_skip_step(client):
