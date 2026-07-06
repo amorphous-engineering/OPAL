@@ -75,14 +75,34 @@
 {% macro indicators(step, attach_counts, vs) %}
 {% set exec = step.execution %}
 {% set n_att = attach_counts.get(exec.id, 0) if exec else 0 %}
-{% set n_note = 1 if exec and exec.notes else 0 %}
+{% set n_note = step_notes_by_se.get(exec.id, []) | length if exec else 0 %}
 {% if n_att or n_note %}
 <span class="doc-ind mono" data-ind>
     {%- if n_att %}<span class="ind" title="{{ n_att }} attachment(s)" onclick="event.stopPropagation(); railFocusStep({{ step.order }})">{{ n_att }} ATT</span>{% endif -%}
     {%- if n_att and n_note %}<span class="ind-sep"> · </span>{% endif -%}
-    {%- if n_note %}<span class="ind" title="Operator notes">1 NOTE</span>{% endif -%}
+    {%- if n_note %}<span class="ind" title="Operator notes">{{ n_note }} NOTE{{ 'S' if n_note > 1 else '' }}</span>{% endif -%}
 </span>
 {% endif %}
+{% endmacro %}
+
+{# The running notes log: timestamped, authored, append-only. One muted mono
+   line per note (HH:MM with the full ISO-8601 in the tooltip), chronological,
+   with the append input underneath. Deliberately its OWN labeled block, set
+   off by a hairline rule — the notes log must never read as another
+   data-capture field (rehearsal feedback). Notes are a record, not a
+   control: rendered for any step status, any work order status. #}
+{% macro notes_block(exec, order) %}
+<div class="step-notes-block" data-notes>
+    <span class="step-notes-label mono">NOTES</span>
+    <div class="step-notes-body">
+        {% for n in step_notes_by_se.get(exec.id, []) %}
+        <div class="note-line mono text-muted">{{ hm(n.created_at) }} {{ (n.author.name | initials) if n.author else '—' }} · {{ n.body }}</div>
+        {% endfor %}
+        <input type="text" class="step-note-add mono" maxlength="2000" placeholder="+ NOTE"
+               onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.blur(); }"
+               onblur="addStepNote({{ order }}, this)">
+    </div>
+</div>
 {% endmacro %}
 
 {# Presence cursors for one row — bordered initials chips in the right

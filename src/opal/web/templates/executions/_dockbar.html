@@ -31,13 +31,11 @@
         {% if workable and bar_step.exec and not bar_step.has_children %}
         <div class="dockbar-fields" id="dockbar-fields">
             {{ ex.data_fields_editable(bar_step) }}
-            <div class="bar-field bar-field-notes">
-                <label class="bar-field-label mono">NOTES</label>
-                <textarea class="form-textarea step-notes-input" rows="1"
-                          onblur="saveNotes({{ bar_step.order }}, this.value)">{% if bar_step.exec.notes %}{{ bar_step.exec.notes }}{% endif %}</textarea>
-            </div>
         </div>
         {% endif %}
+        {# The notes log: separate from the capture-field stack so it never
+           reads as required data — available in any status. #}
+        {% if bar_step.exec %}{{ ex.notes_block(bar_step.exec, bar_step.order) }}{% endif %}
         <div class="dockbar-actions">
             {% if bar_step.exec %}
             <button class="btn btn-sm" onclick='showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})'>ATTACH</button>

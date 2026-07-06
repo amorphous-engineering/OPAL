@@ -308,25 +308,34 @@ def test_attach_to_step_missing_file(client, db_session, tmp_path, monkeypatch):
 # ============ add_step_note ============
 
 
-def test_add_step_note_appends(client, db_session):
+def test_add_step_note_appends(client, db_session, test_user):
+    from datetime import datetime
+
     instance_id, _ = _create_instance(client)
     args = {"execution_id": instance_id, "step_number": 2}
 
     data = _call(server._add_step_note, db_session, {**args, "note": "first line"})
     assert data["success"] is True
-    assert data["notes"] == "first line"
+    assert data["note"]["body"] == "first line"
+    assert data["note"]["author"] is None  # no user_id given: unattributed
+    datetime.fromisoformat(data["note"]["created_at"])  # ISO 8601 or raises
 
-    data = _call(server._add_step_note, db_session, {**args, "note": "second line"})
+    data = _call(
+        server._add_step_note,
+        db_session,
+        {**args, "note": "second line", "user_id": test_user.id},
+    )
     assert data["success"] is True
-    assert "first line" in data["notes"]
-    assert "second line" in data["notes"]
+    assert data["note"]["author"] == test_user.name
 
     data = _call(server._add_step_note, db_session, {**args, "note": "   "})
     assert "error" in data
 
     state = _call(server._get_execution_state, db_session, {"execution_id": instance_id})
     step2 = next(s for s in state["steps"] if s["order"] == 2)
-    assert step2["has_notes"] is True
+    assert [n["body"] for n in step2["notes"]] == ["first line", "second line"]
+    assert step2["notes"][1]["author"] == test_user.name
+    datetime.fromisoformat(step2["notes"][0]["created_at"])
 
 
 # ============ bind_issue_hold ============

@@ -26,6 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from opal.core.audit import log_create
 from opal.core.holds import _val as _status_value  # enum-unwrap, one home in core/holds
 from opal.core.holds import blocking_issues_for_instance, get_hold_state
 from opal.db.models.attachment import Attachment
@@ -34,6 +35,7 @@ from opal.db.models.execution import (
     ProcedureInstance,
     StepExecution,
     StepFocus,
+    StepNote,
     StepStatus,
 )
 from opal.db.models.inventory import InventoryProduction, ProductionStatus
@@ -366,6 +368,47 @@ def mark_instance_in_work(db: Session, instance: ProcedureInstance) -> bool:
     return True
 
 
+# ============ Step notes ============
+
+
+def add_step_note(
+    db: Session,
+    step_exec: StepExecution,
+    body: str | None,
+    author_id: int | None,
+) -> StepNote:
+    """Append a timestamped, authored note to a step. The ONE creation path —
+    JSON API, MCP, and the complete flow all land here.
+
+    Notes are a record, not a control: no status gate, no instance gate — a
+    pending, held, or terminal step on a completed or aborted work order can
+    still take a note (post-mortem debugging is the point).
+    """
+    text = (body or "").strip()
+    if not text:
+        raise FlowError("Note body is empty")
+    note = StepNote(step_execution_id=step_exec.id, author_id=author_id, body=text)
+    db.add(note)
+    db.flush()
+    log_create(db, note, author_id)
+    return note
+
+
+def notes_by_step(db: Session, step_exec_ids: list[int]) -> dict[int, list[StepNote]]:
+    """Chronological notes keyed by step_execution_id."""
+    grouped: dict[int, list[StepNote]] = {}
+    if not step_exec_ids:
+        return grouped
+    for note in (
+        db.query(StepNote)
+        .filter(StepNote.step_execution_id.in_(step_exec_ids))
+        .order_by(StepNote.created_at.asc(), StepNote.id.asc())
+        .all()
+    ):
+        grouped.setdefault(note.step_execution_id, []).append(note)
+    return grouped
+
+
 # ============ Completion ============
 
 
@@ -484,8 +527,8 @@ def complete_step_flow(
         step_exec.started_at = now
     if data_captured:
         step_exec.data_captured = data_captured
-    if notes is not None:
-        step_exec.notes = notes
+    if notes and notes.strip():
+        add_step_note(db, step_exec, notes, user_id)
 
     old_instance_status = _status_value(instance.status)
     check_instance_completion(db, instance)
@@ -614,16 +657,17 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
         bucket.extend(i for i in issues if all(x.id != i.id for x in bucket))
     bound = hold_state.start_blocked
 
+    step_exec_ids = [se.id for se in instance.step_executions]
+    step_notes = notes_by_step(db, step_exec_ids)
+
     user_ids = {c.user_id for c in cursors}
     for p in instance.participants or []:
         if p.get("user_id"):
             user_ids.add(p["user_id"])
     completer_ids = {se.completed_by_id for se in instance.step_executions if se.completed_by_id}
-    users = (
-        db.query(User).filter(User.id.in_(user_ids | completer_ids)).all()
-        if (user_ids | completer_ids)
-        else []
-    )
+    author_ids = {n.author_id for notes in step_notes.values() for n in notes if n.author_id}
+    lookup_ids = user_ids | completer_ids | author_ids
+    users = db.query(User).filter(User.id.in_(lookup_ids)).all() if lookup_ids else []
     user_lookup = {u.id: u for u in users}
 
     def _iso(dt: datetime | None) -> str | None:
@@ -648,7 +692,6 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
         }
 
     # Attachment counts per step (evidence indicator "n ATT").
-    step_exec_ids = [se.id for se in instance.step_executions]
     attach_counts: dict[int, int] = {}
     if step_exec_ids:
         for att_step_id, count in (
@@ -715,7 +758,19 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                     for i in raised.get(se.id, [])
                 ],
                 "attachments": attach_counts.get(se.id, 0),
-                "has_notes": bool(se.notes),
+                "notes": [
+                    {
+                        "id": n.id,
+                        "author": (
+                            user_lookup[n.author_id].name
+                            if n.author_id and n.author_id in user_lookup
+                            else None
+                        ),
+                        "created_at": _iso(n.created_at),
+                        "body": n.body,
+                    }
+                    for n in step_notes.get(se.id, [])
+                ],
             }
         )
 

@@ -25,6 +25,7 @@ from opal.core.events import (
 )
 from opal.core.execution_flow import (
     FlowError,
+    add_step_note,
     build_execution_state,
     check_instance_completion,
     clear_focus,
@@ -42,6 +43,7 @@ from opal.db.models.execution import (
     InstanceStatus,
     ProcedureInstance,
     StepExecution,
+    StepNote,
     StepStatus,
 )
 from opal.db.models.inventory import (
@@ -67,6 +69,16 @@ router = APIRouter(prefix="/procedure-instances", tags=["execution"])
 # ============ Schemas ============
 
 
+class StepNoteResponse(BaseModel):
+    """One timestamped, authored, append-only step note."""
+
+    id: int
+    author_id: int | None = None
+    author: str | None = None
+    created_at: datetime
+    body: str
+
+
 class StepExecutionResponse(BaseModel):
     """Step execution response."""
 
@@ -80,12 +92,42 @@ class StepExecutionResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     completed_by_id: int | None = None
-    notes: str | None = None
+    notes: list[StepNoteResponse] = []
     signed_off_at: datetime | None = None
     signed_off_by_id: int | None = None
     duration_seconds: int | None = None
 
     model_config = {"from_attributes": True}
+
+
+def _note_response(note: StepNote) -> StepNoteResponse:
+    return StepNoteResponse(
+        id=note.id,
+        author_id=note.author_id,
+        author=note.author.name if note.author else None,
+        created_at=note.created_at,
+        body=note.body,
+    )
+
+
+def _step_response(step_exec: StepExecution) -> StepExecutionResponse:
+    """The one serializer for a step execution row."""
+    return StepExecutionResponse(
+        id=step_exec.id,
+        step_number=step_exec.step_number,
+        step_number_str=step_exec.step_number_str,
+        level=step_exec.level,
+        parent_step_order=step_exec.parent_step_order,
+        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
+        data_captured=step_exec.data_captured,
+        started_at=step_exec.started_at,
+        completed_at=step_exec.completed_at,
+        completed_by_id=step_exec.completed_by_id,
+        notes=[_note_response(n) for n in step_exec.notes],
+        signed_off_at=step_exec.signed_off_at,
+        signed_off_by_id=step_exec.signed_off_by_id,
+        duration_seconds=step_exec.duration_seconds,
+    )
 
 
 class InstanceResponse(BaseModel):
@@ -245,25 +287,7 @@ def list_instances(
                 priority=inst.priority,
                 target_entity=inst.target_entity,
                 created_at=inst.created_at,
-                step_executions=[
-                    StepExecutionResponse(
-                        id=se.id,
-                        step_number=se.step_number,
-                        step_number_str=se.step_number_str,
-                        level=se.level,
-                        parent_step_order=se.parent_step_order,
-                        status=se.status.value if hasattr(se.status, "value") else se.status,
-                        data_captured=se.data_captured,
-                        started_at=se.started_at,
-                        completed_at=se.completed_at,
-                        completed_by_id=se.completed_by_id,
-                        signed_off_at=se.signed_off_at,
-                        notes=se.notes,
-                        signed_off_by_id=se.signed_off_by_id,
-                        duration_seconds=se.duration_seconds,
-                    )
-                    for se in inst.step_executions
-                ],
+                step_executions=[_step_response(se) for se in inst.step_executions],
             )
         )
 
@@ -436,24 +460,7 @@ def create_instance(
         priority=instance.priority,
         target_entity=instance.target_entity,
         created_at=instance.created_at,
-        step_executions=[
-            StepExecutionResponse(
-                id=se.id,
-                step_number=se.step_number,
-                step_number_str=se.step_number_str,
-                level=se.level,
-                parent_step_order=se.parent_step_order,
-                status=se.status.value if hasattr(se.status, "value") else se.status,
-                data_captured=se.data_captured,
-                started_at=se.started_at,
-                completed_at=se.completed_at,
-                completed_by_id=se.completed_by_id,
-                signed_off_at=se.signed_off_at,
-                signed_off_by_id=se.signed_off_by_id,
-                duration_seconds=se.duration_seconds,
-            )
-            for se in instance.step_executions
-        ],
+        step_executions=[_step_response(se) for se in instance.step_executions],
     )
 
 
@@ -486,24 +493,7 @@ def get_instance(
         priority=instance.priority,
         target_entity=instance.target_entity,
         created_at=instance.created_at,
-        step_executions=[
-            StepExecutionResponse(
-                id=se.id,
-                step_number=se.step_number,
-                step_number_str=se.step_number_str,
-                level=se.level,
-                parent_step_order=se.parent_step_order,
-                status=se.status.value if hasattr(se.status, "value") else se.status,
-                data_captured=se.data_captured,
-                started_at=se.started_at,
-                completed_at=se.completed_at,
-                completed_by_id=se.completed_by_id,
-                signed_off_at=se.signed_off_at,
-                signed_off_by_id=se.signed_off_by_id,
-                duration_seconds=se.duration_seconds,
-            )
-            for se in instance.step_executions
-        ],
+        step_executions=[_step_response(se) for se in instance.step_executions],
     )
 
 
@@ -577,24 +567,7 @@ def update_instance(
         priority=instance.priority,
         target_entity=instance.target_entity,
         created_at=instance.created_at,
-        step_executions=[
-            StepExecutionResponse(
-                id=se.id,
-                step_number=se.step_number,
-                step_number_str=se.step_number_str,
-                level=se.level,
-                parent_step_order=se.parent_step_order,
-                status=se.status.value if hasattr(se.status, "value") else se.status,
-                data_captured=se.data_captured,
-                started_at=se.started_at,
-                completed_at=se.completed_at,
-                completed_by_id=se.completed_by_id,
-                signed_off_at=se.signed_off_at,
-                signed_off_by_id=se.signed_off_by_id,
-                duration_seconds=se.duration_seconds,
-            )
-            for se in instance.step_executions
-        ],
+        step_executions=[_step_response(se) for se in instance.step_executions],
     )
 
 
@@ -719,39 +692,33 @@ async def complete_step(
             instance_id, instance.procedure_id, InstanceStatus.COMPLETED.value
         )
 
-    return StepExecutionResponse(
-        id=step_exec.id,
-        step_number=step_exec.step_number,
-        step_number_str=step_exec.step_number_str,
-        level=step_exec.level,
-        parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
-        data_captured=step_exec.data_captured,
-        started_at=step_exec.started_at,
-        completed_at=step_exec.completed_at,
-        completed_by_id=step_exec.completed_by_id,
-        signed_off_at=step_exec.signed_off_at,
-        notes=step_exec.notes,
-        signed_off_by_id=step_exec.signed_off_by_id,
-        duration_seconds=step_exec.duration_seconds,
-    )
+    return _step_response(step_exec)
 
 
-class StepNotesUpdate(BaseModel):
-    """Update step notes."""
+class StepNoteCreate(BaseModel):
+    """Append one note to a step."""
 
-    notes: str | None = None
+    body: str
 
 
-@router.patch("/{instance_id}/steps/{step_number}/notes", response_model=StepExecutionResponse)
-def update_step_notes(
+@router.post(
+    "/{instance_id}/steps/{step_number}/notes",
+    response_model=StepNoteResponse,
+    status_code=201,
+)
+def create_step_note(
     instance_id: int,
     step_number: int,
-    data: StepNotesUpdate,
+    data: StepNoteCreate,
     db: DbSession,
     user_id: CurrentUserId,
-) -> StepExecutionResponse:
-    """Update notes on a step execution (while in progress or after completion)."""
+) -> StepNoteResponse:
+    """Append a timestamped, authored note to a step.
+
+    Notes are a record, not a control: any step status (pending, held,
+    terminal) and any instance status — a completed or aborted work order
+    still takes post-mortem notes.
+    """
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -764,26 +731,14 @@ def update_step_notes(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_exec.notes = data.notes
+    try:
+        note = add_step_note(db, step_exec, data.body, user_id)
+    except FlowError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.message) from err
     db.commit()
-    db.refresh(step_exec)
+    db.refresh(note)
 
-    return StepExecutionResponse(
-        id=step_exec.id,
-        step_number=step_exec.step_number,
-        step_number_str=step_exec.step_number_str,
-        level=step_exec.level,
-        parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
-        data_captured=step_exec.data_captured,
-        started_at=step_exec.started_at,
-        completed_at=step_exec.completed_at,
-        completed_by_id=step_exec.completed_by_id,
-        signed_off_at=step_exec.signed_off_at,
-        notes=step_exec.notes,
-        signed_off_by_id=step_exec.signed_off_by_id,
-        duration_seconds=step_exec.duration_seconds,
-    )
+    return _note_response(note)
 
 
 class StepSkip(BaseModel):
@@ -850,22 +805,7 @@ async def skip_step(
     if instance_started:
         await emit_instance_started(instance_id, instance.procedure_id, user_id, None)
 
-    return StepExecutionResponse(
-        id=step_exec.id,
-        step_number=step_exec.step_number,
-        step_number_str=step_exec.step_number_str,
-        level=step_exec.level,
-        parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
-        data_captured=step_exec.data_captured,
-        started_at=step_exec.started_at,
-        completed_at=step_exec.completed_at,
-        completed_by_id=step_exec.completed_by_id,
-        signed_off_at=step_exec.signed_off_at,
-        notes=step_exec.notes,
-        signed_off_by_id=step_exec.signed_off_by_id,
-        duration_seconds=step_exec.duration_seconds,
-    )
+    return _step_response(step_exec)
 
 
 @router.post("/{instance_id}/steps/{step_number}/signoff", response_model=StepExecutionResponse)
@@ -946,22 +886,7 @@ async def signoff_step(
     ):
         await emit_instance_completed(instance_id, instance.procedure_id, new_instance_status)
 
-    return StepExecutionResponse(
-        id=step_exec.id,
-        step_number=step_exec.step_number,
-        step_number_str=step_exec.step_number_str,
-        level=step_exec.level,
-        parent_step_order=step_exec.parent_step_order,
-        status=step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status,
-        data_captured=step_exec.data_captured,
-        started_at=step_exec.started_at,
-        completed_at=step_exec.completed_at,
-        completed_by_id=step_exec.completed_by_id,
-        signed_off_at=step_exec.signed_off_at,
-        notes=step_exec.notes,
-        signed_off_by_id=step_exec.signed_off_by_id,
-        duration_seconds=step_exec.duration_seconds,
-    )
+    return _step_response(step_exec)
 
 
 @router.post("/{instance_id}/steps/{step_number}/nc", status_code=201)
@@ -2030,25 +1955,7 @@ def _redline_op_response(db, op_row: StepExecution) -> AdHocOpResponse:
         title=op_row.title or "",
         status=op_row.status.value if hasattr(op_row.status, "value") else op_row.status,
         created_at=op_row.created_at.isoformat() if op_row.created_at else "",
-        sub_steps=[
-            StepExecutionResponse(
-                id=s.id,
-                step_number=s.step_number,
-                step_number_str=s.step_number_str,
-                level=s.level,
-                parent_step_order=s.parent_step_order,
-                status=s.status.value if hasattr(s.status, "value") else s.status,
-                data_captured=s.data_captured,
-                started_at=s.started_at,
-                completed_at=s.completed_at,
-                completed_by_id=s.completed_by_id,
-                notes=s.notes,
-                signed_off_at=s.signed_off_at,
-                signed_off_by_id=s.signed_off_by_id,
-                duration_seconds=s.duration_seconds,
-            )
-            for s in sub_rows
-        ],
+        sub_steps=[_step_response(s) for s in sub_rows],
     )
 
 

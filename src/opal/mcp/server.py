@@ -27,6 +27,7 @@ from opal.core.execution_flow import (
     complete_step_flow,
     focus_step,
 )
+from opal.core.execution_flow import add_step_note as flow_add_step_note
 from opal.core.holds import get_holds_payload, holding_readout
 from opal.core.numbering import (
     PartNumberError,
@@ -2084,7 +2085,10 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="add_step_note",
-            description="Append a line to a step's operator notes.",
+            description=(
+                "Append a timestamped, authored note to a step. Notes are a "
+                "record, not a control: any step status, any work order status."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -6286,20 +6290,25 @@ async def _add_step_note(db, args: dict) -> list[TextContent]:
     if not step_exec:
         return json_response({"error": f"Step {args['step_number']} not found"})
 
-    note = args["note"].strip()
-    if not note:
-        return json_response({"error": "Note is empty"})
-
-    old = get_model_dict(step_exec)
-    step_exec.notes = f"{step_exec.notes}\n{note}" if step_exec.notes else note
-    log_update(db, step_exec, old, args.get("user_id"))
+    # One creation path: core add_step_note (also used by the JSON API).
+    # FlowError (empty body) raises before any write — nothing to roll back.
+    try:
+        note = flow_add_step_note(db, step_exec, args["note"], args.get("user_id"))
+    except FlowError as err:
+        return json_response({"error": err.message})
     db.commit()
+    db.refresh(note)
 
     return json_response(
         {
             "success": True,
             "message": (f"Note added to step {step_exec.step_number_str or step_exec.step_number}"),
-            "notes": step_exec.notes,
+            "note": {
+                "id": note.id,
+                "author": note.author.name if note.author else None,
+                "created_at": note.created_at.isoformat(),
+                "body": note.body,
+            },
         }
     )
 

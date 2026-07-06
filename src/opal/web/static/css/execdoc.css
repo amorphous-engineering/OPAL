@@ -395,6 +395,50 @@
     font-size: 0.8rem;
 }
 
+/* The running notes log — deliberately its own block, set off from the
+   data-capture field stack by a hairline rule so it never reads as another
+   required field: NOTES label, timestamped trail, append input underneath. */
+.step-notes-block {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    margin-top: var(--space-sm);
+    padding-top: var(--space-xs);
+    border-top: 1px solid var(--border-color);
+}
+
+.step-notes-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    min-width: 160px;
+}
+
+.step-notes-body { flex: 1; min-width: 0; }
+
+.note-line {
+    padding: 1px 0;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+}
+
+.step-note-add {
+    display: block;
+    width: 100%;
+    max-width: 480px;
+    margin-top: 2px;
+    padding: 2px var(--space-xs);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    background: transparent;
+    border: 1px dashed var(--border-color);
+}
+
+.step-note-add:focus {
+    outline: none;
+    border-style: solid;
+    border-color: var(--text-secondary);
+}
+
 .step-kit-panel { margin: var(--space-xs) 0; }
 
 /* Expanded-step control surface: fields, notes, actions. */
@@ -530,8 +574,6 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 .bar-field { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
 .bar-field .form-input, .bar-field .form-select { padding: 2px var(--space-xs); }
 .bar-field-label { font-size: 0.65rem; color: var(--text-secondary); }
-.bar-field-notes { flex: 1; min-width: 160px; }
-.bar-field-notes textarea { resize: none; }
 .bar-check { display: flex; align-items: center; gap: var(--space-xs); font-size: 0.75rem; }
 
 .dockbar-actions {

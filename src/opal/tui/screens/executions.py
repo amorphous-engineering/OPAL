@@ -33,24 +33,19 @@ def _err_detail(exc: Exception) -> str:
     return str(exc)
 
 
-class StepNotesModal(FormModal):
-    """Modal for editing step notes."""
+class StepNoteModal(FormModal):
+    """Modal for appending one timestamped note to a step."""
 
-    form_title = "Step Notes"
-
-    def __init__(self, current_notes: str = "", **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.current_notes = current_notes
+    form_title = "Add Note"
 
     def build_form(self) -> ComposeResult:
         yield FormGroup(
-            "Notes",
-            TextArea(text=self.current_notes, id="field-notes"),
+            "Note",
+            TextArea(id="field-note"),
         )
 
     def get_form_data(self) -> dict[str, Any] | None:
-        notes = self.query_one("#field-notes", TextArea).text.strip()
-        return {"notes": notes}
+        return {"body": self.query_one("#field-note", TextArea).text.strip()}
 
 
 class NCLogModal(FormModal):
@@ -199,9 +194,10 @@ class StepExecution(Static):
         prefix = "[C] " if is_contingency else ""
         line = f"{status_icon} {order}. {prefix}{title}"
 
-        # Show notes indicator
-        if self.step_exec and self.step_exec.get("notes"):
-            line += " [N]"
+        # Show notes indicator (notes is the list of appended note rows)
+        notes = self.step_exec.get("notes") if self.step_exec else None
+        if notes:
+            line += f" [N{len(notes)}]"
 
         # Show signoff indicator
         if self.step_exec and self.step_exec.get("signed_off_by_id"):
@@ -228,7 +224,7 @@ class ExecutionDetail(Static):
             Button("Complete Step", id="btn-complete", variant="success"),
             Button("Skip Step", id="btn-skip", variant="default"),
             Button("Sign Off", id="btn-signoff", variant="warning"),
-            Button("Notes", id="btn-notes", variant="default"),
+            Button("Add Note", id="btn-notes", variant="default"),
             Button("Log NC", id="btn-nc", variant="error"),
             classes="step-controls",
         )
@@ -543,8 +539,8 @@ class ExecutionsScreen(Screen):
         except Exception as e:
             self.notify(f"Error: {_err_detail(e)}", severity="error")
 
-    async def _edit_notes(self) -> None:
-        """Edit notes for the current actionable step."""
+    async def _add_note(self) -> None:
+        """Append a timestamped note to the current actionable step."""
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
             self.notify("Select an execution first", severity="warning")
@@ -555,15 +551,11 @@ class ExecutionsScreen(Screen):
             self.notify("No actionable step", severity="warning")
             return
 
-        current_notes = step.get("notes", "") or ""
-        self.app.push_screen(
-            StepNotesModal(current_notes=current_notes),
-            callback=self._on_notes_saved,
-        )
+        self.app.push_screen(StepNoteModal(), callback=self._on_note_added)
 
-    def _on_notes_saved(self, data: dict[str, Any] | None) -> None:
-        """Handle notes save result."""
-        if data is None:
+    def _on_note_added(self, data: dict[str, Any] | None) -> None:
+        """Handle add-note result."""
+        if data is None or not data.get("body"):
             return
         detail = self.query_one("#execution-detail", ExecutionDetail)
         if not detail.instance_data:
@@ -573,8 +565,8 @@ class ExecutionsScreen(Screen):
             return
         client = get_client(self.app.api_url)
         try:
-            client.update_step_notes(detail.instance_data["id"], step["step_number"], data["notes"])
-            self.notify("Notes updated")
+            client.add_step_note(detail.instance_data["id"], step["step_number"], data["body"])
+            self.notify("Note added")
             self.run_worker(self._reload_selected())
         except Exception as e:
             self.notify(f"Error: {_err_detail(e)}", severity="error")
@@ -675,7 +667,7 @@ class ExecutionsScreen(Screen):
         elif button_id == "btn-signoff":
             await self._signoff_step()
         elif button_id == "btn-notes":
-            await self._edit_notes()
+            await self._add_note()
         elif button_id == "btn-nc":
             await self._log_nc()
         elif button_id == "btn-kit":

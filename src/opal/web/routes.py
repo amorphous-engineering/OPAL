@@ -2495,6 +2495,9 @@ def _execution_detail_context(
     context["attach_counts"] = attach_counts
     context["capture_attachments"] = capture_attachments
 
+    # Step note trail per step execution id — chronological, append-only.
+    context["step_notes_by_se"] = exec_flow.notes_by_step(db, se_ids)
+
     # Presence/progress snapshot for first paint; the page then polls /state.
     context["exec_state"] = exec_flow.build_execution_state(db, instance)
 

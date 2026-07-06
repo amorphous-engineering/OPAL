@@ -98,11 +98,6 @@
         <div class="step-controls">
             <div class="step-controls-fields">
                 {{ ex.data_fields_editable({'exec': exec, 'schema': body_schema}) }}
-                <div class="bar-field bar-field-notes">
-                    <label class="bar-field-label mono">NOTES</label>
-                    <textarea class="form-textarea step-notes-input" rows="1"
-                              onblur="saveNotes({{ step.order }}, this.value)">{% if exec.notes %}{{ exec.notes }}{% endif %}</textarea>
-                </div>
             </div>
             <div class="step-actions">
                 <button class="btn btn-sm" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>
@@ -125,13 +120,11 @@
         </div>
         {% else %}
         {{ ex.data_readout(step) }}
+        {% endif %}
 
-        {% if exec and exec.notes %}
-        <div class="step-notes-readout">
-            <span class="ro-label mono">NOTES</span>
-            <div class="ro-notes mono">{{ exec.notes }}</div>
-        </div>
-        {% endif %}
-        {% endif %}
+        {# The notes log: its own block below the capture fields — a record,
+           not a control; present in every status, including on
+           completed/aborted work orders. #}
+        {% if exec %}{{ ex.notes_block(exec, step.order) }}{% endif %}
     </div>
 </div>
