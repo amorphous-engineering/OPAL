@@ -43,7 +43,9 @@
                 {% set source = record.source_type.value if record.source_type and record.source_type.value is defined else record.source_type %}
                 <tr><th>SOURCE</th><td>
                     {% if source == 'purchase' and source_po %}
-                    <a href="/purchases/{{ source_po.id }}" class="mono">PO-{{ source_po.number }}</a>
+                    {# source_po.number is Purchase.reference — already 'PO-0001';
+                       render it verbatim (purchases/detail.html precedent). #}
+                    <a href="/purchases/{{ source_po.id }}" class="mono">{{ source_po.number or 'PO-' ~ source_po.id }}</a>
                     {% elif source == 'purchase' %}
                     PURCHASE
                     {% elif source == 'production' and source_wo %}
@@ -118,7 +120,7 @@
                 <td class="mono" style="text-align: right;">+{{ '%g' % event.details.quantity }}</td>
                 <td>
                     {% if event.details.source_type == 'purchase' and event.details.po_number %}
-                    <a href="/purchases/{{ event.details.po_id }}" class="mono">PO-{{ event.details.po_number }}</a>
+                    <a href="/purchases/{{ event.details.po_id }}" class="mono">{{ event.details.po_number or 'PO-' ~ event.details.po_id }}</a>
                     {% elif event.details.source_type == 'production' and source_wo %}
                     <a href="/executions/{{ source_wo.instance_id }}" class="mono">{{ source_wo.work_order_number or 'PRODUCED' }}</a>
                     {% elif event.details.source_type == 'manual' %}
