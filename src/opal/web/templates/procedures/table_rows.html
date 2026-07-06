@@ -2,7 +2,6 @@
 {% if procedures %}
 {% for p in procedures %}
 <tr>
-    <td>{{ ok.id_cell(p.id, "/procedures/" ~ p.id) }}</td>
     <td><a href="/procedures/{{ p.id }}">{{ p.name }}</a></td>
     <td>{{ ok.status(p.procedure_type | upper, "info" if p.procedure_type == "build" else "default") }}</td>
     <td>{{ ok.status(p.status | upper) }}</td>
@@ -14,7 +13,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="8">
+    <td colspan="7">
         {{ ok.empty("No procedures found") }}
     </td>
 </tr>

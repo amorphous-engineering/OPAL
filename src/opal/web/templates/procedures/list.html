@@ -19,7 +19,6 @@
         {% call ok.table() %}
             <thead>
                 <tr>
-                    {{ ok.th("ID", width="60px") }}
                     {{ ok.th("NAME") }}
                     {{ ok.th("TYPE", width="80px") }}
                     {{ ok.th("STATUS", width="100px") }}
@@ -31,7 +30,7 @@
             </thead>
             <tbody id="procedures-table-body" hx-get="/procedures/table" hx-trigger="load">
                 <tr>
-                    <td colspan="8" class="text-muted">Loading...</td>
+                    <td colspan="7" class="text-muted">Loading...</td>
                 </tr>
             </tbody>
         {% endcall %}

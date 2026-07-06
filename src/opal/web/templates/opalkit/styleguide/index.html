@@ -372,7 +372,7 @@
             <table class="data-table" style="margin-bottom: var(--space-md);">
                 <thead>
                     <tr>
-                        <th style="width: 60px;">ID</th>
+                        <th style="width: 120px;">PN</th>
                         <th>NAME</th>
                         <th>CATEGORY</th>
                         <th>STATUS</th>
@@ -381,14 +381,14 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>{{ ok.id_cell("1", "#") }}</td>
+                        <td class="mono"><a href="#">RV1-F-0001</a></td>
                         <td>Example Item</td>
                         <td class="mono">HARDWARE</td>
                         <td>{{ ok.status("ACTIVE") }}</td>
                         <td class="timestamp mono">2024-01-15T14:30:00Z</td>
                     </tr>
                     <tr>
-                        <td>{{ ok.id_cell("2", "#") }}</td>
+                        <td class="mono"><a href="#">RV1-F-0002</a></td>
                         <td>Another Item</td>
                         <td class="mono">SOFTWARE</td>
                         <td>{{ ok.status("PENDING") }}</td>
@@ -400,14 +400,14 @@
 <pre style="margin: 0;">{% raw %}<table class="data-table">
     <thead>
         <tr>
-            <th>ID</th>
+            <th>PN</th>
             <th>NAME</th>
             <th>STATUS</th>
         </tr>
     </thead>
     <tbody>
         <tr>
-            <td>{{ ok.id_cell(item.id, "/items/" ~ item.id) }}</td>
+            <td class="mono"><a href="/parts/{{ item.id }}">{{ item.internal_pn }}</a></td>
             <td>{{ item.name }}</td>
             <td>{{ ok.status(item.status) }}</td>
         </tr>
