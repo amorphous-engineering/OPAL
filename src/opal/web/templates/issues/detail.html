@@ -300,9 +300,9 @@
                         </tr>
                         {% if issue.procedure_instance_id %}
                         <tr>
-                            <th>BOUNDARY</th>
+                            <th title="Blocks that step's COMPLETE until disposition">BOUNDARY</th>
                             <td>
-                                <select id="boundary-step-select" class="form-select" style="width: 100%;" onchange="linkBoundaryStep(this.value)">
+                                <select id="boundary-step-select" class="form-select" style="width: 100%;" title="Blocks that step's COMPLETE until disposition" onchange="linkBoundaryStep(this.value)">
                                     <option value="">—</option>
                                     {% for s in instance_steps %}
                                     <option value="{{ s.id }}" {% if issue.containment_step_id == s.id %}selected{% endif %}>{{ s.label }} — {{ s.title }}</option>

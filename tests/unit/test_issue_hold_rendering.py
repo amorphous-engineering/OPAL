@@ -241,6 +241,35 @@ def test_issue_page_links_work_order_and_boundary(web_client):
     assert "BOUNDARY" in page.text
 
 
+def test_anomaly_modal_states_raised_step_and_boundary_consequence(web_client):
+    """(rehearsal) Raise at 5.3, block 6.2: the modal states the raised step
+    as a labeled fact (RAISED AT) and RESOLVE BY carries its consequence —
+    both ends are expressible (raised_step_id + containment_step_id), the
+    labels now say so."""
+    instance_id, _ = _build_instance_with_sub_steps(web_client)
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    assert "RAISED AT" in page.text
+    assert "RESOLVE BY" in page.text
+    assert "Blocks that step's COMPLETE until disposition" in page.text
+    # The default boundary is the raised step, consequence named.
+    assert "this step — holds its COMPLETE" in page.text
+
+
+def test_issue_boundary_select_carries_consequence(web_client):
+    """The issue page's BOUNDARY select mirrors the anomaly modal's
+    RESOLVE BY consequence labeling."""
+    instance_id, _ = _build_instance_with_sub_steps(web_client)
+    issue = web_client.post("/api/issues", json={"title": "Manual", "containment": "step"}).json()
+    r = web_client.patch(f"/api/issues/{issue['id']}", json={"procedure_instance_id": instance_id})
+    assert r.status_code == 200
+
+    page = web_client.get(f"/issues/{issue['id']}?edit=1")
+    assert 'id="boundary-step-select"' in page.text
+    assert "Blocks that step's COMPLETE until disposition" in page.text
+
+
 def test_issues_list_state_column(web_client):
     """(§6) The STATE column renders; undispositioned-with-containment sorts
     first; the HOLDS column is gone."""
