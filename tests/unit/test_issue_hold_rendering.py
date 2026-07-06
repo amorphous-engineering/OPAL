@@ -266,3 +266,22 @@ def test_new_issue_page_renders(web_client):
     page = web_client.get("/issues/new?procedure_instance_id=1")
     assert page.status_code == 200
     assert "CONTAINMENT" in page.text
+
+
+def test_new_issue_form_links_execution(web_client):
+    """/issues/new offers the work-order link — same select as the issue
+    page's LINKS panel; ?execution= (and the older ?procedure_instance_id=)
+    pre-selects it (context pre-fill)."""
+    instance_id, _ = _build_instance_with_sub_steps(web_client)
+
+    page = web_client.get("/issues/new")
+    assert page.status_code == 200
+    assert 'id="execution-select"' in page.text
+    assert f'value="{instance_id}" selected' not in page.text
+
+    for param in ("execution", "procedure_instance_id"):
+        page = web_client.get(f"/issues/new?{param}={instance_id}")
+        assert page.status_code == 200
+        assert f'value="{instance_id}" selected' in page.text
+    # The form posts the selected work order to the create API.
+    assert 'name="procedure_instance_id"' in page.text

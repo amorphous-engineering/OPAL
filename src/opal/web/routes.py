@@ -2952,16 +2952,23 @@ def issues_table(
 
 @router.get("/issues/new", response_class=HTMLResponse)
 def issues_new(
-    request: Request, db: DbSession, procedure_instance_id: int | None = Query(None)
+    request: Request,
+    db: DbSession,
+    procedure_instance_id: int | None = Query(None),
+    execution: int | None = Query(None),
 ) -> HTMLResponse:
-    """New issue form page."""
+    """New issue form page. Context pre-fill: ?execution= (or the older
+    ?procedure_instance_id=) pre-selects the work-order link."""
     context = get_base_context(request, db, "New Issue - OPAL")
     context["types"] = [t.value for t in IssueType]
     context["priorities"] = [p.value for p in IssuePriority]
     context["containments"] = [c.value for c in Containment]
-    context["procedure_instance_id"] = procedure_instance_id
+    context["procedure_instance_id"] = (
+        procedure_instance_id if procedure_instance_id is not None else execution
+    )
 
-    # Get procedures and users for linking (parts use the search typeahead)
+    # Get procedures, executions and users for linking (parts use the search
+    # typeahead). The EXECUTION select mirrors the issue page's LINKS panel.
     procedures = (
         db.query(MasterProcedure)
         .filter(MasterProcedure.deleted_at.is_(None))
@@ -2972,6 +2979,7 @@ def issues_new(
 
     users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
     context["procedures"] = procedures
+    context["instances"] = db.query(ProcedureInstance).order_by(ProcedureInstance.id.desc()).all()
     context["users"] = users
 
     return templates.TemplateResponse("issues/new.html", context)

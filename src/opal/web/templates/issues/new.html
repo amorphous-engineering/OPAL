@@ -10,7 +10,6 @@
 {% block content %}
 {% call ok.panel("NEW ISSUE", max_width="700px") %}
         <form id="new-issue-form" onsubmit="createIssue(event)">
-            {% if procedure_instance_id %}<input type="hidden" id="procedure-instance-id" value="{{ procedure_instance_id }}">{% endif %}
             {{ ok.field("title", "TITLE", required=true) }}
 
             <div style="display: flex; gap: var(--space-md);">
@@ -119,6 +118,12 @@
                         <option value="{{ p.id }}">{{ p.name }}</option>
                         {% endfor %}
                     </select>
+                    <select id="execution-select" name="procedure_instance_id" class="form-select" style="flex: 1;">
+                        <option value="">No execution...</option>
+                        {% for inst in instances %}
+                        <option value="{{ inst.id }}" {% if procedure_instance_id == inst.id %}selected{% endif %}>{{ inst.work_order_number or 'WO #' ~ inst.id }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
 
@@ -182,7 +187,6 @@ async function createIssue(event) {
 
     const type = form.issue_type.value;
 
-    const instanceEl = document.getElementById('procedure-instance-id');
     const data = {
         title: form.title.value,
         description: form.description.value || null,
@@ -191,7 +195,7 @@ async function createIssue(event) {
         containment: form.containment.value,
         part_id: form.part_id.value ? parseInt(form.part_id.value) : null,
         procedure_id: form.procedure_id.value ? parseInt(form.procedure_id.value) : null,
-        procedure_instance_id: instanceEl ? parseInt(instanceEl.value) : null,
+        procedure_instance_id: form.procedure_instance_id.value ? parseInt(form.procedure_instance_id.value) : null,
         assigned_to_id: form.assigned_to_id.value ? parseInt(form.assigned_to_id.value) : null,
     };
 
