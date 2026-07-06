@@ -2473,22 +2473,31 @@ def _execution_detail_context(
     )
 
     # Bound hold points (issue_step_block) — hold COMPLETE of the bound step.
-    context["bound_holds_by_se"] = exec_flow.bound_blocks_by_step(db, instance.id)
+    bound_holds_by_se = exec_flow.bound_blocks_by_step(db, instance.id)
+    context["bound_holds_by_se"] = bound_holds_by_se
 
     # Undispositioned NC holds per step execution id — derived from containment.
     holding_ncs_by_step = exec_flow.holding_ncs_by_step(db, instance.id)
     context["step_holding_ncs"] = holding_ncs_by_step
 
-    # Undispositioned scope per op order — gates the OP's COMPLETE/sign-off
-    # control (inert + reason, never active-but-failing).
+    # Undispositioned scope per op order — the op-card HELD BY blockline.
+    # ONE derivation with the client updater (execdoc.js updateOpProgress):
+    # raised/containment holds AND bound "resolve by" holds both fold in — a
+    # bound hold on a child gates that child's COMPLETE, which holds the OP's
+    # completion (check_instance_completion._row_held folds blockers_for_start),
+    # so it belongs on the op header at SSR time too (F4).
     op_holds_by_order: dict[int, list] = {}
     for op_data in ops + contingency_ops:
         op_exec = op_data["step"].get("execution")
-        bucket = list(holding_ncs_by_step.get(op_exec.id, [])) if op_exec is not None else []
+        bucket: list = []
+        if op_exec is not None:
+            bucket.extend(holding_ncs_by_step.get(op_exec.id, []))
+            bucket.extend(bound_holds_by_se.get(op_exec.id, []))
         for sub in op_data.get("sub_steps", []):
             sub_exec = sub.get("execution")
             if sub_exec is not None:
                 bucket.extend(holding_ncs_by_step.get(sub_exec.id, []))
+                bucket.extend(bound_holds_by_se.get(sub_exec.id, []))
         seen_ids: set[int] = set()
         unique = [b for b in bucket if not (b.id in seen_ids or seen_ids.add(b.id))]
         if unique:

@@ -290,6 +290,46 @@ def test_bound_hold_renders_in_document_and_rail(web_client: TestClient, auth_he
     assert "blocks" in rail.text
 
 
+def test_bound_hold_on_child_renders_in_op_header_at_ssr(
+    web_client: TestClient, auth_headers: dict
+):
+    """A bound "resolve by" hold on a child gates that child's COMPLETE and
+    holds its OP's completion, so it renders in the op-card HELD BY blockline
+    at SSR time — one derivation with the client poll (F4), no flicker."""
+    proc_id = web_client.post("/api/procedures", json={"name": "Bound op header"}).json()["id"]
+    op1 = web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP One"}).json()
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 1.1", "parent_step_id": op1["id"]}
+    )
+    op2 = web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP Two"}).json()
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 2.1", "parent_step_id": op2["id"]}
+    )
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+
+    # Orders: OP1=1, 1.1=2, OP2=3, 2.1=4. NC raised at 1.1, resolve by 2.1:
+    # the hold anchors on the boundary (start_blocked), not the raised step.
+    nc = web_client.post(
+        f"/api/procedure-instances/{instance_id}/steps/2/nc",
+        json={"title": "Resolve downstream", "containment": "step", "containment_step_number": 4},
+        headers=auth_headers,
+    )
+    assert nc.status_code == 201, nc.text
+    issue_number = nc.json()["issue_number"]
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    op2_body = _op_section_body(page.text, 3)
+    assert "HELD BY" in op2_body
+    assert issue_number in op2_body
+    # The raised op's own scope is not held — the hold moved to the boundary.
+    op1_body = _op_section_body(page.text, 1)
+    assert "HELD BY" not in op1_body
+
+
 # ============ 6. dockbar partial ============
 
 
