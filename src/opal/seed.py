@@ -43,6 +43,7 @@ from opal.db.models import (
     Requirement,
     Risk,
     RiskIssueLink,
+    StepDependency,
     StepExecution,
     Supplier,
     TestTemplate,
@@ -326,7 +327,7 @@ def _seed_requirements(
             if entry["title"] == "Oxidizer tank static vent":
                 status = "verified"
                 verified_at = now - timedelta(days=15)
-                notes = "1.2 mm (0.047 in) vent drilled per OP 2; verified clear at tank assembly."
+                notes = "1.2 mm (0.047 in) vent drilled per OP 1; verified clear at tank assembly."
             db.add(
                 PartRequirement(
                     part_id=parts[part_key].id,
@@ -393,20 +394,34 @@ def _seed_procedures(
         db.flush()
 
         order = 0
+        normal_count = 0
+        contingency_count = 0
+        op_steps: dict[int, ProcedureStep] = {}
         for op_idx, op in enumerate(pdata["ops"], start=1):
             order += 1
+            is_contingency = bool(op.get("is_contingency"))
+            # Contingency ops number their own C-series, like the step API does.
+            if is_contingency:
+                contingency_count += 1
+                op_number = f"C{contingency_count}"
+            else:
+                normal_count += 1
+                op_number = str(normal_count)
             op_step = ProcedureStep(
                 procedure_id=proc.id,
                 order=order,
-                step_number=str(op_idx),
+                step_number=op_number,
                 level=0,
                 title=op["title"],
                 instructions=op.get("instructions"),
                 caution=op.get("caution"),
+                is_contingency=is_contingency,
+                strict_sequence=bool(op.get("strict_sequence")),
                 workcenter_id=wc[op["workcenter"]].id if op.get("workcenter") else None,
             )
             db.add(op_step)
             db.flush()
+            op_steps[op_idx] = op_step
             for item in op.get("step_kit", []):
                 part = parts[item["part"]]
                 db.add(
@@ -424,15 +439,25 @@ def _seed_procedures(
                         procedure_id=proc.id,
                         parent_step_id=op_step.id,
                         order=order,
-                        step_number=f"{op_idx}.{sub_idx}",
+                        step_number=f"{op_number}.{sub_idx}",
                         level=1,
                         title=sub["title"],
                         instructions=sub.get("instructions"),
                         caution=sub.get("caution"),
+                        is_contingency=is_contingency,
                         requires_signoff=bool(sub.get("requires_signoff")),
                         required_role=sub.get("required_role"),
                         required_data_schema=sub.get("schema"),
                         workcenter_id=wc[op["workcenter"]].id if op.get("workcenter") else None,
+                    )
+                )
+        # Op-level prerequisites (JSON lists prereq op indices, 1-based).
+        for op_idx, op in enumerate(pdata["ops"], start=1):
+            for dep_idx in op.get("depends_on", []):
+                db.add(
+                    StepDependency(
+                        step_id=op_steps[op_idx].id,
+                        depends_on_step_id=op_steps[dep_idx].id,
                     )
                 )
         db.flush()
@@ -454,6 +479,15 @@ def _publish(db: Session, proc: MasterProcedure) -> ProcedureVersion:
     for sk in db.query(StepKit).filter(StepKit.step_id.in_(step_ids)).all():
         step_kit_map.setdefault(sk.step_id, []).append(sk)
 
+    # Dependencies snapshot as prerequisite `order` values (mirrors the
+    # publish endpoint) so the execution engine gates ops from the frozen copy.
+    step_id_to_order = {s.id: s.order for s in steps}
+    depends_on_map: dict[int, list[int]] = {}
+    for dep in db.query(StepDependency).filter(StepDependency.step_id.in_(step_ids)).all():
+        prereq_order = step_id_to_order.get(dep.depends_on_step_id)
+        if prereq_order is not None:
+            depends_on_map.setdefault(dep.step_id, []).append(prereq_order)
+
     content = {
         "procedure_name": proc.name,
         "procedure_description": proc.description,
@@ -474,7 +508,7 @@ def _publish(db: Session, proc: MasterProcedure) -> ProcedureVersion:
                 "caution": s.caution,
                 "strict_sequence": s.strict_sequence,
                 "workcenter_id": s.workcenter_id,
-                "depends_on": [],
+                "depends_on": sorted(depends_on_map.get(s.id, [])),
                 "images": [],
                 "step_kit": [
                     {
@@ -659,7 +693,6 @@ _NO_STOCK = {
     "gse_fill",
     "gse_enclosure",
     "gse_integration",
-    "fin_bracket_assy",
 }
 
 _LOT_PARTS = {
@@ -787,44 +820,44 @@ def _complete_step(
 
 # Captured values for WO-1 (verbatim spec values from the guidebook steps).
 _WO1_DATA = {
-    "2.1": {"ends_square": "Square against machinist square — no light gap either end"},
-    "6.4": {"piston_depth": 12.19},
-    "6.9": {"fuel_hose_union_torque": 80},
-    "6.10": {"fuel_hose_valve_torque": 80},
-    "12.9": {"verified_7x_91306a279_screws_install": "All 7 install and thread freely"},
-    "12.10": {"verified_8x_90272a194_screws_install": "8x aligned; simulated install OK"},
-    "12.11": {"verified_4x_93135a013_shear_pins_seat": "4x seat flush through both tubes"},
+    "1.1": {"ends_square": "Square against machinist square — no light gap either end"},
+    "5.4": {"piston_depth": 12.19},
+    "5.9": {"fuel_hose_union_torque": 80},
+    "5.10": {"fuel_hose_valve_torque": 80},
+    "10.9": {"verified_7x_91306a279_screws_install": "All 7 install and thread freely"},
+    "10.10": {"verified_8x_90272a194_screws_install": "8x aligned; simulated install OK"},
+    "10.11": {"verified_4x_93135a013_shear_pins_seat": "4x seat flush through both tubes"},
 }
 
 _WO1_NOTES = [
     (
-        "2.4",
+        "1.4",
         "test",
         timedelta(days=15, hours=6),
         "Drill jig bushing (93320A215) snug after the second hole — re-clamped and "
         "finished the pattern. All 8x 5/16 in holes gauge clean.",
     ),
     (
-        "6.4",
+        "5.4",
         "build",
         timedelta(days=15, hours=2),
         "Piston seated at 12.19 in from the tube end on the marked PVC pusher — "
         "inside the 12.125-12.25 in window on the first push.",
     ),
     (
-        "6.9",
+        "5.9",
         "build",
         timedelta(days=15, hours=1),
         "50675K135 union pulled to wrench-tight, call it 80 ft-lb per the step. Flare faces clean.",
     ),
     (
-        "10.8",
+        "8.8",
         "test",
         timedelta(days=14, hours=20),
         "Both Quarks beep out continuity on drogue and main channels with the 9V packs installed.",
     ),
     (
-        "13.20",
+        "11.20",
         "qa",
         timedelta(days=14, hours=3),
         "Final stack check done — shear pins flush, rail buttons clear the 1515 "
@@ -919,7 +952,7 @@ def _seed_executions(
     db.flush()
     veh_rec.source_production_id = production.id
 
-    # ── WO-2: Vehicle Assembly, IN WORK mid-OP-6 ────────────────
+    # ── WO-2: Vehicle Assembly, IN WORK mid-OP-5 (tank assembly) ─
     wo2_start = now - timedelta(hours=26)
     wo2, wo2_steps = _cut_instance(
         db, veh_proc, veh_version, InstanceStatus.IN_WORK, build, started_at=wo2_start
@@ -953,9 +986,9 @@ def _seed_executions(
         num = s["step_number"]
         se = wo2_steps[num]
         op = int(num.split(".")[0])
-        # OPs 1-5 fully complete; OP 6 is mid-flight (its op row stays PENDING
-        # until the op completes under the focus model).
-        done = op <= 5 or num in ("6.1", "6.2", "6.3")
+        # OPs 1-4 fully complete; OP 5 (tank assembly) is mid-flight (its op
+        # row stays PENDING until the op completes under the focus model).
+        done = op <= 4 or num in ("5.1", "5.2", "5.3")
         if done:
             user = (build, test)[s["order"] % 2]
             _complete_step(
@@ -963,12 +996,12 @@ def _seed_executions(
                 s,
                 t,
                 user,
-                {"ends_square": "Square — checked both ends"} if num == "2.1" else None,
+                {"ends_square": "Square — checked both ends"} if num == "1.1" else None,
             )
             t += timedelta(minutes=11)
     # The crew's position is presence (cursor), not status — the step ahead
     # of the completed work stays PENDING with a focus row.
-    cursor = wo2_steps["6.4"]
+    cursor = wo2_steps["5.4"]
     cursor.first_focused_at = now - timedelta(minutes=45)
     db.add(
         StepFocus(
@@ -980,9 +1013,9 @@ def _seed_executions(
     )
     db.add(
         StepNote(
-            step_execution_id=wo2_steps["6.1"].id,
+            step_execution_id=wo2_steps["5.1"].id,
             author_id=build.id,
-            body="Step text calls for QTY 5 '-230' O-rings; the OP 6 kit is 4x "
+            body="Step text calls for QTY 5 '-230' O-rings; the OP 5 kit is 4x "
             "9452K226 -238 (2x bulkheads, 2x piston). Greased the four -238s.",
             created_at=now - timedelta(hours=1, minutes=30),
         )
@@ -1001,6 +1034,65 @@ def _seed_executions(
     wo3, _wo3_steps = _cut_instance(
         db, procs["launch_ops"], versions["launch_ops"], InstanceStatus.CUT, build
     )
+
+    # ── WO-4: Servo-Actuated Ball Valve Assembly, COMPLETED ─────
+    # The GSE fill valve build — shows the component flow end to end:
+    # kit consumption in, serialized assembly out.
+    valve_proc, valve_version = procs["valve_assembly"], versions["valve_assembly"]
+    wo4_start = now - timedelta(days=3, hours=5)
+    wo4, wo4_steps = _cut_instance(
+        db,
+        valve_proc,
+        valve_version,
+        InstanceStatus.COMPLETED,
+        test,
+        started_at=wo4_start,
+        completed_at=now - timedelta(days=3, hours=3),
+    )
+    t = wo4_start
+    for s in valve_version.content["steps"]:
+        _complete_step(wo4_steps[s["step_number"]], s, t, test)
+        t += timedelta(minutes=13)
+    for item in db.query(Kit).filter(Kit.procedure_id == valve_proc.id).all():
+        key = part_key_by_id[item.part_id]
+        rec = inventory.get(key)
+        tracking = parts[key].tracking_type
+        tracking = tracking.value if hasattr(tracking, "value") else tracking
+        if rec is None or tracking == "serialized":
+            continue
+        qty = min(item.quantity_required, rec.quantity)
+        rec.quantity -= qty
+        db.add(
+            InventoryConsumption(
+                inventory_record_id=rec.id,
+                quantity=qty,
+                procedure_instance_id=wo4.id,
+                consumed_by_id=test.id,
+            )
+        )
+    valve_part = parts["sabv_assy"]
+    valve_rec = InventoryRecord(
+        part_id=valve_part.id,
+        quantity=Decimal("1"),
+        location="STORE-A2",
+        lot_number=wo4.work_order_number,
+        opal_number=generate_opal_number(db),
+        source_type=SourceType.PRODUCTION,
+    )
+    db.add(valve_rec)
+    db.flush()
+    valve_prod = InventoryProduction(
+        inventory_record_id=valve_rec.id,
+        quantity=Decimal("1"),
+        procedure_instance_id=wo4.id,
+        serial_number=generate_serial_number(db, valve_part),
+        produced_opal_number=valve_rec.opal_number,
+        status=ProductionStatus.COMPLETED,
+        produced_by_id=test.id,
+    )
+    db.add(valve_prod)
+    db.flush()
+    valve_rec.source_production_id = valve_prod.id
 
     db.flush()
     return {
@@ -1030,11 +1122,12 @@ def _seed_issues(
     issues: dict[str, Issue] = {}
 
     # 1. Undispositioned NC on WO-2 (STEP containment, resolve-by boundary).
-    #    Real erratum: OP 6 step text calls the tank seals "-230" (QTY 5);
-    #    the gather list and BOM say 4x 9452K226 -238.
+    #    Real erratum: the tank-assembly step text (guidebook OP 6, now OP 5)
+    #    calls the tank seals "-230" (QTY 5); the gather list and BOM say
+    #    4x 9452K226 -238.
     nc_oring = Issue(
         issue_number=generate_issue_number(db),
-        title="OP 6 tank O-ring callout mismatch: '-230' x5 vs kit -238 x4",
+        title="OP 5 tank O-ring callout mismatch: '-230' x5 vs kit -238 x4",
         description=(
             "Raised during tank assembly on WO "
             f"{wo['wo2'].work_order_number}. The published step text and the "
@@ -1046,14 +1139,14 @@ def _seed_issues(
         status=IssueStatus.OPEN,
         priority=IssuePriority.HIGH,
         containment=Containment.STEP,
-        containment_step_id=wo["wo2_steps"]["6.4"].id,
+        containment_step_id=wo["wo2_steps"]["5.4"].id,
         part_id=parts["9452k226"].id,
         procedure_id=procs["vehicle_assembly"].id,
         procedure_instance_id=wo["wo2"].id,
-        raised_step_id=wo["wo2_steps"]["6.2"].id,
+        raised_step_id=wo["wo2_steps"]["5.2"].id,
         raised_by_id=test.id,
         assigned_to_id=build.id,
-        should_be="OP 6 gather list: 4x 9452K226 -238 Buna-N O-rings (2x bulkheads, 2x piston)",
+        should_be="OP 5 gather list: 4x 9452K226 -238 Buna-N O-rings (2x bulkheads, 2x piston)",
         actual="Steps 1-3 text: 'a liberal amount of grease to the 5x Buna-N O-rings (-230)' "
         "— dash size and quantity disagree with the kit",
         created_at=now - timedelta(hours=1, minutes=10),
@@ -1071,12 +1164,13 @@ def _seed_issues(
     )
     issues["nc_oring"] = nc_oring
 
-    # 2. Advisory issue: OP 12 references a template missing from its gather list.
+    # 2. Advisory issue: airframe fabrication (guidebook OP 12, now OP 10)
+    #    references a template missing from its gather list.
     adv = Issue(
         issue_number=generate_issue_number(db),
-        title="OP 12 step 8 uses template TMPLT-AF-UPR2-416 absent from gather list",
+        title="OP 10 step 8 uses template TMPLT-AF-UPR2-416 absent from gather list",
         description=(
-            "OP 12 step 8 calls out drill template TMPLT-AF-UPR2-416; the OP 12 "
+            "OP 10 step 8 calls out drill template TMPLT-AF-UPR2-416; the OP 10 "
             "gather list only carries TMPLT-AF-UPR-416 and the backing plug. "
             "Advisory — the on-hand template covers the hole pattern."
         ),
@@ -1109,8 +1203,8 @@ def _seed_issues(
         part_id=parts["90281a102"].id,
         procedure_id=procs["vehicle_assembly"].id,
         procedure_instance_id=wo["wo1"].id,
-        raised_step_id=wo["wo1_steps"]["9.1"].id,
-        containment_step_id=wo["wo1_steps"]["9.1"].id,
+        raised_step_id=wo["wo1_steps"]["7.1"].id,
+        containment_step_id=wo["wo1_steps"]["7.1"].id,
         raised_by_id=qa.id,
         should_be="Section IV usage: 8x TCA tie rods + 6x coupler/recovery studs = 14",
         actual="Appendix F vehicle McMaster table carries 90281A102 twice (14 + 2 = 16)",
