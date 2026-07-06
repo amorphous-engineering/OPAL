@@ -38,10 +38,10 @@
         {% endif %}
         <div class="dockbar-actions">
             {% if bar_step.exec %}
-            <button class="btn btn-sm" onclick="showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})">ATTACH</button>
+            <button class="btn btn-sm" onclick='showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})'>ATTACH</button>
             {% endif %}
             {% if actionable %}
-            <button class="btn btn-sm" onclick="showIssueModal({{ bar_step.order }}, {{ bar_step.number | tojson }})">ISSUE</button>
+            <button class="btn btn-sm" onclick='showIssueModal({{ bar_step.order }}, {{ bar_step.number | tojson }})'>ISSUE</button>
             {% if menu_skip or menu_consume or menu_redline %}
             <div class="dockbar-overflow">
                 <button class="btn btn-sm" onclick="toggleDockbarMenu(event)" aria-label="More actions">···</button>

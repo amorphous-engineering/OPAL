@@ -654,35 +654,6 @@ def index(request: Request, db: DbSession) -> HTMLResponse:
     recent_activity = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(15).all()
     context["recent_activity"] = recent_activity
 
-    # Traceability widget — red-only (overdue TBRs, stuck block-lint drafts)
-    # plus exactly one non-red line (ready-to-baseline count).
-    from opal.se.dashboard import (
-        old_block_lint_drafts,
-        overdue_tbrs,
-        stale_draft_parts,
-        stale_requirements,
-    )
-    from opal.se.readiness import ready_requirement_ids
-
-    context["overdue_tbrs"] = overdue_tbrs(db)
-    context["stuck_drafts"] = old_block_lint_drafts(db)
-    context["stale_reqs"] = stale_requirements(db)
-    context["ready_to_baseline"] = len(ready_requirement_ids(db))
-    context["stale_draft_parts"] = stale_draft_parts(db)
-
-    # Undispositioned holds — the is_blocking predicate in SQL: open,
-    # containment-bearing, unsigned.
-    context["undispositioned_holds_count"] = (
-        db.query(Issue)
-        .filter(
-            Issue.deleted_at.is_(None),
-            Issue.status != IssueStatus.CLOSED,
-            Issue.containment != Containment.ADVISORY,
-            (Issue.disposition_type.is_(None)) | (Issue.dispositioned_at.is_(None)),
-        )
-        .count()
-    )
-
     return templates.TemplateResponse("index.html", context)
 
 
@@ -2321,6 +2292,15 @@ def _execution_detail_context(
             skip_gate_by_se[se.id] = sg
     context["complete_gate_by_se"] = complete_gate_by_se
     context["skip_gate_by_se"] = skip_gate_by_se
+
+    # Resolved-issue trace per step execution id: a dispositioned/closed issue
+    # leaves a residual line on the step it was raised at — the hold clears,
+    # the record stays.
+    step_issue_history: dict[int, list[Issue]] = {}
+    for iss in linked_issues:
+        if iss.raised_step_id and iss.disp_state != "undispositioned":
+            step_issue_history.setdefault(iss.raised_step_id, []).append(iss)
+    context["step_issue_history"] = step_issue_history
 
     # Per-op aggregate of open NCs (op-level + any of its sub-steps). Used to
     # decide when to show the "+ ADD REDLINE OP" button and to populate the

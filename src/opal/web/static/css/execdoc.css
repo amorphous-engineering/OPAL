@@ -434,8 +434,6 @@
 
 .rail-table { font-size: 0.75rem; }
 .rail-table td { padding: 2px var(--space-xs); }
-.rail-hold-active td { color: var(--accent-red); }
-.rail-hold-active a { color: var(--accent-red); }
 .rail-disp { font-size: 0.65rem; white-space: nowrap; }
 .rail-disp-undispositioned { color: var(--accent-red); }
 .rail-issue-title { overflow: hidden; text-overflow: ellipsis; max-width: 140px; white-space: nowrap; }
@@ -689,3 +687,7 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 
     .exec-meta-popover { right: var(--space-xs); min-width: 280px; }
 }
+
+/* Residual issue trace on a step: the hold clears, the record stays. */
+.step-issue-history { font-size: 0.7rem; margin-bottom: var(--space-sm); }
+.step-issue-history a { color: var(--text-muted); text-decoration: underline; }

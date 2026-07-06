@@ -306,13 +306,20 @@
         }
     }
 
+    function activeHolds(s) {
+        return (s.holds || []).filter((h) => h.disposition_state === 'undispositioned');
+    }
+
     function updateOpProgress(state) {
         const leavesByParent = {};
+        const holdsByParent = {};
         for (const s of state.steps) {
             if (s.parent_order === null || s.parent_order === undefined) continue;
             const bucket = leavesByParent[s.parent_order] || (leavesByParent[s.parent_order] = { done: 0, total: 0 });
             bucket.total += 1;
             if (['completed', 'signed_off', 'skipped'].includes(s.status)) bucket.done += 1;
+            const hb = holdsByParent[s.parent_order] || (holdsByParent[s.parent_order] = []);
+            hb.push(...activeHolds(s));
         }
         for (const s of state.steps) {
             if (s.level !== 0) continue;
@@ -328,6 +335,23 @@
             if (mini) {
                 mini.textContent = `${bucket.done}/${bucket.total}`;
                 mini.classList.toggle('is-done', done);
+            }
+            // HELD BY blockline: own + child holds, deduped; hidden when the
+            // last disposition is signed (mirrors op_holds_by_order server-side).
+            const holdEl = card.querySelector('[data-op-holds]');
+            if (holdEl) {
+                const seen = new Set();
+                const holds = activeHolds(s).concat(holdsByParent[s.order] || [])
+                    .filter((h) => !seen.has(h.issue_id) && seen.add(h.issue_id));
+                if (holds.length) {
+                    holdEl.innerHTML = 'HELD BY ' + holds.map((h) =>
+                        `<a href="/issues/${h.issue_id}" onclick="event.stopPropagation()">${h.issue_number}</a>`
+                    ).join(' · ');
+                    holdEl.hidden = false;
+                } else {
+                    holdEl.hidden = true;
+                    holdEl.innerHTML = '';
+                }
             }
         }
     }

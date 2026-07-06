@@ -70,33 +70,16 @@ def test_old_block_lint_drafts_window_and_severity(db_session, test_user):
 # ============ Web surfaces ============
 
 
-def test_dashboard_widget_renders_red_lines_and_ready_count(client, db_session, test_user):
+def test_dashboard_has_no_traceability_widget(client, db_session, test_user):
+    """The traceability panel was removed from the dashboard (rehearsal
+    feedback 2026-07-06); the helpers remain for a future requirements-page
+    home."""
     test_user.needs_onboarding = False
     db_session.commit()
     login(client, test_user)
-    overdue = _make_req(
-        db_session,
-        tbr=True,
-        tbr_owner_id=test_user.id,
-        tbr_due=datetime.now(UTC) - timedelta(days=3),
-    )
-    _make_req(db_session)  # clean draft → counts as ready-to-baseline
-    db_session.commit()
-
     page = client.get("/")
     assert page.status_code == 200
-    assert "TRACEABILITY" in page.text
-    assert overdue.req_number in page.text
-    assert "TBR overdue 3d" in page.text
-    assert "ready to baseline:" in page.text
-
-
-def test_dashboard_widget_quiet_when_clean(client, db_session, test_user):
-    test_user.needs_onboarding = False
-    db_session.commit()
-    login(client, test_user)
-    page = client.get("/")
-    assert "traceability: no findings" in page.text
+    assert "TRACEABILITY" not in page.text
 
 
 def test_part_page_shows_allocated_requirement_with_state(client, db_session, test_user):

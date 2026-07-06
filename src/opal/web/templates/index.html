@@ -16,48 +16,6 @@
     {{ ok.stat(risks_count, "ACTIVE RISKS", href="/risks") }}
 </div>
 
-{% call ok.panel("TRACEABILITY", margin_top="var(--space-md)") %}
-        {% if undispositioned_holds_count or overdue_tbrs or stuck_drafts or stale_reqs or ready_to_baseline or stale_draft_parts %}
-        <div class="mono" style="font-size: 0.85rem;">
-            {% if undispositioned_holds_count %}
-            <div class="text-red">
-                undispositioned holds: <a href="/issues?state=undispositioned" class="text-red">{{ undispositioned_holds_count }} →</a>
-            </div>
-            {% endif %}
-            {% if stale_draft_parts %}
-            <div class="text-red">
-                stale draft parts (&gt;30d, unreferenced): <a href="/parts?state=draft" class="text-red">{{ stale_draft_parts | length }}</a>
-            </div>
-            {% endif %}
-            {% for item in overdue_tbrs %}
-            <div class="text-red">
-                <a href="/requirements/{{ item.req.id }}" class="text-red">{{ item.req.req_number }}</a>
-                TBR overdue {{ item.days_over }}d — {{ item.owner_name }}
-            </div>
-            {% endfor %}
-            {% for req in stuck_drafts %}
-            <div class="text-red">
-                <a href="/requirements/{{ req.id }}" class="text-red">{{ req.req_number }}</a>
-                draft &gt;7d with block-severity lint
-            </div>
-            {% endfor %}
-            {% for req in stale_reqs %}
-            <div class="text-red">
-                ≠ <a href="/requirements/{{ req.id }}" class="text-red">{{ req.req_number }}</a>
-                stale — parent revised; re-affirm or edit
-            </div>
-            {% endfor %}
-            {% if ready_to_baseline %}
-            <div class="text-green">
-                ready to baseline: <a href="/requirements/queue" class="text-green">{{ ready_to_baseline }} →</a>
-            </div>
-            {% endif %}
-        </div>
-        {% else %}
-        <div class="mono text-muted" style="font-size: 0.85rem;">traceability: no findings</div>
-        {% endif %}
-{% endcall %}
-
 {% call ok.panel("QUICK ACTIONS", margin_top="var(--space-md)") %}
         <div style="display: flex; gap: var(--space-md); flex-wrap: wrap;">
             {{ ok.btn("+ NEW PART", href="/parts/new", variant="primary") }}

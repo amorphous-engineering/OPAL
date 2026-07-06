@@ -73,15 +73,14 @@
                 </div>
                 {% endif %}
 
-                <!-- HOLDING — the consequence readout: what this issue is stopping -->
+                <!-- HOLDS — the consequence readout: what this issue is stopping -->
                 {% if holding %}
-                <div style="margin-bottom: var(--space-md); border: 1px solid var(--accent-red); padding: var(--space-md);">
-                    <div class="mono">
-                        holds: {% for t in holding %}<a href="{{ t.href }}">{{ t.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
-                    </div>
+                <div style="margin-bottom: var(--space-md);">
+                    <div class="form-label">HOLDS</div>
+                    <div class="mono">{% for t in holding %}<a href="{{ t.href }}">{{ t.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
                 </div>
                 {% else %}
-                <div style="margin-bottom: var(--space-md);">{{ ok.empty_line("Holding") }}</div>
+                <div style="margin-bottom: var(--space-md);">{{ ok.empty_line("Holds") }}</div>
                 {% endif %}
 
                 <!-- Disposition (§4) — the signature moment. Renders only where

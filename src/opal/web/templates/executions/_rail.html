@@ -27,7 +27,7 @@
                 <tr>
                     <td class="mono"><a href="/issues/{{ iss.id }}">{{ iss.issue_number or '—' }}</a></td>
                     <td class="rail-issue-title">{{ iss.title }}</td>
-                    <td class="mono rail-disp">{{ (iss.status.value if iss.status.value is defined else iss.status) | upper | replace('_', ' ') }}</td>
+                    <td class="mono rail-disp rail-disp-{{ iss.disp_state }}">{{ iss.disp_state | upper }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

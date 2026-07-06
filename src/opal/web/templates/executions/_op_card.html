@@ -23,9 +23,10 @@
         <span class="op-card-spacer"></span>
         <span class="op-card-progress mono{% if op_terminal %} is-done{% endif %}" data-op-progress>{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
         {% if inst_status in ['cut', 'in_work'] %}
-            {% if op_holds %}
-            <span class="op-card-blockline mono text-yellow" title="OP COMPLETE is held until disposition">HELD BY {% for i in op_holds %}<a href="/issues/{{ i.id }}" onclick="event.stopPropagation()">{{ i.issue_number }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</span>
-            {% elif op_gated %}
+            {# data-op-holds: the poll re-renders this from state so a signed
+               disposition clears HELD BY without a reload. #}
+            <span class="op-card-blockline mono text-yellow" title="OP COMPLETE is held until disposition" data-op-holds{% if not op_holds %} hidden{% endif %}>{% if op_holds %}HELD BY {% for i in op_holds %}<a href="/issues/{{ i.id }}" onclick="event.stopPropagation()">{{ i.issue_number }}</a>{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}</span>
+            {% if not op_holds and op_gated %}
             <span class="op-card-blockline mono text-yellow">WAITING ON OP {{ op_gated | join(', ') }}</span>
             {% endif %}
         {% endif %}

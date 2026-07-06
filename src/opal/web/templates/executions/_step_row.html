@@ -38,6 +38,12 @@
             {% for nc in hold_ncs %}<a href="/issues/{{ nc.id }}" class="mono">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
         </div>
         {% endif %}
+        {% set past_ncs = step_issue_history.get(exec.id, []) if exec else [] %}
+        {% if past_ncs %}
+        <div class="step-issue-history mono text-muted">
+            {% for i in past_ncs %}<a href="/issues/{{ i.id }}">{{ i.issue_number }}</a> — {{ (i.disposition_type or i.disp_state) | upper | replace('_', ' ') }}{% if not loop.last %} · {% endif %}{% endfor %}
+        </div>
+        {% endif %}
         {% if vs.get('caution') %}
         <div class="caution-block">CAUTION: {{ vs.get('caution') }}</div>
         {% endif %}
@@ -99,8 +105,8 @@
                 </div>
             </div>
             <div class="step-actions">
-                <button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>
-                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
+                <button class="btn btn-sm" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>
+                <button class="btn btn-sm" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
                 {% if not skip_gate %}
                 <button class="btn btn-sm" onclick='showSkipModal({{ step.order }}, {{ step.title | tojson }})'>SKIP</button>
                 {% endif %}
@@ -113,8 +119,8 @@
         {% elif inst_status in ['cut', 'in_work'] and step.status == 'awaiting_signoff' %}
         <div class="step-controls">
             <div class="step-actions">
-                {% if exec %}<button class="btn btn-sm" onclick="showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})">ATTACH</button>{% endif %}
-                <button class="btn btn-sm" onclick="showIssueModal({{ step.order }}, {{ step_display_number | tojson }})">ISSUE</button>
+                {% if exec %}<button class="btn btn-sm" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>{% endif %}
+                <button class="btn btn-sm" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
                 <button class="btn btn-sm btn-primary" onclick="signoffStep({{ step.order }})">SIGN OFF</button>
             </div>
         </div>

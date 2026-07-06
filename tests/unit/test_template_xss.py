@@ -63,6 +63,26 @@ def test_bom_edit_onclick_payload_is_inert_and_roundtrips(web_client: TestClient
     assert "'" not in match.group(0)
 
 
+def test_no_tojson_inside_double_quoted_event_attributes() -> None:
+    """| tojson output is double-quoted JSON, so inside a DOUBLE-quoted event
+    attribute the first quote terminates the attribute — dead handler at best
+    (the broken ATTACH/ISSUE buttons), attribute injection at worst (#47).
+    Event attributes that interpolate tojson must be single-quoted."""
+    from pathlib import Path
+
+    import opal.web
+
+    templates = Path(opal.web.__file__).parent / "templates"
+    pattern = re.compile(r'\bon[a-z]+="[^"]*\|\s*tojson')
+    offenders = [
+        f"{path}:{i}"
+        for path in templates.rglob("*.html")
+        for i, line in enumerate(path.read_text().splitlines(), 1)
+        if pattern.search(line)
+    ]
+    assert not offenders, f"tojson inside double-quoted event attribute: {offenders}"
+
+
 def test_confirm_btn_message_is_json_escaped() -> None:
     """Issue #55 — confirm_btn interpolates its args into inline JS."""
     from opal.web.routes import templates

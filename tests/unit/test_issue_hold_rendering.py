@@ -110,7 +110,7 @@ def test_issue_page_holding_readout(web_client):
 
     page = web_client.get(f"/issues/{nc['id']}")
     assert page.status_code == 200
-    assert "holds:" in page.text
+    assert ">HOLDS</div>" in page.text
     assert "1.1 COMPLETE" in page.text
     assert "OP 1 COMPLETE" in page.text
     assert "UNDISPOSITIONED" in page.text
@@ -129,7 +129,7 @@ def test_issue_page_holding_readout(web_client):
     page = web_client.get(f"/issues/{advisory['id']}")
     assert page.status_code == 200
     # The empty-line macro wraps the label in a span (Amendment 6 grammar)
-    assert 'Holding</span> — none' in page.text
+    assert 'Holds</span> — none' in page.text
     # No disposition gate above advisory: no panel, no state badge, CLOSE free.
     assert 'id="disposition-btn"' not in page.text
     assert "UNDISPOSITIONED" not in page.text
