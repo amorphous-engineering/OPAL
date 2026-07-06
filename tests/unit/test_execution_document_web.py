@@ -201,6 +201,35 @@ def test_bom_kitting_tabs_absent_without_kit(web_client: TestClient):
     assert "tab=document" in page.text
 
 
+def test_output_only_procedure_shows_kitting_tab(web_client: TestClient):
+    """KITTING is also home to PRODUCTIONS + FINALIZE PRODUCTION: an
+    output-only procedure (ProcedureOutput, no kit) must show it or WIP
+    productions are stranded with FINALIZE unreachable (F7). BOM stays
+    absent — reconciliation is meaningless without a kit side."""
+    part = web_client.post(
+        "/api/parts",
+        json={"name": "Widget Output", "tracking_type": "bulk", "category": "Assemblies"},
+    ).json()
+    web_client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+
+    proc_id = web_client.post("/api/procedures", json={"name": "Output only"}).json()["id"]
+    web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Assemble"})
+    out = web_client.post(
+        f"/api/procedures/{proc_id}/outputs",
+        json={"part_id": part["id"], "quantity_produced": 1},
+    )
+    assert out.status_code == 201, out.text
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    assert "tab=kitting" in page.text
+    assert "tab=bom" not in page.text
+
+
 # ============ 2. legacy tab aliases ============
 
 
