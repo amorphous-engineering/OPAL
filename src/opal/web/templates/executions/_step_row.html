@@ -107,6 +107,7 @@
             <div class="step-actions">
                 <button class="btn btn-sm" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>
                 <button class="btn btn-sm" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
+                {{ ex.redline_control(op.order, op.step_number, op_open_ncs_by_order.get(op.order, [])) }}
                 {{ ex.skip_control(step.order, step.title, skip_gate) }}
                 {% if step_kit %}
                 <button class="btn btn-sm" onclick="consumeStepParts({{ step.order }})">CONSUME PARTS</button>

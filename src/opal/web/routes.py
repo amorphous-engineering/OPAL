@@ -2302,9 +2302,11 @@ def _execution_detail_context(
             step_issue_history.setdefault(iss.raised_step_id, []).append(iss)
     context["step_issue_history"] = step_issue_history
 
-    # Per-op aggregate of open NCs (op-level + any of its sub-steps). Used to
-    # decide when to show the "+ ADD REDLINE OP" button and to populate the
-    # modal's NC dropdown. Keyed by op.order.
+    # Per-op aggregate of open NCs (op-level + any of its sub-steps) — the one
+    # redline-visibility predicate: + REDLINE renders wherever this is
+    # non-empty (step action rows and the dockbar overflow), and it populates
+    # the modal's NC dropdown. Keyed by op.order; ad-hoc (redline) ops are
+    # excluded below, so consumers never re-check is_ad_hoc.
     open_ncs_by_step_exec: dict[int, list[Issue]] = {}
     for iss in linked_issues:
         iss_type = iss.issue_type.value if hasattr(iss.issue_type, "value") else iss.issue_type

@@ -50,6 +50,17 @@
 {%- endif %}
 {% endmacro %}
 
+{# + REDLINE — visible wherever its op carries an open NC. The one
+   visibility predicate is a non-empty `open_ncs` (op_open_ncs_by_order in
+   the route context, which already excludes ad-hoc/redline ops); the one JS
+   entry point is showRedlineModal. Renders in the step action rows and the
+   dockbar overflow. #}
+{% macro redline_control(op_order, op_number, open_ncs, before='') %}
+{%- if open_ncs %}
+<button class="btn btn-sm" onclick='{{ before }}showRedlineModal({{ op_order }}, {{ op_number | tojson }}, {{ open_ncs | map(attribute="id") | list | tojson }}, {{ open_ncs | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
+{%- endif %}
+{% endmacro %}
+
 {# The SKIP control, from the F5 gate — same inert + reason register.
    `menu` renders the dockbar-overflow variant. #}
 {% macro skip_control(order, title, blockers, menu=false) %}

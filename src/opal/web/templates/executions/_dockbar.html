@@ -10,7 +10,9 @@
     {% set workable = actionable and bs in ['pending', 'in_progress'] %}
     {% set menu_skip = workable %}
     {% set menu_consume = workable and bar_step.step_kit and not bar_step.has_children %}
-    {% set menu_redline = bar_step.op_open_ncs and not bar_step.op_is_ad_hoc %}
+    {# op_open_ncs is the one redline-visibility predicate (already empty
+       for ad-hoc ops — see op_open_ncs_by_order). #}
+    {% set menu_redline = bar_step.op_open_ncs %}
     <div class="dockbar">
         <div class="dockbar-id" onclick="jumpToStep({{ bar_step.order }})" title="Scroll to step">
             <span class="mono dockbar-num">{{ bar_step.number }}</span>
@@ -53,7 +55,7 @@
                     <button class="btn btn-sm" onclick="hideDockbarMenu(); consumeStepParts({{ bar_step.order }})">CONSUME PARTS</button>
                     {% endif %}
                     {% if menu_redline %}
-                    <button class="btn btn-sm" onclick='hideDockbarMenu(); showRedlineModal({{ bar_step.op_order }}, {{ bar_step.op_number | tojson }}, {{ bar_step.op_open_ncs | map(attribute="id") | list | tojson }}, {{ bar_step.op_open_ncs | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
+                    {{ ex.redline_control(bar_step.op_order, bar_step.op_number, bar_step.op_open_ncs, before='hideDockbarMenu(); ') }}
                     {% endif %}
                 </div>
             </div>

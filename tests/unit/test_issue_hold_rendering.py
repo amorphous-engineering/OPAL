@@ -106,6 +106,31 @@ def test_dockbar_gated_step_renders_inert_controls(web_client):
     assert f"completeStep({by_label['1.1']}," not in bar.text
 
 
+def test_redline_control_renders_in_step_actions(web_client):
+    """(rehearsal) + REDLINE is discoverable: once an op carries an open NC,
+    the op's step action rows render + REDLINE next to ATTACH/ISSUE — not
+    only the dockbar overflow, which keeps its entry. No open NC, no
+    control."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    assert "showRedlineModal(" not in page.text
+
+    nc = _raise_nc(web_client, instance_id, by_label["1.1"])
+    page = web_client.get(f"/executions/{instance_id}")
+    assert "+ REDLINE" in page.text
+    # The document column carries it (step action rows), not just the bar.
+    assert f"showRedlineModal({by_label['1']}," in page.text
+    assert nc["issue_number"] in page.text
+
+    # The dockbar overflow keeps its entry — same predicate, same entry point.
+    bar = web_client.get(f"/executions/{instance_id}/dockbar?step={by_label['1.1']}")
+    assert bar.status_code == 200
+    assert "+ REDLINE" in bar.text
+    assert f"showRedlineModal({by_label['1']}," in bar.text
+
+
 def test_signed_disposition_restores_controls(web_client):
     """(§10.3) Signing releases the containment; the controls return."""
     instance_id, by_label = _build_instance_with_sub_steps(web_client)
