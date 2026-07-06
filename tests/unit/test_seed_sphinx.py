@@ -230,6 +230,55 @@ def test_step_notes_exist(seeded):
     assert seeded.query(StepNote).count() >= 5
 
 
+def test_tier1_is_flight_critical_not_commodity(seeded):
+    """Tier 1 (FLIGHT, lot+serial enforcement at receive) is reserved for
+    parts whose failure is flight-critical — pressure-bearing and
+    recovery-critical hardware. Generic COTS fasteners, raw stock, and
+    consumables live at tier 3; part numbers carry the matching tier code."""
+    by_epn = {p.external_pn: p for p in seeded.query(Part).all() if p.external_pn}
+
+    # The commodity hardware the sweep flagged is off tier 1.
+    for vendor_pn in ("90281A102", "95505A601", "92141A029", "91255A378"):
+        part = by_epn[vendor_pn]
+        assert part.tier == 3, f"{vendor_pn} ({part.name}) is generic COTS, not tier 1"
+
+    # Pressure-bearing and recovery-critical parts stay tier 1.
+    for name in (
+        "Fuel Tank Bulkhead",
+        "Propellant Tank Casing",
+        "Combustion Chamber",
+        "Servo-Actuated Ball Valve Assembly",
+        "Tubular Nylon Shock Cord, 3000lbf Breaking Strength",
+        "Drogue Parachute, 36\" Diameter",
+    ):
+        part = seeded.query(Part).filter(Part.name == name).one()
+        assert part.tier == 1, f"{name} is flight-critical"
+
+    # Part numbers agree with the tier they claim (tier code is the letter).
+    code = {1: "F", 2: "G", 3: "D"}
+    for part in seeded.query(Part).all():
+        if part.internal_pn and part.internal_pn.startswith("SPX-"):
+            assert part.internal_pn.split("-")[1] == code[part.tier], (
+                f"{part.internal_pn} claims a different tier than {part.tier}"
+            )
+
+    # The lot-gate receive demo keeps tier-1 purchased, lot-tracked stock
+    # (the O-rings the erratum issue is about, and the TCA gaskets).
+    from opal.db.models.inventory import InventoryRecord
+
+    lot_t1 = (
+        seeded.query(InventoryRecord)
+        .join(Part, Part.id == InventoryRecord.part_id)
+        .filter(
+            Part.tier == 1,
+            Part.procurement == "buy",
+            InventoryRecord.lot_number.isnot(None),
+        )
+        .count()
+    )
+    assert lot_t1 >= 2
+
+
 def test_every_published_kit_line_is_stocked(seeded):
     """A fresh WO of any published procedure can kit: on-hand stock covers
     every procedure kit line and every consuming step-kit line — and the
