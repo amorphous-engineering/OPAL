@@ -161,11 +161,6 @@ class StepExecution(Base, IdMixin, TimestampMixin):
         Integer, nullable=True, comment="Order of parent step (for sub-steps)"
     )
 
-    # Operator notes
-    notes: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="Free-text operator notes"
-    )
-
     # Sign-off fields (for parent OPs or steps with requires_signoff)
     signed_off_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="When OP was signed off"
@@ -223,6 +218,12 @@ class StepExecution(Base, IdMixin, TimestampMixin):
     focuses: Mapped[list["StepFocus"]] = relationship(
         "StepFocus", back_populates="step_execution", cascade="all, delete-orphan"
     )
+    notes: Mapped[list["StepNote"]] = relationship(
+        "StepNote",
+        back_populates="step_execution",
+        cascade="all, delete-orphan",
+        order_by="StepNote.created_at, StepNote.id",
+    )
 
     @property
     def duration_seconds(self) -> int | None:
@@ -233,6 +234,32 @@ class StepExecution(Base, IdMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<StepExecution(id={self.id}, instance_id={self.instance_id}, step={self.step_number}, status={self.status})>"
+
+
+class StepNote(Base, IdMixin, TimestampMixin):
+    """Timestamped, authored, append-only operator note on a step execution.
+
+    A note is a record, not a control: it attaches to any step in any status,
+    on any work order — the debugging value is the timestamp trail. Append-only
+    (like IssueComment): no edit, no delete path.
+    """
+
+    step_execution_id: Mapped[int] = mapped_column(
+        ForeignKey("step_execution.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    author_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Relationships
+    step_execution: Mapped["StepExecution"] = relationship(
+        "StepExecution", back_populates="notes"
+    )
+    author: Mapped["User | None"] = relationship("User")
+
+    def __repr__(self) -> str:
+        return f"<StepNote(id={self.id}, step_execution_id={self.step_execution_id})>"
 
 
 class StepFocus(Base, IdMixin, TimestampMixin):
