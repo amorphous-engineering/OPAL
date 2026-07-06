@@ -147,6 +147,7 @@ def _seed_users(db: Session) -> dict[str, User]:
             password_hash=demo_hash,
             email="build@sphinx.local",
             is_admin=True,
+            needs_onboarding=False,
         ),
         User(
             name="Test Engineer",
@@ -154,6 +155,7 @@ def _seed_users(db: Session) -> dict[str, User]:
             password_hash=demo_hash,
             email="test@sphinx.local",
             is_admin=False,
+            needs_onboarding=False,
         ),
         User(
             name="QA Inspector",
@@ -161,6 +163,7 @@ def _seed_users(db: Session) -> dict[str, User]:
             password_hash=demo_hash,
             email="qa@sphinx.local",
             is_admin=False,
+            needs_onboarding=False,
         ),
     ]
     db.add_all(items)
