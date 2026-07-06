@@ -1142,11 +1142,19 @@ def inventory_opal_detail(
     opal_number: str,
 ) -> HTMLResponse:
     """OPAL item detail page with full traceability history."""
-    from opal.db.models.inventory import InventoryProduction
+    from sqlalchemy.orm import joinedload, selectinload
+
+    from opal.db.models.inventory import InventoryConsumption, InventoryProduction
     from opal.db.models.purchase import PurchaseLine
 
     record = (
         db.query(InventoryRecord)
+        .options(
+            joinedload(InventoryRecord.part),
+            selectinload(InventoryRecord.consumptions).joinedload(
+                InventoryConsumption.procedure_instance
+            ),
+        )
         .join(Part)
         .filter(InventoryRecord.opal_number == opal_number, Part.deleted_at.is_(None))
         .first()
@@ -1212,6 +1220,9 @@ def inventory_opal_detail(
                     if hasattr(c.usage_type, "value")
                     else c.usage_type,
                     "procedure_instance_id": c.procedure_instance_id,
+                    "work_order_number": c.procedure_instance.work_order_number
+                    if c.procedure_instance
+                    else None,
                     "notes": c.notes,
                 },
             }
@@ -2168,7 +2179,14 @@ def _execution_detail_context(
     context["version_steps_map"] = {s["order"]: s for s in version_steps}
 
     # Get kit information
-    kit_items = db.query(Kit).filter(Kit.procedure_id == instance.procedure_id).all()
+    from sqlalchemy.orm import joinedload
+
+    kit_items = (
+        db.query(Kit)
+        .options(joinedload(Kit.part))
+        .filter(Kit.procedure_id == instance.procedure_id)
+        .all()
+    )
     context["kit_items"] = kit_items
 
     # Get existing consumptions
@@ -2180,6 +2198,9 @@ def _execution_detail_context(
 
     consumptions = (
         db.query(InventoryConsumption)
+        .options(
+            joinedload(InventoryConsumption.inventory_record).joinedload(InventoryRecord.part)
+        )
         .filter(InventoryConsumption.procedure_instance_id == instance.id)
         .all()
     )
@@ -2209,6 +2230,9 @@ def _execution_detail_context(
     # Get existing productions
     productions = (
         db.query(InventoryProduction)
+        .options(
+            joinedload(InventoryProduction.inventory_record).joinedload(InventoryRecord.part)
+        )
         .filter(InventoryProduction.procedure_instance_id == instance.id)
         .all()
     )
@@ -2233,6 +2257,7 @@ def _execution_detail_context(
         bom_items.append(
             {
                 "part_id": k.part_id,
+                "part_pn": k.part.internal_pn,
                 "part_name": k.part.name,
                 "qty_required": qty_required,
                 "qty_consumed": qty_consumed,
@@ -2246,6 +2271,7 @@ def _execution_detail_context(
         unplanned.append(
             {
                 "part_id": pid,
+                "part_pn": inv_c.inventory_record.part.internal_pn if inv_c else None,
                 "part_name": inv_c.inventory_record.part.name if inv_c else "Unknown",
                 "qty_consumed": qty,
             }
