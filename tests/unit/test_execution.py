@@ -189,6 +189,46 @@ def test_list_instances(client):
     assert data["total"] >= 2
 
 
+def test_list_instances_query_count_does_not_grow_with_rows(client, db_session):
+    """The LIST endpoint serializes every step's notes + each note's author;
+    without eager loading that lazy-loads O(steps+notes) per refresh (F10).
+    Eager-loaded, the query count is flat as instances/notes grow."""
+    from sqlalchemy import event
+
+    proc_id, _ = _create_procedure_with_steps(client)
+
+    def _cut_with_notes() -> None:
+        iid = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()["id"]
+        for order in (1, 2, 3):
+            r = client.post(
+                f"/api/procedure-instances/{iid}/steps/{order}/notes",
+                json={"body": f"note on {order}"},
+            )
+            assert r.status_code == 201, r.text
+
+    def _counted_get() -> int:
+        statements: list[str] = []
+        engine = db_session.get_bind().engine
+
+        def _record(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _record)
+        try:
+            resp = client.get("/api/procedure-instances")
+            assert resp.status_code == 200
+        finally:
+            event.remove(engine, "before_cursor_execute", _record)
+        return len(statements)
+
+    _cut_with_notes()
+    baseline = _counted_get()
+
+    for _ in range(3):
+        _cut_with_notes()
+    assert _counted_get() == baseline  # flat: 1 vs 4 instances, 3 vs 12 notes
+
+
 def test_get_instance(client):
     """Test getting a specific instance."""
     proc_id, _ = _create_procedure_with_steps(client)

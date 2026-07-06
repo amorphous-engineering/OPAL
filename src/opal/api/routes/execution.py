@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import joinedload, selectinload
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_update
@@ -253,16 +254,37 @@ def list_instances(
 
     total = query.count()
 
+    # _step_response serializes every step's notes and each note's author:
+    # eager-load the whole chain (plus the procedure name) so the list stays
+    # a fixed number of queries — the TUI refresh degraded O(steps+notes)
+    # via per-row lazy loads (F10).
     instances = (
-        query.order_by(ProcedureInstance.id.desc())
+        query.options(
+            joinedload(ProcedureInstance.procedure),
+            selectinload(ProcedureInstance.step_executions)
+            .selectinload(StepExecution.notes)
+            .joinedload(StepNote.author),
+        )
+        .order_by(ProcedureInstance.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
 
+    # One query for the page's version numbers, not one per instance.
+    version_ids = {inst.version_id for inst in instances}
+    versions_by_id = (
+        {
+            v.id: v
+            for v in db.query(ProcedureVersion).filter(ProcedureVersion.id.in_(version_ids)).all()
+        }
+        if version_ids
+        else {}
+    )
+
     items = []
     for inst in instances:
-        version = db.query(ProcedureVersion).filter(ProcedureVersion.id == inst.version_id).first()
+        version = versions_by_id.get(inst.version_id)
         items.append(
             InstanceResponse(
                 id=inst.id,
