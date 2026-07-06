@@ -4,7 +4,7 @@
 {% block breadcrumbs %}
 {{ ok.crumb("HOME", "/") }}
 {{ ok.crumb("DATASETS", "/datasets") }}
-{{ ok.crumb(dataset.id) }}
+{{ ok.crumb(dataset.name) }}
 {% endblock %}
 
 {% block content %}
@@ -19,7 +19,6 @@
                 {% endif %}
 
                 {% call ok.table() %}
-                    {{ ok.detail_row("ID", ok.id_cell(dataset.id)) }}
                     {{ ok.detail_row("POINTS", ok.mono(data_points | length)) }}
                     {{ ok.detail_row("CREATED", ok.timestamp(dataset.created_at)) }}
                     {% if dataset.procedure_id %}

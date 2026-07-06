@@ -10,9 +10,8 @@
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("USER #" ~ user.id, actions=ok.btn("EDIT", href="/users/" ~ user.id ~ "/edit"), max_width="800px") %}
+{% call ok.panel("USER: " ~ user.name, actions=ok.btn("EDIT", href="/users/" ~ user.id ~ "/edit"), max_width="800px") %}
         {% call ok.table() %}
-            {{ ok.detail_row("ID", ok.id_cell(user.id)) }}
             {{ ok.detail_row("NAME", user.name) }}
             {{ ok.detail_row("EMAIL", ok.link(user.email, "mailto:" ~ user.email) if user.email else '-') }}
             {% if user.is_admin %}

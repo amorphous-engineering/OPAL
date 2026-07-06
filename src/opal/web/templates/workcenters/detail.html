@@ -10,7 +10,6 @@
 {% block content %}
 {% call ok.panel("WORKCENTER: " ~ workcenter.code, actions=ok.btn("EDIT", href="/workcenters/" ~ workcenter.id ~ "/edit"), max_width="800px") %}
         {% call ok.table() %}
-            {{ ok.detail_row("ID", ok.id_cell(workcenter.id)) }}
             {{ ok.detail_row("CODE", workcenter.code, mono=true) }}
             {{ ok.detail_row("NAME", workcenter.name) }}
             {{ ok.detail_row("LOCATION", workcenter.location or '-') }}

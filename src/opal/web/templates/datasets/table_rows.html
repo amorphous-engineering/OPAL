@@ -1,8 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% for dataset in datasets %}
 <tr onclick="window.location='/datasets/{{ dataset.id }}'" style="cursor: pointer;">
-    <td>{{ ok.id_cell(dataset.id) }}</td>
-    <td>{{ dataset.name }}</td>
+    <td><a href="/datasets/{{ dataset.id }}">{{ dataset.name }}</a></td>
     <td>
         {% if dataset.procedure %}
         <a href="/procedures/{{ dataset.procedure_id }}">{{ dataset.procedure.name }}</a>
@@ -14,6 +13,6 @@
     <td>{{ ok.timestamp(dataset.updated_at) }}</td>
 </tr>
 {% else %}
-<tr><td colspan="5">{{ ok.empty("No datasets found") }}</td></tr>
+<tr><td colspan="4">{{ ok.empty("No datasets found") }}</td></tr>
 {% endfor %}
 {% include 'partials/pagination_row.html' %}

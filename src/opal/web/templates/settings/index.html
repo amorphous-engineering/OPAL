@@ -186,7 +186,6 @@
         {% call ok.table() %}
             <thead>
                 <tr>
-                    {{ ok.th("ID", width="60px") }}
                     {{ ok.th("NAME") }}
                     {{ ok.th("EMAIL", width="250px") }}
                     {{ ok.th("ROLE", width="80px") }}
@@ -196,7 +195,7 @@
             </thead>
             <tbody id="users-table-body" hx-get="/users/table?is_active=true" hx-trigger="load">
                 <tr>
-                    <td colspan="6" class="text-muted">Loading...</td>
+                    <td colspan="5" class="text-muted">Loading...</td>
                 </tr>
             </tbody>
         {% endcall %}

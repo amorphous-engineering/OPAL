@@ -132,8 +132,9 @@
 <span class="mono {{ color_class }}">{{ text if text is not none else '-' }}</span>
 {%- endmacro %}
 
-{# ID cell macro - for table ID columns with link
-   Usage: {{ ok.id_cell(part.id, "/parts/" ~ part.id) }}
+{# ID cell macro - for real identifier columns (opal_number, issue_number) with link.
+   Database ids never render in lists, headers, or titles — link the PN, code, or name instead.
+   Usage: {{ ok.id_cell(issue.issue_number, "/issues/" ~ issue.id) }}
 #}
 {% macro id_cell(id, href=none) %}
 {%- if href -%}
