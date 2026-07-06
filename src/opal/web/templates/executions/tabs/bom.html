@@ -9,7 +9,7 @@
             <tbody>
                 {% for item in bom_items %}
                 <tr>
-                    <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
+                    <td><a href="/parts/{{ item.part_id }}" class="mono">{{ item.part_pn }}</a> {{ item.part_name }}</td>
                     <td class="mono" style="text-align:right;">{{ item.qty_required }}</td>
                     <td class="mono" style="text-align:right;">{{ item.qty_consumed }}</td>
                     <td class="mono" style="text-align:right;{% if item.variance > 0 %}color:var(--accent-yellow);{% elif item.variance < 0 %}color:var(--accent-red);{% endif %}">{% if item.variance > 0 %}+{% endif %}{{ item.variance }}</td>
@@ -29,7 +29,7 @@
                 <tbody>
                     {% for item in unplanned_consumptions %}
                     <tr>
-                        <td><a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a></td>
+                        <td>{% if item.part_pn %}<a href="/parts/{{ item.part_id }}" class="mono">{{ item.part_pn }}</a> {{ item.part_name }}{% else %}<a href="/parts/{{ item.part_id }}">{{ item.part_name }}</a>{% endif %}</td>
                         <td class="mono" style="text-align:right;">{{ item.qty_consumed }}</td>
                     </tr>
                     {% endfor %}

@@ -1031,6 +1031,18 @@
 
     // ---------- kit availability (KITTING tab + step kits) ----------
 
+    // The one home for the consume-from option label: the physical-item
+    // identity first, then where it sits and how much it is.
+    // "OPAL-00164 · STORE-A2 · 5 EA · LOT-2026-03" (lot only when present).
+    function invSourceLabel(opalNumber, location, quantity, uom, lotNumber) {
+        const parts = [];
+        if (opalNumber) parts.push(opalNumber);
+        parts.push(location);
+        parts.push(`${Number(quantity)} ${(uom || 'EA').toUpperCase()}`);
+        if (lotNumber) parts.push(lotNumber);
+        return parts.join(' · ');
+    }
+
     async function loadKitAvailability() {
         if (!document.getElementById('kit-table')) return;
         try {
@@ -1049,11 +1061,12 @@
             if (!item.is_available) availCell.classList.add('text-red');
             const select = row.querySelector('.inv-select');
             if (!select) continue;
-            select.innerHTML = '<option value="">Select location...</option>';
+            select.innerHTML = '<option value="">Select source...</option>';
             for (const loc of item.available_locations) {
                 const opt = document.createElement('option');
                 opt.value = loc.inventory_record_id;
-                opt.textContent = `${loc.location} (${loc.quantity.toFixed(4)})${loc.lot_number ? ' - Lot: ' + loc.lot_number : ''}`;
+                opt.textContent = invSourceLabel(
+                    loc.opal_number, loc.location, loc.quantity, item.uom, loc.lot_number);
                 select.appendChild(opt);
             }
             const required = parseFloat(row.dataset.required);
@@ -1156,7 +1169,8 @@
                 if (parseFloat(rec.quantity) <= 0) continue;
                 const opt = document.createElement('option');
                 opt.value = rec.id;
-                opt.textContent = `${rec.location} (${parseFloat(rec.quantity).toFixed(4)})${rec.lot_number ? ' - Lot: ' + rec.lot_number : ''}`;
+                opt.textContent = invSourceLabel(
+                    rec.opal_number, rec.location, rec.quantity, rec.part_uom, rec.lot_number);
                 select.appendChild(opt);
             }
             const row = select.closest('tr');

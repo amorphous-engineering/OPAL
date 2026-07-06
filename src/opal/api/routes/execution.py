@@ -1013,6 +1013,7 @@ class KitAvailabilityItem(BaseModel):
 
     part_id: int
     part_name: str
+    uom: str | None = None
     quantity_required: float
     quantity_available: float
     is_available: bool
@@ -1090,12 +1091,14 @@ def check_kit_availability(
             KitAvailabilityItem(
                 part_id=kit_item.part_id,
                 part_name=kit_item.part.name,
+                uom=kit_item.part.unit_of_measure,
                 quantity_required=qty_required,
                 quantity_available=total_available,
                 is_available=is_available,
                 available_locations=[
                     {
                         "inventory_record_id": r.id,
+                        "opal_number": r.opal_number,
                         "location": r.location,
                         "lot_number": r.lot_number,
                         "quantity": float(r.quantity),

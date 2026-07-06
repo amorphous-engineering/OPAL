@@ -14,23 +14,29 @@
     </div>
     <div class="panel-body">
         {% if consumptions %}
+        {# Consumed rows carry the physical-item identity: part number and
+           OPAL # trace each deduction to the exact stock record it came from. #}
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>PART</th>
-                    <th style="width: 100px; text-align: right;">QTY</th>
-                    <th style="width: 150px;">LOCATION</th>
-                    <th style="width: 100px;">LOT</th>
-                    <th style="width: 80px;">STEP</th>
+                    <th style="width: 130px;">PART</th>
+                    <th>NAME</th>
+                    <th style="width: 130px;">OPAL #</th>
+                    <th style="width: 80px; text-align: right;">QTY</th>
+                    <th style="width: 120px;">LOT</th>
+                    <th style="width: 130px;">LOCATION</th>
+                    <th style="width: 70px;">STEP</th>
                 </tr>
             </thead>
             <tbody>
                 {% for c in consumptions %}
                 <tr>
-                    <td><a href="/parts/{{ c.inventory_record.part_id }}">{{ c.inventory_record.part.name }}</a></td>
+                    <td><a href="/parts/{{ c.inventory_record.part_id }}" class="mono">{{ c.inventory_record.part.internal_pn }}</a></td>
+                    <td>{{ c.inventory_record.part.name }}</td>
+                    <td class="mono">{% if c.inventory_record.opal_number %}<a href="/inventory/opal/{{ c.inventory_record.opal_number }}">{{ c.inventory_record.opal_number }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td>
                     <td class="mono" style="text-align: right;">{{ c.quantity }}</td>
-                    <td class="mono">{{ c.inventory_record.location }}</td>
                     <td class="mono">{{ c.inventory_record.lot_number or '-' }}</td>
+                    <td class="mono">{{ c.inventory_record.location }}</td>
                     <td class="mono">{% if c.step_execution_id %}{{ step_exec_lookup.get(c.step_execution_id, '-') }}{% else %}-{% endif %}</td>
                 </tr>
                 {% endfor %}
@@ -50,7 +56,7 @@
             <tbody>
                 {% for kit in kit_items %}
                 <tr data-part-id="{{ kit.part_id }}" data-required="{{ kit.quantity_required }}">
-                    <td><a href="/parts/{{ kit.part_id }}">{{ kit.part.name }}</a></td>
+                    <td><a href="/parts/{{ kit.part_id }}" class="mono">{{ kit.part.internal_pn }}</a> {{ kit.part.name }}</td>
                     <td class="mono" style="text-align: right;">{{ kit.quantity_required }}</td>
                     <td class="mono availability-cell" style="text-align: right;">-</td>
                     <td>
@@ -114,7 +120,7 @@
                 {% for p in productions %}
                 {% set pstatus = p.status.value if p.status.value is defined else p.status %}
                 <tr>
-                    <td><a href="/parts/{{ p.inventory_record.part_id }}">{{ p.inventory_record.part.name }}</a></td>
+                    <td><a href="/parts/{{ p.inventory_record.part_id }}" class="mono">{{ p.inventory_record.part.internal_pn }}</a> {{ p.inventory_record.part.name }}</td>
                     <td class="mono">{{ p.serial_number or '-' }}</td>
                     <td class="mono">{% if p.produced_opal_number %}<a href="/inventory/opal/{{ p.produced_opal_number }}">{{ p.produced_opal_number }}</a>{% else %}-{% endif %}</td>
                     <td class="mono" style="text-align: right;">{% if pstatus == 'completed' %}{{ p.quantity }}{% else %}({{ p.quantity }}){% endif %}</td>
@@ -149,7 +155,7 @@
             <tbody>
                 {% for out in output_items %}
                 <tr data-part-id="{{ out.part_id }}">
-                    <td><a href="/parts/{{ out.part_id }}">{{ out.part.name }}</a></td>
+                    <td><a href="/parts/{{ out.part_id }}" class="mono">{{ out.part.internal_pn }}</a> {{ out.part.name }}</td>
                     <td class="mono" style="text-align:right;">{{ out.quantity_produced }}</td>
                     <td><input type="number" name="out_{{ out.part_id }}_qty" class="form-input" step="0.0001" min="0" value="{{ out.quantity_produced }}"></td>
                     <td><input type="text" name="out_{{ out.part_id }}_loc" class="form-input" placeholder="Location"></td>

@@ -526,6 +526,12 @@ def test_kit_availability(client, auth_headers):
     assert len(data["items"]) == 1
     assert data["items"][0]["part_id"] == kit_part_id
     assert data["items"][0]["is_available"] is True
+    # Source locations carry the physical-item identity for the consume-from
+    # select: OPAL # per record, UoM at the item level.
+    assert "uom" in data["items"][0]
+    location = data["items"][0]["available_locations"][0]
+    assert location["opal_number"].startswith("OPAL-")
+    assert location["location"]
 
 
 def test_consume_kit(client, auth_headers):

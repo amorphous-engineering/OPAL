@@ -472,3 +472,64 @@ def test_step_note_input_is_separate_block_and_survives_closeout(
     closed = web_client.get(f"/executions/{instance_id}").text
     assert "step-note-add" in closed
     assert "addStepNote(" in closed
+
+
+# ============ 12. kitting tab: consumption provenance ============
+
+
+def _create_kitted_instance(client: TestClient) -> tuple[int, dict, dict]:
+    """Kitted procedure + instance + stock. Returns (instance_id, part, inv_item)."""
+    part = client.post(
+        "/api/parts",
+        json={"name": "Kit Resistor", "tracking_type": "bulk", "category": "Electronics"},
+    ).json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
+    inv = client.post(
+        "/api/inventory",
+        json={"part_id": part["id"], "quantity": 100, "location": "STORE-A2"},
+    ).json()["items"][0]
+
+    proc_id = client.post("/api/procedures", json={"name": "Kitted Web Proc"}).json()["id"]
+    client.post(
+        f"/api/procedures/{proc_id}/kit",
+        json={"part_id": part["id"], "quantity_required": 5},
+    )
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Install parts"})
+    client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+    return instance_id, part, inv
+
+
+def test_kitting_consumed_rows_carry_provenance(web_client: TestClient):
+    """A consumed row traces to the exact physical item: internal PN linked
+    to the part, OPAL # linked to the inventory item."""
+    instance_id, part, inv = _create_kitted_instance(web_client)
+    resp = web_client.post(
+        f"/api/procedure-instances/{instance_id}/consume",
+        json={"items": [{"inventory_record_id": inv["id"], "quantity": 5}]},
+    )
+    assert resp.status_code == 200, resp.text
+
+    page = web_client.get(f"/executions/{instance_id}?tab=kitting")
+    assert page.status_code == 200
+    body = page.text
+
+    assert "OPAL #" in body
+    assert part["internal_pn"] in body
+    assert f'href="/parts/{part["id"]}"' in body
+    assert inv["opal_number"] in body
+    assert f'href="/inventory/opal/{inv["opal_number"]}"' in body
+
+
+def test_kitting_in_work_table_names_the_part_number(web_client: TestClient):
+    """Before consumption the kit table identifies parts by internal PN, and
+    the BOM tab does the same."""
+    instance_id, part, _ = _create_kitted_instance(web_client)
+
+    kitting = web_client.get(f"/executions/{instance_id}?tab=kitting").text
+    assert part["internal_pn"] in kitting
+
+    bom = web_client.get(f"/executions/{instance_id}?tab=bom").text
+    assert part["internal_pn"] in bom
