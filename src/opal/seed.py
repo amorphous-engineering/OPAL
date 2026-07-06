@@ -781,31 +781,39 @@ def _seed_inventory(
     po_lines: dict[str, PurchaseLine],
     plan: dict[str, int],
     now: datetime,
-) -> dict[str, InventoryRecord]:
+) -> dict[str, list[InventoryRecord]]:
     """Put the planned stock on the shelf — quantities come from _stock_plan,
-    the same numbers the purchase orders received."""
-    inventory: dict[str, InventoryRecord] = {}
+    the same numbers the purchase orders received.
+
+    Bulk parts hold one record at the planned quantity; serialized parts hold
+    one unit-quantity record per planned unit (serialized means one OPAL
+    number per physical unit), so every open kit line can pull real units.
+    """
+    inventory: dict[str, list[InventoryRecord]] = {}
     for entry in parts_data["parts"]:
         key = entry["key"]
         if key not in plan:
             continue
         part = parts[key]
         if entry["tracking"] == "serialized":
-            qty = Decimal("1")
+            count, qty = plan[key], Decimal("1")
+            if key == "sabv_assy":
+                count -= 1  # WO-4's freshly built valve supplies the third unit
         else:
-            qty = Decimal(plan[key])
+            count, qty = 1, Decimal(plan[key])
         po_line = po_lines.get(key)
-        rec = InventoryRecord(
-            part_id=part.id,
-            opal_number=generate_opal_number(db),
-            quantity=qty,
-            location=_stock_location(entry, part),
-            lot_number=_LOT_PARTS.get(key),
-            source_type=SourceType.PURCHASE if po_line else SourceType.MANUAL,
-            source_purchase_line_id=po_line.id if po_line else None,
-        )
-        db.add(rec)
-        inventory[key] = rec
+        for _ in range(count):
+            rec = InventoryRecord(
+                part_id=part.id,
+                opal_number=generate_opal_number(db),
+                quantity=qty,
+                location=_stock_location(entry, part),
+                lot_number=_LOT_PARTS.get(key),
+                source_type=SourceType.PURCHASE if po_line else SourceType.MANUAL,
+                source_purchase_line_id=po_line.id if po_line else None,
+            )
+            db.add(rec)
+            inventory.setdefault(key, []).append(rec)
     db.flush()
     return inventory
 
@@ -929,7 +937,7 @@ def _seed_executions(
     procs: dict[str, MasterProcedure],
     versions: dict[str, ProcedureVersion],
     parts: dict[str, Part],
-    inventory: dict[str, InventoryRecord],
+    inventory: dict[str, list[InventoryRecord]],
     users: dict[str, User],
     now: datetime,
 ) -> dict[str, Any]:
@@ -969,11 +977,12 @@ def _seed_executions(
     part_key_by_id = {p.id: k for k, p in parts.items()}
     for item in kit_items:
         key = part_key_by_id[item.part_id]
-        rec = inventory.get(key)
+        recs = inventory.get(key)
         tracking = parts[key].tracking_type
         tracking = tracking.value if hasattr(tracking, "value") else tracking
-        if rec is None or tracking == "serialized":
+        if not recs or tracking == "serialized":
             continue
+        rec = recs[0]
         qty = min(item.quantity_required, rec.quantity)
         rec.quantity -= qty
         db.add(
@@ -1113,11 +1122,12 @@ def _seed_executions(
         t += timedelta(minutes=13)
     for item in db.query(Kit).filter(Kit.procedure_id == valve_proc.id).all():
         key = part_key_by_id[item.part_id]
-        rec = inventory.get(key)
+        recs = inventory.get(key)
         tracking = parts[key].tracking_type
         tracking = tracking.value if hasattr(tracking, "value") else tracking
-        if rec is None or tracking == "serialized":
+        if not recs or tracking == "serialized":
             continue
+        rec = recs[0]
         qty = min(item.quantity_required, rec.quantity)
         rec.quantity -= qty
         db.add(

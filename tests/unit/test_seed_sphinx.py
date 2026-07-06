@@ -230,6 +230,64 @@ def test_step_notes_exist(seeded):
     assert seeded.query(StepNote).count() >= 5
 
 
+def test_every_published_kit_line_is_stocked(seeded):
+    """A fresh WO of any published procedure can kit: on-hand stock covers
+    every procedure kit line and every consuming step-kit line — and the
+    vehicle and GSE builds can kit simultaneously (their summed demand for
+    the shared valve assembly is covered)."""
+    from opal.db.models.inventory import InventoryRecord
+
+    on_hand: dict[int, float] = {}
+    for rec in seeded.query(InventoryRecord).filter(InventoryRecord.quantity > 0).all():
+        on_hand[rec.part_id] = on_hand.get(rec.part_id, 0) + float(rec.quantity)
+
+    summed: dict[int, float] = {}
+    for version in seeded.query(ProcedureVersion).all():
+        name = version.content["procedure_name"]
+        for item in version.content["kit_items"]:
+            required = item["quantity_required"]
+            summed[item["part_id"]] = summed.get(item["part_id"], 0) + required
+            assert on_hand.get(item["part_id"], 0) >= required, (
+                f"{name}: kit needs {required} of part {item['part_id']}, "
+                f"on hand {on_hand.get(item['part_id'], 0)}"
+            )
+        for step in version.content["steps"]:
+            for item in step["step_kit"]:
+                if item["usage_type"] != "consume":
+                    continue
+                assert on_hand.get(item["part_id"], 0) >= item["quantity_required"], (
+                    f"{name} step {step['step_number']}: needs {item['quantity_required']} "
+                    f"of part {item['part_id']}, on hand {on_hand.get(item['part_id'], 0)}"
+                )
+
+    # Serialized kit demand is covered across procedures, not just per line.
+    serialized = {
+        p.id: p.internal_pn
+        for p in seeded.query(Part).filter(Part.tracking_type == "serialized").all()
+    }
+    for part_id, required in summed.items():
+        if part_id in serialized:
+            assert on_hand.get(part_id, 0) >= required, (
+                f"serialized {serialized[part_id]}: total kit demand {required}, "
+                f"on hand {on_hand.get(part_id, 0)}"
+            )
+
+
+def test_serialized_stock_is_unit_records(seeded):
+    """Serialized means one OPAL number per physical unit — every serialized
+    stock record holds quantity exactly 1 (0 once consumed)."""
+    from opal.db.models.inventory import InventoryRecord
+
+    rows = (
+        seeded.query(InventoryRecord)
+        .join(Part, Part.id == InventoryRecord.part_id)
+        .filter(Part.tracking_type == "serialized")
+        .all()
+    )
+    assert rows
+    assert all(float(r.quantity) in (0.0, 1.0) for r in rows)
+
+
 def test_po_sourced_stock_never_exceeds_received(seeded):
     """A stock record citing a PO line must be covered by what that line
     received — including what was already consumed out of the record."""
