@@ -67,8 +67,8 @@ async function startExecution(event) {
         });
 
         if (response.ok) {
-            const instance = await response.json();
-            window.location.href = quantity > 1 ? '/executions' : '/executions/' + instance.id;
+            // Cutting stages work; the overview is where cut WOs live.
+            window.location.href = '/executions';
         } else {
             const error = await response.json();
             errorDiv.textContent = formatApiError(error.detail, 'Failed to start execution');

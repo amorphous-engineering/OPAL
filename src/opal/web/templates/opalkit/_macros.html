@@ -34,13 +34,14 @@
     {%- set v = value | lower if value else "" -%}
     {%- if v in ["active", "completed", "ok", "received", "published"] -%}
         {%- set variant_class = "status-ok" -%}
-    {%- elif v in ["pending", "cut", "draft", "warn", "ordered", "partial"] -%}
+    {%- elif v in ["pending", "draft", "warn", "ordered", "partial"] -%}
         {%- set variant_class = "status-warn" -%}
     {%- elif v in ["error", "aborted", "critical", "cancelled", "closed"] -%}
         {%- set variant_class = "status-error" -%}
     {%- elif v in ["in_progress", "in-progress", "in work", "in_work", "info"] -%}
         {%- set variant_class = "status-info" -%}
-    {%- elif v in ["inactive", "deprecated"] -%}
+    {%- elif v in ["inactive", "deprecated", "cut"] -%}
+        {# CUT is staged work, not a warning — muted until work starts. #}
         {%- set variant_class = "status-inactive" -%}
     {%- endif -%}
 {%- endif -%}
