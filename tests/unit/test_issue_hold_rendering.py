@@ -159,6 +159,27 @@ def test_issue_page_holding_readout(web_client):
     assert 'id="disposition-btn"' not in web_client.get(f"/issues/{advisory['id']}?edit=1").text
 
 
+def test_disposition_confirm_is_one_line(web_client):
+    """The disposition confirm is the slim signature register (risk-accept
+    parity): one consequence sentence — what signing releases — with
+    CONFIRM/ABORT inline; no box-in-box, no restatement of the type and
+    rationale sitting in the form right above."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+    nc = _raise_nc(web_client, instance_id, by_label["1.1"])
+
+    page = web_client.get(f"/issues/{nc['id']}?edit=1")
+    assert page.status_code == 200
+    assert 'id="disposition-confirm"' in page.text
+    assert "sign-confirm" in page.text
+    assert "releases" in page.text
+    # De-ceremonied: no boxed signature block, no restated type, no client
+    # timestamp (the server stamps the signature).
+    assert "baseline-confirm" not in page.text
+    assert "baseline-signature" not in page.text
+    assert 'id="disposition-type-label"' not in page.text
+    assert 'id="disposition-time"' not in page.text
+
+
 def test_issue_page_view_mode_default(web_client):
     """The issue page opens read-only: facts, an EDIT control, no field
     editors. ?edit=1 renders the in-place editors and a DONE control."""
