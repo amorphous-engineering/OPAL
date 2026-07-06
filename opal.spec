@@ -10,6 +10,8 @@ Output: dist/opal (or dist/opal.exe on Windows)
 import os
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 block_cipher = None
 
 # Paths
@@ -38,6 +40,10 @@ datas.append((str(src_dir / "tui" / "styles.tcss"), "opal/tui"))
 
 # Launcher styles
 datas.append((str(src_dir / "launcher.tcss"), "opal"))
+
+# Third-party package data: fido2 (WebAuthn) reads public_suffix_list.dat at
+# import time — the frozen server dies without it.
+datas.extend(collect_data_files("fido2"))
 
 # Alembic migrations (for programmatic upgrades)
 datas.append((str(migrations_dir), "migrations"))
