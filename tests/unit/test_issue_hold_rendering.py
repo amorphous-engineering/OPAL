@@ -1,5 +1,6 @@
-"""Smoke tests: containment holds render as absent controls + blocker lines
-(§10 exit criteria, template level)."""
+"""Smoke tests: containment holds render as inert controls + reason lines
+(§10 exit criteria, template level) — the gated button is disabled with the
+blockers named beside it, never absent."""
 
 from fastapi.testclient import TestClient
 
@@ -31,33 +32,38 @@ def _raise_nc(client: TestClient, instance_id: int, step_number: int, **extra) -
     return resp.json()
 
 
-def test_held_step_renders_blocker_line_not_complete_button(web_client):
-    """(§10.2) Step and OP COMPLETE controls are absent, replaced by blocker
-    lines naming the issue; the hold chip appears on the row."""
+def test_held_step_renders_inert_complete_with_reason(web_client):
+    """(§10.2, amended) Step and OP COMPLETE controls render disabled with a
+    reason line naming the issue beside them; the hold chip appears on the
+    row."""
     instance_id, by_label = _build_instance_with_sub_steps(web_client)
     nc = _raise_nc(web_client, instance_id, by_label["1.1"])
 
     page = web_client.get(f"/executions/{instance_id}?tab=operations&op={by_label['1']}")
     assert page.status_code == 200
-    # Blocker lines name the issue (step actions + OP header).
+    # Reason lines name the issue (step actions + OP header).
     assert page.text.count(nc["issue_number"]) >= 2
-    assert "COMPLETE — held by" in page.text
+    assert "disabled>COMPLETE</button>" in page.text
+    assert "held by" in page.text
+    # SKIP is gated by the same hold: inert + reason, still in the actions.
+    assert "disabled>SKIP</button>" in page.text
     # The hold chip is the capture confirmation.
     assert "HELD — " + nc["issue_number"] in page.text
-    # The held step's COMPLETE control is absent.
-    assert f"completeStep({by_label['1.1']})" not in page.text
-    # The OP header COMPLETE control is absent too.
-    assert f"completeStep({by_label['1']})" not in page.text
+    # The held step's COMPLETE control is inert — no active handler.
+    assert f"completeStep({by_label['1.1']}," not in page.text
+    # The OP header COMPLETE control is inert too.
+    assert f"completeStep({by_label['1']}," not in page.text
     # The capture surface is the anomaly flow, not an alert.
     assert "ANOMALY" in page.text
     assert "alert(`NC logged" not in page.text
 
 
-def test_bound_hold_row_renders_no_active_complete(web_client):
-    """F4: a 'resolve by' boundary (start_blocked) — which the server refuses to
-    COMPLETE — must not render an active COMPLETE button; the control is absent,
-    replaced by the blocker line. Previously the row derived 'held' from raised
-    NCs only and showed a button the server then 400'd."""
+def test_bound_hold_row_renders_inert_complete(web_client):
+    """F4: a 'resolve by' boundary (start_blocked) — which the server refuses
+    to COMPLETE — must not render an active COMPLETE button; the control is
+    inert (disabled) with the reason line beside it. Previously the row
+    derived 'held' from raised NCs only and showed a button the server then
+    400'd."""
     proc_id = web_client.post("/api/procedures", json={"name": "Bound gate"}).json()["id"]
     for title in ("S1", "S2", "S3"):
         web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": title})
@@ -79,10 +85,25 @@ def test_bound_hold_row_renders_no_active_complete(web_client):
 
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
-    # Step 3's COMPLETE control is absent — the server would 400 the bound hold.
+    # Step 3's COMPLETE control is inert — the server would 400 the bound hold.
     assert "completeStep(3, this)" not in page.text
-    # The blocker line names the issue instead.
+    assert "disabled>COMPLETE</button>" in page.text
+    # The reason line names the issue beside the disabled button.
     assert nc["issue_number"] in page.text
+
+
+def test_dockbar_gated_step_renders_inert_controls(web_client):
+    """The docked bar mirrors the row register: a held step's COMPLETE and
+    SKIP render disabled with the reason attached, never absent."""
+    instance_id, by_label = _build_instance_with_sub_steps(web_client)
+    nc = _raise_nc(web_client, instance_id, by_label["1.1"])
+
+    bar = web_client.get(f"/executions/{instance_id}/dockbar?step={by_label['1.1']}")
+    assert bar.status_code == 200
+    assert "disabled>COMPLETE</button>" in bar.text
+    assert "disabled>SKIP</button>" in bar.text
+    assert nc["issue_number"] in bar.text
+    assert f"completeStep({by_label['1.1']}," not in bar.text
 
 
 def test_signed_disposition_restores_controls(web_client):
@@ -98,7 +119,8 @@ def test_signed_disposition_restores_controls(web_client):
 
     page = web_client.get(f"/executions/{instance_id}?tab=operations&op={by_label['1']}")
     assert page.status_code == 200
-    assert "COMPLETE — held by" not in page.text
+    assert "disabled>COMPLETE</button>" not in page.text
+    assert "disabled>SKIP</button>" not in page.text
     assert f"completeStep({by_label['1.1']}," in page.text
 
 

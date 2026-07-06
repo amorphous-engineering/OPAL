@@ -2279,8 +2279,8 @@ def _execution_detail_context(
     # COMPLETE; held scope + redline for SKIP), so a control never renders
     # active where the server would 400 it (F4/F5). Templates render the
     # controls from these — they do not re-derive gating. Keyed by
-    # step_execution_id; a present, non-empty list means the control is absent
-    # and replaced by a blocker line.
+    # step_execution_id; a present, non-empty list means the control renders
+    # inert (disabled) with the reason line beside it naming the blockers.
     complete_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
     skip_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
     for se in instance.step_executions:
@@ -2440,7 +2440,7 @@ def _execution_detail_context(
     context["step_holding_ncs"] = holding_ncs_by_step
 
     # Undispositioned scope per op order — gates the OP's COMPLETE/sign-off
-    # control (absent + blocker line, never present-but-failing).
+    # control (inert + reason, never active-but-failing).
     op_holds_by_order: dict[int, list] = {}
     for op_data in ops + contingency_ops:
         op_exec = op_data["step"].get("execution")
@@ -2555,7 +2555,7 @@ def _set_bar_step(context: dict, step_order: int | None) -> None:
         "step_kit": vs.get("step_kit") or [],
         # Single per-row gate answer (F4): the COMPLETE/SKIP controls render
         # from these, never re-derived in the template. Non-empty => control
-        # absent, blocker line shown.
+        # inert (disabled), reason line beside it.
         "complete_blockers": (
             context.get("complete_gate_by_se", {}).get(row["execution"].id, [])
             if row.get("execution") is not None
