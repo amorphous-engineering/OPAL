@@ -61,13 +61,12 @@
 
 {# Tab navigation — the document is the landing; META and OPERATIONS are gone. #}
 <div class="exec-tabs" role="tablist">
-    {% set tabs = [
-        ('document', 'DOCUMENT'),
-        ('data',     'DATA'),
-        ('bom',      'BOM'),
-        ('issues',   'ISSUES' ~ (' (' ~ linked_issues|length ~ ')' if linked_issues else '')),
-        ('kitting',  'KITTING'),
-    ] %}
+    {# BOM/KITTING render only when the procedure declares a kit or parts
+       were consumed (kit_relevant) — an irrelevant empty section is absent. #}
+    {% set tabs = [('document', 'DOCUMENT'), ('data', 'DATA')] %}
+    {% if kit_relevant %}{% set tabs = tabs + [('bom', 'BOM')] %}{% endif %}
+    {% set tabs = tabs + [('issues', 'ISSUES' ~ (' (' ~ linked_issues|length ~ ')' if linked_issues else ''))] %}
+    {% if kit_relevant %}{% set tabs = tabs + [('kitting', 'KITTING')] %}{% endif %}
     {% for slug, label in tabs %}
     <a href="?tab={{ slug }}"
        class="exec-tab{% if tab == slug %} active{% endif %}"

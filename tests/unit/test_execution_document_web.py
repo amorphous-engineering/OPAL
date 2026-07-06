@@ -190,6 +190,17 @@ def test_hostile_step_title_does_not_inject_attribute(web_client: TestClient):
     assert "showSkipModal(" in page.text
 
 
+def test_bom_kitting_tabs_absent_without_kit(web_client: TestClient):
+    """A procedure with no kit declares no BOM/KITTING expectation — the tabs
+    are absent, not empty (empty-state rule). A kitted procedure shows them."""
+    instance_id = _create_instance(web_client)  # 3 bare steps, no kit
+    page = web_client.get(f"/executions/{instance_id}")
+    assert page.status_code == 200
+    assert ">KITTING<" not in page.text
+    assert ">BOM<" not in page.text
+    assert ">DOCUMENT<" in page.text
+
+
 # ============ 2. legacy tab aliases ============
 
 

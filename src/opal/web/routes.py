@@ -2251,6 +2251,16 @@ def _execution_detail_context(
     context["bom_items"] = bom_items
     context["unplanned_consumptions"] = unplanned
 
+    # Kit relevance (empty-state rule): the procedure declares whether BOM /
+    # KITTING content is expected. The tabs render only when the version
+    # carries a kit (procedure or step level) or parts were actually consumed
+    # — data always renders; an irrelevant empty section is absent.
+    context["kit_relevant"] = bool(
+        kit_items
+        or consumptions
+        or any(vs.get("step_kit") for vs in context["version_steps_map"].values())
+    )
+
     # Can finalize: instance completed + has WIP productions
     inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
     # Partials (_dockbar, _op_card, _rail) read inst_status from context —
