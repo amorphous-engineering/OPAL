@@ -1,0 +1,166 @@
+{
+ "attribution": "Demo content adapted from HCR-5100 \u2014 Mojave Sphinx Build, Integration, and Launch Guidebook, Half Cat Rocketry, published under the GPL.",
+ "requirements": [
+  {
+   "title": "Nominal thrust",
+   "statement": "The propulsion system shall produce approximately 250 to 300 lbf of thrust at the start of burn.",
+   "rationale": "Produces a visually impressive, easily tracked launch and a thrust-to-weight ratio high enough to launch safely in normally acceptable winds and reach safe rail exit velocity even with a poor-efficiency injector, low-performing fuels (such as diesel), or cold temperatures.",
+   "category": "performance",
+   "verification_method": "test",
+   "allocations": [
+    "tca_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Nominal burn time",
+   "statement": "The motor shall burn for approximately five seconds at nominal conditions (3.2 to 5.9 s across the 40 to 110\u00b0F operating envelope).",
+   "rationale": "Sized so the rocket burns until virtually out of sight while staying within the target impulse class; burn time varies with N2O temperature per Table 2.6.",
+   "category": "performance",
+   "verification_method": "test",
+   "allocations": [
+    "tca_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Total impulse class",
+   "statement": "The motor shall deliver a nominal total impulse of approximately 5000 N\u00b7s, near the L/M-class boundary (3900 to 5000 N\u00b7s across the operating envelope).",
+   "rationale": "Total impulse can fall into either L or M designation depending on injector efficiency and N2O temperature; sets the standoff distance class (L-M: 500 ft minimum).",
+   "category": "performance",
+   "verification_method": "analysis",
+   "allocations": [
+    "vehicle"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Nominal chamber pressure",
+   "statement": "The combustion chamber shall operate at approximately 250 to 300 psi at nominal conditions (220 to 340 psi across the operating envelope).",
+   "rationale": "Chamber pressure in psi and thrust in lbf are almost exactly the same magnitude for this design and trend together; sets injector stiffness and structural requirements.",
+   "category": "performance",
+   "verification_method": "test",
+   "allocations": [
+    "tca_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Wind launch capability",
+   "statement": "The vehicle shall launch safely in any normally acceptable wind conditions (up to 20 mph).",
+   "rationale": "Nominal thrust-to-weight ratio is set high enough to guarantee a safe rail exit velocity in wind.",
+   "category": "environmental",
+   "verification_method": "analysis",
+   "allocations": [
+    "vehicle"
+   ],
+   "state": "draft"
+  },
+  {
+   "title": "Modification envelope for O:F and chamber pressure",
+   "statement": "Any modification to injector orifice number/size shall keep the O:F ratio and chamber pressure within approximately 15% of the original nominal values.",
+   "rationale": "Keeps modified configurations inside the tested envelope; HalfCatSim does not model orifice-size mixing effects, so efficiency must be estimated manually.",
+   "category": "performance",
+   "verification_method": "analysis",
+   "allocations": [
+    "tca_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Minimum characteristic length (L*)",
+   "statement": "The combustion chamber characteristic length (L*) shall be kept above 10 inches minimum.",
+   "rationale": "Below this there is a risk the combustion chamber may ignite but fail to remain ignited.",
+   "category": "performance",
+   "verification_method": "analysis",
+   "allocations": [
+    "tca_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Injector stiffness",
+   "statement": "Injector stiffness ((feed pressure \u2212 chamber pressure)/chamber pressure) shall be at least 30% for both fuel and oxidizer, with 60%+ generally recommended.",
+   "rationale": "Absorbs random pressure fluctuations and off-nominal conditions; below ~20% the design becomes unstable (and HalfCatSim may stop working properly). Displayed stiffness is at start of burn and declines over time.",
+   "category": "performance",
+   "verification_method": "analysis",
+   "allocations": [
+    "tca_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Oxidizer tank static vent",
+   "statement": "The oxidizer run tank shall include a static vent (small hole, typically 0.020 to 0.047 in in diameter) at or near the top of the volume occupied by N2O.",
+   "rationale": "Guarantees the rocket always depressurizes itself given enough time, even in the event of total control failure \u2014 the vent is a built-in leak; also sets oxidizer fill time.",
+   "category": "functional",
+   "verification_method": "inspection",
+   "allocations": [
+    "tank_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Oxidizer supply hose and fill valve (GSE)",
+   "statement": "The hose between the N2O supply bottle and the remotely actuated fill valve shall be the shortest length required (ideally 12 inches or shorter), no larger than 1/4\" nominal diameter, made entirely of oxidizer-compatible materials (PTFE, brass, stainless steel), and rated to a safe working pressure of at least 1000 psi; the fill valve is held to the same requirements.",
+   "rationale": "Minimizes the volume pressurized with N2O when the supply bottle is opened by hand \u2014 the only place N2O is permitted with personnel present; manufacturer working-pressure ratings include a large (typically 4X) safety factor. Whip checks strongly recommended.",
+   "category": "interface",
+   "verification_method": "inspection",
+   "allocations": [
+    "gse_fill"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Oxidizer temperature/pressure operating envelope",
+   "statement": "The vehicle shall be operated with supply-bottle/ambient temperatures between 40\u00b0F and 110\u00b0F, corresponding to tank pressures of approximately 425 to 1050 psi; below 40\u00b0F use a bottle warmer, above 110\u00b0F cool the bottle with ice or a wet towel.",
+   "rationale": "N2O is a saturated liquid whose pressure and density are set by temperature; Table 2.6 defines performance across this envelope and marks conditions outside it as not recommended.",
+   "category": "environmental",
+   "verification_method": "analysis",
+   "allocations": [
+    "tank_assy"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Minimum ignition tank pressure",
+   "statement": "The launch shall proceed to ignition only with a tank pressure of at least 400 psi (the tank loses approximately 4.5 psi per second of venting after fill valve closure, bounding the pad hold at approximately 30 seconds).",
+   "rationale": "Ensures adequate injection pressure at ignition; drives the 30-second hold rule and the repressurize-or-abort decision.",
+   "category": "safety",
+   "verification_method": "demonstration",
+   "allocations": [
+    "gse"
+   ],
+   "state": "baselined"
+  },
+  {
+   "title": "Target apogee",
+   "statement": "The vehicle shall reach an apogee of approximately 5100 to 5800 ft at full fill across the 40 to 100\u00b0F envelope (nominal ~5500 ft at 60\u00b0F, alcohol fuel, BASIC-6-6 injector); hydrocarbon fuels multiply altitude by ~0.8.",
+   "rationale": "Predicted performance per Table 2.6; short-filling may be used to respect FAA waiver altitude ceilings, cloud base, and recovery walk distance.",
+   "category": "performance",
+   "verification_method": "analysis",
+   "allocations": [
+    "vehicle"
+   ],
+   "state": "tbr"
+  },
+  {
+   "title": "Legal launch ceiling (FAA waiver)",
+   "statement": "The launch shall be conducted under a dedicated FAA waiver (Form 7711-2 with supplemental information per 14 CFR 101.29(a)), since any rocket above FAA Class 1 (propellant mass > 125 grams) requires one and club waivers cannot be used for independent liquid launches.",
+   "rationale": "Liquid bipropellants are experimental and not permitted at NAR/TRA sanctioned events; in practice launches are conducted at FAR or RRS in the Mojave Desert.",
+   "category": "safety",
+   "verification_method": "inspection",
+   "allocations": [],
+   "state": "baselined"
+  },
+  {
+   "title": "Minimum standoff distance",
+   "statement": "All persons, occupied buildings, and vehicles shall be kept at least 500 feet from the rocket (L-M class) in all directions whenever it is hazardous, unless behind protection such as FAR/RRS bunkers; standoff is based on maximum potential total impulse of all loaded propellant.",
+   "rationale": "Standoff distance is the only effective precaution against the most serious hazards; distances are based on total stored propellant energy per impulse class (Table 1.4: A-G 200 ft up to >O 1000 ft).",
+   "category": "safety",
+   "verification_method": "demonstration",
+   "allocations": [],
+   "state": "baselined"
+  }
+ ]
+}
