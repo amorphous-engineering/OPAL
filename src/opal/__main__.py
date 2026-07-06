@@ -157,15 +157,38 @@ def cmd_seed(args: argparse.Namespace) -> None:
     """Populate database with Mojave Sphinx demo data."""
     _setup_project(args)
 
+    from opal.config import PROJECT_CONFIG_KEY, get_app_setting
     from opal.db.base import SessionLocal
-    from opal.db.models import Part
+    from opal.db.models import Part, Supplier, User, Workcenter
     from opal.seed import seed_database
 
     db = SessionLocal()
     try:
-        if db.query(Part).first():
-            print("Database already has data. Skipping seed.")
-            return
+        # The seed OVERWRITES the project config and inserts demo users with a
+        # publicly documented password — never on top of a configured instance.
+        found = []
+        for model, label in (
+            (Part, "parts"),
+            (User, "users"),
+            (Workcenter, "workcenters"),
+            (Supplier, "suppliers"),
+        ):
+            count = db.query(model).count()
+            if count:
+                found.append(f"{count} {label}")
+        if get_app_setting(db, PROJECT_CONFIG_KEY) is not None:
+            found.append("a saved project config")
+
+        if found and not args.force:
+            print(
+                "Refusing to seed: this database already has "
+                + ", ".join(found)
+                + ".\nSeeding would overwrite the project config and add demo users "
+                "with a publicly documented password.\n"
+                "Use --force to seed anyway.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         print("Seeding Mojave Sphinx data...")
         seed_database(db)
@@ -391,6 +414,11 @@ def main() -> None:
 
     # seed command
     seed_parser = subparsers.add_parser("seed", help="Seed demo data")
+    seed_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Seed even if the database already has users/parts/config (overwrites project config)",
+    )
     add_project_args(seed_parser)
     seed_parser.set_defaults(func=cmd_seed)
 
