@@ -672,9 +672,12 @@
 
     window.showIssueModal = function (order, label) {
         document.getElementById('anomaly-step').value = order;
-        document.getElementById('anomaly-step-label').textContent = `at ${label}`;
+        document.getElementById('anomaly-step-label').textContent = label;
         document.getElementById('anomaly-form').reset();
         document.getElementById('anomaly-step').value = order;
+        // RESOLVE BY default = the raised step; name its consequence.
+        const boundaryDefault = document.querySelector('#anomaly-boundary option[value=""]');
+        if (boundaryDefault) boundaryDefault.textContent = `this step — holds ${label} COMPLETE`;
         document.getElementById('anomaly-error').hidden = true;
         document.getElementById('anomaly-modal').hidden = false;
         document.getElementById('anomaly-title').focus();

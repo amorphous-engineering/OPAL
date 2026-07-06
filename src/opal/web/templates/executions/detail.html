@@ -97,7 +97,9 @@
         <div class="panel">
             <div class="panel-header">
                 <span>ANOMALY</span>
-                <span class="mono text-muted" id="anomaly-step-label"></span>
+                {# The raised step is a labeled fact — captured implicitly
+                   from the row the ISSUE control was pressed on. #}
+                <span class="mono text-muted">RAISED AT <span id="anomaly-step-label"></span></span>
             </div>
             <div class="panel-body">
                 <form id="anomaly-form" onsubmit="submitAnomaly(event)">
@@ -137,9 +139,12 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="anomaly-boundary">RESOLVE BY</label>
-                        <select id="anomaly-boundary" class="form-select">
-                            <option value="" selected>— this step</option>
+                        {# The boundary is independent of the raised step:
+                           raise at 5.3, resolve by 6.2 holds 6.2's COMPLETE
+                           too (raised_step_id + containment_step_id). #}
+                        <label class="form-label" for="anomaly-boundary" title="Blocks that step's COMPLETE until disposition">RESOLVE BY</label>
+                        <select id="anomaly-boundary" class="form-select" title="Blocks that step's COMPLETE until disposition">
+                            <option value="" selected>this step — holds its COMPLETE</option>
                             {% for op_data in ops %}{% for sub in (op_data.sub_steps or [op_data.step]) %}{% if sub.status == 'pending' %}
                             <option value="{{ sub.order }}">{{ sub.step_number if '.' in sub.step_number else (op_data.step.step_number ~ ('.' ~ sub.step_number if sub.order != op_data.step.order else '')) }} {{ sub.title }}</option>
                             {% endif %}{% endfor %}{% endfor %}

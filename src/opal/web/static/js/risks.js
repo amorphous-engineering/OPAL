@@ -175,10 +175,7 @@ async function applyDisposition(target) {
 // ============ Acceptance — the signature ============
 
 function openAcceptConfirm() {
-    const confirm = document.getElementById('accept-confirm');
-    confirm.style.display = 'block';
-    document.getElementById('accept-sign-time').textContent =
-        new Date().toISOString().substring(0, 19) + 'Z';
+    document.getElementById('accept-confirm').style.display = 'flex';
 }
 
 async function commitAccept() {

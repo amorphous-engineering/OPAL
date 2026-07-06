@@ -127,6 +127,12 @@ def test_acceptance_panel_partial_and_accept_flow(web_client, test_user):
     assert panel.status_code == 200
     assert "openAcceptConfirm()" in panel.text
     assert "ACCEPTANCE READINESS" not in panel.text
+    # Slim confirm register: one consequence sentence, CONFIRM/ABORT inline —
+    # no boxed signature block, no rationale restated from the field above.
+    assert "sign-confirm" in panel.text
+    assert "baseline-signature" not in panel.text
+    assert "rationale:" not in panel.text
+    assert 'id="accept-sign-time"' not in panel.text
 
     accepted = web_client.post(f"/api/risks/{risk['id']}/accept", json={})
     assert accepted.status_code == 200, accepted.text
