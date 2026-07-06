@@ -1372,9 +1372,20 @@ def purchases_detail(request: Request, db: DbSession, purchase_id: int) -> HTMLR
             status_code=404,
         )
 
-    context = get_base_context(request, db, f"PO-{purchase_id} - OPAL")
+    context = get_base_context(request, db, f"{purchase.reference or 'PO'} - OPAL")
     context["purchase"] = purchase
     context["statuses"] = [s.value for s in PurchaseStatus]
+
+    # Known stock locations feed the receive form's datalist — receiving
+    # into an existing location should not require retyping it.
+    context["known_locations"] = [
+        row[0]
+        for row in db.query(InventoryRecord.location)
+        .filter(InventoryRecord.location.isnot(None))
+        .distinct()
+        .order_by(InventoryRecord.location)
+        .all()
+    ]
 
     # Expense ledger records (written at receive time)
     from opal.db.models import PurchaseExpense
