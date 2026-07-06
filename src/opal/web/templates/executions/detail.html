@@ -19,8 +19,7 @@
 {# ============ Header: identity · progress · presence · actions ============ #}
 <div class="exec-head">
     <span class="exec-head-wo mono">{{ instance.work_order_number or 'EXECUTION' }}</span>
-    <a class="exec-head-proc" href="/procedures/{{ instance.procedure_id }}">{{ instance.procedure.name }}</a>
-    <span class="mono text-muted">v{{ version.version_number if version else '—' }}</span>
+    <a class="exec-head-proc" href="/procedures/{{ instance.procedure_id }}">{{ instance.procedure.name }} <span class="mono text-muted">v{{ version.version_number if version else '—' }}</span></a>
     {{ ok.status(inst_status | upper | replace('_', ' ')) }}
     <span class="exec-head-progress mono" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span>
     <span class="exec-progressbar"><span class="exec-progressbar-fill" data-progress-fill
