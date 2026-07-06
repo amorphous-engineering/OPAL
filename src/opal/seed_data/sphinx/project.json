@@ -8,7 +8,7 @@
     "level": 1,
     "name": "FLIGHT",
     "code": "F",
-    "description": "Flight vehicle hardware \u2014 full traceability required"
+    "description": "Flight-critical hardware \u2014 pressure-bearing and recovery-critical parts, full traceability required"
    },
    {
     "level": 2,
@@ -20,7 +20,7 @@
     "level": 3,
     "name": "DEV",
     "code": "D",
-    "description": "Consumables, tooling, templates, and jigs"
+    "description": "Commodity hardware, raw stock, consumables, tooling, templates, and jigs"
    }
   ],
   "part_numbering": {

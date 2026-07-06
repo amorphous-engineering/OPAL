@@ -141,7 +141,21 @@ def test_demo_resume_keeps_demo_data(real_instance):
     lifecycle.exit_demo(delete=True)
 
 
-def test_delete_demo_file_guarded_while_active(real_instance):
+def test_enter_demo_seeds_blank_existing_demo_file(real_instance):
+    """An interrupted first seed leaves an empty-but-existing demo file.
+
+    Freshness must derive from database content, not file existence — the
+    next ENTER DEMO self-heals by seeding instead of opening a blank demo.
+    """
+    # Simulate the trap: the demo file exists (as _switch_database creates it
+    # before the seed commits) but holds no content.
+    lifecycle.demo_db_path().parent.mkdir(parents=True, exist_ok=True)
+    lifecycle.demo_db_path().touch()
+
+    lifecycle.enter_demo(None)
+    with SessionLocal() as db:
+        assert db.query(Part).count() > 10, "blank demo file must be seeded on entry"
+    lifecycle.exit_demo(delete=True)
     lifecycle.enter_demo(None)
     with pytest.raises(RuntimeError):
         lifecycle.delete_demo_file()

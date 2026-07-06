@@ -121,9 +121,8 @@ def enter_demo(current_user=None) -> int | None:
     """
     global _real_upload_dir
 
+    from opal.db.models.part import Part
     from opal.db.models.user import User
-
-    fresh = not demo_file_exists()
 
     # Carry the auth mode across so e.g. an exe-mode deployment doesn't
     # bounce its users to a local login they cannot complete.
@@ -136,6 +135,11 @@ def enter_demo(current_user=None) -> int | None:
 
     demo_user_id: int | None = None
     with SessionLocal() as db:
+        # Freshness is a property of the CONTENT, not the file: _switch_database
+        # creates the file before the seed commits, so an interrupted first
+        # seed leaves an empty-but-existing demo database. A contentless demo
+        # (no users, no parts) is seeded; a seeded one never is.
+        fresh = db.query(User.id).first() is None and db.query(Part.id).first() is None
         if fresh:
             from opal.seed import seed_database
 

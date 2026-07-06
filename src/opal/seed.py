@@ -11,6 +11,7 @@ plus the demo-state narrative.
 """
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -82,6 +83,7 @@ def seed_database(db: Session) -> None:
 
     parts_data = _data("parts.json")
     procs_data = _data("procedures.json")
+    plan = _stock_plan(parts_data, procs_data)
 
     _seed_project_config(db)
     users = _seed_users(db)
@@ -91,8 +93,8 @@ def seed_database(db: Session) -> None:
     _seed_bom(db, parts_data, parts)
     _seed_requirements(db, parts, users, now)
     procs, versions = _seed_procedures(db, procs_data, parts, workcenters)
-    po_lines = _seed_purchases(db, parts, suppliers, now)
-    inventory = _seed_inventory(db, parts_data, procs_data, parts, po_lines, now)
+    po_lines = _seed_purchases(db, parts_data, parts, suppliers, plan, now)
+    inventory = _seed_inventory(db, parts_data, parts, po_lines, plan, now)
     wo = _seed_executions(db, procs, versions, parts, inventory, users, now)
     issues = _seed_issues(db, parts, procs, wo, users, now)
     _seed_risks(db, parts, users, issues)
@@ -542,8 +544,47 @@ def _publish(db: Session, proc: MasterProcedure) -> ProcedureVersion:
 
 
 # ---------------------------------------------------------------------------
-# Purchases
+# Purchases & stock plan
 # ---------------------------------------------------------------------------
+
+_PACK_RE = re.compile(r"[Pp]ack of (\d+)")
+
+
+def _pack_size(entry: dict) -> int:
+    """Units per orderable pack, where the catalog name declares one."""
+    if entry.get("uom") != "pack":
+        return 1
+    match = _PACK_RE.search(entry["name"])
+    return int(match.group(1)) if match else 1
+
+
+def _stock_plan(parts_data: dict, procs_data: dict) -> dict[str, int]:
+    """Intended on-hand stock per part key — the one derivation that both the
+    purchase orders and the shelf records agree on.
+
+    Kit demand across all published procedures drives the plan: bulk parts
+    hold three kits' worth (minimum 4), rounded up to whole packs where the
+    catalog sells packs; serialized parts hold exactly the open kit demand
+    (one unit-quantity record each).
+    """
+    need: dict[str, float] = {}
+    for proc in procs_data["procedures"]:
+        for item in proc.get("kit", []):
+            need[item["part"]] = need.get(item["part"], 0) + item["qty"]
+
+    plan: dict[str, int] = {}
+    for entry in parts_data["parts"]:
+        key = entry["key"]
+        if key in _NO_STOCK or entry["lifecycle"] == "draft":
+            continue
+        if entry["tracking"] == "serialized":
+            plan[key] = max(int(need.get(key, 0)), 1)
+        else:
+            qty = max(int(need.get(key, 0)) * 3, 4)
+            pack = _pack_size(entry)
+            plan[key] = -(-qty // pack) * pack  # round up to whole packs
+    return plan
+
 
 # PO-0001: the big McMaster kit order, fully received.
 _PO1_LINES = [
@@ -587,7 +628,9 @@ _PO1_LINES = [
 ]
 
 # PO-0002: spares per the maintenance schedule, partially received.
-# (received?, key) — O-ring and gasket spares arrived; the rest is backordered.
+# (received?, key, packs ordered) — quantities are authored in orderable
+# packs and expanded to stock units when the line is written.  O-ring and
+# gasket spares arrived; the rest is backordered.
 _PO2_LINES = [
     (True, "94095k114", 2),
     (True, "9452k15", 1),
@@ -599,14 +642,26 @@ _PO2_LINES = [
 
 def _seed_purchases(
     db: Session,
+    parts_data: dict,
     parts: dict[str, Part],
     suppliers: dict[str, Supplier],
+    plan: dict[str, int],
     now: datetime,
 ) -> dict[str, PurchaseLine]:
-    prices = {p["key"]: p.get("price") for p in _data("parts.json")["parts"]}
-    bom_qty: dict[str, float] = {}
-    for line in _data("parts.json")["bom"]:
-        bom_qty[line["component"]] = bom_qty.get(line["component"], 0) + line["qty"]
+    """Seed the two McMaster orders.
+
+    PO-0001 quantities ARE the stock plan: the kit order bought exactly what
+    the shelf holds, so every stock record's source line accounts for it.
+    Costs are per stock unit — pack prices are divided by the pack size the
+    catalog name declares.
+    """
+    prices = {p["key"]: p.get("price") for p in parts_data["parts"]}
+    packs = {p["key"]: _pack_size(p) for p in parts_data["parts"]}
+
+    def unit_cost(key: str) -> Decimal | None:
+        if not prices.get(key):
+            return None
+        return (Decimal(str(prices[key])) / packs[key]).quantize(Decimal("0.0001"))
 
     po_lines: dict[str, PurchaseLine] = {}
 
@@ -623,13 +678,13 @@ def _seed_purchases(
     db.add(po1)
     db.flush()
     for key in _PO1_LINES:
-        qty = Decimal(str(max(int(bom_qty.get(key, 1)), 1)))
+        qty = Decimal(plan[key])
         line = PurchaseLine(
             purchase_id=po1.id,
             part_id=parts[key].id,
             qty_ordered=qty,
             qty_received=qty,
-            unit_cost=Decimal(str(prices[key])) if prices.get(key) else None,
+            unit_cost=unit_cost(key),
         )
         db.add(line)
         po_lines[key] = line
@@ -646,14 +701,15 @@ def _seed_purchases(
     )
     db.add(po2)
     db.flush()
-    for received, key, qty in _PO2_LINES:
+    for received, key, pack_qty in _PO2_LINES:
+        qty = Decimal(pack_qty * packs[key])
         db.add(
             PurchaseLine(
                 purchase_id=po2.id,
                 part_id=parts[key].id,
-                qty_ordered=Decimal(str(qty)),
-                qty_received=Decimal(str(qty)) if received else Decimal("0"),
-                unit_cost=Decimal(str(prices[key])) if prices.get(key) else None,
+                qty_ordered=qty,
+                qty_received=qty if received else Decimal("0"),
+                unit_cost=unit_cost(key),
                 notes=None if received else "Backordered",
             )
         )
@@ -710,44 +766,55 @@ _LOT_PARTS = {
 }
 
 
+def _stock_location(part: Part) -> str:
+    procurement = part.procurement.value if hasattr(part.procurement, "value") else part.procurement
+    return (
+        "SHOP-RACK"
+        if procurement == "make"
+        else _LOCATION_BY_CATEGORY.get(part.category, "STORE-A1")
+    )
+
+
 def _seed_inventory(
     db: Session,
     parts_data: dict,
-    procs_data: dict,
     parts: dict[str, Part],
     po_lines: dict[str, PurchaseLine],
+    plan: dict[str, int],
     now: datetime,
-) -> dict[str, InventoryRecord]:
-    # Kit demand across all procedures drives sensible stock quantities.
-    need: dict[str, float] = {}
-    for proc in procs_data["procedures"]:
-        for item in proc.get("kit", []):
-            need[item["part"]] = need.get(item["part"], 0) + item["qty"]
+) -> dict[str, list[InventoryRecord]]:
+    """Put the planned stock on the shelf — quantities come from _stock_plan,
+    the same numbers the purchase orders received.
 
-    inventory: dict[str, InventoryRecord] = {}
+    Bulk parts hold one record at the planned quantity; serialized parts hold
+    one unit-quantity record per planned unit (serialized means one OPAL
+    number per physical unit), so every open kit line can pull real units.
+    """
+    inventory: dict[str, list[InventoryRecord]] = {}
     for entry in parts_data["parts"]:
         key = entry["key"]
-        if key in _NO_STOCK or entry["lifecycle"] == "draft":
+        if key not in plan:
             continue
         part = parts[key]
         if entry["tracking"] == "serialized":
-            qty = Decimal("1")
+            count, qty = plan[key], Decimal("1")
+            if key == "sabv_assy":
+                count -= 1  # WO-4's freshly built valve supplies the third unit
         else:
-            qty = Decimal(str(max(int(need.get(key, 0)) * 3, 4)))
+            count, qty = 1, Decimal(plan[key])
         po_line = po_lines.get(key)
-        rec = InventoryRecord(
-            part_id=part.id,
-            opal_number=generate_opal_number(db),
-            quantity=qty,
-            location="SHOP-RACK"
-            if entry["procurement"] == "make"
-            else _LOCATION_BY_CATEGORY.get(part.category, "STORE-A1"),
-            lot_number=_LOT_PARTS.get(key),
-            source_type=SourceType.PURCHASE if po_line else SourceType.MANUAL,
-            source_purchase_line_id=po_line.id if po_line else None,
-        )
-        db.add(rec)
-        inventory[key] = rec
+        for _ in range(count):
+            rec = InventoryRecord(
+                part_id=part.id,
+                opal_number=generate_opal_number(db),
+                quantity=qty,
+                location=_stock_location(part),
+                lot_number=_LOT_PARTS.get(key),
+                source_type=SourceType.PURCHASE if po_line else SourceType.MANUAL,
+                source_purchase_line_id=po_line.id if po_line else None,
+            )
+            db.add(rec)
+            inventory.setdefault(key, []).append(rec)
     db.flush()
     return inventory
 
@@ -866,12 +933,68 @@ _WO1_NOTES = [
 ]
 
 
+def _consume_kit(
+    db: Session,
+    wo: ProcedureInstance,
+    kit_items: list[Kit],
+    parts: dict[str, Part],
+    part_key_by_id: dict[int, str],
+    inventory: dict[str, list[InventoryRecord]],
+    user: User,
+) -> None:
+    """Consume a completed WO's kit from stock.
+
+    Bulk lines draw down the shelf record. Serialized lines consume distinct
+    unit records created here — the physical units that went into the build —
+    so genealogy is complete while the shelf units stay for the open demand.
+    """
+    for item in kit_items:
+        key = part_key_by_id[item.part_id]
+        part = parts[key]
+        tracking = part.tracking_type
+        tracking = tracking.value if hasattr(tracking, "value") else tracking
+        if tracking == "serialized":
+            for _ in range(int(item.quantity_required)):
+                rec = InventoryRecord(
+                    part_id=part.id,
+                    opal_number=generate_opal_number(db),
+                    quantity=Decimal("0"),
+                    location=_stock_location(part),
+                    source_type=SourceType.MANUAL,
+                )
+                db.add(rec)
+                db.flush()
+                db.add(
+                    InventoryConsumption(
+                        inventory_record_id=rec.id,
+                        quantity=Decimal("1"),
+                        procedure_instance_id=wo.id,
+                        consumed_by_id=user.id,
+                    )
+                )
+        else:
+            recs = inventory.get(key)
+            if not recs:
+                continue
+            rec = recs[0]
+            qty = min(item.quantity_required, rec.quantity)
+            rec.quantity -= qty
+            db.add(
+                InventoryConsumption(
+                    inventory_record_id=rec.id,
+                    quantity=qty,
+                    procedure_instance_id=wo.id,
+                    consumed_by_id=user.id,
+                )
+            )
+
+
 def _seed_executions(
     db: Session,
     procs: dict[str, MasterProcedure],
     versions: dict[str, ProcedureVersion],
     parts: dict[str, Part],
-    inventory: dict[str, InventoryRecord],
+    inventory: dict[str, list[InventoryRecord]],
     users: dict[str, User],
     now: datetime,
 ) -> dict[str, Any]:
@@ -906,26 +1029,11 @@ def _seed_executions(
             )
         )
 
-    # Consume the vehicle kit from bulk stock (WO-1 built SN 001).
+    # Consume the vehicle kit (WO-1 built SN 001): bulk from the shelf,
+    # serialized as the distinct units that went into the vehicle.
     kit_items = db.query(Kit).filter(Kit.procedure_id == veh_proc.id).all()
     part_key_by_id = {p.id: k for k, p in parts.items()}
-    for item in kit_items:
-        key = part_key_by_id[item.part_id]
-        rec = inventory.get(key)
-        tracking = parts[key].tracking_type
-        tracking = tracking.value if hasattr(tracking, "value") else tracking
-        if rec is None or tracking == "serialized":
-            continue
-        qty = min(item.quantity_required, rec.quantity)
-        rec.quantity -= qty
-        db.add(
-            InventoryConsumption(
-                inventory_record_id=rec.id,
-                quantity=qty,
-                procedure_instance_id=wo1.id,
-                consumed_by_id=build.id,
-            )
-        )
+    _consume_kit(db, wo1, kit_items, parts, part_key_by_id, inventory, build)
 
     # Produced vehicle SN 001.
     veh_part = parts["vehicle"]
@@ -1053,23 +1161,8 @@ def _seed_executions(
     for s in valve_version.content["steps"]:
         _complete_step(wo4_steps[s["step_number"]], s, t, test)
         t += timedelta(minutes=13)
-    for item in db.query(Kit).filter(Kit.procedure_id == valve_proc.id).all():
-        key = part_key_by_id[item.part_id]
-        rec = inventory.get(key)
-        tracking = parts[key].tracking_type
-        tracking = tracking.value if hasattr(tracking, "value") else tracking
-        if rec is None or tracking == "serialized":
-            continue
-        qty = min(item.quantity_required, rec.quantity)
-        rec.quantity -= qty
-        db.add(
-            InventoryConsumption(
-                inventory_record_id=rec.id,
-                quantity=qty,
-                procedure_instance_id=wo4.id,
-                consumed_by_id=test.id,
-            )
-        )
+    valve_kit = db.query(Kit).filter(Kit.procedure_id == valve_proc.id).all()
+    _consume_kit(db, wo4, valve_kit, parts, part_key_by_id, inventory, test)
     valve_part = parts["sabv_assy"]
     valve_rec = InventoryRecord(
         part_id=valve_part.id,
