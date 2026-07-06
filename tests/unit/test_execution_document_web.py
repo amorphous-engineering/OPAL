@@ -338,6 +338,32 @@ def test_dockbar_follows_cursor_with_data_fields(web_client: TestClient, test_us
     assert '<span class="cursor-chip mono is-self"' in page.text
 
 
+def test_dockbar_op_row_renders_inert_complete_with_children_reason(web_client: TestClient):
+    """An OP row over open children shows the standard gated control — an
+    inert COMPLETE with the children reason beside it — never an absent
+    control (F11: inert + reason, the pre-amendment hide pattern is banned)."""
+    proc_id = web_client.post("/api/procedures", json={"name": "Dockbar OP gate"}).json()["id"]
+    op = web_client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Parent OP"}).json()
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 1", "parent_step_id": op["id"]}
+    )
+    web_client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Sub 2", "parent_step_id": op["id"]}
+    )
+    web_client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = web_client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+
+    resp = web_client.get(f"/executions/{instance_id}/dockbar?step=1")
+    assert resp.status_code == 200
+    body = resp.text
+    assert 'data-bar-order="1"' in body
+    # Inert control + reason, display numbers (F1).
+    assert '<button class="btn btn-sm btn-primary" disabled>COMPLETE</button>' in body
+    assert "Waiting on sub-steps 1.1, 1.2" in body
+
+
 # ============ 7. rail partial: attachments + reference docs ============
 
 

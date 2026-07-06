@@ -60,7 +60,11 @@
             {% endif %}
             {% if actionable and bs == 'awaiting_signoff' %}
             <button class="btn btn-sm btn-primary" onclick="signoffStep({{ bar_step.order }})">SIGN OFF</button>
-            {% elif workable and not bar_step.has_children %}
+            {% elif workable %}
+            {# OP rows included: the gate (complete_gate_by_se) carries the
+               children blocker, so a parent over open children renders the
+               standard inert control + "Waiting on sub-steps …" — never an
+               absent control (inert + reason doctrine). #}
             {{ ex.complete_control(bar_step.order, bar_step.complete_blockers) }}
             {% endif %}
             {% endif %}
