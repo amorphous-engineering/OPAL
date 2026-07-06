@@ -1018,14 +1018,6 @@
      "workcenter": "BENCH",
      "step_kit": [
       {
-       "part": "tca_assy",
-       "qty": 1.0
-      },
-      {
-       "part": "tank_assy",
-       "qty": 1.0
-      },
-      {
        "part": "fin_bracket_assy",
        "qty": 4.0
       },

@@ -66,6 +66,28 @@ def test_vehicle_assembly_has_11_ops_with_step_kits(seeded):
     assert sum(len(s["step_kit"]) for s in ops) > 80
 
 
+def test_step_kits_never_exceed_gather_list(seeded):
+    """Step kits are a breakdown of the procedure kit, never extra demand.
+
+    In particular no step kit may demand a mid-procedure subassembly (the ops
+    BUILD those; the kit carries their raw materials) — the model has no way
+    to consume same-WO production.
+    """
+    for version in seeded.query(ProcedureVersion).all():
+        kit = {i["part_id"]: i["quantity_required"] for i in version.content["kit_items"]}
+        step_demand: dict[int, float] = {}
+        for step in version.content["steps"]:
+            for item in step["step_kit"]:
+                step_demand[item["part_id"]] = (
+                    step_demand.get(item["part_id"], 0) + item["quantity_required"]
+                )
+        for part_id, qty in step_demand.items():
+            assert kit.get(part_id, 0) >= qty, (
+                f"{version.content['procedure_name']}: part {part_id} step kits demand {qty} "
+                f"but the gather list carries {kit.get(part_id, 0)}"
+            )
+
+
 def test_op_titles_carry_no_numbering(seeded):
     """The UI renders 'OP {n}' itself — titles must not repeat it."""
     for (title,) in seeded.query(ProcedureStep.title):
