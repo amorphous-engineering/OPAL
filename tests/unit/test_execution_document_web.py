@@ -196,9 +196,9 @@ def test_bom_kitting_tabs_absent_without_kit(web_client: TestClient):
     instance_id = _create_instance(web_client)  # 3 bare steps, no kit
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
-    assert ">KITTING<" not in page.text
-    assert ">BOM<" not in page.text
-    assert ">DOCUMENT<" in page.text
+    assert "tab=kitting" not in page.text
+    assert "tab=bom" not in page.text
+    assert "tab=document" in page.text
 
 
 # ============ 2. legacy tab aliases ============
