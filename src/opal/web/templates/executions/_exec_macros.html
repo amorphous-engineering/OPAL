@@ -48,14 +48,42 @@
 {% macro indicators(step, attach_counts, vs) %}
 {% set exec = step.execution %}
 {% set n_att = attach_counts.get(exec.id, 0) if exec else 0 %}
-{% set n_note = 1 if exec and exec.notes else 0 %}
+{% set n_note = step_notes_by_se.get(exec.id, []) | length if exec else 0 %}
 {% if n_att or n_note %}
 <span class="doc-ind mono" data-ind>
     {%- if n_att %}<span class="ind" title="{{ n_att }} attachment(s)" onclick="event.stopPropagation(); railFocusStep({{ step.order }})">{{ n_att }} ATT</span>{% endif -%}
     {%- if n_att and n_note %}<span class="ind-sep"> · </span>{% endif -%}
-    {%- if n_note %}<span class="ind" title="Operator notes">1 NOTE</span>{% endif -%}
+    {%- if n_note %}<span class="ind" title="Operator notes">{{ n_note }} NOTE{{ 'S' if n_note > 1 else '' }}</span>{% endif -%}
 </span>
 {% endif %}
+{% endmacro %}
+
+{# Step note trail: timestamped, authored, append-only — one muted mono line
+   per note, chronological. HH:MM with the full ISO-8601 in the tooltip (hm).
+   Renders whenever notes exist, in any step/instance status. #}
+{% macro notes_readout(exec) %}
+{% set notes = step_notes_by_se.get(exec.id, []) if exec else [] %}
+{% if notes %}
+<div class="step-notes-readout" data-notes>
+    <span class="ro-label mono">NOTES</span>
+    <div class="ro-notes">
+        {% for n in notes %}
+        <div class="note-line mono text-muted">{{ hm(n.created_at) }} {{ (n.author.name | initials) if n.author else '—' }} · {{ n.body }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Append-only note input: Enter or blur posts, empty is a no-op. Notes are
+   a record, not a control — offered on any step, any work order status. #}
+{% macro note_input(order) %}
+<div class="bar-field bar-field-notes">
+    <label class="bar-field-label mono">+ NOTE</label>
+    <input type="text" class="form-input step-note-add" maxlength="2000"
+           onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.blur(); }"
+           onblur="addStepNote({{ order }}, this)">
+</div>
 {% endmacro %}
 
 {# Presence cursors for one row — bordered initials chips in the right

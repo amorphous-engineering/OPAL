@@ -395,6 +395,16 @@
     font-size: 0.8rem;
 }
 
+/* Step note trail: one line per note, chronological. */
+.step-notes-readout {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    margin: var(--space-xs) 0;
+}
+
+.note-line { padding: 1px 0; }
+
 .step-kit-panel { margin: var(--space-xs) 0; }
 
 /* Expanded-step control surface: fields, notes, actions. */
@@ -523,7 +533,6 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 .bar-field .form-input, .bar-field .form-select { padding: 2px var(--space-xs); }
 .bar-field-label { font-size: 0.65rem; color: var(--text-secondary); }
 .bar-field-notes { flex: 1; min-width: 160px; }
-.bar-field-notes textarea { resize: none; }
 .bar-check { display: flex; align-items: center; gap: var(--space-xs); font-size: 0.75rem; }
 
 .dockbar-actions {

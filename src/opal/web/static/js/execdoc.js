@@ -228,7 +228,10 @@
             s.status,
             s.holds.map((h) => h.issue_number + h.disposition_state),
             s.attachments,
-            s.has_notes,
+            // Count + latest timestamp: a note appended remotely (MCP, another
+            // operator) re-renders the row's note trail on the next poll.
+            s.notes.length,
+            s.notes.length ? s.notes[s.notes.length - 1].created_at : null,
         ]);
     }
 
@@ -587,8 +590,6 @@
                 return;
             }
             if (data) body.data_captured = data;
-            const notesEl = container.querySelector('.step-notes-input');
-            if (notesEl && notesEl.value.trim()) body.notes = notesEl.value.trim();
         }
         try {
             const resp = await fetch(apiUrl(`/steps/${order}/complete`), {
@@ -619,13 +620,26 @@
         } catch (e) { toastError(null, 'Network error'); }
     };
 
-    window.saveNotes = async function (order, value) {
+    // Append-only: posts one timestamped note and clears the input. Empty
+    // input is a no-op (blur fires on every focus change).
+    window.addStepNote = async function (order, input) {
+        const body = input.value.trim();
+        if (!body) return;
         try {
-            await fetch(apiUrl(`/steps/${order}/notes`), {
-                method: 'PATCH', headers: getHeaders(),
-                body: JSON.stringify({ notes: value.trim() || null }),
+            const resp = await fetch(apiUrl(`/steps/${order}/notes`), {
+                method: 'POST', headers: getHeaders(),
+                body: JSON.stringify({ body }),
             });
-        } catch (e) { console.error('execdoc: notes save failed', e); }
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                toastError(err.detail, 'Failed to add note');
+                return;
+            }
+            input.value = '';
+            input.defaultValue = '';
+            await refreshStepRow(order);
+            pollNow();
+        } catch (e) { toastError(null, 'Network error'); }
     };
 
     window.abortExecution = async function () {

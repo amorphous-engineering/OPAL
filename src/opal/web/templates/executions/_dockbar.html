@@ -26,14 +26,11 @@
         {% if bar_step.caution %}
         <div class="caution-block dockbar-caution">CAUTION: {{ bar_step.caution }}</div>
         {% endif %}
-        {% if workable and bar_step.exec and not bar_step.has_children %}
+        {% if bar_step.exec %}
         <div class="dockbar-fields" id="dockbar-fields">
-            {{ ex.data_fields_editable(bar_step) }}
-            <div class="bar-field bar-field-notes">
-                <label class="bar-field-label mono">NOTES</label>
-                <textarea class="form-textarea step-notes-input" rows="1"
-                          onblur="saveNotes({{ bar_step.order }}, this.value)">{% if bar_step.exec.notes %}{{ bar_step.exec.notes }}{% endif %}</textarea>
-            </div>
+            {% if workable and not bar_step.has_children %}{{ ex.data_fields_editable(bar_step) }}{% endif %}
+            {# Append-only note input: available in any status — a record, not a control. #}
+            {{ ex.note_input(bar_step.order) }}
         </div>
         {% endif %}
         <div class="dockbar-actions">

@@ -338,11 +338,11 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def update_step_notes(self, instance_id: int, step_number: int, notes: str) -> dict[str, Any]:
-        """Update step notes."""
-        resp = self.client.patch(
+    def add_step_note(self, instance_id: int, step_number: int, body: str) -> dict[str, Any]:
+        """Append a timestamped note to a step."""
+        resp = self.client.post(
             self._url(f"/procedure-instances/{instance_id}/steps/{step_number}/notes"),
-            json={"notes": notes},
+            json={"body": body},
             headers=self._headers(),
         )
         resp.raise_for_status()
