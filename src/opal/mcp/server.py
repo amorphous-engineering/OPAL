@@ -6348,12 +6348,15 @@ async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
     containment = issue.containment.value if hasattr(issue.containment, "value") else issue.containment
     if containment == Containment.STEP.value and issue.containment_step_id == step_exec.id:
         label = step_exec.step_number_str or str(step_exec.step_number)
-        return json_response(
-            {
-                "success": True,
-                "message": f"{issue.issue_number} already holds COMPLETE of step {label}",
-            }
-        )
+        message = f"{issue.issue_number} already holds COMPLETE of step {label}"
+        # Commit before the early return (after the attribute reads — commit
+        # expires instances): the WO adoption above is only flushed, and
+        # call_tool's cleanup closes (rolls back) the session, so without
+        # this the adoption the cross-WO seam exists for is silently lost on
+        # the re-bind path. Mirrors the normal path, which commits inside
+        # _set_containment.
+        db.commit()
+        return json_response({"success": True, "message": message})
 
     return await _set_containment(
         db,

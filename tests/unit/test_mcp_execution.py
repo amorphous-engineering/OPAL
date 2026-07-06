@@ -569,6 +569,59 @@ def test_bind_issue_hold_adopts_work_order_when_unset(client, db_session, test_u
     assert len(step2["holds"]) == 1
 
 
+def test_bind_issue_hold_rebind_persists_adoption_past_session_close(
+    client, db_session, test_user
+):
+    """F3 (re-bind path): the "already holds COMPLETE of step X" early return
+    must commit the WO adoption. call_tool's cleanup closes (rolls back) the
+    session after the handler, so a flush-only adoption would be silently
+    lost — the seam the adoption exists for."""
+    from opal.db.models.execution import StepExecution
+    from opal.db.models.issue import Containment
+
+    instance_id, _ = _create_instance(client)
+    step_exec = (
+        db_session.query(StepExecution)
+        .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == 2)
+        .one()
+    )
+
+    # An orphaned issue already step-contained at that boundary but naming no
+    # work order (e.g. its WO link was cleared after a bind).
+    issue_data = _call(
+        server._raise_issue,
+        db_session,
+        {"title": "Orphaned bound NC", "issue_type": "non_conformance", "containment": "step"},
+    )
+    issue = db_session.get(Issue, issue_data["issue"]["id"])
+    issue.containment = Containment.STEP
+    issue.containment_step_id = step_exec.id
+    issue.procedure_instance_id = None
+    db_session.flush()
+
+    data = _call(
+        server._bind_issue_hold,
+        db_session,
+        {
+            "execution_id": instance_id,
+            "step_number": 2,
+            "issue_id": issue.id,
+            "user_id": test_user.id,
+        },
+    )
+    assert data["success"] is True
+    assert "already holds" in data["message"]
+
+    # The adoption was COMMITTED: the handler must leave no open transaction
+    # for call_tool's finally db.close() to roll back. A flush-only adoption
+    # leaves in_transaction() True and is silently discarded. (The per-test
+    # outer rollback makes commit-vs-flush unobservable via data, so the
+    # transaction state is the assertion; checked BEFORE any read, which
+    # would autobegin a fresh transaction.)
+    assert not db_session.in_transaction()
+    assert db_session.get(Issue, issue.id).procedure_instance_id == instance_id
+
+
 def test_bind_issue_hold_unknown_issue(client, db_session):
     instance_id, _ = _create_instance(client)
 
