@@ -1025,6 +1025,27 @@ def _create_instance_with_sub_steps(client):
     )
 
 
+def test_parent_op_complete_refused_while_children_open(client):
+    """Manual COMPLETE of an OP row with non-terminal sub-steps is refused —
+    the auto-complete path requires all children terminal, and the manual
+    path must agree (rehearsal finding 2026-07-06). Once the children are
+    done the OP auto-completes; there is nothing left to complete by hand."""
+    instance_id, op_a, a1, a2, _op_b = _create_instance_with_sub_steps(client)
+
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
+    assert resp.status_code == 400
+    assert "Waiting on sub-steps" in resp.json()["detail"]
+
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
+    resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{op_a}/complete", json={})
+    assert resp.status_code == 400  # one child still open
+
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
+    inst = client.get(f"/api/procedure-instances/{instance_id}").json()
+    op_row = next(s for s in inst["step_executions"] if s["step_number"] == op_a)
+    assert op_row["status"] == "completed"  # auto-completed with the last child
+
+
 def test_nc_on_sub_step_blocks_parent_op_complete(client):
     """(§10.2) A step-containment issue makes both the raised step's COMPLETE
     and its OP's COMPLETE absent — the 400 names the issue."""
