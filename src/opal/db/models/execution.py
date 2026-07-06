@@ -71,15 +71,6 @@ class ProcedureInstance(Base, IdMixin, TimestampMixin):
         default=0,
         comment="Higher = more urgent (0=normal, 1=high, 2=urgent)",
     )
-    target_entity: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
-        nullable=True,
-        comment=(
-            "Entity this execution is run against, "
-            "e.g. {entity_type: 'part', entity_id: 42, entity_label: 'SN-00042'}"
-        ),
-    )
-
     # Relationships
     procedure: Mapped["MasterProcedure"] = relationship(
         "MasterProcedure", back_populates="instances"

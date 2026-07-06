@@ -147,7 +147,6 @@ class InstanceResponse(BaseModel):
     scheduled_start_at: datetime | None = None
     target_completion_at: datetime | None = None
     priority: int = 0
-    target_entity: dict[str, Any] | None = None
     created_at: datetime
     step_executions: list[StepExecutionResponse] = []
 
@@ -175,11 +174,6 @@ class InstanceCreate(BaseModel):
     scheduled_start_at: datetime | None = None
     target_completion_at: datetime | None = None
     priority: int = 0
-    target_entity: dict[str, Any] | None = Field(
-        None,
-        description="Entity this execution targets, e.g. "
-        '{"entity_type": "part", "entity_id": 42, "entity_label": "SN-00042"}',
-    )
 
 
 class InstanceUpdate(BaseModel):
@@ -285,7 +279,6 @@ def list_instances(
                 scheduled_start_at=inst.scheduled_start_at,
                 target_completion_at=inst.target_completion_at,
                 priority=inst.priority,
-                target_entity=inst.target_entity,
                 created_at=inst.created_at,
                 step_executions=[_step_response(se) for se in inst.step_executions],
             )
@@ -383,7 +376,6 @@ def create_instance(
             scheduled_start_at=data.scheduled_start_at,
             target_completion_at=data.target_completion_at,
             priority=data.priority,
-            target_entity=data.target_entity,
         )
         db.add(instance)
         db.flush()
@@ -458,7 +450,6 @@ def create_instance(
         scheduled_start_at=instance.scheduled_start_at,
         target_completion_at=instance.target_completion_at,
         priority=instance.priority,
-        target_entity=instance.target_entity,
         created_at=instance.created_at,
         step_executions=[_step_response(se) for se in instance.step_executions],
     )
@@ -491,7 +482,6 @@ def get_instance(
         scheduled_start_at=instance.scheduled_start_at,
         target_completion_at=instance.target_completion_at,
         priority=instance.priority,
-        target_entity=instance.target_entity,
         created_at=instance.created_at,
         step_executions=[_step_response(se) for se in instance.step_executions],
     )
@@ -565,7 +555,6 @@ def update_instance(
         scheduled_start_at=instance.scheduled_start_at,
         target_completion_at=instance.target_completion_at,
         priority=instance.priority,
-        target_entity=instance.target_entity,
         created_at=instance.created_at,
         step_executions=[_step_response(se) for se in instance.step_executions],
     )

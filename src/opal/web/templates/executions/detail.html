@@ -56,7 +56,6 @@
     <div class="ro-row"><span class="ro-label">VERSION CREATED</span><span>{% if version %}{{ version.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
     {% if instance.scheduled_start_at %}<div class="ro-row"><span class="ro-label">SCHEDULED START</span><span>{{ instance.scheduled_start_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
     {% if instance.target_completion_at %}<div class="ro-row"><span class="ro-label">TARGET COMPLETION</span><span>{{ instance.target_completion_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
-    {% if instance.target_entity %}<div class="ro-row"><span class="ro-label">TARGET ENTITY</span><span>[{{ (instance.target_entity.entity_type or '?') | upper }}] {{ instance.target_entity.entity_label or instance.target_entity.entity_id }}</span></div>{% endif %}
 </div>
 
 {# Tab navigation — the document is the landing; META and OPERATIONS are gone. #}
