@@ -102,7 +102,7 @@ def test_enter_demo_creates_separate_db(real_instance):
     assert demo_user_id is not None
 
     with SessionLocal() as db:
-        # Kestrel seed data present, real part absent
+        # Sphinx seed data present, real part absent
         assert db.query(Part).count() > 10
         assert db.query(Part).filter(Part.name == "Real Part").first() is None
         # Operator replicated as admin

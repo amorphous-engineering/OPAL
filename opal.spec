@@ -26,6 +26,13 @@ datas.append((str(src_dir / "web" / "static"), "opal/web/static"))
 # SE requirement lint rules (loaded as data by opal.se.lint)
 datas.append((str(src_dir / "se" / "lint_rules.yaml"), "opal/se"))
 
+# Risk scenario lint rules (loaded as data by opal.risks.lint; the demo seed's
+# risk-accept path reads them)
+datas.append((str(src_dir / "risks" / "lint_rules.yaml"), "opal/risks"))
+
+# Mojave Sphinx demo seed data (loaded by opal.seed)
+datas.append((str(src_dir / "seed_data" / "sphinx"), "opal/seed_data/sphinx"))
+
 # TUI styles
 datas.append((str(src_dir / "tui" / "styles.tcss"), "opal/tui"))
 

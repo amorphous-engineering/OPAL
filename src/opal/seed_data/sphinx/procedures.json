@@ -1,0 +1,3835 @@
+{
+ "attribution": "Demo content adapted from HCR-5100 \u2014 Mojave Sphinx Build, Integration, and Launch Guidebook, Half Cat Rocketry, published under the GPL.",
+ "procedures": [
+  {
+   "key": "vehicle_assembly",
+   "name": "Mojave Sphinx Vehicle Assembly",
+   "description": "Section V build sequence for the Mojave Sphinx flight vehicle: valves, tank, thrust chamber, fin brackets, thrust structure, avionics bay, nose cone, airframe, and recovery integration (HCR-5100 OPs 1-13).",
+   "type": "build",
+   "output": {
+    "part": "vehicle",
+    "qty": 1
+   },
+   "ops": [
+    {
+     "title": "OP 1: Assemble Servo-Actuated Ball Valves",
+     "instructions": "Build two identical servo-actuated ball valve assemblies (PN SABV-04FF) by mounting a DS3225 25kg servo and a 4112T22 compact high-pressure brass ball valve into a 3D-printed Servo Valve Mount, coupling the servo horn to the valve handle via a printed handle connector. All steps are performed twice; listed quantities cover both assemblies.",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "sabv_mount_v2",
+       "qty": 1.0
+      },
+      {
+       "part": "sabv_hcon_v2",
+       "qty": 1.0
+      },
+      {
+       "part": "pla_fil_2kg",
+       "qty": 1.0
+      },
+      {
+       "part": "4112t22",
+       "qty": 1.0
+      },
+      {
+       "part": "ds3225",
+       "qty": 1.0
+      },
+      {
+       "part": "93475a210",
+       "qty": 1.0
+      },
+      {
+       "part": "92855a310",
+       "qty": 1.0
+      },
+      {
+       "part": "90272a194",
+       "qty": 1.0
+      },
+      {
+       "part": "90480a009",
+       "qty": 1.0
+      },
+      {
+       "part": "zip_tie_188w",
+       "qty": 1.0
+      },
+      {
+       "part": "91280a044",
+       "qty": 1.0
+      },
+      {
+       "part": "90591a141",
+       "qty": 1.0
+      },
+      {
+       "part": "98689a113",
+       "qty": 1.0
+      },
+      {
+       "part": "92148a160",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Verify and secure servo horn orientation",
+       "instructions": "Confirm the servo horn is installed in the correct orientation: connect the servo to your control device and verify the horn points the correct direction in both valve-open and valve-closed commanded states. Secure the horn to the spur gear with the M3 Phillips screw included with the servo (replacement PN 92000A76 if lost or damaged).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install servo into Servo Valve Mount",
+       "instructions": "Install the DS3225 servo into the Servo Valve Mount using 4x M4x16 hex head screws (92180A044; step text prints 91280A044), 8x 98689A113 flat washers, 4x 92148A160 lock washers, and 4x 90591A141 nuts. Fully tighten the 2 screws closest to the back of the mount before installing the outer 2 fasteners; socket head screws (PN 90128A215) may be substituted to remove this ordering dependency.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount handle connector on servo horn",
+       "instructions": "Move the servo horn to point out from the Servo Valve Mount (valve closed position). Mount the Servo Valve Handle Connector onto the servo horn using the M3 socket head cap screw and washer, installed in the threaded hole closest to the end of the horn.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Insert ball valve into mount",
+       "instructions": "Move the servo horn back to the valve-open position, parallel to the back face of the mount. Insert the 4112T22 ball valve into the mount so the handle slides into the Servo Valve Handle Connector and the indicated holes align.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Pin valve handle to connector",
+       "instructions": "Move the servo horn and valve handle to the valve-closed position, then install 1x 90272A194 #8-32 screw with 1x 92148A160 lock washer and 1x 90480A009 nut through the handle connector and ball valve handle. The screw should fit through the existing hole in the valve handle; if it does not, drill as necessary to achieve a clearance fit.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Secure valve body with zip tie",
+       "instructions": "Secure the valve in place with a nylon zip tie passed through the small rectangular slot in the Servo Valve Mount. The zip tie is not critical to valve function but reduces movement of the valve body during actuation.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Bag and label completed assemblies",
+       "instructions": "Bag and label the completed servo-actuated ball valve assemblies with PN SABV-04FF and set aside for integration in a later operation.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 2: Drill Tank Tube",
+     "instructions": "Prepare the 4\" OD x 1/8\" wall x 36\" 6061-T6 aluminum tank tube: square the ends, drill 8x 11/32\" bolt holes at each end using printed drill jigs, deburr all edges, and drill the 1.2mm nitrous static vent orifice at 14.25 inches from one end. A vertical mill with indexing head may substitute for the printed jigs.",
+     "workcenter": "SHOP",
+     "step_kit": [
+      {
+       "part": "9056k423",
+       "qty": 1.0
+      },
+      {
+       "part": "drljg_tank_8x625od_bshng",
+       "qty": 2.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Verify tank tube ends square",
+       "instructions": "Ensure the tank tube ends are cut square to within approximately +/-.020. Check by wrapping a strip of paper around the tube and aligning the edge to create a straight line along the cylinder surface. If needed, use a file or trim off a short section (<.25\") with a hacksaw or bandsaw to square the ends.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "ends_square",
+          "type": "text",
+          "label": "Tube ends square within +/-.020 in",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Install tank drill jigs",
+       "instructions": "Press the 2x tank drill jigs onto the tube ends until the tube contacts the lip of the jig. Ensure each jig is snug and cannot slide or rotate; secure with tape if necessary. Optionally mark each hole location with a marker or automatic center punch to keep the drill tip in place when starting holes.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Drill 8x bolt holes per end",
+       "instructions": "Drill 8x holes with an 11/32\" drill bit in each end of the tank tube, using the jig to align the bit. Be careful not to let the drill bit strike the inside surface on the far side of the tube; a drill stop may be used but is not required. A drill press is recommended, though a hand drill may be used.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Deburr hole edges inside tube",
+       "instructions": "Deburr the hole edges on the inside of the tube so sharp edges or burrs will not damage O-rings when inserting the piston and bulkhead. A reversible countersink such as the Noga RC2000 is recommended; any standard countersink tool may be used to break the interior edges by hand. If sandpaper or abrasive pads are used, ensure all motion is circumferential \u2014 axial motion creates scratches perpendicular to the seal and increases likelihood of leakage.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Deburr tube end interiors",
+       "instructions": "Deburr the interior edges of both ends of the tank using a deburring knife or fine rounded file. This reduces risk of seal damage and improves ease of inserting the piston and bulkhead.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mark vent orifice location",
+       "instructions": "Measure 14.25 inches from one end of the tank, in line with one set of tank bolt holes, and mark this location with a permanent marker.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Drill 1.2mm nitrous static vent orifice",
+       "instructions": "At the marked location, drill a 1.2mm diameter hole through the tank wall to create the nitrous static vent orifice. An automatic center punch may be used prior to drilling to prevent the bit from walking. Mark the vent location with a permanent marker or paint pen to assist identification.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mark rail guide line",
+       "instructions": "Mark a line between one pair of bolt holes 90 degrees from the vent location and label it \"RAIL GUIDES\". This ensures the vent points to one side of the rail for maximum visibility.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 3: Fuel Bulkhead Subassembly",
+     "instructions": "Assemble the fuel tank bulkhead: install sealed stud-anchor screws with fluorosilicone sealing washers, populate the printed nut ring with weld nuts and hex nuts inside the tank interface ring, and plumb the servo-actuated fuel valve to the bulkhead via an aluminum pipe nipple plus a fitting stack ending in a 5/16\" 37-degree flared adapter for the fuel downcomer line.",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "sabv_assy",
+       "qty": 1.0
+      },
+      {
+       "part": "bkhd_fl_o238_4npt2x250c",
+       "qty": 1.0
+      },
+      {
+       "part": "inrg_200s_8x3125c8x250c",
+       "qty": 1.0
+      },
+      {
+       "part": "ntrg_45c20d_200e",
+       "qty": 1.0
+      },
+      {
+       "part": "94579a550",
+       "qty": 8.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 8.0
+      },
+      {
+       "part": "90357a013",
+       "qty": 2.0
+      },
+      {
+       "part": "91367a952",
+       "qty": 2.0
+      },
+      {
+       "part": "90264a435",
+       "qty": 2.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 2.0
+      },
+      {
+       "part": "44665k137",
+       "qty": 1.0
+      },
+      {
+       "part": "50785k43",
+       "qty": 1.0
+      },
+      {
+       "part": "5485k31",
+       "qty": 1.0
+      },
+      {
+       "part": "50785k35",
+       "qty": 1.0
+      },
+      {
+       "part": "50675k435",
+       "qty": 1.0
+      },
+      {
+       "part": "50785k27",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Install sealed screws and coupling nuts in bulkhead",
+       "instructions": "Install 2x 90357A013 ultra-low-profile socket head screws, each with one 91367A952 sealing washer under the head, into the fuel bulkhead (FBKHD-D375-O238-4NPT). Thread the screws into 2x 90264A435 coupling nuts with 2x 92141A029 washers between the coupling nuts and bulkhead. Tighten screws until snug, then 1/2 additional turn. Note: excessive torque may cause sealing washers to be extruded.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Populate printed nut ring",
+       "instructions": "Place 8x 94579A550 5/16-24 weld nuts and 8x 95505A601 1/4-20 hex nuts into the printed nut ring (NTRG-3125WN-25HN-8X). A strip of scotch tape may be used to retain the nuts prior to insertion into the machined integration ring, but adhesive must not be used to bond the nuts \u2014 they must float within their cutouts to accommodate hole misalignment. Tape may cover the edges of the hex nuts but not the holes.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Place tank interface ring on bulkhead",
+       "instructions": "Place the Tank Interface Ring onto the outer face of the bulkhead. The interface ring MUST be installed prior to integrating the valve assembly onto the bulkhead.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Insert nut ring into interface ring",
+       "instructions": "Insert the fully populated nut ring into the tank interface ring (INRG-375-3125C-250C-8X) so the 5/16-24 weld nuts align with the larger holes on the smaller-diameter portion of the ring. The location of the \"missing\" centering tab does not matter for the fuel bulkhead subassembly.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Tape and thread pipe nipple into fuel valve",
+       "instructions": "Apply 2-3 clockwise wraps of PTFE tape to both ends of the aluminum pipe nipple (step text: 44665K122; gather list: 44665K137) and thread one end into the port of the SABV-14NPT-FF valve, noting the orientation of the valve bracket. Tighten only to hand-tight at this time.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Thread valve/nipple into bulkhead port",
+       "instructions": "Thread the other end of the aluminum pipe nipple into the offset 1/4 NPT port on the fuel bulkhead (FBKHD-D375-O238-4NPT). Tighten until snug, then rotate no more than one full turn until the valve assembly aligns with the diameter of the bulkhead.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install downcomer fitting stack",
+       "instructions": "Install 1x 50785K27 straight adapter, 1x 50785K43 male/female elbow, 1x 5485K31 reducing adapter, 1x 50785K35 female elbow, and 1x 50675K435 flared fitting adapter. Apply 2-3 wraps of PTFE tape onto each set of male threads before installation. When installing elbow fittings, tighten until snug, then no more than one full turn until the fitting points in the correct direction. The 50785K27 straight adapter prevents excess slack length in the fuel downcomer line.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 4: Recovery Bulkhead Integration",
+     "instructions": "Mount the recovery/avionics bay bulkhead onto the forward fuel bulkhead: thread two 7-inch 1/4\"-20 studs into the coupling nuts on the fuel bulkhead, fit a 1\" ID U-bolt through the recovery bulkhead as the recovery attachment point, then secure the bulkhead onto the studs with hex nuts, flat washers, and split lock washers.",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "95505a601",
+       "qty": 6.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 6.0
+      },
+      {
+       "part": "91102a750",
+       "qty": 4.0
+      },
+      {
+       "part": "3043t643",
+       "qty": 1.0
+      },
+      {
+       "part": "bkhd_rec_399_250c_2x170we",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Thread studs into coupling nuts",
+       "instructions": "Thread 2x 91025A568 studs into the coupling nuts until they contact the ends of the screws installed through the forward bulkhead or reach the ends of the stud threads. Tighten to hand-tight; hardware installed in a later step will prevent rotation.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install U-bolt in recovery bulkhead",
+       "instructions": "Remove the hex nuts and mounting plate from the 3043T643 U-bolt, then thread the included hex nuts all the way to the end of the thread, tightening until snug. Place 2x 91102A750 split lock washers and 2x 92141A029 flat washers onto the U-bolt ends, insert the U-bolt into the recovery bulkhead holes, and secure with the included mounting plate and 2x 95505A601 hex nuts. Tighten both hex nuts approximately 1/4 turn past full compression of the lock washers.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount recovery bulkhead onto studs",
+       "instructions": "Thread 2x 95505A601 hex nuts about 3/4\" onto the threaded studs and place 2x 92141A029 flat washers on top of the nuts. Place the recovery bulkhead with U-bolt onto the studs and secure with an additional 2x 95505A601 hex nuts, 2x 92141A029 flat washers, and 2x 91102A750 split lock washers. Tighten the hex nuts on each stud approximately 1/4 turn past full compression of the lock washers.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 5: Oxidizer Bulkhead Subassembly",
+     "instructions": "Assemble the oxidizer tank bulkhead: install the oxidizer fill check valve with push-to-connect fitting into the 1/8 NPT port, plumb the servo-actuated oxidizer valve to the 1/4 NPT port via an aluminum pipe nipple with a 3/8\" 37-degree flared outlet adapter, populate the nut ring and interface ring, and build the quick-disconnect fill line from high-pressure nylon tubing.",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "sabv_assy",
+       "qty": 1.0
+      },
+      {
+       "part": "bkhd_ox_o238_8npt4npt",
+       "qty": 1.0
+      },
+      {
+       "part": "inrg_200s_8x3125c8x250c",
+       "qty": 1.0
+      },
+      {
+       "part": "ntrg_45c20d_200e",
+       "qty": 1.0
+      },
+      {
+       "part": "94579a550",
+       "qty": 8.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 8.0
+      },
+      {
+       "part": "44665k137",
+       "qty": 1.0
+      },
+      {
+       "part": "50675k163",
+       "qty": 1.0
+      },
+      {
+       "part": "7768k21",
+       "qty": 1.0
+      },
+      {
+       "part": "9396t31",
+       "qty": 2.0
+      },
+      {
+       "part": "50785k41",
+       "qty": 1.0
+      },
+      {
+       "part": "9685t3",
+       "qty": 1.0
+      },
+      {
+       "part": "qdc_750x125flg_281fb8npt",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Install fill check valve with push-to-connect fitting",
+       "instructions": "Apply 2-3 clockwise wraps of PTFE tape to the male threads of 1x 9396T31 push-to-connect fitting (1/8 NPT) and 1x 7768K21 brass check valve. Thread the push-to-connect fitting into the check valve and tighten until snug, then thread the check valve into the 1/8 NPT port on the oxidizer tank bulkhead (OBKHD-D375-O238-4NPT) and tighten until snug. Once snug, continue tightening until one corner of the check valve points radially outward (<1/6 turn required) to ensure clearance to the nut retaining ring.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Tape and thread pipe nipple into oxidizer valve",
+       "instructions": "Apply 2-3 clockwise wraps of PTFE tape to both ends of the aluminum pipe nipple (step text: 44665K122; gather list: 44665K137) and thread one end into the port of the SABV-14NPT-FF valve, noting the orientation of the valve bracket. Tighten only to hand-tight at this time.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install flared outlet adapter in valve",
+       "instructions": "Apply 2-3 clockwise wraps of PTFE tape to the threads of 1x 50675K163 37 degree flared adapter and thread it into the other side of the SABV-14NPT-FF valve, noting the orientation of the valve bracket. Tighten the fitting until snug, 1-3 turns from finger tight.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Populate printed nut ring",
+       "instructions": "Place 8x 94579A550 5/16-24 weld nuts and 8x 95505A601 1/4-20 hex nuts into the printed nut ring (NTRG-3125WN-25HN-8X). A strip of scotch tape may be used to retain the nuts prior to insertion into the machined integration ring, but adhesive must not be used to bond the nuts \u2014 they must float within their cutouts to accommodate hole misalignment.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Place tank interface ring on bulkhead",
+       "instructions": "Place the Tank Interface Ring onto the outer face of the bulkhead. The interface ring MUST be installed prior to integrating the valve assembly onto the bulkhead.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Insert nut ring, clock to check valve",
+       "instructions": "Insert the fully populated nut ring into the tank interface ring (INRG-375-3125C-250C-8X) so the 5/16-24 weld nuts align with the larger holes on the smaller-diameter portion of the ring. Align the nut ring and interface ring so the oxidizer fill check valve aligns with the section that does NOT have a centering tab.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Thread valve/nipple into bulkhead port",
+       "instructions": "Thread the aluminum pipe nipple connected to the oxidizer valve into the 1/4 NPT port on the oxidizer tank bulkhead (OBKHD-D375-O238-4NPT). Tighten until snug, then rotate no more than one full turn until the valve assembly aligns with the diameter of the bulkhead.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Assemble quick-disconnect fitting stack",
+       "instructions": "Apply 2-3 clockwise wraps of PTFE tape to the threads of 1x 50785K41 brass elbow fitting and 1x 9396T31 push-to-connect fitting. Assemble the two fittings and the QDC-750x125FLG-281FB-8NPT QD fitting, tightening all threads until snug, 1-3 turns past finger tight.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Cut and mark fill line tubing",
+       "instructions": "Cut a section of 9685T3 tubing 3.625-3.875 inches long. Mark the tube at 0.56 inches from each end using a permanent marker.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect fill line tubing",
+       "instructions": "Insert one end of the tube into the push-to-connect fitting on the oxidizer fill check valve until the mark aligns with the top face of the fitting or the tube is fully seated. Then connect the push-to-connect fitting on the QD assembly to the other end of the tube, inserting up to the mark or until fully seated.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 6: Tank Assembly",
+     "instructions": "Assemble the integral fuel/oxidizer tank: grease and install O-rings on both bulkhead subassemblies and the piston, insert the piston to depth and both bulkhead subassemblies into the drilled tank tube with correct clocking (fuel line raceway, vent, QD, and rail guide positions), bolt the retaining rings, and connect the braided fuel hose to the fuel valve outlet.",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "bkhd_fl_o238_4npt2x250c",
+       "qty": 1.0
+      },
+      {
+       "part": "bkhd_ox_o238_8npt4npt",
+       "qty": 1.0
+      },
+      {
+       "part": "tank_36l_047v2x8x313c",
+       "qty": 1.0
+      },
+      {
+       "part": "pstn_2xo238_250t20",
+       "qty": 1.0
+      },
+      {
+       "part": "9452k226",
+       "qty": 4.0
+      },
+      {
+       "part": "91255a378",
+       "qty": 12.0
+      },
+      {
+       "part": "4468k858",
+       "qty": 1.0
+      },
+      {
+       "part": "50675k135",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Grease O-rings",
+       "instructions": "Apply a liberal amount of grease to the 5x Buna-N O-rings (source says \"-230\"; gather list specifies 4x 9452K226 -238 O-rings). Set aside on a clean surface.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install O-rings on bulkheads",
+       "instructions": "Install one greased Buna-N O-ring into the O-ring gland on each of the 2x bulkhead subassemblies.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install O-rings on piston",
+       "instructions": "Install 2x greased Buna-N O-rings onto the fuel tank piston.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Insert piston to depth",
+       "instructions": "Insert the piston with O-rings into the tank, with the face containing the 1/4-20 threaded extraction hole facing the forward end where the fuel bulkhead will be inserted (the end closest to the vent orifice). Take care not to damage the O-rings; apply slow, even pressure to compress the seals into the tube. Using a marked piece of PVC pipe, push the piston down until the top face sits 12.125-12.25 inches from the end of the tube.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "piston_depth",
+          "type": "number",
+          "label": "Piston top face depth from tube end (spec 12.125-12.25 in)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Insert oxidizer bulkhead subassembly",
+       "instructions": "Insert the oxidizer bulkhead/valve subassembly into the aft end of the tank (farthest from the vent orifice), noting the orientation relative to the designated rail guide position. Apply slow, even pressure to compress the seal without damaging the O-ring. Use the tank interface ring to ensure the bulkhead seats at the correct depth, aligning the ring bolt holes to the tank bolt holes; if match drilled, ensure the clocking marks are aligned.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Insert fuel bulkhead subassembly",
+       "instructions": "Insert the fuel bulkhead/valve subassembly into the forward end of the tank, noting the orientation relative to the designated rail guide position. Apply slow, even pressure to compress the seal without damaging the O-ring. Use the tank interface ring to ensure the bulkhead seats at the correct depth, aligning the ring bolt holes to the tank bolt holes; if match drilled, ensure the clocking marks are aligned.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install 8x forward retaining screws",
+       "instructions": "Install 8x 91255A378 screws through the tank and retaining ring bolt holes at the forward end (fuel valve side), threading into the weld nuts in the nut retaining ring. Insert all screws before tightening to allow freedom of movement for alignment, then tighten to snug with a 3/16\" hex key. These fasteners are loaded primarily in shear and do not need to be extremely tight.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install 4x aft retaining screws",
+       "instructions": "Install 4x 91255A378 screws through the tank and retaining ring bolt holes at the aft end (oxidizer valve side), skipping every other hole and ensuring screw locations are aligned relative to the valve and rail guide positions per the reference images. The remaining bolt holes will secure the thrust structure to the tank later. Leave all 4 screws on this end slightly loose.",
+       "caution": "CAUTION: The tank cannot be pressurized until all 8X screws are installed. If the tank is to be pressure tested prior to integration of the fin bracket/thrust structure assembly, install an additional 4X 91255A378 screws and tighten all screws to snug.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install flared union in fuel hose",
+       "instructions": "Install 1x 50675K135 flared union fitting into one end of the 4468K858 hose. Tighten to wrench tight (approx. 80 ft-lbs).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "fuel_hose_union_torque",
+          "type": "number",
+          "label": "Fuel hose union torque (spec approx. 80 ft-lbs)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Connect fuel hose to fuel valve outlet",
+       "instructions": "Connect the other end of the 4468K858 hose to the flared fitting on the fuel valve outlet at the forward end of the tank. Tighten to wrench tight (approx. 100-150 in-lbs). The fuel line may be secured to the tank with zip ties and/or tape; a lengthwise strip of aluminum tape is recommended, but do not fully cover the fuel line yet \u2014 the fuel valve servo wire must also be secured in a similar manner.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "fuel_hose_valve_torque",
+          "type": "number",
+          "label": "Fuel hose to valve torque (spec approx. 100-150 in-lbs)",
+          "required": true
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "title": "OP 7: Thrust Chamber Assembly",
+     "instructions": "Assemble the thrust chamber: plumb the injector with flared adapters and igniter-port pipe nipple, install the injector with -141 silicone O-rings into the combustion chamber, seat the throat insert with garter spring into the nozzle, trim the graphite gasket, and clamp the injector/chamber/nozzle stack between two steel flanges using eight 1/4\"-20 tie-rod studs with thrust-mount angle brackets.",
+     "workcenter": "SHOP",
+     "step_kit": [
+      {
+       "part": "nzzl_45c20d_200e",
+       "qty": 1.0
+      },
+      {
+       "part": "thrt_45c20d_100t",
+       "qty": 1.0
+      },
+      {
+       "part": "cmbr_200di_250b_525l",
+       "qty": 1.0
+      },
+      {
+       "part": "injc_2x8npt_38npt_250t20_2xo230_basic",
+       "qty": 1.0
+      },
+      {
+       "part": "50675k164",
+       "qty": 1.0
+      },
+      {
+       "part": "50675k435",
+       "qty": 1.0
+      },
+      {
+       "part": "50785k171",
+       "qty": 1.0
+      },
+      {
+       "part": "50785k91",
+       "qty": 1.0
+      },
+      {
+       "part": "9396k79",
+       "qty": 2.0
+      },
+      {
+       "part": "90213a101",
+       "qty": 1.0
+      },
+      {
+       "part": "94095k114",
+       "qty": 1.0
+      },
+      {
+       "part": "flng_st_25t_8x250c",
+       "qty": 2.0
+      },
+      {
+       "part": "brkt_90a_125t_2x250c",
+       "qty": 8.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 16.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 16.0
+      },
+      {
+       "part": "91102a750",
+       "qty": 8.0
+      },
+      {
+       "part": "90281a102",
+       "qty": 8.0
+      },
+      {
+       "part": "90015a410",
+       "qty": 1.0
+      },
+      {
+       "part": "9368t14",
+       "qty": 1.0
+      },
+      {
+       "part": "8284n57",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Install injector fittings",
+       "instructions": "Apply 2-3 clockwise wraps of PTFE tape to the male threads of the 50675K164 and 50675K435 flared adapters and both ends of the 50785K171 pipe nipple. Install the fittings into the injector ports, with 50785K91 on the upper end of the pipe nipple; tighten all fittings to snug, 1-3 turns past finger-tight. Install the 50675K164 fitting into the center port (oxidizer inlet) first for tool access; a strap wrench is recommended to grip the injector, and pliers or vise-grips should be used for the pipe nipple (marring is acceptable and non-detrimental).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install external retaining ring on injector",
+       "instructions": "Install 1x external retaining ring (step text: 97633A450; gather list: 90213A101) into the upper-most groove on the injector, ensuring it is fully seated in the groove. Clocking of the ring does not matter.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install sleeve bearing and truss head screw",
+       "instructions": "Install 1x 9368T14 bronze sleeve bearing and 1x 90015A410 truss head slotted screw. Tighten firmly, ensuring the bearing is compressed to the injector face.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install -141 O-rings on injector",
+       "instructions": "Liberally grease 2x 9396K79 -141 high-temperature O-rings and install into the O-ring glands on the injector. The deepest groove (2nd from the injector face) is the fuel manifold \u2014 do NOT install an O-ring in this groove.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Seat injector in combustion chamber",
+       "instructions": "Install the injector assembly into the larger bore in the combustion chamber, applying slow, even pressure to compress the seals without damaging the O-rings. When fully seated, the external retaining ring should contact the forward face of the chamber; a small gap is acceptable at this time, as the injector will be drawn in by the tie-rods in a later step.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Fit garter spring to throat insert",
+       "instructions": "Place the 8284N57 garter spring into the groove of the THRT-45C20D-100T nozzle throat insert.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Press throat insert into nozzle",
+       "instructions": "Coat the outside of the throat insert, including the spring, in a thin layer of grease, then install the insert into the nozzle. A wooden dowel or plastic rod may be used to press or mallet the insert into the bore until the spring seats in the retaining groove. The spring prevents the insert from dislodging during handling; no soft seal is used \u2014 chamber pressure loading against the bottom face of the nozzle bore is sufficient to minimize blow-by.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Trim and place graphite gasket",
+       "instructions": "Using a razor knife, trim the inner edge of the 94095K114 graphite gasket to an approximately 2-inch inner diameter, leaving at least 3/8\" of width on all sides; slight protrusion into the combustion chamber is non-detrimental. Place the gasket onto the flat face of the nozzle. The gasket has a thin stainless steel foil layer in the middle, which cuts easily with a sharp blade.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Stack flanges, chamber, and nozzle",
+       "instructions": "Place one FLNG-ST-25T-8X250C flange over the external retaining ring on the injector, place the second flange around the nozzle, and stack the injector/chamber on top of the nozzle and gasket. Tip: use a strip of aluminum tape to hold the nozzle concentric to the chamber.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install first 4 tie-rods through upper flange",
+       "instructions": "Thread 4x 95505A601 hex nuts onto 4x 90281A102 threaded studs with approximately .28\" of thread protruding. Place 1x 91102A750 split lock washer under each nut, followed by 1x 92141A029 flat washer per rod, then insert the rods through the upper flange. Two flange holes must align with the fuel inlet and igniter port; install the rods adjacent to and +/-90 degrees from the injector fittings as shown.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Retain lower flange on tie-rods",
+       "instructions": "Place 1x 92141A029 flat washer and 1x 95505A601 hex nut onto the lower end of each rod to retain the lower flange. Thread the nuts on until the flange seats against the nozzle, with approximately equal thread protrusion on each rod end. Tighten to snug; full tightening happens in a later step.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install remaining 4 rods with mounting brackets",
+       "instructions": "Thread 4x 95505A601 hex nuts onto the remaining 4x 90281A102 studs with approximately .15\" of thread protruding; add 1x 91102A750 split lock washer and 1x 92141A029 flat washer per rod. Place 1x BRKT-90A-125T-2X250C bracket onto each rod with the longer tab extending vertically upward, and insert the rods through the unoccupied holes in both flanges. Place an additional 4x brackets onto the rods at the aft end in the same orientation, and secure with 4x 95505A601 hex nuts and 4x 92141A029 flat washers; lock washers are not required on the aft end.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Final-tighten all 8 tie-rods",
+       "instructions": "Tighten the nuts on all 8 rods until the lock washers are fully compressed, then approximately 1/4 additional turn, ensuring roughly equal thread protrusion on both ends of each rod. Tighten in a star pattern and repeat the pattern until all nuts remain tight. Some visible deflection of the FLNG-ST-25T-8X250C flange plates is normal and does not indicate a problem.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 8: Fin Bracket Subassemblies",
+     "instructions": "Build four identical fin bracket assemblies: drill aluminum angle brackets, mount plywood fins with 1/4\"-20 hardware, and optionally fit printed aerodynamic bracket tips. All steps performed four times; quantities listed are for four complete assemblies. (Guidebook pp. 191-195, PDF 200-204.)",
+     "workcenter": "SHOP",
+     "step_kit": [
+      {
+       "part": "8982k402",
+       "qty": 8.0
+      },
+      {
+       "part": "fin_std_250t_4x250c",
+       "qty": 4.0
+      },
+      {
+       "part": "91306a279",
+       "qty": 16.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 32.0
+      },
+      {
+       "part": "91102a750",
+       "qty": 16.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 16.0
+      },
+      {
+       "part": "tmplt_fin_brkt_1x1_aft",
+       "qty": 1.0
+      },
+      {
+       "part": "tmplt_fin_brkt_1x1_fwd",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Drill fin bracket aluminum angles",
+       "instructions": "Drill 1X .332\" and 7X .281\" holes in QTY 4 pieces of 1\"X1\"X.125\" aluminum angle. The 3D printed templates may be used to mark the hole locations; if not used, refer to the drawing. A drill press or mill is recommended. If using a drill press or hand drill, use an automatic center punch at each hole location prior to drilling to prevent the bit from walking.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount fins to brackets",
+       "instructions": "Mount QTY 4 FIN-STD-250T-4X250C fins (or alternate/custom fins) to the drilled aluminum angle brackets using QTY 4 91306A279 screws, QTY 8 92141A029 flat washers, QTY 4 91102A750 lock washers, and QTY 4 95505A601 hex nuts per fin. Tighten 16X screws approximately 1/4 turn past full compression of the lock washer.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install aerodynamic bracket tips (optional)",
+       "instructions": "Optional: if the leading edges of the aluminum angle fin brackets have not been tapered, install QTY 4 AERO-1X1X125-TIP printed aerodynamic bracket tips onto the aluminum angle. Deburr the edges of the aluminum angle with a deburring knife or file prior to installation. Tips are designed as a press fit; if loose, bond with an adhesive suitable for non-porous materials such as epoxy. If tight, bevel the aluminum angle edges with a file, or carefully warm the aluminum angle and/or printed part with a heat gun to soften the plastic.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 9: Thrust Structure & Feedline Integration",
+     "instructions": "Attach the four fin bracket assemblies to the thrust chamber and propellant tank, install oxidizer and fuel feedline hoses at specified torques, and route/secure the valve servo wiring. (Guidebook pp. 196-204, PDF 205-213.)",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "tca_assy",
+       "qty": 1.0
+      },
+      {
+       "part": "tank_assy",
+       "qty": 1.0
+      },
+      {
+       "part": "fin_bracket_assy",
+       "qty": 4.0
+      },
+      {
+       "part": "spcr_400sd_250c0313c",
+       "qty": 4.0
+      },
+      {
+       "part": "91306a279",
+       "qty": 8.0
+      },
+      {
+       "part": "91255a839",
+       "qty": 4.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 32.0
+      },
+      {
+       "part": "91102a750",
+       "qty": 16.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 16.0
+      },
+      {
+       "part": "4468k031",
+       "qty": 1.0
+      },
+      {
+       "part": "4468k865",
+       "qty": 1.0
+      },
+      {
+       "part": "srv_3pin_1mxt",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Attach fin subassemblies at upper thrust chamber brackets",
+       "instructions": "Connect the QTY 4 fin subassemblies to the thrust chamber mounting brackets. Use QTY 1 91306A279 screw with QTY 2 92141A029 flat washers, QTY 1 91102A750 lock washer, and QTY 1 95505A601 hex nut at each of the upper thrust chamber brackets.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Attach fin subassemblies at lower thrust chamber brackets",
+       "instructions": "On the lower thrust chamber brackets, stack QTY 1 91102A750 lock washer followed by QTY 4 92141A029 flat washers under the head of the screw, then insert the screw through aligned holes in the aluminum angle fin bracket and the thrust chamber mounting bracket. Place an additional QTY 1 92141A029 flat washer onto the screw on the back side of the thrust chamber bracket, then secure with QTY 1 95505A601 hex nut.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect oxidizer hose to oxidizer valve outlet",
+       "instructions": "Connect one end of QTY 1 4468K865 hose to the outlet fitting on the oxidizer valve. Tighten to wrench tight (approx. 250-300 in-lbf).",
+       "caution": "Be sure to back up the oxidizer valve outlet fitting to prevent torquing the valve assembly itself.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Align thrust chamber to tank assembly",
+       "instructions": "Align the thrust chamber and fin brackets relative to the tank assembly; the fuel inlet fitting on the injector should be on the same side as the fuel line downcomer previously installed on the tank.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Align fin bracket holes and insert spacers",
+       "instructions": "Align the holes in the fin brackets with the corresponding 5/16\" and 1/4\" holes in the tank and interface ring, then slide QTY 1 SPCR-400SD-250C-313C spacer between the fin bracket and tank.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install fin bracket to tank screws",
+       "instructions": "As each spacer is inserted, install QTY 1 91306A279 screw with QTY 1 92141A029 washer into each of the 1/4\" holes, and QTY 1 91255A839 screw into each of the 5/16\" holes. Thread the screws into the nuts captured in the nut retaining ring, and tighten all 4X 91306A279 and 4X 91255A839 screws to snug.",
+       "caution": "Excessive torque may damage the printed nut retaining ring.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect oxidizer hose to injector",
+       "instructions": "Connect the free end of the 4468K865 hose to the oxidizer inlet fitting on the injector. Torque to moderately tight (approx. 250-300 in-lbf). Route the line forming a loose spiral to take up the excess length.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect fuel hose to downcomer union",
+       "instructions": "Connect one end of QTY 1 4468K031 hose to the union fitting on the fuel line downcomer installed on the tank assembly. Torque to wrench tight (approximately 100-150 in-lbf).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect fuel hose to injector",
+       "instructions": "Connect the other end of QTY 1 4468K031 hose to the fuel inlet fitting on the injector. Torque to wrench tight (approximately 100-150 in-lbf). Route the line tucking behind the oxidizer line.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Route and secure servo wiring",
+       "instructions": "Once the feedlines are fully installed, plug the fuel valve servo lead into the female end of the SRV-3PIN-1MXT servo extension cable. Route the extension down the side of the tank alongside the fuel downcomer, securing it to the fuel hose with 3-4 zip ties or loops of tape. Plug the other end of the servo extension and the oxidizer valve servo lead into the SRV-Y-HRNS servo Y-harness. Secure all connections using electrical tape to prevent accidental unplugging during handling. Bundle excess wire length and secure to one of the thrust structure brackets using tape and/or zip ties, with the male end of the Y-harness free.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 10: Avionics Bay Assembly",
+     "instructions": "Assemble the printed avionics bay coupler with threaded reinforcing rods, fabricate and populate the altimeter sled with two Eggtimer Quark dual-deploy altimeters and 9V batteries, wire for twist-and-tape external power switching, install the U-bolt bulkhead, and close out the bay. (Guidebook pp. 205-216, PDF 214-225.)",
+     "workcenter": "ELEC",
+     "step_kit": [
+      {
+       "part": "avby_hf_3994",
+       "qty": 2.0
+      },
+      {
+       "part": "avby_sb_4160",
+       "qty": 1.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 20.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 20.0
+      },
+      {
+       "part": "91102a750",
+       "qty": 16.0
+      },
+      {
+       "part": "90281a102",
+       "qty": 4.0
+      },
+      {
+       "part": "92580a328",
+       "qty": 2.0
+      },
+      {
+       "part": "3043t643",
+       "qty": 2.0
+      },
+      {
+       "part": "avby_cr_4r",
+       "qty": 2.0
+      },
+      {
+       "part": "bkhd_rec_399_250c_2x170we",
+       "qty": 2.0
+      },
+      {
+       "part": "avby_sld_225x600_6xm4c",
+       "qty": 1.0
+      },
+      {
+       "part": "avby_mt_250r_m4c",
+       "qty": 1.0
+      },
+      {
+       "part": "avby_bh_2x9v250r_m4c",
+       "qty": 1.0
+      },
+      {
+       "part": "91280a044",
+       "qty": 6.0
+      },
+      {
+       "part": "98689a113",
+       "qty": 12.0
+      },
+      {
+       "part": "92148a160",
+       "qty": 6.0
+      },
+      {
+       "part": "90591a141",
+       "qty": 6.0
+      },
+      {
+       "part": "93505a211",
+       "qty": 4.0
+      },
+      {
+       "part": "91755a152_91755a200",
+       "qty": 8.0
+      },
+      {
+       "part": "egtmr_qrk",
+       "qty": 2.0
+      },
+      {
+       "part": "7712k511",
+       "qty": 2.0
+      },
+      {
+       "part": "20ga_rbp",
+       "qty": 1.0
+      },
+      {
+       "part": "9v_batt",
+       "qty": 2.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Assemble coupler halves and switch band on threaded rods",
+       "instructions": "Assemble QTY 2 avionics bay coupler halves and QTY 1 AVBY-SB-4160 switch band. Thread QTY 1 95505A601 hex nut with QTY 1 91102A750 lock washer and QTY 1 92141A029 flat washer onto one end of each of the QTY 4 90281A102 threaded rods, then insert the rods through the sleeves of the printed coupler components. Secure each rod with an additional QTY 1 92141A029 flat washer, QTY 1 91102A750 lock washer, and QTY 1 95505A601 hex nut. Ensure equal thread protrusion such that the rods do not extend past the end of the coupler. Tighten the nuts on all 4X rods only until the lock washers are fully compressed to flat.",
+       "caution": "Excessive torque may damage the printed components.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Fabricate avionics bay sled (if not prefabricated)",
+       "instructions": "If the avionics bay sled has not been prefabricated, cut a 2.25\" x 6\" rectangle from 1/4\" plywood.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mark and drill sled mounting holes",
+       "instructions": "Place the AVBY-MT-250R-M4C sled mount and AVBY-BH-2X9V-250R-M4C battery holder onto the plywood sled and mark the position of 6X holes using the printed parts. Remove printed parts and drill holes using a #16 or similarly-sized drill bit to create clearance holes suitable for M4 fasteners. It is recommended to insert QTY 2 92580A328 threaded rods through the sleeves to ensure alignment prior to drilling mounting holes.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mark and drill altimeter mounting holes",
+       "instructions": "Place QTY 2 Eggtimer Quark altimeters, assembled per the manufacturer's directions, on the avionics bay sled. Exact position is not critical, but the terminal blocks should be approximately centered on the sled to ensure sufficient clearance to the coupler reinforcing rods. Mark the hole positions using a fine point pen or mechanical pencil, then remove the altimeters and drill 4X holes with a #50 drill bit (2-56 tap drill size).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install hex standoffs into sled",
+       "instructions": "Thread QTY 4 93505A211 hex standoffs into the holes in the plywood sled. Once fully seated, back off the standoffs 2-4 turns, apply a small dab of cyanoacrylate (superglue) gel or other suitable adhesive, then re-engage threads fully. It is not necessary to tap the holes; the standoffs will cut their own threads due to the softness of the plywood. The 90604A303 screws may be temporarily threaded into the standoffs to allow a phillips screwdriver to be used for installation; hold the standoffs with a 3/16\" wrench or pliers while removing the screws.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount sled mount and battery holder",
+       "instructions": "Mount the AVBY-MT-250R-M4C sled mount and AVBY-BH-2X9V-250R-M4C battery holder onto the plywood sled using QTY 6 92180A044 M4 hex head screws, QTY 12 98689A113 M4 flat washers, QTY 6 92148A160 M4 split lock washers, and QTY 6 90591A141 M4 hex nuts. Tighten all fasteners approximately 1/4 turn past full compression of the lock washer.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount altimeters onto standoffs",
+       "instructions": "Mount the QTY 2 Eggtimer Quark altimeters onto the hex standoffs using QTY 4 90604A303 2-56 screws and QTY 8 91755A152 plastic washers. Each hole on the altimeter boards should have a plastic washer on each side to protect against the risk of electrical shorts. Tighten the screws only to snug using a small phillips screwdriver.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Wire altimeters for charges and external power",
+       "instructions": "Connect wiring to the QTY 2 Eggtimer Quark altimeters per the manufacturer's directions, using 20GA-RBP 20 gauge stranded red/black pair silicone-coated wire and QTY 2 7712K511 9V battery connectors or equivalents. Each altimeter should have two wires for the drogue charge, two wires for the main charge, and two wires for connecting/disconnecting power externally. Mark the wires to differentiate between main and drogue on each altimeter. The avionics bay is designed for \"twist and tape\" style power connection/disconnection: a pair of wires with stripped ends is twisted together to supply power and wrapped with electrical tape; to disconnect, the tape is removed and the wires separated and insulated. These wires should be long enough to be inserted through the 2X large holes in the avionics bay switch band prior to installing the sled (~10\").",
+       "caution": "The \"twist and tape\" power wires should NOT be pushed inside the avionics bay, as this will make them inaccessible should power need to be disconnected after an aborted launch. The wires will not be harmed by protruding 2-4\" out of the rocket during flight, so long as they are securely twisted and wrapped in electrical tape.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install and secure 9V batteries",
+       "instructions": "Install QTY 2 9V batteries into the battery holder. Snap the 7712K511 battery connectors onto the terminals of each battery (ensuring that power is disconnected from the altimeter), then secure the batteries with QTY 2 zip ties routed through the slots/notches on the battery holder and over the tops of both battery connectors.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount sled assembly onto threaded rods",
+       "instructions": "Insert QTY 2 92580A328 threaded rods through the sleeves of the avionics bay sled assembly, with equal protrusion of the rods from each end. Place QTY 1 92141A029 flat washer followed by QTY 1 95505A601 hex nut onto each end of each rod to secure the sled assembly in place. Tighten only to finger-tight, or lightly snug using a wrench. It is recommended to strain relieve wires using zip ties.",
+       "caution": "Excessive torque may damage the printed components.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install U-bolt on avionics bay bulkhead",
+       "instructions": "Remove the hex nuts and mounting plate included with the 3043T643 U-bolt, then thread the included hex nuts all the way to the end of the thread, tightening until snug. Place QTY 2 91102A750 split lock washers and QTY 2 92141A029 flat washers onto the ends of the U-bolt, then insert the U-bolt into the holes in the avionics bay bulkhead and centering ring. Secure with the included mounting plate and QTY 2 95505A601 hex nuts. Tighten both hex nuts approximately 1/4 turn past full compression of the lock washers.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install aft bulkhead on sled rods and mark AFT",
+       "instructions": "Thread QTY 1 95505A601 hex nut approximately .875\" onto the lower end of each of the avionics bay sled threaded rods. Insert the rods through the holes on the avionics bay bulkheads. Install QTY 1 92141A029 flat washer followed by QTY 1 91102A750 split lock washer and QTY 1 95505A601 hex nut onto each rod. Tighten the hex nuts on each rod against each other until the lock washers are fully compressed to secure the bulkhead in place. The rods should protrude approximately .25-.30\" from the outer hex nuts. Mark this bulkhead with \"AFT\" using a permanent marker, and insert the 2X pairs of drogue charge wires from the altimeters through the wire exit holes.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install sled into coupler and feed power wires",
+       "instructions": "Install the avionics bay sled with attached bulkhead into the avionics bay coupler in the orientation shown. During (or prior to) installing the sled, feed each pair of the \"twist and tape\" altimeter power switch wires through the large holes in the avionics bay switch band from the inside. A piece of masking or electrical tape may be placed onto each pair of power wires to prevent the ends from accidentally slipping back into the avionics bay.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install forward bulkhead",
+       "instructions": "Place the second avionics bay bulkhead over the protruding ends of the threaded rods and secure with QTY 2 92141A029 flat washers, QTY 2 91102A750 split lock washers, and QTY 2 95505A601 hex nuts. Tighten the hex nuts just until the lock washers are fully compressed.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 11: Nose Cone Assembly",
+     "instructions": "Stack the printed nose cone sections on nylon threaded tension rods, fit the eye bolt and shock cord in the tip, secure the tip with nylon shear screws, and capture the airframe attachment nuts in the shoulder. (Guidebook pp. 217-224, PDF 226-233.)",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "nscn_sldr_4x250r8x832hnc",
+       "qty": 1.0
+      },
+      {
+       "part": "nscn_sc1_4x250r",
+       "qty": 1.0
+      },
+      {
+       "part": "nscn_sc2_4x250r",
+       "qty": 1.0
+      },
+      {
+       "part": "nscn_tip_4x250r250hnc",
+       "qty": 1.0
+      },
+      {
+       "part": "98831a028",
+       "qty": 2.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 8.0
+      },
+      {
+       "part": "91102a750",
+       "qty": 9.0
+      },
+      {
+       "part": "95229a420",
+       "qty": 8.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 8.0
+      },
+      {
+       "part": "93135a013",
+       "qty": 4.0
+      },
+      {
+       "part": "3018t23",
+       "qty": 1.0
+      },
+      {
+       "part": "92994a029",
+       "qty": 1.0
+      },
+      {
+       "part": "90480a009",
+       "qty": 8.0
+      },
+      {
+       "part": "rec_tnsc_3klb",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Cut nylon threaded rods",
+       "instructions": "Cut QTY 2 98831A028 nylon threaded rods into equal lengths of 12 inches each, for a total of four pieces.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Stack nose cone components",
+       "instructions": "Stack QTY 1 NSCN-SLDR-4X250R-8X832HNC nose cone shoulder, QTY 1 NSCN-SC1-4X250R nose cone Section 1, and QTY 1 NSCN-SC2-4X250R nose cone Section 2.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Insert tension rods",
+       "instructions": "Insert QTY 4 12-inch sections of 98831A028 nylon threaded rod into the sleeves of the printed nose cone components, with approximately .50\" protrusion from the bottom of the nose cone shoulder.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install and tighten rod nuts",
+       "instructions": "Install QTY 1 95505A601 hex nut with QTY 1 91102A750 lock washer and QTY 1 95229A420 flat washer onto each end of each nylon threaded rod, with approximately equal thread protrusion from each nut. Tighten the 4X nuts on the bottom of the nose cone shoulder just until the lock washers are fully compressed. Note: excessive thread protrusion will interfere with the nose cone tip installed on a later step.",
+       "caution": "Excessive torque may strip the threads of the nylon threaded rods.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install eye bolt into nose cone tip",
+       "instructions": "Place QTY 1 91102A750 lock washer and QTY 8 92141A029 washers onto the shank of QTY 1 3018T23 eye bolt. Insert QTY 1 92994A029 cap nut into the hex on the NSCN-TIP-4X250R-250HNC nose cone tip, and thread the eye bolt with washers into the cap nut until snug, ensuring that the eye is oriented between the counterbores. Washers may be added or subtracted as needed. The eye bolt is prevented from rotating by other features within the nose cone assembly, and does not need to be especially tight.",
+       "caution": "Excessive torque may damage the hex on the printed nose cone tip.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Tie shock cord to eye bolt",
+       "instructions": "Tie one end of a 24\" section of TNSC-3KLB shock cord to the eye bolt using a non-slip loop knot. The loop should be large enough that the body of the knot sits 2-3 inches behind the eye bolt when pulled taut. Ensure the knot is sufficiently compact to fit through the opening in the NSCN-SC2-4X250R nose cone section.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Place nose cone tip",
+       "instructions": "Place the nose cone tip with eye bolt onto the lower portion of the nose cone assembly, aligning the tabs and slots so that the tension rods and nuts sit within the counterbores.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Secure tip with nylon screws",
+       "instructions": "Secure the nose cone tip to Section 2 of the nose cone using QTY 4 93135A013 nylon screws. The screw holes are nominally an interference fit to allow the screw to be pushed or threaded in without tapping the hole, and retained by friction. If the screws fit loosely, adhesive may be used. If the holes are too small, they may be drilled as needed, and optionally tapped with a #2-56 thread on the NSCN-SC2-4X250R tabs.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install captive nuts in shoulder",
+       "instructions": "Place QTY 8 90480A009 hex nuts into the hexagonal cutouts on the interior of the nose cone shoulder. The nuts should snap in past the retention tabs with moderate force. If the nuts cannot be pushed past the retention tabs, lightly shave down the tips of the tabs using a razor blade. If the tolerances are too loose for the nuts to be adequately retained, a small strip of 7631A82 aluminum foil tape or similar can be placed over each hexagonal cutout.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Tie shoulder-end shock cord loop",
+       "instructions": "Tie the protruding section of shock cord into a second non-slip loop knot, so that the loop hangs out of the nose cone shoulder.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 12: Airframe Fabrication",
+     "instructions": "Cut the 4\" cardboard shipping tube into upper and lower airframe tubes, mark and drill mounting/nose-cone/shear-pin holes using printed templates and sacrificial backing plugs, cut the fuel line slot, and verify hole alignment against mating assemblies. Alternate tubes must be 4\" ID; thin-walled (~.062\") mailing tubes are not recommended (recommended tube wall ~.080\"; .125\" and .250\" heavy duty tubes acceptable at cost of weight and drag). (Guidebook pp. 225-228, PDF 234-237.)",
+     "workcenter": "SHOP",
+     "step_kit": [
+      {
+       "part": "20545t38",
+       "qty": 1.0
+      },
+      {
+       "part": "tmplt_af_lwr_416",
+       "qty": 1.0
+      },
+      {
+       "part": "tmplt_af_upr_416",
+       "qty": 1.0
+      },
+      {
+       "part": "plg_dril_af_upr_416",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Cut tube into upper and lower airframe",
+       "instructions": "Cut QTY 1 20545T38 shipping tube into two pieces of equal length (18 inches each). Designate one as the upper airframe tube (20545T38-AF-UPR) and one as the lower airframe tube (20545T38-AF-LWR). Ensure the cut end is flat and clean.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mark lower airframe holes and insert backing plug",
+       "instructions": "Use the TMPLT-AF-LWR-416 template to mark the positions of the airframe mounting bolt holes and fuel line slot on the lower airframe tube. Then insert the PLG-DRL-AF-LWR sacrificial backing plug into the tube so that it sits flush with the end at which the holes are to be drilled, to prevent or reduce delamination of the cardboard layers during drilling. The plug is intentionally oversized to preload against the inside of the tube.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Drill lower airframe mounting holes",
+       "instructions": "Using a 9/32\" drill bit, drill 7X holes in the airframe tube in the locations marked using the template. Once all holes are drilled, remove and discard the sacrificial backing plug.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Cut fuel line slot",
+       "instructions": "Cut the slot along the templated line using a razor blade and/or a very fine toothed saw. Tip: it is recommended -but not required- to reinforce the edges of the slot, holes, and tube ends using a thin cyanoacrylate glue or epoxy that will soak into the cardboard.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Cover lower airframe with aluminum tape (optional)",
+       "instructions": "Optional step: cover the lower airframe tube with aluminum tape in lengthwise strips with approximately 1/4\" of overlap. Burnish the tape down with a flexible plastic card to remove wrinkles. This is primarily for visual effect, and provides minimal if any structural reinforcement.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mark upper airframe nose cone holes and insert backing plug",
+       "instructions": "Use the TMPLT-AF-UPR1-416 template to mark the positions of the nose cone screw holes on the forward end of the upper airframe tube. Then insert the PLG-DRL-AF-UPR1 sacrificial backing plug into the tube so that it sits flush with the end at which the holes are to be drilled, to prevent or reduce delamination during drilling. The plug is intentionally oversized to preload against the inside of the tube.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Drill nose cone screw holes",
+       "instructions": "Using a 3/16\" drill bit, drill 8X holes in the airframe tube in the locations marked using the template. Once all holes are drilled, remove and discard the sacrificial backing plug.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mark and drill shear pin holes",
+       "instructions": "Use the TMPLT-AF-UPR2-416 template to mark the positions of the shear pin holes on the aft end of the upper airframe tube. A sacrificial backing plug is not required due to the small diameter of these holes. Using a Number 50 (.070\") drill bit, drill 4X holes in the locations marked using the template. Once drilled, use sandpaper and/or a razor blade to clean up any raised material on the inside of the tube. The holes are intentionally undersized to allow press-fitting the shear pins through the cardboard.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Verify lower airframe hole alignment",
+       "instructions": "Verify alignment of the lower airframe mounting bolt holes by sliding the 20545T38-AF-LWR airframe tube over the upper tank interface ring. Ensure that 7X 91306A279 screws are able to be installed simultaneously into the nuts retained in the interface ring. No screw is installed in the hole that aligns with the fuel line slot.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "verified_7x_91306a279_screws_install",
+          "type": "text",
+          "label": "Verified: 7X 91306A279 screws install simultaneously into interface ring nuts (lower airframe)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Verify nose cone screw hole alignment",
+       "instructions": "Verify alignment of the upper airframe nose cone screw holes by inserting the nose cone assembly into the forward end of the upper airframe tube and installing 8X 90272A194 screws into the nuts retained in the nose cone shoulder.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "verified_8x_90272a194_screws_install",
+          "type": "text",
+          "label": "Verified: 8X 90272A194 screws install into nose cone shoulder nuts (upper airframe)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Verify shear pin hole alignment",
+       "instructions": "Verify alignment of the upper airframe tube shear pin holes by sliding the upper airframe tube onto the forward end of the avionics bay coupler, so that the 4X shear pin holes are positioned over the shear pin slots in the avionics bay bulkhead. Install 4X 93135A013 nylon screws into the shear pin holes by press fitting, or turning with a screwdriver, although the cardboard holes are not intended to be threaded. If needed, the shear pins may be retained for flight using a small patch of tape over the head.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "verified_4x_93135a013_shear_pins_seat",
+          "type": "text",
+          "label": "Verified: 4X 93135A013 shear pins seat through upper airframe into avionics bay bulkhead slots",
+          "required": true
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "title": "OP 13: Recovery System & Airframe Integration",
+     "instructions": "Rig the main parachute shroud lines (if not using a COTS chute), build the main and drogue recovery harnesses from 24 ft shock cord sections, connect chutes and parachute protectors via quick links to the nose cone, avionics bay, and tank U-bolts, then install the nose cone, mount the lower airframe, and fit rail buttons. (Guidebook pp. 229-234, PDF 238-243.)",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "rec_tnsc_3klb",
+       "qty": 1.0
+      },
+      {
+       "part": "cnpy_cht_86in",
+       "qty": 1.0
+      },
+      {
+       "part": "crd_kvlr_250lb",
+       "qty": 1.0
+      },
+      {
+       "part": "rec_prt_16",
+       "qty": 2.0
+      },
+      {
+       "part": "rec_cht_drg_36",
+       "qty": 1.0
+      },
+      {
+       "part": "8947t26",
+       "qty": 4.0
+      },
+      {
+       "part": "90272a194",
+       "qty": 8.0
+      },
+      {
+       "part": "97654a620",
+       "qty": 2.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 2.0
+      },
+      {
+       "part": "rlbtn_a_1515_250c",
+       "qty": 2.0
+      },
+      {
+       "part": "rlbtn_b_1515_250c",
+       "qty": 2.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Cut main parachute shroud lines",
+       "instructions": "Skip steps 1-3 if using a COTS parachute. Cut 3 sections of CRD-KVLR-250LB Kevlar cord, each approximately 28 feet in length. Ensure all pieces are consistent in length to within +/-3 inches. These will form the shroud lines for the main parachute.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Tie shroud lines to canopy",
+       "instructions": "Tie the ends of each piece of Kevlar cord to the loops sewn onto the corners of the hexagonal tarp, with minimal excess length after the knot. Ensure the ends of each section of cord are tied to adjacent loops, rather than spanning across the canopy to the loop on the opposite side. Any type of knot may be used; a non-slip loop knot is recommended.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Gather shroud lines and tie attachment loop",
+       "instructions": "Gather the Kevlar cords from the middle of each section. Allow the canopy to bunch into a triangle, so that the sewn loops onto which the shroud lines are tied all align with each other, ensuring the shroud lines are equal in length. Once the sewn loops are aligned, tie a loop at the midsection of the bundled shroud lines using an overhand knot. This will be used to connect the shroud lines to the shock cord via a quick link.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Cut shock cord",
+       "instructions": "Cut the remaining 48ft of shock cord into two equal lengths of 24 ft each.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Designate recovery harnesses",
+       "instructions": "Designate one section of shock cord as the main recovery harness, and one section as the drogue recovery harness.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Tie main parachute loop in main harness",
+       "instructions": "On the main recovery harness, tie a loop approximately 6 to 8 feet from one end, using an overhand knot on a doubled section of cord. Alternate methods such as a Rigger's Loop Knot or Alpine Butterfly may also be used if desired. This loop will be used to connect the main parachute.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect main harness to nose cone",
+       "instructions": "Connect the end of the main recovery harness closest to the loop to the short section of shock cord on the nose cone assembly by tying a non-slip loop knot, with the loop passing through the existing non-slip loop knot on the nose cone.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect main harness to avionics bay U-bolt",
+       "instructions": "Pass the other end of the main recovery harness through the 20545T38-AF-UPR airframe tube, and tie a second non-slip loop knot on the end of the harness. Connect this non-slip loop knot to the U-bolt on the forward end of the Avionics Bay Coupler assembly with QTY 1 8947T26 quick link. Close the quick link and tighten hand tight. A wrench may be used, but is not required.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Tie drogue harness end loops",
+       "instructions": "Tie a non-slip loop knot on each end of the drogue recovery harness.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect drogue harness to tank recovery bulkhead",
+       "instructions": "Connect one end of the drogue recovery harness to the U-bolt on the recovery bulkhead on the tank assembly with QTY 1 8947T26 quick link. Close the quick link and tighten hand tight. A wrench may be used, but is not required.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect drogue harness to avionics bay (quick link open)",
+       "instructions": "Connect the other end of the drogue recovery harness to the U-bolt on the lower end of the Avionics Bay Coupler assembly with QTY 1 8947T26 quick link. Do not close the quick link at this time.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Attach drogue parachute",
+       "instructions": "Tie the center of the shroud lines on the REC-CHT-DRG-36 drogue parachute into a 2-3-inch diameter loop using an overhand knot. Then place this loop onto the 8947T26 quick link on the drogue recovery harness, where it connects to the Avionics Bay Coupler.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Attach drogue parachute protector and close quick link",
+       "instructions": "Place the reinforced slit of QTY 1 REC-PRT-16 parachute protector onto the 8947T26 quick link on the drogue recovery harness, where it connects to the Avionics Bay Coupler. Close the quick link and tighten hand tight. A wrench may be used, but is not required.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect main parachute to harness loop",
+       "instructions": "Using QTY 1 8947T26 quick link, connect the loop at the base of the main parachute shroud lines to the loop on the main recovery harness, 6-8 feet from the nose cone end. Do not close the quick link at this time.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Attach main parachute protector and close quick link",
+       "instructions": "Place the reinforced slit of QTY 1 REC-PRT-16 parachute protector onto the 8947T26 quick link at the base of the main parachute shroud lines, where it connects to the main recovery harness. Close the quick link and tighten hand tight. A wrench may be used, but is not required.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install nose cone into upper airframe",
+       "instructions": "Install the Nose Cone Assembly into the forward end of the 20545T38-AF-UPR airframe tube, and secure with QTY 8 90272A194 screws, threaded into the nuts in the nose cone shoulder.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount lower airframe tube to tank interface ring",
+       "instructions": "Mount the lower airframe tube onto the forward tank interface ring using QTY 6 91306A279 screws and QTY 6 92141A029 washers in the locations shown. Tighten to snug using a 5/32\" hex key.",
+       "caution": "Excessive torque may damage the printed nut retaining ring.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Assemble rail buttons",
+       "instructions": "Place QTY 2 RLBTN-A-1515-250C, QTY 2 RLBTN-B-1515-250C, and QTY 2 92141A029 washers onto QTY 2 97654A620 screws (one of each per screw) to form a rail button assembly.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install forward rail button",
+       "instructions": "Install one rail button assembly into the unoccupied hole/nut on the forward tank interface ring, 90 degrees from the fuel line. Tighten to very slightly snug, so that the rail button can rotate with minor resistance. It does not need to spin freely.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install aft rail button",
+       "instructions": "Install the second rail button assembly into the hole/nut on the lower tank interface ring, 90 degrees from the fuel line (aligned with the upper rail button). Tighten to very slightly snug, so that the rail button can rotate with minor resistance. It does not need to spin freely.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    }
+   ],
+   "kit": [
+    {
+     "part": "sabv_mount_v2",
+     "qty": 1.0
+    },
+    {
+     "part": "sabv_hcon_v2",
+     "qty": 1.0
+    },
+    {
+     "part": "pla_fil_2kg",
+     "qty": 1.0
+    },
+    {
+     "part": "4112t22",
+     "qty": 1.0
+    },
+    {
+     "part": "ds3225",
+     "qty": 1.0
+    },
+    {
+     "part": "93475a210",
+     "qty": 1.0
+    },
+    {
+     "part": "92855a310",
+     "qty": 1.0
+    },
+    {
+     "part": "90272a194",
+     "qty": 9.0
+    },
+    {
+     "part": "90480a009",
+     "qty": 9.0
+    },
+    {
+     "part": "zip_tie_188w",
+     "qty": 1.0
+    },
+    {
+     "part": "91280a044",
+     "qty": 7.0
+    },
+    {
+     "part": "90591a141",
+     "qty": 7.0
+    },
+    {
+     "part": "98689a113",
+     "qty": 13.0
+    },
+    {
+     "part": "92148a160",
+     "qty": 7.0
+    },
+    {
+     "part": "9056k423",
+     "qty": 1.0
+    },
+    {
+     "part": "drljg_tank_8x625od_bshng",
+     "qty": 2.0
+    },
+    {
+     "part": "bkhd_fl_o238_4npt2x250c",
+     "qty": 2.0
+    },
+    {
+     "part": "inrg_200s_8x3125c8x250c",
+     "qty": 2.0
+    },
+    {
+     "part": "ntrg_45c20d_200e",
+     "qty": 2.0
+    },
+    {
+     "part": "94579a550",
+     "qty": 16.0
+    },
+    {
+     "part": "95505a601",
+     "qty": 98.0
+    },
+    {
+     "part": "90357a013",
+     "qty": 2.0
+    },
+    {
+     "part": "91367a952",
+     "qty": 2.0
+    },
+    {
+     "part": "90264a435",
+     "qty": 2.0
+    },
+    {
+     "part": "92141a029",
+     "qty": 118.0
+    },
+    {
+     "part": "44665k137",
+     "qty": 2.0
+    },
+    {
+     "part": "50785k43",
+     "qty": 1.0
+    },
+    {
+     "part": "5485k31",
+     "qty": 1.0
+    },
+    {
+     "part": "50785k35",
+     "qty": 1.0
+    },
+    {
+     "part": "50675k435",
+     "qty": 2.0
+    },
+    {
+     "part": "50785k27",
+     "qty": 1.0
+    },
+    {
+     "part": "91102a750",
+     "qty": 69.0
+    },
+    {
+     "part": "3043t643",
+     "qty": 3.0
+    },
+    {
+     "part": "bkhd_rec_399_250c_2x170we",
+     "qty": 3.0
+    },
+    {
+     "part": "bkhd_ox_o238_8npt4npt",
+     "qty": 2.0
+    },
+    {
+     "part": "50675k163",
+     "qty": 1.0
+    },
+    {
+     "part": "7768k21",
+     "qty": 1.0
+    },
+    {
+     "part": "9396t31",
+     "qty": 2.0
+    },
+    {
+     "part": "50785k41",
+     "qty": 1.0
+    },
+    {
+     "part": "9685t3",
+     "qty": 1.0
+    },
+    {
+     "part": "qdc_750x125flg_281fb8npt",
+     "qty": 1.0
+    },
+    {
+     "part": "tank_36l_047v2x8x313c",
+     "qty": 1.0
+    },
+    {
+     "part": "pstn_2xo238_250t20",
+     "qty": 1.0
+    },
+    {
+     "part": "9452k226",
+     "qty": 4.0
+    },
+    {
+     "part": "91255a378",
+     "qty": 12.0
+    },
+    {
+     "part": "4468k858",
+     "qty": 1.0
+    },
+    {
+     "part": "50675k135",
+     "qty": 1.0
+    },
+    {
+     "part": "nzzl_45c20d_200e",
+     "qty": 1.0
+    },
+    {
+     "part": "thrt_45c20d_100t",
+     "qty": 1.0
+    },
+    {
+     "part": "cmbr_200di_250b_525l",
+     "qty": 1.0
+    },
+    {
+     "part": "injc_2x8npt_38npt_250t20_2xo230_basic",
+     "qty": 1.0
+    },
+    {
+     "part": "50675k164",
+     "qty": 1.0
+    },
+    {
+     "part": "50785k171",
+     "qty": 1.0
+    },
+    {
+     "part": "50785k91",
+     "qty": 1.0
+    },
+    {
+     "part": "9396k79",
+     "qty": 2.0
+    },
+    {
+     "part": "90213a101",
+     "qty": 1.0
+    },
+    {
+     "part": "94095k114",
+     "qty": 1.0
+    },
+    {
+     "part": "flng_st_25t_8x250c",
+     "qty": 2.0
+    },
+    {
+     "part": "brkt_90a_125t_2x250c",
+     "qty": 8.0
+    },
+    {
+     "part": "90281a102",
+     "qty": 12.0
+    },
+    {
+     "part": "90015a410",
+     "qty": 1.0
+    },
+    {
+     "part": "9368t14",
+     "qty": 1.0
+    },
+    {
+     "part": "8284n57",
+     "qty": 1.0
+    },
+    {
+     "part": "8982k402",
+     "qty": 8.0
+    },
+    {
+     "part": "fin_std_250t_4x250c",
+     "qty": 4.0
+    },
+    {
+     "part": "91306a279",
+     "qty": 24.0
+    },
+    {
+     "part": "tmplt_fin_brkt_1x1_aft",
+     "qty": 1.0
+    },
+    {
+     "part": "tmplt_fin_brkt_1x1_fwd",
+     "qty": 1.0
+    },
+    {
+     "part": "spcr_400sd_250c0313c",
+     "qty": 4.0
+    },
+    {
+     "part": "91255a839",
+     "qty": 4.0
+    },
+    {
+     "part": "4468k031",
+     "qty": 1.0
+    },
+    {
+     "part": "4468k865",
+     "qty": 1.0
+    },
+    {
+     "part": "srv_3pin_1mxt",
+     "qty": 1.0
+    },
+    {
+     "part": "avby_hf_3994",
+     "qty": 2.0
+    },
+    {
+     "part": "avby_sb_4160",
+     "qty": 1.0
+    },
+    {
+     "part": "92580a328",
+     "qty": 2.0
+    },
+    {
+     "part": "avby_cr_4r",
+     "qty": 2.0
+    },
+    {
+     "part": "avby_sld_225x600_6xm4c",
+     "qty": 1.0
+    },
+    {
+     "part": "avby_mt_250r_m4c",
+     "qty": 1.0
+    },
+    {
+     "part": "avby_bh_2x9v250r_m4c",
+     "qty": 1.0
+    },
+    {
+     "part": "93505a211",
+     "qty": 4.0
+    },
+    {
+     "part": "91755a152_91755a200",
+     "qty": 8.0
+    },
+    {
+     "part": "egtmr_qrk",
+     "qty": 2.0
+    },
+    {
+     "part": "7712k511",
+     "qty": 2.0
+    },
+    {
+     "part": "20ga_rbp",
+     "qty": 1.0
+    },
+    {
+     "part": "9v_batt",
+     "qty": 2.0
+    },
+    {
+     "part": "nscn_sldr_4x250r8x832hnc",
+     "qty": 1.0
+    },
+    {
+     "part": "nscn_sc1_4x250r",
+     "qty": 1.0
+    },
+    {
+     "part": "nscn_sc2_4x250r",
+     "qty": 1.0
+    },
+    {
+     "part": "nscn_tip_4x250r250hnc",
+     "qty": 1.0
+    },
+    {
+     "part": "98831a028",
+     "qty": 2.0
+    },
+    {
+     "part": "95229a420",
+     "qty": 8.0
+    },
+    {
+     "part": "93135a013",
+     "qty": 4.0
+    },
+    {
+     "part": "3018t23",
+     "qty": 1.0
+    },
+    {
+     "part": "92994a029",
+     "qty": 1.0
+    },
+    {
+     "part": "rec_tnsc_3klb",
+     "qty": 2.0
+    },
+    {
+     "part": "20545t38",
+     "qty": 1.0
+    },
+    {
+     "part": "tmplt_af_lwr_416",
+     "qty": 1.0
+    },
+    {
+     "part": "tmplt_af_upr_416",
+     "qty": 1.0
+    },
+    {
+     "part": "plg_dril_af_upr_416",
+     "qty": 1.0
+    },
+    {
+     "part": "cnpy_cht_86in",
+     "qty": 1.0
+    },
+    {
+     "part": "crd_kvlr_250lb",
+     "qty": 1.0
+    },
+    {
+     "part": "rec_prt_16",
+     "qty": 2.0
+    },
+    {
+     "part": "rec_cht_drg_36",
+     "qty": 1.0
+    },
+    {
+     "part": "8947t26",
+     "qty": 4.0
+    },
+    {
+     "part": "97654a620",
+     "qty": 2.0
+    },
+    {
+     "part": "rlbtn_a_1515_250c",
+     "qty": 2.0
+    },
+    {
+     "part": "rlbtn_b_1515_250c",
+     "qty": 2.0
+    }
+   ]
+  },
+  {
+   "key": "gse_assembly",
+   "name": "GSE Assembly",
+   "description": "Section VI build sequence for the ground support equipment: fill-system plumbing, toolbox enclosure, fluid and electrical integration, cables, and transmitter configuration (HCR-5100 GSE OPs 1-8).",
+   "type": "build",
+   "output": {
+    "part": "gse",
+    "qty": 1
+   },
+   "ops": [
+    {
+     "title": "OP 1: Assemble Servo-Actuated Ball Valves (GSE)",
+     "instructions": "Build the SABV-04FF servo-actuated ball valve assemblies used in the GSE. These are identical to the fuel and oxidizer valves on the vehicle.",
+     "workcenter": "BENCH",
+     "step_kit": [
+      {
+       "part": "sabv_assy",
+       "qty": 1
+      },
+      {
+       "part": "sabv_mount_v2",
+       "qty": 1
+      },
+      {
+       "part": "sabv_hcon_v2",
+       "qty": 1
+      },
+      {
+       "part": "4112t22",
+       "qty": 1
+      },
+      {
+       "part": "93475a210",
+       "qty": 1
+      },
+      {
+       "part": "92855a310",
+       "qty": 1
+      },
+      {
+       "part": "90272a194",
+       "qty": 1
+      },
+      {
+       "part": "90480a009",
+       "qty": 1
+      },
+      {
+       "part": "91280a044",
+       "qty": 1
+      },
+      {
+       "part": "90591a141",
+       "qty": 1
+      },
+      {
+       "part": "98689a113",
+       "qty": 1
+      },
+      {
+       "part": "92148a160",
+       "qty": 1
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Build SABV-04FF valve assemblies per Section 5 OP 1",
+       "instructions": "Per valve, gather: SABV-MOUNT-V2 mount, SABV-HCON-V2 handle connector (both 3D printed; PLA+, PETG, or ABS recommended), 4112T22 compact high-pressure brass ball valve, DS3225 25kg servo with 25T horn, M3 flat washer (93475A210), M3x0.5 10mm low-profile socket head screw (92855A310), #8-32 x 1/2\" pan head screw (90272A194), #8-32 hex nut (90480A009), nylon zip tie (0.188\"), QTY 4 each M4x0.70 16mm hex head screws (92180A044), M4 hex nuts (90591A141), M4 flat washers (98689A113), M4 split lock washers (92148A160). Assemble per Section 5 OP 1 detailed instructions. Build QTY 1 SABV-04FF for Fill Only GSE; build QTY 2 if a CO2 purge valve for static testing is desired.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 2: Assemble Fill System",
+     "instructions": "Assemble the N2O fill plumbing: CGA 326 supply-bottle adapter, hose adapters, servo-actuated fill valve with gauge tee and 0-2000 PSI supply gauge, through-wall bulkhead fittings, and the fill line bulkhead assembly.",
+     "workcenter": "BENCH",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Fit CGA 326 nut over adapter nipple",
+       "instructions": "Slide QTY 1 79215A672 CGA 326 nut over QTY 1 79215A673 CGA 326 adapter nipple so that the threads cover the rounded nub.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect flared adapter to CGA adapter nipple",
+       "instructions": "Apply 2-3 wraps of PTFE tape to the 79215A673 adapter nipple and QTY 1 50675K162 37-degree flared adapter fitting (source prints '2-2 wraps'; 2-3 used elsewhere). Connect the flared adapter fitting to the CGA adapter nipple using QTY 1 50785K92 female straight connector. Tighten all fittings to snug, 1-3 turns past hand tight.",
+       "caution": "N2O supply-side joint: verify PTFE tape application and tightness (1-3 turns past hand tight) on every fitting.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "confirm_ptfe_tape_applied_and_fittings",
+          "type": "text",
+          "label": "Confirm PTFE tape applied and fittings tightened 1-3 turns past hand tight",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Assemble fill valve, tee, and through-wall fitting",
+       "instructions": "Apply 2-3 wraps of PTFE tape to the male threads of QTY 1 50675K162 flared adapter, QTY 1 50785K222 tee, QTY 1 50785K273 male straight connector, and QTY 1 9396T32 push-to-connect fitting. Assemble with QTY 1 50785K273 through-wall fitting and QTY 1 SABV-04FF valve as shown. Tighten all fittings to snug, 1-3 turns past hand tight. Ensure the 50785K222 tee is clocked as shown in the figure.",
+       "caution": "N2O plumbing joints: tee clocking and fitting tightness are critical for gauge readability and leak-free service.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "confirm_tee_clocking_matches_figure",
+          "type": "text",
+          "label": "Confirm tee clocking matches figure",
+          "required": true
+         },
+         {
+          "name": "confirm_all_fittings_tightened_1_3",
+          "type": "text",
+          "label": "Confirm all fittings tightened 1-3 turns past hand tight",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Install bulkhead spacer nut",
+       "instructions": "Thread the 97149A370 hex nut onto the 50785K273 through-wall fitting until approximately one thread remains between the nut and the fixed hex portion of the fitting, then loose-install the included brass jam nut and toothed washer.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install supply pressure gauge",
+       "instructions": "Install QTY 1 3846K93 gauge (0-2000 PSI, 2\" dial) into the side port of the 50785K222 tee with 2-3 wraps of PTFE tape on the threads. Tighten until snug, clocked so the gauge scale is horizontal for readability.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Assemble fill line bulkhead assembly",
+       "instructions": "Apply 2-3 wraps of PTFE tape to QTY 2 9396T31 push-to-connect fittings and install one into each end of QTY 1 50785K272 through-wall fitting to form the fill line bulkhead assembly. Tighten all fittings to snug, 1-3 turns past hand tight.",
+       "caution": "Fill line bulkhead carries N2O to the vehicle \u2014 verify tape and tightness on both fittings.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "confirm_both_9396t31_fittings_tightened",
+          "type": "text",
+          "label": "Confirm both 9396T31 fittings tightened 1-3 turns past hand tight",
+          "required": true
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "title": "OP 3: Assemble Purge System (Optional)",
+     "instructions": "Assemble the optional CO2 purge valve branch (used for static testing only): a second SABV-04FF valve with through-wall fitting and check valves preventing cross-contamination between CO2 and N2O supplies.",
+     "workcenter": "BENCH",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Assemble purge valve plumbing",
+       "instructions": "Apply 2-3 wraps of PTFE tape to the male threads of QTY 2 9396T32 push-to-connect fittings, QTY 1 5485K22 male straight connector, and QTY 1 7768K26 check valve. Assemble with QTY 1 50785K273 through-wall connector and QTY 1 SABV-04FF valve as shown. Tighten all fittings to snug, 1-3 turns past hand tight.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "confirm_all_fittings_tightened_1_3",
+          "type": "text",
+          "label": "Confirm all fittings tightened 1-3 turns past hand tight",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Install bulkhead spacer nut",
+       "instructions": "Thread the 97149A370 hex nut onto the 50785K273 through-wall fitting until approximately one thread remains between the nut and the fixed hex portion, then loose-install the included brass jam nut and toothed washer.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Add check valve to fill assembly",
+       "instructions": "If already installed, remove QTY 1 9396T32 push-to-connect fitting from the fill assembly. Install QTY 1 7768K26 check valve into the SABV-04FF outlet, then reinstall the 9396T32 into the check valve outlet. Apply 2-3 fresh wraps of PTFE tape to each fitting prior to installation. Note: this check valve is only required if a purge valve is also present; it prevents cross-contamination between the CO2 and N2O supply tanks if both valves are accidentally commanded open simultaneously with the tanks at slightly different pressures. If no purge valve is included, no check valves are needed on the fill system.",
+       "caution": "Check valve orientation protects against CO2/N2O supply cross-contamination \u2014 required whenever a purge valve is present.",
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 4: Prepare Toolbox Enclosure",
+     "instructions": "Cut and drill all penetrations in the 91111 21-inch Voyager steel toolbox: gauge window, valve bulkhead holes, outlet/switch holes, and back-face electronics/eyebolt holes. Hole positions are given in figures.",
+     "workcenter": "SHOP",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Cut gauge hole in front face",
+       "instructions": "Using a hole saw, cut a 2 1/8-inch-diameter hole where shown on the front face of the toolbox (for the pressure gauge).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Drill right-side holes",
+       "instructions": "Drill the holes as shown in the side of the toolbox that is on the right when facing the front (the latch side). Note: if no purge valve is included, only the left-most of the two 3/4-inch holes is needed. (A 1/2\" hole for the power switch is also on this side per OP 6.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Drill left-side holes and slot",
+       "instructions": "Drill the holes as shown in the left side of the toolbox. Use a hole saw for the 1.5-inch holes, and cut an approximately 1/4-inch side slot between them using a hacksaw. Note: the imperfect alignment of the 1.5-inch holes with the NEMA electrical outlets is intentional, to avoid overlap between the holes which can cause the hole saw blade to bind.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Drill back-face holes",
+       "instructions": "Drill the holes as shown in the back side of the toolbox (electronics bracket, antenna cover, and 1/4\" eyebolt clearance holes; dimensions given in figure only).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 5: Fluid System Integration",
+     "instructions": "Install the fill valve assembly, fill line bulkhead, and (optionally) the purge valve into the toolbox, and connect them with 1/4\" OD nylon tubing.",
+     "workcenter": "BENCH",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Install fill valve assembly through toolbox wall",
+       "instructions": "Remove the brass nut and toothed washer from the 50785K273 through-wall fitting on the fill valve assembly. Pass the fitting through the 0.75\" hole in the toolbox where shown, then re-install the toothed washer and brass nut. The 97149A370 hex nut should contact the inside of the toolbox. Ensure the gauge is aligned with the hole in the front face, then tighten the brass nut against the 97149A370 hex nut to clamp the assembly in place. Note: the configuration shown includes the check valve, which is only required if a purge valve is also included.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install fill line bulkhead assembly",
+       "instructions": "Remove the brass nut and toothed washer from the 50785K273 through-wall fitting on the fill line bulkhead assembly and install into the 0.67\" hole on the left side of the toolbox. Re-install the nut and washer onto the threaded portion projecting into the toolbox and tighten to clamp the assembly in place. (Source names 50785K273 here; the fill line bulkhead was built on the 1/8 NPT 50785K272 fitting in OP 2.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect fill valve to bulkhead with tubing",
+       "instructions": "Cut a section of 9685T3 tubing approximately 13.5 inches long. Insert one end into the 9396T32 push-to-connect fitting on the fill valve assembly (source prints '9696T32') and the other end into the fill line bulkhead assembly. Some slack in the line aids installation; it will not be perfectly straight as depicted in the CAD model.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Purge branch gate",
+       "instructions": "The following steps are required ONLY if a purge valve is to be included in the system. If only a fill valve is installed, proceed to the next operation.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install purge valve (optional)",
+       "instructions": "Install the purge valve into the second 0.75\" hole in the right face of the toolbox. The 97149A370 hex nut should contact the inner face of the toolbox, with the brass nut and toothed washer on the outside, as on the fill valve assembly. Ensure the valve is oriented vertically with the servo on top, then tighten the two nuts against one another to clamp the assembly in place.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Splice tee into fill line (optional)",
+       "instructions": "Cut the 9685T3 fill tube approximately 4.5 inches from the fill valve assembly and insert QTY 1 9396T61 push-to-connect tee. If needed, remove a short section of tube to reduce excess slack.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect purge valve to tee (optional)",
+       "instructions": "Cut a section of 9685T3 tubing approximately 8 inches long. Insert one end into the 9396T32 fitting on the purge valve assembly and the other end into the branch of the 9396T61 tee.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 6: Electrical System Integration",
+     "instructions": "Mount and wire the control electronics inside the toolbox: FS-iA10B receiver, PWM relay module, voltage regulator, power switch, dual NEMA outlet (IGN/SRV), battery eyebolt restraints, and receiver/servo channel connections per the schematic.",
+     "workcenter": "ELEC",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Mount receiver, relay, and regulator",
+       "instructions": "Mount the FS-iA10B receiver and PWM relay module onto the inside back face of the toolbox using QTY 2 BRKT-EGSE-2X8C brackets. Secure the brackets and DROK-12V-5V voltage regulator using QTY 6 8-32 x 1/2\" screws (9027A194) with 98689A113 flat washers, 92148A160 lock washers, and 90480A009 hex nuts. Note: M4 flat and lock washers are used with #8 screws to reduce unique parts; the relay module may differ slightly in appearance from the CAD model.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install antenna cover",
+       "instructions": "Pass the FS-iA10B antennas through the indicated hole and lay them into the slots in the CVR-ANT-2X8C antenna cover. Secure the cover to the outer back face using QTY 2 8-32 screws with flat washers, lock washers, and hex nuts.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install battery eyebolts",
+       "instructions": "Install QTY 2 9489T519 eyebolts into the 1/4\" clearance holes in the back face, projecting inward with the eyes oriented vertically. Secure using the included hex nuts and QTY 2 92141A029 flat washers, QTY 2 91102A750 lock washers, and QTY 2 95505A601 nuts. These eyebolts secure the 12V battery in a later step.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install power switch with guard",
+       "instructions": "Install QTY 1 GSW-17-SPST toggle switch with QTY 1 TGL-GRD-12MM guard into the 1/2\" hole on the right side of the toolbox. Orient the switch so the toggle is angled downward in the off position, when covered by the toggle guard.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Isolate outlet receptacles",
+       "instructions": "Using needle-nose pliers, break off the small metal tab on the side of the 7159K91 outlet that connects the two receptacles, electrically isolating the two plugs from one another.",
+       "caution": "The IGN and SRV receptacles must be electrically isolated \u2014 a shared tab would cross-connect the igniter and servo circuits.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount electrical outlet",
+       "instructions": "Install QTY 1 7159K91 outlet onto the inner left face of the toolbox using QTY 4 8-32 screws with flat washers, lock washers, and hex nuts.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install wall plate and label outlets",
+       "instructions": "Install the 7526K53 wall plate over the outlet using the included mounting screw. Label the outlets 'IGN' and 'SRV' for the igniter and servo outputs. Alternatively, 3D print the CAD part model with engraved text; a 6-32 x 1/2\" screw is required to mount the printed plate.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Wire SRV receptacle (Vehicle Valves cable)",
+       "instructions": "Cut the female (larger) plug off QTY 1 SRV-3PIN-1M servo extension cable and strip approximately 0.5\" of each wire. Connect to the screw terminals of the receptacle closest to the toolbox front (SRV): white wire to the terminal for the longer of the two slots; red wire to the terminal for the shorter slot; black wire to the ground-pin terminal (grounds of the two plugs must be isolated by the broken-off tab). This is the Vehicle Valves cable that connects to the rocket.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect servo leads to receiver channels",
+       "instructions": "Connect the servo leads to the FS-iA10B receiver per the schematic: Fill Valve to Ch5, Vehicle Valves servo extension to Ch6, Purge Valve to Ch8.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "record_channel_assignments_fill_ch5",
+          "type": "text",
+          "label": "Record channel assignments: Fill=Ch5, Vehicle Valves=Ch6, Purge=Ch8",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Connect relay module to Ch3",
+       "instructions": "Connect the 3-pin cable from the PWM-controlled relay module to Ch3 (throttle channel) as shown in the schematic.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Wire power switch, regulator, relay, and IGN outlet",
+       "instructions": "Using 20GA stranded wire, connect the power switch, voltage regulator, and relay module per the schematic. Connect the 12V positive wire from the relay to the screw terminal for the longer slot, and battery ground to the terminal for the shorter slot, on the second electrical outlet (IGN). This supplies power to the igniter.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Wire receiver power from voltage regulator",
+       "instructions": "Cut the male (smaller) plug off QTY 1 SRV-3PIN-1M servo extension cable and strip approximately 0.5\" of the red and black wires (white wire unused). Splice the red wire to the positive 5V output (yellow wire) of the DROK-12V-5V regulator and the black wire to the negative (black) 5V output. Splices should be tightly twisted and insulated with electrical tape or heat shrink; soldering recommended but not required (crimp ring terminals also acceptable). Connect the 3-pin plug to Ch1/PPM on the FS-iA10B \u2014 this powers the receiver and servos.",
+       "caution": "DO NOT connect to the battery until all wiring is complete.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Secure battery",
+       "instructions": "Place the battery between the two eyebolts and secure with 2-3 nylon zip ties looped through the eyes and across the front of the battery.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect battery",
+       "instructions": "With the power switch in the OFF position, connect the wires to the battery terminals as shown in the schematic.",
+       "caution": "Power switch must be OFF before connecting battery terminals.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Dress wiring",
+       "instructions": "Bundle wires together and onto fill line tubing for tidiness and strain relief as needed, using zip ties and/or electrical tape.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "OP 7: Fabricate Cables and Fill Line",
+     "instructions": "Fabricate the long-run servo cable and ignition cable from 16/3 extension cords, and the ~6 ft fill line with quick-disconnect for connecting the GSE to the rocket.",
+     "workcenter": "ELEC",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Prepare extension cords",
+       "instructions": "Cut the female end off QTY 2 16-3-10FTXT extension cords and strip approximately 1 inch of each wire.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Prepare servo extension",
+       "instructions": "Cut the male end off QTY 1 SRV-3PIN-1MXT servo extension cable and strip approximately 1 inch of each wire.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Splice servo cable",
+       "instructions": "Splice the servo extension wires onto one extension cord: red (servo) to black (cord); white (servo) to white (cord); black (servo) to green (cord). Splices should be tightly twisted and insulated with electrical tape or heat shrink; soldering recommended but not required.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "verify_splice_color_mapping_red_black",
+          "type": "text",
+          "label": "Verify splice color mapping: red-black, white-white, black-green",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Build ignition cable",
+       "instructions": "Crimp QTY 2 insulated alligator clips onto the black and white wires of the second extension cord (one per wire) for connecting to the igniter e-match wires. Clips may be omitted in favor of splicing stripped ends onto the e-match during pre-launch setup. Cut the unused green wire flush with the outer insulation jacket.",
+       "caution": "CAUTION: NEVER plug the ignition or servo cables into a live 120V wall outlet. Doing so creates EXTREME DANGER of electrocution and/or fire. Ensure the servo wire is ONLY plugged into the SRV outlet on the GSE box; plugging the servo lead into the IGN outlet may damage the servos.",
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Cut fill line",
+       "instructions": "Cut a section of 9685T3 nylon tubing about 6 feet in length. This serves as the fill line from the GSE to the rocket.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install PTC fitting into QD",
+       "instructions": "Apply 2-3 wraps of PTFE tape to the male threads of QTY 1 9396T31 push-to-connect fitting and install into the port of QTY 1 QDC-750x125FLG-270MB-O007 male QD fitting.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Seat fill line in PTC fitting",
+       "instructions": "Firmly push one end of the 9685T3 tube into the push-to-connect fitting until it is fully seated.",
+       "caution": "Fill line integrity: tube must be fully seated in the push-to-connect fitting \u2014 this line carries N2O to the vehicle.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "confirm_tube_fully_seated_in_ptc_fitting",
+          "type": "text",
+          "label": "Confirm tube fully seated in PTC fitting",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Install QD O-ring",
+       "instructions": "Install QTY 1 9452K15 -007 Buna-N O-ring onto the male barb of the QD fitting. The seal may be lightly greased to aid installation. The QD O-ring generally lasts many uses and must only be replaced if visibly damaged.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "inspect_qd_o_ring_condition_replace_if",
+          "type": "text",
+          "label": "Inspect QD O-ring condition; replace if visibly damaged",
+          "required": true
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "title": "OP 8: Transmitter Setup & Firmware Configuration",
+     "instructions": "Install switch covers on the FS-i6X transmitter, enable all 10 channels, assign channels to switches, set the igniter throttle-stick lockout, adjust servo endpoints for valve open/closed positions, verify channel mapping, and configure and verify receiver failsafes.",
+     "workcenter": "ELEC",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Install and label toggle switch covers",
+       "instructions": "Drill a 1/8\" hole in the lower right corner of the metal base of QTY 4 TGL-GRD-12MM switch covers. Place covers over the four toggle switches and mark hole locations on the transmitter casing. Using a #37 (.104\") drill bit, drill each marked location adjacent to the switches \u2014 remove the back half of the transmitter casing while drilling to verify no damage to switches or wiring. Install covers with QTY 4 92295A100 thread-forming screws (adhesive may supplement but not replace screws; the right-most cover corner may need slight bending with pliers). Label/engrave: Switch A (left-most) PRG (if purge included), Switch B FILL, Switch C IGN, Switch D (right-most) SRV. Only 3 covers required if purge is not included.",
+       "caution": "Take care not to damage the transmitter switches or internal wiring while drilling.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Enable all 10 channels",
+       "instructions": "Turn the transmitter on (all switches UP, left/throttle stick fully down \u2014 a boot-up safety feature). Hold OK -> MENU -> System Setup -> OK. Navigate DOWN to Aux Switches -> OK. Press OK until the arrow is next to Ch: 6, press UP until Ch: 10. Hold CANCEL to save (higher-pitched beep confirms), then OK to return to the main MENU.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Assign channels to switches",
+       "instructions": "DOWN -> Functions Setup -> OK; DOWN to Aux. Channels -> OK. Set Channel 5 Source = SwB -> OK. Set Channel 6 Source = SwD -> OK. Channel 7: OK to skip. Set Channel 8 Source = SwA. Hold CANCEL to save (higher-pitched beep confirms).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "record_switch_assignments_ch5_swb_fill",
+          "type": "text",
+          "label": "Record switch assignments: Ch5=SwB (FILL), Ch6=SwD (SRV/vehicle), Ch8=SwA (PRG)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Assign igniter channel and set left-stick lockout",
+       "instructions": "The igniter relay is on the throttle channel (Ch3) so the left stick must be up to energize the igniter circuit \u2014 a safety lockout secondary to the switch cover. (Assigning the relay to an aux channel on Switch C instead is not recommended: it increases accidental-activation risk.) In FUNCTIONS menu: DOWN to Assign Switches -> OK; Fly mode None -> OK to skip; Idle mode None -> OK to skip; Thro. Hold -> DOWN until SwC; hold CANCEL to save. If the relay module has a minimum PWM value (e.g. dual-channel modules), set Throttle Hold to On and adjust the hold value so both relay channels are off with the left stick fully down; hold CANCEL to save.",
+       "caution": "Igniter energization requires BOTH Switch C and the left stick fully up \u2014 verify the lockout behaves as designed.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Adjust servo endpoints",
+       "instructions": "Do this before initial SABV assembly to ensure correct servo horn orientation. With transmitter ON and all switches DOWN before powering the GSE, connect ONLY the FILL valve servo to Ch5 (disconnect all other servos; ensure no pressure source is connected to the GSE fill or purge supply fittings). In FUNCTIONS -> End Points, select Ch5 right-side value and adjust until the servo horn/valve handle is exactly perpendicular to the servo/valve body (valve CLOSED). Flip Switch B UP to actuate FILL OPEN; adjust until horn/handle is exactly parallel to the body (valve OPEN). Hold CANCEL to save. Repeat for vehicle valves on Ch6 (connect individually for initial setup, or both via the servo Y-harness with airframe removed for fine-tuning; a <5 degree discrepancy between fuel and ox valves is acceptable as long as the ball fully contacts the seat without the port overlapping the seat's edge), with Switch D actuating OPEN. If a purge valve is used, connect it to Ch8 (Switch A) and repeat. Tip: if the servo stalls against the bracket, listen to the servo whine and adjust in the direction that decreases it; avoid stalling the servo for long periods (overheating/damage). If positions can't be reached within the endpoint range, reinstall the servo horn on the spur gear in a different orientation.",
+       "caution": "Ensure no pressure source is connected to the GSE fill or purge supply fittings during endpoint adjustment. Avoid prolonged servo stall.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "fill_valve_ch5_endpoint_values_closed",
+          "type": "text",
+          "label": "Fill valve Ch5 endpoint values (CLOSED perpendicular / OPEN parallel)",
+          "required": true
+         },
+         {
+          "name": "vehicle_valves_ch6_endpoint_values_fuel",
+          "type": "text",
+          "label": "Vehicle valves Ch6 endpoint values; fuel-vs-ox discrepancy <5 degrees",
+          "required": true
+         },
+         {
+          "name": "purge_valve_ch8_endpoint_values_if",
+          "type": "text",
+          "label": "Purge valve Ch8 endpoint values (if included)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Verify channel mapping",
+       "instructions": "Verify: FILL valve \u2014 Switch B UP = OPEN, DOWN = CLOSED. VEHICLE valves \u2014 Switch D UP = OPEN, DOWN = CLOSED. PURGE valve (if included) \u2014 Switch A UP = OPEN, DOWN = CLOSED (source lists 'Switch B DOWN' for purge closed, apparent typo for Switch A). IGNITER circuit (verify via multimeter or spark checks) \u2014 Switch C and left stick both fully DOWN: DE-ENERGIZED; both fully UP: ENERGIZED; Switch C UP with stick DOWN: DE-ENERGIZED; Switch C DOWN with stick UP: DE-ENERGIZED. Note: Switch C is the only 3-position switch on the FS-i6X; the middle position is effectively ignored and it should only be set fully up or fully down.",
+       "caution": "Igniter checks must be performed with a multimeter or spark check, not a live igniter.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "fill_valve_response_verified_swb",
+          "type": "text",
+          "label": "FILL valve response verified (SwB)",
+          "required": true
+         },
+         {
+          "name": "vehicle_valves_response_verified_swd",
+          "type": "text",
+          "label": "VEHICLE valves response verified (SwD)",
+          "required": true
+         },
+         {
+          "name": "purge_valve_response_verified_swa_if",
+          "type": "text",
+          "label": "PURGE valve response verified (SwA, if included)",
+          "required": true
+         },
+         {
+          "name": "igniter_circuit_truth_table_verified",
+          "type": "text",
+          "label": "IGNITER circuit truth table verified (SwC + left stick, all four combinations)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Configure and verify receiver failsafes",
+       "instructions": "Failsafes must put the system in a safe state on loss of link: fill and purge valves CLOSED, vehicle valves OPEN (no pressure remains in the rocket), igniter DE-ENERGIZED. From home: Hold OK -> System Setup -> OK -> DOWN to RX Setup -> DOWN to Failsafe -> OK. Igniter: select Channel 3 -> OK -> left stick and Switch C both fully down -> UP to change OFF to ON -> OK. Fill: Channel 5 -> OK -> Switch B DOWN (FILL CLOSED) -> ON -> OK. Vehicle valves: Channel 6 -> OK -> Switch D UP (VEHICLE OPEN) -> ON -> OK. Purge (if included): Channel 8 -> OK -> Switch A DOWN (PURGE CLOSED) -> ON -> OK. Hold CANCEL to save. IMPORTANT: failsafe settings are saved only when holding CANCEL to exit the Failsafe menu \u2014 NOT when pressing OK from an individual channel screen. ALWAYS verify failsafe settings are set and saved correctly. To verify: with all valve servos and the igniter relay connected, no pressure supply connected, and GSE powered on, set Switch A UP (purge OPEN), Switch B UP (fill OPEN), Switch C and left stick fully UP (igniter ENERGIZED \u2014 ensure igniter leads are not connected to anything and are insulated from each other), Switch D DOWN (vehicle valves CLOSED). Turn the transmitter POWER OFF and verify the system enters: PURGE CLOSED, FILL CLOSED, IGNITER DE-ENERGIZED (multimeter or spark check), VEHICLE valves OPEN.",
+       "caution": "Loss-of-link failsafe is the primary means of safing the vehicle during fill. Settings are NOT saved unless CANCEL is held at the Failsafe menu level. During the verification test, igniter leads must be disconnected from everything and insulated from each other.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "failsafe_on_confirmed_for_ch3_igniter",
+          "type": "text",
+          "label": "Failsafe ON confirmed for Ch3 (igniter de-energized), Ch5 (fill closed), Ch6 (vehicle open), Ch8 (purge closed, if included)",
+          "required": true
+         },
+         {
+          "name": "transmitter_off_failsafe_test_result",
+          "type": "text",
+          "label": "Transmitter-off failsafe test result: purge CLOSED, fill CLOSED, igniter DE-ENERGIZED, vehicle valves OPEN",
+          "required": true
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "kit": [
+    {
+     "part": "sabv_mount_v2",
+     "qty": 1
+    },
+    {
+     "part": "sabv_hcon_v2",
+     "qty": 1
+    },
+    {
+     "part": "4112t22",
+     "qty": 1
+    },
+    {
+     "part": "93475a210",
+     "qty": 1
+    },
+    {
+     "part": "92855a310",
+     "qty": 1
+    },
+    {
+     "part": "90272a194",
+     "qty": 1
+    },
+    {
+     "part": "90480a009",
+     "qty": 1
+    },
+    {
+     "part": "91280a044",
+     "qty": 1
+    },
+    {
+     "part": "90591a141",
+     "qty": 1
+    },
+    {
+     "part": "98689a113",
+     "qty": 1
+    },
+    {
+     "part": "92148a160",
+     "qty": 1
+    }
+   ]
+  },
+  {
+   "key": "launch_ops",
+   "name": "Launch Operations",
+   "description": "Section VII launch-day sequence: vehicle preparation, GSE setup, launchpad operations, launch procedure, launchpad shutdown, and recovery (HCR-5100 \u00a77.1-7.6). Hold points require sign-off.",
+   "type": "op",
+   "output": null,
+   "ops": [
+    {
+     "title": "7.1 Vehicle Preparation",
+     "instructions": "Preparation of the vehicle for static testing or launch. Recovery system packing is only required for launch. Assumes the rocket has been fully assembled per Section 5; contains only the steps repeated each time the rocket is recycled. Subsections: 7.1.1 Fuel Loading, 7.1.2 Igniter Installation, 7.1.3 Recovery System Packing.",
+     "workcenter": "PAD",
+     "step_kit": [
+      {
+       "part": "e85",
+       "qty": 2
+      },
+      {
+       "part": "a3_4t",
+       "qty": 1
+      },
+      {
+       "part": "1834",
+       "qty": 4
+      },
+      {
+       "part": "1318",
+       "qty": 1
+      },
+      {
+       "part": "52555t644",
+       "qty": 1
+      },
+      {
+       "part": "7619a11",
+       "qty": 1
+      },
+      {
+       "part": "9452k226",
+       "qty": 1
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Fuel loading \u2014 gather tools and materials",
+       "instructions": "Gather: 5/8\" and 9/16\" wrenches, 3/16\" hex key/driver, optional torque-clutch drill, sturdy PVC pipe or dowel marked 12.25\" from one end, safety glasses, nitrile gloves, O-ring grease, 1X -238 Buna-N O-ring (PN 9452K226), shop towels, approx. 1/2 gallon fuel (see Section 2.6). If piston is to be removed (required every 3 firings or sooner): 1/4-20 bolt or threaded rod, vise-grip/large pliers, 2X additional -238 Buna-N O-rings.",
+       "caution": "Handling of fuel and O-ring grease: all personnel wear safety glasses and nitrile gloves. Perform outdoors or in a well-ventilated area with disposable shop towels on hand for fuel spills.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Disconnect fuel line",
+       "instructions": "Disconnect the fuel line from the flared fitting on the fuel valve outlet using the 5/8\" and 9/16\" wrenches.",
+       "caution": "Residual fuel may be present \u2014 be prepared for a small amount to drip from the fuel valve outlet and/or injector.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Ensure fuel valve OPEN",
+       "instructions": "Ensure the fuel valve is OPEN. If closed, open using the GSE or by slowly and gently moving the valve handle/servo horn by hand (servo must be disconnected from power to move manually). If the valve is closed, the forward tank bulkhead cannot be removed, as it will pull a vacuum.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Disconnect servo wire and interface ring fasteners",
+       "instructions": "Disconnect the fuel valve servo wire from the vehicle Y-harness at the 3-pin connector closest to the servo. Remove the 8X 5/16\" fasteners from the forward tank interface ring (3/16\" hex); set aside for reinstallation (magnetic dish recommended).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Remove fuel bulkhead assembly",
+       "instructions": "Remove the entire fuel bulkhead assembly by pulling on the U-bolt in the recovery bulkhead (lower airframe tube may remain connected to the interface ring). When static testing without the recovery bulkhead, pull on 1/4-20 threaded rods/coupling nuts instead. Do not pull on the valve assembly \u2014 it may damage the valve assembly and/or fuel tank outlet port/fitting.",
+       "caution": "Residual fuel will likely be present in the tank. Remove the fuel bulkhead assembly with the rocket vertical or tilted upwards to prevent spillage.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Piston seal service (every 3 firings)",
+       "instructions": "Only if the piston must be removed prior to the next firing (servicing the piston seals is required every three firings): insert a 1/4-20 bolt/threaded rod into the tapped blind hole in the piston center until it bottoms out (hand tight only), pull the piston out of the forward end (vise-grips/pliers may improve grip), remove and discard the 2X O-rings, clean the grooves of particulate or darkened grease, grease and install 2X new -238 O-rings, then re-install the piston with the 1/4-20 blind hole facing the open forward end using even pressure to push the O-rings past the tank edge and bolt holes. Verify the piston extraction fastener has been removed before proceeding.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "piston_seal_service_performed_and",
+          "type": "checkbox",
+          "label": "Piston seal service performed and firing count since last service",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Set piston depth",
+       "instructions": "Push the piston down into the tank until the lower surface closest to the outer edge is 12.25 +0/-.25\" from the forward end of the tank tube, using the marked PVC pipe or dowel.",
+       "caution": "Do not apply more than 100lbf to the piston if the vehicle is resting on the plywood fins; if more force is required, place a wooden or concrete block under the nozzle. No more than 150lbf should be required to install the piston to its final depth. DO NOT use a hammer or mallet to push the piston down \u2014 it may cause the piston to bind against the tank wall, preventing fuel flow when the valve is opened.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "piston_depth_from_forward_end_of_tank",
+          "type": "text",
+          "label": "Piston depth from forward end of tank tube (target 12.25 +0/-.25 in)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Verify static vent unobstructed",
+       "instructions": "Verify that the nitrous tank static vent is unobstructed by poking a small piece of wire (such as from a spent e-match) at least 1/2\" into the vent orifice. If obstructed, pull the piston upwards using a long 1/4-20 threaded rod until the piston no longer blocks the vent. Blockage of the vent will prevent oxidizer loading.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "static_vent_verified_clear",
+          "type": "checkbox",
+          "label": "Static vent verified clear",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Inspect fuel bulkhead O-ring",
+       "instructions": "Inspect the fuel bulkhead O-ring for damage or swelling. If replacement is necessary, remove and discard, then grease and install 1X new -238 O-ring into the bulkhead groove.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "fuel_bulkhead_o_ring_replaced",
+          "type": "checkbox",
+          "label": "Fuel bulkhead O-ring replaced",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Load fuel",
+       "instructions": "With the rocket vertical, pour approximately 1/2 gallon of fuel into the tank on top of the piston. Fuel may be pre-measured, or simply filled until the level reaches 1.25\" from the end of the tank tube. Excess fuel will be pushed out through the fuel valve when the bulkhead is reinstalled. The nominal volume of the fuel tank is 120 cubic inches (.52 gal); a 1/2\" variation in fuel tank length due to fill level and/or piston position will result in <5% variation in total impulse.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "fuel_type_and_quantity_loaded",
+          "type": "text",
+          "label": "Fuel type and quantity loaded",
+          "required": true
+         },
+         {
+          "name": "fuel_level_from_tank_tube_end_target_1",
+          "type": "text",
+          "label": "Fuel level from tank tube end (target 1.25 in)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Reinstall fuel bulkhead assembly",
+       "instructions": "Insert the fuel bulkhead assembly into the forward end of the tank, ensuring proper orientation of the fuel valve outlet fitting and alignment of any clocking marks. Use even pressure to push the O-ring past the tank edge and bolt holes; push the interface ring down until it seats against the edge of the tank tube.",
+       "caution": "Any excess fuel will be pushed out through the fuel valve outlet \u2014 use a shop towel or container against the outlet fitting to catch fuel spray.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Close fuel valve and reassemble",
+       "instructions": "Close the fuel valve (GSE, or by hand with servo unpowered). The fuel tank is now fully sealed and the rocket may be returned horizontal if desired. Reinstall the 8X 5/16\" fasteners into the forward tank retaining ring (leave loose until all 8 installed, then tighten to snug). Reconnect the fuel line hose to the flared fittings on the fuel valve outlet and tighten to snug. Reconnect the fuel valve servo wire to the 3-pin extension and secure the connector with 1-2 wraps of electrical or masking tape. Fuel loading is now complete.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Igniter installation \u2014 gather items",
+       "instructions": "Gather: 9/16\" and 15/16\" wrenches, multimeter with continuity check, 3/8\" drill bit, optional battery drill, long (>6\") hemostats, 1X e-match (MJG FireWire or equivalent) at least 16\" long, 1X Estes A3-4T 13mm black powder motor, grease, shop towels.",
+       "caution": "Pyrotechnic materials handling: safety glasses required for all personnel in the vicinity; face shields recommended for those directly handling pyrotechnics. Perform outdoors, away from flammable materials and ignition sources.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Open igniter cartridge and inspect flow path",
+       "instructions": "Disconnect the igniter cartridge assembly from the injector at the coupler fitting between the two pipe nipples (do not disconnect the lower pipe nipple from the injector port \u2014 it wears the aluminum threads). Remove the forward cap. If previously fired, remove the spent igniter motor (needle nose pliers, curved tweezers, or hooked pick). Inspect the igniter cartridge and injector for blockage of the igniter flow path; clear with stiff wire or a 1/8\" tube brush. Blockages of less than 50% of the igniter inlet orifice area are acceptable so long as they do not prevent insertion of the e-match wires.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Prepare igniter motor",
+       "instructions": "Remove the clay nozzle from the Estes A3-4T using a 3/8\" drill bit (by hand or drill at low speed) until the dark gray propellant grain is exposed across the full bit diameter (small amount of clay on the outer edges acceptable). Remove the ejection charge by drilling out the clay cap at the forward end until the loose black powder is exposed; scrape out or leave residual powder (removal recommended but not required \u2014 no detrimental impact demonstrated from leaving it).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Continuity-check and shunt e-match",
+       "instructions": "Test a new e-match for continuity with a multimeter; if no continuity, do not use it \u2014 replace with one that reads continuity. Shunt the e-match by twisting the exposed wire leads together to prevent accidental ignition from static discharge or other current sources. Tightly twist the first 3-5\" of the leads to aid installation; the twisted wires may be greased to slide through the igniter flow path.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "igniter_e_match_continuity_result",
+          "type": "text",
+          "label": "Igniter e-match continuity result",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Install e-match and cartridge",
+       "instructions": "Insert the wire-lead end of the e-match into the igniter fittings on the injector until the wires can be seen projecting into the chamber. Insert the e-match head into the pipe nipple on the cartridge assembly until the head and 3-4\" of wire protrude from the forward end. Thread the cartridge pipe nipple into the coupler fitting and tighten to snug (PTFE thread tape not required for brass igniter fittings; any leakage is minimal and non-detrimental). Fold the e-match wire 3-4 times approximately 1/2\" below the head to prevent it being pulled out during pre-launch handling while still allowing ejection at ignition.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Seat igniter motor and close cartridge",
+       "instructions": "Place the cored end of the prepared A3-4T against the e-match head and gently push it into the cartridge, keeping the e-match head in contact with the propellant grain. Using long hemostats through the nozzle throat, gently pull the e-match leads until they extend several inches out of the nozzle; leave the stripped ends twisted together (shunted) to prevent accidental ignition (bare ends may be partially untwisted to ease separation at the pad). Place a small wad of shop towel into the forward end of the cartridge to fill the empty volume and maintain igniter-motor/e-match contact, then reinstall the cap and tighten to snug. Igniter installation is now complete.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Recovery packing \u2014 gather items and prepare ejection charges",
+       "instructions": "Gather: safety glasses, nitrile gloves, electrical tape, masking tape, 4X e-matches (MJG FireWire or equivalent, at least 16\" long), FFFG (3F) Pyrodex powder, gram scale or 1/2 tsp measuring spoon, multimeter, 4X 2-56 nylon screws (PN 94735A707). Check continuity on all 4X e-matches (discard and replace any that fail), then shunt the bare leads. Cut 4X fingers off a nitrile glove; measure 8 grams or 1.5 teaspoons of 3F Pyrodex into each. Insert an e-match head fully submerged in the powder, twist the open end around the wires, and wrap each charge tightly in 4-5 layers of electrical tape, stretching to compress: charges should be hard, should not deform when pinched, and have no excess volume for powder to move around.",
+       "caution": "Pyrotechnic materials handling: safety glasses required for all personnel in the vicinity; face shields recommended for those directly handling. Gloves may be used to prevent skin contact with Pyrodex. Ejection charges are conservatively sized; ground testing is strongly recommended to verify/refine charge sizing, especially with airframe modifications or alternative materials such as 4F black powder.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "continuity_results_for_4x_ejection_e",
+          "type": "text",
+          "label": "Continuity results for 4X ejection e-matches",
+          "required": true
+         },
+         {
+          "name": "charge_mass_per_charge_8_g_1_5_tsp_3f",
+          "type": "text",
+          "label": "Charge mass per charge (8 g / 1.5 tsp 3F Pyrodex)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Verify altimeter batteries and connect charges",
+       "instructions": "Before connecting any charges, verify acceptable battery voltage for both altimeter batteries (method per deployment controller manufacturer); replace or recharge if needed. Connect the 4X completed ejection charges to the deployment outputs \u2014 one each to Altimeter A Main, Altimeter A Drogue, Altimeter B Main, Altimeter B Drogue \u2014 using Western Union splices, wrapping all splices thoroughly with electrical tape (see avbay wiring diagram, Fig. 7.5).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "altimeter_a_and_b_battery_voltages",
+          "type": "text",
+          "label": "Altimeter A and B battery voltages",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Pack main parachute",
+       "instructions": "At least two people recommended. Verify the main recovery harness is securely connected to the nose cone and avbay assemblies before proceeding. Gather the main canopy from its center into a flat triangle with shroud line attachment points roughly even; fold into a strip approximately 8-10\" wide; Z-fold so each segment is approximately 1/3 of the canopy radius; tightly roll from the end opposite the shroud lines into a bundle approximately 3.5\" in diameter (do not wrap shroud lines around the roll). Place the rolled canopy on the Nomex protector with shroud lines zig-zagged alongside, and wrap burrito-style so the canopy is fully covered.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Load main charges, parachute, and shock cord",
+       "instructions": "Place the two main deployment charges into the upper airframe tube several inches from the end, then insert the Nomex-wrapped main bundle behind the charges and push in as far as possible with moderate force, without straining the charge wire splices. It is critical that the main parachute bundle is positioned between the ejection charges and the open end of the tube where the airframe will separate in flight \u2014 this lets the charges and airframe act as a \"parachute cannon\". Bundle the main shock cord into 4-5 sections of about 6 feet each, each wrapped with 1-2 wraps of masking tape at a single point (energy expended breaking the tape dissipates deployment shock; other tape types must NOT be used; rubber bands acceptable). Pack the bundles behind the parachute, then insert the avbay coupler \u2014 a moderately snug fit with no wobble; shim with masking or aluminum tape (not electrical tape).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install shear pins",
+       "instructions": "Align the 4X shear pin holes in the upper airframe tube with the slots along the lower edge of the forward avbay bulkhead, and insert a 2-56 nylon screw into each hole (press fit; screwdriver may help; a small tape patch over the heads may retain loose pins). Shear pins should be included in ground testing of main parachute ejection to verify they break cleanly without bending or tearing the airframe holes, which can cause coupler binding and failure to deploy. Main parachute packing is now complete.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Pack drogue parachute and mate vehicle",
+       "instructions": "Verify the drogue recovery harness is securely attached to the recovery bulkhead on the propulsion section and the avbay assembly. Fold the drogue canopy similarly to the main (packing method less critical; shroud lines may be wrapped around the folded canopy). Wrap fully in the Nomex drogue protector, burrito-style. Place the 2X drogue ejection charges into the lower airframe tube several inches from the end, insert the wrapped drogue bundle behind the charges (the drogue fits loosely, so the parachute-cannon effect is less critical \u2014 section momentum after separation is generally sufficient to extract it). Bundle the drogue shock cord into 4-5 sections of about 6 feet each with a single masking-tape wrap per bundle, pack behind the parachute, and insert the avbay coupler (snug, shimmed with masking/aluminum tape as needed, never electrical tape). Mate the integrated upper airframe/avbay assembly to the lower airframe/propulsion section, preferably with the rocket standing vertical on its fins to aid alignment. The rocket is fully integrated and ready to carry to the launch pad.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "7.2 GSE Setup",
+     "instructions": "Setup of the ground support equipment, which is very simple for a liquid rocket motor. May be performed concurrently with Section 7.3 Launchpad Operations. If using the minimum viable GSE, some steps will not apply; functionality remains the same regardless of GSE version.",
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Gather required items",
+       "instructions": "Bring to the launchpad: nitrous oxide supply bottle with adapter to -04 AN flare installed; GSE box containing upstream fill line hose, downstream fill line tube with male QD fitting, servo cable, ignition cable, and QD clip with pre-attached Kevlar tether; two 9/16\" wrenches (adjustable acceptable); ratchet strap if using a bottle without siphon tube (the recommended 20 lbm Gas Cylinder Source bottle has no siphon tube and requires one, plus a stand or sturdy object to secure the inverted bottle); transmitter for GSE control; fire extinguisher if the site does not already have one near the pads.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Position and secure supply bottle",
+       "instructions": "Identify a suitable location adjacent to the launch rail. A siphon-tube bottle can sit on any reasonably flat surface; bottles without a siphon tube must be inverted and secured against tipping (the launch pad structure itself is often usable, as at FAR), so long as the bottle will not be directly exposed to the rocket's exhaust \u2014 behind the launch rail and away from the blast deflector. Strap snug with the ratchet strap if inverted; ensure the outlet adapter is accessible and pointed toward the GSE box, and the hand-valve handle is reachable. If securing an inverted bottle to the pad structure, the rail may need to be lowered to load the rocket first \u2014 in that case defer this step until the rocket is loaded and the rail raised vertical.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Position GSE box",
+       "instructions": "Place the GSE box adjacent to the launch rail on a flat surface out of the way of the blast deflector, with as clear a line of sight to the launch table or control bunker as possible. Orient the fill valve inlet so the nitrous supply line routes easily from the bottle.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect upstream fill line",
+       "instructions": "Thread the upstream fill line hose onto the oxidizer fill valve inlet on the GSE box and onto the supply bottle outlet, adjusting positions if it does not easily reach. Firmly tighten each B-nut with a wrench while backing up the male flared fittings with a second wrench.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect servo and ignition cables",
+       "instructions": "Plug the servo cable into the outlet marked \"SRV\" and the ignition cable into the outlet marked \"IGN\" on the GSE box.",
+       "caution": "Be sure the cables are plugged into the correct outlets. Do NOT swap outlets; doing so will damage the servos in the vehicle's valve assemblies. Obtain second-party verification that the cables are correctly configured before proceeding.",
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Connect downstream fill line and stage QD hardware",
+       "instructions": "Insert the downstream fill line tube into the fluid outlet fitting on the GSE box; push firmly to fully engage the push-to-connect fitting and tug the tubing to verify retention by the internal teeth. Place the male-QD end of the downstream line and the QD clip in safe spots where they will not be damaged, stepped on, or exposed to dirt/debris before connection to the vehicle. Optionally, power the transmitter and GSE now for initial fill-valve and ignition-lead checkouts (also part of Section 7.3).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Stage fire extinguisher",
+       "instructions": "Place the fire extinguisher about 20 feet away from the launchpad (if the site does not already have extinguishers on hand).",
+       "caution": "NEVER approach a nitrous oxide tank which is on fire \u2014 this includes both the supply bottle and the vehicle propellant tank. Whenever possible, launch pad fires should be allowed to burn themselves out with personnel at a safe distance, unless the fire is very small and able to be safely extinguished. Fires not involving an N2O tank (dry grass, plant matter) are handled per the launch site's fire response procedures.",
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "7.3 Launchpad Operations",
+     "instructions": "On-pad setup, GSE startup/checkouts, and vehicle arming. Similar to any high-power rocket except for the oxidizer fill and vehicle valve connections. Arming the vehicle is a hazardous operation and must not be performed until the launchpad is cleared of personnel not directly involved.",
+     "workcenter": "PAD",
+     "step_kit": [
+      {
+       "part": "nitrous_oxide",
+       "qty": 20
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Load vehicle onto rail",
+       "instructions": "Carry the fully packed and integrated vehicle to the launchpad and lower the rail to horizontal if not already. Slide the lower rail guide into the rail slot keeping the vehicle colinear with the rail (excess torquing may damage guide and/or rail), guide the vehicle down until the upper rail guide enters the slot, then slide fully down until it bottoms out on the rail stop (or use a block of wood to stand the nozzle off from the blast deflector).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Raise and aim rail",
+       "instructions": "Raise the launch rail to vertical and lock if it has a locking feature. If the rail is angled, ensure it points away from the flight line. A launch angle of 2-5 degrees downrange is recommended.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "launch_rail_angle_and_direction",
+          "type": "text",
+          "label": "Launch rail angle and direction",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Connect quick disconnect and tether",
+       "instructions": "Plug the male QD (GSE side) into the female QD (vehicle side). Slide the QD clip over the mated quick disconnect with the tether side facing the ground and the opening facing upwards; if the clip will not stay in place, a 1/4-1/2\" wide strip of masking tape over the clip opening may hold it without affecting separation. Tie the clip tether to the launchpad or other secure object \u2014 ideally slightly taut or with minimal slack such that the clip will be disengaged within the first 2-3 inches of the rocket's motion.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Connect servo cable to vehicle",
+       "instructions": "Plug the 3-pin servo cable into the vehicle valve servo wire, observing that all wire colors match (some cables use WHITE=YELLOW, RED=RED, BLACK=BROWN). Tape, tie, or zip-tie the servo cable to the launchpad or other secure object so it unplugs from the vehicle Y-harness connector when the vehicle departs the rail.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Power on transmitter, then GSE",
+       "instructions": "Flip all transmitter switches UP, ensure the LEFT stick is fully DOWN, and slide the transmitter power switch ON. After boot, flip all switches DOWN and close the switch covers. Then flip the GSE box power switch ON and verify the transmitter establishes a connection with the receiver after a few seconds.",
+       "caution": "The transmitter must be booted up before supplying power to the GSE.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Confirm supply bottle hand valve closed (twice, with second party)",
+       "instructions": "If the system has been pressurized since the upstream fill line hose was last connected, verify the upstream line between supply bottle and fill valve has been vented. Manually confirm that the oxidizer supply bottle hand valve is closed. Manually confirm again that it is closed. A second-party verification is strongly recommended, especially with an inverted bottle where the direction of valve rotation appears reversed. Failure to comply with this step may lead to unsafe pressurization of the rocket in close proximity to personnel.",
+       "caution": "Failure to comply may lead to unsafe pressurization of the rocket in close proximity to personnel.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "bottle_hand_valve_confirmed_closed_by",
+          "type": "text",
+          "label": "Bottle hand valve confirmed closed by second party",
+          "required": true
+         }
+        ]
+       },
+       "required_role": "QA"
+      },
+      {
+       "title": "Fill valve and vehicle valve checkouts",
+       "instructions": "Flip the FILL switch UP and visually confirm the fill valve opens; flip FILL DOWN and visually confirm it closes. Flip the SRV switch UP and confirm both vehicle valves open; flip SRV DOWN and confirm both close. Visual observation of the fuel valve may be impossible on the pad with the airframe installed \u2014 perform this checkout at least once prior to airframe integration with visual confirmation; on the pad, auditory confirmation of the servo sound is acceptable, by personnel familiar with the sound of a nominal actuation.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "fill_valve_open_close_confirmed",
+          "type": "text",
+          "label": "Fill valve open/close confirmed",
+          "required": true
+         },
+         {
+          "name": "vehicle_fuel_and_oxidizer_valve_open",
+          "type": "text",
+          "label": "Vehicle fuel and oxidizer valve open/close confirmed",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Spark check ignition system",
+       "instructions": "With the IGN switch DOWN, briefly touch the ignition leads together to confirm they do not spark. Flip IGN FULL UP and briefly touch the leads together to confirm they DO spark. Flip IGN FULL DOWN and confirm the leads do not spark.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "spark_check_results_no_spark_spark_no",
+          "type": "text",
+          "label": "Spark check results (no spark / spark / no spark)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Arm deployment controllers",
+       "instructions": "Only proceed when a launch window is imminent \u2014 do not arm before a launch window is certain and all personnel will be immediately vacating the launchpad area. Turn on the primary deployment controller by twisting its power wires together (minimum five full twists), wrapping the connection with electrical tape over all exposed wire. Repeat for the secondary deployment controller.",
+       "caution": "Eye protection is required for all personnel at or near the pad during this operation. Live pyrotechnic charges can present a hazard in the event of misconfiguration or malfunction of the deployment controllers.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Confirm ejection charge continuity and transmitter custody",
+       "instructions": "Confirm that both deployment controllers read continuity of both drogue and main ejection charges. Confirm that the Operator has physical possession of the GSE control transmitter and that all switch covers are closed before proceeding.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "continuity_readback_a_drogue_a_main_b",
+          "type": "text",
+          "label": "Continuity readback: A-drogue, A-main, B-drogue, B-main",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Connect ignition leads \u2014 igniter armed",
+       "instructions": "After touching the ignition leads together to confirm no spark, connect one clip of the ignition leads to each leg of the igniter wire. Ensure the leads and/or alligator clips cannot contact each other or any conductive surface such as the launch rail; insulate igniter leads with electrical tape as required. WARNING: The igniter is now armed.",
+       "caution": "WARNING: The igniter is now armed.",
+       "requires_signoff": true,
+       "schema": null,
+       "required_role": "TEST"
+      },
+      {
+       "title": "Clear pad, start cameras",
+       "instructions": "Wait until all other personnel are walking away from the pad to a safe distance or bunker \u2014 including unrelated personnel at other launch pads who may pass near on their way to the observation area. Start any cameras or other data collection devices at the pad.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "cameras_data_collection_devices_started",
+          "type": "text",
+          "label": "Cameras / data collection devices started",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Open supply bottle \u2014 oxidizer fill system armed",
+       "instructions": "Fully open the oxidizer supply bottle hand valve. It is recommended to back off the valve approximately 1/4 turn from fully open so the handle rotates easily \u2014 this prevents a full-open bottle from being mistaken for closed. WARNING: The oxidizer fill system is now armed. Proceed calmly from the pad to the launch control center.",
+       "caution": "WARNING: The oxidizer fill system is now armed.",
+       "requires_signoff": true,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "7.4 Launch Procedure",
+     "instructions": "Load-and-go launch: a short, fast-paced sequence best done with a two-person team, a Director and an Operator (one person may perform both roles solo). More than two people are not required, and additional team members should not be involved in the fill and launch operation, to keep communication with the LCO and RSO clear and concise.",
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Procedure review",
+       "instructions": "Both the Director and Operator review the entire launch section before performing the actual fill and fire procedures, so that when the time comes they already know what to do without needing to reference the guidebook. The sequence must be carried out with confidence to avoid wasting oxidizer or creating confusion.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Predetermine fill criteria",
+       "instructions": "Before launch operations, decide the criteria for concluding oxidizer fill: either a predetermined time has elapsed, or the static vent begins visibly expelling liquid nitrous oxide. Fill time for Mojave Sphinx is usually around 60 seconds, plus or minus 10 seconds depending on ambient temperature; any change to tank volume or static vent orifice size changes fill time. Predetermine the fill criteria and stick to those condition(s). If using visual observation, orient the vent perpendicular to the observer \u2014 liquid venting presents as a sudden, distinct opaque, well-defined plume rather than a translucent wisp; close the GSE fill valve immediately upon observation of liquid venting. If operating from the recommended standoff distance rather than a protected bunker, a time-based fill criterion is recommended. If a third spotter with binoculars is used, the authority to call out liquid venting rests solely with one individual.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "chosen_fill_criteria_time_and_or_liquid",
+          "type": "text",
+          "label": "Chosen fill criteria (time and/or liquid venting)",
+          "required": true
+         },
+         {
+          "name": "planned_fill_time",
+          "type": "text",
+          "label": "Planned fill time",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "LCO coordination and go-ahead",
+       "instructions": "Inform the LCO that the rocket is ready to begin fill operations. Communicate: the fill and ignition system is controlled entirely from the R/C transmitter (no club launch-controller buttons needed); nitrous fill will take about 60 seconds; after fill is completed the LCO should give a prompt 5-second countdown. Only proceed once a positive go-ahead has been given by the LCO to begin filling oxidizer. Operations may only proceed when all personnel are at a safe standoff distance or inside of bunkers. Do not begin filling the rocket if there are any personnel within the safe standoff distance.",
+       "caution": "Do not begin filling the rocket if there are any personnel within the safe standoff distance.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "lco_go_ahead_received",
+          "type": "text",
+          "label": "LCO go-ahead received",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Begin oxidizer fill",
+       "instructions": "OPERATOR: Push the LEFT stick FULL UP calling out \"Stick up.\" OPERATOR: Flip the FILL switch UP calling out \"Fill valve open.\" DIRECTOR: Note fill start time on a time counter (a phone video's time counter works). DIRECTOR: Call out fill time elapsed and remaining every 15 seconds.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "fill_start_time",
+          "type": "text",
+          "label": "Fill start time",
+          "required": true
+         },
+         {
+          "name": "elapsed_time_callouts_every_15_s",
+          "type": "text",
+          "label": "Elapsed-time callouts every 15 s",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Conclude fill \u2014 fill valve close",
+       "instructions": "DIRECTOR: When the fill criteria has been met, call out \"Fill complete.\" OPERATOR: Flip the FILL switch DOWN calling out \"Fill valve close.\"",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "actual_fill_duration_criteria_met_time",
+          "type": "text",
+          "label": "Actual fill duration / criteria met (time or liquid venting)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Hold constraint after oxidizer fill",
+       "instructions": "If the 5-second launch countdown cannot commence immediately (e.g., range violation by an aircraft or vehicle), the rocket may be allowed to hold on the pad for up to 30 seconds. If launch does not occur within 30 seconds of closing the fill valve, either: reopen the fill valve for 5-10 seconds to increase the pressure in the tank, or abort the launch by opening the vehicle valves without firing the igniter, which will safely dump all propellant. A standard Mojave Sphinx tank loses approximately 4.5 psi per second from venting after the fill valve is closed. It is not recommended to proceed to ignition with a tank pressure lower than 400 psi (tank pressure is not typically measured when launching; on a hot day the allowable hold may be longer, but 30 seconds is a reasonable rule of thumb).",
+       "caution": "Do not proceed to ignition with a tank pressure lower than 400 psi.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "hold_duration_after_fill_valve_close_if",
+          "type": "text",
+          "label": "Hold duration after fill valve close, if any",
+          "required": true
+         },
+         {
+          "name": "re_pressurization_or_abort_action_taken",
+          "type": "text",
+          "label": "Re-pressurization or abort action taken",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Ready call and range check",
+       "instructions": "DIRECTOR: Confidently call out \"Ready for 5-count.\" DIRECTOR: Confirm acknowledgment by the LCO. Wait for the LCO or RSO to do a range check and begin countdown. Wait for the countdown to finish.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "lco_acknowledgment_confirmed",
+          "type": "text",
+          "label": "LCO acknowledgment confirmed",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Fire",
+       "instructions": "OPERATOR: Flip the IGN and SRV switches FULL UP. The rocket will either launch or dump its propellants. OPERATOR: After launch or dump is complete, flip all switches DOWN and close all covers. (With receiver failsafes set properly, turning off the transmitter accomplishes the same.)",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "launch_or_propellant_dump_outcome",
+          "type": "text",
+          "label": "Launch or propellant dump outcome",
+          "required": true
+         }
+        ]
+       },
+       "required_role": "TEST"
+      },
+      {
+       "title": "Flight observation \u2014 ascent and apogee event",
+       "instructions": "Once launched the rocket proceeds as any other high-power rocket; Mojave Sphinx has no onboard propulsion control and will burn until fuel depletion. Visually track the vehicle as it ascends (\"keep eyes on the rocket\"); from bunkers this may not be possible until the RSO permits exit. Liquid systems generally produce no smoke trail after burnout, so tracking through the full profile may be difficult. Confirm that the vehicle has successfully fired its apogee deployment charge and separated into two segments connected by shock cord. If this is not confirmed, make the RSO aware of a possible ballistic return and ensure that all persons are inside of bunkers if available. Note: Half Cat style rockets with unshrouded thrust structures tend to fall sideways after apogee if the drogue fails, slowing the fall \u2014 but this must not be considered a safe descent mode; always treat an unseparated rocket as a heads-up event that can pose a risk to people and property.",
+       "caution": "If apogee separation is not confirmed, notify the RSO of a possible ballistic return and ensure all persons are inside of bunkers if available.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "apogee_deployment_separation_confirmed",
+          "type": "checkbox",
+          "label": "Apogee deployment/separation confirmed",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Flight observation \u2014 descent and touchdown",
+       "instructions": "Visually track the vehicle as it descends; be aware the LCO may launch other rockets while it descends under parachute. Watch for firing of the main deployment charge \u2014 altitude is difficult to judge by eye; depending on the deployment controller setting (typically around 1000 feet), the vehicle may appear closer to the ground than it truly is. If the main does not deploy, the vehicle will be moving considerably faster at touchdown. If wind brings the vehicle back toward the flight line, make sure all persons are aware there is an incoming rocket; if it appears the rocket will land close to people, loudly announce \"heads up.\" Note the line-of-sight to touchdown: distant landmarks in line with the landing point, and/or a compass reading, so a vector can be drawn to its location \u2014 recommended even with a GPS or radio tracker installed, in case the tracker loses power or malfunctions.",
+       "caution": "Even at a \"safe\" nominal descent rate, collision of the rocket under parachutes with a person, structure, or vehicle has the potential to cause harm.",
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "main_deployment_observed_altitude",
+          "type": "text",
+          "label": "Main deployment observed (altitude estimate)",
+          "required": true
+         },
+         {
+          "name": "touchdown_bearing_landmark_line_and",
+          "type": "text",
+          "label": "Touchdown bearing / landmark line and approximate distance",
+          "required": true
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "title": "7.5 Launchpad Shutdown",
+     "instructions": "Shut down the pad promptly after firing \u2014 the oxidizer supply bottle is still open, and accidental opening of the fill valve can cause the fill line to whip violently. Only cross the flight line after the RSO has given explicit permission or declared the range clear. If the rocket is still on the pad after an oxidizer fill of any duration, use the Aborted Firing procedure \u2014 do NOT approach the rocket without completing a safety walk.",
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Nominal shutdown \u2014 approach and listen",
+       "instructions": "After the RSO has given permission or declared all-clear, calmly proceed toward the launchpad. Stop about 20 feet away and listen for any hissing sounds (ask others to remain quiet). If hissing is heard, attempt to identify the location(s) and stay clear \u2014 hissing indicates a leak (burst line, damaged fill valve, or loose fitting). If the rocket has left the pad, leaks are only a minor hazard and will stop when the supply bottle is closed.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "hissing_leak_observations_at_20_ft",
+          "type": "text",
+          "label": "Hissing/leak observations at 20 ft",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Close supply bottle",
+       "instructions": "Approach the pad and fully close the oxidizer supply bottle hand valve. If leaks were present, step away and wait for them to subside.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Vent upstream fill line",
+       "instructions": "Physically confirm that the oxidizer supply bottle is closed. Place the end of the fill line on the ground and secure it by standing on it (\"whip-checking\") with the QD fitting protruding slightly from under the shoe sole; ask others to step back a few feet. Call out \"Venting!\" and open the fill valve to vent the upstream line \u2014 there will be a brief, loud hissing. If the fill valve fully opens and the hissing does not stop within two seconds, close the fill valve and ensure that the supply bottle is fully closed. Alternatively, vent by cracking the fitting connecting the line to the bottle with a wrench, loosening slowly as the hissing dies down until fully vented, then re-torque or remove the fitting.",
+       "caution": "The thrust force of the 1/4\" fill line and QD fitting is low enough to secure under a shoe without risk of injury; this does NOT necessarily apply to larger-diameter or higher-pressure lines. If restraining with a clamp or short tether instead, all personnel stand clear by at least twice the fill line length in case the restraint fails.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Power down",
+       "instructions": "Flip the GSE box power switch OFF, then slide the transmitter power switch OFF. The launchpad is now safe.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Aborted firing \u2014 propellant was dumped",
+       "instructions": "If the fill valve was opened at any point with the fill line connected, the vehicle tank may still contain pressure. If the vehicle valves were opened to expel propellant (per load-and-go): follow the Nominal Pad Shutdown steps, then disconnect the ignition leads from the igniter wires and twist the igniter wires together. Be mindful of expelled fuel on and around the pad. NEVER bring a heat source, sparks, or open flame near liquid fuels. Hydrocarbon fuel (e.g., diesel) will not evaporate \u2014 mop up with rags or oil-absorbent mats and dispose of responsibly.",
+       "caution": "NEVER approach a nitrous oxide tank which is on fire (supply bottle or vehicle tank). Whenever possible let fires burn out with personnel at a safe distance, unless very small and safely extinguishable.",
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Aborted firing \u2014 vehicle valves could not be opened: wait out boil-off",
+       "instructions": "If the vehicle valves were not opened, the propellant tank may be partially or completely filled with oxidizer; the oxidizer tank check valve prevents backflow, so the only offload path is the static vent. A full load of liquid nitrous takes an estimated 1-1.5 hours to boil off through the vent. Note the approximate time when oxidizer fill concluded. Wait at least one hour if the tank was completely filled; if only partially filled, this may be reduced according to the percentage of the nominal fill duration completed. (Loss of power/connection to the vehicle valves between start of loading and ignition has never occurred in over 50 firings of Half Cat style rockets; transmitter-GSE communication loss automatically safes the system with properly configured receiver failsafes.)",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "time_oxidizer_fill_concluded",
+          "type": "text",
+          "label": "Time oxidizer fill concluded",
+          "required": true
+         },
+         {
+          "name": "fill_percentage_estimate",
+          "type": "text",
+          "label": "Fill percentage estimate",
+          "required": true
+         },
+         {
+          "name": "wait_time_before_approach",
+          "type": "text",
+          "label": "Wait time before approach",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Aborted firing \u2014 safety walk, 100-foot hold",
+       "instructions": "After the RSO gives permission to proceed downrange, calmly and slowly walk toward the launchpad. Stop about 100 feet away and listen for hissing (approach from the static-vent side; liquid oxidizer in the tank produces an audible hiss from the static vent). If static vent hissing is audible, do not approach further \u2014 return to the safe standoff distance or bunker and wait for the hissing to die down (a few minutes to over an hour depending on fill level, vent orifice size, and ambient temperature). Personnel MUST NOT approach closer than 100 feet until no hissing sound can be observed at that distance. During this time, DO NOT turn the transmitter off and back on: booting the transmitter requires the switches in the UP position, which will energize the igniter circuit and command the valves open \u2014 this could result in accidental ignition and launch if the system spontaneously regains functionality. If at least three attempts to remotely open the vehicle valves are unsuccessful, turn the transmitter off and leave it off until the vehicle and pad are completely safed.",
+       "caution": "DO NOT power-cycle the transmitter while the vehicle is loaded \u2014 booting energizes the igniter circuit and commands valves open, risking accidental ignition and launch.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "hissing_audible_at_100_ft",
+          "type": "checkbox",
+          "label": "Hissing audible at 100 ft",
+          "required": true
+         }
+        ]
+       },
+       "required_role": "QA"
+      },
+      {
+       "title": "Aborted firing \u2014 staged approach 50 ft / 20 ft / 10 ft",
+       "instructions": "Once static vent hissing is no longer audible from 100 feet, cautiously proceed and stop about 50 feet away; all personnel remain quiet and listen. If hissing is audible, hold and wait for it to die down. Once no hissing at 50 feet, proceed and stop about 20 feet away; listen again, holding if hissing is audible. Once no hissing at 20 feet, proceed. If there is still quiet hissing only audible within 10 feet, give the propellant tank 5 additional minutes to vent or until hissing has ceased entirely.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "hissing_checks_at_50_ft_20_ft_10_ft",
+          "type": "text",
+          "label": "Hissing checks at 50 ft, 20 ft, 10 ft",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Aborted firing \u2014 safe the pad",
+       "instructions": "When no hissing is audible from the static vent, follow the Nominal Pad Shutdown procedure beginning with closing of the oxidizer supply bottle hand valve. After the oxidizer supply tank has been closed, disconnect the ignition leads from the igniter wires and twist the igniter wires together.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Vehicle shutdown (unlaunched vehicle)",
+       "instructions": "Applies only if the vehicle was not launched and remains on the pad. Turn off all deployment controllers to disarm the pyrotechnic charges and insulate the altimeter power leads to prevent accidental re-arming. Command the vehicle valves closed so fuel does not leak when bringing the vehicle horizontal \u2014 always be mindful of fuel dripping from the nozzle even with the fuel valve fully closed. The vehicle may then be removed from the launch rail and prepared for another attempt.",
+       "caution": "Eye protection is required for all personnel at the pad when deployment controllers with pyrotechnic charges are armed.",
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "7.6 Recovery",
+     "instructions": "After launch, Mojave Sphinx is recovered like any other high-power rocket. No pressure remains in the tank or feed system because the valves stay open, and all propellants are fully expended (save a small amount of residual fuel that may drip from the chamber).",
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Await RSO clearance and locate vehicle",
+       "instructions": "After the vehicle has landed, await instructions from the RSO. When the RSO gives permission to enter the range, proceed in the direction the vehicle was last seen. If a radio beacon or GPS tracker is installed, follow the signal; otherwise draw a vector from the observer's position on the flight line to a distant landmark in line with the rocket's last sighted position.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Field hazards \u2014 temperature, terrain, personnel",
+       "instructions": "The thrust chamber assembly will remain quite hot for several minutes after firing (its substantial thermal mass retains heat longer than some commercial solid casings); the propellant tank will be cold from rapid nitrous expansion but warms quickly in the sun. Be mindful of extreme component temperatures if recovering shortly after landing. Travel to the landing site with at least two people (buddy system). Dress appropriately for the weather and carry plenty of water \u2014 especially critical at desert launch sites in summer; when temperatures exceed 110\u00b0 F, the danger posed by severe dehydration and rapid-onset heat exhaustion cannot be overstated. Exercise caution regarding natural hazards such as rough terrain or venomous wildlife.",
+       "caution": "Thrust chamber assembly remains hot for several minutes after firing; propellant tank may be frostbite-cold.",
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Document landing condition",
+       "instructions": "Upon locating the vehicle, document its condition with photos before it is disturbed \u2014 helpful for identifying landing damage or diagnosing anomalies later. Optional: if the deployment controllers report the recorded apogee via audible beeps, listen for and record the result (a video recording provides a crude data backup).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": {
+        "fields": [
+         {
+          "name": "photos_of_vehicle_as_landed_condition",
+          "type": "text",
+          "label": "Photos of vehicle as-landed condition",
+          "required": true
+         },
+         {
+          "name": "reported_apogee_from_deployment",
+          "type": "text",
+          "label": "Reported apogee from deployment controller beep-out (optional)",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Disarm and pack out",
+       "instructions": "Carefully untuck the two pairs of avbay power wires and untwist the splices to turn off the deployment controllers; insulate the leads with electrical tape if possible to prevent accidental re-activation. Optional: stuff the parachutes, chute protectors, and shock cord back into the tubes and slide the vehicle back together to carry as a single piece (a tote bag is convenient for parachutes and shock cords). Carry the rocket back to the flight line; once returned, it may be prepared for another launch.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    }
+   ],
+   "kit": [
+    {
+     "part": "e85",
+     "qty": 2
+    },
+    {
+     "part": "a3_4t",
+     "qty": 1
+    },
+    {
+     "part": "1834",
+     "qty": 4
+    },
+    {
+     "part": "1318",
+     "qty": 1
+    },
+    {
+     "part": "52555t644",
+     "qty": 1
+    },
+    {
+     "part": "7619a11",
+     "qty": 1
+    },
+    {
+     "part": "9452k226",
+     "qty": 1
+    },
+    {
+     "part": "nitrous_oxide",
+     "qty": 20
+    }
+   ]
+  },
+  {
+   "key": "maintenance",
+   "name": "Periodic Inspection & Maintenance",
+   "description": "Preventive maintenance from the HCR-5100 maintenance schedule: per-firing and per-flight checks plus interval and on-condition replacements.",
+   "type": "op",
+   "output": null,
+   "ops": [
+    {
+     "title": "Per-firing inspection",
+     "instructions": null,
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Chamber threaded rods/nuts",
+       "instructions": "Check tightness \u2014 prevents hot gas leakage and erosion at the chamber/nozzle joint. (Interval: Each firing.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Fuel injector orifices",
+       "instructions": "Verify orifices are unobstructed \u2014 prevents chamber hot spots or reduced performance from clogged fuel orifices. (Interval: Each firing.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Igniter pass-through hole",
+       "instructions": "Verify unobstructed and clear as needed \u2014 prevents reduced igniter burn time or difficulty installing the e-match due to soot buildup. (Interval: Each firing.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "Per-flight inspection",
+     "instructions": null,
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Fin fasteners",
+       "instructions": "Check tightness \u2014 prevents erratic trajectory from excessive fin deflection in flight. (Interval: Each flight (or firing with fins installed).)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "Every 3 firings \u2014 seal replacement",
+     "instructions": null,
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Fuel bulkhead O-ring",
+       "instructions": "Replace \u2014 lack of maintenance may cause fuel leakage out of the tank. (Interval: 3 firings.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Propellant piston O-rings",
+       "instructions": "Replace \u2014 lack of maintenance may cause difficulty pushing the piston into the fuel tank. (Interval: 3 firings.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "Every 5 firings/launches \u2014 wear replacement",
+     "instructions": null,
+     "workcenter": "PAD",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "QD tube",
+       "instructions": "Replace \u2014 lack of maintenance may cause oxidizer leakage out of the tube and inability to fully load the tank. (Interval: 5 firings.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Shock cord (uninsulated)",
+       "instructions": "Replace \u2014 lack of maintenance may cause airframe/propulsion separation on descent. (Interval: 5 launches.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "On-condition replacement",
+     "instructions": null,
+     "workcenter": "BENCH",
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Shock cord (insulated)",
+       "instructions": "Replace \u2014 lack of maintenance may cause airframe/propulsion separation on descent. (Interval: Tears or serious burns.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Graphite gasket",
+       "instructions": "Replace \u2014 lack of maintenance may cause local melting due to hot gas leakage. (Interval: TCA disassembly.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "TCA flange plates",
+       "instructions": "Replace \u2014 deformed plates cause inability to re-assemble the TCA. (Interval: When deformation prevents TCA assembly.)",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    }
+   ],
+   "kit": []
+  }
+ ]
+}

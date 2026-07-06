@@ -1,7 +1,19 @@
-"""Seed data for Project Kestrel — LOX/ethanol pressure-fed sounding rocket."""
+"""Seed data for the Mojave Sphinx demo — a real liquid bipropellant rocket.
 
+Demo content adapted from HCR-5100 — Mojave Sphinx Build, Integration, and
+Launch Guidebook, Half Cat Rocketry, published under the GPL. The parts,
+BOM, procedures, requirements, risks, and maintenance schedule are extracted
+from the guidebook (lightly condensed); the live demo state (work orders,
+issues, notes, purchases) is composed around real guidebook errata.
+
+Content lives in src/opal/seed_data/sphinx/*.json; this module is the loader
+plus the demo-state narrative.
+"""
+
+import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -9,7 +21,9 @@ from sqlalchemy.orm import Session
 from opal.core.designators import (
     generate_issue_number,
     generate_opal_number,
+    generate_requirement_number,
     generate_risk_number,
+    generate_serial_number,
     generate_work_order_number,
 )
 from opal.db.models import (
@@ -26,6 +40,7 @@ from opal.db.models import (
     ProcedureVersion,
     Purchase,
     PurchaseLine,
+    Requirement,
     Risk,
     RiskIssueLink,
     StepExecution,
@@ -34,28 +49,51 @@ from opal.db.models import (
     User,
     Workcenter,
 )
-from opal.db.models.execution import InstanceStatus, StepStatus
-from opal.db.models.inventory import InventoryRecord, SourceType
-from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
-from opal.db.models.procedure import ProcedureStatus, ProcedureType
+from opal.db.models.execution import InstanceStatus, StepFocus, StepNote, StepStatus
+from opal.db.models.inventory import (
+    InventoryConsumption,
+    InventoryProduction,
+    InventoryRecord,
+    ProductionStatus,
+    SourceType,
+)
+from opal.db.models.issue import Containment, DispositionType, IssuePriority, IssueStatus, IssueType
+from opal.db.models.procedure import ProcedureStatus, ProcedureType, StepKit, UsageType
 from opal.db.models.purchase import PurchaseStatus
-from opal.db.models.risk import RiskDisposition, RiskIssueRole
+from opal.db.models.risk import RiskIssueRole
+from opal.db.models.supplier import SupplierPart
+
+DATA_DIR = Path(__file__).resolve().parent / "seed_data" / "sphinx"
+
+ATTRIBUTION = (
+    "Demo content adapted from HCR-5100 — Mojave Sphinx Build, Integration, "
+    "and Launch Guidebook, Half Cat Rocketry, published under the GPL."
+)
+
+
+def _data(name: str) -> dict[str, Any]:
+    return json.loads((DATA_DIR / name).read_text())
 
 
 def seed_database(db: Session) -> None:
-    """Populate database with Project Kestrel seed data."""
+    """Populate database with Mojave Sphinx seed data."""
+    now = datetime.now(UTC)
+
+    parts_data = _data("parts.json")
+    procs_data = _data("procedures.json")
+
     _seed_project_config(db)
     users = _seed_users(db)
     workcenters = _seed_workcenters(db)
-    suppliers = _seed_suppliers(db)
-    parts = _seed_parts(db)
-    _seed_bom(db, parts)
-    _seed_part_requirements(db, parts)
-    _seed_inventory(db, parts)
-    procedures = _seed_procedures(db, parts, workcenters)
-    _seed_versions_and_executions(db, procedures)
-    _seed_purchases(db, parts, suppliers)
-    issues = _seed_issues(db, parts, procedures)
+    suppliers = _seed_suppliers(db, parts_data)
+    parts = _seed_parts(db, parts_data, suppliers, users, now)
+    _seed_bom(db, parts_data, parts)
+    _seed_requirements(db, parts, users, now)
+    procs, versions = _seed_procedures(db, procs_data, parts, workcenters)
+    po_lines = _seed_purchases(db, parts, suppliers, now)
+    inventory = _seed_inventory(db, parts_data, procs_data, parts, po_lines, now)
+    wo = _seed_executions(db, procs, versions, parts, inventory, users, now)
+    issues = _seed_issues(db, parts, procs, wo, users, now)
     _seed_risks(db, parts, users, issues)
     _seed_test_templates(db, parts)
     db.commit()
@@ -64,7 +102,8 @@ def seed_database(db: Session) -> None:
     print(f"  {db.query(Supplier).count()} suppliers")
     print(f"  {db.query(Part).count()} parts")
     print(f"  {db.query(BOMLine).count()} BOM lines")
-    print(f"  {db.query(PartRequirement).count()} part requirements")
+    print(f"  {db.query(Requirement).count()} requirements")
+    print(f"  {db.query(PartRequirement).count()} requirement allocations")
     print(f"  {db.query(InventoryRecord).count()} inventory records")
     print(f"  {db.query(MasterProcedure).count()} procedures")
     print(f"  {db.query(ProcedureStep).count()} procedure steps")
@@ -73,77 +112,31 @@ def seed_database(db: Session) -> None:
     print(f"  {db.query(Purchase).count()} purchase orders")
     print(f"  {db.query(PurchaseLine).count()} PO line items")
     print(f"  {db.query(Issue).count()} issues")
-    print(f"  {db.query(IssueComment).count()} issue comments")
     print(f"  {db.query(Risk).count()} risks")
     print(f"  {db.query(TestTemplate).count()} test templates")
 
 
 # ---------------------------------------------------------------------------
-# Project YAML
+# Project config
 # ---------------------------------------------------------------------------
 
-_PROJECT_YAML = """\
-name: Project Kestrel
-description: LOX/ethanol pressure-fed sounding rocket — target altitude 10 km
-tiers:
-- level: 1
-  name: FLIGHT
-  code: F
-  description: Flight-critical hardware — full traceability required
-- level: 2
-  name: GROUND
-  code: G
-  description: Ground support equipment — test stands, fill systems, launch rail
-- level: 3
-  name: DEV
-  code: D
-  description: Development hardware, prototypes, consumables
-part_numbering:
-  prefix: KST
-  separator: '-'
-  sequence_digits: 4
-  format: '{prefix}{sep}{tier_code}{sep}{sequence}'
-categories:
-- Propulsion
-- Structures
-- Avionics
-- Recovery
-- Plumbing
-- Fasteners
-- GSE
-- Raw Material
-- Consumables
-requirements:
-- id: REQ-001
-  title: Structural Loads
-  description: All flight structures shall withstand 10g axial and 3g lateral load simultaneously with positive margin of safety.
-- id: REQ-002
-  title: Pressure Containment
-  description: All pressure vessels and pressurized lines shall be proof tested to 1.5x MEOP before flight use.
-- id: REQ-003
-  title: LOX Compatibility
-  description: All materials in contact with liquid oxygen shall be LOX-compatible per NASA MSFC-SPEC-106B.
-- id: REQ-004
-  title: Dual-Event Recovery
-  description: Recovery system shall use dual-event deployment (drogue at apogee, main at low altitude) with redundant altimeters.
-- id: REQ-005
-  title: Flight Data Logging
-  description: Flight computer shall log all sensor data (acceleration, rotation, pressure, GPS) at 50 Hz minimum.
-- id: REQ-006
-  title: Telemetry Link
-  description: Telemetry downlink shall maintain 6 dB link margin to 10 km slant range.
-- id: REQ-007
-  title: Pyro Electrical Isolation
-  description: Pyrotechnic firing circuits shall be electrically isolated from avionics power bus with independent arming switch.
-- id: REQ-008
-  title: Flight Hardware Traceability
-  description: All flight components shall be traceable to lot number or serial number via OPAL inventory system.
-cad_directories: []
-"""
+
+def _seed_project_config(db: Session) -> None:
+    """Store the Mojave Sphinx project config in the database (never on disk)."""
+    from opal.config import save_project_to_db
+    from opal.project import ProjectConfig
+
+    config = ProjectConfig(**_data("project.json")["project"])
+    save_project_to_db(db, config)
+    print(f"  Stored project config '{config.name}' in the database")
 
 
 def _seed_users(db: Session) -> dict[str, User]:
-    """Create demo users with a known password (demo data, not production)."""
+    """Create demo users with a known password (demo data, not production).
+
+    Usernames and password are kept from the previous demo (build/test/qa ·
+    kestrel-demo) so existing docs and muscle memory survive the content swap.
+    """
     from opal.core.auth import hash_password
 
     demo_hash = hash_password("kestrel-demo")
@@ -152,22 +145,25 @@ def _seed_users(db: Session) -> dict[str, User]:
             name="Build Lead",
             username="build",
             password_hash=demo_hash,
-            email="build@kestrel.local",
+            email="build@sphinx.local",
             is_admin=True,
+            needs_onboarding=False,
         ),
         User(
             name="Test Engineer",
             username="test",
             password_hash=demo_hash,
-            email="test@kestrel.local",
+            email="test@sphinx.local",
             is_admin=False,
+            needs_onboarding=False,
         ),
         User(
             name="QA Inspector",
             username="qa",
             password_hash=demo_hash,
-            email="qa@kestrel.local",
+            email="qa@sphinx.local",
             is_admin=False,
+            needs_onboarding=False,
         ),
     ]
     db.add_all(items)
@@ -175,35 +171,14 @@ def _seed_users(db: Session) -> dict[str, User]:
     return {u.username: u for u in items}
 
 
-def _seed_project_config(db: Session) -> None:
-    """Store the Kestrel project config in the database (never on disk)."""
-    import yaml
-
-    from opal.config import save_project_to_db
-    from opal.project import ProjectConfig
-
-    config = ProjectConfig(**yaml.safe_load(_PROJECT_YAML))
-    save_project_to_db(db, config)
-    print(f"  Stored project config '{config.name}' in the database")
-
-
-# ---------------------------------------------------------------------------
-# Workcenters
-# ---------------------------------------------------------------------------
-
-
 def _seed_workcenters(db: Session) -> dict[str, Workcenter]:
     items = [
+        Workcenter(code="SHOP", name="Machine Shop", description="Lathe, drill press, cutting"),
+        Workcenter(code="BENCH", name="Assembly Bench", description="Vehicle and GSE assembly"),
         Workcenter(
-            code="SHOP", name="Machine Shop", description="Mill, lathe, welding, fabrication"
+            code="ELEC", name="Electronics Bench", description="Avionics, wiring, transmitter setup"
         ),
-        Workcenter(code="CLEAN", name="Clean Room", description="Assembly bench, LOX-clean work"),
-        Workcenter(code="PAD", name="Test Pad", description="Static fire stand and launch rail"),
-        Workcenter(
-            code="LAB",
-            name="Electronics Lab",
-            description="Soldering, programming, avionics assembly",
-        ),
+        Workcenter(code="PAD", name="Launch Site", description="Pad operations and static fire"),
         Workcenter(code="STORE", name="Stockroom", description="Parts receiving and storage"),
     ]
     db.add_all(items)
@@ -211,49 +186,10 @@ def _seed_workcenters(db: Session) -> dict[str, Workcenter]:
     return {w.code: w for w in items}
 
 
-# ---------------------------------------------------------------------------
-# Suppliers
-# ---------------------------------------------------------------------------
-
-
-def _seed_suppliers(db: Session) -> dict[str, Supplier]:
+def _seed_suppliers(db: Session, data: dict) -> dict[str, Supplier]:
     items = [
-        Supplier(
-            name="McMaster-Carr",
-            email="",
-            website="https://www.mcmaster.com",
-            notes="Fasteners, plumbing, seals, raw stock. Next-day shipping.",
-        ),
-        Supplier(
-            name="Swagelok",
-            email="",
-            website="https://www.swagelok.com",
-            notes="High-pressure fittings, valves, regulators.",
-        ),
-        Supplier(
-            name="Digi-Key",
-            email="",
-            website="https://www.digikey.com",
-            notes="Electronics components, dev boards, connectors.",
-        ),
-        Supplier(
-            name="Metal Supermarkets",
-            email="",
-            website="https://www.metalsupermarkets.com",
-            notes="Cut-to-size aluminum, steel, stainless stock.",
-        ),
-        Supplier(
-            name="Apogee Components",
-            email="",
-            website="https://www.apogeerockets.com",
-            notes="Recovery hardware, parachutes, e-matches.",
-        ),
-        Supplier(
-            name="Airgas",
-            email="",
-            website="https://www.airgas.com",
-            notes="Industrial gases — LOX, nitrogen, helium.",
-        ),
+        Supplier(name=s["name"], website=s.get("website"), notes=s.get("notes"))
+        for s in data["suppliers"]
     ]
     db.add_all(items)
     db.flush()
@@ -261,4262 +197,1124 @@ def _seed_suppliers(db: Session) -> dict[str, Supplier]:
 
 
 # ---------------------------------------------------------------------------
-# Parts
+# Parts & BOM
 # ---------------------------------------------------------------------------
 
+# Reorder points for the consumables the launch procedures burn through.
+_REORDER = {
+    "9452k226": 10,  # -238 tank O-rings — replaced every 3 firings
+    "9452k15": 10,  # -007 QD O-rings — QD tube every 5 firings
+    "94095k114": 2,  # graphite gaskets — replaced on TCA disassembly
+    "1834": 8,  # e-matches — 4 per flight (igniter + ejection)
+    "1318": 1,  # black powder
+    "9v_batt": 2,  # altimeter batteries
+}
 
-def _seed_parts(db: Session) -> dict[str, Part]:
-    """Create ~50 parts. Returns dict keyed by short name for cross-referencing."""
-    p: dict[str, Part] = {}
 
-    def _add(
-        key: str,
-        ipn: str,
-        name: str,
-        *,
-        category: str,
-        tier: int = 1,
-        tracking: str = "serialized",
-        epn: str | None = None,
-        desc: str | None = None,
-        uom: str = "ea",
-        parent_key: str | None = None,
-        reorder: float | None = None,
-        is_tooling: bool = False,
-        cal_days: int | None = None,
-    ) -> None:
+def _seed_parts(
+    db: Session,
+    data: dict,
+    suppliers: dict[str, Supplier],
+    users: dict[str, User],
+    now: datetime,
+) -> dict[str, Part]:
+    parts: dict[str, Part] = {}
+    activated_at = now - timedelta(days=45)
+
+    for entry in data["parts"]:
+        active = entry["lifecycle"] == "active"
         part = Part(
-            internal_pn=ipn,
-            external_pn=epn,
-            name=name,
-            description=desc,
-            category=category,
-            tier=tier,
-            tracking_type=tracking,
-            unit_of_measure=uom,
-            parent_id=p[parent_key].id if parent_key else None,
-            procurement="buy" if epn else "make",
-            reorder_point=Decimal(str(reorder)) if reorder is not None else None,
-            is_tooling=is_tooling,
-            calibration_interval_days=cal_days,
+            internal_pn=entry["ipn"],
+            external_pn=entry.get("vendor_pn") or entry.get("guidebook_pn"),
+            name=entry["name"],
+            description=entry.get("description"),
+            category=entry["category"],
+            tier=entry["tier"],
+            tracking_type=entry["tracking"],
+            unit_of_measure=entry.get("uom") or "ea",
+            procurement=entry["procurement"],
+            is_tooling=bool(entry.get("is_tooling")),
+            reorder_point=(
+                Decimal(str(_REORDER[entry["key"]])) if entry["key"] in _REORDER else None
+            ),
+            lifecycle_state="active" if active else "draft",
+            activated_at=activated_at if active else None,
+            activated_by_id=users["build"].id if active else None,
+            activation_cause="Baseline release for the Sphinx build campaign" if active else None,
         )
         db.add(part)
         db.flush()
-        p[key] = part
+        parts[entry["key"]] = part
 
-    # ── Propulsion ──────────────────────────────────────────────
-    _add(
-        "engine_assy",
-        "KST-F-0001",
-        "Engine Assembly",
-        category="Propulsion",
-        desc="Complete engine: chamber, injector, nozzle, igniter",
-    )
-    _add(
-        "chamber",
-        "KST-F-0002",
-        "Combustion Chamber",
-        category="Propulsion",
-        desc="6061-T6 aluminum chamber, 450 PSI MEOP",
-        parent_key="engine_assy",
-    )
-    _add(
-        "injector",
-        "KST-F-0003",
-        "Injector Plate",
-        category="Propulsion",
-        desc="304 SS, 32-element showerhead pattern",
-        parent_key="engine_assy",
-    )
-    _add(
-        "nozzle",
-        "KST-F-0004",
-        "Nozzle",
-        category="Propulsion",
-        desc="Copper-lined graphite, 4:1 expansion ratio",
-        parent_key="engine_assy",
-    )
-    _add(
-        "igniter",
-        "KST-F-0005",
-        "Igniter Assembly",
-        category="Propulsion",
-        desc="Pyrotechnic torch igniter with e-match",
-        parent_key="engine_assy",
-    )
-    _add(
-        "lox_tank",
-        "KST-F-0006",
-        "LOX Tank",
-        category="Propulsion",
-        desc="6061-T6 welded tank, 500 PSI MEOP, 2.5 gal capacity",
-    )
-    _add(
-        "fuel_tank",
-        "KST-F-0007",
-        "Fuel Tank",
-        category="Propulsion",
-        desc="6061-T6 welded tank, 500 PSI MEOP, 3.0 gal capacity",
-    )
-    _add(
-        "press_tank",
-        "KST-F-0008",
-        "Pressurant Tank (N2)",
-        category="Propulsion",
-        desc="COTS nitrogen bottle, 3000 PSI rated",
-    )
-
-    # ── Plumbing ────────────────────────────────────────────────
-    _add(
-        "lox_valve",
-        "KST-F-0009",
-        "Main LOX Valve",
-        category="Plumbing",
-        desc='Swagelok SS-63TS8 ball valve, 1/2" tube',
-        epn="SS-63TS8",
-    )
-    _add(
-        "fuel_valve",
-        "KST-F-0010",
-        "Main Fuel Valve",
-        category="Plumbing",
-        desc='Swagelok SS-63TS8 ball valve, 1/2" tube',
-        epn="SS-63TS8",
-    )
-    _add(
-        "check_valve",
-        "KST-F-0011",
-        'Check Valve, 1/4" SS',
-        category="Plumbing",
-        tracking="bulk",
-        epn="4888K11",
-        desc='McMaster 4888K11 — 1/4" tube, 3000 PSI, cracking pressure 1/3 PSI',
-        reorder=4,
-    )
-    _add(
-        "relief_valve",
-        "KST-F-0012",
-        "Pressure Relief Valve, 500 PSI",
-        category="Plumbing",
-        epn="48435K41",
-        desc='McMaster 48435K41 — adjustable, 1/4" NPT, brass body',
-    )
-    _add(
-        "tube_half",
-        "KST-F-0013",
-        'SS Tube, 1/2" OD x 0.035" Wall',
-        category="Plumbing",
-        tracking="bulk",
-        uom="ft",
-        epn="89895K427",
-        desc="McMaster 89895K427 — 304 SS, seamless, ASTM A269",
-        reorder=10,
-    )
-    _add(
-        "tube_quarter",
-        "KST-F-0014",
-        'SS Tube, 1/4" OD x 0.035" Wall',
-        category="Plumbing",
-        tracking="bulk",
-        uom="ft",
-        epn="89895K217",
-        desc="McMaster 89895K217 — 304 SS, seamless",
-        reorder=10,
-    )
-    _add(
-        "an_fitting_half",
-        "KST-F-0015",
-        'AN Flare Fitting, 1/2" Tube',
-        category="Plumbing",
-        tracking="bulk",
-        epn="5182K18",
-        desc="McMaster 5182K18 — 37° flare, 316 SS",
-        reorder=8,
-    )
-    _add(
-        "an_fitting_quarter",
-        "KST-F-0016",
-        'AN Flare Fitting, 1/4" Tube',
-        category="Plumbing",
-        tracking="bulk",
-        epn="5182K14",
-        desc="McMaster 5182K14 — 37° flare, 316 SS",
-        reorder=8,
-    )
-    _add(
-        "teflon_tape",
-        "KST-D-0017",
-        'Teflon Tape, 1/2" x 260"',
-        category="Consumables",
-        tier=3,
-        tracking="bulk",
-        epn="6802A13",
-        desc="McMaster 6802A13 — PTFE thread seal tape",
-        reorder=3,
-    )
-
-    # ── Structures ──────────────────────────────────────────────
-    _add(
-        "airframe",
-        "KST-F-0018",
-        'Airframe Tube, 6" OD x 48"',
-        category="Structures",
-        desc='6061-T6 drawn tube, 0.065" wall',
-    )
-    _add(
-        "nosecone",
-        "KST-F-0019",
-        'Nose Cone, 6" 4:1 Ogive',
-        category="Structures",
-        desc='Fiberglass, 24" length, aluminum tip',
-    )
-    _add(
-        "fin_set",
-        "KST-F-0020",
-        "Fin Set (3x)",
-        category="Structures",
-        desc='6061-T6 sheet, 0.125" thick, clipped delta planform',
-    )
-    _add(
-        "bulkhead_fwd",
-        "KST-F-0021",
-        "Bulkhead, Forward",
-        category="Structures",
-        desc='6061-T6 plate, 6" OD, O-ring sealed, recovery harness attach',
-    )
-    _add(
-        "bulkhead_aft",
-        "KST-F-0022",
-        "Bulkhead, Aft",
-        category="Structures",
-        desc='6061-T6 plate, 6" OD, engine mount interface, feedthrough ports',
-    )
-    _add(
-        "coupler",
-        "KST-F-0023",
-        'Coupler Tube, 6" ID x 8"',
-        category="Structures",
-        desc="6061-T6, connects airframe sections, shear-pinned for separation",
-    )
-    _add(
-        "rail_button",
-        "KST-F-0024",
-        "Rail Button, 1515",
-        category="Structures",
-        tracking="bulk",
-        epn="97395A430",
-        desc='McMaster 97395A430 — Delrin, 1/4"-20 thread',
-        reorder=6,
-    )
-
-    # ── Avionics ────────────────────────────────────────────────
-    _add(
-        "fc",
-        "KST-F-0025",
-        "Flight Computer",
-        category="Avionics",
-        desc="Custom PCB — Teensy 4.1, data logging, dual pyro channels",
-    )
-    _add(
-        "gps",
-        "KST-F-0026",
-        "GPS Module, u-blox MAX-M10S",
-        category="Avionics",
-        epn="MAX-M10S",
-        desc="10 Hz update, SAW/LNA, active antenna connector",
-    )
-    _add(
-        "imu",
-        "KST-F-0027",
-        "IMU, Bosch BNO055",
-        category="Avionics",
-        epn="BNO055",
-        desc="9-DOF absolute orientation sensor, I2C, sensor fusion onboard",
-    )
-    _add(
-        "altimeter",
-        "KST-F-0028",
-        "Barometric Altimeter, MS5611",
-        category="Avionics",
-        epn="MS5611",
-        desc="24-bit ADC, 10 cm resolution, SPI/I2C",
-    )
-    _add(
-        "radio",
-        "KST-F-0029",
-        "Telemetry Radio, RFM95W 915 MHz",
-        category="Avionics",
-        epn="RFM95W",
-        desc="LoRa spread spectrum, +20 dBm, SPI interface",
-    )
-    _add(
-        "lipo",
-        "KST-F-0030",
-        "Battery, LiPo 2S 1000 mAh",
-        category="Avionics",
-        tracking="bulk",
-        desc="7.4V nominal, JST-XH balance connector, 20C discharge",
-        reorder=2,
-    )
-    _add(
-        "harness",
-        "KST-F-0031",
-        "Wiring Harness, Avionics Bay",
-        category="Avionics",
-        desc="Point-to-point harness: FC, sensors, pyro, antenna, battery",
-    )
-    _add(
-        "pyro_board",
-        "KST-F-0032",
-        "Pyro Channel Board",
-        category="Avionics",
-        desc="Dual MOSFET e-match firing circuit, optoisolated, LED-armed indicator",
-    )
-
-    # ── Recovery ────────────────────────────────────────────────
-    _add(
-        "main_chute",
-        "KST-F-0033",
-        'Main Parachute, 48" Cruciform',
-        category="Recovery",
-        desc="Ripstop nylon, 12 lb max descent load, Vd ≈ 18 ft/s",
-    )
-    _add(
-        "drogue",
-        "KST-F-0034",
-        'Drogue Parachute, 18" Hemispherical',
-        category="Recovery",
-        desc="Ripstop nylon, stabilizes descent to ~80 ft/s",
-    )
-    _add(
-        "shock_cord",
-        "KST-F-0035",
-        'Shock Cord, 1/2" Tubular Nylon',
-        category="Recovery",
-        tracking="bulk",
-        uom="ft",
-        desc="1500 lb rated, 20 ft working length",
-        reorder=25,
-    )
-    _add(
-        "ubolt",
-        "KST-F-0036",
-        'U-Bolt, 1/4"-20 x 1-1/2" Span',
-        category="Recovery",
-        tracking="bulk",
-        epn="3042T14",
-        desc="McMaster 3042T14 — forged steel, zinc-plated",
-        reorder=4,
-    )
-    _add(
-        "shear_pin",
-        "KST-F-0037",
-        "Shear Pin, 2-56 Nylon",
-        category="Recovery",
-        tracking="bulk",
-        epn="90207A004",
-        desc="McMaster 90207A004 — nylon 6/6, calibrated shear for separation charge",
-        reorder=50,
-    )
-    _add(
-        "ematch",
-        "KST-D-0038",
-        "E-Match, J-Tek",
-        category="Recovery",
-        tier=3,
-        tracking="bulk",
-        desc="Electric match, 1A/1W no-fire, bridgewire igniter for ejection charges",
-        reorder=10,
-    )
-
-    # ── Fasteners ───────────────────────────────────────────────
-    _add(
-        "shcs_quarter",
-        "KST-D-0039",
-        'SHCS 1/4"-20 x 1", 18-8 SS',
-        category="Fasteners",
-        tier=3,
-        tracking="bulk",
-        epn="91251A542",
-        desc="McMaster 91251A542 — socket head cap screw, fully threaded",
-        reorder=50,
-    )
-    _add(
-        "shcs_10_32",
-        "KST-D-0040",
-        'SHCS 10-32 x 3/4", 18-8 SS',
-        category="Fasteners",
-        tier=3,
-        tracking="bulk",
-        epn="91251A320",
-        desc="McMaster 91251A320 — socket head cap screw, fully threaded",
-        reorder=50,
-    )
-    _add(
-        "hex_nut_quarter",
-        "KST-D-0041",
-        'Hex Nut, 1/4"-20, 18-8 SS',
-        category="Fasteners",
-        tier=3,
-        tracking="bulk",
-        epn="91845A029",
-        desc="McMaster 91845A029",
-        reorder=50,
-    )
-    _add(
-        "lock_washer_quarter",
-        "KST-D-0042",
-        'Lock Washer, 1/4", 18-8 SS',
-        category="Fasteners",
-        tier=3,
-        tracking="bulk",
-        epn="92146A029",
-        desc="McMaster 92146A029 — split lock washer",
-        reorder=50,
-    )
-    _add(
-        "oring_012",
-        "KST-D-0043",
-        "O-Ring, -012 Buna-N, 70A",
-        category="Fasteners",
-        tier=3,
-        tracking="bulk",
-        epn="9452K113",
-        desc='McMaster 9452K113 — AS568-012, 0.364" ID x 0.070" CS',
-        reorder=20,
-    )
-    _add(
-        "oring_016",
-        "KST-D-0044",
-        "O-Ring, -016 Buna-N, 70A",
-        category="Fasteners",
-        tier=3,
-        tracking="bulk",
-        epn="9452K117",
-        desc='McMaster 9452K117 — AS568-016, 0.614" ID x 0.070" CS',
-        reorder=20,
-    )
-    _add(
-        "oring_116",
-        "KST-F-0045",
-        "O-Ring, -116 Viton, 75A",
-        category="Fasteners",
-        tracking="bulk",
-        epn="9263K516",
-        desc='McMaster 9263K516 — AS568-116, LOX-compatible fluoroelastomer, 0.614" ID x 0.103" CS',
-        reorder=10,
-    )
-
-    # ── GSE ─────────────────────────────────────────────────────
-    _add(
-        "fill_valve",
-        "KST-G-0001",
-        "Fill/Drain Valve Assembly",
-        category="GSE",
-        tier=2,
-        desc="Ground-side fill panel: ball valve, vent, burst disc",
-    )
-    _add(
-        "umbilical_qd",
-        "KST-G-0002",
-        "Umbilical Quick-Disconnect",
-        category="GSE",
-        tier=2,
-        desc="Swagelok QC4 series, auto-shutoff on disconnect",
-        epn="SS-QC4-B-400",
-    )
-    _add(
-        "ign_box",
-        "KST-G-0003",
-        "Ignition Control Box",
-        category="GSE",
-        tier=2,
-        desc="Key-armed, dual-relay ignition circuit, 500 ft firing lead, continuity check",
-    )
-    _add(
-        "launch_rail",
-        "KST-G-0004",
-        "Launch Rail, 20 ft 1515",
-        category="GSE",
-        tier=2,
-        desc="80/20 1515 aluminum extrusion, guyed, 85° elevation angle",
-    )
-    _add(
-        "proof_fixture",
-        "KST-G-0005",
-        "Pressure Test Fixture",
-        category="GSE",
-        tier=2,
-        is_tooling=True,
-        cal_days=365,
-        desc="Hydrostatic proof test manifold: hand pump, gauge, relief valve, bleed",
-    )
-    _add(
-        "ground_reg",
-        "KST-G-0006",
-        "Ground Regulator, N2",
-        category="GSE",
-        tier=2,
-        desc="Swagelok KPR series, 0-800 PSI outlet, CGA-580 inlet",
-        epn="KPR1FRA412A20000",
-    )
-
-    # ── Raw Material ────────────────────────────────────────────
-    _add(
-        "al_plate",
-        "KST-D-0046",
-        '6061-T6 Al Plate, 1/2" Thick',
-        category="Raw Material",
-        tier=3,
-        tracking="bulk",
-        uom="sq ft",
-        epn="89015K28",
-        desc="McMaster 89015K28 — mill finish, AMS-QQ-A-250/11",
-    )
-    _add(
-        "ss_sheet",
-        "KST-D-0047",
-        '304 SS Sheet, 0.060" Thick',
-        category="Raw Material",
-        tier=3,
-        tracking="bulk",
-        uom="sq ft",
-        epn="88885K58",
-        desc="McMaster 88885K58 — #2B finish, ASTM A240",
-    )
-    _add(
-        "al_round",
-        "KST-D-0048",
-        '6061-T6 Al Round Bar, 3" OD',
-        category="Raw Material",
-        tier=3,
-        tracking="bulk",
-        uom="ft",
-        epn="8974K39",
-        desc="McMaster 8974K39 — AMS 4150, turned and polished",
-    )
-
-    return p
-
-
-# ---------------------------------------------------------------------------
-# BOM
-# ---------------------------------------------------------------------------
-
-
-def _seed_bom(db: Session, p: dict[str, Part]) -> None:
-    lines = [
-        # Engine Assembly BOM
-        BOMLine(assembly_id=p["engine_assy"].id, component_id=p["chamber"].id, quantity=1),
-        BOMLine(assembly_id=p["engine_assy"].id, component_id=p["injector"].id, quantity=1),
-        BOMLine(assembly_id=p["engine_assy"].id, component_id=p["nozzle"].id, quantity=1),
-        BOMLine(assembly_id=p["engine_assy"].id, component_id=p["igniter"].id, quantity=1),
-        BOMLine(
-            assembly_id=p["engine_assy"].id,
-            component_id=p["shcs_quarter"].id,
-            quantity=8,
-            reference_designator="B1-B8",
-            notes="Chamber-to-injector bolts",
-        ),
-        BOMLine(
-            assembly_id=p["engine_assy"].id,
-            component_id=p["hex_nut_quarter"].id,
-            quantity=8,
-            reference_designator="N1-N8",
-        ),
-        BOMLine(
-            assembly_id=p["engine_assy"].id,
-            component_id=p["lock_washer_quarter"].id,
-            quantity=8,
-            reference_designator="W1-W8",
-        ),
-        BOMLine(
-            assembly_id=p["engine_assy"].id,
-            component_id=p["oring_116"].id,
-            quantity=2,
-            notes="Injector face seal + nozzle throat seal",
-        ),
-        BOMLine(
-            assembly_id=p["engine_assy"].id,
-            component_id=p["shcs_10_32"].id,
-            quantity=6,
-            reference_designator="B9-B14",
-            notes="Nozzle retainer ring",
-        ),
-    ]
-    db.add_all(lines)
-    db.flush()
-
-
-# ---------------------------------------------------------------------------
-# Part Requirements
-# ---------------------------------------------------------------------------
-
-
-def _seed_part_requirements(db: Session, p: dict[str, Part]) -> None:
-    now = datetime.now(UTC)
-    reqs: list[PartRequirement] = []
-
-    # REQ-001 Structural Loads → structures
-    for key in ["airframe", "nosecone", "fin_set", "bulkhead_fwd", "bulkhead_aft", "coupler"]:
-        reqs.append(
-            PartRequirement(
-                part_id=p[key].id,
-                requirement_id="REQ-001",
-                status="open",
-            )
-        )
-
-    # REQ-002 Pressure Containment → pressure vessels and engine
-    for key in ["lox_tank", "fuel_tank", "press_tank", "chamber", "engine_assy"]:
-        status = "verified" if key == "press_tank" else "open"
-        reqs.append(
-            PartRequirement(
-                part_id=p[key].id,
-                requirement_id="REQ-002",
-                status=status,
-                verified_at=now - timedelta(days=12) if status == "verified" else None,
-                notes="COTS tank — vendor cert on file" if key == "press_tank" else None,
-            )
-        )
-
-    # REQ-003 LOX Compatibility → wetted parts
-    for key in [
-        "lox_tank",
-        "lox_valve",
-        "check_valve",
-        "relief_valve",
-        "tube_half",
-        "tube_quarter",
-        "an_fitting_half",
-        "an_fitting_quarter",
-        "injector",
-        "oring_116",
-    ]:
-        status = "verified" if key in ("tube_half", "tube_quarter") else "open"
-        reqs.append(
-            PartRequirement(
-                part_id=p[key].id,
-                requirement_id="REQ-003",
-                status=status,
-                verified_at=now - timedelta(days=20) if status == "verified" else None,
-                notes="304 SS — per MSFC-SPEC-106B Table 1" if status == "verified" else None,
-            )
-        )
-
-    # REQ-004 Recovery → recovery components and altimeter
-    for key in ["main_chute", "drogue", "fc", "altimeter", "pyro_board"]:
-        reqs.append(
-            PartRequirement(
-                part_id=p[key].id,
-                requirement_id="REQ-004",
-                status="open",
-            )
-        )
-
-    # REQ-005 Data Logging → flight computer + sensors
-    for key in ["fc", "imu", "altimeter", "gps"]:
-        reqs.append(
-            PartRequirement(
-                part_id=p[key].id,
-                requirement_id="REQ-005",
-                status="open",
-            )
-        )
-
-    # REQ-006 Telemetry Link → radio
-    reqs.append(
-        PartRequirement(
-            part_id=p["radio"].id,
-            requirement_id="REQ-006",
-            status="open",
-        )
-    )
-
-    # REQ-007 Pyro Isolation → pyro board
-    reqs.append(
-        PartRequirement(
-            part_id=p["pyro_board"].id,
-            requirement_id="REQ-007",
-            status="verified",
-            verified_at=now - timedelta(days=5),
-            notes="Bench tested: >500V isolation between pyro and logic rails",
-        )
-    )
-
-    # REQ-008 Traceability → all flight tier parts (sample)
-    for key in [
-        "engine_assy",
-        "chamber",
-        "injector",
-        "nozzle",
-        "lox_tank",
-        "fuel_tank",
-        "press_tank",
-        "fc",
-        "harness",
-        "main_chute",
-    ]:
-        status = "open"
-        if key in ("engine_assy", "chamber"):
-            status = "waived"
-        reqs.append(
-            PartRequirement(
-                part_id=p[key].id,
-                requirement_id="REQ-008",
-                status=status,
-                notes="Waived — traceability deferred to post-assembly serial assignment"
-                if status == "waived"
-                else None,
-            )
-        )
-
-    db.add_all(reqs)
-    db.flush()
-
-
-# ---------------------------------------------------------------------------
-# Inventory
-# ---------------------------------------------------------------------------
-
-
-def _seed_inventory(db: Session, p: dict[str, Part]) -> dict[str, InventoryRecord]:
-    inv: dict[str, InventoryRecord] = {}
-
-    def _add(key: str, part_key: str, qty: float, location: str, **kw: object) -> None:
-        rec = InventoryRecord(
-            part_id=p[part_key].id,
-            opal_number=generate_opal_number(db),
-            quantity=Decimal(str(qty)),
-            location=location,
-            source_type=SourceType.MANUAL,
-            **kw,  # type: ignore[arg-type]
-        )
-        db.add(rec)
-        db.flush()
-        inv[key] = rec
-
-    # Serialized flight hardware
-    _add("chamber_1", "chamber", 1, "CLEAN-1")
-    _add("injector_1", "injector", 1, "CLEAN-1")
-    _add("nozzle_1", "nozzle", 1, "SHOP-BENCH")
-    _add("igniter_1", "igniter", 1, "CLEAN-1")
-    _add("lox_tank_1", "lox_tank", 1, "STORE-A1")
-    _add("fuel_tank_1", "fuel_tank", 1, "STORE-A1")
-    _add("press_tank_1", "press_tank", 1, "STORE-A2")
-    _add("lox_valve_1", "lox_valve", 1, "STORE-B1")
-    _add("fuel_valve_1", "fuel_valve", 1, "STORE-B1")
-    _add("fc_1", "fc", 1, "LAB-BENCH")
-    _add("gps_1", "gps", 1, "LAB-BENCH")
-    _add("imu_1", "imu", 1, "LAB-BENCH")
-    _add("radio_1", "radio", 1, "LAB-BENCH")
-    _add("main_chute_1", "main_chute", 1, "STORE-C1")
-    _add("drogue_1", "drogue", 1, "STORE-C1")
-    _add("nosecone_1", "nosecone", 1, "STORE-A3")
-    _add("airframe_1", "airframe", 1, "STORE-A3")
-
-    # Bulk stock
-    _add("tube_half_stock", "tube_half", 24, "STORE-B2", lot_number="LOT-2026-003")
-    _add("tube_quarter_stock", "tube_quarter", 18, "STORE-B2", lot_number="LOT-2026-004")
-    _add("an_half_stock", "an_fitting_half", 12, "STORE-B3")
-    _add("an_quarter_stock", "an_fitting_quarter", 16, "STORE-B3")
-    _add("shcs_quarter_stock", "shcs_quarter", 200, "STORE-D1", lot_number="LOT-2026-001")
-    _add("shcs_10_32_stock", "shcs_10_32", 150, "STORE-D1", lot_number="LOT-2026-001")
-    _add("hex_nut_stock", "hex_nut_quarter", 200, "STORE-D1")
-    _add("lock_washer_stock", "lock_washer_quarter", 200, "STORE-D1")
-    _add("oring_012_stock", "oring_012", 50, "STORE-D2")
-    _add("oring_016_stock", "oring_016", 50, "STORE-D2")
-    _add("oring_116_stock", "oring_116", 25, "STORE-D2")
-    _add("shear_pin_stock", "shear_pin", 100, "STORE-D3")
-    _add("ematch_stock", "ematch", 20, "STORE-D3")
-    _add("rail_button_stock", "rail_button", 8, "STORE-D3")
-    _add("shock_cord_stock", "shock_cord", 40, "STORE-C1")
-    _add("ubolt_stock", "ubolt", 6, "STORE-C1")
-    _add("lipo_stock", "lipo", 4, "LAB-SHELF")
-    _add("teflon_stock", "teflon_tape", 5, "STORE-D4")
-
-    # Raw material
-    _add("al_plate_stock", "al_plate", 8, "STORE-E1", lot_number="LOT-MS-2026-A")
-    _add("ss_sheet_stock", "ss_sheet", 4, "STORE-E1", lot_number="LOT-MS-2026-B")
-    _add("al_round_stock", "al_round", 6, "STORE-E2", lot_number="LOT-MS-2026-C")
-
-    # GSE
-    _add("proof_fixture_1", "proof_fixture", 1, "PAD-CART")
-    _add("ign_box_1", "ign_box", 1, "PAD-CART")
-    _add("launch_rail_1", "launch_rail", 1, "PAD")
-    _add("ground_reg_1", "ground_reg", 1, "PAD-CART")
-
-    return inv
-
-
-# ---------------------------------------------------------------------------
-# Procedures
-# ---------------------------------------------------------------------------
-
-
-def _add_op_tree(
-    db: Session,
-    procedure_id: int,
-    wc: dict[str, Workcenter],
-    ops: list[dict[str, Any]],
-) -> None:
-    """Insert a list of top-level operations and their sub-steps.
-
-    Each op dict supports: title, instructions, duration, workcenter, sub_steps.
-    Each sub-step dict supports: title, instructions, duration, workcenter,
-    requires_signoff, schema. Step numbers and parent_step_id are auto-computed.
-    """
-    order = 0
-    for op_idx, op in enumerate(ops, start=1):
-        order += 1
-        parent = ProcedureStep(
-            procedure_id=procedure_id,
-            order=order,
-            step_number=str(op_idx),
-            level=0,
-            title=op["title"],
-            instructions=op.get("instructions"),
-            estimated_duration_minutes=op.get("duration"),
-            workcenter_id=wc[op["workcenter"]].id if op.get("workcenter") else None,
-            requires_signoff=op.get("requires_signoff", False),
-            required_data_schema=op.get("schema"),
-        )
-        db.add(parent)
-        db.flush()
-        for sub_idx, sub in enumerate(op.get("sub_steps", []), start=1):
-            order += 1
+        if entry.get("supplier") and entry.get("vendor_pn"):
             db.add(
-                ProcedureStep(
-                    procedure_id=procedure_id,
-                    parent_step_id=parent.id,
-                    order=order,
-                    step_number=f"{op_idx}.{sub_idx}",
-                    level=1,
-                    title=sub["title"],
-                    instructions=sub.get("instructions"),
-                    estimated_duration_minutes=sub.get("duration"),
-                    workcenter_id=wc[sub["workcenter"]].id if sub.get("workcenter") else None,
-                    requires_signoff=sub.get("requires_signoff", False),
-                    required_data_schema=sub.get("schema"),
+                SupplierPart(
+                    supplier_id=suppliers[entry["supplier"]].id,
+                    part_id=part.id,
+                    vendor_pn=entry["vendor_pn"],
+                    is_preferred=True,
                 )
             )
+
     db.flush()
+    return parts
+
+
+def _seed_bom(db: Session, data: dict, parts: dict[str, Part]) -> None:
+    # parent_id mirrors the BOM only where a component has exactly one parent
+    parent_count: dict[str, list[str]] = {}
+    for line in data["bom"]:
+        parent_count.setdefault(line["component"], []).append(line["assembly"])
+
+    for line in data["bom"]:
+        db.add(
+            BOMLine(
+                assembly_id=parts[line["assembly"]].id,
+                component_id=parts[line["component"]].id,
+                quantity=int(line["qty"]),
+                notes=line.get("notes"),
+            )
+        )
+        if len(parent_count[line["component"]]) == 1:
+            parts[line["component"]].parent_id = parts[line["assembly"]].id
+    db.flush()
+
+
+# ---------------------------------------------------------------------------
+# Requirements
+# ---------------------------------------------------------------------------
+
+
+def _seed_requirements(
+    db: Session,
+    parts: dict[str, Part],
+    users: dict[str, User],
+    now: datetime,
+) -> None:
+    from opal.se.baseline import write_baseline_event
+    from opal.se.lifecycle import baseline
+
+    data = _data("requirements.json")
+    baselined: list[Requirement] = []
+
+    for entry in data["requirements"]:
+        req = Requirement(
+            req_number=generate_requirement_number(db),
+            title=entry["title"],
+            statement=entry["statement"],
+            rationale=entry.get("rationale"),
+            category=entry["category"],
+            level=1,
+            verification_method=entry["verification_method"],
+        )
+        if entry["state"] == "tbr":
+            # A TBR carries an owner and an absolute closure date.
+            req.tbr = True
+            req.tbr_owner_id = users["test"].id
+            req.tbr_due = now + timedelta(days=21)
+        db.add(req)
+        db.flush()
+
+        if entry["state"] == "baselined":
+            baseline(db, req, users["build"].id)
+            baselined.append(req)
+
+        for part_key in entry.get("allocations", []):
+            status = "open"
+            verified_at = None
+            notes = None
+            if entry["title"] == "Oxidizer tank static vent":
+                status = "verified"
+                verified_at = now - timedelta(days=15)
+                notes = "1.2 mm (0.047 in) vent drilled per OP 2; verified clear at tank assembly."
+            db.add(
+                PartRequirement(
+                    part_id=parts[part_key].id,
+                    requirement_id=req.req_number,
+                    requirement_ref_id=req.id,
+                    status=status,
+                    verified_at=verified_at,
+                    verified_by_id=users["qa"].id if verified_at else None,
+                    notes=notes,
+                )
+            )
+
+    write_baseline_event(
+        db,
+        baselined,
+        users["build"].id,
+        label="hcr-5100-import",
+        note="Initial baseline of the HCR-5100 guidebook requirement set.",
+    )
+    db.flush()
+
+
+# ---------------------------------------------------------------------------
+# Procedures (build + publish)
+# ---------------------------------------------------------------------------
 
 
 def _seed_procedures(
     db: Session,
-    p: dict[str, Part],
+    data: dict,
+    parts: dict[str, Part],
     wc: dict[str, Workcenter],
-) -> dict[str, MasterProcedure]:
+) -> tuple[dict[str, MasterProcedure], dict[str, ProcedureVersion]]:
     procs: dict[str, MasterProcedure] = {}
+    versions: dict[str, ProcedureVersion] = {}
 
-    # ── 1. Engine Assembly Build ────────────────────────────────
-    eng_build = MasterProcedure(
-        name="Engine Assembly Build",
-        description="Assemble combustion chamber, injector plate, nozzle, and igniter into complete engine unit.",
-        procedure_type=ProcedureType.BUILD,
-        status=ProcedureStatus.ACTIVE,
-    )
-    db.add(eng_build)
-    db.flush()
-    procs["eng_build"] = eng_build
-
-    # Kit (parts consumed by this procedure)
-    for part_key, qty in [
-        ("chamber", 1),
-        ("injector", 1),
-        ("nozzle", 1),
-        ("igniter", 1),
-        ("shcs_quarter", 8),
-        ("hex_nut_quarter", 8),
-        ("lock_washer_quarter", 8),
-        ("oring_116", 2),
-        ("shcs_10_32", 6),
-    ]:
-        db.add(
-            Kit(
-                procedure_id=eng_build.id,
-                part_id=p[part_key].id,
-                quantity_required=Decimal(str(qty)),
-            )
+    for pdata in data["procedures"]:
+        proc = MasterProcedure(
+            name=pdata["name"],
+            description=pdata["description"],
+            procedure_type=(ProcedureType.BUILD if pdata["type"] == "build" else ProcedureType.OP),
+            status=ProcedureStatus.ACTIVE,
         )
-    db.add(
-        ProcedureOutput(
-            procedure_id=eng_build.id, part_id=p["engine_assy"].id, quantity_produced=Decimal("1")
-        )
-    )
-    db.flush()
-
-    _eng_build_ops: list[dict[str, Any]] = [
-        {
-            "title": "Component Prep and Inspection",
-            "instructions": (
-                "Inspect, clean, and stage all chamber, injector, nozzle, and igniter hardware "
-                "before assembly begins."
-            ),
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Visual Component Inspection",
-                    "instructions": (
-                        "Inspect chamber bore, injector face, nozzle throat, and igniter housing "
-                        "for nicks, machining swarf, or surface contamination."
-                    ),
-                    "duration": 15,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Verify Dimensions Against Drawing",
-                    "instructions": (
-                        "Check chamber ID, injector face flatness, and nozzle throat diameter "
-                        "with calipers. Confirm all dimensions are within tolerance per drawing."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Solvent-Clean All Mating Surfaces",
-                    "instructions": (
-                        "Wipe chamber flange, injector face, nozzle threads, and O-ring grooves "
-                        "with isopropyl alcohol on a lint-free wipe. Blow dry with clean N2."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Stage Hardware Kit",
-                    "instructions": (
-                        "Verify kit contents against BOM: 8x 1/4-20 SHCS, 8x lock washers, "
-                        "8x hex nuts, 6x 10-32 SHCS, 2x -116 O-rings. Record O-ring and "
-                        "fastener lot numbers on traveler."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Injector to Chamber Mating",
-            "instructions": "Loose-install the injector onto the chamber. No torque yet.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Install Injector O-Ring",
-                    "instructions": (
-                        "Lubricate -116 O-ring with Krytox GPL-205 grease. Seat into injector "
-                        "face groove. Verify O-ring sits flat with no twists or rolls."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Align Index Pin",
-                    "instructions": (
-                        "Rotate injector so the index dowel pin aligns with the chamber socket "
-                        "at 0 degrees clock position."
-                    ),
-                    "duration": 3,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Lower Injector onto Chamber",
-                    "instructions": (
-                        "Slowly lower the injector flat onto the chamber flange. Verify the "
-                        "O-ring engages evenly without pinching or extruding."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Injector Bolt Torquing",
-            "instructions": "Install and final-torque the injector fasteners.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Install Injector Fasteners",
-                    "instructions": (
-                        "Install 8x 1/4-20 SHCS with lock washers and hex nuts through the "
-                        "injector flange. Tighten finger-tight in star pattern."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Torque to Spec in Star Pattern",
-                    "instructions": (
-                        "Torque 8x 1/4-20 SHCS to 120 in-lb in two passes: 60 in-lb first pass, "
-                        "120 in-lb second pass. Follow star pattern."
-                    ),
-                    "duration": 15,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": f"bolt{i}_torque",
-                                "type": "number",
-                                "label": f"Bolt {i} final torque (in-lb)",
-                                "required": True,
-                            }
-                            for i in range(1, 9)
-                        ]
-                    },
-                },
-                {
-                    "title": "Apply Witness Marks",
-                    "instructions": (
-                        "Apply yellow torque-seal across each bolt head and flange. Photograph "
-                        "flange from two angles."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Nozzle Installation",
-            "instructions": "Install nozzle and torque the retainer ring.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Install Nozzle O-Ring",
-                    "instructions": (
-                        "Lubricate -116 O-ring with Krytox grease. Seat into nozzle throat "
-                        "groove. Verify no twists."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Thread Nozzle into Chamber",
-                    "instructions": (
-                        "Thread nozzle into chamber aft end. Hand-tight plus 1/4 turn. "
-                        "Verify nozzle seats fully against the O-ring."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Install Nozzle Retainer Ring",
-                    "instructions": (
-                        "Install retainer ring over nozzle. Insert 6x 10-32 SHCS and torque to "
-                        "40 in-lb in alternating pattern."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": f"retainer_bolt{i}_torque",
-                                "type": "number",
-                                "label": f"Retainer bolt {i} torque (in-lb)",
-                                "required": True,
-                            }
-                            for i in range(1, 7)
-                        ]
-                    },
-                },
-            ],
-        },
-        {
-            "title": "Igniter Installation",
-            "instructions": "Thread igniter into injector boss and verify continuity.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Thread Igniter into Injector Boss",
-                    "instructions": (
-                        "Apply thread sealant to igniter NPT threads. Thread into injector boss "
-                        "hand-tight plus 1.5 turns. Torque to 25 ft-lb."
-                    ),
-                    "duration": 8,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Route E-Match Leads",
-                    "instructions": (
-                        "Route igniter leads up the chamber exterior, clear of the hot-gas "
-                        "path. Tape leads to chamber wall with Kapton tape."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Igniter Continuity Check",
-                    "instructions": (
-                        "Measure resistance across e-match terminals with multimeter. Acceptable "
-                        "range 1.0 to 3.0 ohms."
-                    ),
-                    "duration": 3,
-                    "workcenter": "CLEAN",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "igniter_ohms",
-                                "type": "number",
-                                "label": "Igniter resistance (ohms)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-            ],
-        },
-        {
-            "title": "Pneumatic Leak Check",
-            "instructions": "Pressure-test all sealed joints with GN2 before closeout.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Cap Nozzle Exit",
-                    "instructions": (
-                        "Install machined test cap on nozzle exit with -012 O-ring. Verify cap "
-                        "seats and is hand-tight."
-                    ),
-                    "duration": 3,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Pressurize to 50 PSI",
-                    "instructions": (
-                        "Connect GN2 supply via pressure test fixture (KST-G-0005). Slowly "
-                        "pressurize chamber to 50 PSI. Hold 60 seconds."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Soap-Bubble All Joints",
-                    "instructions": (
-                        "Apply Snoop leak detector to injector flange, nozzle threads, igniter "
-                        "boss, and cap seal. No bubbles permitted."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Depressurize and Remove Cap",
-                    "instructions": (
-                        "Slowly vent chamber to 0 PSI. Disconnect GN2 supply. Remove nozzle "
-                        "exit cap."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Final Inspection and Documentation",
-            "instructions": "Close out the build traveler and transfer engine to bonded storage.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Final Visual Inspection",
-                    "instructions": (
-                        "Confirm all fasteners are torque-sealed, no FOD inside chamber, no "
-                        "swarf on injector face, no damage to igniter leads."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Photograph Assembly",
-                    "instructions": (
-                        "Take 4 photographs: fore (injector side), aft (nozzle side), left, "
-                        "right. Include SN placard in each frame."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Record Assembly Data",
-                    "instructions": (
-                        "Log SNs of chamber, injector, nozzle, igniter. Record O-ring lot, "
-                        "fastener lot, and thread sealant batch numbers."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Build Traveler Sign-Off",
-                    "instructions": (
-                        "Build lead and QA inspector both sign off that the engine is complete "
-                        "and ready for hydrostatic proof test."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-    ]
-    _add_op_tree(db, eng_build.id, wc, _eng_build_ops)
-
-    # ── 2. Hydrostatic Proof Test ───────────────────────────────
-    hydro = MasterProcedure(
-        name="Hydrostatic Proof Test",
-        description="Proof test pressure vessel to 1.5x MEOP (675 PSI) with water. Verify no leaks or permanent deformation.",
-        procedure_type=ProcedureType.OP,
-        status=ProcedureStatus.ACTIVE,
-    )
-    db.add(hydro)
-    db.flush()
-    procs["hydro"] = hydro
-
-    _hydro_ops: list[dict[str, Any]] = [
-        {
-            "title": "Test Setup",
-            "instructions": (
-                "Plumb the test article to the pressure fixture, fill with distilled water, "
-                "and verify all instrumentation is reading nominal."
-            ),
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Connect Test Fixture",
-                    "instructions": (
-                        "Connect pressure test fixture (KST-G-0005) to test article inlet via "
-                        "1/4 inch SS tubing. Torque AN-4 fitting to 80 in-lb."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Fill with Distilled Water",
-                    "instructions": (
-                        "Fill test article with distilled water through fill port until water "
-                        "weeps from highest vent. Close vent."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Bleed Air from Lines",
-                    "instructions": (
-                        "Open bleed valve and slowly stroke hand pump until water flows clear "
-                        "with no entrained air. Close bleed valve."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Verify Instrumentation",
-                    "instructions": (
-                        "Confirm pressure gauge reads 0 to 2 PSI. Verify data-acquisition "
-                        "system is logging. Verify pressure relief valve set point at 750 PSI."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Pressure Step — 100 PSI",
-            "instructions": "First low-pressure hold. Verify gross leak integrity.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Pressurize to 100 PSI",
-                    "instructions": (
-                        "Slowly pressurize with hand pump at 10 PSI/sec. Stop at 100 PSI and "
-                        "record reading."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "pressure_100_psi",
-                                "type": "number",
-                                "label": "Pressure at hold (PSI)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Hold and Inspect for Leaks",
-                    "instructions": (
-                        "Hold 60 seconds. Visually inspect all joints and weld lines. No "
-                        "weeping or pressure decay permitted."
-                    ),
-                    "duration": 3,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Pressure Step — 300 PSI",
-            "instructions": "Intermediate pressure hold.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Pressurize to 300 PSI",
-                    "instructions": "Slowly pressurize to 300 PSI. Record reading.",
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "pressure_300_psi",
-                                "type": "number",
-                                "label": "Pressure at hold (PSI)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Hold and Inspect",
-                    "instructions": "Hold 60 seconds. Inspect for weeping or audible hiss.",
-                    "duration": 3,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "MEOP Hold — 500 PSI",
-            "instructions": "Maximum Expected Operating Pressure hold.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Pressurize to MEOP",
-                    "instructions": "Slowly pressurize to 500 PSI. Record reading.",
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "pressure_meop",
-                                "type": "number",
-                                "label": "Pressure at hold (PSI)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Hold 2 Minutes",
-                    "instructions": (
-                        "Hold 120 seconds. Monitor pressure gauge for decay. Decay shall not "
-                        "exceed 2 PSI."
-                    ),
-                    "duration": 3,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Thorough Joint Inspection",
-                    "instructions": (
-                        "While at MEOP, inspect every weld seam, fitting, and seal with a "
-                        "flashlight. Mark any suspect areas with chalk."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Proof Pressure Hold — 675 PSI",
-            "instructions": "Proof test at 1.35x MEOP. Verify no yielding or weeping.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Pressurize to Proof",
-                    "instructions": (
-                        "Slowly pressurize to 675 PSI (1.35x MEOP). Approach proof pressure at "
-                        "5 PSI/sec for the final 50 PSI."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "proof_pressure",
-                                "type": "number",
-                                "label": "Peak proof pressure (PSI)",
-                                "required": True,
-                            },
-                            {
-                                "name": "hold_duration_s",
-                                "type": "number",
-                                "label": "Hold duration (seconds)",
-                                "required": True,
-                            },
-                        ]
-                    },
-                },
-                {
-                    "title": "Hold 5 Minutes",
-                    "instructions": (
-                        "Hold 300 seconds. Pressure decay shall not exceed 5 PSI. Log decay rate."
-                    ),
-                    "duration": 6,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Verify No Yielding or Weeping",
-                    "instructions": (
-                        "Final inspection at proof pressure. Any weeping, audible hiss, or "
-                        "visible deformation is a failure."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Depressurization and Dimensional Check",
-            "instructions": "Vent back to zero and verify no permanent deformation.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Slow Depressurize to 0 PSI",
-                    "instructions": (
-                        "Open bleed valve and vent slowly at 25 PSI/sec to atmosphere. "
-                        "Disconnect supply once stable at 0."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Measure OD at 3 Stations",
-                    "instructions": (
-                        "Measure outside diameter with pi-tape at three stations along the "
-                        "test article. Compare to baseline measurements taken pre-test."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "od_station_1",
-                                "type": "number",
-                                "label": "OD Station 1 (in)",
-                            },
-                            {
-                                "name": "od_station_2",
-                                "type": "number",
-                                "label": "OD Station 2 (in)",
-                            },
-                            {
-                                "name": "od_station_3",
-                                "type": "number",
-                                "label": "OD Station 3 (in)",
-                            },
-                        ]
-                    },
-                },
-                {
-                    "title": "Visual Inspection for Cracks or Bulging",
-                    "instructions": (
-                        "Inspect entire test article with bright light. Any visible cracks, "
-                        "bulging, or surface distortion is a failure."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Test Closeout",
-            "instructions": "Drain, dry, and record results.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Drain Test Article",
-                    "instructions": (
-                        "Open drain valve and tilt to fully empty water. Catch in graduated "
-                        "container to verify fill volume."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Dry with N2 Purge",
-                    "instructions": (
-                        "Purge interior with dry GN2 for 5 minutes. Verify no residual moisture."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Record Pass or Fail",
-                    "instructions": (
-                        "Test director records pass/fail in traveler. Attach pressure trace "
-                        "and OD measurements to test report."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-    ]
-    _add_op_tree(db, hydro.id, wc, _hydro_ops)
-
-    # ── 3. Hot Fire Test ────────────────────────────────────────
-    hotfire = MasterProcedure(
-        name="Static Hot Fire Test",
-        description="Ground test of assembled engine on test stand. 5-second burn at full thrust. Record chamber pressure, thrust, and burn time.",
-        procedure_type=ProcedureType.OP,
-        status=ProcedureStatus.ACTIVE,
-    )
-    db.add(hotfire)
-    db.flush()
-    procs["hotfire"] = hotfire
-
-    _hotfire_ops: list[dict[str, Any]] = [
-        {
-            "title": "Pre-Test Planning",
-            "instructions": "Confirm plan, range, and weather before any propellant handling.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Review Test Plan and Abort Criteria",
-                    "instructions": (
-                        "Walk through test card with all crew. Confirm each station knows "
-                        "their role and the abort triggers."
-                    ),
-                    "duration": 15,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Range Clear Confirmation",
-                    "instructions": (
-                        "Range safety officer sweeps test area and confirms all non-essential "
-                        "personnel are clear of the 500 ft exclusion zone."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Weather Check",
-                    "instructions": (
-                        "Verify winds under 20 kts, no lightning within 25 nm, visibility "
-                        "greater than 3 nm. Document conditions."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Engine Stand Installation",
-            "instructions": "Mount engine to the thrust stand and verify alignment.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Mount Engine to Adapter Plate",
-                    "instructions": (
-                        "Lift engine onto thrust stand adapter plate. Engage 4x 3/8-16 mount "
-                        "bolts finger-tight."
-                    ),
-                    "duration": 15,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Torque Mount Bolts",
-                    "instructions": (
-                        "Torque 4x 3/8-16 mount bolts to 240 in-lb in star pattern. Apply "
-                        "Loctite 242."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": f"bolt{i}_torque",
-                                "type": "number",
-                                "label": f"Mount bolt {i} torque (in-lb)",
-                                "required": True,
-                            }
-                            for i in range(1, 5)
-                        ]
-                    },
-                },
-                {
-                    "title": "Verify Engine Alignment",
-                    "instructions": (
-                        "Check that nozzle axis is parallel to thrust stand load axis within "
-                        "0.5 degrees. Adjust shims if needed."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Propellant Plumbing",
-            "instructions": "Connect propellant and pressurant feedlines to the engine.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Connect LOX Feed Line",
-                    "instructions": (
-                        "Connect 1/2 inch SS LOX line to engine LOX inlet. Torque AN-8 fitting "
-                        "to 180 in-lb."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Connect Fuel Feed Line",
-                    "instructions": (
-                        "Connect 1/2 inch SS ethanol line to engine fuel inlet. Torque AN-8 "
-                        "fitting to 180 in-lb."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Connect Pressurant Lines",
-                    "instructions": (
-                        "Connect 1/4 inch GN2 pressurant lines to LOX and fuel tank ullage "
-                        "ports. Torque AN-4 to 80 in-lb."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Instrumentation Hookup",
-            "instructions": "Connect all transducers and verify DAQ is capturing.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Connect Thrust Load Cell",
-                    "instructions": "Attach load cell cable to DAQ channel 1. Verify excitation voltage.",
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Connect Chamber Pressure Transducer",
-                    "instructions": (
-                        "Install Pc transducer in injector boss tap. Torque 1/8 NPT to 80 "
-                        "in-lb with thread sealant. Connect to DAQ channel 2."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Connect Thermocouples",
-                    "instructions": (
-                        "Install Type K thermocouples on chamber wall, nozzle throat, and "
-                        "injector body. Route leads to DAQ channels 3 to 5."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Verify Data Acquisition Capture",
-                    "instructions": (
-                        "Run DAQ self-test. Tap each transducer and verify signal appears on "
-                        "the trace. Confirm sample rate at 1 kHz."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Pneumatic Leak Check",
-            "instructions": "Pressure-test propellant lines with GN2 before loading.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Cap Engine Inlets",
-                    "instructions": "Install test caps on engine LOX and fuel inlets.",
-                    "duration": 3,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Pressurize Lines to 50 PSI",
-                    "instructions": (
-                        "Apply GN2 to both propellant lines at 50 PSI. Hold 60 seconds."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Soap-Bubble All Joints",
-                    "instructions": (
-                        "Apply Snoop to every AN fitting, NPT joint, and valve body. No "
-                        "bubbles permitted."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Depressurize and Remove Caps",
-                    "instructions": "Vent lines to 0 PSI. Remove test caps from engine inlets.",
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Propellant Loading",
-            "instructions": "Load LOX and ethanol. Loading crew only on pad.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Clear Pad Area",
-                    "instructions": (
-                        "All personnel except loading crew (2 max) clear to 100 ft. Loading "
-                        "crew in PPE: face shield, cryo gloves, leather apron."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Fill LOX Tank",
-                    "instructions": (
-                        "Slowly fill LOX tank from dewar through fill port. Target 2.5 gal. "
-                        "Vent ullage to atmosphere during fill."
-                    ),
-                    "duration": 15,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "lox_fill_level",
-                                "type": "number",
-                                "label": "LOX fill level (gal)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Fill Ethanol Tank",
-                    "instructions": "Fill ethanol tank from supply jug. Target 3.0 gal.",
-                    "duration": 10,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "fuel_fill_level",
-                                "type": "number",
-                                "label": "Fuel fill level (gal)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Verify Fill Levels and Crack Vent",
-                    "instructions": (
-                        "Confirm both tank sight glasses show target volume. Crack vent valves "
-                        "to relieve pressure during fill cooldown."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Tank Pressurization",
-            "instructions": "Bring tanks to 450 PSI pressurant.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Connect N2 Supply",
-                    "instructions": "Open main N2 K-bottle valve. Verify supply pressure on regulator inlet.",
-                    "duration": 3,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Regulate to 450 PSI",
-                    "instructions": (
-                        "Adjust ground regulator to deliver 450 PSI. Slowly open isolation "
-                        "valves to tank ullage ports."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Verify Tank Pressures",
-                    "instructions": "Read LOX and fuel tank ullage pressure. Both must be 440 to 460 PSI.",
-                    "duration": 3,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "lox_tank_psi",
-                                "type": "number",
-                                "label": "LOX tank pressure (PSI)",
-                                "required": True,
-                            },
-                            {
-                                "name": "fuel_tank_psi",
-                                "type": "number",
-                                "label": "Fuel tank pressure (PSI)",
-                                "required": True,
-                            },
-                        ]
-                    },
-                },
-            ],
-        },
-        {
-            "title": "Arm and Go/No-Go",
-            "instructions": "All personnel to bunker. Final arming and poll.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Clear All Personnel to Bunker",
-                    "instructions": "Loading crew clears pad to bunker. Confirm all stations report clear.",
-                    "duration": 3,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Arm Ignition System",
-                    "instructions": (
-                        "Turn igniter arm key from SAFE to ARMED. Verify ARMED indicator LED "
-                        "is lit and continuity is shown."
-                    ),
-                    "duration": 2,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Final Station Poll Go/No-Go",
-                    "instructions": (
-                        "Test director polls each station by callsign: PROPS, DAQ, RANGE, "
-                        "MED. Record GO from all before proceeding."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Fire Sequence",
-            "instructions": "Execute ignition and main-stage burn.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Countdown from 5",
-                    "instructions": "Test director calls 5-4-3-2-1 over comms. DAQ trigger armed at T-2.",
-                    "duration": 1,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Igniter Command",
-                    "instructions": (
-                        "At T-0 fire igniter. Verify pre-burner light through pad camera "
-                        "within 200 ms."
-                    ),
-                    "duration": 1,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Main Valve Open Command",
-                    "instructions": (
-                        "T+0.5s: open main LOX and fuel valves simultaneously. Run 5 seconds. "
-                        "Monitor chamber pressure trace live."
-                    ),
-                    "duration": 1,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Engine Shutdown",
-                    "instructions": "T+5.5s: close both main valves. Engine should extinguish within 100 ms.",
-                    "duration": 1,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Safe-State",
-            "instructions": "Vent system and disarm before any pad approach.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Close Main Valves",
-                    "instructions": "Confirm LOX and fuel main valves indicate CLOSED on control panel.",
-                    "duration": 2,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Vent Tank Ullage",
-                    "instructions": (
-                        "Open tank vent valves and bleed ullage pressure to 0 PSI. Monitor "
-                        "tank pressure gauges."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Safe Ignition System",
-                    "instructions": "Turn igniter key to SAFE and remove. Confirm ARMED LED off.",
-                    "duration": 2,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Approach and Inspect for Residual Fire",
-                    "instructions": (
-                        "Wait 5 minutes after shutdown before approach. RSO leads team to "
-                        "pad with extinguisher. Verify no residual fire or smoldering."
-                    ),
-                    "duration": 8,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Data Capture and Post-Fire Inspection",
-            "instructions": "Pull DAQ files and inspect engine hardware.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Download DAQ Files",
-                    "instructions": (
-                        "Download thrust, Pc, and temperature traces from DAQ. Verify file "
-                        "integrity. Record peak values."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "peak_chamber_psi",
-                                "type": "number",
-                                "label": "Peak Pc (PSI)",
-                                "required": True,
-                            },
-                            {
-                                "name": "peak_thrust_lbf",
-                                "type": "number",
-                                "label": "Peak thrust (lbf)",
-                                "required": True,
-                            },
-                            {
-                                "name": "burn_time_s",
-                                "type": "number",
-                                "label": "Burn time (seconds)",
-                                "required": True,
-                            },
-                        ]
-                    },
-                },
-                {
-                    "title": "Inspect Nozzle Throat",
-                    "instructions": (
-                        "Visual inspection of nozzle throat. Check for erosion, cracks, or "
-                        "ablative loss. Photograph."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Inspect Injector Face",
-                    "instructions": (
-                        "Borescope injector face. Check for orifice erosion, soot patterns, "
-                        "or hot spots. Photograph."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Inspect Chamber Walls",
-                    "instructions": (
-                        "Borescope chamber walls. Check for erosion, hot streaks, or "
-                        "discoloration. Photograph."
-                    ),
-                    "duration": 5,
-                    "workcenter": "PAD",
-                },
-            ],
-        },
-        {
-            "title": "Stand Removal and Debrief",
-            "instructions": "Disconnect, remove engine, and review data.",
-            "duration": 5,
-            "workcenter": "PAD",
-            "sub_steps": [
-                {
-                    "title": "Disconnect Lines and Instrumentation",
-                    "instructions": (
-                        "Disconnect all propellant lines, pressurant lines, and instrumentation "
-                        "cables. Cap engine ports."
-                    ),
-                    "duration": 15,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Remove Engine from Stand",
-                    "instructions": (
-                        "Break 4x mount bolts. Lift engine off adapter plate. Transfer to "
-                        "transport cart."
-                    ),
-                    "duration": 10,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Data Review vs Predictions",
-                    "instructions": (
-                        "Compare measured Pc, thrust, and burn time against predicted values. "
-                        "Note any deviations greater than 10%."
-                    ),
-                    "duration": 20,
-                    "workcenter": "PAD",
-                },
-                {
-                    "title": "Test Debrief and Sign-Off",
-                    "instructions": (
-                        "Whole team debrief: lessons learned, anomalies, action items. Test "
-                        "director signs off on test report."
-                    ),
-                    "duration": 15,
-                    "workcenter": "PAD",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-    ]
-    _add_op_tree(db, hotfire.id, wc, _hotfire_ops)
-
-    # ── 4. Avionics Integration ─────────────────────────────────
-    avi = MasterProcedure(
-        name="Avionics Bay Integration",
-        description="Assemble flight computer, sensors, radio, pyro board, and battery onto avionics sled. Build and test wiring harness.",
-        procedure_type=ProcedureType.BUILD,
-        status=ProcedureStatus.DRAFT,
-    )
-    db.add(avi)
-    db.flush()
-    procs["avi"] = avi
-
-    for part_key, qty in [
-        ("fc", 1),
-        ("gps", 1),
-        ("imu", 1),
-        ("altimeter", 1),
-        ("radio", 1),
-        ("lipo", 1),
-        ("pyro_board", 1),
-    ]:
-        db.add(
-            Kit(procedure_id=avi.id, part_id=p[part_key].id, quantity_required=Decimal(str(qty)))
-        )
-    db.add(
-        ProcedureOutput(
-            procedure_id=avi.id, part_id=p["harness"].id, quantity_produced=Decimal("1")
-        )
-    )
-    db.flush()
-
-    _avi_ops: list[dict[str, Any]] = [
-        {
-            "title": "Sled Preparation",
-            "instructions": "Clean sled and install all standoffs before any components touch the board.",
-            "duration": 5,
-            "workcenter": "LAB",
-            "sub_steps": [
-                {
-                    "title": "Clean Sled",
-                    "instructions": (
-                        "Wipe avionics sled with isopropyl alcohol on a lint-free cloth. "
-                        "Blow off with clean N2."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Install Standoffs",
-                    "instructions": (
-                        "Install M3 brass standoffs at flight computer, pyro board, GPS, and "
-                        "radio mounting locations per assembly drawing."
-                    ),
-                    "duration": 10,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Verify Mounting Hole Pattern",
-                    "instructions": (
-                        "Test-fit each board on its standoffs. Confirm no hole misalignment "
-                        "before applying torque."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-            ],
-        },
-        {
-            "title": "Flight Computer Mount",
-            "instructions": "Mount Teensy 4.1 and verify USB access.",
-            "duration": 5,
-            "workcenter": "LAB",
-            "sub_steps": [
-                {
-                    "title": "Position FC on Standoffs",
-                    "instructions": "Place Teensy 4.1 onto its standoffs with USB port facing the access window.",
-                    "duration": 3,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Secure with M3 Screws",
-                    "instructions": "Secure with 4x M3x6 screws. Torque to 4 in-lb. Do not over-tighten.",
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Verify USB Port Accessibility",
-                    "instructions": (
-                        "Confirm USB-C cable seats and disconnects without binding through the "
-                        "access window."
-                    ),
-                    "duration": 2,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Bench Continuity Check",
-                    "instructions": "Connect FC to bench supply at 5V. Verify board enumerates over USB.",
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-            ],
-        },
-        {
-            "title": "Sensor Installation",
-            "instructions": "Mount IMU, altimeter, GPS and connect data buses.",
-            "duration": 5,
-            "workcenter": "LAB",
-            "sub_steps": [
-                {
-                    "title": "Install BNO055 IMU",
-                    "instructions": (
-                        "Mount BNO055 breakout on standoffs with X-axis aligned to vehicle "
-                        "roll axis per drawing. Secure with M3 screws."
-                    ),
-                    "duration": 8,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Install MS5611 Altimeter",
-                    "instructions": (
-                        "Mount MS5611 breakout. Verify barometric port is unblocked and faces "
-                        "the bay vent."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Install MAX-M10S GPS",
-                    "instructions": (
-                        "Mount GPS module with antenna patch facing the airframe outer wall "
-                        "for sky visibility."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Connect Sensor I2C and UART Cables",
-                    "instructions": (
-                        "Connect IMU and altimeter to I2C bus pins. Connect GPS UART to FC "
-                        "Serial1. Verify pin assignments against wiring diagram."
-                    ),
-                    "duration": 10,
-                    "workcenter": "LAB",
-                },
-            ],
-        },
-        {
-            "title": "Pyro Board Installation",
-            "instructions": "Install and verify the pyro channel board.",
-            "duration": 5,
-            "workcenter": "LAB",
-            "sub_steps": [
-                {
-                    "title": "Install Pyro Channel Board on Standoffs",
-                    "instructions": "Mount pyro board with screw terminals facing the bulkhead penetration.",
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Connect Optoisolator Ribbon to FC",
-                    "instructions": (
-                        "Connect 10-conductor ribbon from pyro board to FC pyro control "
-                        "header. Verify ribbon orientation by red stripe on pin 1."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Continuity Check Both Channels",
-                    "instructions": (
-                        "With pyro board unpowered, verify continuity between FC pyro pins "
-                        "and screw terminals using multimeter."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "drogue_channel_ohms",
-                                "type": "number",
-                                "label": "Drogue channel continuity (ohms)",
-                                "required": True,
-                            },
-                            {
-                                "name": "main_channel_ohms",
-                                "type": "number",
-                                "label": "Main channel continuity (ohms)",
-                                "required": True,
-                            },
-                        ]
-                    },
-                },
-            ],
-        },
-        {
-            "title": "Radio and Antenna",
-            "instructions": "Install telemetry radio and route antenna feed.",
-            "duration": 5,
-            "workcenter": "LAB",
-            "sub_steps": [
-                {
-                    "title": "Install RFM95W Module",
-                    "instructions": "Mount RFM95W on its standoffs. Connect SPI ribbon to FC.",
-                    "duration": 8,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Route Antenna Coax",
-                    "instructions": (
-                        "Route 50 ohm coax from RFM95W u.FL to airframe bulkhead. Avoid sharp "
-                        "bends (minimum 1 inch radius)."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Install SMA Bulkhead Connector",
-                    "instructions": "Install SMA bulkhead through coupler. Torque SMA to 5 in-lb.",
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-            ],
-        },
-        {
-            "title": "Wiring Harness Build",
-            "instructions": "Build the harness on the sled per harness drawing.",
-            "duration": 5,
-            "workcenter": "LAB",
-            "sub_steps": [
-                {
-                    "title": "Cut and Strip Wires per Drawing",
-                    "instructions": (
-                        "Cut each wire to length and strip 5 mm per harness drawing. Label "
-                        "both ends with shrink-wrap tags."
-                    ),
-                    "duration": 20,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Terminate Connectors",
-                    "instructions": (
-                        "Crimp Molex SL connectors on each terminated wire. Pull-test each "
-                        "crimp at 5 lbf."
-                    ),
-                    "duration": 25,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Lace Harness with Waxed Cord",
-                    "instructions": "Lace harness bundle with waxed cord every 25 mm. Tie off neatly.",
-                    "duration": 15,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Continuity Check Each Wire",
-                    "instructions": (
-                        "Beep out every wire end-to-end with multimeter. Confirm no shorts "
-                        "between adjacent pins."
-                    ),
-                    "duration": 15,
-                    "workcenter": "LAB",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Power-On Test and Closeout",
-            "instructions": "Power up and verify all subsystems before final inspection.",
-            "duration": 5,
-            "workcenter": "LAB",
-            "sub_steps": [
-                {
-                    "title": "Install LiPo Battery",
-                    "instructions": (
-                        "Install 2S 1500 mAh LiPo in battery holder. Confirm polarity. "
-                        "Connect with XT30."
-                    ),
-                    "duration": 3,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Verify Boot Sequence",
-                    "instructions": (
-                        "Power FC. Watch USB serial for boot banner. Verify firmware version "
-                        "matches build manifest."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Verify Sensor Responses",
-                    "instructions": (
-                        "Issue self-test command. Confirm IMU returns valid quaternion, GPS "
-                        "acquires fix within 90 s, altimeter reads ground pressure."
-                    ),
-                    "duration": 8,
-                    "workcenter": "LAB",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "imu_status",
-                                "type": "string",
-                                "label": "IMU self-test result",
-                                "required": True,
-                            },
-                            {
-                                "name": "gps_fix_count",
-                                "type": "number",
-                                "label": "GPS satellites locked",
-                                "required": True,
-                            },
-                            {
-                                "name": "altimeter_ground_psi",
-                                "type": "number",
-                                "label": "Ground pressure (mbar)",
-                                "required": True,
-                            },
-                        ]
-                    },
-                },
-                {
-                    "title": "Verify Radio TX Test Packet",
-                    "instructions": (
-                        "Trigger test packet TX. Confirm ground station receives at RSSI "
-                        "greater than -90 dBm at 10 m range."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Photograph Completed Assembly",
-                    "instructions": (
-                        "Take 4 photos: top, bottom, both ends. Include build SN placard "
-                        "in each frame."
-                    ),
-                    "duration": 5,
-                    "workcenter": "LAB",
-                },
-                {
-                    "title": "Final Sign-Off",
-                    "instructions": (
-                        "Verify connector seating, wire routing, and chafe protection. "
-                        "Avionics lead signs off."
-                    ),
-                    "duration": 10,
-                    "workcenter": "LAB",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-    ]
-    _add_op_tree(db, avi.id, wc, _avi_ops)
-
-    # ── 5. Recovery System Pack ─────────────────────────────────
-    rec = MasterProcedure(
-        name="Recovery System Pack",
-        description="Fold and pack main and drogue parachutes, install ejection charges, and verify continuity.",
-        procedure_type=ProcedureType.OP,
-        status=ProcedureStatus.ACTIVE,
-    )
-    db.add(rec)
-    db.flush()
-    procs["recovery"] = rec
-
-    _rec_ops: list[dict[str, Any]] = [
-        {
-            "title": "Parachute Inspection",
-            "instructions": "Inspect both canopies and lines before any folding.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Unfold Drogue",
-                    "instructions": "Lay drogue (KST-F-0034) flat on clean inspection table. Spread canopy fully.",
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Unfold Main",
-                    "instructions": "Lay main canopy (KST-F-0033) flat on clean inspection table adjacent to drogue.",
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Inspect Canopies for Tears or Burn-Through",
-                    "instructions": (
-                        "Inspect both canopies under bright light. No tears, burn marks, "
-                        "fabric weakness, or seam separation."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Inspect Shroud Lines for Fraying",
-                    "instructions": (
-                        "Run gloved hand along every shroud line. No fraying, knots, or "
-                        "abrasion. Verify all lines uniform length."
-                    ),
-                    "duration": 8,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Drogue Pack",
-            "instructions": "Z-fold and bag the drogue.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Z-Fold Drogue Canopy",
-                    "instructions": (
-                        "Z-fold drogue canopy into 6 inch wide bundle per packing card. "
-                        "Maintain symmetry."
-                    ),
-                    "duration": 8,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Bundle Shroud Lines",
-                    "instructions": (
-                        "Daisy-chain shroud lines into a loose bundle on top of folded canopy. "
-                        "Do not knot."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Insert in Deployment Bag and Close",
-                    "instructions": (
-                        "Insert bundle into deployment bag. Pull rubber band closure. Verify "
-                        "bridle exits cleanly."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Main Pack",
-            "instructions": "Accordion-fold and bag the main chute.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Accordion-Fold Main Canopy",
-                    "instructions": (
-                        "Accordion-fold main canopy per packing card into 8 inch wide bundle. "
-                        "Compress to deployment bag width."
-                    ),
-                    "duration": 12,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Bundle Main Shroud Lines",
-                    "instructions": "Daisy-chain shroud lines on top of folded canopy. Avoid twists.",
-                    "duration": 6,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Insert in Deployment Bag and Close",
-                    "instructions": (
-                        "Slide bundle into deployment bag. Close with bungee. Confirm pilot "
-                        "chute attached."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Ejection Charge Loading",
-            "instructions": "Load black powder charges. PYRO CREW ONLY in the area.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Clear Area to Pyro Crew Only",
-                    "instructions": (
-                        "All non-pyro personnel clear the room. Pyro crew dons PPE: safety "
-                        "glasses, anti-static wrist strap."
-                    ),
-                    "duration": 3,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Measure and Load Drogue Charge",
-                    "instructions": (
-                        "Weigh 2.5 g FFFFg black powder on anti-static scale. Load into drogue "
-                        "charge well. Record actual mass."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "drogue_charge_g",
-                                "type": "number",
-                                "label": "Drogue charge (grams)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Measure and Load Main Charge",
-                    "instructions": (
-                        "Weigh 4.0 g FFFFg black powder. Load into main charge well. Record "
-                        "actual mass."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "main_charge_g",
-                                "type": "number",
-                                "label": "Main charge (grams)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Install E-Matches in Charge Wells",
-                    "instructions": (
-                        "Bed e-matches (KST-D-0038) in each charge well. Tape leads outboard "
-                        "along bay wall."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Continuity Verification",
-            "instructions": "Confirm both pyro channels show in-spec resistance.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Connect Multimeter to Drogue Circuit",
-                    "instructions": "Connect multimeter across drogue pyro terminals. Set to 200 ohm range.",
-                    "duration": 2,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Record Drogue Circuit Resistance",
-                    "instructions": "Read and record drogue circuit. Acceptable range 1.0 to 3.5 ohms.",
-                    "duration": 2,
-                    "workcenter": "CLEAN",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "drogue_ohms",
-                                "type": "number",
-                                "label": "Drogue circuit (ohms)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Record Main Circuit Resistance",
-                    "instructions": "Connect across main pyro terminals. Read and record. Same acceptable range.",
-                    "duration": 2,
-                    "workcenter": "CLEAN",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "main_ohms",
-                                "type": "number",
-                                "label": "Main circuit (ohms)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Verify Both Channels in Spec",
-                    "instructions": (
-                        "Pyro lead confirms both circuits are in spec and signs off before "
-                        "closeout."
-                    ),
-                    "duration": 3,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Shear Pin Installation",
-            "instructions": "Install separation-joint shear pins and verify coupler engagement.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Install Drogue Joint Shear Pins",
-                    "instructions": (
-                        "Install 3x nylon shear pins (KST-F-0037) at 120 degree spacing through "
-                        "drogue separation joint. Pins flush with airframe."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Install Main Joint Shear Pins",
-                    "instructions": (
-                        "Install 3x nylon shear pins at 120 degree spacing through main "
-                        "separation joint. Pins flush with airframe."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Verify Coupler Alignment",
-                    "instructions": (
-                        "Visually verify both couplers are fully engaged with no gaps. Run "
-                        "straight edge across each joint."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-    ]
-    _add_op_tree(db, rec.id, wc, _rec_ops)
-
-    # ── 6. Final Vehicle Integration ────────────────────────────
-    fvi = MasterProcedure(
-        name="Final Vehicle Integration",
-        description=(
-            "Stack all flight subsystems into complete vehicle. Uses operation/step "
-            "hierarchy: each operation groups related steps for loose install, final "
-            "install, alignment, safety wire, and closeout."
-        ),
-        procedure_type=ProcedureType.BUILD,
-        status=ProcedureStatus.DRAFT,
-    )
-    db.add(fvi)
-    db.flush()
-    procs["fvi"] = fvi
-
-    _fvi_ops: list[dict[str, Any]] = [
-        {
-            "title": "Preparation and Staging",
-            "instructions": (
-                "Set up clean work area. Gather and verify all subassemblies, hardware, "
-                "and tooling required for integration."
-            ),
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Clean Work Surface",
-                    "instructions": (
-                        "Wipe down integration bench with isopropyl alcohol. Lay out clean "
-                        "ESD-safe mat."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Stage Subassemblies",
-                    "instructions": (
-                        "Place the following on bench: engine assembly (KST-F-0001), LOX tank "
-                        "(KST-F-0006), fuel tank (KST-F-0007), avionics sled, recovery bay, "
-                        "forward bulkhead (KST-F-0021), aft bulkhead (KST-F-0022), airframe "
-                        "tube (KST-F-0018), nose cone (KST-F-0019), fin set (KST-F-0020), "
-                        "coupler tubes (KST-F-0023)."
-                    ),
-                    "duration": 15,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Verify Subassembly Serial Numbers",
-                    "instructions": (
-                        "Record serial numbers of all flight subassemblies. Cross-reference "
-                        "against traveler. Confirm all items have passed incoming inspection "
-                        "or prior build procedures."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Inventory Hardware Kit",
-                    "instructions": (
-                        "Verify kit contents against BOM: 1/4 inch-20 SHCS (qty 16), 10-32 "
-                        "SHCS (qty 12), 1/4 inch-20 hex nuts (qty 16), lock washers (qty 16), "
-                        "rail buttons (qty 2), shear pins (qty 6), U-bolts (qty 4), O-rings "
-                        "-012 (qty 4), O-rings -016 (qty 2). Mark checklist."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Aft Section — Loose Install",
-            "instructions": (
-                "Loose-fit aft bulkhead, engine assembly, and thrust structure into the aft "
-                "end of the airframe. All fasteners finger-tight only."
-            ),
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Loose-Install Aft Bulkhead",
-                    "instructions": (
-                        "Insert aft bulkhead (KST-F-0022) into airframe tube. Align "
-                        "feedthrough ports to 0 degree clock position. Install retaining "
-                        "ring finger-tight."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Loose-Install Engine Assembly",
-                    "instructions": (
-                        "Slide engine assembly into aft section. Engage mount flange bolts "
-                        "(4x 1/4 inch-20 SHCS with lock washers) through bulkhead, "
-                        "finger-tight only."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Check Clearances",
-                    "instructions": (
-                        "Verify igniter leads, nozzle exit, and propellant feed ports are "
-                        "not fouled. Minimum 0.125 inch clearance to airframe ID."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Aft Section — Final Install and Torque",
-            "instructions": "Final-torque all aft section fasteners. Apply witness marks.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Torque Aft Bulkhead Retaining Ring",
-                    "instructions": (
-                        "Torque retaining ring to 60 in-lb using spanner wrench. Verify even "
-                        "contact around full circumference."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Apply Witness Marks",
-                    "instructions": (
-                        "Apply torque-seal (yellow) to all aft section fastener heads. "
-                        "Photograph from two angles."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Torque Engine Mount Bolts",
-                    "instructions": (
-                        "Torque 4x 1/4 inch-20 engine mount bolts in star pattern to 120 "
-                        "in-lb. Apply Loctite 242 per drawing."
-                    ),
-                    "duration": 15,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": f"bolt{i}_torque",
-                                "type": "number",
-                                "label": f"Bolt {i} torque (in-lb)",
-                                "required": True,
-                            }
-                            for i in range(1, 5)
-                        ]
-                    },
-                },
-            ],
-        },
-        {
-            "title": "Propellant Tank Installation",
-            "instructions": (
-                "Install LOX and fuel tanks onto thrust structure. Connect feedlines and "
-                "vent lines."
-            ),
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Install LOX Tank",
-                    "instructions": (
-                        "Lower LOX tank (KST-F-0006) onto thrust structure standoffs. Orient "
-                        "fill port to 0 degree clock position. Install 4x 10-32 SHCS "
-                        "finger-tight."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Install Fuel Tank",
-                    "instructions": (
-                        "Stack fuel tank (KST-F-0007) above LOX tank on spacer ring. Orient "
-                        "fill port to 180 degree clock position. Install 4x 10-32 SHCS "
-                        "finger-tight."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Torque Tank Mount Bolts",
-                    "instructions": (
-                        "Torque all 8x 10-32 tank mount SHCS to 40 in-lb in alternating pattern."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Connect Propellant Feedlines",
-                    "instructions": (
-                        "Connect 1/2 inch SS feedlines from tank outlets to engine inlets. "
-                        "Install AN fittings (KST-F-0015). Torque AN-8 fittings to 180 in-lb."
-                    ),
-                    "duration": 15,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "lox_fitting_torque",
-                                "type": "number",
-                                "label": "LOX feed fitting torque (in-lb)",
-                                "required": True,
-                            },
-                            {
-                                "name": "fuel_fitting_torque",
-                                "type": "number",
-                                "label": "Fuel feed fitting torque (in-lb)",
-                                "required": True,
-                            },
-                        ]
-                    },
-                },
-                {
-                    "title": "Connect Vent Lines",
-                    "instructions": (
-                        "Route 1/4 inch vent lines from tank ullage ports to forward "
-                        "bulkhead feedthroughs. Install AN-4 fittings. Torque to 80 in-lb."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Pneumatic Leak Check",
-            "instructions": (
-                "Pressure-test all propellant and pneumatic connections with GN2 before "
-                "closing out the aft section."
-            ),
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Cap Open Ports",
-                    "instructions": (
-                        "Install test caps on engine inlet ports and vent line "
-                        "terminations. Verify all caps are seated."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Pressurize to 50 PSI",
-                    "instructions": (
-                        "Connect GN2 supply via test fixture (KST-G-0005). Slowly pressurize "
-                        "propellant circuit to 50 PSI. Hold 60 seconds."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Soap-Bubble Inspect All Joints",
-                    "instructions": (
-                        "Apply Snoop leak detector to every fitting, O-ring face, and "
-                        "feedthrough. No bubbles permitted."
-                    ),
-                    "duration": 15,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Depressurize and Remove Caps",
-                    "instructions": (
-                        "Slowly vent to 0 PSI. Remove all test caps. Disconnect GN2 supply."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Forward Bulkhead and Pressurant Routing",
-            "instructions": (
-                "Install forward bulkhead. Route recovery harness, vent lines, and "
-                "pressurant feed through bulkhead penetrations."
-            ),
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Install Forward Bulkhead O-Rings",
-                    "instructions": (
-                        "Lubricate 2x -016 O-rings with Krytox grease. Seat into forward "
-                        "bulkhead (KST-F-0021) grooves."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Seat Forward Bulkhead",
-                    "instructions": (
-                        "Insert forward bulkhead into airframe tube. Align wire feedthrough "
-                        "to 90 degree clock position. Press until O-rings engage."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Route Vent Lines Through Bulkhead",
-                    "instructions": (
-                        "Pass LOX and fuel vent lines through bulkhead AN fittings. Tighten "
-                        "to 80 in-lb."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Install Bulkhead Retaining Ring",
-                    "instructions": "Install and torque forward bulkhead retaining ring to 60 in-lb.",
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Route Recovery Harness",
-                    "instructions": (
-                        "Thread shock cord (KST-F-0035) through center feedthrough. Leave "
-                        "24 inches of slack on recovery bay side."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Avionics Bay Integration",
-            "instructions": "Install avionics sled into coupler section. Make all electrical connections.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Slide Avionics Sled into Coupler",
-                    "instructions": (
-                        "Insert avionics sled assembly into coupler tube (KST-F-0023). "
-                        "Align mounting rails. Secure with 4x 10-32 SHCS."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Connect Pyro Leads",
-                    "instructions": (
-                        "Attach drogue pyro channel leads to forward separation joint "
-                        "e-match terminals. Attach main pyro channel leads to aft separation "
-                        "joint e-match terminals. Verify correct polarity per wiring diagram."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Connect Telemetry Antenna",
-                    "instructions": (
-                        "Route antenna coax from RFM95W to SMA bulkhead on coupler. Torque "
-                        "SMA connector to 5 in-lb."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Connect Umbilical",
-                    "instructions": (
-                        "Route external umbilical connector (arming plug, charge cable) "
-                        "through coupler access port. Verify connector seats fully."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Power-On Verification",
-                    "instructions": (
-                        "Connect battery (KST-F-0030). Verify flight computer boots, GPS "
-                        "acquires, IMU initializes, telemetry transmits test packet to ground "
-                        "station. Verify both pyro channels show continuity."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Power Off and Safe",
-                    "instructions": (
-                        "Power down flight computer. Disconnect battery. Install arming plug "
-                        "safety cap."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Recovery Bay Pack",
-            "instructions": "Pack parachutes into recovery section. Install ejection charges. Connect shock cords.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Attach Shock Cord to Forward U-Bolts",
-                    "instructions": (
-                        "Tie shock cord to 2x U-bolts (KST-F-0036) on forward bulkhead using "
-                        "double-bowline knot. Apply 50 lbf pull test to each attachment."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Pack Drogue Parachute",
-                    "instructions": (
-                        "Place folded drogue (KST-F-0034) in deployment bag. Attach "
-                        "deployment bag to shock cord with lark's head knot. Position drogue "
-                        "at aft end of recovery bay."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Pack Main Parachute",
-                    "instructions": (
-                        "Place folded main chute (KST-F-0033) in deployment bag. Attach to "
-                        "shock cord forward of drogue. Tuck deployment bag and shroud lines "
-                        "neatly."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Install Ejection Charges",
-                    "instructions": (
-                        "Load 2.5g FFFFg black powder into drogue charge well. Load 4.0g "
-                        "into main charge well. Install e-matches (KST-D-0038) into each "
-                        "well. Tape leads along shock cord."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Verify Charge Continuity",
-                    "instructions": (
-                        "Using multimeter, verify continuity on both e-match circuits "
-                        "before final close-out."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-            ],
-        },
-        {
-            "title": "Section Mating and Shear Pins",
-            "instructions": "Mate all airframe sections. Install shear pins at separation joints.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Install Aft Separation Joint Shear Pins",
-                    "instructions": (
-                        "Install 3x nylon shear pins (KST-F-0037) at 120 degree spacing "
-                        "through airframe and coupler at aft separation joint. Pins should "
-                        "sit flush."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Install Forward Separation Joint Shear Pins",
-                    "instructions": (
-                        "Install 3x nylon shear pins at 120 degree spacing through recovery "
-                        "tube and coupler at forward separation joint."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Install Nose Cone",
-                    "instructions": (
-                        "Seat nose cone (KST-F-0019) onto recovery tube shoulder. Secure "
-                        "with 2x nylon shear pins."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Verify All Sections Seated",
-                    "instructions": (
-                        "Visually confirm all coupler joints are fully engaged. No gaps at "
-                        "any joint. Run a straight edge along airframe to check alignment."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Mate Avionics Bay to Propulsion Section",
-                    "instructions": (
-                        "Slide coupler section into propulsion airframe tube. Align antenna "
-                        "port to 270 degrees clock position. Engage coupler 4 inches into "
-                        "tube."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Mate Recovery Bay to Avionics Section",
-                    "instructions": (
-                        "Slide recovery bay airframe onto upper coupler. Engage coupler 4 "
-                        "inches into recovery tube."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Fin and Rail Button Installation",
-            "instructions": "Bond fins to airframe. Install rail buttons at CG and CP stations.",
-            "duration": 5,
-            "workcenter": "SHOP",
-            "sub_steps": [
-                {
-                    "title": "Mark Fin Locations",
-                    "instructions": (
-                        "Using fin alignment jig, mark 3x fin root locations at 120 degree "
-                        "spacing on aft airframe tube. Mark leading and trailing edge "
-                        "references."
-                    ),
-                    "duration": 10,
-                    "workcenter": "SHOP",
-                },
-                {
-                    "title": "Surface Prep for Bonding",
-                    "instructions": (
-                        "Sand fin root edges and airframe bonding areas with 220-grit. "
-                        "Clean with acetone. Allow to dry 10 minutes."
-                    ),
-                    "duration": 15,
-                    "workcenter": "SHOP",
-                },
-                {
-                    "title": "Bond Fins",
-                    "instructions": (
-                        "Mix 30-minute epoxy per manufacturer instructions. Apply fillet to "
-                        "fin root. Press fin onto airframe in jig. Repeat for all 3 fins. "
-                        "Allow cure per epoxy data sheet (minimum 12 hours)."
-                    ),
-                    "duration": 20,
-                    "workcenter": "SHOP",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Apply Fin Fillets",
-                    "instructions": (
-                        "After initial cure, apply secondary epoxy fillets on both sides of "
-                        "each fin root. Smooth with gloved finger. Allow full cure."
-                    ),
-                    "duration": 15,
-                    "workcenter": "SHOP",
-                },
-                {
-                    "title": "Install Rail Buttons",
-                    "instructions": (
-                        "Install 2x rail buttons (KST-F-0024) with 8-32 SHCS. Lower button "
-                        "at predicted CG station. Upper button at predicted CP station. "
-                        "Torque to 15 in-lb."
-                    ),
-                    "duration": 10,
-                    "workcenter": "SHOP",
-                },
-            ],
-        },
-        {
-            "title": "Safety Wire and Lockout",
-            "instructions": "Install safety wire on all critical fasteners. Verify all locking features are in place.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Safety Wire AN Propellant Fittings",
-                    "instructions": (
-                        "Install safety wire on LOX and fuel AN feed fittings. Wire to "
-                        "adjacent structure attach point."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Verify All Lock Washers Compressed",
-                    "instructions": (
-                        "Inspect every lock washer in aft section. All must show visible "
-                        "compression (flat, no spring gap)."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Photograph Safety Wire",
-                    "instructions": "Take close-up photos of all safety wire runs. Include in build traveler.",
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Safety Wire Engine Mount Bolts",
-                    "instructions": (
-                        "Install 0.032 inch MS20995C stainless safety wire on engine mount "
-                        "bolt pairs in positive-lock direction. Verify 6 to 8 twists per inch."
-                    ),
-                    "duration": 15,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Final Mass Properties and Inspection",
-            "instructions": (
-                "Weigh completed vehicle. Measure CG. Verify stability margin. Perform "
-                "final visual inspection."
-            ),
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Weigh Vehicle",
-                    "instructions": (
-                        "Place completed vehicle on calibrated scale. Record dry mass. "
-                        "Compare to predicted mass, must be within plus or minus 5%."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "dry_mass_lb",
-                                "type": "number",
-                                "label": "Dry mass (lb)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Measure CG Location",
-                    "instructions": "Balance vehicle on knife-edge. Mark CG location. Measure from nose tip.",
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "schema": {
-                        "fields": [
-                            {
-                                "name": "cg_from_nose_in",
-                                "type": "number",
-                                "label": "CG from nose tip (in)",
-                                "required": True,
-                            }
-                        ]
-                    },
-                },
-                {
-                    "title": "Calculate Static Margin",
-                    "instructions": (
-                        "Static margin = (CP - CG) / body diameter. Must be at least 1.5 "
-                        "calibers for flight acceptance."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Final Visual Inspection",
-                    "instructions": (
-                        "Inspect entire vehicle exterior: no dents, cracks, loose fins, "
-                        "protruding fasteners, or FOD. Verify all access ports closed. Check "
-                        "paint/markings per drawing."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Photograph Completed Vehicle",
-                    "instructions": (
-                        "Take 6 photographs: fore, aft, left, right, top (fins), detail of "
-                        "nose cone. Include scale reference and SN placard in frame."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-        {
-            "title": "Closeout and Documentation",
-            "instructions": "Complete all build records. Transfer vehicle to storage or launch prep.",
-            "duration": 5,
-            "workcenter": "CLEAN",
-            "sub_steps": [
-                {
-                    "title": "Complete Build Traveler",
-                    "instructions": (
-                        "Fill in all remaining fields on build traveler. Attach all data "
-                        "sheets, photos, and test records. Verify no open items."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Log All Serial Numbers",
-                    "instructions": (
-                        "Record serial/lot numbers for all installed components, O-rings, "
-                        "fastener lots, and epoxy batch. Enter into OPAL inventory system."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-                {
-                    "title": "Vehicle Acceptance Sign-Off",
-                    "instructions": (
-                        "Build lead and QA inspector sign off that vehicle is complete, all "
-                        "steps passed, and vehicle is ready for launch operations."
-                    ),
-                    "duration": 5,
-                    "workcenter": "CLEAN",
-                    "requires_signoff": True,
-                },
-                {
-                    "title": "Transfer to Storage",
-                    "instructions": (
-                        "Install protective nose cone cover and fin guards. Place vehicle "
-                        "in padded transport case. Move to bonded storage area. Update OPAL "
-                        "location."
-                    ),
-                    "duration": 10,
-                    "workcenter": "CLEAN",
-                },
-            ],
-        },
-    ]
-    _add_op_tree(db, fvi.id, wc, _fvi_ops)
-
-    return procs
-
-
-# ---------------------------------------------------------------------------
-# Versions & Executions
-# ---------------------------------------------------------------------------
-
-
-def _seed_versions_and_executions(
-    db: Session,
-    procs: dict[str, MasterProcedure],
-) -> None:
-    now = datetime.now(UTC)
-
-    # Publish versions for active procedures
-    for proc_key in ("eng_build", "hydro", "hotfire", "recovery"):
-        proc = procs[proc_key]
-        steps = (
-            db.query(ProcedureStep)
-            .filter(
-                ProcedureStep.procedure_id == proc.id,
-            )
-            .order_by(ProcedureStep.order)
-            .all()
-        )
-
-        content = {
-            "procedure_name": proc.name,
-            "procedure_description": proc.description,
-            "steps": [
-                {
-                    "id": s.id,
-                    "order": s.order,
-                    "step_number": s.step_number,
-                    "level": s.level,
-                    "parent_step_id": s.parent_step_id,
-                    "title": s.title,
-                    "instructions": s.instructions,
-                    "required_data_schema": s.required_data_schema,
-                    "is_contingency": s.is_contingency,
-                    "requires_signoff": s.requires_signoff,
-                    "estimated_duration_minutes": s.estimated_duration_minutes,
-                    "workcenter_id": s.workcenter_id,
-                    "depends_on": [],
-                    "step_kit": [],
-                }
-                for s in steps
-            ],
-            "kit_items": [
-                {"part_id": k.part_id, "quantity_required": float(k.quantity_required)}
-                for k in db.query(Kit).filter(Kit.procedure_id == proc.id).all()
-            ],
-            "output_items": [
-                {"part_id": o.part_id, "quantity_produced": float(o.quantity_produced)}
-                for o in db.query(ProcedureOutput)
-                .filter(ProcedureOutput.procedure_id == proc.id)
-                .all()
-            ],
-        }
-
-        version = ProcedureVersion(
-            procedure_id=proc.id,
-            version_number=1,
-            content=content,
-        )
-        db.add(version)
+        db.add(proc)
         db.flush()
-        proc.current_version_id = version.id
+        procs[pdata["key"]] = proc
 
-        # step order -> parent step order (for StepExecution.parent_step_order)
-        _id_to_order = {s["id"]: s["order"] for s in content["steps"]}
-        parent_order_of = {
-            s["order"]: _id_to_order.get(s["parent_step_id"]) for s in content["steps"]
-        }
-
-        # Create executions for hydro (completed) and hotfire (in-progress)
-        if proc_key == "hydro":
-            inst = ProcedureInstance(
-                procedure_id=proc.id,
-                version_id=version.id,
-                work_order_number=generate_work_order_number(db),
-                status=InstanceStatus.COMPLETED,
-                started_at=now - timedelta(days=10, hours=3),
-                completed_at=now - timedelta(days=10, hours=1),
-            )
-            db.add(inst)
-            db.flush()
-
-            # All steps completed
-            for s in content["steps"]:
-                se = StepExecution(
-                    instance_id=inst.id,
-                    step_number=s["order"],
-                    step_number_str=s["step_number"],
-                    level=s["level"],
-                    parent_step_order=parent_order_of.get(s["order"]),
-                    status=StepStatus.SIGNED_OFF if s["requires_signoff"] else StepStatus.COMPLETED,
-                    started_at=now
-                    - timedelta(days=10, hours=3)
-                    + timedelta(minutes=s["order"] * 8),
-                    completed_at=now
-                    - timedelta(days=10, hours=3)
-                    + timedelta(minutes=s["order"] * 8 + 7),
+        for item in pdata.get("kit", []):
+            db.add(
+                Kit(
+                    procedure_id=proc.id,
+                    part_id=parts[item["part"]].id,
+                    quantity_required=Decimal(str(item["qty"])),
                 )
-                if s["required_data_schema"] and s["step_number"] == "5.1":
-                    se.data_captured = {"proof_pressure": 677, "hold_duration_s": 305}
-                elif s["required_data_schema"] and s["step_number"] == "6.2":
-                    se.data_captured = {
-                        "od_station_1": 6.001,
-                        "od_station_2": 6.000,
-                        "od_station_3": 6.001,
-                    }
-                db.add(se)
-
-        elif proc_key == "hotfire":
-            inst = ProcedureInstance(
-                procedure_id=proc.id,
-                version_id=version.id,
-                work_order_number=generate_work_order_number(db),
-                status=InstanceStatus.IN_WORK,
-                started_at=now - timedelta(hours=2),
-                priority=1,
             )
-            db.add(inst)
+        if pdata.get("output"):
+            db.add(
+                ProcedureOutput(
+                    procedure_id=proc.id,
+                    part_id=parts[pdata["output"]["part"]].id,
+                    quantity_produced=Decimal(str(pdata["output"]["qty"])),
+                )
+            )
+        db.flush()
+
+        order = 0
+        for op_idx, op in enumerate(pdata["ops"], start=1):
+            order += 1
+            op_step = ProcedureStep(
+                procedure_id=proc.id,
+                order=order,
+                step_number=str(op_idx),
+                level=0,
+                title=op["title"],
+                instructions=op.get("instructions"),
+                caution=op.get("caution"),
+                workcenter_id=wc[op["workcenter"]].id if op.get("workcenter") else None,
+            )
+            db.add(op_step)
             db.flush()
+            for item in op.get("step_kit", []):
+                part = parts[item["part"]]
+                db.add(
+                    StepKit(
+                        step_id=op_step.id,
+                        part_id=part.id,
+                        quantity_required=Decimal(str(item["qty"])),
+                        usage_type=UsageType.TOOLING if part.is_tooling else UsageType.CONSUME,
+                    )
+                )
+            for sub_idx, sub in enumerate(op.get("sub_steps", []), start=1):
+                order += 1
+                db.add(
+                    ProcedureStep(
+                        procedure_id=proc.id,
+                        parent_step_id=op_step.id,
+                        order=order,
+                        step_number=f"{op_idx}.{sub_idx}",
+                        level=1,
+                        title=sub["title"],
+                        instructions=sub.get("instructions"),
+                        caution=sub.get("caution"),
+                        requires_signoff=bool(sub.get("requires_signoff")),
+                        required_role=sub.get("required_role"),
+                        required_data_schema=sub.get("schema"),
+                        workcenter_id=wc[op["workcenter"]].id if op.get("workcenter") else None,
+                    )
+                )
+        db.flush()
+        versions[pdata["key"]] = _publish(db, proc)
 
-            # Pre-test planning, engine install, and plumbing complete (orders 1-12).
-            # On instrumentation hookup (order 13).
-            for s in content["steps"]:
-                if s["order"] <= 12:
-                    se = StepExecution(
-                        instance_id=inst.id,
-                        step_number=s["order"],
-                        step_number_str=s["step_number"],
-                        level=s["level"],
-                        parent_step_order=parent_order_of.get(s["order"]),
-                        status=StepStatus.SIGNED_OFF
-                        if s["requires_signoff"]
-                        else StepStatus.COMPLETED,
-                        started_at=now - timedelta(hours=2) + timedelta(minutes=s["order"] * 5),
-                        completed_at=now
-                        - timedelta(hours=2)
-                        + timedelta(minutes=s["order"] * 5 + 4),
-                    )
-                    db.add(se)
-                elif s["order"] == 13:
-                    # The crew's position is presence (cursor), not status —
-                    # the step ahead of the completed work stays PENDING.
-                    se = StepExecution(
-                        instance_id=inst.id,
-                        step_number=s["order"],
-                        step_number_str=s["step_number"],
-                        level=s["level"],
-                        parent_step_order=parent_order_of.get(s["order"]),
-                        status=StepStatus.PENDING,
-                        first_focused_at=now - timedelta(minutes=15),
-                    )
-                    db.add(se)
-                else:
-                    se = StepExecution(
-                        instance_id=inst.id,
-                        step_number=s["order"],
-                        step_number_str=s["step_number"],
-                        level=s["level"],
-                        parent_step_order=parent_order_of.get(s["order"]),
-                        status=StepStatus.PENDING,
-                    )
-                    db.add(se)
+    return procs, versions
 
+
+def _publish(db: Session, proc: MasterProcedure) -> ProcedureVersion:
+    """Snapshot the procedure exactly like the publish endpoint does."""
+    steps = (
+        db.query(ProcedureStep)
+        .filter(ProcedureStep.procedure_id == proc.id)
+        .order_by(ProcedureStep.order)
+        .all()
+    )
+    step_ids = [s.id for s in steps]
+    step_kit_map: dict[int, list[StepKit]] = {}
+    for sk in db.query(StepKit).filter(StepKit.step_id.in_(step_ids)).all():
+        step_kit_map.setdefault(sk.step_id, []).append(sk)
+
+    content = {
+        "procedure_name": proc.name,
+        "procedure_description": proc.description,
+        "steps": [
+            {
+                "id": s.id,
+                "order": s.order,
+                "step_number": s.step_number,
+                "level": s.level,
+                "parent_step_id": s.parent_step_id,
+                "title": s.title,
+                "instructions": s.instructions,
+                "required_data_schema": s.required_data_schema,
+                "is_contingency": s.is_contingency,
+                "requires_signoff": s.requires_signoff,
+                "estimated_duration_minutes": s.estimated_duration_minutes,
+                "required_role": s.required_role,
+                "caution": s.caution,
+                "strict_sequence": s.strict_sequence,
+                "workcenter_id": s.workcenter_id,
+                "depends_on": [],
+                "images": [],
+                "step_kit": [
+                    {
+                        "part_id": sk.part_id,
+                        "part_name": sk.part.name,
+                        "quantity_required": float(sk.quantity_required),
+                        "usage_type": sk.usage_type.value
+                        if hasattr(sk.usage_type, "value")
+                        else sk.usage_type,
+                        "notes": sk.notes,
+                    }
+                    for sk in step_kit_map.get(s.id, [])
+                ],
+            }
+            for s in steps
+        ],
+        "kit_items": [
+            {"part_id": k.part_id, "quantity_required": float(k.quantity_required)}
+            for k in db.query(Kit).filter(Kit.procedure_id == proc.id).all()
+        ],
+        "output_items": [
+            {"part_id": o.part_id, "quantity_produced": float(o.quantity_produced)}
+            for o in db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == proc.id).all()
+        ],
+    }
+    version = ProcedureVersion(procedure_id=proc.id, version_number=1, content=content)
+    db.add(version)
     db.flush()
+    proc.current_version_id = version.id
+    return version
 
 
 # ---------------------------------------------------------------------------
 # Purchases
 # ---------------------------------------------------------------------------
 
+# PO-0001: the big McMaster kit order, fully received.
+_PO1_LINES = [
+    "9452k226",
+    "91255a378",
+    "94579a550",
+    "91306a279",
+    "90264a435",
+    "91367a952",
+    "4112t22",
+    "91280a044",
+    "90591a141",
+    "98689a113",
+    "92148a160",
+    "93475a210",
+    "92855a310",
+    "90480a009",
+    "90272a194",
+    "4468k858",
+    "4468k031",
+    "4468k865",
+    "44665k137",
+    "50675k135",
+    "50675k435",
+    "9685t3",
+    "9396t31",
+    "9452k15",
+    "90213a101",
+    "94095k114",
+    "9396k79",
+    "92141a029",
+    "91102a750",
+    "95505a601",
+    "90281a102",
+    "93135a013",
+    "93505a211",
+    "7712k511",
+    "8947t26",
+    "52555t644",
+    "7619a11",
+]
+
+# PO-0002: spares per the maintenance schedule, partially received.
+# (received?, key) — O-ring and gasket spares arrived; the rest is backordered.
+_PO2_LINES = [
+    (True, "94095k114", 2),
+    (True, "9452k15", 1),
+    (False, "9452k226", 1),
+    (False, "90281a102", 2),
+    (False, "98831a028", 2),
+]
+
 
 def _seed_purchases(
     db: Session,
-    p: dict[str, Part],
+    parts: dict[str, Part],
     suppliers: dict[str, Supplier],
-) -> None:
-    now = datetime.now(UTC)
+    now: datetime,
+) -> dict[str, PurchaseLine]:
+    prices = {p["key"]: p.get("price") for p in _data("parts.json")["parts"]}
+    bom_qty: dict[str, float] = {}
+    for line in _data("parts.json")["bom"]:
+        bom_qty[line["component"]] = bom_qty.get(line["component"], 0) + line["qty"]
 
-    # PO-0001 McMaster — received
+    po_lines: dict[str, PurchaseLine] = {}
+
     po1 = Purchase(
         reference="PO-0001",
         supplier="McMaster-Carr",
         supplier_id=suppliers["McMaster-Carr"].id,
         status=PurchaseStatus.RECEIVED,
-        ordered_at=now - timedelta(days=30),
-        received_at=now - timedelta(days=27),
+        ordered_at=now - timedelta(days=34),
+        received_at=now - timedelta(days=30),
         destination="STORE",
-        notes="Initial fastener and plumbing stock-up",
+        notes="Vehicle build kit — Appendix F McMaster order.",
     )
     db.add(po1)
     db.flush()
-    for part_key, qty, cost in [
-        ("shcs_quarter", 200, Decimal("0.18")),
-        ("shcs_10_32", 150, Decimal("0.14")),
-        ("hex_nut_quarter", 200, Decimal("0.08")),
-        ("lock_washer_quarter", 200, Decimal("0.06")),
-        ("oring_012", 50, Decimal("0.45")),
-        ("oring_016", 50, Decimal("0.52")),
-        ("oring_116", 25, Decimal("1.85")),
-        ("tube_half", 24, Decimal("8.50")),
-        ("tube_quarter", 18, Decimal("5.20")),
-        ("an_fitting_half", 12, Decimal("12.40")),
-        ("an_fitting_quarter", 16, Decimal("8.90")),
-        ("shear_pin", 100, Decimal("0.03")),
-        ("rail_button", 8, Decimal("2.15")),
-        ("ubolt", 6, Decimal("3.80")),
-        ("teflon_tape", 5, Decimal("2.50")),
-    ]:
-        db.add(
-            PurchaseLine(
-                purchase_id=po1.id,
-                part_id=p[part_key].id,
-                qty_ordered=Decimal(str(qty)),
-                qty_received=Decimal(str(qty)),
-                unit_cost=cost,
-            )
+    for key in _PO1_LINES:
+        qty = Decimal(str(max(int(bom_qty.get(key, 1)), 1)))
+        line = PurchaseLine(
+            purchase_id=po1.id,
+            part_id=parts[key].id,
+            qty_ordered=qty,
+            qty_received=qty,
+            unit_cost=Decimal(str(prices[key])) if prices.get(key) else None,
         )
+        db.add(line)
+        po_lines[key] = line
 
-    # PO-0002 Swagelok — partial (QD outstanding)
     po2 = Purchase(
         reference="PO-0002",
-        supplier="Swagelok",
-        supplier_id=suppliers["Swagelok"].id,
+        supplier="McMaster-Carr",
+        supplier_id=suppliers["McMaster-Carr"].id,
         status=PurchaseStatus.PARTIAL,
-        ordered_at=now - timedelta(days=45),
-        target_date=(now + timedelta(days=7)).date(),
-        destination="STORE-B1",
-        notes="Valves and fittings. QD on backorder.",
+        ordered_at=now - timedelta(days=9),
+        target_date=(now + timedelta(days=6)).date(),
+        destination="STORE",
+        notes="Maintenance spares: tank O-rings, graphite gaskets, QD seals, studs.",
     )
     db.add(po2)
     db.flush()
-    db.add(
-        PurchaseLine(
-            purchase_id=po2.id,
-            part_id=p["lox_valve"].id,
-            qty_ordered=Decimal("1"),
-            qty_received=Decimal("1"),
-            unit_cost=Decimal("245.00"),
-        )
-    )
-    db.add(
-        PurchaseLine(
-            purchase_id=po2.id,
-            part_id=p["fuel_valve"].id,
-            qty_ordered=Decimal("1"),
-            qty_received=Decimal("1"),
-            unit_cost=Decimal("245.00"),
-        )
-    )
-    db.add(
-        PurchaseLine(
-            purchase_id=po2.id,
-            part_id=p["check_valve"].id,
-            qty_ordered=Decimal("4"),
-            qty_received=Decimal("4"),
-            unit_cost=Decimal("68.00"),
-        )
-    )
-    db.add(
-        PurchaseLine(
-            purchase_id=po2.id,
-            part_id=p["umbilical_qd"].id,
-            qty_ordered=Decimal("2"),
-            qty_received=Decimal("0"),
-            unit_cost=Decimal("185.00"),
-            notes="Backordered — expected ship date 2026-03-28",
-        )
-    )
-    db.add(
-        PurchaseLine(
-            purchase_id=po2.id,
-            part_id=p["ground_reg"].id,
-            qty_ordered=Decimal("1"),
-            qty_received=Decimal("1"),
-            unit_cost=Decimal("420.00"),
-        )
-    )
-
-    # PO-0003 Digi-Key — received
-    po3 = Purchase(
-        reference="PO-0003",
-        supplier="Digi-Key",
-        supplier_id=suppliers["Digi-Key"].id,
-        status=PurchaseStatus.RECEIVED,
-        ordered_at=now - timedelta(days=21),
-        received_at=now - timedelta(days=18),
-        destination="LAB",
-    )
-    db.add(po3)
-    db.flush()
-    for part_key, qty, cost in [
-        ("fc", 2, Decimal("32.95")),
-        ("gps", 2, Decimal("18.50")),
-        ("imu", 2, Decimal("28.00")),
-        ("altimeter", 3, Decimal("12.40")),
-        ("radio", 2, Decimal("15.95")),
-        ("lipo", 4, Decimal("14.00")),
-        ("pyro_board", 2, Decimal("8.50")),
-    ]:
+    for received, key, qty in _PO2_LINES:
         db.add(
             PurchaseLine(
-                purchase_id=po3.id,
-                part_id=p[part_key].id,
+                purchase_id=po2.id,
+                part_id=parts[key].id,
                 qty_ordered=Decimal(str(qty)),
-                qty_received=Decimal(str(qty)),
-                unit_cost=cost,
+                qty_received=Decimal(str(qty)) if received else Decimal("0"),
+                unit_cost=Decimal(str(prices[key])) if prices.get(key) else None,
+                notes=None if received else "Backordered",
             )
         )
-
-    # PO-0004 Metal Supermarkets — ordered, awaiting
-    po4 = Purchase(
-        reference="PO-0004",
-        supplier="Metal Supermarkets",
-        supplier_id=suppliers["Metal Supermarkets"].id,
-        status=PurchaseStatus.ORDERED,
-        ordered_at=now - timedelta(days=5),
-        target_date=(now + timedelta(days=10)).date(),
-        destination="STORE-E1",
-        notes="Stock for tank and bulkhead fabrication",
-    )
-    db.add(po4)
     db.flush()
-    db.add(
-        PurchaseLine(
-            purchase_id=po4.id,
-            part_id=p["al_plate"].id,
-            qty_ordered=Decimal("8"),
-            qty_received=Decimal("0"),
-            unit_cost=Decimal("45.00"),
-        )
-    )
-    db.add(
-        PurchaseLine(
-            purchase_id=po4.id,
-            part_id=p["ss_sheet"].id,
-            qty_ordered=Decimal("4"),
-            qty_received=Decimal("0"),
-            unit_cost=Decimal("62.00"),
-        )
-    )
-    db.add(
-        PurchaseLine(
-            purchase_id=po4.id,
-            part_id=p["al_round"].id,
-            qty_ordered=Decimal("6"),
-            qty_received=Decimal("0"),
-            unit_cost=Decimal("38.00"),
-        )
-    )
-
-    db.flush()
+    return po_lines
 
 
 # ---------------------------------------------------------------------------
-# Issues
+# Inventory
+# ---------------------------------------------------------------------------
+
+_LOCATION_BY_CATEGORY = {
+    "Propulsion": "STORE-A1",
+    "Fluid System": "STORE-A2",
+    "Valves": "STORE-A2",
+    "Igniter": "STORE-A3",
+    "Airframe": "STORE-B1",
+    "Recovery": "STORE-B2",
+    "Avionics": "ELEC-SHELF",
+    "Consumables": "STORE-C1",
+    "GSE": "PAD-BOX",
+}
+
+# Assembly parents that exist as BOM structure, not as shelf stock.
+_NO_STOCK = {
+    "vehicle",
+    "gse",
+    "tank_assy",
+    "fluid_assy",
+    "valve_assy_grp",
+    "tca_assy",
+    "igniter_assy",
+    "airframe_assy",
+    "recovery_assy",
+    "avbay_assy",
+    "gse_control",
+    "gse_fill",
+    "gse_enclosure",
+    "gse_integration",
+    "fin_bracket_assy",
+}
+
+_LOT_PARTS = {
+    "9452k226": "LOT-MCM-2606-A",
+    "9452k15": "LOT-MCM-2606-A",
+    "9396k79": "LOT-MCM-2606-B",
+    "94095k114": "LOT-MCM-2606-B",
+    "1834": "LOT-CRS-2605-EM",
+    "1318": "LOT-CRS-2605-BP",
+    "a3_4t": "LOT-EST-2604",
+    "nitrous_oxide": "LOT-N2O-FILL-06",
+    "e85": "LOT-E85-2606",
+    "pla_fil_2kg": "LOT-PLA-2605",
+    "52555t644": "LOT-MCM-2606-C",
+}
+
+
+def _seed_inventory(
+    db: Session,
+    parts_data: dict,
+    procs_data: dict,
+    parts: dict[str, Part],
+    po_lines: dict[str, PurchaseLine],
+    now: datetime,
+) -> dict[str, InventoryRecord]:
+    # Kit demand across all procedures drives sensible stock quantities.
+    need: dict[str, float] = {}
+    for proc in procs_data["procedures"]:
+        for item in proc.get("kit", []):
+            need[item["part"]] = need.get(item["part"], 0) + item["qty"]
+
+    inventory: dict[str, InventoryRecord] = {}
+    for entry in parts_data["parts"]:
+        key = entry["key"]
+        if key in _NO_STOCK or entry["lifecycle"] == "draft":
+            continue
+        part = parts[key]
+        if entry["tracking"] == "serialized":
+            qty = Decimal("1")
+        else:
+            qty = Decimal(str(max(int(need.get(key, 0)) * 3, 4)))
+        po_line = po_lines.get(key)
+        rec = InventoryRecord(
+            part_id=part.id,
+            opal_number=generate_opal_number(db),
+            quantity=qty,
+            location="SHOP-RACK"
+            if entry["procurement"] == "make"
+            else _LOCATION_BY_CATEGORY.get(part.category, "STORE-A1"),
+            lot_number=_LOT_PARTS.get(key),
+            source_type=SourceType.PURCHASE if po_line else SourceType.MANUAL,
+            source_purchase_line_id=po_line.id if po_line else None,
+        )
+        db.add(rec)
+        inventory[key] = rec
+    db.flush()
+    return inventory
+
+
+# ---------------------------------------------------------------------------
+# Executions — the live demo state
+# ---------------------------------------------------------------------------
+
+
+def _cut_instance(
+    db: Session,
+    proc: MasterProcedure,
+    version: ProcedureVersion,
+    status: InstanceStatus,
+    started_by: User | None,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+) -> tuple[ProcedureInstance, dict[str, StepExecution]]:
+    """Create an instance with one StepExecution per snapshot step (all PENDING).
+
+    Returns the instance and a step_number_str -> StepExecution map.
+    """
+    inst = ProcedureInstance(
+        procedure_id=proc.id,
+        version_id=version.id,
+        work_order_number=generate_work_order_number(db),
+        status=status,
+        started_by_id=started_by.id if started_by else None,
+        started_at=started_at,
+        completed_at=completed_at,
+    )
+    db.add(inst)
+    db.flush()
+
+    steps = version.content["steps"]
+    id_to_order = {s["id"]: s["order"] for s in steps}
+    by_number: dict[str, StepExecution] = {}
+    for s in steps:
+        se = StepExecution(
+            instance_id=inst.id,
+            step_number=s["order"],
+            step_number_str=s["step_number"],
+            level=s["level"],
+            parent_step_order=id_to_order.get(s["parent_step_id"]),
+            status=StepStatus.PENDING,
+        )
+        db.add(se)
+        by_number[s["step_number"]] = se
+    db.flush()
+    return inst, by_number
+
+
+def _complete_step(
+    se: StepExecution,
+    step: dict,
+    at: datetime,
+    user: User,
+    data: dict | None = None,
+) -> None:
+    se.status = StepStatus.SIGNED_OFF if step["requires_signoff"] else StepStatus.COMPLETED
+    se.started_at = at
+    se.completed_at = at + timedelta(minutes=9)
+    se.completed_by_id = user.id
+    if step["requires_signoff"]:
+        se.signed_off_at = se.completed_at
+        se.signed_off_by_id = user.id
+    if data is not None:
+        se.data_captured = data
+
+
+# Captured values for WO-1 (verbatim spec values from the guidebook steps).
+_WO1_DATA = {
+    "2.1": {"ends_square": "Square against machinist square — no light gap either end"},
+    "6.4": {"piston_depth": 12.19},
+    "6.9": {"fuel_hose_union_torque": 80},
+    "6.10": {"fuel_hose_valve_torque": 80},
+    "12.9": {"verified_7x_91306a279_screws_install": "All 7 install and thread freely"},
+    "12.10": {"verified_8x_90272a194_screws_install": "8x aligned; simulated install OK"},
+    "12.11": {"verified_4x_93135a013_shear_pins_seat": "4x seat flush through both tubes"},
+}
+
+_WO1_NOTES = [
+    (
+        "2.4",
+        "test",
+        timedelta(days=15, hours=6),
+        "Drill jig bushing (93320A215) snug after the second hole — re-clamped and "
+        "finished the pattern. All 8x 5/16 in holes gauge clean.",
+    ),
+    (
+        "6.4",
+        "build",
+        timedelta(days=15, hours=2),
+        "Piston seated at 12.19 in from the tube end on the marked PVC pusher — "
+        "inside the 12.125-12.25 in window on the first push.",
+    ),
+    (
+        "6.9",
+        "build",
+        timedelta(days=15, hours=1),
+        "50675K135 union pulled to wrench-tight, call it 80 ft-lb per the step. Flare faces clean.",
+    ),
+    (
+        "10.8",
+        "test",
+        timedelta(days=14, hours=20),
+        "Both Quarks beep out continuity on drogue and main channels with the 9V packs installed.",
+    ),
+    (
+        "13.20",
+        "qa",
+        timedelta(days=14, hours=3),
+        "Final stack check done — shear pins flush, rail buttons clear the 1515 "
+        "test rail section. Vehicle to transport crate as SN 001.",
+    ),
+]
+
+
+def _seed_executions(
+    db: Session,
+    procs: dict[str, MasterProcedure],
+    versions: dict[str, ProcedureVersion],
+    parts: dict[str, Part],
+    inventory: dict[str, InventoryRecord],
+    users: dict[str, User],
+    now: datetime,
+) -> dict[str, Any]:
+    build, test, qa = users["build"], users["test"], users["qa"]
+    veh_proc, veh_version = procs["vehicle_assembly"], versions["vehicle_assembly"]
+    veh_steps = {s["step_number"]: s for s in veh_version.content["steps"]}
+
+    # ── WO-1: Vehicle Assembly, COMPLETED ───────────────────────
+    wo1_start = now - timedelta(days=16)
+    wo1, wo1_steps = _cut_instance(
+        db,
+        veh_proc,
+        veh_version,
+        InstanceStatus.COMPLETED,
+        build,
+        started_at=wo1_start,
+        completed_at=now - timedelta(days=14),
+    )
+    t = wo1_start
+    for s in veh_version.content["steps"]:
+        se = wo1_steps[s["step_number"]]
+        user = (build, test, qa)[s["order"] % 3]
+        _complete_step(se, s, t, user, _WO1_DATA.get(s["step_number"]))
+        t += timedelta(minutes=20)
+    for step_num, username, ago, body in _WO1_NOTES:
+        db.add(
+            StepNote(
+                step_execution_id=wo1_steps[step_num].id,
+                author_id=users[username].id,
+                body=body,
+                created_at=now - ago,
+            )
+        )
+
+    # Consume the vehicle kit from bulk stock (WO-1 built SN 001).
+    kit_items = db.query(Kit).filter(Kit.procedure_id == veh_proc.id).all()
+    part_key_by_id = {p.id: k for k, p in parts.items()}
+    for item in kit_items:
+        key = part_key_by_id[item.part_id]
+        rec = inventory.get(key)
+        tracking = parts[key].tracking_type
+        tracking = tracking.value if hasattr(tracking, "value") else tracking
+        if rec is None or tracking == "serialized":
+            continue
+        qty = min(item.quantity_required, rec.quantity)
+        rec.quantity -= qty
+        db.add(
+            InventoryConsumption(
+                inventory_record_id=rec.id,
+                quantity=qty,
+                procedure_instance_id=wo1.id,
+                consumed_by_id=build.id,
+            )
+        )
+
+    # Produced vehicle SN 001.
+    veh_part = parts["vehicle"]
+    veh_rec = InventoryRecord(
+        part_id=veh_part.id,
+        quantity=Decimal("1"),
+        location="TRANSPORT-CRATE",
+        lot_number=wo1.work_order_number,
+        opal_number=generate_opal_number(db),
+        source_type=SourceType.PRODUCTION,
+    )
+    db.add(veh_rec)
+    db.flush()
+    production = InventoryProduction(
+        inventory_record_id=veh_rec.id,
+        quantity=Decimal("1"),
+        procedure_instance_id=wo1.id,
+        serial_number=generate_serial_number(db, veh_part),
+        produced_opal_number=veh_rec.opal_number,
+        status=ProductionStatus.COMPLETED,
+        produced_by_id=build.id,
+    )
+    db.add(production)
+    db.flush()
+    veh_rec.source_production_id = production.id
+
+    # ── WO-2: Vehicle Assembly, IN WORK mid-OP-6 ────────────────
+    wo2_start = now - timedelta(hours=26)
+    wo2, wo2_steps = _cut_instance(
+        db, veh_proc, veh_version, InstanceStatus.IN_WORK, build, started_at=wo2_start
+    )
+    # SN 002 allocation, planned until closeout.
+    wo2_rec = InventoryRecord(
+        part_id=veh_part.id,
+        quantity=Decimal("0"),
+        location="",
+        lot_number=wo2.work_order_number,
+        opal_number=generate_opal_number(db),
+        source_type=SourceType.PRODUCTION,
+    )
+    db.add(wo2_rec)
+    db.flush()
+    wo2_prod = InventoryProduction(
+        inventory_record_id=wo2_rec.id,
+        quantity=Decimal("1"),
+        procedure_instance_id=wo2.id,
+        serial_number=generate_serial_number(db, veh_part),
+        produced_opal_number=wo2_rec.opal_number,
+        status=ProductionStatus.WIP,
+        produced_by_id=build.id,
+    )
+    db.add(wo2_prod)
+    db.flush()
+    wo2_rec.source_production_id = wo2_prod.id
+
+    t = wo2_start
+    for s in veh_version.content["steps"]:
+        num = s["step_number"]
+        se = wo2_steps[num]
+        op = int(num.split(".")[0])
+        # OPs 1-5 fully complete; OP 6 is mid-flight (its op row stays PENDING
+        # until the op completes under the focus model).
+        done = op <= 5 or num in ("6.1", "6.2", "6.3")
+        if done:
+            user = (build, test)[s["order"] % 2]
+            _complete_step(
+                se,
+                s,
+                t,
+                user,
+                {"ends_square": "Square — checked both ends"} if num == "2.1" else None,
+            )
+            t += timedelta(minutes=11)
+    # The crew's position is presence (cursor), not status — the step ahead
+    # of the completed work stays PENDING with a focus row.
+    cursor = wo2_steps["6.4"]
+    cursor.first_focused_at = now - timedelta(minutes=45)
+    db.add(
+        StepFocus(
+            instance_id=wo2.id,
+            step_execution_id=cursor.id,
+            user_id=build.id,
+            focused_at=now - timedelta(minutes=12),
+        )
+    )
+    db.add(
+        StepNote(
+            step_execution_id=wo2_steps["6.1"].id,
+            author_id=build.id,
+            body="Step text calls for QTY 5 '-230' O-rings; the OP 6 kit is 4x "
+            "9452K226 -238 (2x bulkheads, 2x piston). Greased the four -238s.",
+            created_at=now - timedelta(hours=1, minutes=30),
+        )
+    )
+    db.add(
+        StepNote(
+            step_execution_id=cursor.id,
+            author_id=test.id,
+            body="Holding before piston insertion until the O-ring callout NC is "
+            "dispositioned — seals are inaccessible after this step.",
+            created_at=now - timedelta(minutes=40),
+        )
+    )
+
+    # ── WO-3: Launch Operations, CUT (staged, untouched) ────────
+    wo3, _wo3_steps = _cut_instance(
+        db, procs["launch_ops"], versions["launch_ops"], InstanceStatus.CUT, build
+    )
+
+    db.flush()
+    return {
+        "wo1": wo1,
+        "wo1_steps": wo1_steps,
+        "wo2": wo2,
+        "wo2_steps": wo2_steps,
+        "wo3": wo3,
+        "veh_steps": veh_steps,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Issues — drawn from real guidebook errata (bom.json / ops meta.extraction_gaps)
 # ---------------------------------------------------------------------------
 
 
 def _seed_issues(
     db: Session,
-    p: dict[str, Part],
+    parts: dict[str, Part],
     procs: dict[str, MasterProcedure],
+    wo: dict[str, Any],
+    users: dict[str, User],
+    now: datetime,
 ) -> dict[str, Issue]:
-    """Create demo issues. Returns dict keyed by short name for cross-referencing."""
-    # ── Non-Conformances ────────────────────────────────────────
+    build, test, qa = users["build"], users["test"], users["qa"]
+    issues: dict[str, Issue] = {}
 
-    nc1 = Issue(
+    # 1. Undispositioned NC on WO-2 (STEP containment, resolve-by boundary).
+    #    Real erratum: OP 6 step text calls the tank seals "-230" (QTY 5);
+    #    the gather list and BOM say 4x 9452K226 -238.
+    nc_oring = Issue(
         issue_number=generate_issue_number(db),
-        title="Injector plate hole pattern out of tolerance",
-        description='During QA inspection, bolt circle measured 0.005" outside tolerance.',
+        title="OP 6 tank O-ring callout mismatch: '-230' x5 vs kit -238 x4",
+        description=(
+            "Raised during tank assembly on WO "
+            f"{wo['wo2'].work_order_number}. The published step text and the "
+            "kit disagree on both dash size and count; the installed seals "
+            "follow the kit. Disposition before the piston goes in — the "
+            "seals are unreachable afterwards."
+        ),
         issue_type=IssueType.NON_CONFORMANCE,
         status=IssueStatus.OPEN,
         priority=IssuePriority.HIGH,
-        part_id=p["injector"].id,
-        should_be='32x 0.040" holes on 1.500" bolt circle ±0.002"',
-        actual='Holes measured at 1.505" bolt circle — 0.005" outside tolerance on 3 of 4 quadrants',
+        containment=Containment.STEP,
+        containment_step_id=wo["wo2_steps"]["6.4"].id,
+        part_id=parts["9452k226"].id,
+        procedure_id=procs["vehicle_assembly"].id,
+        procedure_instance_id=wo["wo2"].id,
+        raised_step_id=wo["wo2_steps"]["6.2"].id,
+        raised_by_id=test.id,
+        assigned_to_id=build.id,
+        should_be="OP 6 gather list: 4x 9452K226 -238 Buna-N O-rings (2x bulkheads, 2x piston)",
+        actual="Steps 1-3 text: 'a liberal amount of grease to the 5x Buna-N O-rings (-230)' "
+        "— dash size and quantity disagree with the kit",
+        created_at=now - timedelta(hours=1, minutes=10),
     )
-    db.add(nc1)
+    db.add(nc_oring)
     db.flush()
+    db.add(
+        IssueComment(
+            issue_id=nc_oring.id,
+            body="Physical parts on the bench are -238 from LOT-MCM-2606-A and match "
+            "the tank gland drawings. Recommending USE AS IS with a doc redline "
+            "against the step text.",
+            created_at=now - timedelta(minutes=50),
+        )
+    )
+    issues["nc_oring"] = nc_oring
 
-    nc2 = Issue(
+    # 2. Advisory issue: OP 12 references a template missing from its gather list.
+    adv = Issue(
         issue_number=generate_issue_number(db),
-        title="LOX tank circumferential weld porosity",
-        description="Radiographic inspection revealed pores in weld at station 14.",
+        title="OP 12 step 8 uses template TMPLT-AF-UPR2-416 absent from gather list",
+        description=(
+            "OP 12 step 8 calls out drill template TMPLT-AF-UPR2-416; the OP 12 "
+            "gather list only carries TMPLT-AF-UPR-416 and the backing plug. "
+            "Advisory — the on-hand template covers the hole pattern."
+        ),
         issue_type=IssueType.NON_CONFORMANCE,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.CRITICAL,
-        part_id=p["lox_tank"].id,
-        should_be="Full-penetration weld with no porosity per AWS D17.1 Class A",
-        actual="Three pores detected: 0.8 mm, 0.6 mm, 0.5 mm in circumferential weld at station 14. Total aggregate porosity exceeds Class A limit.",
-    )
-    db.add(nc2)
-
-    nc3 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Aft bulkhead O-ring groove surface finish",
-        description="Surface finish on aft bulkhead bore exceeds specification.",
-        issue_type=IssueType.NON_CONFORMANCE,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.MEDIUM,
-        part_id=p["bulkhead_aft"].id,
-        should_be="16 µin Ra max per AS568 gland specification for static radial seal",
-        actual="Profilometer measured 32 µin Ra on aft bulkhead bore — 2x allowable roughness",
-    )
-    db.add(nc3)
-
-    nc4 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Pressurant regulator external leak at set pressure",
-        description="Bubble test shows leak at outlet fitting when regulator is at setpoint.",
-        issue_type=IssueType.NON_CONFORMANCE,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.HIGH,
-        part_id=p["ground_reg"].id,
-        should_be="Regulate to 450 PSI ±10 PSI with zero external leakage",
-        actual="Bubble test shows steady stream at outlet NPT fitting at 400 PSI. Leak rate ~5 cc/min.",
-    )
-    db.add(nc4)
-
-    # ── Bugs ────────────────────────────────────────────────────
-
-    bug1 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Flight computer resets during pyro channel firing",
-        description="FC reboots when e-match is fired on either pyro channel.",
-        issue_type=IssueType.BUG,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.HIGH,
-        part_id=p["fc"].id,
-        steps_to_reproduce="1. Power on flight computer via LiPo\n2. Arm both pyro channels via software command\n3. Fire channel 1 e-match\n4. Observe FC status LED and telemetry stream",
-        expected_behavior="FC maintains operation, logs firing event timestamp and channel ID, telemetry stream uninterrupted",
-        actual_behavior="FC resets to boot screen immediately on firing. Telemetry drops for 3 seconds. No firing event logged. Behavior is 100% reproducible on both channels.",
-    )
-    db.add(bug1)
-    db.flush()
-
-    bug2 = Issue(
-        issue_number=generate_issue_number(db),
-        title="GPS cold lock exceeds 5 min in vertical orientation",
-        description="GPS acquisition time dramatically worse when avionics sled is mounted vertically (flight orientation).",
-        issue_type=IssueType.BUG,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.MEDIUM,
-        part_id=p["gps"].id,
-        steps_to_reproduce="1. Mount avionics sled in vertical orientation (flight config)\n2. Power on outdoors with clear sky view\n3. Monitor NMEA stream for fix quality indicator\n4. Record time to first 3D fix",
-        expected_behavior="GPS 3D lock within 60 seconds (horizontal baseline with same antenna: 15 seconds typical)",
-        actual_behavior="Lock takes 5-8 minutes in vertical orientation. Occasionally fails to acquire within 10-minute timeout. Suspect antenna ground plane effect.",
-    )
-    db.add(bug2)
-
-    bug3 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Telemetry packet CRC errors above 500 m range",
-        description="Packet loss exceeds link budget prediction at relatively short range.",
-        issue_type=IssueType.BUG,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.MEDIUM,
-        part_id=p["radio"].id,
-        steps_to_reproduce="1. Set up ground station at pad with directional antenna\n2. Mount flight transmitter on drone\n3. Fly drone to 500 m slant range, then 1 km\n4. Log packet reception rate and CRC error count",
-        expected_behavior="<1% packet loss to 2 km slant range per link budget (SF7, BW125, +20 dBm, 6 dBi ground antenna)",
-        actual_behavior="12% CRC errors at 500 m, 40% at 1 km. Ground station RSSI suggests adequate signal — likely interference or impedance mismatch at SMA bulkhead.",
-    )
-    db.add(bug3)
-
-    # ── Tasks ───────────────────────────────────────────────────
-
-    task1 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Order replacement LOX-compatible O-rings (Viton -116)",
-        description="Current Buna-N -116 O-rings are not LOX-compatible. Need Viton (fluoroelastomer) replacements for all LOX-wetted seals.",
-        issue_type=IssueType.TASK,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.HIGH,
-    )
-    db.add(task1)
-
-    task2 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Machine new injector plate with corrected hole pattern",
-        description='Remake injector from 304 SS stock with corrected bolt circle diameter (1.500" ±0.002"). Use CNC for hole pattern.',
-        issue_type=IssueType.TASK,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.HIGH,
-        part_id=p["injector"].id,
-    )
-    db.add(task2)
-
-    task3 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Write pre-launch checklist procedure",
-        description="Create formal procedure covering all launch-day activities: range setup, vehicle prep, propellant loading, countdown, and safing.",
-        issue_type=IssueType.TASK,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.MEDIUM,
-    )
-    db.add(task3)
-
-    # ── Improvements ────────────────────────────────────────────
-
-    imp1 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Add redundant barometric altimeter for recovery",
-        description="Single MS5611 is a single point of failure for apogee detection and recovery deployment.",
-        issue_type=IssueType.IMPROVEMENT,
-        status=IssueStatus.OPEN,
-        priority=IssuePriority.MEDIUM,
-        part_id=p["altimeter"].id,
-        expected_benefit="Dual-sensor voting eliminates single-point failure for apogee detection. If primary altimeter fails, backup independently triggers recovery events. Required to meet REQ-004 (dual-event recovery with redundant altimeters).",
-    )
-    db.add(imp1)
-
-    imp2 = Issue(
-        issue_number=generate_issue_number(db),
-        title="Replace e-match igniters with electronic igniters",
-        description="E-matches require pyrotechnic handling during pad operations. Electronic (resistive) igniters would simplify pad procedures.",
-        issue_type=IssueType.IMPROVEMENT,
         status=IssueStatus.OPEN,
         priority=IssuePriority.LOW,
-        expected_benefit="Eliminates pyrotechnic handling during pad operations. Enables remote re-arm capability without approaching vehicle. Reduces hazmat paperwork for launch site operations.",
+        containment=Containment.ADVISORY,
+        part_id=parts["tmplt_af_upr_416"].id,
+        procedure_id=procs["vehicle_assembly"].id,
+        procedure_instance_id=wo["wo2"].id,
+        raised_by_id=build.id,
+        created_at=now - timedelta(days=1),
     )
-    db.add(imp2)
+    db.add(adv)
+    issues["adv_template"] = adv
+
+    # 3. Dispositioned USE AS IS (signed) — Appendix F stud-count duplication.
+    stud = Issue(
+        issue_number=generate_issue_number(db),
+        title="Appendix F lists 16x 90281A102 studs; Section IV totals 14",
+        description=(
+            "Kitting for the first vehicle pulled 16 studs per Appendix F, which "
+            "lists 90281A102 on two lines (qty 14 + qty 2); Section IV totals 14 "
+            "(8x chamber tie rods + 6x airframe/coupler studs)."
+        ),
+        issue_type=IssueType.NON_CONFORMANCE,
+        status=IssueStatus.OPEN,
+        priority=IssuePriority.MEDIUM,
+        containment=Containment.STEP,
+        part_id=parts["90281a102"].id,
+        procedure_id=procs["vehicle_assembly"].id,
+        procedure_instance_id=wo["wo1"].id,
+        raised_step_id=wo["wo1_steps"]["9.1"].id,
+        containment_step_id=wo["wo1_steps"]["9.1"].id,
+        raised_by_id=qa.id,
+        should_be="Section IV usage: 8x TCA tie rods + 6x coupler/recovery studs = 14",
+        actual="Appendix F vehicle McMaster table carries 90281A102 twice (14 + 2 = 16)",
+        disposition_type=DispositionType.USE_AS_IS,
+        disposition_rationale=(
+            "Installed count verified against Section IV: 8 + 6 = 14. The Appendix F "
+            "second line is a duplication; the two extra studs go to spares stock."
+        ),
+        dispositioned_at=now - timedelta(days=15, hours=4),
+        dispositioned_by_id=qa.id,
+        created_at=now - timedelta(days=15, hours=6),
+    )
+    db.add(stud)
+    issues["stud_count"] = stud
+
+    # 4. Closed NC — recovery screws PN/link discrepancy, corrected at receiving.
+    screws = Issue(
+        issue_number=generate_issue_number(db),
+        title="Recovery BOM cites 94735A707; link and Appendix F use 93135A013",
+        description=(
+            "Recovery System BOM line 14 prints PN 94735A707, but both the "
+            "Section IV link and the Appendix F order table point to 93135A013 "
+            "(2-56 nylon pan head screws)."
+        ),
+        issue_type=IssueType.NON_CONFORMANCE,
+        status=IssueStatus.CLOSED,
+        priority=IssuePriority.LOW,
+        containment=Containment.STEP,
+        part_id=parts["93135a013"].id,
+        raised_by_id=qa.id,
+        should_be="One part number per part — BOM line, link, and order table agree",
+        actual="BOM line prints 94735A707; the hardware received and both source "
+        "links are 93135A013",
+        root_cause="Typo on the printed BOM line; the ordering tables were correct.",
+        corrective_action="Part record normalized to 93135A013; received stock "
+        "verified against the McMaster label.",
+        disposition_type=DispositionType.NO_DEFECT,
+        disposition_rationale="Hardware on hand matches 93135A013 in both thread and "
+        "material; document-only error.",
+        dispositioned_at=now - timedelta(days=28),
+        dispositioned_by_id=build.id,
+        created_at=now - timedelta(days=29),
+    )
+    db.add(screws)
+    issues["screws_pn"] = screws
+
+    # 5. Field finding that realizes the recovery risk (maintenance trigger:
+    #    insulated shock cord is replaced on tears or serious burns).
+    shock = Issue(
+        issue_number=generate_issue_number(db),
+        title="Shock cord thermal damage found at recovery inspection",
+        description=(
+            "Post-flight inspection of SN 001 found burn-through of the insulated "
+            "section of the 5/8 in tubular nylon shock cord. Maintenance schedule "
+            "action: replace insulated shock cord on tears or serious burns — "
+            "lack of maintenance may cause airframe/propulsion separation."
+        ),
+        issue_type=IssueType.NON_CONFORMANCE,
+        status=IssueStatus.OPEN,
+        priority=IssuePriority.HIGH,
+        containment=Containment.ADVISORY,
+        part_id=parts["rec_tnsc_3klb"].id,
+        raised_by_id=test.id,
+        assigned_to_id=build.id,
+        should_be="Insulated shock cord free of tears and burn damage",
+        actual="Burn-through of the Nomex-protected section adjacent to the drogue "
+        "charge well; nylon core intact but glazed",
+        created_at=now - timedelta(days=7),
+    )
+    db.add(shock)
+    issues["shock_cord"] = shock
+
+    # 6. Mitigation task for the N2O decomposition risk.
+    clean = Issue(
+        issue_number=generate_issue_number(db),
+        title="Add contamination controls for N2O-wetted plumbing",
+        description=(
+            "Keep hydrocarbon contamination out of everything N2O touches: clean "
+            "fittings and hoses before assembly, cap open lines between "
+            "operations, and inspect the fill line and QD before each fill."
+        ),
+        issue_type=IssueType.TASK,
+        status=IssueStatus.OPEN,
+        priority=IssuePriority.HIGH,
+        containment=Containment.ADVISORY,
+        assigned_to_id=build.id,
+        raised_by_id=qa.id,
+        created_at=now - timedelta(days=11),
+    )
+    db.add(clean)
+    issues["n2o_cleanliness"] = clean
 
     db.flush()
-
-    # ── Issue Comments ──────────────────────────────────────────
-
-    db.add(
-        IssueComment(
-            issue_id=nc1.id,
-            body="Measured all 32 holes with pin gauges. Hole diameters are within spec — only the bolt circle is off. Likely a fixture alignment issue on the rotary table.",
-        )
-    )
-    db.add(
-        IssueComment(
-            issue_id=nc1.id,
-            body="Checked the G-code. Origin offset was set to X0.0025 Y0.0000 instead of X0.0000 Y0.0000. That explains the radial shift. CNC program has been corrected for the remake.",
-        )
-    )
-
-    db.add(
-        IssueComment(
-            issue_id=bug1.id,
-            body="Scope trace on Vcc rail shows a 1.2V dip lasting ~500 µs coincident with e-match firing. The MOSFET inrush is pulling the rail below the Teensy's brownout threshold (2.7V). Need a bigger bulk cap on the pyro board or separate battery for pyro.",
-        )
-    )
-    db.add(
-        IssueComment(
-            issue_id=bug1.id,
-            body="Added 2200 µF low-ESR cap to pyro board Vcc input. Dip reduced to 0.3V — FC stays up now. Will retest with both channels firing simultaneously before closing.",
-        )
-    )
-
-    db.add(
-        IssueComment(
-            issue_id=nc2.id,
-            body="Sent X-ray images to welding consultant. Recommendation: grind out affected area and re-weld, then re-inspect. Alternatively, could accept with stress analysis showing adequate margin at reduced section.",
-        )
-    )
-
-    db.flush()
-    return {
-        "injector_nc": nc1,
-        "weld_nc": nc2,
-        "oring_groove_nc": nc3,
-        "regulator_nc": nc4,
-        "pyro_reset_bug": bug1,
-        "gps_bug": bug2,
-        "telemetry_bug": bug3,
-        "oring_task": task1,
-        "injector_task": task2,
-        "checklist_task": task3,
-        "altimeter_imp": imp1,
-        "ematch_imp": imp2,
-    }
+    return issues
 
 
 # ---------------------------------------------------------------------------
-# Risks
+# Risks — HCR-5100 §1.4 hazards, with P/I estimates from the extraction
 # ---------------------------------------------------------------------------
 
 
 def _seed_risks(
     db: Session,
-    p: dict[str, Part],
+    parts: dict[str, Part],
     users: dict[str, User],
     issues: dict[str, Issue],
 ) -> None:
-    """Four scenario-structured risks, one per common disposition."""
+    from opal.risks.dispositions import accept, set_disposition
 
-    # ── open — identified, not yet dispositioned ────────────────
-    db.add(
-        Risk(
+    build, test, qa = users["build"], users["test"], users["qa"]
+    owners = [build, test, qa]
+
+    for i, entry in enumerate(_data("risks.json")["risks"]):
+        risk = Risk(
             risk_number=generate_risk_number(db),
-            title="Avionics single-battery brownout",
-            description=(
-                "Bench testing showed the FC resets when an e-match fires (see the pyro "
-                "firing bug) — the bus is sensitive to transients. Candidate responses: "
-                "separate recovery battery, larger bulk capacitance on the pyro board."
-            ),
-            condition=(
-                "the flight computer, telemetry radio, and both pyro channels draw from a "
-                "single 2S LiPo with no independent backup supply."
-            ),
-            departure=(
-                "the bus voltage sags below the flight computer brownout threshold during "
-                "pyro firing or sustained transmit in flight"
-            ),
-            asset_part_id=p["fc"].id,
-            consequence=(
-                "loss of recovery deployment commanding and loss of all flight data from "
-                "the brownout onward"
-            ),
-            disposition=RiskDisposition.OPEN.value,
-            owner_id=users["test"].id,
-            probability=2,
-            impact=5,
+            title=entry["title"],
+            description=entry["description"],
+            condition=entry["condition"],
+            departure=entry["departure"],
+            asset_part_id=parts[entry["asset_part"]].id if entry.get("asset_part") else None,
+            asset_text=entry.get("asset_text"),
+            consequence=entry["consequence"],
+            probability=entry["probability"],
+            impact=entry["impact"],
+            owner_id=owners[i % 3].id,
         )
-    )
+        db.add(risk)
+        db.flush()
 
-    # ── mitigate — open mitigation issue + residual target ─────
-    lox_seal = Risk(
-        risk_number=generate_risk_number(db),
-        title="Buna-N seals in LOX-wetted joints",
-        description=(
-            "Stock -116 Buna-N O-rings were installed in LOX-wetted seal positions during "
-            "initial plumbing fit-up. MSFC-SPEC-106B lists Buna-N as incompatible with "
-            "liquid oxygen. Viton replacements are on order via the linked task; residual "
-            "assumes all wetted seals are swapped and lot-verified before tanking."
-        ),
-        condition=(
-            "Buna-N -116 O-rings are installed in LOX-wetted seal positions, and Buna-N "
-            "is not LOX-compatible per MSFC-SPEC-106B."
-        ),
-        departure=(
-            "a seal ignites or embrittles on liquid oxygen contact during tanking or static fire"
-        ),
-        asset_part_id=p["engine_assy"].id,
-        consequence=(
-            "fire damage to the engine and pad hardware and loss of the static fire campaign"
-        ),
-        disposition=RiskDisposition.MITIGATE.value,
-        owner_id=users["build"].id,
-        probability=3,
-        impact=5,
-        residual_probability=1,
-        residual_impact=5,
-    )
-    db.add(lox_seal)
-    db.flush()
-    db.add(
-        RiskIssueLink(
-            risk_id=lox_seal.id,
-            issue_id=issues["oring_task"].id,
-            role=RiskIssueRole.MITIGATION.value,
-        )
-    )
-
-    # ── watch — observable + threshold + contingency ────────────
-    db.add(
-        Risk(
-            risk_number=generate_risk_number(db),
-            title="Umbilical QD backorder threatens launch window",
-            description=(
-                "Swagelok quotes 8-10 weeks on the SS-QC4-B-400 quick-disconnect. Pad "
-                "fill-system integration is on the critical path; every other fill-system "
-                "component is in stock."
-            ),
-            condition=(
-                "the umbilical quick-disconnect (SS-QC4-B-400) is on supplier backorder "
-                "with no confirmed ship date, and pad fill-system integration is on the "
-                "critical path to the reserved launch window."
-            ),
-            departure=(
-                "the quick-disconnect delivery slips past the start of pad fill-system integration"
-            ),
-            asset_text="launch window reservation",
-            consequence=(
-                "a launch delay of at least 3 months to the next available site reservation"
-            ),
-            disposition=RiskDisposition.WATCH.value,
-            owner_id=users["build"].id,
-            probability=4,
-            impact=3,
-            watch_observable="Supplier order status for the SS-QC4-B-400 quick-disconnect",
-            watch_threshold="No ship confirmation by 2026-07-01",
-            watch_contingency=(
-                "Fabricate an interim manual-disconnect fill fitting and requalify the "
-                "fill procedure without auto-shutoff."
-            ),
-        )
-    )
-
-    # ── accepted — signed, with rationale ───────────────────────
-    db.add(
-        Risk(
-            risk_number=generate_risk_number(db),
-            title="COTS pressurant bottle accepted on vendor cert",
-            description=(
-                "The N2 pressurant bottle is a DOT-rated COTS unit; REQ-002 was verified "
-                "against the vendor certificate rather than an in-house proof test. The "
-                "pad pressure check before propellant load detects leak-down."
-            ),
-            condition=(
-                "the pressurant tank is a COTS nitrogen bottle accepted on vendor "
-                "certification (DOT 3AL3000) without an in-house proof test."
-            ),
-            departure="the bottle valve leaks down during the pre-launch pad hold",
-            asset_part_id=p["press_tank"].id,
-            consequence="a scrub for that window and the loss of one day of range time",
-            disposition=RiskDisposition.ACCEPTED.value,
-            owner_id=users["qa"].id,
-            probability=2,
-            impact=2,
-            accepted_by_id=users["build"].id,
-            accepted_at=datetime.now(UTC),
-            acceptance_rationale=(
-                "Bottle is DOT-rated to 3000 PSI against a 500 PSI working pressure with "
-                "vendor cert on file (REQ-002 verified). Leak-down is detected by the pad "
-                "pressure check before propellant load; worst credible outcome is a "
-                "one-day scrub."
-            ),
-        )
-    )
+        plan = entry.get("disposition")
+        if plan == "mitigate":
+            risk.residual_probability, risk.residual_impact = entry["residual"]
+            db.add(
+                RiskIssueLink(
+                    risk_id=risk.id,
+                    issue_id=issues[entry["mitigation_issue"]].id,
+                    role=RiskIssueRole.MITIGATION.value,
+                )
+            )
+            db.flush()
+            set_disposition(db, risk, "mitigate", build.id)
+        elif plan == "watch":
+            risk.watch_observable = entry["watch_observable"]
+            risk.watch_threshold = entry["watch_threshold"]
+            risk.watch_contingency = entry["watch_contingency"]
+            set_disposition(db, risk, "watch", build.id)
+        elif plan == "accepted":
+            risk.owner_id = qa.id
+            # The signature moment goes through the core accept path so the
+            # readiness rules hold for the demo row.
+            accept(
+                db,
+                risk,
+                build.id,
+                rationale=(
+                    "Exposure is brief skin contact during hose handling; PPE per "
+                    "§7.1 (nitrile gloves, safety glasses) is already a launch-"
+                    "procedure gate and the credible outcome is a minor cold burn. "
+                    "Guidebook mitigation: " + entry["description"]
+                ),
+            )
+        elif plan == "realized":
+            risk.realized_issue_id = issues[entry["realized_issue"]].id
+            db.flush()
+            set_disposition(
+                db,
+                risk,
+                "realized",
+                test.id,
+                note="Shock cord burn-through found at recovery inspection of SN 001.",
+            )
 
     db.flush()
 
 
 # ---------------------------------------------------------------------------
-# Test Templates
+# Test templates — the two numeric checks the guidebook states outright
 # ---------------------------------------------------------------------------
 
 
-def _seed_test_templates(db: Session, p: dict[str, Part]) -> None:
-    templates = [
-        TestTemplate(
-            part_id=p["chamber"].id,
-            name="Hydrostatic Proof Test",
-            description="Pressurize to 1.5x MEOP (675 PSI) with water. Hold 5 min. No leaks or permanent deformation.",
-            required=True,
-            test_type="numeric",
-            min_value=Decimal("675"),
-            max_value=Decimal("750"),
-            unit="PSI",
-            sort_order=1,
-        ),
-        TestTemplate(
-            part_id=p["lox_tank"].id,
-            name="Hydrostatic Proof Test",
-            description="Pressurize to 750 PSI (1.5x 500 PSI MEOP) with water. Hold 5 min.",
-            required=True,
-            test_type="numeric",
-            min_value=Decimal("750"),
-            max_value=Decimal("800"),
-            unit="PSI",
-            sort_order=1,
-        ),
-        TestTemplate(
-            part_id=p["fuel_tank"].id,
-            name="Hydrostatic Proof Test",
-            description="Pressurize to 750 PSI (1.5x 500 PSI MEOP) with water. Hold 5 min.",
-            required=True,
-            test_type="numeric",
-            min_value=Decimal("750"),
-            max_value=Decimal("800"),
-            unit="PSI",
-            sort_order=1,
-        ),
-        TestTemplate(
-            part_id=p["engine_assy"].id,
-            name="Leak Check — Low Pressure",
-            description="Pressurize assembled engine to 50 PSI with N2. Soap-bubble all joints. No bubbles for 60 seconds.",
-            required=True,
-            test_type="boolean",
-            sort_order=1,
-        ),
-        TestTemplate(
-            part_id=p["lox_valve"].id,
-            name="Seat Leak Test",
-            description="Pressurize upstream to 500 PSI with N2, valve closed. Measure downstream leak rate.",
-            required=True,
-            test_type="boolean",
-            sort_order=1,
-        ),
-        TestTemplate(
-            part_id=p["fuel_valve"].id,
-            name="Seat Leak Test",
-            description="Pressurize upstream to 500 PSI with N2, valve closed. Measure downstream leak rate.",
-            required=True,
-            test_type="boolean",
-            sort_order=1,
-        ),
-        TestTemplate(
-            part_id=p["ematch"].id,
-            name="Continuity Check",
-            description="Measure e-match bridgewire resistance. Must be within 0.5-5.0 Ω for reliable firing.",
-            required=True,
-            test_type="numeric",
-            min_value=Decimal("0.5"),
-            max_value=Decimal("5.0"),
-            unit="Ω",
-            sort_order=1,
-        ),
-        TestTemplate(
-            part_id=p["pyro_board"].id,
-            name="Isolation Test",
-            description="Measure resistance between pyro power rail and logic power rail. Must exceed 10 MΩ.",
-            required=True,
-            test_type="numeric",
-            min_value=Decimal("10000000"),
-            max_value=None,
-            unit="Ω",
-            sort_order=1,
-        ),
-    ]
-    db.add_all(templates)
+def _seed_test_templates(db: Session, parts: dict[str, Part]) -> None:
+    db.add_all(
+        [
+            TestTemplate(
+                part_id=parts["9v_batt"].id,
+                name="Altimeter Battery Voltage",
+                description="Measure open-circuit voltage. Replace below 8.2 V "
+                "(HCR-5100 Table 2.10 spares guidance).",
+                required=True,
+                test_type="numeric",
+                min_value=Decimal("8.2"),
+                max_value=Decimal("9.9"),
+                unit="V",
+                sort_order=1,
+            ),
+            TestTemplate(
+                part_id=parts["tank_36l_047v2x8x313c"].id,
+                name="Static Vent Clear",
+                description="Verify the 1.2 mm (0.047 in) static vent orifice is "
+                "unobstructed (launch procedure 7.1 check).",
+                required=True,
+                test_type="boolean",
+                sort_order=1,
+            ),
+        ]
+    )
     db.flush()

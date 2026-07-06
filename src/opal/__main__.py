@@ -154,7 +154,7 @@ def cmd_migrate(args: argparse.Namespace) -> None:
 
 
 def cmd_seed(args: argparse.Namespace) -> None:
-    """Populate database with Project Kestrel demo data."""
+    """Populate database with Mojave Sphinx demo data."""
     _setup_project(args)
 
     from opal.db.base import SessionLocal
@@ -167,7 +167,7 @@ def cmd_seed(args: argparse.Namespace) -> None:
             print("Database already has data. Skipping seed.")
             return
 
-        print("Seeding Project Kestrel data...")
+        print("Seeding Mojave Sphinx data...")
         seed_database(db)
         print("Done.")
     finally:
