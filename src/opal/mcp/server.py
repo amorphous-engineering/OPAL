@@ -1831,8 +1831,7 @@ async def list_tools() -> list[Tool]:
                                     "type": "string",
                                     "enum": ["make", "buy", "both"],
                                     "description": (
-                                        "Default: buy when external_pn is given, "
-                                        "else make"
+                                        "Default: buy when external_pn is given, else make"
                                     ),
                                 },
                                 "reorder_point": {"type": "number"},
@@ -2428,7 +2427,9 @@ async def _get_part(db, args: dict) -> list[TextContent]:
             "tier_name": tier_name,
             "parent_id": part.parent_id,
             "unit_of_measure": part.unit_of_measure,
-            "procurement": part.procurement.value if hasattr(part.procurement, "value") else part.procurement,
+            "procurement": part.procurement.value
+            if hasattr(part.procurement, "value")
+            else part.procurement,
             "lifecycle_state": part.lifecycle_state,
             "activated_at": part.activated_at.isoformat() if part.activated_at else None,
             "activation_cause": part.activation_cause,
@@ -2535,7 +2536,9 @@ async def _create_part(db, args: dict) -> list[TextContent]:
                 "tier": tier,
                 "tier_name": _tier_name(tier),
                 "parent_id": parent_id,
-                "procurement": part.procurement.value if hasattr(part.procurement, "value") else part.procurement,
+                "procurement": part.procurement.value
+                if hasattr(part.procurement, "value")
+                else part.procurement,
                 "lifecycle_state": part.lifecycle_state,
             },
         }
@@ -6345,7 +6348,9 @@ async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
             }
         )
 
-    containment = issue.containment.value if hasattr(issue.containment, "value") else issue.containment
+    containment = (
+        issue.containment.value if hasattr(issue.containment, "value") else issue.containment
+    )
     if containment == Containment.STEP.value and issue.containment_step_id == step_exec.id:
         label = step_exec.step_number_str or str(step_exec.step_number)
         message = f"{issue.issue_number} already holds COMPLETE of step {label}"
@@ -6368,6 +6373,7 @@ async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
             "user_id": user.id,
         },
     )
+
 
 async def run_server():
     """Run the MCP server."""

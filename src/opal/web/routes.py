@@ -2198,9 +2198,7 @@ def _execution_detail_context(
 
     consumptions = (
         db.query(InventoryConsumption)
-        .options(
-            joinedload(InventoryConsumption.inventory_record).joinedload(InventoryRecord.part)
-        )
+        .options(joinedload(InventoryConsumption.inventory_record).joinedload(InventoryRecord.part))
         .filter(InventoryConsumption.procedure_instance_id == instance.id)
         .all()
     )
@@ -2230,9 +2228,7 @@ def _execution_detail_context(
     # Get existing productions
     productions = (
         db.query(InventoryProduction)
-        .options(
-            joinedload(InventoryProduction.inventory_record).joinedload(InventoryRecord.part)
-        )
+        .options(joinedload(InventoryProduction.inventory_record).joinedload(InventoryRecord.part))
         .filter(InventoryProduction.procedure_instance_id == instance.id)
         .all()
     )

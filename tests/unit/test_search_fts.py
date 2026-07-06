@@ -130,3 +130,23 @@ def test_search_falls_back_without_fts_tables(fts_engine, fts_session) -> None:
     r = client.get("/api/search", params={"q": "gyroscope"})
     assert r.status_code == 200
     assert any(item["label"] == "Gyroscope Mount" for item in r.json())
+
+
+def test_execution_search_result_leads_with_work_order(client) -> None:
+    """Search names an execution by its work order, procedure as sublabel —
+    never 'Execution #<database id>' (F12). Uses the standard client (no FTS
+    tables -> ILIKE fallback), which exercises the same result builder."""
+    proc_id = client.post("/api/procedures", json={"name": "Search Label Proc"}).json()["id"]
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step 1"})
+    client.post(f"/api/procedures/{proc_id}/publish")
+    inst = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()
+    wo = inst["work_order_number"]
+
+    r = client.get("/api/search", params={"q": wo})
+    assert r.status_code == 200
+    hit = next(
+        i for i in r.json() if i["entity_type"] == "execution" and i["id"] == inst["id"]
+    )
+    assert hit["label"] == wo
+    assert hit["sublabel"] == "Search Label Proc"
+    assert "Execution #" not in str(r.json())

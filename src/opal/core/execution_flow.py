@@ -158,9 +158,7 @@ def sequence_blockers(
             # Display numbers (step_display), never the document-global order —
             # a child stored at global order 6 renders as 5.1.
             labels = ", ".join(step_display(se) for se in open_children)
-            blockers.append(
-                Blocker(kind="children", message=f"Waiting on sub-steps {labels}")
-            )
+            blockers.append(Blocker(kind="children", message=f"Waiting on sub-steps {labels}"))
     elif step_exec.parent_step_order is not None:
         gate_op_order = step_exec.parent_step_order
 
@@ -284,9 +282,7 @@ def skip_blockers(
     predecessors to be done."""
     scope = held_scope_blockers(db, instance, step_exec)
     structural = [
-        b
-        for b in sequence_blockers(db, instance, step_exec)
-        if b.kind in ("redline", "children")
+        b for b in sequence_blockers(db, instance, step_exec) if b.kind in ("redline", "children")
     ]
     return scope + structural
 
