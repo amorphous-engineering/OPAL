@@ -324,6 +324,9 @@ def update_requirement(
             )
 
     old_values = get_model_dict(req)
+    # Nullable fields clear on explicit null (model_fields_set distinguishes
+    # absent from null — issue #30); non-nullable fields keep the None-skip.
+    clearable = {"rationale", "category", "verification_method", "tbr_owner_id", "tbr_due"}
     for field in (
         "title",
         "statement",
@@ -339,7 +342,10 @@ def update_requirement(
         "lifecycle_state",
     ):
         value = getattr(data, field)
-        if value is not None:
+        if field in clearable:
+            if field in data.model_fields_set:
+                setattr(req, field, value)
+        elif value is not None:
             setattr(req, field, value)
 
     # Any edit is by definition a fresh look — clear staleness (spec §7).

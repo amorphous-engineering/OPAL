@@ -719,3 +719,37 @@ def test_requirements_table_tolerates_empty_level(client):
     """The HTMX filter selects submit level= for 'all levels'; must not 422."""
     r = client.get("/requirements/table?search=&state=&level=")
     assert r.status_code == 200
+
+
+def test_api_patch_explicit_null_clears_nullable_fields(client, test_user):
+    """Issue #30 — explicit null clears nullable fields (rationale, category,
+    verification_method, tbr_owner_id, tbr_due); omitted fields are untouched;
+    non-nullable fields keep the None-skip."""
+    req = _api_create(client)
+    r = client.patch(
+        f"/api/requirements/{req['id']}",
+        json={
+            "rationale": "because",
+            "category": "propulsion",
+            "verification_method": "test",
+            "tbr": True,
+            "tbr_owner_id": test_user.id,
+            "tbr_due": "2026-08-01T00:00:00Z",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    # Explicit nulls clear; omitted fields (category) survive.
+    r = client.patch(
+        f"/api/requirements/{req['id']}",
+        json={"rationale": None, "verification_method": None, "tbr_owner_id": None,
+              "tbr_due": None},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["rationale"] is None
+    assert body["verification_method"] is None
+    assert body["tbr_owner_id"] is None
+    assert body["tbr_due"] is None
+    assert body["category"] == "propulsion"
+    assert body["title"] == req["title"]  # non-nullable untouched
