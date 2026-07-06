@@ -2,18 +2,76 @@
  "attribution": "Demo content adapted from HCR-5100 \u2014 Mojave Sphinx Build, Integration, and Launch Guidebook, Half Cat Rocketry, published under the GPL.",
  "procedures": [
   {
-   "key": "vehicle_assembly",
-   "name": "Mojave Sphinx Vehicle Assembly",
-   "description": "Section V build sequence for the Mojave Sphinx flight vehicle: valves, tank, thrust chamber, fin brackets, thrust structure, avionics bay, nose cone, airframe, and recovery integration (HCR-5100 OPs 1-13).",
+   "key": "valve_assembly",
+   "name": "Servo-Actuated Ball Valve Assembly",
+   "description": "Builds one SABV-04FF servo-actuated ball valve assembly: a DS3225 servo and a 4112T22 brass ball valve on a printed mount, coupled through a printed handle connector. The vehicle consumes two (fuel and oxidizer); the GSE fill system consumes a third (HCR-5100 OP 1).",
    "type": "build",
    "output": {
-    "part": "vehicle",
+    "part": "sabv_assy",
     "qty": 1
    },
+   "kit": [
+    {
+     "part": "sabv_mount_v2",
+     "qty": 1.0
+    },
+    {
+     "part": "sabv_hcon_v2",
+     "qty": 1.0
+    },
+    {
+     "part": "pla_fil_2kg",
+     "qty": 1.0
+    },
+    {
+     "part": "4112t22",
+     "qty": 1.0
+    },
+    {
+     "part": "ds3225",
+     "qty": 1.0
+    },
+    {
+     "part": "93475a210",
+     "qty": 1.0
+    },
+    {
+     "part": "92855a310",
+     "qty": 1.0
+    },
+    {
+     "part": "90272a194",
+     "qty": 1.0
+    },
+    {
+     "part": "90480a009",
+     "qty": 1.0
+    },
+    {
+     "part": "zip_tie_188w",
+     "qty": 1.0
+    },
+    {
+     "part": "91280a044",
+     "qty": 1.0
+    },
+    {
+     "part": "90591a141",
+     "qty": 1.0
+    },
+    {
+     "part": "98689a113",
+     "qty": 1.0
+    },
+    {
+     "part": "92148a160",
+     "qty": 1.0
+    }
+   ],
    "ops": [
     {
-     "title": "OP 1: Assemble Servo-Actuated Ball Valves",
-     "instructions": "Build two identical servo-actuated ball valve assemblies (PN SABV-04FF) by mounting a DS3225 25kg servo and a 4112T22 compact high-pressure brass ball valve into a 3D-printed Servo Valve Mount, coupling the servo horn to the valve handle via a printed handle connector. All steps are performed twice; listed quantities cover both assemblies.",
+     "title": "Assemble Servo-Actuated Ball Valve",
+     "instructions": "Build one servo-actuated ball valve assembly (PN SABV-04FF) by mounting a DS3225 25kg servo and a 4112T22 compact high-pressure brass ball valve into a 3D-printed Servo Valve Mount, coupling the servo horn to the valve handle via a printed handle connector. (HCR-5100 OP 1.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -118,16 +176,136 @@
       },
       {
        "title": "Bag and label completed assemblies",
-       "instructions": "Bag and label the completed servo-actuated ball valve assemblies with PN SABV-04FF and set aside for integration in a later operation.",
+       "instructions": "Bag and label the completed servo-actuated ball valve assembly with PN SABV-04FF and set aside for integration.",
        "caution": null,
        "requires_signoff": false,
        "schema": null
       }
      ]
+    }
+   ]
+  },
+  {
+   "key": "fin_brackets",
+   "name": "Fin Bracket Subassembly",
+   "description": "Builds the four identical fin bracket assemblies: drilled aluminum angle, plywood fin, and printed spacers with optional aerodynamic tips. The vehicle consumes all four at thrust structure integration (HCR-5100 OP 8).",
+   "type": "build",
+   "output": {
+    "part": "fin_bracket_assy",
+    "qty": 4
+   },
+   "kit": [
+    {
+     "part": "8982k402",
+     "qty": 8.0
     },
     {
-     "title": "OP 2: Drill Tank Tube",
-     "instructions": "Prepare the 4\" OD x 1/8\" wall x 36\" 6061-T6 aluminum tank tube: square the ends, drill 8x 11/32\" bolt holes at each end using printed drill jigs, deburr all edges, and drill the 1.2mm nitrous static vent orifice at 14.25 inches from one end. A vertical mill with indexing head may substitute for the printed jigs.",
+     "part": "fin_std_250t_4x250c",
+     "qty": 4.0
+    },
+    {
+     "part": "91306a279",
+     "qty": 16.0
+    },
+    {
+     "part": "92141a029",
+     "qty": 32.0
+    },
+    {
+     "part": "91102a750",
+     "qty": 16.0
+    },
+    {
+     "part": "95505a601",
+     "qty": 16.0
+    },
+    {
+     "part": "tmplt_fin_brkt_1x1_aft",
+     "qty": 1.0
+    },
+    {
+     "part": "tmplt_fin_brkt_1x1_fwd",
+     "qty": 1.0
+    }
+   ],
+   "ops": [
+    {
+     "title": "Fin Bracket Fabrication",
+     "instructions": "Build four identical fin bracket assemblies: drill aluminum angle brackets, mount plywood fins with 1/4\"-20 hardware, and optionally fit printed aerodynamic bracket tips. All steps performed four times; quantities listed are for four complete assemblies. (HCR-5100 OP 8, pp. 191-195; PDF 200-204.)",
+     "workcenter": "SHOP",
+     "step_kit": [
+      {
+       "part": "8982k402",
+       "qty": 8.0
+      },
+      {
+       "part": "fin_std_250t_4x250c",
+       "qty": 4.0
+      },
+      {
+       "part": "91306a279",
+       "qty": 16.0
+      },
+      {
+       "part": "92141a029",
+       "qty": 32.0
+      },
+      {
+       "part": "91102a750",
+       "qty": 16.0
+      },
+      {
+       "part": "95505a601",
+       "qty": 16.0
+      },
+      {
+       "part": "tmplt_fin_brkt_1x1_aft",
+       "qty": 1.0
+      },
+      {
+       "part": "tmplt_fin_brkt_1x1_fwd",
+       "qty": 1.0
+      }
+     ],
+     "sub_steps": [
+      {
+       "title": "Drill fin bracket aluminum angles",
+       "instructions": "Drill 1X .332\" and 7X .281\" holes in QTY 4 pieces of 1\"X1\"X.125\" aluminum angle. The 3D printed templates may be used to mark the hole locations; if not used, refer to the drawing. A drill press or mill is recommended. If using a drill press or hand drill, use an automatic center punch at each hole location prior to drilling to prevent the bit from walking.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Mount fins to brackets",
+       "instructions": "Mount QTY 4 FIN-STD-250T-4X250C fins (or alternate/custom fins) to the drilled aluminum angle brackets using QTY 4 91306A279 screws, QTY 8 92141A029 flat washers, QTY 4 91102A750 lock washers, and QTY 4 95505A601 hex nuts per fin. Tighten 16X screws approximately 1/4 turn past full compression of the lock washer.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Install aerodynamic bracket tips (optional)",
+       "instructions": "Optional: if the leading edges of the aluminum angle fin brackets have not been tapered, install QTY 4 AERO-1X1X125-TIP printed aerodynamic bracket tips onto the aluminum angle. Deburr the edges of the aluminum angle with a deburring knife or file prior to installation. Tips are designed as a press fit; if loose, bond with an adhesive suitable for non-porous materials such as epoxy. If tight, bevel the aluminum angle edges with a file, or carefully warm the aluminum angle and/or printed part with a heat gun to soften the plastic.",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "vehicle_assembly",
+   "name": "Mojave Sphinx Vehicle Assembly",
+   "description": "Section V build sequence for the Mojave Sphinx flight vehicle: tank, thrust chamber, thrust structure, avionics bay, nose cone, airframe, and recovery integration (HCR-5100 OPs 2-7 and 9-13). Servo valve and fin bracket subassemblies arrive as kit parts from their own build procedures.",
+   "type": "build",
+   "output": {
+    "part": "vehicle",
+    "qty": 1
+   },
+   "ops": [
+    {
+     "title": "Drill Tank Tube",
+     "instructions": "Prepare the 4\" OD x 1/8\" wall x 36\" 6061-T6 aluminum tank tube: square the ends, drill 8x 11/32\" bolt holes at each end using printed drill jigs, deburr all edges, and drill the 1.2mm nitrous static vent orifice at 14.25 inches from one end. A vertical mill with indexing head may substitute for the printed jigs. (HCR-5100 OP 2.)",
      "workcenter": "SHOP",
      "step_kit": [
       {
@@ -208,8 +386,8 @@
      ]
     },
     {
-     "title": "OP 3: Fuel Bulkhead Subassembly",
-     "instructions": "Assemble the fuel tank bulkhead: install sealed stud-anchor screws with fluorosilicone sealing washers, populate the printed nut ring with weld nuts and hex nuts inside the tank interface ring, and plumb the servo-actuated fuel valve to the bulkhead via an aluminum pipe nipple plus a fitting stack ending in a 5/16\" 37-degree flared adapter for the fuel downcomer line.",
+     "title": "Fuel Bulkhead Subassembly",
+     "instructions": "Assemble the fuel tank bulkhead: install sealed stud-anchor screws with fluorosilicone sealing washers, populate the printed nut ring with weld nuts and hex nuts inside the tank interface ring, and plumb the servo-actuated fuel valve to the bulkhead via an aluminum pipe nipple plus a fitting stack ending in a 5/16\" 37-degree flared adapter for the fuel downcomer line. (HCR-5100 OP 3.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -330,8 +508,8 @@
      ]
     },
     {
-     "title": "OP 4: Recovery Bulkhead Integration",
-     "instructions": "Mount the recovery/avionics bay bulkhead onto the forward fuel bulkhead: thread two 7-inch 1/4\"-20 studs into the coupling nuts on the fuel bulkhead, fit a 1\" ID U-bolt through the recovery bulkhead as the recovery attachment point, then secure the bulkhead onto the studs with hex nuts, flat washers, and split lock washers.",
+     "title": "Recovery Bulkhead Integration",
+     "instructions": "Mount the recovery/avionics bay bulkhead onto the forward fuel bulkhead: thread two 7-inch 1/4\"-20 studs into the coupling nuts on the fuel bulkhead, fit a 1\" ID U-bolt through the recovery bulkhead as the recovery attachment point, then secure the bulkhead onto the studs with hex nuts, flat washers, and split lock washers. (HCR-5100 OP 4.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -380,8 +558,8 @@
      ]
     },
     {
-     "title": "OP 5: Oxidizer Bulkhead Subassembly",
-     "instructions": "Assemble the oxidizer tank bulkhead: install the oxidizer fill check valve with push-to-connect fitting into the 1/8 NPT port, plumb the servo-actuated oxidizer valve to the 1/4 NPT port via an aluminum pipe nipple with a 3/8\" 37-degree flared outlet adapter, populate the nut ring and interface ring, and build the quick-disconnect fill line from high-pressure nylon tubing.",
+     "title": "Oxidizer Bulkhead Subassembly",
+     "instructions": "Assemble the oxidizer tank bulkhead: install the oxidizer fill check valve with push-to-connect fitting into the 1/8 NPT port, plumb the servo-actuated oxidizer valve to the 1/4 NPT port via an aluminum pipe nipple with a 3/8\" 37-degree flared outlet adapter, populate the nut ring and interface ring, and build the quick-disconnect fill line from high-pressure nylon tubing. (HCR-5100 OP 5.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -511,8 +689,8 @@
      ]
     },
     {
-     "title": "OP 6: Tank Assembly",
-     "instructions": "Assemble the integral fuel/oxidizer tank: grease and install O-rings on both bulkhead subassemblies and the piston, insert the piston to depth and both bulkhead subassemblies into the drilled tank tube with correct clocking (fuel line raceway, vent, QD, and rail guide positions), bolt the retaining rings, and connect the braided fuel hose to the fuel valve outlet.",
+     "title": "Tank Assembly",
+     "instructions": "Assemble the integral fuel/oxidizer tank: grease and install O-rings on both bulkhead subassemblies and the piston, insert the piston to depth and both bulkhead subassemblies into the drilled tank tube with correct clocking (fuel line raceway, vent, QD, and rail guide positions), bolt the retaining rings, and connect the braided fuel hose to the fuel valve outlet. (HCR-5100 OP 6.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -646,11 +824,17 @@
         ]
        }
       }
+     ],
+     "strict_sequence": true,
+     "depends_on": [
+      2,
+      3,
+      4
      ]
     },
     {
-     "title": "OP 7: Thrust Chamber Assembly",
-     "instructions": "Assemble the thrust chamber: plumb the injector with flared adapters and igniter-port pipe nipple, install the injector with -141 silicone O-rings into the combustion chamber, seat the throat insert with garter spring into the nozzle, trim the graphite gasket, and clamp the injector/chamber/nozzle stack between two steel flanges using eight 1/4\"-20 tie-rod studs with thrust-mount angle brackets.",
+     "title": "Thrust Chamber Assembly",
+     "instructions": "Assemble the thrust chamber: plumb the injector with flared adapters and igniter-port pipe nipple, install the injector with -141 silicone O-rings into the combustion chamber, seat the throat insert with garter spring into the nozzle, trim the graphite gasket, and clamp the injector/chamber/nozzle stack between two steel flanges using eight 1/4\"-20 tie-rod studs with thrust-mount angle brackets. (HCR-5100 OP 7.)",
      "workcenter": "SHOP",
      "step_kit": [
       {
@@ -829,70 +1013,8 @@
      ]
     },
     {
-     "title": "OP 8: Fin Bracket Subassemblies",
-     "instructions": "Build four identical fin bracket assemblies: drill aluminum angle brackets, mount plywood fins with 1/4\"-20 hardware, and optionally fit printed aerodynamic bracket tips. All steps performed four times; quantities listed are for four complete assemblies. (Guidebook pp. 191-195, PDF 200-204.)",
-     "workcenter": "SHOP",
-     "step_kit": [
-      {
-       "part": "8982k402",
-       "qty": 8.0
-      },
-      {
-       "part": "fin_std_250t_4x250c",
-       "qty": 4.0
-      },
-      {
-       "part": "91306a279",
-       "qty": 16.0
-      },
-      {
-       "part": "92141a029",
-       "qty": 32.0
-      },
-      {
-       "part": "91102a750",
-       "qty": 16.0
-      },
-      {
-       "part": "95505a601",
-       "qty": 16.0
-      },
-      {
-       "part": "tmplt_fin_brkt_1x1_aft",
-       "qty": 1.0
-      },
-      {
-       "part": "tmplt_fin_brkt_1x1_fwd",
-       "qty": 1.0
-      }
-     ],
-     "sub_steps": [
-      {
-       "title": "Drill fin bracket aluminum angles",
-       "instructions": "Drill 1X .332\" and 7X .281\" holes in QTY 4 pieces of 1\"X1\"X.125\" aluminum angle. The 3D printed templates may be used to mark the hole locations; if not used, refer to the drawing. A drill press or mill is recommended. If using a drill press or hand drill, use an automatic center punch at each hole location prior to drilling to prevent the bit from walking.",
-       "caution": null,
-       "requires_signoff": false,
-       "schema": null
-      },
-      {
-       "title": "Mount fins to brackets",
-       "instructions": "Mount QTY 4 FIN-STD-250T-4X250C fins (or alternate/custom fins) to the drilled aluminum angle brackets using QTY 4 91306A279 screws, QTY 8 92141A029 flat washers, QTY 4 91102A750 lock washers, and QTY 4 95505A601 hex nuts per fin. Tighten 16X screws approximately 1/4 turn past full compression of the lock washer.",
-       "caution": null,
-       "requires_signoff": false,
-       "schema": null
-      },
-      {
-       "title": "Install aerodynamic bracket tips (optional)",
-       "instructions": "Optional: if the leading edges of the aluminum angle fin brackets have not been tapered, install QTY 4 AERO-1X1X125-TIP printed aerodynamic bracket tips onto the aluminum angle. Deburr the edges of the aluminum angle with a deburring knife or file prior to installation. Tips are designed as a press fit; if loose, bond with an adhesive suitable for non-porous materials such as epoxy. If tight, bevel the aluminum angle edges with a file, or carefully warm the aluminum angle and/or printed part with a heat gun to soften the plastic.",
-       "caution": null,
-       "requires_signoff": false,
-       "schema": null
-      }
-     ]
-    },
-    {
-     "title": "OP 9: Thrust Structure & Feedline Integration",
-     "instructions": "Attach the four fin bracket assemblies to the thrust chamber and propellant tank, install oxidizer and fuel feedline hoses at specified torques, and route/secure the valve servo wiring. (Guidebook pp. 196-204, PDF 205-213.)",
+     "title": "Thrust Structure & Feedline Integration",
+     "instructions": "Attach the four fin bracket assemblies to the thrust chamber and propellant tank, install oxidizer and fuel feedline hoses at specified torques, and route/secure the valve servo wiring. (Guidebook pp. 196-204, PDF 205-213.) (HCR-5100 OP 9.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -1015,11 +1137,14 @@
        "requires_signoff": false,
        "schema": null
       }
+     ],
+     "depends_on": [
+      6
      ]
     },
     {
-     "title": "OP 10: Avionics Bay Assembly",
-     "instructions": "Assemble the printed avionics bay coupler with threaded reinforcing rods, fabricate and populate the altimeter sled with two Eggtimer Quark dual-deploy altimeters and 9V batteries, wire for twist-and-tape external power switching, install the U-bolt bulkhead, and close out the bay. (Guidebook pp. 205-216, PDF 214-225.)",
+     "title": "Avionics Bay Assembly",
+     "instructions": "Assemble the printed avionics bay coupler with threaded reinforcing rods, fabricate and populate the altimeter sled with two Eggtimer Quark dual-deploy altimeters and 9V batteries, wire for twist-and-tape external power switching, install the U-bolt bulkhead, and close out the bay. (Guidebook pp. 205-216, PDF 214-225.) (HCR-5100 OP 10.)",
      "workcenter": "ELEC",
      "step_kit": [
       {
@@ -1217,8 +1342,8 @@
      ]
     },
     {
-     "title": "OP 11: Nose Cone Assembly",
-     "instructions": "Stack the printed nose cone sections on nylon threaded tension rods, fit the eye bolt and shock cord in the tip, secure the tip with nylon shear screws, and capture the airframe attachment nuts in the shoulder. (Guidebook pp. 217-224, PDF 226-233.)",
+     "title": "Nose Cone Assembly",
+     "instructions": "Stack the printed nose cone sections on nylon threaded tension rods, fit the eye bolt and shock cord in the tip, secure the tip with nylon shear screws, and capture the airframe attachment nuts in the shoulder. (Guidebook pp. 217-224, PDF 226-233.) (HCR-5100 OP 11.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -1352,8 +1477,8 @@
      ]
     },
     {
-     "title": "OP 12: Airframe Fabrication",
-     "instructions": "Cut the 4\" cardboard shipping tube into upper and lower airframe tubes, mark and drill mounting/nose-cone/shear-pin holes using printed templates and sacrificial backing plugs, cut the fuel line slot, and verify hole alignment against mating assemblies. Alternate tubes must be 4\" ID; thin-walled (~.062\") mailing tubes are not recommended (recommended tube wall ~.080\"; .125\" and .250\" heavy duty tubes acceptable at cost of weight and drag). (Guidebook pp. 225-228, PDF 234-237.)",
+     "title": "Airframe Fabrication",
+     "instructions": "Cut the 4\" cardboard shipping tube into upper and lower airframe tubes, mark and drill mounting/nose-cone/shear-pin holes using printed templates and sacrificial backing plugs, cut the fuel line slot, and verify hole alignment against mating assemblies. Alternate tubes must be 4\" ID; thin-walled (~.062\") mailing tubes are not recommended (recommended tube wall ~.080\"; .125\" and .250\" heavy duty tubes acceptable at cost of weight and drag). (Guidebook pp. 225-228, PDF 234-237.) (HCR-5100 OP 12.)",
      "workcenter": "SHOP",
      "step_kit": [
       {
@@ -1481,8 +1606,8 @@
      ]
     },
     {
-     "title": "OP 13: Recovery System & Airframe Integration",
-     "instructions": "Rig the main parachute shroud lines (if not using a COTS chute), build the main and drogue recovery harnesses from 24 ft shock cord sections, connect chutes and parachute protectors via quick links to the nose cone, avionics bay, and tank U-bolts, then install the nose cone, mount the lower airframe, and fit rail buttons. (Guidebook pp. 229-234, PDF 238-243.)",
+     "title": "Recovery System & Airframe Integration",
+     "instructions": "Rig the main parachute shroud lines (if not using a COTS chute), build the main and drogue recovery harnesses from 24 ft shock cord sections, connect chutes and parachute protectors via quick links to the nose cone, avionics bay, and tank U-bolts, then install the nose cone, mount the lower airframe, and fit rail buttons. (Guidebook pp. 229-234, PDF 238-243.) (HCR-5100 OP 13.)",
      "workcenter": "BENCH",
      "step_kit": [
       {
@@ -1671,65 +1796,37 @@
        "requires_signoff": false,
        "schema": null
       }
+     ],
+     "depends_on": [
+      9,
+      10
      ]
     }
    ],
    "kit": [
     {
-     "part": "sabv_mount_v2",
-     "qty": 1.0
-    },
-    {
-     "part": "sabv_hcon_v2",
-     "qty": 1.0
-    },
-    {
-     "part": "pla_fil_2kg",
-     "qty": 1.0
-    },
-    {
-     "part": "4112t22",
-     "qty": 1.0
-    },
-    {
-     "part": "ds3225",
-     "qty": 1.0
-    },
-    {
-     "part": "93475a210",
-     "qty": 1.0
-    },
-    {
-     "part": "92855a310",
-     "qty": 1.0
-    },
-    {
      "part": "90272a194",
-     "qty": 9.0
+     "qty": 8.0
     },
     {
      "part": "90480a009",
-     "qty": 9.0
-    },
-    {
-     "part": "zip_tie_188w",
-     "qty": 1.0
+     "qty": 8.0
     },
     {
      "part": "91280a044",
-     "qty": 7.0
+     "qty": 6.0
     },
     {
      "part": "90591a141",
-     "qty": 7.0
+     "qty": 6.0
     },
     {
      "part": "98689a113",
-     "qty": 13.0
+     "qty": 12.0
     },
     {
      "part": "92148a160",
-     "qty": 7.0
+     "qty": 6.0
     },
     {
      "part": "9056k423",
@@ -1757,7 +1854,7 @@
     },
     {
      "part": "95505a601",
-     "qty": 98.0
+     "qty": 82.0
     },
     {
      "part": "90357a013",
@@ -1773,7 +1870,7 @@
     },
     {
      "part": "92141a029",
-     "qty": 118.0
+     "qty": 86.0
     },
     {
      "part": "44665k137",
@@ -1801,7 +1898,7 @@
     },
     {
      "part": "91102a750",
-     "qty": 69.0
+     "qty": 53.0
     },
     {
      "part": "3043t643",
@@ -1928,24 +2025,8 @@
      "qty": 1.0
     },
     {
-     "part": "8982k402",
-     "qty": 8.0
-    },
-    {
-     "part": "fin_std_250t_4x250c",
-     "qty": 4.0
-    },
-    {
      "part": "91306a279",
-     "qty": 24.0
-    },
-    {
-     "part": "tmplt_fin_brkt_1x1_aft",
-     "qty": 1.0
-    },
-    {
-     "part": "tmplt_fin_brkt_1x1_fwd",
-     "qty": 1.0
+     "qty": 8.0
     },
     {
      "part": "spcr_400sd_250c0313c",
@@ -2106,6 +2187,14 @@
     {
      "part": "rlbtn_b_1515_250c",
      "qty": 2.0
+    },
+    {
+     "part": "sabv_assy",
+     "qty": 2.0
+    },
+    {
+     "part": "fin_bracket_assy",
+     "qty": 4.0
     }
    ]
   },
@@ -2120,72 +2209,8 @@
    },
    "ops": [
     {
-     "title": "OP 1: Assemble Servo-Actuated Ball Valves (GSE)",
-     "instructions": "Build the SABV-04FF servo-actuated ball valve assemblies used in the GSE. These are identical to the fuel and oxidizer valves on the vehicle.",
-     "workcenter": "BENCH",
-     "step_kit": [
-      {
-       "part": "sabv_assy",
-       "qty": 1
-      },
-      {
-       "part": "sabv_mount_v2",
-       "qty": 1
-      },
-      {
-       "part": "sabv_hcon_v2",
-       "qty": 1
-      },
-      {
-       "part": "4112t22",
-       "qty": 1
-      },
-      {
-       "part": "93475a210",
-       "qty": 1
-      },
-      {
-       "part": "92855a310",
-       "qty": 1
-      },
-      {
-       "part": "90272a194",
-       "qty": 1
-      },
-      {
-       "part": "90480a009",
-       "qty": 1
-      },
-      {
-       "part": "91280a044",
-       "qty": 1
-      },
-      {
-       "part": "90591a141",
-       "qty": 1
-      },
-      {
-       "part": "98689a113",
-       "qty": 1
-      },
-      {
-       "part": "92148a160",
-       "qty": 1
-      }
-     ],
-     "sub_steps": [
-      {
-       "title": "Build SABV-04FF valve assemblies per Section 5 OP 1",
-       "instructions": "Per valve, gather: SABV-MOUNT-V2 mount, SABV-HCON-V2 handle connector (both 3D printed; PLA+, PETG, or ABS recommended), 4112T22 compact high-pressure brass ball valve, DS3225 25kg servo with 25T horn, M3 flat washer (93475A210), M3x0.5 10mm low-profile socket head screw (92855A310), #8-32 x 1/2\" pan head screw (90272A194), #8-32 hex nut (90480A009), nylon zip tie (0.188\"), QTY 4 each M4x0.70 16mm hex head screws (92180A044), M4 hex nuts (90591A141), M4 flat washers (98689A113), M4 split lock washers (92148A160). Assemble per Section 5 OP 1 detailed instructions. Build QTY 1 SABV-04FF for Fill Only GSE; build QTY 2 if a CO2 purge valve for static testing is desired.",
-       "caution": null,
-       "requires_signoff": false,
-       "schema": null
-      }
-     ]
-    },
-    {
-     "title": "OP 2: Assemble Fill System",
-     "instructions": "Assemble the N2O fill plumbing: CGA 326 supply-bottle adapter, hose adapters, servo-actuated fill valve with gauge tee and 0-2000 PSI supply gauge, through-wall bulkhead fittings, and the fill line bulkhead assembly.",
+     "title": "Assemble Fill System",
+     "instructions": "Assemble the N2O fill plumbing: CGA 326 supply-bottle adapter, hose adapters, servo-actuated fill valve with gauge tee and 0-2000 PSI supply gauge, through-wall bulkhead fittings, and the fill line bulkhead assembly. (HCR-5100 \u00a7VI OP 2.)",
      "workcenter": "BENCH",
      "step_kit": [],
      "sub_steps": [
@@ -2267,8 +2292,8 @@
      ]
     },
     {
-     "title": "OP 3: Assemble Purge System (Optional)",
-     "instructions": "Assemble the optional CO2 purge valve branch (used for static testing only): a second SABV-04FF valve with through-wall fitting and check valves preventing cross-contamination between CO2 and N2O supplies.",
+     "title": "Assemble Purge System (Optional)",
+     "instructions": "Assemble the optional CO2 purge valve branch (used for static testing only): a second SABV-04FF valve with through-wall fitting and check valves preventing cross-contamination between CO2 and N2O supplies. (HCR-5100 \u00a7VI OP 3.)",
      "workcenter": "BENCH",
      "step_kit": [],
      "sub_steps": [
@@ -2305,8 +2330,8 @@
      ]
     },
     {
-     "title": "OP 4: Prepare Toolbox Enclosure",
-     "instructions": "Cut and drill all penetrations in the 91111 21-inch Voyager steel toolbox: gauge window, valve bulkhead holes, outlet/switch holes, and back-face electronics/eyebolt holes. Hole positions are given in figures.",
+     "title": "Prepare Toolbox Enclosure",
+     "instructions": "Cut and drill all penetrations in the 91111 21-inch Voyager steel toolbox: gauge window, valve bulkhead holes, outlet/switch holes, and back-face electronics/eyebolt holes. Hole positions are given in figures. (HCR-5100 \u00a7VI OP 4.)",
      "workcenter": "SHOP",
      "step_kit": [],
      "sub_steps": [
@@ -2319,7 +2344,7 @@
       },
       {
        "title": "Drill right-side holes",
-       "instructions": "Drill the holes as shown in the side of the toolbox that is on the right when facing the front (the latch side). Note: if no purge valve is included, only the left-most of the two 3/4-inch holes is needed. (A 1/2\" hole for the power switch is also on this side per OP 6.)",
+       "instructions": "Drill the holes as shown in the side of the toolbox that is on the right when facing the front (the latch side). Note: if no purge valve is included, only the left-most of the two 3/4-inch holes is needed. (A 1/2\" hole for the power switch is also on this side per OP 5.)",
        "caution": null,
        "requires_signoff": false,
        "schema": null
@@ -2341,10 +2366,15 @@
      ]
     },
     {
-     "title": "OP 5: Fluid System Integration",
-     "instructions": "Install the fill valve assembly, fill line bulkhead, and (optionally) the purge valve into the toolbox, and connect them with 1/4\" OD nylon tubing.",
+     "title": "Fluid System Integration",
+     "instructions": "Install the fill valve assembly, fill line bulkhead, and (optionally) the purge valve into the toolbox, and connect them with 1/4\" OD nylon tubing. (HCR-5100 \u00a7VI OP 5.)",
      "workcenter": "BENCH",
-     "step_kit": [],
+     "step_kit": [
+      {
+       "part": "sabv_assy",
+       "qty": 1
+      }
+     ],
      "sub_steps": [
       {
        "title": "Install fill valve assembly through toolbox wall",
@@ -2355,7 +2385,7 @@
       },
       {
        "title": "Install fill line bulkhead assembly",
-       "instructions": "Remove the brass nut and toothed washer from the 50785K273 through-wall fitting on the fill line bulkhead assembly and install into the 0.67\" hole on the left side of the toolbox. Re-install the nut and washer onto the threaded portion projecting into the toolbox and tighten to clamp the assembly in place. (Source names 50785K273 here; the fill line bulkhead was built on the 1/8 NPT 50785K272 fitting in OP 2.)",
+       "instructions": "Remove the brass nut and toothed washer from the 50785K273 through-wall fitting on the fill line bulkhead assembly and install into the 0.67\" hole on the left side of the toolbox. Re-install the nut and washer onto the threaded portion projecting into the toolbox and tighten to clamp the assembly in place. (Source names 50785K273 here; the fill line bulkhead was built on the 1/8 NPT 50785K272 fitting in OP 1.)",
        "caution": null,
        "requires_signoff": false,
        "schema": null
@@ -2398,8 +2428,8 @@
      ]
     },
     {
-     "title": "OP 6: Electrical System Integration",
-     "instructions": "Mount and wire the control electronics inside the toolbox: FS-iA10B receiver, PWM relay module, voltage regulator, power switch, dual NEMA outlet (IGN/SRV), battery eyebolt restraints, and receiver/servo channel connections per the schematic.",
+     "title": "Electrical System Integration",
+     "instructions": "Mount and wire the control electronics inside the toolbox: FS-iA10B receiver, PWM relay module, voltage regulator, power switch, dual NEMA outlet (IGN/SRV), battery eyebolt restraints, and receiver/servo channel connections per the schematic. (HCR-5100 \u00a7VI OP 6.)",
      "workcenter": "ELEC",
      "step_kit": [],
      "sub_steps": [
@@ -2520,8 +2550,8 @@
      ]
     },
     {
-     "title": "OP 7: Fabricate Cables and Fill Line",
-     "instructions": "Fabricate the long-run servo cable and ignition cable from 16/3 extension cords, and the ~6 ft fill line with quick-disconnect for connecting the GSE to the rocket.",
+     "title": "Fabricate Cables and Fill Line",
+     "instructions": "Fabricate the long-run servo cable and ignition cable from 16/3 extension cords, and the ~6 ft fill line with quick-disconnect for connecting the GSE to the rocket. (HCR-5100 \u00a7VI OP 7.)",
      "workcenter": "ELEC",
      "step_kit": [],
      "sub_steps": [
@@ -2611,8 +2641,8 @@
      ]
     },
     {
-     "title": "OP 8: Transmitter Setup & Firmware Configuration",
-     "instructions": "Install switch covers on the FS-i6X transmitter, enable all 10 channels, assign channels to switches, set the igniter throttle-stick lockout, adjust servo endpoints for valve open/closed positions, verify channel mapping, and configure and verify receiver failsafes.",
+     "title": "Transmitter Setup & Firmware Configuration",
+     "instructions": "Install switch covers on the FS-i6X transmitter, enable all 10 channels, assign channels to switches, set the igniter throttle-stick lockout, adjust servo endpoints for valve open/closed positions, verify channel mapping, and configure and verify receiver failsafes. (HCR-5100 \u00a7VI OP 8.)",
      "workcenter": "ELEC",
      "step_kit": [],
      "sub_steps": [
@@ -2742,47 +2772,7 @@
    ],
    "kit": [
     {
-     "part": "sabv_mount_v2",
-     "qty": 1
-    },
-    {
-     "part": "sabv_hcon_v2",
-     "qty": 1
-    },
-    {
-     "part": "4112t22",
-     "qty": 1
-    },
-    {
-     "part": "93475a210",
-     "qty": 1
-    },
-    {
-     "part": "92855a310",
-     "qty": 1
-    },
-    {
-     "part": "90272a194",
-     "qty": 1
-    },
-    {
-     "part": "90480a009",
-     "qty": 1
-    },
-    {
-     "part": "91280a044",
-     "qty": 1
-    },
-    {
-     "part": "90591a141",
-     "qty": 1
-    },
-    {
-     "part": "98689a113",
-     "qty": 1
-    },
-    {
-     "part": "92148a160",
+     "part": "sabv_assy",
      "qty": 1
     }
    ]
@@ -2795,8 +2785,8 @@
    "output": null,
    "ops": [
     {
-     "title": "7.1 Vehicle Preparation",
-     "instructions": "Preparation of the vehicle for static testing or launch. Recovery system packing is only required for launch. Assumes the rocket has been fully assembled per Section 5; contains only the steps repeated each time the rocket is recycled. Subsections: 7.1.1 Fuel Loading, 7.1.2 Igniter Installation, 7.1.3 Recovery System Packing.",
+     "title": "Vehicle Preparation",
+     "instructions": "Preparation of the vehicle for static testing or launch. Recovery system packing is only required for launch. Assumes the rocket has been fully assembled per Section 5; contains only the steps repeated each time the rocket is recycled. Subsections: 7.1.1 Fuel Loading, 7.1.2 Igniter Installation, 7.1.3 Recovery System Packing. (HCR-5100 \u00a77.1.)",
      "workcenter": "PAD",
      "step_kit": [
       {
@@ -3084,8 +3074,8 @@
      ]
     },
     {
-     "title": "7.2 GSE Setup",
-     "instructions": "Setup of the ground support equipment, which is very simple for a liquid rocket motor. May be performed concurrently with Section 7.3 Launchpad Operations. If using the minimum viable GSE, some steps will not apply; functionality remains the same regardless of GSE version.",
+     "title": "GSE Setup",
+     "instructions": "Setup of the ground support equipment, which is very simple for a liquid rocket motor. May be performed concurrently with Section 7.3 Launchpad Operations. If using the minimum viable GSE, some steps will not apply; functionality remains the same regardless of GSE version. (HCR-5100 \u00a77.2.)",
      "workcenter": "PAD",
      "step_kit": [],
      "sub_steps": [
@@ -3138,11 +3128,14 @@
        "requires_signoff": false,
        "schema": null
       }
+     ],
+     "depends_on": [
+      1
      ]
     },
     {
-     "title": "7.3 Launchpad Operations",
-     "instructions": "On-pad setup, GSE startup/checkouts, and vehicle arming. Similar to any high-power rocket except for the oxidizer fill and vehicle valve connections. Arming the vehicle is a hazardous operation and must not be performed until the launchpad is cleared of personnel not directly involved.",
+     "title": "Launchpad Operations",
+     "instructions": "On-pad setup, GSE startup/checkouts, and vehicle arming. Similar to any high-power rocket except for the oxidizer fill and vehicle valve connections. Arming the vehicle is a hazardous operation and must not be performed until the launchpad is cleared of personnel not directly involved. (HCR-5100 \u00a77.3.)",
      "workcenter": "PAD",
      "step_kit": [
       {
@@ -3304,11 +3297,14 @@
        "requires_signoff": true,
        "schema": null
       }
+     ],
+     "depends_on": [
+      2
      ]
     },
     {
-     "title": "7.4 Launch Procedure",
-     "instructions": "Load-and-go launch: a short, fast-paced sequence best done with a two-person team, a Director and an Operator (one person may perform both roles solo). More than two people are not required, and additional team members should not be involved in the fill and launch operation, to keep communication with the LCO and RSO clear and concise.",
+     "title": "Launch Procedure",
+     "instructions": "Load-and-go launch: a short, fast-paced sequence best done with a two-person team, a Director and an Operator (one person may perform both roles solo). More than two people are not required, and additional team members should not be involved in the fill and launch operation, to keep communication with the LCO and RSO clear and concise. (HCR-5100 \u00a77.4.)",
      "workcenter": "PAD",
      "step_kit": [],
      "sub_steps": [
@@ -3488,11 +3484,15 @@
         ]
        }
       }
-     ]
+     ],
+     "depends_on": [
+      3
+     ],
+     "strict_sequence": true
     },
     {
-     "title": "7.5 Launchpad Shutdown",
-     "instructions": "Shut down the pad promptly after firing \u2014 the oxidizer supply bottle is still open, and accidental opening of the fill valve can cause the fill line to whip violently. Only cross the flight line after the RSO has given explicit permission or declared the range clear. If the rocket is still on the pad after an oxidizer fill of any duration, use the Aborted Firing procedure \u2014 do NOT approach the rocket without completing a safety walk.",
+     "title": "Launchpad Shutdown",
+     "instructions": "Shut down the pad promptly after firing \u2014 the oxidizer supply bottle is still open, and accidental opening of the fill valve can cause the fill line to whip violently. Only cross the flight line after the RSO has given explicit permission or declared the range clear. If the rocket is still on the pad after an oxidizer fill of any duration, use the Aborted Firing Safe-Down contingency operation \u2014 do NOT approach the rocket without completing a safety walk. (HCR-5100 \u00a77.5.)",
      "workcenter": "PAD",
      "step_kit": [],
      "sub_steps": [
@@ -3532,94 +3532,15 @@
        "caution": null,
        "requires_signoff": false,
        "schema": null
-      },
-      {
-       "title": "Aborted firing \u2014 propellant was dumped",
-       "instructions": "If the fill valve was opened at any point with the fill line connected, the vehicle tank may still contain pressure. If the vehicle valves were opened to expel propellant (per load-and-go): follow the Nominal Pad Shutdown steps, then disconnect the ignition leads from the igniter wires and twist the igniter wires together. Be mindful of expelled fuel on and around the pad. NEVER bring a heat source, sparks, or open flame near liquid fuels. Hydrocarbon fuel (e.g., diesel) will not evaporate \u2014 mop up with rags or oil-absorbent mats and dispose of responsibly.",
-       "caution": "NEVER approach a nitrous oxide tank which is on fire (supply bottle or vehicle tank). Whenever possible let fires burn out with personnel at a safe distance, unless very small and safely extinguishable.",
-       "requires_signoff": true,
-       "schema": null
-      },
-      {
-       "title": "Aborted firing \u2014 vehicle valves could not be opened: wait out boil-off",
-       "instructions": "If the vehicle valves were not opened, the propellant tank may be partially or completely filled with oxidizer; the oxidizer tank check valve prevents backflow, so the only offload path is the static vent. A full load of liquid nitrous takes an estimated 1-1.5 hours to boil off through the vent. Note the approximate time when oxidizer fill concluded. Wait at least one hour if the tank was completely filled; if only partially filled, this may be reduced according to the percentage of the nominal fill duration completed. (Loss of power/connection to the vehicle valves between start of loading and ignition has never occurred in over 50 firings of Half Cat style rockets; transmitter-GSE communication loss automatically safes the system with properly configured receiver failsafes.)",
-       "caution": null,
-       "requires_signoff": true,
-       "schema": {
-        "fields": [
-         {
-          "name": "time_oxidizer_fill_concluded",
-          "type": "text",
-          "label": "Time oxidizer fill concluded",
-          "required": true
-         },
-         {
-          "name": "fill_percentage_estimate",
-          "type": "text",
-          "label": "Fill percentage estimate",
-          "required": true
-         },
-         {
-          "name": "wait_time_before_approach",
-          "type": "text",
-          "label": "Wait time before approach",
-          "required": true
-         }
-        ]
-       }
-      },
-      {
-       "title": "Aborted firing \u2014 safety walk, 100-foot hold",
-       "instructions": "After the RSO gives permission to proceed downrange, calmly and slowly walk toward the launchpad. Stop about 100 feet away and listen for hissing (approach from the static-vent side; liquid oxidizer in the tank produces an audible hiss from the static vent). If static vent hissing is audible, do not approach further \u2014 return to the safe standoff distance or bunker and wait for the hissing to die down (a few minutes to over an hour depending on fill level, vent orifice size, and ambient temperature). Personnel MUST NOT approach closer than 100 feet until no hissing sound can be observed at that distance. During this time, DO NOT turn the transmitter off and back on: booting the transmitter requires the switches in the UP position, which will energize the igniter circuit and command the valves open \u2014 this could result in accidental ignition and launch if the system spontaneously regains functionality. If at least three attempts to remotely open the vehicle valves are unsuccessful, turn the transmitter off and leave it off until the vehicle and pad are completely safed.",
-       "caution": "DO NOT power-cycle the transmitter while the vehicle is loaded \u2014 booting energizes the igniter circuit and commands valves open, risking accidental ignition and launch.",
-       "requires_signoff": true,
-       "schema": {
-        "fields": [
-         {
-          "name": "hissing_audible_at_100_ft",
-          "type": "checkbox",
-          "label": "Hissing audible at 100 ft",
-          "required": true
-         }
-        ]
-       },
-       "required_role": "QA"
-      },
-      {
-       "title": "Aborted firing \u2014 staged approach 50 ft / 20 ft / 10 ft",
-       "instructions": "Once static vent hissing is no longer audible from 100 feet, cautiously proceed and stop about 50 feet away; all personnel remain quiet and listen. If hissing is audible, hold and wait for it to die down. Once no hissing at 50 feet, proceed and stop about 20 feet away; listen again, holding if hissing is audible. Once no hissing at 20 feet, proceed. If there is still quiet hissing only audible within 10 feet, give the propellant tank 5 additional minutes to vent or until hissing has ceased entirely.",
-       "caution": null,
-       "requires_signoff": true,
-       "schema": {
-        "fields": [
-         {
-          "name": "hissing_checks_at_50_ft_20_ft_10_ft",
-          "type": "text",
-          "label": "Hissing checks at 50 ft, 20 ft, 10 ft",
-          "required": true
-         }
-        ]
-       }
-      },
-      {
-       "title": "Aborted firing \u2014 safe the pad",
-       "instructions": "When no hissing is audible from the static vent, follow the Nominal Pad Shutdown procedure beginning with closing of the oxidizer supply bottle hand valve. After the oxidizer supply tank has been closed, disconnect the ignition leads from the igniter wires and twist the igniter wires together.",
-       "caution": null,
-       "requires_signoff": true,
-       "schema": null
-      },
-      {
-       "title": "Vehicle shutdown (unlaunched vehicle)",
-       "instructions": "Applies only if the vehicle was not launched and remains on the pad. Turn off all deployment controllers to disarm the pyrotechnic charges and insulate the altimeter power leads to prevent accidental re-arming. Command the vehicle valves closed so fuel does not leak when bringing the vehicle horizontal \u2014 always be mindful of fuel dripping from the nozzle even with the fuel valve fully closed. The vehicle may then be removed from the launch rail and prepared for another attempt.",
-       "caution": "Eye protection is required for all personnel at the pad when deployment controllers with pyrotechnic charges are armed.",
-       "requires_signoff": false,
-       "schema": null
       }
+     ],
+     "depends_on": [
+      4
      ]
     },
     {
-     "title": "7.6 Recovery",
-     "instructions": "After launch, Mojave Sphinx is recovered like any other high-power rocket. No pressure remains in the tank or feed system because the valves stay open, and all propellants are fully expended (save a small amount of residual fuel that may drip from the chamber).",
+     "title": "Recovery",
+     "instructions": "After launch, Mojave Sphinx is recovered like any other high-power rocket. No pressure remains in the tank or feed system because the valves stay open, and all propellants are fully expended (save a small amount of residual fuel that may drip from the chamber). (HCR-5100 \u00a77.6.)",
      "workcenter": "PAD",
      "step_kit": [],
      "sub_steps": [
@@ -3664,6 +3585,137 @@
        "instructions": "Carefully untuck the two pairs of avbay power wires and untwist the splices to turn off the deployment controllers; insulate the leads with electrical tape if possible to prevent accidental re-activation. Optional: stuff the parachutes, chute protectors, and shock cord back into the tubes and slide the vehicle back together to carry as a single piece (a tote bag is convenient for parachutes and shock cords). Carry the rocket back to the flight line; once returned, it may be prepared for another launch.",
        "caution": null,
        "requires_signoff": false,
+       "schema": null
+      }
+     ],
+     "depends_on": [
+      5
+     ]
+    },
+    {
+     "title": "Aborted Firing Safe-Down",
+     "instructions": "If the fill valve was opened at any point with the fill line connected, the vehicle tank may still contain pressure. Two paths: if the vehicle valves were opened to expel propellant (the load-and-go abort), shut down and safe the igniter; if the valves could not be opened, the check valve leaves the static vent as the only offload path \u2014 wait out the boil-off, then approach through the staged safety-walk gates. (HCR-5100 \u00a77.5.2\u2013\u00a77.5.3.)",
+     "workcenter": "PAD",
+     "is_contingency": true,
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Propellant dumped \u2014 shut down and safe the igniter",
+       "instructions": "If the fill valve was opened at any point with the fill line connected, the vehicle tank may still contain pressure. If the vehicle valves were opened to expel propellant (per load-and-go): follow the Nominal Pad Shutdown steps, then disconnect the ignition leads from the igniter wires and twist the igniter wires together. Be mindful of expelled fuel on and around the pad. NEVER bring a heat source, sparks, or open flame near liquid fuels. Hydrocarbon fuel (e.g., diesel) will not evaporate \u2014 mop up with rags or oil-absorbent mats and dispose of responsibly.",
+       "caution": "NEVER approach a nitrous oxide tank which is on fire (supply bottle or vehicle tank), and no one approaches for a minimum of two minutes following the last indication of fire or smoke (\u00a71.4.4). Whenever possible let fires burn out with personnel at a safe distance, unless very small and safely extinguishable.",
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Vehicle valves could not be opened \u2014 wait out boil-off",
+       "instructions": "If the vehicle valves were not opened, the propellant tank may be partially or completely filled with oxidizer; the oxidizer tank check valve prevents backflow, so the only offload path is the static vent. A full load of liquid nitrous takes an estimated 1-1.5 hours to boil off through the vent. Note the approximate time when oxidizer fill concluded. Wait at least one hour if the tank was completely filled; if only partially filled, this may be reduced according to the percentage of the nominal fill duration completed. (Loss of power/connection to the vehicle valves between start of loading and ignition has never occurred in over 50 firings of Half Cat style rockets; transmitter-GSE communication loss automatically safes the system with properly configured receiver failsafes.)",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "time_oxidizer_fill_concluded",
+          "type": "text",
+          "label": "Time oxidizer fill concluded",
+          "required": true
+         },
+         {
+          "name": "fill_percentage_estimate",
+          "type": "text",
+          "label": "Fill percentage estimate",
+          "required": true
+         },
+         {
+          "name": "wait_time_before_approach",
+          "type": "text",
+          "label": "Wait time before approach",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Safety walk \u2014 100-foot hold",
+       "instructions": "After the RSO gives permission to proceed downrange, calmly and slowly walk toward the launchpad. Stop about 100 feet away and listen for hissing (approach from the static-vent side; liquid oxidizer in the tank produces an audible hiss from the static vent). If static vent hissing is audible, do not approach further \u2014 return to the safe standoff distance or bunker and wait for the hissing to die down (a few minutes to over an hour depending on fill level, vent orifice size, and ambient temperature). Personnel MUST NOT approach closer than 100 feet until no hissing sound can be observed at that distance. During this time, DO NOT turn the transmitter off and back on: booting the transmitter requires the switches in the UP position, which will energize the igniter circuit and command the valves open \u2014 this could result in accidental ignition and launch if the system spontaneously regains functionality. If at least three attempts to remotely open the vehicle valves are unsuccessful, turn the transmitter off and leave it off until the vehicle and pad are completely safed.",
+       "caution": "DO NOT power-cycle the transmitter while the vehicle is loaded \u2014 booting energizes the igniter circuit and commands valves open, risking accidental ignition and launch.",
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "hissing_audible_at_100_ft",
+          "type": "checkbox",
+          "label": "Hissing audible at 100 ft",
+          "required": true
+         }
+        ]
+       },
+       "required_role": "QA"
+      },
+      {
+       "title": "Staged approach \u2014 50 ft / 20 ft / 10 ft",
+       "instructions": "Once static vent hissing is no longer audible from 100 feet, cautiously proceed and stop about 50 feet away; all personnel remain quiet and listen. If hissing is audible, hold and wait for it to die down. Once no hissing at 50 feet, proceed and stop about 20 feet away; listen again, holding if hissing is audible. Once no hissing at 20 feet, proceed. If there is still quiet hissing only audible within 10 feet, give the propellant tank 5 additional minutes to vent or until hissing has ceased entirely.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": {
+        "fields": [
+         {
+          "name": "hissing_checks_at_50_ft_20_ft_10_ft",
+          "type": "text",
+          "label": "Hissing checks at 50 ft, 20 ft, 10 ft",
+          "required": true
+         }
+        ]
+       }
+      },
+      {
+       "title": "Safe the pad",
+       "instructions": "When no hissing is audible from the static vent, follow the Nominal Pad Shutdown procedure beginning with closing of the oxidizer supply bottle hand valve. After the oxidizer supply tank has been closed, disconnect the ignition leads from the igniter wires and twist the igniter wires together.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Vehicle shutdown (unlaunched vehicle)",
+       "instructions": "Applies only if the vehicle was not launched and remains on the pad. Turn off all deployment controllers to disarm the pyrotechnic charges and insulate the altimeter power leads to prevent accidental re-arming. Command the vehicle valves closed so fuel does not leak when bringing the vehicle horizontal \u2014 always be mindful of fuel dripping from the nozzle even with the fuel valve fully closed. The vehicle may then be removed from the launch rail and prepared for another attempt.",
+       "caution": "Eye protection is required for all personnel at the pad when deployment controllers with pyrotechnic charges are armed.",
+       "requires_signoff": false,
+       "schema": null
+      }
+     ]
+    },
+    {
+     "title": "Misfire / No-Ignition Recovery",
+     "instructions": "If the IGN and SRV switches were flipped and the rocket neither launched nor dumped its propellants, the pad still holds a loaded, armed vehicle. Diagnose only from the safe standoff distance; any approach goes through the Aborted Firing Safe-Down gates. (HCR-5100 \u00a77.4.5, \u00a77.5, \u00a77.3, \u00a77.1.2.)",
+     "workcenter": "PAD",
+     "is_contingency": true,
+     "step_kit": [],
+     "sub_steps": [
+      {
+       "title": "Safe down before approach",
+       "instructions": "The rocket is still on the pad after an oxidizer fill \u2014 do NOT approach without completing a safety walk. From the standoff distance, attempt to dump propellant by commanding the vehicle valves open (the load-and-go abort path). Then complete the Aborted Firing Safe-Down contingency \u2014 propellant-dumped path if the valves opened, boil-off path if they could not be opened \u2014 before anyone approaches the vehicle.",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Spark-check the ignition system",
+       "instructions": "With the pad safed and the ignition leads disconnected from the igniter wires: with the IGN switch DOWN, briefly touch the ignition leads together to confirm they do not spark; flip IGN FULL UP and briefly touch the leads together to confirm they DO spark; flip IGN FULL DOWN and confirm no spark (checkout per \u00a77.3).",
+       "caution": null,
+       "requires_signoff": true,
+       "schema": null
+      },
+      {
+       "title": "Verify igniter continuity",
+       "instructions": "Check igniter continuity with a multimeter at the igniter wire leads. If there is no continuity, do not reuse the e-match: open the igniter cartridge, remove the e-match and igniter motor, and rebuild per the Vehicle Preparation igniter installation steps \u2014 continuity-check and shunt the new e-match before installing (\u00a77.1.2).",
+       "caution": null,
+       "requires_signoff": false,
+       "schema": null
+      },
+      {
+       "title": "Re-verify tank pressure floor before re-attempt",
+       "instructions": "A standard Mojave Sphinx tank loses approximately 4.5 psi per second through the static vent after the fill valve is closed (\u00a77.4.3). Before any re-attempt, re-verify the hold constraint: if launch cannot occur within 30 seconds of closing the fill valve, either reopen the fill valve for 5\u201310 seconds to restore tank pressure, or abort by opening the vehicle valves.",
+       "caution": "Do not proceed to ignition with a tank pressure lower than 400 psi.",
+       "requires_signoff": true,
        "schema": null
       }
      ]

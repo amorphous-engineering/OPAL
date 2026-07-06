@@ -185,7 +185,7 @@
   {
    "key": "sabv_assy",
    "name": "Servo-Actuated Ball Valve Assembly",
-   "description": "SABV-04FF: DS3225 servo on printed mount driving a 1/4 NPT brass ball valve via printed handle connector. Built by OP 1; two per vehicle, one for the GSE fill valve.",
+   "description": "SABV-04FF: DS3225 servo on printed mount driving a 1/4 NPT brass ball valve via printed handle connector. Built by the Servo-Actuated Ball Valve Assembly procedure; two per vehicle, one for the GSE fill valve.",
    "category": "Valves",
    "tier": 1,
    "tracking": "serialized",
@@ -3103,7 +3103,7 @@
   {
    "key": "fin_bracket_assy",
    "name": "Fin Bracket Assembly",
-   "description": "Drilled aluminum angle with plywood fin and printed spacers \u2014 four identical assemblies built per OP 8.",
+   "description": "Drilled aluminum angle with plywood fin and printed spacers \u2014 four identical assemblies built by the Fin Bracket Subassembly procedure.",
    "category": "Airframe",
    "tier": 1,
    "tracking": "bulk",
@@ -4377,7 +4377,7 @@
    "component": "fin_bracket_assy",
    "qty": 4,
    "uom": "ea",
-   "notes": "Built per OP 8"
+   "notes": "Built by the Fin Bracket Subassembly procedure"
   },
   {
    "assembly": "fin_bracket_assy",
@@ -4461,7 +4461,7 @@
    "component": "sabv_assy",
    "qty": 2,
    "uom": "ea",
-   "notes": "Fuel and oxidizer valves \u2014 built per OP 1"
+   "notes": "Fuel and oxidizer valves \u2014 built by the valve assembly procedure"
   },
   {
    "assembly": "gse_fill",
