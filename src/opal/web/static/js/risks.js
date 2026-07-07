@@ -88,7 +88,8 @@ async function refreshAcceptancePanel() {
         // confirm dialog mid-signature.
         const confirmEl = document.getElementById('accept-confirm');
         const confirmWasOpen = confirmEl && confirmEl.style.display !== 'none';
-        const r = await fetch(`/risks/${riskId}/acceptance-panel`);
+        const editing = typeof EDITING !== 'undefined' && EDITING;
+        const r = await fetch(`/risks/${riskId}/acceptance-panel${editing ? '?edit=1' : ''}`);
         if (r.ok) container.innerHTML = await r.text();
         if (confirmWasOpen && document.getElementById('accept-confirm')) openAcceptConfirm();
     } catch (e) { /* panel refresh is cosmetic; the next save retries */ }
@@ -174,10 +175,7 @@ async function applyDisposition(target) {
 // ============ Acceptance — the signature ============
 
 function openAcceptConfirm() {
-    const confirm = document.getElementById('accept-confirm');
-    confirm.style.display = 'block';
-    document.getElementById('accept-sign-time').textContent =
-        new Date().toISOString().substring(0, 19) + 'Z';
+    document.getElementById('accept-confirm').style.display = 'flex';
 }
 
 async function commitAccept() {

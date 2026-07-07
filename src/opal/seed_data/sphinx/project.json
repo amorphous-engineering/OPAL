@@ -1,0 +1,46 @@
+{
+ "attribution": "Demo content adapted from HCR-5100 \u2014 Mojave Sphinx Build, Integration, and Launch Guidebook, Half Cat Rocketry, published under the GPL.",
+ "project": {
+  "name": "Mojave Sphinx",
+  "description": "N2O/E85 self-pressurizing liquid bipropellant rocket \u2014 ~250-300 lbf, target apogee ~5100-5800 ft. Demo content adapted from HCR-5100 \u2014 Mojave Sphinx Build, Integration, and Launch Guidebook, Half Cat Rocketry, published under the GPL.",
+  "tiers": [
+   {
+    "level": 1,
+    "name": "FLIGHT",
+    "code": "F",
+    "description": "Flight-critical hardware \u2014 pressure-bearing and recovery-critical parts, full traceability required"
+   },
+   {
+    "level": 2,
+    "name": "GROUND",
+    "code": "G",
+    "description": "Ground support equipment \u2014 fill system, ignition, enclosure"
+   },
+   {
+    "level": 3,
+    "name": "DEV",
+    "code": "D",
+    "description": "Commodity hardware, raw stock, consumables, tooling, templates, and jigs"
+   }
+  ],
+  "part_numbering": {
+   "prefix": "SPX",
+   "separator": "-",
+   "sequence_digits": 4,
+   "format": "{prefix}{sep}{tier_code}{sep}{sequence}"
+  },
+  "categories": [
+   "Propulsion",
+   "Fluid System",
+   "Valves",
+   "Igniter",
+   "Airframe",
+   "Recovery",
+   "Avionics",
+   "Consumables",
+   "GSE"
+  ],
+  "requirements": [],
+  "cad_directories": []
+ }
+}

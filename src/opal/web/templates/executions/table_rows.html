@@ -2,10 +2,8 @@
 {% if instances %}
 {% for inst in instances %}
 <tr>
-    <td>{{ ok.id_cell(inst.id, "/executions/" ~ inst.id) }}</td>
-    <td><a href="/executions/{{ inst.id }}">{{ inst.procedure_name }}</a></td>
-    <td>{{ ok.mono("v" ~ inst.version_number) }}</td>
-    <td>{{ ok.mono(inst.work_order) }}</td>
+    <td><a href="/executions/{{ inst.id }}" class="mono">{{ inst.work_order }}</a></td>
+    <td><a href="/executions/{{ inst.id }}">{{ inst.procedure_name }} <span class="mono text-muted">v{{ inst.version_number }}</span></a></td>
     <td>{{ ok.status(inst.status | upper | replace('_', ' ')) }}</td>
     <td>{{ ok.mono(inst.completed_steps ~ "/" ~ inst.total_steps) }}</td>
     <td>{% if inst.started_at %}{{ ok.timestamp(inst.started_at) }}{% else %}{{ ok.timestamp(inst.created_at) }}{% endif %}</td>
@@ -13,8 +11,8 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="7">
-        {{ ok.empty("No executions found") }}
+    <td colspan="5">
+        {{ ok.empty_line("Executions") }}
     </td>
 </tr>
 {% endif %}

@@ -21,6 +21,19 @@ class TrackingType(str, Enum):
     SERIALIZED = "serialized"  # Each unit gets its own OPAL number
 
 
+class ProcurementType(str, Enum):
+    """How this part comes to exist — declares which sections expect content.
+
+    make = built in-house (a BOM is expected); buy = purchased (suppliers
+    and PO lines are expected); both = made and bought. The declaration
+    governs expected emptiness only — actual data always renders.
+    """
+
+    MAKE = "make"
+    BUY = "buy"
+    BOTH = "both"
+
+
 class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     """Part in the inventory system.
 
@@ -51,6 +64,14 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         nullable=False,
         default=TrackingType.SERIALIZED,
         comment="bulk = one OPAL per batch, serialized = one OPAL per unit (default)",
+    )
+    procurement: Mapped[ProcurementType] = mapped_column(
+        String(10),
+        nullable=False,
+        default=ProcurementType.MAKE,
+        server_default="make",
+        index=True,
+        comment="make = in-house (BOM expected), buy = purchased (suppliers/POs expected), both",
     )
 
     # Tiered inventory classification; levels and their semantics are

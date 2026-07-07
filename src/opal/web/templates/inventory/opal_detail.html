@@ -8,269 +8,214 @@
 {% endblock %}
 
 {% block content %}
-<div class="panel">
+{# ============ THE PAGE — the part-page grammar: a panel with actions in
+   its header bar, detail rows for facts, headed tables for collections.
+   TESTS relevance is declared by the part's test templates; data always
+   renders. ============ #}
+<div class="panel" style="max-width: 860px;">
     <div class="panel-header">
-        <span style="font-size: 1.25rem;">{{ opal_number }}</span>
-        <span class="text-muted" style="margin-left: var(--space-md);">Physical Item Traceability</span>
+        <span>OPAL ITEM</span>
         <div class="panel-header-actions">
             {% if record.part.is_tooling %}
-            {{ ok.btn("RECORD CALIBRATION", variant="primary", attrs='onclick="recordCalibration()"') }}
+            {{ ok.btn("RECORD CALIBRATION", variant="primary", size="sm", attrs='onclick="recordCalibration()"') }}
             {% endif %}
-            {{ ok.btn("PRINT LABEL", attrs='onclick="window.open(\'/label?type=inventory&id=' ~ record.id ~ '\', \'_blank\', \'width=500,height=300\')"') }}
-            {{ ok.btn("ADJUST QTY", href="/inventory/" ~ record.id ~ "/adjust") }}
+            {{ ok.btn("PRINT LABEL", size="sm", attrs='onclick="window.open(\'/label?type=inventory&id=' ~ record.id ~ '\', \'_blank\', \'width=500,height=300\')"') }}
+            {{ ok.btn("ADJUST QTY", size="sm", href="/inventory/" ~ record.id ~ "/adjust") }}
             {% if record.quantity > 0 %}
-            {{ ok.btn("SCRAP", variant="danger", attrs='onclick="showScrapModal()"') }}
+            {{ ok.btn("SCRAP", variant="danger", size="sm", attrs='onclick="showScrapModal()"') }}
             {% endif %}
         </div>
     </div>
     <div class="panel-body">
-        <!-- QR Code -->
         <div style="float: right; margin-left: var(--space-md); margin-bottom: var(--space-md);">
             <img src="/api/inventory/{{ record.id }}/qrcode" alt="QR Code" style="width: 96px; height: 96px;">
         </div>
+        <div class="mono" style="font-size: 1.25rem;">{{ opal_number }}</div>
 
-        <!-- Item Info -->
-        <div class="detail-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-lg); margin-bottom: var(--space-xl);">
-            <div>
-                <label class="detail-label">PART</label>
-                <div class="detail-value">
-                    <a href="/parts/{{ record.part_id }}">{{ record.part.name }}</a>
-                    {% if record.part.external_pn %}
-                    <br><span class="text-muted">{{ record.part.external_pn }}</span>
-                    {% endif %}
-                </div>
-            </div>
-            <div>
-                <label class="detail-label">CURRENT LOCATION</label>
-                <div class="detail-value">{{ ok.mono(record.location) }}</div>
-            </div>
-            <div>
-                <label class="detail-label">QUANTITY</label>
-                <div class="detail-value" style="font-size: 1.25rem;">{{ ok.mono(record.quantity) }}</div>
-            </div>
-            <div>
-                <label class="detail-label">LOT NUMBER</label>
-                <div class="detail-value">{{ ok.mono(record.lot_number) }}</div>
-            </div>
-            <div>
-                <label class="detail-label">SOURCE</label>
-                <div class="detail-value">
-                    {% if record.source_type %}
-                        {% set source = record.source_type.value if record.source_type.value is defined else record.source_type %}
-                        {% if source == 'purchase' and source_po %}
-                        <a href="/purchases/{{ source_po.id }}" style="text-decoration: none;">
-                            {{ ok.status("PO-" ~ source_po.number, "info") }}
-                        </a>
-                        {% elif source == 'purchase' %}
-                        {{ ok.status("From PO", "info") }}
-                        {% elif source == 'production' %}
-                        {{ ok.status("Produced", "ok") }}
-                        {% elif source == 'manual' %}
-                        {{ ok.status("Manual Entry", "warn") }}
-                        {% else %}
-                        {{ source }}
-                        {% endif %}
+        {# Fact readout — detail rows, always rendered; absence is a muted dash #}
+        <table class="data-table part-identity">
+            <tbody>
+                <tr><th>PART</th><td><a href="/parts/{{ record.part_id }}" class="mono">{{ record.part.internal_pn }}</a> {{ record.part.name }}</td></tr>
+                <tr><th>EXTERNAL PN</th><td class="mono">{% if record.part.external_pn %}{{ record.part.external_pn }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+                <tr><th>LOCATION</th><td class="mono">{{ record.location }}</td></tr>
+                <tr><th>QUANTITY</th><td class="mono">{{ '%g' % record.quantity }} {{ (record.part.unit_of_measure or 'EA') | upper }}</td></tr>
+                <tr><th>LOT</th><td class="mono">{% if record.lot_number %}{{ record.lot_number }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+                {% set source = record.source_type.value if record.source_type and record.source_type.value is defined else record.source_type %}
+                <tr><th>SOURCE</th><td>
+                    {% if source == 'purchase' and source_po %}
+                    {# source_po.number is Purchase.reference — already 'PO-0001';
+                       render it verbatim (purchases/detail.html precedent). #}
+                    <a href="/purchases/{{ source_po.id }}" class="mono">{{ source_po.number or 'PO-' ~ source_po.id }}</a>
+                    {% elif source == 'purchase' %}
+                    PURCHASE
+                    {% elif source == 'production' and source_wo %}
+                    <a href="/executions/{{ source_wo.instance_id }}" class="mono">{{ source_wo.work_order_number or 'PRODUCED' }}</a>
+                    {% elif source == 'production' %}
+                    PRODUCED
+                    {% elif source == 'manual' %}
+                    MANUAL
+                    {% elif source %}
+                    {{ source | upper }}
                     {% else %}
-                    <span class="text-muted">Unknown</span>
+                    <span class="text-muted">—</span>
                     {% endif %}
-                </div>
-            </div>
-            {% if record.expiration_date %}
-            <div>
-                <label class="detail-label">EXPIRATION DATE</label>
-                <div class="detail-value">
+                </td></tr>
+                {% if source_wo %}
+                <tr><th>SERIAL</th><td class="mono">{% if source_wo.serial_number %}{{ source_wo.serial_number }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+                {% endif %}
+                <tr><th>EXPIRATION</th><td>
+                    {% if record.expiration_date %}
                     <span class="mono">{{ record.expiration_date }}</span>
                     {% if record.expiration_date < today %}
                     {{ ok.status("EXPIRED", "error") }}
                     {% elif (record.expiration_date - today).days <= 30 %}
                     {{ ok.status("EXPIRING", "warn") }}
                     {% endif %}
-                </div>
-            </div>
-            {% endif %}
-            {% if record.part.is_tooling %}
-            <div>
-                <label class="detail-label">LAST CALIBRATED</label>
-                <div class="detail-value">
-                    {% if record.last_calibrated_at %}
-                    {{ ok.timestamp(record.last_calibrated_at) }}
                     {% else %}
-                    <span class="text-muted">Never</span>
+                    <span class="text-muted">—</span>
                     {% endif %}
-                </div>
-            </div>
-            <div>
-                <label class="detail-label">CALIBRATION DUE</label>
-                <div class="detail-value">
+                </td></tr>
+                {% if record.part.is_tooling %}
+                <tr><th>LAST CALIBRATED</th><td>{% if record.last_calibrated_at %}{{ ok.timestamp(record.last_calibrated_at) }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
+                <tr><th>CALIBRATION DUE</th><td>
                     {% if record.calibration_due_at %}
                     {{ ok.timestamp(record.calibration_due_at) }}
                     {% if record.calibration_due_at <= now %}
                     {{ ok.status("OVERDUE", "error") }}
                     {% elif (record.calibration_due_at - now).days <= 30 %}
                     {{ ok.status("CAL DUE", "warn") }}
-                    {% else %}
-                    {{ ok.status("CAL OK", "ok") }}
                     {% endif %}
                     {% else %}
-                    <span class="text-muted">Not set</span>
+                    <span class="text-muted">—</span>
                     {% endif %}
-                </div>
-            </div>
-            {% endif %}
-            <div>
-                <label class="detail-label">RECEIVED</label>
-                <div class="detail-value">{{ ok.timestamp(record.created_at) }}</div>
-            </div>
-        </div>
-
-        <!-- Source Link -->
-        {% if source_po %}
-        <div style="background: var(--bg-secondary); padding: var(--space-md); margin-bottom: var(--space-xl);">
-            <strong>Source:</strong>
-            <a href="/purchases/{{ source_po.id }}" class="mono">PO-{{ source_po.number }}</a>
-            <span class="text-muted">Line #{{ record.source_purchase_line_id }}</span>
-        </div>
-        {% endif %}
-
-        <!-- History Timeline -->
-        <h3 style="margin-bottom: var(--space-md);">TRACEABILITY HISTORY</h3>
-        <div class="timeline">
-            {% for event in history %}
-            <div class="timeline-item" style="display: flex; gap: var(--space-md); padding: var(--space-md); border-left: 3px solid var(--border-color); margin-left: var(--space-md); margin-bottom: var(--space-sm);">
-                <div style="min-width: 160px;">
-                    {{ ok.timestamp(event.timestamp) }}
-                </div>
-                <div>
-                    {% if event.event == 'created' %}
-                    <strong style="color: var(--status-ok);">RECEIVED</strong>
-                    <br>
-                    <span class="text-muted">
-                        Quantity: {{ event.details.quantity }}
-                        {% if event.details.source_type == 'purchase' %}
-                        from PO {{ event.details.po_number or '' }}
-                        {% elif event.details.source_type == 'production' %}
-                        (produced)
-                        {% elif event.details.source_type == 'manual' %}
-                        (manual entry)
-                        {% endif %}
-                    </span>
-
-                    {% elif event.event == 'consumed' %}
-                    {% if event.details.usage_type == 'scrap' %}
-                    <strong style="color: var(--status-error);">SCRAPPED</strong>
-                    {% else %}
-                    <strong style="color: var(--status-warn);">CONSUMED</strong>
-                    {% endif %}
-                    <br>
-                    <span class="text-muted">
-                        Quantity: {{ event.details.quantity }}
-                        {% if event.details.procedure_instance_id %}
-                        in <a href="/executions/{{ event.details.procedure_instance_id }}">Execution #{{ event.details.procedure_instance_id }}</a>
-                        {% endif %}
-                        {% if event.details.usage_type == 'tooling' %}
-                        (tooling - returned)
-                        {% endif %}
-                        {% if event.details.notes %}
-                        <br>{{ event.details.notes }}
-                        {% endif %}
-                    </span>
-
-                    {% elif event.event == 'transferred' %}
-                    <strong style="color: var(--status-info);">TRANSFERRED</strong>
-                    <br>
-                    <span class="text-muted">{{ event.details }}</span>
-
-                    {% else %}
-                    <strong>{{ event.event|upper }}</strong>
-                    <br>
-                    <span class="text-muted">{{ event.details }}</span>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-
-            {% if not history %}
-            {{ ok.empty("No history available") }}
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Tests Panel -->
-<div class="panel" style="margin-top: var(--space-md);">
-    <div class="panel-header">
-        <span>TESTS</span>
-        <span id="test-overall-badge" style="margin-left: var(--space-sm);"></span>
-        <div class="panel-header-actions">
-            {{ ok.btn("+ RUN TEST", variant="primary", attrs='onclick="showRunTest()"') }}
-        </div>
-    </div>
-    <div class="panel-body">
-        <div id="test-status-summary" class="mono" style="margin-bottom: var(--space-md); font-size: 0.875rem;"></div>
-        {% if test_results %}
-        {% call ok.table() %}
-            <thead>
-                <tr>
-                    {{ ok.th("TEST NAME") }}
-                    {{ ok.th("RESULT", width="70px") }}
-                    {{ ok.th("VALUE", width="120px") }}
-                    {{ ok.th("TESTED BY", width="120px") }}
-                    {{ ok.th("TESTED AT", width="160px") }}
-                    {{ ok.th("", width="60px") }}
-                </tr>
-            </thead>
-            <tbody>
-                {% for tr in test_results %}
-                <tr>
-                    <td>{{ tr.test_name }}</td>
-                    <td>
-                        {% set r = tr.result.value if tr.result.value is defined else tr.result %}
-                        {% if r == 'pass' %}
-                        {{ ok.status("PASS", "ok") }}
-                        {% elif r == 'fail' %}
-                        {{ ok.status("FAIL", "error") }}
-                        {% else %}
-                        {{ ok.status("PENDING", "warn") }}
-                        {% endif %}
-                    </td>
-                    {{ ok.td(tr.value or '-', mono=true) }}
-                    <td>{% if tr.tested_by_user %}{{ tr.tested_by_user.display_name or tr.tested_by_user.email }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
-                    <td>{% if tr.tested_at %}{{ ok.timestamp(tr.tested_at) }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
-                    <td>
-                        {{ ok.btn("EDIT", size="sm", attrs='onclick="showEditTest(' ~ tr.id ~ ')"') }}
-                    </td>
-                </tr>
-                {% endfor %}
+                </td></tr>
+                {% endif %}
+                <tr><th>RECEIVED</th><td>{{ ok.timestamp(record.created_at) }}</td></tr>
             </tbody>
-        {% endcall %}
-        {% else %}
-        {{ ok.empty("No test results recorded") }}
-        {% endif %}
+        </table>
     </div>
 </div>
 
-{% if source_wo %}
-{% call ok.panel("SOURCE PRODUCTION", margin_top="var(--space-md)") %}
-        {% call ok.table() %}
+{# --- Traceability history — the receipt and every deduction, newest first --- #}
+<div class="panel panel-ledger" style="max-width: 860px; margin-top: var(--space-md);">
+    <div class="panel-header">
+        <span>TRACEABILITY HISTORY</span>
+        <span class="header-count">{{ history | length }}</span>
+    </div>
+    <table class="data-table">
+        <thead>
             <tr>
-                <th style="width: 140px;">WORK ORDER</th>
+                {{ ok.th("TIMESTAMP", width="180px") }}
+                {{ ok.th("EVENT", width="110px") }}
+                {{ ok.th("QTY", width="80px", align="right") }}
+                {{ ok.th("CONTEXT") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in history %}
+            <tr>
+                <td>{{ ok.timestamp(event.timestamp) }}</td>
+                {% if event.event == 'created' %}
+                <td><span style="color: var(--status-ok);">RECEIVED</span></td>
+                <td class="mono" style="text-align: right;">+{{ '%g' % event.details.quantity }}</td>
                 <td>
-                    {% if source_wo.work_order_number %}
-                    {{ ok.link(source_wo.work_order_number, "/executions/" ~ source_wo.instance_id, mono=true) }}
+                    {% if event.details.source_type == 'purchase' and event.details.po_number %}
+                    <a href="/purchases/{{ event.details.po_id }}" class="mono">{{ event.details.po_number or 'PO-' ~ event.details.po_id }}</a>
+                    {% elif event.details.source_type == 'production' and source_wo %}
+                    <a href="/executions/{{ source_wo.instance_id }}" class="mono">{{ source_wo.work_order_number or 'PRODUCED' }}</a>
+                    {% elif event.details.source_type == 'manual' %}
+                    MANUAL
                     {% else %}
-                    {{ ok.link("Execution #" ~ source_wo.instance_id, "/executions/" ~ source_wo.instance_id) }}
+                    <span class="text-muted">—</span>
                     {% endif %}
                 </td>
+                {% elif event.event == 'consumed' %}
+                {% if event.details.usage_type == 'scrap' %}
+                <td><span style="color: var(--status-error);">SCRAPPED</span></td>
+                <td class="mono" style="text-align: right;">-{{ '%g' % event.details.quantity }}</td>
+                {% elif event.details.usage_type == 'tooling' %}
+                <td><span style="color: var(--status-info);">TOOLING</span></td>
+                <td class="mono" style="text-align: right;">{{ '%g' % event.details.quantity }}</td>
+                {% else %}
+                <td><span style="color: var(--status-warn);">CONSUMED</span></td>
+                <td class="mono" style="text-align: right;">-{{ '%g' % event.details.quantity }}</td>
+                {% endif %}
+                <td>
+                    {% if event.details.procedure_instance_id %}
+                    <a href="/executions/{{ event.details.procedure_instance_id }}" class="mono">{{ event.details.work_order_number or 'WORK ORDER' }}</a>
+                    {% endif %}
+                    {% if event.details.notes %}<span class="text-muted">{{ event.details.notes }}</span>
+                    {% elif not event.details.procedure_instance_id %}<span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                {% else %}
+                <td>{{ event.event | upper }}</td>
+                <td class="mono" style="text-align: right;">{% if event.details.quantity is defined %}{{ '%g' % event.details.quantity }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                <td class="text-muted">{{ event.details }}</td>
+                {% endif %}
             </tr>
-            {% if source_wo.serial_number %}
-            {{ ok.detail_row("SERIAL NUMBER", source_wo.serial_number, mono=true, th_width="140px") }}
-            {% endif %}
-        {% endcall %}
-{% endcall %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# --- Tests — relevance is declared by the part's test templates;
+   recorded results always render --- #}
+{% if test_results %}
+<div class="panel panel-ledger" style="max-width: 860px; margin-top: var(--space-md);">
+    <div class="panel-header">
+        <span>TESTS</span>
+        <span class="header-count">{{ test_results | length }} <span id="test-overall-badge"></span></span>
+        <div class="panel-header-actions">
+            <a class="ledger-add" href="#" onclick="showRunTest(); return false;">+ RUN</a>
+        </div>
+    </div>
+    <div class="panel-body" style="padding-bottom: 0;">
+        <div id="test-status-summary" class="mono" style="font-size: 0.875rem;"></div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                {{ ok.th("TEST NAME") }}
+                {{ ok.th("RESULT", width="70px") }}
+                {{ ok.th("VALUE", width="120px") }}
+                {{ ok.th("TESTED BY", width="120px") }}
+                {{ ok.th("TESTED AT", width="180px") }}
+                {{ ok.th("", width="60px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for tr in test_results %}
+            <tr>
+                <td>{{ tr.test_name }}</td>
+                <td>
+                    {% set r = tr.result.value if tr.result.value is defined else tr.result %}
+                    {% if r == 'pass' %}
+                    {{ ok.status("PASS", "ok") }}
+                    {% elif r == 'fail' %}
+                    {{ ok.status("FAIL", "error") }}
+                    {% else %}
+                    {{ ok.status("PENDING", "warn") }}
+                    {% endif %}
+                </td>
+                {{ ok.td(tr.value or '-', mono=true) }}
+                <td>{% if tr.tested_by_user %}{{ tr.tested_by_user.display_name or tr.tested_by_user.email }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                <td>{% if tr.tested_at %}{{ ok.timestamp(tr.tested_at) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                <td class="row-actions"><a href="#" onclick="showEditTest({{ tr.id }}); return false;">EDIT</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif test_templates %}
+{% set required_count = test_templates | selectattr('required') | list | length %}
+<div style="max-width: 860px; margin-top: var(--space-md);">
+{{ ok.empty_line("TESTS", onclick="showRunTest()", flag=(required_count ~ " REQUIRED") if required_count else none) }}
+</div>
 {% endif %}
 
 {% if genealogy_components or genealogy_assemblies %}
-{% call ok.panel("GENEALOGY", margin_top="var(--space-md)") %}
+{% call ok.panel("GENEALOGY", margin_top="var(--space-md)", max_width="860px") %}
         {% if genealogy_components %}
         <h4 style="margin-bottom: var(--space-sm);">COMPONENTS IN THIS ASSEMBLY</h4>
         {% call ok.table() %}
@@ -318,19 +263,6 @@
         {% endif %}
 {% endcall %}
 {% endif %}
-
-<style>
-.detail-label {
-    display: block;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: var(--space-xs);
-}
-.detail-value {
-    font-size: 1em;
-}
-</style>
 
 <!-- Scrap Modal -->
 <div id="scrap-modal" class="modal-overlay" style="display: none;">
@@ -449,6 +381,7 @@ async function recordCalibration() {
 </script>
 {% endif %}
 
+{% if test_results or test_templates %}
 <!-- Run Test Modal -->
 <div id="run-test-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
@@ -558,10 +491,13 @@ function getHeaders() {
     return headers;
 }
 
-// Load test status summary on page load
 const requiredTemplateCount = {{ test_templates | selectattr('required') | list | length }};
+const hasTestResults = {{ 'true' if test_results else 'false' }};
 
 async function loadTestStatus() {
+    // The summary line and badge live in the populated TESTS panel; the
+    // empty state is the one-line register and needs no readout.
+    if (!hasTestResults) return;
     try {
         const response = await fetch(`/api/inventory/${inventoryId}/test-status`, {
             headers: getHeaders(),
@@ -572,17 +508,10 @@ async function loadTestStatus() {
         const summaryEl = document.getElementById('test-status-summary');
         const badgeEl = document.getElementById('test-overall-badge');
 
-        if (status.total_tests === 0 && requiredTemplateCount === 0) {
-            summaryEl.textContent = 'No tests recorded';
-            summaryEl.style.color = 'var(--text-muted)';
-            return;
-        }
-
         const parts = [];
         if (status.passed > 0) parts.push(`${status.passed} PASS`);
         if (status.failed > 0) parts.push(`${status.failed} FAIL`);
         if (status.pending > 0) parts.push(`${status.pending} PENDING`);
-        if (status.total_tests === 0) parts.push('0 TESTED');
 
         if (requiredTemplateCount > 0) {
             const passedCount = requiredTemplateCount - status.missing_required_tests.length;
@@ -803,4 +732,5 @@ document.addEventListener('keydown', function(e) {
     }
 });
 </script>
+{% endif %}
 {% endblock %}

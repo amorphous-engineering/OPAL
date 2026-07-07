@@ -1,0 +1,203 @@
+{# Shared execution-document macros. Import as: {% import 'executions/_exec_macros.html' as ex %} #}
+
+{% macro role_chip(role) %}{% if role %}<span class="role-chip mono">{{ role }}</span>{% endif %}{% endmacro %}
+
+{% macro hm(dt) %}{% if dt %}<span title="{{ dt.strftime('%Y-%m-%dT%H:%M:%S') }}Z">{{ dt.strftime('%H:%M') }}</span>{% endif %}{% endmacro %}
+
+{# State cell: words in state colors, never a symbol. Exactly one of:
+   complete · skipped · hold · awaiting sign-off · blocker text · nothing. #}
+{% macro state_cell(step, bound_holds_by_se, step_holding_ncs, gate_text, op_on_hold) %}
+{% set exec = step.execution %}
+{% set se_id = exec.id if exec else none %}
+{% set bound = bound_holds_by_se.get(se_id, []) if se_id else [] %}
+{% set raised = step_holding_ncs.get(se_id, []) if se_id else [] %}
+{% if step.status in ['completed', 'signed_off'] %}
+    <span class="pres pres-done mono">{% if exec and exec.completed_by_user %}{{ exec.completed_by_user.name | initials }}{% endif %} {{ hm(exec.completed_at) if exec else '' }}</span>
+{% elif step.status == 'skipped' %}
+    <span class="pres pres-skip mono">SKIPPED{% if exec and exec.completed_by_user %} {{ exec.completed_by_user.name | initials }}{% endif %}</span>
+{% elif raised %}
+    {# R2 derived hold: step stays pending, hold derived from undispositioned issue. #}
+    {% for nc in raised %}<a href="/issues/{{ nc.id }}" class="pres pres-hold mono">HELD — {{ nc.issue_number }}</a>{% endfor %}
+{% elif step.status == 'on_hold' %}
+    <span class="pres pres-hold mono">HOLD{% for nc in raised %} · <a href="/issues/{{ nc.id }}">{{ nc.issue_number }}</a>{% endfor %}</span>
+{% elif bound %}
+    <span class="pres pres-hold mono">HOLD{% for i in bound %} · <a href="/issues/{{ i.id }}">{{ i.issue_number }}</a>{% endfor %}</span>
+{% elif step.status == 'awaiting_signoff' %}
+    <span class="pres pres-gated mono">AWAITING SIGN-OFF</span>
+{% elif gate_text %}
+    <span class="pres pres-gated mono text-yellow">{{ gate_text }}</span>
+{% elif op_on_hold and step.status == 'pending' %}
+    <span class="pres pres-gated mono text-yellow">OP ON HOLD</span>
+{% endif %}
+{% endmacro %}
+
+{# Why a gated control is inert: issue-backed blockers link, structural ones
+   (sequence/redline) render their message. Rendered beside the disabled
+   button — never a control that silently vanishes. #}
+{% macro gate_reason(blockers) %}<span class="mono text-yellow gate-reason">{% for b in blockers %}{% if b.issue_number %}held by <a href="/issues/{{ b.issue_id }}">{{ b.issue_number }}</a>{% else %}{{ b.message }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</span>{% endmacro %}
+
+{# The COMPLETE control, from the single server-computed gate (F4): the active
+   button when nothing holds the step, else inert + reason — the button
+   renders disabled with the blocker line beside it (same register as the
+   risk page's gated ACCEPT). `blockers` is a list of
+   core.execution_flow.Blocker. The server gate stays authoritative; never
+   re-derive gating here. #}
+{% macro complete_control(order, blockers) %}
+{%- if blockers %}
+<span class="gated-control"><button class="btn btn-sm btn-primary" disabled>COMPLETE</button>{{ gate_reason(blockers) }}</span>
+{%- else %}
+<button class="btn btn-sm btn-primary" onclick="completeStep({{ order }}, this)">COMPLETE</button>
+{%- endif %}
+{% endmacro %}
+
+{# + REDLINE — visible wherever its op carries an open NC. The one
+   visibility predicate is a non-empty `open_ncs` (op_open_ncs_by_order in
+   the route context, which already excludes ad-hoc/redline ops); the one JS
+   entry point is showRedlineModal. Renders in the step action rows and the
+   dockbar overflow. #}
+{% macro redline_control(op_order, op_number, open_ncs, before='') %}
+{%- if open_ncs %}
+<button class="btn btn-sm" onclick='{{ before }}showRedlineModal({{ op_order }}, {{ op_number | tojson }}, {{ open_ncs | map(attribute="id") | list | tojson }}, {{ open_ncs | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
+{%- endif %}
+{% endmacro %}
+
+{# The SKIP control, from the F5 gate — same inert + reason register.
+   `menu` renders the dockbar-overflow variant. #}
+{% macro skip_control(order, title, blockers, menu=false) %}
+{%- if blockers %}
+<span class="gated-control"><button class="btn btn-sm" disabled>SKIP</button>{{ gate_reason(blockers) }}</span>
+{%- else %}
+<button class="btn btn-sm" onclick='{% if menu %}hideDockbarMenu(); {% endif %}showSkipModal({{ order }}, {{ title | tojson }})'>SKIP</button>
+{%- endif %}
+{% endmacro %}
+
+{# Row indicators: counts as words, absent when zero (empty-state rule). #}
+{% macro indicators(step, attach_counts, vs) %}
+{% set exec = step.execution %}
+{% set n_att = attach_counts.get(exec.id, 0) if exec else 0 %}
+{% set n_note = step_notes_by_se.get(exec.id, []) | length if exec else 0 %}
+{% if n_att or n_note %}
+<span class="doc-ind mono" data-ind>
+    {%- if n_att %}<span class="ind" title="{{ n_att }} attachment(s)" onclick="event.stopPropagation(); railFocusStep({{ step.order }})">{{ n_att }} ATT</span>{% endif -%}
+    {%- if n_att and n_note %}<span class="ind-sep"> · </span>{% endif -%}
+    {%- if n_note %}<span class="ind" title="Operator notes">{{ n_note }} NOTE{{ 'S' if n_note > 1 else '' }}</span>{% endif -%}
+</span>
+{% endif %}
+{% endmacro %}
+
+{# The running notes log: timestamped, authored, append-only. One muted mono
+   line per note (HH:MM with the full ISO-8601 in the tooltip), chronological,
+   with the append input underneath. Deliberately its OWN labeled block, set
+   off by a hairline rule — the notes log must never read as another
+   data-capture field (rehearsal feedback). Notes are a record, not a
+   control: rendered for any step status, any work order status. #}
+{% macro notes_block(exec, order) %}
+<div class="step-notes-block" data-notes>
+    <span class="step-notes-label mono">NOTES</span>
+    <div class="step-notes-body">
+        {% for n in step_notes_by_se.get(exec.id, []) %}
+        <div class="note-line mono text-muted">{{ hm(n.created_at) }} {{ (n.author.name | initials) if n.author else '—' }} · {{ n.body }}</div>
+        {% endfor %}
+        <input type="text" class="step-note-add mono" maxlength="2000" placeholder="+ NOTE"
+               onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.blur(); }"
+               onblur="addStepNote({{ order }}, this)">
+    </div>
+</div>
+{% endmacro %}
+
+{# Presence cursors for one row — bordered initials chips in the right
+   gutter; the session user's own chip renders filled/inverted. #}
+{% macro cursor_chips(step, cursors_by_se, current_user) %}
+{% set exec = step.execution %}
+<span class="step-cursors" data-cursors>
+{%- if exec %}{% for c in cursors_by_se.get(exec.id, []) %}<span class="cursor-chip mono{% if current_user and c.user and c.user.id == current_user.id %} is-self{% endif %}" title="{{ c.user.name if c.user else '' }}">{{ (c.user.name if c.user else none) | initials }}</span>{% endfor %}{% endif -%}
+</span>
+{% endmacro %}
+
+{# Authored reference imagery — instruction content, the one inline exception. #}
+{% macro step_images(vs) %}
+{% set images = vs.get('images') or [] %}
+{% if images %}
+<div class="step-image-strip">
+    {% for img in images %}
+    <figure class="step-image">
+        <img src="/api/attachments/{{ img.attachment_id }}/download" alt="{{ img.caption or 'Reference image' }}"
+             onclick='openLightbox("/api/attachments/{{ img.attachment_id }}/download", {{ (img.caption or "") | tojson }})'>
+        {% if img.caption %}<figcaption class="mono">{{ img.caption }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Read-only data capture readout (editing happens in the docked bar only). #}
+{% macro data_readout(step) %}
+{% set exec = step.execution %}
+{% set schema = step.required_data_schema %}
+{% if schema and schema.get('fields') %}
+<div class="step-data-readout">
+    {% for field in schema.get('fields', []) %}
+    <div class="ro-row">
+        <span class="ro-label mono">{{ field.label }}{% if field.get('unit') %} ({{ field.unit }}){% endif %}{% if field.required %} *{% endif %}</span>
+        {% set raw = exec.data_captured[field.name] if exec and exec.data_captured and exec.data_captured[field.name] is defined else none %}
+        {% if field.type == 'photo' %}
+            {% set ids = raw if raw is iterable and raw is not string else ([raw] if raw else []) %}
+            <span class="ro-value">
+                {% for att_id in ids %}
+                <img class="step-photo-thumb" src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}"
+                     onclick='openLightbox("/api/attachments/{{ att_id }}/download", {{ field.label | tojson }})'>
+                {% else %}<span class="text-muted mono">—</span>{% endfor %}
+            </span>
+        {% elif field.type == 'checkbox' %}
+            <span class="ro-value mono">{% if raw is none %}—{% elif raw %}YES{% else %}NO{% endif %}</span>
+        {% else %}
+            <span class="ro-value mono">{% if raw is none or raw == '' %}—{% else %}{{ raw }}{% endif %}</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Editable data capture fields — used by the docked bar exclusively. #}
+{% macro data_fields_editable(my_step) %}
+{% set exec = my_step.exec %}
+{% set schema = my_step.schema %}
+{% if schema and schema.get('fields') %}
+{% for field in schema.get('fields', []) %}
+<div class="bar-field">
+    <label class="bar-field-label mono">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
+    {% set raw = exec.data_captured[field.name] if exec.data_captured and exec.data_captured[field.name] is defined else none %}
+    {% if field.type == 'text' %}
+    <input type="text" class="form-input" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}{% if raw is not none %} value="{{ raw }}"{% endif %} placeholder="{{ field.get('placeholder', '') }}">
+    {% elif field.type == 'number' %}
+    <input type="number" class="form-input" data-capture-field="{{ field.name }}"{% if field.get('min') is not none %} min="{{ field.min }}"{% endif %}{% if field.get('max') is not none %} max="{{ field.max }}"{% endif %} step="{{ field.get('step', 'any') }}"{% if field.required %} required{% endif %}{% if raw is not none %} value="{{ raw }}"{% endif %}>
+    {% elif field.type == 'checkbox' %}
+    <label class="bar-check"><input type="checkbox" data-capture-field="{{ field.name }}"{% if raw %} checked{% endif %}> <span class="mono">{{ field.label }}</span></label>
+    {% elif field.type == 'select' %}
+    <select class="form-select" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}>
+        <option value="">Select...</option>
+        {% for opt in field.get('options', []) %}<option value="{{ opt }}"{% if raw == opt %} selected{% endif %}>{{ opt }}</option>{% endfor %}
+    </select>
+    {% elif field.type == 'textarea' %}
+    <textarea class="form-textarea" data-capture-field="{{ field.name }}" rows="{{ field.get('rows', 2) }}"{% if field.required %} required{% endif %}>{% if raw is not none %}{{ raw }}{% endif %}</textarea>
+    {% elif field.type == 'photo' %}
+    {% set ids = raw if raw is iterable and raw is not string else ([raw] if raw else []) %}
+    {% set is_multiple = field.get('multiple', False) %}
+    <div class="step-photo-capture" data-multiple="{{ 'true' if is_multiple else 'false' }}" data-field-name="{{ field.name | e }}" data-step-execution-id="{{ exec.id }}">
+        <div class="step-photo-gallery">
+            {% for att_id in ids %}
+            <div class="step-photo-item" data-attachment-id="{{ att_id }}">
+                <img class="step-photo-thumb" src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" onclick='openLightbox("/api/attachments/{{ att_id }}/download", {{ field.label | tojson }})'>
+                <button type="button" class="btn btn-sm" onclick="removeStepPhoto(this)">REMOVE</button>
+            </div>
+            {% endfor %}
+        </div>
+        <input type="file" accept="image/*" capture="environment"{% if is_multiple %} multiple{% endif %} class="step-photo-input" onchange="uploadStepPhotos(this)">
+        <input type="hidden" data-capture-field="{{ field.name }}" data-capture-field-type="photo" value="{{ ids | tojson }}"{% if field.required %} required{% endif %}>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endmacro %}

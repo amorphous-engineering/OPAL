@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("EDIT USER #" ~ user.id, max_width="600px") %}
+{% call ok.panel("EDIT USER: " ~ user.name, max_width="600px") %}
         <form id="user-form" onsubmit="updateUser(event)">
             {{ ok.field("name", "NAME", value=user.name, required=true, attrs='maxlength="255"') }}
             {{ ok.field("email", "EMAIL", type="email", value=user.email or '', help="Optional - for contact purposes", attrs='maxlength="255"') }}

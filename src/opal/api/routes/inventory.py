@@ -78,6 +78,7 @@ class InventoryResponse(BaseModel):
     part_id: int
     part_name: str
     part_external_pn: str | None
+    part_uom: str | None = None
     quantity: Decimal
     location: str
     lot_number: str | None
@@ -149,6 +150,7 @@ def inventory_to_response(record: InventoryRecord) -> InventoryResponse:
         part_id=record.part_id,
         part_name=record.part.name,
         part_external_pn=record.part.external_pn,
+        part_uom=record.part.unit_of_measure,
         quantity=record.quantity,
         location=record.location,
         lot_number=record.lot_number,

@@ -30,9 +30,9 @@ def load_demo_data(
     db: DbSession,
     user: RequiredUser,
 ) -> JSONResponse:
-    """Enter the demo: a separate throwaway database seeded with Project
-    Kestrel. The real database is untouched; exiting deletes the demo file.
-    Admin only.
+    """Enter the demo: a separate throwaway database seeded with the Mojave
+    Sphinx dataset. The real database is untouched; exiting deletes the demo
+    file. Admin only.
     """
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")

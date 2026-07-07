@@ -322,6 +322,72 @@ def _stamp_alembic_head(engine) -> None:
         command.stamp(cfg, "head")
 
 
+class UnknownDatabaseRevisionError(RuntimeError):
+    """The database is stamped with an alembic revision this checkout lacks.
+
+    Typically a shared database whose alembic_version head was written by a
+    different branch. Raised before any migration runs, so the database is
+    never touched.
+    """
+
+
+def _describe_database_selection(engine: Any) -> str:
+    """Name the setting/env var that selected this database, best-effort."""
+    import os
+
+    from opal.config import _default_database_url
+
+    url = str(engine.url)
+    if os.environ.get("OPAL_DATABASE_URL") == url:
+        return "selected by OPAL_DATABASE_URL"
+    if url == _default_database_url():
+        if os.environ.get("OPAL_DATA_DIR"):
+            return "default opal.db under OPAL_DATA_DIR"
+        return "platform default data dir"
+    return "selected by --database, --project, or project config"
+
+
+def _unknown_revision_error(engine: Any, revision: str) -> UnknownDatabaseRevisionError:
+    """Build the actionable startup error for a cross-branch database."""
+    db_path = engine.url.database or str(engine.url)
+    source = _describe_database_selection(engine)
+    message = (
+        f"Database {db_path} ({source}) is stamped at alembic revision "
+        f"'{revision}', which does not exist in this checkout's "
+        "migrations/versions/ — it was migrated by a different branch. "
+        "Refusing to serve or migrate.\n"
+        "Remedies:\n"
+        "  1. Run from a branch that contains the revision (e.g. rebase onto devel).\n"
+        "  2. Point at a throwaway database:\n"
+        "     env -u OPAL_DATABASE_URL OPAL_DATA_DIR=$(mktemp -d) uv run opal init \\\n"
+        "       && uv run opal seed && uv run opal serve"
+    )
+    return UnknownDatabaseRevisionError(message)
+
+
+def _ensure_stamped_revisions_known(engine: Any, cfg: Any) -> None:
+    """Refuse to migrate a database stamped with a revision unknown to this checkout.
+
+    Reads the alembic_version table and verifies every stamped revision exists
+    in the script directory. A missing revision means the database belongs to
+    another branch: upgrading would either crash with a raw ResolutionError or
+    (worse) silently advance a shared database past every other checkout.
+    """
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+    from alembic.util import CommandError
+
+    script = ScriptDirectory.from_config(cfg)
+    with engine.connect() as conn:
+        stamped = MigrationContext.configure(conn).get_current_heads()
+    for revision in stamped:
+        try:
+            # Raises CommandError (wrapping ResolutionError) when unknown.
+            script.get_revision(revision)
+        except CommandError as exc:
+            raise _unknown_revision_error(engine, revision) from exc
+
+
 def _run_alembic_upgrade(engine, revision: str = "head") -> None:
     """Run alembic upgrade to the given revision (default head) programmatically.
 
@@ -331,6 +397,10 @@ def _run_alembic_upgrade(engine, revision: str = "head") -> None:
     (ON DELETE CASCADE children silently emptied). FK off during migrations
     is alembic's documented requirement for SQLite batch mode; the CLI
     `opal migrate upgrade` path (env.py engine) already behaves this way.
+
+    Raises:
+        UnknownDatabaseRevisionError: the database is stamped with a revision
+            this checkout's migrations/versions/ does not contain.
     """
     from alembic import command
 
@@ -345,6 +415,7 @@ def _run_alembic_upgrade(engine, revision: str = "head") -> None:
 
     try:
         cfg = _get_alembic_config(migration_engine)
+        _ensure_stamped_revisions_known(migration_engine, cfg)
         with migration_engine.begin() as conn:
             cfg.attributes["connection"] = conn
             command.upgrade(cfg, revision)

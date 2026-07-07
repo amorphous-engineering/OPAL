@@ -348,11 +348,16 @@ def test_draft_part_detail_page_renders_activate_confirm(web_client):
     # (activate confirm, delete confirm, tier-change confirm in the form JS)
     assert "Locks PN and tier permanently." in page.text
     assert page.text.count("permanently") <= 3
-    # Ledger rows render with empty values as facts, not boxes or apologies
-    assert "ledger-row" in page.text
+    # Empty relevant sections are one line each, no panels, no narration;
+    # a make part (no external ref) has no SUPPLIERS or PO LINES sections
+    assert page.text.count('class="empty-line"') == 7
+    assert page.text.count('class="panel panel-ledger"') == 0
+    assert ">SUPPLIERS<" not in page.text
+    assert ">PO LINES<" not in page.text
+    assert "No BOM components" not in page.text
     assert "nothing physical yet" not in page.text
-    # Nothing hides behind disclosure: the dense readout is always visible
-    assert "part-readout" in page.text
+    # Nothing hides behind disclosure: the identity table is always visible
+    assert "part-identity" in page.text
     assert "+ details" not in page.text
 
 
@@ -400,10 +405,18 @@ def test_part_page_two_column_layout(web_client):
     assert page.status_code == 200
     assert 'class="part-layout"' in page.text
     assert page.text.count('class="part-col"') == 2
-    # Order is fixed and global: IS column (BOM/REQS/TESTS) renders before
-    # the provenance column (STOCK first), in both lifecycle states
-    assert page.text.index(">BOM<") < page.text.index(">STOCK<")
-    assert page.text.index(">TESTS<") < page.text.index(">STOCK<")
+    # Order is fixed and global: DESIGN (REQUIREMENTS, TESTS) in the left
+    # column, then STOCK & USE (BOM first, CONSUMED last) in the right —
+    # in both lifecycle states. SUPPLIERS/PO LINES are absent on this make
+    # part (section relevance), so the order check covers what renders.
+    assert page.text.index(">DESIGN<") < page.text.index(">STOCK &amp; USE<")
+    second_col = page.text[page.text.index(">STOCK &amp; USE<") :]
+    assert page.text.index(">REQUIREMENTS<") < page.text.index(">TESTS<") < page.text.index(
+        ">STOCK &amp; USE<"
+    )
+    order = [">BOM<", ">STOCK<", ">WHERE USED<", ">PROCEDURE USE<", ">CONSUMED<"]
+    positions = [second_col.index(label) for label in order]
+    assert positions == sorted(positions)
     web_client.post(f"/api/parts/{part['id']}/activate", json={})
     page2 = web_client.get(f"/parts/{part['id']}")
     assert page2.text.index(">BOM<") < page2.text.index(">STOCK<")

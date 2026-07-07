@@ -80,7 +80,7 @@
             {% call ok.table() %}
                 <thead>
                     <tr>
-                        {{ ok.th("PART", width="60px") }}
+                        {{ ok.th("PART", width="120px") }}
                         {{ ok.th("NAME") }}
                         {{ ok.th("ORDERED", width="80px", align="right") }}
                         {{ ok.th("RECEIVED", width="80px", align="right") }}
@@ -90,7 +90,7 @@
                 <tbody>
                     {% for line in purchase.lines %}
                     <tr>
-                        <td>{{ ok.id_cell(line.part_id, "/parts/" ~ line.part_id) }}</td>
+                        <td class="mono"><a href="/parts/{{ line.part_id }}">{{ line.part.internal_pn }}</a></td>
                         <td>{{ ok.link(line.part.name, "/parts/" ~ line.part_id) }}</td>
                         {{ ok.td(line.qty_ordered, mono=true, align="right") }}
                         {{ ok.td(line.qty_received, mono=true, align="right") }}
@@ -119,8 +119,8 @@
             {% call ok.table() %}
                 <thead>
                     <tr>
-                        {{ ok.th("LINE") }}
-                        {{ ok.th("PART") }}
+                        {{ ok.th("PART", width="140px") }}
+                        {{ ok.th("NAME") }}
                         {{ ok.th("OUTSTANDING", width="80px") }}
                         {{ ok.th("RECEIVE QTY", width="100px") }}
                         {{ ok.th("LOCATION *", width="150px") }}
@@ -131,17 +131,20 @@
                     {% for line in purchase.lines %}
                     {% if line.qty_received < line.qty_ordered %}
                     <tr>
-                        <td>{{ ok.mono(line.id) }}</td>
-                        <td>{{ line.part.name }}</td>
+                        <td class="mono"><a href="/parts/{{ line.part_id }}">{{ line.part.internal_pn }}</a></td>
+                        <td data-part-name="{{ line.part.name }}">{{ line.part.name }}</td>
                         {{ ok.td(line.qty_ordered - line.qty_received, mono=true, align="right") }}
                         <td><input type="number" name="recv_{{ line.id }}_qty" class="form-input" step="0.0001" min="0" max="{{ line.qty_ordered - line.qty_received }}"></td>
-                        <td><input type="text" name="recv_{{ line.id }}_loc" class="form-input" placeholder="Location"></td>
+                        <td><input type="text" name="recv_{{ line.id }}_loc" class="form-input" placeholder="Location" list="known-locations"></td>
                         <td><input type="text" name="recv_{{ line.id }}_lot" class="form-input" placeholder="Lot #"></td>
                     </tr>
                     {% endif %}
                     {% endfor %}
                 </tbody>
             {% endcall %}
+            <datalist id="known-locations">
+                {% for loc in known_locations %}<option value="{{ loc }}">{% endfor %}
+            </datalist>
             <div style="display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-md);">
                 {{ ok.btn("FILL ALL", attrs='onclick="fillAllOutstanding()"') }}
                 {{ ok.btn("RECEIVE", variant="primary", type="submit") }}
@@ -357,12 +360,20 @@ async function cancelPO() {
 }
 
 function fillAllOutstanding() {
-    // Fill all qty fields with their max (outstanding) values
+    // Fill all qty fields with their max (outstanding) values, and carry
+    // the first entered location down to empty location fields.
     const form = document.getElementById('receive-form');
     const qtyInputs = form.querySelectorAll('input[name$="_qty"]');
 
     for (const input of qtyInputs) {
         input.value = input.max;
+    }
+    const locInputs = Array.from(form.querySelectorAll('input[name$="_loc"]'));
+    const firstLoc = locInputs.map((i) => i.value.trim()).find((v) => v);
+    if (firstLoc) {
+        for (const input of locInputs) {
+            if (!input.value.trim()) input.value = firstLoc;
+        }
     }
 }
 
@@ -424,6 +435,13 @@ async function receiveItems(event) {
     }
 
     for (const [lineId, data] of Object.entries(lineData)) {
+        if (data.qty && parseFloat(data.qty) > 0 && !data.loc) {
+            const row = form.querySelector(`input[name="recv_${lineId}_loc"]`).closest('tr');
+            const name = row.querySelector('[data-part-name]').dataset.partName;
+            errorDiv.textContent = `${name}: a location is required to receive this line (blank quantity leaves it outstanding).`;
+            errorDiv.style.display = 'block';
+            return;
+        }
         if (data.qty && parseFloat(data.qty) > 0 && data.loc) {
             lines.push({
                 line_id: parseInt(lineId),

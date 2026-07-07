@@ -81,11 +81,25 @@ def _procedure_result(p: MasterProcedure) -> SearchResult:
 
 
 def _execution_result(inst: ProcedureInstance) -> SearchResult:
+    # The work order number is the execution's name; a database id never
+    # renders (F12). WO-less cuts fall back to procedure name + cut date.
+    procedure_name = inst.procedure.name if inst.procedure else None
+    if inst.work_order_number:
+        label = inst.work_order_number
+        sublabel = procedure_name
+    else:
+        cut = inst.created_at.date().isoformat() if inst.created_at else None
+        label = (
+            f"{procedure_name or 'Execution'} (cut {cut})"
+            if cut
+            else (procedure_name or "Execution")
+        )
+        sublabel = None
     return SearchResult(
         entity_type="execution",
         id=inst.id,
-        label=f"Execution #{inst.id}",
-        sublabel=inst.work_order_number,
+        label=label,
+        sublabel=sublabel,
         url=f"/executions/{inst.id}",
         status=_status_value(inst.status),
     )

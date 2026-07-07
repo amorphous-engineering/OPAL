@@ -23,5 +23,5 @@ def test_seed_writes_no_yaml_and_stores_config(db_session, tmp_path, monkeypatch
     raw = get_app_setting(db_session, PROJECT_CONFIG_KEY)
     assert raw is not None
     config = json.loads(raw)
-    assert config["name"] == "Project Kestrel"
-    assert config["part_numbering"]["prefix"] == "KST"
+    assert config["name"] == "Mojave Sphinx"
+    assert config["part_numbering"]["prefix"] == "SPX"

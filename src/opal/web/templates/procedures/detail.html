@@ -548,12 +548,50 @@ async function saveStep(event, stepId) {
         required_data_schema: schema,
     };
     if (form.is_contingency) data.is_contingency = form.is_contingency.checked;
+    if (form.strict_sequence) data.strict_sequence = form.strict_sequence.checked;
 
     try {
         const r = await fetch(`/api/procedures/${procedureId}/steps/${stepId}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) });
         if (r.ok) window.location.reload();
         else { const err = await r.json(); errorDiv.textContent = formatApiError(err.detail, 'Failed to save step'); errorDiv.style.display = 'block'; }
     } catch (e) { errorDiv.textContent = 'Network error: ' + e.message; errorDiv.style.display = 'block'; }
+}
+
+// ============ Step reference images ============
+
+async function uploadStepImage(input, stepId) {
+    if (!input.files.length) return;
+    const file = input.files[0];
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const r = await fetch(`/api/procedures/${procedureId}/steps/${stepId}/images`, {
+            method: 'POST', body: fd,
+        });
+        if (r.ok) window.location.reload();
+        else { const err = await r.json().catch(() => ({})); alert(formatApiError(err.detail, 'Failed to add image')); }
+    } catch (e) { alert('Network error: ' + e.message); }
+    input.value = '';
+}
+
+async function saveStepImageCaption(stepId, imageId, caption) {
+    try {
+        await fetch(`/api/procedures/${procedureId}/steps/${stepId}/images/${imageId}`, {
+            method: 'PATCH', headers: getHeaders(),
+            body: JSON.stringify({ caption: caption.trim() || null }),
+        });
+    } catch (e) { console.error('Failed to save caption:', e); }
+}
+
+async function removeStepImage(stepId, imageId) {
+    if (!confirm('Remove this reference image from the step? Published versions keep their copy.')) return;
+    try {
+        const r = await fetch(`/api/procedures/${procedureId}/steps/${stepId}/images/${imageId}`, { method: 'DELETE' });
+        if (r.ok) {
+            const fig = document.querySelector(`#step-images-${stepId} [data-image-id="${imageId}"]`);
+            if (fig) fig.remove();
+        } else { const err = await r.json().catch(() => ({})); alert(formatApiError(err.detail, 'Failed to remove image')); }
+    } catch (e) { alert('Network error: ' + e.message); }
 }
 
 // ============ Step-parts (per step kit) ============

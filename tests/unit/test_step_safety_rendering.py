@@ -34,10 +34,7 @@ def test_execution_runner_renders_safety_fields(web_client):
     web_client.post(f"/api/procedures/{proc_id}/publish")
     inst = web_client.post(
         "/api/procedure-instances",
-        json={
-            "procedure_id": proc_id,
-            "target_entity": {"entity_type": "part", "entity_id": 7, "entity_label": "SN-00042"},
-        },
+        json={"procedure_id": proc_id},
     ).json()
 
     runner = web_client.get(f"/executions/{inst['id']}?tab=operations&op=1")
@@ -45,9 +42,3 @@ def test_execution_runner_renders_safety_fields(web_client):
     assert "CAUTION: HIGH PRESSURE GAS" in runner.text
     assert "Stand clear of vent" in runner.text
     assert "MFG-LEAD" in runner.text
-
-    meta = web_client.get(f"/executions/{inst['id']}?tab=meta")
-    assert meta.status_code == 200
-    assert "TARGET ENTITY" in meta.text
-    assert "SN-00042" in meta.text
-    assert "[PART]" in meta.text

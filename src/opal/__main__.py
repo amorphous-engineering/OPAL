@@ -70,9 +70,13 @@ def cmd_serve(args: argparse.Namespace) -> None:
     # Serve must work against a brand-new project the way the launcher
     # does: create directories and initialize/migrate the schema.
     settings.ensure_directories()
-    from opal.db.base import get_engine, init_database
+    from opal.db.base import UnknownDatabaseRevisionError, get_engine, init_database
 
-    init_database(get_engine())
+    try:
+        init_database(get_engine())
+    except UnknownDatabaseRevisionError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     host = args.host or settings.host
     port = args.port or settings.port
 
@@ -154,20 +158,43 @@ def cmd_migrate(args: argparse.Namespace) -> None:
 
 
 def cmd_seed(args: argparse.Namespace) -> None:
-    """Populate database with Project Kestrel demo data."""
+    """Populate database with Mojave Sphinx demo data."""
     _setup_project(args)
 
+    from opal.config import PROJECT_CONFIG_KEY, get_app_setting
     from opal.db.base import SessionLocal
-    from opal.db.models import Part
+    from opal.db.models import Part, Supplier, User, Workcenter
     from opal.seed import seed_database
 
     db = SessionLocal()
     try:
-        if db.query(Part).first():
-            print("Database already has data. Skipping seed.")
-            return
+        # The seed OVERWRITES the project config and inserts demo users with a
+        # publicly documented password — never on top of a configured instance.
+        found = []
+        for model, label in (
+            (Part, "parts"),
+            (User, "users"),
+            (Workcenter, "workcenters"),
+            (Supplier, "suppliers"),
+        ):
+            count = db.query(model).count()
+            if count:
+                found.append(f"{count} {label}")
+        if get_app_setting(db, PROJECT_CONFIG_KEY) is not None:
+            found.append("a saved project config")
 
-        print("Seeding Project Kestrel data...")
+        if found and not args.force:
+            print(
+                "Refusing to seed: this database already has "
+                + ", ".join(found)
+                + ".\nSeeding would overwrite the project config and add demo users "
+                "with a publicly documented password.\n"
+                "Use --force to seed anyway.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        print("Seeding Mojave Sphinx data...")
         seed_database(db)
         print("Done.")
     finally:
@@ -177,7 +204,7 @@ def cmd_seed(args: argparse.Namespace) -> None:
 def cmd_init(args: argparse.Namespace) -> None:
     """Initialize OPAL (create directories, initialize/migrate database)."""
     from opal.config import get_active_settings
-    from opal.db.base import get_engine, init_database
+    from opal.db.base import UnknownDatabaseRevisionError, get_engine, init_database
 
     # Configure project first
     _setup_project(args)
@@ -191,6 +218,9 @@ def cmd_init(args: argparse.Namespace) -> None:
         engine = get_engine()
         init_database(engine)
         print("Database initialized")
+    except UnknownDatabaseRevisionError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"Database initialization failed: {e}")
         print("If developing, you can use: opal migrate upgrade")
@@ -391,6 +421,11 @@ def main() -> None:
 
     # seed command
     seed_parser = subparsers.add_parser("seed", help="Seed demo data")
+    seed_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Seed even if the database already has users/parts/config (overwrites project config)",
+    )
     add_project_args(seed_parser)
     seed_parser.set_defaults(func=cmd_seed)
 

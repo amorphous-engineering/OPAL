@@ -288,10 +288,15 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def start_step(self, instance_id: int, step_number: int) -> dict[str, Any]:
-        """Start a step."""
+    def focus_step(self, instance_id: int, step_number: int) -> dict[str, Any]:
+        """Move the caller's cursor to a step (presence).
+
+        The focus/document model has no separate "start": a user places their
+        cursor via /focus, then commits with /complete, /skip, or /signoff.
+        """
         resp = self.client.post(
-            self._url(f"/procedure-instances/{instance_id}/steps/{step_number}/start"),
+            self._url(f"/procedure-instances/{instance_id}/focus"),
+            json={"step_number": step_number},
             headers=self._headers(),
         )
         resp.raise_for_status()
@@ -309,10 +314,13 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def skip_step(self, instance_id: int, step_number: int) -> dict[str, Any]:
+    def skip_step(
+        self, instance_id: int, step_number: int, reason: str | None = None
+    ) -> dict[str, Any]:
         """Skip a step."""
         resp = self.client.post(
             self._url(f"/procedure-instances/{instance_id}/steps/{step_number}/skip"),
+            json={"reason": reason} if reason else {},
             headers=self._headers(),
         )
         resp.raise_for_status()
@@ -330,11 +338,11 @@ class OpalAPIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def update_step_notes(self, instance_id: int, step_number: int, notes: str) -> dict[str, Any]:
-        """Update step notes."""
-        resp = self.client.patch(
+    def add_step_note(self, instance_id: int, step_number: int, body: str) -> dict[str, Any]:
+        """Append a timestamped note to a step."""
+        resp = self.client.post(
             self._url(f"/procedure-instances/{instance_id}/steps/{step_number}/notes"),
-            json={"notes": notes},
+            json={"body": body},
             headers=self._headers(),
         )
         resp.raise_for_status()
@@ -466,6 +474,14 @@ class OpalAPIClient:
         """Update an issue."""
         resp = self.client.patch(
             self._url(f"/issues/{issue_id}"), json=data, headers=self._headers()
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def sign_disposition(self, issue_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        """Sign an issue disposition (releases its holds)."""
+        resp = self.client.post(
+            self._url(f"/issues/{issue_id}/disposition"), json=data, headers=self._headers()
         )
         resp.raise_for_status()
         return resp.json()

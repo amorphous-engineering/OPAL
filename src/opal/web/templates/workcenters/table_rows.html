@@ -2,8 +2,7 @@
 {% if workcenters %}
 {% for wc in workcenters %}
 <tr>
-    <td>{{ ok.id_cell(wc.id, "/workcenters/" ~ wc.id) }}</td>
-    <td>{{ ok.mono(wc.code) }}</td>
+    <td><a href="/workcenters/{{ wc.id }}" class="mono">{{ wc.code }}</a></td>
     <td><a href="/workcenters/{{ wc.id }}">{{ wc.name }}</a></td>
     <td>{{ wc.location or '-' }}</td>
     <td>
@@ -17,7 +16,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="5">{{ ok.empty("No workcenters found") }}</td>
+    <td colspan="4">{{ ok.empty("No workcenters found") }}</td>
 </tr>
 {% endif %}
 {% include 'partials/pagination_row.html' %}

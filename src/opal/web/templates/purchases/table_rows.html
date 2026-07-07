@@ -1,15 +1,11 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if purchases %}
 {% for po in purchases %}
-<tr>
-    <td class="mono"><a href="/purchases/{{ po.id }}">{{ po.reference or ('PO-' ~ po.id) }}</a></td>
-    <td>
-        {% if po.supplier_rel %}
-        {{ ok.link(po.supplier_rel.name, "/suppliers/" ~ po.supplier_rel.id) }}
-        {% else %}
-        {{ po.supplier }}
-        {% endif %}
-    </td>
+<tr onclick="window.location='/purchases/{{ po.id }}'" style="cursor: pointer;">
+    <td class="mono"><a href="/purchases/{{ po.id }}">{{ po.reference or 'PO' }}</a></td>
+    {# Supplier renders plain — the row's identity and click target is the
+       PO; the supplier link lives on the PO page (accent = identifier). #}
+    <td>{{ po.supplier_rel.name if po.supplier_rel else po.supplier }}</td>
     <td>
         {{ ok.status(po.status|status_value|upper) }}
         {% if po.is_overdue %}

@@ -75,7 +75,7 @@
                     <td class="mono text-muted">.text-muted</td>
                 </tr>
                 <tr>
-                    <td>ID Cell</td>
+                    <td>ID Cell <span class="text-muted">(legacy — ids never render in lists)</span></td>
                     <td><span class="id-cell mono">42</span></td>
                     <td class="mono text-muted">.id-cell .mono</td>
                 </tr>
@@ -196,11 +196,11 @@
                 </tr>
                 <tr>
                     <td>mono (colored)</td>
-                    <td>{{ ok.mono("42", color="orange") }}</td>
-                    <td class="mono text-muted">{% raw %}{{ ok.mono(part.id, color="orange") }}{% endraw %}</td>
+                    <td>{{ ok.mono("RV1-F-0001", color="orange") }}</td>
+                    <td class="mono text-muted">{% raw %}{{ ok.mono(part.internal_pn, color="orange") }}{% endraw %}</td>
                 </tr>
                 <tr>
-                    <td>id_cell</td>
+                    <td>id_cell <span class="text-muted">(legacy — ids never render in lists; link the PN or designator)</span></td>
                     <td>{{ ok.id_cell("42", "#") }}</td>
                     <td class="mono text-muted">{% raw %}{{ ok.id_cell(part.id, "/parts/" ~ part.id) }}{% endraw %}</td>
                 </tr>
@@ -284,12 +284,81 @@
             <span>EMPTY STATE</span>
         </div>
         <div class="panel-body">
-            <div style="border: 1px dashed var(--border-color); margin-bottom: var(--space-md);">
-                {{ ok.empty("No items found", action_text="Add Item", action_href="#") }}
+            <p class="text-muted" style="margin-bottom: var(--space-md);">
+                Emptiness is information only where content is expected. Declared
+                intent decides where it's expected; data always renders. An empty
+                relevant section is one line; an irrelevant empty section is absent —
+                not collapsed, absent. Never a header bar over an empty box, never
+                narration.
+            </p>
+            <div style="margin-bottom: var(--space-md);">
+                {{ ok.empty_line("BOM", href="#") }}
+                {{ ok.empty_line("CONSUMED") }}
             </div>
+            <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-bottom: var(--space-md);">
+<pre style="margin: 0;">{% raw %}{% if rows %}
+…panel + headed data-table…
+{% elif relevant %}
+{{ ok.empty_line("BOM", onclick="showAddComponent()") }}
+{% endif %}{% endraw %}</pre>
+            </div>
+            <p class="text-muted" style="margin-bottom: var(--space-md);">
+                ok.empty is legacy — full-page zero states only, never sections.
+            </p>
             <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem;">
-<pre style="margin: 0;">{% raw %}{{ ok.empty("No parts found") }}
-{{ ok.empty("No items", action_text="Add Item", action_href="/items/new") }}{% endraw %}</pre>
+<pre style="margin: 0;">{% raw %}{{ ok.empty("No parts found") }}{% endraw %}</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section panel -->
+    <div class="panel" style="margin-bottom: var(--space-lg);">
+        <div class="panel-header">
+            <span>SECTION (PANEL-LEDGER)</span>
+        </div>
+        <div class="panel-body">
+            <p class="text-muted" style="margin-bottom: var(--space-md);">
+                A populated section renders as a panel at ledger pitch — header bar
+                with the count (and its flags) in the value slot, body a headed data
+                table. Empty sections are one line or absent (see EMPTY STATE).
+            </p>
+            <div class="panel panel-ledger">
+                <div class="panel-header">
+                    <span>STOCK</span>
+                    <span class="header-count"><span class="stock-figure">42 EA</span> · 3 REC <span class="ledger-flag">· LOW</span></span>
+                    <div class="panel-header-actions"><a class="ledger-add" href="#">+ ADD</a></div>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            {{ ok.th("OPAL #", width="120px") }}
+                            {{ ok.th("LOCATION") }}
+                            {{ ok.th("QTY", width="70px", align="right") }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>{{ ok.link("OPAL-00038", "#", mono=true) }}</td>
+                            <td>STORE-E2</td>
+                            <td style="text-align: right;">6</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="background: var(--bg-tertiary); padding: var(--space-md); font-family: var(--font-mono); font-size: 0.75rem; margin-top: var(--space-md);">
+<pre style="margin: 0;">{% raw %}<div class="panel panel-ledger">
+    <div class="panel-header">
+        <span>STOCK</span>
+        <span class="header-count">…count · flags…</span>
+        <div class="panel-header-actions"><a class="ledger-add" …>+ ADD</a></div>
+    </div>
+    <table class="data-table">
+        <thead>…</thead>
+        <tbody>
+        {% for row in rows %}<tr>…</tr>{% endfor %}
+        </tbody>
+    </table>
+</div>{% endraw %}</pre>
             </div>
         </div>
     </div>
@@ -303,7 +372,7 @@
             <table class="data-table" style="margin-bottom: var(--space-md);">
                 <thead>
                     <tr>
-                        <th style="width: 60px;">ID</th>
+                        <th style="width: 120px;">PN</th>
                         <th>NAME</th>
                         <th>CATEGORY</th>
                         <th>STATUS</th>
@@ -312,14 +381,14 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>{{ ok.id_cell("1", "#") }}</td>
+                        <td class="mono"><a href="#">RV1-F-0001</a></td>
                         <td>Example Item</td>
                         <td class="mono">HARDWARE</td>
                         <td>{{ ok.status("ACTIVE") }}</td>
                         <td class="timestamp mono">2024-01-15T14:30:00Z</td>
                     </tr>
                     <tr>
-                        <td>{{ ok.id_cell("2", "#") }}</td>
+                        <td class="mono"><a href="#">RV1-F-0002</a></td>
                         <td>Another Item</td>
                         <td class="mono">SOFTWARE</td>
                         <td>{{ ok.status("PENDING") }}</td>
@@ -331,14 +400,14 @@
 <pre style="margin: 0;">{% raw %}<table class="data-table">
     <thead>
         <tr>
-            <th>ID</th>
+            <th>PN</th>
             <th>NAME</th>
             <th>STATUS</th>
         </tr>
     </thead>
     <tbody>
         <tr>
-            <td>{{ ok.id_cell(item.id, "/items/" ~ item.id) }}</td>
+            <td class="mono"><a href="/parts/{{ item.id }}">{{ item.internal_pn }}</a></td>
             <td>{{ item.name }}</td>
             <td>{{ ok.status(item.status) }}</td>
         </tr>

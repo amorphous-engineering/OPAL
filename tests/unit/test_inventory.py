@@ -581,3 +581,156 @@ def test_locations(client: TestClient, auth_headers: dict, bulk_part: dict) -> N
     assert resp.status_code == 200
     locations = resp.json()
     assert any(loc["location"] == "LOC-UNIQUE-TEST" for loc in locations)
+
+
+# ============ OPAL detail page (web) ============
+
+
+def _receive_stock(client: TestClient, part_id: int, **overrides) -> dict:
+    """Receive stock for a part; returns the created inventory item dict."""
+    payload = {"part_id": part_id, "quantity": 10, "location": "STORE-A2"}
+    payload.update(overrides)
+    resp = client.post("/api/inventory", json=payload)
+    assert resp.status_code == 201, resp.text
+    return resp.json()["items"][0]
+
+
+def _consume_via_execution(client: TestClient, part: dict, inv_record_id: int) -> int:
+    """Kit a procedure with the part, start an instance, consume from the
+    given record. Returns the instance id."""
+    proc_id = client.post("/api/procedures", json={"name": "Opal Page Kit Proc"}).json()["id"]
+    client.post(
+        f"/api/procedures/{proc_id}/kit",
+        json={"part_id": part["id"], "quantity_required": 5},
+    )
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Install"})
+    client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = client.post(
+        "/api/procedure-instances", json={"procedure_id": proc_id}
+    ).json()["id"]
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/consume",
+        json={"items": [{"inventory_record_id": inv_record_id, "quantity": 5}]},
+    )
+    assert resp.status_code == 200, resp.text
+    return instance_id
+
+
+def test_opal_page_facts_render_as_detail_rows(web_client: TestClient, bulk_part: dict) -> None:
+    """The OPAL # page speaks the part-page grammar: a panel with the actions
+    in its header, facts as detail rows, the part identified by its internal
+    PN — and zero narration."""
+    item = _receive_stock(web_client, bulk_part["id"], lot_number="LOT-2026-03")
+    opal = item["opal_number"]
+
+    page = web_client.get(f"/inventory/opal/{opal}")
+    assert page.status_code == 200
+    body = page.text
+
+    assert "OPAL ITEM" in body
+    assert opal in body
+    # The part fact is the internal PN, linked — not just a name.
+    assert f'href="/parts/{bulk_part["id"]}"' in body
+    assert bulk_part["internal_pn"] in body
+    # Detail-row facts.
+    for label in ("PART", "LOCATION", "QUANTITY", "LOT", "SOURCE", "RECEIVED"):
+        assert f"<th>{label}</th>" in body, label
+    assert "LOT-2026-03" in body
+    # History is a headed table, not prose.
+    assert "TRACEABILITY HISTORY" in body
+    assert "<th>CONTEXT</th>" in body
+    assert "RECEIVED" in body
+    # Narration is banned.
+    assert "Physical Item Traceability" not in body
+    assert "No history available" not in body
+    assert "No tests recorded" not in body
+    assert "No test results recorded" not in body
+    assert "Quantity:" not in body
+
+
+def test_opal_page_po_source_renders_reference_verbatim(
+    web_client: TestClient, auth_headers: dict, bulk_part: dict
+) -> None:
+    """Purchase.reference is already the identifier ('PO-0001') — the SOURCE
+    fact and the history CONTEXT render it verbatim, never re-prefixed to
+    'PO-PO-0001' (F8; purchases/detail.html precedent)."""
+    po = web_client.post(
+        "/api/purchases",
+        json={
+            "supplier": "Opal Page Supplier",
+            "reference": "PO-0424",
+            "lines": [{"part_id": bulk_part["id"], "qty_ordered": 4}],
+        },
+        headers=auth_headers,
+    ).json()
+    web_client.patch(f"/api/purchases/{po['id']}", json={"status": "ordered"})
+    recv = web_client.post(
+        f"/api/purchases/{po['id']}/receive",
+        json={
+            "lines": [
+                {
+                    "line_id": po["lines"][0]["id"],
+                    "qty_received": 4,
+                    "location": "A1",
+                    "lot_number": "LOT-0424-A",
+                }
+            ]
+        },
+    )
+    assert recv.status_code == 200, recv.text
+
+    inv = web_client.get(f"/api/inventory?part_id={bulk_part['id']}").json()["items"][0]
+    page = web_client.get(f"/inventory/opal/{inv['opal_number']}")
+    assert page.status_code == 200
+    body = page.text
+    assert "PO-PO" not in body
+    reference = po["reference"]
+    assert reference and body.count(reference) >= 2  # SOURCE fact + history CONTEXT
+
+
+def test_opal_page_consumption_links_work_order_not_db_id(
+    web_client: TestClient, bulk_part: dict
+) -> None:
+    """A consumption event names the work order and links the execution —
+    never 'Execution #<database id>'."""
+    item = _receive_stock(web_client, bulk_part["id"])
+    instance_id = _consume_via_execution(web_client, bulk_part, item["id"])
+    wo_number = web_client.get(f"/api/procedure-instances/{instance_id}").json()[
+        "work_order_number"
+    ]
+    assert wo_number
+
+    page = web_client.get(f"/inventory/opal/{item['opal_number']}")
+    assert page.status_code == 200
+    body = page.text
+
+    assert "CONSUMED" in body
+    assert f'href="/executions/{instance_id}"' in body
+    assert wo_number in body
+    assert f"Execution #{instance_id}" not in body
+
+
+def test_opal_page_tests_follow_empty_state_rule(web_client: TestClient, bulk_part: dict) -> None:
+    """No templates and no results: TESTS is absent. A declared template with
+    no results: one empty line, never a header over an empty box."""
+    item = _receive_stock(web_client, bulk_part["id"])
+    page = web_client.get(f"/inventory/opal/{item['opal_number']}")
+    assert "TESTS" not in page.text
+
+    web_client.post(
+        f"/api/inventory/parts/{bulk_part['id']}/test-templates",
+        json={"name": "Continuity", "test_type": "boolean", "required": True},
+    )
+    declared = web_client.get(f"/inventory/opal/{item['opal_number']}").text
+    assert "TESTS" in declared
+    assert "empty-line" in declared
+    assert "1 REQUIRED" in declared
+
+    resp = web_client.post(
+        f"/api/inventory/{item['id']}/tests",
+        json={"test_name": "Continuity", "result": "pass"},
+    )
+    assert resp.status_code == 201, resp.text
+    recorded = web_client.get(f"/inventory/opal/{item['opal_number']}").text
+    assert "Continuity" in recorded
+    assert "TESTED AT" in recorded
