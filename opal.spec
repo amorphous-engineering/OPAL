@@ -10,6 +10,8 @@ Output: dist/opal (or dist/opal.exe on Windows)
 import os
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 block_cipher = None
 
 # Paths
@@ -26,11 +28,22 @@ datas.append((str(src_dir / "web" / "static"), "opal/web/static"))
 # SE requirement lint rules (loaded as data by opal.se.lint)
 datas.append((str(src_dir / "se" / "lint_rules.yaml"), "opal/se"))
 
+# Risk scenario lint rules (loaded as data by opal.risks.lint; the demo seed's
+# risk-accept path reads them)
+datas.append((str(src_dir / "risks" / "lint_rules.yaml"), "opal/risks"))
+
+# Mojave Sphinx demo seed data (loaded by opal.seed)
+datas.append((str(src_dir / "seed_data" / "sphinx"), "opal/seed_data/sphinx"))
+
 # TUI styles
 datas.append((str(src_dir / "tui" / "styles.tcss"), "opal/tui"))
 
 # Launcher styles
 datas.append((str(src_dir / "launcher.tcss"), "opal"))
+
+# Third-party package data: fido2 (WebAuthn) reads public_suffix_list.dat at
+# import time — the frozen server dies without it.
+datas.extend(collect_data_files("fido2"))
 
 # Alembic migrations (for programmatic upgrades)
 datas.append((str(migrations_dir), "migrations"))

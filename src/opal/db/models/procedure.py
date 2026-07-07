@@ -119,6 +119,11 @@ class ProcedureStep(Base, IdMixin, TimestampMixin):
         nullable=True,
         comment="Safety warning displayed prominently during editing and execution",
     )
+    strict_sequence: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+        comment="OP-level: sub-steps must start in order (N requires N-1 terminal)",
+    )
     workcenter_id: Mapped[int | None] = mapped_column(
         ForeignKey("workcenter.id", ondelete="SET NULL"),
         nullable=True,
@@ -140,9 +145,40 @@ class ProcedureStep(Base, IdMixin, TimestampMixin):
     step_kits: Mapped[list["StepKit"]] = relationship(
         "StepKit", back_populates="step", cascade="all, delete-orphan"
     )
+    images: Mapped[list["StepImage"]] = relationship(
+        "StepImage",
+        back_populates="step",
+        cascade="all, delete-orphan",
+        order_by="StepImage.position",
+    )
 
     def __repr__(self) -> str:
         return f"<ProcedureStep(id={self.id}, step={self.step_number}, title='{self.title}')>"
+
+
+class StepImage(Base, IdMixin, TimestampMixin):
+    """Authored reference image on a step — procedure content, not evidence.
+
+    Snapshotted into ProcedureVersion.content at publish (by attachment id);
+    the attachment row/file must therefore outlive this link row — deleting a
+    StepImage only unlinks it from the master step.
+    """
+
+    step_id: Mapped[int] = mapped_column(
+        ForeignKey("procedure_step.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attachment_id: Mapped[int] = mapped_column(
+        ForeignKey("attachment.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    caption: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Relationships
+    step: Mapped["ProcedureStep"] = relationship("ProcedureStep", back_populates="images")
+    attachment: Mapped["Attachment"] = relationship("Attachment")
+
+    def __repr__(self) -> str:
+        return f"<StepImage(step_id={self.step_id}, attachment_id={self.attachment_id})>"
 
 
 class ProcedureVersion(Base, IdMixin, TimestampMixin):

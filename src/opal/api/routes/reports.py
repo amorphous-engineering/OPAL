@@ -56,6 +56,7 @@ def export_parts_csv(
             "Category",
             "Description",
             "Unit",
+            "Procurement",
             "Total Quantity",
             "Locations",
         ]
@@ -80,6 +81,7 @@ def export_parts_csv(
                 part.category or "",
                 (part.description or "")[:100],
                 part.unit_of_measure or "",
+                part.procurement.value if hasattr(part.procurement, "value") else part.procurement,
                 total_qty,
                 locations,
             ]
@@ -397,8 +399,8 @@ class ExecutionMetrics(BaseModel):
 
     total_executions: int
     completed: int
-    in_progress: int
-    pending: int
+    in_work: int
+    cut: int
     aborted: int
     avg_duration_minutes: float | None
     completion_rate: float
@@ -425,8 +427,8 @@ def get_execution_metrics(
 
     total = len(instances)
     completed = sum(1 for i in instances if _get_status(i) == "completed")
-    in_progress = sum(1 for i in instances if _get_status(i) == "in_progress")
-    pending = sum(1 for i in instances if _get_status(i) == "pending")
+    in_work = sum(1 for i in instances if _get_status(i) == "in_work")
+    cut = sum(1 for i in instances if _get_status(i) == "cut")
     aborted = sum(1 for i in instances if _get_status(i) == "aborted")
 
     # Calculate average duration for completed instances
@@ -441,8 +443,8 @@ def get_execution_metrics(
     return ExecutionMetrics(
         total_executions=total,
         completed=completed,
-        in_progress=in_progress,
-        pending=pending,
+        in_work=in_work,
+        cut=cut,
         aborted=aborted,
         avg_duration_minutes=round(avg_duration, 1) if avg_duration else None,
         completion_rate=round(completion_rate, 1),
@@ -450,13 +452,15 @@ def get_execution_metrics(
 
 
 class IssueMetrics(BaseModel):
-    """Issue tracking metrics."""
+    """Issue tracking metrics. The disposition gate exists only above
+    advisory containment, so open = advisory_open + undispositioned +
+    dispositioned."""
 
     total_issues: int
     open: int
-    investigating: int
-    disposition_pending: int
-    disposition_approved: int
+    advisory_open: int
+    undispositioned: int
+    dispositioned: int
     closed: int
     by_type: dict[str, int]
     by_priority: dict[str, int]
@@ -480,9 +484,9 @@ def get_issue_metrics(
 
     total = len(issues)
     open_count = sum(1 for i in issues if _get_issue_status(i) == "open")
-    investigating = sum(1 for i in issues if _get_issue_status(i) == "investigating")
-    disposition_pending = sum(1 for i in issues if _get_issue_status(i) == "disposition_pending")
-    disposition_approved = sum(1 for i in issues if _get_issue_status(i) == "disposition_approved")
+    advisory_open = sum(1 for i in issues if i.disp_state == "open")
+    undispositioned = sum(1 for i in issues if i.disp_state == "undispositioned")
+    dispositioned = sum(1 for i in issues if i.disp_state == "dispositioned")
     closed = sum(1 for i in issues if _get_issue_status(i) == "closed")
 
     by_type: dict[str, int] = {}
@@ -500,9 +504,9 @@ def get_issue_metrics(
     return IssueMetrics(
         total_issues=total,
         open=open_count,
-        investigating=investigating,
-        disposition_pending=disposition_pending,
-        disposition_approved=disposition_approved,
+        advisory_open=advisory_open,
+        undispositioned=undispositioned,
+        dispositioned=dispositioned,
         closed=closed,
         by_type=by_type,
         by_priority=by_priority,

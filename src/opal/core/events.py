@@ -21,10 +21,13 @@ class EventType(str, Enum):
     """Types of real-time events."""
 
     # Execution events
-    STEP_STARTED = "step_started"
+    CURSOR_MOVED = "cursor_moved"
     STEP_COMPLETED = "step_completed"
     INSTANCE_STARTED = "instance_started"
     INSTANCE_COMPLETED = "instance_completed"
+
+    # Issue events
+    ISSUE_DISPOSITIONED = "issue_dispositioned"
 
     # Collaboration events
     USER_JOINED = "user_joined"
@@ -133,15 +136,15 @@ event_bus = EventBus()
 # Helper functions for publishing common events
 
 
-async def emit_step_started(
+async def emit_cursor_moved(
     instance_id: int,
     step_number: int,
     user_id: int | None = None,
     user_name: str | None = None,
 ) -> None:
-    """Emit a step_started event."""
+    """Emit a cursor_moved presence event (broadcast only — never recorded)."""
     event = Event(
-        type=EventType.STEP_STARTED,
+        type=EventType.CURSOR_MOVED,
         data={
             "instance_id": instance_id,
             "step_number": step_number,
@@ -205,6 +208,24 @@ async def emit_instance_completed(
         },
     )
     await event_bus.publish(event)
+
+
+async def emit_issue_dispositioned(
+    instance_id: int,
+    issue_id: int,
+    issue_number: str,
+) -> None:
+    """Emit an issue_dispositioned event — held rows on execution pages
+    recover their controls without reload."""
+    event = Event(
+        type=EventType.ISSUE_DISPOSITIONED,
+        data={
+            "instance_id": instance_id,
+            "issue_id": issue_id,
+            "issue_number": issue_number,
+        },
+    )
+    await event_bus.publish_to_instance(instance_id, event)
 
 
 async def emit_user_joined(

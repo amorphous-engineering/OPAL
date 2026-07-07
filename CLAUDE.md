@@ -68,8 +68,8 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 
 ### Test infrastructure
 - Fixtures in `tests/conftest.py`: in-memory SQLite engine, per-test rollback transactions
-- `client` fixture provides `TestClient` with dependency overrides
-- `auth_headers` fixture provides `{"X-User-Id": str(test_user.id)}`
+- `client` fixture provides `TestClient` pre-authenticated as an admin service user (Bearer token)
+- `auth_headers` fixture provides `{"Authorization": "Bearer <token>"}` for `test_user`; `web_client` adds the session cookie for web-page GETs
 
 ## Critical Rules
 
@@ -87,9 +87,13 @@ Dense, explicit, functional. Expose state and inner workings. Data tables over c
 
 **One fact, one home.** Every other appearance is a live reference, never a copy. Test: if updating something requires touching two places, the design is wrong — delete one occurrence or derive it. PRs that violate this must argue against it by name.
 
-**The empty-state rule.** An empty section is one line, never a box: `{Section} — none · [+ action]`, muted text, 0.5-border row (`ok.empty_line` macro). A section earns vertical space only when populated. Empty states are facts, not features; six boxes announcing nothingness is anti-density.
+**The empty-state rule.** Emptiness is information only where content is expected; declared intent decides where it's expected, and data always renders. A part's `procurement` (make | buy | both) declares expectation: BOM expects content on make|both, SUPPLIERS and PO LINES on buy|both, everything else always. An irrelevant empty section is absent — not collapsed, absent — while any section with rows renders regardless of the declaration. An empty relevant section is ONE line — `LABEL — none · + ADD` (`ok.empty_line`) — never a header bar over an empty box, never narration ("No X defined" is banned).
 
-**Voice rules.** Spec prose is rationale for the implementer, never interface copy. (1) No interface copy that explains the interface — absent features are not apologized for. (2) Consequence sentences live only in confirmation dialogs and errors; each such sentence has exactly one home. (3) Labels are nouns, values are facts — no clauses, no narration. (4) Nothing hides behind disclosure: meta fields render always, as dense mono readouts. (5) Width is an information budget — max-width the content or fill the viewport with columns of data, never one stretched sparse column. (6) Context pre-fill: the form never asks what the invoking context already knows. (7) Database ids never render in lists, headers, or titles.
+**Structure and register are separate layers.** Structure — panels, header bars, column-headed tables, full-width grids — is the app's shared grammar and may not be deleted by a register pass. Register — row pitch, accent budget, voice, contrast ladder — is where density lives. Data renders in tables: detail rows (`ok.detail_row`) for facts, headed `data-table`s for collections; a register amendment tightens a table's pitch, it does not dissolve the table. The parts list and part page are the reference implementations.
+
+**Voice rules.** Spec prose is rationale for the implementer, never interface copy. (1) No interface copy that explains the interface — absent features are not apologized for. (2) Consequence sentences live only in confirmation dialogs and errors; each such sentence has exactly one home. (3) Labels are nouns, values are facts — no clauses, no narration. (4) Nothing hides behind disclosure: meta fields render always, as detail-row tables; absence is a muted dash, never an omitted row. (5) Width is an information budget — max-width the content or fill the viewport with columns of data, never one stretched sparse column. (6) Context pre-fill: the form never asks what the invoking context already knows. (7) Database ids never render in lists, headers, or titles.
+
+**Register rules.** (1) No emoji or pictographs — state words in state colors carry state. Arrows (→ ←), box-drawing rules (──), and geometric chevrons are typography and stay. (2) State badges only where the state is exceptional or actionable — a state badge on every row is information about nothing. (3) Accent color = identifier + action, never content. (4) Consequence renders where it lands, not where it's filed — a column earns its place by the question the page answers.
 
 ## Linting (Ruff)
 

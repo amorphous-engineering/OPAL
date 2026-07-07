@@ -190,8 +190,8 @@ def test_execution_metrics(client: TestClient):
     data = response.json()
     assert "total_executions" in data
     assert "completed" in data
-    assert "in_progress" in data
-    assert "pending" in data
+    assert "in_work" in data
+    assert "cut" in data
     assert "completion_rate" in data
 
 

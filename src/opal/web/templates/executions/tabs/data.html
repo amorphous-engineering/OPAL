@@ -1,3 +1,4 @@
+{% import 'opalkit/_macros.html' as ok %}
 <div>
 <div class="panel">
     <div class="panel-header">
@@ -31,7 +32,7 @@
             </tbody>
         </table>
         {% else %}
-        <p class="text-muted">No structured data has been captured yet for this execution.</p>
+        {{ ok.empty_line("Captured data") }}
         {% endif %}
     </div>
 </div>

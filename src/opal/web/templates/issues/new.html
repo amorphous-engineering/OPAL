@@ -29,6 +29,14 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label" for="containment">CONTAINMENT</label>
+                    <select id="containment" name="containment" class="form-select">
+                        {% for c in containments %}
+                        <option value="{{ c }}" {% if c == 'advisory' %}selected{% endif %}>{{ c | upper }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
 
             {{ ok.field("description", "DESCRIPTION", type="textarea", rows=4) }}
@@ -42,7 +50,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="is-condition">IS</label>
-                    <textarea id="is-condition" name="is_condition" class="form-textarea" rows="2" placeholder="Actual observed condition..."></textarea>
+                    <textarea id="is-condition" name="actual" class="form-textarea" rows="2" placeholder="Actual observed condition..."></textarea>
                 </div>
             </div>
 
@@ -108,6 +116,12 @@
                         <option value="">No procedure...</option>
                         {% for p in procedures %}
                         <option value="{{ p.id }}">{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="execution-select" name="procedure_instance_id" class="form-select" style="flex: 1;">
+                        <option value="">No execution...</option>
+                        {% for inst in instances %}
+                        <option value="{{ inst.id }}" {% if procedure_instance_id == inst.id %}selected{% endif %}>{{ inst.work_order_number or 'WO #' ~ inst.id }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -178,15 +192,17 @@ async function createIssue(event) {
         description: form.description.value || null,
         issue_type: type,
         priority: form.priority.value,
+        containment: form.containment.value,
         part_id: form.part_id.value ? parseInt(form.part_id.value) : null,
         procedure_id: form.procedure_id.value ? parseInt(form.procedure_id.value) : null,
+        procedure_instance_id: form.procedure_instance_id.value ? parseInt(form.procedure_instance_id.value) : null,
         assigned_to_id: form.assigned_to_id.value ? parseInt(form.assigned_to_id.value) : null,
     };
 
     // Type-specific fields
     if (type === 'non_conformance') {
         data.should_be = form.should_be.value || null;
-        data.is_condition = form.is_condition.value || null;
+        data.actual = form.actual.value || null;
     } else if (type === 'bug') {
         data.steps_to_reproduce = form.steps_to_reproduce.value || null;
         data.expected_behavior = form.expected_behavior.value || null;

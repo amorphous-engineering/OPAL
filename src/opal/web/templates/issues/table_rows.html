@@ -2,26 +2,22 @@
 {% if issues %}
 {% for issue in issues %}
 <tr>
-    <td>{{ ok.id_cell(issue.issue_number or issue.id, "/issues/" ~ issue.id) }}</td>
-    <td>
-        {{ ok.status(issue.issue_type | upper | replace('_', ' '), "error" if issue.issue_type == 'non_conformance' else ("warn" if issue.issue_type == 'bug' else ("info" if issue.issue_type == 'improvement' else "draft"))) }}
-    </td>
-    <td><a href="/issues/{{ issue.id }}">{{ issue.title }}</a></td>
-    <td>
-        {{ ok.status(issue.status | upper | replace('_', ' '), "ok" if issue.status in ['closed', 'disposition_approved'] else ("info" if issue.status == 'investigating' else "warn")) }}
-    </td>
+    <td>{{ ok.id_cell(issue.issue_number, "/issues/" ~ issue.id) }}</td>
+    <td class="cell-clip"><a href="/issues/{{ issue.id }}" class="row-link-plain">{{ issue.title }}</a></td>
+    <td>{{ issue.issue_type }}</td>
+    <td>{{ ok.issue_state(issue.disp_state) }}</td>
     <td>
         <span class="{% if issue.priority == 'critical' %}text-red{% elif issue.priority == 'high' %}text-yellow{% else %}text-secondary{% endif %}">
             {{ issue.priority | upper }}
         </span>
     </td>
-    <td>{{ ok.timestamp(issue.created_at) }}</td>
+    <td class="mono" title="{{ issue.created_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ issue.age }}</td>
 </tr>
 {% endfor %}
 {% else %}
 <tr>
     <td colspan="6">
-        {{ ok.empty("No issues found") }}
+        {{ ok.empty_line("Issues", href="/issues/new") }}
     </td>
 </tr>
 {% endif %}

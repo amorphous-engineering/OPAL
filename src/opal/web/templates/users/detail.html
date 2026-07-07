@@ -10,9 +10,8 @@
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("USER #" ~ user.id, actions=ok.btn("EDIT", href="/users/" ~ user.id ~ "/edit"), max_width="800px") %}
+{% call ok.panel("USER: " ~ user.name, actions=ok.btn("EDIT", href="/users/" ~ user.id ~ "/edit"), max_width="800px") %}
         {% call ok.table() %}
-            {{ ok.detail_row("ID", ok.id_cell(user.id)) }}
             {{ ok.detail_row("NAME", user.name) }}
             {{ ok.detail_row("EMAIL", ok.link(user.email, "mailto:" ~ user.email) if user.email else '-') }}
             {% if user.is_admin %}
@@ -141,7 +140,7 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
 .security-heading { font-weight: 600; font-size: 0.8rem; letter-spacing: 0.05em; margin-bottom: var(--space-sm); }
 </style>
 
-<script src="/static/js/webauthn.js"></script>
+<script src="{{ static_url('js/webauthn.js') }}"></script>
 <script>
 function showResult(id, ok, message) {
     var el = document.getElementById(id);

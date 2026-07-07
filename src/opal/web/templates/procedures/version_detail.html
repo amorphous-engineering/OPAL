@@ -152,7 +152,7 @@
         {% call ok.table() %}
             <thead>
                 <tr>
-                    {{ ok.th("PART", width="60px") }}
+                    {{ ok.th("PART", width="140px") }}
                     {{ ok.th("NAME") }}
                     {{ ok.th("QTY REQ", width="100px", align="right") }}
                 </tr>
@@ -160,7 +160,7 @@
             <tbody>
                 {% for item in version.content.kit_items %}
                 <tr>
-                    <td>{{ ok.id_cell(item.part_id, "/parts/" ~ item.part_id) }}</td>
+                    <td class="mono"><a href="/parts/{{ item.part_id }}">{{ kit_parts.get(item.part_id, {}).get('internal_pn', '-') if kit_parts else '-' }}</a></td>
                     <td>{{ kit_parts.get(item.part_id, {}).get('name', '-') if kit_parts else '-' }}</td>
                     {{ ok.td('%g' % item.quantity_required, mono=true, align="right") }}
                 </tr>
@@ -175,7 +175,7 @@
         {% call ok.table() %}
             <thead>
                 <tr>
-                    {{ ok.th("PART", width="60px") }}
+                    {{ ok.th("PART", width="140px") }}
                     {{ ok.th("NAME") }}
                     {{ ok.th("QTY", width="100px", align="right") }}
                 </tr>
@@ -183,7 +183,7 @@
             <tbody>
                 {% for item in version.content.output_items %}
                 <tr>
-                    <td>{{ ok.id_cell(item.part_id, "/parts/" ~ item.part_id) }}</td>
+                    <td class="mono"><a href="/parts/{{ item.part_id }}">{{ kit_parts.get(item.part_id, {}).get('internal_pn', '-') if kit_parts else '-' }}</a></td>
                     <td>{{ kit_parts.get(item.part_id, {}).get('name', '-') if kit_parts else '-' }}</td>
                     {{ ok.td('%g' % item.quantity_produced, mono=true, align="right") }}
                 </tr>

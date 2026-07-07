@@ -38,14 +38,30 @@
         {%- set variant_class = "status-warn" -%}
     {%- elif v in ["error", "aborted", "critical", "cancelled", "closed"] -%}
         {%- set variant_class = "status-error" -%}
-    {%- elif v in ["in_progress", "in-progress", "info"] -%}
+    {%- elif v in ["in_progress", "in-progress", "in work", "in_work", "info"] -%}
         {%- set variant_class = "status-info" -%}
-    {%- elif v in ["inactive", "deprecated"] -%}
+    {%- elif v in ["inactive", "deprecated", "cut"] -%}
+        {# CUT is staged work, not a warning — muted until work starts. #}
         {%- set variant_class = "status-inactive" -%}
     {%- endif -%}
 {%- endif -%}
 <span class="status-badge {{ variant_class }}">{{ value }}</span>
 {%- endmacro %}
+
+{# Issue STATE register — the one home for every issue index row (issues list,
+   execution issues tab). UNDISP carries warning weight only because it is
+   exceptional and actionable; everything else is calm plain text. #}
+{% macro issue_state(disp_state) %}
+{%- if disp_state == 'undispositioned' -%}
+{{ status("UNDISP", "error") }}
+{%- elif disp_state == 'dispositioned' -%}
+<span class="text-secondary">DISP'D</span>
+{%- elif disp_state == 'closed' -%}
+<span class="text-muted">CLOSED</span>
+{%- else -%}
+<span class="text-secondary">open</span>
+{%- endif -%}
+{% endmacro %}
 
 {# Form field macro
    Usage: {{ ok.field("name", "Part Name", required=true) }}
@@ -116,8 +132,9 @@
 <span class="mono {{ color_class }}">{{ text if text is not none else '-' }}</span>
 {%- endmacro %}
 
-{# ID cell macro - for table ID columns with link
-   Usage: {{ ok.id_cell(part.id, "/parts/" ~ part.id) }}
+{# ID cell macro - for real identifier columns (opal_number, issue_number) with link.
+   Database ids never render in lists, headers, or titles — link the PN, code, or name instead.
+   Usage: {{ ok.id_cell(issue.issue_number, "/issues/" ~ issue.id) }}
 #}
 {% macro id_cell(id, href=none) %}
 {%- if href -%}
@@ -144,11 +161,16 @@
    Usage: {{ ok.empty("No parts found") }}
           {{ ok.empty("No inventory records", action_text="Add Inventory", action_href="/inventory/new") }}
 #}
-{# The empty-state rule: an empty section is one line, never a box.
-   "{Section} — none · [+ action]", muted, 0.5-border row. A section earns
-   vertical space only when populated. #}
-{% macro empty_line(label, action_text=none, href=none, onclick=none) %}
-<div class="empty-line mono">{{ label }} — none{% if action_text %} · <a {% if href %}href="{{ href }}"{% else %}href="#" onclick="{{ onclick }}; return false;"{% endif %}>[+ {{ action_text }}]</a>{% endif %}</div>
+{# The empty-state rule: emptiness is information only where content is
+   expected — declared intent (procurement) decides where it's expected,
+   and data always renders. An empty relevant section is ONE line,
+   "LABEL — none · + ADD", never a header bar over an empty box. #}
+{% macro empty_line(label, href=none, onclick=none, flag=none) %}
+<div class="empty-line">
+    <span class="ledger-label">{{ label }}</span> — none
+    {%- if flag %} <span class="ledger-flag">· {{ flag }}</span>{% endif %}
+    {%- if href or onclick %} · <a class="ledger-add" {% if href %}href="{{ href }}"{% else %}href="#" onclick="{{ onclick }}; return false;"{% endif %}>+ ADD</a>{% endif %}
+</div>
 {% endmacro %}
 
 
@@ -341,7 +363,7 @@
 {% macro confirm_btn(text, message, action=none, method="POST", redirect=none, size="md") %}
 {%- set classes = ["btn", "btn-danger"] -%}
 {%- if size == "sm" %}{% set classes = classes + ["btn-sm"] %}{% endif -%}
-<button type="button" class="{{ classes | join(' ') }}" onclick="if(confirm('{{ message }}')) { {% if action %}fetch('{{ action }}', {method: '{{ method }}', headers: {'Content-Type': 'application/json'}}).then(r => { if(r.ok) { {% if redirect %}window.location.href='{{ redirect }}'{% else %}window.location.reload(){% endif %} } else { r.json().then(e => alert(e.detail || 'Operation failed')) } }){% endif %} }">{{ text }}</button>
+<button type="button" class="{{ classes | join(' ') }}" onclick='if(confirm({{ message | tojson }})) { {% if action %}fetch({{ action | tojson }}, {method: {{ method | tojson }}, headers: {"Content-Type": "application/json"}}).then(r => { if(r.ok) { {% if redirect %}window.location.href={{ redirect | tojson }}{% else %}window.location.reload(){% endif %} } else { r.json().then(e => alert(e.detail || "Operation failed")) } }){% endif %} }'>{{ text }}</button>
 {%- endmacro %}
 
 {# Panel macro - full panel wrapper

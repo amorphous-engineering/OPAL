@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-{% set actions %}{{ ok.btn("REVIEWED ✓", attrs='onclick="stampReviewed()" title="stamp last reviewed on all listed risks"') }} {{ ok.btn("MATRIX VIEW", href="/risks/matrix") }} {{ ok.btn("+ NEW RISK", href="/risks/new", variant="primary") }}{% endset %}
+{% set actions %}{{ ok.btn("REVIEWED", attrs='onclick="stampReviewed()" title="stamp last reviewed on all listed risks"') }} {{ ok.btn("MATRIX VIEW", href="/risks/matrix") }} {{ ok.btn("+ NEW RISK", href="/risks/new", variant="primary") }}{% endset %}
 {% call ok.panel("RISK REGISTER", actions=actions) %}
         <div class="toolbar">
             {{ ok.toolbar_search(name="search", id="search", placeholder="Search risks...", hx_get="/risks/table", hx_target="#risks-table", hx_include="[name='disposition'], [name='severity']") }}
@@ -41,5 +41,5 @@
         {% endcall %}
 {% endcall %}
 
-<script src="/static/js/risks.js"></script>
+<script src="{{ static_url('js/risks.js') }}"></script>
 {% endblock %}

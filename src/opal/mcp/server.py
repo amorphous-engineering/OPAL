@@ -12,6 +12,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from sqlalchemy import func
 
+from opal.api.routes.issues import _recheck_instance_completion
 from opal.config import get_active_project, get_active_settings
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import (
@@ -20,6 +21,14 @@ from opal.core.designators import (
     generate_requirement_number,
     generate_risk_number,
 )
+from opal.core.execution_flow import (
+    FlowError,
+    build_execution_state,
+    complete_step_flow,
+    focus_step,
+)
+from opal.core.execution_flow import add_step_note as flow_add_step_note
+from opal.core.holds import get_holds_payload, holding_readout
 from opal.core.numbering import (
     PartNumberError,
     next_part_number,
@@ -56,8 +65,15 @@ from opal.db.models import (
     User,
     Workcenter,
 )
-from opal.db.models.issue import IssuePriority, IssueStatus, IssueType
-from opal.db.models.part import TrackingType
+from opal.db.models.execution import ProcedureInstance, StepExecution
+from opal.db.models.issue import (
+    Containment,
+    DispositionType,
+    IssuePriority,
+    IssueStatus,
+    IssueType,
+)
+from opal.db.models.part import ProcurementType, TrackingType
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, UsageType
 from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.risk import RiskDisposition, RiskIssueLink, RiskIssueRole
@@ -166,6 +182,15 @@ async def list_tools() -> list[Tool]:
                     "external_pn": {
                         "type": "string",
                         "description": "External/manufacturer part number (optional)",
+                    },
+                    "procurement": {
+                        "type": "string",
+                        "enum": ["make", "buy", "both"],
+                        "description": (
+                            "How the part comes to exist; governs which part-page "
+                            "sections expect content. Default: buy when external_pn "
+                            "is given, else make"
+                        ),
                     },
                     "unit_of_measure": {
                         "type": "string",
@@ -335,6 +360,11 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Safety warning text displayed in red during execution (optional)",
                     },
+                    "strict_sequence": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "OP-level: sub-steps must start in order",
+                    },
                     "required_data_schema": {
                         "type": "object",
                         "description": (
@@ -411,6 +441,7 @@ async def list_tools() -> list[Tool]:
                     "estimated_duration_minutes": {"type": "integer", "minimum": 1},
                     "required_role": {"type": "string"},
                     "caution": {"type": "string"},
+                    "strict_sequence": {"type": "boolean"},
                     "required_data_schema": {"type": "object"},
                 },
                 "required": ["procedure_id", "step_id"],
@@ -717,13 +748,21 @@ async def list_tools() -> list[Tool]:
         # Issues
         Tool(
             name="list_issues",
-            description="List issues, optionally filtered by status or type",
+            description="List issues, optionally filtered by status, disposition state, or type",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "status": {
                         "type": "string",
-                        "description": "Filter by status: open, investigating, disposition_pending, disposition_approved, closed",
+                        "description": "Filter by status: open, closed",
+                    },
+                    "disp_state": {
+                        "type": "string",
+                        "enum": ["open", "undispositioned", "dispositioned", "closed"],
+                        "description": (
+                            "Filter by state: open (advisory-open), undispositioned, "
+                            "dispositioned (containment-bearing only), closed"
+                        ),
                     },
                     "issue_type": {
                         "type": "string",
@@ -738,8 +777,13 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="create_issue",
-            description="Create a new issue to track a problem, task, or improvement",
+            name="raise_issue",
+            description=(
+                "Raise an issue (problem, task, improvement, or non-conformance). "
+                "Containment declares what the issue holds while undispositioned: "
+                "step | op | wo | advisory (default advisory; execution-raised "
+                "issues should use step and set raised_step_id)."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -761,8 +805,108 @@ async def list_tools() -> list[Tool]:
                         "description": "Priority: low, medium, high, critical (default: medium)",
                         "default": "medium",
                     },
+                    "containment": {
+                        "type": "string",
+                        "description": "What this issue holds while undispositioned: step, op, wo, advisory (default: advisory)",
+                        "default": "advisory",
+                    },
+                    "should_be": {
+                        "type": "string",
+                        "description": "Expected condition (the NC pair, captured at discovery)",
+                    },
+                    "actual": {
+                        "type": "string",
+                        "description": "Actual condition",
+                    },
+                    "procedure_instance_id": {
+                        "type": "integer",
+                        "description": "Work order this issue belongs to (required for non-advisory containment)",
+                    },
+                    "raised_step_id": {
+                        "type": "integer",
+                        "description": "Step execution ID where it was found",
+                    },
+                    "containment_step_id": {
+                        "type": "integer",
+                        "description": "Boundary step execution ID ('resolve by 3.7'); blocks that step's START",
+                    },
+                    "part_id": {"type": "integer"},
+                    "assigned_to_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Human user raising the issue",
+                    },
                 },
                 "required": ["title"],
+            },
+        ),
+        Tool(
+            name="sign_disposition",
+            description=(
+                "Sign an issue's disposition — the signature releases every "
+                "containment the issue holds, immediately. user_id must be the "
+                "human making the decision."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Human user signing the disposition",
+                    },
+                    "disposition_type": {
+                        "type": "string",
+                        "description": "use_as_is, rework, repair, scrap, return_to_supplier, no_defect",
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Disposition rationale",
+                    },
+                },
+                "required": ["issue_id", "user_id", "disposition_type", "rationale"],
+            },
+        ),
+        Tool(
+            name="set_containment",
+            description=(
+                "Change an issue's containment scope. Narrowing (e.g. op → step, "
+                "or anything → advisory) releases a hold and requires a note, "
+                "which is recorded on the issue."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "integer"},
+                    "containment": {
+                        "type": "string",
+                        "description": "step, op, wo, advisory",
+                    },
+                    "containment_step_id": {"type": "integer"},
+                    "note": {
+                        "type": "string",
+                        "description": "Required when narrowing scope",
+                    },
+                    "user_id": {"type": "integer"},
+                },
+                "required": ["issue_id", "containment"],
+            },
+        ),
+        Tool(
+            name="get_holds",
+            description=(
+                "Blocking state for a work order: every undispositioned issue "
+                "holding it and what each blocks (are we held and why)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "integer",
+                        "description": "Procedure instance (work order) ID",
+                    },
+                },
+                "required": ["execution_id"],
             },
         ),
         # Risks
@@ -1683,6 +1827,13 @@ async def list_tools() -> list[Tool]:
                                 "unit_of_measure": {"type": "string", "default": "each"},
                                 "description": {"type": "string"},
                                 "external_pn": {"type": "string"},
+                                "procurement": {
+                                    "type": "string",
+                                    "enum": ["make", "buy", "both"],
+                                    "description": (
+                                        "Default: buy when external_pn is given, else make"
+                                    ),
+                                },
                                 "reorder_point": {"type": "number"},
                                 "parent_id": {"type": "integer"},
                             },
@@ -1810,6 +1961,175 @@ async def list_tools() -> list[Tool]:
                 "required": ["name"],
             },
         ),
+        # Execution document (multiplayer work orders)
+        Tool(
+            name="get_execution_state",
+            description=(
+                "Full document state of a running work order: every step with "
+                "status/cursors/holds/evidence counts, the presence roster, and "
+                "active hold points — the controller's view as JSON. Poll this "
+                "to observe a live test."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {
+                        "type": "string",
+                        "description": "Alternative lookup, e.g. 'WO-00002'",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="join_execution",
+            description=(
+                "Join a work order as an observer participant (appears in the "
+                "presence roster before placing a cursor)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Active user joining the execution",
+                    },
+                },
+                "required": ["user_id"],
+            },
+        ),
+        Tool(
+            name="focus_step",
+            description=(
+                "Move a user's cursor to a step. Presence = focus: the cursor "
+                "is broadcast to everyone in the document, several users may "
+                "focus the same step, and moving records no event."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {
+                        "type": "integer",
+                        "description": "Snapshot step order (the 'order' field in execution state)",
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user at the step",
+                    },
+                },
+                "required": ["step_number", "user_id"],
+            },
+        ),
+        Tool(
+            name="complete_step",
+            description=(
+                "Complete a step with optional captured data. Requires the "
+                "user_id of the human who performed the work — agents observe, "
+                "attach, and file anomalies, but completion carries a human "
+                "signature."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "ID of the human user who performed the step",
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "Captured values matching the step's data schema",
+                    },
+                    "notes": {"type": "string"},
+                },
+                "required": ["step_number", "user_id"],
+            },
+        ),
+        Tool(
+            name="attach_to_step",
+            description=(
+                "Attach evidence to a step of a running work order (execution "
+                "capture). Provide a server-readable file_path, or content "
+                "(text) with a filename."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "file_path": {
+                        "type": "string",
+                        "description": "Absolute path of a file to ingest",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Inline text content to store as a file",
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "Filename when using content",
+                    },
+                    "note": {"type": "string", "description": "Capturer's note"},
+                    "user_id": {"type": "integer", "description": "Capturing user, if any"},
+                },
+                "required": ["step_number"],
+            },
+        ),
+        Tool(
+            name="add_step_note",
+            description=(
+                "Append a timestamped, authored note to a step. Notes are a "
+                "record, not a control: any step status, any work order status."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "note": {"type": "string"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Operator appending the note (optional, for attribution)",
+                    },
+                },
+                "required": ["step_number", "note"],
+            },
+        ),
+        Tool(
+            name="bind_issue_hold",
+            description=(
+                "Bind an issue's containment boundary to a step ('resolve by'): "
+                "that step cannot COMPLETE while the issue is undispositioned. "
+                "One boundary per issue; re-binding moves it. The hold lifts the "
+                "moment the disposition is signed."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "integer"},
+                    "execution_id": {"type": "integer"},
+                    "work_order": {"type": "string"},
+                    "step_number": {"type": "integer"},
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Human user binding the hold (containment is a gate change)",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "Required when the bind narrows a blocking issue's containment",
+                    },
+                },
+                "required": ["issue_id", "step_number", "user_id"],
+            },
+        ),
     ]
 
 
@@ -1887,8 +2207,14 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Issues
         elif name == "list_issues":
             return await _list_issues(db, arguments)
-        elif name == "create_issue":
-            return await _create_issue(db, arguments)
+        elif name in ("raise_issue", "create_issue"):
+            return await _raise_issue(db, arguments)
+        elif name == "sign_disposition":
+            return await _sign_disposition(db, arguments)
+        elif name == "set_containment":
+            return await _set_containment(db, arguments)
+        elif name == "get_holds":
+            return await _get_holds(db, arguments)
 
         # Risks
         elif name == "list_risks":
@@ -1988,6 +2314,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "build_procedure":
             return await _build_procedure(db, arguments)
 
+        # Execution document
+        elif name == "get_execution_state":
+            return await _get_execution_state(db, arguments)
+        elif name == "join_execution":
+            return await _join_execution(db, arguments)
+        elif name == "focus_step":
+            return await _focus_step(db, arguments)
+        elif name == "complete_step":
+            return await _complete_step(db, arguments)
+        elif name == "attach_to_step":
+            return await _attach_to_step(db, arguments)
+        elif name == "add_step_note":
+            return await _add_step_note(db, arguments)
+        elif name == "bind_issue_hold":
+            return await _bind_issue_hold(db, arguments)
+
         else:
             return json_response({"error": f"Unknown tool: {name}"})
     finally:
@@ -2085,6 +2427,9 @@ async def _get_part(db, args: dict) -> list[TextContent]:
             "tier_name": tier_name,
             "parent_id": part.parent_id,
             "unit_of_measure": part.unit_of_measure,
+            "procurement": part.procurement.value
+            if hasattr(part.procurement, "value")
+            else part.procurement,
             "lifecycle_state": part.lifecycle_state,
             "activated_at": part.activated_at.isoformat() if part.activated_at else None,
             "activation_cause": part.activation_cause,
@@ -2152,6 +2497,9 @@ def _build_part(db, args: dict) -> Part:
         reorder_point=Decimal(str(args["reorder_point"]))
         if args.get("reorder_point") is not None
         else None,
+        procurement=ProcurementType(args["procurement"]).value
+        if args.get("procurement")
+        else ("buy" if args.get("external_pn") else "make"),
         **({"tracking_type": tracking_type} if tracking_type is not None else {}),
     )
 
@@ -2188,6 +2536,9 @@ async def _create_part(db, args: dict) -> list[TextContent]:
                 "tier": tier,
                 "tier_name": _tier_name(tier),
                 "parent_id": parent_id,
+                "procurement": part.procurement.value
+                if hasattr(part.procurement, "value")
+                else part.procurement,
                 "lifecycle_state": part.lifecycle_state,
             },
         }
@@ -2451,6 +2802,7 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
         estimated_duration_minutes=args.get("estimated_duration_minutes"),
         required_role=args.get("required_role"),
         caution=args.get("caution"),
+        strict_sequence=args.get("strict_sequence", False),
     )
     db.add(step)
     db.flush()
@@ -2486,12 +2838,48 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
     )
 
 
+def _issue_summary(db, issue: Issue) -> dict:
+    """Issue facts shared by the MCP issue tools."""
+    return {
+        "id": issue.id,
+        "issue_number": issue.issue_number,
+        "title": issue.title,
+        "type": issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type,
+        "status": issue.status.value if hasattr(issue.status, "value") else issue.status,
+        "disp_state": issue.disp_state,
+        "priority": issue.priority.value if hasattr(issue.priority, "value") else issue.priority,
+        "containment": issue.containment.value
+        if hasattr(issue.containment, "value")
+        else issue.containment,
+        "holding": [t["label"] for t in holding_readout(db, issue)],
+    }
+
+
 async def _list_issues(db, args: dict) -> list[TextContent]:
     """List issues with optional filtering."""
     query = db.query(Issue).filter(Issue.deleted_at.is_(None))
 
     if args.get("status"):
         query = query.filter(Issue.status == args["status"])
+
+    if args.get("disp_state"):
+        # Four-value STATE filter, mirroring the API: open = advisory-open;
+        # undispositioned / dispositioned = containment-bearing only.
+        signed = (Issue.disposition_type.isnot(None)) & (Issue.dispositioned_at.isnot(None))
+        bearing = Issue.containment != Containment.ADVISORY
+        disp_state = args["disp_state"]
+        if disp_state == "closed":
+            query = query.filter(Issue.status == IssueStatus.CLOSED)
+        elif disp_state == "open":
+            query = query.filter(
+                Issue.status != IssueStatus.CLOSED, Issue.containment == Containment.ADVISORY
+            )
+        elif disp_state == "dispositioned":
+            query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, signed)
+        elif disp_state == "undispositioned":
+            query = query.filter(Issue.status != IssueStatus.CLOSED, bearing, ~signed)
+        else:
+            return json_response({"success": False, "error": f"Invalid disp_state: {disp_state}"})
 
     if args.get("issue_type"):
         query = query.filter(Issue.issue_type == args["issue_type"])
@@ -2505,9 +2893,14 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
             "issues": [
                 {
                     "id": i.id,
+                    "issue_number": i.issue_number,
                     "title": i.title,
                     "type": i.issue_type.value if hasattr(i.issue_type, "value") else i.issue_type,
                     "status": i.status.value if hasattr(i.status, "value") else i.status,
+                    "disp_state": i.disp_state,
+                    "containment": i.containment.value
+                    if hasattr(i.containment, "value")
+                    else i.containment,
                     "priority": i.priority.value if hasattr(i.priority, "value") else i.priority,
                 }
                 for i in issues
@@ -2516,10 +2909,34 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
     )
 
 
-async def _create_issue(db, args: dict) -> list[TextContent]:
-    """Create a new issue."""
+async def _raise_issue(db, args: dict) -> list[TextContent]:
+    """Raise a new issue with the capture fields."""
     issue_type = args.get("issue_type", "task")
     priority = args.get("priority", "medium")
+    containment = args.get("containment", "advisory")
+
+    # A non-advisory containment holds a specific work order (core/holds filters
+    # on procedure_instance_id). Derive it from any step anchor, reject anchors
+    # naming a different WO — otherwise the hold blocks nothing or the wrong WO
+    # (F3). A bare draft (no anchor, no WO) is still allowed.
+    procedure_instance_id = args.get("procedure_instance_id")
+    if containment != Containment.ADVISORY.value:
+        for step_id in (args.get("containment_step_id"), args.get("raised_step_id")):
+            if step_id is None:
+                continue
+            step = db.query(StepExecution).filter(StepExecution.id == step_id).first()
+            if step is None:
+                return json_response({"success": False, "error": f"Step {step_id} not found"})
+            if procedure_instance_id is None:
+                procedure_instance_id = step.instance_id
+            elif step.instance_id != procedure_instance_id:
+                return json_response(
+                    {
+                        "success": False,
+                        "error": f"Step {step_id} belongs to a different work order "
+                        "than procedure_instance_id",
+                    }
+                )
 
     issue = Issue(
         issue_number=generate_issue_number(db),
@@ -2528,25 +2945,159 @@ async def _create_issue(db, args: dict) -> list[TextContent]:
         issue_type=IssueType(issue_type),
         status=IssueStatus.OPEN,
         priority=IssuePriority(priority),
+        containment=Containment(containment),
+        containment_step_id=args.get("containment_step_id"),
+        should_be=args.get("should_be"),
+        actual=args.get("actual"),
+        procedure_instance_id=procedure_instance_id,
+        raised_step_id=args.get("raised_step_id"),
+        raised_by_id=args.get("user_id"),
+        part_id=args.get("part_id"),
+        assigned_to_id=args.get("assigned_to_id"),
     )
     db.add(issue)
     db.flush()
-    log_create(db, issue)
+    log_create(db, issue, args.get("user_id"))
     db.commit()
     db.refresh(issue)
 
     return json_response(
         {
             "success": True,
-            "message": f"Created issue '{issue.title}' with ID {issue.id}",
-            "issue": {
-                "id": issue.id,
-                "title": issue.title,
-                "type": issue_type,
-                "priority": priority,
-            },
+            "message": f"Raised {issue.issue_number} '{issue.title}'",
+            "issue": _issue_summary(db, issue),
         }
     )
+
+
+async def _sign_disposition(db, args: dict) -> list[TextContent]:
+    """Sign a disposition — releases every containment the issue holds."""
+    issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+    if not issue:
+        return json_response({"success": False, "error": "Issue not found"})
+
+    status = issue.status.value if hasattr(issue.status, "value") else issue.status
+    if status == IssueStatus.CLOSED.value:
+        return json_response({"success": False, "error": "Issue is closed"})
+    if issue.dispositioned:
+        return json_response({"success": False, "error": "Disposition already signed"})
+    if not issue.containment_bearing:
+        return json_response(
+            {
+                "success": False,
+                "error": f"{issue.issue_number} is advisory; there is no disposition to sign",
+            }
+        )
+
+    try:
+        disposition_type = DispositionType(args["disposition_type"])
+    except ValueError:
+        return json_response(
+            {"success": False, "error": f"Invalid disposition type: {args['disposition_type']}"}
+        )
+
+    released = [t["label"] for t in holding_readout(db, issue)]
+
+    old_values = get_model_dict(issue)
+    issue.disposition_type = disposition_type
+    issue.disposition_rationale = args["rationale"]
+    issue.dispositioned_by_id = args["user_id"]
+    issue.dispositioned_at = datetime.now(UTC)
+    log_update(db, issue, old_values, args["user_id"])
+    db.flush()
+    _recheck_instance_completion(db, issue)
+    db.commit()
+    db.refresh(issue)
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"Disposition {disposition_type.value} signed on {issue.issue_number}",
+            "released": released,
+            "self_dispositioned": issue.self_dispositioned,
+            "issue": _issue_summary(db, issue),
+        }
+    )
+
+
+async def _set_containment(db, args: dict) -> list[TextContent]:
+    """Change containment scope; narrowing requires a note (audited)."""
+    from opal.db.models.issue import CONTAINMENT_RANK
+    from opal.db.models.issue_comment import IssueComment
+
+    issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+    if not issue:
+        return json_response({"success": False, "error": "Issue not found"})
+
+    try:
+        new_containment = Containment(args["containment"])
+    except ValueError:
+        return json_response(
+            {"success": False, "error": f"Invalid containment: {args['containment']}"}
+        )
+
+    old_containment = (
+        issue.containment.value if hasattr(issue.containment, "value") else issue.containment
+    )
+    narrowing = CONTAINMENT_RANK[new_containment.value] < CONTAINMENT_RANK[old_containment]
+    note = (args.get("note") or "").strip()
+    if narrowing and issue.is_blocking and not note:
+        return json_response(
+            {
+                "success": False,
+                "error": f"Narrowing containment {old_containment} → {new_containment.value} "
+                "releases a hold; a note is required",
+            }
+        )
+
+    user_id = args.get("user_id")
+    old_values = get_model_dict(issue)
+    issue.containment = new_containment
+    # Explicit presence, not None-skip: an omitted containment_step_id leaves
+    # the boundary untouched; an explicit null clears it (F8). A non-null
+    # boundary must belong to this issue's work order.
+    if "containment_step_id" in args:
+        new_step_id = args["containment_step_id"]
+        if new_step_id is not None:
+            step = db.query(StepExecution).filter(StepExecution.id == new_step_id).first()
+            if step is None:
+                return json_response({"success": False, "error": f"Step {new_step_id} not found"})
+            if issue.procedure_instance_id is None:
+                issue.procedure_instance_id = step.instance_id
+            elif step.instance_id != issue.procedure_instance_id:
+                return json_response(
+                    {
+                        "success": False,
+                        "error": f"Step {new_step_id} belongs to a different work order "
+                        "than this issue",
+                    }
+                )
+        issue.containment_step_id = new_step_id
+    log_update(db, issue, old_values, user_id)
+
+    if narrowing and note:
+        comment = IssueComment(
+            issue_id=issue.id,
+            user_id=user_id,
+            body=f"Containment narrowed {old_containment} → {new_containment.value}: {note}",
+        )
+        db.add(comment)
+        db.flush()
+        log_create(db, comment, user_id)
+
+    if narrowing:
+        db.flush()
+        _recheck_instance_completion(db, issue)
+
+    db.commit()
+    db.refresh(issue)
+
+    return json_response({"success": True, "issue": _issue_summary(db, issue)})
+
+
+async def _get_holds(db, args: dict) -> list[TextContent]:
+    """The controller's blocking state for a work order, as JSON."""
+    return json_response(get_holds_payload(db, args["execution_id"]))
 
 
 def _find_risk(db, args: dict) -> "Risk | None":
@@ -2878,7 +3429,7 @@ async def _get_project_info(db, args: dict) -> list[TextContent]:
         db.query(Issue)
         .filter(
             Issue.deleted_at.is_(None),
-            Issue.status.in_(["open", "investigating"]),
+            Issue.status == IssueStatus.OPEN,
         )
         .count()
     )
@@ -4120,6 +4671,8 @@ async def _update_step(db, args: dict) -> list[TextContent]:
         step.required_role = args["required_role"]
     if "caution" in args:
         step.caution = args["caution"]
+    if "strict_sequence" in args:
+        step.strict_sequence = bool(args["strict_sequence"])
     if "required_data_schema" in args:
         step.required_data_schema = args["required_data_schema"]
 
@@ -4846,6 +5399,18 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
         if prereq_order is not None:
             depends_on_map.setdefault(d.step_id, []).append(prereq_order)
 
+    from opal.db.models.procedure import StepImage
+
+    all_images = (
+        db.query(StepImage)
+        .filter(StepImage.step_id.in_(step_ids))
+        .order_by(StepImage.position)
+        .all()
+    )
+    images_map: dict[int, list[StepImage]] = {}
+    for img in all_images:
+        images_map.setdefault(img.step_id, []).append(img)
+
     def step_to_dict(step: ProcedureStep) -> dict:
         return {
             "id": step.id,
@@ -4861,8 +5426,13 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "required_role": step.required_role,
             "caution": step.caution,
+            "strict_sequence": step.strict_sequence,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
+            "images": [
+                {"attachment_id": img.attachment_id, "caption": img.caption}
+                for img in images_map.get(step.id, [])
+            ],
             "step_kit": [
                 {
                     "part_id": sk.part_id,
@@ -5437,6 +6007,7 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
             instructions=step.get("instructions"),
             required_role=step.get("required_role"),
             caution=step.get("caution"),
+            strict_sequence=step.get("strict_sequence", False),
             requires_signoff=bool(step.get("requires_signoff", False)),
             estimated_duration_minutes=step.get("estimated_duration_minutes"),
             workcenter_id=step.get("workcenter_id"),
@@ -5503,7 +6074,305 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
     )
 
 
-# ============ SERVER ENTRY POINT ============
+# ============ EXECUTION DOCUMENT TOOLS ============
+
+
+def _load_instance(db, args: dict) -> ProcedureInstance | None:
+    """Resolve an execution by execution_id or work_order string."""
+    if args.get("execution_id") is not None:
+        return (
+            db.query(ProcedureInstance).filter(ProcedureInstance.id == args["execution_id"]).first()
+        )
+    if args.get("work_order"):
+        return (
+            db.query(ProcedureInstance)
+            .filter(ProcedureInstance.work_order_number == args["work_order"])
+            .first()
+        )
+    return None
+
+
+def _instance_error(args: dict) -> list[TextContent]:
+    ref = args.get("execution_id") or args.get("work_order") or "(none given)"
+    return json_response({"error": f"Execution {ref} not found"})
+
+
+def _load_step(db, instance: ProcedureInstance, args: dict) -> StepExecution | None:
+    return (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.instance_id == instance.id,
+            StepExecution.step_number == args["step_number"],
+        )
+        .first()
+    )
+
+
+async def _get_execution_state(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    return json_response(build_execution_state(db, instance))
+
+
+async def _join_execution(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    participants = list(instance.participants or [])
+    existing = next((p for p in participants if p.get("user_id") == user.id), None)
+    if existing:
+        existing["last_active"] = datetime.now(UTC).isoformat()
+    else:
+        participants.append(
+            {
+                "user_id": user.id,
+                "user_name": user.name,
+                "joined_at": datetime.now(UTC).isoformat(),
+                "last_step": None,
+            }
+        )
+    instance.participants = participants
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": f"{user.name} joined {instance.work_order_number or instance.id}",
+            "participants": instance.participants,
+        }
+    )
+
+
+async def _focus_step(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    focus = focus_step(db, instance, step_exec, user)
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"{user.name} at step {step_exec.step_number_str or step_exec.step_number}"
+            ),
+            "step_number": step_exec.step_number,
+            "focused_at": focus.focused_at.isoformat(),
+        }
+    )
+
+
+async def _complete_step(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+    # Completing a step carries a human signature — declared trust.
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+
+    try:
+        result = complete_step_flow(
+            db,
+            instance,
+            step_exec,
+            user.id,
+            data_captured=args.get("data"),
+            notes=args.get("notes"),
+        )
+    except FlowError as err:
+        db.rollback()
+        return json_response({"error": err.message})
+    if result.validation_errors:
+        db.rollback()
+        return json_response({"error": "Validation failed", "details": result.validation_errors})
+
+    db.commit()
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"Step {step_exec.step_number_str or step_exec.step_number} "
+                f"completed by {user.name}"
+            ),
+            "step_number": step_exec.step_number,
+            "instance_completed": result.instance_completed,
+        }
+    )
+
+
+async def _attach_to_step(db, args: dict) -> list[TextContent]:
+    import mimetypes
+    import uuid
+    from pathlib import Path
+
+    from opal.db.models import Attachment
+
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+
+    file_path = args.get("file_path")
+    content = args.get("content")
+    if not file_path and content is None:
+        return json_response({"error": "Provide file_path or content"})
+
+    if file_path:
+        src = Path(file_path)
+        if not src.is_file():
+            return json_response({"error": f"File not found: {file_path}"})
+        data = src.read_bytes()
+        original_name = src.name
+        mime = mimetypes.guess_type(src.name)[0] or "application/octet-stream"
+    else:
+        data = content.encode()
+        original_name = args.get("filename") or "note.txt"
+        mime = mimetypes.guess_type(original_name)[0] or "text/plain"
+
+    settings = get_active_settings()
+    if len(data) > settings.max_upload_size:
+        return json_response(
+            {"error": f"File too large ({len(data)} bytes, max {settings.max_upload_size})"}
+        )
+
+    stored_name = f"{uuid.uuid4()}{Path(original_name).suffix}"
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    (settings.upload_dir / stored_name).write_bytes(data)
+
+    user_id = args.get("user_id")
+    attachment = Attachment(
+        original_filename=original_name.replace("/", "_").replace("\\", "_")[:200],
+        stored_filename=stored_name,
+        mime_type=mime,
+        size_bytes=len(data),
+        procedure_instance_id=instance.id,
+        step_execution_id=step_exec.id,
+        kind="capture",
+        note=args.get("note"),
+        uploaded_by_id=user_id,
+    )
+    db.add(attachment)
+    db.flush()
+    log_create(db, attachment, user_id)
+    db.commit()
+
+    return json_response(
+        {
+            "success": True,
+            "message": (
+                f"Attached {attachment.original_filename} to step "
+                f"{step_exec.step_number_str or step_exec.step_number}"
+            ),
+            "attachment_id": attachment.id,
+        }
+    )
+
+
+async def _add_step_note(db, args: dict) -> list[TextContent]:
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+
+    # One creation path: core add_step_note (also used by the JSON API).
+    # FlowError (empty body) raises before any write — nothing to roll back.
+    try:
+        note = flow_add_step_note(db, step_exec, args["note"], args.get("user_id"))
+    except FlowError as err:
+        return json_response({"error": err.message})
+    db.commit()
+    db.refresh(note)
+
+    return json_response(
+        {
+            "success": True,
+            "message": (f"Note added to step {step_exec.step_number_str or step_exec.step_number}"),
+            "note": {
+                "id": note.id,
+                "author": note.author.name if note.author else None,
+                "created_at": note.created_at.isoformat(),
+                "body": note.body,
+            },
+        }
+    )
+
+
+async def _bind_issue_hold(db, args: dict) -> list[TextContent]:
+    """Bind = step containment with the bound step as the boundary. Delegates
+    to _set_containment — the narrowing-note rule, audit comment, and the
+    completion recheck all live there (one home)."""
+    instance = _load_instance(db, args)
+    if not instance:
+        return _instance_error(args)
+    step_exec = _load_step(db, instance, args)
+    if not step_exec:
+        return json_response({"error": f"Step {args['step_number']} not found"})
+    user, error = _require_human_user(db, args)
+    if error:
+        return error
+    issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+    if not issue:
+        return json_response({"error": f"Issue {args['issue_id']} not found"})
+
+    # A hold that names one work order cannot be bound into another's step — the
+    # containment filter is per-instance, so a cross-WO bind would report
+    # success and block nothing (F3). Adopt the target WO when the issue names
+    # none yet; reject when it names a different one.
+    if issue.procedure_instance_id is None:
+        issue.procedure_instance_id = instance.id
+        db.flush()
+    elif issue.procedure_instance_id != instance.id:
+        return json_response(
+            {
+                "error": f"{issue.issue_number} belongs to work order "
+                f"{issue.procedure_instance_id}, not this execution ({instance.id})"
+            }
+        )
+
+    containment = (
+        issue.containment.value if hasattr(issue.containment, "value") else issue.containment
+    )
+    if containment == Containment.STEP.value and issue.containment_step_id == step_exec.id:
+        label = step_exec.step_number_str or str(step_exec.step_number)
+        message = f"{issue.issue_number} already holds COMPLETE of step {label}"
+        # Commit before the early return (after the attribute reads — commit
+        # expires instances): the WO adoption above is only flushed, and
+        # call_tool's cleanup closes (rolls back) the session, so without
+        # this the adoption the cross-WO seam exists for is silently lost on
+        # the re-bind path. Mirrors the normal path, which commits inside
+        # _set_containment.
+        db.commit()
+        return json_response({"success": True, "message": message})
+
+    return await _set_containment(
+        db,
+        {
+            "issue_id": issue.id,
+            "containment": Containment.STEP.value,
+            "containment_step_id": step_exec.id,
+            "note": args.get("note"),
+            "user_id": user.id,
+        },
+    )
 
 
 async def run_server():

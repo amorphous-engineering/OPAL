@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Label - {{ part.internal_pn }}</title>
-    <link rel="stylesheet" href="/static/css/tag.css">
+    <link rel="stylesheet" href="{{ static_url('css/tag.css') }}">
     <style>
         /* Print context: same tag component, paper palette. If this label
            and the on-screen tag ever differ structurally, that is a bug. */
@@ -39,7 +39,6 @@
                 uom=part.unit_of_measure,
                 tracking=part.tracking_type.value if part.tracking_type else '',
                 state=part.lifecycle_state,
-                activated_at=part.activated_at,
                 qr_url='/api/parts/' ~ part.id ~ '/qrcode',
                 pn_segments=pn_segments) }}
     <script>window.print();</script>

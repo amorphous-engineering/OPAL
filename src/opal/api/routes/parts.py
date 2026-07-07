@@ -4,7 +4,7 @@ import csv
 import io
 import re
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
@@ -48,6 +48,9 @@ class PartCreate(BaseModel):
     # "bulk" = one OPAL per batch, "serialized" = one OPAL per unit;
     # None resolves by tier convention (see default_tracking_for_tier)
     tracking_type: str | None = None
+    # Declares which sections expect content (make: BOM; buy: suppliers/POs);
+    # None resolves by heuristic: buy when an external PN is given, else make
+    procurement: Literal["make", "buy", "both"] | None = None
     tier: int = 1  # Tier level; must be one of the project's configured tiers
     parent_id: int | None = None  # Parent assembly if this is a child part
     reorder_point: Decimal | None = None
@@ -66,6 +69,7 @@ class PartUpdate(BaseModel):
     category: str | None = None
     unit_of_measure: str | None = None
     tracking_type: str | None = None  # "bulk" or "serialized"
+    procurement: Literal["make", "buy", "both"] | None = None
     tier: int | None = None
     parent_id: int | None = None
     reorder_point: Decimal | None = None
@@ -94,6 +98,7 @@ class PartResponse(BaseModel):
     category: str | None
     unit_of_measure: str
     tracking_type: str  # "bulk" or "serialized"
+    procurement: str  # "make", "buy", or "both"
     tier: int
     tier_name: str | None = None  # Populated from project config if available
     parent_id: int | None
@@ -149,6 +154,7 @@ def get_part_with_quantity(db: DbSession, part: Part) -> PartResponse:
         category=part.category,
         unit_of_measure=part.unit_of_measure,
         tracking_type=part.tracking_type,
+        procurement=part.procurement,
         tier=part.tier,
         tier_name=tier_name,
         parent_id=part.parent_id,
@@ -317,6 +323,7 @@ def create_part(
         category=part_in.category,
         unit_of_measure=part_in.unit_of_measure,
         tracking_type=part_in.tracking_type or default_tracking_for_tier(part_in.tier),
+        procurement=part_in.procurement or ("buy" if part_in.external_pn else "make"),
         tier=part_in.tier,
         parent_id=part_in.parent_id,
         reorder_point=part_in.reorder_point,
@@ -644,6 +651,7 @@ _HEADER_ALIASES: dict[str, str] = {
     "tracking_type": "tracking_type",
     "tracking type": "tracking_type",
     "tracking": "tracking_type",
+    "procurement": "procurement",
     "reorder_point": "reorder_point",
     "reorder point": "reorder_point",
 }
@@ -674,6 +682,7 @@ class ImportRowPreview(BaseModel):
     category: str | None = None
     unit_of_measure: str | None = None
     tracking_type: str | None = None
+    procurement: str | None = None
     description: str | None = None
     reorder_point: float | None = None
     errors: list[str] = []
@@ -765,6 +774,7 @@ async def import_preview(
         preview.category = row_data.get("category") or None
         preview.unit_of_measure = row_data.get("unit_of_measure") or None
         preview.tracking_type = row_data.get("tracking_type") or None
+        preview.procurement = (row_data.get("procurement") or "").lower() or None
         preview.description = row_data.get("description") or None
 
         # Parse tier
@@ -794,6 +804,11 @@ async def import_preview(
         if preview.tracking_type and preview.tracking_type.lower() not in valid_tracking:
             preview.errors.append(
                 f"Tracking type must be 'bulk' or 'serialized', got '{preview.tracking_type}'"
+            )
+
+        if preview.procurement and preview.procurement not in {"make", "buy", "both"}:
+            preview.errors.append(
+                f"Procurement must be 'make', 'buy', or 'both', got '{preview.procurement}'"
             )
 
         # Check duplicates
@@ -856,6 +871,7 @@ def import_parts(
                 category=part_in.category,
                 unit_of_measure=part_in.unit_of_measure or "EA",
                 tracking_type=part_in.tracking_type or "bulk",
+                procurement=part_in.procurement or ("buy" if part_in.external_pn else "make"),
                 tier=part_in.tier,
                 reorder_point=part_in.reorder_point,
                 is_tooling=part_in.is_tooling,

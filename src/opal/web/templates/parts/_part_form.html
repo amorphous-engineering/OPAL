@@ -26,7 +26,6 @@
                             uom=form_part.unit_of_measure,
                             tracking=form_part.tracking_type.value if form_part.tracking_type else '',
                             state=form_part.lifecycle_state,
-                            activated_at=form_part.activated_at,
                             qr_url='/api/parts/' ~ form_part.id ~ '/qrcode',
                             pn_segments=pn_segments) }}
                 {% else %}
@@ -38,6 +37,19 @@
                     {# Identity rows — absent (not disabled) once active #}
                     <div class="form-group">
                         <label class="form-label">TIER{% if not fm_edit %} <span class="text-red">*</span>{% endif %}</label>
+                        {# Tiers are project config, not a fixed trio — the
+                           segmented control holds to five, then a select #}
+                        {% if tiers | length > 5 %}
+                        <select class="form-select mono" id="pf-tier-select"
+                                onchange="if (this.value) pfSelectTier(parseInt(this.value), null)">
+                            <option value="" {% if not fm_edit %}selected{% endif %} disabled>—</option>
+                            {% for tier in tiers %}
+                            <option value="{{ tier.level }}" {% if fm_edit and form_part.tier == tier.level %}selected{% endif %}>
+                                T{{ tier.level }} {{ tier.name | upper }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
                         <div class="segmented" id="pf-tier-segments">
                             {% for tier in tiers %}
                             <button type="button" data-tier="{{ tier.level }}"
@@ -47,6 +59,7 @@
                             </button>
                             {% endfor %}
                         </div>
+                        {% endif %}
                     </div>
 
                     <div class="grid grid-2" style="gap: var(--space-md);">
@@ -65,7 +78,8 @@
                         <div class="form-group">
                             <label class="form-label" for="pf-ext">EXTERNAL REF</label>
                             <input type="text" id="pf-ext" class="form-input"
-                                   value="{{ form_prefill.get('external_pn') or '' }}" placeholder="CAD designator or vendor PN">
+                                   value="{{ form_prefill.get('external_pn') or '' }}" placeholder="CAD designator or vendor PN"
+                                   oninput="if (!pfProcurementTouched) document.getElementById('pf-procurement').value = this.value.trim() ? 'buy' : 'make';">
                         </div>
                         {% endif %}
                     </div>
@@ -109,17 +123,31 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            {# Declares which sections expect content (make: BOM;
+                               buy: suppliers/POs); untouched it follows the
+                               external-ref heuristic, the server's one home #}
+                            <label class="form-label" for="pf-procurement">PROCUREMENT</label>
+                            <select id="pf-procurement" class="form-select" onchange="pfProcurementTouched = true;">
+                                {% set proc = (form_part.procurement.value if form_part.procurement.value is defined else form_part.procurement) if fm_edit else ('buy' if form_prefill.get('external_pn') else 'make') %}
+                                <option value="make" {% if proc == 'make' %}selected{% endif %}>MAKE</option>
+                                <option value="buy" {% if proc == 'buy' %}selected{% endif %}>BUY</option>
+                                <option value="both" {% if proc == 'both' %}selected{% endif %}>BOTH</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-2" style="gap: var(--space-md);">
+                        <div class="form-group">
                             <label class="form-label" for="pf-reorder">REORDER POINT</label>
                             <input type="number" id="pf-reorder" class="form-input" step="0.0001" min="0"
                                    value="{{ '%g' % form_part.reorder_point if fm_edit and form_part.reorder_point is not none else '' }}">
                         </div>
-                    </div>
-                    <div class="grid grid-2" style="gap: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label" for="pf-cal">CALIBRATION (DAYS)</label>
                             <input type="number" id="pf-cal" class="form-input" min="1"
                                    value="{{ form_part.calibration_interval_days or '' if fm_edit else '' }}">
                         </div>
+                    </div>
+                    <div class="grid grid-2" style="gap: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label" style="display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-md);">
                                 <input type="checkbox" id="pf-tooling" {% if fm_edit and form_part.is_tooling %}checked{% endif %}>
@@ -175,6 +203,7 @@ const pfOriginalName = {{ form_part.name | tojson if fm_edit else 'null' }};
 let pfPnEdited = false;
 let pfPreviewPn = null;
 let pfTrackingTouched = pfEdit;  // edit mode always sends the value as-is
+let pfProcurementTouched = pfEdit;  // untouched, the server heuristic is the one home
 
 function openPartForm() {
     document.getElementById('part-form-overlay').style.display = 'block';
@@ -194,8 +223,10 @@ function closePartForm() {
 
 async function pfSelectTier(tier, btn) {
     pfTier = tier;
-    document.querySelectorAll('#pf-tier-segments button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    if (btn) {
+        document.querySelectorAll('#pf-tier-segments button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
     try {
         const r = await fetch('/api/parts/next-pn?tier=' + tier);
         if (!r.ok) return;
@@ -235,7 +266,7 @@ function pfClearParent() {
 async function submitPartForm() {
     const body = {
         category: document.getElementById('pf-category').value || null,
-        external_pn: document.getElementById('pf-ext').value || null,
+        external_pn: document.getElementById('pf-ext').value.trim() || null,
         unit_of_measure: document.getElementById('pf-uom').value || 'EA',
         reorder_point: document.getElementById('pf-reorder').value ? parseFloat(document.getElementById('pf-reorder').value) : null,
         calibration_interval_days: document.getElementById('pf-cal').value ? parseInt(document.getElementById('pf-cal').value) : null,
@@ -245,6 +276,9 @@ async function submitPartForm() {
     };
     if (pfTrackingTouched) {
         body.tracking_type = document.getElementById('pf-tracking').value;
+    }
+    if (pfProcurementTouched) {
+        body.procurement = document.getElementById('pf-procurement').value;
     }
     const metadataText = document.getElementById('pf-metadata').value;
     if (metadataText && metadataText.trim()) {

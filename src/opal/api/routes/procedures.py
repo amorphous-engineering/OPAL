@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
@@ -19,6 +19,7 @@ from opal.db.models.procedure import (
     ProcedureType,
     ProcedureVersion,
     StepDependency,
+    StepImage,
     StepKit,
     UsageType,
 )
@@ -45,6 +46,7 @@ class StepSchema(BaseModel):
     estimated_duration_minutes: int | None = None
     required_role: str | None = None
     caution: str | None = None
+    strict_sequence: bool = False
     workcenter_id: int | None = None
     sub_steps: list["StepSchema"] = []
 
@@ -104,6 +106,7 @@ class StepCreate(BaseModel):
     estimated_duration_minutes: int | None = Field(None, ge=1)
     required_role: str | None = Field(None, max_length=50)
     caution: str | None = None
+    strict_sequence: bool = False
     parent_step_id: int | None = Field(None, description="Parent op ID for sub-steps")
 
 
@@ -118,6 +121,7 @@ class StepUpdate(BaseModel):
     estimated_duration_minutes: int | None = Field(None, ge=1)
     required_role: str | None = Field(None, max_length=50)
     caution: str | None = None
+    strict_sequence: bool | None = None
 
 
 class StepReorder(BaseModel):
@@ -202,6 +206,7 @@ def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
             estimated_duration_minutes=step.estimated_duration_minutes,
             required_role=step.required_role,
             caution=step.caution,
+            strict_sequence=step.strict_sequence,
             workcenter_id=step.workcenter_id,
             sub_steps=[build_schema(s) for s in sorted(sub_steps, key=lambda x: x.order)],
         )
@@ -490,6 +495,7 @@ def add_step(
         estimated_duration_minutes=data.estimated_duration_minutes,
         required_role=data.required_role,
         caution=data.caution,
+        strict_sequence=data.strict_sequence,
     )
     db.add(step)
     db.flush()
@@ -538,6 +544,8 @@ def update_step(
         step.required_role = data.required_role
     if "caution" in data.model_fields_set:
         step.caution = data.caution
+    if data.strict_sequence is not None:
+        step.strict_sequence = data.strict_sequence
 
     log_update(db, step, old_values, user_id)
     db.commit()
@@ -575,6 +583,161 @@ def delete_step(
     for s in remaining:
         s.order -= 1
 
+    db.commit()
+
+
+# ============ Step images (authored reference imagery) ============
+
+
+class StepImageResponse(BaseModel):
+    """Authored step image."""
+
+    id: int
+    step_id: int
+    attachment_id: int
+    caption: str | None = None
+    position: int
+
+    model_config = {"from_attributes": True}
+
+
+class StepImageUpdate(BaseModel):
+    """Update a step image's caption."""
+
+    caption: str | None = None
+
+
+def _get_procedure_step(db: DbSession, procedure_id: int, step_id: int) -> ProcedureStep:
+    step = (
+        db.query(ProcedureStep)
+        .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
+        .first()
+    )
+    if not step:
+        raise HTTPException(status_code=404, detail="Step not found")
+    return step
+
+
+@router.get("/{procedure_id}/steps/{step_id}/images", response_model=list[StepImageResponse])
+def list_step_images(
+    procedure_id: int,
+    step_id: int,
+    db: DbSession,
+) -> list[StepImageResponse]:
+    """List a step's authored reference images, in display order."""
+    step = _get_procedure_step(db, procedure_id, step_id)
+    return [StepImageResponse.model_validate(img) for img in step.images]
+
+
+@router.post(
+    "/{procedure_id}/steps/{step_id}/images",
+    response_model=StepImageResponse,
+    status_code=201,
+)
+async def add_step_image(
+    procedure_id: int,
+    step_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+    file: UploadFile,
+    caption: str | None = Form(default=None),
+) -> StepImageResponse:
+    """Attach an authored reference image to a step.
+
+    Stored as an attachment (kind='step_image', procedure scope) plus a
+    StepImage link carrying caption and position. Published versions
+    snapshot the attachment id — the file outlives the link.
+    """
+    step = _get_procedure_step(db, procedure_id, step_id)
+
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="Step images must be image files")
+
+    from opal.api.routes.attachments import upload_attachment
+
+    # Called as a plain function, not through FastAPI: the omitted Form(...)
+    # parameters would otherwise default to truthy sentinel objects, so pass
+    # them explicitly as None.
+    attachment = await upload_attachment(
+        db=db,
+        user_id=user_id,
+        file=file,
+        procedure_instance_id=None,
+        step_execution_id=None,
+        issue_id=None,
+        procedure_id=procedure_id,
+        kind="step_image",
+        note=None,
+    )
+
+    max_position = (
+        db.query(func.max(StepImage.position)).filter(StepImage.step_id == step.id).scalar()
+    )
+    image = StepImage(
+        step_id=step.id,
+        attachment_id=attachment.id,
+        caption=caption,
+        position=(max_position if max_position is not None else -1) + 1,
+    )
+    db.add(image)
+    db.flush()
+    log_create(db, image, user_id)
+    db.commit()
+    db.refresh(image)
+    return StepImageResponse.model_validate(image)
+
+
+@router.patch(
+    "/{procedure_id}/steps/{step_id}/images/{image_id}",
+    response_model=StepImageResponse,
+)
+def update_step_image(
+    procedure_id: int,
+    step_id: int,
+    image_id: int,
+    data: StepImageUpdate,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> StepImageResponse:
+    """Update a step image's caption."""
+    _get_procedure_step(db, procedure_id, step_id)
+    image = (
+        db.query(StepImage).filter(StepImage.id == image_id, StepImage.step_id == step_id).first()
+    )
+    if not image:
+        raise HTTPException(status_code=404, detail="Step image not found")
+
+    old_values = get_model_dict(image)
+    if "caption" in data.model_fields_set:
+        image.caption = data.caption
+    log_update(db, image, old_values, user_id)
+    db.commit()
+    db.refresh(image)
+    return StepImageResponse.model_validate(image)
+
+
+@router.delete("/{procedure_id}/steps/{step_id}/images/{image_id}", status_code=204)
+def delete_step_image(
+    procedure_id: int,
+    step_id: int,
+    image_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> None:
+    """Unlink an authored image from the step.
+
+    The attachment row and file persist — published versions reference the
+    attachment id and must keep resolving.
+    """
+    _get_procedure_step(db, procedure_id, step_id)
+    image = (
+        db.query(StepImage).filter(StepImage.id == image_id, StepImage.step_id == step_id).first()
+    )
+    if not image:
+        raise HTTPException(status_code=404, detail="Step image not found")
+
+    log_delete(db, image, user_id)
+    db.delete(image)
     db.commit()
 
 
@@ -848,6 +1011,18 @@ def publish_version(
         if prereq_order is not None:
             depends_on_map.setdefault(d.step_id, []).append(prereq_order)
 
+    # Bulk-load authored step images; snapshotted by attachment id (files are
+    # immutable on disk and StepImage deletion only unlinks).
+    all_images = (
+        db.query(StepImage)
+        .filter(StepImage.step_id.in_(step_ids))
+        .order_by(StepImage.position)
+        .all()
+    )
+    images_map: dict[int, list[StepImage]] = {}
+    for img in all_images:
+        images_map.setdefault(img.step_id, []).append(img)
+
     # Create snapshot with hierarchical structure
     def step_to_dict(step: ProcedureStep) -> dict:
         return {
@@ -864,8 +1039,13 @@ def publish_version(
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "required_role": step.required_role,
             "caution": step.caution,
+            "strict_sequence": step.strict_sequence,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
+            "images": [
+                {"attachment_id": img.attachment_id, "caption": img.caption}
+                for img in images_map.get(step.id, [])
+            ],
             "step_kit": [
                 {
                     "part_id": sk.part_id,
@@ -1012,6 +1192,7 @@ def restore_from_version(
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
                 required_role=step_data.get("required_role"),
                 caution=step_data.get("caution"),
+                strict_sequence=step_data.get("strict_sequence", False),
                 workcenter_id=step_data.get("workcenter_id"),
             )
             db.add(new_step)
@@ -1036,6 +1217,7 @@ def restore_from_version(
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
                 required_role=step_data.get("required_role"),
                 caution=step_data.get("caution"),
+                strict_sequence=step_data.get("strict_sequence", False),
                 workcenter_id=step_data.get("workcenter_id"),
             )
             db.add(new_step)
@@ -1668,6 +1850,7 @@ def clone_procedure(
             estimated_duration_minutes=source_step.estimated_duration_minutes,
             required_role=source_step.required_role,
             caution=source_step.caution,
+            strict_sequence=source_step.strict_sequence,
             workcenter_id=source_step.workcenter_id,
         )
         db.add(new_step)

@@ -1,7 +1,6 @@
 <div>
 {% call ok.panel(procedure.name, actions=ok.status(procedure.status | upper, "ok" if procedure.status == "active" else ("error" if procedure.status == "deprecated" else "warn"))) %}
     {% call ok.table() %}
-        {{ ok.detail_row("ID", ok.id_cell(procedure.id), th_width="120px") }}
         {{ ok.detail_row("TYPE", ok.status(procedure.procedure_type | upper, "info" if procedure.procedure_type == "build" else "default"), th_width="120px") }}
         <tr>
             <th style="width: 120px;">STATUS</th>

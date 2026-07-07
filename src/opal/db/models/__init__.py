@@ -7,7 +7,7 @@ from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential
 from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
-from opal.db.models.execution import ProcedureInstance, StepExecution
+from opal.db.models.execution import ProcedureInstance, StepExecution, StepFocus, StepNote
 from opal.db.models.genealogy import AssemblyComponent
 from opal.db.models.inventory import (
     InventoryConsumption,
@@ -28,6 +28,7 @@ from opal.db.models.procedure import (
     ProcedureStep,
     ProcedureVersion,
     StepDependency,
+    StepImage,
     StepKit,
 )
 from opal.db.models.purchase import Purchase, PurchaseExpense, PurchaseLine
@@ -78,9 +79,12 @@ __all__ = [
     "RiskIssueLink",
     "RiskIssueRole",
     "RiskReference",
+    "StepFocus",
     "StepDependency",
     "StepExecution",
+    "StepImage",
     "StepKit",
+    "StepNote",
     "StockTestResult",
     "StockTransfer",
     "Supplier",

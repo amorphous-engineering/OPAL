@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-{% call ok.panel("EXECUTIONS", actions=ok.btn("+ NEW EXECUTION", href="/executions/new", variant="primary")) %}
+{% call ok.panel("EXECUTIONS", actions=ok.btn("+ CUT WO", href="/executions/new", variant="primary")) %}
         <div class="toolbar">
             <div class="toolbar-filter">
                 <select id="procedure-filter" name="procedure_id" class="form-select"
@@ -33,10 +33,8 @@
         {% call ok.table() %}
             <thead>
                 <tr>
-                    {{ ok.th("ID", width="60px") }}
-                    {{ ok.th("PROCEDURE") }}
-                    {{ ok.th("VERSION", width="80px") }}
                     {{ ok.th("WORK ORDER", width="120px") }}
+                    {{ ok.th("PROCEDURE") }}
                     {{ ok.th("STATUS", width="100px") }}
                     {{ ok.th("PROGRESS", width="100px") }}
                     {{ ok.th("STARTED", width="170px") }}
@@ -47,7 +45,7 @@
                    hx-trigger="load"
                    hx-swap="innerHTML">
                 <tr>
-                    <td colspan="7" class="text-muted" style="text-align: center;">Loading...</td>
+                    <td colspan="6" class="text-muted" style="text-align: center;">Loading...</td>
                 </tr>
             </tbody>
         {% endcall %}
