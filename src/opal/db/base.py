@@ -252,6 +252,13 @@ def init_database(engine=None) -> None:
         _run_alembic_upgrade(engine)
         logger.info("Database migrations complete.")
 
+        # Batch migrations recreate tables, which silently drops their FTS
+        # sync triggers; verify the FTS schema and rebuild it if incomplete.
+        from opal.db.fts import check_fts_integrity
+
+        with engine.begin() as conn:
+            check_fts_integrity(conn)
+
 
 def stamp_head(engine, purge: bool = False) -> None:
     """Stamp the alembic version table at head (public wrapper).
@@ -381,8 +388,8 @@ def _ensure_stamped_revisions_known(engine: Any, cfg: Any) -> None:
             raise _unknown_revision_error(engine, revision) from exc
 
 
-def _run_alembic_upgrade(engine) -> None:
-    """Run alembic upgrade to head programmatically.
+def _run_alembic_upgrade(engine, revision: str = "head") -> None:
+    """Run alembic upgrade to the given revision (default head) programmatically.
 
     Migrations run on a plain engine WITHOUT the foreign_keys=ON pragma
     listener: alembic batch mode recreates tables via copy/DROP/RENAME, and
@@ -411,7 +418,7 @@ def _run_alembic_upgrade(engine) -> None:
         _ensure_stamped_revisions_known(migration_engine, cfg)
         with migration_engine.begin() as conn:
             cfg.attributes["connection"] = conn
-            command.upgrade(cfg, "head")
+            command.upgrade(cfg, revision)
     finally:
         if dispose:
             migration_engine.dispose()

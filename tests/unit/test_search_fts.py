@@ -8,7 +8,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from opal.db.base import Base
-from opal.db.fts import ENTITY_SPECS, create_fts_schema, drop_fts_schema, fts_ready
+from opal.db.fts import (
+    ENTITY_SPECS,
+    check_fts_integrity,
+    create_fts_schema,
+    drop_fts_schema,
+    expected_triggers,
+    fts_ready,
+    missing_fts_objects,
+)
 from opal.db.models import Part, Supplier
 from opal.db.models.issue import Issue
 
@@ -115,6 +123,48 @@ def test_search_endpoint_uses_fts(fts_engine, fts_session) -> None:
     r = client.get("/api/search", params={"q": "os"})
     assert r.status_code == 200
     assert any(item["entity_type"] == "part" for item in r.json())
+
+
+def test_fts_integrity_intact_schema_reports_nothing(fts_engine) -> None:
+    with fts_engine.begin() as conn:
+        assert missing_fts_objects(conn) == []
+        assert check_fts_integrity(conn) == []
+
+
+def test_fts_integrity_detects_and_heals_dropped_trigger(fts_engine, fts_session) -> None:
+    """A batch table-recreate drops sync triggers; the startup check must heal.
+
+    Simulates the historical exposure (issue #43): drop part_fts triggers as a
+    batch recreate of `part` would, insert a part that the stale index misses,
+    then verify check_fts_integrity names the missing triggers, rebuilds the
+    schema, and backfills the missed row.
+    """
+    part_spec = next(spec for spec in ENTITY_SPECS if spec.entity_type == "part")
+    dropped = expected_triggers(part_spec)
+    with fts_engine.begin() as conn:
+        for trigger in dropped:
+            conn.exec_driver_sql(f"DROP TRIGGER {trigger}")
+
+    # With triggers gone, this insert never reaches the index (stale index).
+    fts_session.add(Part(name="Reaction Wheel", internal_pn="PN-RW-1", tier=1))
+    fts_session.commit()
+
+    def match_count() -> int:
+        with fts_engine.connect() as conn:
+            return conn.exec_driver_sql(
+                "SELECT count(*) FROM part_fts WHERE part_fts MATCH '\"reaction\"'"
+            ).scalar_one()
+
+    assert match_count() == 0
+
+    with fts_engine.begin() as conn:
+        missing = check_fts_integrity(conn)
+    assert sorted(missing) == sorted(dropped)
+
+    # Healed: triggers restored and the missed row backfilled.
+    with fts_engine.begin() as conn:
+        assert missing_fts_objects(conn) == []
+    assert match_count() == 1
 
 
 def test_search_falls_back_without_fts_tables(fts_engine, fts_session) -> None:
