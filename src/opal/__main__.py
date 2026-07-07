@@ -70,9 +70,13 @@ def cmd_serve(args: argparse.Namespace) -> None:
     # Serve must work against a brand-new project the way the launcher
     # does: create directories and initialize/migrate the schema.
     settings.ensure_directories()
-    from opal.db.base import get_engine, init_database
+    from opal.db.base import UnknownDatabaseRevisionError, get_engine, init_database
 
-    init_database(get_engine())
+    try:
+        init_database(get_engine())
+    except UnknownDatabaseRevisionError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     host = args.host or settings.host
     port = args.port or settings.port
 
@@ -200,7 +204,7 @@ def cmd_seed(args: argparse.Namespace) -> None:
 def cmd_init(args: argparse.Namespace) -> None:
     """Initialize OPAL (create directories, initialize/migrate database)."""
     from opal.config import get_active_settings
-    from opal.db.base import get_engine, init_database
+    from opal.db.base import UnknownDatabaseRevisionError, get_engine, init_database
 
     # Configure project first
     _setup_project(args)
@@ -214,6 +218,9 @@ def cmd_init(args: argparse.Namespace) -> None:
         engine = get_engine()
         init_database(engine)
         print("Database initialized")
+    except UnknownDatabaseRevisionError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"Database initialization failed: {e}")
         print("If developing, you can use: opal migrate upgrade")
