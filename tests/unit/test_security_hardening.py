@@ -291,3 +291,51 @@ def test_mcp_clamp_limit():
     assert _clamp_limit(0, 50) == 50
     assert _clamp_limit(-5, 50) == 50
     assert _clamp_limit("garbage", 50) == 50
+
+
+# ── web/config hardening: /docs gating + OriginCheck ──
+
+
+def test_openapi_schema_not_served(client):
+    # Outside debug the FastAPI OpenAPI schema / Swagger / ReDoc routes are
+    # disabled; /openapi.json also sits behind the web-auth redirect. Either
+    # way it never returns the schema. (/docs is OPAL's own documentation
+    # page, which disabling the built-in explorer unshadows — not asserted
+    # here beyond it no longer being the API explorer.)
+    assert client.get("/openapi.json", follow_redirects=False).status_code != 200
+
+
+def test_origin_check_rejects_null_origin(client):
+    resp = client.post(
+        "/api/datasets",
+        json={"name": "x", "schema": {"fields": []}},
+        headers={"Origin": "null"},
+    )
+    assert resp.status_code == 403
+
+
+def test_origin_check_rejects_cross_origin(client):
+    resp = client.post(
+        "/api/datasets",
+        json={"name": "x", "schema": {"fields": []}},
+        headers={"Origin": "http://evil.example"},
+    )
+    assert resp.status_code == 403
+
+
+def test_origin_check_rejects_cross_origin_referer(client):
+    resp = client.post(
+        "/api/datasets",
+        json={"name": "x", "schema": {"fields": []}},
+        headers={"Referer": "http://evil.example/x"},
+    )
+    assert resp.status_code == 403
+
+
+def test_origin_check_allows_same_origin(client):
+    resp = client.post(
+        "/api/datasets",
+        json={"name": "same origin ok", "schema": {"fields": []}},
+        headers={"Origin": "http://testserver"},
+    )
+    assert resp.status_code == 201

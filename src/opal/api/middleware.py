@@ -28,18 +28,35 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method in UNSAFE_METHODS:
+            host = request.headers.get("host", "")
             origin = request.headers.get("origin")
-            if origin and origin != "null":
-                origin_host = urlparse(origin).netloc
-                if origin_host and origin_host != request.headers.get("host", ""):
-                    logger.warning(
-                        "Rejected cross-origin %s %s from origin %s",
-                        request.method,
-                        request.url.path,
-                        origin,
-                    )
-                    return PlainTextResponse("Cross-origin request rejected", status_code=403)
+            if origin is not None:
+                # An explicit Origin must match the host. `null` (sandboxed
+                # iframe, file://, opaque redirect) is never a legitimate
+                # same-origin app request here — reject rather than allow it.
+                origin_host = "" if origin == "null" else urlparse(origin).netloc
+                if origin == "null" or (origin_host and origin_host != host):
+                    return self._reject(request, f"origin {origin}")
+            else:
+                # No Origin (curl, the TUI, bearer clients) can't carry a
+                # victim's cookie, so it passes — but if a browser sent a
+                # Referer, cross-check it as a fallback.
+                referer = request.headers.get("referer")
+                if referer:
+                    ref_host = urlparse(referer).netloc
+                    if ref_host and ref_host != host:
+                        return self._reject(request, f"referer {referer}")
         return await call_next(request)
+
+    @staticmethod
+    def _reject(request: Request, source: str) -> Response:
+        logger.warning(
+            "Rejected cross-origin %s %s from %s",
+            request.method,
+            request.scope.get("path", request.url.path),
+            source,
+        )
+        return PlainTextResponse("Cross-origin request rejected", status_code=403)
 
 
 class UserSelectionMiddleware(BaseHTTPMiddleware):

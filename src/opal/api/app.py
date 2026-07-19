@@ -102,12 +102,17 @@ def create_app() -> FastAPI:
     settings = get_settings()
     logging.getLogger(__name__).info("OPAL auth_mode=%s", settings.auth_mode)
 
+    # The interactive API explorer enumerates every endpoint; on a semi-trusted
+    # LAN it is pre-auth reconnaissance. Serve it only in debug.
     app = FastAPI(
         title="OPAL",
         description="Operations, Procedures, Assets, Logistics - ERP for small teams",
         version="0.1.0",
         lifespan=lifespan,
         debug=settings.debug,
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
+        openapi_url="/openapi.json" if settings.debug else None,
     )
 
     # Setup middleware

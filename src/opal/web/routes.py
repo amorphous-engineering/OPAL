@@ -4547,9 +4547,23 @@ def settings_onshape_configure_save(
     else:
         new_webhook = current.onshape_webhook_secret
 
+    # Validate the outbound base URL: every Onshape call (carrying the signed
+    # credential) is made against it, so restrict it to https to keep a
+    # compromised/mistyped config from pointing the credentialed client at an
+    # internal http target.
+    resolved_base = base_url.strip() or "https://cad.onshape.com"
+    if not resolved_base.startswith("https://") or len(resolved_base) <= len("https://"):
+        context = _onshape_form_context(request, db)
+        context["save_result"] = {
+            "ok": False,
+            "message": "Base URL must be an https:// URL.",
+        }
+        context["test_result"] = None
+        return templates.TemplateResponse("settings/onshape_configure.html", context)
+
     set_app_setting(db, "onshape_access_key", access_key.strip())
     set_app_setting(db, "onshape_secret_key", new_secret)
-    set_app_setting(db, "onshape_base_url", base_url.strip() or "https://cad.onshape.com")
+    set_app_setting(db, "onshape_base_url", resolved_base)
     set_app_setting(db, "onshape_poll_interval_minutes", str(max(0, poll_interval_minutes)))
     set_app_setting(db, "onshape_webhook_secret", new_webhook)
     db.commit()
