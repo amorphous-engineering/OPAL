@@ -241,3 +241,39 @@ def test_step_ops_rejected_on_soft_deleted_procedure(client):
     )
     assert client.get(f"/api/procedures/{proc_id}/steps/{step_id}/kit").status_code == 404
     assert client.delete(f"/api/procedures/{proc_id}/steps/{step_id}").status_code == 404
+
+
+# ── file handling: CSV formula injection, header filename, upload size ──
+
+
+def test_csv_export_neutralizes_formula(client):
+    ds = client.post(
+        "/api/datasets",
+        json={"name": "Formulas", "schema": {"fields": [{"name": "note", "type": "text"}]}},
+    ).json()
+    client.post(f"/api/datasets/{ds['id']}/points", json={"values": {"note": "=1+2"}})
+
+    resp = client.get(f"/api/datasets/{ds['id']}/export")
+    assert resp.status_code == 200
+    assert "'=1+2" in resp.text  # leading '=' neutralized with a quote
+
+
+def test_csv_export_filename_has_no_quote_breakout(client):
+    ds = client.post(
+        "/api/datasets",
+        json={"name": 'Evil"; x=1', "schema": {"fields": []}},
+    ).json()
+    resp = client.get(f"/api/datasets/{ds['id']}/export")
+    cd = resp.headers["content-disposition"]
+    assert cd.count('"') == 2  # only the wrapping quotes; the name's " was stripped
+
+
+def test_upload_rejects_oversize_by_declared_size(client, monkeypatch):
+    from opal.config import get_active_settings
+
+    monkeypatch.setattr(get_active_settings(), "max_upload_size", 10)
+    resp = client.post(
+        "/api/attachments/upload",
+        files={"file": ("x.png", b"x" * 5000, "image/png")},
+    )
+    assert resp.status_code == 413

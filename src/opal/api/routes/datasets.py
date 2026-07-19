@@ -2,6 +2,7 @@
 
 import csv
 import io
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -428,6 +429,27 @@ def get_chart_data(
 
 # ============ CSV Export ============
 
+# Characters that make a spreadsheet treat a cell as a formula/command.
+_CSV_FORMULA_LEADERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: object) -> str:
+    """Neutralize spreadsheet formula injection (OWASP): prefix any cell that
+    starts with a formula leader with a single quote so Excel/LibreOffice treat
+    it as text. Data-point values are user-supplied, so an unescaped ``=…``
+    would execute when another user opens the export."""
+    text = "" if value is None else str(value)
+    if text and text[0] in _CSV_FORMULA_LEADERS:
+        return "'" + text
+    return text
+
+
+def _safe_filename(name: str) -> str:
+    """ASCII-only, token-safe filename component for Content-Disposition — a
+    raw name could contain a quote and inject extra header parameters."""
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip("._")
+    return cleaned[:100] or "dataset"
+
 
 @router.get("/{dataset_id}/export")
 def export_dataset_csv(
@@ -448,20 +470,22 @@ def export_dataset_csv(
         .all()
     )
 
-    field_names = [f["name"] for f in dataset.data_schema.get("fields", [])]
+    # ORM attribute is `schema` (the Pydantic layer aliases it to data_schema);
+    # `dataset.data_schema` was a latent AttributeError that 500'd every export.
+    field_names = [f["name"] for f in dataset.schema.get("fields", [])]
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["recorded_at"] + field_names)
+    writer.writerow([_csv_safe(c) for c in ["recorded_at", *field_names]])
 
     for point in points:
         row = [point.recorded_at.strftime("%Y-%m-%dT%H:%M:%S")]
         for fname in field_names:
             row.append(point.values.get(fname, ""))
-        writer.writerow(row)
+        writer.writerow([_csv_safe(c) for c in row])
 
     output.seek(0)
-    filename = f"dataset_{dataset_id}_{dataset.name.replace(' ', '_')}.csv"
+    filename = f"dataset_{dataset_id}_{_safe_filename(dataset.name)}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
