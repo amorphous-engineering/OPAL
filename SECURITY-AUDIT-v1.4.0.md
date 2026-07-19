@@ -66,33 +66,44 @@ Fixed on this branch where the change is small and unambiguous:
 - **M2 — Onshape document/config mutation + sync available to non-admins** (`src/opal/api/routes/onshape.py:130,232,268,341,481`). Writes the same `project_config` that `project.py` guards behind admin, and mass-mutates the parts catalog. **Fixed:** `RequiredAdmin` on the mutating/sync/delete endpoints (read endpoints stay open).
 - **M3 — `GET /api/users/{id}` leaks email + admin flag** with no admin gate (`src/opal/api/routes/users.py:132-153`), while `list_users` is admin-only. **Fixed:** gate behind `RequiredAdmin`.
 
-Left as backlog (see below), not fixed on this branch:
+Also fixed on this branch (second pass):
 
-- **M4** — `POST /inventory/{id}/count` overwrites quantity with no reconciling ledger row (`inventory.py:913`).
-- **M5** — `POST /inventory/transfer` skips soft-delete/active-part checks (`inventory.py:576`).
-- **M6** — Procedure child endpoints (steps/kits/outputs/versions) don't verify the parent's `deleted_at`, so a soft-deleted procedure's data stays readable and mutable (`procedures.py:519,565,1341,1520,1607,1127`).
-- **M7** — Login rate limiter is web-password-only and keyed `client_ip:username`; behind a proxy the IP collapses (lockout DoS + attacker indistinguishability); passkey/token paths unthrottled.
-- **M8** — WebAuthn challenge is client-held and not single-use (replay within the 5-minute window; counter check is skipped when the authenticator reports counter 0).
+- **M4** — `POST /inventory/{id}/count` now writes a reconciling ledger row and enforces the negative/serialized guards.
+- **M5** — `POST /inventory/transfer` now joins `Part` and requires `deleted_at IS NULL`.
+- **M6** — Procedure step/kit/output child endpoints reject a soft-deleted parent via `_require_live_procedure`.
+
+Still backlog — these need a design decision or a migration (see below):
+
+- **M7** — Login rate limiter is web-password-only and keyed `client_ip:username`; behind a proxy the IP collapses (lockout DoS + attacker indistinguishability); passkey/token paths unthrottled. *(Needs the trusted-proxy config decision.)*
+- **M8** — WebAuthn challenge is client-held and not single-use (replay within the 5-minute window; counter check is skipped when the authenticator reports counter 0). *(Needs a server-side challenge store.)*
 
 ---
 
 ## Hardening backlog (defense-in-depth; not directly exploitable in the default posture)
 
-- **Session `Secure` flag** derives from `request.url.scheme`, blind to a TLS-terminating proxy (`X-Forwarded-Proto` not honored) — cookie issued without `Secure` behind such a proxy.
+**Fixed on this branch (second pass):**
+
+- **`/docs`, `/redoc`, `/openapi.json`** — disabled outside `debug`; also unshadows OPAL's own `/docs` page.
+- **`onshape_base_url`** — now validated as `https://` on save.
+- **Upload size** — now pre-checked against `UploadFile.size` (413) before the body is buffered.
+- **CSV export** — leading `= + - @` cells now neutralized; **Content-Disposition** filename ASCII-sanitized. (Also fixed a latent bug that 500'd every export.)
+- **`ok.btn` macro** — literals-only contract documented on the macro.
+- **OriginCheck** — now rejects `Origin: null` and cross-checks `Referer` when Origin is absent.
+- **MCP** — `list_*` limits clamped to 1000; `bulk_*` batches capped at 500.
+
+**Still open (need a decision or a migration):**
+
+- **API tokens never expire** — add optional expiry / idle timeout (needs a small model migration + a TTL default). Surface `last_used_at` in the UI.
+- **Session `Secure` flag** derives from `request.url.scheme`, blind to a TLS-terminating proxy (`X-Forwarded-Proto` not honored). *(Ties to a trusted-proxy config concept — see below.)*
 - **WebAuthn RP ID** falls back to the client `Host` header when `OPAL_PASSKEY_RP_ID` is unset — pin it for non-localhost deployments.
-- **API tokens never expire** — add optional expiry / idle timeout; surface `last_used_at` in the UI.
-- **`/docs`, `/redoc`, `/openapi.json`** are served unauthenticated on the LAN — gate behind auth or disable unless `debug`.
+- **Login rate-limiter keying (M7)** — key on a trusted `X-Forwarded-For` behind a configured proxy, or on username with a separate global/IP cap; throttle the passkey handshake.
+- **Uploaded MIME** is trusted from the client `Content-Type` (not sniffed) — sniffing needs a new dependency (`python-magic`/`filetype`); stored-XSS-on-download is already blocked by the forced `attachment` disposition, so this is low-priority.
 - **Default bind `0.0.0.0`** — document; consider defaulting to a specific interface.
-- **`onshape_base_url`** is a runtime-mutable outbound-request base (admin-gated) — validate scheme/host allowlist on save.
-- **Upload size** is enforced only after the whole body is read into memory (`attachments.py:110-115`) — pre-check `Content-Length`/`UploadFile.size` and stream in bounded chunks.
-- **Uploaded MIME** is trusted from the client `Content-Type` (not sniffed) — sniff and reconcile; stored-XSS-on-download is already blocked by the forced `attachment` disposition.
-- **CSV export** does not neutralize leading `= + - @` (`datasets.py:457-461`) — spreadsheet formula injection; prefix-guard on export.
-- **`Content-Disposition` filename** interpolates the unsanitized dataset name (`datasets.py:464-468`) — encode/sanitize.
-- **`ok.btn` macro** injects `attrs` via `| safe` (`_macros.html:15,17`) — all callers are literals today; document the contract or replace with a structured API.
-- **OriginCheck** fails open on `Origin: null` / missing Origin (`middleware.py:31`) — SameSite=Lax already carries the real defense; tighten for old clients.
 - **`updater.py:138`** uses `follow_redirects=True` — safe today (fixed URL) but keep the update URL non-attacker-influenced.
-- **MCP** architectural auth (see H5), bulk-size caps, `list_*` limit clamp, hard-delete → soft-delete.
+- **MCP** architectural auth (see H5): bind an authenticated operator identity to the session.
 - **Attachments/datasets** have no per-user access control (flat by design) — if compartmentalization is ever wanted, scope reads and restrict deletes to admin/uploader.
+
+A recurring dependency below is a **trusted-proxy config concept** (e.g. `OPAL_TRUST_PROXY` + trusted-proxy CIDRs): it would let OPAL honor `X-Forwarded-Proto` (Secure flag), `X-Forwarded-For` (rate-limiter keying, M7), and interacts with the exe-proxy work (C1). Worth deciding once, then applying across these items.
 
 ---
 
