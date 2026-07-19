@@ -2972,6 +2972,12 @@ async def _raise_issue(db, args: dict) -> list[TextContent]:
 
 async def _sign_disposition(db, args: dict) -> list[TextContent]:
     """Sign a disposition — releases every containment the issue holds."""
+    # A disposition is a signed quality record: it must be attributed to a real,
+    # active human, not a caller-supplied id for an arbitrary/absent user.
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+
     issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
     if not issue:
         return json_response({"success": False, "error": "Issue not found"})
@@ -3001,9 +3007,9 @@ async def _sign_disposition(db, args: dict) -> list[TextContent]:
     old_values = get_model_dict(issue)
     issue.disposition_type = disposition_type
     issue.disposition_rationale = args["rationale"]
-    issue.dispositioned_by_id = args["user_id"]
+    issue.dispositioned_by_id = user.id
     issue.dispositioned_at = datetime.now(UTC)
-    log_update(db, issue, old_values, args["user_id"])
+    log_update(db, issue, old_values, user.id)
     db.flush()
     _recheck_instance_completion(db, issue)
     db.commit()
@@ -6235,7 +6241,23 @@ async def _attach_to_step(db, args: dict) -> list[TextContent]:
         return json_response({"error": "Provide file_path or content"})
 
     if file_path:
-        src = Path(file_path)
+        # Confine reads to the upload/staging directory. Without this, a caller
+        # (e.g. a prompt-injected agent) could read any file the server process
+        # can — /etc/passwd, ~/.ssh keys — into a downloadable attachment.
+        staging = get_active_settings().upload_dir.resolve()
+        try:
+            src = (
+                (staging / file_path).resolve()
+                if not Path(file_path).is_absolute()
+                else Path(file_path).resolve()
+            )
+            src.relative_to(staging)
+        except ValueError:
+            return json_response(
+                {
+                    "error": "file_path must be inside the upload directory; pass inline content instead"
+                }
+            )
         if not src.is_file():
             return json_response({"error": f"File not found: {file_path}"})
         data = src.read_bytes()

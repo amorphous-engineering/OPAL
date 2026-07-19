@@ -90,6 +90,13 @@ class Settings(BaseSettings):
 
     # Authentication
     auth_mode: str = Field(default="local", description="Auth mode: 'local' or 'exe'")
+    exe_proxy_secret: str = Field(
+        default="",
+        description="Shared secret the trusted proxy must present in the "
+        "X-ExeDev-Proxy-Secret header when auth_mode='exe'. When unset, exe "
+        "identity headers are refused (fail closed) — set this before "
+        "deploying exe mode, and bind the app to 127.0.0.1 behind the proxy.",
+    )
     auth_secret: str = Field(
         default="",
         description="Secret for signing short-lived auth payloads (auto-generated "

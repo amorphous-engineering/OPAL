@@ -39,9 +39,14 @@ class InventoryCreate(BaseModel):
 
 
 class InventoryUpdate(BaseModel):
-    """Schema for updating an inventory record."""
+    """Schema for updating an inventory record.
 
-    quantity: Decimal | None = None
+    Deliberately has no ``quantity`` field: on-hand stock is traceable and may
+    only change through ``/adjust`` or ``/count``, which write a ledger delta
+    and enforce the negative/serialized guards. A blind ``PATCH`` of quantity
+    would rewrite stock with no history.
+    """
+
     location: str | None = None
     lot_number: str | None = None
     expiration_date: date | None = None

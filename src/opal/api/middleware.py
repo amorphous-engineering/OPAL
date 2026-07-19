@@ -1,5 +1,6 @@
 """FastAPI middleware configuration."""
 
+import hmac
 import logging
 from urllib.parse import quote, urlparse
 
@@ -94,7 +95,10 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
 
     async def _dispatch_local(self, request: Request, call_next) -> Response:
         """Local mode: require a valid session for web pages."""
-        path = request.url.path
+        # Gate on the raw routed ASGI path, not request.url (which is
+        # reconstructed and can be desynced from the routed path via a crafted
+        # Host header), so an exempt-prefix match cannot skip the auth check.
+        path = request.scope.get("path", request.url.path)
         if any(path.startswith(p) for p in self.LOCAL_EXEMPT):
             return await call_next(request)
 
@@ -109,9 +113,19 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
 
     async def _dispatch_exe(self, request: Request, call_next) -> Response:
         """Exe mode: trust proxy headers, auto-provision users, mint sessions."""
-        path = request.url.path
+        path = request.scope.get("path", request.url.path)
         if any(path.startswith(p) for p in self.EXE_EXEMPT):
             return await call_next(request)
+
+        # The identity headers below are only trustworthy if the request
+        # actually transited the trusted proxy. Require a shared secret to
+        # prove that; without it, any LAN client could spoof X-ExeDev-* and
+        # become any user (or self-provision admin). Fail closed when unset.
+        expected_secret = get_active_settings().exe_proxy_secret
+        presented_secret = request.headers.get("X-ExeDev-Proxy-Secret", "")
+        if not expected_secret or not hmac.compare_digest(presented_secret, expected_secret):
+            logger.warning("Rejected exe request: missing or invalid proxy secret")
+            return PlainTextResponse("Proxy authentication required", status_code=403)
 
         exe_user_id = request.headers.get("X-ExeDev-UserID")
         exe_email = request.headers.get("X-ExeDev-Email")

@@ -417,9 +417,12 @@ def login_submit(
             status_code=429,
         )
 
-    # Migrated accounts (no password yet) divert to the set-password flow
+    # Migrated accounts (no password yet) divert to the set-password flow.
+    # Meter this branch too: it is a claimable-account oracle, and without
+    # counting it an attacker could probe passwordless accounts unthrottled.
     pending = db.query(User).filter(User.username == username, User.is_active.is_(True)).first()
     if pending is not None and pending.password_hash is None:
+        login_rate_limiter.record_failure(rate_key)
         state = sign_payload({"kind": "initial-password", "uid": pending.id})
         return templates.TemplateResponse(
             "login_set_password.html",
@@ -3803,7 +3806,6 @@ def datasets_new(request: Request, db: DbSession) -> HTMLResponse:
 @router.get("/datasets/{dataset_id}", response_class=HTMLResponse)
 def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> HTMLResponse:
     """Dataset detail page with chart."""
-    import json
 
     dataset = (
         db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
@@ -3828,17 +3830,17 @@ def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> HTMLRes
     )
     context["data_points"] = data_points
 
-    # Convert to JSON for chart
-    context["data_points_json"] = json.dumps(
-        [
-            {
-                "id": p.id,
-                "recorded_at": p.recorded_at.isoformat(),
-                "values": p.values,
-            }
-            for p in data_points
-        ]
-    )
+    # Chart payload. Rendered in the template via the `tojson` filter, which
+    # HTML-escapes `<`, `>`, `&` — never `json.dumps` + `| safe`, which would
+    # let a data point's `values` break out of the <script> block (stored XSS).
+    context["data_points_json"] = [
+        {
+            "id": p.id,
+            "recorded_at": p.recorded_at.isoformat(),
+            "values": p.values,
+        }
+        for p in data_points
+    ]
 
     return templates.TemplateResponse("datasets/detail.html", context)
 

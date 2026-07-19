@@ -16,7 +16,9 @@ dependencies = [
     "pydantic[email]>=2.10.0",
     "pydantic-settings>=2.6.0",
     "jinja2>=3.1.4",
-    "python-multipart>=0.0.17",
+    # >=0.0.30: earlier versions have a quadratic urlencoded-parse DoS
+    # (PYSEC-2026-3036/3037) reachable on every form POST, incl. /login.
+    "python-multipart>=0.0.30",
     "aiofiles>=24.1.0",
     "httpx>=0.28.0",
     "segno>=1.6.0",
@@ -24,6 +26,9 @@ dependencies = [
     "mcp>=1.0",
     "argon2-cffi>=25.1.0",
     "fido2>=1.1",
+    # Pulled in transitively by fido2; pin the floor to clear the bundled
+    # OpenSSL advisory (GHSA-537c-gmf6-5ccf) fixed in 48.0.1.
+    "cryptography>=48.0.1",
 ]
 
 [project.optional-dependencies]

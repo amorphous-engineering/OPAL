@@ -133,8 +133,10 @@ def create_user(
 def get_user(
     db: DbSession,
     user_id: int,
+    admin: RequiredAdmin,
 ) -> UserResponse:
-    """Get a specific user."""
+    """Get a specific user. Admin-only: the response carries email and the
+    admin flag, matching the admin gate on ``list_users``."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(

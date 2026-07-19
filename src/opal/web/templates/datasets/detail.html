@@ -146,7 +146,7 @@
 
 <script>
 const datasetId = {{ dataset.id }};
-const dataPoints = {{ data_points_json | safe }};
+const dataPoints = {{ data_points_json | tojson }};
 const schema = {{ dataset.schema | tojson | safe }};
 let chart = null;
 
