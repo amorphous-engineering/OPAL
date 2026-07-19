@@ -2339,6 +2339,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 # ============ TOOL IMPLEMENTATIONS ============
 
 
+_MAX_LIST_LIMIT = 1000
+_MAX_BULK = 500
+
+
+def _clamp_limit(value: object, default: int) -> int:
+    """Bound a caller-supplied list limit, mirroring the HTTP API's 1000 cap.
+    Without this an MCP caller can request an unbounded result materialization."""
+    try:
+        n = int(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+    if n < 1:
+        return default
+    return min(n, _MAX_LIST_LIMIT)
+
+
 async def _list_parts(db, args: dict) -> list[TextContent]:
     """List parts with optional filtering."""
     query = db.query(Part).filter(Part.deleted_at.is_(None))
@@ -2354,7 +2370,7 @@ async def _list_parts(db, args: dict) -> list[TextContent]:
             | (Part.external_pn.ilike(search))
         )
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     parts = query.order_by(Part.id.desc()).limit(limit).all()
 
     return json_response(
@@ -2593,7 +2609,7 @@ async def _get_part_consumption_history(db, args: dict) -> list[TextContent]:
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
 
-    limit = args.get("limit", 20)
+    limit = _clamp_limit(args.get("limit"), 20)
 
     # Get consumption records with related info
     consumptions = (
@@ -2884,7 +2900,7 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
     if args.get("issue_type"):
         query = query.filter(Issue.issue_type == args["issue_type"])
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     issues = query.order_by(Issue.id.desc()).limit(limit).all()
 
     return json_response(
@@ -3156,7 +3172,7 @@ async def _list_risks(db, args: dict) -> list[TextContent]:
     elif severity == "high":
         query = query.filter(score > 12)
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     risks = (
         query.options(selectinload(Risk.owner), selectinload(Risk.asset_part))
         .order_by(Risk.id.desc())
@@ -3567,10 +3583,16 @@ async def _bulk_activate_parts(db, args: dict) -> list[TextContent]:
     if error:
         return error
 
+    part_ids = args["part_ids"]
+    if len(part_ids) > _MAX_BULK:
+        return json_response(
+            {"error": f"Too many part_ids ({len(part_ids)}); max {_MAX_BULK} per call"}
+        )
+
     cause = args.get("cause") or f"bulk activation via MCP by {user.name}"
     activated: list[dict] = []
     skipped: list[dict] = []
-    for part_id in args["part_ids"]:
+    for part_id in part_ids:
         part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
         if not part:
             skipped.append({"id": part_id, "reason": "not found"})
@@ -3705,7 +3727,7 @@ async def _list_requirements(db, args: dict) -> list[TextContent]:
             | Requirement.statement.ilike(term)
         )
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     reqs = query.order_by(Requirement.req_number, Requirement.revision).limit(limit).all()
     return json_response({"count": len(reqs), "requirements": [_requirement_dict(r) for r in reqs]})
 
@@ -5654,7 +5676,7 @@ async def _search_suppliers(db, args: dict) -> list[TextContent]:
     if args.get("query"):
         query = query.filter(Supplier.name.ilike(f"%{args['query']}%"))
 
-    limit = args.get("limit", 20)
+    limit = _clamp_limit(args.get("limit"), 20)
     suppliers = query.order_by(Supplier.name).limit(limit).all()
 
     return json_response(
@@ -5816,6 +5838,10 @@ async def _bulk_create_parts(db, args: dict) -> list[TextContent]:
     part_args = args.get("parts") or []
     if not part_args:
         return json_response({"error": "No parts provided"})
+    if len(part_args) > _MAX_BULK:
+        return json_response(
+            {"error": f"Too many parts ({len(part_args)}); max {_MAX_BULK} per call"}
+        )
 
     # Validate all parent_ids up front so the whole batch is rejected cleanly.
     for idx, pa in enumerate(part_args):

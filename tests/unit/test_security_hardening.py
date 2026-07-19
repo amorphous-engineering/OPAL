@@ -277,3 +277,17 @@ def test_upload_rejects_oversize_by_declared_size(client, monkeypatch):
         files={"file": ("x.png", b"x" * 5000, "image/png")},
     )
     assert resp.status_code == 413
+
+
+# ── MCP: list limit is clamped (uncapped result materialization) ──
+
+
+def test_mcp_clamp_limit():
+    from opal.mcp.server import _MAX_LIST_LIMIT, _clamp_limit
+
+    assert _clamp_limit(None, 50) == 50
+    assert _clamp_limit(10, 50) == 10
+    assert _clamp_limit(10**9, 50) == _MAX_LIST_LIMIT
+    assert _clamp_limit(0, 50) == 50
+    assert _clamp_limit(-5, 50) == 50
+    assert _clamp_limit("garbage", 50) == 50
