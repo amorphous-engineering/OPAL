@@ -3,6 +3,7 @@
 Each test pins a specific finding closed; see SECURITY-AUDIT-v1.4.0.md.
 """
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -160,3 +161,83 @@ def test_exe_exempt_paths_skip_secret(monkeypatch, path):
     # Exempt paths return 404 (no such route) rather than 403 — they never
     # reach the secret gate.
     assert tc.get(path).status_code == 404
+
+
+# ── M4: cycle count writes a reconciling ledger row (no silent stock rewrite) ──
+
+
+def _bulk_inventory(client, qty=10):
+    part = client.post(
+        "/api/parts",
+        json={"name": "Ledger Widget", "tracking_type": "bulk", "category": "Fasteners"},
+    ).json()
+    client.post(f"/api/parts/{part['id']}/activate", json={"cause": "t"})
+    inv = client.post(
+        "/api/inventory",
+        json={"part_id": part["id"], "quantity": qty, "location": "A"},
+    ).json()
+    return part, inv["items"][0]["id"]
+
+
+def test_count_writes_ledger_row(client, db_session):
+    from opal.db.models.inventory import InventoryConsumption
+
+    _, inv_id = _bulk_inventory(client, qty=10)
+    resp = client.post(f"/api/inventory/{inv_id}/count", json={"counted_quantity": 7})
+    assert resp.status_code == 200
+    assert float(resp.json()["quantity"]) == 7
+
+    rows = (
+        db_session.query(InventoryConsumption)
+        .filter(InventoryConsumption.inventory_record_id == inv_id)
+        .all()
+    )
+    assert len(rows) == 1
+    assert float(rows[0].quantity) == 3  # 10 → 7 recorded as a −3 delta
+
+
+def test_count_rejects_negative(client):
+    _, inv_id = _bulk_inventory(client, qty=5)
+    resp = client.post(f"/api/inventory/{inv_id}/count", json={"counted_quantity": -1})
+    assert resp.status_code == 400
+
+
+# ── M5: transfer rejects a soft-deleted source part ──
+
+
+def test_transfer_rejected_for_soft_deleted_part(client, db_session):
+    from opal.db.models import Part
+
+    part, inv_id = _bulk_inventory(client, qty=10)
+    p = db_session.query(Part).filter(Part.id == part["id"]).first()
+    p.deleted_at = datetime.now(UTC)
+    db_session.commit()
+
+    resp = client.post(
+        "/api/inventory/transfer",
+        json={"source_inventory_id": inv_id, "target_location": "B", "quantity": 2},
+    )
+    assert resp.status_code == 404
+
+
+# ── M6: child endpoints reject a soft-deleted parent procedure ──
+
+
+def test_step_ops_rejected_on_soft_deleted_procedure(client):
+    proc_id = client.post("/api/procedures", json={"name": "Doomed Procedure"}).json()["id"]
+    step_id = client.post(
+        f"/api/procedures/{proc_id}/steps",
+        json={"title": "S1", "instructions": "x"},
+    ).json()["id"]
+
+    assert client.delete(f"/api/procedures/{proc_id}").status_code in (200, 204)
+
+    # Parent soft-deleted → its step is neither readable nor mutable.
+    assert (
+        client.patch(
+            f"/api/procedures/{proc_id}/steps/{step_id}", json={"title": "hacked"}
+        ).status_code
+        == 404
+    )
+    assert client.get(f"/api/procedures/{proc_id}/steps/{step_id}/kit").status_code == 404
+    assert client.delete(f"/api/procedures/{proc_id}/steps/{step_id}").status_code == 404

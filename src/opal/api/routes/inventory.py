@@ -577,9 +577,17 @@ def transfer_stock(
     This deducts from the source inventory and adds to the target location.
     If the target location doesn't exist for this part/lot combo, it's created.
     """
-    # Get source inventory
+    # Get source inventory. Join Part and require it live: stock for a
+    # soft-deleted part must not be movable (the other inventory routes all
+    # filter deleted_at; this one did not).
     source = (
-        db.query(InventoryRecord).filter(InventoryRecord.id == data.source_inventory_id).first()
+        db.query(InventoryRecord)
+        .join(Part)
+        .filter(
+            InventoryRecord.id == data.source_inventory_id,
+            Part.deleted_at.is_(None),
+        )
+        .first()
     )
     if not source:
         raise HTTPException(status_code=404, detail="Source inventory record not found")
@@ -913,10 +921,50 @@ def record_count(
             detail=f"Inventory record {inventory_id} not found",
         )
 
+    counted = count_in.counted_quantity
+    if counted < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Counted quantity cannot be negative ({counted})",
+        )
+    if record.part.tracking_type == TrackingType.SERIALIZED and counted > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Serialized parts cannot have quantity greater than 1",
+        )
+
     old_values = get_model_dict(record)
 
-    record.quantity = count_in.counted_quantity
+    # A count reconciles on-hand to a physical number; record the difference as
+    # a ledger row so the change is traceable, exactly like an /adjust would.
+    delta = counted - record.quantity
+    record.quantity = counted
     record.last_counted_at = datetime.now(UTC)
+    db.flush()
+
+    if delta < 0:
+        consumption = InventoryConsumption(
+            inventory_record_id=record.id,
+            quantity=abs(delta),
+            consumption_type=ConsumptionType.ADJUSTMENT,
+            usage_type=UsageType.CONSUME,
+            notes="[cycle_count]",
+            consumed_by_id=user_id,
+        )
+        db.add(consumption)
+        db.flush()
+        log_create(db, consumption, user_id)
+    elif delta > 0:
+        production = InventoryProduction(
+            inventory_record_id=record.id,
+            quantity=delta,
+            notes="[cycle_count]",
+            produced_by_id=user_id,
+        )
+        db.add(production)
+        db.flush()
+        log_create(db, production, user_id)
+
     db.commit()
     db.refresh(record)
 

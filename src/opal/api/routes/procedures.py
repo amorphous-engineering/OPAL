@@ -516,6 +516,7 @@ def update_step(
     user_id: CurrentUserId,
 ) -> StepSchema:
     """Update a step."""
+    _require_live_procedure(db, procedure_id)
     step = (
         db.query(ProcedureStep)
         .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
@@ -562,6 +563,7 @@ def delete_step(
     user_id: CurrentUserId,
 ) -> None:
     """Delete a step."""
+    _require_live_procedure(db, procedure_id)
     step = (
         db.query(ProcedureStep)
         .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
@@ -607,7 +609,25 @@ class StepImageUpdate(BaseModel):
     caption: str | None = None
 
 
+def _require_live_procedure(db: DbSession, procedure_id: int) -> None:
+    """Reject operations whose parent procedure is soft-deleted (or absent).
+
+    Child lookups (steps, kits, outputs) filter only on procedure_id, so
+    without this guard a soft-deleted procedure's children stay readable and
+    mutable — the top-level procedure routes filter deleted_at, the leaf
+    handlers historically did not.
+    """
+    live = (
+        db.query(MasterProcedure.id)
+        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
+        .first()
+    )
+    if not live:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+
+
 def _get_procedure_step(db: DbSession, procedure_id: int, step_id: int) -> ProcedureStep:
+    _require_live_procedure(db, procedure_id)
     step = (
         db.query(ProcedureStep)
         .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
@@ -1517,6 +1537,7 @@ def update_output(
     user_id: CurrentUserId,
 ) -> OutputResponse:
     """Update an output item quantity."""
+    _require_live_procedure(db, procedure_id)
     output = (
         db.query(ProcedureOutput)
         .filter(ProcedureOutput.procedure_id == procedure_id, ProcedureOutput.part_id == part_id)
@@ -1549,6 +1570,7 @@ def remove_output(
     user_id: CurrentUserId,
 ) -> None:
     """Remove a part from the outputs."""
+    _require_live_procedure(db, procedure_id)
     output = (
         db.query(ProcedureOutput)
         .filter(ProcedureOutput.procedure_id == procedure_id, ProcedureOutput.part_id == part_id)
@@ -1604,6 +1626,7 @@ def get_step_kit(
     db: DbSession,
 ) -> list[StepKitResponse]:
     """Get parts required for a specific step."""
+    _require_live_procedure(db, procedure_id)
     step = (
         db.query(ProcedureStep)
         .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
@@ -1636,6 +1659,7 @@ def add_step_kit_item(
     user_id: CurrentUserId,
 ) -> StepKitResponse:
     """Add a part to a step's kit."""
+    _require_live_procedure(db, procedure_id)
     step = (
         db.query(ProcedureStep)
         .filter(ProcedureStep.id == step_id, ProcedureStep.procedure_id == procedure_id)
@@ -1703,6 +1727,7 @@ def update_step_kit_item(
     user_id: CurrentUserId,
 ) -> StepKitResponse:
     """Update a step kit item."""
+    _require_live_procedure(db, procedure_id)
     step_kit = (
         db.query(StepKit)
         .join(ProcedureStep)
@@ -1757,6 +1782,7 @@ def remove_step_kit_item(
     user_id: CurrentUserId,
 ) -> None:
     """Remove a part from a step's kit."""
+    _require_live_procedure(db, procedure_id)
     step_kit = (
         db.query(StepKit)
         .join(ProcedureStep)
