@@ -10,13 +10,13 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from opal.api.middleware import setup_middleware
 from opal.api.routes import router as api_router
 from opal.config import get_settings
 from opal.core.part_lifecycle import DraftPartsBlocked
 from opal.web.routes import router as web_router
+from opal.web.templating import Jinja2Templates
 
 # Template directory
 TEMPLATES_DIR = Path(__file__).parent.parent / "web" / "templates"

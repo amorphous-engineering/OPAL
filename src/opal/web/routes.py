@@ -10,7 +10,6 @@ from typing import Any
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, or_
 
 from opal.api.deps import DbSession
@@ -48,6 +47,7 @@ from opal.db.models.requirement import Requirement
 from opal.db.models.risk import Risk, RiskDisposition, RiskIssueRole
 from opal.project import DEFAULT_TIERS
 from opal.risks.dispositions import OPEN_DISPOSITIONS
+from opal.web.templating import Jinja2Templates
 
 # Template directory
 TEMPLATES_DIR = Path(__file__).parent / "templates"
