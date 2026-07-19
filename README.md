@@ -29,6 +29,22 @@ Or download manually from [GitHub Releases](https://github.com/amorphous-enginee
 
 Run it. The launcher initializes the database on first launch, starts the server, and opens the web UI. No Python or dependencies required.
 
+### Prereleases (beta builds)
+
+To install the latest tagged prerelease (e.g. a beta) instead of the latest stable:
+
+```bash
+# macOS / Linux
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install-prerelease.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install-prerelease.ps1 | iex
+```
+
+Or download a specific build manually from [GitHub Releases](https://github.com/amorphous-engineering/OPAL/releases) — prereleases are tagged `Pre-release`. Prereleases are preview builds; expect rough edges and don't rely on them for production data.
+
 ## Features
 
 - **Inventory & Procurement**: Parts database, inventory tracking, purchase order management

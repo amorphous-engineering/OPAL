@@ -1,0 +1,154 @@
+# OPAL prerelease installer for Windows — downloads the latest tagged PRERELEASE binary.
+# Usage: irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install-prerelease.ps1 | iex
+#
+# Same as install.ps1, but installs the newest prerelease (e.g. a beta) instead
+# of the latest stable release. Use install.ps1 for stable installs.
+$ErrorActionPreference = "Stop"
+
+$Repo = "amorphous-engineering/OPAL"
+$ApiUrl = "https://api.github.com/repos/$Repo/releases?per_page=30"
+$InstallDir = Join-Path $env:LOCALAPPDATA "OPAL"
+$InstallPath = Join-Path $InstallDir "opal.exe"
+
+# --- Output helpers ---
+
+function Write-Info {
+    param([string]$Message)
+    Write-Host "info: " -ForegroundColor Green -NoNewline
+    Write-Host $Message
+}
+
+function Write-Warn {
+    param([string]$Message)
+    Write-Host "warn: " -ForegroundColor Yellow -NoNewline
+    Write-Host $Message
+}
+
+function Write-Err {
+    param([string]$Message)
+    Write-Host "error: " -ForegroundColor Red -NoNewline
+    Write-Host $Message
+    exit 1
+}
+
+# --- Platform detection ---
+
+function Get-Platform {
+    $Arch = $env:PROCESSOR_ARCHITECTURE
+    switch ($Arch) {
+        "AMD64"  { return "x86_64" }
+        "x86"    { Write-Err "32-bit Windows is not supported" }
+        "ARM64"  { Write-Err "ARM64 Windows is not currently supported" }
+        default  { Write-Err "Unsupported architecture: $Arch" }
+    }
+}
+
+# --- Release lookup ---
+#
+# Unlike install.ps1, we list all releases (newest-first) and select the first
+# prerelease that is not a draft, instead of hitting the /releases/latest
+# endpoint (which never returns a prerelease).
+
+function Find-DownloadUrl {
+    param([string]$AssetPattern)
+
+    Write-Info "Fetching releases from GitHub..."
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    try {
+        $Releases = Invoke-RestMethod -Uri $ApiUrl -Headers @{ Accept = "application/vnd.github.v3+json" }
+    } catch {
+        Write-Err "Failed to fetch release info from GitHub: $_"
+    }
+
+    $Release = $Releases | Where-Object { $_.prerelease -eq $true -and $_.draft -eq $false } | Select-Object -First 1
+    if (-not $Release) {
+        Write-Err "No prerelease found for $Repo (or the API rate limit was hit -- try again later)"
+    }
+
+    $script:Tag = $Release.tag_name
+    if (-not $Tag) {
+        Write-Err "Could not determine prerelease tag"
+    }
+    Write-Info "Latest prerelease: $Tag"
+
+    $Asset = $Release.assets | Where-Object { $_.name -like "*$AssetPattern*" } | Select-Object -First 1
+    if (-not $Asset) {
+        Write-Err "No release asset found matching '$AssetPattern' in $Tag"
+    }
+
+    return $Asset.browser_download_url
+}
+
+# --- Install ---
+
+function Install-Binary {
+    param([string]$Url, [string]$AssetName)
+
+    Write-Info "Downloading ${AssetName}..."
+
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+
+    $TmpFile = Join-Path $env:TEMP "opal-install-$([System.IO.Path]::GetRandomFileName()).exe"
+
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $TmpFile -UseBasicParsing
+    } catch {
+        if (Test-Path $TmpFile) { Remove-Item $TmpFile -Force }
+        Write-Err "Download failed: $_"
+    }
+
+    # Sanity check: file should be at least 1 KB
+    $Size = (Get-Item $TmpFile).Length
+    if ($Size -lt 1024) {
+        Remove-Item $TmpFile -Force
+        Write-Err "Downloaded file is too small ($Size bytes) -- something went wrong"
+    }
+
+    Move-Item -Path $TmpFile -Destination $InstallPath -Force
+
+    Write-Info "Installed to $InstallPath"
+}
+
+# --- PATH check ---
+
+function Update-Path {
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -and $UserPath.Split(";") -contains $InstallDir) {
+        return
+    }
+
+    [Environment]::SetEnvironmentVariable("Path", "$InstallDir;$UserPath", "User")
+    $env:Path = "$InstallDir;$env:Path"
+    Write-Info "Added $InstallDir to your PATH"
+    Write-Warn "Restart your terminal for the PATH change to take effect in new sessions"
+}
+
+# --- Main ---
+
+function Install-Opal {
+    Write-Host ""
+    Write-Host "OPAL Prerelease Installer" -ForegroundColor White
+    Write-Host ""
+
+    $Arch = Get-Platform
+    Write-Info "Detected platform: windows $Arch"
+
+    $AssetName = "opal-windows-${Arch}.exe"
+    $DownloadUrl = Find-DownloadUrl -AssetPattern $AssetName
+
+    Install-Binary -Url $DownloadUrl -AssetName $AssetName
+    Update-Path
+
+    Write-Host ""
+    Write-Host "OPAL $Tag installed successfully." -ForegroundColor White
+    Write-Host "  Run " -NoNewline
+    Write-Host "opal" -ForegroundColor Green -NoNewline
+    Write-Host " to start."
+    Write-Host ""
+}
+
+Install-Opal
