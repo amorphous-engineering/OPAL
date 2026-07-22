@@ -445,3 +445,63 @@ def test_unexpired_token_authenticates(client, db_session, test_user):
     )
     db_session.commit()
     assert resolve_api_token(db_session, raw) is not None
+
+
+# ── M8: WebAuthn challenges are single-use (server-side store, burned on read) ──
+
+
+def test_webauthn_challenge_is_single_use(db_session):
+    from opal.core.webauthn import consume_challenge, store_challenge
+
+    nonce = store_challenge(db_session, "login", "opal.local", {"challenge": "abc"})
+    db_session.commit()
+
+    first = consume_challenge(db_session, nonce, "login")
+    assert first is not None
+    assert first["state"] == {"challenge": "abc"}
+    assert first["rp_id"] == "opal.local"
+
+    # A replay of the same nonce finds nothing — the row was burned.
+    assert consume_challenge(db_session, nonce, "login") is None
+
+
+def test_webauthn_challenge_kind_must_match(db_session):
+    from opal.core.webauthn import consume_challenge, store_challenge
+
+    nonce = store_challenge(db_session, "register", "opal.local", {"challenge": "x"}, user_id=1)
+    db_session.commit()
+    # Presenting a register nonce to the login path is rejected (and burned).
+    assert consume_challenge(db_session, nonce, "login") is None
+    assert consume_challenge(db_session, nonce, "register") is None
+
+
+def test_webauthn_challenge_expired_rejected(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    from opal.core.webauthn import consume_challenge, store_challenge
+    from opal.db.models import WebauthnChallenge
+
+    nonce = store_challenge(db_session, "login", "opal.local", {"challenge": "x"})
+    row = db_session.query(WebauthnChallenge).filter(WebauthnChallenge.nonce == nonce).first()
+    row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    db_session.commit()
+    assert consume_challenge(db_session, nonce, "login") is None
+
+
+def test_webauthn_unknown_nonce_returns_none(db_session):
+    from opal.core.webauthn import consume_challenge
+
+    assert consume_challenge(db_session, "no-such-nonce", "login") is None
+    assert consume_challenge(db_session, None, "login") is None
+
+
+def test_passkey_login_begin_persists_challenge(client, db_session):
+    from opal.db.models import WebauthnChallenge
+
+    resp = client.post("/api/auth/passkey/login/begin")
+    assert resp.status_code == 200
+    assert "publicKey" in resp.json()
+    # The handshake state lives server-side now, not in the cookie.
+    rows = db_session.query(WebauthnChallenge).filter(WebauthnChallenge.kind == "login").all()
+    assert len(rows) == 1
+    assert rows[0].nonce

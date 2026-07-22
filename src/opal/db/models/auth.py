@@ -9,7 +9,7 @@ same AuthSession rows.
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -92,6 +92,30 @@ class ApiToken(Base, IdMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<ApiToken(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
+
+
+class WebauthnChallenge(Base, IdMixin, TimestampMixin):
+    """A pending WebAuthn handshake, stored so each challenge is single-use.
+
+    The begin step persists the fido2 server state here and hands the client a
+    signed cookie carrying only the random ``nonce``. The complete step looks
+    the row up by nonce and deletes it, so a captured cookie + assertion cannot
+    be replayed once the handshake finishes (or the row expires).
+    """
+
+    __tablename__ = "webauthn_challenge"
+
+    nonce: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, comment="login | register")
+    rp_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    state_json: Mapped[str] = mapped_column(Text, nullable=False, comment="fido2 server state")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<WebauthnChallenge(kind={self.kind}, user_id={self.user_id})>"
 
 
 class PasskeyCredential(Base, IdMixin, TimestampMixin):

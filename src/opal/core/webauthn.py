@@ -14,8 +14,10 @@ The RP ID defaults to the request hostname and can be pinned with
 OPAL_PASSKEY_RP_ID once a deployment hostname is chosen.
 """
 
+import json
 import logging
-from datetime import UTC, datetime
+import secrets
+from datetime import UTC, datetime, timedelta
 
 from fido2.server import Fido2Server
 from fido2.webauthn import (
@@ -27,12 +29,67 @@ from fido2.webauthn import (
 )
 from sqlalchemy.orm import Session
 
-from opal.db.models.auth import PasskeyCredential
+from opal.db.models.auth import PasskeyCredential, WebauthnChallenge
 from opal.db.models.user import User
 
 logger = logging.getLogger("opal.webauthn")
 
 RP_NAME = "OPAL"
+
+# WebAuthn handshakes are short-lived; a stale challenge is useless.
+CHALLENGE_TTL = timedelta(minutes=5)
+
+
+def store_challenge(
+    db: Session, kind: str, rp_id: str, state: dict, user_id: int | None = None
+) -> str:
+    """Persist a pending handshake and return its single-use nonce."""
+    # Opportunistically drop expired rows so the table can't grow unbounded.
+    db.query(WebauthnChallenge).filter(
+        WebauthnChallenge.expires_at < datetime.now(UTC)
+    ).delete(synchronize_session=False)
+    nonce = secrets.token_urlsafe(32)
+    db.add(
+        WebauthnChallenge(
+            nonce=nonce,
+            kind=kind,
+            rp_id=rp_id,
+            user_id=user_id,
+            state_json=json.dumps(state),
+            expires_at=datetime.now(UTC) + CHALLENGE_TTL,
+        )
+    )
+    db.flush()
+    return nonce
+
+
+def consume_challenge(db: Session, nonce: str | None, kind: str) -> dict | None:
+    """Fetch and DELETE a pending handshake by nonce (single-use).
+
+    Returns ``{"rp_id", "state", "user_id"}`` or None if the nonce is unknown,
+    the kind mismatches, or it has expired. Deleting on read makes any replay
+    with the same nonce fail.
+    """
+    if not nonce:
+        return None
+    row = db.query(WebauthnChallenge).filter(WebauthnChallenge.nonce == nonce).first()
+    if row is None:
+        return None
+    result = {
+        "rp_id": row.rp_id,
+        "state": json.loads(row.state_json),
+        "user_id": row.user_id,
+    }
+    kind_ok = row.kind == kind
+    expires = row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    fresh = expires > datetime.now(UTC)
+    db.delete(row)  # burn regardless — a challenge is used at most once
+    db.flush()
+    if not kind_ok or not fresh:
+        return None
+    return result
 
 
 def rp_id_for_host(host: str | None) -> str:
