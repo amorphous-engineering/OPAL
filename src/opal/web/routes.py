@@ -4387,6 +4387,16 @@ def settings_page(request: Request, db: DbSession) -> HTMLResponse:
     context["demo_file_exists"] = lifecycle.demo_file_exists()
     context["demo_db_path"] = str(lifecycle.demo_db_path())
 
+    # MCP agent part-activation opt-in (default off); value is the authorizing operator's id.
+    from opal.config import get_app_setting
+
+    activation_raw = get_app_setting(db, "mcp_agent_activation_operator_id")
+    activation_operator = None
+    if activation_raw and activation_raw.isdigit():
+        activation_operator = db.query(User).filter(User.id == int(activation_raw)).first()
+    context["agent_activation_enabled"] = activation_operator is not None
+    context["agent_activation_operator"] = activation_operator
+
     return templates.TemplateResponse("settings/index.html", context)
 
 
@@ -4442,6 +4452,29 @@ def settings_auth_mode_save(
     context["passkeys_enabled"] = passkeys_enabled
     context["save_result"] = {"ok": True, "message": "Authentication settings saved."}
     return templates.TemplateResponse("settings/auth_mode.html", context)
+
+
+@router.post("/settings/agent-activation", response_class=HTMLResponse, response_model=None)
+def settings_agent_activation_save(
+    request: Request, db: DbSession, enabled: bool = Form(default=False)
+) -> RedirectResponse:
+    """Toggle the MCP-agent part-activation opt-in. Admin only.
+
+    Enabling records the acting admin as the authorizing operator; agent
+    activations then attribute to them (see opal/mcp/server.py). Sign-offs stay
+    human-only regardless. Default off."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+    from opal.config import set_app_setting
+
+    if enabled:
+        current_user = _get_current_user(request, db)
+        value = str(current_user.id) if current_user else None
+        set_app_setting(db, "mcp_agent_activation_operator_id", value)
+    else:
+        set_app_setting(db, "mcp_agent_activation_operator_id", None)
+    db.commit()
+    return RedirectResponse(url="/settings", status_code=302)
 
 
 # ============ INSTANCE LIFECYCLE: DEMO DATA + FACTORY RESET ============

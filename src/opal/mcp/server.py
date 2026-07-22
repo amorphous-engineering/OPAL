@@ -2133,11 +2133,44 @@ async def list_tools() -> list[Tool]:
     ]
 
 
+# ── Level 1: agents may prepare, never sign (see risk #76) ───────────────────
+# Authoritative human sign-offs cannot be performed by an agent. The agent may
+# draft/prepare; a person commits the sign-off in OPAL. Part activation is
+# handled separately (an opt-in), and set_risk_disposition blocks only the
+# un-accept path, so neither is listed here.
+_HUMAN_ONLY_SIGNOFFS = {
+    "sign_disposition": "Signing a disposition",
+    "accept_risk": "Accepting a risk",
+    "stamp_risk_review": "Stamping a risk review",
+    "baseline_requirement": "Baselining a requirement",
+    "baseline_batch": "Baselining requirements",
+    "reaffirm_requirement": "Reaffirming a requirement",
+}
+
+
+def _human_only(action: str) -> list[TextContent]:
+    """Refusal for an authoritative sign-off the agent must not perform itself."""
+    return json_response(
+        {
+            "success": False,
+            "error": (
+                f"{action} is a human sign-off and can't be performed by an agent. "
+                "Prepare the details; a person completes it in OPAL."
+            ),
+            "human_action_required": True,
+        }
+    )
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Handle tool calls."""
     db = get_db()
     try:
+        # Level 1: authoritative sign-offs are human-only — the agent may prepare
+        # but never commit them (see risk #76).
+        if name in _HUMAN_ONLY_SIGNOFFS:
+            return _human_only(_HUMAN_ONLY_SIGNOFFS[name])
         # Parts
         if name == "list_parts":
             return await _list_parts(db, arguments)
@@ -3292,11 +3325,8 @@ async def _set_risk_disposition(db, args: dict) -> list[TextContent]:
 
     user_id = args.get("user_id")
     if risk.disposition == RiskDisposition.ACCEPTED.value:
-        # Un-doing a signature is auditable — it cannot be anonymous.
-        user, error = _require_human_user(db, args)
-        if error:
-            return error
-        user_id = user.id
+        # Reverting a signed acceptance is itself a sign-off — human-only (risk #76).
+        return _human_only("Reverting a signed risk acceptance")
 
     if args.get("realized_issue_id") is not None:
         issue = (
@@ -3541,30 +3571,72 @@ async def _preview_part_number(db, args: dict) -> list[TextContent]:
         return json_response({"error": str(e)})
 
 
+_AGENT_ACTIVATION_SETTING = "mcp_agent_activation_operator_id"
+
+
+def _agent_activation_operator(db):
+    """User an admin authorized agent part-activation under, or None (disabled).
+
+    Activation is blocker-gated (objective) — so, unlike a pure-judgment sign-off,
+    an admin may opt in to agent activation. When set, activations attribute to
+    this operator and are marked agent-performed; the agent never picks who.
+    Off by default. See risk #76.
+    """
+    from opal.config import get_app_setting
+
+    raw = get_app_setting(db, _AGENT_ACTIVATION_SETTING)
+    if not raw:
+        return None
+    try:
+        uid = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return db.query(User).filter(User.id == uid, User.is_active.is_(True)).first()
+
+
+def _activation_disabled() -> list[TextContent]:
+    """Refusal when agent part-activation has not been enabled by an admin."""
+    return json_response(
+        {
+            "success": False,
+            "error": (
+                "Agent part-activation is disabled. An admin can enable it in OPAL "
+                "Settings, or a person can activate the part in OPAL."
+            ),
+            "human_action_required": True,
+        }
+    )
+
+
 async def _activate_part(db, args: dict) -> list[TextContent]:
-    """Activate a draft part. Agents draft, humans activate."""
-    user, error = _require_human_user(db, args)
-    if error:
-        return error
+    """Activate a draft part. Human-only unless an admin opted in to agent
+    activation; blocker checks always apply."""
+    operator = _agent_activation_operator(db)
+    if operator is None:
+        return _activation_disabled()
 
     part = db.query(Part).filter(Part.id == args["part_id"], Part.deleted_at.is_(None)).first()
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
 
-    cause = args.get("cause") or f"manual activation via MCP by {user.name}"
+    base = args.get("cause") or "activation via MCP"
+    cause = f"{base} (MCP agent, authorized by {operator.name})"
     old_values = get_model_dict(part)
     try:
-        activate_part(db, part, user.id, cause)
+        activate_part(db, part, operator.id, cause)
     except PartLifecycleError as e:
         return json_response({"error": str(e)})
-    log_update(db, part, old_values, user.id)
+    log_update(db, part, old_values, operator.id)
     db.commit()
     db.refresh(part)
 
     return json_response(
         {
             "success": True,
-            "message": f"{part.internal_pn} activated by {user.name}: {part.activation_cause}",
+            "message": (
+                f"{part.internal_pn} activated via MCP agent "
+                f"(authorized by {operator.name}): {part.activation_cause}"
+            ),
             "part": {
                 "id": part.id,
                 "internal_pn": part.internal_pn,
@@ -3578,10 +3650,11 @@ async def _activate_part(db, args: dict) -> list[TextContent]:
 
 
 async def _bulk_activate_parts(db, args: dict) -> list[TextContent]:
-    """Activate multiple draft parts in one signed act."""
-    user, error = _require_human_user(db, args)
-    if error:
-        return error
+    """Activate multiple draft parts. Human-only unless an admin opted in to
+    agent activation; blocker checks always apply."""
+    operator = _agent_activation_operator(db)
+    if operator is None:
+        return _activation_disabled()
 
     part_ids = args["part_ids"]
     if len(part_ids) > _MAX_BULK:
@@ -3589,7 +3662,8 @@ async def _bulk_activate_parts(db, args: dict) -> list[TextContent]:
             {"error": f"Too many part_ids ({len(part_ids)}); max {_MAX_BULK} per call"}
         )
 
-    cause = args.get("cause") or f"bulk activation via MCP by {user.name}"
+    base = args.get("cause") or "bulk activation via MCP"
+    cause = f"{base} (MCP agent, authorized by {operator.name})"
     activated: list[dict] = []
     skipped: list[dict] = []
     for part_id in part_ids:
@@ -3599,18 +3673,21 @@ async def _bulk_activate_parts(db, args: dict) -> list[TextContent]:
             continue
         old_values = get_model_dict(part)
         try:
-            activate_part(db, part, user.id, cause)
+            activate_part(db, part, operator.id, cause)
         except PartLifecycleError as e:
             skipped.append({"id": part_id, "internal_pn": part.internal_pn, "reason": str(e)})
             continue
-        log_update(db, part, old_values, user.id)
+        log_update(db, part, old_values, operator.id)
         activated.append({"id": part.id, "internal_pn": part.internal_pn, "name": part.name})
     db.commit()
 
     return json_response(
         {
             "success": True,
-            "message": f"{len(activated)} part(s) activated by {user.name}, {len(skipped)} skipped",
+            "message": (
+                f"{len(activated)} part(s) activated via MCP agent "
+                f"(authorized by {operator.name}), {len(skipped)} skipped"
+            ),
             "activated": activated,
             "skipped": skipped,
         }
