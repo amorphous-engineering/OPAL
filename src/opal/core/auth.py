@@ -249,10 +249,17 @@ def revoke_all_sessions(db: Session, user_id: int, except_token: str | None = No
 # ---------------------------------------------------------------------------
 
 
-def create_api_token(db: Session, user: User, name: str) -> tuple[ApiToken, str]:
-    """Mint an API token. Returns (record, raw token) — raw shown only once."""
+def create_api_token(
+    db: Session, user: User, name: str, expires_at: datetime | None = None
+) -> tuple[ApiToken, str]:
+    """Mint an API token. Returns (record, raw token) — raw shown only once.
+
+    ``expires_at`` is optional; None means the token never expires (default).
+    """
     raw = API_TOKEN_PREFIX + secrets.token_urlsafe(32)
-    record = ApiToken(user_id=user.id, name=name[:100], token_hash=_sha256(raw))
+    record = ApiToken(
+        user_id=user.id, name=name[:100], token_hash=_sha256(raw), expires_at=expires_at
+    )
     db.add(record)
     db.flush()
     return record, raw

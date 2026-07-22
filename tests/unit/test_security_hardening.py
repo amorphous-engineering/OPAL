@@ -403,3 +403,45 @@ def test_client_ip_ignores_forwarded_without_trust(monkeypatch):
     monkeypatch.setattr(net, "get_active_settings", lambda: SimpleNamespace(trust_proxy=False))
     req = _fake_request({"x-forwarded-for": "203.0.113.7"}, client_host="10.0.0.1")
     assert net.client_ip(req) == "10.0.0.1"
+
+
+# ── API token expiry: optional TTL, expired tokens rejected on resolve ──
+
+
+def test_token_created_without_expiry_is_non_expiring(client, auth_headers):
+    resp = client.post("/api/auth/tokens", json={"name": "forever"}, headers=auth_headers)
+    assert resp.status_code == 201
+    assert resp.json()["expires_at"] is None
+
+
+def test_token_created_with_ttl_reports_expiry(client, auth_headers):
+    resp = client.post(
+        "/api/auth/tokens", json={"name": "short", "expires_in_days": 30}, headers=auth_headers
+    )
+    assert resp.status_code == 201
+    assert resp.json()["expires_at"] is not None
+
+
+def test_expired_token_does_not_authenticate(client, db_session, test_user):
+    from datetime import UTC, datetime, timedelta
+
+    from opal.core.auth import create_api_token, resolve_api_token
+
+    record, raw = create_api_token(
+        db_session, test_user, "expired", expires_at=datetime.now(UTC) - timedelta(seconds=1)
+    )
+    db_session.commit()
+    assert record.is_valid is False
+    assert resolve_api_token(db_session, raw) is None
+
+
+def test_unexpired_token_authenticates(client, db_session, test_user):
+    from datetime import UTC, datetime, timedelta
+
+    from opal.core.auth import create_api_token, resolve_api_token
+
+    _, raw = create_api_token(
+        db_session, test_user, "live", expires_at=datetime.now(UTC) + timedelta(days=1)
+    )
+    db_session.commit()
+    assert resolve_api_token(db_session, raw) is not None

@@ -136,6 +136,7 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
         <div id="new-token-box" class="mono" style="display: none; font-size: 0.8rem; margin-bottom: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--border-color); word-break: break-all;"></div>
         <div style="display: flex; gap: var(--space-sm); align-items: center;">
             <input type="text" id="token-name" class="form-input" placeholder="Label, e.g. 'workshop TUI'" style="max-width: 240px;">
+            <input type="number" id="token-ttl" class="form-input" placeholder="Expires (days)" min="1" max="3650" style="max-width: 140px;">
             {{ ok.btn("CREATE TOKEN", attrs='onclick="createToken()"') }}
         </div>
     </div>
@@ -237,9 +238,10 @@ async function removePasskey(id) {
 
 async function loadTokens() {
     var rows = await authApi('/tokens', {method: 'GET'});
-    renderRows('token-table', ['NAME', 'CREATED', 'LAST USED', ''], rows.map(function (t) {
+    renderRows('token-table', ['NAME', 'CREATED', 'LAST USED', 'EXPIRES', ''], rows.map(function (t) {
         return '<td>' + esc(t.name) + '</td><td class="mono">' + esc(t.created_at.slice(0, 10)) + '</td>' +
             '<td class="mono">' + esc(t.last_used_at ? t.last_used_at.slice(0, 10) : '-') + '</td>' +
+            '<td class="mono">' + esc(t.expires_at ? t.expires_at.slice(0, 10) : 'never') + '</td>' +
             '<td><button class="btn btn-sm btn-danger" onclick="revokeToken(' + t.id + ')">REVOKE</button></td>';
     }));
 }
@@ -247,11 +249,16 @@ async function loadTokens() {
 async function createToken() {
     var name = document.getElementById('token-name').value.trim();
     if (!name) { alert('Token label is required.'); return; }
-    var result = await authApi('/tokens', {method: 'POST', body: JSON.stringify({name: name})});
+    var payload = {name: name};
+    var ttl = parseInt(document.getElementById('token-ttl').value, 10);
+    if (ttl > 0) payload.expires_in_days = ttl;
+    var result = await authApi('/tokens', {method: 'POST', body: JSON.stringify(payload)});
     var box = document.getElementById('new-token-box');
     box.style.display = '';
-    box.textContent = 'Token (copy now, shown once): ' + result.token;
+    box.textContent = 'Token (copy now, shown once): ' + result.token +
+        (result.expires_at ? ' — expires ' + result.expires_at.slice(0, 10) : ' — never expires');
     document.getElementById('token-name').value = '';
+    document.getElementById('token-ttl').value = '';
     loadTokens();
 }
 

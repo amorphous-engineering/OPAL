@@ -7,7 +7,7 @@ cookie so the server stays stateless across the handshake.
 """
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
@@ -306,10 +306,13 @@ class TokenInfo(BaseModel):
     name: str
     created_at: str
     last_used_at: str | None
+    expires_at: str | None
 
 
 class TokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    # Optional lifetime in days; omit (or null) for a non-expiring token.
+    expires_in_days: int | None = Field(default=None, ge=1, le=3650)
 
 
 @router.get("/tokens", response_model=list[TokenInfo])
@@ -326,6 +329,7 @@ def list_api_tokens(db: DbSession, user: RequiredUser) -> list[TokenInfo]:
             name=r.name,
             created_at=r.created_at.isoformat(),
             last_used_at=r.last_used_at.isoformat() if r.last_used_at else None,
+            expires_at=r.expires_at.isoformat() if r.expires_at else None,
         )
         for r in rows
     ]
@@ -334,9 +338,17 @@ def list_api_tokens(db: DbSession, user: RequiredUser) -> list[TokenInfo]:
 @router.post("/tokens", status_code=status.HTTP_201_CREATED)
 def create_token(body: TokenCreate, db: DbSession, user: RequiredUser) -> dict:
     """Mint an API token. The raw token appears in this response only."""
-    record, raw = create_api_token(db, user, body.name)
+    expires_at = None
+    if body.expires_in_days is not None:
+        expires_at = datetime.now(UTC) + timedelta(days=body.expires_in_days)
+    record, raw = create_api_token(db, user, body.name, expires_at=expires_at)
     db.commit()
-    return {"id": record.id, "name": record.name, "token": raw}
+    return {
+        "id": record.id,
+        "name": record.name,
+        "token": raw,
+        "expires_at": record.expires_at.isoformat() if record.expires_at else None,
+    }
 
 
 @router.delete("/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)

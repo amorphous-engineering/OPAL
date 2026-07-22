@@ -73,12 +73,22 @@ class ApiToken(Base, IdMixin, TimestampMixin):
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # NULL = never expires (default). A timestamp makes the token invalid past it.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="api_tokens")
 
     @property
     def is_valid(self) -> bool:
-        return self.revoked_at is None
+        if self.revoked_at is not None:
+            return False
+        expires = self.expires_at
+        if expires is not None:
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if expires <= datetime.now(UTC):
+                return False
+        return True
 
     def __repr__(self) -> str:
         return f"<ApiToken(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
