@@ -102,6 +102,15 @@ class Settings(BaseSettings):
         description="Secret for signing short-lived auth payloads (auto-generated "
         "next to the database file when unset)",
     )
+    trust_proxy: bool = Field(
+        default=False,
+        description="Trust X-Forwarded-Proto / X-Forwarded-For from a front-end "
+        "reverse proxy. Enable ONLY when OPAL sits behind a proxy you control "
+        "that overwrites these headers; otherwise a client can spoof them. When "
+        "on, the session/passkey cookies get the Secure flag over a TLS-"
+        "terminating proxy and login rate-limiting keys on the real client IP "
+        "instead of the proxy's.",
+    )
     passkeys_enabled: bool = Field(
         default=True,
         description="Allow FIDO2 passkey registration and login (requires HTTPS or localhost)",

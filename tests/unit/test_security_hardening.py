@@ -339,3 +339,67 @@ def test_origin_check_allows_same_origin(client):
         headers={"Origin": "http://testserver"},
     )
     assert resp.status_code == 201
+
+
+# ── trust-proxy: X-Forwarded-* honored only when OPAL_TRUST_PROXY is set ──
+
+
+def _fake_request(headers=None, scheme="http", client_host="10.0.0.9"):
+    from types import SimpleNamespace
+
+    from starlette.datastructures import URL, Headers
+
+    req = SimpleNamespace()
+    req.headers = Headers(headers or {})
+    req.url = URL(f"{scheme}://opal.local/x")
+    req.client = SimpleNamespace(host=client_host) if client_host else None
+    return req
+
+
+def test_request_is_secure_ignores_forwarded_without_trust(monkeypatch):
+    from types import SimpleNamespace
+
+    from opal.api import net
+
+    monkeypatch.setattr(net, "get_active_settings", lambda: SimpleNamespace(trust_proxy=False))
+    req = _fake_request({"x-forwarded-proto": "https"}, scheme="http")
+    assert net.request_is_secure(req) is False
+
+
+def test_request_is_secure_honors_forwarded_with_trust(monkeypatch):
+    from types import SimpleNamespace
+
+    from opal.api import net
+
+    monkeypatch.setattr(net, "get_active_settings", lambda: SimpleNamespace(trust_proxy=True))
+    req = _fake_request({"x-forwarded-proto": "https"}, scheme="http")
+    assert net.request_is_secure(req) is True
+
+
+def test_request_is_secure_true_for_direct_https(monkeypatch):
+    from types import SimpleNamespace
+
+    from opal.api import net
+
+    monkeypatch.setattr(net, "get_active_settings", lambda: SimpleNamespace(trust_proxy=False))
+    assert net.request_is_secure(_fake_request(scheme="https")) is True
+
+
+def test_client_ip_uses_forwarded_leftmost_with_trust(monkeypatch):
+    from types import SimpleNamespace
+
+    from opal.api import net
+
+    monkeypatch.setattr(net, "get_active_settings", lambda: SimpleNamespace(trust_proxy=True))
+    req = _fake_request({"x-forwarded-for": "203.0.113.7, 10.0.0.1"}, client_host="10.0.0.1")
+    assert net.client_ip(req) == "203.0.113.7"
+
+
+def test_client_ip_ignores_forwarded_without_trust(monkeypatch):
+    from types import SimpleNamespace
+
+    from opal.api import net
+
+    monkeypatch.setattr(net, "get_active_settings", lambda: SimpleNamespace(trust_proxy=False))
+    req = _fake_request({"x-forwarded-for": "203.0.113.7"}, client_host="10.0.0.1")
+    assert net.client_ip(req) == "10.0.0.1"

@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from opal.api.deps import DbSession, RequiredUser
+from opal.api.net import client_ip, request_is_secure
 from opal.core import webauthn
 from opal.core.auth import (
     SESSION_COOKIE,
@@ -42,7 +43,7 @@ def set_session_cookie(response: Response, request: Request, token: str) -> None
         max_age=int(SESSION_LIFETIME.total_seconds()),
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_secure(request),
     )
 
 
@@ -81,7 +82,7 @@ def passkey_login_begin(request: Request, response: Response) -> dict:
         max_age=300,
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_secure(request),
     )
     return options
 
@@ -103,7 +104,7 @@ def passkey_login_complete(request: Request, body: dict, db: DbSession) -> Respo
         user,
         auth_method="passkey",
         user_agent=request.headers.get("user-agent"),
-        ip_address=request.client.host if request.client else None,
+        ip_address=client_ip(request),
     )
     db.commit()
 
@@ -157,7 +158,7 @@ def passkey_register_begin(
         max_age=300,
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_secure(request),
     )
     return options
 

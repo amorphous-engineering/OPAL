@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import case, func, or_
 
 from opal.api.deps import DbSession
+from opal.api.net import client_ip as _client_ip
 from opal.core import execution_flow as exec_flow
 from opal.core.auth import (
     SESSION_COOKIE,
@@ -253,8 +254,7 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
 
 
 def _login_rate_key(request: Request, username: str) -> str:
-    client_ip = request.client.host if request.client else "unknown"
-    return f"{client_ip}:{username.strip().lower()}"
+    return f"{_client_ip(request) or 'unknown'}:{username.strip().lower()}"
 
 
 def _mint_login_session(
@@ -268,7 +268,7 @@ def _mint_login_session(
         user,
         auth_method=auth_method,
         user_agent=request.headers.get("user-agent"),
-        ip_address=request.client.host if request.client else None,
+        ip_address=_client_ip(request),
     )
     db.commit()
     redirect_url = "/welcome" if user.needs_onboarding else "/"
@@ -4476,7 +4476,7 @@ def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
                     demo_user,
                     auth_method="demo",
                     user_agent=request.headers.get("user-agent"),
-                    ip_address=request.client.host if request.client else None,
+                    ip_address=_client_ip(request),
                 )
                 demo_db.commit()
                 set_session_cookie(response, request, token)

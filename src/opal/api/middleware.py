@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import PlainTextResponse, RedirectResponse
 
+from opal.api.net import client_ip
 from opal.config import get_active_settings
 from opal.core.auth import SESSION_COOKIE, create_session, resolve_session
 
@@ -177,7 +178,7 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
                         db_user,
                         auth_method="exe",
                         user_agent=request.headers.get("user-agent"),
-                        ip_address=request.client.host if request.client else None,
+                        ip_address=client_ip(request),
                     )
 
         if user["needs_profile_setup"]:
