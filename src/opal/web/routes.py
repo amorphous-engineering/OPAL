@@ -417,18 +417,14 @@ def login_submit(
             status_code=429,
         )
 
-    # Migrated accounts (no password yet) divert to the set-password flow.
-    # Meter this branch too: it is a claimable-account oracle, and without
-    # counting it an attacker could probe passwordless accounts unthrottled.
-    pending = db.query(User).filter(User.username == username, User.is_active.is_(True)).first()
-    if pending is not None and pending.password_hash is None:
-        login_rate_limiter.record_failure(rate_key)
-        state = sign_payload({"kind": "initial-password", "uid": pending.id})
-        return templates.TemplateResponse(
-            "login_set_password.html",
-            _login_context(request, username=username, state=state),
-        )
-
+    # Passwordless (pre-credential) accounts are NOT claimable from the login
+    # form. That was a trust-on-first-use oracle: anyone who guessed a migrated
+    # username could seize the account — often an admin — by setting its
+    # password. Claiming now requires an admin-issued, out-of-band link (see
+    # /claim). Such accounts fall through to authenticate_password, which fails
+    # closed with timing-safe dummy verification — indistinguishable from a
+    # wrong password, so the form leaks nothing about which usernames exist or
+    # are claimable.
     user = authenticate_password(db, username, password)
     if user is None:
         login_rate_limiter.record_failure(rate_key)
@@ -450,15 +446,15 @@ def login_set_password(
     password: str = Form(...),
     password_confirm: str = Form(...),
 ) -> RedirectResponse | HTMLResponse:
-    """First login for a migrated account: set the initial password.
+    """Set the initial password for a migrated account being claimed.
 
-    Accounts created before credentialed auth have no password hash. The
-    signed state token binds this form to the account and expires quickly.
-    Trust-on-first-use: the first person to claim the account sets its
-    password, so upgrade and have users claim accounts promptly.
+    Reached only via an admin-issued claim link (see GET /claim). The signed
+    state token names the account and carries its own expiry; it is honored
+    only while the account still has no password hash, so a link cannot re-set
+    an already-claimed account.
     """
     payload = verify_payload(state)
-    if not payload or payload.get("kind") != "initial-password":
+    if not payload or payload.get("kind") != "account-claim":
         return RedirectResponse(url="/login", status_code=302)
 
     user = db.query(User).filter(User.id == payload["uid"], User.is_active.is_(True)).first()
@@ -480,6 +476,29 @@ def login_set_password(
 
     user.password_hash = hash_password(password)
     return _mint_login_session(request, db, user, auth_method="password")
+
+
+@router.get("/claim", response_class=HTMLResponse, response_model=None)
+def claim_account(
+    request: Request, db: DbSession, token: str = Query("")
+) -> HTMLResponse | RedirectResponse:
+    """Landing page for an admin-issued account-claim link.
+
+    The token is minted by an admin (POST /users/{id}/claim-link) and delivered
+    out of band. This is the only path by which a passwordless account can set
+    its first password. An invalid, expired, or already-claimed link is sent to
+    the normal login page and reveals nothing.
+    """
+    payload = verify_payload(token)
+    if not payload or payload.get("kind") != "account-claim":
+        return RedirectResponse(url="/login", status_code=302)
+    user = db.query(User).filter(User.id == payload["uid"], User.is_active.is_(True)).first()
+    if user is None or user.password_hash is not None:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        "login_set_password.html",
+        _login_context(request, username=user.username, state=token),
+    )
 
 
 @router.get("/logout", response_model=None)
@@ -4126,6 +4145,15 @@ def users_detail(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
     context = get_base_context(request, db, f"{user.name} - OPAL")
     context["user"] = user
     context["is_own_profile"] = is_own_profile
+    # An admin viewing a passwordless account can hand its owner an out-of-band
+    # claim link (self-claim from the login form was removed — see /claim).
+    context["user_needs_claim"] = bool(
+        current_user
+        and current_user.is_admin
+        and not is_own_profile
+        and user.is_active
+        and user.password_hash is None
+    )
 
     return templates.TemplateResponse("users/detail.html", context)
 
@@ -4152,6 +4180,38 @@ def users_edit(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
     context["user"] = user
 
     return templates.TemplateResponse("users/edit.html", context)
+
+
+_CLAIM_LINK_TTL = timedelta(days=7)
+
+
+@router.post("/users/{user_id}/claim-link", response_class=HTMLResponse)
+def users_issue_claim_link(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
+    """Mint an out-of-band account-claim link for a passwordless user. Admin only.
+
+    Replaces trust-on-first-use claiming: instead of letting whoever reaches
+    the login form seize a migrated account, an admin generates this
+    time-limited link and delivers it to the real person over a trusted
+    channel. Valid only while the target account still has no password.
+    """
+    if _require_admin_web(request, db) is not None:
+        return HTMLResponse("Forbidden", status_code=403)
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        return HTMLResponse("User not found", status_code=404)
+    if not user.is_active or user.password_hash is not None:
+        return HTMLResponse(
+            '<div class="text-muted mono" style="font-size:0.75rem;">'
+            "This account already has a password — no claim link is needed.</div>",
+            status_code=400,
+        )
+    token = sign_payload({"kind": "account-claim", "uid": user.id}, max_age=_CLAIM_LINK_TTL)
+    claim_url = f"{request.base_url}claim?token={token}"
+    expires_at = datetime.now(UTC) + _CLAIM_LINK_TTL
+    return templates.TemplateResponse(
+        "users/_claim_link.html",
+        {"request": request, "claim_url": claim_url, "expires_at": expires_at},
+    )
 
 
 # ============ LABEL PRINT ============

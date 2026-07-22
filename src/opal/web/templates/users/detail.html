@@ -40,6 +40,19 @@
         {% endcall %}
 {% endcall %}
 
+{% if user_needs_claim %}
+<!-- Admin-only: this account has no password; issue an out-of-band claim link. -->
+{% call ok.panel("ACCOUNT CLAIM", max_width="800px", margin_top="var(--space-md)") %}
+    <div class="text-muted mono" style="font-size: 0.75rem; margin-bottom: var(--space-sm);">
+        No password set. Generate a single link and deliver it to the account owner over a
+        trusted channel; they set their own password. The link expires in 7 days and stops
+        working once the account is claimed.
+    </div>
+    <div id="claim-link-box" style="margin-bottom: var(--space-sm);"></div>
+    {{ ok.btn("ISSUE CLAIM LINK", attrs='hx-post="/users/' ~ user.id ~ '/claim-link" hx-target="#claim-link-box" hx-swap="innerHTML"') }}
+{% endcall %}
+{% endif %}
+
 {% if is_own_profile %}
 <!-- Preferences panel, only visible when viewing own profile -->
 {% call ok.panel("PREFERENCES", max_width="800px", margin_top="var(--space-md)") %}

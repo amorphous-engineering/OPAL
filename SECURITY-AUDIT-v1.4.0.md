@@ -37,10 +37,10 @@ Severities reflect the trusted-LAN model and the **default** deployment (`auth_m
 `src/opal/api/routes/inventory.py:752-784`: `InventoryUpdate.quantity` (`:44`) is written by a blind `setattr` loop (`:774-776`) with no consumption/production ledger row and no negative/serialized guard — unlike `/adjust` (`:787+`) which validates and writes a traceable delta. `PATCH /api/inventory/{id}` `{"quantity": 999999}` (or negative) rewrites on-hand stock invisibly to `get_opal_history`, defeating the traceability the system exists to provide.
 **Fix (this branch):** remove `quantity` from `InventoryUpdate`; quantity changes must go through `/adjust` or `/count`.
 
-### H3 — Passwordless accounts are claimable by any unauthenticated LAN client — **High (needs a product decision for the full fix)**
-`src/opal/web/routes.py:420-427` diverts any username whose `password_hash IS NULL` to a set-password form with a signed state token that binds only the target `uid` — not the requester. `login_set_password` (`:442-479`) then sets the password with no proof of ownership. This intersects with admin password reset (`src/opal/api/routes/users.py:300-306` sets `password_hash = None`): from reset until claimed, any unauthenticated LAN peer who submits that username seizes the account. The divert is also a distinguishable response (username-enumeration / claimable-account oracle) and, unlike the failure path, does not `record_failure`, so probing is unmetered.
-This is documented as intentional trust-on-first-use, so the **model** (how users receive initial passwords) is a product decision, not a unilateral code change.
-**Fix (this branch, defense-in-depth):** rate-limit and meter the divert branch so it can't be probed or abused en masse. **Recommended (owner decision):** replace TOFU with an admin-issued one-time claim token handed to the user out-of-band, and return an identical generic response for unknown vs. claimable usernames to close the oracle.
+### H3 — Passwordless accounts are claimable by any unauthenticated LAN client — **High — RESOLVED (model changed: admin-issued claim)**
+`src/opal/web/routes.py:420-427` diverted any username whose `password_hash IS NULL` to a set-password form with a signed state token that binds only the target `uid` — not the requester. `login_set_password` then set the password with no proof of ownership. This intersected with admin password reset (`src/opal/api/routes/users.py:300-306` sets `password_hash = None`): from reset until claimed, any unauthenticated LAN peer who submitted that username seized the account. The divert was also a distinguishable response (username-enumeration / claimable-account oracle).
+Owner decision (2026-07-22): replace trust-on-first-use with **admin-issued out-of-band claim links** (option A).
+**Fix (this branch):** the login form no longer diverts passwordless accounts — they fall through to `authenticate_password`, which fails closed with timing-safe dummy verification, so the response is indistinguishable from a wrong password and leaks no claimable usernames (closes the oracle; no metering special-case needed). Claiming now requires a signed, 7-day, single-use link minted by an admin (`POST /users/{id}/claim-link`, admin-gated) and delivered out of band; the link lands on `GET /claim`, and `login_set_password` honors only the `account-claim` token kind and only while the account still has no password. Admin UI: an "ISSUE CLAIM LINK" affordance on the user page for passwordless accounts. Regression tests in `tests/unit/test_auth.py` (`test_passwordless_login_is_not_a_claim_oracle`, `test_admin_issued_claim_flow`, `test_claim_link_requires_admin`, `test_claim_link_refused_for_password_holder`).
 
 ### H4 — Reachable dependency CVEs — **High**
 `uv run --with pip-audit pip-audit --desc` → 24 advisories across 10 packages. Reachable ones:
@@ -111,6 +111,6 @@ A recurring dependency below is a **trusted-proxy config concept** (e.g. `OPAL_T
 
 1. **C1** before any exe-mode deployment (fixed here; also front with a hardened proxy + `127.0.0.1` bind).
 2. **H1, H2** — trivially exploitable, fixed here.
-3. **H4** — apply the safe dependency bumps now (fixed here); schedule the Starlette 1.x + FastAPI upgrade before GA.
-4. **H3** — deploy the metering fix now (fixed here); make the account-claim-model decision before onboarding new clients.
+3. **H4** — dependency CVEs cleared here via the Starlette 1.x + FastAPI 0.139 upgrade (compat shim; no call-site churn).
+4. **H3** — fixed here: login oracle removed, claiming replaced with admin-issued out-of-band claim links.
 5. **H5 / M1–M3** — MCP hardening + the small Medium gaps, fixed here; the MCP architectural item is a follow-up.
