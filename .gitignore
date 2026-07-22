@@ -72,3 +72,6 @@ Thumbs.db
 # Examples/scratch
 examples/
 opal.project.yaml
+
+# Local working docs — audit reports, design notes; useful but never committed (public repo)
+notes/
