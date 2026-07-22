@@ -72,10 +72,8 @@ Also fixed on this branch (second pass):
 - **M5** — `POST /inventory/transfer` now joins `Part` and requires `deleted_at IS NULL`.
 - **M6** — Procedure step/kit/output child endpoints reject a soft-deleted parent via `_require_live_procedure`.
 
-Still backlog — these need a design decision or a migration (see below):
-
-- **M7** — Login rate limiter is web-password-only and keyed `client_ip:username`; behind a proxy the IP collapses (lockout DoS + attacker indistinguishability); passkey/token paths unthrottled. *(Needs the trusted-proxy config decision.)*
-- **M8** — WebAuthn challenge is client-held and not single-use (replay within the 5-minute window; counter check is skipped when the authenticator reports counter 0). *(Needs a server-side challenge store.)*
+- **M7** — Login rate-limiter keying fixed here: behind a configured trusted proxy the key now uses the real client IP (`X-Forwarded-For` leftmost) instead of the collapsed proxy IP. See `OPAL_TRUST_PROXY` below. *(Passkey/token-path throttling remains a possible follow-up.)*
+- **M8** — WebAuthn challenges are now single-use: state is held in a server-side `webauthn_challenge` store and burned on completion, so a captured cookie + assertion can't be replayed within the TTL window. Fixed here.
 
 ---
 
@@ -91,19 +89,29 @@ Still backlog — these need a design decision or a migration (see below):
 - **OriginCheck** — now rejects `Origin: null` and cross-checks `Referer` when Origin is absent.
 - **MCP** — `list_*` limits clamped to 1000; `bulk_*` batches capped at 500.
 
+**Fixed on this branch (decision pass, 2026-07-22):**
+
+- **`OPAL_TRUST_PROXY`** — the trusted-proxy config concept the items below all depended on. When set (OPAL behind a reverse proxy the operator controls), `X-Forwarded-Proto`/`X-Forwarded-For` are honored; otherwise ignored so a client can't spoof scheme or IP. Helpers in `opal/api/net.py`.
+  - **Session/passkey `Secure` flag** now set over a TLS-terminating proxy (was: only direct `https`).
+  - **Login rate-limiter keying (M7)** and session/audit IP now use the real client IP behind the proxy.
+- **API tokens can expire** — optional per-token TTL (`api_token.expires_at`, migration `b4b681fa39d7`); non-expiring by default. `POST /api/auth/tokens` takes `expires_in_days`; the UI exposes it and the token table shows expiry.
+- **WebAuthn single-use challenge (M8)** — server-side `webauthn_challenge` store (migration `c1a2b3d4e5f6`), burned on completion.
+
+**Deliberately not done (with rationale):**
+
+- **Uploaded MIME sniffing** — owner decision (2026-07-22): rely on the extension allowlist + forced `attachment` Content-Disposition rather than add a native `libmagic` dependency. Stored-XSS-on-download is already blocked by the disposition, so the residual risk is low; revisit if inline rendering is ever needed.
+
 **Still open (need a decision or a migration):**
 
-- **API tokens never expire** — add optional expiry / idle timeout (needs a small model migration + a TTL default). Surface `last_used_at` in the UI.
-- **Session `Secure` flag** derives from `request.url.scheme`, blind to a TLS-terminating proxy (`X-Forwarded-Proto` not honored). *(Ties to a trusted-proxy config concept — see below.)*
-- **WebAuthn RP ID** falls back to the client `Host` header when `OPAL_PASSKEY_RP_ID` is unset — pin it for non-localhost deployments.
-- **Login rate-limiter keying (M7)** — key on a trusted `X-Forwarded-For` behind a configured proxy, or on username with a separate global/IP cap; throttle the passkey handshake.
-- **Uploaded MIME** is trusted from the client `Content-Type` (not sniffed) — sniffing needs a new dependency (`python-magic`/`filetype`); stored-XSS-on-download is already blocked by the forced `attachment` disposition, so this is low-priority.
-- **Default bind `0.0.0.0`** — document; consider defaulting to a specific interface.
+- **WebAuthn RP ID** falls back to the client `Host` header when `OPAL_PASSKEY_RP_ID` is unset — pin it for non-localhost deployments (config already exists; this is a deployment note).
+- **Default bind `0.0.0.0`** — documented under Deployment below; consider defaulting to a specific interface.
 - **`updater.py:138`** uses `follow_redirects=True` — safe today (fixed URL) but keep the update URL non-attacker-influenced.
-- **MCP** architectural auth (see H5): bind an authenticated operator identity to the session.
+- **MCP** architectural auth (see H5): bind an authenticated operator identity to the session — deferred pending owner design decision.
 - **Attachments/datasets** have no per-user access control (flat by design) — if compartmentalization is ever wanted, scope reads and restrict deletes to admin/uploader.
 
-A recurring dependency below is a **trusted-proxy config concept** (e.g. `OPAL_TRUST_PROXY` + trusted-proxy CIDRs): it would let OPAL honor `X-Forwarded-Proto` (Secure flag), `X-Forwarded-For` (rate-limiter keying, M7), and interacts with the exe-proxy work (C1). Worth deciding once, then applying across these items.
+### Deployment hardening notes
+
+- **Bind address.** OPAL defaults to `0.0.0.0:8080` (reachable from the whole LAN). For a hardened deployment, bind to a specific interface or `127.0.0.1` and front it with a reverse proxy; set `OPAL_TRUST_PROXY=1` so the Secure flag and client-IP rate-limiting work correctly behind it. This is required for `exe` mode (see C1).
 
 ---
 
@@ -114,3 +122,4 @@ A recurring dependency below is a **trusted-proxy config concept** (e.g. `OPAL_T
 3. **H4** — dependency CVEs cleared here via the Starlette 1.x + FastAPI 0.139 upgrade (compat shim; no call-site churn).
 4. **H3** — fixed here: login oracle removed, claiming replaced with admin-issued out-of-band claim links.
 5. **H5 / M1–M3** — MCP hardening + the small Medium gaps, fixed here; the MCP architectural item is a follow-up.
+6. **Decision-pass items** — `OPAL_TRUST_PROXY` (Secure flag + M7), optional API-token expiry, and single-use WebAuthn challenges (M8) all fixed here. MIME sniffing intentionally deferred; MCP operator identity (H5) remains an owner design decision.
