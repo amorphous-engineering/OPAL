@@ -106,11 +106,21 @@ async def upload_attachment(
             detail=f"File type '{file.content_type}' is not allowed. Allowed: {', '.join(settings.mime_types_list)}",
         )
 
+    # Reject oversized uploads by their declared size before buffering the
+    # whole body into memory (Starlette populates UploadFile.size from the
+    # multipart part). The post-read check below stays as the authoritative
+    # guard, since a declared size can be absent or lie.
+    if file.size is not None and file.size > settings.max_upload_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large ({file.size} bytes). Max: {settings.max_upload_size} bytes",
+        )
+
     # Read file and check size
     content = await file.read()
     if len(content) > settings.max_upload_size:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large ({len(content)} bytes). Max: {settings.max_upload_size} bytes",
         )
 

@@ -10,10 +10,10 @@ from typing import Any
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, or_
 
 from opal.api.deps import DbSession
+from opal.api.net import client_ip as _client_ip
 from opal.core import execution_flow as exec_flow
 from opal.core.auth import (
     SESSION_COOKIE,
@@ -48,6 +48,7 @@ from opal.db.models.requirement import Requirement
 from opal.db.models.risk import Risk, RiskDisposition, RiskIssueRole
 from opal.project import DEFAULT_TIERS
 from opal.risks.dispositions import OPEN_DISPOSITIONS
+from opal.web.templating import Jinja2Templates
 
 # Template directory
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -253,8 +254,7 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
 
 
 def _login_rate_key(request: Request, username: str) -> str:
-    client_ip = request.client.host if request.client else "unknown"
-    return f"{client_ip}:{username.strip().lower()}"
+    return f"{_client_ip(request) or 'unknown'}:{username.strip().lower()}"
 
 
 def _mint_login_session(
@@ -268,7 +268,7 @@ def _mint_login_session(
         user,
         auth_method=auth_method,
         user_agent=request.headers.get("user-agent"),
-        ip_address=request.client.host if request.client else None,
+        ip_address=_client_ip(request),
     )
     db.commit()
     redirect_url = "/welcome" if user.needs_onboarding else "/"
@@ -417,15 +417,14 @@ def login_submit(
             status_code=429,
         )
 
-    # Migrated accounts (no password yet) divert to the set-password flow
-    pending = db.query(User).filter(User.username == username, User.is_active.is_(True)).first()
-    if pending is not None and pending.password_hash is None:
-        state = sign_payload({"kind": "initial-password", "uid": pending.id})
-        return templates.TemplateResponse(
-            "login_set_password.html",
-            _login_context(request, username=username, state=state),
-        )
-
+    # Passwordless (pre-credential) accounts are NOT claimable from the login
+    # form. That was a trust-on-first-use oracle: anyone who guessed a migrated
+    # username could seize the account — often an admin — by setting its
+    # password. Claiming now requires an admin-issued, out-of-band link (see
+    # /claim). Such accounts fall through to authenticate_password, which fails
+    # closed with timing-safe dummy verification — indistinguishable from a
+    # wrong password, so the form leaks nothing about which usernames exist or
+    # are claimable.
     user = authenticate_password(db, username, password)
     if user is None:
         login_rate_limiter.record_failure(rate_key)
@@ -447,15 +446,15 @@ def login_set_password(
     password: str = Form(...),
     password_confirm: str = Form(...),
 ) -> RedirectResponse | HTMLResponse:
-    """First login for a migrated account: set the initial password.
+    """Set the initial password for a migrated account being claimed.
 
-    Accounts created before credentialed auth have no password hash. The
-    signed state token binds this form to the account and expires quickly.
-    Trust-on-first-use: the first person to claim the account sets its
-    password, so upgrade and have users claim accounts promptly.
+    Reached only via an admin-issued claim link (see GET /claim). The signed
+    state token names the account and carries its own expiry; it is honored
+    only while the account still has no password hash, so a link cannot re-set
+    an already-claimed account.
     """
     payload = verify_payload(state)
-    if not payload or payload.get("kind") != "initial-password":
+    if not payload or payload.get("kind") != "account-claim":
         return RedirectResponse(url="/login", status_code=302)
 
     user = db.query(User).filter(User.id == payload["uid"], User.is_active.is_(True)).first()
@@ -477,6 +476,29 @@ def login_set_password(
 
     user.password_hash = hash_password(password)
     return _mint_login_session(request, db, user, auth_method="password")
+
+
+@router.get("/claim", response_class=HTMLResponse, response_model=None)
+def claim_account(
+    request: Request, db: DbSession, token: str = Query("")
+) -> HTMLResponse | RedirectResponse:
+    """Landing page for an admin-issued account-claim link.
+
+    The token is minted by an admin (POST /users/{id}/claim-link) and delivered
+    out of band. This is the only path by which a passwordless account can set
+    its first password. An invalid, expired, or already-claimed link is sent to
+    the normal login page and reveals nothing.
+    """
+    payload = verify_payload(token)
+    if not payload or payload.get("kind") != "account-claim":
+        return RedirectResponse(url="/login", status_code=302)
+    user = db.query(User).filter(User.id == payload["uid"], User.is_active.is_(True)).first()
+    if user is None or user.password_hash is not None:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        "login_set_password.html",
+        _login_context(request, username=user.username, state=token),
+    )
 
 
 @router.get("/logout", response_model=None)
@@ -3803,7 +3825,6 @@ def datasets_new(request: Request, db: DbSession) -> HTMLResponse:
 @router.get("/datasets/{dataset_id}", response_class=HTMLResponse)
 def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> HTMLResponse:
     """Dataset detail page with chart."""
-    import json
 
     dataset = (
         db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
@@ -3828,17 +3849,17 @@ def datasets_detail(request: Request, db: DbSession, dataset_id: int) -> HTMLRes
     )
     context["data_points"] = data_points
 
-    # Convert to JSON for chart
-    context["data_points_json"] = json.dumps(
-        [
-            {
-                "id": p.id,
-                "recorded_at": p.recorded_at.isoformat(),
-                "values": p.values,
-            }
-            for p in data_points
-        ]
-    )
+    # Chart payload. Rendered in the template via the `tojson` filter, which
+    # HTML-escapes `<`, `>`, `&` — never `json.dumps` + `| safe`, which would
+    # let a data point's `values` break out of the <script> block (stored XSS).
+    context["data_points_json"] = [
+        {
+            "id": p.id,
+            "recorded_at": p.recorded_at.isoformat(),
+            "values": p.values,
+        }
+        for p in data_points
+    ]
 
     return templates.TemplateResponse("datasets/detail.html", context)
 
@@ -4124,6 +4145,15 @@ def users_detail(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
     context = get_base_context(request, db, f"{user.name} - OPAL")
     context["user"] = user
     context["is_own_profile"] = is_own_profile
+    # An admin viewing a passwordless account can hand its owner an out-of-band
+    # claim link (self-claim from the login form was removed — see /claim).
+    context["user_needs_claim"] = bool(
+        current_user
+        and current_user.is_admin
+        and not is_own_profile
+        and user.is_active
+        and user.password_hash is None
+    )
 
     return templates.TemplateResponse("users/detail.html", context)
 
@@ -4150,6 +4180,38 @@ def users_edit(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
     context["user"] = user
 
     return templates.TemplateResponse("users/edit.html", context)
+
+
+_CLAIM_LINK_TTL = timedelta(days=7)
+
+
+@router.post("/users/{user_id}/claim-link", response_class=HTMLResponse)
+def users_issue_claim_link(request: Request, db: DbSession, user_id: int) -> HTMLResponse:
+    """Mint an out-of-band account-claim link for a passwordless user. Admin only.
+
+    Replaces trust-on-first-use claiming: instead of letting whoever reaches
+    the login form seize a migrated account, an admin generates this
+    time-limited link and delivers it to the real person over a trusted
+    channel. Valid only while the target account still has no password.
+    """
+    if _require_admin_web(request, db) is not None:
+        return HTMLResponse("Forbidden", status_code=403)
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        return HTMLResponse("User not found", status_code=404)
+    if not user.is_active or user.password_hash is not None:
+        return HTMLResponse(
+            '<div class="text-muted mono" style="font-size:0.75rem;">'
+            "This account already has a password — no claim link is needed.</div>",
+            status_code=400,
+        )
+    token = sign_payload({"kind": "account-claim", "uid": user.id}, max_age=_CLAIM_LINK_TTL)
+    claim_url = f"{request.base_url}claim?token={token}"
+    expires_at = datetime.now(UTC) + _CLAIM_LINK_TTL
+    return templates.TemplateResponse(
+        "users/_claim_link.html",
+        {"request": request, "claim_url": claim_url, "expires_at": expires_at},
+    )
 
 
 # ============ LABEL PRINT ============
@@ -4325,6 +4387,16 @@ def settings_page(request: Request, db: DbSession) -> HTMLResponse:
     context["demo_file_exists"] = lifecycle.demo_file_exists()
     context["demo_db_path"] = str(lifecycle.demo_db_path())
 
+    # MCP agent part-activation opt-in (default off); value is the authorizing operator's id.
+    from opal.config import get_app_setting
+
+    activation_raw = get_app_setting(db, "mcp_agent_activation_operator_id")
+    activation_operator = None
+    if activation_raw and activation_raw.isdigit():
+        activation_operator = db.query(User).filter(User.id == int(activation_raw)).first()
+    context["agent_activation_enabled"] = activation_operator is not None
+    context["agent_activation_operator"] = activation_operator
+
     return templates.TemplateResponse("settings/index.html", context)
 
 
@@ -4382,6 +4454,29 @@ def settings_auth_mode_save(
     return templates.TemplateResponse("settings/auth_mode.html", context)
 
 
+@router.post("/settings/agent-activation", response_class=HTMLResponse, response_model=None)
+def settings_agent_activation_save(
+    request: Request, db: DbSession, enabled: bool = Form(default=False)
+) -> RedirectResponse:
+    """Toggle the MCP-agent part-activation opt-in. Admin only.
+
+    Enabling records the acting admin as the authorizing operator; agent
+    activations then attribute to them (see opal/mcp/server.py). Sign-offs stay
+    human-only regardless. Default off."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+    from opal.config import set_app_setting
+
+    if enabled:
+        current_user = _get_current_user(request, db)
+        value = str(current_user.id) if current_user else None
+        set_app_setting(db, "mcp_agent_activation_operator_id", value)
+    else:
+        set_app_setting(db, "mcp_agent_activation_operator_id", None)
+    db.commit()
+    return RedirectResponse(url="/settings", status_code=302)
+
+
 # ============ INSTANCE LIFECYCLE: DEMO DATA + FACTORY RESET ============
 
 
@@ -4414,7 +4509,7 @@ def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
                     demo_user,
                     auth_method="demo",
                     user_agent=request.headers.get("user-agent"),
-                    ip_address=request.client.host if request.client else None,
+                    ip_address=_client_ip(request),
                 )
                 demo_db.commit()
                 set_session_cookie(response, request, token)
@@ -4545,9 +4640,23 @@ def settings_onshape_configure_save(
     else:
         new_webhook = current.onshape_webhook_secret
 
+    # Validate the outbound base URL: every Onshape call (carrying the signed
+    # credential) is made against it, so restrict it to https to keep a
+    # compromised/mistyped config from pointing the credentialed client at an
+    # internal http target.
+    resolved_base = base_url.strip() or "https://cad.onshape.com"
+    if not resolved_base.startswith("https://") or len(resolved_base) <= len("https://"):
+        context = _onshape_form_context(request, db)
+        context["save_result"] = {
+            "ok": False,
+            "message": "Base URL must be an https:// URL.",
+        }
+        context["test_result"] = None
+        return templates.TemplateResponse("settings/onshape_configure.html", context)
+
     set_app_setting(db, "onshape_access_key", access_key.strip())
     set_app_setting(db, "onshape_secret_key", new_secret)
-    set_app_setting(db, "onshape_base_url", base_url.strip() or "https://cad.onshape.com")
+    set_app_setting(db, "onshape_base_url", resolved_base)
     set_app_setting(db, "onshape_poll_interval_minutes", str(max(0, poll_interval_minutes)))
     set_app_setting(db, "onshape_webhook_secret", new_webhook)
     db.commit()

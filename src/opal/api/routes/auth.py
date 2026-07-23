@@ -7,12 +7,13 @@ cookie so the server stays stateless across the handshake.
 """
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from opal.api.deps import DbSession, RequiredUser
+from opal.api.net import client_ip, request_is_secure
 from opal.core import webauthn
 from opal.core.auth import (
     SESSION_COOKIE,
@@ -42,7 +43,7 @@ def set_session_cookie(response: Response, request: Request, token: str) -> None
         max_age=int(SESSION_LIFETIME.total_seconds()),
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_secure(request),
     )
 
 
@@ -70,18 +71,20 @@ def _require_passkeys_enabled() -> None:
 
 
 @public_router.post("/passkey/login/begin")
-def passkey_login_begin(request: Request, response: Response) -> dict:
+def passkey_login_begin(request: Request, response: Response, db: DbSession) -> dict:
     """Start usernameless passkey authentication."""
     _require_passkeys_enabled()
     rp_id = webauthn.rp_id_for_host(request.url.hostname)
     options, state = webauthn.begin_authentication(rp_id)
+    nonce = webauthn.store_challenge(db, "login", rp_id, state)
+    db.commit()
     response.set_cookie(
         PASSKEY_STATE_COOKIE,
-        sign_payload({"kind": "login", "rp_id": rp_id, "state": state}),
+        sign_payload({"kind": "login", "nonce": nonce}),
         max_age=300,
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_secure(request),
     )
     return options
 
@@ -91,10 +94,13 @@ def passkey_login_complete(request: Request, body: dict, db: DbSession) -> Respo
     """Verify the assertion and mint a session."""
     _require_passkeys_enabled()
     payload = verify_payload(request.cookies.get(PASSKEY_STATE_COOKIE))
-    if not payload or payload.get("kind") != "login":
+    challenge = webauthn.consume_challenge(db, payload.get("nonce"), "login") if payload else None
+    # Persist the burn now so a failed assertion can't retry the same challenge.
+    db.commit()
+    if challenge is None:
         raise HTTPException(status_code=400, detail="Missing or expired passkey challenge")
 
-    user = webauthn.complete_authentication(db, payload["rp_id"], payload["state"], body)
+    user = webauthn.complete_authentication(db, challenge["rp_id"], challenge["state"], body)
     if user is None:
         raise HTTPException(status_code=401, detail="Passkey authentication failed")
 
@@ -103,7 +109,7 @@ def passkey_login_complete(request: Request, body: dict, db: DbSession) -> Respo
         user,
         auth_method="passkey",
         user_agent=request.headers.get("user-agent"),
-        ip_address=request.client.host if request.client else None,
+        ip_address=client_ip(request),
     )
     db.commit()
 
@@ -151,13 +157,15 @@ def passkey_register_begin(
     _require_passkeys_enabled()
     rp_id = webauthn.rp_id_for_host(request.url.hostname)
     options, state = webauthn.begin_registration(db, user, rp_id)
+    nonce = webauthn.store_challenge(db, "register", rp_id, state, user_id=user.id)
+    db.commit()
     response.set_cookie(
         PASSKEY_STATE_COOKIE,
-        sign_payload({"kind": "register", "rp_id": rp_id, "state": state, "uid": user.id}),
+        sign_payload({"kind": "register", "nonce": nonce, "uid": user.id}),
         max_age=300,
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_secure(request),
     )
     return options
 
@@ -176,11 +184,17 @@ def passkey_register_complete(
 ) -> dict:
     _require_passkeys_enabled()
     payload = verify_payload(request.cookies.get(PASSKEY_STATE_COOKIE))
-    if not payload or payload.get("kind") != "register" or payload.get("uid") != user.id:
+    ok_owner = bool(payload) and payload.get("uid") == user.id
+    challenge = (
+        webauthn.consume_challenge(db, payload.get("nonce"), "register") if ok_owner else None
+    )
+    # Persist the burn now so a failed attempt can't retry the same challenge.
+    db.commit()
+    if challenge is None:
         raise HTTPException(status_code=400, detail="Missing or expired registration challenge")
     try:
         credential = webauthn.complete_registration(
-            db, user, payload["rp_id"], payload["state"], body.credential, body.name
+            db, user, challenge["rp_id"], challenge["state"], body.credential, body.name
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Passkey registration failed: {exc}") from exc
@@ -305,10 +319,13 @@ class TokenInfo(BaseModel):
     name: str
     created_at: str
     last_used_at: str | None
+    expires_at: str | None
 
 
 class TokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    # Optional lifetime in days; omit (or null) for a non-expiring token.
+    expires_in_days: int | None = Field(default=None, ge=1, le=3650)
 
 
 @router.get("/tokens", response_model=list[TokenInfo])
@@ -325,6 +342,7 @@ def list_api_tokens(db: DbSession, user: RequiredUser) -> list[TokenInfo]:
             name=r.name,
             created_at=r.created_at.isoformat(),
             last_used_at=r.last_used_at.isoformat() if r.last_used_at else None,
+            expires_at=r.expires_at.isoformat() if r.expires_at else None,
         )
         for r in rows
     ]
@@ -333,9 +351,17 @@ def list_api_tokens(db: DbSession, user: RequiredUser) -> list[TokenInfo]:
 @router.post("/tokens", status_code=status.HTTP_201_CREATED)
 def create_token(body: TokenCreate, db: DbSession, user: RequiredUser) -> dict:
     """Mint an API token. The raw token appears in this response only."""
-    record, raw = create_api_token(db, user, body.name)
+    expires_at = None
+    if body.expires_in_days is not None:
+        expires_at = datetime.now(UTC) + timedelta(days=body.expires_in_days)
+    record, raw = create_api_token(db, user, body.name, expires_at=expires_at)
     db.commit()
-    return {"id": record.id, "name": record.name, "token": raw}
+    return {
+        "id": record.id,
+        "name": record.name,
+        "token": raw,
+        "expires_at": record.expires_at.isoformat() if record.expires_at else None,
+    }
 
 
 @router.delete("/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)

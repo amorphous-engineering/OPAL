@@ -90,10 +90,26 @@ class Settings(BaseSettings):
 
     # Authentication
     auth_mode: str = Field(default="local", description="Auth mode: 'local' or 'exe'")
+    exe_proxy_secret: str = Field(
+        default="",
+        description="Shared secret the trusted proxy must present in the "
+        "X-ExeDev-Proxy-Secret header when auth_mode='exe'. When unset, exe "
+        "identity headers are refused (fail closed) — set this before "
+        "deploying exe mode, and bind the app to 127.0.0.1 behind the proxy.",
+    )
     auth_secret: str = Field(
         default="",
         description="Secret for signing short-lived auth payloads (auto-generated "
         "next to the database file when unset)",
+    )
+    trust_proxy: bool = Field(
+        default=False,
+        description="Trust X-Forwarded-Proto / X-Forwarded-For from a front-end "
+        "reverse proxy. Enable ONLY when OPAL sits behind a proxy you control "
+        "that overwrites these headers; otherwise a client can spoof them. When "
+        "on, the session/passkey cookies get the Secure flag over a TLS-"
+        "terminating proxy and login rate-limiting keys on the real client IP "
+        "instead of the proxy's.",
     )
     passkeys_enabled: bool = Field(
         default=True,

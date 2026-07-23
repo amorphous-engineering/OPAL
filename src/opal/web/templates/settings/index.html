@@ -122,6 +122,32 @@
         {% endif %}
 {% endcall %}
 
+{# ── MCP AGENT ── #}
+{% call ok.panel("MCP AGENT", margin_top="var(--space-md)") %}
+        {% call ok.table() %}
+            {{ ok.detail_row("PART ACTIVATION", ok.status("AGENT ENABLED", "warn") if agent_activation_enabled else ok.status("HUMAN ONLY", "default")) }}
+            {% if agent_activation_enabled and agent_activation_operator %}
+            {{ ok.detail_row("AUTHORIZED BY", agent_activation_operator.name) }}
+            {% endif %}
+        {% endcall %}
+        {% if is_admin %}
+        {% if agent_activation_enabled %}
+        <form method="POST" action="/settings/agent-activation" style="margin-top: var(--space-sm);">
+            {{ ok.btn("DISABLE AGENT ACTIVATION", type="submit") }}
+        </form>
+        {% else %}
+        <form method="POST" action="/settings/agent-activation" style="margin-top: var(--space-sm);">
+            <input type="hidden" name="enabled" value="true">
+            {{ ok.btn("ENABLE AGENT ACTIVATION", type="submit") }}
+        </form>
+        {% endif %}
+        {% endif %}
+        <p class="text-muted" style="margin-top: var(--space-sm); font-size: 0.85rem;">
+            Sign-offs — dispositions, baselines, risk acceptance — are always human-only.
+            Enabling this lets the MCP agent activate blocker-clear parts, attributed to you.
+        </p>
+{% endcall %}
+
 {# ── ONSHAPE INTEGRATION ── #}
 {% if onshape_enabled %}
 {% set onshape_actions %}

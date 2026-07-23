@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
@@ -15,6 +15,20 @@ router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
 
 # --- Schemas ---
+
+
+def _validate_website(value: str | None) -> str | None:
+    """Reject non-http(s) URLs. The website is rendered as an anchor href, so a
+    ``javascript:`` (or ``data:``) scheme would be stored, click-to-fire XSS."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    scheme = value.split(":", 1)[0].lower() if ":" in value else ""
+    if scheme not in ("http", "https"):
+        raise ValueError("website must be an http:// or https:// URL")
+    return value
 
 
 class SupplierCreate(BaseModel):
@@ -30,6 +44,8 @@ class SupplierCreate(BaseModel):
     notes: str | None = None
     is_active: bool = True
 
+    _check_website = field_validator("website")(_validate_website)
+
 
 class SupplierUpdate(BaseModel):
     """Schema for updating a supplier."""
@@ -43,6 +59,8 @@ class SupplierUpdate(BaseModel):
     address: str | None = None
     notes: str | None = None
     is_active: bool | None = None
+
+    _check_website = field_validator("website")(_validate_website)
 
 
 class SupplierResponse(BaseModel):

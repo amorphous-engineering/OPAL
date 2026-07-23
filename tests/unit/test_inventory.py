@@ -169,6 +169,9 @@ def test_update_inventory(client: TestClient, auth_headers: dict, bulk_part: dic
     )
     inv_id = create_resp.json()["items"][0]["id"]
 
+    # PATCH may update metadata (location) but must NOT change quantity: stock
+    # is traceable and only /adjust and /count may move it (with a ledger row).
+    # A quantity in the body is ignored, not applied.
     resp = client.patch(
         f"/api/inventory/{inv_id}",
         json={"location": "Shelf B", "quantity": 8},
@@ -176,7 +179,7 @@ def test_update_inventory(client: TestClient, auth_headers: dict, bulk_part: dic
     )
     assert resp.status_code == 200
     assert resp.json()["location"] == "Shelf B"
-    assert float(resp.json()["quantity"]) == 8
+    assert float(resp.json()["quantity"]) == 5  # unchanged — ledger bypass closed
 
 
 def test_delete_inventory(client: TestClient, auth_headers: dict, bulk_part: dict) -> None:

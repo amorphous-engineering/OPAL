@@ -285,29 +285,42 @@ def _make_part(db, name: str, lifecycle_state: str = "draft") -> Part:
     return part
 
 
-def test_mcp_activate_part_requires_user(db_session):
-    part = _make_part(db_session, "MCP-NoUser")
-    data = _call(server._activate_part, db_session, {"part_id": part.id})
-    assert "error" in data
-    assert "user_id" in data["error"]
+def _enable_agent_activation(db, user) -> None:
+    """Opt in to MCP-agent part activation, authorized by `user` (see risk #76)."""
+    from opal.config import set_app_setting
+
+    set_app_setting(db, "mcp_agent_activation_operator_id", str(user.id))
+    db.flush()
 
 
-def test_mcp_activate_part_with_valid_user(db_session, test_user):
-    part = _make_part(db_session, "MCP-Activate")
+def test_mcp_activate_part_blocked_by_default(db_session, test_user):
+    # Agent activation is off by default — even with a valid user_id it refuses.
+    part = _make_part(db_session, "MCP-NoOptIn")
     data = _call(server._activate_part, db_session, {"part_id": part.id, "user_id": test_user.id})
+    assert data.get("success") is False
+    assert data["human_action_required"] is True
+
+
+def test_mcp_activate_part_when_opted_in(db_session, test_user):
+    _enable_agent_activation(db_session, test_user)
+    part = _make_part(db_session, "MCP-Activate")
+    # user_id is ignored; attribution comes from the authorizing operator.
+    data = _call(server._activate_part, db_session, {"part_id": part.id, "user_id": 999999})
     assert data["success"] is True
-    assert "activated by" in data["message"]
+    assert "MCP agent" in data["message"]
+    assert test_user.name in data["message"]
     assert data["part"]["lifecycle_state"] == "active"
 
 
 def test_mcp_bulk_activate_skips_already_active(db_session, test_user):
+    _enable_agent_activation(db_session, test_user)
     draft = _make_part(db_session, "MCP-Bulk-Draft")
     active = _make_part(db_session, "MCP-Bulk-Active", lifecycle_state="active")
 
     data = _call(
         server._bulk_activate_parts,
         db_session,
-        {"part_ids": [draft.id, active.id], "user_id": test_user.id},
+        {"part_ids": [draft.id, active.id]},
     )
     assert data["success"] is True
     assert [p["id"] for p in data["activated"]] == [draft.id]

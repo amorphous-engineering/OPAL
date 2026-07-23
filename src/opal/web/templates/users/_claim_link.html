@@ -1,0 +1,7 @@
+{% import 'opalkit/_macros.html' as ok %}
+<div class="mono" style="font-size: 0.8rem; padding: var(--space-sm); border: 1px solid var(--border-color); word-break: break-all;">
+    <div class="text-muted" style="margin-bottom: var(--space-xs);">
+        CLAIM LINK — deliver to the account owner over a trusted channel. Expires {{ ok.timestamp(expires_at) }}.
+    </div>
+    <div>{{ claim_url }}</div>
+</div>

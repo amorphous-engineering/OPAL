@@ -80,6 +80,7 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 5. **Soft deletes** via `deleted_at` field on most entities — don't hard-delete
 6. **AuditLog records every CUD** — use `log_create`/`log_update`/`log_delete` from `src/opal/core/audit.py`
 7. **Part IDs are system-unique and never reused**
+8. **Working docs live in `notes/` (gitignored), never the repo tree** — audit reports, design notes, scratch analyses, and anything that isn't critical project data/upkeep go in the local `notes/` directory. The repo is public; these shouldn't ship, add noise, or reach `master`. Only genuine product docs stay tracked (`README.md`, `CHANGELOG.md`, `CLAUDE.md`, the manual).
 
 ## UI/UX Philosophy (US Graphics Style)
 

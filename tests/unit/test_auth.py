@@ -232,31 +232,74 @@ def test_forged_or_legacy_cookie_rejected(client, test_user) -> None:
     assert r.status_code == 302
 
 
-def test_tofu_initial_password_flow(client, db_session) -> None:
-    """Migrated accounts (NULL password hash) set a password on first login."""
+def test_passwordless_login_is_not_a_claim_oracle(client, db_session) -> None:
+    """A migrated (NULL-hash) account is NOT claimable from the login form.
+
+    Self-claim was a trust-on-first-use oracle; the login form must now be
+    indistinguishable from a wrong password so it leaks no claimable usernames.
+    """
     user = User(name="Migrated", username="oldtimer", password_hash=None)
     db_session.add(user)
     db_session.commit()
 
-    # Login attempt diverts to the set-password form with a signed state
-    r = client.post("/login", data={"username": "oldtimer", "password": "x"})
-    assert r.status_code == 200
-    assert "SET PASSWORD" in r.text
+    r = client.post(
+        "/login", data={"username": "oldtimer", "password": "x"}, follow_redirects=False
+    )
+    assert r.status_code == 401
+    assert "SET PASSWORD" not in r.text
+    db_session.refresh(user)
+    assert user.password_hash is None  # nothing was claimed
+
+
+def test_claim_link_requires_admin(client, db_session) -> None:
+    """A non-admin (here: anonymous) request cannot mint a claim link."""
+    user = User(name="Migrated", username="oldtimer", password_hash=None)
+    db_session.add(user)
+    db_session.commit()
+
+    anon = client
+    anon.cookies.clear()
+    r = anon.post(
+        f"/users/{user.id}/claim-link",
+        headers={"Authorization": ""},
+        follow_redirects=False,
+    )
+    assert r.status_code in (302, 403)
+    db_session.refresh(user)
+    assert user.password_hash is None
+
+
+def test_admin_issued_claim_flow(client, db_session, admin_user) -> None:
+    """Admin mints an out-of-band claim link; the owner sets their password once."""
     import re
 
-    state = re.search(r'name="state" value="([^"]+)"', r.text).group(1)
+    from tests.conftest import login
 
-    # Mismatched confirmation is rejected
+    user = User(name="Migrated", username="oldtimer", password_hash=None)
+    db_session.add(user)
+    db_session.commit()
+
+    login(client, admin_user)  # web admin routes authenticate via session cookie
+    r = client.post(f"/users/{user.id}/claim-link")
+    assert r.status_code == 200
+    token = re.search(r"/claim\?token=([^\s\"'<]+)", r.text).group(1)
+
+    # The claim landing page renders the set-password form.
+    r = client.get(f"/claim?token={token}")
+    assert r.status_code == 200
+    assert "SET PASSWORD" in r.text
+
+    # Mismatched confirmation is rejected.
     r = client.post(
         "/login/set-password",
-        data={"state": state, "password": "new-password-1", "password_confirm": "different-1"},
+        data={"state": token, "password": "new-password-1", "password_confirm": "different-1"},
     )
     assert r.status_code == 400
 
-    # Valid set-password claims the account and signs in
+    # Valid submission claims the account and signs in.
     r = client.post(
         "/login/set-password",
-        data={"state": state, "password": "new-password-1", "password_confirm": "new-password-1"},
+        data={"state": token, "password": "new-password-1", "password_confirm": "new-password-1"},
         follow_redirects=False,
     )
     assert r.status_code == 302
@@ -264,14 +307,27 @@ def test_tofu_initial_password_flow(client, db_session) -> None:
     db_session.refresh(user)
     assert user.password_hash is not None
 
-    # The state token cannot claim the account twice
+    # A spent link cannot claim the (now password-holding) account again.
+    r = client.get(f"/claim?token={token}", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"] == "/login"
     r = client.post(
         "/login/set-password",
-        data={"state": state, "password": "stolen-pass-1", "password_confirm": "stolen-pass-1"},
+        data={"state": token, "password": "stolen-pass-1", "password_confirm": "stolen-pass-1"},
         follow_redirects=False,
     )
     assert r.status_code == 302
     assert r.headers["location"] == "/login"
+
+
+def test_claim_link_refused_for_password_holder(client, db_session, admin_user, test_user) -> None:
+    """No claim link is minted for an account that already has a password."""
+    from tests.conftest import login
+
+    login(client, admin_user)
+    r = client.post(f"/users/{test_user.id}/claim-link")
+    assert r.status_code == 400
+    assert "already has a password" in r.text
 
 
 def test_logout_revokes_session(client, db_session, test_user) -> None:

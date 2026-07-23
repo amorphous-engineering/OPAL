@@ -245,27 +245,21 @@ def test_mcp_stamp_review_empty_list_is_an_error(db_session: Session, test_user:
     assert "empty" in data["error"]
 
 
-def test_mcp_unaccept_requires_a_human_user(
-    client: TestClient, db_session: Session, test_user: User
-):
+def test_mcp_unaccept_is_human_only(client: TestClient, db_session: Session, test_user: User):
+    # Reverting a signed acceptance is itself a sign-off — the agent can't do it,
+    # not even with a user_id (see risk #76). A human reopens it in OPAL.
     risk = _create_risk(client)
     _accept_risk(client, risk, test_user.id)
 
-    data = _call(
-        server._set_risk_disposition,
-        db_session,
+    for args in (
         {"risk_id": risk["id"], "disposition": "open", "note": "reopening"},
-    )
-    assert "error" in data and "user" in data["error"].lower()
-
-    data = _call(
-        server._set_risk_disposition,
-        db_session,
         {
             "risk_id": risk["id"],
             "disposition": "open",
             "note": "reopening",
             "user_id": test_user.id,
         },
-    )
-    assert data.get("success") is True
+    ):
+        data = _call(server._set_risk_disposition, db_session, args)
+        assert data.get("success") is False
+        assert data["human_action_required"] is True

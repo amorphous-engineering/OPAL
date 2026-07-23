@@ -1,5 +1,6 @@
 """FastAPI middleware configuration."""
 
+import hmac
 import logging
 from urllib.parse import quote, urlparse
 
@@ -8,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import PlainTextResponse, RedirectResponse
 
+from opal.api.net import client_ip
 from opal.config import get_active_settings
 from opal.core.auth import SESSION_COOKIE, create_session, resolve_session
 
@@ -27,18 +29,35 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method in UNSAFE_METHODS:
+            host = request.headers.get("host", "")
             origin = request.headers.get("origin")
-            if origin and origin != "null":
-                origin_host = urlparse(origin).netloc
-                if origin_host and origin_host != request.headers.get("host", ""):
-                    logger.warning(
-                        "Rejected cross-origin %s %s from origin %s",
-                        request.method,
-                        request.url.path,
-                        origin,
-                    )
-                    return PlainTextResponse("Cross-origin request rejected", status_code=403)
+            if origin is not None:
+                # An explicit Origin must match the host. `null` (sandboxed
+                # iframe, file://, opaque redirect) is never a legitimate
+                # same-origin app request here — reject rather than allow it.
+                origin_host = "" if origin == "null" else urlparse(origin).netloc
+                if origin == "null" or (origin_host and origin_host != host):
+                    return self._reject(request, f"origin {origin}")
+            else:
+                # No Origin (curl, the TUI, bearer clients) can't carry a
+                # victim's cookie, so it passes — but if a browser sent a
+                # Referer, cross-check it as a fallback.
+                referer = request.headers.get("referer")
+                if referer:
+                    ref_host = urlparse(referer).netloc
+                    if ref_host and ref_host != host:
+                        return self._reject(request, f"referer {referer}")
         return await call_next(request)
+
+    @staticmethod
+    def _reject(request: Request, source: str) -> Response:
+        logger.warning(
+            "Rejected cross-origin %s %s from %s",
+            request.method,
+            request.scope.get("path", request.url.path),
+            source,
+        )
+        return PlainTextResponse("Cross-origin request rejected", status_code=403)
 
 
 class UserSelectionMiddleware(BaseHTTPMiddleware):
@@ -94,7 +113,10 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
 
     async def _dispatch_local(self, request: Request, call_next) -> Response:
         """Local mode: require a valid session for web pages."""
-        path = request.url.path
+        # Gate on the raw routed ASGI path, not request.url (which is
+        # reconstructed and can be desynced from the routed path via a crafted
+        # Host header), so an exempt-prefix match cannot skip the auth check.
+        path = request.scope.get("path", request.url.path)
         if any(path.startswith(p) for p in self.LOCAL_EXEMPT):
             return await call_next(request)
 
@@ -109,9 +131,19 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
 
     async def _dispatch_exe(self, request: Request, call_next) -> Response:
         """Exe mode: trust proxy headers, auto-provision users, mint sessions."""
-        path = request.url.path
+        path = request.scope.get("path", request.url.path)
         if any(path.startswith(p) for p in self.EXE_EXEMPT):
             return await call_next(request)
+
+        # The identity headers below are only trustworthy if the request
+        # actually transited the trusted proxy. Require a shared secret to
+        # prove that; without it, any LAN client could spoof X-ExeDev-* and
+        # become any user (or self-provision admin). Fail closed when unset.
+        expected_secret = get_active_settings().exe_proxy_secret
+        presented_secret = request.headers.get("X-ExeDev-Proxy-Secret", "")
+        if not expected_secret or not hmac.compare_digest(presented_secret, expected_secret):
+            logger.warning("Rejected exe request: missing or invalid proxy secret")
+            return PlainTextResponse("Proxy authentication required", status_code=403)
 
         exe_user_id = request.headers.get("X-ExeDev-UserID")
         exe_email = request.headers.get("X-ExeDev-Email")
@@ -146,7 +178,7 @@ class UserSelectionMiddleware(BaseHTTPMiddleware):
                         db_user,
                         auth_method="exe",
                         user_agent=request.headers.get("user-agent"),
-                        ip_address=request.client.host if request.client else None,
+                        ip_address=client_ip(request),
                     )
 
         if user["needs_profile_setup"]:

@@ -10,13 +10,13 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from opal.api.middleware import setup_middleware
 from opal.api.routes import router as api_router
 from opal.config import get_settings
 from opal.core.part_lifecycle import DraftPartsBlocked
 from opal.web.routes import router as web_router
+from opal.web.templating import Jinja2Templates
 
 # Template directory
 TEMPLATES_DIR = Path(__file__).parent.parent / "web" / "templates"
@@ -102,12 +102,17 @@ def create_app() -> FastAPI:
     settings = get_settings()
     logging.getLogger(__name__).info("OPAL auth_mode=%s", settings.auth_mode)
 
+    # The interactive API explorer enumerates every endpoint; on a semi-trusted
+    # LAN it is pre-auth reconnaissance. Serve it only in debug.
     app = FastAPI(
         title="OPAL",
         description="Operations, Procedures, Assets, Logistics - ERP for small teams",
         version="0.1.0",
         lifespan=lifespan,
         debug=settings.debug,
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
+        openapi_url="/openapi.json" if settings.debug else None,
     )
 
     # Setup middleware

@@ -2133,11 +2133,44 @@ async def list_tools() -> list[Tool]:
     ]
 
 
+# ── Level 1: agents may prepare, never sign (see risk #76) ───────────────────
+# Authoritative human sign-offs cannot be performed by an agent. The agent may
+# draft/prepare; a person commits the sign-off in OPAL. Part activation is
+# handled separately (an opt-in), and set_risk_disposition blocks only the
+# un-accept path, so neither is listed here.
+_HUMAN_ONLY_SIGNOFFS = {
+    "sign_disposition": "Signing a disposition",
+    "accept_risk": "Accepting a risk",
+    "stamp_risk_review": "Stamping a risk review",
+    "baseline_requirement": "Baselining a requirement",
+    "baseline_batch": "Baselining requirements",
+    "reaffirm_requirement": "Reaffirming a requirement",
+}
+
+
+def _human_only(action: str) -> list[TextContent]:
+    """Refusal for an authoritative sign-off the agent must not perform itself."""
+    return json_response(
+        {
+            "success": False,
+            "error": (
+                f"{action} is a human sign-off and can't be performed by an agent. "
+                "Prepare the details; a person completes it in OPAL."
+            ),
+            "human_action_required": True,
+        }
+    )
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Handle tool calls."""
     db = get_db()
     try:
+        # Level 1: authoritative sign-offs are human-only — the agent may prepare
+        # but never commit them (see risk #76).
+        if name in _HUMAN_ONLY_SIGNOFFS:
+            return _human_only(_HUMAN_ONLY_SIGNOFFS[name])
         # Parts
         if name == "list_parts":
             return await _list_parts(db, arguments)
@@ -2339,6 +2372,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 # ============ TOOL IMPLEMENTATIONS ============
 
 
+_MAX_LIST_LIMIT = 1000
+_MAX_BULK = 500
+
+
+def _clamp_limit(value: object, default: int) -> int:
+    """Bound a caller-supplied list limit, mirroring the HTTP API's 1000 cap.
+    Without this an MCP caller can request an unbounded result materialization."""
+    try:
+        n = int(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+    if n < 1:
+        return default
+    return min(n, _MAX_LIST_LIMIT)
+
+
 async def _list_parts(db, args: dict) -> list[TextContent]:
     """List parts with optional filtering."""
     query = db.query(Part).filter(Part.deleted_at.is_(None))
@@ -2354,7 +2403,7 @@ async def _list_parts(db, args: dict) -> list[TextContent]:
             | (Part.external_pn.ilike(search))
         )
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     parts = query.order_by(Part.id.desc()).limit(limit).all()
 
     return json_response(
@@ -2593,7 +2642,7 @@ async def _get_part_consumption_history(db, args: dict) -> list[TextContent]:
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
 
-    limit = args.get("limit", 20)
+    limit = _clamp_limit(args.get("limit"), 20)
 
     # Get consumption records with related info
     consumptions = (
@@ -2884,7 +2933,7 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
     if args.get("issue_type"):
         query = query.filter(Issue.issue_type == args["issue_type"])
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     issues = query.order_by(Issue.id.desc()).limit(limit).all()
 
     return json_response(
@@ -2972,6 +3021,12 @@ async def _raise_issue(db, args: dict) -> list[TextContent]:
 
 async def _sign_disposition(db, args: dict) -> list[TextContent]:
     """Sign a disposition — releases every containment the issue holds."""
+    # A disposition is a signed quality record: it must be attributed to a real,
+    # active human, not a caller-supplied id for an arbitrary/absent user.
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+
     issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
     if not issue:
         return json_response({"success": False, "error": "Issue not found"})
@@ -3001,9 +3056,9 @@ async def _sign_disposition(db, args: dict) -> list[TextContent]:
     old_values = get_model_dict(issue)
     issue.disposition_type = disposition_type
     issue.disposition_rationale = args["rationale"]
-    issue.dispositioned_by_id = args["user_id"]
+    issue.dispositioned_by_id = user.id
     issue.dispositioned_at = datetime.now(UTC)
-    log_update(db, issue, old_values, args["user_id"])
+    log_update(db, issue, old_values, user.id)
     db.flush()
     _recheck_instance_completion(db, issue)
     db.commit()
@@ -3150,7 +3205,7 @@ async def _list_risks(db, args: dict) -> list[TextContent]:
     elif severity == "high":
         query = query.filter(score > 12)
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     risks = (
         query.options(selectinload(Risk.owner), selectinload(Risk.asset_part))
         .order_by(Risk.id.desc())
@@ -3270,11 +3325,8 @@ async def _set_risk_disposition(db, args: dict) -> list[TextContent]:
 
     user_id = args.get("user_id")
     if risk.disposition == RiskDisposition.ACCEPTED.value:
-        # Un-doing a signature is auditable — it cannot be anonymous.
-        user, error = _require_human_user(db, args)
-        if error:
-            return error
-        user_id = user.id
+        # Reverting a signed acceptance is itself a sign-off — human-only (risk #76).
+        return _human_only("Reverting a signed risk acceptance")
 
     if args.get("realized_issue_id") is not None:
         issue = (
@@ -3519,30 +3571,72 @@ async def _preview_part_number(db, args: dict) -> list[TextContent]:
         return json_response({"error": str(e)})
 
 
+_AGENT_ACTIVATION_SETTING = "mcp_agent_activation_operator_id"
+
+
+def _agent_activation_operator(db):
+    """User an admin authorized agent part-activation under, or None (disabled).
+
+    Activation is blocker-gated (objective) — so, unlike a pure-judgment sign-off,
+    an admin may opt in to agent activation. When set, activations attribute to
+    this operator and are marked agent-performed; the agent never picks who.
+    Off by default. See risk #76.
+    """
+    from opal.config import get_app_setting
+
+    raw = get_app_setting(db, _AGENT_ACTIVATION_SETTING)
+    if not raw:
+        return None
+    try:
+        uid = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return db.query(User).filter(User.id == uid, User.is_active.is_(True)).first()
+
+
+def _activation_disabled() -> list[TextContent]:
+    """Refusal when agent part-activation has not been enabled by an admin."""
+    return json_response(
+        {
+            "success": False,
+            "error": (
+                "Agent part-activation is disabled. An admin can enable it in OPAL "
+                "Settings, or a person can activate the part in OPAL."
+            ),
+            "human_action_required": True,
+        }
+    )
+
+
 async def _activate_part(db, args: dict) -> list[TextContent]:
-    """Activate a draft part. Agents draft, humans activate."""
-    user, error = _require_human_user(db, args)
-    if error:
-        return error
+    """Activate a draft part. Human-only unless an admin opted in to agent
+    activation; blocker checks always apply."""
+    operator = _agent_activation_operator(db)
+    if operator is None:
+        return _activation_disabled()
 
     part = db.query(Part).filter(Part.id == args["part_id"], Part.deleted_at.is_(None)).first()
     if not part:
         return json_response({"error": f"Part {args['part_id']} not found"})
 
-    cause = args.get("cause") or f"manual activation via MCP by {user.name}"
+    base = args.get("cause") or "activation via MCP"
+    cause = f"{base} (MCP agent, authorized by {operator.name})"
     old_values = get_model_dict(part)
     try:
-        activate_part(db, part, user.id, cause)
+        activate_part(db, part, operator.id, cause)
     except PartLifecycleError as e:
         return json_response({"error": str(e)})
-    log_update(db, part, old_values, user.id)
+    log_update(db, part, old_values, operator.id)
     db.commit()
     db.refresh(part)
 
     return json_response(
         {
             "success": True,
-            "message": f"{part.internal_pn} activated by {user.name}: {part.activation_cause}",
+            "message": (
+                f"{part.internal_pn} activated via MCP agent "
+                f"(authorized by {operator.name}): {part.activation_cause}"
+            ),
             "part": {
                 "id": part.id,
                 "internal_pn": part.internal_pn,
@@ -3556,33 +3650,44 @@ async def _activate_part(db, args: dict) -> list[TextContent]:
 
 
 async def _bulk_activate_parts(db, args: dict) -> list[TextContent]:
-    """Activate multiple draft parts in one signed act."""
-    user, error = _require_human_user(db, args)
-    if error:
-        return error
+    """Activate multiple draft parts. Human-only unless an admin opted in to
+    agent activation; blocker checks always apply."""
+    operator = _agent_activation_operator(db)
+    if operator is None:
+        return _activation_disabled()
 
-    cause = args.get("cause") or f"bulk activation via MCP by {user.name}"
+    part_ids = args["part_ids"]
+    if len(part_ids) > _MAX_BULK:
+        return json_response(
+            {"error": f"Too many part_ids ({len(part_ids)}); max {_MAX_BULK} per call"}
+        )
+
+    base = args.get("cause") or "bulk activation via MCP"
+    cause = f"{base} (MCP agent, authorized by {operator.name})"
     activated: list[dict] = []
     skipped: list[dict] = []
-    for part_id in args["part_ids"]:
+    for part_id in part_ids:
         part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
         if not part:
             skipped.append({"id": part_id, "reason": "not found"})
             continue
         old_values = get_model_dict(part)
         try:
-            activate_part(db, part, user.id, cause)
+            activate_part(db, part, operator.id, cause)
         except PartLifecycleError as e:
             skipped.append({"id": part_id, "internal_pn": part.internal_pn, "reason": str(e)})
             continue
-        log_update(db, part, old_values, user.id)
+        log_update(db, part, old_values, operator.id)
         activated.append({"id": part.id, "internal_pn": part.internal_pn, "name": part.name})
     db.commit()
 
     return json_response(
         {
             "success": True,
-            "message": f"{len(activated)} part(s) activated by {user.name}, {len(skipped)} skipped",
+            "message": (
+                f"{len(activated)} part(s) activated via MCP agent "
+                f"(authorized by {operator.name}), {len(skipped)} skipped"
+            ),
             "activated": activated,
             "skipped": skipped,
         }
@@ -3699,7 +3804,7 @@ async def _list_requirements(db, args: dict) -> list[TextContent]:
             | Requirement.statement.ilike(term)
         )
 
-    limit = args.get("limit", 50)
+    limit = _clamp_limit(args.get("limit"), 50)
     reqs = query.order_by(Requirement.req_number, Requirement.revision).limit(limit).all()
     return json_response({"count": len(reqs), "requirements": [_requirement_dict(r) for r in reqs]})
 
@@ -5648,7 +5753,7 @@ async def _search_suppliers(db, args: dict) -> list[TextContent]:
     if args.get("query"):
         query = query.filter(Supplier.name.ilike(f"%{args['query']}%"))
 
-    limit = args.get("limit", 20)
+    limit = _clamp_limit(args.get("limit"), 20)
     suppliers = query.order_by(Supplier.name).limit(limit).all()
 
     return json_response(
@@ -5810,6 +5915,10 @@ async def _bulk_create_parts(db, args: dict) -> list[TextContent]:
     part_args = args.get("parts") or []
     if not part_args:
         return json_response({"error": "No parts provided"})
+    if len(part_args) > _MAX_BULK:
+        return json_response(
+            {"error": f"Too many parts ({len(part_args)}); max {_MAX_BULK} per call"}
+        )
 
     # Validate all parent_ids up front so the whole batch is rejected cleanly.
     for idx, pa in enumerate(part_args):
@@ -6235,7 +6344,23 @@ async def _attach_to_step(db, args: dict) -> list[TextContent]:
         return json_response({"error": "Provide file_path or content"})
 
     if file_path:
-        src = Path(file_path)
+        # Confine reads to the upload/staging directory. Without this, a caller
+        # (e.g. a prompt-injected agent) could read any file the server process
+        # can — /etc/passwd, ~/.ssh keys — into a downloadable attachment.
+        staging = get_active_settings().upload_dir.resolve()
+        try:
+            src = (
+                (staging / file_path).resolve()
+                if not Path(file_path).is_absolute()
+                else Path(file_path).resolve()
+            )
+            src.relative_to(staging)
+        except ValueError:
+            return json_response(
+                {
+                    "error": "file_path must be inside the upload directory; pass inline content instead"
+                }
+            )
         if not src.is_file():
             return json_response({"error": f"File not found: {file_path}"})
         data = src.read_bytes()

@@ -5,6 +5,11 @@
    Usage: {{ ok.btn("Save", variant="primary") }}
           {{ ok.btn("Edit", href="/parts/1/edit") }}
           {{ ok.btn("Delete", variant="danger", attrs='onclick="confirmDelete()"') }}
+
+   SECURITY: `attrs` is emitted with `|safe` (unescaped) into attribute
+   position. It MUST be a hardcoded literal — never interpolate a
+   user-controlled value into it, or you get attribute-injection XSS.
+   Pass dynamic data through escaped attributes or a data-* value instead.
 #}
 {% macro btn(text, href=none, variant="default", size="md", type="button", attrs="") %}
 {%- set classes = ["btn"] -%}

@@ -3,7 +3,7 @@
 from opal.db.models.app_setting import AppSetting
 from opal.db.models.attachment import Attachment
 from opal.db.models.audit import AuditLog
-from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential
+from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential, WebauthnChallenge
 from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
@@ -69,6 +69,7 @@ __all__ = [
     "ProcedureOutput",
     "ProcedureStep",
     "ProcedureVersion",
+    "WebauthnChallenge",
     "Purchase",
     "PurchaseExpense",
     "PurchaseLine",

@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel
 
-from opal.api.deps import CurrentUserId, DbSession
+from opal.api.deps import CurrentUserId, DbSession, RequiredAdmin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onshape", tags=["onshape"])
@@ -128,7 +128,9 @@ def onshape_status() -> OnshapeStatusResponse:
 
 
 @router.post("/documents", response_model=DocumentRefResponse)
-async def add_document(body: AddDocumentRequest, db: DbSession) -> DocumentRefResponse:
+async def add_document(
+    body: AddDocumentRequest, db: DbSession, admin: RequiredAdmin
+) -> DocumentRefResponse:
     """Add an Onshape document from a pasted URL.
 
     Parses the URL, auto-detects element type via API, and saves to project config.
@@ -235,6 +237,7 @@ async def add_document(body: AddDocumentRequest, db: DbSession) -> DocumentRefRe
 )
 def remove_document(
     db: DbSession,
+    admin: RequiredAdmin,
     document_id: str = Path(...),
     element_id: str = Path(...),
 ) -> None:
@@ -268,6 +271,7 @@ def remove_document(
 @router.post("/sync/pull", response_model=SyncResultResponse)
 async def trigger_pull_sync(
     user_id: CurrentUserId,
+    admin: RequiredAdmin,
     document_id: str | None = Query(None, description="Specific document to sync (all if omitted)"),
 ) -> SyncResultResponse:
     """Trigger a manual pull sync from Onshape."""
@@ -341,6 +345,7 @@ async def trigger_pull_sync(
 @router.post("/sync/push", response_model=SyncResultResponse)
 async def trigger_push_sync(
     user_id: CurrentUserId,
+    admin: RequiredAdmin,
     document_id: str | None = Query(None, description="Specific document to push (all if omitted)"),
 ) -> SyncResultResponse:
     """Trigger a manual push sync to Onshape."""
@@ -483,6 +488,7 @@ def delete_link(
     db: DbSession,
     link_id: int,
     user_id: CurrentUserId,
+    admin: RequiredAdmin,
 ) -> None:
     """Unlink an Onshape part from its OPAL part (does not delete the OPAL part)."""
     from opal.core.audit import log_delete
