@@ -780,7 +780,7 @@ wheels = [
 
 [[package]]
 name = "opal"
-version = "1.4.0b1"
+version = "1.4.0b2"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
