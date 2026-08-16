@@ -29,8 +29,10 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 def start_onshape_polling(app: FastAPI) -> None:
     """(Re)start the Onshape polling task for the currently active settings.
 
-    Cancels any existing task first — called at startup and again after
-    database switches (demo enter/exit, factory reset).
+    Cancels any existing task first, then starts one only if the Onshape
+    extension is enabled and credentials and an interval are configured.
+    Reached through the extension hook (opal.integrations.onshape.extension),
+    which the loader calls at startup and after every database switch.
     """
     from opal.config import get_active_settings
 
@@ -39,7 +41,11 @@ def start_onshape_polling(app: FastAPI) -> None:
         existing.cancel()
     app.state.onshape_polling_task = None
 
+    from opal.integrations.onshape.extension import is_enabled as onshape_extension_enabled
+
     settings = get_active_settings()
+    if not onshape_extension_enabled():
+        return
     if settings.onshape_enabled and settings.onshape_poll_interval_minutes > 0:
         try:
             from opal.integrations.onshape.polling import onshape_polling_loop
@@ -83,7 +89,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logging.getLogger(__name__).warning("Project config bootstrap failed", exc_info=True)
 
-    start_onshape_polling(app)
+    # Reconcile bundled code extensions (Onshape today) with their enabled
+    # state; this also creates registry rows for anything newly discovered.
+    from opal.extensions.loader import activate
+
+    activate(app)
 
     yield
 

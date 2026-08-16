@@ -1,6 +1,7 @@
 """Pytest configuration and fixtures."""
 
 import os
+import tempfile
 from collections.abc import Generator
 from typing import Any
 
@@ -12,6 +13,11 @@ from sqlalchemy.orm import Session, sessionmaker
 # Set test environment before importing app
 os.environ["OPAL_DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["OPAL_DEBUG"] = "false"
+# Extension installs write real files. Point them at a throwaway directory so a
+# test can never touch the developer's own OPAL data directory.
+os.environ.setdefault(
+    "OPAL_EXTENSION_DIR", tempfile.mkdtemp(prefix="opal-test-extensions-")
+)
 
 from opal.api.app import create_app
 from opal.api.deps import get_db

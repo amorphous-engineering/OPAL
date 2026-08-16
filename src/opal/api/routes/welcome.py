@@ -40,15 +40,15 @@ def load_demo_data(
     user.needs_onboarding = False
     db.commit()
 
-    from opal.api.app import start_onshape_polling
     from opal.api.routes.auth import set_session_cookie
     from opal.core import lifecycle
     from opal.core.auth import create_session
     from opal.db.base import SessionLocal
     from opal.db.models.user import User
+    from opal.extensions.loader import activate as activate_extensions
 
     demo_user_id = lifecycle.enter_demo(user)
-    start_onshape_polling(request.app)
+    activate_extensions(request.app)
 
     response = JSONResponse({"ok": True})
     if demo_user_id is not None:

@@ -4433,6 +4433,13 @@ def project_edit(request: Request, db: DbSession) -> HTMLResponse:
 # ============ SETTINGS ============
 
 
+def _human_bytes(value: int) -> str:
+    """Size limits, rendered the way the settings tables show them."""
+    if value < 1024 * 1024:
+        return f"{value / 1024:.0f} KB"
+    return f"{value / (1024 * 1024):.0f} MB"
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, db: DbSession) -> HTMLResponse:
     """System settings page."""
@@ -4458,24 +4465,13 @@ def settings_page(request: Request, db: DbSession) -> HTMLResponse:
     except OSError:
         pass
 
-    # Max upload size human-readable
-    max_bytes = settings.max_upload_size
-    if max_bytes < 1024 * 1024:
-        max_upload = f"{max_bytes / 1024:.0f} KB"
-    else:
-        max_upload = f"{max_bytes / (1024 * 1024):.0f} MB"
+    max_upload = _human_bytes(settings.max_upload_size)
 
     context["project"] = project
 
-    # Onshape integration context
-    onshape_enabled = settings.onshape_enabled
-    context["onshape_enabled"] = onshape_enabled
-    context["onshape_connected"] = False
-    context["onshape_documents"] = []
-    context["onshape_poll_interval"] = settings.onshape_poll_interval_minutes
-    if onshape_enabled and project and project.onshape.documents:
-        context["onshape_connected"] = True
-        context["onshape_documents"] = project.onshape.documents
+    # Extensions: names and states only — each extension's configuration and
+    # content live on its own page under /settings/extensions.
+    context["extensions"] = _extension_summaries(db)
 
     context["sys_info"] = {
         "opal_version": context["opal_version"],
@@ -4723,25 +4719,327 @@ def settings_agent_activation_save(
     return RedirectResponse(url="/settings", status_code=302)
 
 
+# ============ EXTENSIONS ============
+#
+# The filesystem says what exists; the extension table says what the operator
+# decided. Every read reconciles the two (registry.sync) so a directory added
+# or removed by hand is reflected without a restart.
+#
+# Mutations render their result page directly rather than redirecting, the
+# same way the Onshape credential form does — the outcome of an install is
+# too specific to survive a redirect.
+
+
+def _extension_summaries(db: DbSession) -> list[dict[str, Any]]:
+    """Registry rows joined with what is on disk, for list rendering."""
+    from opal.db.models.extension import Extension as ExtensionModel
+    from opal.extensions import registry
+    from opal.extensions.manifest import CAPABILITIES
+
+    try:
+        rows = {row.id: row for row in registry.sync(db)}
+        db.commit()
+    except Exception:
+        logging.getLogger("opal.web").warning("Extension registry sync failed", exc_info=True)
+        db.rollback()
+        rows = {row.id: row for row in db.query(ExtensionModel).all()}
+
+    found, _ = registry.discover()
+    summaries: list[dict[str, Any]] = []
+    for ext in found:
+        row = rows.get(ext.id)
+        provides = ext.manifest.provides
+        counts = [
+            f"{len(getattr(provides, name))} {name}"
+            for name in CAPABILITIES
+            if getattr(provides, name)
+        ]
+        if ext.manifest.code is not None:
+            counts.insert(0, "integration")
+        summaries.append(
+            {
+                "id": ext.id,
+                "name": ext.manifest.name,
+                "version": ext.manifest.version,
+                "origin": ext.origin,
+                "enabled": row.enabled if row is not None else True,
+                "compatible": ext.manifest.compatible_with(),
+                "provides_summary": ", ".join(counts) or "-",
+            }
+        )
+    return summaries
+
+
+def _extension_detail(db: DbSession, ext_id: str) -> dict[str, Any] | None:
+    """Full view of one extension, including the content it provides."""
+    from opal.extensions import registry
+    from opal.extensions.content import load_content
+    from opal.extensions.manifest import CAPABILITIES
+
+    ext = registry.find(ext_id)
+    if ext is None:
+        return None
+
+    registry.sync(db)
+    db.commit()
+    row = registry.get_row(db, ext_id)
+    manifest = ext.manifest
+
+    return {
+        "id": ext.id,
+        "name": manifest.name,
+        "version": manifest.version,
+        "summary": manifest.summary,
+        "author": manifest.author,
+        "license": manifest.license,
+        "homepage": manifest.homepage,
+        "requires": manifest.opal,
+        "origin": ext.origin,
+        "is_bundled": ext.is_bundled,
+        "enabled": row.enabled if row is not None else True,
+        "compatible": manifest.compatible_with(),
+        "checksum": row.checksum if row is not None else None,
+        "installed_at": row.installed_at if row is not None else None,
+        "path": str(ext.root),
+        "declares": {name: bool(getattr(manifest.provides, name)) for name in CAPABILITIES},
+        "content": load_content(ext),
+    }
+
+
+def _render_extensions_page(
+    request: Request, db: DbSession, install_result: dict[str, Any] | None = None
+) -> HTMLResponse:
+    from opal.config import get_active_settings
+    from opal.extensions import registry
+
+    settings = get_active_settings()
+    context = get_base_context(request, db, "Extensions - OPAL")
+    context["extensions"] = _extension_summaries(db)
+    context["broken"] = registry.discover()[1]
+    context["extension_dir"] = str(registry.installed_root())
+    context["max_archive_size"] = _human_bytes(settings.max_extension_size)
+    context["install_result"] = install_result
+    return templates.TemplateResponse("settings/extensions.html", context)
+
+
+def _render_extension_detail(
+    request: Request, db: DbSession, ext_id: str, action_result: dict[str, Any] | None = None
+) -> HTMLResponse | RedirectResponse:
+    from opal.integrations.onshape.extension import EXTENSION_ID as ONSHAPE_EXTENSION_ID
+
+    detail = _extension_detail(db, ext_id)
+    if detail is None:
+        return RedirectResponse(url="/settings/extensions", status_code=302)
+
+    context = get_base_context(request, db, f"{detail['name']} - OPAL")
+    context["ext"] = detail
+    context["action_result"] = action_result
+    if ext_id == ONSHAPE_EXTENSION_ID:
+        _onshape_panel_context(context)
+    return templates.TemplateResponse("settings/extension_detail.html", context)
+
+
+def _onshape_panel_context(context: dict[str, Any]) -> None:
+    """Add the live Onshape state the extension detail page renders."""
+    from opal.config import get_active_project, get_active_settings
+
+    settings = get_active_settings()
+    project = get_active_project()
+    context["onshape_enabled"] = settings.onshape_enabled
+    context["onshape_poll_interval"] = settings.onshape_poll_interval_minutes
+    context["onshape_documents"] = []
+    context["onshape_connected"] = False
+    if settings.onshape_enabled and project and project.onshape.documents:
+        context["onshape_connected"] = True
+        context["onshape_documents"] = project.onshape.documents
+
+
+@router.get("/settings/extensions", response_class=HTMLResponse)
+def settings_extensions(request: Request, db: DbSession) -> HTMLResponse:
+    """Extension registry: what is installed, and what state it is in."""
+    return _render_extensions_page(request, db)
+
+
+@router.get("/settings/extensions/{ext_id}", response_class=HTMLResponse, response_model=None)
+def settings_extension_detail(
+    request: Request, db: DbSession, ext_id: str
+) -> HTMLResponse | RedirectResponse:
+    """One extension: its manifest, its state, and the content it offers."""
+    return _render_extension_detail(request, db, ext_id)
+
+
+@router.post("/settings/extensions/install", response_class=HTMLResponse, response_model=None)
+async def settings_extension_install(
+    request: Request, db: DbSession
+) -> HTMLResponse | RedirectResponse:
+    """Install an extension from an uploaded ZIP archive. Admin only."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    from opal.extensions.install import InstallError, install_archive
+
+    current_user = _get_current_user(request, db)
+    form = await request.form()
+    upload = form.get("archive")
+
+    try:
+        if upload is None or not hasattr(upload, "read"):
+            raise InstallError("no file was uploaded")
+        data = await upload.read()
+        row = install_archive(db, data, user_id=current_user.id if current_user else None)
+        db.commit()
+        result = {"ok": True, "message": f"Installed {row.id} {row.version}."}
+    except InstallError as err:
+        db.rollback()
+        result = {"ok": False, "message": str(err)}
+    except Exception:
+        db.rollback()
+        logging.getLogger("opal.web").warning("Extension install failed", exc_info=True)
+        result = {"ok": False, "message": "Install failed — see the server log."}
+
+    return _render_extensions_page(request, db, install_result=result)
+
+
+@router.post(
+    "/settings/extensions/{ext_id}/enable", response_class=HTMLResponse, response_model=None
+)
+def settings_extension_enable(
+    request: Request, db: DbSession, ext_id: str
+) -> HTMLResponse | RedirectResponse:
+    """Switch an extension on. Admin only."""
+    return _set_extension_state(request, db, ext_id, enabled=True)
+
+
+@router.post(
+    "/settings/extensions/{ext_id}/disable", response_class=HTMLResponse, response_model=None
+)
+def settings_extension_disable(
+    request: Request, db: DbSession, ext_id: str
+) -> HTMLResponse | RedirectResponse:
+    """Switch an extension off. Admin only."""
+    return _set_extension_state(request, db, ext_id, enabled=False)
+
+
+def _set_extension_state(
+    request: Request, db: DbSession, ext_id: str, *, enabled: bool
+) -> HTMLResponse | RedirectResponse:
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    from opal.extensions import registry
+    from opal.extensions.loader import activate as activate_extensions
+
+    current_user = _get_current_user(request, db)
+    try:
+        registry.sync(db)
+        registry.set_enabled(db, ext_id, enabled, user_id=current_user.id if current_user else None)
+        db.commit()
+    except LookupError:
+        db.rollback()
+        return RedirectResponse(url="/settings/extensions", status_code=302)
+
+    # Background work owned by a code extension follows its state immediately.
+    activate_extensions(request.app)
+
+    state = "enabled" if enabled else "disabled"
+    return _render_extension_detail(
+        request, db, ext_id, action_result={"ok": True, "message": f"{ext_id} {state}."}
+    )
+
+
+@router.post(
+    "/settings/extensions/{ext_id}/uninstall", response_class=HTMLResponse, response_model=None
+)
+def settings_extension_uninstall(
+    request: Request, db: DbSession, ext_id: str
+) -> HTMLResponse | RedirectResponse:
+    """Delete an installed extension's files and registry row. Admin only."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    from opal.extensions.install import InstallError, uninstall
+
+    current_user = _get_current_user(request, db)
+    try:
+        uninstall(db, ext_id, user_id=current_user.id if current_user else None)
+        db.commit()
+    except LookupError:
+        db.rollback()
+        return RedirectResponse(url="/settings/extensions", status_code=302)
+    except InstallError as err:
+        db.rollback()
+        return _render_extension_detail(
+            request, db, ext_id, action_result={"ok": False, "message": str(err)}
+        )
+
+    return _render_extensions_page(
+        request, db, install_result={"ok": True, "message": f"Uninstalled {ext_id}."}
+    )
+
+
+@router.post(
+    "/settings/extensions/{ext_id}/import/{kind}/{key}",
+    response_class=HTMLResponse,
+    response_model=None,
+)
+def settings_extension_import(
+    request: Request, db: DbSession, ext_id: str, kind: str, key: str
+) -> HTMLResponse | RedirectResponse:
+    """Import one template into the project as ordinary project data. Admin only."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    from opal.extensions import registry
+    from opal.extensions.content import IMPORTERS, ContentError
+
+    current_user = _get_current_user(request, db)
+    ext = registry.find(ext_id)
+    importer = IMPORTERS.get(kind)
+
+    if ext is None or importer is None:
+        return RedirectResponse(url="/settings/extensions", status_code=302)
+    if not registry.is_enabled(db, ext_id):
+        return _render_extension_detail(
+            request,
+            db,
+            ext_id,
+            action_result={"ok": False, "message": "Enable this extension before importing."},
+        )
+
+    try:
+        created = importer(db, ext, key, user_id=current_user.id if current_user else None)
+        db.commit()
+        result = {"ok": True, "message": f"Imported {created.name}."}
+    except ContentError as err:
+        db.rollback()
+        result = {"ok": False, "message": str(err)}
+    except Exception:
+        db.rollback()
+        logging.getLogger("opal.web").warning("Extension import failed", exc_info=True)
+        result = {"ok": False, "message": "Import failed — see the server log."}
+
+    return _render_extension_detail(request, db, ext_id, action_result=result)
+
+
 # ============ INSTANCE LIFECYCLE: DEMO DATA + FACTORY RESET ============
 
 
 @router.post("/settings/demo/enter")
 def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
     """Switch the instance to the throwaway demo database (admin only)."""
-    from opal.api.app import start_onshape_polling
     from opal.api.routes.auth import set_session_cookie
     from opal.core import lifecycle
     from opal.core.auth import create_session
     from opal.db.base import SessionLocal
     from opal.db.models.user import User as UserModel
+    from opal.extensions.loader import activate as activate_extensions
 
     if redirect := _require_admin_web(request, db):
         return redirect
     current_user = _get_current_user(request, db)
 
     demo_user_id = lifecycle.enter_demo(current_user)
-    start_onshape_polling(request.app)
+    activate_extensions(request.app)
 
     response = RedirectResponse(url="/", status_code=302)
     if demo_user_id is not None:
@@ -4765,15 +5063,15 @@ def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
 @router.post("/settings/demo/exit")
 def settings_demo_exit(request: Request, db: DbSession) -> RedirectResponse:
     """Exit the demo: switch back to the real database and delete the demo file."""
-    from opal.api.app import start_onshape_polling
     from opal.api.routes.auth import clear_session_cookie
     from opal.core import lifecycle
+    from opal.extensions.loader import activate as activate_extensions
 
     if redirect := _require_admin_web(request, db):
         return redirect
 
     lifecycle.exit_demo(delete=True)
-    start_onshape_polling(request.app)
+    activate_extensions(request.app)
 
     # Demo-database sessions mean nothing in the real database.
     response = RedirectResponse(url="/login", status_code=302)
@@ -4800,9 +5098,9 @@ def settings_factory_reset(
     request: Request, db: DbSession, confirm: str = Form("")
 ) -> RedirectResponse:
     """Wipe the instance back to first-run state. Requires typing RESET."""
-    from opal.api.app import start_onshape_polling
     from opal.api.routes.auth import clear_session_cookie
     from opal.core import lifecycle
+    from opal.extensions.loader import activate as activate_extensions
 
     if redirect := _require_admin_web(request, db):
         return redirect
@@ -4812,7 +5110,7 @@ def settings_factory_reset(
 
     logging.getLogger("opal.web").warning("FACTORY RESET initiated from settings")
     lifecycle.factory_reset()
-    start_onshape_polling(request.app)
+    activate_extensions(request.app)
 
     response = RedirectResponse(url="/setup", status_code=302)
     clear_session_cookie(response)

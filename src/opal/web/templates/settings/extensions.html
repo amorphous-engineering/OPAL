@@ -1,0 +1,105 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("SETTINGS", "/settings") }}
+{{ ok.crumb("EXTENSIONS") }}
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px;">
+
+{% if install_result %}
+<div class="panel" style="margin-bottom: var(--space-md); border: 1px solid var(--accent-{{ 'green' if install_result.ok else 'red' }});">
+    <div class="panel-body">
+        <span class="{{ 'text-green' if install_result.ok else 'text-red' }}">{{ install_result.message }}</span>
+    </div>
+</div>
+{% endif %}
+
+{% call ok.panel("EXTENSIONS") %}
+    {% if extensions %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("EXTENSION") }}
+                {{ ok.th("VERSION", width="90px") }}
+                {{ ok.th("ORIGIN", width="100px") }}
+                {{ ok.th("PROVIDES", width="180px") }}
+                {{ ok.th("STATUS", width="110px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for ext in extensions %}
+            <tr>
+                <td>
+                    <a href="/settings/extensions/{{ ext.id }}" class="mono">{{ ext.id }}</a>
+                    <div class="text-muted">{{ ext.name }}</div>
+                </td>
+                <td class="mono">{{ ext.version }}</td>
+                <td class="mono">{{ ext.origin | upper }}</td>
+                <td class="mono">{{ ext.provides_summary }}</td>
+                <td>
+                    {% if not ext.compatible %}
+                    {{ ok.status("INCOMPATIBLE", "error") }}
+                    {% elif ext.enabled %}
+                    {{ ok.status("ENABLED", "ok") }}
+                    {% else %}
+                    {{ ok.status("DISABLED", "default") }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ok.empty_line("EXTENSIONS") }}
+    {% endif %}
+{% endcall %}
+
+{% if broken %}
+{% call ok.panel("UNREADABLE", margin_top="var(--space-md)") %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("DIRECTORY", width="220px") }}
+                {{ ok.th("REASON") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in broken %}
+            <tr>
+                <td class="mono">{{ item.directory }}</td>
+                <td class="text-red">{{ item.error }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+{% endcall %}
+{% endif %}
+
+{% if is_admin %}
+{% call ok.panel("INSTALL", margin_top="var(--space-md)") %}
+    <form method="post" action="/settings/extensions/install" enctype="multipart/form-data"
+          style="display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap;">
+        <input type="file" name="archive" accept=".zip,application/zip" class="form-input" required
+               style="max-width: 360px;">
+        {{ ok.btn("INSTALL", variant="primary", type="submit") }}
+    </form>
+    {% call ok.table() %}
+        {{ ok.detail_row("ARCHIVE", "ZIP containing opal-ext.yaml", mono=true) }}
+        {{ ok.detail_row("SIZE LIMIT", max_archive_size, mono=true) }}
+        {{ ok.detail_row("DIRECTORY", extension_dir, mono=true) }}
+    {% endcall %}
+    <p class="text-muted" style="margin-top: var(--space-sm); font-size: 0.85rem;">
+        Installed extensions carry procedure and dataset templates you import
+        explicitly. They do not run code — an archive declaring a
+        <span class="mono">code:</span> entry point is refused. Only extensions
+        bundled with OPAL run Python.
+    </p>
+{% endcall %}
+{% endif %}
+
+</div>
+{% endblock %}

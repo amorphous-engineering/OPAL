@@ -32,6 +32,11 @@ datas.append((str(src_dir / "se" / "lint_rules.yaml"), "opal/se"))
 # risk-accept path reads them)
 datas.append((str(src_dir / "risks" / "lint_rules.yaml"), "opal/risks"))
 
+# Bundled extensions: manifests are discovered by a directory scan of the
+# package, so they must land in the frozen tree or the registry comes up empty
+# and Onshape has no on/off switch.
+datas.append((str(src_dir / "extensions" / "bundled"), "opal/extensions/bundled"))
+
 # Mojave Sphinx demo seed data (loaded by opal.seed)
 datas.append((str(src_dir / "seed_data" / "sphinx"), "opal/seed_data/sphinx"))
 

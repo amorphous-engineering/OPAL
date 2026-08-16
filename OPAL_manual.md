@@ -20,8 +20,9 @@
 10. [User Interface Guide](#user-interface-guide)
 11. [Advanced Features](#advanced-features)
 12. [Onshape Integration](#onshape-integration)
-13. [Traceability & Compliance](#traceability--compliance)
-14. [Troubleshooting](#troubleshooting)
+13. [Extensions](#extensions)
+14. [Traceability & Compliance](#traceability--compliance)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -2140,7 +2141,7 @@ For real-time sync without polling, configure an Onshape webhook to notify OPAL 
 
 ### Settings UI
 
-Navigate to **Settings** to find the **ONSHAPE INTEGRATION** panel. This panel appears when credentials are configured.
+Onshape is a bundled extension. Navigate to **Settings → EXTENSIONS → opal.onshape** for the **ONSHAPE INTEGRATION** panel; that page is also where the integration is switched on and off (see [Extensions](#extensions)). Disabling it stops polling and hides the panel without discarding credentials.
 
 **Panel contents:**
 
@@ -2191,7 +2192,154 @@ The Onshape client retries automatically with exponential backoff (respects `Ret
 A link becomes stale when the part is removed from the Onshape BOM. The OPAL part is not deleted — only the link is marked stale. To clean up, unlink the part via `DELETE /api/onshape/links/{link_id}` or re-add the part in Onshape and run another pull sync.
 
 **Checking sync history:**
-View the sync log table in **Settings → Onshape Integration** or query `GET /api/onshape/sync/logs`. Each entry shows direction, trigger, status, and counters for parts and BOM lines created/updated/removed.
+View the sync log table in **Settings → Extensions → opal.onshape** or query `GET /api/onshape/sync/logs`. Each entry shows direction, trigger, status, and counters for parts and BOM lines created/updated/removed.
+
+---
+
+## Extensions
+
+### Overview
+
+An extension is a packaged unit of OPAL functionality that lives outside the core: a directory containing an `opal-ext.yaml` manifest plus whatever that manifest declares. Extensions are listed at **Settings → EXTENSIONS**, and each one has its own page with its manifest, its state, and whatever it provides.
+
+There are two origins, and they are not equally trusted.
+
+| | Bundled | Installed |
+|---|---|---|
+| Source | Ships inside OPAL | ZIP archive uploaded by an admin |
+| Location | Inside the application package | `<data directory>/extensions/<id>/` |
+| May run Python | Yes | No |
+| Can be disabled | Yes | Yes |
+| Can be uninstalled | No | Yes |
+
+**Installed extensions do not run code.** They carry declarative content — procedure and dataset templates — that an admin imports explicitly. An uploaded archive whose manifest declares a `code:` entry point is refused at install time rather than silently ignored. Running Python is reserved for extensions that shipped with the release and were reviewed as part of it; third-party code hooks are future work.
+
+`opal.onshape` is the bundled extension in this release. Disabling it stops Onshape polling and hides its panel; credentials are kept, so re-enabling resumes where it left off.
+
+### Installing an Extension
+
+1. Go to **Settings → EXTENSIONS**.
+2. Under **INSTALL**, choose a `.zip` archive and press **INSTALL**.
+3. The extension appears in the list, enabled.
+
+The archive must contain `opal-ext.yaml`, either at its root or inside a single top-level folder (the layout GitHub's "Download ZIP" produces). Installing an id that is already present upgrades it in place, keeping its enabled state.
+
+Archives are rejected — with the reason shown — when they exceed the size limit (5 MB by default, `OPAL_MAX_EXTENSION_SIZE`), contain no manifest, declare no content, declare a `code:` entry point, target an OPAL version this instance is not, use the id of a bundled extension, or contain members that would write outside the extension's own directory.
+
+### Uninstalling
+
+Open the extension's page and press **UNINSTALL**. Its directory and registry entry are deleted. **Procedures and datasets already imported from it stay** — they became project data at import, and an uninstall is not a retraction. Bundled extensions have no uninstall; disable them instead.
+
+Removing an extension's directory by hand has the same effect: the registry reconciles against the filesystem on every read, so the entry disappears without a restart.
+
+### Authoring an Extension
+
+An extension is a directory. The minimum is a manifest and one content file:
+
+```
+acme.qms/
+├── opal-ext.yaml
+├── procedures/
+│   └── inspection.json
+└── datasets/
+    └── torque.json
+```
+
+The directory name must equal the manifest `id`. Zip the directory (or its contents) and that archive is installable.
+
+**`opal-ext.yaml`:**
+
+```yaml
+id: acme.qms                    # lowercase, '.' or '-' separated; also the directory name
+name: ACME QMS Pack
+version: 1.0.0
+opal: ">=1.4"                   # PEP 440 specifier for compatible OPAL versions
+summary: Inspection procedures and torque logging for the ACME quality system.
+author: ACME Engineering
+license: MIT
+homepage: https://example.com/acme-qms
+
+provides:
+  procedures: ["procedures/*.json"]
+  datasets: ["datasets/*.json"]
+```
+
+Unknown keys are an error, not a warning — a typo in a manifest fails loudly. Content patterns are globs relative to the extension directory and may not escape it.
+
+**Procedure templates** are self-contained: no part numbers, no workcenters, nothing that must already exist in the project. Sub-steps go exactly one level deep, matching the procedure model.
+
+```json
+{
+  "procedures": [
+    {
+      "key": "incoming-inspection",
+      "name": "Incoming Inspection",
+      "description": "Check received goods against the PO.",
+      "type": "op",
+      "steps": [
+        {
+          "title": "Verify quantity",
+          "instructions": "Count against the packing slip.",
+          "caution": "Do not open sealed ESD bags.",
+          "sub_steps": [{ "title": "Record discrepancies" }]
+        },
+        { "title": "Inspect for damage", "requires_signoff": true }
+      ]
+    }
+  ]
+}
+```
+
+`type` is `op` or `build`. Step fields: `title` (required), `instructions`, `caution`, `required_role`, `requires_signoff`, `is_contingency`, `strict_sequence`, `estimated_duration_minutes`, `sub_steps`.
+
+**Dataset templates** carry a name and a field schema:
+
+```json
+{
+  "datasets": [
+    {
+      "key": "torque-log",
+      "name": "Torque Log",
+      "description": "Applied torque per fastener.",
+      "schema": {
+        "fields": [
+          { "name": "fastener", "type": "text" },
+          { "name": "nm", "type": "number" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+`key` is the stable identifier within the extension; it is what the import action addresses. Duplicate keys are reported and only the first is offered.
+
+A content file may be a JSON object with a `procedures` / `datasets` key (as above) or a bare JSON array. Files that fail to parse or validate are listed under **CONTENT ERRORS** on the extension's page — the remaining templates still load.
+
+### Importing Content
+
+Templates do nothing until an admin imports them. On the extension's page, press **IMPORT** next to a template:
+
+- A **procedure template** becomes a draft master procedure. Publish it through the normal procedure UI when you are ready.
+- A **dataset template** becomes a dataset, ready to record into.
+
+Imported content is ordinary project data — editable, auditable, and independent of the extension it came from. Importing the same template twice creates a second copy; OPAL does not deduplicate.
+
+Imports require the extension to be enabled.
+
+### Permissions and Audit
+
+Reading the extension list requires a signed-in user. Installing, uninstalling, enabling, disabling, and importing are admin-only. Every install, state change, and uninstall writes an `AuditLog` row against the `extension` table with the acting user.
+
+### Where Things Live
+
+| | Path |
+|---|---|
+| Installed extensions | `<data directory>/extensions/` (`OPAL_EXTENSION_DIR`) |
+| Bundled extensions | Inside the application package |
+| Registry state | `extension` table |
+
+Extensions are instance-level, not per-database: entering or leaving the demo does not relocate or hide them.
 
 ---
 

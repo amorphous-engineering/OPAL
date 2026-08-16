@@ -8,6 +8,7 @@ from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
 from opal.db.models.execution import ProcedureInstance, StepExecution, StepFocus, StepNote
+from opal.db.models.extension import Extension
 from opal.db.models.genealogy import AssemblyComponent
 from opal.db.models.inventory import (
     InventoryConsumption,
@@ -52,6 +53,7 @@ __all__ = [
     "DataPoint",
     "Dataset",
     "DesignatorSequence",
+    "Extension",
     "InventoryConsumption",
     "InventoryProduction",
     "InventoryRecord",
