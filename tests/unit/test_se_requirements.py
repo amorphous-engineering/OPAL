@@ -753,3 +753,24 @@ def test_api_patch_explicit_null_clears_nullable_fields(client, test_user):
     assert body["tbr_due"] is None
     assert body["category"] == "propulsion"
     assert body["title"] == req["title"]  # non-nullable untouched
+
+
+def test_api_patch_explicit_null_clears_parent(client):
+    """Issue #30 — parent_id is nullable ('level-0 roots have no parent'), so a
+    child promotes back to a root on explicit null. level is independent and is
+    only changed when the caller sends it."""
+    parent = _api_create(client, title="Vehicle", level=0)
+    child = _api_create(client, title="Engine", level=1, parent_id=parent["id"])
+    assert child["parent_id"] == parent["id"]
+
+    r = client.patch(f"/api/requirements/{child['id']}", json={"parent_id": None})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["parent_id"] is None
+    assert body["level"] == 1  # untouched — clearing the parent does not relevel
+
+    # It stays cleared on reload, and omitting the field leaves it alone.
+    r = client.patch(f"/api/requirements/{child['id']}", json={"title": "Engine A"})
+    assert r.status_code == 200, r.text
+    assert r.json()["parent_id"] is None
+    assert client.get(f"/api/requirements/{child['id']}").json()["parent_id"] is None
