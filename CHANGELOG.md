@@ -2,6 +2,21 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
+## Unreleased
+
+### Added
+- **OpenID Connect single sign-on.** OPAL can now federate with any spec-compliant OIDC provider — Pocket ID, Authentik, Keycloak, Auth0, Entra ID — using the OAuth 2.0 authorization-code flow with PKCE. Configure it at **Settings → Authentication**: issuer URL, client id, optional client secret, scopes, and the group claim that grants admin. A **TEST DISCOVERY** button fetches the provider's metadata and reports the endpoints it advertises, and the page shows the exact callback URL to register with the provider.
+- **Group-mapped admin rights.** Membership in `OPAL_OIDC_ADMIN_GROUP` grants admin on every sign-in, and losing it revokes admin. Leave the field blank to manage admin rights entirely inside OPAL.
+- **Account linking.** An existing password account whose email matches a verified OIDC identity adopts single sign-on on first use, keeping its history, sign-offs and API tokens. Thereafter the account is matched on the provider's stable subject, so an email change never orphans it.
+- **Independent sign-in toggles.** Password, passkey and OIDC sign-in are now switched on and off separately rather than chosen between. Password sign-in can only be disabled once OIDC is configured — OPAL refuses the change that would leave nobody able to reach the web UI.
+
+### Removed
+- **exe-proxy authentication.** The `exe` auth mode, which trusted `X-ExeDev-UserID` / `X-ExeDev-Email` headers from a reverse proxy, is gone along with the `OPAL_AUTH_MODE` and `OPAL_EXE_PROXY_SECRET` settings and the `user.exe_user_id` column. No request header confers identity any more; every sign-in method mints a real session. Deployments running exe mode fall back to password sign-in on upgrade — configure OIDC and have users sign in once to re-link their accounts, or issue password-claim links from the Users page.
+
+### Changed
+- First-run setup no longer asks for an auth mode. It creates the first admin account, which is always credentialed so an unreachable identity provider can never lock an instance out. When OIDC is pre-configured by environment, setup also offers a sign-in button and the first identity to use it becomes admin.
+- Signing out ends the OPAL session only, leaving the identity provider's own session alone — a per-app sign-out button should not sign you out of every federated application.
+
 ## 1.3.0 — 2026-05-17
 
 First major release under the **amorphous engineering** org.

@@ -71,27 +71,32 @@
             <div class="login-subtitle">Operations, Procedures, Assets, Logistics</div>
         </div>
 
-        {% if auth_mode is defined and auth_mode == "exe" %}
-        <div class="panel">
-            <div class="panel-header">EXTERNAL AUTH</div>
-            <div class="panel-body">
-                <p class="mono" style="margin-bottom: var(--space-md);">Redirecting to exe.dev login...</p>
-                <a href="/__exe.dev/login?redirect=/" class="btn btn-primary" style="width: 100%;">GO TO LOGIN</a>
-            </div>
-        </div>
-        {% else %}
+        {% if error %}
+        <div class="login-error">{{ error }}</div>
+        {% endif %}
 
+        {% if oidc_enabled %}
         <div class="panel">
             <div class="panel-header">SIGN IN</div>
             <div class="panel-body">
-                {% if error %}
-                <div class="login-error">{{ error }}</div>
-                {% endif %}
+                <a href="/oidc/login" class="btn btn-primary" style="width: 100%; display: block; text-align: center;">
+                    SIGN IN WITH {{ oidc_provider_name | upper }}
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if password_login_enabled %}
+        {% if oidc_enabled %}<div class="login-divider">or</div>{% endif %}
+        <div class="panel">
+            <div class="panel-header">{% if oidc_enabled %}PASSWORD{% else %}SIGN IN{% endif %}</div>
+            <div class="panel-body">
                 <form method="POST" action="/login">
                     <div class="form-group">
                         <label class="form-label" for="username">Username</label>
                         <input type="text" name="username" id="username" class="form-input mono" required
-                               autocomplete="username webauthn" autocapitalize="none" autofocus
+                               autocomplete="username webauthn" autocapitalize="none"
+                               {% if not oidc_enabled %}autofocus{% endif %}
                                value="{{ username or '' }}">
                     </div>
                     <div class="form-group">
@@ -103,6 +108,7 @@
                 </form>
             </div>
         </div>
+        {% endif %}
 
         {% if passkeys_enabled %}
         <div id="passkey-block" style="display: none;">
@@ -128,8 +134,6 @@
                 });
             }
         </script>
-        {% endif %}
-
         {% endif %}
     </div>
 </body>

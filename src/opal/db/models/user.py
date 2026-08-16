@@ -9,12 +9,12 @@ from opal.db.base import Base, IdMixin, TimestampMixin
 
 
 class User(Base, IdMixin, TimestampMixin):
-    """User account with credentialed authentication.
+    """User account with credentialed or federated authentication.
 
-    Authenticated with username + argon2 password hash, optionally with FIDO2
-    passkeys (see PasskeyCredential). Sessions and API tokens live in their
-    own tables so future identity providers (SSO) plug into the same session
-    layer without touching this model.
+    Authenticated with username + argon2 password hash, with FIDO2 passkeys
+    (see PasskeyCredential), or through an OpenID Connect provider. Sessions
+    and API tokens live in their own tables, so every method converges on the
+    same session layer.
     """
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -27,7 +27,16 @@ class User(Base, IdMixin, TimestampMixin):
         comment="Argon2 hash; NULL means the account must set a password on first login",
     )
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
-    exe_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    oidc_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="OIDC 'sub' claim — the stable identity link, never the email",
+    )
+    oidc_issuer: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Issuer the oidc_subject belongs to"
+    )
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     is_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
     needs_profile_setup: Mapped[bool] = mapped_column(default=False, nullable=False)

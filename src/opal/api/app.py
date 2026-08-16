@@ -100,7 +100,11 @@ def create_app() -> FastAPI:
     import logging
 
     settings = get_settings()
-    logging.getLogger(__name__).info("OPAL auth_mode=%s", settings.auth_mode)
+    logging.getLogger(__name__).info(
+        "OPAL sign-in: password=%s oidc=%s",
+        settings.password_login_enabled,
+        settings.oidc_issuer if settings.oidc_enabled else "off",
+    )
 
     # The interactive API explorer enumerates every endpoint; on a semi-trusted
     # LAN it is pre-auth reconnaissance. Serve it only in debug.
