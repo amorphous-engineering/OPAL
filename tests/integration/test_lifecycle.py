@@ -364,3 +364,53 @@ def test_save_project_to_db_writes_audit_log(real_instance):
         )
         assert len(update_entries) == 1
         assert update_entries[0].old_values["key"] == PROJECT_CONFIG_KEY
+
+
+# ── Demo inbox belongs to whoever entered the demo ────────────────────────────
+
+
+def test_enter_demo_gives_the_operator_a_populated_inbox(real_instance):
+    """An operator entering the demo as themselves must not find an empty bell.
+
+    Demo notifications are seeded against the demo's own users, so without
+    mirroring, the person actually looking at the demo would conclude the
+    notification system does nothing.
+    """
+    from opal.core import notifications
+    from opal.db.models.notification import Notification
+    from opal.db.models.user import User
+
+    admin = _make_admin("InboxAdmin")
+    lifecycle.enter_demo(admin)
+
+    with SessionLocal() as db:
+        operator = db.query(User).filter(User.name == admin.name).one()
+        assert notifications.unread_count(db, operator.id) > 0
+        assert len(notifications.recent(db, operator.id, limit=8)) > 0
+
+        # The never-notify-your-own-action rule survives the copy.
+        mirrored = db.query(Notification).filter(Notification.user_id == operator.id).all()
+        assert all(n.actor_id != operator.id for n in mirrored)
+
+    lifecycle.exit_demo(delete=True)
+
+
+def test_reentering_the_demo_does_not_duplicate_the_inbox(real_instance):
+    from opal.db.models.notification import Notification
+    from opal.db.models.user import User
+
+    admin = _make_admin("ReentryAdmin")
+
+    lifecycle.enter_demo(admin)
+    with SessionLocal() as db:
+        operator = db.query(User).filter(User.name == admin.name).one()
+        first = db.query(Notification).filter(Notification.user_id == operator.id).count()
+
+    lifecycle.exit_demo(delete=False)
+    lifecycle.enter_demo(admin)
+    with SessionLocal() as db:
+        operator = db.query(User).filter(User.name == admin.name).one()
+        second = db.query(Notification).filter(Notification.user_id == operator.id).count()
+
+    assert second == first, "re-entering the demo must not stack duplicate notifications"
+    lifecycle.exit_demo(delete=True)

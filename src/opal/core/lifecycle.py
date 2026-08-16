@@ -206,10 +206,59 @@ def enter_demo(current_user=None) -> int | None:
                 log_update(db, match, old_values)
             db.commit()
             demo_user_id = match.id
+            _mirror_demo_notifications(db, match)
+            db.commit()
 
         apply_db_overlay(db)
 
     return demo_user_id
+
+
+def _mirror_demo_notifications(db, operator) -> None:
+    """Give the operator entering the demo the build lead's inbox.
+
+    The seed addresses notifications to the demo's own users, so an operator
+    who enters the demo as themselves would find an empty bell and conclude
+    the feature does nothing. Copying the build lead's notifications onto them
+    makes the demo testable by whoever is actually looking at it.
+
+    Best-effort: a demo that cannot mirror its inbox is still a usable demo.
+    """
+    from opal.db.models.notification import Notification
+    from opal.db.models.user import User
+
+    try:
+        lead = db.query(User).filter(User.username == "build").first()
+        if lead is None or lead.id == operator.id:
+            return
+        if db.query(Notification).filter(Notification.user_id == operator.id).first() is not None:
+            return  # already mirrored on a previous entry
+
+        for source in db.query(Notification).filter(Notification.user_id == lead.id).all():
+            # The actor stays whoever really acted. If that turns out to be
+            # the operator themselves, the copy would tell them about their
+            # own action, so the actor is dropped rather than the row.
+            actor_id = None if source.actor_id == operator.id else source.actor_id
+            db.add(
+                Notification(
+                    user_id=operator.id,
+                    actor_id=actor_id,
+                    kind=source.kind,
+                    priority=source.priority,
+                    title=source.title,
+                    body=source.body,
+                    href=source.href,
+                    subject_type=source.subject_type,
+                    subject_id=source.subject_id,
+                    created_at=source.created_at,
+                    updated_at=source.updated_at,
+                    read_at=source.read_at,
+                )
+            )
+        db.flush()
+    except Exception:
+        logger.warning("Could not mirror demo notifications", exc_info=True)
+        db.rollback()
 
 
 def exit_demo(delete: bool = True) -> None:
