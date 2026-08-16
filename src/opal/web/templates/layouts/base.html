@@ -82,6 +82,11 @@
                 <span class="cmd-icon">&#8984;</span>K
             </button>
 
+            {# Notifications bell — loads once, then polls itself. #}
+            {% if current_user %}
+            <div hx-get="/notifications/bell" hx-trigger="load" hx-swap="outerHTML"></div>
+            {% endif %}
+
             <div class="user-dropdown">
             <button class="user-dropdown-btn" id="user-btn" onclick="toggleUserDropdown()">
                 <span id="user-display">{{ current_user.name if current_user else 'NO USER' }}</span>

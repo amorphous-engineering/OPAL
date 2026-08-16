@@ -973,10 +973,16 @@ def log_non_conformance(
         raised_by_id=user_id,
         assigned_to_id=data.assigned_to_id,
     )
-    db.add(issue)
-    db.flush()
+    # Raising an NC from the floor is the commonest way a run becomes blocked,
+    # so it notifies through the same path as an issue raised from /issues.
+    from opal.core import notifications
+
+    with notifications.blocking_change(db, instance_id, user_id, issue):
+        db.add(issue)
+        db.flush()
 
     log_create(db, issue, user_id)
+    notifications.issue_assigned(db, issue, user_id)
     db.commit()
     db.refresh(issue)
 

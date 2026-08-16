@@ -18,11 +18,12 @@
 8. [Quality Management](#quality-management)
 9. [Data Analysis](#data-analysis)
 10. [User Interface Guide](#user-interface-guide)
-11. [Advanced Features](#advanced-features)
-12. [Onshape Integration](#onshape-integration)
-13. [Extensions](#extensions)
-14. [Traceability & Compliance](#traceability--compliance)
-15. [Troubleshooting](#troubleshooting)
+11. [Notifications](#notifications)
+12. [Advanced Features](#advanced-features)
+13. [Onshape Integration](#onshape-integration)
+14. [Extensions](#extensions)
+15. [Traceability & Compliance](#traceability--compliance)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1836,6 +1837,70 @@ When data is loading:
 ```
 
 Appears inline. No spinners that hide content.
+
+---
+
+## Notifications
+
+### Overview
+
+Notifications tell you about things you would otherwise have to go looking for: an issue put in your name, a work order you are running becoming blocked, and that block clearing.
+
+A **NOTIFS** control sits in the top-right of the menu bar. It shows a count of what you have not read yet and, on hover, the eight most recent items. Selecting one marks it read and takes you to the record it is about — a notification is a pointer, never a copy of the record.
+
+**ALL NOTIFICATIONS →** at the bottom of that panel opens the inbox.
+
+### What raises a notification
+
+| Event | Who is notified |
+|---|---|
+| An issue is assigned to you | The new assignee |
+| An issue is dispositioned | Its assignee and the person who raised it |
+| Someone comments on an issue | Its assignee and the person who raised it |
+| An issue is closed | Its assignee and the person who raised it |
+| A work order becomes blocked | Everyone who has worked that run |
+| A work order becomes unblocked | Everyone who has worked that run |
+
+"Everyone who has worked that run" means the person who started the work order plus anyone who completed or signed off a step on it. Having the execution page open does not put you on that list — being named on a step does.
+
+**You are never notified of your own action.** If you assign an issue to yourself, close your own issue, or comment on one, nothing lands in your inbox. An inbox that reports what you just did stops being read.
+
+### Blocked and unblocked
+
+OPAL never stores "blocked" — holds are derived live from undispositioned issues and their containment (see [Issues](#issues)). So the notification fires on the *transition*, not on every contributing event:
+
+- Raising a second blocking issue against an already-blocked work order is silent. It is already blocked; saying so again is noise.
+- The work order reports **unblocked** only when the last blocker clears — whether that is by signing a disposition, closing the issue, downgrading its containment to advisory, or deleting it.
+
+Advisory issues hold nothing, so they never produce a blocked notification.
+
+### The inbox
+
+`/notifications` lists everything addressed to you, with:
+
+- **Category** — ISSUES or EXECUTIONS.
+- **State** — ANY, UNREAD, or READ.
+- **Sort** — RECENT (default), PRIORITY, or UNREAD FIRST.
+
+Priority is inherited from the issue that caused the notification, so a critical non-conformance arrives as a critical notification; blocked and unblocked are always high.
+
+**OPEN** marks the notification read and follows it to its record. **DISMISS** removes it from the inbox without visiting the record. **MARK ALL READ** clears the count in one action. Dismissing does not delete the underlying issue or work order — notifications carry no state of their own.
+
+### API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/notifications` | Your undismissed notifications (`?unread_only=true&category=issues&limit=50`) |
+| `GET` | `/api/notifications/unread-count` | Just the count the bell shows |
+| `POST` | `/api/notifications/{id}/read` | Mark one read |
+| `POST` | `/api/notifications/{id}/dismiss` | Remove one from your inbox |
+| `POST` | `/api/notifications/read-all` | Mark every unread notification read |
+
+Every endpoint is scoped to the caller; there is no way to read or write another user's notifications, and none to create one. Notifications are raised by the events that cause them, never by a client asserting that something happened.
+
+### Push notifications
+
+Out of scope for core OPAL, by design. OPAL is local-first and sends nothing outward on its own. Delivery to email, chat or a phone belongs in an extension (Apprise is the obvious candidate), which is future work.
 
 ---
 

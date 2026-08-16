@@ -18,6 +18,13 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Onshape is now a bundled extension** (`opal.onshape`). Its panel moved from the main settings page to **Settings → EXTENSIONS → opal.onshape**, which is also where it is switched on and off. Disabling stops polling and hides the panel; credentials are kept, so re-enabling resumes where it left off. All Onshape URLs and API endpoints are unchanged.
 - Extension installs, state changes, and uninstalls are audited with the acting user.
 
+#### Notifications
+- **Notification system.** A **NOTIFS** control in the menu bar shows your unread count and the eight most recent items; `/notifications` is the full inbox, with category (issues / executions), read-state and sort (recent, priority, unread-first) filters, plus per-item dismiss and MARK ALL READ. Selecting a notification marks it read and takes you to the record it points at.
+- **What raises one.** An issue assigned to you; an issue you raised or own being dispositioned, commented on, or closed; and a work order you have worked becoming blocked or unblocked. "Worked" means you started the work order or completed or signed off a step on it — having the page open does not count.
+- **Blocked and unblocked report transitions, not events.** Holds are derived, so a second blocking issue on an already-blocked run is silent, and the run reports unblocked only when the last blocker clears — by disposition, closure, downgrade to advisory, or deletion.
+- **You are never notified of your own action.** Assigning an issue to yourself or commenting on your own issue puts nothing in your inbox.
+- Notifications carry no state of their own: dismissing one never touches the issue or work order it points at. Push delivery stays out of core and is left to a future extension.
+
 ### Removed
 - **exe-proxy authentication.** The `exe` auth mode, which trusted `X-ExeDev-UserID` / `X-ExeDev-Email` headers from a reverse proxy, is gone along with the `OPAL_AUTH_MODE` and `OPAL_EXE_PROXY_SECRET` settings and the `user.exe_user_id` column. No request header confers identity any more; every sign-in method mints a real session. Deployments running exe mode fall back to password sign-in on upgrade — configure OIDC and have users sign in once to re-link their accounts, or issue password-claim links from the Users page.
 

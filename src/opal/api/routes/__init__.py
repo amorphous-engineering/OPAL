@@ -18,6 +18,7 @@ from opal.api.routes import (
     health,
     inventory,
     issues,
+    notifications,
     onshape,
     parts,
     procedures,
@@ -54,6 +55,7 @@ protected.include_router(execution.router)  # Has its own /procedure-instances p
 protected.include_router(issues.router)  # Has its own /issues prefix
 protected.include_router(risks.router)  # Has its own /risks prefix
 protected.include_router(datasets.router)  # Has its own /datasets prefix
+protected.include_router(notifications.router)  # Has its own /notifications prefix
 protected.include_router(workcenters.router)  # Has its own /workcenters prefix
 protected.include_router(suppliers.router)  # Has its own /suppliers prefix
 protected.include_router(events.router)  # Has its own /events prefix

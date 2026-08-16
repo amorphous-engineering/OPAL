@@ -2792,3 +2792,102 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     padding: var(--space-md);
     font-size: 0.85rem;
 }
+
+/* ============ NOTIFICATIONS ============ */
+/* The bell sits in the header-right cluster and opens on hover, matching the
+   nav dropdowns. No icon: a state word in the app's own register. */
+
+.notif-bell {
+    position: relative;
+    display: inline-block;
+}
+
+.notif-bell-btn {
+    font-family: var(--font-mono);
+}
+
+/* Unread count is an identifier for "there is something here", so it takes
+   the accent — never the notification text itself. */
+.notif-count {
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.notif-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 380px;
+    max-width: 460px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    margin-top: 1px;
+    z-index: 1000;
+}
+
+.notif-bell:hover .notif-dropdown {
+    display: block;
+}
+
+.notif-table {
+    margin: 0;
+}
+
+.notif-row-form {
+    margin: 0;
+}
+
+.notif-row-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.notif-row-title {
+    display: block;
+    color: var(--text-primary);
+}
+
+.notif-row-body {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.notif-row-meta {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* Unread is carried by a left rule, not a badge on every row: a state badge
+   on every row is information about nothing. */
+.notif-unread > td:first-child {
+    border-left: 2px solid var(--accent-primary);
+}
+
+.notif-empty {
+    padding: var(--space-sm) var(--space-md);
+}
+
+.notif-all {
+    display: block;
+    padding: var(--space-sm) var(--space-md);
+    border-top: 1px solid var(--border-color);
+    color: var(--accent-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+.toolbar-sep {
+    color: var(--text-muted);
+    padding: 0 var(--space-xs);
+}
