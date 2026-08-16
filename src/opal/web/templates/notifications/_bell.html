@@ -1,0 +1,32 @@
+{# Header bell. Polls itself; swaps itself. The count is the only state it
+   carries, and it is read from the same rows the inbox lists. #}
+{% import 'opalkit/_macros.html' as ok %}
+<div class="notif-bell" hx-get="/notifications/bell" hx-trigger="every 30s" hx-swap="outerHTML">
+    <button class="nav-cmd-btn notif-bell-btn" title="Notifications">
+        NOTIFS{% if unread_count %} <span class="notif-count">{{ unread_count }}</span>{% endif %}
+    </button>
+    <div class="notif-dropdown">
+        {% if notifications %}
+        <table class="data-table notif-table">
+            <tbody>
+                {% for n in notifications %}
+                <tr class="{% if not n.is_read %}notif-unread{% endif %}">
+                    <td>
+                        <form method="post" action="/notifications/{{ n.id }}/read" class="notif-row-form">
+                            <button type="submit" class="notif-row-btn">
+                                <span class="notif-row-title">{{ n.title }}</span>
+                                {% if n.body %}<span class="notif-row-body">{{ n.body }}</span>{% endif %}
+                                <span class="notif-row-meta mono">{{ ok.timestamp(n.created_at) }}</span>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="notif-empty">{{ ok.empty_line("NOTIFICATIONS") }}</div>
+        {% endif %}
+        <a href="/notifications" class="notif-all">ALL NOTIFICATIONS →</a>
+    </div>
+</div>

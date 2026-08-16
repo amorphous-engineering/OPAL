@@ -1,0 +1,95 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("NOTIFICATIONS") }}
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 1100px;">
+
+{% set inbox_actions %}
+    {% if unread_count %}
+    <form method="post" action="/notifications/read-all" style="display:inline;">
+        {{ ok.btn("MARK ALL READ", type="submit") }}
+    </form>
+    {% endif %}
+{% endset %}
+
+{% call ok.panel("INBOX", actions=inbox_actions) %}
+    <div class="toolbar">
+        <a class="btn{% if not filter_category %} btn-primary{% endif %}"
+           href="/notifications?state={{ filter_state }}&sort={{ sort }}">ALL</a>
+        {% for c in categories %}
+        <a class="btn{% if filter_category == c %} btn-primary{% endif %}"
+           href="/notifications?category={{ c }}&state={{ filter_state }}&sort={{ sort }}">{{ c | upper }}</a>
+        {% endfor %}
+
+        <span class="toolbar-sep">·</span>
+
+        <a class="btn{% if not filter_state %} btn-primary{% endif %}"
+           href="/notifications?category={{ filter_category }}&sort={{ sort }}">ANY</a>
+        <a class="btn{% if filter_state == 'unread' %} btn-primary{% endif %}"
+           href="/notifications?category={{ filter_category }}&state=unread&sort={{ sort }}">UNREAD</a>
+        <a class="btn{% if filter_state == 'read' %} btn-primary{% endif %}"
+           href="/notifications?category={{ filter_category }}&state=read&sort={{ sort }}">READ</a>
+
+        <span class="toolbar-sep">·</span>
+
+        <a class="btn{% if sort == 'recent' %} btn-primary{% endif %}"
+           href="/notifications?category={{ filter_category }}&state={{ filter_state }}&sort=recent">RECENT</a>
+        <a class="btn{% if sort == 'priority' %} btn-primary{% endif %}"
+           href="/notifications?category={{ filter_category }}&state={{ filter_state }}&sort=priority">PRIORITY</a>
+        <a class="btn{% if sort == 'unread' %} btn-primary{% endif %}"
+           href="/notifications?category={{ filter_category }}&state={{ filter_state }}&sort=unread">UNREAD FIRST</a>
+    </div>
+
+    {% if notifications %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("WHEN", width="180px") }}
+                {{ ok.th("CATEGORY", width="110px") }}
+                {{ ok.th("PRIORITY", width="90px") }}
+                {{ ok.th("NOTIFICATION") }}
+                {{ ok.th("FROM", width="140px") }}
+                {{ ok.th("", width="150px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for n in notifications %}
+            <tr class="{% if not n.is_read %}notif-unread{% endif %}">
+                <td class="mono">{{ ok.timestamp(n.created_at) }}</td>
+                <td class="mono">{{ n.category.value | upper }}</td>
+                <td>
+                    {% if n.priority in ('critical', 'high') %}
+                    {{ ok.status(n.priority | upper, "error" if n.priority == 'critical' else "warn") }}
+                    {% else %}
+                    <span class="mono text-muted">{{ n.priority | upper }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div>{{ n.title }}</div>
+                    {% if n.body %}<div class="text-muted">{{ n.body }}</div>{% endif %}
+                </td>
+                <td>{{ n.actor.name if n.actor else '-' }}</td>
+                <td>
+                    <form method="post" action="/notifications/{{ n.id }}/read" style="display:inline;">
+                        {{ ok.btn("OPEN", type="submit", size="sm") }}
+                    </form>
+                    <form method="post" action="/notifications/{{ n.id }}/dismiss" style="display:inline;">
+                        {{ ok.btn("DISMISS", type="submit", size="sm") }}
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ok.empty_line("NOTIFICATIONS") }}
+    {% endif %}
+{% endcall %}
+
+</div>
+{% endblock %}

@@ -20,6 +20,12 @@ from opal.db.models.inventory import (
 )
 from opal.db.models.issue import Issue
 from opal.db.models.issue_comment import IssueComment
+from opal.db.models.notification import (
+    Notification,
+    NotificationCategory,
+    NotificationKind,
+    NotificationPriority,
+)
 from opal.db.models.onshape_link import OnshapeLink, OnshapeSyncLog
 from opal.db.models.part import BOMLine, Part, PartRequirement
 from opal.db.models.procedure import (
@@ -62,6 +68,10 @@ __all__ = [
     "IssueReference",
     "Kit",
     "MasterProcedure",
+    "Notification",
+    "NotificationCategory",
+    "NotificationKind",
+    "NotificationPriority",
     "OnshapeLink",
     "OnshapeSyncLog",
     "Part",

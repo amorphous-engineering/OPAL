@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from opal.api.deps import CurrentUserId, DbSession
+from opal.core import notifications
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
 from opal.core.events import emit_issue_dispositioned
@@ -407,10 +408,14 @@ def create_issue(
         raised_by_id=user_id,
         assigned_to_id=data.assigned_to_id,
     )
-    db.add(issue)
-    db.flush()
+    # Raising a containment-bearing issue against a work order can be what
+    # blocks it; blocking_change reports that only if the run was clear before.
+    with notifications.blocking_change(db, procedure_instance_id, user_id, issue):
+        db.add(issue)
+        db.flush()
 
     log_create(db, issue, user_id)
+    notifications.issue_assigned(db, issue, user_id)
     db.commit()
     db.refresh(issue)
 
@@ -458,6 +463,13 @@ def update_issue(
         raise HTTPException(status_code=404, detail="Issue not found")
 
     old_values = get_model_dict(issue)
+    previous_assignee = issue.assigned_to_id
+    previous_status = _get_enum_val(issue, "status")
+    # The run this issue holds *now*. Re-pointing an issue at a different work
+    # order is rare and is handled as a plain edit: the derived hold display
+    # stays correct either way, only the transition notification is skipped.
+    watched_instance = issue.procedure_instance_id
+    was_blocking = notifications.has_blocker(db, watched_instance)
 
     if data.title is not None:
         issue.title = data.title
@@ -534,6 +546,16 @@ def update_issue(
 
     log_update(db, issue, old_values, user_id)
 
+    # Closing an issue can release the last hold on a work order.
+    notifications.blocking_transition(db, watched_instance, was_blocking, user_id, issue)
+    if issue.assigned_to_id is not None and issue.assigned_to_id != previous_assignee:
+        notifications.issue_assigned(db, issue, user_id)
+    if (
+        _get_enum_val(issue, "status") == IssueStatus.CLOSED.value
+        and previous_status != IssueStatus.CLOSED.value
+    ):
+        notifications.issue_closed(db, issue, user_id)
+
     db.commit()
     db.refresh(issue)
 
@@ -607,6 +629,7 @@ async def sign_disposition(
         ) from err
 
     old_values = get_model_dict(issue)
+    was_blocking = notifications.has_blocker(db, issue.procedure_instance_id)
     issue.disposition_type = disposition_type
     issue.disposition_rationale = data.disposition_rationale
     issue.dispositioned_by_id = user_id
@@ -615,6 +638,9 @@ async def sign_disposition(
     log_update(db, issue, old_values, user_id)
     db.flush()
     _recheck_instance_completion(db, issue)
+    # Signing releases this issue's containment — the run may now be clear.
+    notifications.issue_dispositioned(db, issue, user_id)
+    notifications.blocking_transition(db, issue.procedure_instance_id, was_blocking, user_id, issue)
     db.commit()
     db.refresh(issue)
 
@@ -656,6 +682,7 @@ def set_containment(
         )
 
     old_values = get_model_dict(issue)
+    was_blocking = notifications.has_blocker(db, issue.procedure_instance_id)
     issue.containment = new_containment
     # Boundary re-binding uses explicit presence, not None-skip: an omitted
     # containment_step_id leaves the boundary untouched, while an explicit null
@@ -692,6 +719,10 @@ def set_containment(
         db.flush()
         _recheck_instance_completion(db, issue)
 
+    # Downgrading to advisory releases the hold; widening onto a clear run
+    # creates one.
+    notifications.blocking_transition(db, issue.procedure_instance_id, was_blocking, user_id, issue)
+
     db.commit()
     db.refresh(issue)
 
@@ -709,10 +740,13 @@ def delete_issue(
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
+    was_blocking = notifications.has_blocker(db, issue.procedure_instance_id)
     issue.deleted_at = datetime.now(UTC)
     log_delete(db, issue, user_id)
     db.flush()
     _recheck_instance_completion(db, issue)
+    # Deleting the last blocker frees the run just as signing one does.
+    notifications.blocking_transition(db, issue.procedure_instance_id, was_blocking, user_id, issue)
     db.commit()
 
 
@@ -739,6 +773,7 @@ def create_issue_comment(
     db.add(comment)
     db.flush()
     log_create(db, comment, user_id)
+    notifications.issue_commented(db, issue, data.body, user_id)
     db.commit()
     db.refresh(comment)
 

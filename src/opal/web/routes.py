@@ -5609,6 +5609,123 @@ async def settings_onshape_sync_push(request: Request, db: DbSession) -> HTMLRes
     )
 
 
+# ============ NOTIFICATIONS ============
+#
+# The bell polls _bell.html; the inbox owns sorting, filtering and the read
+# actions. Both read the same rows through opal.core.notifications, so the
+# count in the header and the list on the page can never disagree.
+
+#: Inbox sort orders. "recent" is the default — an inbox is a timeline first.
+_NOTIFICATION_SORTS = ("recent", "priority", "unread")
+
+
+@router.get("/notifications/bell", response_class=HTMLResponse)
+def notifications_bell(request: Request, db: DbSession) -> HTMLResponse:
+    """HTMX partial: the header bell, its unread count, and the newest eight."""
+    from opal.core import notifications
+
+    current_user = _get_current_user(request, db)
+    context: dict[str, Any] = {"request": request, "notifications": [], "unread_count": 0}
+    if current_user is not None:
+        context["notifications"] = notifications.recent(db, current_user.id, limit=8)
+        context["unread_count"] = notifications.unread_count(db, current_user.id)
+    return templates.TemplateResponse("notifications/_bell.html", context)
+
+
+@router.get("/notifications", response_class=HTMLResponse, response_model=None)
+def notifications_inbox(
+    request: Request,
+    db: DbSession,
+    category: str = "",
+    state: str = "",
+    sort: str = "recent",
+) -> HTMLResponse | RedirectResponse:
+    """Inbox: every notification for the reader, with filters and sorting."""
+    from opal.core import notifications
+    from opal.db.models.notification import Notification, NotificationCategory, category_for
+
+    current_user = _get_current_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=302)
+
+    if sort not in _NOTIFICATION_SORTS:
+        sort = "recent"
+
+    query = db.query(Notification).filter(
+        Notification.user_id == current_user.id, Notification.dismissed_at.is_(None)
+    )
+    if state == "unread":
+        query = query.filter(Notification.read_at.is_(None))
+    elif state == "read":
+        query = query.filter(Notification.read_at.isnot(None))
+
+    rows = query.order_by(Notification.created_at.desc(), Notification.id.desc()).all()
+
+    # Category is derived from kind, so it is filtered in Python rather than
+    # stored a second time in the table.
+    if category in {c.value for c in NotificationCategory}:
+        rows = [row for row in rows if category_for(row.kind).value == category]
+
+    if sort == "priority":
+        rows.sort(key=lambda row: (row.priority_rank, row.created_at), reverse=True)
+    elif sort == "unread":
+        rows.sort(key=lambda row: (row.read_at is None, row.created_at), reverse=True)
+
+    context = get_base_context(request, db, "Notifications - OPAL")
+    context["notifications"] = rows
+    context["unread_count"] = notifications.unread_count(db, current_user.id)
+    context["categories"] = [c.value for c in NotificationCategory]
+    context["filter_category"] = category
+    context["filter_state"] = state
+    context["sort"] = sort
+    return templates.TemplateResponse("notifications/index.html", context)
+
+
+@router.post("/notifications/read-all", response_model=None)
+def notifications_read_all(request: Request, db: DbSession) -> RedirectResponse:
+    """Mark every unread notification read."""
+    from opal.core import notifications
+
+    current_user = _get_current_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=302)
+    notifications.mark_all_read(db, current_user.id)
+    db.commit()
+    return RedirectResponse(url="/notifications", status_code=302)
+
+
+@router.post("/notifications/{notification_id}/read", response_model=None)
+def notifications_mark_read(
+    request: Request, db: DbSession, notification_id: int
+) -> RedirectResponse:
+    """Mark one notification read, then follow it to its subject."""
+    from opal.core import notifications
+
+    current_user = _get_current_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=302)
+
+    row = notifications.mark_read(db, current_user.id, notification_id)
+    db.commit()
+    # A notification is a pointer: reading it means going to the record.
+    return RedirectResponse(url=row.href if row is not None else "/notifications", status_code=302)
+
+
+@router.post("/notifications/{notification_id}/dismiss", response_model=None)
+def notifications_dismiss(
+    request: Request, db: DbSession, notification_id: int
+) -> RedirectResponse:
+    """Remove one notification from the inbox."""
+    from opal.core import notifications
+
+    current_user = _get_current_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=302)
+    notifications.dismiss(db, current_user.id, notification_id)
+    db.commit()
+    return RedirectResponse(url="/notifications", status_code=302)
+
+
 # ============ AUDIT LOG ============
 
 
