@@ -26,6 +26,7 @@
         <span>PART</span>
         <div class="panel-header-actions">
             {{ ok.btn("PRINT LABEL", size="sm", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
+            {{ ok.btn("PRINT LABEL · DYMO", size="sm", attrs='onclick="showDymoPrintModal(\'part\', ' ~ part.id ~ ')"') }}
             {{ ok.btn("EDIT", size="sm", attrs='onclick="openPartForm()"') }}
             {% if is_draft %}
             {{ ok.btn("ACTIVATE", variant="primary", size="sm", attrs='onclick="openActivateConfirm()"') }}
@@ -751,4 +752,5 @@ async function deleteSupplierEntry(entryId, supplierId) {
     }
 }
 </script>
+{% include "_dymo_print_modal.html" %}
 {% endblock %}

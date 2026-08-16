@@ -1,0 +1,97 @@
+{# Shared DYMO direct-print modal — included from parts/detail.html and
+   inventory/opal_detail.html. Lists CUPS printers on this machine and
+   sends the job straight to the chosen one; no browser print dialog. #}
+<div id="dymo-print-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px;">
+        <div class="panel">
+            <div class="panel-header">
+                <span>PRINT LABEL &middot; DYMO</span>
+                <button class="btn btn-sm" onclick="hideDymoPrintModal()" style="margin-left: auto;">&times;</button>
+            </div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label class="form-label" for="dymo-printer-select">PRINTER <span class="text-red">*</span></label>
+                    <select id="dymo-printer-select" class="form-select" required>
+                        <option value="">Loading printers&hellip;</option>
+                    </select>
+                </div>
+                <div id="dymo-print-status" class="mono" style="font-size: 0.75rem; display: none; margin-top: var(--space-sm);"></div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end; margin-top: var(--space-md);">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideDymoPrintModal()"') }}
+                    {{ ok.btn("PRINT", variant="primary", attrs='id="dymo-print-submit" onclick="submitDymoPrint()"') }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let _dymoPrintTarget = null;
+
+function showDymoPrintModal(type, id) {
+    _dymoPrintTarget = { type: type, id: id };
+    const status = document.getElementById('dymo-print-status');
+    status.style.display = 'none';
+    status.textContent = '';
+    const select = document.getElementById('dymo-printer-select');
+    select.innerHTML = '<option value="">Loading printers&hellip;</option>';
+    document.getElementById('dymo-print-modal').style.display = 'block';
+
+    fetch('/label/printers')
+        .then(function(r) { if (!r.ok) throw new Error('Could not list printers'); return r.json(); })
+        .then(function(printers) {
+            if (printers.length === 0) {
+                select.innerHTML = '<option value="">No printers found</option>';
+                return;
+            }
+            select.innerHTML = printers.map(function(p) {
+                const label = p.name + (p.status !== 'idle' ? ' (' + p.status.toUpperCase() + ')' : '');
+                return '<option value="' + p.name + '">' + label + '</option>';
+            }).join('');
+        })
+        .catch(function() {
+            select.innerHTML = '<option value="">Error loading printers</option>';
+        });
+}
+
+function hideDymoPrintModal() {
+    document.getElementById('dymo-print-modal').style.display = 'none';
+}
+document.getElementById('dymo-print-modal').addEventListener('click', function(e) {
+    if (e.target === this) hideDymoPrintModal();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('dymo-print-modal').style.display !== 'none') {
+        hideDymoPrintModal();
+    }
+});
+
+async function submitDymoPrint() {
+    const printer = document.getElementById('dymo-printer-select').value;
+    const status = document.getElementById('dymo-print-status');
+    if (!printer) { alert('Select a printer'); return; }
+
+    status.style.display = 'block';
+    status.className = 'mono';
+    status.textContent = 'Sending…';
+
+    try {
+        const body = new URLSearchParams();
+        body.set('type', _dymoPrintTarget.type);
+        body.set('id', _dymoPrintTarget.id);
+        body.set('printer', printer);
+        const response = await fetch('/label/print-direct', { method: 'POST', body: body });
+        if (response.ok) {
+            status.className = 'mono text-green';
+            status.textContent = 'SENT to ' + printer;
+        } else {
+            const error = await response.json();
+            status.className = 'mono text-red';
+            status.textContent = 'ERROR: ' + (error.detail || 'Failed to print');
+        }
+    } catch (e) {
+        status.className = 'mono text-red';
+        status.textContent = 'ERROR: ' + e.message;
+    }
+}
+</script>

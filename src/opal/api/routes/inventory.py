@@ -262,6 +262,34 @@ def get_inventory_qrcode(
     return Response(content=buf.getvalue(), media_type="image/svg+xml")
 
 
+@router.get("/{inventory_id}/datamatrix")
+def get_inventory_datamatrix(
+    db: DbSession,
+    inventory_id: int,
+) -> Response:
+    """Generate a Data Matrix SVG of the OPAL number.
+
+    A short identifier needs far fewer modules per side as Data Matrix
+    than as a QR code (~16x16 vs. QR's 21x21+), which matters on a
+    narrow continuous-tape label printer (e.g. the DYMO LabelManager
+    280's 12mm/180dpi print strip): more px/module survives the print
+    resolution instead of blurring into an unscannable square.
+    """
+    from pystrich.datamatrix import DataMatrixEncoder
+
+    record = (
+        db.query(InventoryRecord)
+        .join(Part)
+        .filter(InventoryRecord.id == inventory_id, Part.deleted_at.is_(None))
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Inventory record {inventory_id} not found")
+
+    encoder = DataMatrixEncoder(record.opal_number)
+    return Response(content=encoder.get_svg(), media_type="image/svg+xml")
+
+
 @router.get("/locations")
 def list_locations(db: DbSession) -> list[LocationSummary]:
     """List all inventory locations with summary."""

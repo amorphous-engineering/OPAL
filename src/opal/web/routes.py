@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import case, func, or_
 
@@ -4216,6 +4216,61 @@ def users_issue_claim_link(request: Request, db: DbSession, user_id: int) -> HTM
 
 # ============ LABEL PRINT ============
 
+# DYMO LabelManager 280: only two fixed "Label" page lengths are safe to
+# request without risking an unvalidated custom size (see label_dymo.html)
+# — 2in (1.167in printable) and 3.5in (2.667in printable). The driver
+# doesn't trim a fixed page to content, so picking the shorter one
+# whenever content fits avoids feeding blank tape past the label.
+_DYMO_SHORT_PAGE_IN = 2.0
+_DYMO_LONG_PAGE_IN = 3.5
+_DYMO_PAGE_MARGIN_IN = 0.833  # fixed on both presets: (page - printable) / 2 * 2
+_DYMO_SHORT_PRINTABLE_IN = _DYMO_SHORT_PAGE_IN - _DYMO_PAGE_MARGIN_IN
+_DYMO_DATAMATRIX_IN = 0.32  # matches the 0.32in cross-tape budget, see template
+_DYMO_MONO_CHAR_WIDTH_EM = 0.6  # typical monospace advance width
+
+
+def _dymo_page_height_in(pn: str, name: str, meta: str | None) -> float:
+    """Pick the shortest DYMO page preset that fits this label's content."""
+
+    def _line_width_in(text: str, font_pt: float) -> float:
+        return len(text) * _DYMO_MONO_CHAR_WIDTH_EM * font_pt / 72.0
+
+    lines = [_line_width_in(pn, 8), _line_width_in(name, 6.5)]
+    if meta:
+        lines.append(_line_width_in(meta, 5.5))
+    needed_in = _DYMO_DATAMATRIX_IN + 0.05 + max(lines) + 0.05
+    return _DYMO_SHORT_PAGE_IN if needed_in <= _DYMO_SHORT_PRINTABLE_IN else _DYMO_LONG_PAGE_IN
+
+
+def _dymo_label_fields(
+    type: str, id: int, db: DbSession
+) -> tuple[str, str, str | None, str] | None:
+    """Resolve (pn, name, meta, datamatrix_data) for a part or inventory
+    record. Shared by the HTML preview route and the direct-print
+    dispatch route so the meta-line format lives in one place.
+    """
+    if type == "inventory":
+        record = (
+            db.query(InventoryRecord)
+            .join(Part)
+            .filter(InventoryRecord.id == id, Part.deleted_at.is_(None))
+            .first()
+        )
+        if not record:
+            return None
+        identifier = record.opal_number or f"INV-{record.id}"
+        uom = (record.part.unit_of_measure or "ea").upper()
+        meta = " · ".join(
+            [record.lot_number or "—", identifier, f"QTY: {float(record.quantity):g} {uom}"]
+        )
+        return record.part.internal_pn, record.part.name, meta, identifier
+    if type == "part":
+        part = db.query(Part).filter(Part.id == id, Part.deleted_at.is_(None)).first()
+        if not part:
+            return None
+        return part.internal_pn, part.name, None, part.internal_pn
+    return None
+
 
 @router.get("/label", response_class=HTMLResponse)
 def label_print(
@@ -4223,8 +4278,13 @@ def label_print(
     db: DbSession,
     type: str = Query(...),
     id: int = Query(...),
+    fmt: str = Query("default"),
 ) -> HTMLResponse:
-    """Print label with QR code for a part or inventory record."""
+    """Print label with QR code for a part or inventory record.
+
+    fmt=dymo renders a compact label sized for the DYMO LabelManager 280
+    (12mm / 1/2in D1 tape, its max width) instead of the full-size tag.
+    """
     if type == "inventory":
         record = (
             db.query(InventoryRecord)
@@ -4234,13 +4294,28 @@ def label_print(
         )
         if not record:
             return HTMLResponse("Not found", status_code=404)
+        identifier = record.opal_number or f"INV-{record.id}"
+        if fmt == "dymo":
+            pn, name, meta, _ = _dymo_label_fields(type, id, db)
+            return templates.TemplateResponse(
+                "label_dymo.html",
+                {
+                    "request": request,
+                    "entity_type": "inventory",
+                    "entity_id": record.id,
+                    "pn": pn,
+                    "name": name,
+                    "meta": meta,
+                    "page_height_in": _dymo_page_height_in(pn, name, meta),
+                },
+            )
         return templates.TemplateResponse(
             "label_print.html",
             {
                 "request": request,
                 "entity_type": "inventory",
                 "entity_id": record.id,
-                "identifier": record.opal_number or f"INV-{record.id}",
+                "identifier": identifier,
                 "name": record.part.name,
                 "location": record.location,
             },
@@ -4251,6 +4326,19 @@ def label_print(
         part = db.query(Part).filter(Part.id == id, Part.deleted_at.is_(None)).first()
         if not part:
             return HTMLResponse("Not found", status_code=404)
+        if fmt == "dymo":
+            return templates.TemplateResponse(
+                "label_dymo.html",
+                {
+                    "request": request,
+                    "entity_type": "parts",
+                    "entity_id": part.id,
+                    "pn": part.internal_pn,
+                    "name": part.name,
+                    "meta": None,
+                    "page_height_in": _dymo_page_height_in(part.internal_pn, part.name, None),
+                },
+            )
         # The label IS the tag component in print mode — one identity,
         # one rendering, everywhere
         project = get_active_project()
@@ -4267,6 +4355,45 @@ def label_print(
             },
         )
     return HTMLResponse("Invalid type", status_code=400)
+
+
+@router.get("/label/printers")
+def label_printers() -> list[dict[str, str]]:
+    """List CUPS printers on this machine for the direct-print picker."""
+    from opal.core.printing import PrinterError, list_printers
+
+    try:
+        return list_printers()
+    except PrinterError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/label/print-direct")
+def label_print_direct(
+    db: DbSession,
+    type: str = Form(...),
+    id: int = Form(...),
+    printer: str = Form(...),
+) -> dict[str, str]:
+    """Render a DYMO label natively and send it straight to a CUPS printer.
+
+    No browser print dialog — OPAL runs on one machine, so "print" means
+    print to whatever's attached to that machine (see printing.py).
+    """
+    from opal.core.dymo_label import render_dymo_label_pdf
+    from opal.core.printing import PrinterError, print_file
+
+    fields = _dymo_label_fields(type, id, db)
+    if fields is None:
+        raise HTTPException(status_code=404, detail=f"{type} {id} not found")
+    pn, name, meta, datamatrix_data = fields
+
+    pdf_bytes = render_dymo_label_pdf(pn, name, meta, datamatrix_data)
+    try:
+        print_file(printer, pdf_bytes)
+    except PrinterError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"printer": printer}
 
 
 # ============ DOCUMENTATION ============
