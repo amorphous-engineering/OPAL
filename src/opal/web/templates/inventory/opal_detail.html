@@ -12,7 +12,7 @@
    its header bar, detail rows for facts, headed tables for collections.
    TESTS relevance is declared by the part's test templates; data always
    renders. ============ #}
-<div class="panel" style="max-width: 860px; margin-inline: auto;">
+<div class="panel" style="max-width: 860px;">
     <div class="panel-header">
         <span>OPAL ITEM</span>
         <div class="panel-header-actions">
@@ -97,7 +97,7 @@
 </div>
 
 {# --- Traceability history — the receipt and every deduction, newest first --- #}
-<div class="panel panel-ledger" style="max-width: 860px; margin-inline: auto; margin-top: var(--space-md);">
+<div class="panel panel-ledger" style="max-width: 860px; margin-top: var(--space-md);">
     <div class="panel-header">
         <span>TRACEABILITY HISTORY</span>
         <span class="header-count">{{ history | length }}</span>
@@ -162,7 +162,7 @@
 {# --- Tests — relevance is declared by the part's test templates;
    recorded results always render --- #}
 {% if test_results %}
-<div class="panel panel-ledger" style="max-width: 860px; margin-inline: auto; margin-top: var(--space-md);">
+<div class="panel panel-ledger" style="max-width: 860px; margin-top: var(--space-md);">
     <div class="panel-header">
         <span>TESTS</span>
         <span class="header-count">{{ test_results | length }} <span id="test-overall-badge"></span></span>
@@ -209,7 +209,7 @@
 </div>
 {% elif test_templates %}
 {% set required_count = test_templates | selectattr('required') | list | length %}
-<div style="max-width: 860px; margin-inline: auto; margin-top: var(--space-md);">
+<div style="max-width: 860px; margin-top: var(--space-md);">
 {{ ok.empty_line("TESTS", onclick="showRunTest()", flag=(required_count ~ " REQUIRED") if required_count else none) }}
 </div>
 {% endif %}
@@ -265,8 +265,8 @@
 {% endif %}
 
 <!-- Scrap Modal -->
-<div id="scrap-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
+<div id="scrap-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 500px;">
         <div class="panel">
             <div class="panel-header">
                 <span>SCRAP INVENTORY</span>
@@ -311,7 +311,7 @@
 
 <script>
 function showScrapModal() {
-    document.getElementById('scrap-modal').style.display = 'block';
+    document.getElementById('scrap-modal').style.display = 'flex';
 }
 function hideScrapModal() {
     document.getElementById('scrap-modal').style.display = 'none';
