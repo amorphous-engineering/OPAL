@@ -4,7 +4,6 @@ Each test pins a specific finding closed; see SECURITY-AUDIT-v1.4.0.md.
 """
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import pytest
 from starlette.applications import Starlette
@@ -12,7 +11,7 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from opal.api.middleware import UserSelectionMiddleware
+from opal.api.middleware import WebSessionMiddleware
 
 # ── M1: supplier website must be http(s), never javascript: (stored XSS) ──
 
@@ -95,71 +94,54 @@ def test_dataset_detail_escapes_script_payload(web_client):
 # ── H2 is covered by the updated tests/unit/test_inventory.py::test_update_inventory ──
 
 
-# ── C1: exe-mode refuses spoofed identity headers without the proxy secret ──
+# ── C1: web pages require a resolved session cookie, whatever headers say ──
 
 
-def _exe_app(monkeypatch, *, secret: str):
-    """Minimal app carrying only UserSelectionMiddleware in exe mode."""
+def _web_app(monkeypatch, *, session_user_id: int | None):
+    """Minimal app carrying only WebSessionMiddleware."""
     monkeypatch.setattr(
-        "opal.api.middleware.get_active_settings",
-        lambda: SimpleNamespace(auth_mode="exe", exe_proxy_secret=secret),
+        WebSessionMiddleware, "_session_user_id", staticmethod(lambda request: session_user_id)
     )
     app = Starlette(routes=[Route("/", lambda request: PlainTextResponse("ok"))])
-    app.add_middleware(UserSelectionMiddleware)
+    app.add_middleware(WebSessionMiddleware)
     return TestClient(app, follow_redirects=False)
 
 
-def test_exe_rejects_missing_proxy_secret(monkeypatch):
-    tc = _exe_app(monkeypatch, secret="topsecret")
-    resp = tc.get(
-        "/",
-        headers={"X-ExeDev-UserID": "1", "X-ExeDev-Email": "victim@example.com"},
-    )
-    assert resp.status_code == 403
-
-
-def test_exe_rejects_wrong_proxy_secret(monkeypatch):
-    tc = _exe_app(monkeypatch, secret="topsecret")
-    resp = tc.get(
-        "/",
-        headers={
-            "X-ExeDev-Proxy-Secret": "wrong",
-            "X-ExeDev-UserID": "1",
-            "X-ExeDev-Email": "victim@example.com",
-        },
-    )
-    assert resp.status_code == 403
-
-
-def test_exe_fails_closed_when_secret_unset(monkeypatch):
-    # No secret configured → identity headers are refused even if the client
-    # also sends a (meaningless) proxy-secret header.
-    tc = _exe_app(monkeypatch, secret="")
-    resp = tc.get(
-        "/",
-        headers={
-            "X-ExeDev-Proxy-Secret": "anything",
-            "X-ExeDev-UserID": "1",
-            "X-ExeDev-Email": "victim@example.com",
-        },
-    )
-    assert resp.status_code == 403
-
-
-def test_exe_valid_secret_passes_gate(monkeypatch):
-    # Correct secret but no identity headers → falls through to the exe.dev
-    # login redirect (302), proving the secret gate was cleared.
-    tc = _exe_app(monkeypatch, secret="topsecret")
-    resp = tc.get("/", headers={"X-ExeDev-Proxy-Secret": "topsecret"})
+def test_web_page_without_session_redirects_to_login(monkeypatch):
+    tc = _web_app(monkeypatch, session_user_id=None)
+    resp = tc.get("/")
     assert resp.status_code == 302
-    assert "/__exe.dev/login" in resp.headers["location"]
+    assert resp.headers["location"] == "/login"
 
 
-@pytest.mark.parametrize("path", ["/login", "/static/x.css", "/api/health"])
-def test_exe_exempt_paths_skip_secret(monkeypatch, path):
-    tc = _exe_app(monkeypatch, secret="topsecret")
-    # Exempt paths return 404 (no such route) rather than 403 — they never
-    # reach the secret gate.
+def test_web_page_with_session_passes(monkeypatch):
+    tc = _web_app(monkeypatch, session_user_id=7)
+    assert tc.get("/").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        {"X-ExeDev-UserID": "1", "X-ExeDev-Email": "victim@example.com"},
+        {"X-Forwarded-User": "victim"},
+        {"X-Remote-User": "victim"},
+        {"Remote-User": "victim"},
+    ],
+)
+def test_identity_headers_never_authenticate(monkeypatch, header):
+    """No header grants identity. Proxy-header trust was removed with exe auth;
+    this pins it closed so it cannot creep back in."""
+    tc = _web_app(monkeypatch, session_user_id=None)
+    resp = tc.get("/", headers=header)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/login"
+
+
+@pytest.mark.parametrize("path", ["/login", "/oidc/callback", "/static/x.css", "/api/health"])
+def test_exempt_paths_skip_session_check(monkeypatch, path):
+    tc = _web_app(monkeypatch, session_user_id=None)
+    # Exempt paths return 404 (no such route) rather than a login redirect —
+    # they never reach the session gate.
     assert tc.get(path).status_code == 404
 
 

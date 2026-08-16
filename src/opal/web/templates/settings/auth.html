@@ -1,0 +1,172 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("SETTINGS", "/settings") }}
+{{ ok.crumb("AUTHENTICATION") }}
+{% endblock %}
+
+{% block content %}
+{% call ok.panel("SIGN-IN METHODS", max_width="820px") %}
+
+    {% call ok.table() %}
+        {{ ok.detail_row("PASSWORD", ok.status("ENABLED" if auth.password_login_enabled else "DISABLED", "ok" if auth.password_login_enabled else "default")) }}
+        {{ ok.detail_row("PASSKEYS", ok.status("ENABLED" if auth.passkeys_enabled else "DISABLED", "ok" if auth.passkeys_enabled else "default")) }}
+        {{ ok.detail_row("OIDC", ok.status("ENABLED" if auth.oidc_enabled else "DISABLED", "ok" if auth.oidc_enabled else "default")) }}
+        {{ ok.detail_row("ISSUER", auth.oidc_issuer or "—", mono=true) }}
+        {{ ok.detail_row("CALLBACK URL", oidc_callback_url, mono=true) }}
+    {% endcall %}
+
+    <p class="text-muted" style="margin: var(--space-md) 0; font-size: 0.85rem;">
+        These values are stored in the local database and override the matching
+        <code>OPAL_*</code> environment variables. Register the callback URL above with the
+        provider as the redirect URI.
+    </p>
+
+    <form method="post" action="/settings/auth">
+
+        <div class="form-group">
+            <label class="form-label">LOCAL CREDENTIALS</label>
+            <label style="display: flex; align-items: flex-start; gap: var(--space-sm); margin-bottom: var(--space-sm);">
+                <input type="checkbox" name="password_login_enabled" value="true"
+                       {% if auth.password_login_enabled %}checked{% endif %}>
+                <span class="text-muted" style="font-size: 0.85rem;">
+                    Username and password sign-in. Turning this off requires a working OIDC
+                    provider; API tokens and passkeys are unaffected.
+                </span>
+            </label>
+            <label style="display: flex; align-items: flex-start; gap: var(--space-sm);">
+                <input type="checkbox" name="passkeys_enabled" value="true"
+                       {% if auth.passkeys_enabled %}checked{% endif %}>
+                <span class="text-muted" style="font-size: 0.85rem;">
+                    FIDO2 passkey registration and sign-in. Browsers require HTTPS (or
+                    localhost) and a stable hostname.
+                </span>
+            </label>
+        </div>
+
+        <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: var(--space-md);">
+            <label class="form-label">OPENID CONNECT</label>
+            <label style="display: flex; align-items: flex-start; gap: var(--space-sm);">
+                <input type="checkbox" name="oidc_enabled" value="true"
+                       {% if auth.oidc_enabled %}checked{% endif %}>
+                <span class="text-muted" style="font-size: 0.85rem;">
+                    Offer single sign-on via the authorization-code flow with PKCE.
+                </span>
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_issuer">ISSUER URL</label>
+            <input type="url" name="oidc_issuer" id="oidc_issuer" class="form-input mono"
+                   placeholder="https://id.example.com" value="{{ auth.oidc_issuer }}">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_client_id">CLIENT ID</label>
+            <input type="text" name="oidc_client_id" id="oidc_client_id" class="form-input mono"
+                   value="{{ auth.oidc_client_id }}">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_client_secret">CLIENT SECRET</label>
+            <input type="password" name="oidc_client_secret" id="oidc_client_secret" class="form-input mono"
+                   autocomplete="new-password"
+                   placeholder="{% if auth.has_client_secret %}set — leave blank to keep{% else %}optional (PKCE public client){% endif %}">
+            {% if auth.has_client_secret %}
+            <label style="display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-sm);">
+                <input type="checkbox" name="clear_client_secret" value="true">
+                <span class="text-muted" style="font-size: 0.85rem;">Clear the stored secret</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_provider_name">PROVIDER NAME</label>
+            <input type="text" name="oidc_provider_name" id="oidc_provider_name" class="form-input"
+                   placeholder="Pocket ID" value="{{ auth.oidc_provider_name }}">
+            <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
+                Shown on the sign-in button.
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_scopes">SCOPES</label>
+            <input type="text" name="oidc_scopes" id="oidc_scopes" class="form-input mono"
+                   value="{{ auth.oidc_scopes }}">
+            <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
+                Space separated; must include <code>openid</code>.
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_groups_claim">GROUPS CLAIM</label>
+            <input type="text" name="oidc_groups_claim" id="oidc_groups_claim" class="form-input mono"
+                   value="{{ auth.oidc_groups_claim }}">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_admin_group">ADMIN GROUP</label>
+            <input type="text" name="oidc_admin_group" id="oidc_admin_group" class="form-input mono"
+                   placeholder="opal-admins" value="{{ auth.oidc_admin_group }}">
+            <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
+                Membership grants admin on every sign-in, and absence revokes it. Blank means
+                group claims never affect admin rights.
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="oidc_redirect_base_url">PUBLIC BASE URL</label>
+            <input type="url" name="oidc_redirect_base_url" id="oidc_redirect_base_url" class="form-input mono"
+                   placeholder="derived from the request" value="{{ auth.oidc_redirect_base_url }}">
+            <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
+                Only needed when a reverse proxy rewrites the host.
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">PROVISIONING</label>
+            <label style="display: flex; align-items: flex-start; gap: var(--space-sm);">
+                <input type="checkbox" name="oidc_auto_create_users" value="true"
+                       {% if auth.oidc_auto_create_users %}checked{% endif %}>
+                <span class="text-muted" style="font-size: 0.85rem;">
+                    Create an OPAL account on first successful sign-in. When off, only
+                    identities matching an existing account by email may sign in.
+                </span>
+            </label>
+        </div>
+
+        {{ ok.form_actions(cancel_href="/settings", submit_text="SAVE") }}
+
+        {% if save_result %}
+        <div style="margin-top: var(--space-md); text-align: right;
+                    color: {% if save_result.ok %}var(--accent-green){% else %}var(--accent-red){% endif %};
+                    font-weight: 600;">
+            {{ save_result.message }}
+        </div>
+        {% endif %}
+
+    </form>
+{% endcall %}
+
+{% call ok.panel("PROVIDER DISCOVERY", max_width="820px", margin_top="var(--space-lg)") %}
+    <form method="post" action="/settings/auth/test">
+        <button type="submit" class="btn">TEST DISCOVERY</button>
+    </form>
+
+    {% if test_result %}
+    <div style="margin-top: var(--space-md); color: {% if test_result.ok %}var(--accent-green){% else %}var(--accent-red){% endif %}; font-weight: 600;">
+        {{ test_result.message }}
+    </div>
+    {% if test_result.authorization_endpoint %}
+    {% call ok.table() %}
+        {{ ok.detail_row("AUTHORIZATION", test_result.authorization_endpoint, mono=true) }}
+        {{ ok.detail_row("TOKEN", test_result.token_endpoint or "—", mono=true) }}
+        {{ ok.detail_row("USERINFO", test_result.userinfo_endpoint or "—", mono=true) }}
+        {{ ok.detail_row("JWKS", test_result.jwks_uri or "—", mono=true) }}
+    {% endcall %}
+    {% endif %}
+    {% endif %}
+{% endcall %}
+{% endblock %}

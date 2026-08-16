@@ -30,6 +30,8 @@ dependencies = [
     "mcp>=1.28.1",  # CVE-2026-52869/52870/59950 (not reachable on stdio, cleared anyway)
     "argon2-cffi>=25.1.0",
     "fido2>=1.1",
+    # OIDC id_token verification (RS256/ES256 via JWKS)
+    "pyjwt[crypto]>=2.10.0",
     # Pulled in transitively by fido2; pin the floor to clear the bundled
     # OpenSSL advisory (GHSA-537c-gmf6-5ccf) fixed in 48.0.1.
     "cryptography>=48.0.1",

@@ -20,6 +20,7 @@ from opal.config import (
     apply_db_overlay,
     configure_for_project,
     get_active_settings,
+    get_app_setting,
     load_project_from_db,
     set_app_setting,
 )
@@ -29,6 +30,23 @@ from opal.db.base import SessionLocal, get_engine, init_database, reinitialize_e
 logger = logging.getLogger("opal.lifecycle")
 
 DEMO_PREFIX = "demo."
+
+# Sign-in configuration carried into a freshly seeded demo database, so an SSO
+# deployment does not drop its users onto a password login they cannot complete.
+AUTH_SETTING_KEYS = (
+    "password_login_enabled",
+    "passkeys_enabled",
+    "oidc_enabled",
+    "oidc_issuer",
+    "oidc_client_id",
+    "oidc_client_secret",
+    "oidc_scopes",
+    "oidc_provider_name",
+    "oidc_groups_claim",
+    "oidc_admin_group",
+    "oidc_auto_create_users",
+    "oidc_redirect_base_url",
+)
 
 # Captured at boot: the server always starts against the real database, so
 # this is the way home from demo mode even after a crash mid-demo.
@@ -124,9 +142,12 @@ def enter_demo(current_user=None) -> int | None:
     from opal.db.models.part import Part
     from opal.db.models.user import User
 
-    # Carry the auth mode across so e.g. an exe-mode deployment doesn't
-    # bounce its users to a local login they cannot complete.
-    auth_mode = get_active_settings().auth_mode
+    # Carry the sign-in configuration across so an SSO deployment doesn't drop
+    # its users onto a password login they cannot complete. Settings themselves
+    # are instance-level (see configure_for_project); these rows make the demo
+    # database self-consistent if it is ever opened directly.
+    with SessionLocal() as db:
+        auth_overlay = {key: get_app_setting(db, key) for key in AUTH_SETTING_KEYS}
 
     # Remember the real upload dir before switching so exit_demo can restore it.
     _real_upload_dir = get_active_settings().upload_dir
@@ -144,7 +165,9 @@ def enter_demo(current_user=None) -> int | None:
             from opal.seed import seed_database
 
             seed_database(db)
-            set_app_setting(db, "auth_mode", auth_mode)
+            for key, value in auth_overlay.items():
+                if value is not None:
+                    set_app_setting(db, key, value)
             db.commit()
             logger.info("Demo database created and seeded at %s", demo_db_path())
 

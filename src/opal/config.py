@@ -89,13 +89,10 @@ class Settings(BaseSettings):
     rate_limit_window: int = Field(default=60, description="Rate limit window in seconds")
 
     # Authentication
-    auth_mode: str = Field(default="local", description="Auth mode: 'local' or 'exe'")
-    exe_proxy_secret: str = Field(
-        default="",
-        description="Shared secret the trusted proxy must present in the "
-        "X-ExeDev-Proxy-Secret header when auth_mode='exe'. When unset, exe "
-        "identity headers are refused (fail closed) — set this before "
-        "deploying exe mode, and bind the app to 127.0.0.1 behind the proxy.",
+    password_login_enabled: bool = Field(
+        default=True,
+        description="Allow username/password sign-in. Turn off only once OIDC "
+        "is proven working — API tokens and passkeys are unaffected.",
     )
     auth_secret: str = Field(
         default="",
@@ -118,6 +115,48 @@ class Settings(BaseSettings):
     passkey_rp_id: str = Field(
         default="",
         description="Pin the WebAuthn RP ID to a hostname; defaults to the request host",
+    )
+
+    # OpenID Connect / OAuth 2.0 single sign-on (off by default).
+    # Authorization Code flow with PKCE against any spec-compliant provider
+    # (Pocket ID, Authentik, Keycloak, Auth0, Entra ID, ...).
+    oidc_enabled: bool = Field(default=False, description="Enable OpenID Connect single sign-on")
+    oidc_issuer: str = Field(
+        default="",
+        description="Issuer URL, e.g. https://id.example.com. Discovery reads "
+        "{issuer}/.well-known/openid-configuration",
+    )
+    oidc_client_id: str = Field(default="", description="OIDC client id")
+    oidc_client_secret: str = Field(
+        default="",
+        description="OIDC client secret. Optional for public clients — PKCE is "
+        "always used, so a secretless client is still safe",
+    )
+    oidc_scopes: str = Field(
+        default="openid profile email groups",
+        description="Space-separated scopes requested at the authorization endpoint",
+    )
+    oidc_provider_name: str = Field(
+        default="SSO", description="Provider name shown on the sign-in button"
+    )
+    oidc_groups_claim: str = Field(
+        default="groups", description="ID-token/userinfo claim holding the user's groups"
+    )
+    oidc_admin_group: str = Field(
+        default="",
+        description="Membership in this group grants admin on every sign-in, and "
+        "absence revokes it. Empty means group claims never affect admin rights.",
+    )
+    oidc_auto_create_users: bool = Field(
+        default=True,
+        description="Create an OPAL account on first successful sign-in. When off, "
+        "only identities matching an existing account (by email) may sign in.",
+    )
+    oidc_redirect_base_url: str = Field(
+        default="",
+        description="Public base URL OPAL is reached at, e.g. https://opal.example.com. "
+        "Only needed when a reverse proxy rewrites the host; otherwise the "
+        "callback URL is derived from the request.",
     )
 
     # Onshape integration (off by default)
@@ -270,7 +309,21 @@ def configure_for_project(
         upload_dir=resolved_upload_dir,
         max_upload_size=base.max_upload_size,
         allowed_mime_types=base.allowed_mime_types,
-        auth_mode=base.auth_mode,
+        # Identity is instance-level, not per-database: a demo switch or a
+        # project change must never drop users onto a login they cannot complete.
+        password_login_enabled=base.password_login_enabled,
+        passkeys_enabled=base.passkeys_enabled,
+        passkey_rp_id=base.passkey_rp_id,
+        oidc_enabled=base.oidc_enabled,
+        oidc_issuer=base.oidc_issuer,
+        oidc_client_id=base.oidc_client_id,
+        oidc_client_secret=base.oidc_client_secret,
+        oidc_scopes=base.oidc_scopes,
+        oidc_provider_name=base.oidc_provider_name,
+        oidc_groups_claim=base.oidc_groups_claim,
+        oidc_admin_group=base.oidc_admin_group,
+        oidc_auto_create_users=base.oidc_auto_create_users,
+        oidc_redirect_base_url=base.oidc_redirect_base_url,
         onshape_access_key=base.onshape_access_key,
         onshape_secret_key=base.onshape_secret_key,
         onshape_base_url=base.onshape_base_url,
@@ -295,9 +348,19 @@ def get_active_project() -> "ProjectConfig | None":
 # Subset of Settings fields editable from the in-app settings UI. The DB
 # overlay only touches these; everything else stays env-driven.
 _DB_OVERLAY_FIELDS: tuple[str, ...] = (
-    "auth_mode",
+    "password_login_enabled",
     "passkeys_enabled",
     "passkey_rp_id",
+    "oidc_enabled",
+    "oidc_issuer",
+    "oidc_client_id",
+    "oidc_client_secret",
+    "oidc_scopes",
+    "oidc_provider_name",
+    "oidc_groups_claim",
+    "oidc_admin_group",
+    "oidc_auto_create_users",
+    "oidc_redirect_base_url",
     "onshape_access_key",
     "onshape_secret_key",
     "onshape_base_url",

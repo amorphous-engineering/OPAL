@@ -23,27 +23,22 @@
             letter-spacing: 0.1em;
         }
         .setup-subtitle { font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-xs); }
-        .mode-card {
-            display: block;
-            border: 1px solid var(--border-color);
-            padding: var(--space-md);
-            margin-bottom: var(--space-md);
-            cursor: pointer;
-        }
-        .mode-card:has(input:checked) {
-            border-color: var(--accent-orange);
-        }
-        .mode-card-header {
+        .setup-sso { margin-bottom: var(--space-md); }
+        .setup-divider {
             display: flex;
             align-items: center;
-            gap: var(--space-sm);
-            font-weight: 600;
-            margin-bottom: var(--space-xs);
+            gap: var(--space-md);
+            margin: var(--space-lg) 0;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
         }
-        .mode-card-body { font-size: 0.85rem; color: var(--text-muted); margin-left: 24px; }
-        #local-fields, #exe-fields { display: none; }
-        body:has(#mode-local:checked) #local-fields { display: block; }
-        body:has(#mode-exe:checked) #exe-fields { display: block; }
+        .setup-divider::before, .setup-divider::after {
+            content: '';
+            flex: 1;
+            border-top: 1px solid var(--border-color);
+        }
     </style>
 </head>
 <body>
@@ -59,86 +54,54 @@
     </div>
     {% endif %}
 
+    {% if oidc_enabled %}
+    <div class="setup-sso">
+        <div class="panel">
+            <div class="panel-header"><span>SINGLE SIGN-ON</span></div>
+            <div class="panel-body">
+                <p class="text-muted" style="font-size: 0.85rem; margin-bottom: var(--space-md);">
+                    {{ oidc_provider_name }} is configured. The first identity to sign in
+                    becomes the administrator.
+                </p>
+                <a href="/oidc/login" class="btn btn-primary" style="width: 100%; display: block; text-align: center;">
+                    SIGN IN WITH {{ oidc_provider_name | upper }}
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="setup-divider">or create a local admin</div>
+    {% endif %}
+
     <form method="POST" action="/setup">
 
         <div class="panel">
-            <div class="panel-header"><span>AUTHENTICATION MODE</span></div>
+            <div class="panel-header"><span>FIRST ADMIN</span></div>
             <div class="panel-body">
-
-                <label class="mode-card" for="mode-local">
-                    <div class="mode-card-header">
-                        <input type="radio" name="auth_mode" id="mode-local" value="local"
-                               {% if current_auth_mode != 'exe' %}checked{% endif %}>
-                        LOCAL
-                    </div>
-                    <div class="mode-card-body">
-                        Username and password login with sessions, plus optional FIDO2
-                        passkeys. You create the first admin account below; further users
-                        are added from Settings.
-                    </div>
-                </label>
-
-                <label class="mode-card" for="mode-exe">
-                    <div class="mode-card-header">
-                        <input type="radio" name="auth_mode" id="mode-exe" value="exe"
-                               {% if current_auth_mode == 'exe' %}checked{% endif %}>
-                        EXE (REVERSE PROXY)
-                    </div>
-                    <div class="mode-card-body">
-                        Trust <code>X-ExeDev-UserID</code> / <code>X-ExeDev-Email</code>
-                        headers from a reverse proxy (exe.dev SSO). Users are auto-provisioned
-                        on first request. <strong>Requires a reverse proxy in front</strong>
-                        &mdash; without one, anyone can forge headers and impersonate any user.
-                    </div>
-                </label>
-
-            </div>
-        </div>
-
-        <div id="local-fields">
-            <div class="panel" style="margin-top: var(--space-md);">
-                <div class="panel-header"><span>FIRST ADMIN</span></div>
-                <div class="panel-body">
-                    <div class="form-group">
-                        <label class="form-label" for="name">NAME <span class="text-red">*</span></label>
-                        <input type="text" name="name" id="name" class="form-input" placeholder="Full Name"
-                               value="{{ name or '' }}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="username">USERNAME <span class="text-red">*</span></label>
-                        <input type="text" name="username" id="username" class="form-input mono"
-                               placeholder="lowercase, no spaces" autocapitalize="none"
-                               autocomplete="username" value="{{ username or '' }}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="password">PASSWORD <span class="text-red">*</span></label>
-                        <input type="password" name="password" id="password" class="form-input"
-                               minlength="10" autocomplete="new-password" placeholder="Minimum 10 characters">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="password_confirm">CONFIRM PASSWORD <span class="text-red">*</span></label>
-                        <input type="password" name="password_confirm" id="password_confirm" class="form-input"
-                               minlength="10" autocomplete="new-password">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="email">EMAIL</label>
-                        <input type="email" name="email" id="email" class="form-input" placeholder="Optional"
-                               value="{{ email or '' }}">
-                    </div>
+                <div class="form-group">
+                    <label class="form-label" for="name">NAME <span class="text-red">*</span></label>
+                    <input type="text" name="name" id="name" class="form-input" placeholder="Full Name"
+                           value="{{ name or '' }}">
                 </div>
-            </div>
-        </div>
-
-        <div id="exe-fields">
-            <div class="panel" style="margin-top: var(--space-md);">
-                <div class="panel-header"><span>NEXT STEP</span></div>
-                <div class="panel-body">
-                    <p class="text-muted" style="font-size: 0.85rem;">
-                        On save you'll be redirected to <code>/__exe.dev/login</code>.
-                        The first identity authenticated through the proxy becomes the
-                        admin. If you reach OPAL directly without the proxy you will
-                        be locked out.
-                    </p>
+                <div class="form-group">
+                    <label class="form-label" for="username">USERNAME <span class="text-red">*</span></label>
+                    <input type="text" name="username" id="username" class="form-input mono"
+                           placeholder="lowercase, no spaces" autocapitalize="none"
+                           autocomplete="username" value="{{ username or '' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password">PASSWORD <span class="text-red">*</span></label>
+                    <input type="password" name="password" id="password" class="form-input"
+                           minlength="10" autocomplete="new-password" placeholder="Minimum 10 characters">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password_confirm">CONFIRM PASSWORD <span class="text-red">*</span></label>
+                    <input type="password" name="password_confirm" id="password_confirm" class="form-input"
+                           minlength="10" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="email">EMAIL</label>
+                    <input type="email" name="email" id="email" class="form-input" placeholder="Optional"
+                           value="{{ email or '' }}">
                 </div>
             </div>
         </div>

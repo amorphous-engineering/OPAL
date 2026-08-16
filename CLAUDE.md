@@ -62,9 +62,24 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 ### Application factory
 `opal.api.app:create_app()` builds the FastAPI app, mounts static files and web routes, configures middleware.
 
-### Auth modes (`OPAL_AUTH_MODE`)
-- `local` (default): Cookie-based user selection via `/login`
-- `exe`: Trust proxy headers `X-ExeDev-UserID` / `X-ExeDev-Email`, auto-provision users
+### Authentication
+Every sign-in method converges on one session layer: `opal.core.auth.create_session` mints an
+opaque token stored hashed in `auth_session`, carried in the `opal_session` HttpOnly cookie.
+`WebSessionMiddleware` only ever asks whether that cookie resolves — it knows nothing about how
+the session was obtained. **No request header ever confers identity.**
+
+Methods, each independently toggleable from `/settings/auth`:
+- **Password** (`OPAL_PASSWORD_LOGIN_ENABLED`, default on) — username + argon2id
+- **Passkeys** (`OPAL_PASSKEYS_ENABLED`, default on) — FIDO2, see `src/opal/core/webauthn.py`
+- **OIDC** (`OPAL_OIDC_ENABLED`, default off) — see `src/opal/core/oidc.py`
+- **API tokens** — `Authorization: Bearer opal_...`, for the TUI and scripts
+
+OIDC is the OAuth 2.0 authorization-code flow with PKCE (S256) against any spec-compliant
+provider; Pocket ID is the reference target. Identity is `(oidc_issuer, oidc_subject)` on `User`
+— never the email, which is a display attribute that may change. Handshake state (state, nonce,
+PKCE verifier) rides in one short-lived HMAC-signed cookie, so no server-side store is needed.
+`OPAL_OIDC_ADMIN_GROUP` maps a group claim to `is_admin` on every sign-in; the first account on
+a fresh install is always admin regardless, so an operator cannot lock themselves out.
 
 ### Test infrastructure
 - Fixtures in `tests/conftest.py`: in-memory SQLite engine, per-test rollback transactions

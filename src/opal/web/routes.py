@@ -1,19 +1,22 @@
 """Web UI routes."""
 
 import contextlib
+import hmac
 import logging
 import math
 import re
+import secrets
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import case, func, or_
 
 from opal.api.deps import DbSession
 from opal.api.net import client_ip as _client_ip
+from opal.api.net import request_is_secure
 from opal.core import execution_flow as exec_flow
 from opal.core.auth import (
     SESSION_COOKIE,
@@ -49,6 +52,8 @@ from opal.db.models.risk import Risk, RiskDisposition, RiskIssueRole
 from opal.project import DEFAULT_TIERS
 from opal.risks.dispositions import OPEN_DISPOSITIONS
 from opal.web.templating import Jinja2Templates
+
+logger = logging.getLogger("opal.web")
 
 # Template directory
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -244,7 +249,6 @@ def get_base_context(request: Request, db: DbSession, title: str) -> dict[str, A
         "version_tooltip": version_info.tooltip,
         "current_user": current_user,
         "is_admin": is_admin,
-        "auth_mode": settings.auth_mode,
         "passkeys_enabled": settings.passkeys_enabled,
         "demo_active": lifecycle.is_demo_active(),
     }
@@ -258,7 +262,7 @@ def _login_rate_key(request: Request, username: str) -> str:
 
 
 def _mint_login_session(
-    request: Request, db: DbSession, user: User, auth_method: str
+    request: Request, db: DbSession, user: User, auth_method: str, next_url: str = "/"
 ) -> RedirectResponse:
     """Create a session for a successful login and redirect appropriately."""
     from opal.api.routes.auth import set_session_cookie
@@ -271,39 +275,41 @@ def _mint_login_session(
         ip_address=_client_ip(request),
     )
     db.commit()
-    redirect_url = "/welcome" if user.needs_onboarding else "/"
+    if user.needs_profile_setup:
+        redirect_url = "/setup-profile"
+    elif user.needs_onboarding:
+        redirect_url = "/welcome"
+    else:
+        redirect_url = next_url or "/"
     response = RedirectResponse(url=redirect_url, status_code=302)
     set_session_cookie(response, request, token)
     return response
 
 
 def _login_context(request: Request, **extra: Any) -> dict[str, Any]:
+    """Which sign-in methods this instance offers, plus per-render extras."""
     from opal.config import get_active_settings
+    from opal.core import oidc
 
     settings = get_active_settings()
+    oidc_on = oidc.is_enabled()
     return {
         "request": request,
-        "auth_mode": settings.auth_mode,
+        "password_login_enabled": settings.password_login_enabled,
         "passkeys_enabled": settings.passkeys_enabled,
+        "oidc_enabled": oidc_on,
+        "oidc_provider_name": oidc.get_config().provider_name if oidc_on else None,
         **extra,
     }
 
 
 @router.get("/login", response_class=HTMLResponse, response_model=None)
 def login_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
-    """Credentialed login page (username/password, optional passkey)."""
-    from opal.config import get_active_settings
-
-    settings = get_active_settings()
-
-    # First-run: zero users means the operator hasn't picked an auth mode yet.
-    # Send them to /setup before anyone can create the admin user.
+    """Sign-in page: password, passkey and OIDC, whichever are enabled."""
+    # First-run: zero users means nobody can sign in yet. Send the operator to
+    # /setup so the first admin exists before any credential is checked.
     if db.query(User).count() == 0:
         return RedirectResponse(url="/setup", status_code=302)
-
-    # In exe mode, redirect to exe.dev login
-    if settings.auth_mode == "exe":
-        return RedirectResponse(url="/__exe.dev/login?redirect=/", status_code=302)
 
     # If already logged in, redirect to home
     if resolve_session(db, request.cookies.get(SESSION_COOKIE)) is not None:
@@ -312,65 +318,170 @@ def login_page(request: Request, db: DbSession) -> HTMLResponse | RedirectRespon
     return templates.TemplateResponse("login.html", _login_context(request))
 
 
+# ============ OPENID CONNECT ============
+
+
+@router.get("/oidc/login", response_model=None)
+def oidc_login(request: Request, next: str = Query("/")) -> RedirectResponse | HTMLResponse:
+    """Begin the authorization-code handshake and redirect to the provider.
+
+    ``state``, ``nonce`` and the PKCE verifier are signed into one short-lived
+    cookie, so the handshake needs no server-side storage.
+    """
+    from opal.core import oidc
+
+    if not oidc.is_enabled():
+        return RedirectResponse(url="/login", status_code=302)
+
+    config = oidc.get_config()
+    state = secrets.token_urlsafe(24)
+    nonce = secrets.token_urlsafe(24)
+    verifier, challenge = oidc.make_pkce_pair()
+    callback_url = oidc.redirect_uri(str(request.base_url), config)
+
+    try:
+        auth_url = oidc.build_authorization_url(config, callback_url, state, nonce, challenge)
+    except oidc.OidcError as exc:
+        return templates.TemplateResponse(
+            "login.html", _login_context(request, error=str(exc)), status_code=502
+        )
+
+    payload = oidc.sign_state(
+        {"state": state, "nonce": nonce, "verifier": verifier, "next": _safe_next(next)}
+    )
+    response = RedirectResponse(url=auth_url, status_code=302)
+    _set_oidc_state_cookie(response, request, payload)
+    return response
+
+
+@router.get("/oidc/callback", response_model=None)
+def oidc_callback(
+    request: Request,
+    db: DbSession,
+    code: str = Query(""),
+    state: str = Query(""),
+    error: str = Query(""),
+    error_description: str = Query(""),
+) -> RedirectResponse | HTMLResponse:
+    """Complete the handshake: verify the token, resolve the user, mint a session."""
+    from opal.core import oidc
+
+    def _fail(message: str, status_code: int = 400) -> HTMLResponse:
+        logger.warning("OIDC sign-in failed: %s", message)
+        response = templates.TemplateResponse(
+            "login.html", _login_context(request, error=message), status_code=status_code
+        )
+        response.delete_cookie(oidc.STATE_COOKIE)
+        return response
+
+    if not oidc.is_enabled():
+        return RedirectResponse(url="/login", status_code=302)
+
+    if error:
+        return _fail(f"The identity provider refused the sign-in: {error_description or error}")
+    if not code or not state:
+        return _fail("The identity provider returned an incomplete response.")
+
+    stored = oidc.verify_state(request.cookies.get(oidc.STATE_COOKIE))
+    if stored is None:
+        return _fail("The sign-in request expired. Please try again.")
+    # Constant-time compare: state is the CSRF defence for the whole flow.
+    if not hmac.compare_digest(str(stored.get("state", "")), state):
+        return _fail("The sign-in request did not match. Please try again.")
+
+    config = oidc.get_config()
+    callback_url = oidc.redirect_uri(str(request.base_url), config)
+
+    try:
+        tokens = oidc.exchange_code(config, code, callback_url, str(stored["verifier"]))
+        claims = oidc.verify_id_token(config, tokens["id_token"], str(stored["nonce"]))
+        # Groups often live only in userinfo; merge it over the id_token claims.
+        userinfo = oidc.fetch_userinfo(config, tokens.get("access_token", ""))
+        if userinfo and str(userinfo.get("sub", claims["sub"])) == str(claims["sub"]):
+            claims = {**claims, **userinfo}
+        user = oidc.resolve_identity(db, config, claims)
+    except oidc.OidcError as exc:
+        db.rollback()
+        return _fail(str(exc))
+
+    db.commit()
+    db.refresh(user)
+
+    response = _mint_login_session(
+        request, db, user, auth_method="oidc", next_url=_safe_next(str(stored.get("next", "/")))
+    )
+    response.delete_cookie(oidc.STATE_COOKIE)
+    return response
+
+
+def _safe_next(value: str) -> str:
+    """Confine post-login redirects to this app — never an attacker's host."""
+    if not value.startswith("/") or value.startswith("//"):
+        return "/"
+    return value
+
+
+def _set_oidc_state_cookie(response: Response, request: Request, payload: str) -> None:
+    from opal.core import oidc
+
+    response.set_cookie(
+        oidc.STATE_COOKIE,
+        payload,
+        max_age=600,
+        httponly=True,
+        # The provider redirects back cross-site, so the cookie must survive a
+        # top-level cross-site GET. `lax` does exactly that and no more.
+        samesite="lax",
+        secure=request_is_secure(request),
+    )
+
+
+def _setup_context(request: Request, **extra: Any) -> dict[str, Any]:
+    """First-run context: the admin form, plus SSO when it is pre-configured."""
+    from opal.core import oidc
+
+    oidc_on = oidc.is_enabled()
+    return {
+        "request": request,
+        "oidc_enabled": oidc_on,
+        "oidc_provider_name": oidc.get_config().provider_name if oidc_on else None,
+        **extra,
+    }
+
+
 @router.get("/setup", response_class=HTMLResponse, response_model=None)
 def setup_page(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
-    """First-run auth-mode picker. Bounces home once any user exists."""
+    """First-run admin creation. Bounces home once any user exists."""
     if db.query(User).count() > 0:
         return RedirectResponse(url="/", status_code=302)
-
-    from opal.config import get_active_settings
-
-    settings = get_active_settings()
-    return templates.TemplateResponse(
-        "setup.html",
-        {
-            "request": request,
-            "current_auth_mode": settings.auth_mode,
-        },
-    )
+    return templates.TemplateResponse("setup.html", _setup_context(request))
 
 
 @router.post("/setup", response_model=None)
 def setup_submit(
     request: Request,
     db: DbSession,
-    auth_mode: str = Form(...),
     name: str = Form(default=""),
     email: str = Form(default=""),
     username: str = Form(default=""),
     password: str = Form(default=""),
     password_confirm: str = Form(default=""),
 ) -> RedirectResponse | HTMLResponse:
-    """Lock in the auth mode (and create the first admin in local mode)."""
+    """Create the first admin account.
+
+    Always credentialed: an instance whose only administrator lives in an
+    external identity provider has no recovery path when that provider is
+    unreachable. OIDC is configured afterwards from Settings — or pre-set by
+    environment, in which case the first identity to sign in becomes admin.
+    """
     if db.query(User).count() > 0:
         return RedirectResponse(url="/", status_code=302)
 
-    if auth_mode not in ("local", "exe"):
-        return RedirectResponse(url="/setup", status_code=302)
-
-    from opal.config import apply_db_overlay, set_app_setting
-
-    set_app_setting(db, "auth_mode", auth_mode)
-    db.commit()
-    apply_db_overlay(db)
-
-    if auth_mode == "exe":
-        # In exe mode the first proxy request auto-provisions the admin.
-        # Send them through the proxy login.
-        return RedirectResponse(url="/__exe.dev/login?redirect=/", status_code=302)
-
-    # Local mode: create the first admin with credentials.
     def _retry(error: str) -> HTMLResponse:
         return templates.TemplateResponse(
             "setup.html",
-            {
-                "request": request,
-                "current_auth_mode": "local",
-                "error": error,
-                "name": name,
-                "email": email,
-                "username": username,
-            },
+            _setup_context(request, error=error, name=name, email=email, username=username),
+            status_code=400,
         )
 
     clean_name = name.strip()
@@ -408,6 +519,15 @@ def login_submit(
     password: str = Form(...),
 ) -> RedirectResponse | HTMLResponse:
     """Verify credentials and mint a session."""
+    from opal.config import get_active_settings
+
+    if not get_active_settings().password_login_enabled:
+        return templates.TemplateResponse(
+            "login.html",
+            _login_context(request, error="Password sign-in is disabled on this instance."),
+            status_code=403,
+        )
+
     username = username.strip().lower()
     rate_key = _login_rate_key(request, username)
     if login_rate_limiter.is_blocked(rate_key):
@@ -503,26 +623,17 @@ def claim_account(
 
 @router.get("/logout", response_model=None)
 def logout(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
-    """Revoke the session and clear the cookie."""
-    from opal.config import get_active_settings
+    """Revoke the OPAL session and clear the cookie.
 
+    This ends the session in OPAL only. The identity provider's own session is
+    deliberately left alone: RP-initiated logout would sign the user out of
+    every application federated with that provider, which is not what a
+    per-app sign-out button means.
+    """
     revoke_session(db, request.cookies.get(SESSION_COOKIE))
     db.commit()
 
-    settings = get_active_settings()
-    if settings.auth_mode == "exe":
-        # Exe logout requires POST to /__exe.dev/logout — serve an auto-submit page
-        html = """<!DOCTYPE html>
-<html><head><title>Signing out...</title></head>
-<body>
-<p>Signing out...</p>
-<form id="exeLogout" method="POST" action="/__exe.dev/logout"></form>
-<script>document.getElementById('exeLogout').submit();</script>
-</body></html>"""
-        response: HTMLResponse | RedirectResponse = HTMLResponse(content=html)
-    else:
-        response = RedirectResponse(url="/login", status_code=302)
-
+    response = RedirectResponse(url="/login", status_code=302)
     response.delete_cookie(SESSION_COOKIE)
     return response
 
@@ -4372,12 +4483,22 @@ def settings_page(request: Request, db: DbSession) -> HTMLResponse:
         "platform": f"{platform.system()} {platform.release()} ({platform.machine()})",
         "server": f"{settings.host}:{settings.port}",
         "debug": settings.debug,
-        "auth_mode": settings.auth_mode,
         "data_dir": str(get_default_data_dir()),
         "db_path": db_path,
         "db_size": db_size,
         "upload_dir": str(settings.upload_dir),
         "max_upload_size": max_upload,
+    }
+
+    # Sign-in methods, as facts rather than a mode name
+    from opal.core import oidc
+
+    context["auth_summary"] = {
+        "password": settings.password_login_enabled,
+        "passkeys": settings.passkeys_enabled,
+        "oidc": oidc.is_enabled(),
+        "oidc_issuer": settings.oidc_issuer or None,
+        "oidc_provider_name": settings.oidc_provider_name,
     }
 
     # Instance lifecycle: demo + danger zone
@@ -4400,58 +4521,183 @@ def settings_page(request: Request, db: DbSession) -> HTMLResponse:
     return templates.TemplateResponse("settings/index.html", context)
 
 
-@router.get("/settings/auth-mode", response_class=HTMLResponse, response_model=None)
-def settings_auth_mode_form(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
-    """Admin-only auth-mode edit form."""
+def _auth_form_context(request: Request, db: DbSession, **extra: Any) -> dict[str, Any]:
+    """Current sign-in configuration for the settings form.
+
+    Secrets are reported as presence, never echoed back into the form.
+    """
+    from opal.config import get_active_settings
+    from opal.core import oidc
+
+    s = get_active_settings()
+    context = get_base_context(request, db, "Authentication - OPAL")
+    context["auth"] = {
+        "password_login_enabled": s.password_login_enabled,
+        "passkeys_enabled": s.passkeys_enabled,
+        "oidc_enabled": s.oidc_enabled,
+        "oidc_issuer": s.oidc_issuer,
+        "oidc_client_id": s.oidc_client_id,
+        "has_client_secret": bool(s.oidc_client_secret),
+        "oidc_scopes": s.oidc_scopes,
+        "oidc_provider_name": s.oidc_provider_name,
+        "oidc_groups_claim": s.oidc_groups_claim,
+        "oidc_admin_group": s.oidc_admin_group,
+        "oidc_auto_create_users": s.oidc_auto_create_users,
+        "oidc_redirect_base_url": s.oidc_redirect_base_url,
+    }
+    # The exact string that must be registered with the provider — the single
+    # most common misconfiguration, so it is shown rather than described.
+    context["oidc_callback_url"] = oidc.redirect_uri(str(request.base_url), oidc.get_config())
+    context["save_result"] = None
+    context["test_result"] = None
+    context.update(extra)
+    return context
+
+
+@router.get("/settings/auth", response_class=HTMLResponse, response_model=None)
+def settings_auth_form(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
+    """Admin-only authentication settings."""
     if redirect := _require_admin_web(request, db):
         return redirect
-    from opal.config import get_active_settings
-
-    context = get_base_context(request, db, "Auth Mode - OPAL")
-    context["current_auth_mode"] = get_active_settings().auth_mode
-    context["save_result"] = None
-    return templates.TemplateResponse("settings/auth_mode.html", context)
+    return templates.TemplateResponse("settings/auth.html", _auth_form_context(request, db))
 
 
-@router.post("/settings/auth-mode", response_class=HTMLResponse, response_model=None)
-def settings_auth_mode_save(
+@router.post("/settings/auth", response_class=HTMLResponse, response_model=None)
+def settings_auth_save(
     request: Request,
     db: DbSession,
-    auth_mode: str = Form(...),
-    confirm_proxy: bool = Form(default=False),
+    password_login_enabled: bool = Form(default=False),
     passkeys_enabled: bool = Form(default=False),
+    oidc_enabled: bool = Form(default=False),
+    oidc_issuer: str = Form(default=""),
+    oidc_client_id: str = Form(default=""),
+    oidc_client_secret: str = Form(default=""),
+    clear_client_secret: bool = Form(default=False),
+    oidc_scopes: str = Form(default="openid profile email groups"),
+    oidc_provider_name: str = Form(default="SSO"),
+    oidc_groups_claim: str = Form(default="groups"),
+    oidc_admin_group: str = Form(default=""),
+    oidc_auto_create_users: bool = Form(default=False),
+    oidc_redirect_base_url: str = Form(default=""),
 ) -> HTMLResponse | RedirectResponse:
-    """Persist auth settings (db overlay). Switching to exe requires the
-    admin to confirm a reverse proxy is in place — otherwise anyone can
-    forge ``X-ExeDev-UserID`` and impersonate any user."""
+    """Persist authentication settings to the DB overlay. Admin only."""
     if redirect := _require_admin_web(request, db):
         return redirect
+
     from opal.config import apply_db_overlay, get_active_settings, set_app_setting
+    from opal.core import oidc
 
-    context = get_base_context(request, db, "Auth Mode - OPAL")
+    current = get_active_settings()
 
-    if auth_mode not in ("local", "exe"):
-        context["current_auth_mode"] = get_active_settings().auth_mode
-        context["save_result"] = {"ok": False, "message": f"Invalid auth_mode '{auth_mode}'."}
-        return templates.TemplateResponse("settings/auth_mode.html", context)
+    def _reject(message: str) -> HTMLResponse:
+        return templates.TemplateResponse(
+            "settings/auth.html",
+            _auth_form_context(request, db, save_result={"ok": False, "message": message}),
+            status_code=400,
+        )
 
-    if auth_mode == "exe" and not confirm_proxy:
-        context["current_auth_mode"] = get_active_settings().auth_mode
-        context["save_result"] = {
-            "ok": False,
-            "message": "Confirm a reverse proxy is in front before switching to exe mode.",
-        }
-        return templates.TemplateResponse("settings/auth_mode.html", context)
+    issuer = oidc_issuer.strip().rstrip("/")
 
-    set_app_setting(db, "auth_mode", auth_mode)
+    if oidc_enabled:
+        if not issuer or not oidc_client_id.strip():
+            return _reject("An issuer URL and client id are required to enable OIDC.")
+        # Every token exchange posts the client credential to this host, so it
+        # must be https — the one exception is a loopback issuer in development.
+        if not issuer.startswith("https://") and not (
+            issuer.startswith("http://localhost") or issuer.startswith("http://127.0.0.1")
+        ):
+            return _reject("The issuer URL must be https:// (or a localhost URL for development).")
+        if "openid" not in oidc_scopes.split():
+            return _reject("The scopes must include 'openid'.")
+
+    # Locking out every interactive sign-in leaves only API tokens, which
+    # cannot reach the web UI — refuse rather than strand the operator.
+    if not password_login_enabled and not (oidc_enabled and issuer):
+        return _reject(
+            "Disabling password sign-in requires a working OIDC provider — "
+            "otherwise nobody can reach the web UI."
+        )
+
+    new_secret: str
+    if clear_client_secret:
+        new_secret = ""
+    elif oidc_client_secret:
+        new_secret = oidc_client_secret
+    else:
+        new_secret = current.oidc_client_secret
+
+    set_app_setting(db, "password_login_enabled", "true" if password_login_enabled else "false")
     set_app_setting(db, "passkeys_enabled", "true" if passkeys_enabled else "false")
+    set_app_setting(db, "oidc_enabled", "true" if oidc_enabled else "false")
+    set_app_setting(db, "oidc_issuer", issuer)
+    set_app_setting(db, "oidc_client_id", oidc_client_id.strip())
+    set_app_setting(db, "oidc_client_secret", new_secret)
+    set_app_setting(db, "oidc_scopes", oidc_scopes.strip() or "openid profile email")
+    set_app_setting(db, "oidc_provider_name", oidc_provider_name.strip() or "SSO")
+    set_app_setting(db, "oidc_groups_claim", oidc_groups_claim.strip() or "groups")
+    set_app_setting(db, "oidc_admin_group", oidc_admin_group.strip())
+    set_app_setting(db, "oidc_auto_create_users", "true" if oidc_auto_create_users else "false")
+    set_app_setting(db, "oidc_redirect_base_url", oidc_redirect_base_url.strip().rstrip("/"))
     db.commit()
     apply_db_overlay(db)
+    # Metadata is cached per issuer; a settings change must not be served stale.
+    oidc.reset_discovery_cache()
 
-    context["current_auth_mode"] = auth_mode
-    context["passkeys_enabled"] = passkeys_enabled
-    context["save_result"] = {"ok": True, "message": "Authentication settings saved."}
-    return templates.TemplateResponse("settings/auth_mode.html", context)
+    return templates.TemplateResponse(
+        "settings/auth.html",
+        _auth_form_context(
+            request, db, save_result={"ok": True, "message": "Authentication settings saved."}
+        ),
+    )
+
+
+@router.post("/settings/auth/test", response_class=HTMLResponse, response_model=None)
+def settings_auth_test(request: Request, db: DbSession) -> HTMLResponse | RedirectResponse:
+    """Fetch the provider's discovery document and report what it advertises."""
+    if redirect := _require_admin_web(request, db):
+        return redirect
+
+    from opal.core import oidc
+
+    config = oidc.get_config()
+    if not config.is_configured:
+        return templates.TemplateResponse(
+            "settings/auth.html",
+            _auth_form_context(
+                request,
+                db,
+                test_result={"ok": False, "message": "Set an issuer URL and client id first."},
+            ),
+        )
+
+    try:
+        metadata = oidc.discover(config.issuer, force=True)
+    except oidc.OidcError as exc:
+        return templates.TemplateResponse(
+            "settings/auth.html",
+            _auth_form_context(request, db, test_result={"ok": False, "message": str(exc)}),
+        )
+
+    scopes = metadata.get("scopes_supported") or []
+    missing = [s for s in config.scopes.split() if scopes and s not in scopes]
+    message = f"Reached {metadata.get('issuer', config.issuer)}."
+    if missing:
+        message += " Provider does not advertise scope(s): " + ", ".join(missing) + "."
+    return templates.TemplateResponse(
+        "settings/auth.html",
+        _auth_form_context(
+            request,
+            db,
+            test_result={
+                "ok": not missing,
+                "message": message,
+                "authorization_endpoint": metadata.get("authorization_endpoint"),
+                "token_endpoint": metadata.get("token_endpoint"),
+                "userinfo_endpoint": metadata.get("userinfo_endpoint"),
+                "jwks_uri": metadata.get("jwks_uri"),
+            },
+        ),
+    )
 
 
 @router.post("/settings/agent-activation", response_class=HTMLResponse, response_model=None)
