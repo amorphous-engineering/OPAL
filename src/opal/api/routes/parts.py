@@ -504,6 +504,29 @@ def get_part_qrcode(
     return Response(content=buf.getvalue(), media_type="image/svg+xml")
 
 
+@router.get("/{part_id}/datamatrix")
+def get_part_datamatrix(
+    db: DbSession,
+    part_id: int,
+) -> Response:
+    """Generate a Data Matrix SVG of the part number.
+
+    A short identifier needs far fewer modules per side as Data Matrix
+    than as a QR code (~16x16 vs. QR's 21x21+), which matters on a
+    narrow continuous-tape label printer (e.g. the DYMO LabelManager
+    280's 12mm/180dpi print strip): more px/module survives the print
+    resolution instead of blurring into an unscannable square.
+    """
+    from pystrich.datamatrix import DataMatrixEncoder
+
+    part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
+    if not part:
+        raise HTTPException(status_code=404, detail=f"Part {part_id} not found")
+
+    encoder = DataMatrixEncoder(part.internal_pn)
+    return Response(content=encoder.get_svg(), media_type="image/svg+xml")
+
+
 @router.get("/{part_id}", response_model=PartResponse)
 def get_part(
     db: DbSession,

@@ -4216,6 +4216,31 @@ def users_issue_claim_link(request: Request, db: DbSession, user_id: int) -> HTM
 
 # ============ LABEL PRINT ============
 
+# DYMO LabelManager 280: only two fixed "Label" page lengths are safe to
+# request without risking an unvalidated custom size (see label_dymo.html)
+# — 2in (1.167in printable) and 3.5in (2.667in printable). The driver
+# doesn't trim a fixed page to content, so picking the shorter one
+# whenever content fits avoids feeding blank tape past the label.
+_DYMO_SHORT_PAGE_IN = 2.0
+_DYMO_LONG_PAGE_IN = 3.5
+_DYMO_PAGE_MARGIN_IN = 0.833  # fixed on both presets: (page - printable) / 2 * 2
+_DYMO_SHORT_PRINTABLE_IN = _DYMO_SHORT_PAGE_IN - _DYMO_PAGE_MARGIN_IN
+_DYMO_DATAMATRIX_IN = 0.32  # matches the 0.32in cross-tape budget, see template
+_DYMO_MONO_CHAR_WIDTH_EM = 0.6  # typical monospace advance width
+
+
+def _dymo_page_height_in(pn: str, name: str, meta: str | None) -> float:
+    """Pick the shortest DYMO page preset that fits this label's content."""
+
+    def _line_width_in(text: str, font_pt: float) -> float:
+        return len(text) * _DYMO_MONO_CHAR_WIDTH_EM * font_pt / 72.0
+
+    lines = [_line_width_in(pn, 8), _line_width_in(name, 6.5)]
+    if meta:
+        lines.append(_line_width_in(meta, 5.5))
+    needed_in = _DYMO_DATAMATRIX_IN + 0.05 + max(lines) + 0.05
+    return _DYMO_SHORT_PAGE_IN if needed_in <= _DYMO_SHORT_PRINTABLE_IN else _DYMO_LONG_PAGE_IN
+
 
 @router.get("/label", response_class=HTMLResponse)
 def label_print(
@@ -4227,9 +4252,8 @@ def label_print(
 ) -> HTMLResponse:
     """Print label with QR code for a part or inventory record.
 
-    fmt=dymo renders a compact single-line text label sized for the DYMO
-    LabelManager 280 (12mm / 1/2in D1 tape, its max width) instead of the
-    full QR tag, which doesn't fit that print height.
+    fmt=dymo renders a compact label sized for the DYMO LabelManager 280
+    (12mm / 1/2in D1 tape, its max width) instead of the full-size tag.
     """
     if type == "inventory":
         record = (
@@ -4242,13 +4266,22 @@ def label_print(
             return HTMLResponse("Not found", status_code=404)
         identifier = record.opal_number or f"INV-{record.id}"
         if fmt == "dymo":
+            meta_parts = [record.lot_number or "—", identifier]
+            uom = (record.part.unit_of_measure or "ea").upper()
+            meta_parts.append(f"QTY: {float(record.quantity):g} {uom}")
+            meta = " · ".join(meta_parts)
             return templates.TemplateResponse(
                 "label_dymo.html",
                 {
                     "request": request,
-                    "identifier": identifier,
+                    "entity_type": "inventory",
+                    "entity_id": record.id,
+                    "pn": record.part.internal_pn,
                     "name": record.part.name,
-                    "location": record.location,
+                    "meta": meta,
+                    "page_height_in": _dymo_page_height_in(
+                        record.part.internal_pn, record.part.name, meta
+                    ),
                 },
             )
         return templates.TemplateResponse(
@@ -4273,9 +4306,12 @@ def label_print(
                 "label_dymo.html",
                 {
                     "request": request,
-                    "identifier": part.internal_pn,
+                    "entity_type": "parts",
+                    "entity_id": part.id,
+                    "pn": part.internal_pn,
                     "name": part.name,
-                    "location": None,
+                    "meta": None,
+                    "page_height_in": _dymo_page_height_in(part.internal_pn, part.name, None),
                 },
             )
         # The label IS the tag component in print mode — one identity,

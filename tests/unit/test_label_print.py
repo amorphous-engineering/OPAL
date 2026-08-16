@@ -3,8 +3,11 @@
 from fastapi.testclient import TestClient
 
 
-def _activated_part(client: TestClient) -> dict:
-    resp = client.post("/api/parts", json={"name": "Bracket Assy", "tier": 1})
+def _activated_part(client: TestClient, tracking_type: str = "serialized") -> dict:
+    resp = client.post(
+        "/api/parts",
+        json={"name": "Bracket Assy", "tier": 1, "tracking_type": tracking_type},
+    )
     assert resp.status_code == 201
     part = resp.json()
     client.post(f"/api/parts/{part['id']}/activate", json={})
@@ -29,26 +32,59 @@ def test_part_label_default_renders_tag_with_qr(web_client, client):
     assert part["internal_pn"] in page.text
 
 
-def test_part_label_dymo_is_compact_text_only(web_client, client):
+def test_part_label_dymo_has_pn_name_and_datamatrix_no_meta_line(web_client, client):
     part = _activated_part(client)
     page = web_client.get(f"/label?type=part&id={part['id']}&fmt=dymo")
     assert page.status_code == 200
     assert part["internal_pn"] in page.text
     assert "Bracket Assy" in page.text
-    # No QR — illegible at 12mm/180dpi, so the dymo format drops it
+    assert f"/api/parts/{part['id']}/datamatrix" in page.text
+    # QR and 1D barcode were both tried and failed on hardware (QR:
+    # unscannable at ~1.5px/module; 1D bars: bled together at print
+    # resolution) — Data Matrix needs far fewer modules per side for a
+    # short identifier and is what actually scanned
     assert "/qrcode" not in page.text
-    # Sized for D1 tape (max 12mm / 1/2in on the LabelManager 280)
-    assert "size: 2in 0.5in" in page.text
+    assert "/barcode" not in page.text
+    # A catalog part has no serial/lot/qty yet — no meta line
+    assert 'class="dymo-meta"' not in page.text
+    # Sized for D1 tape (max 12mm / 1/2in on the LabelManager 280), rotated
+    # to read correctly along the driver's native portrait canvas; short
+    # content gets the shorter of the two validated page presets so it
+    # doesn't feed blank tape past the label
+    assert "size: 0.4861in 2.0in" in page.text
+    assert "rotate(-90deg)" in page.text
 
 
-def test_inventory_label_dymo_includes_location(web_client, client):
-    part = _activated_part(client)
+def test_inventory_label_dymo_has_lot_opal_number_and_qty(web_client, client):
+    part = _activated_part(client, tracking_type="bulk")
     record = _inventory_record(client, part)
     page = web_client.get(f"/label?type=inventory&id={record['id']}&fmt=dymo")
     assert page.status_code == 200
+    assert part["internal_pn"] in page.text
     assert record["opal_number"] in page.text
-    assert "Shelf A" in page.text
+    assert "QTY: 5" in page.text
+    assert f"/api/inventory/{record['id']}/datamatrix" in page.text
     assert "/qrcode" not in page.text
+    assert "/barcode" not in page.text
+    # The 3-line meta (lot/opal#/qty) pushes this past the short preset
+    assert "size: 0.4861in 3.5in" in page.text
+
+
+def test_part_datamatrix_svg(web_client, client):
+    part = _activated_part(client)
+    resp = web_client.get(f"/api/parts/{part['id']}/datamatrix")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/svg+xml"
+    assert b"<svg" in resp.content
+
+
+def test_inventory_datamatrix_svg(web_client, client):
+    part = _activated_part(client, tracking_type="bulk")
+    record = _inventory_record(client, part)
+    resp = web_client.get(f"/api/inventory/{record['id']}/datamatrix")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/svg+xml"
+    assert b"<svg" in resp.content
 
 
 def test_label_invalid_type_rejected(web_client):

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Label - {{ identifier }}</title>
+    <title>Label - {{ pn }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -15,36 +15,112 @@
         }
         .dymo-label {
             display: flex;
-            align-items: baseline;
-            gap: 4px;
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
             white-space: nowrap;
-            font-size: 7px;
-            line-height: 1;
-            padding: 0 2px;
+            padding: 4px;
         }
-        .dymo-id {
+        .dymo-dm img {
+            display: block;
+            width: 40px;
+            height: 40px;
+        }
+        .dymo-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.3;
+        }
+        .dymo-pn {
             font-weight: 700;
+            font-size: 15px;
             letter-spacing: 0.02em;
         }
-        .dymo-sep {
-            color: #666;
+        .dymo-name {
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .dymo-meta {
+            font-weight: 600;
+            font-size: 10px;
+            color: #444;
         }
         @media print {
-            body { min-height: auto; }
-            /* DYMO LabelManager 280: 180dpi, D1 tape up to 12mm (1/2in) —
-               its widest supported width. A QR doesn't render legibly at
-               that height, so this is a single text line instead of the
-               full tag. Fixed strip; the driver cuts the continuous tape
-               to length regardless of page size. */
-            @page { margin: 0; size: 2in 0.5in; }
+            /* DYMO LabelManager 280: 180dpi, D1 tape, 35pt/0.486in native
+               print width for the 12mm (1/2in, its max) cassette. The
+               driver's page is portrait (narrow = tape width, long =
+               feed direction); the strip has to be printed rotated
+               -90deg to come out reading normally once the tape is
+               peeled off — confirmed against physical hardware.
+
+               Only two "Label" page lengths are validated safe: 2in
+               (1.167in printable) and 3.5in (2.667in printable, also the
+               driver's own default). page_height_in is chosen server-side
+               per label so short content doesn't feed blank tape past
+               it — see _dymo_page_height_in() in web/routes.py, which
+               must stay in sync with the font sizes below.
+
+               A QR needs resolution in both dimensions and doesn't
+               survive the 0.32in cross-tape budget at 180dpi (~1.5
+               px/module) — confirmed unreadable on hardware. Data
+               Matrix encodes the same short identifier in far fewer
+               modules per side (~16x16 vs QR's 21x21+), which is what
+               makes the same 0.32in budget usable — confirmed on
+               hardware. A 1D barcode was tried first but its narrow
+               bars bled together at this print resolution. */
+            html, body {
+                width: 0.4861in;
+                height: {{ page_height_in }}in;
+                min-height: 0;
+                display: block;
+            }
+            .dymo-label {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: max-content;
+                max-width: {{ page_height_in - 0.833 }}in;
+                height: 0.32in;
+                transform: translate(-50%, -50%) rotate(-90deg);
+                gap: 3pt;
+                padding: 0;
+            }
+            .dymo-dm img {
+                width: 0.32in;
+                height: 0.32in;
+            }
+            .dymo-text {
+                line-height: 1.1;
+            }
+            .dymo-pn {
+                font-size: 8pt;
+            }
+            .dymo-name {
+                font-size: 6.5pt;
+                max-width: 2.2in;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .dymo-meta {
+                font-size: 5.5pt;
+                max-width: 2.2in;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            @page { margin: 0; size: 0.4861in {{ page_height_in }}in; }
         }
     </style>
 </head>
 <body>
     <div class="dymo-label">
-        <span class="dymo-id">{{ identifier }}</span>
-        {% if name %}<span class="dymo-sep">&middot;</span><span class="dymo-name">{{ name }}</span>{% endif %}
-        {% if location %}<span class="dymo-sep">&middot;</span><span class="dymo-location">{{ location }}</span>{% endif %}
+        <div class="dymo-dm">
+            <img src="/api/{{ entity_type }}/{{ entity_id }}/datamatrix" alt="Data Matrix">
+        </div>
+        <div class="dymo-text">
+            <div class="dymo-pn">{{ pn }}</div>
+            <div class="dymo-name">{{ name }}</div>
+            {% if meta %}<div class="dymo-meta">{{ meta }}</div>{% endif %}
+        </div>
     </div>
     <script>window.print();</script>
 </body>
