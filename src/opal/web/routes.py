@@ -4223,8 +4223,14 @@ def label_print(
     db: DbSession,
     type: str = Query(...),
     id: int = Query(...),
+    fmt: str = Query("default"),
 ) -> HTMLResponse:
-    """Print label with QR code for a part or inventory record."""
+    """Print label with QR code for a part or inventory record.
+
+    fmt=dymo renders a compact single-line text label sized for the DYMO
+    LabelManager 280 (12mm / 1/2in D1 tape, its max width) instead of the
+    full QR tag, which doesn't fit that print height.
+    """
     if type == "inventory":
         record = (
             db.query(InventoryRecord)
@@ -4234,13 +4240,24 @@ def label_print(
         )
         if not record:
             return HTMLResponse("Not found", status_code=404)
+        identifier = record.opal_number or f"INV-{record.id}"
+        if fmt == "dymo":
+            return templates.TemplateResponse(
+                "label_dymo.html",
+                {
+                    "request": request,
+                    "identifier": identifier,
+                    "name": record.part.name,
+                    "location": record.location,
+                },
+            )
         return templates.TemplateResponse(
             "label_print.html",
             {
                 "request": request,
                 "entity_type": "inventory",
                 "entity_id": record.id,
-                "identifier": record.opal_number or f"INV-{record.id}",
+                "identifier": identifier,
                 "name": record.part.name,
                 "location": record.location,
             },
@@ -4251,6 +4268,16 @@ def label_print(
         part = db.query(Part).filter(Part.id == id, Part.deleted_at.is_(None)).first()
         if not part:
             return HTMLResponse("Not found", status_code=404)
+        if fmt == "dymo":
+            return templates.TemplateResponse(
+                "label_dymo.html",
+                {
+                    "request": request,
+                    "identifier": part.internal_pn,
+                    "name": part.name,
+                    "location": None,
+                },
+            )
         # The label IS the tag component in print mode — one identity,
         # one rendering, everywhere
         project = get_active_project()
