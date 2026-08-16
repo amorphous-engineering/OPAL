@@ -1,0 +1,74 @@
+{# Onshape integration panel — the single home for Onshape's live state.
+   Rendered on the extension's detail page; /settings links here rather than
+   repeating any of it. #}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% if not ext.enabled %}
+{% call ok.panel("ONSHAPE INTEGRATION", margin_top="var(--space-md)") %}
+    {% call ok.table() %}
+        {{ ok.detail_row("CREDENTIALS", ok.status("CONFIGURED", "ok") if onshape_enabled else ok.status("NONE", "default")) }}
+        {{ ok.detail_row("POLLING", ok.status("STOPPED", "default")) }}
+    {% endcall %}
+    <p class="text-muted" style="margin-top: var(--space-sm); font-size: 0.85rem;">
+        Enabling restarts polling and restores sync. Credentials are kept while disabled.
+    </p>
+{% endcall %}
+
+{% else %}
+
+{% if onshape_enabled %}
+{% set onshape_actions %}
+    {% if is_admin %}<a class="btn" href="/settings/onshape/configure">EDIT</a>{% endif %}
+    <button class="btn"
+            hx-post="/settings/onshape/sync/pull"
+            hx-target="#onshape-sync-result"
+            hx-indicator="#onshape-pull-spinner">
+        PULL
+        <span id="onshape-pull-spinner" class="htmx-indicator" style="margin-left: 4px;">...</span>
+    </button>
+    <button class="btn"
+            hx-post="/settings/onshape/sync/push"
+            hx-target="#onshape-sync-result"
+            hx-indicator="#onshape-push-spinner">
+        PUSH
+        <span id="onshape-push-spinner" class="htmx-indicator" style="margin-left: 4px;">...</span>
+    </button>
+{% endset %}
+{% call ok.panel("ONSHAPE INTEGRATION", actions=onshape_actions, margin_top="var(--space-md)") %}
+    {% call ok.table() %}
+        {{ ok.detail_row("STATUS", ok.status("CONNECTED", "ok") if onshape_connected else ok.status("CREDENTIALS ONLY", "warn")) }}
+        {{ ok.detail_row("POLL INTERVAL", (onshape_poll_interval ~ " min") if onshape_poll_interval else ok.status("DISABLED", "default"), mono=true) }}
+    {% endcall %}
+
+    <div style="margin-top: var(--space-lg);">
+        <div class="form-label">REGISTERED DOCUMENTS</div>
+        {% set onshape_doc_error = None %}
+        {% set onshape_doc_success = None %}
+        {% include "settings/onshape_documents.html" %}
+    </div>
+
+    <div id="onshape-sync-result" style="margin-top: var(--space-md);"></div>
+
+    <div style="margin-top: var(--space-lg);">
+        <div class="form-label">RECENT SYNC LOG</div>
+        <div hx-get="/settings/onshape/sync-log" hx-trigger="load" id="onshape-sync-log">
+            <span class="text-muted">Loading...</span>
+        </div>
+    </div>
+{% endcall %}
+
+{% else %}
+{% set onshape_actions %}
+    {% if is_admin %}<a class="btn btn-primary" href="/settings/onshape/configure">CONFIGURE</a>{% endif %}
+{% endset %}
+{% call ok.panel("ONSHAPE INTEGRATION", actions=onshape_actions, margin_top="var(--space-md)") %}
+    {% call ok.table() %}
+        {{ ok.detail_row("CREDENTIALS", ok.status("NONE", "default")) }}
+    {% endcall %}
+    <p class="text-muted" style="margin-top: var(--space-sm); font-size: 0.85rem;">
+        {% if is_admin %}Enter an API access key and secret key to connect.{% else %}An admin must configure API credentials.{% endif %}
+    </p>
+{% endcall %}
+{% endif %}
+
+{% endif %}

@@ -10,6 +10,14 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Account linking.** An existing password account whose email matches a verified OIDC identity adopts single sign-on on first use, keeping its history, sign-offs and API tokens. Thereafter the account is matched on the provider's stable subject, so an email change never orphans it.
 - **Independent sign-in toggles.** Password, passkey and OIDC sign-in are now switched on and off separately rather than chosen between. Password sign-in can only be disabled once OIDC is configured — OPAL refuses the change that would leave nobody able to reach the web UI.
 
+#### Extensions
+- **Extension system.** An extension is a directory with an `opal-ext.yaml` manifest. **Settings → EXTENSIONS** lists what is installed, what state each one is in, and what it provides; each extension has its own page with its manifest, its content, and its enable/disable switch.
+- **Install from a ZIP archive.** Admins upload an archive on the extensions page. Archives may contain procedure and dataset templates; the manifest declares them under `provides:`. Reinstalling the same id upgrades it in place. Uninstall deletes the extension's files and registry entry — content already imported from it stays, because it became project data at import.
+- **Declarative content, imported explicitly.** Procedure templates import as draft master procedures; dataset templates import as datasets. Nothing is written to the project until an admin presses IMPORT.
+- **Installed extensions do not run code.** An uploaded archive declaring a `code:` entry point is refused at install with an explanation, not ignored. Only extensions bundled with OPAL run Python. Archives are also refused when oversized, manifest-less, incompatible with this OPAL version, shadowing a bundled id, or containing members that would write outside their own directory.
+- **Onshape is now a bundled extension** (`opal.onshape`). Its panel moved from the main settings page to **Settings → EXTENSIONS → opal.onshape**, which is also where it is switched on and off. Disabling stops polling and hides the panel; credentials are kept, so re-enabling resumes where it left off. All Onshape URLs and API endpoints are unchanged.
+- Extension installs, state changes, and uninstalls are audited with the acting user.
+
 ### Removed
 - **exe-proxy authentication.** The `exe` auth mode, which trusted `X-ExeDev-UserID` / `X-ExeDev-Email` headers from a reverse proxy, is gone along with the `OPAL_AUTH_MODE` and `OPAL_EXE_PROXY_SECRET` settings and the `user.exe_user_id` column. No request header confers identity any more; every sign-in method mints a real session. Deployments running exe mode fall back to password sign-in on upgrade — configure OIDC and have users sign in once to re-link their accounts, or issue password-claim links from the Users page.
 

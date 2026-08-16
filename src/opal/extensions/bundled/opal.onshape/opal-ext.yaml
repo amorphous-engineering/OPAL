@@ -1,0 +1,18 @@
+# Onshape CAD integration — a bundled extension.
+#
+# The code lives in opal.integrations.onshape (client, sync engine, polling)
+# and ships with OPAL; this manifest is what puts it in the registry, gives it
+# an on/off switch, and gives it a home on the extensions page. Disabling it
+# stops polling, hides the panel, and refuses sync — credentials are left
+# alone, so re-enabling picks up where it left off.
+id: opal.onshape
+name: Onshape
+version: 1.0.0
+opal: ">=1.4"
+summary: Two-way part and BOM sync with Onshape documents.
+author: OPAL
+license: MIT
+homepage: https://cad.onshape.com
+
+code:
+  entry_point: opal.integrations.onshape.extension:register

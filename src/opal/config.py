@@ -57,6 +57,10 @@ def _default_upload_dir() -> Path:
     return get_default_data_dir() / "attachments"
 
 
+def _default_extension_dir() -> Path:
+    return get_default_data_dir() / "extensions"
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -204,6 +208,16 @@ class Settings(BaseSettings):
         description="Comma-separated list of allowed MIME types",
     )
 
+    # Extensions
+    extension_dir: Path = Field(
+        default_factory=_default_extension_dir,
+        description="Directory holding installed extensions (one subdirectory per id)",
+    )
+    max_extension_size: int = Field(
+        default=5 * 1024 * 1024,  # 5MB
+        description="Maximum size in bytes of an uploaded extension archive",
+    )
+
     @property
     def cors_origins(self) -> list[str]:
         """Parse allowed origins into a list."""
@@ -221,6 +235,7 @@ class Settings(BaseSettings):
     def ensure_directories(self) -> None:
         """Create required directories if they don't exist."""
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.extension_dir.mkdir(parents=True, exist_ok=True)
         # Ensure the data directory exists for SQLite — project configs use
         # absolute paths, so this must not be limited to ./relative ones.
         if self.database_url.startswith("sqlite") and ":memory:" not in self.database_url:
@@ -308,6 +323,10 @@ def configure_for_project(
         rate_limit_window=base.rate_limit_window,
         upload_dir=resolved_upload_dir,
         max_upload_size=base.max_upload_size,
+        # Extensions are instance-level, not per-database: a demo switch or a
+        # project change must never relocate them.
+        extension_dir=base.extension_dir,
+        max_extension_size=base.max_extension_size,
         allowed_mime_types=base.allowed_mime_types,
         # Identity is instance-level, not per-database: a demo switch or a
         # project change must never drop users onto a login they cannot complete.

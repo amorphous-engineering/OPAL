@@ -1,0 +1,168 @@
+{% extends "layouts/base.html" %}
+{% import 'opalkit/_macros.html' as ok %}
+
+{% block breadcrumbs %}
+{{ ok.crumb("HOME", "/") }}
+{{ ok.crumb("SETTINGS", "/settings") }}
+{{ ok.crumb("EXTENSIONS", "/settings/extensions") }}
+{{ ok.crumb(ext.id) }}
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px;">
+
+{% if action_result %}
+<div class="panel" style="margin-bottom: var(--space-md); border: 1px solid var(--accent-{{ 'green' if action_result.ok else 'red' }});">
+    <div class="panel-body">
+        <span class="{{ 'text-green' if action_result.ok else 'text-red' }}">{{ action_result.message }}</span>
+    </div>
+</div>
+{% endif %}
+
+{% set header_actions %}
+    {% if is_admin %}
+    {% if ext.enabled %}
+    <form method="post" action="/settings/extensions/{{ ext.id }}/disable" style="display:inline;">
+        {{ ok.btn("DISABLE", type="submit") }}
+    </form>
+    {% else %}
+    <form method="post" action="/settings/extensions/{{ ext.id }}/enable" style="display:inline;">
+        {{ ok.btn("ENABLE", variant="primary", type="submit") }}
+    </form>
+    {% endif %}
+    {% endif %}
+{% endset %}
+
+{% call ok.panel(ext.name | upper, actions=header_actions) %}
+    {% call ok.table() %}
+        {{ ok.detail_row("ID", ext.id, mono=true) }}
+        {{ ok.detail_row("VERSION", ext.version, mono=true) }}
+        {{ ok.detail_row("ORIGIN", ext.origin | upper, mono=true) }}
+        {{ ok.detail_row("STATUS", ok.status("ENABLED", "ok") if ext.enabled else ok.status("DISABLED", "default")) }}
+        {{ ok.detail_row("REQUIRES", ext.requires ~ (" — this instance is " ~ opal_version if not ext.compatible else ""), mono=true) }}
+        {{ ok.detail_row("SUMMARY", ext.summary or '-') }}
+        {{ ok.detail_row("AUTHOR", ext.author or '-') }}
+        {{ ok.detail_row("LICENSE", ext.license or '-', mono=true) }}
+        {{ ok.detail_row("HOMEPAGE", ok.link(ext.homepage, ext.homepage, mono=true, external=true) if ext.homepage else '-') }}
+        {{ ok.detail_row("REGISTERED", ok.timestamp(ext.installed_at) if ext.installed_at else '-', mono=true) }}
+        {{ ok.detail_row("CHECKSUM", ext.checksum or '-', mono=true) }}
+        {{ ok.detail_row("PATH", ext.path, mono=true) }}
+    {% endcall %}
+{% endcall %}
+
+{# ── BUNDLED INTEGRATION PANEL ── #}
+{% if ext.id == "opal.onshape" %}
+{% include "settings/_onshape_panel.html" %}
+{% endif %}
+
+{# ── PROVIDED CONTENT ──
+   Declared intent decides expectation: a capability listed under `provides:`
+   expects content, so an empty one renders as a single line. A capability the
+   manifest never declared is absent entirely. #}
+{% if ext.declares.procedures %}
+{% call ok.panel("PROCEDURE TEMPLATES", margin_top="var(--space-md)") %}
+    {% if ext.content.procedures %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("KEY", width="160px") }}
+                {{ ok.th("NAME") }}
+                {{ ok.th("TYPE", width="70px") }}
+                {{ ok.th("STEPS", width="60px", align="right") }}
+                {{ ok.th("", width="90px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in ext.content.procedures %}
+            <tr>
+                <td class="mono">{{ item.key }}</td>
+                <td>{{ item.name }}</td>
+                <td class="mono">{{ item.type | upper }}</td>
+                <td class="mono" style="text-align: right;">{{ item.steps | length }}</td>
+                <td>
+                    {% if is_admin %}
+                    <form method="post" action="/settings/extensions/{{ ext.id }}/import/procedures/{{ item.key }}">
+                        {{ ok.btn("IMPORT", type="submit", size="sm") }}
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    <p class="text-muted" style="margin-top: var(--space-sm); font-size: 0.85rem;">
+        Import creates a draft master procedure. It is project data from that
+        point on — editable, publishable, and unaffected by uninstalling this
+        extension.
+    </p>
+    {% else %}
+    {{ ok.empty_line("PROCEDURE TEMPLATES") }}
+    {% endif %}
+{% endcall %}
+{% endif %}
+
+{% if ext.declares.datasets %}
+{% call ok.panel("DATASET TEMPLATES", margin_top="var(--space-md)") %}
+    {% if ext.content.datasets %}
+    {% call ok.table() %}
+        <thead>
+            <tr>
+                {{ ok.th("KEY", width="160px") }}
+                {{ ok.th("NAME") }}
+                {{ ok.th("FIELDS", width="60px", align="right") }}
+                {{ ok.th("", width="90px") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in ext.content.datasets %}
+            <tr>
+                <td class="mono">{{ item.key }}</td>
+                <td>{{ item.name }}</td>
+                <td class="mono" style="text-align: right;">{{ item.schema_.get('fields', []) | length }}</td>
+                <td>
+                    {% if is_admin %}
+                    <form method="post" action="/settings/extensions/{{ ext.id }}/import/datasets/{{ item.key }}">
+                        {{ ok.btn("IMPORT", type="submit", size="sm") }}
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ok.empty_line("DATASET TEMPLATES") }}
+    {% endif %}
+{% endcall %}
+{% endif %}
+
+{% if ext.content.errors %}
+{% call ok.panel("CONTENT ERRORS", margin_top="var(--space-md)") %}
+    {% call ok.table() %}
+        <tbody>
+            {% for error in ext.content.errors %}
+            <tr><td class="text-red">{{ error }}</td></tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+{% endcall %}
+{% endif %}
+
+{% if is_admin and not ext.is_bundled %}
+<div class="panel" style="margin-top: var(--space-md); border: 1px solid var(--accent-red);">
+    <div class="panel-header" style="color: var(--accent-red);"><span>UNINSTALL</span></div>
+    <div class="panel-body">
+        <p class="text-muted" style="margin-bottom: var(--space-md);">
+            Deletes <span class="mono">{{ ext.path }}</span> and its registry entry.
+            Procedures and datasets already imported from it stay.
+        </p>
+        <form method="post" action="/settings/extensions/{{ ext.id }}/uninstall"
+              onsubmit="return confirm('Uninstall {{ ext.id }}? Its files are deleted from this machine.');">
+            <button type="submit" class="btn" style="color: var(--accent-red); border-color: var(--accent-red);">UNINSTALL</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+</div>
+{% endblock %}
