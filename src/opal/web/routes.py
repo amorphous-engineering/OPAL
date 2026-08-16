@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import case, func, or_
 
@@ -4242,6 +4242,36 @@ def _dymo_page_height_in(pn: str, name: str, meta: str | None) -> float:
     return _DYMO_SHORT_PAGE_IN if needed_in <= _DYMO_SHORT_PRINTABLE_IN else _DYMO_LONG_PAGE_IN
 
 
+def _dymo_label_fields(
+    type: str, id: int, db: DbSession
+) -> tuple[str, str, str | None, str] | None:
+    """Resolve (pn, name, meta, datamatrix_data) for a part or inventory
+    record. Shared by the HTML preview route and the direct-print
+    dispatch route so the meta-line format lives in one place.
+    """
+    if type == "inventory":
+        record = (
+            db.query(InventoryRecord)
+            .join(Part)
+            .filter(InventoryRecord.id == id, Part.deleted_at.is_(None))
+            .first()
+        )
+        if not record:
+            return None
+        identifier = record.opal_number or f"INV-{record.id}"
+        uom = (record.part.unit_of_measure or "ea").upper()
+        meta = " · ".join(
+            [record.lot_number or "—", identifier, f"QTY: {float(record.quantity):g} {uom}"]
+        )
+        return record.part.internal_pn, record.part.name, meta, identifier
+    if type == "part":
+        part = db.query(Part).filter(Part.id == id, Part.deleted_at.is_(None)).first()
+        if not part:
+            return None
+        return part.internal_pn, part.name, None, part.internal_pn
+    return None
+
+
 @router.get("/label", response_class=HTMLResponse)
 def label_print(
     request: Request,
@@ -4266,22 +4296,17 @@ def label_print(
             return HTMLResponse("Not found", status_code=404)
         identifier = record.opal_number or f"INV-{record.id}"
         if fmt == "dymo":
-            meta_parts = [record.lot_number or "—", identifier]
-            uom = (record.part.unit_of_measure or "ea").upper()
-            meta_parts.append(f"QTY: {float(record.quantity):g} {uom}")
-            meta = " · ".join(meta_parts)
+            pn, name, meta, _ = _dymo_label_fields(type, id, db)
             return templates.TemplateResponse(
                 "label_dymo.html",
                 {
                     "request": request,
                     "entity_type": "inventory",
                     "entity_id": record.id,
-                    "pn": record.part.internal_pn,
-                    "name": record.part.name,
+                    "pn": pn,
+                    "name": name,
                     "meta": meta,
-                    "page_height_in": _dymo_page_height_in(
-                        record.part.internal_pn, record.part.name, meta
-                    ),
+                    "page_height_in": _dymo_page_height_in(pn, name, meta),
                 },
             )
         return templates.TemplateResponse(
@@ -4330,6 +4355,45 @@ def label_print(
             },
         )
     return HTMLResponse("Invalid type", status_code=400)
+
+
+@router.get("/label/printers")
+def label_printers() -> list[dict[str, str]]:
+    """List CUPS printers on this machine for the direct-print picker."""
+    from opal.core.printing import PrinterError, list_printers
+
+    try:
+        return list_printers()
+    except PrinterError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/label/print-direct")
+def label_print_direct(
+    db: DbSession,
+    type: str = Form(...),
+    id: int = Form(...),
+    printer: str = Form(...),
+) -> dict[str, str]:
+    """Render a DYMO label natively and send it straight to a CUPS printer.
+
+    No browser print dialog — OPAL runs on one machine, so "print" means
+    print to whatever's attached to that machine (see printing.py).
+    """
+    from opal.core.dymo_label import render_dymo_label_pdf
+    from opal.core.printing import PrinterError, print_file
+
+    fields = _dymo_label_fields(type, id, db)
+    if fields is None:
+        raise HTTPException(status_code=404, detail=f"{type} {id} not found")
+    pn, name, meta, datamatrix_data = fields
+
+    pdf_bytes = render_dymo_label_pdf(pn, name, meta, datamatrix_data)
+    try:
+        print_file(printer, pdf_bytes)
+    except PrinterError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"printer": printer}
 
 
 # ============ DOCUMENTATION ============

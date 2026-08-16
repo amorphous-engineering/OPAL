@@ -2,6 +2,8 @@
 
 from fastapi.testclient import TestClient
 
+from opal.core import printing
+
 
 def _activated_part(client: TestClient, tracking_type: str = "serialized") -> dict:
     resp = client.post(
@@ -85,6 +87,66 @@ def test_inventory_datamatrix_svg(web_client, client):
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/svg+xml"
     assert b"<svg" in resp.content
+
+
+def test_label_printers_lists_available(web_client, monkeypatch):
+    monkeypatch.setattr(
+        printing, "list_printers", lambda: [{"name": "DYMO_LabelManager_280", "status": "idle"}]
+    )
+    resp = web_client.get("/label/printers")
+    assert resp.status_code == 200
+    assert resp.json() == [{"name": "DYMO_LabelManager_280", "status": "idle"}]
+
+
+def test_label_printers_error_is_502(web_client, monkeypatch):
+    def _raise():
+        raise printing.PrinterError("cups not running")
+
+    monkeypatch.setattr(printing, "list_printers", _raise)
+    resp = web_client.get("/label/printers")
+    assert resp.status_code == 502
+
+
+def test_label_print_direct_dispatches_to_printer(web_client, client, monkeypatch):
+    part = _activated_part(client)
+    sent = {}
+
+    def _fake_print_file(printer, pdf_bytes):
+        sent["printer"] = printer
+        sent["pdf_bytes"] = pdf_bytes
+
+    monkeypatch.setattr(printing, "print_file", _fake_print_file)
+    resp = web_client.post(
+        "/label/print-direct",
+        data={"type": "part", "id": part["id"], "printer": "DYMO_LabelManager_280"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"printer": "DYMO_LabelManager_280"}
+    assert sent["printer"] == "DYMO_LabelManager_280"
+    assert sent["pdf_bytes"].startswith(b"%PDF")
+
+
+def test_label_print_direct_not_found(web_client, monkeypatch):
+    monkeypatch.setattr(printing, "print_file", lambda printer, pdf_bytes: None)
+    resp = web_client.post(
+        "/label/print-direct",
+        data={"type": "part", "id": 999999, "printer": "DYMO_LabelManager_280"},
+    )
+    assert resp.status_code == 404
+
+
+def test_label_print_direct_printer_error_is_502(web_client, client, monkeypatch):
+    part = _activated_part(client)
+
+    def _raise(printer, pdf_bytes):
+        raise printing.PrinterError("printer-stopped")
+
+    monkeypatch.setattr(printing, "print_file", _raise)
+    resp = web_client.post(
+        "/label/print-direct",
+        data={"type": "part", "id": part["id"], "printer": "DYMO_LabelManager_280"},
+    )
+    assert resp.status_code == 502
 
 
 def test_label_invalid_type_rejected(web_client):

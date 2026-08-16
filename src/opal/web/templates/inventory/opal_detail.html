@@ -20,7 +20,7 @@
             {{ ok.btn("RECORD CALIBRATION", variant="primary", size="sm", attrs='onclick="recordCalibration()"') }}
             {% endif %}
             {{ ok.btn("PRINT LABEL", size="sm", attrs='onclick="window.open(\'/label?type=inventory&id=' ~ record.id ~ '\', \'_blank\', \'width=500,height=300\')"') }}
-            {{ ok.btn("PRINT LABEL · DYMO", size="sm", attrs='onclick="window.open(\'/label?type=inventory&id=' ~ record.id ~ '&fmt=dymo\', \'_blank\', \'width=350,height=150\')"') }}
+            {{ ok.btn("PRINT LABEL · DYMO", size="sm", attrs='onclick="showDymoPrintModal(\'inventory\', ' ~ record.id ~ ')"') }}
             {{ ok.btn("ADJUST QTY", size="sm", href="/inventory/" ~ record.id ~ "/adjust") }}
             {% if record.quantity > 0 %}
             {{ ok.btn("SCRAP", variant="danger", size="sm", attrs='onclick="showScrapModal()"') }}
@@ -734,4 +734,5 @@ document.addEventListener('keydown', function(e) {
 });
 </script>
 {% endif %}
+{% include "_dymo_print_modal.html" %}
 {% endblock %}
