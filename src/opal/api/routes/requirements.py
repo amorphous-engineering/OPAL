@@ -326,7 +326,17 @@ def update_requirement(
     old_values = get_model_dict(req)
     # Nullable fields clear on explicit null (model_fields_set distinguishes
     # absent from null — issue #30); non-nullable fields keep the None-skip.
-    clearable = {"rationale", "category", "verification_method", "tbr_owner_id", "tbr_due"}
+    # parent_id clears too: a level-0 root has no parent, so promoting a child
+    # back to a root is a legitimate edit. level is a separate field and is not
+    # adjusted here — the caller sets it in the same PATCH if it should change.
+    clearable = {
+        "rationale",
+        "category",
+        "verification_method",
+        "tbr_owner_id",
+        "tbr_due",
+        "parent_id",
+    }
     for field in (
         "title",
         "statement",
