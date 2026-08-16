@@ -33,6 +33,7 @@ from opal.db.models import (
     IssueComment,
     Kit,
     MasterProcedure,
+    Notification,
     Part,
     PartRequirement,
     ProcedureInstance,
@@ -60,6 +61,7 @@ from opal.db.models.inventory import (
     SourceType,
 )
 from opal.db.models.issue import Containment, DispositionType, IssuePriority, IssueStatus, IssueType
+from opal.db.models.notification import NotificationKind, NotificationPriority
 from opal.db.models.procedure import ProcedureStatus, ProcedureType, StepKit, UsageType
 from opal.db.models.purchase import PurchaseStatus
 from opal.db.models.risk import RiskIssueRole
@@ -98,6 +100,7 @@ def seed_database(db: Session) -> None:
     wo = _seed_executions(db, procs, versions, parts, inventory, users, now)
     issues = _seed_issues(db, parts, procs, wo, users, now)
     _seed_risks(db, parts, users, issues)
+    _seed_notifications(db, users, issues, wo, now)
     _seed_test_templates(db, parts)
     db.commit()
 
@@ -117,6 +120,7 @@ def seed_database(db: Session) -> None:
     print(f"  {db.query(Issue).count()} issues")
     print(f"  {db.query(Risk).count()} risks")
     print(f"  {db.query(TestTemplate).count()} test templates")
+    print(f"  {db.query(Notification).count()} notifications")
 
 
 # ---------------------------------------------------------------------------
@@ -1475,6 +1479,120 @@ def _seed_risks(
 
 # ---------------------------------------------------------------------------
 # Test templates — the two numeric checks the guidebook states outright
+# ---------------------------------------------------------------------------
+# Notifications — the demo inbox
+# ---------------------------------------------------------------------------
+
+
+def _seed_notifications(
+    db: Session,
+    users: dict[str, User],
+    issues: dict[str, Issue],
+    wo: dict[str, Any],
+    now: datetime,
+) -> None:
+    """Give the demo a populated bell and inbox.
+
+    Raised through opal.core.notifications, the same helpers the live triggers
+    use, so demo notifications cannot drift into a shape production never
+    produces. Only the timestamps are authored: rows are back-dated afterwards
+    so the inbox reads as a timeline rather than a pile stamped "now", and a
+    few older ones are marked read so both states are visible.
+    """
+    from opal.core import notifications
+
+    build, test, qa = users["build"], users["test"], users["qa"]
+
+    def dated(
+        rows: list[Any], when: datetime, read_after: timedelta | None = None
+    ) -> None:
+        for row in rows:
+            row.created_at = when
+            row.updated_at = when
+            if read_after is not None:
+                row.read_at = when + read_after
+
+    def execution_event(
+        instance: Any, kind: Any, title: str, body: str, actor: User
+    ) -> list[Any]:
+        """Mirror what blocking_transition raises, for a demo-authored moment."""
+        return notifications.notify(
+            db,
+            recipients=notifications.instance_operators(db, instance.id),
+            kind=kind,
+            title=title,
+            body=body,
+            href=f"/executions/{instance.id}",
+            subject_type="procedure_instance",
+            subject_id=instance.id,
+            priority=NotificationPriority.HIGH.value,
+            actor_id=actor.id,
+        )
+
+    # ── Older, already read ──────────────────────────────────────
+    # screws_pn was raised by qa and has no assignee, so build has to be the
+    # one who closed it — an actor is always dropped from their own audience,
+    # and qa closing their own issue would notify nobody.
+    dated(
+        notifications.issue_closed(db, issues["screws_pn"], actor_id=build.id),
+        now - timedelta(days=27, hours=6),
+        read_after=timedelta(hours=2),
+    )
+    dated(
+        notifications.issue_dispositioned(db, issues["stud_count"], actor_id=build.id),
+        now - timedelta(days=15, hours=3),
+        read_after=timedelta(hours=1),
+    )
+    dated(
+        execution_event(
+            wo["wo1"],
+            NotificationKind.EXECUTION_UNBLOCKED,
+            f"{wo['wo1'].work_order_number} is unblocked",
+            "Every blocking issue is dispositioned or closed.",
+            build,
+        ),
+        now - timedelta(days=15, hours=2),
+        read_after=timedelta(minutes=40),
+    )
+
+    # ── Recent, still unread ─────────────────────────────────────
+    dated(
+        notifications.issue_assigned(db, issues["n2o_cleanliness"], actor_id=qa.id),
+        now - timedelta(days=6, hours=2),
+    )
+    dated(
+        notifications.issue_assigned(db, issues["shock_cord"], actor_id=test.id),
+        now - timedelta(days=3, hours=5),
+    )
+    dated(
+        notifications.issue_assigned(db, issues["nc_oring"], actor_id=test.id),
+        now - timedelta(hours=1, minutes=10),
+    )
+    dated(
+        execution_event(
+            wo["wo2"],
+            NotificationKind.EXECUTION_BLOCKED,
+            f"{wo['wo2'].work_order_number} is blocked",
+            f"{issues['nc_oring'].issue_number} — {issues['nc_oring'].title}",
+            test,
+        ),
+        now - timedelta(hours=1, minutes=5),
+    )
+    dated(
+        notifications.issue_commented(
+            db,
+            issues["nc_oring"],
+            "Physical parts on the bench are -238 from LOT-MCM-2606-A and match "
+            "the tank gland drawings. Recommending USE AS IS with a doc redline "
+            "against the step text.",
+            actor_id=qa.id,
+        ),
+        now - timedelta(minutes=50),
+    )
+
+    db.flush()
+
+
 # ---------------------------------------------------------------------------
 
 

@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import timedelta
 
 import pytest
 
@@ -404,3 +405,65 @@ def test_po_sourced_stock_never_exceeds_received(seeded):
             f"PO line {line_id} (part {line.part_id}) received {line.qty_received} "
             f"but sourced stock accounts for {claimed}"
         )
+
+
+# ============ Notifications in the demo ============
+
+
+def test_demo_inbox_covers_every_notification_kind(seeded):
+    """The demo is where notifications get looked at first — every kind the
+    system can raise should be visible there, or the feature demos as half
+    built."""
+    from opal.db.models.notification import Notification, NotificationKind
+
+    kinds = {kind for (kind,) in seeded.query(Notification.kind).distinct()}
+    assert kinds == {k.value for k in NotificationKind}
+
+
+def test_demo_admin_has_unread_notifications(seeded):
+    """The bell must show a count for the user the demo signs in as."""
+    from opal.core import notifications
+    from opal.db.models.user import User
+
+    build = seeded.query(User).filter(User.username == "build").one()
+    assert notifications.unread_count(seeded, build.id) >= 3
+    assert len(notifications.recent(seeded, build.id, limit=8)) >= 3
+
+
+def test_demo_notifications_show_both_read_and_unread(seeded):
+    from opal.db.models.notification import Notification
+
+    rows = seeded.query(Notification).all()
+    assert any(row.read_at is None for row in rows), "nothing unread — bell would be empty"
+    assert any(row.read_at is not None for row in rows), "nothing read — READ filter demos empty"
+
+
+def test_demo_notifications_are_back_dated_into_a_timeline(seeded):
+    """Rows all stamped 'now' would make the inbox's RECENT sort meaningless."""
+    from opal.db.models.notification import Notification
+
+    stamps = {row.created_at for row in seeded.query(Notification).all()}
+    assert len(stamps) > 1
+    assert max(stamps) - min(stamps) > timedelta(days=7)
+
+
+def test_demo_never_notifies_anyone_of_their_own_action(seeded):
+    from opal.db.models.notification import Notification
+
+    for row in seeded.query(Notification).all():
+        assert row.user_id != row.actor_id, f"{row.kind} notifies its own actor"
+
+
+def test_demo_blocked_notification_matches_the_held_work_order(seeded):
+    """The demo's BLOCKED notification must point at a run that really is held."""
+    from opal.core import notifications
+    from opal.db.models.notification import Notification, NotificationKind
+
+    blocked = (
+        seeded.query(Notification)
+        .filter(Notification.kind == NotificationKind.EXECUTION_BLOCKED.value)
+        .all()
+    )
+    assert blocked, "the demo should show a blocked work order"
+    for row in blocked:
+        assert notifications.has_blocker(seeded, row.subject_id) is True
