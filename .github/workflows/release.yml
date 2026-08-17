@@ -23,9 +23,12 @@ jobs:
           - os: macos-latest
             asset_name: opal-macos-arm64
             python_arch: arm64
-          - os: macos-latest
-            asset_name: opal-macos-x86_64
-            python_arch: x64
+          # No macos-x86_64 target. macos-latest is Apple Silicon, and
+          # setup-python's x64 architecture does not make PyInstaller emit an
+          # x86_64 binary — it froze a native arm64 one and shipped it under an
+          # x86_64 name through v1.4.0-beta.3. An Intel Mac cannot run that, so
+          # the target is gone rather than wrong. Restoring it needs a real
+          # cross-build, not an architecture input.
           - os: ubuntu-latest
             asset_name: opal-linux-x86_64
             python_arch: x64
@@ -102,11 +105,27 @@ jobs:
             echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create release
+      # Either order works: push the tag and let this create the release, or
+      # create the release in the UI (which pushes the tag) and let this attach
+      # the binaries. v1.4.0-beta.3 took the second path and the bare `create`
+      # failed with "a release with the same tag name already exists", leaving a
+      # published release with no assets on it.
+      #
+      # When the release already exists its notes belong to whoever wrote them,
+      # so only the assets are uploaded. --clobber makes a re-run replace them
+      # instead of failing on duplicates.
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.tag.outputs.tag }}" \
-            release-assets/* \
-            --generate-notes \
-            --latest
+          tag="${{ steps.tag.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists — uploading assets to it."
+            gh release upload "$tag" release-assets/* --clobber
+          else
+            echo "Release $tag does not exist — creating it."
+            gh release create "$tag" \
+              release-assets/* \
+              --generate-notes \
+              --latest
+          fi
