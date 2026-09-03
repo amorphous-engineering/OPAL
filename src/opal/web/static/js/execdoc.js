@@ -154,6 +154,8 @@
 
     function applyDockbarPref() {
         document.body.classList.toggle('dockbar-off', !dockbarVisible());
+        const toggle = document.getElementById('dockbar-toggle');
+        if (toggle) toggle.checked = dockbarVisible();
     }
 
     window.toggleDockbar = function () {

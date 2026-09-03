@@ -465,6 +465,7 @@
 /* Work-order facts: a detail-row table inside the header's ··· popover. */
 .exec-meta-popover { padding: var(--space-xs); min-width: 360px; }
 .exec-meta-popover .data-table { margin: 0; }
+.exec-meta-pref { margin: var(--space-sm) 0 var(--space-xs) var(--space-xs); }
 .rail-table td { padding: 2px var(--space-xs); }
 .rail-disp { font-size: 0.65rem; white-space: nowrap; }
 .rail-disp-undispositioned { color: var(--accent-red); }

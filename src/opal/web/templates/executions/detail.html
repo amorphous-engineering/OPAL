@@ -51,6 +51,10 @@
                         {{ ok.detail_row("VERSION AUTHOR", version.created_by_user.name if version and version.created_by_user else '—', th_width="120px") }}
                     </tbody>
                 </table>
+                <div role="group" class="field exec-meta-pref" data-orientation="horizontal">
+                    <input class="input" type="checkbox" id="dockbar-toggle" checked onchange="toggleDockbar()">
+                    <label for="dockbar-toggle">DOCKED BAR</label>
+                </div>
             </div>
         </div>
     </span>
