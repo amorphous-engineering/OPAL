@@ -331,3 +331,22 @@ def test_state_progress_counts_leaf_steps(client, auth_headers):
 def test_state_missing_instance_404(client):
     resp = client.get("/api/procedure-instances/999999/state")
     assert resp.status_code == 404
+
+
+# ============ 6. a claim is refused where work cannot happen ============
+
+
+def test_claim_refused_on_finished_step(client, auth_headers):
+    """CLAIM says "I am working here": a completed step cannot be claimed."""
+    instance_id = _create_instance(client)
+
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/steps/1/complete",
+        json={},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+    resp = _focus(client, instance_id, 1, headers=auth_headers)
+    assert resp.status_code == 409
+    assert "finished" in resp.json()["detail"]

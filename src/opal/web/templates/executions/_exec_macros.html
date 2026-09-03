@@ -34,9 +34,14 @@
 {# The CLAIM control: the one way a user's marker moves. Pressed = this is
    the caller's claimed step; pressing again releases it. Context-aware
    (my_cursor_order) so a dockbar refetch renders the right state. #}
-{% macro claim_control(order) %}
+{% macro claim_control(order, blockers=[]) %}
 {%- set mine = my_cursor_order is not none and my_cursor_order == order -%}
+{%- set gates = blockers | selectattr('kind', 'in', ['sequence', 'dependency', 'redline', 'children']) | list -%}
+{%- if gates and not mine %}
+<span class="gated-control"><button type="button" class="btn" data-variant="outline" data-size="xs" disabled>CLAIM</button>{{ gate_reason(gates) }}</span>
+{%- else %}
 <button type="button" class="btn" data-claim="{{ order }}" data-variant="{{ 'primary' if mine else 'outline' }}" data-size="xs" aria-pressed="{{ 'true' if mine else 'false' }}" onclick="toggleClaim({{ order }})" title="{{ 'Release this step' if mine else 'Mark this step as where you are working' }}">{{ 'CLAIMED' if mine else 'CLAIM' }}</button>
+{%- endif %}
 {%- endmacro %}
 
 {# Why a gated control is inert: issue-backed blockers link, structural ones

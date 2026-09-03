@@ -33,6 +33,7 @@ from opal.core.execution_flow import (
     complete_step_flow,
     focus_step,
     mark_instance_in_work,
+    sequence_blockers,
     skip_blockers,
     touch_user_presence,
 )
@@ -615,6 +616,16 @@ async def move_focus(
     )
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
+
+    # A claim says "I am working here": it is refused where work cannot
+    # happen yet — a finished step, or one still gated by its sequence,
+    # an OP dependency, or an open redline.
+    status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
+    if status in ("completed", "signed_off", "skipped"):
+        raise HTTPException(status_code=409, detail="Step is finished")
+    gates = sequence_blockers(db, instance, step_exec)
+    if gates:
+        raise HTTPException(status_code=409, detail="; ".join(b.message for b in gates))
 
     from opal.db.models import User
 

@@ -494,7 +494,7 @@
                 body: JSON.stringify({ step_number: order }),
             });
             if (resp.ok) { myClaimOrder = order; syncClaimButtons(); pollNow(); }
-            else toastError(null, 'Could not claim step');
+            else { const err = await resp.json().catch(() => ({})); toastError(err.detail, 'Could not claim step'); }
         } catch (e) { toastError(null, 'Network error'); }
     }
 
@@ -502,7 +502,8 @@
         try {
             const resp = await fetch(apiUrl('/focus'), { method: 'DELETE', headers: getHeaders() });
             if (resp.ok) { myClaimOrder = null; syncClaimButtons(); pollNow(); }
-        } catch (e) { /* best-effort */ }
+            else toastError(null, 'Could not release claim');
+        } catch (e) { toastError(null, 'Network error'); }
     }
 
     window.toggleClaim = function (order) {

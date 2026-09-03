@@ -38,7 +38,7 @@
         {% if bar_step.exec %}{{ ex.notes_block(bar_step.exec, bar_step.order) }}{% endif %}
         <div class="dockbar-actions">
             {% if actionable and bs not in ['completed', 'signed_off', 'skipped'] %}
-            {{ ex.claim_control(bar_step.order) }}
+            {{ ex.claim_control(bar_step.order, bar_step.complete_blockers) }}
             {% endif %}
             {% if bar_step.exec %}
             <button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})'>ATTACH</button>
