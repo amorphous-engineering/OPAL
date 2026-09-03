@@ -979,18 +979,8 @@ body.exec-detail .exec-tabbar {
     margin-bottom: var(--space-md);
 }
 
-/* The dock-bar preference sits at the end of the tab row; pressed = docked. */
-body.exec-detail .exec-tabbar { position: relative; }
-.exec-dock-toggle {
-    position: absolute;
-    right: 0;
-    top: 0;
-    color: var(--muted-foreground);
-}
-.exec-dock-toggle[aria-pressed="true"] {
-    color: var(--primary);
-    border-color: var(--primary);
-}
+
+body.exec-detail .exec-tabbar { position: relative; } /* anchors the tablet drawer toggle */
 
 body.exec-detail .exec-tabbar > [role="tablist"] {
     margin-left: calc(-1 * var(--space-md));

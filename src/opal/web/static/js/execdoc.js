@@ -146,14 +146,14 @@
         } catch (e) { console.error('execdoc: row refresh failed', e); }
     }
 
+    // The docked bar is the control surface for the focused step; it is on
+    // unless a stored preference says otherwise.
     function dockbarVisible() {
-        return localStorage.getItem('opal_dockbar') === '1';
+        return localStorage.getItem('opal_dockbar') !== '0';
     }
 
     function applyDockbarPref() {
         document.body.classList.toggle('dockbar-off', !dockbarVisible());
-        const toggle = document.getElementById('dockbar-toggle');
-        if (toggle) toggle.setAttribute('aria-pressed', dockbarVisible() ? 'true' : 'false');
     }
 
     window.toggleDockbar = function () {

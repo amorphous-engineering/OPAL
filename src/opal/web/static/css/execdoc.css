@@ -43,19 +43,6 @@
 
 /* Presence: "N ONLINE" counter; the roster lives in the left rail and in
    the counter's popover (the only roster when the rails are hidden). */
-/* Facts line: every work-order fact, one dense row, always rendered. */
-.exec-facts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px var(--space-lg);
-    margin: var(--space-xs) 0 0;
-    font-size: 0.7rem;
-}
-
-.exec-facts > div { display: flex; gap: var(--space-xs); white-space: nowrap; }
-.exec-facts dt { color: var(--text-muted); letter-spacing: 0.05em; }
-.exec-facts dd { margin: 0; color: var(--text-secondary); }
-
 .roster-row {
     padding: 1px 0;
     cursor: pointer;
@@ -472,6 +459,12 @@
 }
 
 .rail-table { font-size: 0.75rem; }
+.rail-facts th { font-size: 0.65rem; white-space: nowrap; }
+.rail-facts td { white-space: nowrap; }
+
+/* Work-order facts: a detail-row table inside the header's ··· popover. */
+.exec-meta-popover { padding: var(--space-xs); min-width: 360px; }
+.exec-meta-popover .data-table { margin: 0; }
 .rail-table td { padding: 2px var(--space-xs); }
 .rail-disp { font-size: 0.65rem; white-space: nowrap; }
 .rail-disp-undispositioned { color: var(--accent-red); }
@@ -654,7 +647,7 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
     .rail-toggle {
         display: inline-flex;
         position: absolute;
-        right: 7.5rem;
+        right: 0;
         top: 0;
         color: var(--muted-foreground);
     }

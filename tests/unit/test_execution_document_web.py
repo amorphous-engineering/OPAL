@@ -479,7 +479,7 @@ def test_meta_facts_abort_and_report_visibility(web_client: TestClient, db_sessi
     page = web_client.get(f"/executions/{instance_id}")
     assert page.status_code == 200
     body = page.text
-    assert "<dt>STARTED</dt>" in body
+    assert ">STARTED BY</th>" in body
     assert "VERSION AUTHOR" in body
     assert "abortExecution()" in body
     assert f"/executions/{instance_id}/report" not in body
