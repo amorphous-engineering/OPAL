@@ -429,7 +429,8 @@
    label segment attached to its disabled button. */
 .step-actions.button-group {
     display: inline-flex;
-    margin-left: auto;
+    gap: 0;
+    margin: var(--space-md) 0 0 auto;
 }
 .step-controls { display: flex; flex-direction: column; }
 .button-group > .gate-reason {
@@ -439,7 +440,14 @@
     border-inline-start-width: 0;
     background: var(--muted);
     white-space: nowrap;
+    max-width: 22ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    line-height: calc(var(--spacing) * 6 - 2px);
 }
+/* The inert button keeps its edges so the label reads as attached to it. */
+.button-group > .btn:disabled { opacity: 1; color: var(--muted-foreground); background: var(--muted); border-color: var(--border); }
 .step-kit-actions { display: flex; justify-content: flex-end; margin-top: var(--space-xs); }
 .step-kit-consumed { margin-top: var(--space-xs); font-size: 0.75rem; }
 

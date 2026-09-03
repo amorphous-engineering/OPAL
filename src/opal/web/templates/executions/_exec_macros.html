@@ -47,7 +47,21 @@
 {# Why a gated control is inert: issue-backed blockers link, structural ones
    (sequence/redline) render their message. Rendered beside the disabled
    button — never a control that silently vanishes. #}
-{% macro gate_reason(blockers) %}<span class="mono text-yellow gate-reason">{% for b in blockers %}{% if b.issue_number %}held by <a href="/issues/{{ b.issue_id }}">{{ b.issue_number }}</a>{% else %}{{ b.message }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</span>{% endmacro %}
+{% macro gate_reason(blockers) %}
+{#- The segment names the first blocker and counts the rest; the full list
+    rides in the tooltip, so a stack of dependencies never makes a pyramid. -#}
+{%- set full = [] -%}
+{%- for b in blockers %}{% set _ = full.append(('held by ' ~ b.issue_number) if b.issue_number else b.message) %}{% endfor -%}
+{%- set b = blockers[0] -%}
+{%- if b.issue_number -%}
+{%- set extra = blockers | length - 1 -%}
+<span class="mono text-yellow gate-reason" title="{{ full | join('; ') }}">held by <a href="/issues/{{ b.issue_id }}">{{ b.issue_number }}</a>{% if extra %} +{{ extra }}{% endif %}</span>
+{%- else -%}
+{%- set parts = b.message.split(', ') -%}
+{%- set extra = (parts | length - 1) + (blockers | length - 1) -%}
+<span class="mono text-yellow gate-reason" title="{{ full | join('; ') }}">{{ parts[0] }}{% if extra %} +{{ extra }}{% endif %}</span>
+{%- endif -%}
+{% endmacro %}
 
 {# The COMPLETE control, from the single server-computed gate (F4): the active
    button when nothing holds the step, else inert + reason — the button
