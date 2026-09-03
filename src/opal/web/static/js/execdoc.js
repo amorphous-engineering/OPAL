@@ -142,6 +142,9 @@
             if (focusedOrder !== null && parseInt(fresh.dataset.order) === focusedOrder) {
                 fresh.classList.add('is-focused');
             }
+            if (myClaimOrder !== null && parseInt(fresh.dataset.order) === myClaimOrder) {
+                fresh.classList.add('is-claimed');
+            }
             if (typeof renderMarkdown === 'function') renderMarkdown();
             loadStepKitAvailability();
         } catch (e) { console.error('execdoc: row refresh failed', e); }
@@ -478,6 +481,14 @@
         ? cfg.myCursorOrder : null;
 
     function syncClaimButtons() {
+        // The accent rail marks the claimed row; focus only carries the docked bar.
+        document.querySelectorAll('#exec-doc .doc-step.is-claimed').forEach((row) => {
+            if (parseInt(row.dataset.order) !== myClaimOrder) row.classList.remove('is-claimed');
+        });
+        if (myClaimOrder !== null) {
+            const row = document.getElementById(`step-${myClaimOrder}`);
+            if (row) row.classList.add('is-claimed');
+        }
         document.querySelectorAll('[data-claim]').forEach((btn) => {
             const mine = parseInt(btn.dataset.claim) === myClaimOrder;
             btn.dataset.variant = mine ? 'primary' : 'outline';
@@ -1254,6 +1265,7 @@
                 row.classList.add('is-focused');
             }
         }
+        syncClaimButtons();
 
         // A HOLDING link (holds.py exec_href) lands here with ?op=N — jump to
         // that step, expanding its collapsed OP card. jumpToStep is idempotent.

@@ -247,7 +247,12 @@
     text-decoration: line-through;
 }
 
+/* Focus (the row the docked bar shows) is quiet; the claim carries the accent. */
 .doc-step.is-focused .doc-step-line {
+    background: var(--muted);
+}
+
+.doc-step.is-claimed .doc-step-line {
     border-left: 2px solid var(--accent-orange);
     background: color-mix(in srgb, var(--accent-orange) 7%, transparent);
 }
