@@ -95,9 +95,9 @@
 {% else %}
 {% call ok.panel("PROJECT CONFIGURATION") %}
         {% if is_admin %}
-        {{ ok.empty("No project configured", action_text="CREATE PROJECT", action_href="/project/new") }}
+        {{ ok.empty_line("Project", href="/project/new") }}
         {% else %}
-        {{ ok.empty("No project configured") }}
+        {{ ok.empty_line("Project") }}
         {% endif %}
 {% endcall %}
 {% endif %}

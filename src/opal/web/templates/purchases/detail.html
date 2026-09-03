@@ -108,7 +108,7 @@
                 </tbody>
             {% endcall %}
             {% else %}
-            {{ ok.empty("No line items") }}
+            {{ ok.empty_line("Line items", onclick="showAddLine()") }}
             {% endif %}
     {% endcall %}
 {% endcall %}
@@ -189,7 +189,7 @@
             </tbody>
         {% endcall %}
         {% else %}
-        {{ ok.empty("No expense records — written automatically when items are received") }}
+        {{ ok.empty_line("Expense records") }}
         {% endif %}
 {% endcall %}
 

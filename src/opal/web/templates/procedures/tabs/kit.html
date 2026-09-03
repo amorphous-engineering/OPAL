@@ -24,7 +24,7 @@
         </tbody>
     {% endcall %}
     {% else %}
-    {{ ok.empty("No parts in kit") }}
+    {{ ok.empty_line("Kit", onclick="showAddKit()") }}
     {% endif %}
 {% endcall %}
 </div>

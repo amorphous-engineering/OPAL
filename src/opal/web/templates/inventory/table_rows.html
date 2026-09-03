@@ -71,7 +71,7 @@
 {% else %}
 <tr>
     <td colspan="9">
-        {{ ok.empty("No inventory records found") }}
+        {{ ok.empty_line("Inventory records", href="/inventory/new") }}
     </td>
 </tr>
 {% endif %}

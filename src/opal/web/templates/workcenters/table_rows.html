@@ -16,7 +16,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="4">{{ ok.empty("No workcenters found") }}</td>
+    <td colspan="4">{{ ok.empty_line("Workcenters", href="/workcenters/new") }}</td>
 </tr>
 {% endif %}
 {% include 'partials/pagination_row.html' %}

@@ -155,4 +155,4 @@ def test_expense_panel_empty_state(web_client, auth_headers):
     po = _create_and_order_po(web_client, auth_headers, [{"part_id": part["id"], "qty_ordered": 1}])
     page = web_client.get(f"/purchases/{po['id']}")
     assert page.status_code == 200
-    assert "No expense records" in page.text
+    assert "Expense records" in page.text

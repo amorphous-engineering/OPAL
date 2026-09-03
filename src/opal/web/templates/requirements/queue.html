@@ -10,7 +10,7 @@
 {% block content %}
 {% call ok.panel("BASELINE QUEUE · " ~ (queue_items | length)) %}
     {% if not queue_items %}
-    {{ ok.empty("Nothing is ready to baseline — clear blockers in the dossiers first") }}
+    {{ ok.empty_line("Ready to baseline") }}
     {% else %}
     <div id="queue-review" class="queue-review mono">
         <!-- Item screen -->

@@ -53,7 +53,7 @@
         {% endfor %}
         {{ ghost_row('', None, None, 0, 0) }}
         {% if not tree %}
-        {{ ok.empty("No requirements yet — NEW L0 starts the spec") }}
+        {{ ok.empty_line("Requirements", href="/requirements?new=l0") }}
         {% endif %}
     </div>
 {% endcall %}

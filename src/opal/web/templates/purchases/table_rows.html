@@ -19,7 +19,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="6">{{ ok.empty("No purchase orders") }}</td>
+    <td colspan="6">{{ ok.empty_line("Purchase orders", href="/purchases/new") }}</td>
 </tr>
 {% endif %}
 {% include 'partials/pagination_row.html' %}

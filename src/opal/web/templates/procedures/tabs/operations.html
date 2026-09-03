@@ -1,3 +1,4 @@
+{% import 'opalkit/_macros.html' as ok %}
 <div>
 <div class="exec-layout">
     <div class="exec-sidebar">
@@ -125,9 +126,7 @@
         {% endif %}
         {% endfor %}
         {% if not selected_op_order %}
-        <div class="empty-state mono" style="padding: var(--space-xl); text-align: center; color: var(--text-muted);">
-            No operations yet — click <strong>+ ADD OP</strong> in the sidebar to create the first one.
-        </div>
+        {{ ok.empty_line("Operations", onclick="showAddOp()") }}
         {% endif %}
     </div>
 </div>

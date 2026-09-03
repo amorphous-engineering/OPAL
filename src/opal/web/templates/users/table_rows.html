@@ -23,7 +23,7 @@
 {% endfor %}
 {% else %}
 <tr>
-    <td colspan="5">{{ ok.empty("No users found") }}</td>
+    <td colspan="5">{{ ok.empty_line("Users", href="/users/new") }}</td>
 </tr>
 {% endif %}
 {% include 'partials/pagination_row.html' %}

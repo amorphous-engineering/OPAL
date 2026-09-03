@@ -79,7 +79,7 @@
             </tbody>
         {% endcall %}
         {% else %}
-        {{ ok.empty("No purchase orders for this supplier") }}
+        {{ ok.empty_line("Purchase orders") }}
         {% endif %}
     {% endcall %}
 {% endcall %}
@@ -117,7 +117,7 @@
         </tbody>
     {% endcall %}
     {% else %}
-    {{ ok.empty("No catalog numbers linked to this supplier") }}
+    {{ ok.empty_line("Catalog numbers", onclick="showAddCatalog()") }}
     {% endif %}
 {% endcall %}
 

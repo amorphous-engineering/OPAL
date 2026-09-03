@@ -103,7 +103,7 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="{{ dataset.schema.fields | length + 2 }}">{{ ok.empty("No data points") }}</td></tr>
+                        <tr><td colspan="{{ dataset.schema.fields | length + 2 }}">{{ ok.empty_line("Data points", onclick="openAddPointModal()") }}</td></tr>
                         {% endfor %}
                     </tbody>
                 {% endcall %}

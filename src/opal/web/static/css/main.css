@@ -635,13 +635,6 @@ select.select,
     letter-spacing: 0.05em;
 }
 
-/* Empty state */
-.empty-state {
-    text-align: center;
-    padding: var(--space-xl);
-    color: var(--text-muted);
-}
-
 /* Loading indicator (shown inline, no spinner) */
 .htmx-request {
     opacity: 0.7;

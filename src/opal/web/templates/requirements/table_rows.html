@@ -27,5 +27,5 @@
     <td>{{ ok.timestamp(req.updated_at) }}</td>
 </tr>
 {% else %}
-<tr><td colspan="9">{{ ok.empty("No requirements found — create one or run `opal import-requirements`") }}</td></tr>
+<tr><td colspan="9">{{ ok.empty_line("Requirements", href="/requirements/new") }}</td></tr>
 {% endfor %}

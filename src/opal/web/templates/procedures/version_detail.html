@@ -85,7 +85,7 @@
         {% endfor %}
 
         {% if not ops %}
-        {{ ok.empty("No operations in this version") }}
+        {{ ok.empty_line("Operations") }}
         {% endif %}
 
         {% if contingency_ops %}

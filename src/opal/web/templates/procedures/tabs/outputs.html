@@ -25,12 +25,8 @@
         </tbody>
     {% endcall %}
     {% else %}
-    {{ ok.empty("No outputs defined — add the part(s) this procedure produces") }}
+    {{ ok.empty_line("Outputs", onclick="showAddOutput()") }}
     {% endif %}
-{% endcall %}
-{% else %}
-{% call ok.panel("OUTPUTS") %}
-    {{ ok.empty("Outputs are only configured on build-type procedures. This procedure's type is " ~ (procedure.procedure_type | upper) ~ ".") }}
 {% endcall %}
 {% endif %}
 </div>

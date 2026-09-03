@@ -13,6 +13,6 @@
     <td>{{ ok.timestamp(dataset.updated_at) }}</td>
 </tr>
 {% else %}
-<tr><td colspan="4">{{ ok.empty("No datasets found") }}</td></tr>
+<tr><td colspan="4">{{ ok.empty_line("Datasets", href="/datasets/new") }}</td></tr>
 {% endfor %}
 {% include 'partials/pagination_row.html' %}

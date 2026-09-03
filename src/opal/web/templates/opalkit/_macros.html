@@ -162,10 +162,6 @@
 {%- endif -%}
 {% endmacro %}
 
-{# Empty state macro
-   Usage: {{ ok.empty("No parts found") }}
-          {{ ok.empty("No inventory records", action_text="Add Inventory", action_href="/inventory/new") }}
-#}
 {# The empty-state rule: emptiness is information only where content is
    expected — declared intent (procurement) decides where it's expected,
    and data always renders. An empty relevant section is ONE line,
@@ -179,16 +175,6 @@
 {% endmacro %}
 
 
-{% macro empty(message, action_text=none, action_href=none) %}
-<div class="empty-state">
-    <p class="text-muted">{{ message }}</p>
-    {%- if action_text and action_href -%}
-    <p style="margin-top: var(--space-md);">
-        {{ btn(action_text, href=action_href, variant="primary") }}
-    </p>
-    {%- endif -%}
-</div>
-{% endmacro %}
 
 {# Panel header with optional actions
    Usage: {{ ok.panel_header("PARTS", actions) }}

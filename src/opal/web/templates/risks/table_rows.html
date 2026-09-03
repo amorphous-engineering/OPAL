@@ -10,6 +10,6 @@
     <td class="mono" title="{{ row.reviewed_iso }}">{{ row.reviewed_age }}</td>
 </tr>
 {% else %}
-<tr><td colspan="6">{{ ok.empty("No risks found") }}</td></tr>
+<tr><td colspan="6">{{ ok.empty_line("Risks", href="/risks/new") }}</td></tr>
 {% endfor %}
 {% include 'partials/pagination_row.html' %}
