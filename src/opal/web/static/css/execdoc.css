@@ -43,17 +43,18 @@
 
 /* Presence: "N ONLINE" counter; the roster lives in the left rail and in
    the counter's popover (the only roster when the rails are hidden). */
-/* Roster + meta are Basecoat popovers; OPAL sets register and width. */
-.exec-online {
-    border-color: var(--accent-orange);
-    color: var(--accent-orange);
+/* Facts line: every work-order fact, one dense row, always rendered. */
+.exec-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px var(--space-lg);
+    margin: var(--space-xs) 0 0;
+    font-size: 0.7rem;
 }
 
-#exec-roster-pop {
-    padding: var(--space-sm) var(--space-md);
-    min-width: 220px;
-    font-size: 0.8rem;
-}
+.exec-facts > div { display: flex; gap: var(--space-xs); white-space: nowrap; }
+.exec-facts dt { color: var(--text-muted); letter-spacing: 0.05em; }
+.exec-facts dd { margin: 0; color: var(--text-secondary); }
 
 .roster-row {
     padding: 1px 0;
@@ -64,24 +65,6 @@
 
 .roster-row.is-self { font-weight: 700; }
 .roster-row.is-stale { color: var(--text-muted); }
-
-/* Meta readout popover (the META tab's facts, compacted) */
-.exec-meta-popover {
-    padding: var(--space-sm) var(--space-md);
-    min-width: 340px;
-    font-size: 0.8rem;
-}
-
-.exec-meta-popover .ro-row {
-    display: flex;
-    gap: var(--space-md);
-    padding: 1px 0;
-}
-
-.exec-meta-popover .ro-label {
-    color: var(--text-secondary);
-    min-width: 140px;
-}
 
 /* ============ Document layout ============
    The document is a centered readable column (~860px); the rails FLOAT in
@@ -667,12 +650,13 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 
     .exec-doc-layout.rail-open .exec-rail { transform: translateX(0); }
 
+    /* Drawer toggle sits in the tab row beside the dock-bar preference. */
     .rail-toggle {
-        display: block;
-        position: fixed;
-        right: var(--space-sm);
-        top: 7rem;
-        z-index: calc(var(--z-dropdown) + 1);
+        display: inline-flex;
+        position: absolute;
+        right: 7.5rem;
+        top: 0;
+        color: var(--muted-foreground);
     }
 
     .dockbar { gap: var(--space-sm); }
@@ -685,7 +669,6 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
     .dockbar-actions { order: 3; flex-basis: 100%; justify-content: flex-end; }
     .dockbar-actions .btn { padding: var(--space-sm) var(--space-md); }
 
-    .exec-meta-popover { min-width: 280px; }
 }
 
 /* Residual issue trace on a step: the hold clears, the record stays. */

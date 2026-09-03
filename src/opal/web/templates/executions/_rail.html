@@ -3,6 +3,12 @@
 {% import 'opalkit/_macros.html' as ok %}
 <section class="exec-rail-content accordion rail-accordion" id="exec-rail-content" data-multiple>
     <details class="rail-section" open>
+        <summary class="rail-head mono">ONLINE</summary>
+        <div class="rail-roster" data-rail-roster>
+            <div class="empty-line mono">Online — none</div>
+        </div>
+    </details>
+    <details class="rail-section" open>
         <summary class="rail-head mono">ISSUES / HOLDS</summary>
         {% set hold_entries = exec_state.holds %}
         {% set hold_issue_ids = hold_entries | map(attribute='issue_id') | list %}

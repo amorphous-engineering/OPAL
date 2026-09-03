@@ -152,6 +152,8 @@
 
     function applyDockbarPref() {
         document.body.classList.toggle('dockbar-off', !dockbarVisible());
+        const toggle = document.getElementById('dockbar-toggle');
+        if (toggle) toggle.setAttribute('aria-pressed', dockbarVisible() ? 'true' : 'false');
     }
 
     window.toggleDockbar = function () {
@@ -378,16 +380,6 @@
     function renderPresence(state) {
         const myId = window.OPAL_USER_ID;
         const roster = state.roster;
-        const online = roster.filter((r) => !r.stale).length;
-
-        const counter = document.querySelector('[data-online]');
-        if (counter) counter.textContent = `${online} ONLINE`;
-
-        const pop = document.getElementById('exec-roster-pop');
-        if (pop) {
-            pop.innerHTML = '';
-            for (const r of roster) pop.appendChild(rosterRow(r, myId));
-        }
 
         const railRoster = document.querySelector('[data-rail-roster]');
         if (railRoster) {

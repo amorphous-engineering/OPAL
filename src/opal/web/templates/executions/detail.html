@@ -16,7 +16,11 @@
 {% block content %}
 {% set inst_status = instance.status.value if instance.status.value is defined else instance.status %}
 
-{# ============ Header: identity · progress · presence · actions ============ #}
+{# ============ Header ============
+   Line 1: identity · state · progress · actions. Line 2: every fact the
+   work order carries, always rendered (absence is a dash, never a hidden
+   popover). People are context, so the roster lives in the rail. #}
+{% macro ts(dt) %}{% if dt %}{{ dt.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}<span class="text-muted">—</span>{% endif %}{% endmacro %}
 <div class="exec-head">
     <span class="exec-head-wo mono">{{ instance.work_order_number or 'EXECUTION' }}</span>
     <a class="exec-head-proc" href="/procedures/{{ instance.procedure_id }}">{{ instance.procedure.name }} <span class="mono text-muted">v{{ version.version_number if version else '—' }}</span></a>
@@ -24,11 +28,6 @@
     <span class="exec-head-progress mono" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span>
     {% set pct = (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 %}
     <div class="progress exec-progressbar" role="progressbar" aria-label="Steps complete" aria-valuenow="{{ pct | round | int }}" aria-valuemin="0" aria-valuemax="100"><span data-progress-fill style="width: {{ pct }}%"></span></div>
-    {# Roster popover — the only roster when the rails are hidden. #}
-    <div class="popover exec-online-pop">
-        <button type="button" class="btn exec-online" data-variant="outline" data-size="xs" data-online aria-expanded="false" aria-controls="exec-roster-pop">0 ONLINE</button>
-        <div id="exec-roster-pop" data-popover aria-hidden="true" data-side="bottom" data-align="start" class="part-readout mono"></div>
-    </div>
     <span class="exec-head-spacer"></span>
     <span class="exec-head-actions">
         {% if inst_status == 'completed' %}
@@ -37,27 +36,18 @@
         {% if inst_status in ['cut', 'in_work'] %}
         <button class="btn" data-variant="destructive" data-size="xs" onclick="abortExecution()">ABORT</button>
         {% endif %}
-        <button class="btn" data-variant="outline" data-size="xs" id="dockbar-toggle" onclick="toggleDockbar()" title="Docked current-step bar">BAR</button>
-        {# Compact meta readout — every fact the META tab held. #}
-        <div class="popover">
-            <button type="button" class="btn" data-variant="outline" data-size="xs" id="exec-meta-btn" aria-expanded="false" aria-controls="exec-meta-popover" aria-label="Execution facts">···</button>
-            <div id="exec-meta-popover" data-popover aria-hidden="true" data-side="bottom" data-align="end" class="exec-meta-popover part-readout mono">
-    <div class="ro-row"><span class="ro-label">STATUS</span><span>{{ inst_status | upper | replace('_', ' ') }}</span></div>
-    <div class="ro-row"><span class="ro-label">PROCEDURE</span><span>{{ instance.procedure.name }}</span></div>
-    <div class="ro-row"><span class="ro-label">VERSION</span><span>v{{ version.version_number if version else '—' }}</span></div>
-    <div class="ro-row"><span class="ro-label">CREATED</span><span>{{ instance.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>
-    <div class="ro-row"><span class="ro-label">STARTED</span><span>{% if instance.started_at %}{{ instance.started_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
-    <div class="ro-row"><span class="ro-label">COMPLETED</span><span>{% if instance.completed_at %}{{ instance.completed_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
-    <div class="ro-row"><span class="ro-label">LAST ACTIVITY</span><span>{% if last_activity_at %}{{ last_activity_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
-    <div class="ro-row"><span class="ro-label">STARTED BY</span><span>{{ instance.started_by_user.name if instance.started_by_user else '—' }}</span></div>
-    <div class="ro-row"><span class="ro-label">VERSION AUTHOR</span><span>{{ version.created_by_user.name if version and version.created_by_user else '—' }}</span></div>
-    <div class="ro-row"><span class="ro-label">VERSION CREATED</span><span>{% if version %}{{ version.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
-    {% if instance.scheduled_start_at %}<div class="ro-row"><span class="ro-label">SCHEDULED START</span><span>{{ instance.scheduled_start_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
-    {% if instance.target_completion_at %}<div class="ro-row"><span class="ro-label">TARGET COMPLETION</span><span>{{ instance.target_completion_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
-            </div>
-        </div>
     </span>
 </div>
+<dl class="exec-facts mono">
+    <div><dt>STARTED</dt><dd>{{ ts(instance.started_at) }}{% if instance.started_by_user %} · {{ instance.started_by_user.name }}{% endif %}</dd></div>
+    <div><dt>LAST ACTIVITY</dt><dd>{{ ts(last_activity_at) }}</dd></div>
+    <div><dt>COMPLETED</dt><dd>{{ ts(instance.completed_at) }}</dd></div>
+    <div><dt>CREATED</dt><dd>{{ ts(instance.created_at) }}</dd></div>
+    <div><dt>SCHEDULED</dt><dd>{{ ts(instance.scheduled_start_at) }}</dd></div>
+    <div><dt>TARGET</dt><dd>{{ ts(instance.target_completion_at) }}</dd></div>
+    <div><dt>VERSION</dt><dd>{% if version %}v{{ version.version_number }} · {{ ts(version.created_at) }}{% else %}<span class="text-muted">—</span>{% endif %}</dd></div>
+    <div><dt>VERSION AUTHOR</dt><dd>{% if version and version.created_by_user %}{{ version.created_by_user.name }}{% else %}<span class="text-muted">—</span>{% endif %}</dd></div>
+</dl>
 
 {# Tab navigation — Basecoat tabs; every tab controls the one HTMX-swapped
    panel, so Basecoat carries aria-selected and keyboard nav while HTMX
@@ -81,6 +71,8 @@
             hx-push-url="?tab={{ slug }}">{{ label }}</button>
     {% endfor %}
     </nav>
+    <button type="button" class="btn rail-toggle" data-variant="ghost" data-size="xs" onclick="toggleRail()" aria-label="Issues and attachments">ISSUES / ATTACHMENTS</button>
+    <button type="button" class="btn exec-dock-toggle" data-variant="ghost" data-size="xs" id="dockbar-toggle" aria-pressed="false" onclick="toggleDockbar()" title="Keep the focused step's controls docked at the bottom">DOCKED BAR</button>
     <div class="exec-tab-content" id="exec-tab-content" role="tabpanel" aria-labelledby="exec-tab-{{ tab }}" tabindex="-1">
         {% include 'executions/tabs/' ~ tab ~ '.html' %}
     </div>
