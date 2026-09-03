@@ -86,7 +86,7 @@
 
 .exec-rail-left {
     width: 230px;
-    padding: var(--space-sm);
+    padding: var(--space-md);
 }
 
 @media (max-width: 1279px) {
@@ -145,7 +145,7 @@
 .op-card {
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
-    margin-bottom: calc(var(--space-sm) * 2);
+    margin-bottom: var(--space-lg);
 }
 
 .op-card.is-redline { border-left: 3px solid var(--accent-red); }
@@ -160,7 +160,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    padding: var(--space-xs) var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
     cursor: pointer;
     background: var(--bg-tertiary);
     border-bottom: 1px solid var(--border-color);
@@ -187,14 +187,16 @@
 .op-card-blockline a { color: inherit; }
 
 .op-card-body {
-    padding: var(--space-xs) var(--space-sm) var(--space-sm);
+    padding: var(--space-md) var(--space-md) var(--space-md);
     font-size: 0.875rem;
     overflow: visible;
 }
 .op-instructions {
-    color: var(--text-primary);
-    font-size: 1rem;
-    margin-bottom: var(--space-xs);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    max-width: 72ch;
+    margin-bottom: var(--space-md);
 }
 
 .exec-redline-banner {
@@ -218,9 +220,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    padding: var(--space-xs) var(--space-xs);
+    padding: var(--space-sm) var(--space-sm);
     cursor: pointer;
-    min-height: 2rem;
+    min-height: 2.5rem;
 }
 
 .doc-step-line:hover { background: var(--bg-tertiary); }
@@ -237,7 +239,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 1rem;
+    font-size: 0.9375rem;
     color: var(--text-primary);
 }
 
@@ -300,9 +302,15 @@
 .pres-gated { font-size: 0.7rem; color: var(--text-muted); }
 
 .doc-step-body {
-    padding: var(--space-xs) var(--space-sm) var(--space-sm) calc(3em + var(--space-lg));
+    padding: var(--space-md) var(--space-md) var(--space-md) calc(3em + var(--space-lg));
+    line-height: 1.6;
     border-top: 1px dashed color-mix(in srgb, var(--border-color) 50%, transparent);
     background: var(--bg-primary);
+}
+
+.doc-step-body .step-instructions {
+    font-size: 0.875rem;
+    max-width: 72ch;
 }
 
 /* Authored reference imagery (instruction content — the inline exception) */
@@ -358,8 +366,8 @@
     display: flex;
     gap: var(--space-md);
     align-items: baseline;
-    margin-top: var(--space-sm);
-    padding-top: var(--space-xs);
+    margin-top: var(--space-md);
+    padding-top: var(--space-sm);
     border-top: 1px solid var(--border-color);
 }
 
@@ -398,14 +406,14 @@
 .step-kit-panel { margin: var(--space-xs) 0; }
 
 /* Expanded-step control surface: fields, notes, actions. */
-.step-controls { margin-top: var(--space-sm); }
+.step-controls { margin-top: var(--space-md); }
 
 .step-controls-fields {
     display: flex;
     gap: var(--space-md);
     align-items: flex-end;
     flex-wrap: wrap;
-    margin-bottom: var(--space-xs);
+    margin-bottom: var(--space-md);
 }
 
 .step-actions {
@@ -427,9 +435,9 @@
 
 /* ============ Rail ============ */
 
-.exec-rail-content { padding: var(--space-sm); }
+.exec-rail-content { padding: var(--space-md); }
 
-.rail-section { margin-bottom: var(--space-md); }
+.rail-section { margin-bottom: var(--space-lg); }
 
 .rail-head {
     font-size: 0.7rem;
