@@ -36,7 +36,7 @@
         {# The notes log: separate from the capture-field stack so it never
            reads as required data — available in any status. #}
         {% if bar_step.exec %}{{ ex.notes_block(bar_step.exec, bar_step.order) }}{% endif %}
-        <div class="dockbar-actions button-group">
+        <div class="dockbar-actions">
             {% if actionable and bs not in ['completed', 'signed_off', 'skipped'] %}
             {{ ex.claim_control(bar_step.order, bar_step.complete_blockers) }}
             {% endif %}

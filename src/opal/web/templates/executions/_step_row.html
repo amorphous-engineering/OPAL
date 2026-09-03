@@ -99,7 +99,7 @@
             <div class="step-controls-fields">
                 {{ ex.data_fields_editable({'exec': exec, 'schema': body_schema}) }}
             </div>
-            <div class="step-actions button-group">
+            <div class="step-actions">
                 {{ ex.claim_control(step.order, complete_gate) }}
                 <button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>
                 <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
@@ -113,7 +113,7 @@
         </div>
         {% elif inst_status in ['cut', 'in_work'] and step.status == 'awaiting_signoff' %}
         <div class="step-controls">
-            <div class="step-actions button-group">
+            <div class="step-actions">
                 {{ ex.claim_control(step.order, complete_gate) }}
                 {% if exec %}<button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>{% endif %}
                 <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>

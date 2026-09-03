@@ -424,13 +424,14 @@
     margin-bottom: var(--space-md);
 }
 
-/* The action rows are Basecoat button groups, right-aligned. A gated
-   control's reason (F4/F5: inert + reason, never an absent control) is a
-   label segment attached to its disabled button. */
-.step-actions.button-group {
-    display: inline-flex;
-    gap: 0;
-    margin: var(--space-md) 0 0 auto;
+/* Action rows are plain rows of separate buttons. A gated control (F4/F5:
+   inert + reason, never an absent control) is its own two-segment Basecoat
+   button group: the disabled button with its reason attached. */
+.step-actions {
+    display: flex;
+    gap: var(--space-xs);
+    justify-content: flex-end;
+    margin-top: var(--space-md);
 }
 .step-controls { display: flex; flex-direction: column; }
 .button-group > .gate-reason {
@@ -570,9 +571,11 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 .bar-field-label { font-size: 0.65rem; color: var(--text-secondary); }
 .bar-check { display: flex; align-items: center; gap: var(--space-xs); font-size: 0.75rem; }
 
-.dockbar-actions.button-group {
+.dockbar-actions {
+    display: flex;
+    gap: var(--space-xs);
+    align-items: center;
     margin-left: auto;
-    align-self: flex-end;
 }
 
 /* The overflow is a Basecoat dropdown-menu opening upward. */

@@ -83,8 +83,9 @@
 {{ ok.btn("DANGER", variant="danger") }}    → class="btn" data-variant="destructive"
 {{ ok.btn("GHOST", variant="ghost") }}      → class="btn" data-variant="ghost"
 {{ ok.btn("SMALL", size="sm") }}            → data-size="sm"{% endraw %}</pre>
-        <div class="button-group" style="margin-bottom: var(--space-md);">
-            {{ ok.btn("CLAIM") }}{{ ok.btn("ATTACH") }}{{ ok.btn("ISSUE") }}<button class="btn" data-variant="primary" data-state="ok" data-size="sm" disabled>COMPLETE</button><span class="mono text-yellow gate-reason">held by IT-00001</span>
+        <div style="display: flex; gap: var(--space-sm); align-items: center; margin-bottom: var(--space-md);">
+            {{ ok.btn("ATTACH") }}{{ ok.btn("ISSUE") }}<span class="button-group gated-control"><button class="btn" data-variant="primary" data-state="ok" data-size="sm" disabled>COMPLETE</button><span class="mono text-yellow gate-reason">held by IT-00001</span></span>
+            <span class="text-muted mono">gated control: a two-segment group</span>
         </div>
         <div style="display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center;">
             <span class="text-muted mono" style="width: 100%;">Raw Basecoat, every variant and size:</span>
