@@ -146,7 +146,9 @@ def test_focusing_second_step_moves_cursor(client, auth_headers, test_user):
 # ============ 4. leave clears the cursor ============
 
 
-def test_leave_clears_cursor(client, auth_headers):
+def test_leave_keeps_claim_and_release_clears_it(client, auth_headers):
+    """A claim is an explicit statement of where the user works: leaving
+    the page keeps it (it must survive reloads); DELETE /focus releases it."""
     instance_id = _create_instance(client)
 
     _focus(client, instance_id, 1, headers=auth_headers)
@@ -155,6 +157,13 @@ def test_leave_clears_cursor(client, auth_headers):
         headers=auth_headers,
     )
     assert resp.status_code == 200, resp.text
+
+    state = _state(client, instance_id)
+    assert [r for r in state["roster"] if r["step_order"] is not None] != []
+
+    resp = client.delete(f"/api/procedure-instances/{instance_id}/focus", headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"step_number": None}
 
     state = _state(client, instance_id)
     assert all(s["cursors"] == [] for s in state["steps"])

@@ -586,7 +586,7 @@ def update_instance(
 
 
 class FocusMove(BaseModel):
-    """Move the caller's cursor to a step. Presence, not an event."""
+    """Claim a step: the caller says they are working here. Presence, not an event."""
 
     step_number: int
 
@@ -598,7 +598,9 @@ async def move_focus(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> dict:
-    """Move the caller's cursor. Broadcast to the document; never recorded."""
+    """Claim a step for the caller (one claim per user per work order).
+    Broadcast to the document; never recorded. Reading a step never moves
+    the claim — only this explicit call does."""
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -630,6 +632,21 @@ async def move_focus(
         "step_number": data.step_number,
         "focused_at": focus.focused_at.isoformat(),
     }
+
+
+@router.delete("/{instance_id}/focus")
+async def release_focus(instance_id: int, db: DbSession, user_id: CurrentUserId) -> dict:
+    """Release the caller's claim. Broadcast as a cursor move to nowhere."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    from opal.db.models import User
+
+    user = db.query(User).filter(User.id == user_id).first()
+    clear_focus(db, instance_id, user_id)
+    db.commit()
+    await emit_cursor_moved(instance_id, None, user_id, user.name if user else None)
+    return {"step_number": None}
 
 
 @router.get("/{instance_id}/state")
@@ -1875,9 +1892,9 @@ async def leave_execution(
     leaving_user = next((p for p in participants if p.get("user_id") == user_id), None)
     user_name = leaving_user.get("user_name", "Unknown") if leaving_user else "Unknown"
 
-    # Remove user from participants and drop their cursor
+    # Remove user from participants. The claim stays: it is an explicit
+    # statement of where they work, and survives reloads and closed tabs.
     instance.participants = [p for p in participants if p.get("user_id") != user_id]
-    clear_focus(db, instance_id, user_id)
     db.commit()
 
     # Emit user left event

@@ -6,9 +6,10 @@
  *   mutations only surface through the poll)
  * - in-place row/presence updates (spatial stability: rows swap, the
  *   document never reflows)
- * - presence = focus: the cursor moves with arrows/j/k/click, is broadcast,
- *   and records no event; complete / skip / sign-off / issue act on the
- *   focused step from the docked bar
+ * - focus is local: arrows/j/k/click move the highlight and the docked bar
+ *   and broadcast nothing. Presence is the CLAIM: an explicit button that
+ *   marks the step a user is working on (one per user, released by
+ *   pressing again or by completing the step). Reading never moves it.
  * - issue capture, evidence attach, lightbox, docked bar
  */
 
@@ -382,6 +383,9 @@
     function renderPresence(state) {
         const myId = window.OPAL_USER_ID;
         const roster = state.roster;
+        const me = roster.find((r) => r.user_id === myId);
+        myClaimOrder = me && me.step_order !== null && me.step_order !== undefined ? me.step_order : null;
+        syncClaimButtons();
 
         const railRoster = document.querySelector('[data-rail-roster]');
         if (railRoster) {
@@ -463,23 +467,48 @@
     // ---------- focus (presence) ----------
 
     let focusedOrder = null;
-    let focusPostTimer = null;
 
     function focusableRows() {
         return Array.from(document.querySelectorAll('#exec-doc .doc-step[data-order]'));
     }
 
-    function postFocus(order) {
-        clearTimeout(focusPostTimer);
-        focusPostTimer = setTimeout(async () => {
-            try {
-                await fetch(apiUrl('/focus'), {
-                    method: 'POST', headers: getHeaders(),
-                    body: JSON.stringify({ step_number: order }),
-                });
-            } catch (e) { /* presence is best-effort; the next move retries */ }
-        }, 250);
+    // ---------- claim (presence) ----------
+
+    let myClaimOrder = cfg.myCursorOrder !== null && cfg.myCursorOrder !== undefined
+        ? cfg.myCursorOrder : null;
+
+    function syncClaimButtons() {
+        document.querySelectorAll('[data-claim]').forEach((btn) => {
+            const mine = parseInt(btn.dataset.claim) === myClaimOrder;
+            btn.dataset.variant = mine ? 'primary' : 'outline';
+            btn.setAttribute('aria-pressed', mine ? 'true' : 'false');
+            btn.textContent = mine ? 'CLAIMED' : 'CLAIM';
+            btn.title = mine ? 'Release this step' : 'Mark this step as where you are working';
+        });
     }
+
+    async function postClaim(order) {
+        try {
+            const resp = await fetch(apiUrl('/focus'), {
+                method: 'POST', headers: getHeaders(),
+                body: JSON.stringify({ step_number: order }),
+            });
+            if (resp.ok) { myClaimOrder = order; syncClaimButtons(); pollNow(); }
+            else toastError(null, 'Could not claim step');
+        } catch (e) { toastError(null, 'Network error'); }
+    }
+
+    async function releaseClaim() {
+        try {
+            const resp = await fetch(apiUrl('/focus'), { method: 'DELETE', headers: getHeaders() });
+            if (resp.ok) { myClaimOrder = null; syncClaimButtons(); pollNow(); }
+        } catch (e) { /* best-effort */ }
+    }
+
+    window.toggleClaim = function (order) {
+        if (myClaimOrder === order) releaseClaim();
+        else postClaim(order);
+    };
 
     function setFocus(order, opts = {}) {
         const row = document.getElementById(`step-${order}`);
@@ -494,10 +523,7 @@
         const card = row.closest('.op-card');
         if (card && !card.open) setOpExpanded(card, true, false);
         if (opts.scroll) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        if (moved || opts.force) {
-            refreshDockbar();
-            if (opts.post !== false) postFocus(order);
-        }
+        if (moved || opts.force) refreshDockbar();
     }
 
     window.onStepRowClick = function (order) {
@@ -582,6 +608,7 @@
                 method: 'POST', headers: getHeaders(), body: JSON.stringify(body),
             });
             if (resp.ok) {
+                if (myClaimOrder === parseInt(order)) releaseClaim();
                 await refreshDockbar({ force: true });
                 await refreshStepRow(order);
                 pollNow();
@@ -596,6 +623,7 @@
         try {
             const resp = await fetch(apiUrl(`/steps/${order}/signoff`), { method: 'POST', headers: getHeaders() });
             if (resp.ok) {
+                if (myClaimOrder === parseInt(order)) releaseClaim();
                 await refreshDockbar();
                 await refreshStepRow(order);
                 pollNow();
@@ -1223,7 +1251,6 @@
             if (row) {
                 focusedOrder = initial;
                 row.classList.add('is-focused');
-                postFocus(initial);
             }
         }
 

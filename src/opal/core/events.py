@@ -138,11 +138,13 @@ event_bus = EventBus()
 
 async def emit_cursor_moved(
     instance_id: int,
-    step_number: int,
+    step_number: int | None,
     user_id: int | None = None,
     user_name: str | None = None,
 ) -> None:
-    """Emit a cursor_moved presence event (broadcast only — never recorded)."""
+    """Emit a cursor_moved presence event (broadcast only — never recorded).
+
+    step_number None means the user released their claim."""
     event = Event(
         type=EventType.CURSOR_MOVED,
         data={

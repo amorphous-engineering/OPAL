@@ -100,6 +100,7 @@
                 {{ ex.data_fields_editable({'exec': exec, 'schema': body_schema}) }}
             </div>
             <div class="step-actions">
+                {{ ex.claim_control(step.order) }}
                 <button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>
                 <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
                 {{ ex.redline_control(op.order, op.step_number, op_open_ncs_by_order.get(op.order, [])) }}
@@ -113,6 +114,7 @@
         {% elif inst_status in ['cut', 'in_work'] and step.status == 'awaiting_signoff' %}
         <div class="step-controls">
             <div class="step-actions">
+                {{ ex.claim_control(step.order) }}
                 {% if exec %}<button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>{% endif %}
                 <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
                 <button class="btn" data-variant="primary" data-size="xs" onclick="signoffStep({{ step.order }})">SIGN OFF</button>
