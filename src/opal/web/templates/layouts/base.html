@@ -107,11 +107,13 @@
         </div>
     </header>
 
-    <div class="breadcrumbs">
+    <nav class="breadcrumbs breadcrumb" aria-label="Breadcrumb">
+        <ol>
         {% block breadcrumbs %}
-        <span class="breadcrumb-item">HOME</span>
+        <li><span aria-current="page">HOME</span></li>
         {% endblock %}
-    </div>
+        </ol>
+    </nav>
 
     <main class="main">
         {% block content %}{% endblock %}

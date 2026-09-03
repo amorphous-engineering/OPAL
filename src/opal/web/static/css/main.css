@@ -248,14 +248,22 @@ select option {
     color: var(--text-muted);
 }
 
-.breadcrumb-item::before {
-    content: '>';
+/* ok.crumb emits its own leading separator; the first one is noise. */
+.breadcrumbs > ol > li[aria-hidden="true"]:first-child {
+    display: none;
+}
+
+.breadcrumbs li[aria-hidden="true"] {
     margin: 0 var(--space-sm);
 }
 
-.breadcrumb-item:first-child::before {
-    content: '';
-    margin: 0;
+.breadcrumbs a,
+.breadcrumbs [aria-current="page"] {
+    color: var(--muted-foreground);
+}
+
+.breadcrumbs a:hover {
+    color: var(--foreground);
 }
 
 /* Main */
@@ -335,10 +343,7 @@ select option {
 
 /* Status badges */
 .status {
-    display: inline-block;
-    padding: 2px 6px;
     font-family: var(--font-mono);
-    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -362,11 +367,15 @@ select option {
 }
 
 /* Status badge variant (alias for .status, used in some templates) */
-.status-badge {
+/* PR3-TEMP: three literal status-badge spans lack the .badge class. */
+.status-badge:not(.badge) {
     display: inline-block;
     padding: 2px 6px;
-    font-family: var(--font-mono);
     font-size: 0.75rem;
+}
+
+.status-badge {
+    font-family: var(--font-mono);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -465,8 +474,13 @@ select.select,
     font-size: 0.75rem;
     color: var(--muted-foreground);
 }
-.field + .field {
-    margin-top: var(--space-md);
+.field {
+    margin-bottom: var(--space-md);
+}
+.toolbar .field,
+.data-table .field,
+.field .field {
+    margin-bottom: 0;
 }
 
 /* PR3-TEMP: legacy form classes (form-group/-label/-input/-select/-textarea).
@@ -1057,16 +1071,10 @@ textarea {
     border-color: var(--status-error);
 }
 
-/* OPALkit Badge Component - for tags/categories */
+/* Badges are Basecoat (.badge, data-variant). OPAL adds the register and the
+   state-colour variants. */
 .badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    font-size: 0.75rem;
     font-family: var(--font-mono);
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
 }
 
 .badge-info {

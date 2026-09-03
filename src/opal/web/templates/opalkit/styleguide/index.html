@@ -77,13 +77,13 @@
             {{ ok.btn("DISABLED", attrs="disabled") }}
         </div>
         <pre class="mono" style="margin: 0 0 var(--space-md); padding: var(--space-sm); background: var(--muted); font-size: 0.75rem;">{% raw %}{{ ok.btn("DEFAULT") }}                      → class="btn" data-variant="outline"
-{{ ok.btn("PRIMARY", variant="primary") }}  → class="btn"
+{{ ok.btn("PRIMARY", variant="primary") }}  → class="btn" data-variant="primary"
 {{ ok.btn("DANGER", variant="danger") }}    → class="btn" data-variant="destructive"
 {{ ok.btn("GHOST", variant="ghost") }}      → class="btn" data-variant="ghost"
 {{ ok.btn("SMALL", size="sm") }}            → data-size="sm"{% endraw %}</pre>
         <div style="display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center;">
             <span class="text-muted mono" style="width: 100%;">Raw Basecoat, every variant and size:</span>
-            <button type="button" class="btn">Primary</button>
+            <button type="button" class="btn" data-variant="primary">Primary</button>
             <button type="button" class="btn" data-variant="secondary">Secondary</button>
             <button type="button" class="btn" data-variant="outline">Outline</button>
             <button type="button" class="btn" data-variant="ghost">Ghost</button>
@@ -147,11 +147,11 @@
 {{ ok.field("category", "CATEGORY", type="select", options=categories, placeholder="Select...") }}
 {{ ok.field("notes", "NOTES", type="textarea", rows=4, help="Markdown") }}
 
-<div role="group" class="field">
-  <label for="x">LABEL</label>
-  <input id="x" type="text">
-  <p>help</p>
-</div>{% endraw %}</pre>
+&lt;div role="group" class="field"&gt;
+  &lt;label for="x"&gt;LABEL&lt;/label&gt;
+  &lt;input id="x" type="text"&gt;
+  &lt;p&gt;help&lt;/p&gt;
+&lt;/div&gt;{% endraw %}</pre>
     {% endcall %}
 
     {# ---------------- Toolbar ---------------- #}

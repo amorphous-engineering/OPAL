@@ -1,10 +1,18 @@
 {# OPALkit - Reusable UI component macros for OPAL #}
 {# Import with: {% import 'opalkit/_macros.html' as ok %} #}
+{# Every macro here emits Basecoat markup (class="btn", .field, .badge, .breadcrumb,
+   .dialog, ...). Register — mono, uppercase, state colours — is layered on in
+   static/css/main.css. Legacy classes (btn-primary, form-input, ...) are no
+   longer emitted; the literal usages still in templates ride a PR3-TEMP shim. #}
 
 {# Button macro
    Usage: {{ ok.btn("Save", variant="primary") }}
           {{ ok.btn("Edit", href="/parts/1/edit") }}
           {{ ok.btn("Delete", variant="danger", attrs='onclick="confirmDelete()"') }}
+
+   Variants: default (outline), primary (filled orange), danger (destructive), ghost.
+   Sizes: md -> Basecoat "sm" (28px), sm -> Basecoat "xs" (24px). OPAL's pitch is one
+   step tighter than Lyra's default, so the names shift down one size.
 
    SECURITY: `attrs` is emitted with `|safe` (unescaped) into attribute
    position. It MUST be a hardcoded literal — never interpolate a
@@ -12,14 +20,12 @@
    Pass dynamic data through escaped attributes or a data-* value instead.
 #}
 {% macro btn(text, href=none, variant="default", size="md", type="button", attrs="") %}
-{%- set classes = ["btn"] -%}
-{%- if variant == "primary" %}{% set classes = classes + ["btn-primary"] %}{% endif -%}
-{%- if variant == "danger" %}{% set classes = classes + ["btn-danger"] %}{% endif -%}
-{%- if size == "sm" %}{% set classes = classes + ["btn-sm"] %}{% endif -%}
+{%- set bc_variant = {"default": "outline", "primary": "primary", "danger": "destructive", "ghost": "ghost"}.get(variant, "outline") -%}
+{%- set bc_size = "xs" if size == "sm" else "sm" -%}
 {%- if href -%}
-<a href="{{ href }}" class="{{ classes | join(' ') }}" {{ attrs|safe }}>{{ text }}</a>
+<a href="{{ href }}" class="btn" data-variant="{{ bc_variant }}" data-size="{{ bc_size }}" {{ attrs|safe }}>{{ text }}</a>
 {%- else -%}
-<button type="{{ type }}" class="{{ classes | join(' ') }}" {{ attrs|safe }}>{{ text }}</button>
+<button type="{{ type }}" class="btn" data-variant="{{ bc_variant }}" data-size="{{ bc_size }}" {{ attrs|safe }}>{{ text }}</button>
 {%- endif -%}
 {% endmacro %}
 
@@ -50,7 +56,7 @@
         {%- set variant_class = "status-inactive" -%}
     {%- endif -%}
 {%- endif -%}
-<span class="status-badge {{ variant_class }}">{{ value }}</span>
+<span class="badge status-badge {{ variant_class }}" data-variant="outline">{{ value }}</span>
 {%- endmacro %}
 
 {# Issue STATE register — the one home for every issue index row (issues list,
@@ -74,20 +80,20 @@
           {{ ok.field("category", "Category", type="select", options=categories) }}
 #}
 {% macro field(name, label, type="text", value="", required=false, help=none, placeholder=none, rows=3, options=none, attrs="") %}
-<div class="form-group">
-    <label class="form-label" for="{{ name }}">{{ label }}{% if required %} *{% endif %}</label>
+<div role="group" class="field">
+    <label for="{{ name }}">{{ label }}{% if required %} *{% endif %}</label>
     {%- if type == "textarea" -%}
     <textarea
         id="{{ name }}"
         name="{{ name }}"
-        class="form-textarea"
         rows="{{ rows }}"
         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
         {% if required %}required{% endif %}
+        {% if help %}aria-describedby="{{ name }}-help"{% endif %}
         {{ attrs }}
     >{{ value }}</textarea>
     {%- elif type == "select" -%}
-    <select id="{{ name }}" name="{{ name }}" class="form-select" {% if required %}required{% endif %} {{ attrs }}>
+    <select id="{{ name }}" name="{{ name }}" {% if required %}required{% endif %} {% if help %}aria-describedby="{{ name }}-help"{% endif %} {{ attrs }}>
         {%- if placeholder -%}
         <option value="">{{ placeholder }}</option>
         {%- endif -%}
@@ -104,15 +110,15 @@
         type="{{ type }}"
         id="{{ name }}"
         name="{{ name }}"
-        class="form-input"
         value="{{ value }}"
         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
         {% if required %}required{% endif %}
+        {% if help %}aria-describedby="{{ name }}-help"{% endif %}
         {{ attrs }}
     >
     {%- endif -%}
     {%- if help -%}
-    <small class="form-help">{{ help }}</small>
+    <p id="{{ name }}-help">{{ help }}</p>
     {%- endif -%}
 </div>
 {% endmacro %}
@@ -149,16 +155,18 @@
 {%- endif -%}
 {% endmacro %}
 
-{# Breadcrumb item macro
+{# Breadcrumb item macro — one <li> in the layout's <nav class="breadcrumb"><ol>.
+   Each item carries its own leading separator; CSS hides the first one.
    Usage: {{ ok.crumb("HOME", "/") }}
           {{ ok.crumb("PARTS", "/parts") }}
           {{ ok.crumb(part.internal_pn) }}  {# No href = current page #}
 #}
 {% macro crumb(text, href=none) %}
+<li aria-hidden="true">›</li>
 {%- if href -%}
-<span class="breadcrumb-item"><a href="{{ href }}">{{ text }}</a></span>
+<li><a href="{{ href }}">{{ text }}</a></li>
 {%- else -%}
-<span class="breadcrumb-item">{{ text }}</span>
+<li><span aria-current="page">{{ text }}</span></li>
 {%- endif -%}
 {% endmacro %}
 
@@ -282,7 +290,7 @@
 {% macro badge(text, variant="default", removable=false, onclick=none) %}
 {%- set classes = ["badge"] -%}
 {%- if variant != "default" %}{% set classes = classes + ["badge-" ~ variant] %}{% endif -%}
-<span class="{{ classes | join(' ') }}">{{ text }}{%- if removable -%}<button type="button" onclick="{{ onclick }}" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>{%- endif -%}</span>
+<span class="{{ classes | join(' ') }}" data-variant="{{ 'outline' if variant != 'default' else 'secondary' }}">{{ text }}{%- if removable -%}<button type="button" onclick="{{ onclick }}" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>{%- endif -%}</span>
 {%- endmacro %}
 
 {# Score macro - for risk probability/impact scores
@@ -301,11 +309,11 @@
 {% macro severity(probability, impact) %}
 {%- set score = probability * impact -%}
 {%- if score >= 15 -%}
-<span class="status-badge status-error">HIGH ({{ score }})</span>
+<span class="badge status-badge status-error" data-variant="outline">HIGH ({{ score }})</span>
 {%- elif score >= 8 -%}
-<span class="status-badge status-warn">MEDIUM ({{ score }})</span>
+<span class="badge status-badge status-warn" data-variant="outline">MEDIUM ({{ score }})</span>
 {%- else -%}
-<span class="status-badge status-ok">LOW ({{ score }})</span>
+<span class="badge status-badge status-ok" data-variant="outline">LOW ({{ score }})</span>
 {%- endif -%}
 {% endmacro %}
 
@@ -323,11 +331,10 @@
           {{ ok.toolbar_search(name="search", id="search-input", hx_get="/parts/table", hx_target="#table-body", hx_include="#filter1, #filter2") }}
 #}
 {% macro toolbar_search(name="q", placeholder="Search...", value="", hx_get=none, hx_target=none, hx_trigger="keyup changed delay:300ms, search", hx_include=none, id=none) %}
-<div class="toolbar-search">
+<div class="toolbar-search field">
     <input type="text"
            {% if id %}id="{{ id }}"{% endif %}
            name="{{ name }}"
-           class="form-input"
            placeholder="{{ placeholder }}"
            value="{{ value }}"
            {% if hx_get %}hx-get="{{ hx_get }}"{% endif %}
@@ -346,7 +353,7 @@
 <div class="toolbar-filter">
     <select {% if id %}id="{{ id }}"{% endif %}
             name="{{ name }}"
-            class="form-select"
+            class="select"
             {% if hx_get %}hx-get="{{ hx_get }}"{% endif %}
             {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
             {% if hx_get %}hx-trigger="{{ hx_trigger }}"{% endif %}
@@ -366,9 +373,7 @@
    Usage: {{ ok.confirm_btn("DELETE", message="Delete this part?", action="/api/parts/1", method="DELETE") }}
 #}
 {% macro confirm_btn(text, message, action=none, method="POST", redirect=none, size="md") %}
-{%- set classes = ["btn", "btn-danger"] -%}
-{%- if size == "sm" %}{% set classes = classes + ["btn-sm"] %}{% endif -%}
-<button type="button" class="{{ classes | join(' ') }}" onclick='if(confirm({{ message | tojson }})) { {% if action %}fetch({{ action | tojson }}, {method: {{ method | tojson }}, headers: {"Content-Type": "application/json"}}).then(r => { if(r.ok) { {% if redirect %}window.location.href={{ redirect | tojson }}{% else %}window.location.reload(){% endif %} } else { r.json().then(e => alert(e.detail || "Operation failed")) } }){% endif %} }'>{{ text }}</button>
+<button type="button" class="btn" data-variant="destructive" data-size="{{ 'xs' if size == 'sm' else 'sm' }}" onclick='if(confirm({{ message | tojson }})) { {% if action %}fetch({{ action | tojson }}, {method: {{ method | tojson }}, headers: {"Content-Type": "application/json"}}).then(r => { if(r.ok) { {% if redirect %}window.location.href={{ redirect | tojson }}{% else %}window.location.reload(){% endif %} } else { r.json().then(e => alert(e.detail || "Operation failed")) } }){% endif %} }'>{{ text }}</button>
 {%- endmacro %}
 
 {# Panel macro - full panel wrapper
@@ -400,26 +405,23 @@
 </table>
 {% endmacro %}
 
-{# Modal macro - dialog wrapper
+{# Modal macro - native <dialog> styled by Basecoat.
    Usage: {% call ok.modal("add-modal", "ADD ITEM") %}...form content...{% endcall %}
+   Open:  document.getElementById('add-modal').showModal()
+   Close: this.closest('dialog').close()  (backdrop click and Esc also close)
 #}
 {% macro modal(id, title) %}
-<div id="{{ id }}" class="ok-modal" style="display: none;">
-    <div class="ok-modal-backdrop" onclick="document.getElementById('{{ id }}').style.display='none'"></div>
-    <div class="ok-modal-content">
-        <div class="panel">
-            <div class="panel-header">
-                <span>{{ title }}</span>
-                <div class="panel-header-actions">
-                    <button type="button" class="btn btn-sm" onclick="document.getElementById('{{ id }}').style.display='none'">X</button>
-                </div>
-            </div>
-            <div class="panel-body">
-                {{ caller() }}
-            </div>
-        </div>
+<dialog id="{{ id }}" class="dialog" aria-labelledby="{{ id }}-title" onclick="if (event.target === this) this.close()">
+    <div>
+        <header>
+            <h2 id="{{ id }}-title" class="mono">{{ title }}</h2>
+        </header>
+        <section>
+            {{ caller() }}
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 {% endmacro %}
 
 {# Grid macro - responsive grid wrapper

@@ -44,6 +44,7 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 - `/api/*` — JSON API via FastAPI route modules in `src/opal/api/routes/`
 - `/*` — HTMX web UI, all routes in single file `src/opal/web/routes.py`
 - Templates in `src/opal/web/templates/` (Jinja2)
+- UI components are [Basecoat](https://basecoatui.com) (Lyra style), vendored in `src/opal/web/static/vendor/basecoat/` — no CDN, no Tailwind toolchain. Basecoat is entirely inside `@layer`, so every rule in `static/css/main.css` wins over it; that file holds only tokens, layout, register (mono/uppercase) and domain sections. Emit components through the `ok.*` macros in `opalkit/_macros.html`; `/styleguide` is the acceptance page. Theme: `data-theme` is the source of truth, `html.dark` is derived from it in `layouts/base.html`.
 
 ### Code organization
 - `src/opal/api/routes/` — FastAPI JSON API endpoints
