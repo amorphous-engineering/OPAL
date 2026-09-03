@@ -7,14 +7,15 @@
 <div class="exec-doc-layout" id="exec-doc-layout">
     <button class="btn rail-toggle" data-variant="outline" data-size="xs" onclick="toggleRail()" aria-label="Issues and attachments">≡</button>
     <aside class="exec-rail-left" id="exec-rail-left" aria-label="Online and operations">
-        <div class="rail-section">
-            <div class="rail-head mono">ONLINE</div>
+        <section class="accordion rail-accordion" data-multiple>
+        <details class="rail-section" open>
+            <summary class="rail-head mono">ONLINE</summary>
             <div class="rail-roster" data-rail-roster>
                 <div class="empty-line mono">Online — none</div>
             </div>
-        </div>
-        <div class="rail-section">
-            <div class="rail-head mono">OPERATIONS</div>
+        </details>
+        <details class="rail-section" open>
+            <summary class="rail-head mono">OPERATIONS</summary>
             <div class="rail-minimap" data-minimap>
                 {% for op_data in ops + contingency_ops %}
                 {% set op_terminal = op_data.step.status in ['completed', 'signed_off', 'skipped'] %}
@@ -25,9 +26,10 @@
                 </div>
                 {% endfor %}
             </div>
-        </div>
+        </details>
+        </section>
     </aside>
-    <div class="exec-doc" id="exec-doc">
+    <section class="exec-doc accordion" id="exec-doc" data-multiple>
         {% for op_data in ops %}
         {% include 'executions/_op_card.html' %}
         {% endfor %}
@@ -40,7 +42,7 @@
         {% if not ops and not contingency_ops %}
         <div class="empty-line mono">Operations — none</div>
         {% endif %}
-    </div>
+    </section>
     <aside class="exec-rail" id="exec-rail" aria-label="Issues, attachments, reference">
         {% include 'executions/_rail.html' %}
     </aside>

@@ -39,6 +39,6 @@ def test_execution_runner_renders_safety_fields(web_client):
 
     runner = web_client.get(f"/executions/{inst['id']}?tab=operations&op=1")
     assert runner.status_code == 200
-    assert "CAUTION: HIGH PRESSURE GAS" in runner.text
+    assert "<h2>CAUTION</h2><section>HIGH PRESSURE GAS</section>" in runner.text
     assert "Stand clear of vent" in runner.text
     assert "MFG-LEAD" in runner.text

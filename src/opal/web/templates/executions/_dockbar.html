@@ -26,7 +26,7 @@
             {% endif %}
         </div>
         {% if bar_step.caution %}
-        <div class="caution-block dockbar-caution">CAUTION: {{ bar_step.caution }}</div>
+        <div class="alert caution-block dockbar-caution" data-variant="destructive"><h2>CAUTION</h2><section>{{ bar_step.caution }}</section></div>
         {% endif %}
         {% if workable and bar_step.exec and not bar_step.has_children %}
         <div class="dockbar-fields" id="dockbar-fields">
@@ -43,18 +43,20 @@
             {% if actionable %}
             <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ bar_step.order }}, {{ bar_step.number | tojson }})'>ISSUE</button>
             {% if menu_skip or menu_consume or menu_redline %}
-            <div class="dockbar-overflow">
-                <button class="btn" data-variant="outline" data-size="xs" onclick="toggleDockbarMenu(event)" aria-label="More actions">···</button>
-                <div class="dockbar-menu" id="dockbar-menu" hidden>
-                    {% if menu_skip %}
-                    {{ ex.skip_control(bar_step.order, bar_step.title, bar_step.skip_blockers, menu=true) }}
-                    {% endif %}
-                    {% if menu_consume %}
-                    <button class="btn" data-variant="outline" data-size="xs" onclick="hideDockbarMenu(); consumeStepParts({{ bar_step.order }})">CONSUME PARTS</button>
-                    {% endif %}
-                    {% if menu_redline %}
-                    {{ ex.redline_control(bar_step.op_order, bar_step.op_number, bar_step.op_open_ncs, before='hideDockbarMenu(); ') }}
-                    {% endif %}
+            <div class="dropdown-menu dockbar-overflow" id="dockbar-overflow">
+                <button type="button" class="btn" data-variant="outline" data-size="xs" id="dockbar-menu-trigger" aria-haspopup="menu" aria-controls="dockbar-menu" aria-expanded="false" aria-label="More actions">···</button>
+                <div id="dockbar-menu-popover" data-popover aria-hidden="true" data-side="top" data-align="end">
+                    <div role="menu" id="dockbar-menu" aria-labelledby="dockbar-menu-trigger">
+                        {% if menu_skip %}
+                        {{ ex.skip_control(bar_step.order, bar_step.title, bar_step.skip_blockers, menu=true) }}
+                        {% endif %}
+                        {% if menu_consume %}
+                        <div role="menuitem" onclick="consumeStepParts({{ bar_step.order }})">CONSUME PARTS</div>
+                        {% endif %}
+                        {% if menu_redline %}
+                        {{ ex.redline_control(bar_step.op_order, bar_step.op_number, bar_step.op_open_ncs, menu=true) }}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endif %}

@@ -1,9 +1,9 @@
 {# The rail: issues/holds, attachments (evidence), reference docs.
    Heavy content renders here, never inline in the document (Abby's rule). #}
 {% import 'opalkit/_macros.html' as ok %}
-<div class="exec-rail-content" id="exec-rail-content">
-    <div class="rail-section">
-        <div class="rail-head mono">ISSUES / HOLDS</div>
+<section class="exec-rail-content accordion rail-accordion" id="exec-rail-content" data-multiple>
+    <details class="rail-section" open>
+        <summary class="rail-head mono">ISSUES / HOLDS</summary>
         {% set hold_entries = exec_state.holds %}
         {% set hold_issue_ids = hold_entries | map(attribute='issue_id') | list %}
         {% if hold_entries %}
@@ -36,10 +36,10 @@
         {% if not hold_entries and not other_issues %}
         {{ ok.empty_line("Issues") }}
         {% endif %}
-    </div>
+    </details>
 
-    <div class="rail-section">
-        <div class="rail-head mono">ATTACHMENTS</div>
+    <details class="rail-section" open>
+        <summary class="rail-head mono">ATTACHMENTS</summary>
         {% set wo_attachments = [] %}
         {% for att in instance.attachments %}{% if not att.step_execution_id %}{% set _ = wo_attachments.append(att) %}{% endif %}{% endfor %}
         {% set step_orders = {} %}
@@ -94,10 +94,10 @@
             <button class="btn" data-variant="outline" data-size="xs" onclick="showAttachModal(null, 'WO')">+ ATTACH</button>
         </div>
         {% endif %}
-    </div>
+    </details>
 
-    <div class="rail-section">
-        <div class="rail-head mono">REFERENCE DOCS</div>
+    <details class="rail-section" open>
+        <summary class="rail-head mono">REFERENCE DOCS</summary>
         {% if reference_attachments %}
         <table class="data-table rail-table">
             <tbody>
@@ -112,5 +112,5 @@
         {% else %}
         {{ ok.empty_line("Reference documents") }}
         {% endif %}
-    </div>
-</div>
+    </details>
+</section>

@@ -10,10 +10,13 @@
 {% if op_data.is_ad_hoc and op.ad_hoc_issue %}
 <a class="exec-redline-banner mono" href="/issues/{{ op.ad_hoc_issue.id }}" title="Open NC {{ op.ad_hoc_issue.issue_number }}">REDLINE — {{ op.ad_hoc_issue.issue_number }}</a>
 {% endif %}
-<section class="op-card{% if op_terminal %} is-collapsed is-done{% endif %}{% if op_data.is_ad_hoc %} is-redline{% endif %}{% if op.is_contingency %} is-contingency{% endif %}"
-         id="op-{{ op.order }}" data-op-order="{{ op.order }}" data-op-status="{{ op.status }}">
-    <header class="op-card-head" onclick="toggleOp({{ op.order }})">
-        <span class="op-card-caret mono" data-caret>{{ '▸' if op_terminal else '▾' }}</span>
+{# One <details> in the document accordion (data-multiple). Open state is the
+   native `open` attribute: nothing loads collapsed unless it is complete. #}
+<details class="op-card{% if op_terminal %} is-done{% endif %}{% if op_data.is_ad_hoc %} is-redline{% endif %}{% if op.is_contingency %} is-contingency{% endif %}"
+         id="op-{{ op.order }}" data-op-order="{{ op.order }}" data-op-status="{{ op.status }}"{% if not op_terminal %} open{% endif %}
+         ontoggle="window.onOpToggle && onOpToggle(this)">
+    <summary class="op-card-head">
+        <span class="op-card-caret mono" aria-hidden="true">▸</span>
         <span class="op-card-num mono">OP {{ op.step_number }}</span>
         <span class="op-card-title">{{ op.title }}</span>
         {% if op.is_contingency %}{{ ok.status("CONTINGENCY", "warn") }}{% endif %}
@@ -30,10 +33,10 @@
             <span class="op-card-blockline mono text-yellow">WAITING ON OP {{ op_gated | join(', ') }}</span>
             {% endif %}
         {% endif %}
-    </header>
-    <div class="op-card-body" {% if op_terminal %}hidden{% endif %}>
+    </summary>
+    <section class="op-card-body">
         {% if op_vs.get('caution') %}
-        <div class="caution-block">CAUTION: {{ op_vs.get('caution') }}</div>
+        <div class="alert caution-block" data-variant="destructive"><h2>CAUTION</h2><section>{{ op_vs.get('caution') }}</section></div>
         {% endif %}
         {% if op_data.sub_steps %}
             {% if op.instructions %}
@@ -48,5 +51,5 @@
             {% set row_is_op = true %}
             {% include 'executions/_step_row.html' %}
         {% endif %}
-    </div>
-</section>
+    </section>
+</details>

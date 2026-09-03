@@ -55,9 +55,14 @@
    the route context, which already excludes ad-hoc/redline ops); the one JS
    entry point is showRedlineModal. Renders in the step action rows and the
    dockbar overflow. #}
-{% macro redline_control(op_order, op_number, open_ncs, before='') %}
+{% macro redline_control(op_order, op_number, open_ncs, menu=false) %}
 {%- if open_ncs %}
-<button class="btn" data-variant="outline" data-size="xs" onclick='{{ before }}showRedlineModal({{ op_order }}, {{ op_number | tojson }}, {{ open_ncs | map(attribute="id") | list | tojson }}, {{ open_ncs | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
+{%- set call = 'showRedlineModal(' ~ op_order ~ ', ' ~ (op_number | tojson) ~ ', ' ~ (open_ncs | map(attribute="id") | list | tojson) ~ ', ' ~ (open_ncs | map(attribute="issue_number") | list | tojson) ~ ')' %}
+{%- if menu %}
+<div role="menuitem" onclick='{{ call }}'>+ REDLINE</div>
+{%- else %}
+<button class="btn" data-variant="outline" data-size="xs" onclick='{{ call }}'>+ REDLINE</button>
+{%- endif %}
 {%- endif %}
 {% endmacro %}
 
@@ -65,9 +70,15 @@
    `menu` renders the dockbar-overflow variant. #}
 {% macro skip_control(order, title, blockers, menu=false) %}
 {%- if blockers %}
-<span class="gated-control"><button class="btn" data-variant="outline" data-size="xs" disabled>SKIP</button>{{ gate_reason(blockers) }}</span>
+{%- if menu %}
+<div role="menuitem" aria-disabled="true">SKIP {{ gate_reason(blockers) }}</div>
 {%- else %}
-<button class="btn" data-variant="outline" data-size="xs" onclick='{% if menu %}hideDockbarMenu(); {% endif %}showSkipModal({{ order }}, {{ title | tojson }})'>SKIP</button>
+<span class="gated-control"><button class="btn" data-variant="outline" data-size="xs" disabled>SKIP</button>{{ gate_reason(blockers) }}</span>
+{%- endif %}
+{%- elif menu %}
+<div role="menuitem" onclick='showSkipModal({{ order }}, {{ title | tojson }})'>SKIP</div>
+{%- else %}
+<button class="btn" data-variant="outline" data-size="xs" onclick='showSkipModal({{ order }}, {{ title | tojson }})'>SKIP</button>
 {%- endif %}
 {% endmacro %}
 
@@ -165,8 +176,8 @@
 {% set schema = my_step.schema %}
 {% if schema and schema.get('fields') %}
 {% for field in schema.get('fields', []) %}
-<div class="bar-field">
-    <label class="bar-field-label mono">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
+<div role="group" class="field bar-field">
+    <label class="bar-field-label">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
     {% set raw = exec.data_captured[field.name] if exec.data_captured and exec.data_captured[field.name] is defined else none %}
     {% if field.type == 'text' %}
     <input type="text" class="input" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}{% if raw is not none %} value="{{ raw }}"{% endif %} placeholder="{{ field.get('placeholder', '') }}">

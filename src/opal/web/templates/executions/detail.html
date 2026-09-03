@@ -22,9 +22,13 @@
     <a class="exec-head-proc" href="/procedures/{{ instance.procedure_id }}">{{ instance.procedure.name }} <span class="mono text-muted">v{{ version.version_number if version else '—' }}</span></a>
     {{ ok.status(inst_status | upper | replace('_', ' ')) }}
     <span class="exec-head-progress mono" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span>
-    <span class="exec-progressbar"><span class="exec-progressbar-fill" data-progress-fill
-        style="width: {{ (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 }}%"></span></span>
-    <span class="exec-online mono" data-online onclick="toggleRosterPop(event)">0 ONLINE</span>
+    {% set pct = (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 %}
+    <div class="progress exec-progressbar" role="progressbar" aria-label="Steps complete" aria-valuenow="{{ pct | round | int }}" aria-valuemin="0" aria-valuemax="100"><span data-progress-fill style="width: {{ pct }}%"></span></div>
+    {# Roster popover — the only roster when the rails are hidden. #}
+    <div class="popover exec-online-pop">
+        <button type="button" class="btn exec-online" data-variant="outline" data-size="xs" data-online aria-expanded="false" aria-controls="exec-roster-pop">0 ONLINE</button>
+        <div id="exec-roster-pop" data-popover aria-hidden="true" data-side="bottom" data-align="start" class="part-readout mono"></div>
+    </div>
     <span class="exec-head-spacer"></span>
     <span class="exec-head-actions">
         {% if inst_status == 'completed' %}
@@ -34,15 +38,10 @@
         <button class="btn" data-variant="destructive" data-size="xs" onclick="abortExecution()">ABORT</button>
         {% endif %}
         <button class="btn" data-variant="outline" data-size="xs" id="dockbar-toggle" onclick="toggleDockbar()" title="Docked current-step bar">BAR</button>
-        <button class="btn" data-variant="outline" data-size="xs" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">···</button>
-    </span>
-</div>
-
-{# Roster popover — the only roster when the rails are hidden. #}
-<div class="exec-roster-pop part-readout mono" id="exec-roster-pop" hidden></div>
-
-{# Compact meta readout — every fact the META tab held. #}
-<div class="exec-meta-popover part-readout mono" id="exec-meta-popover" hidden>
+        {# Compact meta readout — every fact the META tab held. #}
+        <div class="popover">
+            <button type="button" class="btn" data-variant="outline" data-size="xs" id="exec-meta-btn" aria-expanded="false" aria-controls="exec-meta-popover" aria-label="Execution facts">···</button>
+            <div id="exec-meta-popover" data-popover aria-hidden="true" data-side="bottom" data-align="end" class="exec-meta-popover part-readout mono">
     <div class="ro-row"><span class="ro-label">STATUS</span><span>{{ inst_status | upper | replace('_', ' ') }}</span></div>
     <div class="ro-row"><span class="ro-label">PROCEDURE</span><span>{{ instance.procedure.name }}</span></div>
     <div class="ro-row"><span class="ro-label">VERSION</span><span>v{{ version.version_number if version else '—' }}</span></div>
@@ -55,10 +54,16 @@
     <div class="ro-row"><span class="ro-label">VERSION CREATED</span><span>{% if version %}{{ version.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z{% else %}—{% endif %}</span></div>
     {% if instance.scheduled_start_at %}<div class="ro-row"><span class="ro-label">SCHEDULED START</span><span>{{ instance.scheduled_start_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
     {% if instance.target_completion_at %}<div class="ro-row"><span class="ro-label">TARGET COMPLETION</span><span>{{ instance.target_completion_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z</span></div>{% endif %}
+            </div>
+        </div>
+    </span>
 </div>
 
-{# Tab navigation — the document is the landing; META and OPERATIONS are gone. #}
-<div class="exec-tabs" role="tablist">
+{# Tab navigation — Basecoat tabs; every tab controls the one HTMX-swapped
+   panel, so Basecoat carries aria-selected and keyboard nav while HTMX
+   carries the content. The document is the landing. #}
+<div class="tabs exec-tabbar" id="exec-tabs">
+    <nav role="tablist" aria-orientation="horizontal" data-variant="line">
     {# BOM renders when parts go IN (kit_relevant); KITTING also hosts
        PRODUCTIONS + FINALIZE, so it renders when parts go in OR out
        (material_relevant) — an irrelevant empty section is absent. #}
@@ -67,21 +72,18 @@
     {% set tabs = tabs + [('issues', 'ISSUES' ~ (' (' ~ linked_issues|length ~ ')' if linked_issues else ''))] %}
     {% if material_relevant %}{% set tabs = tabs + [('kitting', 'KITTING')] %}{% endif %}
     {% for slug, label in tabs %}
-    <a href="?tab={{ slug }}"
-       class="exec-tab{% if tab == slug %} active{% endif %}"
-       hx-get="?tab={{ slug }}"
-       hx-target=".exec-tab-content"
-       hx-select=".exec-tab-content > *"
-       hx-swap="innerHTML scroll:false"
-       hx-push-url="true"
-       hx-on:click="this.parentNode.querySelectorAll('.exec-tab').forEach(el => el.classList.remove('active')); this.classList.add('active')">
-        {{ label }}
-    </a>
+    <button type="button" role="tab" id="exec-tab-{{ slug }}" class="exec-tab"
+            aria-controls="exec-tab-content" aria-selected="{{ 'true' if tab == slug else 'false' }}" tabindex="{{ '0' if tab == slug else '-1' }}"
+            hx-get="?tab={{ slug }}"
+            hx-target="#exec-tab-content"
+            hx-select="#exec-tab-content > *"
+            hx-swap="innerHTML scroll:false"
+            hx-push-url="?tab={{ slug }}">{{ label }}</button>
     {% endfor %}
-</div>
-
-<div class="exec-tab-content">
-    {% include 'executions/tabs/' ~ tab ~ '.html' %}
+    </nav>
+    <div class="exec-tab-content" id="exec-tab-content" role="tabpanel" aria-labelledby="exec-tab-{{ tab }}" tabindex="-1">
+        {% include 'executions/tabs/' ~ tab ~ '.html' %}
+    </div>
 </div>
 
 {# Docked bar — all controls for the focused step. #}
@@ -90,176 +92,172 @@
 {# ============ Modals ============ #}
 
 <!-- Issue capture (creates an NC with containment) -->
-<div id="anomaly-modal" class="execdoc-modal" hidden>
-    <div class="execdoc-modal-box">
-        <div class="panel">
-            <div class="panel-header">
-                <span>ANOMALY</span>
-                {# The raised step is a labeled fact — captured implicitly
-                   from the row the ISSUE control was pressed on. #}
-                <span class="mono text-muted">RAISED AT <span id="anomaly-step-label"></span></span>
-            </div>
-            <div class="panel-body">
-                <form id="anomaly-form" onsubmit="submitAnomaly(event)">
-                    <input type="hidden" id="anomaly-step" name="step_number">
+<dialog id="anomaly-modal" class="dialog" aria-labelledby="anomaly-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 560px;">
+        <header>
+            <h2 id="anomaly-modal-title" class="mono">ANOMALY</h2>
+            <p><span class="mono text-muted">RAISED AT <span id="anomaly-step-label"></span></p>
+        </header>
+        <section>
+            <form id="anomaly-form" onsubmit="submitAnomaly(event)">
+                <input type="hidden" id="anomaly-step" name="step_number">
+                <div role="group" class="field">
+                    <label class="label" for="anomaly-title">TITLE *</label>
+                    <input type="text" id="anomaly-title" class="input" maxlength="255" required>
+                </div>
+                <div class="anomaly-pair">
                     <div role="group" class="field">
-                        <label class="label" for="anomaly-title">TITLE *</label>
-                        <input type="text" id="anomaly-title" class="input" maxlength="255" required>
-                    </div>
-                    <div class="anomaly-pair">
-                        <div role="group" class="field">
-                            <label class="label" for="anomaly-should-be">SHOULD BE</label>
-                            <input type="text" id="anomaly-should-be" class="input">
-                        </div>
-                        <div role="group" class="field">
-                            <label class="label" for="anomaly-is">IS</label>
-                            <input type="text" id="anomaly-is" class="input">
-                        </div>
-                    </div>
-                    <div class="anomaly-pair">
-                        <div role="group" class="field">
-                            <label class="label" for="anomaly-priority">PRIORITY</label>
-                            <select id="anomaly-priority" class="select">
-                                <option value="low">LOW</option>
-                                <option value="medium" selected>MEDIUM</option>
-                                <option value="high">HIGH</option>
-                                <option value="critical">CRITICAL</option>
-                            </select>
-                        </div>
-                        <div role="group" class="field">
-                            <label class="label" for="anomaly-containment">CONTAINMENT</label>
-                            <select id="anomaly-containment" class="select">
-                                <option value="step" selected>STEP — holds this step's COMPLETE</option>
-                                <option value="op">OP — holds the operation's COMPLETE</option>
-                                <option value="wo">WO — holds work order close-out</option>
-                                <option value="advisory">ADVISORY — holds nothing</option>
-                            </select>
-                        </div>
+                        <label class="label" for="anomaly-should-be">SHOULD BE</label>
+                        <input type="text" id="anomaly-should-be" class="input">
                     </div>
                     <div role="group" class="field">
-                        {# The boundary is independent of the raised step:
-                           raise at 5.3, resolve by 6.2 holds 6.2's COMPLETE
-                           too (raised_step_id + containment_step_id). #}
-                        <label class="label" for="anomaly-boundary" title="Blocks that step's COMPLETE until disposition">RESOLVE BY</label>
-                        <select id="anomaly-boundary" class="select" title="Blocks that step's COMPLETE until disposition">
-                            <option value="" selected>this step — holds its COMPLETE</option>
-                            {% for op_data in ops %}{% for sub in (op_data.sub_steps or [op_data.step]) %}{% if sub.status == 'pending' %}
-                            <option value="{{ sub.order }}">{{ sub.step_number if '.' in sub.step_number else (op_data.step.step_number ~ ('.' ~ sub.step_number if sub.order != op_data.step.order else '')) }} {{ sub.title }}</option>
-                            {% endif %}{% endfor %}{% endfor %}
+                        <label class="label" for="anomaly-is">IS</label>
+                        <input type="text" id="anomaly-is" class="input">
+                    </div>
+                </div>
+                <div class="anomaly-pair">
+                    <div role="group" class="field">
+                        <label class="label" for="anomaly-priority">PRIORITY</label>
+                        <select id="anomaly-priority" class="select">
+                            <option value="low">LOW</option>
+                            <option value="medium" selected>MEDIUM</option>
+                            <option value="high">HIGH</option>
+                            <option value="critical">CRITICAL</option>
                         </select>
                     </div>
                     <div role="group" class="field">
-                        <label class="label" for="anomaly-photos">EVIDENCE</label>
-                        <input type="file" id="anomaly-photos" class="input" accept="image/*" capture="environment" multiple>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="anomaly-assign">ASSIGN</label>
-                        <select id="anomaly-assign" class="select">
-                            <option value="">—</option>
-                            {% for u in active_users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+                        <label class="label" for="anomaly-containment">CONTAINMENT</label>
+                        <select id="anomaly-containment" class="select">
+                            <option value="step" selected>STEP — holds this step's COMPLETE</option>
+                            <option value="op">OP — holds the operation's COMPLETE</option>
+                            <option value="wo">WO — holds work order close-out</option>
+                            <option value="advisory">ADVISORY — holds nothing</option>
                         </select>
                     </div>
-                    <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideAnomalyModal()">CANCEL</button>
-                        <button type="submit" class="btn" data-variant="primary" data-size="sm">RAISE</button>
-                    </div>
-                </form>
-                <div id="anomaly-error" class="text-red" hidden></div>
-            </div>
-        </div>
+                </div>
+                <div role="group" class="field">
+                    {# The boundary is independent of the raised step:
+                       raise at 5.3, resolve by 6.2 holds 6.2's COMPLETE
+                       too (raised_step_id + containment_step_id). #}
+                    <label class="label" for="anomaly-boundary" title="Blocks that step's COMPLETE until disposition">RESOLVE BY</label>
+                    <select id="anomaly-boundary" class="select" title="Blocks that step's COMPLETE until disposition">
+                        <option value="" selected>this step — holds its COMPLETE</option>
+                        {% for op_data in ops %}{% for sub in (op_data.sub_steps or [op_data.step]) %}{% if sub.status == 'pending' %}
+                        <option value="{{ sub.order }}">{{ sub.step_number if '.' in sub.step_number else (op_data.step.step_number ~ ('.' ~ sub.step_number if sub.order != op_data.step.order else '')) }} {{ sub.title }}</option>
+                        {% endif %}{% endfor %}{% endfor %}
+                    </select>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="anomaly-photos">EVIDENCE</label>
+                    <input type="file" id="anomaly-photos" class="input" accept="image/*" capture="environment" multiple>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="anomaly-assign">ASSIGN</label>
+                    <select id="anomaly-assign" class="select">
+                        <option value="">—</option>
+                        {% for u in active_users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="execdoc-modal-actions">
+                    <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideAnomalyModal()">CANCEL</button>
+                    <button type="submit" class="btn" data-variant="primary" data-size="sm">RAISE</button>
+                </div>
+            </form>
+            <div id="anomaly-error" class="text-red" hidden></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Skip -->
-<div id="skip-modal" class="execdoc-modal" hidden>
-    <div class="execdoc-modal-box execdoc-modal-sm">
-        <div class="panel">
-            <div class="panel-header">SKIP STEP</div>
-            <div class="panel-body">
-                <form id="skip-form" onsubmit="submitSkip(event)">
-                    <input type="hidden" id="skip-step" name="step_number">
-                    <p class="skip-target">Skip <strong id="skip-step-title"></strong></p>
-                    <div role="group" class="field">
-                        <label class="label" for="skip-reason">REASON</label>
-                        <textarea id="skip-reason" class="textarea" rows="2"></textarea>
-                    </div>
-                    <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideSkipModal()">CANCEL</button>
-                        <button type="submit" class="btn text-yellow" data-variant="outline" data-size="sm">SKIP STEP</button>
-                    </div>
-                </form>
-                <div id="skip-error" class="text-red" hidden></div>
-            </div>
-        </div>
+<dialog id="skip-modal" class="dialog" aria-labelledby="skip-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 440px;">
+        <header>
+            <h2 id="skip-modal-title" class="mono">SKIP STEP</h2>
+        </header>
+        <section>
+            <form id="skip-form" onsubmit="submitSkip(event)">
+                <input type="hidden" id="skip-step" name="step_number">
+                <p class="skip-target">Skip <strong id="skip-step-title"></strong></p>
+                <div role="group" class="field">
+                    <label class="label" for="skip-reason">REASON</label>
+                    <textarea id="skip-reason" class="textarea" rows="2"></textarea>
+                </div>
+                <div class="execdoc-modal-actions">
+                    <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideSkipModal()">CANCEL</button>
+                    <button type="submit" class="btn text-yellow" data-variant="outline" data-size="sm">SKIP STEP</button>
+                </div>
+            </form>
+            <div id="skip-error" class="text-red" hidden></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Attach (execution capture: evidence) -->
-<div id="attach-modal" class="execdoc-modal" hidden>
-    <div class="execdoc-modal-box execdoc-modal-sm">
-        <div class="panel">
-            <div class="panel-header">
-                <span>ATTACH</span>
-                <span class="mono text-muted" id="attach-step-label"></span>
-            </div>
-            <div class="panel-body">
-                <form id="attach-form" onsubmit="submitAttach(event)">
-                    <input type="hidden" id="attach-se-id">
-                    <div role="group" class="field">
-                        <input type="file" id="attach-file" class="input" capture="environment" multiple required>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="attach-note">NOTE</label>
-                        <input type="text" id="attach-note" class="input" maxlength="500">
-                    </div>
-                    <label class="bar-check" id="attach-closeout-row">
-                        <input type="checkbox" id="attach-closeout"> <span class="mono">CLOSEOUT</span>
-                    </label>
-                    <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideAttachModal()">CANCEL</button>
-                        <button type="submit" class="btn" data-variant="primary" data-size="sm">UPLOAD</button>
-                    </div>
-                </form>
-                <div id="attach-error" class="text-red" hidden></div>
-            </div>
-        </div>
+<dialog id="attach-modal" class="dialog" aria-labelledby="attach-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 440px;">
+        <header>
+            <h2 id="attach-modal-title" class="mono">ATTACH</h2>
+            <p><span class="mono text-muted" id="attach-step-label"></span></p>
+        </header>
+        <section>
+            <form id="attach-form" onsubmit="submitAttach(event)">
+                <input type="hidden" id="attach-se-id">
+                <div role="group" class="field">
+                    <input type="file" id="attach-file" class="input" capture="environment" multiple required>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="attach-note">NOTE</label>
+                    <input type="text" id="attach-note" class="input" maxlength="500">
+                </div>
+                <label class="bar-check" id="attach-closeout-row">
+                    <input type="checkbox" id="attach-closeout"> <span class="mono">CLOSEOUT</span>
+                </label>
+                <div class="execdoc-modal-actions">
+                    <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideAttachModal()">CANCEL</button>
+                    <button type="submit" class="btn" data-variant="primary" data-size="sm">UPLOAD</button>
+                </div>
+            </form>
+            <div id="attach-error" class="text-red" hidden></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Redline Op -->
-<div id="redline-modal" class="execdoc-modal" hidden>
-    <div class="execdoc-modal-box">
-        <div class="panel">
-            <div class="panel-header">
-                <span>ADD REDLINE OP</span>
-                <span class="mono text-muted" id="redline-host-label"></span>
-            </div>
-            <div class="panel-body">
-                <form id="redline-form" onsubmit="submitRedline(event)">
-                    <input type="hidden" id="redline-host-order">
-                    <div role="group" class="field">
-                        <label class="label" for="redline-issue-id">AUTHORIZING NC</label>
-                        <select id="redline-issue-id" class="select" required></select>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="redline-title">REDLINE OP TITLE</label>
-                        <input type="text" id="redline-title" class="input" maxlength="255" required>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label">SUB-STEPS</label>
-                        <div id="redline-steps"></div>
-                        <button type="button" class="btn" data-variant="outline" data-size="xs" onclick="addRedlineStep()">+ ADD STEP</button>
-                    </div>
-                    <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideRedlineModal()">CANCEL</button>
-                        <button type="submit" class="btn" data-variant="primary" data-size="sm">CREATE REDLINE</button>
-                    </div>
-                </form>
-                <div id="redline-error" class="text-red" hidden></div>
-            </div>
-        </div>
+<dialog id="redline-modal" class="dialog" aria-labelledby="redline-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 560px;">
+        <header>
+            <h2 id="redline-modal-title" class="mono">ADD REDLINE OP</h2>
+            <p><span class="mono text-muted" id="redline-host-label"></span></p>
+        </header>
+        <section>
+            <form id="redline-form" onsubmit="submitRedline(event)">
+                <input type="hidden" id="redline-host-order">
+                <div role="group" class="field">
+                    <label class="label" for="redline-issue-id">AUTHORIZING NC</label>
+                    <select id="redline-issue-id" class="select" required></select>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="redline-title">REDLINE OP TITLE</label>
+                    <input type="text" id="redline-title" class="input" maxlength="255" required>
+                </div>
+                <div role="group" class="field">
+                    <label class="label">SUB-STEPS</label>
+                    <div id="redline-steps"></div>
+                    <button type="button" class="btn" data-variant="outline" data-size="xs" onclick="addRedlineStep()">+ ADD STEP</button>
+                </div>
+                <div class="execdoc-modal-actions">
+                    <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideRedlineModal()">CANCEL</button>
+                    <button type="submit" class="btn" data-variant="primary" data-size="sm">CREATE REDLINE</button>
+                </div>
+            </form>
+            <div id="redline-error" class="text-red" hidden></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Lightbox -->
 <div id="lightbox" class="execdoc-lightbox" hidden onclick="closeLightbox()">

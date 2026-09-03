@@ -48,23 +48,17 @@
     }
 
     function toast(html, opts) {
-        let container = document.getElementById('execdoc-toasts');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'execdoc-toasts';
-            document.body.appendChild(container);
-        }
-        const note = document.createElement('div');
-        note.className = 'execdoc-toast mono' + (opts && opts.error ? ' is-error' : '');
-        // Server error details can echo user input (issue titles) — text by
-        // default; opts.html is reserved for trusted, server-generated markup.
-        if (opts && opts.html) note.innerHTML = html;
-        else note.textContent = html;
-        container.appendChild(note);
-        setTimeout(() => {
-            note.classList.add('fade-out');
-            setTimeout(() => note.remove(), 300);
-        }, opts && opts.sticky ? 8000 : 3500);
+        // Basecoat toaster (layouts/base.html). Its title is inserted as
+        // markup, so server error details that echo user input are escaped
+        // here; opts.html is reserved for trusted, server-generated markup.
+        const toaster = document.getElementById('toaster');
+        if (!toaster || typeof toaster.toast !== 'function') return;
+        const title = (opts && opts.html) ? html : escapeHtml(html);
+        toaster.toast({
+            category: opts && opts.error ? 'error' : 'info',
+            title: title,
+            duration: opts && opts.sticky ? 8000 : 3500,
+        });
     }
 
     function toastError(detail, fallback) {
@@ -100,19 +94,20 @@
         }
     }
 
+    // OP cards are native <details> in a Basecoat accordion. Programmatic
+    // opens (restore, focus-follow, jump) must not be persisted as a user
+    // choice. The toggle event is dispatched asynchronously, so the mute is
+    // a per-card flag that the handler itself consumes.
     function setOpExpanded(card, expanded, persist) {
-        card.classList.toggle('is-collapsed', !expanded);
-        const body = card.querySelector('.op-card-body');
-        if (body) body.hidden = !expanded;
-        const caret = card.querySelector('[data-caret]');
-        if (caret) caret.textContent = expanded ? '▾' : '▸';
+        if (card.open === expanded) return;
+        if (!persist) card._muteToggle = true;
+        card.open = expanded;
         if (persist) saveToggle(`op_${card.dataset.opOrder}`, expanded);
     }
 
-    window.toggleOp = function (order) {
-        const card = document.getElementById(`op-${order}`);
-        if (!card) return;
-        setOpExpanded(card, card.classList.contains('is-collapsed'), true);
+    window.onOpToggle = function (card) {
+        if (card._muteToggle) { card._muteToggle = false; return; }
+        saveToggle(`op_${card.dataset.opOrder}`, card.open);
     };
 
     window.toggleStepBody = function (order) {
@@ -426,12 +421,6 @@
         }
     }
 
-    window.toggleRosterPop = function (event) {
-        event.stopPropagation();
-        const pop = document.getElementById('exec-roster-pop');
-        if (pop) pop.hidden = !pop.hidden;
-    };
-
     async function pollState() {
         try {
             const resp = await fetch(apiUrl('/state'));
@@ -456,7 +445,7 @@
         const row = document.getElementById(`step-${order}`) || document.getElementById(`op-${order}`);
         if (!row) return;
         const card = row.closest('.op-card');
-        if (card && card.classList.contains('is-collapsed')) setOpExpanded(card, true, false);
+        if (card && !card.open) setOpExpanded(card, true, false);
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         row.classList.add('pulse');
         setTimeout(() => row.classList.remove('pulse'), 1600);
@@ -508,7 +497,7 @@
         focusedOrder = order;
         row.classList.add('is-focused');
         const card = row.closest('.op-card');
-        if (card && card.classList.contains('is-collapsed')) setOpExpanded(card, true, false);
+        if (card && !card.open) setOpExpanded(card, true, false);
         if (opts.scroll) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         if (moved || opts.force) {
             refreshDockbar();
@@ -523,7 +512,7 @@
 
     document.addEventListener('keydown', (e) => {
         if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) return;
-        if (document.querySelector('.execdoc-modal:not([hidden])')) return;
+        if (document.querySelector('dialog[open]')) return;
         if (e.key === 'Enter' && focusedOrder !== null) {
             e.preventDefault();
             toggleStepBody(focusedOrder);
@@ -669,21 +658,6 @@
         navigator.sendBeacon(apiUrl('/leave'));
     });
 
-    // ---------- meta popover ----------
-
-    window.toggleMetaPopover = function (event) {
-        event.stopPropagation();
-        const pop = document.getElementById('exec-meta-popover');
-        if (pop) pop.hidden = !pop.hidden;
-    };
-
-    document.addEventListener('click', (e) => {
-        const pop = document.getElementById('exec-meta-popover');
-        if (pop && !pop.hidden && !pop.contains(e.target) && e.target.id !== 'exec-meta-btn') {
-            pop.hidden = true;
-        }
-    });
-
     // ---------- issue capture ----------
 
     window.showIssueModal = function (order, label) {
@@ -695,12 +669,12 @@
         const boundaryDefault = document.querySelector('#anomaly-boundary option[value=""]');
         if (boundaryDefault) boundaryDefault.textContent = `this step — holds ${label} COMPLETE`;
         document.getElementById('anomaly-error').hidden = true;
-        document.getElementById('anomaly-modal').hidden = false;
+        document.getElementById('anomaly-modal').showModal();
         document.getElementById('anomaly-title').focus();
     };
 
     window.hideAnomalyModal = function () {
-        document.getElementById('anomaly-modal').hidden = true;
+        document.getElementById('anomaly-modal').close();
     };
     window.showAnomalyModal = window.showIssueModal;
 
@@ -768,11 +742,11 @@
         document.getElementById('skip-step').value = order;
         document.getElementById('skip-step-title').textContent = title;
         document.getElementById('skip-error').hidden = true;
-        document.getElementById('skip-modal').hidden = false;
+        document.getElementById('skip-modal').showModal();
     };
 
     window.hideSkipModal = function () {
-        document.getElementById('skip-modal').hidden = true;
+        document.getElementById('skip-modal').close();
         document.getElementById('skip-form').reset();
     };
 
@@ -810,11 +784,11 @@
         document.getElementById('attach-error').hidden = true;
         document.getElementById('attach-form').reset();
         document.getElementById('attach-se-id').value = seId || '';
-        document.getElementById('attach-modal').hidden = false;
+        document.getElementById('attach-modal').showModal();
     };
 
     window.hideAttachModal = function () {
-        document.getElementById('attach-modal').hidden = true;
+        document.getElementById('attach-modal').close();
     };
 
     window.submitAttach = async function (event) {
@@ -950,11 +924,11 @@
         document.getElementById('redline-steps').innerHTML = '';
         addRedlineStep();
         document.getElementById('redline-error').hidden = true;
-        document.getElementById('redline-modal').hidden = false;
+        document.getElementById('redline-modal').showModal();
     };
 
     window.hideRedlineModal = function () {
-        document.getElementById('redline-modal').hidden = true;
+        document.getElementById('redline-modal').close();
     };
 
     window.addRedlineStep = function () {
@@ -1212,24 +1186,6 @@
 
     // ---------- wiring ----------
 
-    window.toggleDockbarMenu = function (event) {
-        event.stopPropagation();
-        const menu = document.getElementById('dockbar-menu');
-        if (menu) menu.hidden = !menu.hidden;
-    };
-
-    window.hideDockbarMenu = function () {
-        const menu = document.getElementById('dockbar-menu');
-        if (menu) menu.hidden = true;
-    };
-
-    document.addEventListener('click', (e) => {
-        const menu = document.getElementById('dockbar-menu');
-        if (menu && !menu.hidden && !menu.contains(e.target)) menu.hidden = true;
-        const pop = document.getElementById('exec-roster-pop');
-        if (pop && !pop.hidden && !pop.contains(e.target)) pop.hidden = true;
-    });
-
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             window.hideAnomalyModal();
@@ -1237,11 +1193,6 @@
             window.hideAttachModal();
             window.hideRedlineModal();
             window.closeLightbox();
-            window.hideDockbarMenu();
-            const pop = document.getElementById('exec-meta-popover');
-            if (pop) pop.hidden = true;
-            const roster = document.getElementById('exec-roster-pop');
-            if (roster) roster.hidden = true;
         }
     });
 

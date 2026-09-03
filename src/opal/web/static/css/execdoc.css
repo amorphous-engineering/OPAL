@@ -26,21 +26,12 @@
 
 .exec-head-progress { color: var(--text-secondary); }
 
-.exec-progressbar {
-    display: inline-block;
-    width: 90px;
-    height: 8px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    vertical-align: middle;
+.exec-progressbar.progress {
+    width: 80px;
+    height: 6px;
 }
 
-.exec-progressbar-fill {
-    display: block;
-    height: 100%;
-    background: var(--accent-green);
-    transition: width 0.3s ease;
-}
+.exec-progressbar > span { background: var(--accent-green); }
 
 .exec-head-spacer { flex: 1; }
 
@@ -52,22 +43,13 @@
 
 /* Presence: "N ONLINE" counter; the roster lives in the left rail and in
    the counter's popover (the only roster when the rails are hidden). */
+/* Roster + meta are Basecoat popovers; OPAL sets register and width. */
 .exec-online {
-    font-size: 0.75rem;
-    padding: 1px var(--space-xs);
-    border: 1px solid var(--accent-orange);
+    border-color: var(--accent-orange);
     color: var(--accent-orange);
-    cursor: pointer;
-    white-space: nowrap;
 }
 
-.exec-roster-pop {
-    position: absolute;
-    left: var(--space-md);
-    top: 5.5rem;
-    z-index: var(--z-dropdown);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
+#exec-roster-pop {
     padding: var(--space-sm) var(--space-md);
     min-width: 220px;
     font-size: 0.8rem;
@@ -85,12 +67,6 @@
 
 /* Meta readout popover (the META tab's facts, compacted) */
 .exec-meta-popover {
-    position: absolute;
-    right: var(--space-md);
-    top: 5.5rem;
-    z-index: var(--z-dropdown);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
     padding: var(--space-sm) var(--space-md);
     min-width: 340px;
     font-size: 0.8rem;
@@ -147,6 +123,19 @@
     .exec-rail-left { display: none; }
 }
 
+/* Rail sections are one Basecoat accordion (data-multiple); the head is the
+   <summary>. Register only — Basecoat's summary pitch and rules are dropped. */
+.rail-accordion > details > summary {
+    list-style: none;
+    padding: 0;
+    text-decoration: none;
+    border-radius: 0;
+}
+.rail-accordion > details > summary::-webkit-details-marker { display: none; }
+.rail-accordion > details > summary:hover { text-decoration: none; }
+.rail-accordion > details > :not(summary) { padding-bottom: 0; font-size: inherit; overflow: visible; }
+.rail-accordion > details:not(:last-child) { border-bottom: none; }
+
 /* Left rail: roster + OP minimap */
 .rail-roster .roster-row { font-size: 0.75rem; }
 
@@ -192,6 +181,11 @@
 .op-card.is-redline { border-left: 3px solid var(--accent-red); }
 .op-card.is-contingency { border-left: 3px solid var(--accent-yellow); }
 
+/* The document is a Basecoat accordion; each OP card is a <details> whose
+   <summary> is the head. Native open state, no JS toggle. */
+.exec-doc.accordion { gap: 0; }
+.exec-doc.accordion > details:not(:last-child) { border-bottom: 1px solid var(--border-color); }
+
 .op-card-head {
     display: flex;
     align-items: center;
@@ -201,14 +195,20 @@
     background: var(--bg-tertiary);
     border-bottom: 1px solid var(--border-color);
     flex-wrap: wrap;
+    list-style: none;
+    font-size: inherit;
+    border-radius: 0;
 }
 
-.op-card.is-collapsed .op-card-head { border-bottom: none; }
+.op-card-head::-webkit-details-marker { display: none; }
+.op-card-head:hover { text-decoration: none; }
+.op-card:not([open]) > .op-card-head { border-bottom: none; }
+.op-card[open] > .op-card-head .op-card-caret { transform: rotate(90deg); }
 .op-card.is-done .op-card-head { background: transparent; }
 .op-card.is-done .op-card-title,
 .op-card.is-done .op-card-num { color: var(--text-muted); }
 
-.op-card-caret { color: var(--text-muted); width: 1em; }
+.op-card-caret { color: var(--text-muted); width: 1em; transition: transform 0.15s ease; }
 .op-card-num { font-weight: 700; }
 .op-card-title { font-weight: 600; text-transform: uppercase; }
 .op-card-spacer { flex: 1; }
@@ -217,7 +217,11 @@
 .op-caution-chip { color: var(--accent-red); border-color: var(--accent-red); }
 .op-card-blockline a { color: inherit; }
 
-.op-card-body { padding: var(--space-xs) var(--space-sm) var(--space-sm); }
+.op-card-body {
+    padding: var(--space-xs) var(--space-sm) var(--space-sm);
+    font-size: 0.875rem;
+    overflow: visible;
+}
 .op-instructions {
     color: var(--text-primary);
     font-size: 1rem;
@@ -571,7 +575,7 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
     flex-wrap: wrap;
 }
 
-.bar-field { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+.bar-field.field { display: flex; flex-direction: column; gap: 2px; min-width: 120px; width: auto; margin-bottom: 0; }
 .bar-field .input, .bar-field .select { padding: 2px var(--space-xs); }
 .bar-field-label { font-size: 0.65rem; color: var(--text-secondary); }
 .bar-check { display: flex; align-items: center; gap: var(--space-xs); font-size: 0.75rem; }
@@ -583,44 +587,12 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
     margin-left: auto;
 }
 
-.dockbar-overflow { position: relative; }
+/* The overflow is a Basecoat dropdown-menu opening upward. */
+.dockbar-overflow [role="menu"] { min-width: 160px; }
 
-.dockbar-menu {
-    position: absolute;
-    bottom: calc(100% + 4px);
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    padding: var(--space-xs);
-    z-index: var(--z-dropdown);
-    min-width: 150px;
-}
+/* ============ Modals / lightbox ============ */
 
-/* ============ Modals / lightbox / toasts ============ */
-
-.execdoc-modal {
-    position: fixed;
-    inset: 0;
-    background: var(--modal-backdrop);
-    z-index: var(--z-modal);
-}
-
-.execdoc-modal-box {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 560px;
-    max-width: 95vw;
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-.execdoc-modal-sm { width: 440px; }
-
+/* Modals are Basecoat <dialog class="dialog">; only the action row is OPAL's. */
 .execdoc-modal-actions {
     display: flex;
     gap: var(--space-md);
@@ -673,28 +645,6 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 
 #lightbox-caption { color: var(--text-secondary); font-size: 0.8rem; }
 
-#execdoc-toasts {
-    position: fixed;
-    bottom: 4.5rem;
-    right: var(--space-md);
-    z-index: var(--z-modal);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-}
-
-.execdoc-toast {
-    background: var(--bg-secondary);
-    border: 1px solid var(--accent-orange);
-    color: var(--text-primary);
-    padding: var(--space-xs) var(--space-md);
-    font-size: 0.8rem;
-}
-
-.execdoc-toast.is-error { border-color: var(--accent-red); color: var(--accent-red); }
-.execdoc-toast.fade-out { opacity: 0; transition: opacity 0.3s; }
-.execdoc-toast a { color: var(--accent-orange); }
-
 /* Rail drawer toggle (tablet only) */
 .rail-toggle { display: none; }
 
@@ -735,7 +685,7 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
     .dockbar-actions { order: 3; flex-basis: 100%; justify-content: flex-end; }
     .dockbar-actions .btn { padding: var(--space-sm) var(--space-md); }
 
-    .exec-meta-popover { right: var(--space-xs); min-width: 280px; }
+    .exec-meta-popover { min-width: 280px; }
 }
 
 /* Residual issue trace on a step: the hold clears, the record stays. */

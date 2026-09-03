@@ -89,15 +89,15 @@ def _upload_capture(client: TestClient, se_id: int, note: str) -> dict:
     return resp.json()
 
 
-def _op_section_class_attr(html: str, order: int) -> str:
-    """The <section ...> opening text immediately preceding id="op-{order}"."""
-    head = html.split(f'id="op-{order}"')[0]
-    return head.rsplit("<section", 1)[1]
-
-
 def _op_section_body(html: str, order: int) -> str:
-    """Markup between id="op-{order}" and its closing </section>."""
-    return html.split(f'id="op-{order}"')[1].split("</section>")[0]
+    """Markup between id="op-{order}" and its closing </details>."""
+    return html.split(f'id="op-{order}"')[1].split("</details>")[0]
+
+
+def _op_details_tag(html: str, order: int) -> str:
+    """The full <details ...> opening tag of OP card {order}."""
+    head, tail = html.split(f'id="op-{order}"')
+    return head.rsplit("<details", 1)[1] + f'id="op-{order}"' + tail.split(">", 1)[0]
 
 
 def _doc_column(html: str) -> str:
@@ -259,13 +259,12 @@ def test_completed_op_collapses_pending_op_does_not(web_client: TestClient):
     assert page.status_code == 200
     html = page.text
 
-    # Completed OP: collapsed, body hidden.
-    assert "is-collapsed" in _op_section_class_attr(html, 1)
-    assert '<div class="op-card-body" hidden>' in _op_section_body(html, 1)
+    # Completed OP: the <details> loads closed.
+    assert " open" not in _op_details_tag(html, 1)
+    assert "is-done" in _op_details_tag(html, 1)
 
-    # Pending OP: expanded, body visible.
-    assert "is-collapsed" not in _op_section_class_attr(html, 2)
-    assert '<div class="op-card-body" hidden>' not in _op_section_body(html, 2)
+    # Pending OP: the <details> loads open.
+    assert " open" in _op_details_tag(html, 2)
 
 
 # ============ 4. role chip + caution ============
@@ -285,7 +284,7 @@ def test_role_chip_and_caution_render(web_client: TestClient):
     resp = web_client.get(f"/executions/{instance_id}")
     assert resp.status_code == 200
     assert '<span class="role-chip mono">TC</span>' in resp.text
-    assert "CAUTION: HOT SURFACE" in resp.text
+    assert "<h2>CAUTION</h2><section>HOT SURFACE</section>" in resp.text
 
 
 # ============ 5. holds render in the document and the rail ============

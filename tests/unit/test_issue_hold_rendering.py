@@ -101,7 +101,8 @@ def test_dockbar_gated_step_renders_inert_controls(web_client):
     bar = web_client.get(f"/executions/{instance_id}/dockbar?step={by_label['1.1']}")
     assert bar.status_code == 200
     assert "disabled>COMPLETE</button>" in bar.text
-    assert "disabled>SKIP</button>" in bar.text
+    # SKIP lives in the overflow menu: an inert menu item with its reason.
+    assert 'role="menuitem" aria-disabled="true">SKIP' in bar.text
     assert nc["issue_number"] in bar.text
     assert f"completeStep({by_label['1.1']}," not in bar.text
 

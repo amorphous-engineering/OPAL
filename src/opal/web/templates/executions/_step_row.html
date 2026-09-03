@@ -33,9 +33,8 @@
     <div class="doc-step-body" hidden>
         {% if step.status == 'on_hold' and exec %}
         {% set hold_ncs = step_holding_ncs.get(exec.id, []) %}
-        <div class="step-hold-banner">
-            <strong>ON HOLD</strong> — awaiting disposition on
-            {% for nc in hold_ncs %}<a href="/issues/{{ nc.id }}" class="mono">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+        <div class="alert step-hold-banner"><h2>ON HOLD</h2><section>Awaiting disposition on
+            {% for nc in hold_ncs %}<a href="/issues/{{ nc.id }}" class="mono">{{ nc.issue_number }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</section>
         </div>
         {% endif %}
         {% set past_ncs = step_issue_history.get(exec.id, []) if exec else [] %}
@@ -45,7 +44,7 @@
         </div>
         {% endif %}
         {% if vs.get('caution') %}
-        <div class="caution-block">CAUTION: {{ vs.get('caution') }}</div>
+        <div class="alert caution-block" data-variant="destructive"><h2>CAUTION</h2><section>{{ vs.get('caution') }}</section></div>
         {% endif %}
         {% if step.instructions %}
         <div class="step-instructions" data-markdown>{{ step.instructions }}</div>

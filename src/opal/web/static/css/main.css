@@ -549,6 +549,16 @@ select.select,
     letter-spacing: 0.05em;
 }
 
+/* Toasts are Basecoat; register only. */
+.toaster .toast .toast-content {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+.toaster .toast[data-category="error"] {
+    border-color: var(--destructive);
+}
+
 /* Command palette is a Basecoat command-dialog; only the row register is OPAL's. */
 .command [role="menu"] {
     font-family: var(--font-mono);
@@ -951,6 +961,37 @@ body.procedure-detail .exec-tabs {
     min-height: 400px;
 }
 
+/* Execution page tab strip: Basecoat tabs (line variant), full-bleed like
+   the legacy strip, mono uppercase register, accent on the selected tab. */
+body.exec-detail .exec-tabbar {
+    margin-left: calc(-1 * var(--space-md));
+    margin-right: calc(-1 * var(--space-md));
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: var(--space-md);
+}
+
+.exec-tabbar > [role="tablist"] {
+    height: auto;
+    padding: 0;
+}
+
+.exec-tabbar [role="tab"] {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+}
+
+.exec-tabbar [role="tab"][aria-selected="true"] {
+    color: var(--primary);
+}
+
+.exec-tabbar [role="tab"]::after {
+    background: var(--primary);
+}
+
 /* Execution-detail page: lock to viewport so each tab scrolls within .exec-tab-content,
    and the Operations exec-layout fills the remaining space naturally. */
 body.exec-detail,
@@ -1122,9 +1163,16 @@ body.procedure-detail .exec-tab-content > div {
     border-color: var(--accent-yellow);
 }
 
+/* Hold and caution banners are Basecoat alerts with OPAL's state rail. */
+.alert > h2 {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
 .step-hold-banner {
     margin-bottom: var(--space-md);
-    padding: var(--space-sm) var(--space-md);
     background: var(--diff-modified-bg);
     border-left: 3px solid var(--accent-yellow);
     font-family: var(--font-mono);
@@ -1132,19 +1180,14 @@ body.procedure-detail .exec-tab-content > div {
     color: var(--text-primary);
 }
 
-.step-hold-banner strong {
-    color: var(--accent-yellow);
-    letter-spacing: 0.05em;
-}
+.step-hold-banner > h2 { color: var(--accent-yellow); }
 
 .caution-block {
     margin-bottom: var(--space-md);
-    padding: var(--space-sm) var(--space-md);
     border-left: 3px solid var(--accent-red);
     font-family: var(--font-mono);
     font-size: 0.875rem;
     color: var(--accent-red);
-    letter-spacing: 0.05em;
 }
 
 /* Demo-mode banner: full-width, impossible to miss */

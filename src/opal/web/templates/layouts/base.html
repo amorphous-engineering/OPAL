@@ -119,6 +119,9 @@
         {% block content %}{% endblock %}
     </main>
 
+    {# Basecoat toaster: document.getElementById('toaster').toast({category, title, description, duration}) #}
+    <div id="toaster" class="toaster" data-align="end"></div>
+
     <footer class="footer">
         <span class="footer-status">STATUS: READY</span>
         <span class="footer-db" title="Active database">DB: {{ active_database_path() }}</span>
