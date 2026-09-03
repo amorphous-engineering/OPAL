@@ -1,0 +1,5 @@
+basecoat-css 1.0.2 (Lyra style bundle)
+https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/basecoat-lyra.cdn.min.css
+https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/js/all.min.js
+MIT license — https://github.com/hunvreus/basecoat
+Vendored so the app makes no network requests; PyInstaller bundles web/static.

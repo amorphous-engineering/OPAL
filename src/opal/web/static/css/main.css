@@ -1,6 +1,12 @@
-/* OPAL - US Graphics Style
+/* OPAL - US Graphics Style, on Basecoat (Lyra style bundle)
  * Principles: Dense, functional, no decoration
  * No rounded corners, shadows, or gradients
+ *
+ * Layering: static/vendor/basecoat/basecoat-lyra.cdn.min.css loads first and
+ * is entirely inside @layer, so every unlayered rule in this file wins over
+ * it. This file holds only: tokens, layout, OPAL-specific components, and
+ * domain sections. Component looks (buttons, fields, menus, dialogs, badges)
+ * belong to Basecoat; do not restyle them here beyond register (font, case).
  */
 
 /* Self-hosted Google Fonts (variable, latin subset). No external requests. */
@@ -20,33 +26,47 @@
     font-display: swap;
 }
 
+/* ============ Tokens ============
+ * Neutrals (--background, --card, --muted, --border, --input, --foreground,
+ * --muted-foreground, ...) are Lyra's defaults: light on :root, dark on
+ * html.dark, both defined inside Basecoat. OPAL only sets the accent and the
+ * tokens Basecoat has no equivalent for. Dark is OPAL's default; the theme
+ * hook in layouts/base.html derives html.dark from data-theme.
+ */
 :root {
-    /* Colors */
-    --bg-primary: #0a0a0a;
-    --bg-secondary: #141414;
-    --bg-tertiary: #1e1e1e;
-    --border-color: #333;
-    --border-light: #444;
+    /* Accent: OPAL orange is identifier + action, never content. */
+    --primary: #fb923c;
+    --primary-foreground: #0a0a0a;
+    --ring: #fb923c;
 
-    --text-primary: #e0e0e0;
-    --text-secondary: #888;
-    --text-muted: #7a7a7a; /* AA floor: 4.61:1 on bg-primary at small sizes */
+    /* Fonts (Basecoat reads --font-sans / --font-mono for every component) */
+    --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
+    /* State colours — no Basecoat equivalent; state words carry state. */
     --accent-blue: #4a9eff;
     --accent-green: #4ade80;
     --accent-yellow: #fbbf24;
     --accent-red: #f87171;
-    --accent-orange: #fb923c;
+
+    /* Legacy OPAL names, aliased to Basecoat tokens so the domain sections
+       (execdoc, requirements tree, part tag, ...) track the theme unchanged. */
+    --bg-primary: var(--background);
+    --bg-secondary: var(--card);
+    --bg-tertiary: var(--muted);
+    --border-color: var(--border);
+    --border-light: var(--input);
+    --text-primary: var(--foreground);
+    --text-secondary: var(--muted-foreground);
+    --text-muted: var(--muted-foreground);
+    --accent-orange: var(--primary);
+    --accent-primary: var(--primary);
 
     /* Status colors */
     --status-ok: var(--accent-green);
     --status-warn: var(--accent-yellow);
     --status-error: var(--accent-red);
     --status-info: var(--accent-orange);
-
-    /* Fonts */
-    --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-    --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
     /* Spacing */
     --space-xs: 4px;
@@ -71,11 +91,24 @@
     --z-palette: 10000;
 }
 
-/* Reset */
-*, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+/* Light: Lyra neutrals as shipped; orange deepened so white-on-primary and
+   primary-on-white both clear AA. */
+:root[data-theme="light"] {
+    --primary: #c2410c;
+    --primary-foreground: #ffffff;
+    --ring: #c2410c;
+
+    --accent-blue: #1e66f5;
+    --accent-green: #40a02b;
+    --accent-yellow: #df8e1d;
+    --accent-red: #d20f39;
+
+    --modal-backdrop: rgba(0, 0, 0, 0.5);
+
+    --diff-added-bg: rgba(64, 160, 43, 0.12);
+    --diff-removed-bg: rgba(210, 15, 57, 0.10);
+    --diff-modified-bg: rgba(223, 142, 29, 0.14);
+    --diff-changed-bg: rgba(223, 142, 29, 0.20);
 }
 
 /* The hidden attribute must win over any class that sets display
@@ -84,18 +117,31 @@
     display: none !important;
 }
 
-html {
-    font-size: 14px;
-}
-
+/* Root stays at the browser's 16px so Basecoat's rem-based Lyra scale lands
+   at its designed 12px. Prose is 14px; data tables pin their own size. */
 body {
     font-family: var(--font-sans);
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    font-size: 0.875rem;
+    background: var(--background);
+    color: var(--foreground);
     line-height: 1.5;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+/* Basecoat's preflight flattens headings and lists; restore OPAL's scale. */
+h1 { font-size: 1.5rem; font-weight: 600; }
+h2 { font-size: 1.25rem; font-weight: 600; }
+h3 { font-size: 1rem; font-weight: 600; }
+h4 { font-size: 0.875rem; font-weight: 600; }
+
+.main ul:not([class]),
+.main ol:not([class]),
+.markdown-content ul,
+.markdown-content ol {
+    list-style: revert;
+    padding-left: 1.5em;
 }
 
 /* Text selection */
@@ -111,12 +157,10 @@ a {
 }
 
 /* Links in navigation and UI elements inherit their container's color */
-.nav-dropdown-content a,
-.header-link,
+.dropdown-menu a,
 .brand-link,
 .btn,
 .stat,
-.user-dropdown a,
 .breadcrumbs a {
     color: inherit;
 }
@@ -194,66 +238,6 @@ select option {
     justify-content: flex-end;
 }
 
-.header-link {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid transparent;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.header-link:hover {
-    color: var(--text-primary);
-    border-color: var(--border-light);
-}
-
-.header-link.active {
-    color: var(--accent-orange);
-    border-color: var(--accent-orange);
-}
-
-.nav-link {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid transparent;
-}
-
-.nav-link:hover {
-    color: var(--text-primary);
-    border-color: var(--border-light);
-}
-
-.nav-link.active {
-    color: var(--accent-orange);
-    border-color: var(--accent-orange);
-}
-
-.header-user {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-}
-
-.header-user label {
-    color: var(--text-secondary);
-}
-
-.header-user select {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    padding: var(--space-xs) var(--space-sm);
-}
-
 /* Breadcrumbs */
 .breadcrumbs {
     padding: var(--space-xs) var(--space-md);
@@ -312,7 +296,7 @@ select option {
     width: 100%;
     border-collapse: collapse;
     font-family: var(--font-mono);
-    font-size: 0.875rem;
+    font-size: 0.8125rem; /* 13px: same density as before the 16px root */
 }
 
 .data-table th,
@@ -416,60 +400,77 @@ select option {
     color: var(--text-muted);
 }
 
-/* Buttons */
+/* Buttons are Basecoat: class="btn" data-variant="outline|destructive|ghost|link" data-size="sm|xs".
+   Register: mono + uppercase, matching the rest of the chrome. */
 .btn {
     font-family: var(--font-mono);
-    font-size: 0.875rem;
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--border-color);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
-.btn:hover {
-    background: var(--bg-secondary);
-    border-color: var(--border-light);
+/* PR3-TEMP: legacy button classes. ok.btn no longer emits these; the ~110
+   literal usages in templates keep working until the forms-and-buttons
+   sweep deletes this block. A bare "btn" was OPAL's neutral button. */
+.btn:not([data-variant]):not(.btn-primary):not(.btn-danger) {
+    border-color: var(--border);
+    background: var(--background);
+    color: var(--foreground);
 }
-
-.btn-primary {
-    border-color: var(--accent-orange);
-    color: var(--accent-orange);
+.btn:not([data-variant]):not(.btn-primary):not(.btn-danger):hover {
+    background: var(--muted);
 }
-
-.btn-primary:hover {
-    background: var(--accent-orange);
-    color: var(--bg-primary);
+.btn.btn-danger {
+    border-color: var(--destructive);
+    background: transparent;
+    color: var(--destructive);
 }
-
+.btn.btn-danger:hover {
+    background: var(--destructive);
+    color: #fff;
+}
+.btn.btn-sm {
+    height: calc(var(--spacing) * 7);
+    padding-inline: calc(var(--spacing) * 2.5);
+}
 /* Disabled buttons gray out regardless of variant — the gate must be
    visible, not just functional. */
 .btn:disabled,
 .btn:disabled:hover {
-    border-color: var(--border-color);
-    background: var(--bg-tertiary);
-    color: var(--text-muted);
+    border-color: var(--border);
+    background: var(--muted);
+    color: var(--muted-foreground);
     cursor: not-allowed;
+    opacity: 1;
 }
 
-.btn-danger {
-    border-color: var(--accent-red);
-    color: var(--accent-red);
-}
-
-.btn-danger:hover {
-    background: var(--accent-red);
-    color: var(--bg-primary);
-}
-
-.btn-sm {
-    padding: 2px 6px;
+/* Forms are Basecoat: <div class="field"><label>..</label><input|select|textarea><p>help</p></div>.
+   Register: mono uppercase labels, mono values. */
+.field > label,
+.label {
+    font-family: var(--font-mono);
     font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+}
+.field > input,
+.field > select,
+.field > textarea,
+select.select,
+.textarea {
+    font-family: var(--font-mono);
+}
+.field > p {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+.field + .field {
+    margin-top: var(--space-md);
 }
 
-/* Forms */
+/* PR3-TEMP: legacy form classes (form-group/-label/-input/-select/-textarea).
+   Deleted by the forms-and-buttons sweep. */
 .form-group {
     margin-bottom: var(--space-md);
 }
@@ -820,82 +821,34 @@ textarea {
     color: var(--accent-yellow);
 }
 
-/* Dropdown components - reusable for nav and user menu */
-.nav-dropdown {
-    position: relative;
-    display: inline-block;
+/* Header nav + user menu are Basecoat dropdown-menus. Register only. */
+.header-nav .dropdown-menu > .btn,
+.user-menu > .btn {
+    color: var(--muted-foreground);
 }
-
-.nav-dropdown-btn {
+.header-nav .dropdown-menu > .btn.active {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+.dropdown-menu [role="menu"] {
     font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    background: transparent;
-    border: 1px solid transparent;
-    padding: var(--space-xs) var(--space-sm);
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
-
-.nav-dropdown-btn:hover {
-    color: var(--text-primary);
-    border-color: var(--border-light);
+.dropdown-menu [role="menuitem"] > a {
+    flex: 1;
+    color: inherit;
 }
-
-.nav-dropdown-btn.active {
-    color: var(--accent-orange);
-    border-color: var(--accent-orange);
+.dropdown-menu [role="menuitem"] > a.active {
+    color: var(--primary);
 }
-
-.nav-dropdown-content {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    min-width: 160px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    margin-top: 0;
-    z-index: 1000;
+.dropdown-menu [role="heading"] .user-fullname {
+    color: var(--foreground);
+    font-weight: 600;
 }
-
-.nav-dropdown:hover .nav-dropdown-content {
-    display: block;
-}
-
-/* Add padding to prevent gap when moving cursor */
-.nav-dropdown-content::before {
-    content: '';
-    position: absolute;
-    top: -2px;
-    left: 0;
-    right: 0;
-    height: 2px;
-}
-
-.nav-dropdown-content a {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px solid var(--border-color);
-}
-
-.nav-dropdown-content a:last-child {
-    border-bottom: none;
-}
-
-.nav-dropdown-content a:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-}
-
-.nav-dropdown-content a.active {
-    color: var(--accent-orange);
-    background: var(--bg-tertiary);
+.dropdown-menu [role="heading"] .user-username {
+    color: var(--muted-foreground);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 /* Command palette button */
@@ -919,261 +872,6 @@ textarea {
 
 .cmd-icon {
     font-size: 1rem;
-}
-
-/* Project dropdown */
-.project-dropdown {
-    position: relative;
-    display: inline-block;
-}
-
-.project-dropdown-btn {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    background: transparent;
-    border: 1px solid transparent;
-    padding: var(--space-xs) var(--space-sm);
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.project-dropdown-btn:hover {
-    color: var(--text-primary);
-    border-color: var(--border-light);
-}
-
-.project-dropdown-content {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    min-width: 120px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    margin-top: 0;
-    z-index: 1000;
-}
-
-.project-dropdown-content::before {
-    content: '';
-    position: absolute;
-    top: -2px;
-    left: 0;
-    right: 0;
-    height: 2px;
-}
-
-.project-dropdown-content a {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px solid var(--border-color);
-}
-
-.project-dropdown-content a:last-child {
-    border-bottom: none;
-}
-
-.project-dropdown-content a:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-}
-
-.project-dropdown-content a.active {
-    color: var(--accent-orange);
-    background: var(--bg-tertiary);
-}
-
-/* User dropdown (right-aligned) */
-.user-dropdown {
-    position: relative;
-    display: inline-block;
-}
-
-.user-dropdown-btn {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    padding: var(--space-xs) var(--space-sm);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-}
-
-.user-dropdown-btn:hover {
-    color: var(--text-primary);
-    border-color: var(--border-light);
-}
-
-.user-dropdown-content {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    min-width: 280px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    margin-top: 1px;
-    z-index: 1000;
-}
-
-/* User dropdown header with profile section */
-.user-dropdown-header {
-    padding: var(--space-md);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-}
-
-.user-profile-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-.user-avatar {
-    width: 64px;
-    height: 64px;
-    border: 2px solid var(--border-color);
-    background: var(--bg-tertiary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-mono);
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.user-name-display {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.user-fullname {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.user-username {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.user-header-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-xs);
-}
-
-.icon-btn {
-    font-family: var(--font-mono);
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    padding: var(--space-xs);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.icon-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-color: var(--border-light);
-}
-
-/* User dropdown sections */
-.user-dropdown-section {
-    padding: var(--space-sm) 0;
-}
-
-.user-dropdown-divider {
-    border: none;
-    border-top: 1px solid var(--border-color);
-    margin: 0;
-}
-
-.user-dropdown-label {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    padding: var(--space-xs) var(--space-md);
-    letter-spacing: 0.05em;
-}
-
-/* User selection buttons */
-.user-select-btn {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    width: 100%;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    text-align: left;
-    padding: var(--space-xs) var(--space-md);
-    border: none;
-    background: transparent;
-    cursor: pointer;
-}
-
-.user-select-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-}
-
-.user-select-initial {
-    width: 24px;
-    height: 24px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-tertiary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-/* Sign out button */
-.user-signout-btn {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    width: 100%;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--accent-red);
-    text-decoration: none;
-    text-align: left;
-    padding: var(--space-sm) var(--space-md);
-    border: none;
-    background: transparent;
-    cursor: pointer;
-}
-
-.user-signout-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--accent-red);
 }
 
 /* Part Search Component */
@@ -1391,7 +1089,7 @@ textarea {
     color: var(--status-warn);
 }
 
-/* Execution Tabs — mirrors .nav-dropdown-btn so the chrome reads as one family.
+/* Execution Tabs — mirrors the header nav triggers so the chrome reads as one family.
    On the exec-detail page the strip breaks out of .main padding so it runs
    edge-to-edge; the .main padding-top is also zeroed so the strip hugs the
    breadcrumbs above. */
@@ -2034,82 +1732,9 @@ textarea.md-image-target.md-drop-target {
 /* Light theme — Catppuccin Latte (https://catppuccin.com/palette).
  * Page bg uses Mantle so cards (bg-secondary = Base) read as lighter/elevated,
  * preserving the existing OPAL pattern where cards "rise" out of the page. */
-:root[data-theme="light"] {
-    --bg-primary: #e6e9ef;   /* Mantle  — page background */
-    --bg-secondary: #eff1f5; /* Base    — cards, panels */
-    --bg-tertiary: #dce0e8;  /* Crust   — insets, table headers, buttons */
-    --border-color: #bcc0cc; /* Surface1 — visible borders */
-    --border-light: #ccd0da; /* Surface0 — subtle borders */
-
-    --text-primary: #4c4f69;   /* Text     */
-    --text-secondary: #5c5f77; /* Subtext1 */
-    --text-muted: #8c8fa1;     /* Overlay1 */
-
-    --accent-blue: #1e66f5;    /* Blue   */
-    --accent-green: #40a02b;   /* Green  */
-    --accent-yellow: #df8e1d;  /* Yellow */
-    --accent-red: #d20f39;     /* Red    */
-    --accent-orange: #fe640b;  /* Peach  */
-
-    /* Diff tints retinted for the Latte accents so they still look like
-     * the right hue against a light background. */
-    --diff-added-bg: rgba(64, 160, 43, 0.12);
-    --diff-removed-bg: rgba(210, 15, 57, 0.10);
-    --diff-modified-bg: rgba(223, 142, 29, 0.14);
-    --diff-changed-bg: rgba(223, 142, 29, 0.20);
-}
-
 :root[data-theme="light"] ::selection {
-    background: var(--accent-orange);
+    background: var(--primary);
     color: #fff;
-}
-
-/* User menu links (dropdown items for audit, project, theme) */
-a.user-menu-link,
-button.user-menu-link {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    text-align: left;
-    padding: var(--space-sm) var(--space-md);
-    border: none;
-    background: transparent;
-    cursor: pointer;
-}
-
-a.user-menu-link:hover,
-button.user-menu-link:hover,
-a.user-menu-link.active {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-}
-
-/* Theme row inside user dropdown */
-.user-menu-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-sm) var(--space-md);
-}
-
-.user-menu-row-label {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-}
-
-.user-menu-select {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    padding: var(--space-xs) var(--space-sm);
-    cursor: pointer;
 }
 
 /* Diff view styles */
