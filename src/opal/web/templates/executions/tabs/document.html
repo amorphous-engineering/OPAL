@@ -5,8 +5,13 @@
    keeps the right rail reachable and "N ONLINE" serves the roster. #}
 <div>
 <div class="exec-doc-layout" id="exec-doc-layout">
-    <aside class="exec-rail-left" id="exec-rail-left" aria-label="Operations">
+    <aside class="exec-rail-left" id="exec-rail-left" aria-label="Progress and operations">
         <section class="accordion rail-accordion" data-multiple>
+        <details class="rail-section" open>
+            <summary class="rail-head mono">PROGRESS <span class="rail-head-count" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span></summary>
+            {% set pct = (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 %}
+            <div class="progress rail-progress" role="progressbar" aria-label="Steps complete" aria-valuenow="{{ pct | round | int }}" aria-valuemin="0" aria-valuemax="100" data-progressbar><span data-progress-fill style="width: {{ pct }}%"></span></div>
+        </details>
         <details class="rail-section" open>
             <summary class="rail-head mono">OPERATIONS</summary>
             <div class="rail-minimap" data-minimap>

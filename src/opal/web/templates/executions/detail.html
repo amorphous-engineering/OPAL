@@ -24,9 +24,6 @@
     <span class="exec-head-wo mono">{{ instance.work_order_number or 'EXECUTION' }}</span>
     <a class="exec-head-proc" href="/procedures/{{ instance.procedure_id }}">{{ instance.procedure.name }} <span class="mono text-muted">v{{ version.version_number if version else '—' }}</span></a>
     {{ ok.status(inst_status | upper | replace('_', ' ')) }}
-    <span class="exec-head-progress mono" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span>
-    {% set pct = (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 %}
-    <div class="progress exec-progressbar" role="progressbar" aria-label="Steps complete" aria-valuenow="{{ pct | round | int }}" aria-valuemin="0" aria-valuemax="100"><span data-progress-fill style="width: {{ pct }}%"></span></div>
     <span class="exec-head-spacer"></span>
     <span class="exec-head-actions">
         {% if inst_status == 'completed' %}

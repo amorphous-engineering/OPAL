@@ -270,7 +270,10 @@
         }
         const fill = document.querySelector('[data-progress-fill]');
         if (fill && state.instance.progress.total) {
-            fill.style.width = `${(state.instance.progress.done / state.instance.progress.total) * 100}%`;
+            const pct = (state.instance.progress.done / state.instance.progress.total) * 100;
+            fill.style.width = `${pct}%`;
+            const bar = document.querySelector('[data-progressbar]');
+            if (bar) bar.setAttribute('aria-valuenow', String(Math.round(pct)));
         }
 
         renderPresence(state);

@@ -24,14 +24,11 @@
 
 .exec-head-proc:hover { color: var(--accent-orange); }
 
-.exec-head-progress { color: var(--text-secondary); }
-
-.exec-progressbar.progress {
-    width: 80px;
-    height: 6px;
-}
-
-.exec-progressbar > span { background: var(--accent-green); }
+/* Progress lives at the top of the left rail: a Basecoat progress bar
+   under a PROGRESS head that carries the count. */
+.rail-head-count { margin-left: auto; color: var(--text-primary); }
+.rail-progress.progress { height: 6px; margin-top: var(--space-xs); }
+.rail-progress > span { background: var(--accent-green); }
 
 .exec-head-spacer { flex: 1; }
 
@@ -68,8 +65,6 @@
 .exec-doc {
     flex: 1;
     min-width: 0;
-    max-width: 860px;
-    margin: 0 auto;
 }
 
 .exec-rail,
@@ -440,6 +435,9 @@
 .rail-section { margin-bottom: var(--space-lg); }
 
 .rail-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
     font-size: 0.7rem;
     letter-spacing: 0.1em;
     color: var(--text-secondary);
