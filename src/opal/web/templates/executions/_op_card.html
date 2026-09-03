@@ -8,7 +8,7 @@
 {% set op_holds = op_holds_by_order.get(op.order, []) %}
 {% set op_gated = gated_ops_by_order.get(op.order) %}
 {% if op_data.is_ad_hoc and op.ad_hoc_issue %}
-<a class="exec-redline-banner mono" href="/issues/{{ op.ad_hoc_issue.id }}" title="Open NC {{ op.ad_hoc_issue.issue_number }}">REDLINE — {{ op.ad_hoc_issue.issue_number }}</a>
+<a class="exec-redline-banner mono" href="/issues/{{ op.ad_hoc_issue.id }}" title="Open NC {{ op.ad_hoc_issue.issue_number }}">REDLINE · {{ op.ad_hoc_issue.issue_number }} · {{ op.ad_hoc_issue.title }}</a>
 {% endif %}
 {# One <details> in the document accordion (data-multiple). Open state is the
    native `open` attribute: nothing loads collapsed unless it is complete. #}
