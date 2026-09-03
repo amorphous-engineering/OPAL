@@ -415,7 +415,11 @@
         // Format API error detail (handles both string and validation error arrays)
         function formatApiError(detail, fallback) {
             if (typeof detail === 'string') return detail;
-            if (Array.isArray(detail)) return detail.map(e => e.msg).join('; ');
+            if (Array.isArray(detail)) {
+                // Server validation errors are {msg} objects; client-side
+                // pre-flight errors are plain strings.
+                return detail.map(e => (typeof e === 'string' ? e : (e && (e.msg || e.message)) || '')).filter(Boolean).join('; ');
+            }
             if (detail && detail.message) return detail.message;
             return fallback || 'Unknown error';
         }
