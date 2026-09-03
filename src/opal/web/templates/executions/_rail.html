@@ -18,7 +18,7 @@
                 {% for h in hold_entries %}
                 <tr class="rail-hold{% if h.disposition_state == 'undispositioned' %} rail-hold-active{% endif %}">
                     <td class="mono"><a href="/issues/{{ h.issue_id }}">{{ h.issue_number }}</a></td>
-                    <td class="mono">{% if h.blocks %}→ blocks {{ h.blocks | join(', ') }}{% endif %}</td>
+                    <td>{% for step in h.blocks %}<span class="badge" data-variant="secondary" title="Holds step {{ step }}">{{ step }}</span>{% endfor %}</td>
                     <td class="rail-disp">{{ ok.issue_state(h.disposition_state) }}</td>
                 </tr>
                 {% endfor %}

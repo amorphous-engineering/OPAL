@@ -315,7 +315,7 @@ def test_bound_hold_renders_in_document_and_rail(web_client: TestClient, auth_he
     assert rail.status_code == 200
     assert "ISSUES / HOLDS" in rail.text
     assert issue_number in rail.text
-    assert "blocks" in rail.text
+    assert '<span class="badge" data-variant="secondary" title="Holds step ' in rail.text
 
 
 def test_bound_hold_on_child_renders_in_op_header_at_ssr(
