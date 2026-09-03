@@ -305,114 +305,64 @@ select option {
     padding: 0 var(--space-md);
 }
 
-/* Tables */
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
+/* Tables are Basecoat (.table in .table-container). Register: mono, 13px,
+   uppercase muted headers, cells wrap. Row rules come from Basecoat. */
+.table {
     font-family: var(--font-mono);
-    font-size: 0.8125rem; /* 13px: same density as before the 16px root */
+    font-size: 0.8125rem;
 }
 
-.data-table th,
-.data-table td {
+.table th,
+.table td {
     padding: var(--space-xs) var(--space-sm);
     text-align: left;
-    border: 1px solid var(--border-color);
 }
 
-.data-table th {
-    background: var(--bg-tertiary);
+.table th {
+    background: var(--muted);
+    color: var(--muted-foreground);
     font-weight: 600;
-    color: var(--text-secondary);
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.05em;
 }
 
-.data-table tr:hover {
-    background: var(--bg-secondary);
+.table td {
+    white-space: normal;
 }
 
-.data-table .mono {
-    font-family: var(--font-mono);
-}
-
-.data-table .id-cell {
-    color: var(--accent-orange);
+.table .id-cell {
+    color: var(--primary);
     font-weight: 600;
 }
 
-.data-table .timestamp {
-    color: var(--text-muted);
+.table .timestamp {
+    color: var(--muted-foreground);
     font-size: 0.75rem;
 }
 
-/* Status badges */
-.status {
+/* Badges are Basecoat (.badge, data-variant). A data-state carries OPAL's
+   state colour on an outline badge: state words in state colours. */
+.badge {
     font-family: var(--font-mono);
+}
+
+.badge[data-state] {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border: 1px solid currentColor;
+    border-color: currentColor;
 }
 
-.status-ok, .status-completed, .status-active {
-    color: var(--status-ok);
-}
+.badge[data-state="ok"] { color: var(--status-ok); }
+.badge[data-state="warn"] { color: var(--status-warn); }
+.badge[data-state="error"] { color: var(--status-error); }
+.badge[data-state="info"] { color: var(--status-info); }
+.badge[data-state="inactive"] { color: var(--muted-foreground); }
 
-.status-warn, .status-pending, .status-draft {
-    color: var(--status-warn);
-}
-
-.status-error, .status-aborted, .status-critical {
-    color: var(--status-error);
-}
-
-.status-info, .status-in-progress {
-    color: var(--status-info);
-}
-
-/* Status badge variant (alias for .status, used in some templates) */
-/* Literal status-badge spans outside the macro still need their box. */
-.status-badge:not(.badge) {
-    display: inline-block;
-    padding: 2px 6px;
-    font-size: 0.75rem;
-}
-
-.status-badge {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border: 1px solid currentColor;
-}
-
-.status-badge.status-ok,
-.status-badge.status-completed,
-.status-badge.status-active {
-    color: var(--status-ok);
-}
-
-.status-badge.status-warn,
-.status-badge.status-pending,
-.status-badge.status-draft {
-    color: var(--status-warn);
-}
-
-.status-badge.status-error,
-.status-badge.status-aborted,
-.status-badge.status-critical {
-    color: var(--status-error);
-}
-
-.status-badge.status-info,
-.status-badge.status-in-progress {
-    color: var(--status-info);
-}
-
-.status-badge.status-inactive {
-    color: var(--text-muted);
+.badge.score {
+    min-width: 24px;
+    justify-content: center;
 }
 
 /* Buttons are Basecoat: class="btn" data-variant="outline|destructive|ghost|link" data-size="sm|xs".
@@ -461,7 +411,7 @@ select.select,
     margin-bottom: var(--space-md);
 }
 .toolbar .field,
-.data-table .field,
+.table .field,
 .field .field {
     margin-bottom: 0;
 }
@@ -611,7 +561,7 @@ select.select,
     border-top: none !important;
 }
 
-.audit-detail-row .data-table {
+.audit-detail-row .table {
     margin: 0;
 }
 
@@ -851,53 +801,6 @@ select.select,
 
 .part-search-clear:hover {
     color: var(--accent-red);
-}
-
-/* OPALkit Score Component - for risk P/I values */
-.score {
-    display: inline-block;
-    min-width: 24px;
-    padding: 2px 6px;
-    font-family: var(--font-mono);
-    font-weight: 600;
-    text-align: center;
-    border: 1px solid var(--border-color);
-}
-
-.score-ok {
-    color: var(--status-ok);
-    border-color: var(--status-ok);
-}
-
-.score-warn {
-    color: var(--status-warn);
-    border-color: var(--status-warn);
-}
-
-.score-error {
-    color: var(--status-error);
-    border-color: var(--status-error);
-}
-
-/* Badges are Basecoat (.badge, data-variant). OPAL adds the register and the
-   state-colour variants. */
-.badge {
-    font-family: var(--font-mono);
-}
-
-.badge-info {
-    color: var(--accent-orange);
-    border-color: var(--accent-orange);
-}
-
-.badge-warn {
-    color: var(--status-warn);
-    border-color: var(--status-warn);
-}
-
-.badge-error {
-    color: var(--status-error);
-    border-color: var(--status-error);
 }
 
 /* Utility: ensure text-warn works */
@@ -2172,31 +2075,31 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
     font-weight: 600;
 }
 
-.panel-ledger .data-table {
+.panel-ledger .table {
     font-size: 0.8rem;
 }
 
-.panel-ledger .data-table th,
-.panel-ledger .data-table td {
+.panel-ledger .table th,
+.panel-ledger .table td {
     padding: 5px 8px;
 }
 
-.panel-ledger .data-table .row-actions {
+.panel-ledger .table .row-actions {
     white-space: nowrap;
     text-align: right;
 }
 
-.panel-ledger .data-table .row-actions a {
+.panel-ledger .table .row-actions a {
     color: var(--text-secondary);
     text-decoration: none;
     padding: 2px 6px;
 }
 
-.panel-ledger .data-table .row-actions a:hover {
+.panel-ledger .table .row-actions a:hover {
     color: var(--text-primary);
 }
 
-.panel-ledger .data-table .row-actions a.act-remove:hover {
+.panel-ledger .table .row-actions a.act-remove:hover {
     color: var(--accent-red);
 }
 
@@ -2237,7 +2140,7 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 }
 
 /* One-line index rows: content cells clip, never wrap. */
-.data-table td.cell-clip {
+.table td.cell-clip {
     max-width: 0;
     white-space: nowrap;
     overflow: hidden;

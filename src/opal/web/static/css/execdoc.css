@@ -184,7 +184,6 @@
 .op-card-spacer { flex: 1; }
 .op-card-progress { color: var(--text-secondary); }
 .op-card-progress.is-done { color: var(--accent-green); }
-.op-caution-chip { color: var(--accent-red); border-color: var(--accent-red); }
 .op-card-blockline a { color: inherit; }
 
 .op-card-body {
@@ -262,17 +261,9 @@
     gap: 2px;
 }
 
-.cursor-chip {
-    font-size: 0.7rem;
-    padding: 0 4px;
-    border: 1px solid var(--accent-orange);
-    color: var(--accent-orange);
-    white-space: nowrap;
-    background: var(--bg-primary);
-}
+.cursor-chip { font-size: 0.7rem; height: auto; padding: 0 4px; background: var(--background); }
 
-.cursor-chip.is-self { background: var(--accent-orange); color: var(--bg-primary); }
-.cursor-chip.is-stale { border-color: var(--border-light); color: var(--text-muted); }
+.cursor-chip.is-stale { border-color: var(--input); color: var(--muted-foreground); }
 
 @media (min-width: 1280px) {
     .step-cursors {
@@ -293,13 +284,7 @@
     100% { background: transparent; }
 }
 
-.role-chip {
-    font-size: 0.7rem;
-    padding: 0 var(--space-xs);
-    border: 1px solid var(--border-light);
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
+.role-chip { font-size: 0.7rem; height: auto; padding: 0 var(--space-xs); color: var(--text-secondary); }
 
 .doc-ind { display: inline-flex; gap: var(--space-xs); color: var(--text-secondary); font-size: 0.75rem; }
 .doc-ind .ind { cursor: pointer; }
@@ -464,12 +449,12 @@
 
 /* Work-order facts: a detail-row table inside the header's ··· popover. */
 .exec-meta-popover { padding: var(--space-xs); min-width: 360px; }
-.exec-meta-popover .data-table { margin: 0; }
+.exec-meta-popover .table { margin: 0; }
 .exec-meta-pref { margin: var(--space-sm) 0 var(--space-xs) var(--space-xs); }
 .rail-table td { padding: 2px var(--space-xs); }
 .rail-disp { font-size: 0.65rem; white-space: nowrap; }
 .rail-disp-undispositioned { color: var(--accent-red); }
-.rail-issue-title { overflow: hidden; text-overflow: ellipsis; max-width: 140px; white-space: nowrap; }
+.rail-table td.rail-issue-title { overflow: hidden; text-overflow: ellipsis; max-width: 140px; white-space: nowrap; }
 
 .rail-attach-group { margin-bottom: var(--space-sm); }
 

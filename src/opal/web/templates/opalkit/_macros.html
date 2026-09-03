@@ -29,34 +29,24 @@
 {%- endif -%}
 {% endmacro %}
 
-{# Status badge macro
+{# Status badge macro — a Basecoat outline badge carrying a state colour.
    Usage: {{ ok.status("ACTIVE") }}
           {{ ok.status("COMPLETED", "ok") }}
           {{ ok.status(part.status.value, part.status.value | lower) }}
 
-   Variants: ok, warn, error, info, pending, draft, active, completed, in-progress, inactive
+   State is detected from the variant (or the value): ok, warn, error, info, inactive.
+   Anything else renders as a plain outline badge.
 #}
 {% macro status(value, variant=none) %}
-{%- set variant_class = "" -%}
-{%- if variant -%}
-    {%- set variant_class = "status-" ~ variant -%}
-{%- else -%}
-    {# Auto-detect variant from value #}
-    {%- set v = value | lower if value else "" -%}
-    {%- if v in ["active", "completed", "ok", "received", "published"] -%}
-        {%- set variant_class = "status-ok" -%}
-    {%- elif v in ["pending", "draft", "warn", "ordered", "partial"] -%}
-        {%- set variant_class = "status-warn" -%}
-    {%- elif v in ["error", "aborted", "critical", "cancelled", "closed"] -%}
-        {%- set variant_class = "status-error" -%}
-    {%- elif v in ["in_progress", "in-progress", "in work", "in_work", "info"] -%}
-        {%- set variant_class = "status-info" -%}
-    {%- elif v in ["inactive", "deprecated", "cut"] -%}
-        {# CUT is staged work, not a warning — muted until work starts. #}
-        {%- set variant_class = "status-inactive" -%}
-    {%- endif -%}
+{%- set v = (variant or value or "") | lower | replace("_", "-") -%}
+{%- set state = none -%}
+{%- if v in ["ok", "active", "completed", "received", "published"] -%}{% set state = "ok" %}
+{%- elif v in ["warn", "pending", "draft", "ordered", "partial"] -%}{% set state = "warn" %}
+{%- elif v in ["error", "aborted", "critical", "cancelled", "closed"] -%}{% set state = "error" %}
+{%- elif v in ["info", "in-progress", "in work", "in-work"] -%}{% set state = "info" %}
+{%- elif v in ["inactive", "deprecated", "cut"] -%}{% set state = "inactive" %}
 {%- endif -%}
-<span class="badge status-badge {{ variant_class }}" data-variant="outline">{{ value }}</span>
+<span class="badge" data-variant="outline"{% if state %} data-state="{{ state }}"{% endif %}>{{ value }}</span>
 {%- endmacro %}
 
 {# Issue STATE register — the one home for every issue index row (issues list,
@@ -288,9 +278,7 @@
    Variants: default, info, warn, error
 #}
 {% macro badge(text, variant="default", removable=false, onclick=none) %}
-{%- set classes = ["badge"] -%}
-{%- if variant != "default" %}{% set classes = classes + ["badge-" ~ variant] %}{% endif -%}
-<span class="{{ classes | join(' ') }}" data-variant="{{ 'outline' if variant != 'default' else 'secondary' }}">{{ text }}{%- if removable -%}<button type="button" onclick="{{ onclick }}" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>{%- endif -%}</span>
+<span class="badge" data-variant="{{ 'outline' if variant != 'default' else 'secondary' }}"{% if variant != 'default' %} data-state="{{ variant }}"{% endif %}>{{ text }}{%- if removable -%}<button type="button" onclick="{{ onclick }}" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>{%- endif -%}</span>
 {%- endmacro %}
 
 {# Score macro - for risk probability/impact scores
@@ -300,7 +288,7 @@
 {% macro score(value, max=5) %}
 {%- set pct = (value / max * 100) | int -%}
 {%- set color = "ok" if pct <= 40 else ("warn" if pct <= 60 else "error") -%}
-<span class="score score-{{ color }}">{{ value }}</span>
+<span class="badge score" data-variant="outline" data-state="{{ color }}">{{ value }}</span>
 {%- endmacro %}
 
 {# Severity macro - for risk severity display (P x I)
@@ -309,11 +297,11 @@
 {% macro severity(probability, impact) %}
 {%- set score = probability * impact -%}
 {%- if score >= 15 -%}
-<span class="badge status-badge status-error" data-variant="outline">HIGH ({{ score }})</span>
+<span class="badge" data-variant="outline" data-state="error">HIGH ({{ score }})</span>
 {%- elif score >= 8 -%}
-<span class="badge status-badge status-warn" data-variant="outline">MEDIUM ({{ score }})</span>
+<span class="badge" data-variant="outline" data-state="warn">MEDIUM ({{ score }})</span>
 {%- else -%}
-<span class="badge status-badge status-ok" data-variant="outline">LOW ({{ score }})</span>
+<span class="badge" data-variant="outline" data-state="ok">LOW ({{ score }})</span>
 {%- endif -%}
 {% endmacro %}
 
@@ -396,13 +384,15 @@
 </div>
 {% endmacro %}
 
-{# Data table macro - wrapper for consistent tables
+{# Data table macro - Basecoat table in a scroll container
    Usage: {% call ok.table() %}...thead and tbody...{% endcall %}
 #}
 {% macro table(id=none) %}
-<table class="data-table"{% if id %} id="{{ id }}"{% endif %}>
+<div class="table-container">
+<table class="table"{% if id %} id="{{ id }}"{% endif %}>
     {{ caller() }}
 </table>
+</div>
 {% endmacro %}
 
 {# Modal macro - native <dialog> styled by Basecoat.

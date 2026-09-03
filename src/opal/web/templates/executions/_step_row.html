@@ -57,7 +57,7 @@
         <div class="step-kit-panel">
             <div class="label">STEP PARTS{% if step_cons %} {{ ok.status("CONSUMED " ~ step_cons|length, "ok") }}{% endif %}</div>
             {% if step_kit %}
-            <table class="data-table" data-step-kit="{{ step.order }}">
+            <table class="table" data-step-kit="{{ step.order }}">
                 <thead><tr>
                     <th>PART</th>
                     <th style="width:60px;text-align:right;">QTY</th>

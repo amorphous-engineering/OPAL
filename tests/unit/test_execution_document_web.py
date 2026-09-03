@@ -283,7 +283,7 @@ def test_role_chip_and_caution_render(web_client: TestClient):
 
     resp = web_client.get(f"/executions/{instance_id}")
     assert resp.status_code == 200
-    assert '<span class="role-chip mono">TC</span>' in resp.text
+    assert '<span class="badge role-chip" data-variant="outline">TC</span>' in resp.text
     assert "<h2>CAUTION</h2><section>HOT SURFACE</section>" in resp.text
 
 
@@ -403,7 +403,7 @@ def test_dockbar_follows_cursor_with_data_fields(web_client: TestClient, test_us
 
     # The document renders the session user's cursor chip server-side.
     page = web_client.get(f"/executions/{instance_id}")
-    assert '<span class="cursor-chip mono is-self"' in page.text
+    assert '<span class="badge cursor-chip is-self" data-variant="primary"' in page.text
 
 
 def test_dockbar_op_row_renders_inert_complete_with_children_reason(web_client: TestClient):

@@ -16,7 +16,7 @@
         {% if consumptions %}
         {# Consumed rows carry the physical-item identity: part number and
            OPAL # trace each deduction to the exact stock record it came from. #}
-        <table class="data-table">
+        <table class="table">
             <thead>
                 <tr>
                     <th style="width: 130px;">PART</th>
@@ -43,7 +43,7 @@
             </tbody>
         </table>
         {% else %}
-        <table class="data-table" id="kit-table">
+        <table class="table" id="kit-table">
             <thead>
                 <tr>
                     <th>PART</th>
@@ -104,7 +104,7 @@
         </div>
     </div>
     <div class="panel-body">
-        <table class="data-table">
+        <table class="table">
             <thead>
                 <tr>
                     <th>PART</th>
@@ -150,7 +150,7 @@
 <div class="panel">
     <div class="panel-header"><span>ASSEMBLY OUTPUT</span></div>
     <div class="panel-body">
-        <table class="data-table" id="output-table">
+        <table class="table" id="output-table">
             <thead><tr><th>PART</th><th style="width:100px;text-align:right;">EXPECTED</th><th style="width:100px;">QTY</th><th style="width:150px;">LOCATION *</th><th style="width:100px;">LOT</th><th style="width:150px;">SERIAL</th></tr></thead>
             <tbody>
                 {% for out in output_items %}

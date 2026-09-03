@@ -70,7 +70,7 @@
 
 {# Identity readout — every meta fact, always rendered; absence is a
    muted dash. Labels are nouns, values are facts. Edits live behind EDIT. #}
-<table class="data-table part-identity">
+<table class="table part-identity">
     <tbody>
         <tr><th>CATEGORY</th><td>{% if part.category %}{{ part.category | upper }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
         <tr><th>UOM</th><td>{{ (part.unit_of_measure or 'EA') | upper }}</td></tr>

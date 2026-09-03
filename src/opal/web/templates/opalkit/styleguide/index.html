@@ -15,7 +15,7 @@
 
     {# ---------------- Tokens ---------------- #}
     {% call ok.panel("TOKENS") %}
-        <table class="data-table">
+        <table class="table">
             <thead>
                 <tr>{{ ok.th("TOKEN", width="220px") }}{{ ok.th("SWATCH", width="120px") }}{{ ok.th("ROLE") }}{{ ok.th("LEGACY ALIAS", width="180px") }}</tr>
             </thead>
@@ -49,7 +49,7 @@
 
     {# ---------------- Typography ---------------- #}
     {% call ok.panel("TYPOGRAPHY") %}
-        <table class="data-table">
+        <table class="table">
             <thead><tr>{{ ok.th("STYLE", width="180px") }}{{ ok.th("EXAMPLE") }}{{ ok.th("USAGE", width="260px") }}</tr></thead>
             <tbody>
                 <tr><td class="mono">h1</td><td><h1>Part RV1-F-0001</h1></td><td class="text-muted">page title, one per page</td></tr>
@@ -57,7 +57,7 @@
                 <tr><td class="mono">h3</td><td><h3>Sub-section</h3></td><td class="text-muted">inside panels</td></tr>
                 <tr><td class="mono">body 14px</td><td>Prose is IBM Plex Sans at 14px on a 16px root.</td><td class="text-muted">descriptions, notes</td></tr>
                 <tr><td class="mono">.mono</td><td><span class="mono">RV1-F-0001 · 2026-09-02T22:14:07Z</span></td><td class="text-muted">identifiers, timestamps, data</td></tr>
-                <tr><td class="mono">.data-table 13px</td><td class="mono">Table cells pin 13px so density matches the old 14px root.</td><td class="text-muted">every collection</td></tr>
+                <tr><td class="mono">.table 13px</td><td class="mono">Table cells pin 13px so density matches the old 14px root.</td><td class="text-muted">every collection</td></tr>
                 <tr><td class="mono">Basecoat xs 12px</td><td><span class="btn" data-variant="outline" data-size="sm">CONTROL</span></td><td class="text-muted">buttons, fields, menus, badges</td></tr>
                 <tr><td class="mono">.kbd</td><td><kbd class="kbd">⌘K</kbd> <kbd class="kbd">Esc</kbd></td><td class="text-muted">shortcut hints</td></tr>
             </tbody>
@@ -235,7 +235,7 @@ openModal('add-modal')  /  closeModal('add-modal'){% endraw %}</pre>
                 </tr>
             </tbody>
         {% endcall %}
-        <table class="data-table" style="margin-top: var(--space-md); max-width: 520px;">
+        <table class="table" style="margin-top: var(--space-md); max-width: 520px;">
             {{ ok.detail_row("NAME", "Feed line, LOX, 1.5 in") }}
             {{ ok.detail_row("PART NUMBER", "RV1-F-0001", mono=true) }}
             {{ ok.detail_row("STATUS", ok.status("ACTIVE")) }}
@@ -263,7 +263,7 @@ openModal('add-modal')  /  closeModal('add-modal'){% endraw %}</pre>
 
     {# ---------------- Risk ---------------- #}
     {% call ok.panel("RISK SCORES") %}
-        <table class="data-table" style="max-width: 420px;">
+        <table class="table" style="max-width: 420px;">
             <thead><tr>{{ ok.th("P") }}{{ ok.th("I") }}{{ ok.th("SEVERITY") }}</tr></thead>
             <tbody>
                 <tr><td>{{ ok.score(1) }}</td><td>{{ ok.score(2) }}</td><td>{{ ok.severity(1, 2) }}</td></tr>

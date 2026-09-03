@@ -20,9 +20,9 @@
         <span class="op-card-num mono">OP {{ op.step_number }}</span>
         <span class="op-card-title">{{ op.title }}</span>
         {% if op.is_contingency %}{{ ok.status("CONTINGENCY", "warn") }}{% endif %}
-        {% if op_vs.get('strict_sequence') %}<span class="role-chip mono" title="Sub-steps complete in order">SEQ</span>{% endif %}
+        {% if op_vs.get('strict_sequence') %}<span class="badge role-chip" data-variant="outline" title="Sub-steps complete in order">SEQ</span>{% endif %}
         {{ ex.role_chip(op_vs.get('required_role')) }}
-        {% if op_vs.get('caution') %}<span class="role-chip mono op-caution-chip" title="{{ op_vs.get('caution') }}">CAUTION</span>{% endif %}
+        {% if op_vs.get('caution') %}<span class="badge role-chip" data-variant="outline" data-state="error" title="{{ op_vs.get('caution') }}">CAUTION</span>{% endif %}
         <span class="op-card-spacer"></span>
         <span class="op-card-progress mono{% if op_terminal %} is-done{% endif %}" data-op-progress>{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
         {% if inst_status in ['cut', 'in_work'] %}

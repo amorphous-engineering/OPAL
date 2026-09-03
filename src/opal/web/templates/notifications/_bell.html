@@ -7,7 +7,7 @@
     </button>
     <div class="notif-dropdown">
         {% if notifications %}
-        <table class="data-table notif-table">
+        <table class="table notif-table">
             <tbody>
                 {% for n in notifications %}
                 <tr class="{% if not n.is_read %}notif-unread{% endif %}">

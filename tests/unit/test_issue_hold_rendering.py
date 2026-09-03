@@ -346,7 +346,7 @@ def test_issues_list_mixed_register(web_client):
     rows = web_client.get("/issues/table")
     assert rows.status_code == 200
     # Exactly one warning-weight badge: the bearing-undispositioned row.
-    assert rows.text.count("status-error") == 1
+    assert rows.text.count('data-state="error"') == 1
     assert ">UNDISP<" in rows.text
     # The advisory TASK row is calm: plain text state, plain unboxed type.
     assert ">open<" in rows.text

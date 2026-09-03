@@ -1,6 +1,6 @@
 {# Shared execution-document macros. Import as: {% import 'executions/_exec_macros.html' as ex %} #}
 
-{% macro role_chip(role) %}{% if role %}<span class="role-chip mono">{{ role }}</span>{% endif %}{% endmacro %}
+{% macro role_chip(role) %}{% if role %}<span class="badge role-chip" data-variant="outline">{{ role }}</span>{% endif %}{% endmacro %}
 
 {% macro hm(dt) %}{% if dt %}<span title="{{ dt.strftime('%Y-%m-%dT%H:%M:%S') }}Z">{{ dt.strftime('%H:%M') }}</span>{% endif %}{% endmacro %}
 
@@ -121,7 +121,7 @@
 {% macro cursor_chips(step, cursors_by_se, current_user) %}
 {% set exec = step.execution %}
 <span class="step-cursors" data-cursors>
-{%- if exec %}{% for c in cursors_by_se.get(exec.id, []) %}<span class="cursor-chip mono{% if current_user and c.user and c.user.id == current_user.id %} is-self{% endif %}" title="{{ c.user.name if c.user else '' }}">{{ (c.user.name if c.user else none) | initials }}</span>{% endfor %}{% endif -%}
+{%- if exec %}{% for c in cursors_by_se.get(exec.id, []) %}<span class="badge cursor-chip{% if current_user and c.user and c.user.id == current_user.id %} is-self{% endif %}" data-variant="{{ 'primary' if current_user and c.user and c.user.id == current_user.id else 'outline' }}" title="{{ c.user.name if c.user else '' }}">{{ (c.user.name if c.user else none) | initials }}</span>{% endfor %}{% endif -%}
 </span>
 {% endmacro %}
 

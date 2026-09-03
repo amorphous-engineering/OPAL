@@ -125,7 +125,7 @@ function insertCreatedRow(editor, req) {
         '<a class="tree-num mono" href="/requirements/' + req.id + '">' + escapeHtml(req.req_number) + '</a>' +
         '<span class="tree-statement">' + escapeHtml(req.statement) + '</span>' +
         '<span class="tree-meta">' +
-        '<span class="status-badge status-draft">DRAFT</span>' +
+        '<span class="badge" data-variant="outline" data-state="warn">DRAFT</span>' +
         '<span class="tree-lvl mono">L' + req.level + '·' + (req.verification_method || '—')[0].toUpperCase() + '</span>' +
         '<span class="tree-age mono">now</span></span>';
     ghost.parentNode.insertBefore(row, ghost);

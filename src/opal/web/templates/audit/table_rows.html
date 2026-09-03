@@ -22,7 +22,7 @@
     <td colspan="6" style="padding: 0;">
         <div style="padding: var(--space-sm) var(--space-md); background: var(--bg-tertiary);">
             {% if action_val == 'create' and entry.new_values %}
-            <table class="data-table" style="font-size: 0.75rem;">
+            <table class="table" style="font-size: 0.75rem;">
                 <thead><tr><th>FIELD</th><th>VALUE</th></tr></thead>
                 <tbody>
                 {% for key, val in entry.new_values.items() %}
@@ -34,7 +34,7 @@
                 </tbody>
             </table>
             {% elif action_val == 'update' and entry.new_values %}
-            <table class="data-table" style="font-size: 0.75rem;">
+            <table class="table" style="font-size: 0.75rem;">
                 <thead><tr><th>FIELD</th><th>OLD</th><th>NEW</th></tr></thead>
                 <tbody>
                 {% for key, new_val in entry.new_values.items() %}
@@ -48,7 +48,7 @@
                 </tbody>
             </table>
             {% elif action_val == 'delete' and entry.old_values %}
-            <table class="data-table" style="font-size: 0.75rem;">
+            <table class="table" style="font-size: 0.75rem;">
                 <thead><tr><th>FIELD</th><th>VALUE</th></tr></thead>
                 <tbody>
                 {% for key, val in entry.old_values.items() %}

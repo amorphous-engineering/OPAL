@@ -4,7 +4,7 @@
     <div class="panel-header"><span>BOM RECONCILIATION</span></div>
     <div class="panel-body">
         {% if bom_items %}
-        <table class="data-table">
+        <table class="table">
             <thead><tr><th>PART</th><th style="width:100px;text-align:right;">REQUIRED</th><th style="width:100px;text-align:right;">CONSUMED</th><th style="width:100px;text-align:right;">VARIANCE</th></tr></thead>
             <tbody>
                 {% for item in bom_items %}
@@ -24,7 +24,7 @@
         {% if unplanned_consumptions %}
         <div style="margin-top: var(--space-md);">
             <strong class="text-yellow">UNPLANNED CONSUMPTIONS</strong>
-            <table class="data-table" style="margin-top: var(--space-sm);">
+            <table class="table" style="margin-top: var(--space-sm);">
                 <thead><tr><th>PART</th><th style="width:100px;text-align:right;">QTY</th></tr></thead>
                 <tbody>
                     {% for item in unplanned_consumptions %}

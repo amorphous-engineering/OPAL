@@ -38,7 +38,7 @@
         <div class="popover">
             <button type="button" class="btn" data-variant="outline" data-size="xs" id="exec-meta-btn" aria-expanded="false" aria-controls="exec-meta-popover" aria-label="Work order facts">···</button>
             <div id="exec-meta-popover" data-popover aria-hidden="true" data-side="bottom" data-align="end" class="exec-meta-popover">
-                <table class="data-table rail-facts">
+                <table class="table rail-facts">
                     <tbody>
                         {{ ok.detail_row("STARTED", ts(instance.started_at), mono=true, th_width="120px") }}
                         {{ ok.detail_row("STARTED BY", instance.started_by_user.name if instance.started_by_user else '—', th_width="120px") }}

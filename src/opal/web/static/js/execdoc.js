@@ -405,9 +405,10 @@
             slot.innerHTML = '';
             for (const c of s.cursors) {
                 const chip = document.createElement('span');
-                chip.className = 'cursor-chip mono'
+                chip.className = 'badge cursor-chip'
                     + (c.user_id === myId ? ' is-self' : '')
                     + (c.stale ? ' is-stale' : '');
+                chip.dataset.variant = c.user_id === myId ? 'primary' : 'outline';
                 chip.textContent = c.initials || '?';
                 chip.title = c.name || '';
                 slot.appendChild(chip);

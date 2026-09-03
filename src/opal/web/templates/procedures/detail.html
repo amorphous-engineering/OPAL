@@ -655,7 +655,7 @@ function renderStepSchema(stepId) {
         container.innerHTML = '<span class="text-muted">No data capture fields defined</span>';
         return;
     }
-    let html = '<table class="data-table"><thead><tr><th>NAME</th><th>LABEL</th><th style="width:80px;">TYPE</th><th style="width:60px;">REQ</th><th style="width:100px;"></th></tr></thead><tbody>';
+    let html = '<table class="table"><thead><tr><th>NAME</th><th>LABEL</th><th style="width:80px;">TYPE</th><th style="width:60px;">REQ</th><th style="width:100px;"></th></tr></thead><tbody>';
     fields.forEach((f, i) => {
         html += `<tr><td class="mono">${escapeHtml(f.name)}</td><td>${escapeHtml(f.label)}</td><td>${escapeHtml(f.type)}</td><td>${f.required ? 'YES' : '-'}</td><td style="display:flex;gap:var(--space-xs);"><button type="button" class="btn" data-variant="outline" data-size="xs" onclick="editField(${stepId}, ${i})">EDIT</button><button type="button" class="btn" data-variant="outline" data-size="xs" style="color:var(--accent-red);" onclick="deleteField(${stepId}, ${i})">X</button></td></tr>`;
     });

@@ -33,7 +33,7 @@
         <div class="mono" style="font-size: 1.25rem;">{{ opal_number }}</div>
 
         {# Fact readout — detail rows, always rendered; absence is a muted dash #}
-        <table class="data-table part-identity">
+        <table class="table part-identity">
             <tbody>
                 <tr><th>PART</th><td><a href="/parts/{{ record.part_id }}" class="mono">{{ record.part.internal_pn }}</a> {{ record.part.name }}</td></tr>
                 <tr><th>EXTERNAL PN</th><td class="mono">{% if record.part.external_pn %}{{ record.part.external_pn }}{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
@@ -102,7 +102,7 @@
         <span>TRACEABILITY HISTORY</span>
         <span class="header-count">{{ history | length }}</span>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("TIMESTAMP", width="180px") }}
@@ -173,7 +173,7 @@
     <div class="panel-body" style="padding-bottom: 0;">
         <div id="test-status-summary" class="mono" style="font-size: 0.875rem;"></div>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("TEST NAME") }}
@@ -521,11 +521,11 @@ async function loadTestStatus() {
         summaryEl.textContent = parts.join('  |  ');
 
         if (status.overall_status === 'pass') {
-            badgeEl.innerHTML = '<span class="status-badge status-ok">PASS</span>';
+            badgeEl.innerHTML = '<span class="badge" data-variant="outline" data-state="ok">PASS</span>';
         } else if (status.overall_status === 'fail') {
-            badgeEl.innerHTML = '<span class="status-badge status-error">FAIL</span>';
+            badgeEl.innerHTML = '<span class="badge" data-variant="outline" data-state="error">FAIL</span>';
         } else {
-            badgeEl.innerHTML = '<span class="status-badge status-warn">PENDING</span>';
+            badgeEl.innerHTML = '<span class="badge" data-variant="outline" data-state="warn">PENDING</span>';
         }
     } catch (e) {
         // Silent failure — not critical

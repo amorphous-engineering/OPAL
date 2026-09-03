@@ -13,7 +13,7 @@
         {% set hold_entries = exec_state.holds %}
         {% set hold_issue_ids = hold_entries | map(attribute='issue_id') | list %}
         {% if hold_entries %}
-        <table class="data-table rail-table">
+        <table class="table rail-table">
             <tbody>
                 {% for h in hold_entries %}
                 <tr class="rail-hold{% if h.disposition_state == 'undispositioned' %} rail-hold-active{% endif %}">
@@ -27,7 +27,7 @@
         {% endif %}
         {% set other_issues = linked_issues | rejectattr('id', 'in', hold_issue_ids) | list %}
         {% if other_issues %}
-        <table class="data-table rail-table">
+        <table class="table rail-table">
             <tbody>
                 {% for iss in other_issues %}
                 <tr>
@@ -105,7 +105,7 @@
     <details class="rail-section" open>
         <summary class="rail-head mono">REFERENCE DOCS</summary>
         {% if reference_attachments %}
-        <table class="data-table rail-table">
+        <table class="table rail-table">
             <tbody>
                 {% for a in reference_attachments %}
                 <tr>

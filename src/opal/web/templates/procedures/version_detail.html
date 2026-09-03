@@ -63,7 +63,7 @@
                     {% if step.required_data_schema and step.required_data_schema.fields %}
                     <div style="margin: var(--space-sm) 0;">
                         <div class="label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
-                        <table class="data-table">
+                        <table class="table">
                             <thead><tr>{{ ok.th("FIELD") }}{{ ok.th("TYPE", width="80px") }}{{ ok.th("REQUIRED", width="80px") }}</tr></thead>
                             <tbody>
                                 {% for field in step.required_data_schema.fields %}
@@ -124,7 +124,7 @@
                     {% if step.required_data_schema and step.required_data_schema.fields %}
                     <div style="margin: var(--space-sm) 0;">
                         <div class="label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
-                        <table class="data-table">
+                        <table class="table">
                             <thead><tr>{{ ok.th("FIELD") }}{{ ok.th("TYPE", width="80px") }}{{ ok.th("REQUIRED", width="80px") }}</tr></thead>
                             <tbody>
                                 {% for field in step.required_data_schema.fields %}

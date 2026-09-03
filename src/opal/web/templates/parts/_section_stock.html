@@ -18,7 +18,7 @@
             <a class="ledger-add" href="#" onclick="showAddComponent(); return false;">+ ADD</a>
         </div>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("PN", width="130px") }}
@@ -69,7 +69,7 @@
             <a class="ledger-add" href="#" onclick="toggleReceiveStock(); return false;">+ ADD</a>
         </div>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("OPAL #", width="120px") }}
@@ -109,7 +109,7 @@
         <span>PO LINES</span>
         <span class="header-count">{{ open_po_lines | length }}</span>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("PO", width="120px") }}
@@ -142,7 +142,7 @@
             <a class="ledger-add" href="#" onclick="showAddSupplier(); return false;">+ ADD</a>
         </div>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("SUPPLIER") }}
@@ -174,7 +174,7 @@
         <span>WHERE USED</span>
         <span class="header-count">{{ where_used | length }}</span>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("PN", width="130px") }}
@@ -206,7 +206,7 @@
         <span>PROCEDURE USE</span>
         <span class="header-count">{{ (kit_usages | length) + (step_kit_usages | length) }}</span>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("PROCEDURE") }}
@@ -249,7 +249,7 @@
         <span>CONSUMED</span>
         <span class="header-count">{{ consumption_history | length }}{{ '+' if consumption_history | length == 50 }}</span>
     </div>
-    <table class="data-table">
+    <table class="table">
         <thead>
             <tr>
                 {{ ok.th("DATE", width="110px") }}
