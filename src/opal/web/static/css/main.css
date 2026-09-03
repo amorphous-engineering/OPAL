@@ -963,18 +963,28 @@ body.procedure-detail .exec-tabs {
 
 /* Execution page tab strip: Basecoat tabs (line variant), full-bleed like
    the legacy strip, mono uppercase register, accent on the selected tab. */
+/* The wrapper holds both the strip and the swapped panel, so it must pass
+   the page's remaining height through: flex column, min-height 0. */
 body.exec-detail .exec-tabbar {
-    margin-left: calc(-1 * var(--space-md));
-    margin-right: calc(-1 * var(--space-md));
-    padding-left: var(--space-md);
-    padding-right: var(--space-md);
-    border-bottom: 1px solid var(--border-color);
-    margin-bottom: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
 }
 
 .exec-tabbar > [role="tablist"] {
     height: auto;
     padding: 0;
+    flex-shrink: 0;
+    margin-bottom: var(--space-md);
+}
+
+body.exec-detail .exec-tabbar > [role="tablist"] {
+    margin-left: calc(-1 * var(--space-md));
+    margin-right: calc(-1 * var(--space-md));
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .exec-tabbar [role="tab"] {
