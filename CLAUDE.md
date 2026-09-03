@@ -51,7 +51,7 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 - `src/opal/core/` — Business logic (audit, inventory, designators, genealogy)
 - `src/opal/db/models/` — SQLAlchemy ORM models (19 model files, re-exported from `__init__.py`)
 - `src/opal/db/base.py` — `Base` declarative base, `IdMixin`, `TimestampMixin`, `SoftDeleteMixin`
-- `src/opal/web/routes.py` — All HTMX web routes (~85KB single file)
+- `src/opal/web/routes.py` — All HTMX web routes (single file). `web/context.py` holds the Jinja environment, `static_url` and `get_base_context`; `web/execution_context.py` builds the execution document's view model (`build_execution_context`, `set_bar_step`)
 - `src/opal/config.py` — Settings via pydantic-settings, all env vars use `OPAL_` prefix
 - `src/opal/project.py` — `opal.project.yaml` bootstrap loader (read-once, deprecated as a write target); live project config (tiers, part numbering, categories) is stored in the `app_setting` table under the `project_config` key
 - `src/opal/core/lifecycle.py` — demo-database switching (separate throwaway `demo.<name>` file) and factory reset; one instance = one project
