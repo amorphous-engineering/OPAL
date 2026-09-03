@@ -279,7 +279,6 @@
 
 .cursor-chip.is-stale { border-color: var(--input); color: var(--muted-foreground); }
 
-
 .doc-step.pulse, .rail-attach-group.pulse {
     animation: execdoc-pulse 1.5s ease;
 }
@@ -357,12 +356,6 @@
     color: var(--text-secondary);
     font-size: 0.75rem;
     min-width: 160px;
-}
-
-.ro-notes {
-    white-space: pre-wrap;
-    color: var(--text-secondary);
-    font-size: 0.8rem;
 }
 
 /* The running notes log — deliberately its own block, set off from the
@@ -447,9 +440,7 @@
 }
 /* The inert button keeps its edges so the label reads as attached to it. */
 .button-group > .btn:disabled { opacity: 1; color: var(--muted-foreground); background: var(--muted); border-color: var(--border); }
-.step-kit-actions { display: flex; justify-content: flex-end; margin-top: var(--space-xs); }
 .step-kit-consumed { margin-top: var(--space-xs); font-size: 0.75rem; }
-
 
 /* ============ Rail ============ */
 
@@ -480,7 +471,6 @@
 .rail-table td { padding: 2px var(--space-xs); }
 .rail-table td:first-child { white-space: nowrap; }
 .rail-disp { font-size: 0.65rem; white-space: nowrap; }
-.rail-disp-undispositioned { color: var(--accent-red); }
 .rail-table td.rail-issue-title { overflow: hidden; text-overflow: ellipsis; max-width: 140px; white-space: nowrap; }
 
 .rail-attach-group { margin-bottom: var(--space-sm); }

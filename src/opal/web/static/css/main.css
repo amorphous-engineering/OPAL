@@ -549,10 +549,6 @@ select.select,
     color: var(--muted-foreground);
 }
 
-.cmd-type-action {
-    color: var(--primary);
-}
-
 .cmd-label {
     flex: 1;
     overflow: hidden;
@@ -612,19 +608,11 @@ select.select,
 .mono { font-family: var(--font-mono); }
 .text-muted { color: var(--text-muted); }
 .text-secondary { color: var(--text-secondary); }
-.text-blue { color: var(--accent-blue); }
 .text-green { color: var(--accent-green); }
 .text-yellow { color: var(--accent-yellow); }
 .text-red { color: var(--accent-red); }
 
-.mt-xs { margin-top: var(--space-xs); }
-.mt-sm { margin-top: var(--space-sm); }
 .mt-md { margin-top: var(--space-md); }
-.mt-lg { margin-top: var(--space-lg); }
-.mt-xl { margin-top: var(--space-xl); }
-.mb-md { margin-bottom: var(--space-md); }
-.p-md { padding: var(--space-md); }
-
 /* Stats/Metrics */
 .stat {
     padding: var(--space-md);
@@ -652,11 +640,6 @@ select.select,
     text-align: center;
     padding: var(--space-xl);
     color: var(--text-muted);
-}
-
-.empty-state-icon {
-    font-size: 3rem;
-    margin-bottom: var(--space-md);
 }
 
 /* Loading indicator (shown inline, no spinner) */
@@ -1035,10 +1018,6 @@ body.procedure-detail .exec-tab-content > div {
     background: var(--accent-red);
     text-decoration: underline;
 }
-.exec-sidebar-item--redline {
-    border-left: 3px solid var(--accent-red);
-}
-
 .exec-sidebar-item-title {
     font-family: var(--font-sans);
     font-weight: 600;
@@ -1079,23 +1058,7 @@ body.procedure-detail .exec-tab-content > div {
     border: 1px solid var(--text-muted);
 }
 
-.exec-sidebar-status--completed,
-.exec-sidebar-status--signed_off {
-    background: var(--accent-green);
-    border-color: var(--accent-green);
-}
-
-.exec-sidebar-status--in_progress {
-    background: var(--accent-orange);
-    border-color: var(--accent-orange);
-}
-
 .exec-sidebar-status--awaiting_signoff {
-    background: var(--accent-yellow);
-    border-color: var(--accent-yellow);
-}
-
-.exec-sidebar-status--on_hold {
     background: var(--accent-yellow);
     border-color: var(--accent-yellow);
 }
@@ -1287,12 +1250,6 @@ textarea.md-image-target.md-drop-target {
     border-color: var(--text-muted);
 }
 
-.exec-sidebar-status--pending {
-    background: var(--text-muted);
-    border-color: var(--text-muted);
-    opacity: 0.4;
-}
-
 .exec-sidebar-divider {
     border-top: 2px solid var(--border-light);
     margin: var(--space-xs) 0;
@@ -1407,13 +1364,6 @@ textarea.md-image-target.md-drop-target {
     line-height: 1.6;
 }
 
-.step-data-capture {
-    margin-bottom: var(--space-md);
-    padding: var(--space-sm);
-    border: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-}
-
 .step-notes {
     margin-bottom: var(--space-md);
 }
@@ -1435,42 +1385,6 @@ textarea.md-image-target.md-drop-target {
     color: var(--bg-primary);
 }
 
-/* Collaboration styles */
-.connection-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.connection-dot {
-    width: 8px;
-    height: 8px;
-    background: var(--accent-red);
-    display: inline-block;
-}
-
-.connection-status.connected .connection-dot {
-    background: var(--accent-green);
-}
-
-.participants-header {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--space-xs);
-}
-
-.participants-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-}
-
 .participant {
     display: flex;
     align-items: center;
@@ -1484,37 +1398,6 @@ textarea.md-image-target.md-drop-target {
     color: var(--accent-orange);
 }
 
-.participant-avatar {
-    width: 24px;
-    height: 24px;
-    border: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
-    background: var(--bg-tertiary);
-}
-
-.participant-name {
-    flex: 1;
-}
-
-.participant-step {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.btn-join {
-    border-color: var(--accent-green);
-    color: var(--accent-green);
-}
-
-.btn-leave {
-    border-color: var(--text-muted);
-    color: var(--text-muted);
-}
-
 /* Light theme — Catppuccin Latte (https://catppuccin.com/palette).
  * Page bg uses Mantle so cards (bg-secondary = Base) read as lighter/elevated,
  * preserving the existing OPAL pattern where cards "rise" out of the page. */
@@ -1523,29 +1406,9 @@ textarea.md-image-target.md-drop-target {
     color: #fff;
 }
 
-/* Diff view styles */
-.diff-added {
-    background: var(--diff-added-bg);
-    border-left: 3px solid var(--accent-green);
-}
-
-.diff-removed {
-    background: var(--diff-removed-bg);
-    border-left: 3px solid var(--accent-red);
-}
-
 .diff-modified {
     background: var(--diff-modified-bg);
     border-left: 3px solid var(--accent-yellow);
-}
-
-.diff-unchanged {
-    opacity: 0.5;
-}
-
-.diff-field-changed {
-    background: var(--diff-changed-bg);
-    padding: 1px 4px;
 }
 
 /* ============ Requirements tree + lint underlines ============ */
@@ -1980,21 +1843,6 @@ textarea.md-image-target.md-drop-target {
     font-weight: 600;
 }
 
-/* Inline disclosure — a line that opens, not a box */
-details.disclosure > summary {
-    cursor: pointer;
-    list-style: none;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: var(--space-xs) 0;
-}
-
-details.disclosure > summary::-webkit-details-marker { display: none; }
-details.disclosure[open] > summary { color: var(--text-secondary); }
-
 /* The part page — data renders in tables: detail rows for facts, headed
    tables for collections. An empty section is one line, never a box; a
    populated section promotes to the panel grammar at ledger pitch. */
@@ -2171,8 +2019,6 @@ details.disclosure[open] > summary { color: var(--text-secondary); }
 /* Risk module — severity-colored scores, statement masthead, residual markers */
 .sev-low { color: var(--status-ok); }
 .sev-medium { color: var(--status-warn); }
-.sev-high { color: var(--status-error); }
-
 .risk-statement {
     font-size: 1.05rem;
     max-width: 80ch;
