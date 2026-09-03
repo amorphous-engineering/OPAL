@@ -27,8 +27,8 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from opal.core.audit import log_create
+from opal.core.holds import HoldState, blocking_issues_for_instance, get_hold_state
 from opal.core.holds import _val as _status_value  # enum-unwrap, one home in core/holds
-from opal.core.holds import blocking_issues_for_instance, get_hold_state
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
     InstanceStatus,
@@ -228,14 +228,18 @@ def held_scope_blockers(
     db: Session,
     instance: ProcedureInstance,
     step_exec: StepExecution,
+    hold_state: HoldState | None = None,
 ) -> list[Blocker]:
     """Undispositioned issues holding this row's scope.
 
     Containment-derived (core/holds): step/op containment in the row's
     scope, plus a boundary hold bound to this row ("resolve by") — held
     work cannot be completed or skipped around.
+
+    Pass ``hold_state`` when gating many rows of one work order: the state
+    is a full query pass, and it is the same for every row.
     """
-    state = get_hold_state(db, instance.id)
+    state = hold_state if hold_state is not None else get_hold_state(db, instance.id)
     issues = state.blockers_for_complete(step_exec) + state.blockers_for_start(step_exec)
     blockers: list[Blocker] = []
     seen: set[int] = set()
@@ -258,16 +262,20 @@ def complete_blockers(
     db: Session,
     instance: ProcedureInstance,
     step_exec: StepExecution,
+    hold_state: HoldState | None = None,
 ) -> list[Blocker]:
     """Everything holding this step's (or OP's) COMPLETE: the held scope
     plus the structural sequence gates."""
-    return held_scope_blockers(db, instance, step_exec) + sequence_blockers(db, instance, step_exec)
+    return held_scope_blockers(db, instance, step_exec, hold_state) + sequence_blockers(
+        db, instance, step_exec
+    )
 
 
 def skip_blockers(
     db: Session,
     instance: ProcedureInstance,
     step_exec: StepExecution,
+    hold_state: HoldState | None = None,
 ) -> list[Blocker]:
     """Everything holding this step's SKIP: the held scope, any open
     redline-rework op on the gate, and — for a parent OP row — its open
@@ -280,7 +288,7 @@ def skip_blockers(
     COMPLETE refuses. It deliberately omits strict_sequence and
     OP-dependency ordering: skipping legitimately does not require
     predecessors to be done."""
-    scope = held_scope_blockers(db, instance, step_exec)
+    scope = held_scope_blockers(db, instance, step_exec, hold_state)
     structural = [
         b for b in sequence_blockers(db, instance, step_exec) if b.kind in ("redline", "children")
     ]

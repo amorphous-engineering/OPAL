@@ -31,7 +31,7 @@ from opal.core.auth import (
     validate_password_strength,
     verify_payload,
 )
-from opal.core.holds import holding_readout, scope_label
+from opal.core.holds import get_hold_state, holding_readout, scope_label
 from opal.db.models import (
     InventoryRecord,
     Kit,
@@ -2467,11 +2467,12 @@ def _execution_detail_context(
     # inert (disabled) with the reason line beside it naming the blockers.
     complete_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
     skip_gate_by_se: dict[int, list[exec_flow.Blocker]] = {}
+    hold_state = get_hold_state(db, instance.id)  # one pass; the same for every row
     for se in instance.step_executions:
-        cg = exec_flow.complete_blockers(db, instance, se)
+        cg = exec_flow.complete_blockers(db, instance, se, hold_state)
         if cg:
             complete_gate_by_se[se.id] = cg
-        sg = exec_flow.skip_blockers(db, instance, se)
+        sg = exec_flow.skip_blockers(db, instance, se, hold_state)
         if sg:
             skip_gate_by_se[se.id] = sg
     context["complete_gate_by_se"] = complete_gate_by_se
