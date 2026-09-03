@@ -150,14 +150,6 @@ const dataPoints = {{ data_points_json | tojson }};
 const schema = {{ dataset.schema | tojson | safe }};
 let chart = null;
 
-function openModal(id) {
-    document.getElementById(id).classList.add('active');
-}
-
-function closeModal(id) {
-    document.getElementById(id).classList.remove('active');
-}
-
 function openAddPointModal() {
     openModal('add-point-modal');
 }

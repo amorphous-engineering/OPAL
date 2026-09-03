@@ -122,57 +122,58 @@
 {% endcall %}
 
 {# Add Catalog Number Modal #}
-<div id="add-catalog-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">ADD CATALOG NUMBER</div>
-            <div class="panel-body">
-                <form id="add-catalog-form" onsubmit="addCatalogEntry(event)">
-                    <div role="group" class="field">
-                        <label class="label" for="cat-part-search">PART *</label>
-                        <div class="part-search-container">
-                            <input type="text"
-                                   id="cat-part-search"
-                                   class="input part-search-input"
-                                   placeholder="Search parts..."
-                                   autocomplete="off"
-                                   hx-get="/parts/search"
-                                   hx-trigger="keyup changed delay:200ms"
-                                   hx-target="#cat-part-results"
-                                   hx-vals='{"limit": 5}'
-                                   name="q">
-                            <input type="hidden" id="cat-part" name="part_id" required>
-                            <div id="cat-part-results" class="part-search-dropdown"></div>
-                            <div id="cat-part-selected" class="part-search-selected" style="display: none;">
-                                <span class="part-id"></span>
-                                <span class="part-name"></span>
-                                <span class="part-search-clear" onclick="clearCatPartSelection()">&times;</span>
-                            </div>
+<dialog id="add-catalog-modal" class="dialog" aria-labelledby="add-catalog-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="add-catalog-modal-title" class="mono">ADD CATALOG NUMBER</h2>
+        </header>
+        <section>
+            <form id="add-catalog-form" onsubmit="addCatalogEntry(event)">
+                <div role="group" class="field">
+                    <label class="label" for="cat-part-search">PART *</label>
+                    <div class="part-search-container">
+                        <input type="text"
+                               id="cat-part-search"
+                               class="input part-search-input"
+                               placeholder="Search parts..."
+                               autocomplete="off"
+                               hx-get="/parts/search"
+                               hx-trigger="keyup changed delay:200ms"
+                               hx-target="#cat-part-results"
+                               hx-vals='{"limit": 5}'
+                               name="q">
+                        <input type="hidden" id="cat-part" name="part_id" required>
+                        <div id="cat-part-results" class="part-search-dropdown"></div>
+                        <div id="cat-part-selected" class="part-search-selected" style="display: none;">
+                            <span class="part-id"></span>
+                            <span class="part-name"></span>
+                            <span class="part-search-clear" onclick="clearCatPartSelection()">&times;</span>
                         </div>
                     </div>
-                    <div role="group" class="field">
-                        <label class="label" for="cat-vendor-pn">VENDOR PN *</label>
-                        <input type="text" id="cat-vendor-pn" name="vendor_pn" class="input mono" required placeholder="e.g. DK-12345">
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label">
-                            <input type="checkbox" id="cat-preferred" name="is_preferred"> PREFERRED SUPPLIER
-                        </label>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="cat-notes">NOTES</label>
-                        <input type="text" id="cat-notes" name="notes" class="input">
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideAddCatalog()"') }}
-                        {{ ok.btn("ADD", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="cat-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="cat-vendor-pn">VENDOR PN *</label>
+                    <input type="text" id="cat-vendor-pn" name="vendor_pn" class="input mono" required placeholder="e.g. DK-12345">
+                </div>
+                <div role="group" class="field">
+                    <label class="label">
+                        <input type="checkbox" id="cat-preferred" name="is_preferred"> PREFERRED SUPPLIER
+                    </label>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="cat-notes">NOTES</label>
+                    <input type="text" id="cat-notes" name="notes" class="input">
+                </div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideAddCatalog()"') }}
+                    {{ ok.btn("ADD", variant="primary", type="submit") }}
+                </div>
+            </form>
+            <div id="cat-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <script>
 const supplierId = {{ supplier.id }};
@@ -183,11 +184,11 @@ function getHeaders() {
 }
 
 function showAddCatalog() {
-    document.getElementById('add-catalog-modal').style.display = 'block';
+    document.getElementById('add-catalog-modal').showModal();
 }
 
 function hideAddCatalog() {
-    document.getElementById('add-catalog-modal').style.display = 'none';
+    document.getElementById('add-catalog-modal').close();
     document.getElementById('add-catalog-form').reset();
     document.getElementById('cat-part').value = '';
     document.getElementById('cat-part-search').value = '';

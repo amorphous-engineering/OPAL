@@ -22,33 +22,22 @@
    - modal_content: HTML string - Body content of the modal
    - modal_actions: HTML string - Footer buttons/actions
 
-   JavaScript functions (add to your page):
-
-   function openModal(id) {
-       document.getElementById(id).classList.add('active');
-   }
-
-   function closeModal(id) {
-       document.getElementById(id).classList.remove('active');
-   }
+   openModal(id) / closeModal(id) are global (layouts/base.html) and wrap the
+   native <dialog> showModal()/close(). Backdrop click and Esc also close.
 #}
-<div id="{{ modal_id }}" class="ok-modal" onclick="if(event.target === this) closeModal('{{ modal_id }}')">
-    <div class="ok-modal-dialog ok-modal-{{ modal_size|default('md') }}">
-        <div class="panel">
-            <div class="panel-header">
-                <span>{{ modal_title }}</span>
-                <div class="panel-header-actions">
-                    <button class="btn" data-variant="outline" data-size="xs" onclick="closeModal('{{ modal_id }}')">&times;</button>
-                </div>
-            </div>
-            <div class="panel-body">
-                {{ modal_content|default('') }}
-            </div>
-            {%- if modal_actions -%}
-            <div style="padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: var(--space-sm);">
-                {{ modal_actions }}
-            </div>
-            {%- endif -%}
-        </div>
+<dialog id="{{ modal_id }}" class="dialog" aria-labelledby="{{ modal_id }}-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 100%; max-width: {{ {'sm': '400px', 'md': '600px', 'lg': '800px'}[modal_size|default('md')] }};">
+        <header>
+            <h2 id="{{ modal_id }}-title" class="mono">{{ modal_title }}</h2>
+        </header>
+        <section>
+            {{ modal_content|default('') }}
+        </section>
+        {%- if modal_actions -%}
+        <footer>
+            {{ modal_actions }}
+        </footer>
+        {%- endif -%}
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>

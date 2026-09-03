@@ -75,20 +75,20 @@
     --space-lg: 24px;
     --space-xl: 32px;
 
-    /* Modal / overlay */
-    --modal-backdrop: rgba(0, 0, 0, 0.8);
-
     /* Diff view tints (accent-color + low opacity) */
     --diff-added-bg: rgba(74, 222, 128, 0.1);
     --diff-removed-bg: rgba(248, 113, 113, 0.1);
     --diff-modified-bg: rgba(251, 191, 36, 0.1);
     --diff-changed-bg: rgba(251, 191, 36, 0.15);
 
-    /* Z-index scale: base 1, sticky 10, dropdown 100, modal 9000, palette 10000 */
+    /* Overlay tokens for the execution-document lightbox/toasts and the
+       part-form overlay, which are not <dialog>s (yet). */
+    --modal-backdrop: rgba(0, 0, 0, 0.8);
+
+    /* Z-index scale: base 1, sticky 10, dropdown 100, overlay 9000. <dialog>s use the top layer. */
     --z-sticky: 10;
     --z-dropdown: 100;
     --z-modal: 9000;
-    --z-palette: 10000;
 }
 
 /* Light: Lyra neutrals as shipped; orange deepened so white-on-primary and
@@ -542,136 +542,58 @@ select.select,
     grid-template-columns: repeat(4, 1fr);
 }
 
-/* Command Palette */
-.cmd-palette {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: var(--z-palette);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: 20vh;
-}
-
-.cmd-palette-backdrop {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--modal-backdrop);
-}
-
-.cmd-palette-dialog {
-    position: relative;
-    width: 600px;
-    max-width: 90vw;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    z-index: 1;
-}
-
-.cmd-input {
-    width: 100%;
+/* Dialogs are Basecoat <dialog class="dialog">. Register only. */
+.dialog > * > header > h2 {
     font-family: var(--font-mono);
-    font-size: 1rem;
-    padding: var(--space-md);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: none;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.cmd-input:focus {
-    outline: none;
-}
-
-.cmd-results {
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.cmd-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    cursor: pointer;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.cmd-item:last-child {
-    border-bottom: none;
-}
-
-.cmd-item:hover,
-.cmd-item.selected {
-    background: var(--bg-tertiary);
-}
-
-.cmd-type {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    padding: 2px 6px;
-    border: 1px solid currentColor;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
-.cmd-type-nav {
-    color: var(--accent-orange);
+/* Command palette is a Basecoat command-dialog; only the row register is OPAL's. */
+.command [role="menu"] {
+    font-family: var(--font-mono);
+}
+
+.command a[role="menuitem"] {
+    color: inherit;
+    gap: var(--space-sm);
+}
+
+.cmd-type {
+    flex-shrink: 0;
+    min-width: 3ch;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
 }
 
 .cmd-type-action {
-    color: var(--accent-green);
+    color: var(--primary);
 }
 
 .cmd-label {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    color: var(--text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.cmd-empty {
-    padding: var(--space-xl);
-    text-align: center;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-}
-
-.cmd-group-header {
-    padding: var(--space-xs) var(--space-md);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    background: var(--bg-tertiary);
-    border-bottom: 1px solid var(--border-color);
-}
-
-.cmd-sublabel {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-left: auto;
-}
-
+.cmd-sublabel,
 .cmd-status {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    padding: 1px 4px;
-    border: 1px solid var(--text-muted);
-    color: var(--text-muted);
-    text-transform: uppercase;
+    flex-shrink: 0;
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
 }
 
-.cmd-type-search {
-    color: var(--accent-orange);
+.cmd-footer {
+    display: flex;
+    gap: var(--space-md);
+    padding: var(--space-xs) var(--space-sm);
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
 }
 
 /* Audit detail rows */
@@ -919,62 +841,6 @@ select.select,
 
 .part-search-clear:hover {
     color: var(--accent-red);
-}
-
-/* OPALkit Modal Component */
-.ok-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--modal-backdrop);
-    z-index: var(--z-modal);
-    display: none;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: 15vh;
-}
-
-.ok-modal.active {
-    display: flex;
-}
-
-.ok-modal-dialog {
-    position: relative;
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-.ok-modal-sm {
-    width: 400px;
-    max-width: 90vw;
-}
-
-.ok-modal-md {
-    width: 600px;
-    max-width: 90vw;
-}
-
-.ok-modal-lg {
-    width: 800px;
-    max-width: 90vw;
-}
-
-.ok-modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: -1;
-}
-
-.ok-modal-content {
-    position: relative;
-    z-index: 1;
-    width: 500px;
-    max-width: 90vw;
 }
 
 /* OPALkit Score Component - for risk P/I values */

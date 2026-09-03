@@ -125,24 +125,32 @@
         <span class="footer-time" id="current-time"></span>
     </footer>
 
-    <!-- Command Palette Modal -->
-    <div id="command-palette" class="cmd-palette" style="display: none;">
-        <div class="cmd-palette-backdrop" onclick="closeCommandPalette()"></div>
-        <div class="cmd-palette-dialog">
-            <input type="text"
-                   id="cmd-input"
-                   class="cmd-input"
-                   placeholder="Type a command or search..."
-                   autocomplete="off"
-                   oninput="filterCommands(this.value)">
-            <div id="cmd-results" class="cmd-results"></div>
-            <div class="cmd-footer">
-                <span><kbd>↑↓</kbd> navigate</span>
-                <span><kbd>Enter</kbd> select</span>
-                <span><kbd>Esc</kbd> close</span>
-            </div>
+    <!-- Command palette: Basecoat command-dialog. OPAL owns the item list
+         (static commands + /api/search); Basecoat owns keyboard nav, the
+         active row, and the empty state. data-filter="manual" because the
+         list is rebuilt per keystroke. -->
+    <dialog id="command-palette" class="command-dialog" aria-label="Command palette" onclick="if (event.target === this) this.close()">
+        <div class="command" data-filter="manual">
+            <header>
+                <input type="text"
+                       id="cmd-input"
+                       role="combobox"
+                       aria-autocomplete="list"
+                       aria-expanded="true"
+                       aria-controls="cmd-results"
+                       placeholder="Type a command or search..."
+                       autocomplete="off"
+                       spellcheck="false"
+                       oninput="filterCommands(this.value)">
+            </header>
+            <div id="cmd-results" role="menu" aria-orientation="vertical" data-empty="No matches found"></div>
+            <footer class="cmd-footer">
+                <span><kbd class="kbd">↑↓</kbd> navigate</span>
+                <span><kbd class="kbd">Enter</kbd> select</span>
+                <span><kbd class="kbd">Esc</kbd> close</span>
+            </footer>
         </div>
-    </div>
+    </dialog>
 
     <script>
         // Command palette data
@@ -181,10 +189,8 @@
             { type: 'action', label: 'New Inventory Record', action: '/inventory/new', keywords: 'create add inventory stock record' },
         ];
 
-        let selectedIndex = 0;
         let filteredCommands = [...commands];
         let searchResults = [];
-        let allItems = []; // combined commands + search results for keyboard nav
         let searchDebounce = null;
 
         function escapeHtml(str) {
@@ -194,18 +200,18 @@
         }
 
         function openCommandPalette() {
-            document.getElementById('command-palette').style.display = 'flex';
+            const dialog = document.getElementById('command-palette');
             const input = document.getElementById('cmd-input');
             input.value = '';
-            input.focus();
             filteredCommands = [...commands];
             searchResults = [];
-            selectedIndex = 0;
             renderCommands();
+            if (!dialog.open) dialog.showModal();
+            input.focus();
         }
 
         function closeCommandPalette() {
-            document.getElementById('command-palette').style.display = 'none';
+            document.getElementById('command-palette').close();
             if (searchDebounce) clearTimeout(searchDebounce);
         }
 
@@ -214,7 +220,6 @@
             if (!query) {
                 filteredCommands = [...commands];
                 searchResults = [];
-                selectedIndex = 0;
                 renderCommands();
                 return;
             }
@@ -223,7 +228,6 @@
                 const searchText = (cmd.label + ' ' + cmd.keywords).toLowerCase();
                 return query.split(' ').every(term => searchText.includes(term));
             });
-            selectedIndex = 0;
             renderCommands();
 
             // Debounced API search
@@ -243,27 +247,25 @@
             }
         }
 
+        function cmdItem(href, type, label, sublabel, status) {
+            return `<a role="menuitem" href="${escapeHtml(href)}">
+                <span class="cmd-type cmd-type-${escapeHtml(type)}">${escapeHtml(label.length ? '' : '')}${escapeHtml(type === 'nav' ? 'GO' : type === 'action' ? 'NEW' : type.toUpperCase().slice(0, 4))}</span>
+                <span class="cmd-label">${escapeHtml(label)}</span>
+                ${sublabel ? `<span class="cmd-sublabel">${escapeHtml(sublabel)}</span>` : ''}
+                ${status ? `<span class="cmd-status">${escapeHtml(status)}</span>` : ''}
+            </a>`;
+        }
+
         function renderCommands() {
-            const container = document.getElementById('cmd-results');
-            allItems = [];
+            const menu = document.getElementById('cmd-results');
             let html = '';
 
-            // Static commands
             if (filteredCommands.length > 0) {
-                html += '<div class="cmd-group-header">COMMANDS</div>';
-                filteredCommands.forEach((cmd, i) => {
-                    const idx = allItems.length;
-                    allItems.push({ type: 'command', index: i });
-                    html += `<div class="cmd-item ${idx === selectedIndex ? 'selected' : ''}"
-                                  onclick="executeItem(${idx})"
-                                  onmouseenter="selectedIndex = ${idx}; renderCommands();">
-                        <span class="cmd-type cmd-type-${cmd.type}">${cmd.type === 'nav' ? 'GO' : 'NEW'}</span>
-                        <span class="cmd-label">${escapeHtml(cmd.label)}</span>
-                    </div>`;
-                });
+                html += '<div role="group" aria-labelledby="cmd-group-commands"><span role="heading" id="cmd-group-commands">COMMANDS</span>';
+                filteredCommands.forEach(cmd => { html += cmdItem(cmd.action, cmd.type, cmd.label); });
+                html += '</div>';
             }
 
-            // Search results grouped by entity type
             if (searchResults.length > 0) {
                 const grouped = {};
                 searchResults.forEach(r => {
@@ -279,60 +281,26 @@
                 };
 
                 for (const [type, items] of Object.entries(grouped)) {
-                    html += `<div class="cmd-group-header">${typeLabels[type] || type.toUpperCase()}</div>`;
-                    items.forEach((r, i) => {
-                        const idx = allItems.length;
-                        allItems.push({ type: 'search', result: r });
-                        html += `<div class="cmd-item ${idx === selectedIndex ? 'selected' : ''}"
-                                      onclick="executeItem(${idx})"
-                                      onmouseenter="selectedIndex = ${idx}; renderCommands();">
-                            <span class="cmd-type cmd-type-search">${escapeHtml(type).toUpperCase().slice(0, 4)}</span>
-                            <span class="cmd-label">${escapeHtml(r.label)}</span>
-                            ${r.sublabel ? `<span class="cmd-sublabel">${escapeHtml(r.sublabel)}</span>` : ''}
-                            ${r.status ? `<span class="cmd-status">${escapeHtml(r.status)}</span>` : ''}
-                        </div>`;
-                    });
+                    const gid = 'cmd-group-' + type;
+                    html += `<div role="group" aria-labelledby="${gid}"><span role="heading" id="${gid}">${escapeHtml(typeLabels[type] || type.toUpperCase())}</span>`;
+                    items.forEach(r => { html += cmdItem(r.url, type, r.label, r.sublabel, r.status); });
+                    html += '</div>';
                 }
             }
 
-            if (allItems.length === 0) {
-                html = '<div class="cmd-empty">No matches found</div>';
-            }
-
-            container.innerHTML = html;
-
-            // Scroll selected into view
-            const sel = container.querySelector('.cmd-item.selected');
-            if (sel) sel.scrollIntoView({ block: 'nearest' });
+            menu.innerHTML = html;
+            const command = menu.closest('.command');
+            if (command && command.refresh) command.refresh();
         }
 
-        function executeItem(index) {
-            const item = allItems[index];
-            if (!item) return;
-            if (item.type === 'command') {
-                window.location.href = filteredCommands[item.index].action;
-            } else if (item.type === 'search') {
-                window.location.href = item.result.url;
-            }
+        // Native <dialog> helpers for opalkit/_includes/modal.html and ok.modal().
+        function openModal(id) {
+            document.getElementById(id).showModal();
         }
 
-        // Keyboard navigation for command palette
-        document.getElementById('cmd-input').addEventListener('keydown', function(e) {
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                selectedIndex = Math.min(selectedIndex + 1, allItems.length - 1);
-                renderCommands();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                selectedIndex = Math.max(selectedIndex - 1, 0);
-                renderCommands();
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                executeItem(selectedIndex);
-            } else if (e.key === 'Escape') {
-                closeCommandPalette();
-            }
-        });
+        function closeModal(id) {
+            document.getElementById(id).close();
+        }
 
         // Identity is server-rendered from the session
         window.OPAL_USER_ID = {{ current_user.id if current_user else 'null' }};

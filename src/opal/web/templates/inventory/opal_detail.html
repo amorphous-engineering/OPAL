@@ -265,14 +265,12 @@
 {% endif %}
 
 <!-- Scrap Modal -->
-<div id="scrap-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">
-                <span>SCRAP INVENTORY</span>
-                <button class="btn" data-variant="outline" data-size="xs" onclick="hideScrapModal()" style="margin-left: auto;">&times;</button>
-            </div>
-            <div class="panel-body">
+<dialog id="scrap-modal" class="dialog" aria-labelledby="scrap-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="scrap-modal-title" class="mono">SCRAP INVENTORY</h2>
+        </header>
+        <section>
                 {% call ok.table() %}
                     {{ ok.detail_row("OPAL #", ok.mono(opal_number), th_width="100px") }}
                     {{ ok.detail_row("PART", record.part.name, th_width="100px") }}
@@ -304,17 +302,17 @@
                         {{ ok.btn("CONFIRM SCRAP", variant="danger", type="submit") }}
                     </div>
                 </form>
-            </div>
-        </div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <script>
 function showScrapModal() {
-    document.getElementById('scrap-modal').style.display = 'block';
+    document.getElementById('scrap-modal').showModal();
 }
 function hideScrapModal() {
-    document.getElementById('scrap-modal').style.display = 'none';
+    document.getElementById('scrap-modal').close();
 }
 document.getElementById('scrap-modal').addEventListener('click', function(e) {
     if (e.target === this) hideScrapModal();
@@ -383,105 +381,107 @@ async function recordCalibration() {
 
 {% if test_results or test_templates %}
 <!-- Run Test Modal -->
-<div id="run-test-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">RUN TEST</div>
-            <div class="panel-body">
-                <form id="run-test-form" onsubmit="submitRunTest(event)">
-                    {% if test_templates %}
-                    <div role="group" class="field">
-                        <label class="label" for="run-template">TEST TEMPLATE</label>
-                        <select id="run-template" class="select" onchange="onTemplateSelect()">
-                            <option value="">(Custom test)</option>
-                            {% for tt in test_templates %}
-                            <option value="{{ tt.id }}"
-                                data-name="{{ tt.name }}"
-                                data-type="{{ tt.test_type }}"
-                                data-min="{{ tt.min_value if tt.min_value is not none else '' }}"
-                                data-max="{{ tt.max_value if tt.max_value is not none else '' }}"
-                                data-unit="{{ tt.unit or '' }}">{{ tt.name }}{% if tt.required %} (REQUIRED){% endif %}</option>
-                            {% endfor %}
-                        </select>
+<dialog id="run-test-modal" class="dialog" aria-labelledby="run-test-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="run-test-modal-title" class="mono">RUN TEST</h2>
+        </header>
+        <section>
+            <form id="run-test-form" onsubmit="submitRunTest(event)">
+                {% if test_templates %}
+                <div role="group" class="field">
+                    <label class="label" for="run-template">TEST TEMPLATE</label>
+                    <select id="run-template" class="select" onchange="onTemplateSelect()">
+                        <option value="">(Custom test)</option>
+                        {% for tt in test_templates %}
+                        <option value="{{ tt.id }}"
+                            data-name="{{ tt.name }}"
+                            data-type="{{ tt.test_type }}"
+                            data-min="{{ tt.min_value if tt.min_value is not none else '' }}"
+                            data-max="{{ tt.max_value if tt.max_value is not none else '' }}"
+                            data-unit="{{ tt.unit or '' }}">{{ tt.name }}{% if tt.required %} (REQUIRED){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div role="group" class="field" id="run-name-group">
+                    <label class="label" for="run-test-name">TEST NAME *</label>
+                    <input type="text" id="run-test-name" class="input" required>
+                </div>
+                <div role="group" class="field" id="run-type-group">
+                    <label class="label" for="run-test-type">TYPE</label>
+                    <select id="run-test-type" class="select" onchange="toggleRunFields()">
+                        <option value="boolean">BOOLEAN (Pass/Fail)</option>
+                        <option value="numeric">NUMERIC</option>
+                        <option value="text">TEXT</option>
+                    </select>
+                </div>
+                <div id="run-value-group" role="group" class="field" style="display: none;">
+                    <label class="label" for="run-value">VALUE</label>
+                    <input type="text" id="run-value" class="input">
+                    <div id="run-value-hint" class="text-muted" style="font-size: 0.75rem; margin-top: 2px;"></div>
+                </div>
+                <div role="group" class="field">
+                    <label class="label">RESULT *</label>
+                    <div style="display: flex; gap: var(--space-md);">
+                        <label><input type="radio" name="run-result" value="pass" required> PASS</label>
+                        <label><input type="radio" name="run-result" value="fail"> FAIL</label>
                     </div>
-                    {% endif %}
-                    <div role="group" class="field" id="run-name-group">
-                        <label class="label" for="run-test-name">TEST NAME *</label>
-                        <input type="text" id="run-test-name" class="input" required>
-                    </div>
-                    <div role="group" class="field" id="run-type-group">
-                        <label class="label" for="run-test-type">TYPE</label>
-                        <select id="run-test-type" class="select" onchange="toggleRunFields()">
-                            <option value="boolean">BOOLEAN (Pass/Fail)</option>
-                            <option value="numeric">NUMERIC</option>
-                            <option value="text">TEXT</option>
-                        </select>
-                    </div>
-                    <div id="run-value-group" role="group" class="field" style="display: none;">
-                        <label class="label" for="run-value">VALUE</label>
-                        <input type="text" id="run-value" class="input">
-                        <div id="run-value-hint" class="text-muted" style="font-size: 0.75rem; margin-top: 2px;"></div>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label">RESULT *</label>
-                        <div style="display: flex; gap: var(--space-md);">
-                            <label><input type="radio" name="run-result" value="pass" required> PASS</label>
-                            <label><input type="radio" name="run-result" value="fail"> FAIL</label>
-                        </div>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="run-notes">NOTES</label>
-                        <textarea id="run-notes" class="input" rows="2"></textarea>
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideRunTest()"') }}
-                        {{ ok.btn("RECORD", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="run-test-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="run-notes">NOTES</label>
+                    <textarea id="run-notes" class="input" rows="2"></textarea>
+                </div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideRunTest()"') }}
+                    {{ ok.btn("RECORD", variant="primary", type="submit") }}
+                </div>
+            </form>
+            <div id="run-test-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Edit Test Modal -->
-<div id="edit-test-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">EDIT TEST RESULT</div>
-            <div class="panel-body">
-                <form id="edit-test-form" onsubmit="submitEditTest(event)">
-                    <input type="hidden" id="edit-test-id">
-                    <div role="group" class="field">
-                        <label class="label" for="edit-test-name">TEST NAME *</label>
-                        <input type="text" id="edit-test-name" class="input" required>
+<dialog id="edit-test-modal" class="dialog" aria-labelledby="edit-test-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="edit-test-modal-title" class="mono">EDIT TEST RESULT</h2>
+        </header>
+        <section>
+            <form id="edit-test-form" onsubmit="submitEditTest(event)">
+                <input type="hidden" id="edit-test-id">
+                <div role="group" class="field">
+                    <label class="label" for="edit-test-name">TEST NAME *</label>
+                    <input type="text" id="edit-test-name" class="input" required>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="edit-value">VALUE</label>
+                    <input type="text" id="edit-value" class="input">
+                </div>
+                <div role="group" class="field">
+                    <label class="label">RESULT *</label>
+                    <div style="display: flex; gap: var(--space-md);">
+                        <label><input type="radio" name="edit-result" value="pass" required> PASS</label>
+                        <label><input type="radio" name="edit-result" value="fail"> FAIL</label>
+                        <label><input type="radio" name="edit-result" value="pending"> PENDING</label>
                     </div>
-                    <div role="group" class="field">
-                        <label class="label" for="edit-value">VALUE</label>
-                        <input type="text" id="edit-value" class="input">
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label">RESULT *</label>
-                        <div style="display: flex; gap: var(--space-md);">
-                            <label><input type="radio" name="edit-result" value="pass" required> PASS</label>
-                            <label><input type="radio" name="edit-result" value="fail"> FAIL</label>
-                            <label><input type="radio" name="edit-result" value="pending"> PENDING</label>
-                        </div>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="edit-notes">NOTES</label>
-                        <textarea id="edit-notes" class="input" rows="2"></textarea>
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideEditTest()"') }}
-                        {{ ok.btn("SAVE", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="edit-test-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="edit-notes">NOTES</label>
+                    <textarea id="edit-notes" class="input" rows="2"></textarea>
+                </div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideEditTest()"') }}
+                    {{ ok.btn("SAVE", variant="primary", type="submit") }}
+                </div>
+            </form>
+            <div id="edit-test-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <script>
 const inventoryId = {{ record.id }};
@@ -535,11 +535,11 @@ loadTestStatus();
 
 // Run Test
 function showRunTest() {
-    document.getElementById('run-test-modal').style.display = 'block';
+    document.getElementById('run-test-modal').showModal();
 }
 
 function hideRunTest() {
-    document.getElementById('run-test-modal').style.display = 'none';
+    document.getElementById('run-test-modal').close();
     document.getElementById('run-test-form').reset();
     document.getElementById('run-value-group').style.display = 'none';
     document.getElementById('run-value-hint').textContent = '';
@@ -674,11 +674,11 @@ function showEditTest(testId) {
     radios.forEach(r => r.checked = r.value === data.result);
 
     document.getElementById('edit-test-error').style.display = 'none';
-    document.getElementById('edit-test-modal').style.display = 'block';
+    document.getElementById('edit-test-modal').showModal();
 }
 
 function hideEditTest() {
-    document.getElementById('edit-test-modal').style.display = 'none';
+    document.getElementById('edit-test-modal').close();
 }
 
 async function submitEditTest(event) {

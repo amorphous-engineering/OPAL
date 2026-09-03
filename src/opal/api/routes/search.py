@@ -110,9 +110,9 @@ def _risk_result(r: Risk) -> SearchResult:
         entity_type="risk",
         id=r.id,
         label=r.title,
-        sublabel=f"#{r.id}",
+        sublabel=r.risk_number,
         url=f"/risks/{r.id}",
-        status=_status_value(r.status),
+        status=_status_value(r.disposition),
     )
 
 

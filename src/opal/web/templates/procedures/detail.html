@@ -40,11 +40,12 @@
 </div>
 
 <!-- Add Operation Modal -->
-<div id="add-op-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px;">
-        <div class="panel">
-            <div class="panel-header" id="add-op-title">ADD OPERATION</div>
-            <div class="panel-body">
+<dialog id="add-op-modal" class="dialog" aria-labelledby="add-op-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 600px;">
+        <header>
+            <h2 id="add-op-title" class="mono">ADD OPERATION</h2>
+        </header>
+        <section>
                 <form id="add-op-form" onsubmit="addOp(event)">
                     <input type="hidden" id="op-is-contingency" name="is_contingency" value="false">
                     <div role="group" class="field">
@@ -65,192 +66,197 @@
                     </div>
                 </form>
                 <div id="op-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Add Step Modal (sub-step under an OP) -->
-<div id="add-step-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px;">
-        <div class="panel">
-            <div class="panel-header">ADD STEP</div>
-            <div class="panel-body">
-                <form id="add-step-form" onsubmit="addStep(event)">
-                    <input type="hidden" id="step-parent-id" name="parent_step_id" value="">
-                    <div role="group" class="field">
-                        <label class="label" for="step-title">TITLE *</label>
-                        <input type="text" id="step-title" name="title" class="input" required>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="step-instructions">INSTRUCTIONS (Markdown supported)</label>
-                        <textarea id="step-instructions" name="instructions" class="textarea" rows="4"></textarea>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="step-duration">EST. DURATION (min)</label>
-                        <input type="number" id="step-duration" name="estimated_duration_minutes" class="input" min="1">
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideAddStep()"') }}
-                        {{ ok.btn("ADD", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="step-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+<dialog id="add-step-modal" class="dialog" aria-labelledby="add-step-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 600px;">
+        <header>
+            <h2 id="add-step-modal-title" class="mono">ADD STEP</h2>
+        </header>
+        <section>
+            <form id="add-step-form" onsubmit="addStep(event)">
+                <input type="hidden" id="step-parent-id" name="parent_step_id" value="">
+                <div role="group" class="field">
+                    <label class="label" for="step-title">TITLE *</label>
+                    <input type="text" id="step-title" name="title" class="input" required>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="step-instructions">INSTRUCTIONS (Markdown supported)</label>
+                    <textarea id="step-instructions" name="instructions" class="textarea" rows="4"></textarea>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="step-duration">EST. DURATION (min)</label>
+                    <input type="number" id="step-duration" name="estimated_duration_minutes" class="input" min="1">
+                </div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideAddStep()"') }}
+                    {{ ok.btn("ADD", variant="primary", type="submit") }}
+                </div>
+            </form>
+            <div id="step-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Add Kit Modal -->
-<div id="add-kit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">ADD PART TO KIT</div>
-            <div class="panel-body">
-                <form id="add-kit-form" onsubmit="addKitItem(event)">
-                    <div role="group" class="field">
-                        <label class="label" for="kit-part-search">PART *</label>
-                        <div class="part-search-container">
-                            <input type="text"
-                                   id="kit-part-search"
-                                   class="input part-search-input"
-                                   placeholder="Search parts..."
-                                   autocomplete="off"
-                                   hx-get="/parts/search"
-                                   hx-trigger="keyup changed delay:200ms"
-                                   hx-target="#kit-part-results"
-                                   hx-vals='{"limit": 5}'
-                                   name="q">
-                            <input type="hidden" id="kit-part" name="part_id" required>
-                            <div id="kit-part-results" class="part-search-dropdown"></div>
-                            <div id="kit-part-selected" class="part-search-selected" style="display: none;">
-                                <span class="part-id"></span>
-                                <span class="part-name"></span>
-                                <span class="part-search-clear" onclick="clearPartSelection('kit')">&times;</span>
-                            </div>
+<dialog id="add-kit-modal" class="dialog" aria-labelledby="add-kit-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="add-kit-modal-title" class="mono">ADD PART TO KIT</h2>
+        </header>
+        <section>
+            <form id="add-kit-form" onsubmit="addKitItem(event)">
+                <div role="group" class="field">
+                    <label class="label" for="kit-part-search">PART *</label>
+                    <div class="part-search-container">
+                        <input type="text"
+                               id="kit-part-search"
+                               class="input part-search-input"
+                               placeholder="Search parts..."
+                               autocomplete="off"
+                               hx-get="/parts/search"
+                               hx-trigger="keyup changed delay:200ms"
+                               hx-target="#kit-part-results"
+                               hx-vals='{"limit": 5}'
+                               name="q">
+                        <input type="hidden" id="kit-part" name="part_id" required>
+                        <div id="kit-part-results" class="part-search-dropdown"></div>
+                        <div id="kit-part-selected" class="part-search-selected" style="display: none;">
+                            <span class="part-id"></span>
+                            <span class="part-name"></span>
+                            <span class="part-search-clear" onclick="clearPartSelection('kit')">&times;</span>
                         </div>
                     </div>
-                    <div role="group" class="field">
-                        <label class="label" for="kit-qty">QUANTITY REQUIRED *</label>
-                        <input type="number" id="kit-qty" name="quantity_required" class="input" step="0.0001" min="0.0001" required>
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideAddKit()"') }}
-                        {{ ok.btn("ADD", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="kit-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="kit-qty">QUANTITY REQUIRED *</label>
+                    <input type="number" id="kit-qty" name="quantity_required" class="input" step="0.0001" min="0.0001" required>
+                </div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideAddKit()"') }}
+                    {{ ok.btn("ADD", variant="primary", type="submit") }}
+                </div>
+            </form>
+            <div id="kit-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Add Output Modal -->
-<div id="add-output-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">ADD OUTPUT PART</div>
-            <div class="panel-body">
-                <form id="add-output-form" onsubmit="addOutputItem(event)">
-                    <div role="group" class="field">
-                        <label class="label" for="output-part-search">PART *</label>
-                        <div class="part-search-container">
-                            <input type="text"
-                                   id="output-part-search"
-                                   class="input part-search-input"
-                                   placeholder="Search parts..."
-                                   autocomplete="off"
-                                   hx-get="/parts/search"
-                                   hx-trigger="keyup changed delay:200ms"
-                                   hx-target="#output-part-results"
-                                   hx-vals='{"limit": 5}'
-                                   name="q">
-                            <input type="hidden" id="output-part" name="part_id" required>
-                            <div id="output-part-results" class="part-search-dropdown"></div>
-                            <div id="output-part-selected" class="part-search-selected" style="display: none;">
-                                <span class="part-id"></span>
-                                <span class="part-name"></span>
-                                <span class="part-search-clear" onclick="clearPartSelection('output')">&times;</span>
-                            </div>
+<dialog id="add-output-modal" class="dialog" aria-labelledby="add-output-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="add-output-modal-title" class="mono">ADD OUTPUT PART</h2>
+        </header>
+        <section>
+            <form id="add-output-form" onsubmit="addOutputItem(event)">
+                <div role="group" class="field">
+                    <label class="label" for="output-part-search">PART *</label>
+                    <div class="part-search-container">
+                        <input type="text"
+                               id="output-part-search"
+                               class="input part-search-input"
+                               placeholder="Search parts..."
+                               autocomplete="off"
+                               hx-get="/parts/search"
+                               hx-trigger="keyup changed delay:200ms"
+                               hx-target="#output-part-results"
+                               hx-vals='{"limit": 5}'
+                               name="q">
+                        <input type="hidden" id="output-part" name="part_id" required>
+                        <div id="output-part-results" class="part-search-dropdown"></div>
+                        <div id="output-part-selected" class="part-search-selected" style="display: none;">
+                            <span class="part-id"></span>
+                            <span class="part-name"></span>
+                            <span class="part-search-clear" onclick="clearPartSelection('output')">&times;</span>
                         </div>
                     </div>
-                    <div role="group" class="field">
-                        <label class="label" for="output-qty">QUANTITY PRODUCED *</label>
-                        <input type="number" id="output-qty" name="quantity_produced" class="input" step="0.0001" min="0.0001" value="1" required>
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideAddOutput()"') }}
-                        {{ ok.btn("ADD", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="output-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="output-qty">QUANTITY PRODUCED *</label>
+                    <input type="number" id="output-qty" name="quantity_produced" class="input" step="0.0001" min="0.0001" value="1" required>
+                </div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideAddOutput()"') }}
+                    {{ ok.btn("ADD", variant="primary", type="submit") }}
+                </div>
+            </form>
+            <div id="output-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Step-Part Modal (per step kit add) -->
-<div id="step-part-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header">ADD PART TO STEP</div>
-            <div class="panel-body">
-                <form id="step-part-form" onsubmit="addStepPart(event)">
-                    <input type="hidden" id="step-part-step-id" value="">
-                    <div role="group" class="field">
-                        <label class="label" for="step-part-part-search">PART *</label>
-                        <div class="part-search-container">
-                            <input type="text"
-                                   id="step-part-part-search"
-                                   class="input part-search-input"
-                                   placeholder="Search parts..."
-                                   autocomplete="off"
-                                   hx-get="/parts/search"
-                                   hx-trigger="keyup changed delay:200ms"
-                                   hx-target="#step-part-results"
-                                   hx-vals='{"limit": 5}'
-                                   name="q">
-                            <input type="hidden" id="step-part-id" name="part_id" required>
-                            <div id="step-part-results" class="part-search-dropdown"></div>
-                            <div id="step-part-selected" class="part-search-selected" style="display: none;">
-                                <span class="part-id"></span>
-                                <span class="part-name"></span>
-                                <span class="part-search-clear" onclick="clearPartSelection('step-part')">&times;</span>
-                            </div>
+<dialog id="step-part-modal" class="dialog" aria-labelledby="step-part-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="step-part-modal-title" class="mono">ADD PART TO STEP</h2>
+        </header>
+        <section>
+            <form id="step-part-form" onsubmit="addStepPart(event)">
+                <input type="hidden" id="step-part-step-id" value="">
+                <div role="group" class="field">
+                    <label class="label" for="step-part-part-search">PART *</label>
+                    <div class="part-search-container">
+                        <input type="text"
+                               id="step-part-part-search"
+                               class="input part-search-input"
+                               placeholder="Search parts..."
+                               autocomplete="off"
+                               hx-get="/parts/search"
+                               hx-trigger="keyup changed delay:200ms"
+                               hx-target="#step-part-results"
+                               hx-vals='{"limit": 5}'
+                               name="q">
+                        <input type="hidden" id="step-part-id" name="part_id" required>
+                        <div id="step-part-results" class="part-search-dropdown"></div>
+                        <div id="step-part-selected" class="part-search-selected" style="display: none;">
+                            <span class="part-id"></span>
+                            <span class="part-name"></span>
+                            <span class="part-search-clear" onclick="clearPartSelection('step-part')">&times;</span>
                         </div>
                     </div>
-                    <div role="group" class="field">
-                        <label class="label" for="step-part-qty">QUANTITY *</label>
-                        <input type="number" id="step-part-qty" name="quantity_required" class="input" step="0.0001" min="0.0001" required>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="step-part-type">USAGE TYPE *</label>
-                        <select id="step-part-type" name="usage_type" class="select" required>
-                            <option value="consume">CONSUME - Part installed/used up</option>
-                            <option value="tooling">TOOLING - GSE/fixtures (reusable)</option>
-                        </select>
-                    </div>
-                    <div role="group" class="field">
-                        <label class="label" for="step-part-notes">NOTES</label>
-                        <input type="text" id="step-part-notes" name="notes" class="input" placeholder="Optional notes">
-                    </div>
-                    <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
-                        {{ ok.btn("CANCEL", attrs='onclick="hideAddStepPart()"') }}
-                        {{ ok.btn("ADD", variant="primary", type="submit") }}
-                    </div>
-                </form>
-                <div id="step-part-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-            </div>
-        </div>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="step-part-qty">QUANTITY *</label>
+                    <input type="number" id="step-part-qty" name="quantity_required" class="input" step="0.0001" min="0.0001" required>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="step-part-type">USAGE TYPE *</label>
+                    <select id="step-part-type" name="usage_type" class="select" required>
+                        <option value="consume">CONSUME - Part installed/used up</option>
+                        <option value="tooling">TOOLING - GSE/fixtures (reusable)</option>
+                    </select>
+                </div>
+                <div role="group" class="field">
+                    <label class="label" for="step-part-notes">NOTES</label>
+                    <input type="text" id="step-part-notes" name="notes" class="input" placeholder="Optional notes">
+                </div>
+                <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
+                    {{ ok.btn("CANCEL", attrs='onclick="hideAddStepPart()"') }}
+                    {{ ok.btn("ADD", variant="primary", type="submit") }}
+                </div>
+            </form>
+            <div id="step-part-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <!-- Data-Capture Field Modal (per step schema field add/edit) -->
-<div id="field-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        <div class="panel">
-            <div class="panel-header" id="field-modal-title">ADD DATA CAPTURE FIELD</div>
-            <div class="panel-body">
+<dialog id="field-modal" class="dialog" aria-labelledby="field-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="field-modal-title" class="mono">ADD DATA CAPTURE FIELD</h2>
+        </header>
+        <section>
                 <form id="field-form" onsubmit="saveField(event)">
                     <input type="hidden" id="field-step-id" value="">
                     <input type="hidden" id="field-edit-index" value="-1">
@@ -331,10 +337,10 @@
                         {{ ok.btn("SAVE FIELD", variant="primary", type="submit") }}
                     </div>
                 </form>
-            </div>
-        </div>
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <script>
 const procedureId = {{ procedure.id }};
@@ -455,12 +461,12 @@ async function deleteProcedureDoc(id) {
 // ============ Op / Step add via modal ============
 
 function showAddOp(isContingency = false) {
-    document.getElementById('add-op-modal').style.display = 'block';
+    document.getElementById('add-op-modal').showModal();
     document.getElementById('op-is-contingency').value = isContingency ? 'true' : 'false';
     document.getElementById('add-op-title').textContent = isContingency ? 'ADD CONTINGENCY OPERATION' : 'ADD OPERATION';
 }
 function hideAddOp() {
-    document.getElementById('add-op-modal').style.display = 'none';
+    document.getElementById('add-op-modal').close();
     document.getElementById('add-op-form').reset();
 }
 
@@ -483,11 +489,11 @@ async function addOp(event) {
 }
 
 function showAddStep(parentOpId) {
-    document.getElementById('add-step-modal').style.display = 'block';
+    document.getElementById('add-step-modal').showModal();
     document.getElementById('step-parent-id').value = parentOpId;
 }
 function hideAddStep() {
-    document.getElementById('add-step-modal').style.display = 'none';
+    document.getElementById('add-step-modal').close();
     document.getElementById('add-step-form').reset();
 }
 
@@ -598,10 +604,10 @@ async function removeStepImage(stepId, imageId) {
 
 function showAddStepPart(stepId) {
     document.getElementById('step-part-step-id').value = stepId;
-    document.getElementById('step-part-modal').style.display = 'block';
+    document.getElementById('step-part-modal').showModal();
 }
 function hideAddStepPart() {
-    document.getElementById('step-part-modal').style.display = 'none';
+    document.getElementById('step-part-modal').close();
     document.getElementById('step-part-form').reset();
     clearPartSelection('step-part');
 }
@@ -671,11 +677,11 @@ function showAddField(stepId) {
     document.getElementById('field-modal-title').textContent = 'ADD DATA CAPTURE FIELD';
     document.getElementById('field-form').reset();
     toggleTypeExtras('text');
-    document.getElementById('field-modal').style.display = 'block';
+    document.getElementById('field-modal').showModal();
 }
 
 function hideFieldModal() {
-    document.getElementById('field-modal').style.display = 'none';
+    document.getElementById('field-modal').close();
 }
 
 function editField(stepId, index) {
@@ -703,7 +709,7 @@ function editField(stepId, index) {
     } else if (f.type === 'photo') {
         document.getElementById('field-multiple').checked = !!f.multiple;
     }
-    document.getElementById('field-modal').style.display = 'block';
+    document.getElementById('field-modal').showModal();
 }
 
 function deleteField(stepId, index) {
@@ -755,9 +761,9 @@ function saveField(event) {
 
 // ============ Kit (procedure level) ============
 
-function showAddKit() { document.getElementById('add-kit-modal').style.display = 'block'; }
+function showAddKit() { document.getElementById('add-kit-modal').showModal(); }
 function hideAddKit() {
-    document.getElementById('add-kit-modal').style.display = 'none';
+    document.getElementById('add-kit-modal').close();
     document.getElementById('add-kit-form').reset();
     document.getElementById('kit-part').value = '';
     document.getElementById('kit-part-search').value = '';
@@ -790,9 +796,9 @@ async function removeKitItem(partId) {
 
 // ============ Outputs (procedure level) ============
 
-function showAddOutput() { document.getElementById('add-output-modal').style.display = 'block'; }
+function showAddOutput() { document.getElementById('add-output-modal').showModal(); }
 function hideAddOutput() {
-    document.getElementById('add-output-modal').style.display = 'none';
+    document.getElementById('add-output-modal').close();
     document.getElementById('add-output-form').reset();
     document.getElementById('output-part').value = '';
     document.getElementById('output-part-search').value = '';

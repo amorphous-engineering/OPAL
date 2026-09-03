@@ -194,9 +194,12 @@
 {% endcall %}
 
 <!-- Add Line Modal -->
-<div id="add-line-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-backdrop); z-index: var(--z-modal);">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
-        {% call ok.panel("ADD LINE ITEM") %}
+<dialog id="add-line-modal" class="dialog" aria-labelledby="add-line-modal-title" onclick="if (event.target === this) this.close()">
+    <div style="width: 500px;">
+        <header>
+            <h2 id="add-line-modal-title" class="mono">ADD LINE ITEM</h2>
+        </header>
+        <section>
                 <form id="add-line-form" onsubmit="addLine(event)">
                     <div role="group" class="field">
                         <label class="label" for="line-part-search">PART *</label>
@@ -234,9 +237,10 @@
                     </div>
                 </form>
                 <div id="line-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
-        {% endcall %}
+        </section>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
     </div>
-</div>
+</dialog>
 
 <script>
 function getHeaders() {
@@ -304,11 +308,11 @@ document.addEventListener('click', function(evt) {
 });
 
 function showAddLine() {
-    document.getElementById('add-line-modal').style.display = 'block';
+    document.getElementById('add-line-modal').showModal();
 }
 
 function hideAddLine() {
-    document.getElementById('add-line-modal').style.display = 'none';
+    document.getElementById('add-line-modal').close();
     // Reset the part search
     document.getElementById('line-part').value = '';
     document.getElementById('line-part-search').value = '';
