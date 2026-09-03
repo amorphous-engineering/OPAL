@@ -60,8 +60,16 @@
 {# Tab navigation — Basecoat tabs; every tab controls the one HTMX-swapped
    panel, so Basecoat carries aria-selected and keyboard nav while HTMX
    carries the content. The document is the landing. #}
+{# Three columns under the header: left rail · tabs + content · right rail.
+   Rails are page-level so they stay put across tabs; below 1280px the left
+   rail hides and the right rail is a drawer. #}
+<div class="exec-layout" id="exec-doc-layout">
+<aside class="exec-rail-left" id="exec-rail-left" aria-label="Progress and operations">
+    {% include 'executions/_rail_left.html' %}
+</aside>
+<div class="exec-main">
 <div class="tabs exec-tabbar" id="exec-tabs">
-    <nav role="tablist" aria-orientation="horizontal" data-variant="line">
+    <nav role="tablist" aria-orientation="horizontal">
     {# BOM renders when parts go IN (kit_relevant); KITTING also hosts
        PRODUCTIONS + FINALIZE, so it renders when parts go in OR out
        (material_relevant) — an irrelevant empty section is absent. #}
@@ -83,6 +91,11 @@
     <div class="exec-tab-content" id="exec-tab-content" role="tabpanel" aria-labelledby="exec-tab-{{ tab }}" tabindex="-1">
         {% include 'executions/tabs/' ~ tab ~ '.html' %}
     </div>
+</div>
+</div>
+<aside class="exec-rail" id="exec-rail" aria-label="Online, issues, attachments, reference">
+    {% include 'executions/_rail.html' %}
+</aside>
 </div>
 
 {# Docked bar — all controls for the focused step. #}

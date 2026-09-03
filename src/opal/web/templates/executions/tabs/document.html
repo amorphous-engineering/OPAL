@@ -1,32 +1,6 @@
-{# The document: a centered readable column of OP cards, with rails floating
-   in the side gutters (page-level scroll, no inner scrollbar). LEFT rail:
-   online roster + OP minimap. RIGHT rail: issues/holds, attachments,
-   reference docs. Rails hide below ~1280px — content is king; the drawer
-   keeps the right rail reachable and "N ONLINE" serves the roster. #}
+{# The document tab: OP cards only. The rails are page-level (detail.html)
+   so they stay put across tabs. #}
 <div>
-<div class="exec-doc-layout" id="exec-doc-layout">
-    <aside class="exec-rail-left" id="exec-rail-left" aria-label="Progress and operations">
-        <section class="accordion rail-accordion" data-multiple>
-        <details class="rail-section" open>
-            <summary class="rail-head mono">PROGRESS <span class="rail-head-count" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span></summary>
-            {% set pct = (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 %}
-            <div class="progress rail-progress" role="progressbar" aria-label="Steps complete" aria-valuenow="{{ pct | round | int }}" aria-valuemin="0" aria-valuemax="100" data-progressbar><span data-progress-fill style="width: {{ pct }}%"></span></div>
-        </details>
-        <details class="rail-section" open>
-            <summary class="rail-head mono">OPERATIONS</summary>
-            <div class="rail-minimap" data-minimap>
-                {% for op_data in ops + contingency_ops %}
-                {% set op_terminal = op_data.step.status in ['completed', 'signed_off', 'skipped'] %}
-                <div class="minimap-row mono" data-minimap-op="{{ op_data.step.order }}" onclick="jumpToStep({{ op_data.step.order }})">
-                    <span class="minimap-num">{{ op_data.step.step_number }}</span>
-                    <span class="minimap-title">{{ op_data.step.title }}</span>
-                    <span class="minimap-prog{% if op_terminal %} is-done{% endif %}" data-minimap-prog>{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </details>
-        </section>
-    </aside>
     <section class="exec-doc accordion" id="exec-doc" data-multiple>
         {% for op_data in ops %}
         {% include 'executions/_op_card.html' %}
@@ -41,8 +15,4 @@
         <div class="empty-line mono">Operations — none</div>
         {% endif %}
     </section>
-    <aside class="exec-rail" id="exec-rail" aria-label="Issues, attachments, reference">
-        {% include 'executions/_rail.html' %}
-    </aside>
-</div>
 </div>

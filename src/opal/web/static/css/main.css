@@ -864,33 +864,22 @@ body.procedure-detail .exec-tabs {
     min-height: 400px;
 }
 
-/* Execution page tab strip: Basecoat tabs (line variant), full-bleed like
-   the legacy strip, mono uppercase register, accent on the selected tab. */
-/* The wrapper holds both the strip and the swapped panel, so it must pass
-   the page's remaining height through: flex column, min-height 0. */
+/* Execution page tab strip: Basecoat tabs (boxed), mono uppercase register,
+   accent on the selected tab. The wrapper holds both the strip and the
+   swapped panel and passes the column's height through so the panel is the
+   scroll box. */
 body.exec-detail .exec-tabbar {
     display: flex;
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    position: relative; /* anchors the tablet drawer toggle */
 }
 
 .exec-tabbar > [role="tablist"] {
-    height: auto;
-    padding: 0;
     flex-shrink: 0;
+    align-self: flex-start;
     margin-bottom: var(--space-md);
-}
-
-
-body.exec-detail .exec-tabbar { position: relative; } /* anchors the tablet drawer toggle */
-
-body.exec-detail .exec-tabbar > [role="tablist"] {
-    margin-left: calc(-1 * var(--space-md));
-    margin-right: calc(-1 * var(--space-md));
-    padding-left: var(--space-md);
-    padding-right: var(--space-md);
-    border-bottom: 1px solid var(--border-color);
 }
 
 .exec-tabbar [role="tab"] {
@@ -902,10 +891,7 @@ body.exec-detail .exec-tabbar > [role="tablist"] {
 
 .exec-tabbar [role="tab"][aria-selected="true"] {
     color: var(--primary);
-}
-
-.exec-tabbar [role="tab"]::after {
-    background: var(--primary);
+    border-color: var(--primary);
 }
 
 /* Execution-detail page: lock to viewport so each tab scrolls within .exec-tab-content,

@@ -55,11 +55,25 @@
    the side gutters and the page scrolls as one surface — no inner
    scrollbars. Below 1280px the rails hide: content is king. */
 
-.exec-doc-layout {
+/* Page-level three-column layout: left rail · main (tabs + panel) · right
+   rail. The page is viewport-locked (main.css), so the layout takes the
+   remaining height and the middle panel is the scroll box; each rail
+   hugs its content and scrolls on its own when taller than the page. */
+.exec-layout {
     display: flex;
     gap: var(--space-md);
     align-items: flex-start;
-    margin-bottom: var(--space-sm);
+    flex: 1;
+    min-height: 0;
+}
+
+.exec-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-height: 0;
 }
 
 .exec-doc {
@@ -71,9 +85,7 @@
 .exec-rail-left {
     width: 280px;
     flex-shrink: 0;
-    position: sticky;
-    top: var(--space-sm);
-    max-height: calc(100vh - 9rem);
+    max-height: 100%;
     overflow-y: auto;
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
@@ -455,6 +467,7 @@
 .exec-meta-popover .table { margin: 0; }
 .exec-meta-pref { margin: var(--space-sm) 0 var(--space-xs) var(--space-xs); }
 .rail-table td { padding: 2px var(--space-xs); }
+.rail-table td:first-child { white-space: nowrap; }
 .rail-disp { font-size: 0.65rem; white-space: nowrap; }
 .rail-disp-undispositioned { color: var(--accent-red); }
 .rail-table td.rail-issue-title { overflow: hidden; text-overflow: ellipsis; max-width: 140px; white-space: nowrap; }
@@ -630,7 +643,7 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
         padding-top: var(--space-md);
     }
 
-    .exec-doc-layout.rail-open .exec-rail { transform: translateX(0); }
+    .exec-layout.rail-open .exec-rail { transform: translateX(0); }
 
     /* Drawer toggle sits in the tab row beside the dock-bar preference. */
     .rail-toggle {

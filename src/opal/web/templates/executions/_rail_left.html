@@ -1,0 +1,21 @@
+{# Left rail: progress + OP minimap. Page-level, present on every tab. #}
+<section class="accordion rail-accordion" data-multiple>
+<details class="rail-section" open>
+    <summary class="rail-head mono">PROGRESS <span class="rail-head-count" data-progress>{{ exec_state.instance.progress.done }}/{{ exec_state.instance.progress.total }}</span></summary>
+    {% set pct = (exec_state.instance.progress.done / exec_state.instance.progress.total * 100) if exec_state.instance.progress.total else 0 %}
+    <div class="progress rail-progress" role="progressbar" aria-label="Steps complete" aria-valuenow="{{ pct | round | int }}" aria-valuemin="0" aria-valuemax="100" data-progressbar><span data-progress-fill style="width: {{ pct }}%"></span></div>
+</details>
+<details class="rail-section" open>
+    <summary class="rail-head mono">OPERATIONS</summary>
+    <div class="rail-minimap" data-minimap>
+        {% for op_data in ops + contingency_ops %}
+        {% set op_terminal = op_data.step.status in ['completed', 'signed_off', 'skipped'] %}
+        <div class="minimap-row mono" data-minimap-op="{{ op_data.step.order }}" onclick="jumpToStep({{ op_data.step.order }})">
+            <span class="minimap-num">{{ op_data.step.step_number }}</span>
+            <span class="minimap-title">{{ op_data.step.title }}</span>
+            <span class="minimap-prog{% if op_terminal %} is-done{% endif %}" data-minimap-prog>{{ op_data.completed_steps }}/{{ op_data.total_steps }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</details>
+</section>
