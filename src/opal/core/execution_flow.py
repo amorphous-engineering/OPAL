@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from opal.core.audit import log_create
 from opal.core.holds import HoldState, blocking_issues_for_instance, get_hold_state
-from opal.core.holds import _val as _status_value  # enum-unwrap, one home in core/holds
+from opal.core.holds import enum_value as _status_value  # enum-unwrap, one home in core/holds
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
     InstanceStatus,

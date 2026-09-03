@@ -25,11 +25,17 @@ from opal.db.models.execution import ProcedureInstance, StepExecution
 from opal.db.models.issue import Containment, Issue, IssueStatus
 
 
-def _val(obj: object) -> str | None:
-    """Unwrap a potentially-enum attribute to its string value."""
+def enum_value(obj: object) -> str | None:
+    """Unwrap a potentially-enum attribute to its string value.
+
+    One home: SQLite rows come back as enums or as plain strings depending
+    on how they were loaded, and every layer needs the string."""
     if obj is None:
         return None
     return obj.value if hasattr(obj, "value") else obj  # type: ignore[return-value]
+
+
+_val = enum_value
 
 
 def blocking_issues_for_instance(db: Session, instance_id: int) -> list[Issue]:

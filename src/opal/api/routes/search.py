@@ -16,6 +16,7 @@ from sqlalchemy import literal_column, or_
 from sqlalchemy.orm import Session
 
 from opal.api.deps import DbSession
+from opal.core.holds import enum_value as _status_value
 from opal.db.base import LifecycleState
 from opal.db.fts import ENTITY_SPECS, FtsEntity, fts_ready, fts_table
 from opal.db.models import Part, Supplier
@@ -40,12 +41,6 @@ class SearchResult(BaseModel):
     sublabel: str | None = None
     url: str
     status: str | None = None
-
-
-def _status_value(value: Any) -> str | None:
-    if value is None:
-        return None
-    return value.value if hasattr(value, "value") else value
 
 
 def _part_result(p: Part) -> SearchResult:
