@@ -7,14 +7,14 @@
             <span class="mono text-muted">{{ pagination.start }}-{{ pagination.end }} OF {{ pagination.total }}</span>
             <span>
                 {% if pagination.has_prev %}
-                <button type="button" class="btn btn-sm"
+                <button type="button" class="btn" data-variant="outline" data-size="xs"
                         hx-get="{{ pagination.prev_url }}" hx-target="closest tbody" hx-swap="innerHTML">
                     &laquo; PREV
                 </button>
                 {% endif %}
                 <span class="mono text-muted" style="margin: 0 8px;">PAGE {{ pagination.page }}/{{ pagination.pages }}</span>
                 {% if pagination.has_next %}
-                <button type="button" class="btn btn-sm"
+                <button type="button" class="btn" data-variant="outline" data-size="xs"
                         hx-get="{{ pagination.next_url }}" hx-target="closest tbody" hx-swap="innerHTML">
                     NEXT &raquo;
                 </button>

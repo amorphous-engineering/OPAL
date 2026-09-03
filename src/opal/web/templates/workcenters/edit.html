@@ -11,16 +11,14 @@
 {% block content %}
 {% call ok.panel("EDIT WORKCENTER: " ~ workcenter.code, max_width="600px") %}
         <form id="workcenter-form" onsubmit="updateWorkcenter(event)">
-            {{ ok.field("code", "CODE", value=workcenter.code, required=true, help="Short unique code for the workcenter", attrs='maxlength="50" class="form-input mono"') }}
+            {{ ok.field("code", "CODE", value=workcenter.code, required=true, help="Short unique code for the workcenter", attrs='maxlength="50" class="input mono"') }}
             {{ ok.field("name", "NAME", value=workcenter.name, required=true, attrs='maxlength="255"') }}
             {{ ok.field("location", "LOCATION", value=workcenter.location or '', placeholder="Physical location or building", attrs='maxlength="255"') }}
             {{ ok.field("description", "DESCRIPTION", type="textarea", value=workcenter.description or '', rows=3) }}
 
-            <div class="form-group">
-                <label class="form-checkbox">
-                    <input type="checkbox" id="is_active" name="is_active" {{ 'checked' if workcenter.is_active else '' }}>
-                    Active
-                </label>
+            <div role="group" class="field" data-orientation="horizontal">
+                <input class="input" type="checkbox" id="is_active" name="is_active" {{ 'checked' if workcenter.is_active else '' }}>
+                <label for="is_active">Active</label>
             </div>
 
             {{ ok.form_messages() }}

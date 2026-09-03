@@ -270,7 +270,7 @@
         <div class="panel">
             <div class="panel-header">
                 <span>SCRAP INVENTORY</span>
-                <button class="btn btn-sm" onclick="hideScrapModal()" style="margin-left: auto;">&times;</button>
+                <button class="btn" data-variant="outline" data-size="xs" onclick="hideScrapModal()" style="margin-left: auto;">&times;</button>
             </div>
             <div class="panel-body">
                 {% call ok.table() %}
@@ -279,13 +279,13 @@
                     {{ ok.detail_row("CURRENT QTY", ok.mono('%g' % record.quantity), th_width="100px") }}
                 {% endcall %}
                 <form id="scrap-form" onsubmit="event.preventDefault(); submitScrap();">
-                    <div class="form-group">
-                        <label class="form-label" for="scrap-qty">QUANTITY TO SCRAP <span class="text-red">*</span></label>
-                        <input type="number" id="scrap-qty" class="form-input" step="0.0001" min="0.0001" max="{{ record.quantity }}" value="{{ '%g' % record.quantity }}" required>
+                    <div role="group" class="field">
+                        <label class="label" for="scrap-qty">QUANTITY TO SCRAP <span class="text-red">*</span></label>
+                        <input type="number" id="scrap-qty" class="input" step="0.0001" min="0.0001" max="{{ record.quantity }}" value="{{ '%g' % record.quantity }}" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="scrap-reason">REASON <span class="text-red">*</span></label>
-                        <select id="scrap-reason" class="form-select" required>
+                    <div role="group" class="field">
+                        <label class="label" for="scrap-reason">REASON <span class="text-red">*</span></label>
+                        <select id="scrap-reason" class="select" required>
                             <option value="">Select reason...</option>
                             <option value="Damaged">Damaged</option>
                             <option value="Expired">Expired</option>
@@ -295,9 +295,9 @@
                             <option value="Other">Other</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="scrap-notes">NOTES</label>
-                        <textarea id="scrap-notes" class="form-input" rows="3" placeholder="Additional details about the scrap event..."></textarea>
+                    <div role="group" class="field">
+                        <label class="label" for="scrap-notes">NOTES</label>
+                        <textarea id="scrap-notes" class="input" rows="3" placeholder="Additional details about the scrap event..."></textarea>
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end; margin-top: var(--space-md);">
                         {{ ok.btn("CANCEL", attrs='onclick="hideScrapModal()"') }}
@@ -390,9 +390,9 @@ async function recordCalibration() {
             <div class="panel-body">
                 <form id="run-test-form" onsubmit="submitRunTest(event)">
                     {% if test_templates %}
-                    <div class="form-group">
-                        <label class="form-label" for="run-template">TEST TEMPLATE</label>
-                        <select id="run-template" class="form-select" onchange="onTemplateSelect()">
+                    <div role="group" class="field">
+                        <label class="label" for="run-template">TEST TEMPLATE</label>
+                        <select id="run-template" class="select" onchange="onTemplateSelect()">
                             <option value="">(Custom test)</option>
                             {% for tt in test_templates %}
                             <option value="{{ tt.id }}"
@@ -405,33 +405,33 @@ async function recordCalibration() {
                         </select>
                     </div>
                     {% endif %}
-                    <div class="form-group" id="run-name-group">
-                        <label class="form-label" for="run-test-name">TEST NAME *</label>
-                        <input type="text" id="run-test-name" class="form-input" required>
+                    <div role="group" class="field" id="run-name-group">
+                        <label class="label" for="run-test-name">TEST NAME *</label>
+                        <input type="text" id="run-test-name" class="input" required>
                     </div>
-                    <div class="form-group" id="run-type-group">
-                        <label class="form-label" for="run-test-type">TYPE</label>
-                        <select id="run-test-type" class="form-select" onchange="toggleRunFields()">
+                    <div role="group" class="field" id="run-type-group">
+                        <label class="label" for="run-test-type">TYPE</label>
+                        <select id="run-test-type" class="select" onchange="toggleRunFields()">
                             <option value="boolean">BOOLEAN (Pass/Fail)</option>
                             <option value="numeric">NUMERIC</option>
                             <option value="text">TEXT</option>
                         </select>
                     </div>
-                    <div id="run-value-group" class="form-group" style="display: none;">
-                        <label class="form-label" for="run-value">VALUE</label>
-                        <input type="text" id="run-value" class="form-input">
+                    <div id="run-value-group" role="group" class="field" style="display: none;">
+                        <label class="label" for="run-value">VALUE</label>
+                        <input type="text" id="run-value" class="input">
                         <div id="run-value-hint" class="text-muted" style="font-size: 0.75rem; margin-top: 2px;"></div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">RESULT *</label>
+                    <div role="group" class="field">
+                        <label class="label">RESULT *</label>
                         <div style="display: flex; gap: var(--space-md);">
                             <label><input type="radio" name="run-result" value="pass" required> PASS</label>
                             <label><input type="radio" name="run-result" value="fail"> FAIL</label>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="run-notes">NOTES</label>
-                        <textarea id="run-notes" class="form-input" rows="2"></textarea>
+                    <div role="group" class="field">
+                        <label class="label" for="run-notes">NOTES</label>
+                        <textarea id="run-notes" class="input" rows="2"></textarea>
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideRunTest()"') }}
@@ -452,25 +452,25 @@ async function recordCalibration() {
             <div class="panel-body">
                 <form id="edit-test-form" onsubmit="submitEditTest(event)">
                     <input type="hidden" id="edit-test-id">
-                    <div class="form-group">
-                        <label class="form-label" for="edit-test-name">TEST NAME *</label>
-                        <input type="text" id="edit-test-name" class="form-input" required>
+                    <div role="group" class="field">
+                        <label class="label" for="edit-test-name">TEST NAME *</label>
+                        <input type="text" id="edit-test-name" class="input" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-value">VALUE</label>
-                        <input type="text" id="edit-value" class="form-input">
+                    <div role="group" class="field">
+                        <label class="label" for="edit-value">VALUE</label>
+                        <input type="text" id="edit-value" class="input">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">RESULT *</label>
+                    <div role="group" class="field">
+                        <label class="label">RESULT *</label>
                         <div style="display: flex; gap: var(--space-md);">
                             <label><input type="radio" name="edit-result" value="pass" required> PASS</label>
                             <label><input type="radio" name="edit-result" value="fail"> FAIL</label>
                             <label><input type="radio" name="edit-result" value="pending"> PENDING</label>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-notes">NOTES</label>
-                        <textarea id="edit-notes" class="form-input" rows="2"></textarea>
+                    <div role="group" class="field">
+                        <label class="label" for="edit-notes">NOTES</label>
+                        <textarea id="edit-notes" class="input" rows="2"></textarea>
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideEditTest()"') }}

@@ -44,9 +44,9 @@
    re-derive gating here. #}
 {% macro complete_control(order, blockers) %}
 {%- if blockers %}
-<span class="gated-control"><button class="btn btn-sm btn-primary" disabled>COMPLETE</button>{{ gate_reason(blockers) }}</span>
+<span class="gated-control"><button class="btn" data-variant="primary" data-size="xs" disabled>COMPLETE</button>{{ gate_reason(blockers) }}</span>
 {%- else %}
-<button class="btn btn-sm btn-primary" onclick="completeStep({{ order }}, this)">COMPLETE</button>
+<button class="btn" data-variant="primary" data-size="xs" onclick="completeStep({{ order }}, this)">COMPLETE</button>
 {%- endif %}
 {% endmacro %}
 
@@ -57,7 +57,7 @@
    dockbar overflow. #}
 {% macro redline_control(op_order, op_number, open_ncs, before='') %}
 {%- if open_ncs %}
-<button class="btn btn-sm" onclick='{{ before }}showRedlineModal({{ op_order }}, {{ op_number | tojson }}, {{ open_ncs | map(attribute="id") | list | tojson }}, {{ open_ncs | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
+<button class="btn" data-variant="outline" data-size="xs" onclick='{{ before }}showRedlineModal({{ op_order }}, {{ op_number | tojson }}, {{ open_ncs | map(attribute="id") | list | tojson }}, {{ open_ncs | map(attribute="issue_number") | list | tojson }})'>+ REDLINE</button>
 {%- endif %}
 {% endmacro %}
 
@@ -65,9 +65,9 @@
    `menu` renders the dockbar-overflow variant. #}
 {% macro skip_control(order, title, blockers, menu=false) %}
 {%- if blockers %}
-<span class="gated-control"><button class="btn btn-sm" disabled>SKIP</button>{{ gate_reason(blockers) }}</span>
+<span class="gated-control"><button class="btn" data-variant="outline" data-size="xs" disabled>SKIP</button>{{ gate_reason(blockers) }}</span>
 {%- else %}
-<button class="btn btn-sm" onclick='{% if menu %}hideDockbarMenu(); {% endif %}showSkipModal({{ order }}, {{ title | tojson }})'>SKIP</button>
+<button class="btn" data-variant="outline" data-size="xs" onclick='{% if menu %}hideDockbarMenu(); {% endif %}showSkipModal({{ order }}, {{ title | tojson }})'>SKIP</button>
 {%- endif %}
 {% endmacro %}
 
@@ -169,18 +169,18 @@
     <label class="bar-field-label mono">{{ field.label }}{% if field.required %} <span class="text-red">*</span>{% endif %}{% if field.get('unit') %} ({{ field.unit }}){% endif %}</label>
     {% set raw = exec.data_captured[field.name] if exec.data_captured and exec.data_captured[field.name] is defined else none %}
     {% if field.type == 'text' %}
-    <input type="text" class="form-input" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}{% if raw is not none %} value="{{ raw }}"{% endif %} placeholder="{{ field.get('placeholder', '') }}">
+    <input type="text" class="input" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}{% if raw is not none %} value="{{ raw }}"{% endif %} placeholder="{{ field.get('placeholder', '') }}">
     {% elif field.type == 'number' %}
-    <input type="number" class="form-input" data-capture-field="{{ field.name }}"{% if field.get('min') is not none %} min="{{ field.min }}"{% endif %}{% if field.get('max') is not none %} max="{{ field.max }}"{% endif %} step="{{ field.get('step', 'any') }}"{% if field.required %} required{% endif %}{% if raw is not none %} value="{{ raw }}"{% endif %}>
+    <input type="number" class="input" data-capture-field="{{ field.name }}"{% if field.get('min') is not none %} min="{{ field.min }}"{% endif %}{% if field.get('max') is not none %} max="{{ field.max }}"{% endif %} step="{{ field.get('step', 'any') }}"{% if field.required %} required{% endif %}{% if raw is not none %} value="{{ raw }}"{% endif %}>
     {% elif field.type == 'checkbox' %}
     <label class="bar-check"><input type="checkbox" data-capture-field="{{ field.name }}"{% if raw %} checked{% endif %}> <span class="mono">{{ field.label }}</span></label>
     {% elif field.type == 'select' %}
-    <select class="form-select" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}>
+    <select class="select" data-capture-field="{{ field.name }}"{% if field.required %} required{% endif %}>
         <option value="">Select...</option>
         {% for opt in field.get('options', []) %}<option value="{{ opt }}"{% if raw == opt %} selected{% endif %}>{{ opt }}</option>{% endfor %}
     </select>
     {% elif field.type == 'textarea' %}
-    <textarea class="form-textarea" data-capture-field="{{ field.name }}" rows="{{ field.get('rows', 2) }}"{% if field.required %} required{% endif %}>{% if raw is not none %}{{ raw }}{% endif %}</textarea>
+    <textarea class="textarea" data-capture-field="{{ field.name }}" rows="{{ field.get('rows', 2) }}"{% if field.required %} required{% endif %}>{% if raw is not none %}{{ raw }}{% endif %}</textarea>
     {% elif field.type == 'photo' %}
     {% set ids = raw if raw is iterable and raw is not string else ([raw] if raw else []) %}
     {% set is_multiple = field.get('multiple', False) %}
@@ -189,7 +189,7 @@
             {% for att_id in ids %}
             <div class="step-photo-item" data-attachment-id="{{ att_id }}">
                 <img class="step-photo-thumb" src="/api/attachments/{{ att_id }}/download" alt="{{ field.label }}" onclick='openLightbox("/api/attachments/{{ att_id }}/download", {{ field.label | tojson }})'>
-                <button type="button" class="btn btn-sm" onclick="removeStepPhoto(this)">REMOVE</button>
+                <button type="button" class="btn" data-variant="outline" data-size="xs" onclick="removeStepPhoto(this)">REMOVE</button>
             </div>
             {% endfor %}
         </div>

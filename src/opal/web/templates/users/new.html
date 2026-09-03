@@ -13,12 +13,12 @@
             {{ ok.field("name", "NAME", required=true, attrs='maxlength="255"') }}
             {{ ok.field("email", "EMAIL", type="email", help="Optional - for contact purposes", attrs='maxlength="255"') }}
 
-            <div class="form-group">
-                <label class="form-checkbox">
-                    <input type="checkbox" id="is_admin_field" name="is_admin">
-                    Admin
-                </label>
-                <small class="text-muted">Admins can manage users and project settings</small>
+            <div role="group" class="field" data-orientation="horizontal">
+                <input class="input" type="checkbox" id="is_admin_field" name="is_admin">
+                <section>
+                    <label for="is_admin_field">Admin</label>
+                    <p class="field-help">Admins can manage users and project settings</p>
+                </section>
             </div>
 
             {{ ok.form_messages() }}

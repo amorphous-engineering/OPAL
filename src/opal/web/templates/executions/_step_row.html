@@ -56,7 +56,7 @@
         {% set step_cons = step_consumptions.get(exec.id, []) if exec else [] %}
         {% if step_kit or step_cons %}
         <div class="step-kit-panel">
-            <div class="form-label">STEP PARTS{% if step_cons %} {{ ok.status("CONSUMED " ~ step_cons|length, "ok") }}{% endif %}</div>
+            <div class="label">STEP PARTS{% if step_cons %} {{ ok.status("CONSUMED " ~ step_cons|length, "ok") }}{% endif %}</div>
             {% if step_kit %}
             <table class="data-table" data-step-kit="{{ step.order }}">
                 <thead><tr>
@@ -72,8 +72,8 @@
                         <td>{{ sk.part_name }}{% if sk.notes %} <span class="text-muted">({{ sk.notes }})</span>{% endif %}</td>
                         <td class="mono" style="text-align:right;">{{ sk.quantity_required }}</td>
                         <td>{{ ok.status(sk.usage_type|upper, "info" if sk.usage_type == 'tooling' else "default") }}</td>
-                        <td><select class="form-select form-select-sm sk-inv-select" data-part-id="{{ sk.part_id }}"><option>Loading...</option></select></td>
-                        <td><input type="number" class="form-input sk-qty-input" data-part-id="{{ sk.part_id }}" step="0.0001" min="0" value="{{ sk.quantity_required }}" style="width:70px;"></td>
+                        <td><select class="select sk-inv-select" data-part-id="{{ sk.part_id }}"><option>Loading...</option></select></td>
+                        <td><input type="number" class="input sk-qty-input" data-part-id="{{ sk.part_id }}" step="0.0001" min="0" value="{{ sk.quantity_required }}" style="width:70px;"></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -100,12 +100,12 @@
                 {{ ex.data_fields_editable({'exec': exec, 'schema': body_schema}) }}
             </div>
             <div class="step-actions">
-                <button class="btn btn-sm" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>
-                <button class="btn btn-sm" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
+                <button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>
+                <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
                 {{ ex.redline_control(op.order, op.step_number, op_open_ncs_by_order.get(op.order, [])) }}
                 {{ ex.skip_control(step.order, step.title, skip_gate) }}
                 {% if step_kit %}
-                <button class="btn btn-sm" onclick="consumeStepParts({{ step.order }})">CONSUME PARTS</button>
+                <button class="btn" data-variant="outline" data-size="xs" onclick="consumeStepParts({{ step.order }})">CONSUME PARTS</button>
                 {% endif %}
                 {{ ex.complete_control(step.order, complete_gate) }}
             </div>
@@ -113,9 +113,9 @@
         {% elif inst_status in ['cut', 'in_work'] and step.status == 'awaiting_signoff' %}
         <div class="step-controls">
             <div class="step-actions">
-                {% if exec %}<button class="btn btn-sm" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>{% endif %}
-                <button class="btn btn-sm" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
-                <button class="btn btn-sm btn-primary" onclick="signoffStep({{ step.order }})">SIGN OFF</button>
+                {% if exec %}<button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ exec.id }}, {{ step_display_number | tojson }})'>ATTACH</button>{% endif %}
+                <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ step.order }}, {{ step_display_number | tojson }})'>ISSUE</button>
+                <button class="btn" data-variant="primary" data-size="xs" onclick="signoffStep({{ step.order }})">SIGN OFF</button>
             </div>
         </div>
         {% else %}

@@ -12,14 +12,14 @@
         <form id="new-po-form" onsubmit="createPO(event)">
             {% call ok.grid(cols=2, gap="var(--space-lg)") %}
                 <div>
-                    <div class="form-group">
-                        <label class="form-label" for="reference">PO REFERENCE</label>
-                        <input type="text" id="reference" name="reference" class="form-input mono" maxlength="64" placeholder="PO-0001 (auto-generated if blank)">
+                    <div role="group" class="field">
+                        <label class="label" for="reference">PO REFERENCE</label>
+                        <input type="text" id="reference" name="reference" class="input mono" maxlength="64" placeholder="PO-0001 (auto-generated if blank)">
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label" for="supplier_id">SUPPLIER</label>
-                        <select id="supplier_id" name="supplier_id" class="form-select" onchange="updateSupplierText()">
+                    <div role="group" class="field">
+                        <label class="label" for="supplier_id">SUPPLIER</label>
+                        <select id="supplier_id" name="supplier_id" class="select" onchange="updateSupplierText()">
                             <option value="">Select supplier or enter below...</option>
                             {% for s in suppliers %}
                             <option value="{{ s.id }}" {{ 'selected' if preselected_supplier_id == s.id else '' }}>
@@ -29,11 +29,11 @@
                         </select>
                     </div>
 
-                    {{ ok.field("supplier", "SUPPLIER NAME *", required=true, help="Auto-filled when supplier is selected, or enter manually") }}
+                    {{ ok.field("supplier", "SUPPLIER NAME", required=true, help="Auto-filled when supplier is selected, or enter manually") }}
 
-                    <div class="form-group">
-                        <label class="form-label" for="supplier_reference">SUPPLIER REF</label>
-                        <input type="text" id="supplier_reference" name="supplier_reference" class="form-input mono" maxlength="100" placeholder="Supplier's order number">
+                    <div role="group" class="field">
+                        <label class="label" for="supplier_reference">SUPPLIER REF</label>
+                        <input type="text" id="supplier_reference" name="supplier_reference" class="input mono" maxlength="100" placeholder="Supplier's order number">
                     </div>
                 </div>
 
@@ -46,8 +46,8 @@
                 </div>
             {% endcall %}
 
-            <div class="form-group" style="margin-top: var(--space-lg);">
-                <label class="form-label">LINE ITEMS</label>
+            <div role="group" class="field" style="margin-top: var(--space-lg);">
+                <label class="label">LINE ITEMS</label>
                 {% call ok.table(id="lines-table") %}
                     <thead>
                         <tr>
@@ -152,7 +152,7 @@ function addLine() {
         <td>
             <div class="part-search-container">
                 <input type="text"
-                       class="form-input part-search-input"
+                       class="input part-search-input"
                        placeholder="Search parts..."
                        autocomplete="off"
                        hx-get="/parts/search"
@@ -169,10 +169,10 @@ function addLine() {
                 </div>
             </div>
         </td>
-        <td><input type="number" name="lines[${currentLine}][qty_ordered]" class="form-input" step="0.0001" min="0.0001" required></td>
-        <td><input type="number" name="lines[${currentLine}][unit_cost]" class="form-input" step="0.01" min="0"></td>
-        <td><input type="text" name="lines[${currentLine}][destination]" class="form-input" placeholder="Location"></td>
-        <td><button type="button" class="btn btn-danger" onclick="removeLine(${currentLine})">X</button></td>
+        <td><input type="number" name="lines[${currentLine}][qty_ordered]" class="input" step="0.0001" min="0.0001" required></td>
+        <td><input type="number" name="lines[${currentLine}][unit_cost]" class="input" step="0.01" min="0"></td>
+        <td><input type="text" name="lines[${currentLine}][destination]" class="input" placeholder="Location"></td>
+        <td><button type="button" class="btn" data-variant="destructive" data-size="sm" onclick="removeLine(${currentLine})">X</button></td>
     `;
     tbody.appendChild(row);
     htmx.process(row);  // Process HTMX attributes on new elements

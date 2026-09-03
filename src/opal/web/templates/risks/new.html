@@ -12,41 +12,41 @@
         <form id="new-risk-form" onsubmit="createRisk(event)">
             {{ ok.field("title", "TITLE", required=true) }}
 
-            <div class="form-label">CONDITION <span class="text-muted">— present fact, true now</span></div>
+            <div class="label">CONDITION <span class="text-muted">— present fact, true now</span></div>
             <div class="lint-editor" style="margin-bottom: var(--space-sm);">
                 <div class="lint-overlay mono" id="condition-overlay" aria-hidden="true"></div>
-                <textarea id="condition-text" name="condition" class="form-textarea mono lint-textarea" rows="2"></textarea>
+                <textarea id="condition-text" name="condition" class="textarea mono lint-textarea" rows="2"></textarea>
             </div>
 
-            <div class="form-label">DEPARTURE <span class="text-muted">— future undesired event; probability scores this</span></div>
+            <div class="label">DEPARTURE <span class="text-muted">— future undesired event; probability scores this</span></div>
             <div class="lint-editor" style="margin-bottom: var(--space-sm);">
                 <div class="lint-overlay mono" id="departure-overlay" aria-hidden="true"></div>
-                <textarea id="departure-text" name="departure" class="form-textarea mono lint-textarea" rows="2"></textarea>
+                <textarea id="departure-text" name="departure" class="textarea mono lint-textarea" rows="2"></textarea>
             </div>
 
-            <div class="form-label">ASSET <span class="text-muted">— what is exposed: a part, or a name (schedule, campaign, ...)</span></div>
+            <div class="label">ASSET <span class="text-muted">— what is exposed: a part, or a name (schedule, campaign, ...)</span></div>
             <div style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm);">
-                <select id="asset-part-select" name="asset_part_id" class="form-select" style="width: auto;"
+                <select id="asset-part-select" name="asset_part_id" class="select" style="width: auto;"
                         onchange="if (this.value) document.getElementById('asset-text-input').value = '';">
                     <option value="">— part —</option>
                     {% for part in parts %}
                     <option value="{{ part.id }}">{{ part.name }}{% if part.internal_pn %} ({{ part.internal_pn }}){% endif %}</option>
                     {% endfor %}
                 </select>
-                <input type="text" id="asset-text-input" name="asset_text" class="form-input" maxlength="255"
+                <input type="text" id="asset-text-input" name="asset_text" class="input" maxlength="255"
                        placeholder="or: schedule, test campaign, ..."
                        oninput="if (this.value) document.getElementById('asset-part-select').value = '';">
             </div>
 
-            <div class="form-label">CONSEQUENCE <span class="text-muted">— measurable impact; impact scores this</span></div>
+            <div class="label">CONSEQUENCE <span class="text-muted">— measurable impact; impact scores this</span></div>
             <div class="lint-editor" style="margin-bottom: var(--space-md);">
                 <div class="lint-overlay mono" id="consequence-overlay" aria-hidden="true"></div>
-                <textarea id="consequence-text" name="consequence" class="form-textarea mono lint-textarea" rows="2"></textarea>
+                <textarea id="consequence-text" name="consequence" class="textarea mono lint-textarea" rows="2"></textarea>
             </div>
 
-            <div class="form-group">
-                <label class="form-label" for="owner-select">OWNER</label>
-                <select id="owner-select" name="owner_id" class="form-select" style="width: auto;">
+            <div role="group" class="field">
+                <label class="label" for="owner-select">OWNER</label>
+                <select id="owner-select" name="owner_id" class="select" style="width: auto;">
                     <option value="">—</option>
                     {% for user in users %}
                     <option value="{{ user.id }}">{{ user.name }}</option>
@@ -59,8 +59,8 @@
                 {{ ok.field("impact", "IMPACT (1-5)", type="select", value="3", options=[{"value": "1", "label": "1 - Negligible"}, {"value": "2", "label": "2 - Minor"}, {"value": "3", "label": "3 - Moderate"}, {"value": "4", "label": "4 - Major"}, {"value": "5", "label": "5 - Severe"}]) }}
             {% endcall %}
 
-            <div class="form-group">
-                <label class="form-label">CALCULATED SCORE</label>
+            <div role="group" class="field">
+                <label class="label">CALCULATED SCORE</label>
                 <div id="score-display" class="mono" style="font-size: 1.5rem; font-weight: 600;"><span class="sev-medium">9</span></div>
             </div>
 

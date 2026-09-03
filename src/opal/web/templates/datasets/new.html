@@ -13,9 +13,9 @@
             {{ ok.field("name", "NAME", required=true) }}
             {{ ok.field("description", "DESCRIPTION", type="textarea", rows=2) }}
 
-            <div class="form-group">
-                <label class="form-label" for="procedure">LINKED PROCEDURE (optional)</label>
-                <select id="procedure" name="procedure_id" class="form-select">
+            <div role="group" class="field">
+                <label class="label" for="procedure">LINKED PROCEDURE (optional)</label>
+                <select id="procedure" name="procedure_id" class="select">
                     <option value="">No linked procedure...</option>
                     {% for p in procedures %}
                     <option value="{{ p.id }}">{{ p.name }}</option>
@@ -23,18 +23,18 @@
                 </select>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">SCHEMA FIELDS</label>
+            <div role="group" class="field">
+                <label class="label">SCHEMA FIELDS</label>
                 <div id="schema-fields">
                     <div class="schema-field" style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm); align-items: center;">
-                        <input type="text" class="form-input field-name" placeholder="Field name" style="flex: 2;">
-                        <select class="form-select field-type" style="flex: 1;">
+                        <input type="text" class="input field-name" placeholder="Field name" style="flex: 2;">
+                        <select class="select field-type" style="flex: 1;">
                             <option value="number">Number</option>
                             <option value="text">Text</option>
                             <option value="boolean">Boolean</option>
                             <option value="date">Date</option>
                         </select>
-                        <input type="text" class="form-input field-unit" placeholder="Unit (optional)" style="flex: 1;">
+                        <input type="text" class="input field-unit" placeholder="Unit (optional)" style="flex: 1;">
                         <label style="display: inline-flex; align-items: center; gap: var(--space-xs); white-space: nowrap; font-size: 0.85rem;" title="Render this field as a chart in build reports (numeric fields only)">
                             <input type="checkbox" class="field-chart">
                             <span class="mono">CHART</span>
@@ -55,19 +55,19 @@ function addField() {
     const container = document.getElementById('schema-fields');
     const fieldHtml = `
         <div class="schema-field" style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm); align-items: center;">
-            <input type="text" class="form-input field-name" placeholder="Field name" style="flex: 2;">
-            <select class="form-select field-type" style="flex: 1;">
+            <input type="text" class="input field-name" placeholder="Field name" style="flex: 2;">
+            <select class="select field-type" style="flex: 1;">
                 <option value="number">Number</option>
                 <option value="text">Text</option>
                 <option value="boolean">Boolean</option>
                 <option value="date">Date</option>
             </select>
-            <input type="text" class="form-input field-unit" placeholder="Unit (optional)" style="flex: 1;">
+            <input type="text" class="input field-unit" placeholder="Unit (optional)" style="flex: 1;">
             <label style="display: inline-flex; align-items: center; gap: var(--space-xs); white-space: nowrap; font-size: 0.85rem;" title="Render this field as a chart in build reports (numeric fields only)">
                 <input type="checkbox" class="field-chart">
                 <span class="mono">CHART</span>
             </label>
-            <button type="button" class="btn" onclick="removeField(this)" style="padding: 0 var(--space-sm);">X</button>
+            <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="removeField(this)" style="padding: 0 var(--space-sm);">X</button>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', fieldHtml);

@@ -60,12 +60,12 @@
                     <td class="mono" style="text-align: right;">{{ kit.quantity_required }}</td>
                     <td class="mono availability-cell" style="text-align: right;">-</td>
                     <td>
-                        <select name="inv_{{ kit.part_id }}" class="form-select inv-select" data-part-id="{{ kit.part_id }}">
+                        <select name="inv_{{ kit.part_id }}" class="select inv-select" data-part-id="{{ kit.part_id }}">
                             <option value="">Loading...</option>
                         </select>
                     </td>
                     <td>
-                        <input type="number" name="qty_{{ kit.part_id }}" class="form-input qty-input"
+                        <input type="number" name="qty_{{ kit.part_id }}" class="input qty-input"
                                data-part-id="{{ kit.part_id }}" step="0.0001" min="0"
                                value="{{ kit.quantity_required }}">
                     </td>
@@ -75,7 +75,7 @@
         </table>
         {% if inst_status in ['in_work', 'completed'] %}
         <div style="display: flex; justify-content: flex-end; margin-top: var(--space-md);">
-            <button class="btn btn-primary" onclick="consumeParts()">CONSUME PARTS</button>
+            <button class="btn" data-variant="primary" data-size="sm" onclick="consumeParts()">CONSUME PARTS</button>
         </div>
         <div id="consume-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
         {% elif inst_status == 'cut' %}
@@ -135,11 +135,11 @@
         {% if can_finalize %}
         <div style="margin-top: var(--space-md); border-top: 1px solid var(--border-color); padding-top: var(--space-md);">
             <div style="display: flex; gap: var(--space-md); align-items: flex-end;">
-                <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                    <label class="form-label" for="finalize-location">STORAGE LOCATION *</label>
-                    <input type="text" id="finalize-location" class="form-input" placeholder="e.g., SHELF-A1, CLEANROOM-2">
+                <div role="group" class="field" style="flex: 1; margin-bottom: 0;">
+                    <label class="label" for="finalize-location">STORAGE LOCATION *</label>
+                    <input type="text" id="finalize-location" class="input" placeholder="e.g., SHELF-A1, CLEANROOM-2">
                 </div>
-                <button class="btn btn-primary" onclick="finalizeProduction()">FINALIZE PRODUCTION</button>
+                <button class="btn" data-variant="primary" data-size="sm" onclick="finalizeProduction()">FINALIZE PRODUCTION</button>
             </div>
             <div id="finalize-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
         </div>
@@ -157,17 +157,17 @@
                 <tr data-part-id="{{ out.part_id }}">
                     <td><a href="/parts/{{ out.part_id }}" class="mono">{{ out.part.internal_pn }}</a> {{ out.part.name }}</td>
                     <td class="mono" style="text-align:right;">{{ out.quantity_produced }}</td>
-                    <td><input type="number" name="out_{{ out.part_id }}_qty" class="form-input" step="0.0001" min="0" value="{{ out.quantity_produced }}"></td>
-                    <td><input type="text" name="out_{{ out.part_id }}_loc" class="form-input" placeholder="Location"></td>
-                    <td><input type="text" name="out_{{ out.part_id }}_lot" class="form-input" placeholder="Lot #"></td>
-                    <td><input type="text" name="out_{{ out.part_id }}_serial" class="form-input" placeholder="Serial #"></td>
+                    <td><input type="number" name="out_{{ out.part_id }}_qty" class="input" step="0.0001" min="0" value="{{ out.quantity_produced }}"></td>
+                    <td><input type="text" name="out_{{ out.part_id }}_loc" class="input" placeholder="Location"></td>
+                    <td><input type="text" name="out_{{ out.part_id }}_lot" class="input" placeholder="Lot #"></td>
+                    <td><input type="text" name="out_{{ out.part_id }}_serial" class="input" placeholder="Serial #"></td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% if inst_status in ['in_work', 'completed'] %}
         <div style="display: flex; justify-content: flex-end; margin-top: var(--space-md);">
-            <button class="btn btn-primary" onclick="produceOutput()">RECORD OUTPUT</button>
+            <button class="btn" data-variant="primary" data-size="sm" onclick="produceOutput()">RECORD OUTPUT</button>
         </div>
         <div id="produce-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
         {% elif inst_status == 'cut' %}

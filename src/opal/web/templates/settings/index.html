@@ -19,7 +19,7 @@
 
         {# Tiers #}
         <div style="margin-top: var(--space-lg);">
-            <div class="form-label">INVENTORY TIERS</div>
+            <div class="label">INVENTORY TIERS</div>
             {% call ok.table() %}
                 <thead>
                     <tr>
@@ -44,7 +44,7 @@
 
         {# Part numbering #}
         <div style="margin-top: var(--space-lg);">
-            <div class="form-label">PART NUMBERING</div>
+            <div class="label">PART NUMBERING</div>
             {% call ok.table() %}
                 {{ ok.detail_row("PREFIX", project.part_numbering.prefix or '-', mono=true) }}
                 {{ ok.detail_row("SEPARATOR", project.part_numbering.separator if project.part_numbering.separator else '(none)', mono=true) }}
@@ -56,7 +56,7 @@
         {# Categories #}
         {% if project.categories %}
         <div style="margin-top: var(--space-lg);">
-            <div class="form-label">CATEGORIES</div>
+            <div class="label">CATEGORIES</div>
             <div style="display: flex; flex-wrap: wrap; gap: var(--space-xs);">
                 {% for cat in project.categories %}
                 {{ ok.badge(cat) }}
@@ -68,7 +68,7 @@
         {# Requirements #}
         {% if project.requirements %}
         <div style="margin-top: var(--space-lg);">
-            <div class="form-label">REQUIREMENTS</div>
+            <div class="label">REQUIREMENTS</div>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -104,7 +104,7 @@
 
 {# ── AUTHENTICATION ── #}
 {% set auth_actions %}
-            {% if is_admin %}<a class="btn" href="/settings/auth">EDIT</a>{% endif %}
+            {% if is_admin %}<a class="btn" data-variant="outline" data-size="sm" href="/settings/auth">EDIT</a>{% endif %}
 {% endset %}
 {% call ok.panel("AUTHENTICATION", actions=auth_actions, margin_top="var(--space-md)") %}
         {% call ok.table() %}
@@ -250,9 +250,9 @@
         </p>
         <form method="post" action="/settings/factory-reset" style="display: flex; gap: var(--space-sm); align-items: center;"
               onsubmit="return confirm('FINAL WARNING: this erases all data on this instance. Continue?');">
-            <input type="text" name="confirm" id="reset-confirm" class="form-input mono"
+            <input type="text" name="confirm" id="reset-confirm" class="input mono"
                    placeholder="type RESET to confirm" autocomplete="off" style="max-width: 240px;">
-            <button type="submit" id="reset-btn" class="btn" disabled
+            <button type="submit" id="reset-btn" class="btn" data-variant="outline" data-size="sm" disabled
                     style="color: var(--accent-red); border-color: var(--accent-red);">FACTORY RESET</button>
         </form>
         <script>
@@ -275,7 +275,7 @@
         {% endcall %}
 
         <div style="margin-top: var(--space-lg);">
-            <div class="form-label">STORAGE</div>
+            <div class="label">STORAGE</div>
             {% call ok.table() %}
                 {{ ok.detail_row("DATA DIRECTORY", sys_info.data_dir, mono=true) }}
                 {{ ok.detail_row("DATABASE", sys_info.db_path, mono=true) }}

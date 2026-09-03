@@ -11,8 +11,8 @@
 {% call ok.panel("ADD INVENTORY", max_width="600px") %}
         <form id="inventory-form" onsubmit="event.preventDefault(); submitInventoryForm();">
             <!-- Part Selection -->
-            <div class="form-group">
-                <label class="form-label" for="part_id">PART *</label>
+            <div role="group" class="field">
+                <label class="label" for="part_id">PART *</label>
                 {% if selected_part %}
                 <input type="hidden" id="part_id" name="part_id" value="{{ selected_part.id }}">
                 <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
@@ -32,7 +32,7 @@
                     <input type="hidden" id="part_id" name="part_id" required>
                     <input type="text"
                            id="part_search"
-                           class="form-input"
+                           class="input"
                            placeholder="Search by name or part number..."
                            autocomplete="off"
                            hx-get="/parts/search"
@@ -54,16 +54,16 @@
             ), attrs='min="1" step="1" id="quantity-help-field"') }}
 
             <!-- Location -->
-            <div class="form-group">
-                <label class="form-label" for="location">LOCATION *</label>
-                <input type="text" id="location" name="location" class="form-input" required
+            <div role="group" class="field">
+                <label class="label" for="location">LOCATION *</label>
+                <input type="text" id="location" name="location" class="input" required
                        list="location-list" placeholder="e.g., SHELF-A1, BIN-001">
                 <datalist id="location-list">
                     {% for loc in locations %}
                     <option value="{{ loc }}">
                     {% endfor %}
                 </datalist>
-                <small class="form-help">Where this inventory will be stored</small>
+                <p class="field-help">Where this inventory will be stored</p>
             </div>
 
             <!-- Lot Number (optional) -->
@@ -164,7 +164,7 @@ async function submitInventoryForm() {
 
                 // Add navigation button
                 const partId = formData.get('part_id');
-                resultDiv.innerHTML += `<br><br><a href="/parts/${partId}" class="btn btn-primary">View Part Inventory</a>`;
+                resultDiv.innerHTML += `<br><br><a href="/parts/${partId}" class="btn" data-variant="primary" data-size="sm">View Part Inventory</a>`;
             }
         } else {
             const error = await response.json();

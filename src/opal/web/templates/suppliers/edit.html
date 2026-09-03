@@ -12,7 +12,7 @@
 {% call ok.panel("EDIT SUPPLIER: " ~ supplier.name, max_width="600px") %}
         <form id="supplier-form" onsubmit="updateSupplier(event)">
             {{ ok.field("name", "NAME", value=supplier.name, required=true, attrs='maxlength="255"') }}
-            {{ ok.field("code", "CODE", value=supplier.code or '', placeholder="SUP001", help="Short unique code for quick reference", attrs='maxlength="50" class="form-input mono"') }}
+            {{ ok.field("code", "CODE", value=supplier.code or '', placeholder="SUP001", help="Short unique code for quick reference", attrs='maxlength="50" class="input mono"') }}
 
             {% call ok.grid(cols=2) %}
                 {{ ok.field("email", "EMAIL", type="email", value=supplier.email or '', attrs='maxlength="255"') }}
@@ -24,11 +24,9 @@
             {{ ok.field("description", "DESCRIPTION", type="textarea", value=supplier.description or '', rows=2) }}
             {{ ok.field("notes", "NOTES", type="textarea", value=supplier.notes or '', rows=2) }}
 
-            <div class="form-group">
-                <label class="form-checkbox">
-                    <input type="checkbox" id="is_active" name="is_active" {{ 'checked' if supplier.is_active else '' }}>
-                    Active
-                </label>
+            <div role="group" class="field" data-orientation="horizontal">
+                <input class="input" type="checkbox" id="is_active" name="is_active" {{ 'checked' if supplier.is_active else '' }}>
+                <label for="is_active">Active</label>
             </div>
 
             {{ ok.form_messages() }}

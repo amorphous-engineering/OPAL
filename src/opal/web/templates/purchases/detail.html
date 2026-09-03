@@ -37,7 +37,7 @@
         {% endcall %}
 
             <div style="margin-top: var(--space-lg);">
-                <div class="form-label">DATES</div>
+                <div class="label">DATES</div>
                 {% call ok.table() %}
                     <tr>
                         <th style="width: 140px;">CREATED</th>
@@ -58,7 +58,7 @@
             </div>
             {% if purchase.notes %}
             <div style="margin-top: var(--space-md);">
-                <div class="form-label">NOTES</div>
+                <div class="label">NOTES</div>
                 <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
                     {{ purchase.notes }}
                 </div>
@@ -134,9 +134,9 @@
                         <td class="mono"><a href="/parts/{{ line.part_id }}">{{ line.part.internal_pn }}</a></td>
                         <td data-part-name="{{ line.part.name }}">{{ line.part.name }}</td>
                         {{ ok.td(line.qty_ordered - line.qty_received, mono=true, align="right") }}
-                        <td><input type="number" name="recv_{{ line.id }}_qty" class="form-input" step="0.0001" min="0" max="{{ line.qty_ordered - line.qty_received }}"></td>
-                        <td><input type="text" name="recv_{{ line.id }}_loc" class="form-input" placeholder="Location" list="known-locations"></td>
-                        <td><input type="text" name="recv_{{ line.id }}_lot" class="form-input" placeholder="Lot #"></td>
+                        <td><input type="number" name="recv_{{ line.id }}_qty" class="input" step="0.0001" min="0" max="{{ line.qty_ordered - line.qty_received }}"></td>
+                        <td><input type="text" name="recv_{{ line.id }}_loc" class="input" placeholder="Location" list="known-locations"></td>
+                        <td><input type="text" name="recv_{{ line.id }}_lot" class="input" placeholder="Lot #"></td>
                     </tr>
                     {% endif %}
                     {% endfor %}
@@ -198,12 +198,12 @@
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px;">
         {% call ok.panel("ADD LINE ITEM") %}
                 <form id="add-line-form" onsubmit="addLine(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="line-part-search">PART *</label>
+                    <div role="group" class="field">
+                        <label class="label" for="line-part-search">PART *</label>
                         <div class="part-search-container">
                             <input type="text"
                                    id="line-part-search"
-                                   class="form-input part-search-input"
+                                   class="input part-search-input"
                                    placeholder="Search parts..."
                                    autocomplete="off"
                                    hx-get="/parts/search"
@@ -220,13 +220,13 @@
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="line-qty">QUANTITY *</label>
-                        <input type="number" id="line-qty" name="qty_ordered" class="form-input" step="0.0001" min="0.0001" required>
+                    <div role="group" class="field">
+                        <label class="label" for="line-qty">QUANTITY *</label>
+                        <input type="number" id="line-qty" name="qty_ordered" class="input" step="0.0001" min="0.0001" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="line-cost">UNIT COST</label>
-                        <input type="number" id="line-cost" name="unit_cost" class="form-input" step="0.01" min="0">
+                    <div role="group" class="field">
+                        <label class="label" for="line-cost">UNIT COST</label>
+                        <input type="number" id="line-cost" name="unit_cost" class="input" step="0.01" min="0">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddLine()"') }}

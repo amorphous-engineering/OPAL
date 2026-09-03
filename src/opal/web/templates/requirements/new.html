@@ -19,9 +19,9 @@
                 {{ ok.field("verification_method", "VERIFICATION METHOD", type="select", options=[{"value": "", "label": "— not set —"}, {"value": "analysis", "label": "ANALYSIS"}, {"value": "inspection", "label": "INSPECTION"}, {"value": "demonstration", "label": "DEMONSTRATION"}, {"value": "test", "label": "TEST"}]) }}
             {% endcall %}
 
-            <div class="form-group">
-                <label class="form-label" for="parent-select">PARENT (flow-down)</label>
-                <select id="parent-select" name="parent_id" class="form-select">
+            <div role="group" class="field">
+                <label class="label" for="parent-select">PARENT (flow-down)</label>
+                <select id="parent-select" name="parent_id" class="select">
                     <option value="">None — root (level 0)</option>
                     {% for p in parents %}
                     <option value="{{ p.id }}">{{ p.req_number }} (L{{ p.level }}) — {{ p.title }}</option>
@@ -29,7 +29,7 @@
                 </select>
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field">
                 <label style="margin-right: var(--space-md);"><input type="checkbox" name="tbd"> <span class="mono">TBD</span> <span class="text-muted">value not yet determined</span></label>
                 <label><input type="checkbox" name="tbr"> <span class="mono">TBR</span> <span class="text-muted">value to be reviewed</span></label>
             </div>

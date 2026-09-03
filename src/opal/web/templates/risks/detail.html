@@ -21,38 +21,38 @@
             {%- if risk.statement %}{{ risk.statement }}{% else %}scenario incomplete — condition · departure · asset · consequence{% endif -%}
         </div>
 
-        <div class="form-label">CONDITION <span class="text-muted">— present fact, true now</span></div>
+        <div class="label">CONDITION <span class="text-muted">— present fact, true now</span></div>
         {% if editing %}
         <div class="lint-editor" style="margin-bottom: var(--space-sm);">
             <div class="lint-overlay mono" id="condition-overlay" aria-hidden="true">{{ lint_html['condition'] }}</div>
-            <textarea id="condition-text" class="form-textarea mono lint-textarea" rows="2"
+            <textarea id="condition-text" class="textarea mono lint-textarea" rows="2"
                       onblur="updateRisk('condition', this.value || null)">{{ risk.condition or '' }}</textarea>
         </div>
         {% else %}
         <div style="margin-bottom: var(--space-sm);">{{ fact_block(risk.condition) }}</div>
         {% endif %}
 
-        <div class="form-label">DEPARTURE <span class="text-muted">— future undesired event; probability scores this</span></div>
+        <div class="label">DEPARTURE <span class="text-muted">— future undesired event; probability scores this</span></div>
         {% if editing %}
         <div class="lint-editor" style="margin-bottom: var(--space-sm);">
             <div class="lint-overlay mono" id="departure-overlay" aria-hidden="true">{{ lint_html['departure'] }}</div>
-            <textarea id="departure-text" class="form-textarea mono lint-textarea" rows="2"
+            <textarea id="departure-text" class="textarea mono lint-textarea" rows="2"
                       onblur="updateRisk('departure', this.value || null)">{{ risk.departure or '' }}</textarea>
         </div>
         {% else %}
         <div style="margin-bottom: var(--space-sm);">{{ fact_block(risk.departure) }}</div>
         {% endif %}
 
-        <div class="form-label">ASSET <span class="text-muted">— what is exposed: a part, or a name (schedule, campaign, ...)</span></div>
+        <div class="label">ASSET <span class="text-muted">— what is exposed: a part, or a name (schedule, campaign, ...)</span></div>
         {% if editing %}
         <div style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm);">
-            <select id="asset-part-select" class="form-select" style="width: auto;" onchange="updateAsset('part', this.value)">
+            <select id="asset-part-select" class="select" style="width: auto;" onchange="updateAsset('part', this.value)">
                 <option value="">— part —</option>
                 {% for part in parts %}
                 <option value="{{ part.id }}" {% if risk.asset_part_id == part.id %}selected{% endif %}>{{ part.name }}{% if part.internal_pn %} ({{ part.internal_pn }}){% endif %}</option>
                 {% endfor %}
             </select>
-            <input type="text" id="asset-text-input" class="form-input" maxlength="255" placeholder="or: schedule, test campaign, ..."
+            <input type="text" id="asset-text-input" class="input" maxlength="255" placeholder="or: schedule, test campaign, ..."
                    value="{{ risk.asset_text or '' }}" onblur="updateAsset('text', this.value)">
         </div>
         {% else %}
@@ -65,11 +65,11 @@
         </div>
         {% endif %}
 
-        <div class="form-label">CONSEQUENCE <span class="text-muted">— measurable impact; impact scores this</span></div>
+        <div class="label">CONSEQUENCE <span class="text-muted">— measurable impact; impact scores this</span></div>
         {% if editing %}
         <div class="lint-editor" style="margin-bottom: var(--space-md);">
             <div class="lint-overlay mono" id="consequence-overlay" aria-hidden="true">{{ lint_html['consequence'] }}</div>
-            <textarea id="consequence-text" class="form-textarea mono lint-textarea" rows="2"
+            <textarea id="consequence-text" class="textarea mono lint-textarea" rows="2"
                       onblur="updateRisk('consequence', this.value || null)">{{ risk.consequence or '' }}</textarea>
         </div>
         {% else %}
@@ -83,7 +83,7 @@
             <tr>
                 <th style="width: 160px;">OWNER</th>
                 <td>
-                    <select class="form-select" style="width: auto;" onchange="updateRisk('owner_id', this.value ? parseInt(this.value) : null)">
+                    <select class="select" style="width: auto;" onchange="updateRisk('owner_id', this.value ? parseInt(this.value) : null)">
                         <option value="">—</option>
                         {% for user in users %}
                         <option value="{{ user.id }}" {% if risk.owner_id == user.id %}selected{% endif %}>{{ user.name }}</option>
@@ -94,7 +94,7 @@
             <tr>
                 <th>PROBABILITY</th>
                 <td>
-                    <select class="form-select" style="width: auto;" onchange="updateRisk('probability', parseInt(this.value))">
+                    <select class="select" style="width: auto;" onchange="updateRisk('probability', parseInt(this.value))">
                         {% for value, label in prob_labels.items() %}
                         <option value="{{ value }}" {% if risk.probability == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -104,7 +104,7 @@
             <tr>
                 <th>IMPACT</th>
                 <td>
-                    <select class="form-select" style="width: auto;" onchange="updateRisk('impact', parseInt(this.value))">
+                    <select class="select" style="width: auto;" onchange="updateRisk('impact', parseInt(this.value))">
                         {% for value, label in impact_labels.items() %}
                         <option value="{{ value }}" {% if risk.impact == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -114,14 +114,14 @@
             <tr>
                 <th>RESIDUAL <span class="text-muted">P × I</span></th>
                 <td>
-                    <select class="form-select" style="width: auto; display: inline-block;" onchange="updateRisk('residual_probability', this.value ? parseInt(this.value) : null)">
+                    <select class="select" style="width: auto; display: inline-block;" onchange="updateRisk('residual_probability', this.value ? parseInt(this.value) : null)">
                         <option value="">—</option>
                         {% for value in [1, 2, 3, 4, 5] %}
                         <option value="{{ value }}" {% if risk.residual_probability == value %}selected{% endif %}>{{ value }}</option>
                         {% endfor %}
                     </select>
                     ×
-                    <select class="form-select" style="width: auto; display: inline-block;" onchange="updateRisk('residual_impact', this.value ? parseInt(this.value) : null)">
+                    <select class="select" style="width: auto; display: inline-block;" onchange="updateRisk('residual_impact', this.value ? parseInt(this.value) : null)">
                         <option value="">—</option>
                         {% for value in [1, 2, 3, 4, 5] %}
                         <option value="{{ value }}" {% if risk.residual_impact == value %}selected{% endif %}>{{ value }}</option>
@@ -170,9 +170,9 @@
         {% endcall %}
 
         {% if editing %}
-        <div class="form-label" style="margin-top: var(--space-md);">DISPOSITION</div>
+        <div class="label" style="margin-top: var(--space-md);">DISPOSITION</div>
         <div style="margin-bottom: var(--space-sm);">
-            <select id="disposition-select" class="form-select" style="width: auto;" onchange="loadDispositionPanel(this.value)"
+            <select id="disposition-select" class="select" style="width: auto;" onchange="loadDispositionPanel(this.value)"
                     {% if risk.disposition == 'realized' %}disabled title="realized is terminal"{% endif %}>
                 <option value="">— transition to —</option>
                 {% for d in dispositions %}
@@ -189,7 +189,7 @@
             {% include 'risks/_acceptance_panel.html' %}
         </div>
 
-        <div class="form-label">LINKED ISSUES</div>
+        <div class="label">LINKED ISSUES</div>
         {% call ok.table() %}
             <thead>
                 <tr>
@@ -207,7 +207,7 @@
                     <td class="cell-clip"><a href="/issues/{{ link.issue.id }}" class="row-link-plain">{{ link.issue.title }}</a></td>
                     <td class="mono">{{ link.role | upper }}</td>
                     <td>{{ ok.issue_state(link.issue.disp_state) }}</td>
-                    {% if editing %}<td><button type="button" class="btn btn-sm" onclick="unlinkIssue({{ link.issue.id }})">UNLINK</button></td>{% endif %}
+                    {% if editing %}<td><button type="button" class="btn" data-variant="outline" data-size="xs" onclick="unlinkIssue({{ link.issue.id }})">UNLINK</button></td>{% endif %}
                 </tr>
                 {% else %}
                 <tr><td colspan="{{ 5 if editing else 4 }}">{{ ok.empty_line("Linked issues") }}</td></tr>
@@ -216,27 +216,27 @@
         {% endcall %}
         {% if editing %}
         <div style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); flex-wrap: wrap;">
-            <select id="link-issue-select" class="form-select" style="width: auto;">
+            <select id="link-issue-select" class="select" style="width: auto;">
                 <option value="">— existing issue —</option>
                 {% for issue in linkable_issues %}
                 <option value="{{ issue.id }}">{{ issue.issue_number }} {{ issue.title }}</option>
                 {% endfor %}
             </select>
-            <select id="link-role-select" class="form-select" style="width: auto;">
+            <select id="link-role-select" class="select" style="width: auto;">
                 {% for role in roles %}
                 <option value="{{ role }}">{{ role | upper }}</option>
                 {% endfor %}
             </select>
-            <button type="button" class="btn" onclick="linkIssue()">LINK</button>
-            <input type="text" id="spawn-title-input" class="form-input" style="width: 260px;" maxlength="255" placeholder="new issue title...">
-            <button type="button" class="btn" onclick="spawnIssue()">SPAWN ISSUE</button>
+            <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="linkIssue()">LINK</button>
+            <input type="text" id="spawn-title-input" class="input" style="width: 260px;" maxlength="255" placeholder="new issue title...">
+            <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="spawnIssue()">SPAWN ISSUE</button>
         </div>
         {% endif %}
 
-        <div class="form-label"{% if not editing %} style="margin-top: var(--space-md);"{% endif %}>NARRATIVE <span class="text-muted">— context, evidence, suggested responses</span></div>
+        <div class="label"{% if not editing %} style="margin-top: var(--space-md);"{% endif %}>NARRATIVE <span class="text-muted">— context, evidence, suggested responses</span></div>
         <div style="margin-bottom: var(--space-md);">
             {% if editing %}
-            <textarea class="form-textarea" rows="4"
+            <textarea class="textarea" rows="4"
                       onblur="updateRisk('description', this.value || null)">{{ risk.description or '' }}</textarea>
             {% else %}
             {{ fact_block(risk.description, mono=false) }}

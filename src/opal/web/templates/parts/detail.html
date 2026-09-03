@@ -54,8 +54,8 @@
         signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
         · <span id="activate-sign-time"></span>
     </div>
-    <button type="button" class="btn btn-primary" onclick="commitActivate()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
-    <button type="button" class="btn" onclick="document.getElementById('activate-confirm').style.display='none'">ABORT</button>
+    <button type="button" class="btn" data-variant="primary" data-size="sm" onclick="commitActivate()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+    <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="document.getElementById('activate-confirm').style.display='none'">ABORT</button>
 </div>
 {% endif %}
 
@@ -110,22 +110,22 @@
             <div class="panel-header">LINK SUPPLIER</div>
             <div class="panel-body">
                 <form id="add-supplier-form" onsubmit="addSupplierEntry(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="sup-supplier-id">SUPPLIER ID *</label>
-                        <input type="number" id="sup-supplier-id" name="supplier_id" class="form-input mono" required min="1">
+                    <div role="group" class="field">
+                        <label class="label" for="sup-supplier-id">SUPPLIER ID *</label>
+                        <input type="number" id="sup-supplier-id" name="supplier_id" class="input mono" required min="1">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="sup-vendor-pn">VENDOR PN *</label>
-                        <input type="text" id="sup-vendor-pn" name="vendor_pn" class="form-input mono" required placeholder="e.g. DK-12345">
+                    <div role="group" class="field">
+                        <label class="label" for="sup-vendor-pn">VENDOR PN *</label>
+                        <input type="text" id="sup-vendor-pn" name="vendor_pn" class="input mono" required placeholder="e.g. DK-12345">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">
+                    <div role="group" class="field">
+                        <label class="label">
                             <input type="checkbox" id="sup-preferred" name="is_preferred"> PREFERRED SUPPLIER
                         </label>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="sup-notes">NOTES</label>
-                        <input type="text" id="sup-notes" name="notes" class="form-input">
+                    <div role="group" class="field">
+                        <label class="label" for="sup-notes">NOTES</label>
+                        <input type="text" id="sup-notes" name="notes" class="input">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddSupplier()"') }}
@@ -145,13 +145,13 @@
             <div class="panel-header">ADD TEST TEMPLATE</div>
             <div class="panel-body">
                 <form id="add-test-form" onsubmit="addTestTemplate(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="test-name">NAME *</label>
-                        <input type="text" id="test-name" class="form-input" required>
+                    <div role="group" class="field">
+                        <label class="label" for="test-name">NAME *</label>
+                        <input type="text" id="test-name" class="input" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="test-type">TYPE *</label>
-                        <select id="test-type" class="form-select" onchange="toggleNumericFields()">
+                    <div role="group" class="field">
+                        <label class="label" for="test-type">TYPE *</label>
+                        <select id="test-type" class="select" onchange="toggleNumericFields()">
                             <option value="boolean">BOOLEAN (Pass/Fail)</option>
                             <option value="numeric">NUMERIC (Measured Value)</option>
                             <option value="text">TEXT (Freeform)</option>
@@ -159,28 +159,28 @@
                     </div>
                     <div id="numeric-fields" style="display: none;">
                         <div style="display: flex; gap: var(--space-md);">
-                            <div class="form-group" style="flex: 1;">
-                                <label class="form-label" for="test-min">MIN VALUE</label>
-                                <input type="number" id="test-min" class="form-input" step="any">
+                            <div role="group" class="field" style="flex: 1;">
+                                <label class="label" for="test-min">MIN VALUE</label>
+                                <input type="number" id="test-min" class="input" step="any">
                             </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label class="form-label" for="test-max">MAX VALUE</label>
-                                <input type="number" id="test-max" class="form-input" step="any">
+                            <div role="group" class="field" style="flex: 1;">
+                                <label class="label" for="test-max">MAX VALUE</label>
+                                <input type="number" id="test-max" class="input" step="any">
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="test-unit">UNIT</label>
-                            <input type="text" id="test-unit" class="form-input" placeholder="e.g., ohms, mm, V">
+                        <div role="group" class="field">
+                            <label class="label" for="test-unit">UNIT</label>
+                            <input type="text" id="test-unit" class="input" placeholder="e.g., ohms, mm, V">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">
+                    <div role="group" class="field">
+                        <label class="label">
                             <input type="checkbox" id="test-required"> REQUIRED
                         </label>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="test-sort">SORT ORDER</label>
-                        <input type="number" id="test-sort" class="form-input" value="0" min="0">
+                    <div role="group" class="field">
+                        <label class="label" for="test-sort">SORT ORDER</label>
+                        <input type="number" id="test-sort" class="input" value="0" min="0">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddTest()"') }}
@@ -205,12 +205,12 @@
             </div>
             <div class="panel-body">
                 <form id="add-component-form" onsubmit="addComponent(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="bom-part-search">COMPONENT PART *</label>
+                    <div role="group" class="field">
+                        <label class="label" for="bom-part-search">COMPONENT PART *</label>
                         <div class="part-search-container">
                             <input type="text"
                                    id="bom-part-search"
-                                   class="form-input part-search-input"
+                                   class="input part-search-input"
                                    placeholder="Search parts..."
                                    autocomplete="off"
                                    hx-get="/parts/search"
@@ -227,17 +227,17 @@
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="bom-qty">QUANTITY *</label>
-                        <input type="number" id="bom-qty" name="quantity" class="form-input" min="1" value="1" required>
+                    <div role="group" class="field">
+                        <label class="label" for="bom-qty">QUANTITY *</label>
+                        <input type="number" id="bom-qty" name="quantity" class="input" min="1" value="1" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="bom-refdes">REFERENCE DESIGNATOR</label>
-                        <input type="text" id="bom-refdes" name="reference_designator" class="form-input" placeholder="e.g., R1, C3, U2">
+                    <div role="group" class="field">
+                        <label class="label" for="bom-refdes">REFERENCE DESIGNATOR</label>
+                        <input type="text" id="bom-refdes" name="reference_designator" class="input" placeholder="e.g., R1, C3, U2">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="bom-notes">NOTES</label>
-                        <input type="text" id="bom-notes" name="notes" class="form-input">
+                    <div role="group" class="field">
+                        <label class="label" for="bom-notes">NOTES</label>
+                        <input type="text" id="bom-notes" name="notes" class="input">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddComponent()"') }}
@@ -258,17 +258,17 @@
             <div class="panel-body">
                 <form id="edit-bom-form" onsubmit="updateBomLine(event)">
                     <input type="hidden" id="edit-bom-line-id">
-                    <div class="form-group">
-                        <label class="form-label" for="edit-bom-qty">QUANTITY *</label>
-                        <input type="number" id="edit-bom-qty" class="form-input" min="1" required>
+                    <div role="group" class="field">
+                        <label class="label" for="edit-bom-qty">QUANTITY *</label>
+                        <input type="number" id="edit-bom-qty" class="input" min="1" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-bom-refdes">REFERENCE DESIGNATOR</label>
-                        <input type="text" id="edit-bom-refdes" class="form-input">
+                    <div role="group" class="field">
+                        <label class="label" for="edit-bom-refdes">REFERENCE DESIGNATOR</label>
+                        <input type="text" id="edit-bom-refdes" class="input">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-bom-notes">NOTES</label>
-                        <input type="text" id="edit-bom-notes" class="form-input">
+                    <div role="group" class="field">
+                        <label class="label" for="edit-bom-notes">NOTES</label>
+                        <input type="text" id="edit-bom-notes" class="input">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideEditBom()"') }}

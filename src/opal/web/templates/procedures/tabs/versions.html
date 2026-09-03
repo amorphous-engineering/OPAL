@@ -21,14 +21,14 @@
     {% endcall %}
     {% if versions | length >= 2 %}
     <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm); align-items: center;">
-        <span class="form-label" style="margin: 0;">COMPARE:</span>
-        <select id="compare-v1" class="form-select" style="width: auto;">
+        <span class="label" style="margin: 0;">COMPARE:</span>
+        <select id="compare-v1" class="select" style="width: auto;">
             {% for v in versions %}
             <option value="{{ v.id }}">v{{ v.version_number }}{% if v.id == procedure.current_version_id %} (current){% endif %}</option>
             {% endfor %}
         </select>
         <span class="text-muted">vs</span>
-        <select id="compare-v2" class="form-select" style="width: auto;">
+        <select id="compare-v2" class="select" style="width: auto;">
             {% for v in versions %}
             <option value="{{ v.id }}"{% if loop.index == 2 %} selected{% endif %}>v{{ v.version_number }}{% if v.id == procedure.current_version_id %} (current){% endif %}</option>
             {% endfor %}

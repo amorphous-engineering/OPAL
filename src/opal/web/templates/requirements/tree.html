@@ -9,22 +9,22 @@
 
 {% block content %}
 {% set actions %}
-<a href="/requirements" class="btn btn-sm" style="border-color: var(--accent-green, #4ade80);">TREE</a>
-<a href="/requirements/list" class="btn btn-sm">LIST</a>
-<a href="/requirements/baselines" class="btn btn-sm">BASELINES</a>
+<a href="/requirements" class="btn" data-variant="outline" data-size="xs" style="border-color: var(--accent-green, #4ade80);">TREE</a>
+<a href="/requirements/list" class="btn" data-variant="outline" data-size="xs">LIST</a>
+<a href="/requirements/baselines" class="btn" data-variant="outline" data-size="xs">BASELINES</a>
 {% if queue_count %}
-<a href="/requirements/queue" class="btn btn-sm" style="color: var(--accent-green);">BASELINE QUEUE · {{ queue_count }}</a>
+<a href="/requirements/queue" class="btn" data-variant="outline" data-size="xs" style="color: var(--accent-green);">BASELINE QUEUE · {{ queue_count }}</a>
 {% endif %}
 {{ ok.btn("NEW L0", variant="primary", attrs='onclick="openRootGhost()"') }}
 {% endset %}
 {% call ok.panel("REQUIREMENTS · " ~ total, actions=actions) %}
     <div class="toolbar">
         <div class="toolbar-search">
-            <input type="text" id="tree-search" class="form-input" placeholder="Filter tree... ( / )"
+            <input type="text" id="tree-search" class="input" placeholder="Filter tree... ( / )"
                    autocomplete="off" oninput="applyFilters()">
         </div>
         <div class="toolbar-filter">
-            <select id="tree-state" class="form-select" onchange="applyFilters()">
+            <select id="tree-state" class="select" onchange="applyFilters()">
                 <option value="">All states</option>
                 {% for s in states if s != 'superseded' %}
                 <option value="{{ s }}">{{ s | upper }}</option>
@@ -32,7 +32,7 @@
             </select>
         </div>
         <div class="toolbar-filter">
-            <select id="tree-level" class="form-select" onchange="applyFilters()">
+            <select id="tree-level" class="select" onchange="applyFilters()">
                 <option value="">All levels</option>
                 <option value="0">L0 - Mission</option>
                 <option value="1">L1 - System</option>

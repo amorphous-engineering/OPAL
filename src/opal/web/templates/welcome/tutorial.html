@@ -102,12 +102,12 @@
             <!-- Navigation buttons -->
             <div style="display: flex; justify-content: space-between; margin-top: var(--space-xl); padding-top: var(--space-md); border-top: 1px solid var(--border-color);">
                 <div>
-                    <button id="btn-back" class="btn" onclick="prevStep()" style="display: none;">BACK</button>
+                    <button id="btn-back" class="btn" data-variant="outline" data-size="sm" onclick="prevStep()" style="display: none;">BACK</button>
                 </div>
                 <div style="display: flex; gap: var(--space-sm);">
                     <a href="#" onclick="skipOnboarding(); return false;" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); align-self: center; margin-right: var(--space-md);">SKIP</a>
-                    <button id="btn-next" class="btn btn-primary" onclick="nextStep()">NEXT</button>
-                    <button id="btn-done" class="btn btn-primary" onclick="finishOnboarding()" style="display: none;">GET STARTED</button>
+                    <button id="btn-next" class="btn" data-variant="primary" data-size="sm" onclick="nextStep()">NEXT</button>
+                    <button id="btn-done" class="btn" data-variant="primary" data-size="sm" onclick="finishOnboarding()" style="display: none;">GET STARTED</button>
                 </div>
             </div>
         </div>

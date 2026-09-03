@@ -18,16 +18,16 @@
             <div style="margin-bottom: var(--space-xl); border-bottom: 1px solid var(--border-color); padding-bottom: var(--space-lg);">
                 <h3 style="margin-bottom: var(--space-md); color: var(--accent-orange);">1. BASIC INFO</h3>
 
-                <div class="form-group">
-                    <label class="form-label" for="name">PROJECT NAME *</label>
-                    <input type="text" id="name" name="name" class="form-input" required
+                <div role="group" class="field">
+                    <label class="label" for="name">PROJECT NAME *</label>
+                    <input type="text" id="name" name="name" class="input" required
                            value="{{ existing_config.name if existing_config else '' }}"
                            placeholder="e.g., Rocket V1">
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="description">DESCRIPTION</label>
-                    <textarea id="description" name="description" class="form-textarea" rows="2"
+                <div role="group" class="field">
+                    <label class="label" for="description">DESCRIPTION</label>
+                    <textarea id="description" name="description" class="textarea" rows="2"
                               placeholder="Brief project description">{{ existing_config.description if existing_config else '' }}</textarea>
                 </div>
 
@@ -54,9 +54,9 @@
                         {% for tier in tiers %}
                         <tr data-tier-level="{{ tier.level }}">
                             <td class="mono">{{ tier.level }}</td>
-                            <td><input type="text" class="form-input tier-name" value="{{ tier.name }}" required></td>
-                            <td><input type="text" class="form-input mono tier-code" value="{{ tier.code }}" maxlength="3" style="text-transform: uppercase;" required></td>
-                            <td><input type="text" class="form-input tier-desc" value="{{ tier.description }}"></td>
+                            <td><input type="text" class="input tier-name" value="{{ tier.name }}" required></td>
+                            <td><input type="text" class="input mono tier-code" value="{{ tier.code }}" maxlength="3" style="text-transform: uppercase;" required></td>
+                            <td><input type="text" class="input tier-desc" value="{{ tier.description }}"></td>
                             <td>
                                 {{ ok.btn("X", size="sm", attrs='onclick="removeTier(this)"' ~ (' disabled' if loop.length <= 1 else '')) }}
                             </td>
@@ -75,16 +75,16 @@
                 </p>
 
                 <div class="grid grid-3">
-                    <div class="form-group">
-                        <label class="form-label" for="pn-prefix">PREFIX</label>
-                        <input type="text" id="pn-prefix" name="pn_prefix" class="form-input mono"
+                    <div role="group" class="field">
+                        <label class="label" for="pn-prefix">PREFIX</label>
+                        <input type="text" id="pn-prefix" name="pn_prefix" class="input mono"
                                value="{{ existing_config.part_numbering.prefix if existing_config else '' }}"
                                placeholder="e.g., RV1" oninput="updatePnPreview()">
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label" for="pn-separator">SEPARATOR</label>
-                        <select id="pn-separator" name="pn_separator" class="form-select" onchange="updatePnPreview()">
+                    <div role="group" class="field">
+                        <label class="label" for="pn-separator">SEPARATOR</label>
+                        <select id="pn-separator" name="pn_separator" class="select" onchange="updatePnPreview()">
                             <option value="-" {% if not existing_config or existing_config.part_numbering.separator == '-' %}selected{% endif %}>- (dash)</option>
                             <option value="_" {% if existing_config and existing_config.part_numbering.separator == '_' %}selected{% endif %}>_ (underscore)</option>
                             <option value="." {% if existing_config and existing_config.part_numbering.separator == '.' %}selected{% endif %}>. (dot)</option>
@@ -92,9 +92,9 @@
                         </select>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label" for="pn-digits">SEQUENCE DIGITS</label>
-                        <select id="pn-digits" name="pn_digits" class="form-select" onchange="updatePnPreview()">
+                    <div role="group" class="field">
+                        <label class="label" for="pn-digits">SEQUENCE DIGITS</label>
+                        <select id="pn-digits" name="pn_digits" class="select" onchange="updatePnPreview()">
                             <option value="3" {% if existing_config and existing_config.part_numbering.sequence_digits == 3 %}selected{% endif %}>3 (001-999)</option>
                             <option value="4" {% if not existing_config or existing_config.part_numbering.sequence_digits == 4 %}selected{% endif %}>4 (0001-9999)</option>
                             <option value="5" {% if existing_config and existing_config.part_numbering.sequence_digits == 5 %}selected{% endif %}>5 (00001-99999)</option>
@@ -102,9 +102,9 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="pn-format">FORMAT TEMPLATE</label>
-                    <input type="text" id="pn-format" name="pn_format" class="form-input mono"
+                <div role="group" class="field">
+                    <label class="label" for="pn-format">FORMAT TEMPLATE</label>
+                    <input type="text" id="pn-format" name="pn_format" class="input mono"
                            value="{{ existing_config.part_numbering.format if existing_config else '{prefix}{sep}{tier_code}{sep}{sequence}' }}"
                            oninput="updatePnPreview()">
                     <small class="text-muted">
@@ -113,7 +113,7 @@
                 </div>
 
                 <div style="margin-top: var(--space-md); padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-color);">
-                    <div class="form-label">PREVIEW</div>
+                    <div class="label">PREVIEW</div>
                     <div id="pn-preview" class="mono" style="font-size: 1.25rem;">
                         <!-- Preview will be rendered by JS -->
                     </div>
@@ -127,8 +127,8 @@
                     Define part categories for organization. These appear as dropdown options when creating parts.
                 </p>
 
-                <div class="form-group">
-                    <label class="form-label" for="categories-input">CATEGORIES</label>
+                <div role="group" class="field">
+                    <label class="label" for="categories-input">CATEGORIES</label>
                     <div id="categories-tags" style="display: flex; flex-wrap: wrap; gap: var(--space-xs); margin-bottom: var(--space-sm);">
                         {% for cat in categories %}
                         <span class="badge" data-category="{{ cat }}">
@@ -138,7 +138,7 @@
                         {% endfor %}
                     </div>
                     <div style="display: flex; gap: var(--space-sm);">
-                        <input type="text" id="category-input" class="form-input" placeholder="Enter category name">
+                        <input type="text" id="category-input" class="input" placeholder="Enter category name">
                         {{ ok.btn("ADD", attrs='onclick="addCategory()"') }}
                     </div>
                     <small class="text-muted">Common categories: propulsion, structures, avionics, electrical, ground-support</small>
@@ -180,11 +180,11 @@ function addTier() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td class="mono">${tierCounter}</td>
-        <td><input type="text" class="form-input tier-name" value="" required></td>
-        <td><input type="text" class="form-input mono tier-code" value="" maxlength="3" style="text-transform: uppercase;" required></td>
-        <td><input type="text" class="form-input tier-desc" value=""></td>
+        <td><input type="text" class="input tier-name" value="" required></td>
+        <td><input type="text" class="input mono tier-code" value="" maxlength="3" style="text-transform: uppercase;" required></td>
+        <td><input type="text" class="input tier-desc" value=""></td>
         <td>
-            <button type="button" class="btn btn-sm" onclick="removeTier(this)">X</button>
+            <button type="button" class="btn" data-variant="outline" data-size="xs" onclick="removeTier(this)">X</button>
         </td>
     `;
     tbody.appendChild(tr);
@@ -210,7 +210,7 @@ function renumberTiers() {
 
 function updateRemoveButtons() {
     const rows = document.querySelectorAll('#tiers-body tr');
-    const buttons = document.querySelectorAll('#tiers-body .btn-sm');
+    const buttons = document.querySelectorAll('#tiers-body .btn');
     buttons.forEach(btn => {
         btn.disabled = rows.length <= 1;
     });

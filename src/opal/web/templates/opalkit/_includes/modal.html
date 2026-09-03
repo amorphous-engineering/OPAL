@@ -8,8 +8,8 @@
        <p>Are you sure you want to delete this item?</p>
    {% endset %}
    {% set modal_actions %}
-       <button class="btn" onclick="closeModal('confirm-delete')">Cancel</button>
-       <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+       <button class="btn" data-variant="outline" data-size="sm" onclick="closeModal('confirm-delete')">Cancel</button>
+       <button class="btn" data-variant="destructive" data-size="sm" onclick="confirmDelete()">Delete</button>
    {% endset %}
    {% include 'opalkit/_includes/modal.html' %}
 
@@ -38,7 +38,7 @@
             <div class="panel-header">
                 <span>{{ modal_title }}</span>
                 <div class="panel-header-actions">
-                    <button class="btn btn-sm" onclick="closeModal('{{ modal_id }}')">&times;</button>
+                    <button class="btn" data-variant="outline" data-size="xs" onclick="closeModal('{{ modal_id }}')">&times;</button>
                 </div>
             </div>
             <div class="panel-body">

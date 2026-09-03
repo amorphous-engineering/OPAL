@@ -11,7 +11,7 @@
         <div class="toolbar">
             {{ ok.toolbar_search(name="search", id="search", placeholder="Search datasets...", hx_get="/datasets/table", hx_target="#datasets-table", hx_include="[name='procedure_id']") }}
             <div class="toolbar-filter">
-                <select name="procedure_id" class="form-select"
+                <select name="procedure_id" class="select"
                         hx-get="/datasets/table" hx-trigger="change" hx-target="#datasets-table"
                         hx-include="#search">
                     <option value="">All procedures</option>

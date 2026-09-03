@@ -470,7 +470,9 @@
                 label.textContent = (p.internal_pn || ('part ' + p.id)) + ' — ' + p.name;
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'btn btn-sm';
+                btn.className = 'btn';
+                btn.dataset.variant = 'outline';
+                btn.dataset.size = 'xs';
                 btn.textContent = 'ACTIVATE & CONTINUE';
                 btn.onclick = async () => {
                     btn.disabled = true;

@@ -12,7 +12,7 @@
         <div class="toolbar">
             {{ ok.toolbar_search(name="search", id="search", placeholder="Search risks...", hx_get="/risks/table", hx_target="#risks-table", hx_include="[name='disposition'], [name='severity']") }}
             <div class="toolbar-filter">
-                <select name="disposition" class="form-select"
+                <select name="disposition" class="select"
                         hx-get="/risks/table" hx-trigger="change" hx-target="#risks-table"
                         hx-include="[name='severity'], #search">
                     <option value="">All dispositions</option>

@@ -28,7 +28,7 @@
         {% endcall %}
 
         <!-- Hierarchical step display -->
-        <div class="form-label" style="margin-bottom: var(--space-sm);">OPERATIONS ({{ ops | length }}{% if contingency_ops %} + {{ contingency_ops | length }} contingency{% endif %})</div>
+        <div class="label" style="margin-bottom: var(--space-sm);">OPERATIONS ({{ ops | length }}{% if contingency_ops %} + {{ contingency_ops | length }} contingency{% endif %})</div>
 
         {% for op_data in ops %}
         {% set op = op_data.step %}
@@ -62,7 +62,7 @@
                     {% endif %}
                     {% if step.required_data_schema and step.required_data_schema.fields %}
                     <div style="margin: var(--space-sm) 0;">
-                        <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
+                        <div class="label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
                         <table class="data-table">
                             <thead><tr>{{ ok.th("FIELD") }}{{ ok.th("TYPE", width="80px") }}{{ ok.th("REQUIRED", width="80px") }}</tr></thead>
                             <tbody>
@@ -89,7 +89,7 @@
         {% endif %}
 
         {% if contingency_ops %}
-        <div class="form-label" style="margin-top: var(--space-lg); margin-bottom: var(--space-sm);">CONTINGENCY OPERATIONS</div>
+        <div class="label" style="margin-top: var(--space-lg); margin-bottom: var(--space-sm);">CONTINGENCY OPERATIONS</div>
         {% for op_data in contingency_ops %}
         {% set op = op_data.step %}
         <div class="op-block op-contingency" style="margin-bottom: var(--space-md);">
@@ -123,7 +123,7 @@
                     {% endif %}
                     {% if step.required_data_schema and step.required_data_schema.fields %}
                     <div style="margin: var(--space-sm) 0;">
-                        <div class="form-label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
+                        <div class="label" style="font-size: 0.75rem; margin-bottom: var(--space-xs);">DATA CAPTURE SCHEMA</div>
                         <table class="data-table">
                             <thead><tr>{{ ok.th("FIELD") }}{{ ok.th("TYPE", width="80px") }}{{ ok.th("REQUIRED", width="80px") }}</tr></thead>
                             <tbody>
@@ -148,7 +148,7 @@
 
         <!-- Kit Items (if captured in version snapshot) -->
         {% if version.content.kit_items %}
-        <div class="form-label" style="margin-top: var(--space-lg); margin-bottom: var(--space-sm);">KIT ITEMS ({{ version.content.kit_items | length }})</div>
+        <div class="label" style="margin-top: var(--space-lg); margin-bottom: var(--space-sm);">KIT ITEMS ({{ version.content.kit_items | length }})</div>
         {% call ok.table() %}
             <thead>
                 <tr>
@@ -171,7 +171,7 @@
 
         <!-- Output Items (if captured in version snapshot) -->
         {% if version.content.output_items %}
-        <div class="form-label" style="margin-top: var(--space-lg); margin-bottom: var(--space-sm);">OUTPUTS ({{ version.content.output_items | length }})</div>
+        <div class="label" style="margin-top: var(--space-lg); margin-bottom: var(--space-sm);">OUTPUTS ({{ version.content.output_items | length }})</div>
         {% call ok.table() %}
             <thead>
                 <tr>
@@ -198,7 +198,7 @@
             <span class="text-muted mono" style="font-size: 0.75rem;">COMPARE WITH:</span>
             {% for v in versions %}
             {% if v.id != version.id %}
-            <a href="/procedures/{{ procedure.id }}/versions/{{ version.id }}/diff/{{ v.id }}" class="btn btn-sm">v{{ v.version_number }}</a>
+            <a href="/procedures/{{ procedure.id }}/versions/{{ version.id }}/diff/{{ v.id }}" class="btn" data-variant="outline" data-size="xs">v{{ v.version_number }}</a>
             {% endif %}
             {% endfor %}
         </div>

@@ -46,20 +46,20 @@
         <div id="queue-commit-screen" style="display: none;">
             <div class="queue-header"><span>STAGED FOR BASELINE</span></div>
             <div id="queue-staged-list" class="queue-staged"></div>
-            <div class="form-group" style="margin-top: var(--space-md); max-width: 420px;">
-                <label class="form-label" for="queue-label">LABEL (optional, e.g. l0-freeze)</label>
-                <input type="text" id="queue-label" class="form-input mono" maxlength="100">
+            <div role="group" class="field" style="margin-top: var(--space-md); max-width: 420px;">
+                <label class="label" for="queue-label">LABEL (optional, e.g. l0-freeze)</label>
+                <input type="text" id="queue-label" class="input mono" maxlength="100">
             </div>
-            <div class="form-group" style="max-width: 420px;">
-                <label class="form-label" for="queue-note">NOTE (optional)</label>
-                <textarea id="queue-note" class="form-textarea" rows="2"></textarea>
+            <div role="group" class="field" style="max-width: 420px;">
+                <label class="label" for="queue-note">NOTE (optional)</label>
+                <textarea id="queue-note" class="textarea" rows="2"></textarea>
             </div>
             <div class="baseline-signature">
                 signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
                 · <span id="queue-sign-time"></span>
             </div>
             <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-sm);">
-                <button type="button" class="btn btn-primary" onclick="commitBatch()" {% if not current_user %}disabled title="select a user first"{% endif %}>
+                <button type="button" class="btn" data-variant="primary" data-size="sm" onclick="commitBatch()" {% if not current_user %}disabled title="select a user first"{% endif %}>
                     COMMIT BASELINE
                 </button>
                 {{ ok.btn("BACK TO REVIEW", attrs='onclick="showItem(0)"') }}

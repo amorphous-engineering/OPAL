@@ -8,8 +8,10 @@
         (function() {
             var theme = localStorage.getItem('opal_theme') || 'dark';
             if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.classList.toggle('dark', theme !== 'light');
         })();
     </script>
+    <link rel="stylesheet" href="{{ static_url('vendor/basecoat/basecoat-lyra.cdn.min.css') }}">
     <link rel="stylesheet" href="{{ static_url('css/main.css') }}">
     <style>
         body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
@@ -63,7 +65,7 @@
                     {{ oidc_provider_name }} is configured. The first identity to sign in
                     becomes the administrator.
                 </p>
-                <a href="/oidc/login" class="btn btn-primary" style="width: 100%; display: block; text-align: center;">
+                <a href="/oidc/login" class="btn" data-variant="primary" data-size="sm" style="width: 100%; display: block; text-align: center;">
                     SIGN IN WITH {{ oidc_provider_name | upper }}
                 </a>
             </div>
@@ -77,37 +79,37 @@
         <div class="panel">
             <div class="panel-header"><span>FIRST ADMIN</span></div>
             <div class="panel-body">
-                <div class="form-group">
-                    <label class="form-label" for="name">NAME <span class="text-red">*</span></label>
-                    <input type="text" name="name" id="name" class="form-input" placeholder="Full Name"
+                <div role="group" class="field">
+                    <label class="label" for="name">NAME <span class="text-red">*</span></label>
+                    <input type="text" name="name" id="name" class="input" placeholder="Full Name"
                            value="{{ name or '' }}">
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="username">USERNAME <span class="text-red">*</span></label>
-                    <input type="text" name="username" id="username" class="form-input mono"
+                <div role="group" class="field">
+                    <label class="label" for="username">USERNAME <span class="text-red">*</span></label>
+                    <input type="text" name="username" id="username" class="input mono"
                            placeholder="lowercase, no spaces" autocapitalize="none"
                            autocomplete="username" value="{{ username or '' }}">
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="password">PASSWORD <span class="text-red">*</span></label>
-                    <input type="password" name="password" id="password" class="form-input"
+                <div role="group" class="field">
+                    <label class="label" for="password">PASSWORD <span class="text-red">*</span></label>
+                    <input type="password" name="password" id="password" class="input"
                            minlength="10" autocomplete="new-password" placeholder="Minimum 10 characters">
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="password_confirm">CONFIRM PASSWORD <span class="text-red">*</span></label>
-                    <input type="password" name="password_confirm" id="password_confirm" class="form-input"
+                <div role="group" class="field">
+                    <label class="label" for="password_confirm">CONFIRM PASSWORD <span class="text-red">*</span></label>
+                    <input type="password" name="password_confirm" id="password_confirm" class="input"
                            minlength="10" autocomplete="new-password">
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="email">EMAIL</label>
-                    <input type="email" name="email" id="email" class="form-input" placeholder="Optional"
+                <div role="group" class="field">
+                    <label class="label" for="email">EMAIL</label>
+                    <input type="email" name="email" id="email" class="input" placeholder="Optional"
                            value="{{ email or '' }}">
                 </div>
             </div>
         </div>
 
         <div style="margin-top: var(--space-md); display: flex; justify-content: flex-end;">
-            <button type="submit" class="btn btn-primary">CONTINUE</button>
+            <button type="submit" class="btn" data-variant="primary" data-size="sm">CONTINUE</button>
         </div>
 
     </form>

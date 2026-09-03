@@ -26,7 +26,7 @@
                     {% endif %}
                 {% endcall %}
 
-                <div class="form-label">SCHEMA FIELDS</div>
+                <div class="label">SCHEMA FIELDS</div>
                 {% call ok.table() %}
                     <thead>
                         <tr>
@@ -60,12 +60,12 @@
     <!-- Chart and Data Panel -->
     <div style="flex: 1;">
         {% set chart_actions %}
-                    <select id="chart-type" class="form-select" style="width: 120px;" onchange="updateChart()">
+                    <select id="chart-type" class="select" style="width: 120px;" onchange="updateChart()">
                         <option value="line">Line</option>
                         <option value="scatter">Scatter</option>
                         <option value="bar">Bar</option>
                     </select>
-                    <select id="chart-field" class="form-select" style="width: 150px;" onchange="updateChart()">
+                    <select id="chart-field" class="select" style="width: 150px;" onchange="updateChart()">
                         {% for field in dataset.schema.fields %}
                         {% if field.type == 'number' %}
                         <option value="{{ field.name }}">{{ field.name }}</option>
@@ -119,20 +119,20 @@
 {% set modal_content %}
     <form id="add-point-form" onsubmit="addPoint(event)">
         {% for field in dataset.schema.fields %}
-        <div class="form-group">
-            <label class="form-label">{{ field.name | upper }}{% if field.unit %} ({{ field.unit }}){% endif %}</label>
+        <div role="group" class="field">
+            <label class="label">{{ field.name | upper }}{% if field.unit %} ({{ field.unit }}){% endif %}</label>
             {% if field.type == 'number' %}
-            <input type="number" step="any" name="{{ field.name }}" class="form-input">
+            <input type="number" step="any" name="{{ field.name }}" class="input">
             {% elif field.type == 'boolean' %}
-            <select name="{{ field.name }}" class="form-select">
+            <select name="{{ field.name }}" class="select">
                 <option value="">-</option>
                 <option value="true">Yes</option>
                 <option value="false">No</option>
             </select>
             {% elif field.type == 'date' %}
-            <input type="datetime-local" name="{{ field.name }}" class="form-input">
+            <input type="datetime-local" name="{{ field.name }}" class="input">
             {% else %}
-            <input type="text" name="{{ field.name }}" class="form-input">
+            <input type="text" name="{{ field.name }}" class="input">
             {% endif %}
         </div>
         {% endfor %}

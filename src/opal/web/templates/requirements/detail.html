@@ -38,11 +38,11 @@
         </div>
         {% endif %}
 
-        <div class="form-label">SHALL STATEMENT</div>
+        <div class="label">SHALL STATEMENT</div>
         {% if mutable %}
         <div class="lint-editor">
             <div class="lint-overlay mono" id="statement-overlay" aria-hidden="true"></div>
-            <textarea id="statement-text" class="form-textarea mono lint-textarea" rows="3"
+            <textarea id="statement-text" class="textarea mono lint-textarea" rows="3"
                       onblur="updateReq('statement', this.value)">{{ req.statement }}</textarea>
         </div>
         {% else %}
@@ -51,9 +51,9 @@
         </div>
         {% endif %}
 
-        <div class="form-label" style="margin-top: var(--space-md);">RATIONALE</div>
+        <div class="label" style="margin-top: var(--space-md);">RATIONALE</div>
         {% if mutable %}
-        <textarea id="rationale-text" class="form-textarea" rows="2"
+        <textarea id="rationale-text" class="textarea" rows="2"
                   onblur="updateReq('rationale', this.value)"
                   placeholder="required to baseline — where did the number come from, what does it protect?">{{ req.rationale or '' }}</textarea>
         {% else %}
@@ -67,7 +67,7 @@
                 <th style="width: 160px;">TITLE</th>
                 <td>
                     {% if mutable %}
-                    <input type="text" class="form-input" value="{{ req.title }}" maxlength="255" onblur="updateReq('title', this.value)">
+                    <input type="text" class="input" value="{{ req.title }}" maxlength="255" onblur="updateReq('title', this.value)">
                     {% else %}{{ req.title }}{% endif %}
                 </td>
             </tr>
@@ -75,7 +75,7 @@
                 <th>CATEGORY</th>
                 <td>
                     {% if mutable %}
-                    <input type="text" class="form-input" value="{{ req.category or '' }}" maxlength="50" placeholder="functional, performance, interface, ..." onblur="updateReq('category', this.value)">
+                    <input type="text" class="input" value="{{ req.category or '' }}" maxlength="50" placeholder="functional, performance, interface, ..." onblur="updateReq('category', this.value)">
                     {% else %}{{ req.category or '—' }}{% endif %}
                 </td>
             </tr>
@@ -95,7 +95,7 @@
                 <th>VERIFICATION METHOD</th>
                 <td>
                     {% if mutable %}
-                    <select class="form-select" style="width: auto;" onchange="updateReq('verification_method', this.value || null)">
+                    <select class="select" style="width: auto;" onchange="updateReq('verification_method', this.value || null)">
                         <option value="">— not set —</option>
                         {% for m in ['analysis', 'inspection', 'demonstration', 'test'] %}
                         <option value="{{ m }}" {% if req.verification_method == m %}selected{% endif %}>{{ m | upper }}</option>
@@ -122,7 +122,7 @@
                 <th>TBR OWNER</th>
                 <td>
                     {% if mutable %}
-                    <select class="form-select" style="width: auto;" onchange="updateReq('tbr_owner_id', this.value ? parseInt(this.value) : null)">
+                    <select class="select" style="width: auto;" onchange="updateReq('tbr_owner_id', this.value ? parseInt(this.value) : null)">
                         <option value="">— not set —</option>
                         {% for u in users %}
                         <option value="{{ u.id }}" {% if req.tbr_owner_id == u.id %}selected{% endif %}>{{ u.name }}</option>
@@ -135,7 +135,7 @@
                 <th>TBR DUE</th>
                 <td>
                     {% if mutable %}
-                    <input type="date" class="form-input mono" style="width: auto;"
+                    <input type="date" class="input mono" style="width: auto;"
                            value="{{ req.tbr_due.strftime('%Y-%m-%d') if req.tbr_due else '' }}"
                            onblur="updateReq('tbr_due', this.value || null)">
                     {% else %}{{ req.tbr_due.strftime('%Y-%m-%d') if req.tbr_due else '—' }}{% endif %}
@@ -203,7 +203,7 @@
                     <td><a href="/parts/{{ a.part_id }}">{{ a.part.name }}</a></td>
                     <td>{{ ok.mono(a.part.internal_pn or '—') }}</td>
                     <td>{{ ok.status(a.status | upper | replace('_', ' '), "ok" if a.status == 'verified' else "draft") }}</td>
-                    <td><button type="button" class="btn btn-sm" onclick='unlinkAllocation({{ a.id }}, {{ a.part.name | tojson }})'>UNLINK</button></td>
+                    <td><button type="button" class="btn" data-variant="outline" data-size="xs" onclick='unlinkAllocation({{ a.id }}, {{ a.part.name | tojson }})'>UNLINK</button></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -235,14 +235,14 @@
         {% endcall %}
         {% if revisions | length > 1 %}
         <div style="display: flex; gap: var(--space-sm); align-items: center; margin-top: var(--space-md);">
-            <span class="form-label" style="margin: 0;">REDLINE</span>
-            <select id="redline-a" class="form-select" style="width: auto;">
+            <span class="label" style="margin: 0;">REDLINE</span>
+            <select id="redline-a" class="select" style="width: auto;">
                 {% for r in revisions %}
                 <option value="{{ r.revision }}" {% if r.id == req.supersedes_id %}selected{% endif %}>rev {{ r.revision }}</option>
                 {% endfor %}
             </select>
             <span class="mono text-muted">→</span>
-            <select id="redline-b" class="form-select" style="width: auto;">
+            <select id="redline-b" class="select" style="width: auto;">
                 {% for r in revisions %}
                 <option value="{{ r.revision }}" {% if r.id == req.id %}selected{% endif %}>rev {{ r.revision }}</option>
                 {% endfor %}

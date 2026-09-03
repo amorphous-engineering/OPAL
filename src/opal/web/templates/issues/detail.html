@@ -19,9 +19,9 @@
                 {# View mode renders facts; ?edit=1 renders the in-place
                    editors. Each editor saves on blur; DONE returns to view. #}
                 {% macro text_field(label, field, value, rows=2) %}
-                <div class="form-label">{{ label }}</div>
+                <div class="label">{{ label }}</div>
                 {% if editing %}
-                <textarea class="form-textarea" rows="{{ rows }}" style="width: 100%;" onblur="updateIssue('{{ field }}', this.value || null)">{{ value or '' }}</textarea>
+                <textarea class="textarea" rows="{{ rows }}" style="width: 100%;" onblur="updateIssue('{{ field }}', this.value || null)">{{ value or '' }}</textarea>
                 {% else %}
                 <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color); white-space: pre-wrap;{% if not value %} color: var(--text-muted);{% endif %}">{{ value or '—' }}</div>
                 {% endif %}
@@ -30,7 +30,7 @@
                 <!-- Title -->
                 <div style="margin-bottom: var(--space-md);">
                     {% if editing %}
-                    <input type="text" id="title-input" class="form-input" value="{{ issue.title }}" style="font-size: 1.2rem; font-weight: 600; width: 100%;" onkeydown="if(event.key==='Enter') this.blur();" onblur="saveTitle(this)">
+                    <input type="text" id="title-input" class="input" value="{{ issue.title }}" style="font-size: 1.2rem; font-weight: 600; width: 100%;" onkeydown="if(event.key==='Enter') this.blur();" onblur="saveTitle(this)">
                     {% else %}
                     <h2 style="margin: 0;">{{ issue.title }}</h2>
                     {% endif %}
@@ -53,7 +53,7 @@
 
                 {% if type_val == 'bug' %}
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">BUG DETAILS</div>
+                    <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">BUG DETAILS</div>
                     <div style="margin-bottom: var(--space-sm);">
                         {{ text_field("STEPS TO REPRODUCE", "steps_to_reproduce", issue.steps_to_reproduce, rows=3) }}
                     </div>
@@ -66,7 +66,7 @@
                 </div>
                 {% elif type_val == 'improvement' %}
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">IMPROVEMENT DETAILS</div>
+                    <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">IMPROVEMENT DETAILS</div>
                     <div>
                         {{ text_field("EXPECTED BENEFIT", "expected_benefit", issue.expected_benefit) }}
                     </div>
@@ -76,7 +76,7 @@
                 <!-- HOLDS — the consequence readout: what this issue is stopping -->
                 {% if holding %}
                 <div style="margin-bottom: var(--space-md);">
-                    <div class="form-label">HOLDS</div>
+                    <div class="label">HOLDS</div>
                     <div class="mono">{% for t in holding %}<a href="{{ t.href }}">{{ t.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
                 </div>
                 {% else %}
@@ -88,7 +88,7 @@
                      (even after an advisory downgrade); advisory issues carry none. -->
                 {% if issue.dispositioned or (issue.containment_bearing and issue.disp_state != 'closed') %}
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">
+                    <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">
                         DISPOSITION
                         {% if issue.self_dispositioned %}{{ ok.status("SELF-DISPOSITIONED", "warn") }}{% endif %}
                     </div>
@@ -107,8 +107,8 @@
                     {% elif editing %}
                     <div style="display: flex; gap: var(--space-md); margin-bottom: var(--space-sm);">
                         <div style="flex: 1;">
-                            <div class="form-label">TYPE</div>
-                            <select id="disposition-type-select" class="form-select" style="width: 100%;" onchange="updateIssue('disposition_type', this.value || ''); updateDispositionReady();">
+                            <div class="label">TYPE</div>
+                            <select id="disposition-type-select" class="select" style="width: 100%;" onchange="updateIssue('disposition_type', this.value || ''); updateDispositionReady();">
                                 <option value="">—</option>
                                 {% for dt in disposition_types %}
                                 <option value="{{ dt }}" {% if disposition_val == dt %}selected{% endif %}>{{ dt | upper | replace('_', ' ') }}</option>
@@ -117,17 +117,17 @@
                         </div>
                     </div>
                     <div style="margin-bottom: var(--space-sm);">
-                        <div class="form-label">RATIONALE</div>
-                        <textarea id="disposition-rationale-input" class="form-textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_rationale', this.value || null)" oninput="updateDispositionReady()">{{ issue.disposition_rationale or '' }}</textarea>
+                        <div class="label">RATIONALE</div>
+                        <textarea id="disposition-rationale-input" class="textarea" rows="2" style="width: 100%;" onblur="updateIssue('disposition_rationale', this.value || null)" oninput="updateDispositionReady()">{{ issue.disposition_rationale or '' }}</textarea>
                     </div>
-                    <button type="button" class="btn btn-primary" id="disposition-btn" disabled onclick="openDispositionConfirm()">DISPOSITION</button>
+                    <button type="button" class="btn" data-variant="primary" data-size="sm" id="disposition-btn" disabled onclick="openDispositionConfirm()">DISPOSITION</button>
                     {# Slim confirm: one consequence sentence (what signing
                        releases — its one home) + CONFIRM/ABORT inline. Type
                        and rationale stay in the form right above. #}
                     <div id="disposition-confirm" class="sign-confirm" style="display: none;">
                         <span class="mono">releases <span id="disposition-releases"></span> — signed <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span></span>
-                        <button type="button" class="btn btn-primary" onclick="commitDisposition()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
-                        <button type="button" class="btn" onclick="document.getElementById('disposition-confirm').style.display='none'">ABORT</button>
+                        <button type="button" class="btn" data-variant="primary" data-size="sm" onclick="commitDisposition()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="document.getElementById('disposition-confirm').style.display='none'">ABORT</button>
                     </div>
                     {% else %}
                     {% call ok.table() %}
@@ -140,7 +140,7 @@
 
                 <!-- Attachments -->
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">ATTACHMENTS</div>
+                    <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">ATTACHMENTS</div>
                     {% if attachments %}
                     {% call ok.table() %}
                         {% for att in attachments %}
@@ -154,8 +154,8 @@
                     {% endcall %}
                     {% endif %}
                     <div style="display: flex; gap: var(--space-sm); align-items: center;{% if attachments %} margin-top: var(--space-sm);{% endif %}">
-                        <input type="file" id="att-file" class="form-input" multiple style="flex: 1;">
-                        <button type="button" class="btn" onclick="document.getElementById('att-camera').click()">CAMERA</button>
+                        <input type="file" id="att-file" class="input" multiple style="flex: 1;">
+                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="document.getElementById('att-camera').click()">CAMERA</button>
                         <span id="att-camera-count" class="mono text-muted" style="display: none;"></span>
                         {{ ok.btn("UPLOAD", variant="primary", attrs='onclick="uploadIssueAttachments()"') }}
                     </div>
@@ -175,7 +175,7 @@
 
                 <!-- Activity log -->
                 <div style="margin-bottom: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">ACTIVITY LOG</div>
+                    <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">ACTIVITY LOG</div>
 
                     <div id="comments-list">
                         {% for comment in comments %}
@@ -190,7 +190,7 @@
                     </div>
 
                     <div style="margin-top: var(--space-md);">
-                        <textarea id="new-comment" class="form-textarea" rows="3" placeholder="Add a comment..." style="width: 100%;"></textarea>
+                        <textarea id="new-comment" class="textarea" rows="3" placeholder="Add a comment..." style="width: 100%;"></textarea>
                         <div style="margin-top: var(--space-xs);">
                             {{ ok.btn("POST COMMENT", variant="primary", attrs='onclick="postComment()"') }}
                         </div>
@@ -211,7 +211,7 @@
                     <tr>
                         {{ ok.th("TYPE", width="120px") }}
                         <td>
-                            <select id="type-select" class="form-select" style="width: 100%;" onchange="updateIssue('issue_type', this.value)">
+                            <select id="type-select" class="select" style="width: 100%;" onchange="updateIssue('issue_type', this.value)">
                                 {% for t in types %}
                                 <option value="{{ t }}" {% if type_val == t %}selected{% endif %}>{{ t | upper | replace('_', ' ') }}</option>
                                 {% endfor %}
@@ -221,7 +221,7 @@
                     <tr>
                         <th>PRIORITY</th>
                         <td>
-                            <select id="priority-select" class="form-select" style="width: 100%;" onchange="updateIssue('priority', this.value)">
+                            <select id="priority-select" class="select" style="width: 100%;" onchange="updateIssue('priority', this.value)">
                                 {% for p in priorities %}
                                 <option value="{{ p }}" {% if priority_val == p %}selected{% endif %}>{{ p | upper }}</option>
                                 {% endfor %}
@@ -231,7 +231,7 @@
                     <tr>
                         <th>CONTAINMENT</th>
                         <td>
-                            <select id="containment-select" class="form-select" style="width: 100%;" onchange="setContainment(this.value)">
+                            <select id="containment-select" class="select" style="width: 100%;" onchange="setContainment(this.value)">
                                 {% for c in containments %}
                                 <option value="{{ c }}" {% if containment_val == c %}selected{% endif %}>{{ c | upper }}</option>
                                 {% endfor %}
@@ -241,7 +241,7 @@
                     <tr>
                         <th>ASSIGNED TO</th>
                         <td>
-                            <select id="assigned-to-select" class="form-select" style="width: 100%;" onchange="updateIssue('assigned_to_id', parseInt(this.value) || null)">
+                            <select id="assigned-to-select" class="select" style="width: 100%;" onchange="updateIssue('assigned_to_id', parseInt(this.value) || null)">
                                 <option value="">(unassigned)</option>
                                 {% for u in users %}
                                 <option value="{{ u.id }}" {% if issue.assigned_to_id == u.id %}selected{% endif %}>{{ u.name or u.email }}</option>
@@ -278,7 +278,7 @@
                      and containment boundary step from here. -->
                 {% if editing or issue.part_id or issue.procedure_id or issue.procedure_instance_id or issue.raised_step_id or issue.containment_step_id %}
                 <div style="margin-top: var(--space-md); border: 1px solid var(--border-color); padding: var(--space-md);">
-                    <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">LINKS</div>
+                    <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">LINKS</div>
                     {% call ok.table() %}
                         {% if issue.part_id %}
                         {{ ok.detail_row("PART", ok.link(issue.part.name if issue.part else '—', "/parts/" ~ issue.part_id), th_width="100px") }}
@@ -290,7 +290,7 @@
                         <tr>
                             <th style="width: 100px;">EXECUTION</th>
                             <td>
-                                <select id="execution-select" class="form-select" style="width: 100%;" onchange="linkExecution(this.value)">
+                                <select id="execution-select" class="select" style="width: 100%;" onchange="linkExecution(this.value)">
                                     <option value="">—</option>
                                     {% for inst in instances %}
                                     <option value="{{ inst.id }}" {% if issue.procedure_instance_id == inst.id %}selected{% endif %}>{{ inst.work_order_number or 'WO #' ~ inst.id }}</option>
@@ -302,7 +302,7 @@
                         <tr>
                             <th title="Blocks that step's COMPLETE until disposition">BOUNDARY</th>
                             <td>
-                                <select id="boundary-step-select" class="form-select" style="width: 100%;" title="Blocks that step's COMPLETE until disposition" onchange="linkBoundaryStep(this.value)">
+                                <select id="boundary-step-select" class="select" style="width: 100%;" title="Blocks that step's COMPLETE until disposition" onchange="linkBoundaryStep(this.value)">
                                     <option value="">—</option>
                                     {% for s in instance_steps %}
                                     <option value="{{ s.id }}" {% if issue.containment_step_id == s.id %}selected{% endif %}>{{ s.label }} — {{ s.title }}</option>

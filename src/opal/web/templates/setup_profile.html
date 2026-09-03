@@ -8,8 +8,10 @@
         (function() {
             var theme = localStorage.getItem('opal_theme') || 'dark';
             if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.classList.toggle('dark', theme !== 'light');
         })();
     </script>
+    <link rel="stylesheet" href="{{ static_url('vendor/basecoat/basecoat-lyra.cdn.min.css') }}">
     <link rel="stylesheet" href="{{ static_url('css/main.css') }}">
     <style>
         body {
@@ -57,14 +59,14 @@
             <div class="panel-body">
                 <div class="setup-email">Signed in as <span class="mono">{{ user.email }}</span></div>
                 <form method="POST" action="/setup-profile">
-                    <div class="form-group">
-                        <label class="form-label" for="name">Display Name *</label>
-                        <input type="text" name="name" id="name" class="form-input" required
+                    <div role="group" class="field">
+                        <label class="label" for="name">Display Name *</label>
+                        <input type="text" name="name" id="name" class="input" required
                                placeholder="Your full name"
                                value="{{ user.name }}"
                                autofocus>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">CONTINUE</button>
+                    <button type="submit" class="btn" data-variant="primary" data-size="sm" style="width: 100%;">CONTINUE</button>
                 </form>
             </div>
         </div>

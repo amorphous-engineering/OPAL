@@ -10,7 +10,7 @@
 {% call ok.panel("EXECUTIONS", actions=ok.btn("+ CUT WO", href="/executions/new", variant="primary")) %}
         <div class="toolbar">
             <div class="toolbar-filter">
-                <select id="procedure-filter" name="procedure_id" class="form-select"
+                <select id="procedure-filter" name="procedure_id" class="select"
                         hx-get="/executions/table" hx-trigger="change" hx-target="#executions-table-body"
                         hx-include="#status-filter">
                     <option value="">All Procedures</option>
@@ -20,7 +20,7 @@
                 </select>
             </div>
             <div class="toolbar-filter">
-                <select id="status-filter" name="status" class="form-select"
+                <select id="status-filter" name="status" class="select"
                         hx-get="/executions/table" hx-trigger="change" hx-target="#executions-table-body"
                         hx-include="#procedure-filter">
                     <option value="">All Statuses</option>

@@ -10,16 +10,14 @@
 {% block content %}
 {% call ok.panel("NEW WORKCENTER", max_width="600px") %}
         <form id="workcenter-form" onsubmit="createWorkcenter(event)">
-            {{ ok.field("code", "CODE", required=true, placeholder="AB1, CR, etc.", help="Short unique code for the workcenter", attrs='maxlength="50" class="form-input mono"') }}
+            {{ ok.field("code", "CODE", required=true, placeholder="AB1, CR, etc.", help="Short unique code for the workcenter", attrs='maxlength="50" class="input mono"') }}
             {{ ok.field("name", "NAME", required=true, attrs='maxlength="255"') }}
             {{ ok.field("location", "LOCATION", placeholder="Physical location or building", attrs='maxlength="255"') }}
             {{ ok.field("description", "DESCRIPTION", type="textarea", rows=3) }}
 
-            <div class="form-group">
-                <label class="form-checkbox">
-                    <input type="checkbox" id="is_active" name="is_active" checked>
-                    Active
-                </label>
+            <div role="group" class="field" data-orientation="horizontal">
+                <input class="input" type="checkbox" id="is_active" name="is_active" checked>
+                <label for="is_active">Active</label>
             </div>
 
             {{ ok.form_messages() }}

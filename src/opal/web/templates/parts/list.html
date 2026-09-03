@@ -12,7 +12,7 @@
         <div class="toolbar">
             {{ ok.toolbar_search(name="search", id="search-input", placeholder="SEARCH", hx_get="/parts/table", hx_target="#parts-table-body", hx_include="#category-filter, #tier-filter, #top-level-filter, #low-stock-filter, #state-filter") }}
             <div class="toolbar-filter">
-                <select id="category-filter" name="category" class="form-select"
+                <select id="category-filter" name="category" class="select"
                         hx-get="/parts/table" hx-trigger="change" hx-target="#parts-table-body"
                         hx-include="#search-input, #tier-filter, #top-level-filter, #low-stock-filter, #state-filter">
                     <option value="">All categories</option>
@@ -22,7 +22,7 @@
                 </select>
             </div>
             <div class="toolbar-filter">
-                <select id="tier-filter" name="tier" class="form-select"
+                <select id="tier-filter" name="tier" class="select"
                         hx-get="/parts/table" hx-trigger="change" hx-target="#parts-table-body"
                         hx-include="#search-input, #category-filter, #top-level-filter, #low-stock-filter, #state-filter">
                     <option value="">All tiers</option>

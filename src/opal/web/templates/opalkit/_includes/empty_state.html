@@ -17,7 +17,7 @@
     <p class="text-muted">{{ empty_message }}</p>
     {%- if empty_action_text and empty_action_href -%}
     <p style="margin-top: var(--space-md);">
-        <a href="{{ empty_action_href }}" class="btn btn-primary">{{ empty_action_text }}</a>
+        <a href="{{ empty_action_href }}" class="btn" data-variant="primary" data-size="sm">{{ empty_action_text }}</a>
     </p>
     {%- endif -%}
 </div>

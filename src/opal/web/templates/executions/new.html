@@ -10,9 +10,9 @@
 {% block content %}
 {% call ok.panel("CUT WORK ORDERS", max_width="600px") %}
         <form id="new-execution-form" onsubmit="startExecution(event)">
-            <div class="form-group">
-                <label class="form-label" for="procedure">PROCEDURE *</label>
-                <select id="procedure" name="procedure_id" class="form-select" required>
+            <div role="group" class="field">
+                <label class="label" for="procedure">PROCEDURE *</label>
+                <select id="procedure" name="procedure_id" class="select" required>
                     <option value="">Select procedure...</option>
                     {% for p in procedures %}
                     <option value="{{ p.id }}">{{ p.name }}</option>
@@ -22,9 +22,9 @@
 
             {{ ok.field("work_order_number", "WORK ORDER NUMBER", placeholder="Optional - generated if blank") }}
 
-            <div class="form-group">
-                <label class="form-label" for="quantity">QUANTITY</label>
-                <input type="number" id="quantity" name="quantity" class="form-input"
+            <div role="group" class="field">
+                <label class="label" for="quantity">QUANTITY</label>
+                <input type="number" id="quantity" name="quantity" class="input"
                        value="1" min="1" max="100" step="1" required style="width: 100px;">
             </div>
 

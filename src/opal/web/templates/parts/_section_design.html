@@ -60,7 +60,7 @@
 {{ ok.empty_line("REQUIREMENTS", onclick="showAssignRequirement()") }}
 {% endif %}
 <div id="assign-req-row" class="inline-add-row">
-    <input type="text" id="assign-req-number" class="form-input mono" style="width: 160px;"
+    <input type="text" id="assign-req-number" class="input mono" style="width: 160px;"
            placeholder="REQ-0007" onkeydown="if(event.key==='Enter')assignRequirement()">
     {{ ok.btn("ASSIGN", variant="primary", size="sm", attrs='onclick="assignRequirement()"') }}
 </div>

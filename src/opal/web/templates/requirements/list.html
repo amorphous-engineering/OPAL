@@ -12,7 +12,7 @@
         <div class="toolbar">
             {{ ok.toolbar_search(name="search", id="search", placeholder="Search number, title, statement...", hx_get="/requirements/table", hx_target="#requirements-table", hx_include="[name='state'], [name='level'], [name='show_superseded']") }}
             <div class="toolbar-filter">
-                <select name="state" class="form-select"
+                <select name="state" class="select"
                         hx-get="/requirements/table" hx-trigger="change" hx-target="#requirements-table"
                         hx-include="[name='level'], [name='show_superseded'], #search">
                     <option value="">All states</option>
@@ -22,7 +22,7 @@
                 </select>
             </div>
             <div class="toolbar-filter">
-                <select name="level" class="form-select"
+                <select name="level" class="select"
                         hx-get="/requirements/table" hx-trigger="change" hx-target="#requirements-table"
                         hx-include="[name='state'], [name='show_superseded'], #search">
                     <option value="">All levels</option>

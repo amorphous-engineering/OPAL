@@ -291,7 +291,13 @@ select option {
     color: var(--status-ok);
 }
 
+.footer > span {
+    white-space: nowrap;
+}
+
 .footer-db {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -367,7 +373,7 @@ select option {
 }
 
 /* Status badge variant (alias for .status, used in some templates) */
-/* PR3-TEMP: three literal status-badge spans lack the .badge class. */
+/* Literal status-badge spans outside the macro still need their box. */
 .status-badge:not(.badge) {
     display: inline-block;
     padding: 2px 6px;
@@ -417,30 +423,6 @@ select option {
     letter-spacing: 0.05em;
 }
 
-/* PR3-TEMP: legacy button classes. ok.btn no longer emits these; the ~110
-   literal usages in templates keep working until the forms-and-buttons
-   sweep deletes this block. A bare "btn" was OPAL's neutral button. */
-.btn:not([data-variant]):not(.btn-primary):not(.btn-danger) {
-    border-color: var(--border);
-    background: var(--background);
-    color: var(--foreground);
-}
-.btn:not([data-variant]):not(.btn-primary):not(.btn-danger):hover {
-    background: var(--muted);
-}
-.btn.btn-danger {
-    border-color: var(--destructive);
-    background: transparent;
-    color: var(--destructive);
-}
-.btn.btn-danger:hover {
-    background: var(--destructive);
-    color: #fff;
-}
-.btn.btn-sm {
-    height: calc(var(--spacing) * 7);
-    padding-inline: calc(var(--spacing) * 2.5);
-}
 /* Disabled buttons gray out regardless of variant — the gate must be
    visible, not just functional. */
 .btn:disabled,
@@ -469,7 +451,8 @@ select.select,
 .textarea {
     font-family: var(--font-mono);
 }
-.field > p {
+.field > p,
+.field-help {
     font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--muted-foreground);
@@ -481,57 +464,6 @@ select.select,
 .data-table .field,
 .field .field {
     margin-bottom: 0;
-}
-
-/* PR3-TEMP: legacy form classes (form-group/-label/-input/-select/-textarea).
-   Deleted by the forms-and-buttons sweep. */
-.form-group {
-    margin-bottom: var(--space-md);
-}
-
-.form-label {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--space-xs);
-}
-
-.form-input,
-.form-textarea,
-.form-select {
-    width: 100%;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    padding: var(--space-sm);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-}
-
-textarea {
-    resize: none;
-    overflow: hidden;
-    /* Modern browsers auto-grow with content; older browsers fall back to the
-       JS autoresize handler in layouts/base.html. */
-    field-sizing: content;
-}
-
-.form-input:focus,
-.form-textarea:focus,
-.form-select:focus {
-    outline: none;
-    border-color: var(--accent-orange);
-}
-
-.form-help {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: var(--space-xs);
 }
 
 /* Toolbar - flex container for filters and actions */

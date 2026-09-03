@@ -31,10 +31,10 @@
         {{ ok.btn("REPORT", href="/executions/" ~ instance.id ~ "/report", size="sm", attrs='target="_blank" rel="noopener"') }}
         {% endif %}
         {% if inst_status in ['cut', 'in_work'] %}
-        <button class="btn btn-sm btn-danger" onclick="abortExecution()">ABORT</button>
+        <button class="btn" data-variant="destructive" data-size="xs" onclick="abortExecution()">ABORT</button>
         {% endif %}
-        <button class="btn btn-sm" id="dockbar-toggle" onclick="toggleDockbar()" title="Docked current-step bar">BAR</button>
-        <button class="btn btn-sm" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">···</button>
+        <button class="btn" data-variant="outline" data-size="xs" id="dockbar-toggle" onclick="toggleDockbar()" title="Docked current-step bar">BAR</button>
+        <button class="btn" data-variant="outline" data-size="xs" id="exec-meta-btn" onclick="toggleMetaPopover(event)" aria-label="Execution facts">···</button>
     </span>
 </div>
 
@@ -102,33 +102,33 @@
             <div class="panel-body">
                 <form id="anomaly-form" onsubmit="submitAnomaly(event)">
                     <input type="hidden" id="anomaly-step" name="step_number">
-                    <div class="form-group">
-                        <label class="form-label" for="anomaly-title">TITLE *</label>
-                        <input type="text" id="anomaly-title" class="form-input" maxlength="255" required>
+                    <div role="group" class="field">
+                        <label class="label" for="anomaly-title">TITLE *</label>
+                        <input type="text" id="anomaly-title" class="input" maxlength="255" required>
                     </div>
                     <div class="anomaly-pair">
-                        <div class="form-group">
-                            <label class="form-label" for="anomaly-should-be">SHOULD BE</label>
-                            <input type="text" id="anomaly-should-be" class="form-input">
+                        <div role="group" class="field">
+                            <label class="label" for="anomaly-should-be">SHOULD BE</label>
+                            <input type="text" id="anomaly-should-be" class="input">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="anomaly-is">IS</label>
-                            <input type="text" id="anomaly-is" class="form-input">
+                        <div role="group" class="field">
+                            <label class="label" for="anomaly-is">IS</label>
+                            <input type="text" id="anomaly-is" class="input">
                         </div>
                     </div>
                     <div class="anomaly-pair">
-                        <div class="form-group">
-                            <label class="form-label" for="anomaly-priority">PRIORITY</label>
-                            <select id="anomaly-priority" class="form-select">
+                        <div role="group" class="field">
+                            <label class="label" for="anomaly-priority">PRIORITY</label>
+                            <select id="anomaly-priority" class="select">
                                 <option value="low">LOW</option>
                                 <option value="medium" selected>MEDIUM</option>
                                 <option value="high">HIGH</option>
                                 <option value="critical">CRITICAL</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="anomaly-containment">CONTAINMENT</label>
-                            <select id="anomaly-containment" class="form-select">
+                        <div role="group" class="field">
+                            <label class="label" for="anomaly-containment">CONTAINMENT</label>
+                            <select id="anomaly-containment" class="select">
                                 <option value="step" selected>STEP — holds this step's COMPLETE</option>
                                 <option value="op">OP — holds the operation's COMPLETE</option>
                                 <option value="wo">WO — holds work order close-out</option>
@@ -136,32 +136,32 @@
                             </select>
                         </div>
                     </div>
-                    <div class="form-group">
+                    <div role="group" class="field">
                         {# The boundary is independent of the raised step:
                            raise at 5.3, resolve by 6.2 holds 6.2's COMPLETE
                            too (raised_step_id + containment_step_id). #}
-                        <label class="form-label" for="anomaly-boundary" title="Blocks that step's COMPLETE until disposition">RESOLVE BY</label>
-                        <select id="anomaly-boundary" class="form-select" title="Blocks that step's COMPLETE until disposition">
+                        <label class="label" for="anomaly-boundary" title="Blocks that step's COMPLETE until disposition">RESOLVE BY</label>
+                        <select id="anomaly-boundary" class="select" title="Blocks that step's COMPLETE until disposition">
                             <option value="" selected>this step — holds its COMPLETE</option>
                             {% for op_data in ops %}{% for sub in (op_data.sub_steps or [op_data.step]) %}{% if sub.status == 'pending' %}
                             <option value="{{ sub.order }}">{{ sub.step_number if '.' in sub.step_number else (op_data.step.step_number ~ ('.' ~ sub.step_number if sub.order != op_data.step.order else '')) }} {{ sub.title }}</option>
                             {% endif %}{% endfor %}{% endfor %}
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="anomaly-photos">EVIDENCE</label>
-                        <input type="file" id="anomaly-photos" class="form-input" accept="image/*" capture="environment" multiple>
+                    <div role="group" class="field">
+                        <label class="label" for="anomaly-photos">EVIDENCE</label>
+                        <input type="file" id="anomaly-photos" class="input" accept="image/*" capture="environment" multiple>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="anomaly-assign">ASSIGN</label>
-                        <select id="anomaly-assign" class="form-select">
+                    <div role="group" class="field">
+                        <label class="label" for="anomaly-assign">ASSIGN</label>
+                        <select id="anomaly-assign" class="select">
                             <option value="">—</option>
                             {% for u in active_users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
                         </select>
                     </div>
                     <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" onclick="hideAnomalyModal()">CANCEL</button>
-                        <button type="submit" class="btn btn-primary">RAISE</button>
+                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideAnomalyModal()">CANCEL</button>
+                        <button type="submit" class="btn" data-variant="primary" data-size="sm">RAISE</button>
                     </div>
                 </form>
                 <div id="anomaly-error" class="text-red" hidden></div>
@@ -179,13 +179,13 @@
                 <form id="skip-form" onsubmit="submitSkip(event)">
                     <input type="hidden" id="skip-step" name="step_number">
                     <p class="skip-target">Skip <strong id="skip-step-title"></strong></p>
-                    <div class="form-group">
-                        <label class="form-label" for="skip-reason">REASON</label>
-                        <textarea id="skip-reason" class="form-textarea" rows="2"></textarea>
+                    <div role="group" class="field">
+                        <label class="label" for="skip-reason">REASON</label>
+                        <textarea id="skip-reason" class="textarea" rows="2"></textarea>
                     </div>
                     <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" onclick="hideSkipModal()">CANCEL</button>
-                        <button type="submit" class="btn text-yellow">SKIP STEP</button>
+                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideSkipModal()">CANCEL</button>
+                        <button type="submit" class="btn text-yellow" data-variant="outline" data-size="sm">SKIP STEP</button>
                     </div>
                 </form>
                 <div id="skip-error" class="text-red" hidden></div>
@@ -205,19 +205,19 @@
             <div class="panel-body">
                 <form id="attach-form" onsubmit="submitAttach(event)">
                     <input type="hidden" id="attach-se-id">
-                    <div class="form-group">
-                        <input type="file" id="attach-file" class="form-input" capture="environment" multiple required>
+                    <div role="group" class="field">
+                        <input type="file" id="attach-file" class="input" capture="environment" multiple required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="attach-note">NOTE</label>
-                        <input type="text" id="attach-note" class="form-input" maxlength="500">
+                    <div role="group" class="field">
+                        <label class="label" for="attach-note">NOTE</label>
+                        <input type="text" id="attach-note" class="input" maxlength="500">
                     </div>
                     <label class="bar-check" id="attach-closeout-row">
                         <input type="checkbox" id="attach-closeout"> <span class="mono">CLOSEOUT</span>
                     </label>
                     <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" onclick="hideAttachModal()">CANCEL</button>
-                        <button type="submit" class="btn btn-primary">UPLOAD</button>
+                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideAttachModal()">CANCEL</button>
+                        <button type="submit" class="btn" data-variant="primary" data-size="sm">UPLOAD</button>
                     </div>
                 </form>
                 <div id="attach-error" class="text-red" hidden></div>
@@ -237,22 +237,22 @@
             <div class="panel-body">
                 <form id="redline-form" onsubmit="submitRedline(event)">
                     <input type="hidden" id="redline-host-order">
-                    <div class="form-group">
-                        <label class="form-label" for="redline-issue-id">AUTHORIZING NC</label>
-                        <select id="redline-issue-id" class="form-select" required></select>
+                    <div role="group" class="field">
+                        <label class="label" for="redline-issue-id">AUTHORIZING NC</label>
+                        <select id="redline-issue-id" class="select" required></select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="redline-title">REDLINE OP TITLE</label>
-                        <input type="text" id="redline-title" class="form-input" maxlength="255" required>
+                    <div role="group" class="field">
+                        <label class="label" for="redline-title">REDLINE OP TITLE</label>
+                        <input type="text" id="redline-title" class="input" maxlength="255" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">SUB-STEPS</label>
+                    <div role="group" class="field">
+                        <label class="label">SUB-STEPS</label>
                         <div id="redline-steps"></div>
-                        <button type="button" class="btn btn-sm" onclick="addRedlineStep()">+ ADD STEP</button>
+                        <button type="button" class="btn" data-variant="outline" data-size="xs" onclick="addRedlineStep()">+ ADD STEP</button>
                     </div>
                     <div class="execdoc-modal-actions">
-                        <button type="button" class="btn" onclick="hideRedlineModal()">CANCEL</button>
-                        <button type="submit" class="btn btn-primary">CREATE REDLINE</button>
+                        <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="hideRedlineModal()">CANCEL</button>
+                        <button type="submit" class="btn" data-variant="primary" data-size="sm">CREATE REDLINE</button>
                     </div>
                 </form>
                 <div id="redline-error" class="text-red" hidden></div>

@@ -48,7 +48,7 @@
                           hx-confirm="Remove '{{ doc.name }}' from registered documents?">
                         <input type="hidden" name="document_id" value="{{ doc.document_id }}">
                         <input type="hidden" name="element_id" value="{{ doc.element_id }}">
-                        <button type="submit" class="btn btn-sm btn-danger">REMOVE</button>
+                        <button type="submit" class="btn" data-variant="destructive" data-size="xs">REMOVE</button>
                     </form>
                 </td>
             </tr>
@@ -62,24 +62,24 @@
     {# Add document form #}
     {% if onshape_enabled %}
     <div style="margin-top: var(--space-md); border-top: 1px solid var(--border-color); padding-top: var(--space-md);">
-        <div class="form-label">ADD DOCUMENT</div>
+        <div class="label">ADD DOCUMENT</div>
         <form hx-post="/settings/onshape/documents"
               hx-target="#onshape-documents"
               hx-swap="outerHTML"
               hx-indicator="#onshape-add-spinner"
               style="display: flex; gap: var(--space-sm); align-items: flex-end; flex-wrap: wrap;">
             <div style="flex: 2; min-width: 300px;">
-                <input type="text" name="url" class="form-input mono"
+                <input type="text" name="url" class="input mono"
                        placeholder="Paste Onshape URL..."
                        style="width: 100%;" required>
             </div>
             <div style="flex: 1; min-width: 150px;">
-                <input type="text" name="name" class="form-input"
+                <input type="text" name="name" class="input"
                        placeholder="Name (auto-detected)"
                        style="width: 100%;">
             </div>
             <div>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn" data-variant="primary" data-size="sm">
                     ADD
                     <span id="onshape-add-spinner" class="htmx-indicator" style="margin-left: 4px;">...</span>
                 </button>

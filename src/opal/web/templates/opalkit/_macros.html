@@ -1,9 +1,9 @@
 {# OPALkit - Reusable UI component macros for OPAL #}
 {# Import with: {% import 'opalkit/_macros.html' as ok %} #}
-{# Every macro here emits Basecoat markup (class="btn", .field, .badge, .breadcrumb,
+{# Every macro here emits Basecoat markup (class="btn" data-variant="outline" data-size="sm", .field, .badge, .breadcrumb,
    .dialog, ...). Register — mono, uppercase, state colours — is layered on in
-   static/css/main.css. Legacy classes (btn-primary, form-input, ...) are no
-   longer emitted; the literal usages still in templates ride a PR3-TEMP shim. #}
+   static/css/main.css. Legacy classes (btn-primary, form-input, ...) no longer
+   exist; literal markup uses the same Basecoat classes and data attributes. #}
 
 {# Button macro
    Usage: {{ ok.btn("Save", variant="primary") }}

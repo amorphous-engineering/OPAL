@@ -91,7 +91,7 @@
         {% endif %}
         {% if (capture_attachments or wo_attachments) and inst_status in ['cut', 'in_work', 'completed'] %}
         <div class="rail-attach-add">
-            <button class="btn btn-sm" onclick="showAttachModal(null, 'WO')">+ ATTACH</button>
+            <button class="btn" data-variant="outline" data-size="xs" onclick="showAttachModal(null, 'WO')">+ ATTACH</button>
         </div>
         {% endif %}
     </div>

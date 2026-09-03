@@ -5,7 +5,7 @@
         <tr>
             <th style="width: 120px;">STATUS</th>
             <td>
-                <select id="status-select" class="form-select" style="width: auto;" onchange="updateStatus(this.value)">
+                <select id="status-select" class="select" style="width: auto;" onchange="updateStatus(this.value)">
                     {% for s in statuses %}
                     <option value="{{ s }}" {% if procedure.status == s %}selected{% endif %}>{{ s | upper }}</option>
                     {% endfor %}
@@ -18,7 +18,7 @@
     {% endcall %}
     {% if procedure.description %}
     <div style="margin-top: var(--space-md);">
-        <div class="form-label">DESCRIPTION</div>
+        <div class="label">DESCRIPTION</div>
         <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);" data-markdown>{{ procedure.description }}</div>
     </div>
     {% endif %}

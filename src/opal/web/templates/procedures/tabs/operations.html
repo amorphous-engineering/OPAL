@@ -3,7 +3,7 @@
     <div class="exec-sidebar">
         <div class="exec-sidebar-header">
             <span>OPERATIONS</span>
-            <button class="btn btn-sm btn-primary" onclick="showAddOp()" style="float:right;">+ ADD OP</button>
+            <button class="btn" data-variant="primary" data-size="xs" onclick="showAddOp()" style="float:right;">+ ADD OP</button>
         </div>
         {% for op_data in ops %}
         {% set op = op_data.step %}

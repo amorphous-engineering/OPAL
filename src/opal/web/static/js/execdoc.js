@@ -871,7 +871,9 @@
             item.appendChild(img);
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'btn btn-sm';
+            btn.className = 'btn';
+            btn.dataset.variant = 'outline';
+            btn.dataset.size = 'xs';
             btn.textContent = 'REMOVE';
             btn.onclick = function () { removeStepPhoto(btn); };
             item.appendChild(btn);
@@ -963,11 +965,11 @@
         row.innerHTML = `
             <div class="redline-step-head">
                 <span class="mono text-muted">${idx}.</span>
-                <input type="text" class="form-input redline-step-title" placeholder="Step title" required maxlength="255">
+                <input type="text" class="input redline-step-title" placeholder="Step title" required maxlength="255">
                 <label class="bar-check"><input type="checkbox" class="redline-step-signoff"> <span class="mono">SIGN-OFF</span></label>
-                <button type="button" class="btn btn-sm" onclick="removeRedlineStep(this)">REMOVE</button>
+                <button type="button" class="btn" data-variant="outline" data-size="xs" onclick="removeRedlineStep(this)">REMOVE</button>
             </div>
-            <textarea class="form-textarea redline-step-instructions" rows="2" placeholder="Instructions (optional, markdown)"></textarea>
+            <textarea class="textarea redline-step-instructions" rows="2" placeholder="Instructions (optional, markdown)"></textarea>
         `;
         container.appendChild(row);
     };

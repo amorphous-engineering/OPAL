@@ -10,7 +10,7 @@
 {% call ok.panel("AUDIT LOG") %}
         <div class="toolbar">
             <div class="toolbar-filter">
-                <select id="table-filter" name="table_name" class="form-select"
+                <select id="table-filter" name="table_name" class="select"
                         hx-get="/audit/table" hx-trigger="change" hx-target="#audit-table-body"
                         hx-include="#action-filter, #date-from, #date-to">
                     <option value="">All entities</option>
@@ -21,12 +21,12 @@
             </div>
             {{ ok.toolbar_filter("action", [{"value": "", "label": "All actions"}, {"value": "create", "label": "CREATE"}, {"value": "update", "label": "UPDATE"}, {"value": "delete", "label": "DELETE"}], id="action-filter", hx_get="/audit/table", hx_target="#audit-table-body", hx_include="#table-filter, #date-from, #date-to") }}
             <div class="toolbar-filter">
-                <input type="date" id="date-from" name="date_from" class="form-input"
+                <input type="date" id="date-from" name="date_from" class="input"
                        hx-get="/audit/table" hx-trigger="change" hx-target="#audit-table-body"
                        hx-include="#table-filter, #action-filter, #date-to" placeholder="From">
             </div>
             <div class="toolbar-filter">
-                <input type="date" id="date-to" name="date_to" class="form-input"
+                <input type="date" id="date-to" name="date_to" class="input"
                        hx-get="/audit/table" hx-trigger="change" hx-target="#audit-table-body"
                        hx-include="#table-filter, #action-filter, #date-from" placeholder="To">
             </div>

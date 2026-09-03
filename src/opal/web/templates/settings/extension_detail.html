@@ -158,7 +158,7 @@
         </p>
         <form method="post" action="/settings/extensions/{{ ext.id }}/uninstall"
               onsubmit="return confirm('Uninstall {{ ext.id }}? Its files are deleted from this machine.');">
-            <button type="submit" class="btn" style="color: var(--accent-red); border-color: var(--accent-red);">UNINSTALL</button>
+            <button type="submit" class="btn" data-variant="outline" data-size="sm" style="color: var(--accent-red); border-color: var(--accent-red);">UNINSTALL</button>
         </form>
     </div>
 </div>

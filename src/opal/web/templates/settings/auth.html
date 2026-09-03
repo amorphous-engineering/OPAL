@@ -26,8 +26,8 @@
 
     <form method="post" action="/settings/auth">
 
-        <div class="form-group">
-            <label class="form-label">LOCAL CREDENTIALS</label>
+        <div role="group" class="field">
+            <label class="label">LOCAL CREDENTIALS</label>
             <label style="display: flex; align-items: flex-start; gap: var(--space-sm); margin-bottom: var(--space-sm);">
                 <input type="checkbox" name="password_login_enabled" value="true"
                        {% if auth.password_login_enabled %}checked{% endif %}>
@@ -46,8 +46,8 @@
             </label>
         </div>
 
-        <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: var(--space-md);">
-            <label class="form-label">OPENID CONNECT</label>
+        <div role="group" class="field" style="border-top: 1px solid var(--border-color); padding-top: var(--space-md);">
+            <label class="label">OPENID CONNECT</label>
             <label style="display: flex; align-items: flex-start; gap: var(--space-sm);">
                 <input type="checkbox" name="oidc_enabled" value="true"
                        {% if auth.oidc_enabled %}checked{% endif %}>
@@ -57,21 +57,21 @@
             </label>
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_issuer">ISSUER URL</label>
-            <input type="url" name="oidc_issuer" id="oidc_issuer" class="form-input mono"
+        <div role="group" class="field">
+            <label class="label" for="oidc_issuer">ISSUER URL</label>
+            <input type="url" name="oidc_issuer" id="oidc_issuer" class="input mono"
                    placeholder="https://id.example.com" value="{{ auth.oidc_issuer }}">
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_client_id">CLIENT ID</label>
-            <input type="text" name="oidc_client_id" id="oidc_client_id" class="form-input mono"
+        <div role="group" class="field">
+            <label class="label" for="oidc_client_id">CLIENT ID</label>
+            <input type="text" name="oidc_client_id" id="oidc_client_id" class="input mono"
                    value="{{ auth.oidc_client_id }}">
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_client_secret">CLIENT SECRET</label>
-            <input type="password" name="oidc_client_secret" id="oidc_client_secret" class="form-input mono"
+        <div role="group" class="field">
+            <label class="label" for="oidc_client_secret">CLIENT SECRET</label>
+            <input type="password" name="oidc_client_secret" id="oidc_client_secret" class="input mono"
                    autocomplete="new-password"
                    placeholder="{% if auth.has_client_secret %}set — leave blank to keep{% else %}optional (PKCE public client){% endif %}">
             {% if auth.has_client_secret %}
@@ -82,33 +82,33 @@
             {% endif %}
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_provider_name">PROVIDER NAME</label>
-            <input type="text" name="oidc_provider_name" id="oidc_provider_name" class="form-input"
+        <div role="group" class="field">
+            <label class="label" for="oidc_provider_name">PROVIDER NAME</label>
+            <input type="text" name="oidc_provider_name" id="oidc_provider_name" class="input"
                    placeholder="Pocket ID" value="{{ auth.oidc_provider_name }}">
             <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
                 Shown on the sign-in button.
             </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_scopes">SCOPES</label>
-            <input type="text" name="oidc_scopes" id="oidc_scopes" class="form-input mono"
+        <div role="group" class="field">
+            <label class="label" for="oidc_scopes">SCOPES</label>
+            <input type="text" name="oidc_scopes" id="oidc_scopes" class="input mono"
                    value="{{ auth.oidc_scopes }}">
             <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
                 Space separated; must include <code>openid</code>.
             </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_groups_claim">GROUPS CLAIM</label>
-            <input type="text" name="oidc_groups_claim" id="oidc_groups_claim" class="form-input mono"
+        <div role="group" class="field">
+            <label class="label" for="oidc_groups_claim">GROUPS CLAIM</label>
+            <input type="text" name="oidc_groups_claim" id="oidc_groups_claim" class="input mono"
                    value="{{ auth.oidc_groups_claim }}">
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_admin_group">ADMIN GROUP</label>
-            <input type="text" name="oidc_admin_group" id="oidc_admin_group" class="form-input mono"
+        <div role="group" class="field">
+            <label class="label" for="oidc_admin_group">ADMIN GROUP</label>
+            <input type="text" name="oidc_admin_group" id="oidc_admin_group" class="input mono"
                    placeholder="opal-admins" value="{{ auth.oidc_admin_group }}">
             <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
                 Membership grants admin on every sign-in, and absence revokes it. Blank means
@@ -116,17 +116,17 @@
             </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label" for="oidc_redirect_base_url">PUBLIC BASE URL</label>
-            <input type="url" name="oidc_redirect_base_url" id="oidc_redirect_base_url" class="form-input mono"
+        <div role="group" class="field">
+            <label class="label" for="oidc_redirect_base_url">PUBLIC BASE URL</label>
+            <input type="url" name="oidc_redirect_base_url" id="oidc_redirect_base_url" class="input mono"
                    placeholder="derived from the request" value="{{ auth.oidc_redirect_base_url }}">
             <div class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-xs);">
                 Only needed when a reverse proxy rewrites the host.
             </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label">PROVISIONING</label>
+        <div role="group" class="field">
+            <label class="label">PROVISIONING</label>
             <label style="display: flex; align-items: flex-start; gap: var(--space-sm);">
                 <input type="checkbox" name="oidc_auto_create_users" value="true"
                        {% if auth.oidc_auto_create_users %}checked{% endif %}>
@@ -152,7 +152,7 @@
 
 {% call ok.panel("PROVIDER DISCOVERY", max_width="820px", margin_top="var(--space-lg)") %}
     <form method="post" action="/settings/auth/test">
-        <button type="submit" class="btn">TEST DISCOVERY</button>
+        <button type="submit" class="btn" data-variant="outline" data-size="sm">TEST DISCOVERY</button>
     </form>
 
     {% if test_result %}

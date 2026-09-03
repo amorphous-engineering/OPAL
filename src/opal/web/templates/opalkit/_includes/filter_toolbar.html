@@ -7,12 +7,12 @@
    {% set toolbar_htmx_target = "#parts-table tbody" %}
    {% set toolbar_htmx_endpoint = "/parts/table" %}
    {% set toolbar_filters %}
-       <select name="category" class="form-select toolbar-filter">
+       <select name="category" class="select toolbar-filter">
            <option value="">All Categories</option>
        </select>
    {% endset %}
    {% set toolbar_actions %}
-       <a href="/parts/new" class="btn btn-primary">+ NEW PART</a>
+       <a href="/parts/new" class="btn" data-variant="primary" data-size="sm">+ NEW PART</a>
    {% endset %}
    {% include 'opalkit/_includes/filter_toolbar.html' %}
 
@@ -33,7 +33,7 @@
     <input
         type="search"
         name="{{ toolbar_search_name|default('search') }}"
-        class="form-input toolbar-search"
+        class="input toolbar-search"
         placeholder="{{ toolbar_search_placeholder|default('Search...') }}"
         hx-get="{{ toolbar_htmx_endpoint }}"
         hx-target="{{ toolbar_htmx_target }}"

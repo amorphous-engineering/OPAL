@@ -21,7 +21,7 @@
         {% endcall %}
 
         <div style="margin-top: var(--space-lg);">
-            <div class="form-label">CONTACT</div>
+            <div class="label">CONTACT</div>
             {% call ok.table() %}
                 {{ ok.detail_row("EMAIL", ok.link(supplier.email, "mailto:" ~ supplier.email) if supplier.email else '-') }}
                 {{ ok.detail_row("PHONE", supplier.phone or '-', mono=true) }}
@@ -31,21 +31,21 @@
 
         {% if supplier.address %}
         <div style="margin-top: var(--space-md);">
-            <div class="form-label">ADDRESS</div>
+            <div class="label">ADDRESS</div>
             <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color); white-space: pre-wrap;">{{ supplier.address }}</div>
         </div>
         {% endif %}
 
         {% if supplier.description %}
         <div style="margin-top: var(--space-md);">
-            <div class="form-label">DESCRIPTION</div>
+            <div class="label">DESCRIPTION</div>
             <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">{{ supplier.description }}</div>
         </div>
         {% endif %}
 
         {% if supplier.notes %}
         <div style="margin-top: var(--space-md);">
-            <div class="form-label">NOTES</div>
+            <div class="label">NOTES</div>
             <div style="padding: var(--space-sm); background: var(--bg-tertiary); border: 1px solid var(--border-color);">{{ supplier.notes }}</div>
         </div>
         {% endif %}
@@ -128,12 +128,12 @@
             <div class="panel-header">ADD CATALOG NUMBER</div>
             <div class="panel-body">
                 <form id="add-catalog-form" onsubmit="addCatalogEntry(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="cat-part-search">PART *</label>
+                    <div role="group" class="field">
+                        <label class="label" for="cat-part-search">PART *</label>
                         <div class="part-search-container">
                             <input type="text"
                                    id="cat-part-search"
-                                   class="form-input part-search-input"
+                                   class="input part-search-input"
                                    placeholder="Search parts..."
                                    autocomplete="off"
                                    hx-get="/parts/search"
@@ -150,18 +150,18 @@
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="cat-vendor-pn">VENDOR PN *</label>
-                        <input type="text" id="cat-vendor-pn" name="vendor_pn" class="form-input mono" required placeholder="e.g. DK-12345">
+                    <div role="group" class="field">
+                        <label class="label" for="cat-vendor-pn">VENDOR PN *</label>
+                        <input type="text" id="cat-vendor-pn" name="vendor_pn" class="input mono" required placeholder="e.g. DK-12345">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">
+                    <div role="group" class="field">
+                        <label class="label">
                             <input type="checkbox" id="cat-preferred" name="is_preferred"> PREFERRED SUPPLIER
                         </label>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="cat-notes">NOTES</label>
-                        <input type="text" id="cat-notes" name="notes" class="form-input">
+                    <div role="group" class="field">
+                        <label class="label" for="cat-notes">NOTES</label>
+                        <input type="text" id="cat-notes" name="notes" class="input">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddCatalog()"') }}

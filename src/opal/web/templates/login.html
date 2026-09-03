@@ -8,8 +8,10 @@
         (function() {
             var theme = localStorage.getItem('opal_theme') || 'dark';
             if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.classList.toggle('dark', theme !== 'light');
         })();
     </script>
+    <link rel="stylesheet" href="{{ static_url('vendor/basecoat/basecoat-lyra.cdn.min.css') }}">
     <link rel="stylesheet" href="{{ static_url('css/main.css') }}">
     <style>
         body {
@@ -79,7 +81,7 @@
         <div class="panel">
             <div class="panel-header">SIGN IN</div>
             <div class="panel-body">
-                <a href="/oidc/login" class="btn btn-primary" style="width: 100%; display: block; text-align: center;">
+                <a href="/oidc/login" class="btn" data-variant="primary" data-size="sm" style="width: 100%; display: block; text-align: center;">
                     SIGN IN WITH {{ oidc_provider_name | upper }}
                 </a>
             </div>
@@ -92,19 +94,19 @@
             <div class="panel-header">{% if oidc_enabled %}PASSWORD{% else %}SIGN IN{% endif %}</div>
             <div class="panel-body">
                 <form method="POST" action="/login">
-                    <div class="form-group">
-                        <label class="form-label" for="username">Username</label>
-                        <input type="text" name="username" id="username" class="form-input mono" required
+                    <div role="group" class="field">
+                        <label class="label" for="username">Username</label>
+                        <input type="text" name="username" id="username" class="input mono" required
                                autocomplete="username webauthn" autocapitalize="none"
                                {% if not oidc_enabled %}autofocus{% endif %}
                                value="{{ username or '' }}">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="password">Password</label>
-                        <input type="password" name="password" id="password" class="form-input" required
+                    <div role="group" class="field">
+                        <label class="label" for="password">Password</label>
+                        <input type="password" name="password" id="password" class="input" required
                                autocomplete="current-password">
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">SIGN IN</button>
+                    <button type="submit" class="btn" data-variant="primary" data-size="sm" style="width: 100%;">SIGN IN</button>
                 </form>
             </div>
         </div>
@@ -113,7 +115,7 @@
         {% if passkeys_enabled %}
         <div id="passkey-block" style="display: none;">
             <div class="login-divider">or</div>
-            <button id="passkey-login" class="btn" style="width: 100%;">SIGN IN WITH PASSKEY</button>
+            <button id="passkey-login" class="btn" data-variant="outline" data-size="sm" style="width: 100%;">SIGN IN WITH PASSKEY</button>
             <div id="passkey-error" class="login-error" style="display: none; margin-top: var(--space-md);"></div>
         </div>
         <script src="{{ static_url('js/webauthn.js') }}"></script>

@@ -38,19 +38,19 @@
         {% if bar_step.exec %}{{ ex.notes_block(bar_step.exec, bar_step.order) }}{% endif %}
         <div class="dockbar-actions">
             {% if bar_step.exec %}
-            <button class="btn btn-sm" onclick='showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})'>ATTACH</button>
+            <button class="btn" data-variant="outline" data-size="xs" onclick='showAttachModal({{ bar_step.exec.id }}, {{ bar_step.number | tojson }})'>ATTACH</button>
             {% endif %}
             {% if actionable %}
-            <button class="btn btn-sm" onclick='showIssueModal({{ bar_step.order }}, {{ bar_step.number | tojson }})'>ISSUE</button>
+            <button class="btn" data-variant="outline" data-size="xs" onclick='showIssueModal({{ bar_step.order }}, {{ bar_step.number | tojson }})'>ISSUE</button>
             {% if menu_skip or menu_consume or menu_redline %}
             <div class="dockbar-overflow">
-                <button class="btn btn-sm" onclick="toggleDockbarMenu(event)" aria-label="More actions">···</button>
+                <button class="btn" data-variant="outline" data-size="xs" onclick="toggleDockbarMenu(event)" aria-label="More actions">···</button>
                 <div class="dockbar-menu" id="dockbar-menu" hidden>
                     {% if menu_skip %}
                     {{ ex.skip_control(bar_step.order, bar_step.title, bar_step.skip_blockers, menu=true) }}
                     {% endif %}
                     {% if menu_consume %}
-                    <button class="btn btn-sm" onclick="hideDockbarMenu(); consumeStepParts({{ bar_step.order }})">CONSUME PARTS</button>
+                    <button class="btn" data-variant="outline" data-size="xs" onclick="hideDockbarMenu(); consumeStepParts({{ bar_step.order }})">CONSUME PARTS</button>
                     {% endif %}
                     {% if menu_redline %}
                     {{ ex.redline_control(bar_step.op_order, bar_step.op_number, bar_step.op_open_ncs, before='hideDockbarMenu(); ') }}
@@ -59,7 +59,7 @@
             </div>
             {% endif %}
             {% if actionable and bs == 'awaiting_signoff' %}
-            <button class="btn btn-sm btn-primary" onclick="signoffStep({{ bar_step.order }})">SIGN OFF</button>
+            <button class="btn" data-variant="primary" data-size="xs" onclick="signoffStep({{ bar_step.order }})">SIGN OFF</button>
             {% elif workable %}
             {# OP rows included: the gate (complete_gate_by_se) carries the
                children blocker, so a parent over open children renders the

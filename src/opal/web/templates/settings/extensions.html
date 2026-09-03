@@ -83,7 +83,7 @@
 {% call ok.panel("INSTALL", margin_top="var(--space-md)") %}
     <form method="post" action="/settings/extensions/install" enctype="multipart/form-data"
           style="display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap;">
-        <input type="file" name="archive" accept=".zip,application/zip" class="form-input" required
+        <input type="file" name="archive" accept=".zip,application/zip" class="input" required
                style="max-width: 360px;">
         {{ ok.btn("INSTALL", variant="primary", type="submit") }}
     </form>

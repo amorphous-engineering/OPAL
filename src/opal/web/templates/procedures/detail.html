@@ -47,17 +47,17 @@
             <div class="panel-body">
                 <form id="add-op-form" onsubmit="addOp(event)">
                     <input type="hidden" id="op-is-contingency" name="is_contingency" value="false">
-                    <div class="form-group">
-                        <label class="form-label" for="op-title">TITLE *</label>
-                        <input type="text" id="op-title" name="title" class="form-input" required>
+                    <div role="group" class="field">
+                        <label class="label" for="op-title">TITLE *</label>
+                        <input type="text" id="op-title" name="title" class="input" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="op-instructions">INSTRUCTIONS (Markdown supported)</label>
-                        <textarea id="op-instructions" name="instructions" class="form-textarea" rows="4"></textarea>
+                    <div role="group" class="field">
+                        <label class="label" for="op-instructions">INSTRUCTIONS (Markdown supported)</label>
+                        <textarea id="op-instructions" name="instructions" class="textarea" rows="4"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="op-duration">EST. DURATION (min)</label>
-                        <input type="number" id="op-duration" name="estimated_duration_minutes" class="form-input" min="1">
+                    <div role="group" class="field">
+                        <label class="label" for="op-duration">EST. DURATION (min)</label>
+                        <input type="number" id="op-duration" name="estimated_duration_minutes" class="input" min="1">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddOp()"') }}
@@ -78,17 +78,17 @@
             <div class="panel-body">
                 <form id="add-step-form" onsubmit="addStep(event)">
                     <input type="hidden" id="step-parent-id" name="parent_step_id" value="">
-                    <div class="form-group">
-                        <label class="form-label" for="step-title">TITLE *</label>
-                        <input type="text" id="step-title" name="title" class="form-input" required>
+                    <div role="group" class="field">
+                        <label class="label" for="step-title">TITLE *</label>
+                        <input type="text" id="step-title" name="title" class="input" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="step-instructions">INSTRUCTIONS (Markdown supported)</label>
-                        <textarea id="step-instructions" name="instructions" class="form-textarea" rows="4"></textarea>
+                    <div role="group" class="field">
+                        <label class="label" for="step-instructions">INSTRUCTIONS (Markdown supported)</label>
+                        <textarea id="step-instructions" name="instructions" class="textarea" rows="4"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="step-duration">EST. DURATION (min)</label>
-                        <input type="number" id="step-duration" name="estimated_duration_minutes" class="form-input" min="1">
+                    <div role="group" class="field">
+                        <label class="label" for="step-duration">EST. DURATION (min)</label>
+                        <input type="number" id="step-duration" name="estimated_duration_minutes" class="input" min="1">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddStep()"') }}
@@ -108,12 +108,12 @@
             <div class="panel-header">ADD PART TO KIT</div>
             <div class="panel-body">
                 <form id="add-kit-form" onsubmit="addKitItem(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="kit-part-search">PART *</label>
+                    <div role="group" class="field">
+                        <label class="label" for="kit-part-search">PART *</label>
                         <div class="part-search-container">
                             <input type="text"
                                    id="kit-part-search"
-                                   class="form-input part-search-input"
+                                   class="input part-search-input"
                                    placeholder="Search parts..."
                                    autocomplete="off"
                                    hx-get="/parts/search"
@@ -130,9 +130,9 @@
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="kit-qty">QUANTITY REQUIRED *</label>
-                        <input type="number" id="kit-qty" name="quantity_required" class="form-input" step="0.0001" min="0.0001" required>
+                    <div role="group" class="field">
+                        <label class="label" for="kit-qty">QUANTITY REQUIRED *</label>
+                        <input type="number" id="kit-qty" name="quantity_required" class="input" step="0.0001" min="0.0001" required>
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddKit()"') }}
@@ -152,12 +152,12 @@
             <div class="panel-header">ADD OUTPUT PART</div>
             <div class="panel-body">
                 <form id="add-output-form" onsubmit="addOutputItem(event)">
-                    <div class="form-group">
-                        <label class="form-label" for="output-part-search">PART *</label>
+                    <div role="group" class="field">
+                        <label class="label" for="output-part-search">PART *</label>
                         <div class="part-search-container">
                             <input type="text"
                                    id="output-part-search"
-                                   class="form-input part-search-input"
+                                   class="input part-search-input"
                                    placeholder="Search parts..."
                                    autocomplete="off"
                                    hx-get="/parts/search"
@@ -174,9 +174,9 @@
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="output-qty">QUANTITY PRODUCED *</label>
-                        <input type="number" id="output-qty" name="quantity_produced" class="form-input" step="0.0001" min="0.0001" value="1" required>
+                    <div role="group" class="field">
+                        <label class="label" for="output-qty">QUANTITY PRODUCED *</label>
+                        <input type="number" id="output-qty" name="quantity_produced" class="input" step="0.0001" min="0.0001" value="1" required>
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddOutput()"') }}
@@ -197,12 +197,12 @@
             <div class="panel-body">
                 <form id="step-part-form" onsubmit="addStepPart(event)">
                     <input type="hidden" id="step-part-step-id" value="">
-                    <div class="form-group">
-                        <label class="form-label" for="step-part-part-search">PART *</label>
+                    <div role="group" class="field">
+                        <label class="label" for="step-part-part-search">PART *</label>
                         <div class="part-search-container">
                             <input type="text"
                                    id="step-part-part-search"
-                                   class="form-input part-search-input"
+                                   class="input part-search-input"
                                    placeholder="Search parts..."
                                    autocomplete="off"
                                    hx-get="/parts/search"
@@ -219,20 +219,20 @@
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="step-part-qty">QUANTITY *</label>
-                        <input type="number" id="step-part-qty" name="quantity_required" class="form-input" step="0.0001" min="0.0001" required>
+                    <div role="group" class="field">
+                        <label class="label" for="step-part-qty">QUANTITY *</label>
+                        <input type="number" id="step-part-qty" name="quantity_required" class="input" step="0.0001" min="0.0001" required>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="step-part-type">USAGE TYPE *</label>
-                        <select id="step-part-type" name="usage_type" class="form-select" required>
+                    <div role="group" class="field">
+                        <label class="label" for="step-part-type">USAGE TYPE *</label>
+                        <select id="step-part-type" name="usage_type" class="select" required>
                             <option value="consume">CONSUME - Part installed/used up</option>
                             <option value="tooling">TOOLING - GSE/fixtures (reusable)</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="step-part-notes">NOTES</label>
-                        <input type="text" id="step-part-notes" name="notes" class="form-input" placeholder="Optional notes">
+                    <div role="group" class="field">
+                        <label class="label" for="step-part-notes">NOTES</label>
+                        <input type="text" id="step-part-notes" name="notes" class="input" placeholder="Optional notes">
                     </div>
                     <div style="display: flex; gap: var(--space-md); justify-content: flex-end;">
                         {{ ok.btn("CANCEL", attrs='onclick="hideAddStepPart()"') }}
@@ -254,18 +254,18 @@
                 <form id="field-form" onsubmit="saveField(event)">
                     <input type="hidden" id="field-step-id" value="">
                     <input type="hidden" id="field-edit-index" value="-1">
-                    <div class="form-group">
-                        <label class="form-label" for="field-name">FIELD NAME *</label>
-                        <input type="text" id="field-name" class="form-input" required placeholder="e.g., torque_value" pattern="[a-z0-9_]+">
-                        <small class="form-help">Lowercase, underscores only (used as key)</small>
+                    <div role="group" class="field">
+                        <label class="label" for="field-name">FIELD NAME *</label>
+                        <input type="text" id="field-name" class="input" required placeholder="e.g., torque_value" pattern="[a-z0-9_]+">
+                        <p class="field-help">Lowercase, underscores only (used as key)</p>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="field-label">DISPLAY LABEL *</label>
-                        <input type="text" id="field-label" class="form-input" required placeholder="e.g., Torque Value">
+                    <div role="group" class="field">
+                        <label class="label" for="field-label">DISPLAY LABEL *</label>
+                        <input type="text" id="field-label" class="input" required placeholder="e.g., Torque Value">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="field-type">TYPE *</label>
-                        <select id="field-type" class="form-select" required onchange="toggleTypeExtras(this.value)">
+                    <div role="group" class="field">
+                        <label class="label" for="field-type">TYPE *</label>
+                        <select id="field-type" class="select" required onchange="toggleTypeExtras(this.value)">
                             <option value="text">Text</option>
                             <option value="number">Number</option>
                             <option value="checkbox">Checkbox</option>
@@ -274,7 +274,7 @@
                             <option value="photo">Photo</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div role="group" class="field">
                         <label style="display: flex; align-items: center; gap: var(--space-sm);">
                             <input type="checkbox" id="field-required">
                             <span>Required</span>
@@ -282,44 +282,44 @@
                     </div>
                     <div id="extras-number" style="display: none;">
                         <div style="display: flex; gap: var(--space-md);">
-                            <div class="form-group" style="flex: 1;">
-                                <label class="form-label" for="field-min">MIN</label>
-                                <input type="number" id="field-min" class="form-input" step="any">
+                            <div role="group" class="field" style="flex: 1;">
+                                <label class="label" for="field-min">MIN</label>
+                                <input type="number" id="field-min" class="input" step="any">
                             </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label class="form-label" for="field-max">MAX</label>
-                                <input type="number" id="field-max" class="form-input" step="any">
+                            <div role="group" class="field" style="flex: 1;">
+                                <label class="label" for="field-max">MAX</label>
+                                <input type="number" id="field-max" class="input" step="any">
                             </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label class="form-label" for="field-unit">UNIT</label>
-                                <input type="text" id="field-unit" class="form-input" placeholder="e.g., Nm">
+                            <div role="group" class="field" style="flex: 1;">
+                                <label class="label" for="field-unit">UNIT</label>
+                                <input type="text" id="field-unit" class="input" placeholder="e.g., Nm">
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="field-step-incr">STEP</label>
-                            <input type="number" id="field-step-incr" class="form-input" step="any" placeholder="e.g., 0.1">
+                        <div role="group" class="field">
+                            <label class="label" for="field-step-incr">STEP</label>
+                            <input type="number" id="field-step-incr" class="input" step="any" placeholder="e.g., 0.1">
                         </div>
                     </div>
                     <div id="extras-text" style="display: none;">
-                        <div class="form-group">
-                            <label class="form-label" for="field-placeholder">PLACEHOLDER</label>
-                            <input type="text" id="field-placeholder" class="form-input">
+                        <div role="group" class="field">
+                            <label class="label" for="field-placeholder">PLACEHOLDER</label>
+                            <input type="text" id="field-placeholder" class="input">
                         </div>
                     </div>
                     <div id="extras-select" style="display: none;">
-                        <div class="form-group">
-                            <label class="form-label" for="field-options">OPTIONS (one per line) *</label>
-                            <textarea id="field-options" class="form-textarea" rows="4" placeholder="Aluminum&#10;Steel&#10;Titanium"></textarea>
+                        <div role="group" class="field">
+                            <label class="label" for="field-options">OPTIONS (one per line) *</label>
+                            <textarea id="field-options" class="textarea" rows="4" placeholder="Aluminum&#10;Steel&#10;Titanium"></textarea>
                         </div>
                     </div>
                     <div id="extras-textarea" style="display: none;">
-                        <div class="form-group">
-                            <label class="form-label" for="field-rows">ROWS</label>
-                            <input type="number" id="field-rows" class="form-input" min="2" max="20" value="3">
+                        <div role="group" class="field">
+                            <label class="label" for="field-rows">ROWS</label>
+                            <input type="number" id="field-rows" class="input" min="2" max="20" value="3">
                         </div>
                     </div>
                     <div id="extras-photo" style="display: none;">
-                        <div class="form-group">
+                        <div role="group" class="field">
                             <label style="display: flex; align-items: center; gap: var(--space-sm);">
                                 <input type="checkbox" id="field-multiple">
                                 <span>Allow multiple photos</span>
@@ -651,7 +651,7 @@ function renderStepSchema(stepId) {
     }
     let html = '<table class="data-table"><thead><tr><th>NAME</th><th>LABEL</th><th style="width:80px;">TYPE</th><th style="width:60px;">REQ</th><th style="width:100px;"></th></tr></thead><tbody>';
     fields.forEach((f, i) => {
-        html += `<tr><td class="mono">${escapeHtml(f.name)}</td><td>${escapeHtml(f.label)}</td><td>${escapeHtml(f.type)}</td><td>${f.required ? 'YES' : '-'}</td><td style="display:flex;gap:var(--space-xs);"><button type="button" class="btn btn-sm" onclick="editField(${stepId}, ${i})">EDIT</button><button type="button" class="btn btn-sm" style="color:var(--accent-red);" onclick="deleteField(${stepId}, ${i})">X</button></td></tr>`;
+        html += `<tr><td class="mono">${escapeHtml(f.name)}</td><td>${escapeHtml(f.label)}</td><td>${escapeHtml(f.type)}</td><td>${f.required ? 'YES' : '-'}</td><td style="display:flex;gap:var(--space-xs);"><button type="button" class="btn" data-variant="outline" data-size="xs" onclick="editField(${stepId}, ${i})">EDIT</button><button type="button" class="btn" data-variant="outline" data-size="xs" style="color:var(--accent-red);" onclick="deleteField(${stepId}, ${i})">X</button></td></tr>`;
     });
     html += '</tbody></table>';
     container.innerHTML = html;

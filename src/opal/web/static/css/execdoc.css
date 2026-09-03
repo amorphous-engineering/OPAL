@@ -572,7 +572,7 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 }
 
 .bar-field { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
-.bar-field .form-input, .bar-field .form-select { padding: 2px var(--space-xs); }
+.bar-field .input, .bar-field .select { padding: 2px var(--space-xs); }
 .bar-field-label { font-size: 0.65rem; color: var(--text-secondary); }
 .bar-check { display: flex; align-items: center; gap: var(--space-xs); font-size: 0.75rem; }
 
@@ -728,7 +728,7 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
     .dockbar { gap: var(--space-sm); }
     .dockbar-fields { flex-basis: 100%; order: 2; }
     .bar-field { flex: 1; }
-    .bar-field .form-input, .bar-field .form-select, .bar-field textarea {
+    .bar-field .input, .bar-field .select, .bar-field textarea {
         font-size: 1rem;
         padding: var(--space-xs) var(--space-sm);
     }

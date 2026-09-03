@@ -27,7 +27,7 @@
         {% endcall %}
 
         <div style="margin-top: var(--space-lg);">
-            <div class="form-label">PRESENCE</div>
+            <div class="label">PRESENCE</div>
             {% call ok.table() %}
                 {{ ok.detail_row("LAST SEEN", ok.timestamp(user.last_seen_at)) }}
                 {{ ok.detail_row("ACTIVITY", user.current_activity or '-', mono=true) }}
@@ -76,11 +76,11 @@ function updateThemeButtons() {
     var darkBtn = document.getElementById('theme-btn-dark');
     var lightBtn = document.getElementById('theme-btn-light');
     if (theme === 'dark') {
-        darkBtn.classList.add('btn-primary');
-        lightBtn.classList.remove('btn-primary');
+        darkBtn.dataset.variant = 'primary';
+        lightBtn.dataset.variant = 'outline';
     } else {
-        lightBtn.classList.add('btn-primary');
-        darkBtn.classList.remove('btn-primary');
+        lightBtn.dataset.variant = 'primary';
+        darkBtn.dataset.variant = 'outline';
     }
 }
 document.addEventListener('DOMContentLoaded', updateThemeButtons);
@@ -91,17 +91,17 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
     <div class="security-section">
         <div class="security-heading mono">CHANGE PASSWORD</div>
         <form id="password-form" onsubmit="changePassword(event)" style="max-width: 420px;">
-            <div class="form-group">
-                <label class="form-label" for="current-password">CURRENT PASSWORD</label>
-                <input type="password" id="current-password" class="form-input" autocomplete="current-password">
+            <div role="group" class="field">
+                <label class="label" for="current-password">CURRENT PASSWORD</label>
+                <input type="password" id="current-password" class="input" autocomplete="current-password">
             </div>
-            <div class="form-group">
-                <label class="form-label" for="new-password">NEW PASSWORD</label>
-                <input type="password" id="new-password" class="form-input" minlength="10" required autocomplete="new-password">
+            <div role="group" class="field">
+                <label class="label" for="new-password">NEW PASSWORD</label>
+                <input type="password" id="new-password" class="input" minlength="10" required autocomplete="new-password">
             </div>
-            <div class="form-group">
-                <label class="form-label" for="new-password-confirm">CONFIRM NEW PASSWORD</label>
-                <input type="password" id="new-password-confirm" class="form-input" minlength="10" required autocomplete="new-password">
+            <div role="group" class="field">
+                <label class="label" for="new-password-confirm">CONFIRM NEW PASSWORD</label>
+                <input type="password" id="new-password-confirm" class="input" minlength="10" required autocomplete="new-password">
             </div>
             <div id="password-result" class="mono" style="font-size: 0.75rem; margin-bottom: var(--space-sm); display: none;"></div>
             {{ ok.btn("CHANGE PASSWORD", variant="primary", type="submit") }}
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
         </div>
         <table class="data-table" id="passkey-table" style="margin-bottom: var(--space-sm);"></table>
         <div style="display: flex; gap: var(--space-sm); align-items: center;">
-            <input type="text" id="passkey-name" class="form-input" placeholder="Label, e.g. 'shop laptop'" style="max-width: 240px;">
+            <input type="text" id="passkey-name" class="input" placeholder="Label, e.g. 'shop laptop'" style="max-width: 240px;">
             {{ ok.btn("ADD PASSKEY", attrs='onclick="addPasskey()"') }}
         </div>
         <div id="passkey-result" class="mono" style="font-size: 0.75rem; margin-top: var(--space-xs); display: none;"></div>
@@ -135,8 +135,8 @@ document.addEventListener('DOMContentLoaded', updateThemeButtons);
         <table class="data-table" id="token-table" style="margin-bottom: var(--space-sm);"></table>
         <div id="new-token-box" class="mono" style="display: none; font-size: 0.8rem; margin-bottom: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--border-color); word-break: break-all;"></div>
         <div style="display: flex; gap: var(--space-sm); align-items: center;">
-            <input type="text" id="token-name" class="form-input" placeholder="Label, e.g. 'workshop TUI'" style="max-width: 240px;">
-            <input type="number" id="token-ttl" class="form-input" placeholder="Expires (days)" min="1" max="3650" style="max-width: 140px;">
+            <input type="text" id="token-name" class="input" placeholder="Label, e.g. 'workshop TUI'" style="max-width: 240px;">
+            <input type="number" id="token-ttl" class="input" placeholder="Expires (days)" min="1" max="3650" style="max-width: 140px;">
             {{ ok.btn("CREATE TOKEN", attrs='onclick="createToken()"') }}
         </div>
     </div>
@@ -214,7 +214,7 @@ async function loadPasskeys() {
     renderRows('passkey-table', ['NAME', 'CREATED', 'LAST USED', ''], rows.map(function (p) {
         return '<td>' + esc(p.name) + '</td><td class="mono">' + esc(p.created_at.slice(0, 10)) + '</td>' +
             '<td class="mono">' + esc(p.last_used_at ? p.last_used_at.slice(0, 10) : '-') + '</td>' +
-            '<td><button class="btn btn-sm btn-danger" onclick="removePasskey(' + p.id + ')">REMOVE</button></td>';
+            '<td><button class="btn" data-variant="destructive" data-size="xs" onclick="removePasskey(' + p.id + ')">REMOVE</button></td>';
     }));
 }
 
@@ -242,7 +242,7 @@ async function loadTokens() {
         return '<td>' + esc(t.name) + '</td><td class="mono">' + esc(t.created_at.slice(0, 10)) + '</td>' +
             '<td class="mono">' + esc(t.last_used_at ? t.last_used_at.slice(0, 10) : '-') + '</td>' +
             '<td class="mono">' + esc(t.expires_at ? t.expires_at.slice(0, 10) : 'never') + '</td>' +
-            '<td><button class="btn btn-sm btn-danger" onclick="revokeToken(' + t.id + ')">REVOKE</button></td>';
+            '<td><button class="btn" data-variant="destructive" data-size="xs" onclick="revokeToken(' + t.id + ')">REVOKE</button></td>';
     }));
 }
 
@@ -275,7 +275,7 @@ async function loadSessions() {
             '<td class="mono">' + esc(s.last_seen_at ? s.last_seen_at.slice(0, 16).replace('T', ' ') : '-') + '</td>' +
             '<td class="mono" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">' + esc(s.user_agent || '-') + '</td>' +
             '<td class="mono">' + esc(s.ip_address || '-') + '</td>' +
-            '<td>' + (s.current ? '' : '<button class="btn btn-sm btn-danger" onclick="revokeSession(' + s.id + ')">REVOKE</button>') + '</td>';
+            '<td>' + (s.current ? '' : '<button class="btn" data-variant="destructive" data-size="xs" onclick="revokeSession(' + s.id + ')">REVOKE</button>') + '</td>';
     }));
 }
 

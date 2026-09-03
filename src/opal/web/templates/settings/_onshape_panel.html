@@ -18,15 +18,15 @@
 
 {% if onshape_enabled %}
 {% set onshape_actions %}
-    {% if is_admin %}<a class="btn" href="/settings/onshape/configure">EDIT</a>{% endif %}
-    <button class="btn"
+    {% if is_admin %}<a class="btn" data-variant="outline" data-size="sm" href="/settings/onshape/configure">EDIT</a>{% endif %}
+    <button class="btn" data-variant="outline" data-size="sm"
             hx-post="/settings/onshape/sync/pull"
             hx-target="#onshape-sync-result"
             hx-indicator="#onshape-pull-spinner">
         PULL
         <span id="onshape-pull-spinner" class="htmx-indicator" style="margin-left: 4px;">...</span>
     </button>
-    <button class="btn"
+    <button class="btn" data-variant="outline" data-size="sm"
             hx-post="/settings/onshape/sync/push"
             hx-target="#onshape-sync-result"
             hx-indicator="#onshape-push-spinner">
@@ -41,7 +41,7 @@
     {% endcall %}
 
     <div style="margin-top: var(--space-lg);">
-        <div class="form-label">REGISTERED DOCUMENTS</div>
+        <div class="label">REGISTERED DOCUMENTS</div>
         {% set onshape_doc_error = None %}
         {% set onshape_doc_success = None %}
         {% include "settings/onshape_documents.html" %}
@@ -50,7 +50,7 @@
     <div id="onshape-sync-result" style="margin-top: var(--space-md);"></div>
 
     <div style="margin-top: var(--space-lg);">
-        <div class="form-label">RECENT SYNC LOG</div>
+        <div class="label">RECENT SYNC LOG</div>
         <div hx-get="/settings/onshape/sync-log" hx-trigger="load" id="onshape-sync-log">
             <span class="text-muted">Loading...</span>
         </div>
@@ -59,7 +59,7 @@
 
 {% else %}
 {% set onshape_actions %}
-    {% if is_admin %}<a class="btn btn-primary" href="/settings/onshape/configure">CONFIGURE</a>{% endif %}
+    {% if is_admin %}<a class="btn" data-variant="primary" data-size="sm" href="/settings/onshape/configure">CONFIGURE</a>{% endif %}
 {% endset %}
 {% call ok.panel("ONSHAPE INTEGRATION", actions=onshape_actions, margin_top="var(--space-md)") %}
     {% call ok.table() %}

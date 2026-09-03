@@ -12,9 +12,9 @@
     </button>
     <div class="tree-ghost-editor" style="display: none;"
          data-parent-id="{{ parent_id }}" data-category="{{ parent_category or '' }}" data-level="{{ child_level }}">
-        <input type="text" class="form-input tree-ghost-title" placeholder="Title"
+        <input type="text" class="input tree-ghost-title" placeholder="Title"
                onkeydown="ghostKeydown(event, this)">
-        <input type="text" class="form-input mono tree-ghost-statement"
+        <input type="text" class="input mono tree-ghost-statement"
                placeholder="The <subject> shall <one thought>"
                onkeydown="ghostKeydown(event, this)">
         <span class="text-muted mono tree-ghost-hint">enter create · esc cancel</span>

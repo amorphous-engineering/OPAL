@@ -13,25 +13,25 @@
             {{ ok.field("title", "TITLE", required=true) }}
 
             <div style="display: flex; gap: var(--space-md);">
-                <div class="form-group" style="flex: 1;">
-                    <label class="form-label" for="issue-type">TYPE</label>
-                    <select id="issue-type" name="issue_type" class="form-select" onchange="toggleTypeFields()">
+                <div role="group" class="field" style="flex: 1;">
+                    <label class="label" for="issue-type">TYPE</label>
+                    <select id="issue-type" name="issue_type" class="select" onchange="toggleTypeFields()">
                         {% for t in types %}
                         <option value="{{ t }}" {% if t == 'task' %}selected{% endif %}>{{ t | upper | replace('_', ' ') }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group" style="flex: 1;">
-                    <label class="form-label" for="priority">PRIORITY</label>
-                    <select id="priority" name="priority" class="form-select">
+                <div role="group" class="field" style="flex: 1;">
+                    <label class="label" for="priority">PRIORITY</label>
+                    <select id="priority" name="priority" class="select">
                         {% for p in priorities %}
                         <option value="{{ p }}" {% if p == 'medium' %}selected{% endif %}>{{ p | upper }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group" style="flex: 1;">
-                    <label class="form-label" for="containment">CONTAINMENT</label>
-                    <select id="containment" name="containment" class="form-select">
+                <div role="group" class="field" style="flex: 1;">
+                    <label class="label" for="containment">CONTAINMENT</label>
+                    <select id="containment" name="containment" class="select">
                         {% for c in containments %}
                         <option value="{{ c }}" {% if c == 'advisory' %}selected{% endif %}>{{ c | upper }}</option>
                         {% endfor %}
@@ -43,46 +43,46 @@
 
             <!-- NC fields -->
             <div id="nc-fields" style="display: none; border: 1px solid var(--border-color); padding: var(--space-md); margin-bottom: var(--space-md);">
-                <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">NON-CONFORMANCE DETAILS</div>
-                <div class="form-group">
-                    <label class="form-label" for="should-be">SHOULD BE</label>
-                    <textarea id="should-be" name="should_be" class="form-textarea" rows="2" placeholder="Expected condition or specification..."></textarea>
+                <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">NON-CONFORMANCE DETAILS</div>
+                <div role="group" class="field">
+                    <label class="label" for="should-be">SHOULD BE</label>
+                    <textarea id="should-be" name="should_be" class="textarea" rows="2" placeholder="Expected condition or specification..."></textarea>
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="is-condition">IS</label>
-                    <textarea id="is-condition" name="actual" class="form-textarea" rows="2" placeholder="Actual observed condition..."></textarea>
+                <div role="group" class="field">
+                    <label class="label" for="is-condition">IS</label>
+                    <textarea id="is-condition" name="actual" class="textarea" rows="2" placeholder="Actual observed condition..."></textarea>
                 </div>
             </div>
 
             <!-- Bug fields -->
             <div id="bug-fields" style="display: none; border: 1px solid var(--border-color); padding: var(--space-md); margin-bottom: var(--space-md);">
-                <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">BUG DETAILS</div>
-                <div class="form-group">
-                    <label class="form-label" for="steps-to-reproduce">STEPS TO REPRODUCE</label>
-                    <textarea id="steps-to-reproduce" name="steps_to_reproduce" class="form-textarea" rows="3" placeholder="1. ..."></textarea>
+                <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">BUG DETAILS</div>
+                <div role="group" class="field">
+                    <label class="label" for="steps-to-reproduce">STEPS TO REPRODUCE</label>
+                    <textarea id="steps-to-reproduce" name="steps_to_reproduce" class="textarea" rows="3" placeholder="1. ..."></textarea>
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="expected-behavior">EXPECTED BEHAVIOR</label>
-                    <textarea id="expected-behavior" name="expected_behavior" class="form-textarea" rows="2"></textarea>
+                <div role="group" class="field">
+                    <label class="label" for="expected-behavior">EXPECTED BEHAVIOR</label>
+                    <textarea id="expected-behavior" name="expected_behavior" class="textarea" rows="2"></textarea>
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="actual-behavior">ACTUAL BEHAVIOR</label>
-                    <textarea id="actual-behavior" name="actual_behavior" class="form-textarea" rows="2"></textarea>
+                <div role="group" class="field">
+                    <label class="label" for="actual-behavior">ACTUAL BEHAVIOR</label>
+                    <textarea id="actual-behavior" name="actual_behavior" class="textarea" rows="2"></textarea>
                 </div>
             </div>
 
             <!-- Improvement fields -->
             <div id="improvement-fields" style="display: none; border: 1px solid var(--border-color); padding: var(--space-md); margin-bottom: var(--space-md);">
-                <div class="form-label" style="margin-bottom: var(--space-sm); font-weight: 600;">IMPROVEMENT DETAILS</div>
-                <div class="form-group">
-                    <label class="form-label" for="expected-benefit">EXPECTED BENEFIT</label>
-                    <textarea id="expected-benefit" name="expected_benefit" class="form-textarea" rows="2" placeholder="What value does this improvement provide?"></textarea>
+                <div class="label" style="margin-bottom: var(--space-sm); font-weight: 600;">IMPROVEMENT DETAILS</div>
+                <div role="group" class="field">
+                    <label class="label" for="expected-benefit">EXPECTED BENEFIT</label>
+                    <textarea id="expected-benefit" name="expected_benefit" class="textarea" rows="2" placeholder="What value does this improvement provide?"></textarea>
                 </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label" for="assigned-to">ASSIGN TO</label>
-                <select id="assigned-to" name="assigned_to_id" class="form-select">
+            <div role="group" class="field">
+                <label class="label" for="assigned-to">ASSIGN TO</label>
+                <select id="assigned-to" name="assigned_to_id" class="select">
                     <option value="">(unassigned)</option>
                     {% for u in users %}
                     <option value="{{ u.id }}">{{ u.name or u.email }}</option>
@@ -90,13 +90,13 @@
                 </select>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">LINK TO (optional)</label>
+            <div role="group" class="field">
+                <label class="label">LINK TO (optional)</label>
                 <div style="display: flex; gap: var(--space-md);">
                     <div class="part-search-container" style="flex: 1;">
                         <input type="text"
                                id="issue-part-search"
-                               class="form-input part-search-input"
+                               class="input part-search-input"
                                placeholder="No part... (search to link)"
                                autocomplete="off"
                                hx-get="/parts/search"
@@ -112,13 +112,13 @@
                             <span class="part-search-clear" onclick="clearPartSelection('issue')">&times;</span>
                         </div>
                     </div>
-                    <select id="procedure-id" name="procedure_id" class="form-select" style="flex: 1;">
+                    <select id="procedure-id" name="procedure_id" class="select" style="flex: 1;">
                         <option value="">No procedure...</option>
                         {% for p in procedures %}
                         <option value="{{ p.id }}">{{ p.name }}</option>
                         {% endfor %}
                     </select>
-                    <select id="execution-select" name="procedure_instance_id" class="form-select" style="flex: 1;">
+                    <select id="execution-select" name="procedure_instance_id" class="select" style="flex: 1;">
                         <option value="">No execution...</option>
                         {% for inst in instances %}
                         <option value="{{ inst.id }}" {% if procedure_instance_id == inst.id %}selected{% endif %}>{{ inst.work_order_number or 'WO #' ~ inst.id }}</option>
