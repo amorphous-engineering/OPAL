@@ -97,7 +97,7 @@
     <input type="number" id="rs-qty" class="input mono" style="width: 90px;" placeholder="QTY" step="any" min="0">
     <input type="text" id="rs-location" class="input mono" style="width: 130px;" placeholder="LOCATION" onkeydown="if(event.key==='Enter')submitReceiveStock()">
     <input type="text" id="rs-lot" class="input mono" style="width: 140px;" placeholder="LOT" onkeydown="if(event.key==='Enter')submitReceiveStock()">
-    {{ ok.btn("RECEIVE", variant="primary", size="sm", attrs='onclick="submitReceiveStock()"') }}
+    {{ ok.btn("RECEIVE", variant="success", size="sm", attrs='onclick="submitReceiveStock()"') }}
     <a href="/inventory/new?part_id={{ part.id }}" class="ledger-add">FULL RECORD</a>
     <span id="rs-error" class="text-red" style="display: none;"></span>
 </div>

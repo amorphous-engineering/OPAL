@@ -139,7 +139,7 @@
                     <label class="label" for="finalize-location">STORAGE LOCATION *</label>
                     <input type="text" id="finalize-location" class="input" placeholder="e.g., SHELF-A1, CLEANROOM-2">
                 </div>
-                <button class="btn" data-variant="primary" data-size="sm" onclick="finalizeProduction()">FINALIZE PRODUCTION</button>
+                <button class="btn" data-variant="primary" data-state="ok" data-size="sm" onclick="finalizeProduction()">FINALIZE PRODUCTION</button>
             </div>
             <div id="finalize-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
         </div>
@@ -167,7 +167,7 @@
         </table>
         {% if inst_status in ['in_work', 'completed'] %}
         <div style="display: flex; justify-content: flex-end; margin-top: var(--space-md);">
-            <button class="btn" data-variant="primary" data-size="sm" onclick="produceOutput()">RECORD OUTPUT</button>
+            <button class="btn" data-variant="primary" data-state="ok" data-size="sm" onclick="produceOutput()">RECORD OUTPUT</button>
         </div>
         <div id="produce-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>
         {% elif inst_status == 'cut' %}

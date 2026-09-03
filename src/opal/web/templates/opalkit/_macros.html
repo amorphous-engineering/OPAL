@@ -10,7 +10,8 @@
           {{ ok.btn("Edit", href="/parts/1/edit") }}
           {{ ok.btn("Delete", variant="danger", attrs='onclick="confirmDelete()"') }}
 
-   Variants: default (outline), primary (filled orange), danger (destructive), ghost.
+   Variants: default (outline), primary (blue), success (green: a commit moment),
+   danger (red), ghost.
    Sizes: md -> Basecoat "sm" (28px), sm -> Basecoat "xs" (24px). OPAL's pitch is one
    step tighter than Lyra's default, so the names shift down one size.
 
@@ -20,12 +21,13 @@
    Pass dynamic data through escaped attributes or a data-* value instead.
 #}
 {% macro btn(text, href=none, variant="default", size="md", type="button", attrs="") %}
-{%- set bc_variant = {"default": "outline", "primary": "primary", "danger": "destructive", "ghost": "ghost"}.get(variant, "outline") -%}
+{%- set bc_variant = {"default": "outline", "primary": "primary", "success": "primary", "danger": "destructive", "ghost": "ghost"}.get(variant, "outline") -%}
+{%- set state_attr = ' data-state="ok"' if variant == "success" else '' -%}
 {%- set bc_size = "xs" if size == "sm" else "sm" -%}
 {%- if href -%}
-<a href="{{ href }}" class="btn" data-variant="{{ bc_variant }}" data-size="{{ bc_size }}" {{ attrs|safe }}>{{ text }}</a>
+<a href="{{ href }}" class="btn" data-variant="{{ bc_variant }}"{{ state_attr|safe }} data-size="{{ bc_size }}" {{ attrs|safe }}>{{ text }}</a>
 {%- else -%}
-<button type="{{ type }}" class="btn" data-variant="{{ bc_variant }}" data-size="{{ bc_size }}" {{ attrs|safe }}>{{ text }}</button>
+<button type="{{ type }}" class="btn" data-variant="{{ bc_variant }}"{{ state_attr|safe }} data-size="{{ bc_size }}" {{ attrs|safe }}>{{ text }}</button>
 {%- endif -%}
 {% endmacro %}
 

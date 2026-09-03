@@ -9,9 +9,11 @@
 
 {% block content %}
 {% set actions %}
-<a href="/requirements" class="btn" data-variant="outline" data-size="xs" style="border-color: var(--accent-green, #4ade80);">TREE</a>
+<div class="button-group" role="group" aria-label="View">
+<a href="/requirements" class="btn" data-variant="primary" data-size="xs" aria-current="page">TREE</a>
 <a href="/requirements/list" class="btn" data-variant="outline" data-size="xs">LIST</a>
 <a href="/requirements/baselines" class="btn" data-variant="outline" data-size="xs">BASELINES</a>
+</div>
 {% if queue_count %}
 <a href="/requirements/queue" class="btn" data-variant="outline" data-size="xs" style="color: var(--accent-green);">BASELINE QUEUE · {{ queue_count }}</a>
 {% endif %}

@@ -424,18 +424,21 @@
     margin-bottom: var(--space-md);
 }
 
-.step-actions {
-    display: flex;
-    gap: var(--space-xs);
-    justify-content: flex-end;
-}
-/* Gated control (F4/F5): the disabled button with its reason beside it —
-   inert + reason, never an absent control. */
-.gated-control {
+/* The action rows are Basecoat button groups, right-aligned. A gated
+   control's reason (F4/F5: inert + reason, never an absent control) is a
+   label segment attached to its disabled button. */
+.step-actions.button-group {
     display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs);
-    font-size: 0.75rem;
+    margin-left: auto;
+}
+.step-controls { display: flex; flex-direction: column; }
+.button-group > .gate-reason {
+    font-size: 0.7rem;
+    padding-inline: var(--space-sm);
+    border: 1px solid var(--border);
+    border-inline-start-width: 0;
+    background: var(--muted);
+    white-space: nowrap;
 }
 .step-kit-actions { display: flex; justify-content: flex-end; margin-top: var(--space-xs); }
 .step-kit-consumed { margin-top: var(--space-xs); font-size: 0.75rem; }
@@ -559,11 +562,9 @@ body.dockbar-off.has-dockbar .main { padding-bottom: var(--space-md); }
 .bar-field-label { font-size: 0.65rem; color: var(--text-secondary); }
 .bar-check { display: flex; align-items: center; gap: var(--space-xs); font-size: 0.75rem; }
 
-.dockbar-actions {
-    display: flex;
-    gap: var(--space-xs);
-    align-items: center;
+.dockbar-actions.button-group {
     margin-left: auto;
+    align-self: flex-end;
 }
 
 /* The overflow is a Basecoat dropdown-menu opening upward. */

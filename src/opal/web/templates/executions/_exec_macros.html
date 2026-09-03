@@ -38,7 +38,7 @@
 {%- set mine = my_cursor_order is not none and my_cursor_order == order -%}
 {%- set gates = blockers | selectattr('kind', 'in', ['sequence', 'dependency', 'redline', 'children']) | list -%}
 {%- if gates and not mine %}
-<span class="gated-control"><button type="button" class="btn" data-variant="outline" data-size="xs" disabled>CLAIM</button>{{ gate_reason(gates) }}</span>
+<button type="button" class="btn" data-variant="outline" data-size="xs" disabled>CLAIM</button>{{ gate_reason(gates) }}
 {%- else %}
 <button type="button" class="btn" data-claim="{{ order }}" data-variant="{{ 'primary' if mine else 'outline' }}" data-size="xs" aria-pressed="{{ 'true' if mine else 'false' }}" onclick="toggleClaim({{ order }})" title="{{ 'Release this step' if mine else 'Mark this step as where you are working' }}">{{ 'CLAIMED' if mine else 'CLAIM' }}</button>
 {%- endif %}
@@ -57,9 +57,9 @@
    re-derive gating here. #}
 {% macro complete_control(order, blockers) %}
 {%- if blockers %}
-<span class="gated-control"><button class="btn" data-variant="primary" data-size="xs" disabled>COMPLETE</button>{{ gate_reason(blockers) }}</span>
+<button class="btn" data-variant="primary" data-state="ok" data-size="xs" disabled>COMPLETE</button>{{ gate_reason(blockers) }}
 {%- else %}
-<button class="btn" data-variant="primary" data-size="xs" onclick="completeStep({{ order }}, this)">COMPLETE</button>
+<button class="btn" data-variant="primary" data-state="ok" data-size="xs" onclick="completeStep({{ order }}, this)">COMPLETE</button>
 {%- endif %}
 {% endmacro %}
 
@@ -86,7 +86,7 @@
 {%- if menu %}
 <div role="menuitem" aria-disabled="true">SKIP {{ gate_reason(blockers) }}</div>
 {%- else %}
-<span class="gated-control"><button class="btn" data-variant="outline" data-size="xs" disabled>SKIP</button>{{ gate_reason(blockers) }}</span>
+<button class="btn" data-variant="outline" data-size="xs" disabled>SKIP</button>{{ gate_reason(blockers) }}
 {%- endif %}
 {%- elif menu %}
 <div role="menuitem" onclick='showSkipModal({{ order }}, {{ title | tojson }})'>SKIP</div>

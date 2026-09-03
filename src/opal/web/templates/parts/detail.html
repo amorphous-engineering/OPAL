@@ -28,7 +28,7 @@
             {{ ok.btn("PRINT LABEL", size="sm", attrs='onclick="window.open(\'/label?type=part&id=' ~ part.id ~ '\', \'_blank\', \'width=600,height=350\')"') }}
             {{ ok.btn("EDIT", size="sm", attrs='onclick="openPartForm()"') }}
             {% if is_draft %}
-            {{ ok.btn("ACTIVATE", variant="primary", size="sm", attrs='onclick="openActivateConfirm()"') }}
+            {{ ok.btn("ACTIVATE", variant="success", size="sm", attrs='onclick="openActivateConfirm()"') }}
             {% if not part_is_referenced %}
             {{ ok.confirm_btn("DELETE", message="Deletes this draft. " ~ part.internal_pn ~ " is retired permanently and never reissued.", action="/api/parts/" ~ part.id, method="DELETE", redirect="/parts", size="sm") }}
             {% endif %}
@@ -54,7 +54,7 @@
         signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
         · <span id="activate-sign-time"></span>
     </div>
-    <button type="button" class="btn" data-variant="primary" data-size="sm" onclick="commitActivate()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+    <button type="button" class="btn" data-variant="primary" data-state="ok" data-size="sm" onclick="commitActivate()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
     <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="document.getElementById('activate-confirm').style.display='none'">ABORT</button>
 </div>
 {% endif %}

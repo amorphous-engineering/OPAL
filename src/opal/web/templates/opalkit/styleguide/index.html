@@ -69,6 +69,7 @@
         <div style="display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center; margin-bottom: var(--space-md);">
             {{ ok.btn("DEFAULT") }}
             {{ ok.btn("PRIMARY", variant="primary") }}
+            {{ ok.btn("SUCCESS", variant="success") }}
             {{ ok.btn("DANGER", variant="danger") }}
             {{ ok.btn("GHOST", variant="ghost") }}
             {{ ok.btn("SMALL", size="sm") }}
@@ -77,10 +78,14 @@
             {{ ok.btn("DISABLED", attrs="disabled") }}
         </div>
         <pre class="mono" style="margin: 0 0 var(--space-md); padding: var(--space-sm); background: var(--muted); font-size: 0.75rem;">{% raw %}{{ ok.btn("DEFAULT") }}                      → class="btn" data-variant="outline"
-{{ ok.btn("PRIMARY", variant="primary") }}  → class="btn" data-variant="primary"
+{{ ok.btn("PRIMARY", variant="primary") }}  → class="btn" data-variant="primary"            (blue: the action)
+{{ ok.btn("SUCCESS", variant="success") }}  → class="btn" data-variant="primary" data-state="ok"  (green: a commit moment)
 {{ ok.btn("DANGER", variant="danger") }}    → class="btn" data-variant="destructive"
 {{ ok.btn("GHOST", variant="ghost") }}      → class="btn" data-variant="ghost"
 {{ ok.btn("SMALL", size="sm") }}            → data-size="sm"{% endraw %}</pre>
+        <div class="button-group" style="margin-bottom: var(--space-md);">
+            {{ ok.btn("CLAIM") }}{{ ok.btn("ATTACH") }}{{ ok.btn("ISSUE") }}<button class="btn" data-variant="primary" data-state="ok" data-size="sm" disabled>COMPLETE</button><span class="mono text-yellow gate-reason">held by IT-00001</span>
+        </div>
         <div style="display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center;">
             <span class="text-muted mono" style="width: 100%;">Raw Basecoat, every variant and size:</span>
             <button type="button" class="btn" data-variant="primary">Primary</button>

@@ -373,6 +373,27 @@ select option {
     letter-spacing: 0.05em;
 }
 
+/* Button palette: default (outline/ghost), blue (primary action), green
+   (commit moment: data-state="ok"), red (destructive). Orange is the
+   identifier/accent colour and never a button. */
+.btn[data-variant="primary"] {
+    background: var(--accent-blue);
+    color: #fff;
+}
+.btn[data-variant="primary"]:hover {
+    background: color-mix(in srgb, var(--accent-blue) 85%, #000);
+}
+.btn[data-variant="primary"][data-state="ok"] {
+    background: var(--accent-green);
+    color: #0a0a0a;
+}
+.btn[data-variant="primary"][data-state="ok"]:hover {
+    background: color-mix(in srgb, var(--accent-green) 85%, #000);
+}
+.btn[data-variant="destructive"] {
+    color: #fff;
+}
+
 /* Disabled buttons gray out regardless of variant — the gate must be
    visible, not just functional. */
 .btn:disabled,
@@ -655,8 +676,8 @@ select.select,
     color: var(--muted-foreground);
 }
 .header-nav .dropdown-menu > .btn.active {
-    color: var(--primary);
-    border-color: var(--primary);
+    color: var(--foreground);
+    border-color: var(--border);
 }
 .dropdown-menu [role="menu"] {
     font-family: var(--font-mono);

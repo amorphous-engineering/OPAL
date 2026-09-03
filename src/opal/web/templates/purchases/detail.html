@@ -67,7 +67,7 @@
 
             <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm); flex-wrap: wrap;">
                 {% if purchase.status|status_value == 'draft' %}
-                {{ ok.btn("PLACE ORDER", variant="primary", attrs='onclick="placeOrder()"') }}
+                {{ ok.btn("PLACE ORDER", variant="success", attrs='onclick="placeOrder()"') }}
                 {{ ok.btn("CANCEL PO", variant="danger", attrs='onclick="cancelPO()"') }}
                 {% elif purchase.status|status_value in ['ordered', 'partial'] %}
                 {{ ok.btn("CANCEL PO", variant="danger", attrs='onclick="cancelPO()"') }}
@@ -147,7 +147,7 @@
             </datalist>
             <div style="display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-md);">
                 {{ ok.btn("FILL ALL", attrs='onclick="fillAllOutstanding()"') }}
-                {{ ok.btn("RECEIVE", variant="primary", type="submit") }}
+                {{ ok.btn("RECEIVE", variant="success", type="submit") }}
             </div>
         </form>
         <div id="receive-error" class="text-red" style="margin-top: var(--space-md); display: none;"></div>

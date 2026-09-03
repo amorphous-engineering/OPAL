@@ -25,7 +25,7 @@
             signed: <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span>
             · <span id="baseline-sign-time"></span>
         </div>
-        <button type="button" class="btn" data-variant="primary" data-size="sm" onclick="commitBaseline()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+        <button type="button" class="btn" data-variant="primary" data-state="ok" data-size="sm" onclick="commitBaseline()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
         <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="document.getElementById('baseline-confirm').style.display='none'">ABORT</button>
     </div>
 </div>

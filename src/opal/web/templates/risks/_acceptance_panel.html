@@ -21,7 +21,7 @@
    rationale stays in the textarea right above — never restated here. #}
 <div id="accept-confirm" class="sign-confirm" style="display: none;">
     <span class="mono">accepts <span class="text-green">{{ risk.risk_number }}</span> at <span class="sev-{{ risk.severity }}">{{ risk.score }}</span>{% if risk.residual_score is not none %} → <span class="sev-{{ risk.residual_severity }}">{{ risk.residual_score }}</span>{% endif %} — signed <span class="text-green">{{ current_user.name if current_user else '(no session user)' }}</span></span>
-    <button type="button" class="btn" data-variant="primary" data-size="sm" onclick="commitAccept()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
+    <button type="button" class="btn" data-variant="primary" data-state="ok" data-size="sm" onclick="commitAccept()" {% if not current_user %}disabled title="select a user first"{% endif %}>CONFIRM</button>
     <button type="button" class="btn" data-variant="outline" data-size="sm" onclick="document.getElementById('accept-confirm').style.display='none'">ABORT</button>
 </div>
 {% elif risk.acceptance_rationale %}

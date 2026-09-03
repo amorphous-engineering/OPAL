@@ -428,7 +428,7 @@ def test_dockbar_op_row_renders_inert_complete_with_children_reason(web_client: 
     body = resp.text
     assert 'data-bar-order="1"' in body
     # Inert control + reason, display numbers (F1).
-    assert '<button class="btn" data-variant="primary" data-size="xs" disabled>COMPLETE</button>' in body
+    assert '<button class="btn" data-variant="primary" data-state="ok" data-size="xs" disabled>COMPLETE</button>' in body
     assert "Waiting on sub-steps 1.1, 1.2" in body
 
 

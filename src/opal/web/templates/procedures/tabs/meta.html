@@ -25,7 +25,7 @@
     <div style="margin-top: var(--space-md); display: flex; gap: var(--space-sm);">
         {{ ok.btn("EDIT", href="/procedures/" ~ procedure.id ~ "/edit") }}
         {{ ok.btn("CLONE", attrs='onclick="cloneProcedure()"') }}
-        {{ ok.btn("PUBLISH VERSION", variant="primary", attrs='onclick="publishVersion()"') }}
+        {{ ok.btn("PUBLISH VERSION", variant="success", attrs='onclick="publishVersion()"') }}
     </div>
     {# Publish blocker panel — "kit contains draft parts" with per-part activate #}
     <div id="publish-blocker" style="display: none;"></div>
