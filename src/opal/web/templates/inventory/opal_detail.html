@@ -521,11 +521,11 @@ async function loadTestStatus() {
         summaryEl.textContent = parts.join('  |  ');
 
         if (status.overall_status === 'pass') {
-            badgeEl.innerHTML = '<span class="badge" data-variant="outline" data-state="ok">PASS</span>';
+            badgeEl.innerHTML = '<span class="badge" data-variant="primary" data-state="ok">PASS</span>';
         } else if (status.overall_status === 'fail') {
-            badgeEl.innerHTML = '<span class="badge" data-variant="outline" data-state="error">FAIL</span>';
+            badgeEl.innerHTML = '<span class="badge" data-variant="primary" data-state="error">FAIL</span>';
         } else {
-            badgeEl.innerHTML = '<span class="badge" data-variant="outline" data-state="warn">PENDING</span>';
+            badgeEl.innerHTML = '<span class="badge" data-variant="primary" data-state="warn">PENDING</span>';
         }
     } catch (e) {
         // Silent failure — not critical

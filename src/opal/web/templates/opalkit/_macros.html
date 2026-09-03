@@ -46,7 +46,7 @@
 {%- elif v in ["info", "in-progress", "in work", "in-work"] -%}{% set state = "info" %}
 {%- elif v in ["inactive", "deprecated", "cut"] -%}{% set state = "inactive" %}
 {%- endif -%}
-<span class="badge" data-variant="outline"{% if state %} data-state="{{ state }}"{% endif %}>{{ value }}</span>
+<span class="badge" data-variant="{{ 'primary' if state else 'secondary' }}"{% if state %} data-state="{{ state }}"{% endif %}>{{ value }}</span>
 {%- endmacro %}
 
 {# Issue STATE register — the one home for every issue index row (issues list,
@@ -278,7 +278,7 @@
    Variants: default, info, warn, error
 #}
 {% macro badge(text, variant="default", removable=false, onclick=none) %}
-<span class="badge" data-variant="{{ 'outline' if variant != 'default' else 'secondary' }}"{% if variant != 'default' %} data-state="{{ variant }}"{% endif %}>{{ text }}{%- if removable -%}<button type="button" onclick="{{ onclick }}" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>{%- endif -%}</span>
+<span class="badge" data-variant="{{ 'primary' if variant != 'default' else 'secondary' }}"{% if variant != 'default' %} data-state="{{ variant }}"{% endif %}>{{ text }}{%- if removable -%}<button type="button" onclick="{{ onclick }}" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>{%- endif -%}</span>
 {%- endmacro %}
 
 {# Score macro - for risk probability/impact scores
@@ -288,7 +288,7 @@
 {% macro score(value, max=5) %}
 {%- set pct = (value / max * 100) | int -%}
 {%- set color = "ok" if pct <= 40 else ("warn" if pct <= 60 else "error") -%}
-<span class="badge score" data-variant="outline" data-state="{{ color }}">{{ value }}</span>
+<span class="badge score" data-variant="primary" data-state="{{ color }}">{{ value }}</span>
 {%- endmacro %}
 
 {# Severity macro - for risk severity display (P x I)
@@ -297,11 +297,11 @@
 {% macro severity(probability, impact) %}
 {%- set score = probability * impact -%}
 {%- if score >= 15 -%}
-<span class="badge" data-variant="outline" data-state="error">HIGH ({{ score }})</span>
+<span class="badge" data-variant="primary" data-state="error">HIGH ({{ score }})</span>
 {%- elif score >= 8 -%}
-<span class="badge" data-variant="outline" data-state="warn">MEDIUM ({{ score }})</span>
+<span class="badge" data-variant="primary" data-state="warn">MEDIUM ({{ score }})</span>
 {%- else -%}
-<span class="badge" data-variant="outline" data-state="ok">LOW ({{ score }})</span>
+<span class="badge" data-variant="primary" data-state="ok">LOW ({{ score }})</span>
 {%- endif -%}
 {% endmacro %}
 

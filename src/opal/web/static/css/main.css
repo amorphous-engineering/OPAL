@@ -351,14 +351,14 @@ select option {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-color: currentColor;
+    color: var(--primary-foreground);
 }
 
-.badge[data-state="ok"] { color: var(--status-ok); }
-.badge[data-state="warn"] { color: var(--status-warn); }
-.badge[data-state="error"] { color: var(--status-error); }
-.badge[data-state="info"] { color: var(--status-info); }
-.badge[data-state="inactive"] { color: var(--muted-foreground); }
+.badge[data-state="ok"] { background: var(--status-ok); }
+.badge[data-state="warn"] { background: var(--status-warn); }
+.badge[data-state="error"] { background: var(--status-error); }
+.badge[data-state="info"] { background: var(--status-info); }
+.badge[data-state="inactive"] { background: var(--muted); color: var(--muted-foreground); }
 
 .badge.score {
     min-width: 24px;
