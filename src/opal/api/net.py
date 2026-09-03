@@ -6,7 +6,7 @@ terminates TLS and rewrites the client-facing headers. Only then do we honor
 would let any client forge its scheme or source IP.
 """
 
-from fastapi import Request
+from fastapi import Request, Response
 
 from opal.config import get_active_settings
 
@@ -30,3 +30,25 @@ def client_ip(request: Request) -> str | None:
         if forwarded:
             return forwarded
     return request.client.host if request.client else None
+
+
+def set_session_cookie(response: Response, request: Request, token: str) -> None:
+    """Attach the session cookie with the right security attributes.
+
+    One home for the API login, the web login, setup and the demo switch."""
+    from opal.core.auth import SESSION_COOKIE, SESSION_LIFETIME
+
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=int(SESSION_LIFETIME.total_seconds()),
+        httponly=True,
+        samesite="lax",
+        secure=request_is_secure(request),
+    )
+
+
+def clear_session_cookie(response: Response) -> None:
+    from opal.core.auth import SESSION_COOKIE
+
+    response.delete_cookie(SESSION_COOKIE)

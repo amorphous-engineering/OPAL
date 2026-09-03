@@ -13,11 +13,10 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from opal.api.deps import DbSession, RequiredUser
-from opal.api.net import client_ip, request_is_secure
+from opal.api.net import client_ip, request_is_secure, set_session_cookie
 from opal.core import webauthn
 from opal.core.auth import (
     SESSION_COOKIE,
-    SESSION_LIFETIME,
     create_api_token,
     create_session,
     hash_password,
@@ -33,22 +32,6 @@ public_router = APIRouter(prefix="/auth", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 PASSKEY_STATE_COOKIE = "opal_webauthn_state"
-
-
-def set_session_cookie(response: Response, request: Request, token: str) -> None:
-    """Attach the session cookie with the right security attributes."""
-    response.set_cookie(
-        SESSION_COOKIE,
-        token,
-        max_age=int(SESSION_LIFETIME.total_seconds()),
-        httponly=True,
-        samesite="lax",
-        secure=request_is_secure(request),
-    )
-
-
-def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(SESSION_COOKIE)
 
 
 def _passkeys_enabled() -> bool:

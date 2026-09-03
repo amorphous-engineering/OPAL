@@ -40,7 +40,7 @@ def load_demo_data(
     user.needs_onboarding = False
     db.commit()
 
-    from opal.api.routes.auth import set_session_cookie
+    from opal.api.net import set_session_cookie
     from opal.core import lifecycle
     from opal.core.auth import create_session
     from opal.db.base import SessionLocal

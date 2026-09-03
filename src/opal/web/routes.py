@@ -265,7 +265,7 @@ def _mint_login_session(
     request: Request, db: DbSession, user: User, auth_method: str, next_url: str = "/"
 ) -> RedirectResponse:
     """Create a session for a successful login and redirect appropriately."""
-    from opal.api.routes.auth import set_session_cookie
+    from opal.api.net import set_session_cookie
 
     token = create_session(
         db,
@@ -5031,7 +5031,7 @@ def settings_extension_import(
 @router.post("/settings/demo/enter")
 def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
     """Switch the instance to the throwaway demo database (admin only)."""
-    from opal.api.routes.auth import set_session_cookie
+    from opal.api.net import set_session_cookie
     from opal.core import lifecycle
     from opal.core.auth import create_session
     from opal.db.base import SessionLocal
@@ -5067,7 +5067,7 @@ def settings_demo_enter(request: Request, db: DbSession) -> RedirectResponse:
 @router.post("/settings/demo/exit")
 def settings_demo_exit(request: Request, db: DbSession) -> RedirectResponse:
     """Exit the demo: switch back to the real database and delete the demo file."""
-    from opal.api.routes.auth import clear_session_cookie
+    from opal.api.net import clear_session_cookie
     from opal.core import lifecycle
     from opal.extensions.loader import activate as activate_extensions
 
@@ -5102,7 +5102,7 @@ def settings_factory_reset(
     request: Request, db: DbSession, confirm: str = Form("")
 ) -> RedirectResponse:
     """Wipe the instance back to first-run state. Requires typing RESET."""
-    from opal.api.routes.auth import clear_session_cookie
+    from opal.api.net import clear_session_cookie
     from opal.core import lifecycle
     from opal.extensions.loader import activate as activate_extensions
 
