@@ -24,11 +24,12 @@
         {{ ex.role_chip(vs.get('required_role')) }}
         <span class="doc-step-num mono">{{ step_display_number }}</span>
         <span class="doc-step-title">{{ step.title }}</span>
+        {{ ex.cursor_chips(step, cursors_by_se, current_user) }}
+        <span class="doc-step-spacer"></span>
         {{ ex.indicators(step, attach_counts, vs) }}
         <span class="doc-step-presence" data-presence>
             {{ ex.state_cell(step, bound_holds_by_se, step_holding_ncs, gate_text, parent_held) }}
         </span>
-        {{ ex.cursor_chips(step, cursors_by_se, current_user) }}
     </div>
     <div class="doc-step-body" hidden>
         {% if step.status == 'on_hold' and exec %}

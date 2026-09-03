@@ -232,7 +232,7 @@
 }
 
 .doc-step-title {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -252,8 +252,7 @@
     background: color-mix(in srgb, var(--accent-orange) 7%, transparent);
 }
 
-/* Presence cursors render in the RIGHT GUTTER, outside the OP card border —
-   inside the box is procedure, outside the box is people. */
+/* Presence cursors sit in the row header, right after the title. */
 .doc-step-line { position: relative; }
 
 .step-cursors {
@@ -261,19 +260,12 @@
     gap: 2px;
 }
 
-.cursor-chip { font-size: 0.7rem; height: auto; padding: 0 4px; background: var(--background); }
+.doc-step-spacer { flex: 1; }
+
+.cursor-chip { font-size: 0.7rem; height: auto; padding: 0 4px; }
 
 .cursor-chip.is-stale { border-color: var(--input); color: var(--muted-foreground); }
 
-@media (min-width: 1280px) {
-    .step-cursors {
-        position: absolute;
-        left: 100%;
-        margin-left: calc(var(--space-sm) + 8px);
-        top: 50%;
-        transform: translateY(-50%);
-    }
-}
 
 .doc-step.pulse, .rail-attach-group.pulse {
     animation: execdoc-pulse 1.5s ease;

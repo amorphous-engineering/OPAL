@@ -2667,7 +2667,10 @@ def _execution_detail_context(
                 if s["order"] < sub["order"] and s["status"] not in terminal
             ]
             if unmet:
-                seq_blockers_by_order[sub["order"]] = "WAITING ON " + ", ".join(unmet)
+                # The earliest unmet step is the one that matters; the rest
+                # is a count, so a strict sequence never renders a pyramid.
+                more = f" +{len(unmet) - 1}" if len(unmet) > 1 else ""
+                seq_blockers_by_order[sub["order"]] = f"WAITING ON {unmet[0]}{more}"
     context["seq_blockers_by_order"] = seq_blockers_by_order
 
     # Evidence counts (⎙n) per step execution id.
