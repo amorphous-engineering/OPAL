@@ -134,41 +134,6 @@
 {% endcall %}
 
 <script>
-// Part search component (same contract as the other part typeaheads)
-function selectPart(el) {
-    const partId = el.dataset.partId;
-    const partName = el.dataset.partName;
-    const partPn = el.dataset.partPn;
-    const container = el.closest('.part-search-dropdown').parentElement;
-    const hiddenInput = container.querySelector('input[type="hidden"]');
-    const searchInput = container.querySelector('.part-search-input');
-    const dropdown = container.querySelector('.part-search-dropdown');
-    const selected = container.querySelector('.part-search-selected');
-    hiddenInput.value = partId;
-    selected.querySelector('.part-id').textContent = partId;
-    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
-    selected.style.display = 'flex';
-    searchInput.style.display = 'none';
-    dropdown.classList.remove('active');
-    dropdown.innerHTML = '';
-}
-
-function clearPartSelection(prefix) {
-    const container = document.getElementById(prefix + '-part-search').closest('.part-search-container');
-    container.querySelector('input[type="hidden"]').value = '';
-    container.querySelector('.part-search-input').value = '';
-    container.querySelector('.part-search-input').style.display = 'block';
-    container.querySelector('.part-search-selected').style.display = 'none';
-}
-
-document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target && evt.detail.target.classList.contains('part-search-dropdown')) {
-        const dropdown = evt.detail.target;
-        if (dropdown.innerHTML.trim()) dropdown.classList.add('active');
-        else dropdown.classList.remove('active');
-    }
-});
-
 function toggleTypeFields() {
     const type = document.getElementById('issue-type').value;
     document.getElementById('nc-fields').style.display = type === 'non_conformance' ? '' : 'none';

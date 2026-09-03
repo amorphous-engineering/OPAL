@@ -486,10 +486,6 @@ async function recordCalibration() {
 <script>
 const inventoryId = {{ record.id }};
 
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
 
 const requiredTemplateCount = {{ test_templates | selectattr('required') | list | length }};
 const hasTestResults = {{ 'true' if test_results else 'false' }};

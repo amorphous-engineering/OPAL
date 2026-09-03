@@ -330,49 +330,6 @@ async function submitPartForm() {
     }
 }
 
-// Part-search wiring for the parent field; pages with their own selectPart
-// (detail.html) override this with an identical implementation
-if (typeof window.selectPart !== 'function') {
-    window.selectPart = function (el) {
-        const partId = el.dataset.partId;
-        const partName = el.dataset.partName;
-        const partPn = el.dataset.partPn;
-
-        const container = el.closest('.part-search-dropdown').parentElement;
-        const hiddenInput = container.querySelector('input[type="hidden"]');
-        const searchInput = container.querySelector('.part-search-input');
-        const dropdown = container.querySelector('.part-search-dropdown');
-        const selected = container.querySelector('.part-search-selected');
-
-        hiddenInput.value = partId;
-        selected.querySelector('.part-id').textContent = partId;
-        selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
-        selected.style.display = 'flex';
-        searchInput.style.display = 'none';
-        dropdown.classList.remove('active');
-        dropdown.innerHTML = '';
-    };
-}
-
-if (!window._pfSearchWired) {
-    window._pfSearchWired = true;
-    document.body.addEventListener('htmx:afterSwap', function (evt) {
-        if (evt.detail.target.classList.contains('part-search-dropdown')) {
-            const dropdown = evt.detail.target;
-            if (dropdown.innerHTML.trim()) {
-                dropdown.classList.add('active');
-            } else {
-                dropdown.classList.remove('active');
-            }
-        }
-    });
-    document.addEventListener('click', function (evt) {
-        if (!evt.target.closest('.part-search-container')) {
-            document.querySelectorAll('.part-search-dropdown').forEach(d => d.classList.remove('active'));
-        }
-    });
-}
-
 document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closePartForm();
 });

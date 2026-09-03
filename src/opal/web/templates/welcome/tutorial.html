@@ -136,10 +136,6 @@ function prevStep() {
     if (currentStep > 1) { currentStep--; showStep(currentStep); }
 }
 
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
 
 async function finishOnboarding() {
     await fetch('/api/welcome/complete', { method: 'POST', headers: getHeaders() });

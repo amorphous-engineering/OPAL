@@ -332,10 +332,6 @@ const issueId = {{ issue.id }};
 const HOLDING = {{ holding | tojson }};
 const CONTAINMENT = {{ containment_val | tojson }};
 
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
 
 async function updateIssue(field, value) {
     try {

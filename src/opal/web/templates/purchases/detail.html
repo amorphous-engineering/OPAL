@@ -243,69 +243,6 @@
 </dialog>
 
 <script>
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
-
-// Part search component functions
-function selectPart(el) {
-    const partId = el.dataset.partId;
-    const partName = el.dataset.partName;
-    const partPn = el.dataset.partPn;
-
-    // Find the parent container
-    const container = el.closest('.part-search-dropdown').parentElement;
-    const hiddenInput = container.querySelector('input[type="hidden"]');
-    const searchInput = container.querySelector('.part-search-input');
-    const dropdown = container.querySelector('.part-search-dropdown');
-    const selected = container.querySelector('.part-search-selected');
-
-    // Set the hidden value
-    hiddenInput.value = partId;
-
-    // Update selected display
-    selected.querySelector('.part-id').textContent = partId;
-    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
-    selected.style.display = 'flex';
-
-    // Hide search input and dropdown
-    searchInput.style.display = 'none';
-    dropdown.classList.remove('active');
-    dropdown.innerHTML = '';
-}
-
-function clearPartSelection(prefix) {
-    const container = document.getElementById(prefix + '-part-search').closest('.part-search-container');
-    const hiddenInput = container.querySelector('input[type="hidden"]');
-    const searchInput = container.querySelector('.part-search-input');
-    const selected = container.querySelector('.part-search-selected');
-
-    hiddenInput.value = '';
-    searchInput.value = '';
-    searchInput.style.display = 'block';
-    selected.style.display = 'none';
-    searchInput.focus();
-}
-
-// Show dropdown when results load
-document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target.classList.contains('part-search-dropdown')) {
-        const dropdown = evt.detail.target;
-        if (dropdown.innerHTML.trim()) {
-            dropdown.classList.add('active');
-        } else {
-            dropdown.classList.remove('active');
-        }
-    }
-});
-
-// Hide dropdown when clicking outside
-document.addEventListener('click', function(evt) {
-    if (!evt.target.closest('.part-search-container')) {
-        document.querySelectorAll('.part-search-dropdown').forEach(d => d.classList.remove('active'));
-    }
-});
 
 function showAddLine() {
     document.getElementById('add-line-modal').showModal();

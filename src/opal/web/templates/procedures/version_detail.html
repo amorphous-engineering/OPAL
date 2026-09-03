@@ -210,10 +210,6 @@
 {% endcall %}
 
 <script>
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
 
 async function restoreFromVersion() {
     if (!confirm('Replace ALL current draft steps, kit items, and outputs with this version\'s snapshot? This cannot be undone.')) return;

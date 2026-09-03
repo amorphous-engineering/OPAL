@@ -284,10 +284,6 @@
 <script>
 const partId = {{ part.id }};
 
-function getHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    return headers;
-}
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -394,59 +390,6 @@ async function submitReceiveStock() {
         errorEl.style.display = 'inline';
     }
 }
-
-// Part search component
-function selectPart(el) {
-    const partId = el.dataset.partId;
-    const partName = el.dataset.partName;
-    const partPn = el.dataset.partPn;
-
-    const container = el.closest('.part-search-dropdown').parentElement;
-    const hiddenInput = container.querySelector('input[type="hidden"]');
-    const searchInput = container.querySelector('.part-search-input');
-    const dropdown = container.querySelector('.part-search-dropdown');
-    const selected = container.querySelector('.part-search-selected');
-
-    hiddenInput.value = partId;
-    selected.querySelector('.part-id').textContent = partId;
-    selected.querySelector('.part-name').textContent = partPn ? `${partPn} - ${partName}` : partName;
-    selected.style.display = 'flex';
-    searchInput.style.display = 'none';
-    dropdown.classList.remove('active');
-    dropdown.innerHTML = '';
-}
-
-function clearPartSelection(prefix) {
-    const container = document.getElementById(prefix + '-part-search')
-        ? document.getElementById(prefix + '-part-search').closest('.part-search-container')
-        : document.getElementById(prefix + '-search').closest('.part-search-container');
-    const hiddenInput = container.querySelector('input[type="hidden"]');
-    const searchInput = container.querySelector('.part-search-input');
-    const selected = container.querySelector('.part-search-selected');
-
-    hiddenInput.value = '';
-    searchInput.value = '';
-    searchInput.style.display = 'block';
-    selected.style.display = 'none';
-    searchInput.focus();
-}
-
-document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target.classList.contains('part-search-dropdown')) {
-        const dropdown = evt.detail.target;
-        if (dropdown.innerHTML.trim()) {
-            dropdown.classList.add('active');
-        } else {
-            dropdown.classList.remove('active');
-        }
-    }
-});
-
-document.addEventListener('click', function(evt) {
-    if (!evt.target.closest('.part-search-container')) {
-        document.querySelectorAll('.part-search-dropdown').forEach(d => d.classList.remove('active'));
-    }
-});
 
 // Add Component
 function showAddComponent() {
