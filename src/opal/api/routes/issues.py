@@ -16,6 +16,7 @@ from opal.core import notifications
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
 from opal.core.events import emit_issue_dispositioned
+from opal.core.execution_flow import recheck_instance_completion
 from opal.core.holds import holding_readout
 from opal.db.models.execution import StepExecution
 from opal.db.models.issue import (
@@ -562,20 +563,6 @@ def update_issue(
     return _issue_to_response(issue)
 
 
-def _recheck_instance_completion(db, issue: Issue) -> None:
-    """Releasing a hold may have been the last thing standing between a work
-    order and completion (e.g. wo/op containment signed after every step
-    finished) — re-evaluate."""
-    if issue.procedure_instance_id is None:
-        return
-    from opal.core.execution_flow import check_instance_completion
-    from opal.db.models.execution import ProcedureInstance
-
-    instance = db.get(ProcedureInstance, issue.procedure_instance_id)
-    if instance is not None:
-        check_instance_completion(db, instance)
-
-
 def _validate_close(issue: Issue, data: IssueUpdate | None = None) -> None:
     """Closing an undispositioned containment-bearing issue is impossible —
     disposition first, always. Advisory issues close freely. NC-type issues
@@ -637,7 +624,7 @@ async def sign_disposition(
 
     log_update(db, issue, old_values, user_id)
     db.flush()
-    _recheck_instance_completion(db, issue)
+    recheck_instance_completion(db, issue)
     # Signing releases this issue's containment — the run may now be clear.
     notifications.issue_dispositioned(db, issue, user_id)
     notifications.blocking_transition(db, issue.procedure_instance_id, was_blocking, user_id, issue)
@@ -717,7 +704,7 @@ def set_containment(
 
     if narrowing:
         db.flush()
-        _recheck_instance_completion(db, issue)
+        recheck_instance_completion(db, issue)
 
     # Downgrading to advisory releases the hold; widening onto a clear run
     # creates one.
@@ -744,7 +731,7 @@ def delete_issue(
     issue.deleted_at = datetime.now(UTC)
     log_delete(db, issue, user_id)
     db.flush()
-    _recheck_instance_completion(db, issue)
+    recheck_instance_completion(db, issue)
     # Deleting the last blocker frees the run just as signing one does.
     notifications.blocking_transition(db, issue.procedure_instance_id, was_blocking, user_id, issue)
     db.commit()

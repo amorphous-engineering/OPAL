@@ -12,7 +12,6 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from sqlalchemy import func
 
-from opal.api.routes.issues import _recheck_instance_completion
 from opal.config import get_active_project, get_active_settings
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import (
@@ -26,6 +25,7 @@ from opal.core.execution_flow import (
     build_execution_state,
     complete_step_flow,
     focus_step,
+    recheck_instance_completion,
 )
 from opal.core.execution_flow import add_step_note as flow_add_step_note
 from opal.core.holds import get_holds_payload, holding_readout
@@ -3060,7 +3060,7 @@ async def _sign_disposition(db, args: dict) -> list[TextContent]:
     issue.dispositioned_at = datetime.now(UTC)
     log_update(db, issue, old_values, user.id)
     db.flush()
-    _recheck_instance_completion(db, issue)
+    recheck_instance_completion(db, issue)
     db.commit()
     db.refresh(issue)
 
@@ -3142,7 +3142,7 @@ async def _set_containment(db, args: dict) -> list[TextContent]:
 
     if narrowing:
         db.flush()
-        _recheck_instance_completion(db, issue)
+        recheck_instance_completion(db, issue)
 
     db.commit()
     db.refresh(issue)

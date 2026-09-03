@@ -560,6 +560,19 @@ def complete_step_flow(
     )
 
 
+def recheck_instance_completion(db: Session, issue: Issue) -> None:
+    """Re-evaluate a work order's completion after an issue's hold changed.
+
+    Releasing a hold may have been the last thing standing between a work
+    order and completion (e.g. wo/op containment signed after every step
+    finished). One home for the API, the web and the MCP server."""
+    if issue.procedure_instance_id is None:
+        return
+    instance = db.get(ProcedureInstance, issue.procedure_instance_id)
+    if instance is not None:
+        check_instance_completion(db, instance)
+
+
 def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
     """Auto-complete parent OPs whose children are done, then the instance.
 
