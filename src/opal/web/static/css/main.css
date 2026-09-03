@@ -864,10 +864,11 @@ body.procedure-detail .exec-tabs {
     min-height: 400px;
 }
 
-/* Execution page tab strip: Basecoat tabs (boxed), mono uppercase register,
-   accent on the selected tab. The wrapper holds both the strip and the
-   swapped panel and passes the column's height through so the panel is the
-   scroll box. */
+/* Execution page tab strip: Basecoat tabs (line variant) running the full
+   width of the column as a rule under the header, mono uppercase register,
+   accent underline on the selected tab. The wrapper holds both the strip
+   and the swapped panel and passes the column's height through so the
+   panel is the scroll box. */
 body.exec-detail .exec-tabbar {
     display: flex;
     flex-direction: column;
@@ -878,8 +879,18 @@ body.exec-detail .exec-tabbar {
 
 .exec-tabbar > [role="tablist"] {
     flex-shrink: 0;
-    align-self: flex-start;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    gap: var(--space-md);
+    justify-content: flex-start;
+    border-bottom: 1px solid var(--border);
     margin-bottom: var(--space-md);
+}
+
+.exec-tabbar [role="tab"] {
+    flex: 0 0 auto;
+    padding: var(--space-xs) var(--space-xs) var(--space-sm);
 }
 
 .exec-tabbar [role="tab"] {
@@ -891,7 +902,10 @@ body.exec-detail .exec-tabbar {
 
 .exec-tabbar [role="tab"][aria-selected="true"] {
     color: var(--primary);
-    border-color: var(--primary);
+}
+
+.exec-tabbar [role="tab"]::after {
+    background: var(--primary);
 }
 
 /* Execution-detail page: lock to viewport so each tab scrolls within .exec-tab-content,
