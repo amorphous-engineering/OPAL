@@ -190,6 +190,7 @@
     color: var(--text-secondary);
     font-size: 0.875rem;
     line-height: 1.6;
+    max-width: 860px;
     margin-bottom: var(--space-md);
 }
 
@@ -304,6 +305,7 @@
 
 .doc-step-body .step-instructions {
     font-size: 0.875rem;
+    max-width: 860px;
 }
 
 /* Authored reference imagery (instruction content — the inline exception) */
