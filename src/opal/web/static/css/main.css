@@ -2002,11 +2002,11 @@ textarea.md-image-target.md-drop-target {
 }
 
 /* One-line index rows: content cells clip, never wrap. */
+/* Table text wraps within its cell; .cell-clip only keeps a long title
+   column from starving its neighbours. */
 .table td.cell-clip {
-    max-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    max-width: 48ch;
+    overflow-wrap: anywhere;
 }
 
 /* Risk module — severity-colored scores, statement masthead, residual markers */

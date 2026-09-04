@@ -462,7 +462,7 @@
 
 .rail-table { font-size: 0.75rem; }
 .rail-facts th { font-size: 0.65rem; white-space: nowrap; }
-.rail-facts td { white-space: nowrap; }
+.rail-facts td { overflow-wrap: anywhere; }
 
 /* Work-order facts: a detail-row table inside the header's ··· popover. */
 .exec-meta-popover { padding: var(--space-xs); min-width: 360px; }
@@ -471,7 +471,7 @@
 .rail-table td { padding: 2px var(--space-xs); }
 .rail-table td:first-child { white-space: nowrap; }
 .rail-disp { font-size: 0.65rem; white-space: nowrap; }
-.rail-table td.rail-issue-title { overflow: hidden; text-overflow: ellipsis; max-width: 140px; white-space: nowrap; }
+.rail-table td.rail-issue-title { overflow-wrap: anywhere; }
 
 .rail-attach-group { margin-bottom: var(--space-sm); }
 
