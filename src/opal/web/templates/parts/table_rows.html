@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if parts %}
 {% for part in parts %}
-<tr>
+<tr data-href="/parts/{{ part.id }}">
     <td class="mono"><a href="/parts/{{ part.id }}">{{ part.internal_pn }}</a></td>
     <td><a href="/parts/{{ part.id }}" class="row-link-plain">{{ part.name }}</a></td>
     <td>{{ ok.mono(part.external_pn) }}</td>

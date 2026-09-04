@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if workcenters %}
 {% for wc in workcenters %}
-<tr>
+<tr data-href="/workcenters/{{ wc.id }}">
     <td><a href="/workcenters/{{ wc.id }}" class="mono">{{ wc.code }}</a></td>
     <td><a href="/workcenters/{{ wc.id }}">{{ wc.name }}</a></td>
     <td>{{ wc.location or '-' }}</td>

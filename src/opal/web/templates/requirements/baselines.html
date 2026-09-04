@@ -22,7 +22,7 @@
         </thead>
         <tbody>
             {% for e in events %}
-            <tr onclick="window.location='/requirements/baselines/{{ e.id }}'" style="cursor: pointer;">
+            <tr data-href="/requirements/baselines/{{ e.id }}">
                 <td class="mono">{{ e.id }}</td>
                 <td class="mono">{{ e.label or '—' }}</td>
                 <td class="mono" style="text-align: right;">{{ e.items | length }}</td>

@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if users_list %}
 {% for u in users_list %}
-<tr>
+<tr data-href="/users/{{ u.id }}">
     <td><a href="/users/{{ u.id }}">{{ u.name }}</a></td>
     <td>{{ ok.mono(u.email) }}</td>
     <td>

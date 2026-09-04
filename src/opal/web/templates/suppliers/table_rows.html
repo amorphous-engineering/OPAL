@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if suppliers %}
 {% for s in suppliers %}
-<tr>
+<tr data-href="/suppliers/{{ s.id }}">
     <td><a href="/suppliers/{{ s.id }}" class="mono">{{ s.code }}</a></td>
     <td><a href="/suppliers/{{ s.id }}">{{ s.name }}</a></td>
     <td>{{ ok.mono(s.email) }}</td>

@@ -1,6 +1,6 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% for req in requirements %}
-<tr onclick="window.location='/requirements/{{ req.id }}'" style="cursor: pointer;">
+<tr data-href="/requirements/{{ req.id }}">
     <td>{{ ok.mono(req.req_number) }}</td>
     <td class="mono">{{ req.revision }}</td>
     <td>{{ req.title }}</td>

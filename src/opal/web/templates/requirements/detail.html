@@ -224,7 +224,7 @@
             </thead>
             <tbody>
                 {% for r in revisions %}
-                <tr {% if r.id != req.id %}onclick="window.location='/requirements/{{ r.id }}'" style="cursor: pointer;"{% else %}style="background: var(--bg-tertiary);"{% endif %}>
+                <tr {% if r.id != req.id %}data-href="/requirements/{{ r.id }}"{% else %}style="background: var(--bg-tertiary);"{% endif %}>
                     <td class="mono">{{ r.revision }}{% if r.id == req.id %} ◀{% endif %}</td>
                     <td>{{ ok.status(r.lifecycle_state | upper, "ok" if r.lifecycle_state == 'baselined' else ("warn" if r.lifecycle_state == 'superseded' else "draft")) }}</td>
                     <td class="mono" style="font-size: 0.8rem; {% if r.lifecycle_state == 'superseded' %}text-decoration: line-through; opacity: 0.6;{% endif %}">{{ r.statement | truncate(110) }}</td>

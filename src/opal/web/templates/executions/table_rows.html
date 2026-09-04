@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if instances %}
 {% for inst in instances %}
-<tr>
+<tr data-href="/executions/{{ inst.id }}">
     <td><a href="/executions/{{ inst.id }}" class="mono">{{ inst.work_order }}</a></td>
     <td><a href="/executions/{{ inst.id }}">{{ inst.procedure_name }} <span class="mono text-muted">v{{ inst.version_number }}</span></a></td>
     <td>{{ ok.status(inst.status | upper | replace('_', ' ')) }}</td>

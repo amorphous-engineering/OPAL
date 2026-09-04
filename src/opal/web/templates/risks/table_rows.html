@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% for row in rows %}
 {% set risk = row.risk %}
-<tr onclick="window.location='/risks/{{ risk.id }}'" style="cursor: pointer;" data-risk-id="{{ risk.id }}">
+<tr data-href="/risks/{{ risk.id }}" data-risk-id="{{ risk.id }}">
     <td class="mono text-green">{{ risk.risk_number }}</td>
     <td>{{ risk.title }}</td>
     <td>{% if risk.disposition == 'realized' %}{{ ok.status("REALIZED", "error") }}{% elif risk.disposition == 'closed' %}<span class="text-muted">CLOSED</span>{% else %}<span class="text-secondary">{{ risk.disposition | upper }}</span>{% endif %}</td>

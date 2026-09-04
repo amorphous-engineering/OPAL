@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if issues %}
 {% for issue in issues %}
-<tr>
+<tr data-href="/issues/{{ issue.id }}">
     <td>{{ ok.id_cell(issue.issue_number, "/issues/" ~ issue.id) }}</td>
     <td class="cell-clip"><a href="/issues/{{ issue.id }}" class="row-link-plain">{{ issue.title }}</a></td>
     <td>{{ issue.issue_type }}</td>

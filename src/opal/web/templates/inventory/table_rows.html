@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if records %}
 {% for rec in records %}
-<tr>
+<tr data-href="/inventory/opal/{{ rec.opal_number }}">
     <td class="mono">
         {% if rec.opal_number %}
         <a href="/inventory/opal/{{ rec.opal_number }}" style="font-weight: 600; color: var(--accent-blue);">

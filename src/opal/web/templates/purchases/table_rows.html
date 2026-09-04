@@ -1,7 +1,7 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% if purchases %}
 {% for po in purchases %}
-<tr onclick="window.location='/purchases/{{ po.id }}'" style="cursor: pointer;">
+<tr data-href="/purchases/{{ po.id }}">
     <td class="mono"><a href="/purchases/{{ po.id }}">{{ po.reference or 'PO' }}</a></td>
     {# Supplier renders plain — the row's identity and click target is the
        PO; the supplier link lives on the PO page (accent = identifier). #}

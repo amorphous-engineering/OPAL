@@ -331,6 +331,8 @@ select option {
     white-space: normal;
 }
 
+.table tr[data-href] { cursor: pointer; }
+
 .table .id-cell {
     color: var(--primary);
     font-weight: 600;

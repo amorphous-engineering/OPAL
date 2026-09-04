@@ -61,6 +61,22 @@
         }
     });
 
+    // Clickable rows: a <tr data-href> navigates on click, unless the click
+    // landed on something interactive inside it (a link, button, control).
+    // Modifier/middle clicks open in a new tab like a link would.
+    document.addEventListener('click', function (evt) {
+        const row = evt.target.closest('tr[data-href]');
+        if (!row || evt.target.closest('a, button, input, select, textarea, label, [role="menuitem"], summary')) return;
+        if (window.getSelection && String(window.getSelection())) return;
+        const href = row.dataset.href;
+        if (evt.metaKey || evt.ctrlKey || evt.button === 1) window.open(href, '_blank');
+        else window.location.href = href;
+    });
+    document.addEventListener('auxclick', function (evt) {
+        const row = evt.target.closest('tr[data-href]');
+        if (row && evt.button === 1 && !evt.target.closest('a, button')) window.open(row.dataset.href, '_blank');
+    });
+
     // Click outside any widget closes every open dropdown.
     document.addEventListener('click', function (evt) {
         if (!evt.target.closest('.part-search-container')) {

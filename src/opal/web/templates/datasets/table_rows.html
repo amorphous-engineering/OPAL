@@ -1,6 +1,6 @@
 {% import 'opalkit/_macros.html' as ok %}
 {% for dataset in datasets %}
-<tr onclick="window.location='/datasets/{{ dataset.id }}'" style="cursor: pointer;">
+<tr data-href="/datasets/{{ dataset.id }}">
     <td><a href="/datasets/{{ dataset.id }}">{{ dataset.name }}</a></td>
     <td>
         {% if dataset.procedure %}

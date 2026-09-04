@@ -30,7 +30,7 @@
         <tbody>
             {% for item in event.items %}
             {% set r = item.requirement %}
-            <tr onclick="window.location='/requirements/{{ r.id }}'" style="cursor: pointer;">
+            <tr data-href="/requirements/{{ r.id }}">
                 <td>{{ ok.mono(r.req_number) }}</td>
                 <td class="mono">{{ r.revision }}</td>
                 <td>{{ r.title }}</td>
