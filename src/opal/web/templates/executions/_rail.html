@@ -12,28 +12,25 @@
         <summary class="rail-head mono">ISSUES / HOLDS</summary>
         {% set hold_entries = exec_state.holds %}
         {% set hold_issue_ids = hold_entries | map(attribute='issue_id') | list %}
-        {% if hold_entries %}
-        <table class="table rail-table">
+        {% set other_issues = linked_issues | rejectattr('id', 'in', hold_issue_ids) | list %}
+        {# One row per issue: number · step badge(s) · state badge. Held issues
+           name the steps they hold; the rest name the step they were raised on. #}
+        {% set state_badge = {'undispositioned': ('UNDISP', 'error'), 'open': ('OPEN', 'warn'), 'dispositioned': ("DISP'D", 'ok'), 'closed': ('CLOSED', 'inactive')} %}
+        {% if hold_entries or other_issues %}
+        <table class="table rail-table rail-issues">
             <tbody>
                 {% for h in hold_entries %}
-                <tr class="rail-hold{% if h.disposition_state == 'undispositioned' %} rail-hold-active{% endif %}">
+                <tr data-href="/issues/{{ h.issue_id }}" class="rail-hold{% if h.disposition_state == 'undispositioned' %} rail-hold-active{% endif %}">
                     <td class="mono"><a href="/issues/{{ h.issue_id }}">{{ h.issue_number }}</a></td>
                     <td>{% for step in h.blocks %}<span class="badge" data-variant="secondary" title="Holds step {{ step }}">{{ step }}</span>{% endfor %}</td>
-                    <td class="rail-disp">{{ ok.issue_state(h.disposition_state) }}</td>
+                    <td>{% set sb = state_badge.get(h.disposition_state, (h.disposition_state | upper, none)) %}{{ ok.status(sb[0], sb[1]) }}</td>
                 </tr>
                 {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
-        {% set other_issues = linked_issues | rejectattr('id', 'in', hold_issue_ids) | list %}
-        {% if other_issues %}
-        <table class="table rail-table">
-            <tbody>
                 {% for iss in other_issues %}
-                <tr>
+                <tr data-href="/issues/{{ iss.id }}">
                     <td class="mono"><a href="/issues/{{ iss.id }}">{{ iss.issue_number or '—' }}</a></td>
-                    <td class="rail-issue-title">{{ iss.title }}</td>
-                    <td class="rail-disp">{{ ok.issue_state(iss.disp_state) }}</td>
+                    <td>{% if iss.raised_step %}<span class="badge" data-variant="secondary" title="Raised at step {{ iss.raised_step.step_number_str or iss.raised_step.step_number }}">{{ iss.raised_step.step_number_str or iss.raised_step.step_number }}</span>{% endif %}</td>
+                    <td>{% set sb = state_badge.get(iss.disp_state, (iss.disp_state | upper, none)) %}{{ ok.status(sb[0], sb[1]) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

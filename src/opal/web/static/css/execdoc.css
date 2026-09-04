@@ -470,8 +470,9 @@
 .exec-meta-pref { margin: var(--space-sm) 0 var(--space-xs) var(--space-xs); }
 .rail-table td { padding: 2px var(--space-xs); }
 .rail-table td:first-child { white-space: nowrap; }
-.rail-disp { font-size: 0.65rem; white-space: nowrap; }
-.rail-table td.rail-issue-title { overflow-wrap: anywhere; }
+.rail-issues td { white-space: nowrap; }
+.rail-issues td:last-child { text-align: right; }
+.rail-issues .badge + .badge { margin-left: 2px; }
 
 .rail-attach-group { margin-bottom: var(--space-sm); }
 
