@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Receive against open lines: quantity, location, lot. Blank quantity leaves a line outstanding.
-	import { Section } from '#lib/components/opal/index.js';
+	import { Section, confirm } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { api, ApiError } from '#lib/api.js';
@@ -52,6 +52,12 @@
 		return l.destination ?? purchase.destination;
 	}
 
+	/** Quantity entered beyond what is outstanding (0 when within). */
+	function over(l: Purchase['lines'][number]): number {
+		const q = Number(drafts[l.id]?.qty);
+		return q > 0 ? Math.max(0, q - num(l.qty_outstanding)) : 0;
+	}
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		error = null;
@@ -71,12 +77,25 @@
 				line_id: l.id,
 				qty_received: Number(row.qty),
 				location: row.location.trim() || null,
-				lot_number: row.lot.trim() || null
+				lot_number: row.lot.trim() || null,
+				allow_over_receipt: over(l) > 0
 			});
 		}
 		if (lines.length === 0) {
 			error = 'Enter a quantity for at least one line';
 			return;
+		}
+		const overLines = open.filter((l) => over(l) > 0);
+		if (overLines.length > 0) {
+			const ok = await confirm({
+				title: 'Receive more than ordered?',
+				body:
+					overLines
+						.map((l) => `${l.part_name}: ${fmtQty(over(l), l.unit_of_measure)} over`)
+						.join('\n') + '\nThe excess is received into stock and costed on this order.',
+				action: 'RECEIVE'
+			});
+			if (!ok) return;
 		}
 		busy = true;
 		try {
@@ -129,7 +148,9 @@
 									bind:value={row.qty}
 									aria-label={`Receive quantity for ${l.part_name}`}
 									class="h-7 w-28 font-mono text-xs"
-								/></td
+								/>{#if over(l) > 0}<span class="mt-0.5 block font-mono text-[11px] text-warn"
+										>+{fmtQty(over(l), l.unit_of_measure)} OVER</span
+									>{/if}</td
 							>
 							<td class="px-3 py-1"
 								><Input

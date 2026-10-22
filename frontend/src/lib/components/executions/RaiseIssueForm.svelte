@@ -30,7 +30,7 @@
 
 	onMount(async () => {
 		try {
-			people = await api.get('/procedure-instances/assignees');
+			people = await api.get('/users/directory');
 		} catch {
 			/* assignment is optional */
 		}

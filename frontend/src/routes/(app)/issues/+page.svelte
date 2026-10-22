@@ -66,8 +66,8 @@
 		{ key: 'links', label: 'Linked' },
 		{
 			key: 'created',
-			label: 'Age',
-			width: '4.5rem',
+			label: 'Created',
+			width: '10rem',
 			align: 'right',
 			sortable: true,
 			sortValue: (i) => i.created_at
@@ -168,7 +168,7 @@
 					</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'created'}
-				<Timestamp value={i.created_at} relative />
+				<Timestamp value={i.created_at} />
 			{/if}
 		{/snippet}
 		{#snippet emptyAction()}

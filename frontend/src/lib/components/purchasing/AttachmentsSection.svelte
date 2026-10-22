@@ -1,13 +1,13 @@
 <script lang="ts">
 	// Quotes, invoices and packing slips attached to the order.
 	import {
+		ActionLink,
 		Section,
 		EmptyLine,
 		Timestamp,
 		confirm,
 		toastError
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { api } from '#lib/api.js';
 	import type { Attachment } from './types.js';
@@ -86,7 +86,7 @@
 	<NativeSelect size="sm" bind:value={kind} aria-label="Document kind" class="w-36">
 		{#each KINDS as k (k.value)}<option value={k.value}>{k.label}</option>{/each}
 	</NativeSelect>
-	<Button size="xs" variant="ghost" disabled={busy} onclick={() => input?.click()}>+ UPLOAD</Button>
+	<ActionLink disabled={busy} onclick={() => input?.click()}>+ UPLOAD</ActionLink>
 {/snippet}
 
 {#if attachments.length === 0}
@@ -131,11 +131,7 @@
 								>{/if}</td
 						>
 						<td class="px-3 py-1.5 text-right"
-							><button
-								type="button"
-								class="font-mono text-[11px] tracking-wider text-muted-foreground uppercase hover:text-error"
-								onclick={() => remove(a)}>Delete</button
-							></td
+							><ActionLink danger onclick={() => remove(a)}>DELETE</ActionLink></td
 						>
 					</tr>
 				{/each}

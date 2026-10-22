@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import {
+		ActionLink,
 		DataTable,
 		FilterBar,
 		FilterSelect,
@@ -24,6 +25,7 @@
 
 	const sort = urlSort({ key: 'internal_pn', dir: 'asc' });
 	let reserving = $state(false);
+	let picked = $state<(string | number)[]>([]);
 
 	const FILTERS = ['q', 'tier', 'category', 'procurement', 'state', 'parent', 'low', 'tooling'];
 	const filtered = $derived(
@@ -109,12 +111,19 @@
 			]}
 		/>
 		<FilterToggle param="low" label="Low stock" />
+		{#if picked.length}
+			<ActionLink href={`/label?part=${picked.join(',')}`} class="ml-2"
+				>PRINT {picked.length === 1 ? 'LABEL' : `${picked.length} LABELS`}</ActionLink
+			>
+			<ActionLink onclick={() => (picked = [])}>CLEAR SELECTION</ActionLink>
+		{/if}
 	</FilterBar>
 
 	<DataTable
 		rows={data.list.items}
 		{columns}
 		bind:sort={() => sort.value, sort.set}
+		bind:selected={picked}
 		serverSort
 		key={(r) => r.id}
 		href={(r) => `/parts/${r.id}`}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		ActionLink,
 		DataTable,
 		FilterBar,
 		FilterSelect,
@@ -58,6 +59,10 @@
 		{ key: 'record_count', label: 'Records', sortable: true, align: 'right', mono: true },
 		{ key: 'locations', label: 'Locations', mono: true }
 	];
+
+	// Batch labels: records picked on any page this visit.
+	let picked = $state<(string | number)[]>([]);
+	const pickedOpals = $derived(picked.filter((k): k is string => typeof k === 'string'));
 
 	const filtered = $derived(
 		!!(data.q || data.partId || data.location || data.source || data.flag || data.depleted)
@@ -147,6 +152,12 @@
 		{#if data.view === 'records'}
 			<FilterToggle param="depleted" label="Include depleted" />
 		{/if}
+		{#if data.view === 'records' && pickedOpals.length}
+			<ActionLink href={`/label?inventory=${pickedOpals.join(',')}`} class="ml-2"
+				>PRINT {pickedOpals.length === 1 ? 'LABEL' : `${pickedOpals.length} LABELS`}</ActionLink
+			>
+			<ActionLink onclick={() => (picked = [])}>CLEAR SELECTION</ActionLink>
+		{/if}
 	</FilterBar>
 
 	{#if data.error}
@@ -162,9 +173,10 @@
 			columns={recordColumns}
 			serverSort
 			bind:sort={() => sorter.value, sorter.set}
+			bind:selected={picked}
 			href={(r) => (r.opal_number ? `/inventory/opal/${r.opal_number}` : null)}
 			emptyLabel={filtered ? 'Stock matching these filters' : 'Stock'}
-			key={(r) => r.id}
+			key={(r) => r.opal_number ?? r.id}
 		>
 			{#snippet emptyAction()}
 				<a href="/inventory/new" class="font-medium text-info hover:underline">+ RECEIVE</a>

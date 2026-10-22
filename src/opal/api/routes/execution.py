@@ -706,21 +706,6 @@ def preview_cut(
     )
 
 
-class Assignee(BaseModel):
-    id: int
-    name: str
-
-
-@router.get("/assignees", response_model=list[Assignee])
-def list_assignees(db: DbSession) -> list[Assignee]:
-    """Active users an issue raised from the floor can be assigned to. Any signed-in
-    user may read it; the admin-only user list carries emails and flags."""
-    from opal.db.models import User
-
-    users = db.query(User).filter(User.is_active.is_(True)).order_by(User.name.asc()).all()
-    return [Assignee(id=u.id, name=u.name) for u in users]
-
-
 @router.get("/{instance_id}/document")
 def get_execution_document(
     instance_id: int,

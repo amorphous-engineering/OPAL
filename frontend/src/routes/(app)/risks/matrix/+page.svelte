@@ -31,10 +31,10 @@
 	const live = (extra: string) => `/risks?active=1&${extra}`;
 </script>
 
-<PageHeader title="Risk matrix" crumbs={[{ label: 'Risks', href: '/risks' }]}>
+<PageHeader title="Risk matrix" crumbs={[{ label: 'Risks', href: '/risks' }, { label: 'Matrix' }]}>
 	{#snippet actions()}
-		<Button variant="outline" href="/risks">REGISTER</Button>
-		<Button href="/risks/new">+ NEW RISK</Button>
+		<Button size="sm" variant="outline" href="/risks">REGISTER</Button>
+		<Button size="sm" href="/risks/new">+ NEW RISK</Button>
 	{/snippet}
 </PageHeader>
 

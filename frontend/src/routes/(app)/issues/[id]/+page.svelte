@@ -62,7 +62,17 @@
 	}
 
 	// ---- Header actions ----
-	const canClose = $derived(!closed && (issue.dispositioned || !bearing));
+	const needsCorrective = $derived(
+		issue.issue_type === 'non_conformance' && !issue.corrective_action?.trim()
+	);
+	const canClose = $derived(!closed && (issue.dispositioned || !bearing) && !needsCorrective);
+	const closeBlock = $derived(
+		!issue.dispositioned && bearing
+			? `${issue.issue_number} is undispositioned`
+			: needsCorrective
+				? 'Corrective action is required to close'
+				: undefined
+	);
 
 	async function close() {
 		await act(() => patch({ status: 'closed' }));
@@ -334,12 +344,13 @@
 <PageHeader
 	title={issue.title}
 	identifier={issue.issue_number}
-	crumbs={[
-		{ label: 'Quality' },
-		{ label: 'Issues', href: '/issues' },
-		{ label: issue.issue_number ?? 'Issue' }
-	]}
+	crumbs={[{ label: 'Issues', href: '/issues' }, { label: issue.issue_number ?? 'Issue' }]}
 >
+	{#snippet heading()}
+		<h1 class="min-w-0 text-lg font-semibold tracking-tight [&>div]:items-center">
+			<InlineText label="Title" value={issue.title} required onsave={text('title')} />
+		</h1>
+	{/snippet}
 	{#snippet state()}
 		<State
 			value={issue.disp_state}
@@ -348,6 +359,7 @@
 		/>
 	{/snippet}
 	{#snippet actions()}
+		<Button size="sm" variant="ghost" href={`/audit?entity=issue&record=${issue.id}`}>AUDIT</Button>
 		{#if closed}
 			<Button size="sm" variant="outline" onclick={reopen}>REOPEN</Button>
 		{:else}
@@ -355,7 +367,7 @@
 				size="sm"
 				variant="outline"
 				disabled={!canClose}
-				title={canClose ? undefined : `${issue.issue_number} is undispositioned`}
+				title={canClose ? undefined : closeBlock}
 				onclick={close}>CLOSE</Button
 			>
 		{/if}
@@ -367,9 +379,6 @@
 	<div class="grid content-start gap-4">
 		<Section title="Details">
 			<DetailTable>
-				<DetailRow label="Title">
-					<InlineText label="Title" value={issue.title} required onsave={text('title')} />
-				</DetailRow>
 				{@render textRow('Description', 'description')}
 				{#if typeFields.nc || issue.should_be || issue.actual}
 					{@render textRow('Should be', 'should_be')}

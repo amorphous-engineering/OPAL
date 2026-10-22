@@ -67,7 +67,7 @@
 		{ key: 'disposition', label: 'Disposition', sortable: true, width: '8rem' },
 		{ key: 'score', label: 'Score', sortable: true, width: '6rem' },
 		{ key: 'owner', label: 'Owner', width: '10rem' },
-		{ key: 'reviewed', label: 'Reviewed', sortable: true, width: '6rem' }
+		{ key: 'reviewed', label: 'Reviewed', sortable: true, width: '10rem' }
 	];
 
 	/** Matrix-cell filters have no control in the bar; show them as a clearable line. */
@@ -198,7 +198,7 @@
 			{:else if col.key === 'owner'}
 				{#if r.owner_name}{r.owner_name}{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'reviewed'}
-				<Timestamp value={r.last_reviewed_at} relative />
+				<Timestamp value={r.last_reviewed_at} />
 			{/if}
 		{/snippet}
 	</DataTable>

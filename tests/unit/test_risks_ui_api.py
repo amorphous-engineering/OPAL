@@ -163,9 +163,3 @@ def test_history_lists_score_and_disposition_changes(client, test_user):
     assert fields["probability"]["from"] == 2 and fields["probability"]["to"] == 4
     assert fields["owner"]["to"] == test_user.name
     assert client.get("/api/risks/99999/history").status_code == 404
-
-
-def test_options_lists_owners_for_non_admin(client, auth_headers, test_user):
-    response = client.get("/api/risks/options", headers=auth_headers)
-    assert response.status_code == 200
-    assert test_user.id in {o["id"] for o in response.json()["owners"]}

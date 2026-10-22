@@ -21,7 +21,9 @@
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>{o.title}</AlertDialog.Title>
-			{#if o.body}<AlertDialog.Description>{o.body}</AlertDialog.Description>{/if}
+			{#if o.body}<AlertDialog.Description class="whitespace-pre-line"
+					>{o.body}</AlertDialog.Description
+				>{/if}
 		</AlertDialog.Header>
 		{#if o.typeToConfirm}
 			<label class="grid gap-1.5 text-xs">

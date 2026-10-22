@@ -504,7 +504,12 @@ def test_instance_facts(client: TestClient, db_session: Session):
 def _create_kitted_instance(client: TestClient) -> tuple[int, dict, dict]:
     part = client.post(
         "/api/parts",
-        json={"name": "Kit Resistor", "tracking_type": "bulk", "category": "Electronics"},
+        json={
+            "name": "Kit Resistor",
+            "tracking_type": "bulk",
+            "category": "Electronics",
+            "tier": 3,
+        },
     ).json()
     client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
     inv = client.post(

@@ -96,7 +96,7 @@ def test_identity_headers_never_authenticate(client, test_user, header):
 def _bulk_inventory(client, qty=10):
     part = client.post(
         "/api/parts",
-        json={"name": "Ledger Widget", "tracking_type": "bulk", "category": "Fasteners"},
+        json={"name": "Ledger Widget", "tracking_type": "bulk", "category": "Fasteners", "tier": 3},
     ).json()
     client.post(f"/api/parts/{part['id']}/activate", json={"cause": "t"})
     inv = client.post(

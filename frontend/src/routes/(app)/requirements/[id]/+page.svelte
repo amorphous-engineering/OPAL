@@ -268,6 +268,19 @@
 		{ label: req.req_number }
 	]}
 >
+	{#snippet heading()}
+		<h1 class="min-w-0 text-lg font-semibold tracking-tight">
+			{#if mutable}
+				<Input
+					class="h-8 w-[min(60ch,60vw)] text-base font-semibold"
+					aria-label="Title"
+					bind:value={title}
+					maxlength={255}
+					onblur={() => saveText('title', title)}
+				/>
+			{:else}{req.title}{/if}
+		</h1>
+	{/snippet}
 	{#snippet state()}
 		<State value={req.lifecycle_state} tone={lifecycleTone(req.lifecycle_state)} badge />
 		<span class="mono text-xs text-muted-foreground">REV {req.revision}</span>
@@ -280,19 +293,24 @@
 	{/snippet}
 	{#snippet actions()}
 		{#if req.stale}<Button size="sm" variant="outline" onclick={reaffirm}>RE-AFFIRM</Button>{/if}
+		<Button size="sm" variant="ghost" href={`/audit?entity=requirement&record=${req.id}`}
+			>AUDIT</Button
+		>
 		{#if req.lifecycle_state === 'baselined'}
 			<Button size="sm" onclick={revise}>REVISE</Button>
 		{/if}
 		{#if req.can_delete}
-			<Button size="sm" variant="outline" class="text-error" onclick={deleteIt}>DELETE</Button>
+			<Button size="sm" variant="destructive" onclick={deleteIt}>DELETE</Button>
 		{/if}
 		{#if !terminal}
-			<Button size="sm" variant="outline" class="text-error" onclick={cancelIt}>CANCEL</Button>
+			<Button size="sm" variant="outline" class="text-error" onclick={cancelIt}
+				>CANCEL REQUIREMENT</Button
+			>
 		{/if}
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<Section title="REQUIREMENT">
 		<DetailTable>
 			<DetailRow label="Statement">
@@ -323,16 +341,6 @@
 		</DetailTable>
 		<div class="grid border-t border-border md:grid-cols-2 md:divide-x md:divide-border">
 			<DetailTable>
-				<DetailRow label="Title">
-					{#if mutable}
-						<Input
-							class="h-7"
-							bind:value={title}
-							maxlength={255}
-							onblur={() => saveText('title', title)}
-						/>
-					{:else}{req.title}{/if}
-				</DetailRow>
 				<DetailRow label="Category">
 					{#if mutable}
 						<Input

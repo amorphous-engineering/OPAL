@@ -8,7 +8,7 @@ export const load: PageLoad = async ({ fetch, params }) => {
 	try {
 		const [req, assignees, tree] = await Promise.all([
 			a.get<Dossier>(`/requirements/${params.id}/dossier`),
-			a.get<{ id: number; name: string }[]>('/requirements/assignees'),
+			a.get<{ id: number; name: string }[]>('/users/directory'),
 			a.get<TreeResponse>('/requirements/tree')
 		]);
 		// Re-parent candidates: anything that is not this row or below it.

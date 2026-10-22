@@ -21,7 +21,7 @@ from opal.config import get_active_project
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_requirement_number
 from opal.db.base import LifecycleState
-from opal.db.models import BaselineEvent, Part, PartRequirement, Requirement, User
+from opal.db.models import BaselineEvent, Part, PartRequirement, Requirement
 from opal.se.baseline import baseline_batch, write_baseline_event
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
 from opal.se.lint import lint_requirement
@@ -500,13 +500,6 @@ def requirement_tree_view(db: DbSession) -> dict:
 def requirements_summary_view(db: DbSession) -> dict:
     """Coverage, verification and staleness roll-up plus what is red."""
     return requirements_summary(db)
-
-
-@router.get("/assignees")
-def requirement_assignees(db: DbSession) -> list[dict]:
-    """Active users, for TBR owner selection (the /users list is admin-only)."""
-    users = db.query(User).filter(User.is_active.is_(True)).order_by(User.name).all()
-    return [{"id": u.id, "name": u.name} for u in users]
 
 
 @router.get("/baselines")

@@ -26,7 +26,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			page: q.get('page') ?? 1,
 			page_size: PAGE_SIZE
 		}),
-		client.get<Assignee[]>('/issues/assignees')
+		client.get<Assignee[]>('/users/directory')
 	]);
 	return { issues, assignees };
 };

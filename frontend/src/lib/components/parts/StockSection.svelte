@@ -3,12 +3,18 @@
 	// Always relevant (empty = one line). Receiving is a commitment, so a draft
 	// part offers no add: the draft banner carries the remedy.
 	import { onMount } from 'svelte';
-	import { DataTable, EmptyLine, Section, State, type Column } from '#lib/components/opal/index.js';
+	import {
+		ActionLink,
+		DataTable,
+		EmptyLine,
+		Section,
+		State,
+		type Column
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { api } from '#lib/api.js';
 	import { qty } from '#lib/format.js';
-	import ActionLink from './ActionLink.svelte';
 	import FormField from './FormField.svelte';
 	import { act } from './actions.js';
 	import type { PartDetail, StockRecord } from './types.js';
@@ -125,10 +131,6 @@
 			<Input id="rs-lot" class="font-mono" bind:value={rLot} />
 		</FormField>
 		<Button type="submit" size="sm" disabled={busy}>RECEIVE</Button>
-		<a
-			href={`/inventory/new?part_id=${part.id}`}
-			class="pb-2 font-mono text-xs font-medium text-info hover:underline">RECEIVE STOCK</a
-		>
 	</form>
 {/snippet}
 
@@ -145,7 +147,7 @@
 				onclick={() => (adding = !adding)}
 				disabled={isDraft}
 				title={isDraft ? 'Draft part: activate to receive stock' : undefined}
-				>{adding ? 'CANCEL' : '+ ADD'}</ActionLink
+				>{adding ? 'CANCEL' : '+ RECEIVE'}</ActionLink
 			>
 		{/snippet}
 		<DataTable
@@ -161,9 +163,6 @@
 			{#snippet cell(g, col)}
 				{#if col.key === 'location'}
 					{g.location}
-					{#if g.records.length > 1}<span class="mono ml-2 text-xs text-muted-foreground"
-							>{g.records.length} rec</span
-						>{/if}
 				{:else if col.key === 'opal'}
 					{#if g.records.length === 1 && g.records[0].opal_number}
 						<a
@@ -192,7 +191,11 @@
 	</Section>
 {:else}
 	<div>
-		<EmptyLine label="STOCK" onadd={isDraft ? undefined : () => (adding = true)} />
+		<EmptyLine
+			label="STOCK"
+			onadd={isDraft ? undefined : () => (adding = true)}
+			addLabel="+ RECEIVE"
+		/>
 		{#if adding}{@render receiveForm()}{/if}
 	</div>
 {/if}

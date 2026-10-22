@@ -9,12 +9,17 @@
 		Timestamp,
 		type Column
 	} from '#lib/components/opal/index.js';
+	import { ActionLink } from '#lib/components/opal/index.js';
 	import { money, qty, stateLabel } from '#lib/format.js';
 	import type { BomLine, Consumption, PartDetail, PoLine, ProcedureUse } from './types.js';
 
 	let { detail, group }: { detail: PartDetail; group: 'purchasing' | 'usage' } = $props();
 
 	const dash = '—';
+	// Context pre-fill: ordering from the part makes it the first line. Drafts cannot be ordered.
+	const orderHref = $derived(
+		detail.part.lifecycle_state === 'draft' ? undefined : `/purchases/new?part_id=${detail.part.id}`
+	);
 
 	const poColumns: Column<PoLine>[] = [
 		{ key: 'po', label: 'PO', width: '9rem', mono: true },
@@ -54,6 +59,9 @@
 {#if group === 'purchasing'}
 	{#if detail.po_lines.length}
 		<Section title="PO lines" count={detail.po_lines.length}>
+			{#snippet actions()}
+				{#if orderHref}<ActionLink href={orderHref}>+ ORDER</ActionLink>{/if}
+			{/snippet}
 			<DataTable
 				rows={detail.po_lines}
 				columns={poColumns}
@@ -84,7 +92,7 @@
 			</DataTable>
 		</Section>
 	{:else if detail.expects.po_lines}
-		<EmptyLine label="PO LINES" />
+		<EmptyLine label="PO LINES" addHref={orderHref} addLabel="+ ORDER" />
 	{/if}
 {:else}
 	<!-- WHERE USED -->

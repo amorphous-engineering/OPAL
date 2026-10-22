@@ -271,7 +271,7 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<StatusPanel summary={data.summary} />
 
 	<Section

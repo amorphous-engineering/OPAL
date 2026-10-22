@@ -38,7 +38,7 @@
 <Popover.Root bind:open>
 	<Popover.Trigger>
 		{#snippet child({ props })}
-			<Button variant="ghost" size="xs" class="font-mono text-info" {...props}>+ ASSIGN PART</Button
+			<Button variant="ghost" size="xs" {...props} class="font-mono text-info">+ ASSIGN PART</Button
 			>
 		{/snippet}
 	</Popover.Trigger>

@@ -76,7 +76,7 @@
 	}
 </script>
 
-<PageHeader title="New risk" crumbs={[{ label: 'Risks', href: '/risks' }]} />
+<PageHeader title="New risk" crumbs={[{ label: 'Risks', href: '/risks' }, { label: 'New' }]} />
 
 <form class="grid max-w-3xl gap-4 p-4" onsubmit={submit}>
 	{#if error}

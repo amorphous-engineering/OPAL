@@ -97,8 +97,8 @@
 			{error}
 		</p>
 	{/if}
-	<div class="flex gap-2">
+	<div class="flex justify-end gap-2">
+		<Button variant="outline" href="/suppliers">CANCEL</Button>
 		<Button type="submit" disabled={busy}>CREATE SUPPLIER</Button>
-		<Button variant="ghost" href="/suppliers">CANCEL</Button>
 	</div>
 </form>

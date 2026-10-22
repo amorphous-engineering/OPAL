@@ -15,7 +15,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { api } from '#lib/api.js';
 	import { qty } from '#lib/format.js';
-	import ActionLink from './ActionLink.svelte';
+	import { ActionLink } from '#lib/components/opal/index.js';
 	import FormField from './FormField.svelte';
 	import PartPicker from './PartPicker.svelte';
 	import { act } from './actions.js';

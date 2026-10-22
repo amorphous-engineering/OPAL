@@ -1,3 +1,4 @@
+export { default as ActionLink } from './ActionLink.svelte';
 export { default as DataTable } from './DataTable.svelte';
 export type { Column } from './types.js';
 export { default as FilterBar } from './FilterBar.svelte';
