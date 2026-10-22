@@ -1,5 +1,6 @@
 """Procedures API routes."""
 
+import copy
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -9,10 +10,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 from opal.api.deps import CurrentUserId, DbSession
+from opal.core import procedure_tree as tree
 from opal.core.audit import AuditContext, get_model_dict, log_create, log_delete, log_update
 from opal.core.diff import diff_part_lists, diff_procedure_versions, snapshots_equivalent
 from opal.core.part_lifecycle import DraftPartsBlocked, draft_parts_in
-from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput
+from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput, Workcenter
 from opal.db.models.execution import InstanceStatus, ProcedureInstance
 from opal.db.models.procedure import (
     MasterProcedure,
@@ -128,7 +130,13 @@ class StepCreate(BaseModel):
     required_role: str | None = Field(None, max_length=50)
     caution: str | None = None
     strict_sequence: bool = False
+    workcenter_id: int | None = None
     parent_step_id: int | None = Field(None, description="Parent op ID for sub-steps")
+    after_step_id: int | None = Field(
+        None,
+        description="Insert right after this step (a sub-step of the same OP, or the OP itself "
+        "to become its first sub-step / the next OP); renumbers. Omit to append.",
+    )
 
 
 class StepUpdate(BaseModel):
@@ -143,6 +151,17 @@ class StepUpdate(BaseModel):
     required_role: str | None = Field(None, max_length=50)
     caution: str | None = None
     strict_sequence: bool | None = None
+    workcenter_id: int | None = None
+
+
+class StepMove(BaseModel):
+    """Move a step: new parent (null = top level) and index among its siblings."""
+
+    parent_step_id: int | None = None
+    index: int = Field(..., ge=0)
+    is_contingency: bool | None = Field(
+        None, description="Top-level only: contingency group (default: keep the step's)"
+    )
 
 
 class StepReorder(BaseModel):
@@ -618,6 +637,48 @@ def _calculate_step_number(
             return str(normal_count + 1)
 
 
+def _check_workcenter(db: DbSession, workcenter_id: int | None) -> None:
+    if workcenter_id is None:
+        return
+    if not db.get(Workcenter, workcenter_id):
+        raise HTTPException(status_code=404, detail="Workcenter not found")
+
+
+def _procedure_steps(db: DbSession, procedure_id: int) -> list[ProcedureStep]:
+    return db.query(ProcedureStep).filter(ProcedureStep.procedure_id == procedure_id).all()
+
+
+def _insert_after(
+    db: DbSession,
+    procedure_id: int,
+    step: ProcedureStep,
+    after: ProcedureStep,
+    parent_step_id: int | None,
+) -> None:
+    """Place a freshly added step right after ``after`` and renumber."""
+    steps = _procedure_steps(db, procedure_id)
+    others = [s for s in steps if s.id != step.id]
+    if after.parent_step_id is not None:
+        # After a sub-step: same OP, next position.
+        parent_id: int | None = after.parent_step_id
+        siblings = tree.children_map(others).get(parent_id, [])
+        index = next(i for i, s in enumerate(siblings) if s.id == after.id) + 1
+        tree.place(steps, step, parent_id, index)
+    elif parent_step_id == after.id:
+        # After an OP, inside it: its first sub-step.
+        tree.place(steps, step, after.id, 0)
+    else:
+        # After an OP, beside it: the next OP of the same group.
+        group = [
+            s
+            for s in tree.children_map(others).get(None, [])
+            if s.is_contingency == after.is_contingency
+        ]
+        index = next(i for i, s in enumerate(group) if s.id == after.id) + 1
+        tree.place(steps, step, None, index, after.is_contingency)
+    db.flush()
+
+
 @router.post("/{procedure_id}/steps", response_model=StepSchema, status_code=201)
 def add_step(
     procedure_id: int,
@@ -658,6 +719,20 @@ def add_step(
         is_contingency = data.is_contingency
         level = 0
 
+    _check_workcenter(db, data.workcenter_id)
+    after: ProcedureStep | None = None
+    if data.after_step_id is not None:
+        after = (
+            db.query(ProcedureStep)
+            .filter(
+                ProcedureStep.id == data.after_step_id,
+                ProcedureStep.procedure_id == procedure_id,
+            )
+            .first()
+        )
+        if not after:
+            raise HTTPException(status_code=404, detail="Step to insert after not found")
+
     # Calculate step number
     step_number = _calculate_step_number(db, procedure_id, data.parent_step_id, is_contingency)
 
@@ -684,9 +759,23 @@ def add_step(
         required_role=data.required_role,
         caution=data.caution,
         strict_sequence=data.strict_sequence,
+        workcenter_id=data.workcenter_id,
     )
     db.add(step)
     db.flush()
+
+    if after is not None:
+        _insert_after(db, procedure_id, step, after, data.parent_step_id)
+    else:
+        # Append at the end of its siblings; keeps `order` in document order.
+        tree.place(
+            _procedure_steps(db, procedure_id),
+            step,
+            data.parent_step_id,
+            10**6,
+            is_contingency,
+        )
+        db.flush()
 
     log_create(db, step, user_id)
     db.commit()
@@ -714,19 +803,29 @@ def update_step(
         raise HTTPException(status_code=404, detail="Step not found")
 
     old_values = get_model_dict(step)
+    regroup = False
 
     if data.title is not None:
         step.title = data.title
-    if data.instructions is not None:
+    # Explicit null clears these: an author must be able to empty a field
+    if "instructions" in data.model_fields_set:
         step.instructions = data.instructions
-    if data.required_data_schema is not None:
+    if "required_data_schema" in data.model_fields_set:
         step.required_data_schema = data.required_data_schema
-    if data.is_contingency is not None:
+    if "estimated_duration_minutes" in data.model_fields_set:
+        step.estimated_duration_minutes = data.estimated_duration_minutes
+    if "workcenter_id" in data.model_fields_set:
+        _check_workcenter(db, data.workcenter_id)
+        step.workcenter_id = data.workcenter_id
+    if data.is_contingency is not None and data.is_contingency != step.is_contingency:
+        if step.parent_step_id is not None:
+            raise HTTPException(
+                status_code=400, detail="A sub-step follows its OP; set contingency on the OP"
+            )
         step.is_contingency = data.is_contingency
+        regroup = True
     if data.requires_signoff is not None:
         step.requires_signoff = data.requires_signoff
-    if data.estimated_duration_minutes is not None:
-        step.estimated_duration_minutes = data.estimated_duration_minutes
     # Explicit null clears these: a stale safety callout must be removable,
     # or it re-snapshots into every future published version
     if "required_role" in data.model_fields_set:
@@ -735,6 +834,11 @@ def update_step(
         step.caution = data.caution
     if data.strict_sequence is not None:
         step.strict_sequence = data.strict_sequence
+
+    if regroup:
+        # Toggling contingency moves the OP between numbering groups (1, 2 / C1, C2).
+        all_steps = db.query(ProcedureStep).filter(ProcedureStep.procedure_id == procedure_id).all()
+        tree.normalize(all_steps)
 
     log_update(db, step, old_values, user_id)
     db.commit()
@@ -760,20 +864,266 @@ def delete_step(
     if not step:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    deleted_order = step.order
     log_delete(db, step, user_id)
     db.delete(step)
+    db.flush()
 
-    # Reorder remaining steps
-    remaining = (
-        db.query(ProcedureStep)
-        .filter(ProcedureStep.procedure_id == procedure_id, ProcedureStep.order > deleted_order)
-        .all()
-    )
-    for s in remaining:
-        s.order -= 1
+    # Numbering and order close up over the gap (sub-steps went with their OP).
+    tree.normalize(_procedure_steps(db, procedure_id))
 
     db.commit()
+
+
+@router.post(
+    "/{procedure_id}/steps/{step_id}/duplicate", response_model=StepSchema, status_code=201
+)
+def duplicate_step(
+    procedure_id: int,
+    step_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> StepSchema:
+    """Copy a step (an OP takes its sub-steps along) to right after the original.
+
+    Kit lines and images are copied too; images share the same attachment files.
+    Op-level dependencies are not copied: a copy starts unconstrained.
+    """
+    source = _get_procedure_step(db, procedure_id, step_id)
+
+    def clone(src: ProcedureStep, parent_id: int | None) -> ProcedureStep:
+        dup = ProcedureStep(
+            procedure_id=procedure_id,
+            parent_step_id=parent_id,
+            order=src.order,
+            step_number=src.step_number,
+            level=src.level,
+            title=src.title,
+            instructions=src.instructions,
+            required_data_schema=copy.deepcopy(src.required_data_schema),
+            is_contingency=src.is_contingency,
+            requires_signoff=src.requires_signoff,
+            estimated_duration_minutes=src.estimated_duration_minutes,
+            required_role=src.required_role,
+            caution=src.caution,
+            strict_sequence=src.strict_sequence,
+            workcenter_id=src.workcenter_id,
+        )
+        db.add(dup)
+        db.flush()
+        log_create(db, dup, user_id)
+        for sk in src.step_kits:
+            kit = StepKit(
+                step_id=dup.id,
+                part_id=sk.part_id,
+                quantity_required=sk.quantity_required,
+                usage_type=sk.usage_type,
+                notes=sk.notes,
+            )
+            db.add(kit)
+            db.flush()
+            log_create(db, kit, user_id)
+        for img in src.images:
+            link = StepImage(
+                step_id=dup.id,
+                attachment_id=img.attachment_id,
+                caption=img.caption,
+                position=img.position,
+            )
+            db.add(link)
+            db.flush()
+            log_create(db, link, user_id)
+        return dup
+
+    dup = clone(source, source.parent_step_id)
+    if source.parent_step_id is None:
+        for sub in sorted(source.sub_steps, key=lambda s: (s.order, s.id)):
+            clone(sub, dup.id)
+    db.flush()
+
+    steps = _procedure_steps(db, procedure_id)
+    siblings = tree.children_map([s for s in steps if s.id != dup.id]).get(
+        source.parent_step_id, []
+    )
+    if source.parent_step_id is None:
+        siblings = [s for s in siblings if s.is_contingency == source.is_contingency]
+    index = next(i for i, s in enumerate(siblings) if s.id == source.id) + 1
+    tree.place(steps, dup, source.parent_step_id, index, source.is_contingency)
+    db.commit()
+    db.refresh(dup)
+    return StepSchema.model_validate(dup)
+
+
+@router.post("/{procedure_id}/steps/{step_id}/move", response_model=StepSchema)
+def move_step(
+    procedure_id: int,
+    step_id: int,
+    data: StepMove,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> StepSchema:
+    """Move a step to ``index`` among the children of ``parent_step_id`` (null = top level).
+
+    An OP that holds sub-steps stays top-level. Moving an OP under another OP
+    drops its op-level dependencies and those pointing at it. An OP changes
+    between the normal and contingency groups through ``is_contingency``.
+    """
+    step = _get_procedure_step(db, procedure_id, step_id)
+    steps = _procedure_steps(db, procedure_id)
+
+    if data.parent_step_id is not None:
+        parent = next((s for s in steps if s.id == data.parent_step_id), None)
+        if parent is None:
+            raise HTTPException(status_code=404, detail="Parent step not found")
+        if parent.parent_step_id is not None:
+            raise HTTPException(status_code=400, detail="Sub-steps cannot hold sub-steps")
+        if parent.id == step.id:
+            raise HTTPException(status_code=400, detail="A step cannot move into itself")
+        if any(s.parent_step_id == step.id for s in steps):
+            raise HTTPException(status_code=400, detail="An OP with sub-steps stays top-level")
+
+    old_values = get_model_dict(step)
+    if step.parent_step_id is None and data.parent_step_id is not None:
+        for dep in (
+            db.query(StepDependency)
+            .filter(
+                (StepDependency.step_id == step.id) | (StepDependency.depends_on_step_id == step.id)
+            )
+            .all()
+        ):
+            log_delete(db, dep, user_id)
+            db.delete(dep)
+        step.strict_sequence = False
+    contingency = step.is_contingency if data.is_contingency is None else data.is_contingency
+    tree.place(steps, step, data.parent_step_id, data.index, contingency)
+    log_update(db, step, old_values, user_id)
+    db.commit()
+    db.refresh(step)
+    return StepSchema.model_validate(step)
+
+
+# ============ Draft (authoring view) ============
+
+
+class DraftKitLine(BaseModel):
+    """A step kit line with the part identity an author needs."""
+
+    id: int
+    part_id: int
+    part_name: str
+    part_internal_pn: str | None = None
+    quantity_required: float
+    usage_type: str
+    notes: str | None = None
+
+
+class DraftImage(BaseModel):
+    """A step reference image."""
+
+    id: int
+    attachment_id: int
+    caption: str | None = None
+    position: int
+
+
+class DraftStep(BaseModel):
+    """One step of the draft, flat, with everything the editor shows."""
+
+    id: int
+    order: int
+    step_number: str
+    level: int
+    parent_step_id: int | None = None
+    title: str
+    instructions: str | None = None
+    required_data_schema: dict[str, Any] | None = None
+    is_contingency: bool = False
+    requires_signoff: bool = False
+    estimated_duration_minutes: int | None = None
+    required_role: str | None = None
+    caution: str | None = None
+    strict_sequence: bool = False
+    workcenter_id: int | None = None
+    depends_on: list[int] = []
+    images: list[DraftImage] = []
+    step_kit: list[DraftKitLine] = []
+
+
+class DraftResponse(BaseModel):
+    """The whole draft in document order, in one request."""
+
+    procedure_id: int
+    steps: list[DraftStep]
+
+
+@router.get("/{procedure_id}/draft", response_model=DraftResponse)
+def get_draft(procedure_id: int, db: DbSession) -> DraftResponse:
+    """The procedure's steps in document order with images, kit lines and
+    op dependencies, for the template editor. Bulk-loaded: a handful of queries."""
+    _require_live_procedure(db, procedure_id)
+    steps = tree.document_order(_procedure_steps(db, procedure_id))
+    ids = [s.id for s in steps]
+
+    images: dict[int, list[StepImage]] = {}
+    kits: dict[int, list[StepKit]] = {}
+    deps: dict[int, list[int]] = {}
+    if ids:
+        for img in (
+            db.query(StepImage)
+            .filter(StepImage.step_id.in_(ids))
+            .order_by(StepImage.position, StepImage.id)
+            .all()
+        ):
+            images.setdefault(img.step_id, []).append(img)
+        for sk in db.query(StepKit).filter(StepKit.step_id.in_(ids)).order_by(StepKit.id).all():
+            kits.setdefault(sk.step_id, []).append(sk)
+        for d in db.query(StepDependency).filter(StepDependency.step_id.in_(ids)).all():
+            deps.setdefault(d.step_id, []).append(d.depends_on_step_id)
+
+    return DraftResponse(
+        procedure_id=procedure_id,
+        steps=[
+            DraftStep(
+                id=s.id,
+                order=s.order,
+                step_number=s.step_number,
+                level=s.level,
+                parent_step_id=s.parent_step_id,
+                title=s.title,
+                instructions=s.instructions,
+                required_data_schema=s.required_data_schema,
+                is_contingency=s.is_contingency,
+                requires_signoff=s.requires_signoff,
+                estimated_duration_minutes=s.estimated_duration_minutes,
+                required_role=s.required_role,
+                caution=s.caution,
+                strict_sequence=s.strict_sequence,
+                workcenter_id=s.workcenter_id,
+                depends_on=sorted(deps.get(s.id, [])),
+                images=[
+                    DraftImage(
+                        id=i.id,
+                        attachment_id=i.attachment_id,
+                        caption=i.caption,
+                        position=i.position,
+                    )
+                    for i in images.get(s.id, [])
+                ],
+                step_kit=[
+                    DraftKitLine(
+                        id=k.id,
+                        part_id=k.part_id,
+                        part_name=k.part.name,
+                        part_internal_pn=k.part.internal_pn,
+                        quantity_required=float(k.quantity_required),
+                        usage_type=_enum_value(k.usage_type),
+                        notes=k.notes,
+                    )
+                    for k in kits.get(s.id, [])
+                ],
+            )
+            for s in steps
+        ],
+    )
 
 
 # ============ Step images (authored reference imagery) ============
@@ -936,6 +1286,38 @@ def delete_step_image(
     log_delete(db, image, user_id)
     db.delete(image)
     db.commit()
+
+
+class StepImageReorder(BaseModel):
+    """Image ids in their new display order."""
+
+    image_ids: list[int]
+
+
+@router.post(
+    "/{procedure_id}/steps/{step_id}/images/reorder", response_model=list[StepImageResponse]
+)
+def reorder_step_images(
+    procedure_id: int,
+    step_id: int,
+    data: StepImageReorder,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> list[StepImageResponse]:
+    """Set the display order of a step's reference images."""
+    step = _get_procedure_step(db, procedure_id, step_id)
+    images = {img.id: img for img in step.images}
+    if set(data.image_ids) != set(images) or len(data.image_ids) != len(images):
+        raise HTTPException(status_code=400, detail="Image ids don't match the step's images")
+    for position, image_id in enumerate(data.image_ids):
+        img = images[image_id]
+        if img.position != position:
+            old_values = get_model_dict(img)
+            img.position = position
+            log_update(db, img, old_values, user_id)
+    db.commit()
+    db.refresh(step)
+    return [StepImageResponse.model_validate(img) for img in step.images]
 
 
 def _renumber_procedure_steps(steps: list[ProcedureStep]) -> None:
