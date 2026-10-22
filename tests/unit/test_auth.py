@@ -72,6 +72,21 @@ def test_session_lifecycle(db_session, test_user) -> None:
     assert resolve_session(db_session, token) is None
 
 
+def test_sessions_record_the_users_last_seen(db_session, test_user) -> None:
+    test_user.last_seen_at = None
+    token = create_session(db_session, test_user)
+    assert test_user.last_seen_at is not None
+
+    # A stale session being touched refreshes the account's last-seen time too.
+    stale = datetime.now(UTC) - timedelta(hours=2)
+    test_user.last_seen_at = stale
+    session = db_session.query(AuthSession).filter(AuthSession.user_id == test_user.id).one()
+    session.last_seen_at = stale
+    db_session.flush()
+    assert resolve_session(db_session, token) is test_user
+    assert test_user.last_seen_at > stale
+
+
 def test_session_expiry(db_session, test_user) -> None:
     token = create_session(db_session, test_user)
     session = db_session.query(AuthSession).filter(AuthSession.user_id == test_user.id).one()

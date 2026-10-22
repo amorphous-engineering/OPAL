@@ -150,7 +150,7 @@
 </PageHeader>
 
 <div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<ProfileSection
 			{profile}
 			{canEdit}
@@ -170,7 +170,7 @@
 			<PreferencesSection />
 		{/if}
 	</div>
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if isSelf}
 			<PasskeysSection enabled={passkeysEnabled} onchanged={() => refreshAll()} />
 			<SessionsSection version={sessionsVersion} />

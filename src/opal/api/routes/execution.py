@@ -38,6 +38,7 @@ from opal.core.execution_flow import (
     focus_step,
     mark_instance_in_work,
     sequence_blockers,
+    signoff_step_flow,
     skip_blockers,
     touch_user_presence,
 )
@@ -46,7 +47,6 @@ from opal.core.genealogy import record_assembly_genealogy
 from opal.core.holds import (
     blocking_issues_for_instance,
     enum_value,
-    get_hold_state,
     get_holds_payload,
 )
 from opal.core.part_lifecycle import ensure_parts_active
@@ -1307,10 +1307,6 @@ async def signoff_step(
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
-    inst_status = instance.status.value if hasattr(instance.status, "value") else instance.status
-    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
-        raise HTTPException(status_code=400, detail="Instance is not active")
-
     step_exec = (
         db.query(StepExecution)
         .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
@@ -1319,54 +1315,18 @@ async def signoff_step(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    step_status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
-
-    # Can only sign off steps that are awaiting sign-off
-    if step_status != StepStatus.AWAITING_SIGNOFF.value:
-        if step_status == StepStatus.SIGNED_OFF.value:
-            raise HTTPException(status_code=400, detail="Step already signed off")
-        elif step_status in [StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value]:
-            raise HTTPException(
-                status_code=400, detail="Step has sub-steps that are not yet complete"
-            )
-        else:
-            raise HTTPException(
-                status_code=400, detail=f"Cannot sign off step in {step_status} status"
-            )
-
-    # Containment gate: sign-off is a terminal commitment, same scope check
-    # as COMPLETE.
-    signoff_blockers = get_hold_state(db, instance_id).blockers_for_complete(step_exec)
-    if signoff_blockers:
-        raise HTTPException(
-            status_code=400, detail=_hold_blocker_detail("sign off", signoff_blockers)
-        )
-
-    step_exec.status = StepStatus.SIGNED_OFF
-    step_exec.signed_off_at = datetime.now(UTC)
-    step_exec.signed_off_by_id = user_id
-
-    # Track old status to detect completion
-    old_instance_status = (
-        instance.status.value if hasattr(instance.status, "value") else instance.status
-    )
-
-    # Check if procedure is complete
-    check_instance_completion(db, instance)
+    try:
+        result = signoff_step_flow(db, instance, step_exec, user_id)
+    except FlowError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
 
     db.commit()
     db.refresh(step_exec)
-    db.refresh(instance)
-
-    # Check if instance just completed
-    new_instance_status = (
-        instance.status.value if hasattr(instance.status, "value") else instance.status
-    )
-    if (
-        old_instance_status != InstanceStatus.COMPLETED.value
-        and new_instance_status == InstanceStatus.COMPLETED.value
-    ):
-        await emit_instance_completed(instance_id, instance.procedure_id, new_instance_status)
+    if result.instance_completed:
+        db.refresh(instance)
+        await emit_instance_completed(
+            instance_id, instance.procedure_id, InstanceStatus.COMPLETED.value
+        )
 
     return _step_response(step_exec)
 

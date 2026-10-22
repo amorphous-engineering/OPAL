@@ -46,6 +46,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install dependencies
 uv sync
 
+# Build the web client (needs Node 22+ and pnpm)
+(cd frontend && pnpm install && pnpm build)
+
 # Initialize database
 uv run opal init
 
@@ -69,11 +72,15 @@ uv run opal migrate generate --message "Description"
 
 # Apply migrations
 uv run opal migrate upgrade
+
+# Web client with hot reload against a seeded dev database
+# (API :8000+N, web :5173+N; demo users build/test/qa, password kestrel-demo)
+frontend/scripts/dev.sh 0
 ```
 
 ## Stack
 
 - **Database**: SQLite
 - **Backend**: Python 3.11+ with FastAPI
-- **Frontend**: HTMX + Jinja2 templates
+- **Frontend**: SvelteKit (Svelte 5) single-page app with shadcn-svelte and Tailwind, served by the backend
 - **Desktop App**: Textual TUI launcher with auto-updater
