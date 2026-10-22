@@ -144,7 +144,10 @@ def web_client(path: str) -> Response:
         return Response(status_code=404)
     candidate = (CLIENT_DIR / path).resolve()
     if path and candidate.is_file() and CLIENT_DIR.resolve() in candidate.parents:
-        return FileResponse(candidate)
+        # Hashed build assets never change under the same name.
+        immutable = path.startswith("_app/immutable/")
+        cache = "public, max-age=31536000, immutable" if immutable else "no-cache"
+        return FileResponse(candidate, headers={"Cache-Control": cache})
     index = CLIENT_DIR / "index.html"
     if not index.exists():
         return HTMLResponse(

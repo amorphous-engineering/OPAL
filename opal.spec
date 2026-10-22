@@ -21,9 +21,11 @@ migrations_dir = Path("migrations")
 # Collect all data files that need to be bundled
 datas = []
 
-# Web templates and static files
-datas.append((str(src_dir / "web" / "templates"), "opal/web/templates"))
-datas.append((str(src_dir / "web" / "static"), "opal/web/static"))
+# Built web client (frontend/ → `pnpm build` writes src/opal/web_client)
+web_client = src_dir / "web_client"
+if not (web_client / "index.html").exists():
+    raise SystemExit("Web client not built: run `pnpm install && pnpm build` in frontend/")
+datas.append((str(web_client), "opal/web_client"))
 
 # SE requirement lint rules (loaded as data by opal.se.lint)
 datas.append((str(src_dir / "se" / "lint_rules.yaml"), "opal/se"))
@@ -69,7 +71,6 @@ a = Analysis(
         "opal.db",
         "opal.db.models",
         "opal.db.base",
-        "opal.web",
         "opal.tui",
         "opal.mcp",
         "uvicorn",

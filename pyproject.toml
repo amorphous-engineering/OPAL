@@ -72,6 +72,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opal"]
+# The built web client is gitignored (a build output) but ships in the wheel.
+artifacts = ["src/opal/web_client/**"]
 
 [tool.ruff]
 line-length = 100
