@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
@@ -75,7 +75,7 @@ class PartCreate(BaseModel):
     procurement: Literal["make", "buy", "both"] | None = None
     tier: int = 1  # Tier level; must be one of the project's configured tiers
     parent_id: int | None = None  # Parent assembly if this is a child part
-    reorder_point: Decimal | None = None
+    reorder_point: Decimal | None = Field(None, ge=0)
     is_tooling: bool = False
     calibration_interval_days: int | None = None
     metadata: dict[str, Any] | None = None
@@ -94,7 +94,7 @@ class PartUpdate(BaseModel):
     procurement: Literal["make", "buy", "both"] | None = None
     tier: int | None = None
     parent_id: int | None = None
-    reorder_point: Decimal | None = None
+    reorder_point: Decimal | None = Field(None, ge=0)
     is_tooling: bool | None = None
     calibration_interval_days: int | None = None
     metadata: dict[str, Any] | None = None
@@ -1013,6 +1013,9 @@ async def import_preview(
                 preview.reorder_point = float(rp_str)
             except ValueError:
                 preview.errors.append(f"Invalid reorder_point: '{rp_str}'")
+            else:
+                if preview.reorder_point < 0:
+                    preview.errors.append(f"Reorder point cannot be negative, got '{rp_str}'")
 
         # Validate required fields
         if not preview.name:

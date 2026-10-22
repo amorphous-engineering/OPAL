@@ -305,3 +305,22 @@ def test_tracking_cannot_change_once_stock_exists(client):
     # Same value is not a change
     resp = client.patch(f"/api/parts/{part['id']}", json={"tracking_type": "bulk"})
     assert resp.status_code == 200
+
+
+def test_reorder_point_cannot_be_negative(client):
+    resp = client.post("/api/parts", json={"name": "Neg Reorder", "reorder_point": -1})
+    assert resp.status_code == 422
+    part = client.post("/api/parts", json={"name": "Ok Reorder", "reorder_point": 5}).json()
+    assert client.patch(f"/api/parts/{part['id']}", json={"reorder_point": -2}).status_code == 422
+
+
+def test_import_preview_flags_negative_reorder_point(client):
+    csv = "name,reorder_point\nImport Neg,-4\nImport Fine,3\n"
+    resp = client.post(
+        "/api/parts/import/preview", files={"file": ("p.csv", csv.encode(), "text/csv")}
+    )
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()["rows"]
+    assert rows[0]["valid"] is False
+    assert "negative" in rows[0]["errors"][0]
+    assert rows[1]["valid"] is True
