@@ -242,42 +242,6 @@
 			</Section>
 		{/if}
 
-		{#if data.issues.total === 0}
-			<EmptyLine label="Open issues" />
-		{:else}
-			<Section title="Open issues" count={data.issues.total}>
-				{#snippet actions()}
-					{#if data.issues.total > data.issues.items.length}
-						<Button variant="ghost" size="xs" href={`/issues?procedure_id=${p.id}&status=open`}
-							>ALL →</Button
-						>
-					{/if}
-				{/snippet}
-				<DataTable
-					rows={data.issues.items}
-					columns={issueColumns}
-					emptyLabel="Open issues"
-					dense
-					key={(r) => r.id}
-					href={(r) => `/issues/${r.id}`}
-				>
-					{#snippet cell(r, col)}
-						{#if col.key === 'issue_number'}
-							<a href={`/issues/${r.id}`} class="text-info hover:underline"
-								>{r.issue_number ?? '—'}</a
-							>
-						{:else if col.key === 'priority'}
-							<State value={r.priority} />
-						{:else if col.key === 'disp_state'}
-							<State value={r.disp_state} />
-						{:else}
-							{(r as unknown as Record<string, unknown>)[col.key]}
-						{/if}
-					{/snippet}
-				</DataTable>
-			</Section>
-		{/if}
-
 		<VersionsSection
 			procedureId={p.id}
 			versions={data.versions}
@@ -297,6 +261,40 @@
 	<PartLines kind="kit" procedureId={p.id} lines={data.kit} onchange={reload} />
 	{#if showOutputs}
 		<PartLines kind="outputs" procedureId={p.id} lines={data.outputs} onchange={reload} />
+	{/if}
+	{#if data.issues.total === 0}
+		<EmptyLine label="Open issues" />
+	{:else}
+		<Section title="Open issues" count={data.issues.total}>
+			{#snippet actions()}
+				{#if data.issues.total > data.issues.items.length}
+					<Button variant="ghost" size="xs" href={`/issues?procedure_id=${p.id}&status=open`}
+						>ALL →</Button
+					>
+				{/if}
+			{/snippet}
+			<DataTable
+				rows={data.issues.items}
+				columns={issueColumns}
+				emptyLabel="Open issues"
+				dense
+				key={(r) => r.id}
+				href={(r) => `/issues/${r.id}`}
+			>
+				{#snippet cell(r, col)}
+					{#if col.key === 'issue_number'}
+						<a href={`/issues/${r.id}`} class="text-info hover:underline">{r.issue_number ?? '—'}</a
+						>
+					{:else if col.key === 'priority'}
+						<State value={r.priority} />
+					{:else if col.key === 'disp_state'}
+						<State value={r.disp_state} />
+					{:else}
+						{(r as unknown as Record<string, unknown>)[col.key]}
+					{/if}
+				{/snippet}
+			</DataTable>
+		</Section>
 	{/if}
 </div>
 

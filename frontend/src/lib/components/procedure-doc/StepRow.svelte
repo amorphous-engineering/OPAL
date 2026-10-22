@@ -93,6 +93,12 @@
 				title={step.caution}>CAUTION</span
 			>
 		{/if}
+		{#if step.requires_signoff && !terminal}
+			<span
+				class="inline-flex h-5 items-center border border-info/50 px-1.5 font-mono text-[11px] font-medium text-info"
+				title="Requires sign-off">SIGN-OFF</span
+			>
+		{/if}
 		{#if au}<AuthorChips {step} />{/if}
 		<CursorChips cursors={step.cursors} viewerId={ctl.viewerId} />
 		{#if nAtt || nNote}

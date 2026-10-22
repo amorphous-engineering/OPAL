@@ -9,7 +9,6 @@
 	const chip = 'font-mono text-[11px] whitespace-nowrap text-muted-foreground hidden md:inline';
 </script>
 
-{#if step.requires_signoff}<span class={chip} title="Requires sign-off">SIGNOFF</span>{/if}
 {#if step.estimated_duration_minutes}<span class={chip} title="Estimate"
 		>{duration(step.estimated_duration_minutes)}</span
 	>{/if}
