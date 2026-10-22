@@ -181,6 +181,7 @@ def create_session(
 ) -> str:
     """Mint a session for a user and return the raw cookie token."""
     token = secrets.token_urlsafe(32)
+    user.last_seen_at = datetime.now(UTC)
     db.add(
         AuthSession(
             user_id=user.id,
@@ -214,6 +215,7 @@ def resolve_session(db: Session, token: str | None) -> User | None:
     if last_seen is None or now - last_seen > SESSION_TOUCH_INTERVAL:
         session.last_seen_at = now
         session.expires_at = now + SESSION_LIFETIME
+        user.last_seen_at = now
     return user
 
 

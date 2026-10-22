@@ -63,7 +63,7 @@
 		<Button size="sm" href="/users/new">+ NEW USER</Button>
 	{/snippet}
 	{#snippet meta()}<span class="mono">{data.total}</span>
-		{data.status === 'all' ? 'accounts' : data.status + ' accounts'}{/snippet}
+		{data.status === 'all' ? 'total' : data.status}{/snippet}
 </PageHeader>
 
 <div class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">

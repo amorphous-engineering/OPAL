@@ -6,15 +6,39 @@
 	import NotificationBell from '#lib/components/shell/NotificationBell.svelte';
 	import UserMenu from '#lib/components/shell/UserMenu.svelte';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
+	import { api } from '#lib/api.js';
 	import type { LayoutProps } from './$types';
 
-	let { children }: LayoutProps = $props();
+	let { children, data }: LayoutProps = $props();
 	let paletteOpen = $state(false);
+
+	// Presence: the Users pages show who is online, which needs a pulse while a tab is open.
+	$effect(() => {
+		const beat = () => {
+			if (document.visibilityState === 'visible') api.post('/users/heartbeat', {}).catch(() => {});
+		};
+		beat();
+		const timer = setInterval(beat, 15_000);
+		document.addEventListener('visibilitychange', beat);
+		return () => {
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', beat);
+		};
+	});
 </script>
 
 <Sidebar.Provider style="--sidebar-width: 13rem">
 	<AppSidebar />
 	<Sidebar.Inset class="min-w-0">
+		{#if data.demoActive}
+			<div
+				role="status"
+				class="flex h-7 items-center gap-3 border-b border-warn/40 bg-warn-muted px-3 font-mono text-[11px] tracking-wider text-warn uppercase"
+			>
+				<span>Demo database active — changes are deleted on exit</span>
+				{#if data.user.is_admin}<a class="underline" href="/settings">Exit demo</a>{/if}
+			</div>
+		{/if}
 		<header
 			class="sticky top-0 z-30 flex h-11 items-center gap-2 border-b border-border bg-background px-3"
 		>

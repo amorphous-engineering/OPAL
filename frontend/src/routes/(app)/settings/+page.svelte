@@ -16,12 +16,12 @@
 <PageHeader title="Settings" crumbs={[{ label: 'System' }, { label: 'Settings' }]} />
 
 <div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<ProjectSummary project={data.project} {isAdmin} />
 		<AuthSummary signIn={data.signIn} auth={data.auth} {isAdmin} />
 		<AgentSection agent={data.agent} {isAdmin} />
 	</div>
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<ExtensionsSummary items={data.extensions.items} />
 		{#if isAdmin}<LifecycleSections lifecycle={data.lifecycle} />{/if}
 		<SystemSection system={data.system} />
