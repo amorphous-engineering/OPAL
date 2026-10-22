@@ -148,6 +148,10 @@ def web_client(path: str) -> Response:
         immutable = path.startswith("_app/immutable/")
         cache = "public, max-age=31536000, immutable" if immutable else "no-cache"
         return FileResponse(candidate, headers={"Cache-Control": cache})
+    # A missing file (anything with an extension: /openapi.json, /x.js) is a
+    # 404, not the app shell — client routes never carry an extension.
+    if "." in path.rsplit("/", 1)[-1]:
+        return Response(status_code=404)
     index = CLIENT_DIR / "index.html"
     if not index.exists():
         return HTMLResponse(

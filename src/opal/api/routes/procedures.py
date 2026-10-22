@@ -861,21 +861,10 @@ async def add_step_image(
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="Step images must be image files")
 
-    from opal.api.routes.attachments import upload_attachment
+    from opal.api.routes.attachments import store_attachment
 
-    # Called as a plain function, not through FastAPI: the omitted Form(...)
-    # parameters would otherwise default to truthy sentinel objects, so pass
-    # them explicitly as None.
-    attachment = await upload_attachment(
-        db=db,
-        user_id=user_id,
-        file=file,
-        procedure_instance_id=None,
-        step_execution_id=None,
-        issue_id=None,
-        procedure_id=procedure_id,
-        kind="step_image",
-        note=None,
+    attachment = await store_attachment(
+        db, user_id, file, procedure_id=procedure_id, kind="step_image"
     )
 
     max_position = (

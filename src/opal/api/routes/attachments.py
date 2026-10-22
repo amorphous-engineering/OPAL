@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.config import get_active_settings
@@ -94,10 +95,40 @@ async def upload_attachment(
 ) -> AttachmentResponse:
     """Upload a file attachment.
 
-    Can be linked to a procedure instance, step execution, issue, and/or
-    procedure template. `procedure_id` scopes inline images used in step
+    Can be linked to a procedure instance, step execution, issue, purchase
+    and/or procedure template. `procedure_id` scopes inline images used in step
     instructions so they're cleaned up when the procedure is deleted.
     """
+    attachment = await store_attachment(
+        db,
+        user_id,
+        file,
+        procedure_instance_id=procedure_instance_id,
+        step_execution_id=step_execution_id,
+        issue_id=issue_id,
+        purchase_id=purchase_id,
+        procedure_id=procedure_id,
+        kind=kind,
+        note=note,
+    )
+    return _attachment_to_response(attachment)
+
+
+async def store_attachment(
+    db: Session,
+    user_id: int | None,
+    file: UploadFile,
+    *,
+    procedure_instance_id: int | None = None,
+    step_execution_id: int | None = None,
+    issue_id: int | None = None,
+    purchase_id: int | None = None,
+    procedure_id: int | None = None,
+    kind: str | None = None,
+    note: str | None = None,
+) -> Attachment:
+    """Validate, write and record an uploaded file. Callable from other routes
+    (step images) with plain keyword arguments."""
     if kind is not None and kind not in ALLOWED_KINDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -211,8 +242,7 @@ async def upload_attachment(
     log_create(db, attachment, user_id)
     db.commit()
     db.refresh(attachment)
-
-    return _attachment_to_response(attachment)
+    return attachment
 
 
 @router.get("/{attachment_id}/download")
