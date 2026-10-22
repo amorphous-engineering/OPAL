@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from opal.api.deps import require_user
 from opal.api.routes import (
     attachments,
+    audit,
     auth,
     bom,
     datasets,
@@ -20,6 +21,7 @@ from opal.api.routes import (
     issues,
     notifications,
     onshape,
+    overview,
     parts,
     procedures,
     project,
@@ -65,6 +67,8 @@ protected.include_router(bom.router, prefix="/bom", tags=["bom"])
 protected.include_router(project.router)  # Has its own /project prefix
 protected.include_router(search.router)  # Has its own /search prefix
 protected.include_router(attachments.router)  # Has its own /attachments prefix
+protected.include_router(audit.router)  # Has its own /audit prefix
+protected.include_router(overview.router)  # Has its own /overview prefix
 protected.include_router(undo.router)  # Has its own /undo prefix
 protected.include_router(
     onshape.router

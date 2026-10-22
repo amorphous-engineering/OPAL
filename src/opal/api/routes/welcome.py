@@ -13,6 +13,20 @@ class WelcomeResponse(BaseModel):
     ok: bool = True
 
 
+class WelcomeState(BaseModel):
+    mode: str  # "setup" | "tutorial"
+
+
+@router.get("", response_model=WelcomeState)
+def welcome_state(db: DbSession, user: RequiredUser) -> WelcomeState:
+    """Which onboarding applies: the first admin on an empty catalog sets the project
+    up (or loads the demo); everyone else gets the orientation."""
+    from opal.db.models.part import Part
+
+    is_fresh = db.query(Part.id).filter(Part.deleted_at.is_(None)).first() is None
+    return WelcomeState(mode="setup" if user.is_admin and is_fresh else "tutorial")
+
+
 @router.post("/complete", response_model=WelcomeResponse)
 def complete_onboarding(
     db: DbSession,

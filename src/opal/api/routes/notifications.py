@@ -32,6 +32,7 @@ class NotificationResponse(BaseModel):
     subject_id: int
     created_at: datetime
     read_at: datetime | None
+    actor_name: str | None = None
 
     @classmethod
     def of(cls, row: Notification) -> "NotificationResponse":
@@ -47,12 +48,17 @@ class NotificationResponse(BaseModel):
             subject_id=row.subject_id,
             created_at=row.created_at,
             read_at=row.read_at,
+            actor_name=row.actor.name if row.actor else None,
         )
 
 
 class NotificationListResponse(BaseModel):
     items: list[NotificationResponse]
     unread_count: int
+    total: int = 0
+
+
+_SORTS = ("recent", "priority", "unread")
 
 
 @router.get("", response_model=NotificationListResponse)
@@ -60,26 +66,43 @@ def list_notifications(
     db: DbSession,
     user_id: CurrentUserId,
     unread_only: bool = False,
+    state: str | None = Query(None, description="unread | read"),
     category: str | None = None,
+    sort: str = Query("recent", description="recent | priority | unread"),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> NotificationListResponse:
-    """The caller's undismissed notifications, newest first."""
+    """The caller's undismissed notifications. Newest first unless sorted otherwise."""
+    if category and category not in {c.value for c in NotificationCategory}:
+        raise HTTPException(status_code=400, detail=f"Unknown category: {category}")
+    if sort not in _SORTS:
+        raise HTTPException(status_code=400, detail=f"Unknown sort: {sort}")
+    if state not in (None, "", "unread", "read"):
+        raise HTTPException(status_code=400, detail=f"Unknown state: {state}")
+
     query = db.query(Notification).filter(
         Notification.user_id == user_id, Notification.dismissed_at.is_(None)
     )
-    if unread_only:
+    if unread_only or state == "unread":
         query = query.filter(Notification.read_at.is_(None))
+    elif state == "read":
+        query = query.filter(Notification.read_at.isnot(None))
 
-    rows = query.order_by(Notification.created_at.desc(), Notification.id.desc()).limit(limit).all()
+    rows = query.order_by(Notification.created_at.desc(), Notification.id.desc()).all()
 
+    # Category is derived from kind, so it is filtered here rather than stored twice.
+    # Filtering before the limit keeps a sparse category from being cut off by
+    # newer rows of another category.
     if category:
-        if category not in {c.value for c in NotificationCategory}:
-            raise HTTPException(status_code=400, detail=f"Unknown category: {category}")
         rows = [row for row in rows if category_for(row.kind).value == category]
+    if sort == "priority":
+        rows.sort(key=lambda row: (row.priority_rank, row.created_at), reverse=True)
+    elif sort == "unread":
+        rows.sort(key=lambda row: (row.read_at is None, row.created_at), reverse=True)
 
     return NotificationListResponse(
-        items=[NotificationResponse.of(row) for row in rows],
+        items=[NotificationResponse.of(row) for row in rows[:limit]],
         unread_count=notifications.unread_count(db, user_id),
+        total=len(rows),
     )
 
 
