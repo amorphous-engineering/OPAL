@@ -38,7 +38,7 @@ from opal.db.models.execution import (
     StepNote,
     StepStatus,
 )
-from opal.db.models.inventory import InventoryProduction, ProductionStatus
+from opal.db.models.inventory import InventoryConsumption, InventoryProduction, ProductionStatus
 from opal.db.models.issue import Issue
 from opal.db.models.procedure import ProcedureVersion
 from opal.db.models.user import User
@@ -731,6 +731,17 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
         ):
             attach_counts[att_step_id] = count
 
+    # Consumption counts per step: a change signal for the document poll.
+    consumed_counts: dict[int, int] = {}
+    if step_exec_ids:
+        for cons_step_id, count in (
+            db.query(InventoryConsumption.step_execution_id, func.count())
+            .filter(InventoryConsumption.step_execution_id.in_(step_exec_ids))
+            .group_by(InventoryConsumption.step_execution_id)
+            .all()
+        ):
+            consumed_counts[cons_step_id] = count
+
     steps: list[dict[str, Any]] = []
     done = 0
     total = 0
@@ -787,6 +798,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                     for i in raised.get(se.id, [])
                 ],
                 "attachments": attach_counts.get(se.id, 0),
+                "consumed": consumed_counts.get(se.id, 0),
                 "notes": [
                     {
                         "id": n.id,

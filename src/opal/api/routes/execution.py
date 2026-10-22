@@ -4,8 +4,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import joinedload, selectinload
 
 from opal.api.deps import CurrentUserId, DbSession
@@ -15,6 +17,7 @@ from opal.core.designators import (
     generate_opal_number,
     generate_serial_number,
     generate_work_order_number,
+    peek_serial_numbers,
 )
 from opal.core.events import (
     emit_cursor_moved,
@@ -24,6 +27,7 @@ from opal.core.events import (
     emit_user_joined,
     emit_user_left,
 )
+from opal.core.execution_document import build_execution_document
 from opal.core.execution_flow import (
     FlowError,
     add_step_note,
@@ -37,14 +41,21 @@ from opal.core.execution_flow import (
     skip_blockers,
     touch_user_presence,
 )
+from opal.core.execution_report import build_execution_report, qr_svg
 from opal.core.genealogy import record_assembly_genealogy
-from opal.core.holds import get_hold_state, get_holds_payload
+from opal.core.holds import (
+    blocking_issues_for_instance,
+    enum_value,
+    get_hold_state,
+    get_holds_payload,
+)
 from opal.core.part_lifecycle import ensure_parts_active
 from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput
 from opal.db.models.execution import (
     InstanceStatus,
     ProcedureInstance,
     StepExecution,
+    StepFocus,
     StepNote,
     StepStatus,
 )
@@ -313,6 +324,445 @@ def list_instances(
         page=page,
         page_size=page_size,
     )
+
+
+# ============ Overview, cut preview, document, report ============
+
+
+class OverviewRow(BaseModel):
+    """One work order in the executions list."""
+
+    id: int
+    work_order_number: str | None = None
+    procedure_id: int
+    procedure_name: str
+    version_number: int
+    status: str
+    priority: int = 0
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    target_completion_at: datetime | None = None
+    cut_by: str | None = None
+    progress_done: int = 0
+    progress_total: int = 0
+    held_by: list[str] = []
+    working: list[dict[str, Any]] = []
+
+
+class OverviewResponse(BaseModel):
+    """Paginated work-order list with per-status counts for the active filters."""
+
+    items: list[OverviewRow]
+    total: int
+    page: int
+    page_size: int
+    counts: dict[str, int]
+
+
+_OVERVIEW_SORTS = {
+    "work_order": ProcedureInstance.work_order_number,
+    "procedure": MasterProcedure.name,
+    "status": ProcedureInstance.status,
+    "created": ProcedureInstance.id,
+    "target": ProcedureInstance.target_completion_at,
+    "priority": ProcedureInstance.priority,
+}
+
+
+def _blocking_issue_exists():
+    """Correlated EXISTS: an undispositioned, containment-bearing issue on the work order."""
+    return exists().where(
+        Issue.procedure_instance_id == ProcedureInstance.id,
+        Issue.deleted_at.is_(None),
+        Issue.status != IssueStatus.CLOSED,
+        Issue.containment != Containment.ADVISORY,
+        or_(Issue.disposition_type.is_(None), Issue.dispositioned_at.is_(None)),
+    )
+
+
+@router.get("/overview", response_model=OverviewResponse)
+def executions_overview(
+    db: DbSession,
+    user_id: CurrentUserId,
+    status: list[str] | None = Query(None),
+    procedure_id: int | None = Query(None),
+    q: str | None = Query(None, description="Work order number or procedure name"),
+    mine: bool = Query(False, description="Cut by, claimed by, or worked by the caller"),
+    held: bool = Query(False, description="Only work orders held by an undispositioned issue"),
+    sort: str = Query("created"),
+    dir: str = Query("desc", pattern="^(asc|desc)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+) -> OverviewResponse:
+    """The executions list: filters, sort and per-row progress, holds and claimers."""
+    from opal.db.models import User
+
+    def apply_filters(query, with_status: bool):
+        if with_status and status:
+            wanted = [x for part in status for x in part.split(",") if x]
+            query = query.filter(ProcedureInstance.status.in_(wanted))
+        if procedure_id:
+            query = query.filter(ProcedureInstance.procedure_id == procedure_id)
+        if q:
+            term = f"%{q}%"
+            query = query.filter(
+                or_(
+                    ProcedureInstance.work_order_number.ilike(term),
+                    MasterProcedure.name.ilike(term),
+                )
+            )
+        if mine and user_id is not None:
+            query = query.filter(
+                or_(
+                    ProcedureInstance.started_by_id == user_id,
+                    exists().where(
+                        StepFocus.instance_id == ProcedureInstance.id, StepFocus.user_id == user_id
+                    ),
+                    exists().where(
+                        StepExecution.instance_id == ProcedureInstance.id,
+                        StepExecution.completed_by_id == user_id,
+                    ),
+                )
+            )
+        if held:
+            query = query.filter(_blocking_issue_exists())
+        return query
+
+    base = db.query(ProcedureInstance).join(
+        MasterProcedure, MasterProcedure.id == ProcedureInstance.procedure_id
+    )
+    total = apply_filters(base, True).count()
+
+    counts = {s.value: 0 for s in InstanceStatus}
+    count_rows = apply_filters(
+        db.query(ProcedureInstance.status, func.count(ProcedureInstance.id)).join(
+            MasterProcedure, MasterProcedure.id == ProcedureInstance.procedure_id
+        ),
+        False,
+    ).group_by(ProcedureInstance.status)
+    for st, n in count_rows:
+        counts[enum_value(st)] = n
+
+    column = _OVERVIEW_SORTS.get(sort, ProcedureInstance.id)
+    order = column.asc() if dir == "asc" else column.desc()
+    instances = (
+        apply_filters(base, True)
+        .options(
+            joinedload(ProcedureInstance.procedure),
+            selectinload(ProcedureInstance.step_executions),
+        )
+        .order_by(order, ProcedureInstance.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    versions = {
+        v.id: v
+        for v in db.query(ProcedureVersion)
+        .filter(ProcedureVersion.id.in_({i.version_id for i in instances}))
+        .all()
+    }
+    ids = [i.id for i in instances]
+    cursors_by_instance: dict[int, list[StepFocus]] = {}
+    if ids:
+        for c in db.query(StepFocus).filter(StepFocus.instance_id.in_(ids)).all():
+            cursors_by_instance.setdefault(c.instance_id, []).append(c)
+    user_ids = {c.user_id for cs in cursors_by_instance.values() for c in cs}
+    user_ids |= {i.started_by_id for i in instances if i.started_by_id}
+    users = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    )
+
+    items = []
+    for inst in instances:
+        version = versions.get(inst.version_id)
+        contingency = {
+            s["order"]
+            for s in (version.content.get("steps", []) if version else [])
+            if s.get("is_contingency")
+        }
+        rows = inst.step_executions
+        parents = {se.parent_step_order for se in rows if se.parent_step_order is not None}
+        counted = [
+            se
+            for se in rows
+            if se.step_number not in parents
+            and se.step_number not in contingency
+            and se.parent_step_order not in contingency
+        ]
+        done = sum(
+            1 for se in counted if enum_value(se.status) in ("completed", "signed_off", "skipped")
+        )
+        by_id = {se.id: se for se in rows}
+        working = []
+        for c in cursors_by_instance.get(inst.id, []):
+            u = users.get(c.user_id)
+            se = by_id.get(c.step_execution_id)
+            working.append(
+                {
+                    "user_id": c.user_id,
+                    "name": u.name if u else None,
+                    "step_number": (se.step_number_str or str(se.step_number)) if se else None,
+                }
+            )
+        held_by = (
+            [i.issue_number for i in blocking_issues_for_instance(db, inst.id)]
+            if enum_value(inst.status) in ("cut", "in_work")
+            else []
+        )
+        starter = users.get(inst.started_by_id)
+        items.append(
+            OverviewRow(
+                id=inst.id,
+                work_order_number=inst.work_order_number,
+                procedure_id=inst.procedure_id,
+                procedure_name=inst.procedure.name,
+                version_number=version.version_number if version else 0,
+                status=enum_value(inst.status),
+                priority=inst.priority,
+                created_at=inst.created_at,
+                started_at=inst.started_at,
+                completed_at=inst.completed_at,
+                target_completion_at=inst.target_completion_at,
+                cut_by=starter.name if starter else None,
+                progress_done=done,
+                progress_total=len(counted),
+                held_by=held_by,
+                working=working,
+            )
+        )
+
+    return OverviewResponse(items=items, total=total, page=page, page_size=page_size, counts=counts)
+
+
+class PreviewPart(BaseModel):
+    part_id: int
+    part_number: str | None
+    part_name: str
+    uom: str | None = None
+    per_work_order: float
+    required: float
+    available: float
+    is_available: bool
+    usage_type: str | None = None
+
+
+class PreviewOutput(BaseModel):
+    part_id: int
+    part_number: str | None
+    part_name: str
+    quantity_each: float
+    serials: list[str]
+
+
+class PreviewVersion(BaseModel):
+    id: int
+    number: int
+    created_at: datetime
+    is_current: bool
+
+
+class CutPreview(BaseModel):
+    """What cutting N work orders from a procedure version will allocate and consume."""
+
+    procedure_id: int
+    procedure_name: str
+    procedure_type: str
+    versions: list[PreviewVersion]
+    version_id: int
+    version_number: int
+    step_count: int
+    op_count: int
+    quantity: int
+    outputs: list[PreviewOutput]
+    kit: list[PreviewPart]
+    step_kit: list[PreviewPart]
+    all_available: bool
+
+
+@router.get("/preview", response_model=CutPreview)
+def preview_cut(
+    db: DbSession,
+    procedure_id: int = Query(...),
+    version_id: int | None = Query(None),
+    quantity: int = Query(1, ge=1, le=100),
+) -> CutPreview:
+    """Cut preview: versions, serials the build outputs will be given, and a kit
+    availability check scaled by quantity. Allocates nothing."""
+    procedure = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
+        .first()
+    )
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+    versions = (
+        db.query(ProcedureVersion)
+        .filter(ProcedureVersion.procedure_id == procedure_id)
+        .order_by(ProcedureVersion.version_number.desc())
+        .all()
+    )
+    if not versions:
+        raise HTTPException(status_code=400, detail="Procedure has no published version")
+    chosen = next((v for v in versions if v.id == version_id), None) if version_id else None
+    if version_id and chosen is None:
+        raise HTTPException(status_code=404, detail="Version not found for this procedure")
+    if chosen is None:
+        chosen = next((v for v in versions if v.id == procedure.current_version_id), versions[0])
+
+    steps = chosen.content.get("steps", [])
+    proc_type = enum_value(procedure.procedure_type)
+
+    def on_hand(part_id: int) -> float:
+        total = (
+            db.query(func.coalesce(func.sum(InventoryRecord.quantity), 0))
+            .filter(InventoryRecord.part_id == part_id, InventoryRecord.quantity > 0)
+            .scalar()
+        )
+        return float(total or 0)
+
+    outputs: list[PreviewOutput] = []
+    if proc_type == ProcedureType.BUILD.value:
+        for o in db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == procedure_id):
+            outputs.append(
+                PreviewOutput(
+                    part_id=o.part_id,
+                    part_number=o.part.internal_pn,
+                    part_name=o.part.name,
+                    quantity_each=float(o.quantity_produced),
+                    serials=peek_serial_numbers(db, o.part, quantity),
+                )
+            )
+
+    kit_parts: list[PreviewPart] = []
+    for k in db.query(Kit).options(joinedload(Kit.part)).filter(Kit.procedure_id == procedure_id):
+        per = float(k.quantity_required)
+        have = on_hand(k.part_id)
+        kit_parts.append(
+            PreviewPart(
+                part_id=k.part_id,
+                part_number=k.part.internal_pn,
+                part_name=k.part.name,
+                uom=k.part.unit_of_measure,
+                per_work_order=per,
+                required=per * quantity,
+                available=have,
+                is_available=have >= per * quantity,
+            )
+        )
+
+    # Step kits aggregate by part and usage: tooling is checked out, not used up,
+    # so it needs one set on hand rather than `quantity` sets.
+    agg: dict[tuple[int, str], float] = {}
+    for step in steps:
+        for sk in step.get("step_kit") or []:
+            key = (sk["part_id"], sk.get("usage_type") or "consume")
+            agg[key] = agg.get(key, 0.0) + float(sk["quantity_required"])
+    step_kit_parts: list[PreviewPart] = []
+    for (part_id, usage), per in sorted(agg.items()):
+        part = db.get(Part, part_id)
+        if part is None:
+            continue
+        need = per * quantity if usage == "consume" else per
+        have = on_hand(part_id)
+        step_kit_parts.append(
+            PreviewPart(
+                part_id=part_id,
+                part_number=part.internal_pn,
+                part_name=part.name,
+                uom=part.unit_of_measure,
+                per_work_order=per,
+                required=need,
+                available=have,
+                is_available=have >= need,
+                usage_type=usage,
+            )
+        )
+
+    return CutPreview(
+        procedure_id=procedure.id,
+        procedure_name=procedure.name,
+        procedure_type=proc_type,
+        versions=[
+            PreviewVersion(
+                id=v.id,
+                number=v.version_number,
+                created_at=v.created_at,
+                is_current=v.id == procedure.current_version_id,
+            )
+            for v in versions
+        ],
+        version_id=chosen.id,
+        version_number=chosen.version_number,
+        step_count=len(steps),
+        op_count=sum(1 for s in steps if s.get("level", 0) == 0),
+        quantity=quantity,
+        outputs=outputs,
+        kit=kit_parts,
+        step_kit=step_kit_parts,
+        all_available=all(p.is_available for p in [*kit_parts, *step_kit_parts]),
+    )
+
+
+class Assignee(BaseModel):
+    id: int
+    name: str
+
+
+@router.get("/assignees", response_model=list[Assignee])
+def list_assignees(db: DbSession) -> list[Assignee]:
+    """Active users an issue raised from the floor can be assigned to. Any signed-in
+    user may read it; the admin-only user list carries emails and flags."""
+    from opal.db.models import User
+
+    users = db.query(User).filter(User.is_active.is_(True)).order_by(User.name.asc()).all()
+    return [Assignee(id=u.id, name=u.name) for u in users]
+
+
+@router.get("/{instance_id}/document")
+def get_execution_document(
+    instance_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> dict:
+    """The execution document view model: OPs and steps with computed gates, holds,
+    cursors, notes, evidence, kit and consumption. A pure read; the presence
+    heartbeat stays on /state."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    return build_execution_document(db, instance, user_id)
+
+
+@router.get("/{instance_id}/report")
+def get_execution_report(instance_id: int, db: DbSession) -> dict:
+    """Build report content for a COMPLETED work order."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    status = enum_value(instance.status)
+    if status != InstanceStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Work order is {status.upper().replace('_', ' ')}; "
+            "reports are only generated for COMPLETED work orders",
+        )
+    return build_execution_report(db, instance)
+
+
+@router.get("/{instance_id}/qr.svg")
+def get_execution_qr(instance_id: int, request: Request, db: DbSession, origin: str | None = None):
+    """QR code linking to the execution page. ``origin`` is the browser's origin
+    (the API cannot know the public address); it defaults to the request's own."""
+    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    base = (origin or str(request.base_url)).rstrip("/")
+    if not base.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="origin must be an http(s) origin")
+    return Response(content=qr_svg(f"{base}/executions/{instance_id}"), media_type="image/svg+xml")
 
 
 @router.post("", response_model=InstanceResponse, status_code=201)
