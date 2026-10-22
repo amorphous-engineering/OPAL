@@ -180,9 +180,7 @@ def test_bound_step_refuses_complete_and_shows_in_state(client):
     assert rebind.status_code == 200
 
     # Step 1 is now free; step 3 is the boundary.
-    complete1 = client.post(
-        f"/api/procedure-instances/{instance_id}/steps/1/complete", json={}
-    )
+    complete1 = client.post(f"/api/procedure-instances/{instance_id}/steps/1/complete", json={})
     assert complete1.status_code == 200
 
     complete3 = client.post(
@@ -468,9 +466,7 @@ def _sub_step_instance(client):
 
 
 def _complete(client, instance_id, order, **body):
-    return client.post(
-        f"/api/procedure-instances/{instance_id}/steps/{order}/complete", json=body
-    )
+    return client.post(f"/api/procedure-instances/{instance_id}/steps/{order}/complete", json=body)
 
 
 def _inst_status(client, instance_id):
@@ -490,9 +486,7 @@ def test_wo_stays_open_under_boundary_bound_to_terminal_step(client):
     assert _complete(client, instance_id, 2).status_code == 200
 
     # Raise an NC on step 3, boundary bound to the already-terminal step 1.
-    nc = _raise_nc(
-        client, instance_id, 3, containment="step", containment_step_number=1
-    )
+    nc = _raise_nc(client, instance_id, 3, containment="step", containment_step_number=1)
     assert nc.status_code == 201, nc.text
     issue_id = nc.json()["id"]
 
@@ -549,9 +543,7 @@ def test_op_does_not_auto_complete_over_bound_hold_on_op_row(client):
     instance_id = _sub_step_instance(client)
 
     # NC raised on sub 1.1 (order 2), boundary bound to the OP row (order 1).
-    nc = _raise_nc(
-        client, instance_id, 2, containment="step", containment_step_number=1
-    )
+    nc = _raise_nc(client, instance_id, 2, containment="step", containment_step_number=1)
     assert nc.status_code == 201, nc.text
     issue_id = nc.json()["id"]
 

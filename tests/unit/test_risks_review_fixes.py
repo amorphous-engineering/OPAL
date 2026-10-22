@@ -125,9 +125,7 @@ def test_unknown_owner_and_asset_part_are_404_not_500(client: TestClient):
     risk = _create_risk(client)
     assert client.patch(f"/api/risks/{risk['id']}", json={"owner_id": 99999}).status_code == 404
     assert (
-        client.post(
-            "/api/risks", json={"title": "bad part", "asset_part_id": 99999}
-        ).status_code
+        client.post("/api/risks", json={"title": "bad part", "asset_part_id": 99999}).status_code
         == 404
     )
 
@@ -212,7 +210,7 @@ def test_rl03_finding_carries_a_span(client: TestClient):
 
 
 def test_matrix_page_escapes_script_breakout_titles(web_client: TestClient):
-    payload = '</script><img src=x onerror=alert(1)>'
+    payload = "</script><img src=x onerror=alert(1)>"
     _create_risk(web_client, title=payload)
     page = web_client.get("/risks/matrix")
     assert page.status_code == 200
@@ -239,9 +237,7 @@ def test_mcp_create_risk_rejects_unknown_owner(db_session: Session):
 
 
 def test_mcp_stamp_review_empty_list_is_an_error(db_session: Session, test_user: User):
-    data = _call(
-        server._stamp_risk_review, db_session, {"user_id": test_user.id, "risk_ids": []}
-    )
+    data = _call(server._stamp_risk_review, db_session, {"user_id": test_user.id, "risk_ids": []})
     assert "empty" in data["error"]
 
 

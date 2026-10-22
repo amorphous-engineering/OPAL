@@ -1503,18 +1503,14 @@ def _seed_notifications(
 
     build, test, qa = users["build"], users["test"], users["qa"]
 
-    def dated(
-        rows: list[Any], when: datetime, read_after: timedelta | None = None
-    ) -> None:
+    def dated(rows: list[Any], when: datetime, read_after: timedelta | None = None) -> None:
         for row in rows:
             row.created_at = when
             row.updated_at = when
             if read_after is not None:
                 row.read_at = when + read_after
 
-    def execution_event(
-        instance: Any, kind: Any, title: str, body: str, actor: User
-    ) -> list[Any]:
+    def execution_event(instance: Any, kind: Any, title: str, body: str, actor: User) -> list[Any]:
         """Mirror what blocking_transition raises, for a demo-authored moment."""
         return notifications.notify(
             db,

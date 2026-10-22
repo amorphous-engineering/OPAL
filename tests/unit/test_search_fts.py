@@ -194,9 +194,7 @@ def test_execution_search_result_leads_with_work_order(client) -> None:
 
     r = client.get("/api/search", params={"q": wo})
     assert r.status_code == 200
-    hit = next(
-        i for i in r.json() if i["entity_type"] == "execution" and i["id"] == inst["id"]
-    )
+    hit = next(i for i in r.json() if i["entity_type"] == "execution" and i["id"] == inst["id"])
     assert hit["label"] == wo
     assert hit["sublabel"] == "Search Label Proc"
     assert "Execution #" not in str(r.json())

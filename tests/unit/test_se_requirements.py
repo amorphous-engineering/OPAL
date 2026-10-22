@@ -742,8 +742,12 @@ def test_api_patch_explicit_null_clears_nullable_fields(client, test_user):
     # Explicit nulls clear; omitted fields (category) survive.
     r = client.patch(
         f"/api/requirements/{req['id']}",
-        json={"rationale": None, "verification_method": None, "tbr_owner_id": None,
-              "tbr_due": None},
+        json={
+            "rationale": None,
+            "verification_method": None,
+            "tbr_owner_id": None,
+            "tbr_due": None,
+        },
     )
     assert r.status_code == 200, r.text
     body = r.json()

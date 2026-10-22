@@ -181,180 +181,177 @@ def test_x_user_id_header_no_longer_works(client, test_user) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Web login flows
+# Sign-in API (the web client's login surface)
 # ---------------------------------------------------------------------------
 
 
-def test_web_login_with_credentials(client, db_session, test_user) -> None:
+def _anon(client):
+    client.cookies.clear()
+    client.headers.pop("Authorization", None)
+    return client
+
+
+def test_sign_in_config_is_public(client, test_user) -> None:
+    r = _anon(client).get("/api/auth/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["needs_setup"] is False
+    assert body["password_login_enabled"] is True
+
+
+def test_password_login_sets_session(client, db_session, test_user) -> None:
     from tests.conftest import TEST_PASSWORD
 
-    r = client.post(
-        "/login",
-        data={"username": "testuser", "password": TEST_PASSWORD},
-        follow_redirects=False,
+    r = _anon(client).post(
+        "/api/auth/login", json={"username": "TestUser ", "password": TEST_PASSWORD}
     )
-    assert r.status_code == 302
+    assert r.status_code == 200
+    assert r.json()["user"]["username"] == "testuser"
     assert SESSION_COOKIE in r.cookies
+    assert resolve_session(db_session, r.cookies[SESSION_COOKIE]).id == test_user.id
 
 
-def test_web_login_rejects_bad_password(client, db_session, test_user) -> None:
-    r = client.post(
-        "/login",
-        data={"username": "testuser", "password": "wrong-password"},
-        follow_redirects=False,
+def test_password_login_rejects_bad_password(client, db_session, test_user) -> None:
+    r = _anon(client).post(
+        "/api/auth/login", json={"username": "testuser", "password": "wrong-password"}
     )
     assert r.status_code == 401
     assert SESSION_COOKIE not in r.cookies
 
 
-def test_web_pages_redirect_without_session(client, test_user) -> None:
-    client.cookies.clear()
-    r = client.get("/parts", follow_redirects=False)
-    assert r.status_code == 302
-    assert r.headers["location"] == "/login"
-
-
-def test_web_session_cookie_grants_access(web_client) -> None:
-    r = web_client.get("/parts", follow_redirects=False)
-    assert r.status_code == 200
+def test_session_cookie_grants_api_access(client, db_session, test_user) -> None:
+    token = create_session(db_session, test_user)
+    db_session.commit()
+    c = _anon(client)
+    c.cookies.set(SESSION_COOKIE, token)
+    assert c.get("/api/auth/me").json()["id"] == test_user.id
 
 
 def test_forged_or_legacy_cookie_rejected(client, test_user) -> None:
-    client.cookies.clear()
-    client.cookies.set(SESSION_COOKIE, "forged-token")
-    r = client.get("/parts", follow_redirects=False)
-    assert r.status_code == 302
-    assert r.headers["location"] == "/login"
-
-    client.cookies.clear()
-    client.cookies.set("opal_user_id", str(test_user.id))  # pre-auth-era cookie
-    r = client.get("/parts", follow_redirects=False)
-    assert r.status_code == 302
+    c = _anon(client)
+    c.cookies.set(SESSION_COOKIE, "forged-token")
+    assert c.get("/api/auth/me").status_code == 401
+    c.cookies.clear()
+    c.cookies.set("opal_user_id", str(test_user.id))  # pre-auth-era cookie
+    assert c.get("/api/parts").status_code == 401
 
 
 def test_passwordless_login_is_not_a_claim_oracle(client, db_session) -> None:
-    """A migrated (NULL-hash) account is NOT claimable from the login form.
-
-    Self-claim was a trust-on-first-use oracle; the login form must now be
-    indistinguishable from a wrong password so it leaks no claimable usernames.
-    """
+    """A migrated (NULL-hash) account is NOT claimable from the login form: the
+    response is indistinguishable from a wrong password."""
     user = User(name="Migrated", username="oldtimer", password_hash=None)
     db_session.add(user)
     db_session.commit()
 
-    r = client.post(
-        "/login", data={"username": "oldtimer", "password": "x"}, follow_redirects=False
-    )
+    r = _anon(client).post("/api/auth/login", json={"username": "oldtimer", "password": "x"})
     assert r.status_code == 401
-    assert "SET PASSWORD" not in r.text
-    db_session.refresh(user)
-    assert user.password_hash is None  # nothing was claimed
-
-
-def test_claim_link_requires_admin(client, db_session) -> None:
-    """A non-admin (here: anonymous) request cannot mint a claim link."""
-    user = User(name="Migrated", username="oldtimer", password_hash=None)
-    db_session.add(user)
-    db_session.commit()
-
-    anon = client
-    anon.cookies.clear()
-    r = anon.post(
-        f"/users/{user.id}/claim-link",
-        headers={"Authorization": ""},
-        follow_redirects=False,
-    )
-    assert r.status_code in (302, 403)
+    assert r.json()["detail"] == "Invalid username or password"
     db_session.refresh(user)
     assert user.password_hash is None
 
 
-def test_admin_issued_claim_flow(client, db_session, admin_user) -> None:
-    """Admin mints an out-of-band claim link; the owner sets their password once."""
-    import re
+def test_claim_link_requires_admin(client, db_session, test_user, auth_headers) -> None:
+    user = User(name="Migrated", username="oldtimer", password_hash=None)
+    db_session.add(user)
+    db_session.commit()
 
-    from tests.conftest import login
+    r = client.post(f"/api/users/{user.id}/claim-link", headers=auth_headers)
+    assert r.status_code == 403
+    r = _anon(client).post(f"/api/users/{user.id}/claim-link")
+    assert r.status_code == 401
+    db_session.refresh(user)
+    assert user.password_hash is None
+
+
+def test_admin_issued_claim_flow(client, db_session, admin_user, admin_headers) -> None:
+    """Admin mints an out-of-band claim link; the owner sets their password once."""
+    from urllib.parse import parse_qs, urlparse
 
     user = User(name="Migrated", username="oldtimer", password_hash=None)
     db_session.add(user)
     db_session.commit()
 
-    login(client, admin_user)  # web admin routes authenticate via session cookie
-    r = client.post(f"/users/{user.id}/claim-link")
+    r = client.post(f"/api/users/{user.id}/claim-link", headers=admin_headers)
     assert r.status_code == 200
-    token = re.search(r"/claim\?token=([^\s\"'<]+)", r.text).group(1)
+    url = r.json()["url"]
+    assert urlparse(url).path == "/claim"
+    token = parse_qs(urlparse(url).query)["token"][0]
 
-    # The claim landing page renders the set-password form.
-    r = client.get(f"/claim?token={token}")
-    assert r.status_code == 200
-    assert "SET PASSWORD" in r.text
+    c = _anon(client)
+    assert c.get("/api/auth/claim", params={"token": token}).json() == {"username": "oldtimer"}
 
-    # Mismatched confirmation is rejected.
-    r = client.post(
-        "/login/set-password",
-        data={"state": token, "password": "new-password-1", "password_confirm": "different-1"},
-    )
+    r = c.post("/api/auth/claim", json={"token": token, "password": "short"})
     assert r.status_code == 400
 
-    # Valid submission claims the account and signs in.
-    r = client.post(
-        "/login/set-password",
-        data={"state": token, "password": "new-password-1", "password_confirm": "new-password-1"},
-        follow_redirects=False,
-    )
-    assert r.status_code == 302
+    r = c.post("/api/auth/claim", json={"token": token, "password": "new-password-1"})
+    assert r.status_code == 200
     assert SESSION_COOKIE in r.cookies
     db_session.refresh(user)
     assert user.password_hash is not None
 
     # A spent link cannot claim the (now password-holding) account again.
-    r = client.get(f"/claim?token={token}", follow_redirects=False)
-    assert r.status_code == 302
-    assert r.headers["location"] == "/login"
-    r = client.post(
-        "/login/set-password",
-        data={"state": token, "password": "stolen-pass-1", "password_confirm": "stolen-pass-1"},
-        follow_redirects=False,
-    )
-    assert r.status_code == 302
-    assert r.headers["location"] == "/login"
+    c.cookies.clear()
+    assert c.get("/api/auth/claim", params={"token": token}).status_code == 404
+    r = c.post("/api/auth/claim", json={"token": token, "password": "stolen-pass-1"})
+    assert r.status_code == 404
 
 
-def test_claim_link_refused_for_password_holder(client, db_session, admin_user, test_user) -> None:
-    """No claim link is minted for an account that already has a password."""
-    from tests.conftest import login
-
-    login(client, admin_user)
-    r = client.post(f"/users/{test_user.id}/claim-link")
+def test_claim_link_refused_for_password_holder(client, admin_headers, test_user) -> None:
+    r = client.post(f"/api/users/{test_user.id}/claim-link", headers=admin_headers)
     assert r.status_code == 400
-    assert "already has a password" in r.text
+    assert "already has a password" in r.json()["detail"]
 
 
 def test_logout_revokes_session(client, db_session, test_user) -> None:
     token = create_session(db_session, test_user)
     db_session.commit()
-    client.cookies.set(SESSION_COOKIE, token)
-    r = client.get("/logout", follow_redirects=False)
-    assert r.status_code == 302
+    c = _anon(client)
+    c.cookies.set(SESSION_COOKIE, token)
+    r = c.post("/api/auth/logout")
+    assert r.status_code == 204
     assert resolve_session(db_session, token) is None
 
 
 def test_login_rate_limited(client, db_session, test_user) -> None:
     from opal.core.auth import login_rate_limiter
 
+    c = _anon(client)
     try:
         for _ in range(10):
-            client.post(
-                "/login",
-                data={"username": "testuser", "password": "wrong-password"},
-            )
-        r = client.post(
-            "/login",
-            data={"username": "testuser", "password": "wrong-password"},
-        )
+            c.post("/api/auth/login", json={"username": "testuser", "password": "wrong-password"})
+        r = c.post("/api/auth/login", json={"username": "testuser", "password": "wrong-password"})
         assert r.status_code == 429
     finally:
         login_rate_limiter._failures.clear()
+
+
+def test_first_run_setup_creates_admin_once(client, db_session) -> None:
+    db_session.query(User).delete()
+    db_session.commit()
+    c = _anon(client)
+    assert c.get("/api/auth/config").json()["needs_setup"] is True
+
+    r = c.post(
+        "/api/auth/setup",
+        json={"name": "Ada", "username": "Ada", "password": "correct-horse-1"},
+    )
+    assert r.status_code == 201
+    assert r.json()["user"]["is_admin"] is True
+    assert r.json()["user"]["username"] == "ada"
+    assert SESSION_COOKIE in r.cookies
+
+    r = c.post(
+        "/api/auth/setup",
+        json={"name": "Eve", "username": "eve", "password": "correct-horse-1"},
+    )
+    assert r.status_code == 409
+
+
+def test_web_client_served_for_app_paths(client) -> None:
+    """Non-API paths serve the SPA shell (or a 503 when it is not built)."""
+    r = _anon(client).get("/parts/12")
+    assert r.status_code in (200, 503)
+    assert _anon(client).get("/api/nope").status_code == 404
 
 
 # ---------------------------------------------------------------------------

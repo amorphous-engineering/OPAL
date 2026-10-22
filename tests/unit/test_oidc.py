@@ -518,17 +518,18 @@ def oidc_settings(monkeypatch, config):
     return config
 
 
-def test_login_page_offers_sso_and_password(client, test_user, oidc_settings):
-    html = client.get("/login").text
-    assert "SIGN IN WITH POCKET ID" in html
-    assert "/oidc/login" in html
-    assert 'name="password"' in html
+def test_sign_in_config_offers_sso_and_password(client, test_user, oidc_settings):
+    config = client.get("/api/auth/config").json()
+    assert config["oidc_enabled"] is True
+    assert config["oidc_provider_name"] == "Pocket ID"
+    assert config["password_login_enabled"] is True
 
 
-def test_login_page_without_oidc_shows_only_password(client, test_user):
-    html = client.get("/login").text
-    assert "/oidc/login" not in html
-    assert 'name="password"' in html
+def test_sign_in_config_without_oidc_offers_only_password(client, test_user):
+    config = client.get("/api/auth/config").json()
+    assert config["oidc_enabled"] is False
+    assert config["oidc_provider_name"] is None
+    assert config["password_login_enabled"] is True
 
 
 def test_oidc_login_redirects_to_provider_and_sets_state(client, provider, oidc_settings):
@@ -606,14 +607,16 @@ def test_oidc_callback_rejects_mismatched_state(client, provider, oidc_settings)
         oidc.sign_state({"state": "expected", "nonce": "n", "verifier": "v"}),
     )
     resp = client.get("/oidc/callback?code=c&state=forged", follow_redirects=False)
-    assert resp.status_code == 400
-    assert "did not match" in resp.text
+    assert resp.status_code == 302
+    assert "did%20not%20match" in resp.headers["location"]
+    assert not resp.cookies.get("opal_session")
 
 
 def test_oidc_callback_rejects_missing_state_cookie(client, provider, oidc_settings):
     resp = client.get("/oidc/callback?code=c&state=st", follow_redirects=False)
-    assert resp.status_code == 400
-    assert "expired" in resp.text
+    assert resp.status_code == 302
+    assert resp.headers["location"].startswith("/login?error=")
+    assert "expired" in resp.headers["location"]
 
 
 def test_oidc_callback_surfaces_provider_error(client, oidc_settings):
@@ -621,8 +624,8 @@ def test_oidc_callback_surfaces_provider_error(client, oidc_settings):
         "/oidc/callback?error=access_denied&error_description=User+said+no",
         follow_redirects=False,
     )
-    assert resp.status_code == 400
-    assert "User said no" in resp.text
+    assert resp.status_code == 302
+    assert "User%20said%20no" in resp.headers["location"]
 
 
 @pytest.mark.parametrize(
@@ -630,7 +633,7 @@ def test_oidc_callback_surfaces_provider_error(client, oidc_settings):
     [("//evil.test/", "/"), ("https://evil.test", "/"), ("/parts", "/parts"), ("", "/")],
 )
 def test_next_redirect_is_confined_to_this_app(target, expected):
-    from opal.web.routes import _safe_next
+    from opal.api.spa import _safe_next
 
     assert _safe_next(target) == expected
 
@@ -641,8 +644,6 @@ def test_password_login_refused_when_disabled(client, test_user, monkeypatch):
     settings = get_active_settings()
     monkeypatch.setattr(settings, "password_login_enabled", False)
     resp = client.post(
-        "/login",
-        data={"username": "testuser", "password": "test-password-123"},
-        follow_redirects=False,
+        "/api/auth/login", json={"username": "testuser", "password": "test-password-123"}
     )
     assert resp.status_code == 403

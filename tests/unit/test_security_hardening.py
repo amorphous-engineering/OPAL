@@ -6,12 +6,6 @@ Each test pins a specific finding closed; see SECURITY-AUDIT-v1.4.0.md.
 from datetime import UTC, datetime
 
 import pytest
-from starlette.applications import Starlette
-from starlette.responses import PlainTextResponse
-from starlette.routing import Route
-from starlette.testclient import TestClient
-
-from opal.api.middleware import WebSessionMiddleware
 
 # ── M1: supplier website must be http(s), never javascript: (stored XSS) ──
 
@@ -94,29 +88,7 @@ def test_dataset_detail_escapes_script_payload(web_client):
 # ── H2 is covered by the updated tests/unit/test_inventory.py::test_update_inventory ──
 
 
-# ── C1: web pages require a resolved session cookie, whatever headers say ──
-
-
-def _web_app(monkeypatch, *, session_user_id: int | None):
-    """Minimal app carrying only WebSessionMiddleware."""
-    monkeypatch.setattr(
-        WebSessionMiddleware, "_session_user_id", staticmethod(lambda request: session_user_id)
-    )
-    app = Starlette(routes=[Route("/", lambda request: PlainTextResponse("ok"))])
-    app.add_middleware(WebSessionMiddleware)
-    return TestClient(app, follow_redirects=False)
-
-
-def test_web_page_without_session_redirects_to_login(monkeypatch):
-    tc = _web_app(monkeypatch, session_user_id=None)
-    resp = tc.get("/")
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
-
-
-def test_web_page_with_session_passes(monkeypatch):
-    tc = _web_app(monkeypatch, session_user_id=7)
-    assert tc.get("/").status_code == 200
+# ── C1: only a session cookie or bearer token confers identity, whatever headers say ──
 
 
 @pytest.mark.parametrize(
@@ -126,23 +98,15 @@ def test_web_page_with_session_passes(monkeypatch):
         {"X-Forwarded-User": "victim"},
         {"X-Remote-User": "victim"},
         {"Remote-User": "victim"},
+        {"X-User-Id": "1"},
     ],
 )
-def test_identity_headers_never_authenticate(monkeypatch, header):
+def test_identity_headers_never_authenticate(client, test_user, header):
     """No header grants identity. Proxy-header trust was removed with exe auth;
     this pins it closed so it cannot creep back in."""
-    tc = _web_app(monkeypatch, session_user_id=None)
-    resp = tc.get("/", headers=header)
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
-
-
-@pytest.mark.parametrize("path", ["/login", "/oidc/callback", "/static/x.css", "/api/health"])
-def test_exempt_paths_skip_session_check(monkeypatch, path):
-    tc = _web_app(monkeypatch, session_user_id=None)
-    # Exempt paths return 404 (no such route) rather than a login redirect —
-    # they never reach the session gate.
-    assert tc.get(path).status_code == 404
+    client.cookies.clear()
+    resp = client.get("/api/auth/me", headers={"Authorization": "", **header})
+    assert resp.status_code == 401
 
 
 # ── M4: cycle count writes a reconciling ledger row (no silent stock rewrite) ──

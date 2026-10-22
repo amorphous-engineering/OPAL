@@ -1,8 +1,8 @@
 """User management endpoints."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams, RequiredAdmin, RequiredUser
@@ -333,6 +333,40 @@ class OnlineUserResponse(BaseModel):
     last_seen_at: str
     current_activity: str | None
     is_online: bool
+
+
+CLAIM_LINK_TTL = timedelta(days=7)
+
+
+class ClaimLinkResponse(BaseModel):
+    url: str
+    expires_at: datetime
+
+
+@router.post("/{user_id}/claim-link", response_model=ClaimLinkResponse)
+def issue_claim_link(
+    user_id: int, request: Request, db: DbSession, admin: RequiredAdmin
+) -> ClaimLinkResponse:
+    """Mint an out-of-band account-claim link for a passwordless user. Admin only.
+
+    Instead of letting whoever reaches the login form seize a migrated account,
+    an admin generates this time-limited link and delivers it to the real
+    person over a trusted channel. Valid only while the account has no password.
+    """
+    from opal.core.auth import sign_payload
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_active or user.password_hash is not None:
+        raise HTTPException(
+            status_code=400, detail="This account already has a password; no claim link is needed"
+        )
+    token = sign_payload({"kind": "account-claim", "uid": user.id}, max_age=CLAIM_LINK_TTL)
+    return ClaimLinkResponse(
+        url=f"{request.base_url}claim?token={token}",
+        expires_at=datetime.now(UTC) + CLAIM_LINK_TTL,
+    )
 
 
 @router.post("/heartbeat", response_model=HeartbeatResponse)

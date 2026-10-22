@@ -288,9 +288,7 @@ def _validate_refs(db: DbSession, values: dict) -> None:
         raise HTTPException(status_code=404, detail="Owner not found")
     asset_part_id = values.get("asset_part_id")
     if asset_part_id is not None:
-        part = (
-            db.query(Part).filter(Part.id == asset_part_id, Part.deleted_at.is_(None)).first()
-        )
+        part = db.query(Part).filter(Part.id == asset_part_id, Part.deleted_at.is_(None)).first()
         if part is None:
             raise HTTPException(status_code=404, detail="Asset part not found")
 
@@ -376,9 +374,7 @@ def review_stamp(
 ) -> dict:
     """Stamp last_reviewed_* on the listed risks — the entire review ceremony."""
     if data.risk_ids is not None:
-        risks = (
-            db.query(Risk).filter(Risk.id.in_(data.risk_ids), Risk.deleted_at.is_(None)).all()
-        )
+        risks = db.query(Risk).filter(Risk.id.in_(data.risk_ids), Risk.deleted_at.is_(None)).all()
     else:
         risks = _filtered_risks_query(
             db, data.search, data.disposition, data.severity, data.min_score
@@ -525,9 +521,7 @@ def update_risk(
     updates = data.model_dump(exclude_unset=True)
     for non_nullable in ("title", "probability", "impact"):
         if non_nullable in updates and updates[non_nullable] is None:
-            raise HTTPException(
-                status_code=422, detail=f"{non_nullable} cannot be cleared"
-            )
+            raise HTTPException(status_code=422, detail=f"{non_nullable} cannot be cleared")
     if (
         "acceptance_rationale" in updates
         and risk.disposition == RiskDisposition.ACCEPTED.value

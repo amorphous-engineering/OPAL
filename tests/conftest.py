@@ -15,9 +15,7 @@ os.environ["OPAL_DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["OPAL_DEBUG"] = "false"
 # Extension installs write real files. Point them at a throwaway directory so a
 # test can never touch the developer's own OPAL data directory.
-os.environ.setdefault(
-    "OPAL_EXTENSION_DIR", tempfile.mkdtemp(prefix="opal-test-extensions-")
-)
+os.environ.setdefault("OPAL_EXTENSION_DIR", tempfile.mkdtemp(prefix="opal-test-extensions-"))
 
 from opal.api.app import create_app
 from opal.api.deps import get_db

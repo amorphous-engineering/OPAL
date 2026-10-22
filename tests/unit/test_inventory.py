@@ -608,9 +608,9 @@ def _consume_via_execution(client: TestClient, part: dict, inv_record_id: int) -
     )
     client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Install"})
     client.post(f"/api/procedures/{proc_id}/publish")
-    instance_id = client.post(
-        "/api/procedure-instances", json={"procedure_id": proc_id}
-    ).json()["id"]
+    instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
+        "id"
+    ]
     resp = client.post(
         f"/api/procedure-instances/{instance_id}/consume",
         json={"items": [{"inventory_record_id": inv_record_id, "quantity": 5}]},

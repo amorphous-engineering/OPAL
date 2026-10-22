@@ -45,9 +45,9 @@ def store_challenge(
 ) -> str:
     """Persist a pending handshake and return its single-use nonce."""
     # Opportunistically drop expired rows so the table can't grow unbounded.
-    db.query(WebauthnChallenge).filter(
-        WebauthnChallenge.expires_at < datetime.now(UTC)
-    ).delete(synchronize_session=False)
+    db.query(WebauthnChallenge).filter(WebauthnChallenge.expires_at < datetime.now(UTC)).delete(
+        synchronize_session=False
+    )
     nonce = secrets.token_urlsafe(32)
     db.add(
         WebauthnChallenge(

@@ -244,9 +244,7 @@ class StepNote(Base, IdMixin, TimestampMixin):
     body: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Relationships
-    step_execution: Mapped["StepExecution"] = relationship(
-        "StepExecution", back_populates="notes"
-    )
+    step_execution: Mapped["StepExecution"] = relationship("StepExecution", back_populates="notes")
     author: Mapped["User | None"] = relationship("User")
 
     def __repr__(self) -> str:

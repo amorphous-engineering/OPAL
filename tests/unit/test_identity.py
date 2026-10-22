@@ -41,8 +41,8 @@ def test_token_for_deactivated_user_401s(client, db_session, test_user):
     assert resp.status_code == 401
 
 
-def test_session_for_deactivated_user_logs_out_web(client, db_session, test_user):
-    """Middleware treats a session whose user vanished as logged out."""
+def test_session_for_deactivated_user_is_signed_out(client, db_session, test_user):
+    """A session whose user was deactivated no longer resolves."""
     token = create_session(db_session, test_user)
     db_session.commit()
 
@@ -51,6 +51,5 @@ def test_session_for_deactivated_user_logs_out_web(client, db_session, test_user
 
     client.cookies.set(SESSION_COOKIE, token)
     client.headers.pop("Authorization", None)
-    resp = client.get("/parts", follow_redirects=False)
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
+    resp = client.get("/api/auth/me")
+    assert resp.status_code == 401

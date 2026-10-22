@@ -177,7 +177,7 @@ def test_issue_page_holding_readout(web_client):
     page = web_client.get(f"/issues/{advisory['id']}")
     assert page.status_code == 200
     # The empty-line macro wraps the label in a span (Amendment 6 grammar)
-    assert 'Holds</span> — none' in page.text
+    assert "Holds</span> — none" in page.text
     # No disposition gate above advisory: no panel, no state badge, CLOSE free.
     assert 'id="disposition-btn"' not in page.text
     assert "UNDISPOSITIONED" not in page.text
@@ -239,9 +239,7 @@ def test_issue_page_links_work_order_and_boundary(web_client):
     assert 'id="boundary-step-select"' not in page.text  # no WO linked yet
 
     # Link the WO; the boundary select appears with the WO's steps.
-    r = web_client.patch(
-        f"/api/issues/{issue['id']}", json={"procedure_instance_id": instance_id}
-    )
+    r = web_client.patch(f"/api/issues/{issue['id']}", json={"procedure_instance_id": instance_id})
     assert r.status_code == 200
     page = web_client.get(f"/issues/{issue['id']}?edit=1")
     assert 'id="boundary-step-select"' in page.text

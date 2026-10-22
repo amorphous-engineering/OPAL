@@ -428,7 +428,10 @@ def test_dockbar_op_row_renders_inert_complete_with_children_reason(web_client: 
     body = resp.text
     assert 'data-bar-order="1"' in body
     # Inert control + reason, display numbers (F1).
-    assert '<button class="btn" data-variant="primary" data-state="ok" data-size="xs" disabled>COMPLETE</button>' in body
+    assert (
+        '<button class="btn" data-variant="primary" data-state="ok" data-size="xs" disabled>COMPLETE</button>'
+        in body
+    )
     assert "Waiting on sub-steps 1.1, 1.2" in body
 
 
@@ -590,9 +593,9 @@ def _create_kitted_instance(client: TestClient) -> tuple[int, dict, dict]:
     )
     client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Install parts"})
     client.post(f"/api/procedures/{proc_id}/publish")
-    instance_id = client.post(
-        "/api/procedure-instances", json={"procedure_id": proc_id}
-    ).json()["id"]
+    instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
+        "id"
+    ]
     return instance_id, part, inv
 
 

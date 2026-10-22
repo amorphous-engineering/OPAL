@@ -5,25 +5,15 @@ import contextlib
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from opal.api.middleware import setup_middleware
 from opal.api.routes import router as api_router
+from opal.api.spa import router as spa_router
 from opal.config import get_settings
 from opal.core.part_lifecycle import DraftPartsBlocked
-from opal.web.routes import router as web_router
-from opal.web.templating import Jinja2Templates
-
-# Template directory
-TEMPLATES_DIR = Path(__file__).parent.parent / "web" / "templates"
-STATIC_DIR = Path(__file__).parent.parent / "web" / "static"
-
-# Jinja2 templates
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 def start_onshape_polling(app: FastAPI) -> None:
@@ -138,15 +128,10 @@ def create_app() -> FastAPI:
     async def draft_parts_blocked_handler(request: Request, exc: DraftPartsBlocked) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": exc.payload()})
 
-    # Mount static files
-    if STATIC_DIR.exists():
-        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-    # Include API routes
+    # JSON API, then the browser-facing OIDC handshake and the web client.
+    # The client router ends in a catch-all, so it must be included last.
     app.include_router(api_router, prefix="/api")
-
-    # Include web routes
-    app.include_router(web_router)
+    app.include_router(spa_router)
 
     return app
 

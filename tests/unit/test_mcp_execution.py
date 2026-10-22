@@ -569,9 +569,7 @@ def test_bind_issue_hold_adopts_work_order_when_unset(client, db_session, test_u
     assert len(step2["holds"]) == 1
 
 
-def test_bind_issue_hold_rebind_persists_adoption_past_session_close(
-    client, db_session, test_user
-):
+def test_bind_issue_hold_rebind_persists_adoption_past_session_close(client, db_session, test_user):
     """F3 (re-bind path): the "already holds COMPLETE of step X" early return
     must commit the WO adoption. call_tool's cleanup closes (rolls back) the
     session after the handler, so a flush-only adoption would be silently

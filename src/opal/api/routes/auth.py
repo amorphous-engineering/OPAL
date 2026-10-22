@@ -17,16 +17,20 @@ from opal.api.net import client_ip, request_is_secure, set_session_cookie
 from opal.core import webauthn
 from opal.core.auth import (
     SESSION_COOKIE,
+    authenticate_password,
     create_api_token,
     create_session,
+    generate_unique_username,
     hash_password,
+    login_rate_limiter,
     revoke_all_sessions,
+    revoke_session,
     sign_payload,
     validate_password_strength,
     verify_password,
     verify_payload,
 )
-from opal.db.models import ApiToken, AuthSession, PasskeyCredential
+from opal.db.models import ApiToken, AuthSession, PasskeyCredential, User
 
 public_router = APIRouter(prefix="/auth", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -46,6 +50,171 @@ def _require_passkeys_enabled() -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Passkeys are disabled on this OPAL instance",
         )
+
+
+# ---------------------------------------------------------------------------
+# Public: sign-in surface for the web client
+# ---------------------------------------------------------------------------
+
+
+def _user_payload(user: User) -> dict:
+    """The signed-in identity as the web client sees it."""
+    return {
+        "id": user.id,
+        "username": user.username,
+        "name": user.name,
+        "email": user.email,
+        "is_admin": user.is_admin,
+        "needs_onboarding": bool(user.needs_onboarding),
+        "needs_profile_setup": bool(user.needs_profile_setup),
+    }
+
+
+def _session_response(request: Request, db: DbSession, user: User, auth_method: str) -> Response:
+    """Mint a session for ``user`` and return its identity with the cookie set."""
+    from fastapi.responses import JSONResponse
+
+    token = create_session(
+        db,
+        user,
+        auth_method=auth_method,
+        user_agent=request.headers.get("user-agent"),
+        ip_address=client_ip(request),
+    )
+    db.commit()
+    response = JSONResponse({"user": _user_payload(user)})
+    set_session_cookie(response, request, token)
+    return response
+
+
+@public_router.get("/config")
+def sign_in_config(db: DbSession) -> dict:
+    """Which sign-in methods this instance offers, and whether it needs first-run setup."""
+    from opal.config import get_active_settings
+    from opal.core import oidc
+
+    settings = get_active_settings()
+    oidc_on = oidc.is_enabled()
+    return {
+        "needs_setup": db.query(User).count() == 0,
+        "password_login_enabled": settings.password_login_enabled,
+        "passkeys_enabled": _passkeys_enabled(),
+        "oidc_enabled": oidc_on,
+        "oidc_provider_name": oidc.get_config().provider_name if oidc_on else None,
+    }
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@public_router.post("/login")
+def password_login(request: Request, body: LoginRequest, db: DbSession) -> Response:
+    """Verify username + password and mint a session.
+
+    Passwordless (pre-credential) accounts are not claimable here; they fail
+    closed exactly like a wrong password (see /auth/claim)."""
+    from opal.config import get_active_settings
+
+    if not get_active_settings().password_login_enabled:
+        raise HTTPException(status_code=403, detail="Password sign-in is disabled")
+    username = body.username.strip().lower()
+    rate_key = f"{client_ip(request) or 'unknown'}:{username}"
+    if login_rate_limiter.is_blocked(rate_key):
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
+    user = authenticate_password(db, username, body.password)
+    if user is None:
+        login_rate_limiter.record_failure(rate_key)
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    login_rate_limiter.reset(rate_key)
+    return _session_response(request, db, user, "password")
+
+
+@public_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(request: Request, db: DbSession) -> Response:
+    """End this OPAL session. The identity provider's session is left alone."""
+    revoke_session(db, request.cookies.get(SESSION_COOKIE))
+    db.commit()
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.delete_cookie(SESSION_COOKIE)
+    return response
+
+
+class SetupRequest(BaseModel):
+    name: str
+    username: str
+    password: str
+    email: str | None = None
+
+
+@public_router.post("/setup", status_code=status.HTTP_201_CREATED)
+def first_run_setup(request: Request, body: SetupRequest, db: DbSession) -> Response:
+    """Create the first admin account. Refused once any user exists.
+
+    Always credentialed: an instance whose only administrator lives in an
+    external identity provider has no recovery path when it is unreachable."""
+    if db.query(User).count() > 0:
+        raise HTTPException(status_code=409, detail="Setup is already complete")
+    name = body.name.strip()
+    username = body.username.strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+    if error := validate_password_strength(body.password):
+        raise HTTPException(status_code=400, detail=error)
+    user = User(
+        name=name,
+        username=generate_unique_username(db, username),
+        password_hash=hash_password(body.password),
+        email=(body.email or "").strip() or None,
+        is_active=True,
+        is_admin=True,
+        needs_onboarding=True,
+    )
+    db.add(user)
+    db.flush()
+    response = _session_response(request, db, user, "password")
+    response.status_code = status.HTTP_201_CREATED
+    return response
+
+
+def _claimable_user(db: DbSession, token: str) -> User | None:
+    """The account an admin-issued claim link names, while it is still unclaimed."""
+    payload = verify_payload(token)
+    if not payload or payload.get("kind") != "account-claim":
+        return None
+    user = db.query(User).filter(User.id == payload["uid"], User.is_active.is_(True)).first()
+    if user is None or user.password_hash is not None:
+        return None
+    return user
+
+
+@public_router.get("/claim")
+def claim_status(token: str, db: DbSession) -> dict:
+    """Validate a claim link. Invalid, expired and claimed links are indistinguishable."""
+    user = _claimable_user(db, token)
+    if user is None:
+        raise HTTPException(status_code=404, detail="This link is invalid or has expired")
+    return {"username": user.username}
+
+
+class ClaimRequest(BaseModel):
+    token: str
+    password: str
+
+
+@public_router.post("/claim")
+def claim_account(request: Request, body: ClaimRequest, db: DbSession) -> Response:
+    """Set the first password on a passwordless account via an admin-issued link."""
+    user = _claimable_user(db, body.token)
+    if user is None:
+        raise HTTPException(status_code=404, detail="This link is invalid or has expired")
+    if error := validate_password_strength(body.password):
+        raise HTTPException(status_code=400, detail=error)
+    user.password_hash = hash_password(body.password)
+    return _session_response(request, db, user, "password")
 
 
 # ---------------------------------------------------------------------------
@@ -205,13 +374,20 @@ def delete_passkey(passkey_id: int, db: DbSession, user: RequiredUser) -> None:
 
 @router.get("/me")
 def whoami(user: RequiredUser) -> dict:
-    return {
-        "id": user.id,
-        "username": user.username,
-        "name": user.name,
-        "email": user.email,
-        "is_admin": user.is_admin,
-    }
+    return _user_payload(user)
+
+
+class ProfileUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+
+
+@router.post("/profile")
+def complete_profile(body: ProfileUpdate, db: DbSession, user: RequiredUser) -> dict:
+    """Set the display name and clear the profile-setup flag."""
+    user.name = body.name.strip()
+    user.needs_profile_setup = False
+    db.commit()
+    return _user_payload(user)
 
 
 class PasswordChange(BaseModel):

@@ -83,9 +83,7 @@ def stale_draft_parts(db: Session, older_than_days: int = 30) -> list["Part"]:
     )
     result = []
     for part in drafts:
-        created = (
-            part.created_at if part.created_at.tzinfo else part.created_at.replace(tzinfo=UTC)
-        )
+        created = part.created_at if part.created_at.tzinfo else part.created_at.replace(tzinfo=UTC)
         if created > cutoff:
             continue
         if not is_referenced(db, part):

@@ -144,9 +144,7 @@ class Risk(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         "User", foreign_keys=[last_reviewed_by_id]
     )
     asset_part: Mapped["Part | None"] = relationship("Part", foreign_keys=[asset_part_id])
-    realized_issue: Mapped["Issue | None"] = relationship(
-        "Issue", foreign_keys=[realized_issue_id]
-    )
+    realized_issue: Mapped["Issue | None"] = relationship("Issue", foreign_keys=[realized_issue_id])
     issue_links: Mapped[list["RiskIssueLink"]] = relationship(
         "RiskIssueLink", back_populates="risk", cascade="all, delete-orphan"
     )
@@ -244,4 +242,6 @@ class RiskIssueLink(Base, IdMixin, TimestampMixin):
     issue: Mapped["Issue"] = relationship("Issue", back_populates="risk_links")
 
     def __repr__(self) -> str:
-        return f"<RiskIssueLink(risk_id={self.risk_id}, issue_id={self.issue_id}, role={self.role})>"
+        return (
+            f"<RiskIssueLink(risk_id={self.risk_id}, issue_id={self.issue_id}, role={self.role})>"
+        )

@@ -38,9 +38,7 @@ class RiskDispositionError(Exception):
 #: Dispositions that count as live exposure. realized is excluded — the
 #: departure happened; the exposure lives on as its issue, not as a risk.
 OPEN_DISPOSITIONS = [
-    d.value
-    for d in RiskDisposition
-    if d not in (RiskDisposition.CLOSED, RiskDisposition.REALIZED)
+    d.value for d in RiskDisposition if d not in (RiskDisposition.CLOSED, RiskDisposition.REALIZED)
 ]
 
 
@@ -117,12 +115,11 @@ def disposition_blockers(
         if not (risk.watch_threshold or "").strip():
             blockers.append("watch requires a threshold — when the watch trips")
     elif target == RiskDisposition.RESEARCH.value:
-        if not open_links(risk, RiskIssueRole.RESEARCH.value) and not (
-            risk.description or ""
-        ).strip():
-            blockers.append(
-                "research requires a linked issue (role: research) or a narrative note"
-            )
+        if (
+            not open_links(risk, RiskIssueRole.RESEARCH.value)
+            and not (risk.description or "").strip()
+        ):
+            blockers.append("research requires a linked issue (role: research) or a narrative note")
     elif target == RiskDisposition.CLOSED.value:
         if not (note or "").strip():
             blockers.append("closing requires a one-line close note")
@@ -197,9 +194,7 @@ def apply_acceptance_invalidation(
     if risk.disposition != RiskDisposition.ACCEPTED.value:
         return False
 
-    changed = [
-        field for field in SIGNATURE_FIELDS if old_values.get(field) != getattr(risk, field)
-    ]
+    changed = [field for field in SIGNATURE_FIELDS if old_values.get(field) != getattr(risk, field)]
     if not changed:
         return False
 

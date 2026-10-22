@@ -95,12 +95,8 @@ def test_step_note_backfill_and_column_drop(tmp_path):
         },
     )
     # Whitespace-only and NULL blobs: no note rows.
-    _insert_step(
-        conn, **{**common, "step_number": 3, "notes": "   ", "completed_at": COMPLETED_AT}
-    )
-    _insert_step(
-        conn, **{**common, "step_number": 4, "notes": None, "completed_at": COMPLETED_AT}
-    )
+    _insert_step(conn, **{**common, "step_number": 3, "notes": "   ", "completed_at": COMPLETED_AT})
+    _insert_step(conn, **{**common, "step_number": 4, "notes": None, "completed_at": COMPLETED_AT})
     conn.commit()
     conn.close()
 
@@ -127,9 +123,7 @@ def test_step_note_backfill_and_column_drop(tmp_path):
     # Downgrade restores the blob (best-effort concatenation).
     _alembic(db, "downgrade", PREV_REV)
     conn = sqlite3.connect(db)
-    notes = dict(
-        conn.execute("SELECT step_number, notes FROM step_execution ORDER BY step_number")
-    )
+    notes = dict(conn.execute("SELECT step_number, notes FROM step_execution ORDER BY step_number"))
     assert notes[1] == "legacy blob"
     assert notes[2] == "pending note"
     assert notes[3] is None and notes[4] is None

@@ -6,10 +6,9 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import PlainTextResponse, RedirectResponse
+from starlette.responses import PlainTextResponse
 
 from opal.config import get_active_settings
-from opal.core.auth import SESSION_COOKIE, resolve_session
 
 logger = logging.getLogger(__name__)
 
@@ -58,68 +57,6 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
         return PlainTextResponse("Cross-origin request rejected", status_code=403)
 
 
-class WebSessionMiddleware(BaseHTTPMiddleware):
-    """Require a valid session cookie for web pages.
-
-    Every sign-in method — password, passkey, OIDC — ends at the same place:
-    a session cookie minted by ``opal.core.auth.create_session``. This
-    middleware therefore only ever asks whether that cookie resolves, and
-    knows nothing about how it was obtained.
-
-    The JSON API is exempt here because it enforces auth itself (401 via
-    require_user on every business router).
-    """
-
-    EXEMPT = (
-        "/setup",
-        "/login",
-        "/logout",
-        "/oidc/",
-        "/api/",
-        "/static/",
-        "/docs",
-        "/favicon.ico",
-    )
-
-    async def dispatch(self, request: Request, call_next) -> Response:
-        # Gate on the raw routed ASGI path, not request.url (which is
-        # reconstructed and can be desynced from the routed path via a crafted
-        # Host header), so an exempt-prefix match cannot skip the auth check.
-        path = request.scope.get("path", request.url.path)
-        if any(path.startswith(p) for p in self.EXEMPT):
-            return await call_next(request)
-
-        # A session surviving a database switch/reset resolves to None in
-        # the new database — treated as logged out, not as valid.
-        if self._session_user_id(request) is None:
-            response = RedirectResponse(url="/login", status_code=302)
-            response.delete_cookie(SESSION_COOKIE)
-            return response
-
-        return await call_next(request)
-
-    @staticmethod
-    def _session_user_id(request: Request) -> int | None:
-        """Resolve the session cookie to an active user id, if any.
-
-        Covers stale credentials by construction: a session minted before a
-        database switch or factory reset simply does not exist in the new
-        database and resolves to None (logged out). A pre-init or mid-switch
-        database fails closed the same way rather than raising.
-        """
-        from opal.db.session import get_session
-
-        token = request.cookies.get(SESSION_COOKIE)
-        if not token:
-            return None
-        try:
-            with get_session() as db:
-                user = resolve_session(db, token)
-                return user.id if user else None
-        except Exception:
-            return None
-
-
 def setup_middleware(app: FastAPI) -> None:
     """Configure all middleware for the application."""
     settings = get_active_settings()
@@ -156,6 +93,3 @@ def setup_middleware(app: FastAPI) -> None:
 
     # CSRF origin check for unsafe methods
     app.add_middleware(OriginCheckMiddleware)
-
-    # Web pages require a resolved session cookie
-    app.add_middleware(WebSessionMiddleware)

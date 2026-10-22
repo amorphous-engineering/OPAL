@@ -408,7 +408,11 @@ def test_parts_new_prefills_parent_from_context(web_client):
     parent = web_client.post("/api/parts", json={"name": "Vehicle", "tier": 1}).json()
     page = web_client.get(f"/parts/new?parent_id={parent['id']}")
     assert page.status_code == 200
-    assert f'id="pf-parent"\n                                   value="{parent["id"]}"' in page.text.replace("\r", "") or f'value="{parent["id"]}"' in page.text
+    assert (
+        f'id="pf-parent"\n                                   value="{parent["id"]}"'
+        in page.text.replace("\r", "")
+        or f'value="{parent["id"]}"' in page.text
+    )
     assert parent["internal_pn"] in page.text
 
 
@@ -424,8 +428,10 @@ def test_part_page_two_column_layout(web_client):
     # part (section relevance), so the order check covers what renders.
     assert page.text.index(">DESIGN<") < page.text.index(">STOCK &amp; USE<")
     second_col = page.text[page.text.index(">STOCK &amp; USE<") :]
-    assert page.text.index(">REQUIREMENTS<") < page.text.index(">TESTS<") < page.text.index(
-        ">STOCK &amp; USE<"
+    assert (
+        page.text.index(">REQUIREMENTS<")
+        < page.text.index(">TESTS<")
+        < page.text.index(">STOCK &amp; USE<")
     )
     order = [">BOM<", ">STOCK<", ">WHERE USED<", ">PROCEDURE USE<", ">CONSUMED<"]
     positions = [second_col.index(label) for label in order]
@@ -449,4 +455,4 @@ def test_parts_list_columns(web_client):
     assert part["internal_pn"] in rows.text
     # State is a column; database ids render nowhere in rows
     assert "DRAFT" in rows.text
-    assert f'>{part["id"]}<' not in rows.text
+    assert f">{part['id']}<" not in rows.text

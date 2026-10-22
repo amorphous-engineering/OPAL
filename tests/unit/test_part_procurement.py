@@ -47,7 +47,9 @@ def test_buy_part_page_has_no_bom_but_one_line_suppliers(web_client):
     assert ">SUPPLIERS<" in page.text
     assert ">PO LINES<" in page.text
     # One line with the add affordance, never a header bar over a box
-    suppliers_line = page.text[page.text.index(">SUPPLIERS<") - 200 : page.text.index(">SUPPLIERS<") + 300]
+    suppliers_line = page.text[
+        page.text.index(">SUPPLIERS<") - 200 : page.text.index(">SUPPLIERS<") + 300
+    ]
     assert "empty-line" in suppliers_line
     assert "+ ADD" in suppliers_line
     assert page.text.count('class="panel panel-ledger"') == 0
@@ -101,7 +103,12 @@ def test_import_honors_explicit_procurement(web_client):
         "/api/parts/import",
         json={
             "rows": [
-                {"name": "Imported Declared", "external_pn": "IMP-1", "tier": 1, "procurement": "both"},
+                {
+                    "name": "Imported Declared",
+                    "external_pn": "IMP-1",
+                    "tier": 1,
+                    "procurement": "both",
+                },
                 {"name": "Imported Heuristic", "external_pn": "IMP-2", "tier": 1},
             ]
         },

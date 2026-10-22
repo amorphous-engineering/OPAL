@@ -866,9 +866,7 @@ def test_wo_containment_blocks_instance_completion(client):
     issue_id, _ = _log_nc(client, instance_id, containment="wo")
 
     for step in (1, 2, 3):
-        resp = client.post(
-            f"/api/procedure-instances/{instance_id}/steps/{step}/complete", json={}
-        )
+        resp = client.post(f"/api/procedure-instances/{instance_id}/steps/{step}/complete", json={})
         assert resp.status_code == 200, resp.text
 
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
@@ -1085,9 +1083,7 @@ def test_skip_blocked_by_open_redline_after_disposition(client):
     assert "redline" in skip.json()["detail"].lower()
 
     # Once the redline sub-step is executed, the gate clears and SKIP works.
-    client.post(
-        f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/complete", json={}
-    )
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{sub_step_number}/complete", json={})
     skip = client.post(f"/api/procedure-instances/{instance_id}/steps/1/skip", json={})
     assert skip.status_code == 200, skip.text
     assert skip.json()["status"] == "skipped"
@@ -1109,9 +1105,9 @@ def test_skip_not_blocked_by_strict_sequence_predecessor(client):
         f"/api/procedures/{proc_id}/steps", json={"title": "Sub 2", "parent_step_id": op["id"]}
     )
     client.post(f"/api/procedures/{proc_id}/publish")
-    instance_id = client.post(
-        "/api/procedure-instances", json={"procedure_id": proc_id}
-    ).json()["id"]
+    instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
+        "id"
+    ]
     # Orders: OP=1, 1.1=2, 1.2=3. COMPLETE on 1.2 is sequence-gated...
     blocked = client.post(f"/api/procedure-instances/{instance_id}/steps/3/complete", json={})
     assert blocked.status_code == 400
@@ -1256,13 +1252,15 @@ def test_disposition_releases_sub_step_and_op(client):
     _sign(client, nc["id"])
 
     assert (
-        client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
-        .status_code
+        client.post(
+            f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={}
+        ).status_code
         == 200
     )
     assert (
-        client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
-        .status_code
+        client.post(
+            f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={}
+        ).status_code
         == 200
     )
     inst = client.get(f"/api/procedure-instances/{instance_id}").json()
@@ -1281,13 +1279,15 @@ def test_op_containment_blocks_op_complete_not_steps(client):
 
     # Steps inside the OP run and complete freely...
     assert (
-        client.post(f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={})
-        .status_code
+        client.post(
+            f"/api/procedure-instances/{instance_id}/steps/{a1}/complete", json={}
+        ).status_code
         == 200
     )
     assert (
-        client.post(f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={})
-        .status_code
+        client.post(
+            f"/api/procedure-instances/{instance_id}/steps/{a2}/complete", json={}
+        ).status_code
         == 200
     )
 
@@ -1340,4 +1340,3 @@ def test_sub_step_cannot_complete_when_parent_op_has_unmet_prereqs(client):
     assert "waiting on" in resp.json()["detail"].lower()
     # B.1 unused but kept as a reference to confirm setup correctness.
     assert b1["id"] is not None
-

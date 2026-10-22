@@ -122,9 +122,7 @@ class Part(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         index=True,
         comment="draft (identity mutable) or active (identity locked)",
     )
-    activated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     activated_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )

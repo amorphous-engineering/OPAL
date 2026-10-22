@@ -250,7 +250,7 @@ def test_tier1_is_flight_critical_not_commodity(seeded):
         "Combustion Chamber",
         "Servo-Actuated Ball Valve Assembly",
         "Tubular Nylon Shock Cord, 3000lbf Breaking Strength",
-        "Drogue Parachute, 36\" Diameter",
+        'Drogue Parachute, 36" Diameter',
     ):
         part = seeded.query(Part).filter(Part.name == name).one()
         assert part.tier == 1, f"{name} is flight-critical"
