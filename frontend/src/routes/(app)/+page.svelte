@@ -74,35 +74,35 @@
 			value: o.executions.total,
 			sub: `${o.executions.flagged} blocked or overdue`,
 			tone: o.executions.flagged > 0 ? 'warn' : 'default',
-			href: '/executions?status=in_work'
+			href: '/executions'
 		},
 		{
 			label: 'Low stock',
 			value: o.low_stock.total,
 			sub: 'below reorder point',
 			tone: o.low_stock.total > 0 ? 'warn' : 'default',
-			href: '/parts?low_stock=true'
+			href: '/parts?low=1'
 		},
 		{
 			label: 'POs awaiting receipt',
 			value: o.purchases.total,
 			sub: `${o.purchases.flagged} overdue`,
 			tone: o.purchases.flagged > 0 ? 'warn' : 'default',
-			href: '/purchases?status=ordered'
+			href: '/purchases?status=open'
 		},
 		{
 			label: 'Calibration / expiry',
 			value: o.stock_attention.total,
 			sub: `${o.stock_attention.flagged} overdue or expired`,
 			tone: o.stock_attention.flagged > 0 ? 'error' : o.stock_attention.total ? 'warn' : 'default',
-			href: '/inventory'
+			href: '/inventory?flag=attention'
 		},
 		{
 			label: 'High risks',
 			value: o.risks.total,
 			sub: 'open, score above 12',
 			tone: o.risks.total > 0 ? 'warn' : 'default',
-			href: '/risks'
+			href: '/risks?severity=high&active=1'
 		}
 	]);
 
@@ -312,9 +312,8 @@
 		{#if o.low_stock.items.length}
 			<Section title="Low stock" count={shown(o.low_stock)}>
 				{#snippet actions()}
-					<a
-						href="/parts?low_stock=true"
-						class="font-mono text-[11px] text-info uppercase hover:underline">All</a
+					<a href="/parts?low=1" class="font-mono text-[11px] text-info uppercase hover:underline"
+						>All</a
 					>
 				{/snippet}
 				<DataTable
@@ -348,7 +347,7 @@
 			<Section title="Purchases awaiting receipt" count={shown(o.purchases)}>
 				{#snippet actions()}
 					<a
-						href="/purchases?status=ordered"
+						href="/purchases?status=open"
 						class="font-mono text-[11px] text-info uppercase hover:underline">All</a
 					>
 				{/snippet}
@@ -387,8 +386,9 @@
 		{#if o.stock_attention.items.length}
 			<Section title="Calibration and expiry" count={shown(o.stock_attention)}>
 				{#snippet actions()}
-					<a href="/inventory" class="font-mono text-[11px] text-info uppercase hover:underline"
-						>Stock</a
+					<a
+						href="/inventory?flag=attention"
+						class="font-mono text-[11px] text-info uppercase hover:underline">Stock</a
 					>
 				{/snippet}
 				<DataTable
@@ -421,7 +421,10 @@
 		{#if o.risks.items.length}
 			<Section title="High risks" count={shown(o.risks)}>
 				{#snippet actions()}
-					<a href="/risks" class="font-mono text-[11px] text-info uppercase hover:underline">All</a>
+					<a
+						href="/risks?severity=high&active=1"
+						class="font-mono text-[11px] text-info uppercase hover:underline">All</a
+					>
 				{/snippet}
 				<DataTable
 					rows={o.risks.items}

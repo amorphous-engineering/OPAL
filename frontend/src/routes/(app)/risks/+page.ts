@@ -7,7 +7,7 @@ const PAGE_SIZE = 50;
 export const load: PageLoad = async ({ fetch, url }) => {
 	const p = url.searchParams;
 	const query = {
-		search: p.get('search'),
+		search: p.get('q'),
 		disposition: p.get('disposition'),
 		severity: p.get('severity'),
 		owner_id: p.get('owner_id'),

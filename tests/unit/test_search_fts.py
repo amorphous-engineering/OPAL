@@ -198,3 +198,14 @@ def test_execution_search_result_leads_with_work_order(client) -> None:
     assert hit["label"] == wo
     assert hit["sublabel"] == "Search Label Proc"
     assert "Execution #" not in str(r.json())
+
+
+def test_search_finds_issue_by_number_and_never_shows_database_ids(client) -> None:
+    """Palette hits carry the human identifier (IT-00001), found by number as well as text."""
+    issue = client.post(
+        "/api/issues", json={"title": "Zebra valve chatter", "issue_type": "bug", "priority": "low"}
+    ).json()
+    hits = client.get("/api/search", params={"q": issue["issue_number"]}).json()
+    hit = next(h for h in hits if h["entity_type"] == "issue" and h["id"] == issue["id"])
+    assert hit["sublabel"] == issue["issue_number"]
+    assert f"#{issue['id']}" not in str([h["sublabel"] for h in hits])

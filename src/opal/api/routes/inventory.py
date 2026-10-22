@@ -7,7 +7,7 @@ from enum import Enum
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
@@ -227,6 +227,7 @@ def _filtered_records(
     expired: bool,
     expiring_soon: bool,
     calibration_overdue: bool,
+    attention: bool = False,
 ):
     query = db.query(InventoryRecord).join(Part).filter(Part.deleted_at.is_(None))
 
@@ -275,6 +276,23 @@ def _filtered_records(
             InventoryRecord.calibration_due_at.isnot(None),
             InventoryRecord.calibration_due_at <= now,
         )
+    if attention:
+        # Same set the overview strip counts: tooling past calibration, or stock on hand
+        # that is expired or expires within the window.
+        query = query.filter(
+            or_(
+                and_(
+                    Part.is_tooling == True,  # noqa: E712
+                    InventoryRecord.calibration_due_at.isnot(None),
+                    InventoryRecord.calibration_due_at <= datetime.now(UTC),
+                ),
+                and_(
+                    InventoryRecord.quantity > 0,
+                    InventoryRecord.expiration_date.isnot(None),
+                    InventoryRecord.expiration_date <= date.today() + timedelta(days=30),
+                ),
+            )
+        )
     return query
 
 
@@ -310,6 +328,9 @@ def list_inventory(
     calibration_overdue: bool = Query(
         False, description="Filter to tooling items with overdue calibration"
     ),
+    attention: bool = Query(
+        False, description="Tooling past calibration, or stock expired or expiring within 30 days"
+    ),
     sort: str | None = Query(None, description=f"One of: {', '.join(_SORT_COLUMNS)}"),
     order: str = Query("asc", pattern="^(asc|desc)$"),
 ) -> InventoryListResponse:
@@ -331,6 +352,7 @@ def list_inventory(
         expired=expired,
         expiring_soon=expiring_soon,
         calibration_overdue=calibration_overdue,
+        attention=attention,
     )
 
     total = query.count()

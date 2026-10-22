@@ -1,38 +1,31 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
 		DataTable,
-		EmptyLine,
+		FilterBar,
+		FilterSelect,
+		ListFrame,
 		PageHeader,
+		Pagination,
+		SearchInput,
 		State,
-		Timestamp
+		Timestamp,
+		hasParams,
+		urlSort,
+		type Column
 	} from '#lib/components/opal/index.js';
-	import type { Column } from '#lib/components/opal/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import type { ProcedureRow } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	const params = $derived(page.url.searchParams);
-	const filtered = $derived(!!(params.get('q') || params.get('status') || params.get('type')));
-
-	// API sort name per column key.
-	const SORT_KEYS: Record<string, string> = {
-		name: 'name',
-		procedure_type: 'type',
-		status: 'status',
-		current_version_number: 'version',
-		step_count: 'steps',
-		execution_count: 'executions',
-		updated_at: 'updated_at',
-		created_at: 'created_at'
-	};
-	const KEY_OF = Object.fromEntries(Object.entries(SORT_KEYS).map(([k, v]) => [v, k]));
+	const sort = urlSort({ key: 'updated_at', dir: 'desc' });
+	const FILTERS = ['q', 'status', 'type'];
+	const filtered = $derived.by(() => {
+		void page.url.search;
+		return hasParams(FILTERS);
+	});
 
 	const columns: Column<ProcedureRow>[] = [
 		{ key: 'name', label: 'Name', sortable: true },
@@ -57,103 +50,58 @@
 		},
 		{ key: 'updated_at', label: 'Updated', sortable: true, width: '10rem' }
 	];
-
-	const urlSort = $derived.by(() => {
-		const s = params.get('sort') ?? 'updated_at';
-		return { key: KEY_OF[s] ?? 'updated_at', dir: (params.get('dir') ?? 'desc') as 'asc' | 'desc' };
-	});
-
-	function go(patch: Record<string, string | null>, keepFocus = false) {
-		const next = new SvelteURLSearchParams(page.url.search);
-		for (const [k, v] of Object.entries(patch)) {
-			if (v) next.set(k, v);
-			else next.delete(k);
-		}
-		if (!('page' in patch)) next.delete('page');
-		const qs = next.toString();
-		goto(qs ? `?${qs}` : page.url.pathname, { reset: !keepFocus, replace: true });
-	}
-
-	function setSort(next: { key: string; dir: 'asc' | 'desc' } | null) {
-		if (!next) go({ sort: null, dir: null });
-		else go({ sort: SORT_KEYS[next.key], dir: next.dir });
-	}
-
-	let search = $state(page.url.searchParams.get('q') ?? '');
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	function onSearch() {
-		clearTimeout(timer);
-		timer = setTimeout(() => go({ q: search.trim() || null }, true), 250);
-	}
-
-	const total = $derived(data.result.total);
-	const pageNo = $derived(data.result.page ?? 1);
-	const pages = $derived(Math.max(1, Math.ceil(total / (data.result.page_size ?? 50))));
 </script>
 
-<PageHeader title="Templates" crumbs={[{ label: 'Manufacturing' }]}>
+<PageHeader title="Templates">
+	{#snippet meta()}
+		<span class="mono"
+			>{data.result.total} {data.result.total === 1 ? 'template' : 'templates'}</span
+		>
+	{/snippet}
 	{#snippet actions()}
-		<Button href="/procedures/new">+ NEW TEMPLATE</Button>
+		<Button size="sm" href="/procedures/new">+ NEW TEMPLATE</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-	<Input
-		type="search"
-		class="w-64"
-		placeholder="Search name or description"
-		aria-label="Search templates"
-		bind:value={search}
-		oninput={onSearch}
-	/>
-	<NativeSelect
-		class="w-36"
-		aria-label="Type"
-		value={params.get('type') ?? ''}
-		onchange={(e) => go({ type: e.currentTarget.value || null })}
-	>
-		<NativeSelectOption value="">All types</NativeSelectOption>
-		<NativeSelectOption value="op">OP</NativeSelectOption>
-		<NativeSelectOption value="build">BUILD</NativeSelectOption>
-	</NativeSelect>
-	<NativeSelect
-		class="w-40"
-		aria-label="Status"
-		value={params.get('status') ?? ''}
-		onchange={(e) => go({ status: e.currentTarget.value || null })}
-	>
-		<NativeSelectOption value="">All statuses</NativeSelectOption>
-		<NativeSelectOption value="draft">DRAFT</NativeSelectOption>
-		<NativeSelectOption value="active">ACTIVE</NativeSelectOption>
-		<NativeSelectOption value="deprecated">DEPRECATED</NativeSelectOption>
-	</NativeSelect>
-	{#if filtered}
-		<Button
-			variant="ghost"
-			size="sm"
-			onclick={() => {
-				search = '';
-				goto(page.url.pathname, { replace: true });
-			}}>CLEAR</Button
-		>
-	{/if}
-	<span class="ml-auto font-mono text-xs text-muted-foreground">{total} TOTAL</span>
-</div>
+<ListFrame>
+	<FilterBar clear={FILTERS}>
+		<SearchInput label="Search templates" placeholder="Search name or description" />
+		<FilterSelect
+			param="type"
+			label="Type"
+			allLabel="All types"
+			options={[
+				{ value: 'op', label: 'OP' },
+				{ value: 'build', label: 'BUILD' }
+			]}
+		/>
+		<FilterSelect
+			param="status"
+			label="Status"
+			allLabel="All statuses"
+			options={[
+				{ value: 'draft', label: 'DRAFT' },
+				{ value: 'active', label: 'ACTIVE' },
+				{ value: 'deprecated', label: 'DEPRECATED' }
+			]}
+		/>
+	</FilterBar>
 
-{#if data.result.items.length === 0 && filtered}
-	<EmptyLine label="Matching templates" />
-{:else}
 	<DataTable
 		rows={data.result.items}
 		{columns}
-		bind:sort={() => urlSort, setSort}
+		bind:sort={() => sort.value, sort.set}
 		serverSort
-		emptyLabel="Templates"
+		emptyLabel="TEMPLATES"
 		key={(r) => r.id}
 		href={(r) => `/procedures/${r.id}`}
 	>
 		{#snippet emptyAction()}
-			<a href="/procedures/new" class="font-medium text-info hover:underline">+ ADD</a>
+			{#if filtered}
+				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+			{:else}
+				<a href="/procedures/new" class="font-medium text-info hover:underline">+ NEW TEMPLATE</a>
+			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
 			{#if col.key === 'name'}
@@ -173,22 +121,5 @@
 			{/if}
 		{/snippet}
 	</DataTable>
-{/if}
-
-{#if pages > 1}
-	<div class="flex items-center gap-2 border-t border-border px-4 py-2 font-mono text-xs">
-		<Button
-			variant="outline"
-			size="xs"
-			disabled={pageNo <= 1}
-			onclick={() => go({ page: String(pageNo - 1) })}>PREV</Button
-		>
-		<span class="text-muted-foreground">PAGE {pageNo} / {pages}</span>
-		<Button
-			variant="outline"
-			size="xs"
-			disabled={pageNo >= pages}
-			onclick={() => go({ page: String(pageNo + 1) })}>NEXT</Button
-		>
-	</div>
-{/if}
+	<Pagination total={data.result.total} pageSize={data.result.page_size ?? 50} />
+</ListFrame>

@@ -3,12 +3,15 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
 		DataTable,
 		EmptyLine,
+		FilterBar,
+		FilterSelect,
+		FilterToggle,
 		PageHeader,
+		SearchInput,
+		urlSort,
 		Section,
 		State,
 		Timestamp,
@@ -172,17 +175,10 @@
 	}
 
 	// ---- keyboard ----
-	let searchEl = $state<HTMLInputElement | null>(null);
-
 	function onkeydown(e: KeyboardEvent) {
 		const t = e.target as HTMLElement;
 		if (t.closest('input, textarea, select, [role="dialog"], [contenteditable]')) return;
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
-		if (e.key === '/') {
-			e.preventDefault();
-			searchEl?.focus();
-			return;
-		}
 		if (e.key === 'b' && data.tree.queue_count) {
 			e.preventDefault();
 			goto('/requirements/queue');
@@ -246,9 +242,7 @@
 		{ key: 'flags', label: 'Flags', width: '8rem' },
 		{ key: 'updated_at', label: 'Updated', sortable: true, width: '6rem', align: 'right' }
 	];
-	let sort = $state<{ key: string; dir: 'asc' | 'desc' } | null>(null);
-
-	const filterCount = $derived([q, stFilter, level, verif, staleOnly].filter(Boolean).length);
+	const sort = urlSort(null);
 </script>
 
 <svelte:window {onkeydown} />
@@ -284,81 +278,44 @@
 		title="REQUIREMENTS"
 		count={filtering ? `${rows.length || listRows.length} of ${data.tree.total}` : data.tree.total}
 	>
-		<div class="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
-			<Input
-				bind:ref={searchEl}
-				class="h-7 w-64"
-				placeholder="Filter number, title, statement   /"
-				value={q}
-				oninput={(e) => setParam('q', e.currentTarget.value)}
-				aria-label="Filter requirements"
+		<FilterBar clear={['q', 'state', 'level', 'verif', 'stale']}>
+			<SearchInput label="Filter requirements" placeholder="Filter number, title, statement" />
+			<FilterSelect
+				param="state"
+				label="State"
+				allLabel="All states"
+				options={LIFECYCLE_STATES.map((s) => ({ value: s, label: stateLabel(s) }))}
 			/>
-			<NativeSelect
-				size="sm"
-				value={stFilter}
-				onchange={(e) => setParam('state', e.currentTarget.value)}
-				aria-label="State"
-			>
-				<NativeSelectOption value="">All states</NativeSelectOption>
-				{#each LIFECYCLE_STATES as s (s)}
-					<NativeSelectOption value={s}>{stateLabel(s)}</NativeSelectOption>
-				{/each}
-			</NativeSelect>
-			<NativeSelect
-				size="sm"
-				value={level}
-				onchange={(e) => setParam('level', e.currentTarget.value)}
-				aria-label="Level"
-			>
-				<NativeSelectOption value="">All levels</NativeSelectOption>
-				{#each LEVELS as l (l.value)}
-					<NativeSelectOption value={String(l.value)}>{l.label}</NativeSelectOption>
-				{/each}
-			</NativeSelect>
-			<NativeSelect
-				size="sm"
-				value={verif}
-				onchange={(e) => setParam('verif', e.currentTarget.value)}
-				aria-label="Verification"
-			>
-				<NativeSelectOption value="">Any verification</NativeSelectOption>
-				{#each ['verified', 'partial', 'open', 'unallocated'] as v (v)}
-					<NativeSelectOption value={v}
-						>{verificationLabel[v as keyof typeof verificationLabel]}</NativeSelectOption
+			<FilterSelect
+				param="level"
+				label="Level"
+				allLabel="All levels"
+				options={LEVELS.map((l) => ({ value: String(l.value), label: l.label }))}
+			/>
+			<FilterSelect
+				param="verif"
+				label="Verification"
+				allLabel="Any verification"
+				options={(['verified', 'partial', 'open', 'unallocated'] as const).map((v) => ({
+					value: v,
+					label: verificationLabel[v]
+				}))}
+			/>
+			<FilterToggle param="stale" label="Stale only" />
+			{#snippet end()}
+				{#if view === 'tree'}
+					<span class="font-mono text-[11px] whitespace-nowrap text-muted-foreground"
+						>j/k move · ←/→ fold · enter open · c flow down · / filter · b queue</span
 					>
-				{/each}
-			</NativeSelect>
-			<label class="flex items-center gap-1.5 font-mono text-[11px] tracking-wider uppercase">
-				<input
-					type="checkbox"
-					checked={staleOnly}
-					onchange={(e) => setParam('stale', e.currentTarget.checked ? '1' : null)}
-				/>
-				Stale only
-			</label>
-			{#if filterCount}
-				<Button
-					size="xs"
-					variant="ghost"
-					onclick={() =>
-						goto(view === 'list' ? '?view=list' : page.url.pathname, {
-							replace: true,
-							reset: false
-						})}>CLEAR</Button
-				>
-			{/if}
-			{#if view === 'tree'}
-				<span class="ml-auto font-mono text-[11px] whitespace-nowrap text-muted-foreground"
-					>j/k move · ←/→ fold · enter open · c flow down · / filter · b queue</span
-				>
-			{/if}
-		</div>
+				{/if}
+			{/snippet}
+		</FilterBar>
 
 		{#if view === 'list'}
 			<DataTable
 				rows={listRows}
 				{columns}
-				bind:sort
+				bind:sort={() => sort.value, sort.set}
 				href={(r) => `/requirements/${r.id}`}
 				key={(r) => r.id}
 				emptyLabel={filtering ? 'Matching requirements' : 'Requirements'}
