@@ -52,7 +52,7 @@
 		<Button size="sm" href="/users/new">+ NEW USER</Button>
 	{/snippet}
 	{#snippet meta()}<span class="mono">{data.total}</span>
-		{data.status === 'all' ? 'accounts' : data.status + ' accounts'}{/snippet}
+		{data.status === 'all' ? 'total' : data.status}{/snippet}
 </PageHeader>
 
 <ListFrame>

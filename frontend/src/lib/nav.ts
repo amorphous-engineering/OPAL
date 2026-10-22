@@ -41,7 +41,7 @@ export const NAV: NavGroup[] = [
 		label: 'System',
 		items: [
 			{ href: '/audit', label: 'Audit log' },
-			{ href: '/users', label: 'Users' },
+			{ href: '/users', label: 'Users', adminOnly: true },
 			{ href: '/settings', label: 'Settings' }
 		]
 	}

@@ -16,8 +16,8 @@
 	let busy = $state(false);
 
 	onMount(async () => {
-		const config = await getSignInConfig();
-		if (!config.needs_setup) goto('/login', { replace: true });
+		const config = await getSignInConfig().catch(() => null);
+		if (config && !config.needs_setup) goto('/login', { replace: true });
 	});
 
 	async function submit(e: SubmitEvent) {

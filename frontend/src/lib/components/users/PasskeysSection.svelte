@@ -28,9 +28,13 @@
 	let label = $state('');
 	let busy = $state(false);
 
-	// Browsers only expose WebAuthn on HTTPS or localhost.
+	// Browsers only expose WebAuthn on HTTPS or localhost, and never for a bare IP address.
 	const usable = $derived(
-		enabled && typeof window !== 'undefined' && window.isSecureContext && passkeysSupported()
+		enabled &&
+			typeof window !== 'undefined' &&
+			window.isSecureContext &&
+			!/^[\d.]+$|:/.test(window.location.hostname) &&
+			passkeysSupported()
 	);
 
 	async function load() {
@@ -120,7 +124,7 @@
 			</form>
 		{:else}
 			<p class="border-t border-border px-3 py-2 font-mono text-xs text-muted-foreground">
-				Registering needs HTTPS or localhost.
+				Registering needs HTTPS or the hostname localhost.
 			</p>
 		{/if}
 	</Section>

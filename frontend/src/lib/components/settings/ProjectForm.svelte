@@ -231,7 +231,7 @@
 </script>
 
 <form class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" onsubmit={save}>
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if error}
 			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
 				{error}
@@ -272,7 +272,12 @@
 							<tr class="border-b border-border align-middle">
 								<td class="px-2 py-1 font-mono tabular-nums">{t.level}</td>
 								<td class="px-2 py-1"
-									><Input bind:value={t.name} aria-label="Tier name" class="h-7" required /></td
+									><Input
+										bind:value={t.name}
+										aria-label="Tier name"
+										class="h-7 min-w-24"
+										required
+									/></td
 								>
 								<td class="px-2 py-1"
 									><Input
@@ -395,7 +400,7 @@
 		</Section>
 	</div>
 
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Part numbering">
 			<div class="grid gap-3 p-3">
 				<div class="grid grid-cols-3 gap-3">
