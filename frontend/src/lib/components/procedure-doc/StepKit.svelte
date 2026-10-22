@@ -8,6 +8,7 @@
 	import { State } from '#lib/components/opal/index.js';
 	import { qty } from '#lib/format.js';
 	import { useDoc, type StockRecord } from './controller.js';
+	import KitEditor from './author/KitEditor.svelte';
 	import type { DocStep } from './types.js';
 
 	let { step }: { step: DocStep } = $props();
@@ -67,7 +68,9 @@
 	}
 </script>
 
-{#if step.step_kit.length || step.consumptions.length}
+{#if ctl.mode === 'author'}
+	<KitEditor {step} />
+{:else if step.step_kit.length || step.consumptions.length}
 	<div class="grid gap-1.5">
 		<span class="label">Step parts</span>
 		{#if open.length}

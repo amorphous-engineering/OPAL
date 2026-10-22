@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Parts this supplier carries: their catalog number, preferred flag, last paid cost.
 	import {
+		ActionLink,
 		Section,
 		DataTable,
 		EmptyLine,
@@ -110,7 +111,7 @@
 {:else}
 	<Section title="PARTS SUPPLIED" count={entries.length}>
 		{#snippet actions()}
-			<Button size="xs" variant="ghost" onclick={() => openDialog(null)}>+ ADD PART</Button>
+			<ActionLink onclick={() => openDialog(null)}>+ ADD PART</ActionLink>
 		{/snippet}
 		<DataTable rows={entries} {columns} emptyLabel="Parts supplied" key={(r) => r.id}>
 			{#snippet cell(r, col)}
@@ -127,17 +128,9 @@
 				{:else if col.key === 'notes'}
 					{#if r.notes}{r.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else if col.key === 'actions'}
-					<span class="inline-flex gap-3 font-mono text-[11px] tracking-wider uppercase">
-						<button
-							type="button"
-							class="text-muted-foreground hover:text-info"
-							onclick={() => openDialog(r)}>Edit</button
-						>
-						<button
-							type="button"
-							class="text-muted-foreground hover:text-error"
-							onclick={() => remove(r)}>Remove</button
-						>
+					<span class="inline-flex gap-3">
+						<ActionLink onclick={() => openDialog(r)}>EDIT</ActionLink>
+						<ActionLink danger onclick={() => remove(r)}>REMOVE</ActionLink>
 					</span>
 				{:else}
 					{(r as unknown as Record<string, string>)[col.key]}

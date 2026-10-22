@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Expense ledger: immutable receive records plus charges (shipping, tax, duty, fee).
 	import {
+		ActionLink,
 		Section,
 		EmptyLine,
 		Timestamp,
@@ -104,7 +105,7 @@
 {:else}
 	<Section title="EXPENSES" count={expenses.length}>
 		{#snippet actions()}
-			{#if canAdd}<Button size="xs" variant="ghost" onclick={openDialog}>+ ADD CHARGE</Button>{/if}
+			{#if canAdd}<ActionLink onclick={openDialog}>+ ADD CHARGE</ActionLink>{/if}
 		{/snippet}
 		<div class="overflow-x-auto">
 			<table class="w-full border-collapse text-sm">
@@ -149,11 +150,7 @@
 							<td class="px-3 py-1.5"><Timestamp value={e.received_at} /></td>
 							<td class="px-3 py-1.5 text-right">
 								{#if e.charge_kind}
-									<button
-										type="button"
-										class="font-mono text-[11px] tracking-wider text-muted-foreground uppercase hover:text-error"
-										onclick={() => remove(e)}>Remove</button
-									>
+									<ActionLink danger onclick={() => remove(e)}>REMOVE</ActionLink>
 								{/if}
 							</td>
 						</tr>

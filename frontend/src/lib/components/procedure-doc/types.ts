@@ -5,7 +5,11 @@
  * rest at their empty defaults.
  */
 
-/** execute: operator controls. readonly: facts only. author: reserved for the template editor. */
+/**
+ * execute: operator controls. readonly: facts only. author: the template editor; every
+ * element edits in place through `controller.author`. In author mode `order` is the
+ * template step's id (stable across renumbering) and `number` its display number.
+ */
 export type DocMode = 'execute' | 'author' | 'readonly';
 
 export type StepStatus =
@@ -39,11 +43,15 @@ export interface DocSchema {
 }
 
 export interface DocImage {
+	/** StepImage id; present when authoring. */
+	id?: number;
 	attachment_id: number;
 	caption: string | null;
 }
 
 export interface DocStepKitItem {
+	/** StepKit id; present when authoring. */
+	id?: number;
 	part_id: number;
 	part_name: string;
 	part_number: string | null;
@@ -125,6 +133,10 @@ export interface DocStep {
 	requires_signoff: boolean;
 	is_contingency: boolean;
 	estimated_duration_minutes?: number | null;
+	/** Template step id (authoring). */
+	id?: number;
+	/** Default workcenter (authoring). */
+	workcenter_id?: number | null;
 	images: DocImage[];
 	step_kit: DocStepKitItem[];
 	data_schema: DocSchema | null;
@@ -170,6 +182,8 @@ export interface DocOp {
 		host_order: number | null;
 	} | null;
 	waiting_on_ops: string[];
+	/** OP ids this OP waits on (authoring; `waiting_on_ops` carries their numbers). */
+	depends_on?: number[];
 	holds: DocHold[];
 	open_ncs: { id: number; issue_number: string; title: string }[];
 	progress: { done: number; total: number };

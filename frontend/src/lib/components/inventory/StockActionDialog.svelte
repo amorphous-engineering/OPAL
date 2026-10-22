@@ -77,7 +77,7 @@
 					? 1
 					: -1
 	);
-	const delta = $derived(sign * (Number(amount) || 0));
+	const delta = $derived(sign * Math.max(0, Number(amount) || 0));
 	const newOnHand = $derived(current + delta);
 	const countDelta = $derived((Number(counted) || 0) - current);
 

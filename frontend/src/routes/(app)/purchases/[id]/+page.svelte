@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import {
+		ActionLink,
 		PageHeader,
 		Section,
 		DataTable,
@@ -263,16 +264,14 @@
 			<EmptyLine label="Lines">
 				{#snippet action()}
 					{#if editable}
-						<button type="button" class="font-medium text-info hover:underline" onclick={addLine}
-							>+ ADD LINE</button
-						>
+						<ActionLink onclick={addLine}>+ ADD LINE</ActionLink>
 					{/if}
 				{/snippet}
 			</EmptyLine>
 		{:else}
 			<Section title="LINES" count={po.lines.length}>
 				{#snippet actions()}
-					{#if editable}<Button size="xs" variant="ghost" onclick={addLine}>+ ADD LINE</Button>{/if}
+					{#if editable}<ActionLink onclick={addLine}>+ ADD LINE</ActionLink>{/if}
 				{/snippet}
 				<DataTable rows={po.lines} columns={lineColumns} emptyLabel="Lines" key={(l) => l.id}>
 					{#snippet cell(l, col)}
@@ -302,18 +301,10 @@
 								>{/if}
 						{:else if col.key === 'actions'}
 							{#if editable}
-								<span class="inline-flex gap-3 font-mono text-[11px] tracking-wider uppercase">
-									<button
-										type="button"
-										class="text-muted-foreground hover:text-info"
-										onclick={() => changeLine(l)}>Edit</button
-									>
+								<span class="inline-flex gap-3">
+									<ActionLink onclick={() => changeLine(l)}>EDIT</ActionLink>
 									{#if num(l.qty_received) === 0}
-										<button
-											type="button"
-											class="text-muted-foreground hover:text-error"
-											onclick={() => removeLine(l)}>Remove</button
-										>
+										<ActionLink danger onclick={() => removeLine(l)}>REMOVE</ActionLink>
 									{/if}
 								</span>
 							{/if}

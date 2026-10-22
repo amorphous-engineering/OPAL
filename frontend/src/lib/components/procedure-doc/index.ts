@@ -27,6 +27,16 @@ export { default as GateReason } from './GateReason.svelte';
 export { default as Lightbox } from './Lightbox.svelte';
 export { lightbox, attachmentUrl } from './lightbox.svelte.js';
 export { provideDoc, useDoc } from './controller.js';
-export type { DocController, DocActions, StockRecord, ConsumeItem } from './controller.js';
+export type {
+	AuthorActions,
+	ConsumeItem,
+	DocActions,
+	DocController,
+	PartHit,
+	SaveState,
+	StepEdit,
+	StockRecord,
+	WorkcenterOption
+} from './controller.js';
 export { isTerminal, visibleRows, TERMINAL_STATUSES } from './types.js';
 export type * from './types.js';

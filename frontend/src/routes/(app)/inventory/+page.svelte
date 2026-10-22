@@ -3,7 +3,9 @@
 	import { page } from '$app/state';
 	import { onDestroy } from 'svelte';
 	import {
+		ActionLink,
 		DataTable,
+		Pager,
 		PageHeader,
 		State,
 		Timestamp,
@@ -47,9 +49,12 @@
 		go({ sort: v ? v.key : null, order: v ? v.dir : null });
 	}
 
-	const pages = $derived(Math.max(1, Math.ceil(data.total / data.pageSize)));
-	const first = $derived(data.total === 0 ? 0 : (data.page - 1) * data.pageSize + 1);
-	const last = $derived(Math.min(data.total, data.page * data.pageSize));
+	function pageHref(n: number): string {
+		const url = new URL(page.url.href);
+		if (n <= 1) url.searchParams.delete('page');
+		else url.searchParams.set('page', String(n));
+		return url.pathname + url.search;
+	}
 
 	const recordColumns: Column<InventoryItem>[] = [
 		{ key: 'opal_number', label: 'OPAL', sortable: true, mono: true, width: '9rem' },
@@ -77,6 +82,10 @@
 		{ key: 'record_count', label: 'Records', sortable: true, align: 'right', mono: true },
 		{ key: 'locations', label: 'Locations', mono: true }
 	];
+
+	// Batch labels: records picked on any page this visit.
+	let picked = $state<(string | number)[]>([]);
+	const pickedOpals = $derived(picked.filter((k): k is string => typeof k === 'string'));
 
 	const filtered = $derived(!!(data.q || data.location || data.source || data.flag));
 </script>
@@ -171,9 +180,12 @@
 		>
 	{/if}
 
-	<span class="mono ml-auto text-xs text-muted-foreground">
-		{#if data.total}{first}–{last} of {data.total}{:else}0{/if}
-	</span>
+	{#if data.view === 'records' && pickedOpals.length}
+		<ActionLink href={`/label?inventory=${pickedOpals.join(',')}`} class="ml-2"
+			>PRINT {pickedOpals.length === 1 ? 'LABEL' : `${pickedOpals.length} LABELS`}</ActionLink
+		>
+		<ActionLink onclick={() => (picked = [])}>CLEAR SELECTION</ActionLink>
+	{/if}
 </div>
 
 {#if data.error}
@@ -188,7 +200,8 @@
 		bind:sort={() => sort, setSort}
 		href={(r) => (r.opal_number ? `/inventory/opal/${r.opal_number}` : null)}
 		emptyLabel={filtered ? 'Stock matching these filters' : 'Stock'}
-		key={(r) => r.id}
+		key={(r) => r.opal_number ?? r.id}
+		bind:selected={picked}
 	>
 		{#snippet emptyAction()}
 			<a href="/inventory/new" class="font-medium text-info hover:underline">+ RECEIVE</a>
@@ -277,20 +290,6 @@
 	</DataTable>
 {/if}
 
-{#if pages > 1}
-	<div class="flex items-center justify-end gap-2 border-t border-border px-4 py-2">
-		<Button
-			size="sm"
-			variant="outline"
-			disabled={data.page <= 1}
-			onclick={() => go({ page: data.page > 2 ? String(data.page - 1) : null })}>PREV</Button
-		>
-		<span class="mono text-xs text-muted-foreground">{data.page} / {pages}</span>
-		<Button
-			size="sm"
-			variant="outline"
-			disabled={data.page >= pages}
-			onclick={() => go({ page: String(data.page + 1) })}>NEXT</Button
-		>
-	</div>
+{#if data.total > 0}
+	<Pager total={data.total} page={data.page} pageSize={data.pageSize} href={(n) => pageHref(n)} />
 {/if}

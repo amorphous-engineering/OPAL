@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { DataTable, PageHeader, State, type Column } from '#lib/components/opal/index.js';
+	import {
+		ActionLink,
+		DataTable,
+		Pager,
+		PageHeader,
+		State,
+		type Column
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -18,6 +25,7 @@
 	let sort = $derived<{ key: string; dir: 'asc' | 'desc' } | null>({ key: q.sort, dir: q.dir });
 	let search = $derived(q.q);
 	let reserving = $state(false);
+	let picked = $state<(string | number)[]>([]);
 	let searchEl = $state<HTMLInputElement | null>(null);
 
 	type Patch = Partial<Record<string, string | number | boolean | null>>;
@@ -54,10 +62,16 @@
 		!!(q.q || q.tier || q.category || q.procurement || q.state || q.parent || q.low || q.tooling)
 	);
 
+	function pageHref(n: number): string {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
+		const next = new URLSearchParams(page.url.searchParams.toString());
+		if (n <= 1) next.delete('page');
+		else next.set('page', String(n));
+		const qs = next.toString();
+		return qs ? `?${qs}` : page.url.pathname;
+	}
+
 	const total = $derived(data.list.total);
-	const pageCount = $derived(Math.max(1, Math.ceil(total / PARTS_PAGE_SIZE)));
-	const from = $derived(total === 0 ? 0 : (q.page - 1) * PARTS_PAGE_SIZE + 1);
-	const to = $derived(Math.min(total, q.page * PARTS_PAGE_SIZE));
 
 	const columns: Column<Part>[] = [
 		{ key: 'internal_pn', label: 'PN', sortable: true, mono: true, width: '9rem' },
@@ -179,12 +193,19 @@
 					onclick={() => (search = '')}>CLEAR</a
 				>
 			{/if}
+			{#if picked.length}
+				<ActionLink href={`/label?part=${picked.join(',')}`} class="ml-2"
+					>PRINT {picked.length === 1 ? 'LABEL' : `${picked.length} LABELS`}</ActionLink
+				>
+				<ActionLink onclick={() => (picked = [])}>CLEAR SELECTION</ActionLink>
+			{/if}
 		</div>
 
 		<DataTable
 			rows={data.list.items}
 			{columns}
 			bind:sort
+			bind:selected={picked}
 			serverSort
 			key={(r) => r.id}
 			href={(r) => `/parts/${r.id}`}
@@ -231,26 +252,7 @@
 		</DataTable>
 
 		{#if total > 0}
-			<div
-				class="flex items-center gap-3 border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground"
-			>
-				<span class="tabular-nums">{from}–{to} of {total}</span>
-				<div class="ml-auto flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="xs"
-						disabled={q.page <= 1}
-						onclick={() => navigate({ page: q.page - 1 })}>← PREV</Button
-					>
-					<span class="tabular-nums">PAGE {q.page}/{pageCount}</span>
-					<Button
-						variant="outline"
-						size="xs"
-						disabled={q.page >= pageCount}
-						onclick={() => navigate({ page: q.page + 1 })}>NEXT →</Button
-					>
-				</div>
-			</div>
+			<Pager {total} page={q.page} pageSize={PARTS_PAGE_SIZE} href={(n) => pageHref(n)} />
 		{/if}
 	</div>
 </div>

@@ -9,6 +9,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
 	import { useDoc } from './controller.js';
+	import FieldEditor from './author/FieldEditor.svelte';
 	import { attachmentUrl, lightbox } from './lightbox.svelte.js';
 	import type { DocStep } from './types.js';
 
@@ -16,6 +17,18 @@
 	const ctl = useDoc();
 
 	const fields = $derived(step.data_schema?.fields ?? []);
+	const authoring = $derived(ctl.mode === 'author');
+
+	function addField() {
+		let n = fields.length + 1;
+		while (fields.some((f) => f.name === `field_${n}`)) n++;
+		ctl.author?.edit(step, {
+			data_schema: {
+				...(step.data_schema ?? {}),
+				fields: [...fields, { name: `field_${n}`, label: 'Field', type: 'text' }]
+			}
+		});
+	}
 	const errors = $derived(ctl.fieldErrors(step));
 	let uploading = $state(false);
 
@@ -49,9 +62,17 @@
 	}
 </script>
 
+{#if authoring}
+	<div class="flex items-center gap-2">
+		<span class="label">Data capture</span>
+		<Button size="xs" variant="outline" onclick={addField}>+ FIELD</Button>
+		{#if !fields.length}<span class="font-mono text-xs text-muted-foreground">FIELDS — none</span
+			>{/if}
+	</div>
+{/if}
 {#if fields.length}
 	<div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-4 gap-y-3">
-		{#each fields as f (f.name)}
+		{#each fields as f, i (authoring ? i : f.name)}
 			{@const id = `cap-${step.order}-${f.name}`}
 			{@const err = errors[f.name]}
 			<div class="grid content-start gap-1">
@@ -141,7 +162,7 @@
 							accept="image/*"
 							capture="environment"
 							multiple={!!f.multiple}
-							disabled={uploading}
+							disabled={uploading || authoring}
 							onchange={(e) => pick(f.name, !!f.multiple, e)}
 						/>
 					</div>
@@ -156,6 +177,7 @@
 					/>
 				{/if}
 				{#if err}<p class="text-[11px] text-error">{err}</p>{/if}
+				{#if authoring}<FieldEditor {step} index={i} />{/if}
 			</div>
 		{/each}
 	</div>

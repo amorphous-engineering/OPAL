@@ -13,6 +13,7 @@
 		type StockTest
 	} from '#lib/components/inventory/types.js';
 	import {
+		ActionLink,
 		confirm,
 		DataTable,
 		DetailRow,
@@ -189,7 +190,7 @@
 		<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,48rem)_max-content]">
 			<Section title="Record">
 				{#snippet actions()}
-					<Button size="xs" variant="ghost" onclick={openEdit}>EDIT</Button>
+					<ActionLink onclick={openEdit}>EDIT</ActionLink>
 				{/snippet}
 				<DetailTable>
 					<DetailRow label="Part">
@@ -200,7 +201,7 @@
 					</DetailRow>
 					<DetailRow label="External PN" value={d.part.external_pn} mono />
 					<DetailRow label="Tracking">
-						<span class="font-mono text-xs uppercase">{d.part.tracking_type}</span>
+						<span class="uppercase">{d.part.tracking_type}</span>
 					</DetailRow>
 					<DetailRow label="Location" value={rec.location} mono />
 					<DetailRow label="Quantity">
@@ -394,7 +395,7 @@
 								>REQUIRED {requiredPassed}/{requiredTemplates.length}</span
 							>
 						{/if}
-						<Button size="xs" variant="ghost" onclick={() => openTest(null)}>+ RUN</Button>
+						<ActionLink onclick={() => openTest(null)}>+ RUN</ActionLink>
 					{/snippet}
 					<DataTable
 						rows={d.tests}
@@ -419,8 +420,10 @@
 							{:else if col.key === 'tested_at'}
 								<Timestamp value={r.tested_at} />
 							{:else if col.key === 'actions'}
-								<Button size="xs" variant="ghost" onclick={() => openTest(r)}>EDIT</Button>
-								<Button size="xs" variant="ghost" onclick={() => removeTest(r)}>DELETE</Button>
+								<span class="inline-flex gap-3">
+									<ActionLink onclick={() => openTest(r)}>EDIT</ActionLink>
+									<ActionLink danger onclick={() => removeTest(r)}>DELETE</ActionLink>
+								</span>
 							{:else}
 								{@const v = r[col.key as 'test_name' | 'value' | 'notes' | 'tested_by_name']}
 								{#if v}{v}{:else}<span class="text-muted-foreground">—</span>{/if}
