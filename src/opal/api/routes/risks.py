@@ -8,11 +8,14 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import case, func
 from sqlalchemy.orm import selectinload
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number, generate_risk_number
+from opal.core.lint_segments import lint_segments
+from opal.db.models.audit import AuditLog
 from opal.db.models.issue import Issue, IssueStatus, IssueType
 from opal.db.models.part import Part
 from opal.db.models.risk import Risk, RiskDisposition, RiskIssueLink, RiskIssueRole
@@ -22,6 +25,8 @@ from opal.risks.dispositions import (
     RiskDispositionError,
     accept,
     apply_acceptance_invalidation,
+    disposition_blockers,
+    open_links,
     set_disposition,
     stamp_review,
 )
@@ -58,6 +63,8 @@ class RiskResponse(BaseModel):
     asset_text: str | None = None
     consequence: str | None = None
     asset_display: str | None = None
+    asset_part_number: str | None = None
+    asset_part_name: str | None = None
     statement: str | None = None
 
     disposition: str
@@ -84,8 +91,10 @@ class RiskResponse(BaseModel):
 
     last_reviewed_at: datetime | None = None
     last_reviewed_by_id: int | None = None
+    last_reviewed_by_name: str | None = None
 
     realized_issue_id: int | None = None
+    realized_issue_number: str | None = None
     linked_issues: list[LinkedIssueSummary] = []
 
     acceptance_invalidated: bool = False
@@ -206,6 +215,12 @@ class ReviewStampRequest(BaseModel):
     disposition: str | None = None
     severity: str | None = None
     min_score: int | None = Field(None, ge=1, le=25)
+    owner_id: int | None = None
+    probability: int | None = Field(None, ge=1, le=5)
+    impact: int | None = Field(None, ge=1, le=5)
+    residual_probability: int | None = Field(None, ge=1, le=5)
+    residual_impact: int | None = Field(None, ge=1, le=5)
+    active: bool = False
 
 
 # ============ Helpers ============
@@ -231,6 +246,8 @@ def _risk_to_response(risk: Risk, acceptance_invalidated: bool = False) -> RiskR
         asset_text=risk.asset_text,
         consequence=risk.consequence,
         asset_display=risk.asset_display,
+        asset_part_number=risk.asset_part.internal_pn if risk.asset_part else None,
+        asset_part_name=risk.asset_part.name if risk.asset_part else None,
         statement=risk.statement,
         disposition=risk.disposition,
         owner_id=risk.owner_id,
@@ -252,7 +269,9 @@ def _risk_to_response(risk: Risk, acceptance_invalidated: bool = False) -> RiskR
         watch_contingency=risk.watch_contingency,
         last_reviewed_at=risk.last_reviewed_at,
         last_reviewed_by_id=risk.last_reviewed_by_id,
+        last_reviewed_by_name=risk.last_reviewed_by.name if risk.last_reviewed_by else None,
         realized_issue_id=risk.realized_issue_id,
+        realized_issue_number=risk.realized_issue.issue_number if risk.realized_issue else None,
         linked_issues=[
             LinkedIssueSummary(
                 issue_id=link.issue_id,
@@ -318,9 +337,19 @@ def lint_risk_scenario(data: LintRequest) -> dict:
         departure=data.departure,
         consequence=data.consequence,
     )
+    texts = {
+        "condition": data.condition,
+        "departure": data.departure,
+        "consequence": data.consequence,
+    }
     return {
         "findings": {
             field: [f.to_dict() for f in field_findings]
+            for field, field_findings in findings.items()
+        },
+        # Ready-to-render underline runs per field (client draws, server computes spans).
+        "segments": {
+            field: lint_segments(texts[field] or "", field_findings)
             for field, field_findings in findings.items()
         },
         "would_block_accept": any(
@@ -377,7 +406,17 @@ def review_stamp(
         risks = db.query(Risk).filter(Risk.id.in_(data.risk_ids), Risk.deleted_at.is_(None)).all()
     else:
         risks = _filtered_risks_query(
-            db, data.search, data.disposition, data.severity, data.min_score
+            db,
+            data.search,
+            data.disposition,
+            data.severity,
+            data.min_score,
+            owner_id=data.owner_id,
+            probability=data.probability,
+            impact=data.impact,
+            residual_probability=data.residual_probability,
+            residual_impact=data.residual_impact,
+            active=data.active,
         ).all()
     if not risks:
         raise HTTPException(status_code=404, detail="No matching risks")
@@ -389,6 +428,13 @@ def review_stamp(
     }
 
 
+@router.get("/options")
+def get_risk_options(db: DbSession) -> dict:
+    """Pickers for the register: active users who can own a risk. /users is admin-only."""
+    users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
+    return {"owners": [{"id": u.id, "name": u.name} for u in users]}
+
+
 # ============ Risk CRUD ============
 
 
@@ -398,6 +444,13 @@ def _filtered_risks_query(
     disposition: str | None = None,
     severity: str | None = None,
     min_score: int | None = None,
+    *,
+    owner_id: int | None = None,
+    probability: int | None = None,
+    impact: int | None = None,
+    residual_probability: int | None = None,
+    residual_impact: int | None = None,
+    active: bool = False,
 ):
     """Shared filter builder — all predicates in SQL so pagination and counts
     see the filtered set, mirroring Risk.severity thresholds (web register
@@ -419,8 +472,38 @@ def _filtered_risks_query(
         query = query.filter(score > 12)
     if min_score:
         query = query.filter(score >= min_score)
+    if owner_id is not None:
+        query = query.filter(Risk.owner_id == owner_id)
+    if probability is not None:
+        query = query.filter(Risk.probability == probability)
+    if impact is not None:
+        query = query.filter(Risk.impact == impact)
+    if residual_probability is not None:
+        query = query.filter(Risk.residual_probability == residual_probability)
+    if residual_impact is not None:
+        query = query.filter(Risk.residual_impact == residual_impact)
+    if active:
+        # Same set the matrix counts: live exposure only.
+        query = query.filter(Risk.disposition.in_(OPEN_DISPOSITIONS))
 
     return query
+
+
+_SORT_COLUMNS = {
+    "risk_number": lambda: Risk.risk_number,
+    "title": lambda: func.lower(Risk.title),
+    "disposition": lambda: Risk.disposition,
+    "score": lambda: Risk.probability * Risk.impact,
+    "residual_score": lambda: case(
+        (
+            Risk.residual_probability.is_not(None) & Risk.residual_impact.is_not(None),
+            Risk.residual_probability * Risk.residual_impact,
+        ),
+        else_=None,
+    ),
+    "reviewed": lambda: Risk.last_reviewed_at,
+    "created": lambda: Risk.created_at,
+}
 
 
 def _eager_response_options(query):
@@ -429,6 +512,8 @@ def _eager_response_options(query):
     return query.options(
         selectinload(Risk.owner),
         selectinload(Risk.accepted_by),
+        selectinload(Risk.last_reviewed_by),
+        selectinload(Risk.realized_issue),
         selectinload(Risk.asset_part),
         selectinload(Risk.issue_links).selectinload(RiskIssueLink.issue),
     )
@@ -441,16 +526,40 @@ def list_risks(
     disposition: str | None = Query(None),
     severity: str | None = Query(None),
     min_score: int | None = Query(None, ge=1, le=25),
+    owner_id: int | None = Query(None),
+    probability: int | None = Query(None, ge=1, le=5),
+    impact: int | None = Query(None, ge=1, le=5),
+    residual_probability: int | None = Query(None, ge=1, le=5),
+    residual_impact: int | None = Query(None, ge=1, le=5),
+    active: bool = Query(False, description="Only live exposure (not closed or realized)"),
+    sort: str = Query("score"),
+    dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> RiskListResponse:
-    """List risks with optional filters."""
-    query = _filtered_risks_query(db, search, disposition, severity, min_score)
+    """List risks with optional filters. Default order: highest score first."""
+    if sort not in _SORT_COLUMNS:
+        raise HTTPException(status_code=422, detail=f"Unknown sort '{sort}'")
+    query = _filtered_risks_query(
+        db,
+        search,
+        disposition,
+        severity,
+        min_score,
+        owner_id=owner_id,
+        probability=probability,
+        impact=impact,
+        residual_probability=residual_probability,
+        residual_impact=residual_impact,
+        active=active,
+    )
     total = query.count()
 
+    column = _SORT_COLUMNS[sort]()
+    ordered = column.asc() if dir == "asc" else column.desc()
     risks = (
         _eager_response_options(query)
-        .order_by(Risk.id.desc())
+        .order_by(ordered.nulls_last(), Risk.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -572,6 +681,97 @@ def delete_risk(
 def get_risk_readiness(risk_id: int, db: DbSession) -> dict:
     """Acceptance readiness checks for the panel."""
     return readiness(db, _get_risk(db, risk_id))
+
+
+@router.get("/{risk_id}/disposition-check")
+def check_disposition(
+    risk_id: int,
+    db: DbSession,
+    target: str = Query(...),
+) -> dict:
+    """Pre-flight for a disposition transition: what blocks it, and live counts.
+
+    note is assumed supplied — the form collects it, and the POST enforces it.
+    """
+    risk = _get_risk(db, risk_id)
+    return {
+        "target": target,
+        "blockers": disposition_blockers(db, risk, target, note="pending"),
+        "open_mitigations": len(open_links(risk, RiskIssueRole.MITIGATION.value)),
+        "open_research": len(open_links(risk, RiskIssueRole.RESEARCH.value)),
+        "needs_note": target == RiskDisposition.CLOSED.value
+        or risk.disposition == RiskDisposition.ACCEPTED.value,
+    }
+
+
+_HISTORY_FIELDS = (
+    "probability",
+    "impact",
+    "residual_probability",
+    "residual_impact",
+    "disposition",
+    "owner_id",
+)
+
+
+@router.get("/{risk_id}/history")
+def get_risk_history(risk_id: int, db: DbSession) -> list[dict]:
+    """Scoring and disposition history from the audit log, newest first.
+
+    One row per audited change touching score, residual, disposition or owner:
+    {at, by, changes: [{field, from, to}], note}. Owner is resolved to a name.
+    """
+    _get_risk(db, risk_id)
+    entries = (
+        db.query(AuditLog)
+        .filter(AuditLog.table_name == "risk", AuditLog.record_id == risk_id)
+        .order_by(AuditLog.timestamp.desc(), AuditLog.id.desc())
+        .all()
+    )
+    user_ids = {e.user_id for e in entries if e.user_id}
+    for e in entries:
+        for blob in (e.old_values, e.new_values):
+            if blob and blob.get("owner_id"):
+                user_ids.add(blob["owner_id"])
+    names = (
+        {u.id: u.name for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+        if user_ids
+        else {}
+    )
+
+    rows: list[dict] = []
+    for e in entries:
+        new = e.new_values or {}
+        old = e.old_values or {}
+        if e.action == "create":
+            changes = [
+                {"field": f, "from": None, "to": new.get(f)}
+                for f in _HISTORY_FIELDS
+                if new.get(f) is not None
+            ]
+        elif e.action == "update":
+            changes = [
+                {"field": f, "from": old.get(f), "to": new[f]} for f in _HISTORY_FIELDS if f in new
+            ]
+        else:
+            continue
+        for c in changes:
+            if c["field"] == "owner_id":
+                c["field"] = "owner"
+                c["from"] = names.get(c["from"]) if c["from"] else None
+                c["to"] = names.get(c["to"]) if c["to"] else None
+        if not changes:
+            continue
+        rows.append(
+            {
+                "at": e.timestamp.isoformat(),
+                "by": names.get(e.user_id) if e.user_id else None,
+                "action": e.action,
+                "changes": changes,
+                "note": new.get("disposition_note"),
+            }
+        )
+    return rows
 
 
 @router.post("/{risk_id}/disposition", response_model=RiskResponse)

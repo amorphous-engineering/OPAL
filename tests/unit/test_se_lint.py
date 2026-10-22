@@ -218,33 +218,45 @@ def test_verification_method_and_req_number():
     assert clean == []
 
 
-# ============ Server-side underline markup ============
+# ============ Underline segments (rendered by the client) ============
 
 
-def test_statement_lint_html_wraps_spans_and_escapes():
-    from opal.web.lint_markup import statement_lint_html
+def test_lint_segments_wrap_spans_and_keep_text_verbatim():
+    from opal.core.lint_segments import lint_segments
 
     stmt = "The GSE <vent> shall open as appropriate."
-    html = str(statement_lint_html(stmt, lint_statement(stmt)))
-    assert "&lt;vent&gt;" in html  # escaped outside spans
-    assert '<span class="lint-block"' in html
-    assert "as appropriate</span>" in html
-    assert "LINT-003" in html  # rule id in the tooltip
+    segments = lint_segments(stmt, lint_statement(stmt))
+    assert "".join(s["text"] for s in segments) == stmt  # lossless; client escapes
+    flagged = [s for s in segments if s["severity"]]
+    assert flagged and flagged[0]["severity"] == "block"
+    assert flagged[0]["text"] == "as appropriate"
+    assert any(f["rule"] == "LINT-003" for f in flagged[0]["findings"])
 
 
-def test_statement_lint_html_overlap_block_wins():
+def test_lint_segments_overlap_block_wins():
+    from opal.core.lint_segments import lint_segments
     from opal.se.lint import LintFinding
-    from opal.web.lint_markup import statement_lint_html
 
     stmt = "abcdef"
     warn = LintFinding(rule="LINT-X", name="w", severity="warn", message="warn", span=(0, 4))
     block = LintFinding(
         rule="LINT-Y", name="b", severity="block_baseline", message="block", span=(2, 6)
     )
-    html = str(statement_lint_html(stmt, [warn, block]))
+    segments = lint_segments(stmt, [warn, block])
     # Three runs: warn-only, overlap (block wins), block-only.
-    assert html.count("<span") == 3
-    assert html.index('class="lint-warn"') < html.index('class="lint-block"')
+    assert [(s["text"], s["severity"]) for s in segments] == [
+        ("ab", "warn"),
+        ("cd", "block"),
+        ("ef", "block"),
+    ]
+    assert len(segments[1]["findings"]) == 2
+
+
+def test_lint_segments_unflagged_and_empty():
+    from opal.core.lint_segments import lint_segments
+
+    assert lint_segments("", []) == []
+    assert lint_segments("clean", []) == [{"text": "clean", "severity": None, "findings": []}]
 
 
 # ============ Lint endpoint ============
