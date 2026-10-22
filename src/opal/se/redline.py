@@ -1,14 +1,11 @@
 """Word-level redlines between requirement revisions.
 
 difflib over word tokens (whitespace preserved as part of the stream so
-reflowed text doesn't light up as a change wall). Two consumers: the web
-revision-history partial renders HTML, MCP returns the raw segments.
+reflowed text doesn't light up as a change wall). Consumers: the requirements API and MCP both return the raw segments.
 """
 
 import re
 from difflib import SequenceMatcher
-
-from markupsafe import Markup, escape
 
 _TOKEN = re.compile(r"\S+|\s+")
 
@@ -35,17 +32,3 @@ def redline_segments(old: str, new: str) -> list[dict[str, str]]:
             push("delete", "".join(old_tokens[a0:a1]))
             push("insert", "".join(new_tokens[b0:b1]))
     return segments
-
-
-def redline_html(old: str, new: str) -> Markup:
-    """Strike-old / highlight-new rendering of the segments."""
-    parts: list[str] = []
-    for seg in redline_segments(old, new):
-        text = escape(seg["text"])
-        if seg["op"] == "delete":
-            parts.append(f'<del class="redline-del">{text}</del>')
-        elif seg["op"] == "insert":
-            parts.append(f'<ins class="redline-ins">{text}</ins>')
-        else:
-            parts.append(str(text))
-    return Markup("".join(parts))

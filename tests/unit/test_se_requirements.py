@@ -10,7 +10,6 @@ from opal.db.models import Part, PartRequirement, Requirement, User
 from opal.project import ProjectConfig, RequirementConfig
 from opal.se.import_requirements import import_requirements_from_config
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
-from tests.conftest import login, user_headers
 
 
 def _make_requirement(db: Session, **overrides) -> Requirement:
@@ -340,119 +339,38 @@ def test_api_allocation_unknown_number_400(client):
     assert r.status_code == 400
 
 
-# ============ Web pages ============
+# ============ Read models ============
 
 
-def test_web_pages_render(client, test_user):
-    login(client, test_user)
-    req = _api_create(client)
-    client.post(f"/api/requirements/{req['id']}/baseline")
-
-    page = client.get("/requirements")
-    assert page.status_code == 200
-    assert "REQUIREMENTS" in page.text
-    assert req["req_number"] in page.text  # tree renders rows server-side
-
-    list_page = client.get("/requirements/list")
-    assert list_page.status_code == 200
-    assert "REQUIREMENTS" in list_page.text
-
-    rows = client.get("/requirements/table")
-    assert rows.status_code == 200
-    assert req["req_number"] in rows.text
-    assert "BASELINED" in rows.text
-
-    detail = client.get(f"/requirements/{req['id']}")
-    assert detail.status_code == 200
-    assert "SHALL STATEMENT" in detail.text
-    assert "REVISE" in detail.text
-    assert "REVISION HISTORY" in detail.text
-
-    new_page = client.get("/requirements/new")
-    assert new_page.status_code == 200
-    assert "CREATE DRAFT" in new_page.text
-
-
-def test_baseline_panel_disabled_until_blockers_clear(client, test_user):
-    login(client, test_user)
+def test_dossier_reflects_blockers(client):
     blocked = _api_create(client, title="Blocked", verification_method=None)
     clean = _api_create(client, title="Clean")
 
-    blocked_page = client.get(f"/requirements/{blocked['id']}")
-    assert "BASELINE READINESS" in blocked_page.text
-    assert "disabled" in blocked_page.text
-    assert "verification method" in blocked_page.text
+    d = client.get(f"/api/requirements/{blocked['id']}/dossier").json()
+    assert d["readiness"]["ready"] is False
+    failing = [c["key"] for c in d["readiness"]["checks"] if not c["passed"]]
+    assert "verification_method" in failing
 
-    clean_page = client.get(f"/requirements/{clean['id']}")
-    assert "BASELINE READINESS" in clean_page.text
-    panel_start = clean_page.text.index("BASELINE READINESS")
-    panel = clean_page.text[panel_start : panel_start + 2500]
-    assert "disabled" not in panel
+    d = client.get(f"/api/requirements/{clean['id']}/dossier").json()
+    assert d["readiness"]["ready"] is True
 
-    # Panel partial is independently fetchable (the dossier re-fetches on save).
-    partial = client.get(f"/requirements/{blocked['id']}/baseline-panel")
-    assert partial.status_code == 200
-    assert "BASELINE READINESS" in partial.text
-
-    # Baselined rows hide the panel entirely.
+    # Baselined rows carry no readiness panel
     client.post(f"/api/requirements/{clean['id']}/baseline")
-    baselined_page = client.get(f"/requirements/{clean['id']}")
-    assert "BASELINE READINESS" not in baselined_page.text
+    d = client.get(f"/api/requirements/{clean['id']}/dossier").json()
+    assert d["readiness"] is None and d["lifecycle_state"] == "baselined"
 
 
-def test_delete_button_only_on_stillborn_drafts(client, db_session, test_user):
-    """Spec §4.3: DELETE renders only for never-baselined drafts with zero
-    children and zero allocations; CANCEL is the path for everything else."""
-    login(client, test_user)
-
-    stillborn = _api_create(client, title="Stillborn")
-    page = client.get(f"/requirements/{stillborn['id']}")
-    assert 'onclick="deleteReq()"' in page.text
-
-    # With a child: no DELETE, CANCEL remains.
-    parent = _api_create(client, title="Parent")
-    _api_create(client, title="Child", parent_id=parent["id"])
-    page = client.get(f"/requirements/{parent['id']}")
-    assert 'onclick="deleteReq()"' not in page.text
-    assert "CANCEL REQ" in page.text
-
-    # With an allocation: no DELETE; backend refuses too.
-    allocated = _api_create(client, title="Allocated")
-    part = client.post("/api/parts", json={"name": "Bracket"}).json()
-    client.post(
-        f"/api/requirements/parts/{part['id']}",
-        json={"requirement_id": allocated["req_number"]},
-        headers=user_headers(test_user),
-    )
-    page = client.get(f"/requirements/{allocated['id']}")
-    assert 'onclick="deleteReq()"' not in page.text
-    resp = client.delete(f"/api/requirements/{allocated['id']}", headers=user_headers(test_user))
-    assert resp.status_code == 409
-    assert "allocated" in resp.json()["detail"]
-
-    # Baselined: immutable, no DELETE.
-    done = _api_create(client, title="Done")
-    client.post(f"/api/requirements/{done['id']}/baseline")
-    page = client.get(f"/requirements/{done['id']}")
-    assert 'onclick="deleteReq()"' not in page.text
+def test_dossier_revisions_and_missing(client):
+    req = _api_create(client)
+    client.post(f"/api/requirements/{req['id']}/baseline")
+    rev2 = client.post(f"/api/requirements/{req['id']}/revise").json()
+    d = client.get(f"/api/requirements/{rev2['id']}/dossier").json()
+    assert [r["revision"] for r in d["revisions"]] == [1, 2]
+    assert d["predecessor_revision"] == 1
+    assert client.get("/api/requirements/99999/dossier").status_code == 404
 
 
-def test_dossier_breadcrumb_chain_and_flowdown_ghost(client, test_user):
-    login(client, test_user)
-    root = _api_create(client, title="Mission")
-    mid = _api_create(client, title="System", parent_id=root["id"])
-    leaf = _api_create(client, title="Subsystem", parent_id=mid["id"])
-
-    page = client.get(f"/requirements/{leaf['id']}")
-    # Chain renders root first, every crumb a link.
-    assert page.text.index(root["req_number"]) < page.text.index(mid["req_number"])
-    assert f'href="/requirements/{root["id"]}"' in page.text
-    # Flow-down section carries the ghost-row creator for this requirement.
-    assert f"flow down from {leaf['req_number']}" in page.text
-
-
-def test_tree_page_nests_children_and_renders_lint(client, test_user):
-    login(client, test_user)
+def test_tree_nests_by_parent_and_carries_lint(client):
     parent = _api_create(client, title="Mission")
     child = _api_create(
         client,
@@ -460,18 +378,22 @@ def test_tree_page_nests_children_and_renders_lint(client, test_user):
         statement="The engine shall vent as appropriate.",
         parent_id=parent["id"],
     )
+    rows = {i["id"]: i for i in client.get("/api/requirements/tree").json()["items"]}
+    assert rows[child["id"]]["parent_id"] == parent["id"]
+    assert rows[parent["id"]]["parent_id"] is None
+    # The draft child's banned term arrives as a spanned block finding.
+    spanned = [f for f in rows[child["id"]]["lint"] if f.get("span")]
+    assert any(f["severity"] == "block_baseline" for f in spanned)
 
-    page = client.get("/requirements")
-    assert page.status_code == 200
-    # Parent row precedes the child row, and the child sits inside the
-    # parent's children container.
-    assert page.text.index(parent["req_number"]) < page.text.index(child["req_number"])
-    assert f'id="children-{parent["id"]}"' in page.text
-    # The draft child's banned term renders with a lint underline span.
-    assert 'class="lint-block"' in page.text
-    assert "as appropriate</span>" in page.text
-    # Ghost row offers flow-down from the parent.
-    assert f"flow down from {parent['req_number']}" in page.text
+
+def test_tree_flags_orphans_whose_parent_is_gone(client):
+    parent = _api_create(client, title="Mission")
+    child = _api_create(client, title="Child", parent_id=parent["id"])
+    client.post(f"/api/requirements/{parent['id']}/cancel")
+    # cancelled parents stay in the tree; only superseded/deleted ones drop out
+    rows = {i["id"]: i for i in client.get("/api/requirements/tree").json()["items"]}
+    assert rows[child["id"]]["parent_id"] == parent["id"]
+    assert rows[child["id"]]["orphan"] is False
 
 
 # ============ MCP tools ============
@@ -715,12 +637,6 @@ def test_baseline_batch_duplicate_ids_are_deduped(client):
     assert len(r.json()["baselined"]) == 1
 
 
-def test_requirements_table_tolerates_empty_level(client):
-    """The HTMX filter selects submit level= for 'all levels'; must not 422."""
-    r = client.get("/requirements/table?search=&state=&level=")
-    assert r.status_code == 200
-
-
 def test_api_patch_explicit_null_clears_nullable_fields(client, test_user):
     """Issue #30 — explicit null clears nullable fields (rationale, category,
     verification_method, tbr_owner_id, tbr_due); omitted fields are untouched;
@@ -778,3 +694,15 @@ def test_api_patch_explicit_null_clears_parent(client):
     assert r.status_code == 200, r.text
     assert r.json()["parent_id"] is None
     assert client.get(f"/api/requirements/{child['id']}").json()["parent_id"] is None
+
+
+def test_api_patch_refuses_parent_cycle(client):
+    """Re-parenting a requirement under its own descendant would loop the tree."""
+    root = _api_create(client, title="Vehicle", level=0)
+    mid = _api_create(client, title="Engine", level=1, parent_id=root["id"])
+    leaf = _api_create(client, title="Injector", level=2, parent_id=mid["id"])
+
+    r = client.patch(f"/api/requirements/{root['id']}", json={"parent_id": leaf["id"]})
+    assert r.status_code == 400
+    assert "descendant" in r.json()["detail"]
+    assert client.get(f"/api/requirements/{root['id']}").json()["parent_id"] is None

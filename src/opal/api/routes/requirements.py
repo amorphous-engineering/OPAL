@@ -21,11 +21,20 @@ from opal.config import get_active_project
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_requirement_number
 from opal.db.base import LifecycleState
-from opal.db.models import Part, PartRequirement, Requirement
+from opal.db.models import BaselineEvent, Part, PartRequirement, Requirement, User
 from opal.se.baseline import baseline_batch, write_baseline_event
 from opal.se.lifecycle import LifecycleError, baseline, cancel, ensure_mutable, revise
 from opal.se.lint import lint_requirement
-from opal.se.readiness import readiness, ready_requirement_ids
+from opal.se.readiness import readiness
+from opal.se.views import (
+    event_detail,
+    event_summary,
+    queue_items,
+    redline,
+    requirement_dossier,
+    requirement_tree,
+    requirements_summary,
+)
 
 router = APIRouter()
 
@@ -322,6 +331,17 @@ def update_requirement(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Parent requirement {data.parent_id} not found",
             )
+        # Walk up from the proposed parent; meeting this row means a cycle.
+        cursor: Requirement | None = parent
+        seen: set[int] = set()
+        while cursor is not None and cursor.id not in seen:
+            if cursor.id == req.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A requirement cannot be parented under its own descendant",
+                )
+            seen.add(cursor.id)
+            cursor = cursor.parent
 
     old_values = get_model_dict(req)
     # Nullable fields clear on explicit null (model_fields_set distinguishes
@@ -461,9 +481,50 @@ def baseline_batch_endpoint(
 
 @router.get("/queue")
 def baseline_queue(db: DbSession) -> dict:
-    """The ready set — draft/preliminary rows whose hard checks all pass."""
-    ids = ready_requirement_ids(db)
-    return {"count": len(ids), "ids": ids}
+    """The ready set — draft/preliminary rows whose hard checks all pass.
+
+    ``items`` carries the review context (flow-down chain, parts, what the
+    revision changed) so the review screen needs no further calls.
+    """
+    items = queue_items(db)
+    return {"count": len(items), "ids": [i["id"] for i in items], "items": items}
+
+
+@router.get("/tree")
+def requirement_tree_view(db: DbSession) -> dict:
+    """Every live requirement as flat tree rows with parts, verification and lint."""
+    return requirement_tree(db)
+
+
+@router.get("/summary")
+def requirements_summary_view(db: DbSession) -> dict:
+    """Coverage, verification and staleness roll-up plus what is red."""
+    return requirements_summary(db)
+
+
+@router.get("/assignees")
+def requirement_assignees(db: DbSession) -> list[dict]:
+    """Active users, for TBR owner selection (the /users list is admin-only)."""
+    users = db.query(User).filter(User.is_active.is_(True)).order_by(User.name).all()
+    return [{"id": u.id, "name": u.name} for u in users]
+
+
+@router.get("/baselines")
+def list_baseline_events(db: DbSession) -> list[dict]:
+    """Baseline events, newest first."""
+    events = db.query(BaselineEvent).order_by(BaselineEvent.created_at.desc()).all()
+    return [event_summary(e) for e in events]
+
+
+@router.get("/baselines/{event_id:int}")
+def get_baseline_event(db: DbSession, event_id: int) -> dict:
+    """One baseline event: the locked revisions and what each changed."""
+    event = db.get(BaselineEvent, event_id)
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Baseline event {event_id} not found"
+        )
+    return event_detail(db, event)
 
 
 @router.post(
@@ -515,6 +576,38 @@ def reaffirm_requirement(db: DbSession, req_id: int, user_id: CurrentUserId) -> 
     db.commit()
     db.refresh(req)
     return _req_response(db, req)
+
+
+@router.get("/{req_id:int}/dossier")
+def requirement_dossier_view(db: DbSession, req_id: int) -> dict:
+    """The requirement page payload: fields, flow-down, parts, revisions, readiness, lint."""
+    return requirement_dossier(db, _get_requirement(db, req_id))
+
+
+@router.get("/{req_id:int}/redline")
+def requirement_redline(
+    db: DbSession, req_id: int, rev_a: int | None = None, rev_b: int | None = None
+) -> dict:
+    """Word diff between two revisions of this requirement's number.
+
+    Defaults to this revision against the one it supersedes.
+    """
+    req = _get_requirement(db, req_id)
+    revisions = {
+        r.revision: r
+        for r in db.query(Requirement)
+        .filter(Requirement.req_number == req.req_number, Requirement.deleted_at.is_(None))
+        .all()
+    }
+    if rev_b is None:
+        rev_b = req.revision
+    if rev_a is None:
+        predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
+        rev_a = predecessor.revision if predecessor else rev_b
+    old, new = revisions.get(rev_a), revisions.get(rev_b)
+    if not old or not new:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Revision not found")
+    return redline(old, new)
 
 
 @router.get("/{req_id:int}/readiness")
