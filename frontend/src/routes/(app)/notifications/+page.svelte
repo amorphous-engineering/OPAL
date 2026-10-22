@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		DataTable,
+		FilterBar,
+		FilterSelect,
+		ListFrame,
 		PageHeader,
 		State,
 		Timestamp,
+		hasParams,
 		toastError,
 		type Column
 	} from '#lib/components/opal/index.js';
@@ -17,34 +20,10 @@
 
 	let { data }: PageProps = $props();
 
-	const q = $derived(page.url.searchParams);
-	const readState = $derived(q.get('state') ?? '');
-	const category = $derived(q.get('category') ?? '');
-	const sort = $derived(q.get('sort') ?? 'recent');
-
-	const STATES = [
-		['', 'Any'],
-		['unread', 'Unread'],
-		['read', 'Read']
-	] as const;
-	const CATEGORIES = [
-		['', 'All'],
-		['issues', 'Issues'],
-		['executions', 'Executions']
-	] as const;
-	const SORTS = [
-		['recent', 'Recent'],
-		['priority', 'Priority'],
-		['unread', 'Unread first']
-	] as const;
-
-	function link(key: string, value: string): string {
-		const next = new SvelteURLSearchParams(page.url.search);
-		if (value && !(key === 'sort' && value === 'recent')) next.set(key, value);
-		else next.delete(key);
-		const qs = next.toString();
-		return qs ? `?${qs}` : page.url.pathname;
-	}
+	const filtered = $derived.by(() => {
+		void page.url.search;
+		return hasParams(['state', 'category']);
+	});
 
 	const columns: Column<Notification>[] = [
 		{ key: 'created_at', label: 'When', width: '10.5rem' },
@@ -116,84 +95,91 @@
 	{/snippet}
 </PageHeader>
 
-{#snippet group(
-	label: string,
-	items: readonly (readonly [string, string])[],
-	key: string,
-	current: string
-)}
-	<div class="flex items-center gap-1.5" role="group" aria-label={label}>
-		<span class="label">{label}</span>
-		<div class="flex border border-border">
-			{#each items as [value, text] (value)}
+<ListFrame>
+	<FilterBar clear={['state', 'category', 'sort']}>
+		<FilterSelect
+			param="state"
+			label="State"
+			allLabel="Any state"
+			options={[
+				{ value: 'unread', label: 'Unread' },
+				{ value: 'read', label: 'Read' }
+			]}
+		/>
+		<FilterSelect
+			param="category"
+			label="Category"
+			allLabel="All categories"
+			options={[
+				{ value: 'issues', label: 'Issues' },
+				{ value: 'executions', label: 'Executions' }
+			]}
+		/>
+		<FilterSelect
+			param="sort"
+			label="Sort"
+			allLabel=""
+			fallback="recent"
+			options={[
+				{ value: 'recent', label: 'Recent' },
+				{ value: 'priority', label: 'Priority' },
+				{ value: 'unread', label: 'Unread first' }
+			]}
+		/>
+		{#snippet end()}
+			<span class="font-mono text-xs text-muted-foreground">
+				{data.items.length}{data.total > data.items.length ? ` of ${data.total}` : ''} shown
+			</span>
+		{/snippet}
+	</FilterBar>
+
+	<DataTable
+		rows={data.items}
+		{columns}
+		key={(n) => n.id}
+		onrowclick={open}
+		emptyLabel="NOTIFICATIONS"
+		emptyAction={filtered ? clearAction : undefined}
+		rowClass={(n) => (n.read_at ? 'text-muted-foreground' : undefined)}
+	>
+		{#snippet cell(n, col)}
+			{#if col.key === 'created_at'}
+				<span class="inline-flex items-center gap-1.5">
+					<span
+						class="size-1.5 shrink-0 {n.read_at ? '' : 'bg-info'}"
+						role={n.read_at ? undefined : 'img'}
+						aria-label={n.read_at ? undefined : 'Unread'}
+					></span>
+					<Timestamp value={n.created_at} />
+				</span>
+			{:else if col.key === 'category'}
+				<span class="font-mono text-xs uppercase">{n.category}</span>
+			{:else if col.key === 'priority'}
+				<State value={n.priority} tone={priorityTone(n.priority)} />
+			{:else if col.key === 'title'}
 				<a
-					href={link(key, value)}
-					data-sveltekit-reset="false"
-					aria-current={current === value ? 'true' : undefined}
-					class="h-7 border-r border-border px-2.5 font-mono text-[11px] leading-7 tracking-wider uppercase last:border-r-0 {current ===
-					value
-						? 'bg-primary text-primary-foreground'
-						: 'hover:bg-accent'}">{text}</a
+					href={n.href}
+					class="{n.read_at ? '' : 'font-medium'} hover:underline"
+					onclick={(e) => {
+						e.preventDefault();
+						open(n);
+					}}>{n.title}</a
 				>
-			{/each}
-		</div>
-	</div>
+				{#if n.body}<div class="text-xs text-muted-foreground">{n.body}</div>{/if}
+			{:else if col.key === 'actor_name'}
+				{#if n.actor_name}{n.actor_name}{:else}<span class="text-muted-foreground">—</span>{/if}
+			{:else}
+				<span class="inline-flex gap-1">
+					{#if !n.read_at}
+						<Button variant="outline" size="xs" onclick={() => markRead(n)}>MARK READ</Button>
+					{/if}
+					<Button variant="outline" size="xs" onclick={() => dismiss(n)}>DISMISS</Button>
+				</span>
+			{/if}
+		{/snippet}
+	</DataTable>
+</ListFrame>
+
+{#snippet clearAction()}
+	<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
 {/snippet}
-
-<div class="space-y-3 p-4">
-	<div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-		{@render group('State', STATES, 'state', readState)}
-		{@render group('Category', CATEGORIES, 'category', category)}
-		{@render group('Sort', SORTS, 'sort', sort)}
-		<span class="ml-auto font-mono text-xs text-muted-foreground">
-			{data.items.length}{data.total > data.items.length ? ` of ${data.total}` : ''} shown
-		</span>
-	</div>
-
-	<div class="border border-border bg-card">
-		<DataTable
-			rows={data.items}
-			{columns}
-			key={(n) => n.id}
-			onrowclick={open}
-			emptyLabel={readState || category ? 'NOTIFICATIONS MATCHING' : 'NOTIFICATIONS'}
-			rowClass={(n) => (n.read_at ? 'text-muted-foreground' : undefined)}
-		>
-			{#snippet cell(n, col)}
-				{#if col.key === 'created_at'}
-					<span class="inline-flex items-center gap-1.5">
-						<span
-							class="size-1.5 shrink-0 {n.read_at ? '' : 'bg-info'}"
-							role={n.read_at ? undefined : 'img'}
-							aria-label={n.read_at ? undefined : 'Unread'}
-						></span>
-						<Timestamp value={n.created_at} />
-					</span>
-				{:else if col.key === 'category'}
-					<span class="font-mono text-xs uppercase">{n.category}</span>
-				{:else if col.key === 'priority'}
-					<State value={n.priority} tone={priorityTone(n.priority)} />
-				{:else if col.key === 'title'}
-					<a
-						href={n.href}
-						class="{n.read_at ? '' : 'font-medium'} hover:underline"
-						onclick={(e) => {
-							e.preventDefault();
-							open(n);
-						}}>{n.title}</a
-					>
-					{#if n.body}<div class="text-xs text-muted-foreground">{n.body}</div>{/if}
-				{:else if col.key === 'actor_name'}
-					{#if n.actor_name}{n.actor_name}{:else}<span class="text-muted-foreground">—</span>{/if}
-				{:else}
-					<span class="inline-flex gap-1">
-						{#if !n.read_at}
-							<Button variant="outline" size="xs" onclick={() => markRead(n)}>MARK READ</Button>
-						{/if}
-						<Button variant="outline" size="xs" onclick={() => dismiss(n)}>DISMISS</Button>
-					</span>
-				{/if}
-			{/snippet}
-		</DataTable>
-	</div>
-</div>

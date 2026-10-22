@@ -212,7 +212,7 @@
 			<Section title="Executions" count={data.executions.total}>
 				{#snippet actions()}
 					{#if data.executions.total > data.executions.items.length}
-						<Button variant="ghost" size="xs" href={`/executions?procedure_id=${p.id}`}
+						<Button variant="ghost" size="xs" href={`/executions?procedure=${p.id}&status=all`}
 							>ALL →</Button
 						>
 					{/if}
@@ -268,7 +268,7 @@
 		<Section title="Open issues" count={data.issues.total}>
 			{#snippet actions()}
 				{#if data.issues.total > data.issues.items.length}
-					<Button variant="ghost" size="xs" href={`/issues?procedure_id=${p.id}&status=open`}
+					<Button variant="ghost" size="xs" href={`/issues?procedure=${p.id}&status=open`}
 						>ALL →</Button
 					>
 				{/if}

@@ -58,7 +58,7 @@
 <Popover.Root bind:open>
 	<Popover.Trigger
 		class="relative inline-flex h-7 items-center gap-1.5 border border-border px-2 font-mono text-[11px] tracking-wider uppercase hover:bg-accent"
-		aria-label="Notifications"
+		aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
 	>
 		Inbox
 		{#if unread > 0}<span class="bg-error px-1 text-[10px] text-white tabular-nums">{unread}</span

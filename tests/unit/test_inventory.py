@@ -1003,3 +1003,44 @@ def test_new_endpoints_require_authentication(client: TestClient) -> None:
     client.cookies.clear()
     for path in ("/api/inventory/by-part", "/api/inventory/opal/OPAL-00001/detail"):
         assert client.get(path, headers={"Authorization": ""}).status_code == 401
+
+
+# ============ Needs-attention filter (overview strip drills into it) ============
+
+
+def test_attention_filter_matches_expired_and_expiring_stock_only(
+    client: TestClient, bulk_part: dict
+) -> None:
+    from datetime import date, timedelta
+
+    soon = _receive_stock(
+        client, bulk_part["id"], expiration_date=(date.today() + timedelta(days=5)).isoformat()
+    )
+    expired = _receive_stock(
+        client, bulk_part["id"], expiration_date=(date.today() - timedelta(days=5)).isoformat()
+    )
+    _receive_stock(
+        client, bulk_part["id"], expiration_date=(date.today() + timedelta(days=90)).isoformat()
+    )
+    _receive_stock(client, bulk_part["id"])
+
+    resp = client.get("/api/inventory", params={"attention": True})
+    assert resp.status_code == 200
+    assert {i["id"] for i in resp.json()["items"]} == {soon["id"], expired["id"]}
+
+
+def test_attention_filter_matches_overdue_tooling_calibration(
+    client: TestClient, db_session, tooling_part: dict, bulk_part: dict
+) -> None:
+    from datetime import UTC, datetime
+
+    from opal.db.models import InventoryRecord
+
+    overdue = _receive_stock(client, tooling_part["id"], quantity=1)
+    _receive_stock(client, bulk_part["id"])
+    record = db_session.get(InventoryRecord, overdue["id"])
+    record.calibration_due_at = datetime(2020, 1, 1, tzinfo=UTC)
+    db_session.flush()
+
+    resp = client.get("/api/inventory", params={"attention": True})
+    assert [i["id"] for i in resp.json()["items"]] == [overdue["id"]]

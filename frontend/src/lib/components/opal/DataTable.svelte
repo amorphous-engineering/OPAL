@@ -111,7 +111,8 @@
 	{/if}
 {:else}
 	<div class={cn('w-full overflow-x-auto', className)}>
-		<table class="w-full border-collapse text-sm">
+		<!-- Narrow viewports scroll the table sideways instead of crushing its columns. -->
+		<table class="w-full border-collapse text-sm" style:min-width={`${columns.length * 6.5}rem`}>
 			<thead>
 				<tr class="border-b border-border bg-muted/60">
 					{#if selected}
@@ -192,7 +193,7 @@
 								class={cn(
 									dense ? 'px-3 py-1' : 'px-3 py-1.5',
 									alignClass[col.align ?? 'left'],
-									col.mono && 'font-mono tabular-nums',
+									col.mono && 'font-mono whitespace-nowrap tabular-nums',
 									col.class
 								)}
 							>

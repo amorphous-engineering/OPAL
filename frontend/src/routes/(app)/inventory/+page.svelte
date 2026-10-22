@@ -1,20 +1,21 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
-	import { onDestroy } from 'svelte';
 	import {
 		ActionLink,
 		DataTable,
-		Pager,
+		FilterBar,
+		FilterSelect,
+		FilterToggle,
+		ListFrame,
 		PageHeader,
+		Pagination,
+		SearchInput,
 		State,
 		Timestamp,
+		setQuery,
+		urlSort,
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { date, qty } from '#lib/format.js';
 	import {
 		sourceLabel,
@@ -25,36 +26,12 @@
 
 	let { data }: PageProps = $props();
 
-	// Filters and sort live in the URL; everything below derives from `data`.
-	function go(patch: Record<string, string | null>, keepFocus = false) {
-		const url = new URL(page.url.href);
-		for (const [k, v] of Object.entries(patch)) {
-			if (v === null || v === '') url.searchParams.delete(k);
-			else url.searchParams.set(k, v);
-		}
-		if (!('page' in patch)) url.searchParams.delete('page');
-		goto(url, { reset: false, replace: keepFocus });
-	}
-
-	let search = $derived(data.q);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	function onSearch() {
-		clearTimeout(timer);
-		timer = setTimeout(() => go({ q: search.trim() || null }, true), 250);
-	}
-	onDestroy(() => clearTimeout(timer));
-
-	const sort = $derived({ key: data.sort, dir: data.order });
-	function setSort(v: { key: string; dir: 'asc' | 'desc' } | null) {
-		go({ sort: v ? v.key : null, order: v ? v.dir : null });
-	}
-
-	function pageHref(n: number): string {
-		const url = new URL(page.url.href);
-		if (n <= 1) url.searchParams.delete('page');
-		else url.searchParams.set('page', String(n));
-		return url.pathname + url.search;
-	}
+	// Sort defaults depend on the view; the URL carries only a deviation.
+	const sorter = $derived(
+		urlSort(
+			data.view === 'parts' ? { key: 'part', dir: 'asc' } : { key: 'created_at', dir: 'desc' }
+		)
+	);
 
 	const recordColumns: Column<InventoryItem>[] = [
 		{ key: 'opal_number', label: 'OPAL', sortable: true, mono: true, width: '9rem' },
@@ -87,209 +64,206 @@
 	let picked = $state<(string | number)[]>([]);
 	const pickedOpals = $derived(picked.filter((k): k is string => typeof k === 'string'));
 
-	const filtered = $derived(!!(data.q || data.location || data.source || data.flag));
+	const filtered = $derived(
+		!!(data.q || data.partId || data.location || data.source || data.flag || data.depleted)
+	);
 </script>
 
 <PageHeader title="Stock">
+	{#snippet meta()}<span class="mono"
+			>{data.total} {data.view === 'parts' ? 'parts' : 'records'}</span
+		>{/snippet}
 	{#snippet actions()}
 		<Button size="sm" href="/inventory/new">+ RECEIVE STOCK</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-	<Input
-		type="search"
-		class="h-7 w-64"
-		placeholder="OPAL number, part, lot, location"
-		aria-label="Search stock"
-		bind:value={search}
-		oninput={onSearch}
-	/>
+<ListFrame>
+	<FilterBar clear={['q', 'part_id', 'location', 'source', 'flag', 'depleted']}>
+		<SearchInput label="Search stock" placeholder="OPAL number, part, lot, location" />
 
-	<div class="flex" role="group" aria-label="View">
-		<Button
-			size="sm"
-			variant={data.view === 'records' ? 'default' : 'outline'}
-			onclick={() => go({ view: null, sort: null, order: null })}>RECORDS</Button
-		>
-		<Button
-			size="sm"
-			variant={data.view === 'parts' ? 'default' : 'outline'}
-			onclick={() => go({ view: 'parts', sort: null, order: null })}>BY PART</Button
-		>
-	</div>
-
-	<NativeSelect
-		size="sm"
-		aria-label="Location"
-		value={data.location}
-		onchange={(e) => go({ location: e.currentTarget.value })}
-	>
-		<option value="">All locations</option>
-		{#each data.locations.filter((l) => l.location) as l (l.location)}
-			<option value={l.location}>{l.location}</option>
-		{/each}
-	</NativeSelect>
-
-	{#if data.view === 'records'}
-		<NativeSelect
-			size="sm"
-			aria-label="Source"
-			value={data.source}
-			onchange={(e) => go({ source: e.currentTarget.value })}
-		>
-			<option value="">All sources</option>
-			<option value="purchase">Purchase</option>
-			<option value="production">Produced</option>
-			<option value="manual">Manual</option>
-			<option value="transfer">Moved</option>
-		</NativeSelect>
-	{/if}
-
-	<NativeSelect
-		size="sm"
-		aria-label="Flag"
-		value={data.flag}
-		onchange={(e) => go({ flag: e.currentTarget.value })}
-	>
-		<option value="">All stock</option>
-		<option value="low">Low stock</option>
-		{#if data.view === 'records'}
-			<option value="expired">Expired</option>
-			<option value="expiring">Expiring in 30 days</option>
-			<option value="calibration">Calibration overdue</option>
-		{/if}
-	</NativeSelect>
-
-	{#if data.view === 'records'}
-		<label class="flex items-center gap-1.5 text-xs">
-			<Checkbox
-				checked={data.depleted}
-				onCheckedChange={(v) => go({ depleted: v ? '1' : null })}
-				aria-label="Include depleted records"
-			/>
-			Include depleted
-		</label>
-	{/if}
-
-	{#if filtered}
-		<Button
-			size="sm"
-			variant="ghost"
-			onclick={() => go({ q: null, location: null, source: null, flag: null })}>CLEAR</Button
-		>
-	{/if}
-
-	{#if data.view === 'records' && pickedOpals.length}
-		<ActionLink href={`/label?inventory=${pickedOpals.join(',')}`} class="ml-2"
-			>PRINT {pickedOpals.length === 1 ? 'LABEL' : `${pickedOpals.length} LABELS`}</ActionLink
-		>
-		<ActionLink onclick={() => (picked = [])}>CLEAR SELECTION</ActionLink>
-	{/if}
-</div>
-
-{#if data.error}
-	<p role="alert" class="m-4 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
-		{data.error}
-	</p>
-{:else if data.view === 'records'}
-	<DataTable
-		rows={data.records}
-		columns={recordColumns}
-		serverSort
-		bind:sort={() => sort, setSort}
-		href={(r) => (r.opal_number ? `/inventory/opal/${r.opal_number}` : null)}
-		emptyLabel={filtered ? 'Stock matching these filters' : 'Stock'}
-		key={(r) => r.opal_number ?? r.id}
-		bind:selected={picked}
-	>
-		{#snippet emptyAction()}
-			<a href="/inventory/new" class="font-medium text-info hover:underline">+ RECEIVE</a>
-		{/snippet}
-		{#snippet cell(r, col)}
-			{#if col.key === 'opal_number'}
-				<span class="font-semibold text-info">{r.opal_number ?? '—'}</span>
-			{:else if col.key === 'part'}
-				<a href="/parts/{r.part_id}" class="hover:underline">
-					<span class="font-mono text-info">{r.part_internal_pn ?? '—'}</span>
-					<span class="ml-1.5">{r.part_name}</span>
-				</a>
-			{:else if col.key === 'location'}
-				{#if r.location}{r.location}{:else}<span class="text-muted-foreground">—</span>{/if}
-			{:else if col.key === 'quantity'}
-				<span class={Number(r.quantity) === 0 ? 'text-muted-foreground' : ''}
-					>{qty(r.quantity, r.part_uom)}</span
+		{#if data.partId}
+			<span class="flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs">
+				<span class="text-muted-foreground uppercase">Part</span>
+				{data.records[0]?.part_internal_pn ?? data.parts[0]?.internal_pn ?? 'selected'}
+				<button
+					type="button"
+					class="text-info hover:underline"
+					onclick={() => setQuery({ part_id: null })}>ALL</button
 				>
-			{:else if col.key === 'lot_number'}
-				{#if r.lot_number}{r.lot_number}{:else}<span class="text-muted-foreground">—</span>{/if}
-			{:else if col.key === 'source_type'}
-				<span class="font-mono text-xs text-muted-foreground">{sourceLabel(r.source_type)}</span>
-			{:else if col.key === 'expiration_date'}
-				{#if r.expiration_date}
-					{date(r.expiration_date)}
-					{#if r.is_expired}<State value="expired" tone="error" label="EXPIRED" class="ml-1" />
-					{:else if r.days_until_expiration !== null && r.days_until_expiration <= 30}<State
-							value="expiring"
-							tone="warn"
-							label="{r.days_until_expiration}D"
-							class="ml-1"
-						/>{/if}
-				{:else}<span class="text-muted-foreground">—</span>{/if}
-			{:else if col.key === 'calibration_due_at'}
-				{#if r.part_is_tooling && r.calibration_due_at}
-					{date(r.calibration_due_at)}
-					{#if r.calibration_status === 'overdue'}<State
-							value="overdue"
-							tone="error"
-							label="OVERDUE"
-							class="ml-1"
-						/>
-					{:else if r.calibration_status === 'due_soon'}<State
-							value="due"
-							tone="warn"
-							label="DUE"
-							class="ml-1"
-						/>{/if}
-				{:else}<span class="text-muted-foreground">—</span>{/if}
-			{:else if col.key === 'created_at'}
-				<Timestamp value={r.created_at} dateOnly />
-			{/if}
-		{/snippet}
-	</DataTable>
-{:else}
-	<DataTable
-		rows={data.parts}
-		columns={partColumns}
-		serverSort
-		bind:sort={() => sort, setSort}
-		href={(r) => `/inventory?q=${encodeURIComponent(r.internal_pn ?? r.name)}`}
-		emptyLabel={filtered ? 'Parts matching these filters' : 'Stock'}
-		key={(r) => r.part_id}
-	>
-		{#snippet cell(r, col)}
-			{#if col.key === 'part'}
-				<a href="/parts/{r.part_id}" class="hover:underline">
-					<span class="font-mono text-info">{r.internal_pn ?? '—'}</span>
-					<span class="ml-1.5">{r.name}</span>
-				</a>
-			{:else if col.key === 'quantity'}
-				{qty(r.quantity, r.unit_of_measure)}
-				{#if r.is_low_stock}<State value="low" tone="warn" label="LOW" class="ml-1" />{/if}
-			{:else if col.key === 'reorder_point'}
-				{#if r.reorder_point !== null}{qty(r.reorder_point)}{:else}<span
-						class="text-muted-foreground">—</span
-					>{/if}
-			{:else if col.key === 'record_count'}
-				{r.record_count}
-			{:else if col.key === 'locations'}
-				{#if r.locations.length}{r.locations.join(', ')}{:else}<span class="text-muted-foreground"
-						>—</span
-					>{/if}
-			{/if}
-		{/snippet}
-	</DataTable>
-{/if}
+			</span>
+		{/if}
 
-{#if data.total > 0}
-	<Pager total={data.total} page={data.page} pageSize={data.pageSize} href={(n) => pageHref(n)} />
-{/if}
+		<div class="flex" role="group" aria-label="View">
+			<Button
+				size="xs"
+				variant={data.view === 'records' ? 'default' : 'outline'}
+				aria-pressed={data.view === 'records'}
+				onclick={() => setQuery({ view: null, sort: null, dir: null })}>RECORDS</Button
+			>
+			<Button
+				size="xs"
+				variant={data.view === 'parts' ? 'default' : 'outline'}
+				aria-pressed={data.view === 'parts'}
+				onclick={() => setQuery({ view: 'parts', sort: null, dir: null })}>BY PART</Button
+			>
+		</div>
+
+		<FilterSelect
+			param="location"
+			label="Location"
+			allLabel="All locations"
+			options={data.locations
+				.filter((l) => l.location)
+				.map((l) => ({ value: l.location as string, label: l.location as string }))}
+		/>
+
+		{#if data.view === 'records'}
+			<FilterSelect
+				param="source"
+				label="Source"
+				allLabel="All sources"
+				options={[
+					{ value: 'purchase', label: 'Purchase' },
+					{ value: 'production', label: 'Produced' },
+					{ value: 'manual', label: 'Manual' },
+					{ value: 'transfer', label: 'Moved' }
+				]}
+			/>
+		{/if}
+
+		<FilterSelect
+			param="flag"
+			label="Flag"
+			allLabel="All stock"
+			options={[
+				{ value: 'low', label: 'Low stock' },
+				...(data.view === 'records'
+					? [
+							{ value: 'attention', label: 'Needs attention' },
+							{ value: 'expired', label: 'Expired' },
+							{ value: 'expiring', label: 'Expiring in 30 days' },
+							{ value: 'calibration', label: 'Calibration overdue' }
+						]
+					: [])
+			]}
+		/>
+
+		{#if data.view === 'records'}
+			<FilterToggle param="depleted" label="Include depleted" />
+		{/if}
+		{#if data.view === 'records' && pickedOpals.length}
+			<ActionLink href={`/label?inventory=${pickedOpals.join(',')}`} class="ml-2"
+				>PRINT {pickedOpals.length === 1 ? 'LABEL' : `${pickedOpals.length} LABELS`}</ActionLink
+			>
+			<ActionLink onclick={() => (picked = [])}>CLEAR SELECTION</ActionLink>
+		{/if}
+	</FilterBar>
+
+	{#if data.error}
+		<p
+			role="alert"
+			class="m-4 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+		>
+			{data.error}
+		</p>
+	{:else if data.view === 'records'}
+		<DataTable
+			rows={data.records}
+			columns={recordColumns}
+			serverSort
+			bind:sort={() => sorter.value, sorter.set}
+			bind:selected={picked}
+			href={(r) => (r.opal_number ? `/inventory/opal/${r.opal_number}` : null)}
+			emptyLabel={filtered ? 'Stock matching these filters' : 'Stock'}
+			key={(r) => r.opal_number ?? r.id}
+		>
+			{#snippet emptyAction()}
+				<a href="/inventory/new" class="font-medium text-info hover:underline">+ RECEIVE</a>
+			{/snippet}
+			{#snippet cell(r, col)}
+				{#if col.key === 'opal_number'}
+					<span class="font-semibold text-info">{r.opal_number ?? '—'}</span>
+				{:else if col.key === 'part'}
+					<a href="/parts/{r.part_id}" class="hover:underline">
+						<span class="font-mono text-info">{r.part_internal_pn ?? '—'}</span>
+						<span class="ml-1.5">{r.part_name}</span>
+					</a>
+				{:else if col.key === 'location'}
+					{#if r.location}{r.location}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else if col.key === 'quantity'}
+					<span class={Number(r.quantity) === 0 ? 'text-muted-foreground' : ''}
+						>{qty(r.quantity, r.part_uom)}</span
+					>
+				{:else if col.key === 'lot_number'}
+					{#if r.lot_number}{r.lot_number}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else if col.key === 'source_type'}
+					<span class="font-mono text-xs text-muted-foreground">{sourceLabel(r.source_type)}</span>
+				{:else if col.key === 'expiration_date'}
+					{#if r.expiration_date}
+						{date(r.expiration_date)}
+						{#if r.is_expired}<State value="expired" tone="error" label="EXPIRED" class="ml-1" />
+						{:else if r.days_until_expiration !== null && r.days_until_expiration <= 30}<State
+								value="expiring"
+								tone="warn"
+								label="{r.days_until_expiration}D"
+								class="ml-1"
+							/>{/if}
+					{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else if col.key === 'calibration_due_at'}
+					{#if r.part_is_tooling && r.calibration_due_at}
+						{date(r.calibration_due_at)}
+						{#if r.calibration_status === 'overdue'}<State
+								value="overdue"
+								tone="error"
+								label="OVERDUE"
+								class="ml-1"
+							/>
+						{:else if r.calibration_status === 'due_soon'}<State
+								value="due"
+								tone="warn"
+								label="DUE"
+								class="ml-1"
+							/>{/if}
+					{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else if col.key === 'created_at'}
+					<Timestamp value={r.created_at} dateOnly />
+				{/if}
+			{/snippet}
+		</DataTable>
+	{:else}
+		<DataTable
+			rows={data.parts}
+			columns={partColumns}
+			serverSort
+			bind:sort={() => sorter.value, sorter.set}
+			href={(r) => `/inventory?q=${encodeURIComponent(r.internal_pn ?? r.name)}`}
+			emptyLabel={filtered ? 'Parts matching these filters' : 'Stock'}
+			key={(r) => r.part_id}
+		>
+			{#snippet cell(r, col)}
+				{#if col.key === 'part'}
+					<a href="/parts/{r.part_id}" class="hover:underline">
+						<span class="font-mono text-info">{r.internal_pn ?? '—'}</span>
+						<span class="ml-1.5">{r.name}</span>
+					</a>
+				{:else if col.key === 'quantity'}
+					{qty(r.quantity, r.unit_of_measure)}
+					{#if r.is_low_stock}<State value="low" tone="warn" label="LOW" class="ml-1" />{/if}
+				{:else if col.key === 'reorder_point'}
+					{#if r.reorder_point !== null}{qty(r.reorder_point)}{:else}<span
+							class="text-muted-foreground">—</span
+						>{/if}
+				{:else if col.key === 'record_count'}
+					{r.record_count}
+				{:else if col.key === 'locations'}
+					{#if r.locations.length}{r.locations.join(', ')}{:else}<span class="text-muted-foreground"
+							>—</span
+						>{/if}
+				{/if}
+			{/snippet}
+		</DataTable>
+	{/if}
+
+	<Pagination total={data.total} pageSize={data.pageSize} />
+</ListFrame>

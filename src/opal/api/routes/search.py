@@ -58,7 +58,7 @@ def _issue_result(i: Issue) -> SearchResult:
         entity_type="issue",
         id=i.id,
         label=i.title,
-        sublabel=f"#{i.id}",
+        sublabel=i.issue_number,
         url=f"/issues/{i.id}",
         status=_status_value(i.status),
     )
@@ -69,7 +69,7 @@ def _procedure_result(p: MasterProcedure) -> SearchResult:
         entity_type="procedure",
         id=p.id,
         label=p.name,
-        sublabel=f"#{p.id}",
+        sublabel=_status_value(p.procedure_type) if p.procedure_type else None,
         url=f"/procedures/{p.id}",
         status=_status_value(p.status),
     )
@@ -125,8 +125,8 @@ def _purchase_result(po: Purchase) -> SearchResult:
     return SearchResult(
         entity_type="purchase",
         id=po.id,
-        label=f"PO-{po.id}",
-        sublabel=po.reference,
+        label=po.reference or f"PO-{po.id}",
+        sublabel=po.supplier_rel.name if po.supplier_rel else po.supplier,
         url=f"/purchases/{po.id}",
         status=_status_value(po.status),
     )
@@ -137,7 +137,7 @@ def _dataset_result(d: Dataset) -> SearchResult:
         entity_type="dataset",
         id=d.id,
         label=d.name,
-        sublabel=f"#{d.id}",
+        sublabel=d.procedure.name if d.procedure else None,
         url=f"/datasets/{d.id}",
     )
 
@@ -174,6 +174,7 @@ class _Searchable:
     ilike_columns: tuple
     order_desc: bool = True  # ILIKE path order: id desc (True) or first column asc (False)
     filters: tuple = ()  # extra filter clauses applied on both search paths
+    identifier: Any = None  # human identifier column (IT-00001) the FTS index does not carry
 
 
 _SEARCHABLES: tuple[_Searchable, ...] = (
@@ -184,7 +185,14 @@ _SEARCHABLES: tuple[_Searchable, ...] = (
         True,
         (Part.name, Part.internal_pn, Part.external_pn, Part.description),
     ),
-    _Searchable("issue", Issue, _issue_result, True, (Issue.title, Issue.description)),
+    _Searchable(
+        "issue",
+        Issue,
+        _issue_result,
+        True,
+        (Issue.title, Issue.description),
+        identifier=Issue.issue_number,
+    ),
     _Searchable("procedure", MasterProcedure, _procedure_result, True, (MasterProcedure.name,)),
     _Searchable(
         "execution",
@@ -193,7 +201,14 @@ _SEARCHABLES: tuple[_Searchable, ...] = (
         False,
         (ProcedureInstance.work_order_number,),
     ),
-    _Searchable("risk", Risk, _risk_result, True, (Risk.title, Risk.description)),
+    _Searchable(
+        "risk",
+        Risk,
+        _risk_result,
+        True,
+        (Risk.title, Risk.description),
+        identifier=Risk.risk_number,
+    ),
     _Searchable(
         "requirement",
         Requirement,
@@ -259,6 +274,18 @@ def _search_ilike(db: Session, searchable: _Searchable, q: str, limit: int) -> l
     return query.limit(limit).all()
 
 
+def _with_identifier_matches(
+    db: Session, searchable: _Searchable, q: str, limit: int, found: list[Any]
+) -> list[Any]:
+    """Put records whose human identifier (IT-00001, RISK-00017) matches the query first."""
+    query = db.query(searchable.model).filter(searchable.identifier.ilike(f"%{q}%"))
+    if searchable.soft_delete:
+        query = query.filter(searchable.model.deleted_at.is_(None))
+    by_number = query.order_by(searchable.identifier).limit(limit).all()
+    seen = {e.id for e in by_number}
+    return (by_number + [e for e in found if e.id not in seen])[:limit]
+
+
 @router.get("", response_model=list[SearchResult])
 def search(
     db: DbSession,
@@ -275,5 +302,7 @@ def search(
             entities = _search_fts(db, searchable, q, limit)
         else:
             entities = _search_ilike(db, searchable, q, limit)
+        if searchable.identifier is not None:
+            entities = _with_identifier_matches(db, searchable, q, limit, entities)
         results.extend(searchable.build(entity) for entity in entities)
     return results

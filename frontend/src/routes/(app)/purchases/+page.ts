@@ -13,8 +13,9 @@ export const load: PageLoad = async ({ url, fetch }) => {
 	const http = api.using(fetch);
 	const [list, suppliers] = await Promise.all([
 		http.get<{ items: PurchaseListItem[]; total: number }>('/purchases', {
-			status: status && status !== 'open' ? status : undefined,
+			status: status && status !== 'open' && status !== 'awaiting' ? status : undefined,
 			open: status === 'open' ? true : undefined,
+			awaiting: status === 'awaiting' ? true : undefined,
 			overdue: p.get('overdue') ? true : undefined,
 			supplier_id: p.get('supplier_id') || undefined,
 			q: p.get('q') || undefined,

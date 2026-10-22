@@ -1,11 +1,19 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { PageHeader, State, Timestamp, EmptyLine } from '#lib/components/opal/index.js';
+	import {
+		EmptyLine,
+		FilterBar,
+		FilterDate,
+		FilterSelect,
+		ListFrame,
+		PageHeader,
+		Pagination,
+		State,
+		Timestamp,
+		hasParams,
+		setQuery
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
 		AUDIT_PAGE_SIZE,
 		actionTone,
@@ -22,30 +30,18 @@
 
 	const q = $derived(page.url.searchParams);
 	const entity = $derived(q.get('entity') ?? '');
-	const action = $derived(q.get('action') ?? '');
-	const user = $derived(q.get('user') ?? '');
 	const from = $derived(q.get('from') ?? '');
 	const to = $derived(q.get('to') ?? '');
 	const record = $derived(q.get('record') ?? '');
-	const filtered = $derived(!!(entity || action || user || from || to || record));
-	const pages = $derived(Math.max(1, Math.ceil(data.total / AUDIT_PAGE_SIZE)));
-	const first = $derived(data.total === 0 ? 0 : (data.page - 1) * AUDIT_PAGE_SIZE + 1);
-	const last = $derived(Math.min(data.total, data.page * AUDIT_PAGE_SIZE));
+	const FILTERS = ['entity', 'action', 'user', 'from', 'to', 'record'];
+	const filtered = $derived.by(() => {
+		void page.url.search;
+		return hasParams(FILTERS);
+	});
 
 	let open = $state<Record<number, boolean>>({});
 	let allOpen = $state(false);
 	const isOpen = (e: AuditEntry) => open[e.id] ?? allOpen;
-
-	function setParams(changes: Record<string, string | null>) {
-		const next = new SvelteURLSearchParams(page.url.search);
-		for (const [k, v] of Object.entries(changes)) {
-			if (v) next.set(k, v);
-			else next.delete(k);
-		}
-		if (!('page' in changes)) next.delete('page');
-		const qs = next.toString();
-		goto(qs ? `?${qs}` : page.url.pathname, { reset: false });
-	}
 
 	function toggle(e: AuditEntry) {
 		open[e.id] = !isOpen(e);
@@ -68,76 +64,41 @@
 </script>
 
 <PageHeader title="Audit log">
+	{#snippet meta()}
+		<span class="mono">{data.total.toLocaleString()} {data.total === 1 ? 'entry' : 'entries'}</span>
+	{/snippet}
 	{#snippet actions()}
 		<Button variant="outline" size="sm" onclick={undoLast}>UNDO LAST CHANGE</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="space-y-3 p-4">
-	<form
-		class="flex flex-wrap items-end gap-x-3 gap-y-2"
-		onsubmit={(e) => e.preventDefault()}
-		aria-label="Audit filters"
-	>
-		<label class="grid gap-1">
-			<span class="label">Entity</span>
-			<NativeSelect
-				size="sm"
-				value={entity}
-				onchange={(e) => setParams({ entity: e.currentTarget.value, record: null })}
-			>
-				<NativeSelectOption value="">All</NativeSelectOption>
-				{#each data.facets.entity_types as t (t.value)}
-					<NativeSelectOption value={t.value}>{t.label}</NativeSelectOption>
-				{/each}
-			</NativeSelect>
-		</label>
-		<label class="grid gap-1">
-			<span class="label">Action</span>
-			<NativeSelect
-				size="sm"
-				value={action}
-				onchange={(e) => setParams({ action: e.currentTarget.value })}
-			>
-				<NativeSelectOption value="">All</NativeSelectOption>
-				<NativeSelectOption value="create">Create</NativeSelectOption>
-				<NativeSelectOption value="update">Update</NativeSelectOption>
-				<NativeSelectOption value="delete">Delete</NativeSelectOption>
-			</NativeSelect>
-		</label>
-		<label class="grid gap-1">
-			<span class="label">User</span>
-			<NativeSelect
-				size="sm"
-				value={user}
-				onchange={(e) => setParams({ user: e.currentTarget.value })}
-			>
-				<NativeSelectOption value="">All</NativeSelectOption>
-				{#each data.facets.users as u (u.id)}
-					<NativeSelectOption value={String(u.id)}>{u.name}</NativeSelectOption>
-				{/each}
-			</NativeSelect>
-		</label>
-		<label class="grid gap-1">
-			<span class="label">From</span>
-			<Input
-				type="date"
-				class="h-7 w-36"
-				value={from}
-				max={to || undefined}
-				onchange={(e) => setParams({ from: e.currentTarget.value })}
-			/>
-		</label>
-		<label class="grid gap-1">
-			<span class="label">To</span>
-			<Input
-				type="date"
-				class="h-7 w-36"
-				value={to}
-				min={from || undefined}
-				onchange={(e) => setParams({ to: e.currentTarget.value })}
-			/>
-		</label>
+<ListFrame>
+	<FilterBar clear={FILTERS} label="Audit filters">
+		<FilterSelect
+			param="entity"
+			label="Entity"
+			allLabel="All entities"
+			alsoClear={['record']}
+			options={data.facets.entity_types}
+		/>
+		<FilterSelect
+			param="action"
+			label="Action"
+			allLabel="All actions"
+			options={[
+				{ value: 'create', label: 'Create' },
+				{ value: 'update', label: 'Update' },
+				{ value: 'delete', label: 'Delete' }
+			]}
+		/>
+		<FilterSelect
+			param="user"
+			label="User"
+			allLabel="All users"
+			options={data.facets.users.map((u) => ({ value: String(u.id), label: u.name }))}
+		/>
+		<FilterDate param="from" label="From" max={to || undefined} />
+		<FilterDate param="to" label="To" min={from || undefined} />
 		{#if record && entity}
 			<div class="flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs">
 				<span class="text-muted-foreground uppercase">Record</span>
@@ -145,27 +106,28 @@
 				<button
 					type="button"
 					class="text-info hover:underline"
-					onclick={() => setParams({ record: null })}>ALL</button
+					onclick={() => setQuery({ record: null })}>ALL</button
 				>
 			</div>
 		{/if}
-		{#if filtered}
-			<Button variant="ghost" size="sm" href={page.url.pathname}>CLEAR FILTERS</Button>
-		{/if}
-		<div class="ml-auto flex items-center gap-3 font-mono text-xs text-muted-foreground">
-			<span>{first}–{last} of {data.total.toLocaleString()}</span>
-			<button type="button" class="text-info hover:underline" onclick={toggleAll}
+		{#snippet end()}
+			<button type="button" class="font-mono text-xs text-info hover:underline" onclick={toggleAll}
 				>{allOpen ? 'COLLAPSE ALL' : 'EXPAND ALL'}</button
 			>
-		</div>
-	</form>
+		{/snippet}
+	</FilterBar>
 
 	{#if data.items.length === 0}
-		<div class="border border-border bg-card">
-			<EmptyLine label={filtered ? 'AUDIT ENTRIES MATCHING' : 'AUDIT ENTRIES'} />
-		</div>
+		<EmptyLine label="AUDIT ENTRIES">
+			{#snippet action()}
+				{#if filtered}
+					<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a
+					>
+				{/if}
+			{/snippet}
+		</EmptyLine>
 	{:else}
-		<div class="overflow-x-auto border border-border bg-card">
+		<div class="overflow-x-auto">
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-muted/60">
@@ -219,7 +181,7 @@
 									class="hover:underline"
 									onclick={(ev) => {
 										ev.preventDefault();
-										setParams({ entity: e.entity_type, record: null });
+										setQuery({ entity: e.entity_type, record: null });
 									}}>{e.entity_label}</a
 								>
 							</td>
@@ -255,23 +217,6 @@
 			</table>
 		</div>
 
-		{#if pages > 1}
-			<nav class="flex items-center gap-2 font-mono text-xs" aria-label="Pages">
-				<Button
-					variant="outline"
-					size="xs"
-					disabled={data.page <= 1}
-					onclick={() => setParams({ page: data.page > 2 ? String(data.page - 1) : null })}
-					>← NEWER</Button
-				>
-				<span class="text-muted-foreground">PAGE {data.page} / {pages}</span>
-				<Button
-					variant="outline"
-					size="xs"
-					disabled={data.page >= pages}
-					onclick={() => setParams({ page: String(data.page + 1) })}>OLDER →</Button
-				>
-			</nav>
-		{/if}
+		<Pagination total={data.total} pageSize={AUDIT_PAGE_SIZE} />
 	{/if}
-</div>
+</ListFrame>

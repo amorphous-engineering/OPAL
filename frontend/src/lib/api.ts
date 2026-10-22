@@ -2,6 +2,7 @@
  * JSON API client. Same-origin: the session cookie rides every request and
  * the server's Origin check covers CSRF. One error shape for the whole app.
  */
+import { error } from '@sveltejs/kit';
 import { goto } from '$app/navigation';
 import { navigating, page } from '$app/state';
 
@@ -125,4 +126,17 @@ export interface Page<T> {
 	total: number;
 	page?: number;
 	page_size?: number;
+}
+
+/**
+ * For `load` functions: await API calls and turn a failure into SvelteKit's `error()`, so the
+ * shared error page shows the right status and message. Anything else rethrows unchanged.
+ */
+export async function orHttpError<T>(work: Promise<T>): Promise<T> {
+	try {
+		return await work;
+	} catch (e) {
+		if (e instanceof ApiError) error(e.status, e.message);
+		throw e;
+	}
 }

@@ -1,32 +1,29 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { PageHeader, DataTable, State, type Column } from '#lib/components/opal/index.js';
+	import { page } from '$app/state';
+	import {
+		DataTable,
+		FilterBar,
+		FilterSelect,
+		ListFrame,
+		PageHeader,
+		SearchInput,
+		State,
+		hasParams,
+		urlSort,
+		type Column
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import type { Workcenter } from '#lib/components/workcenters/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	// svelte-ignore state_referenced_locally
-	let search = $state(data.search);
-	let timer: ReturnType<typeof setTimeout>;
-
-	function go(next: { search?: string; status?: string }) {
-		const q = new SvelteURLSearchParams();
-		const s = next.search ?? data.search;
-		const st = next.status ?? data.status;
-		if (s) q.set('search', s);
-		if (st !== 'active') q.set('status', st);
-		goto(`/workcenters${q.size ? `?${q}` : ''}`);
-	}
-
-	function onSearch() {
-		clearTimeout(timer);
-		timer = setTimeout(() => go({ search }), 250);
-	}
+	const sort = urlSort(null);
+	const FILTERS = ['q', 'status'];
+	const filtered = $derived.by(() => {
+		void page.url.search;
+		return hasParams(FILTERS);
+	});
 
 	const rows = $derived(
 		data.workcenters.filter((w) =>
@@ -51,50 +48,56 @@
 </script>
 
 <PageHeader title="Workcenters">
+	{#snippet meta()}
+		<span class="mono">{rows.length} {rows.length === 1 ? 'workcenter' : 'workcenters'}</span>
+	{/snippet}
 	{#snippet actions()}
 		<Button href="/workcenters/new" size="sm">+ NEW WORKCENTER</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-	<Input
-		class="w-64"
-		placeholder="Search code or name"
-		aria-label="Search workcenters"
-		bind:value={search}
-		oninput={onSearch}
-	/>
-	<NativeSelect
-		aria-label="Status"
-		value={data.status}
-		onchange={(e) => go({ status: e.currentTarget.value })}
-	>
-		<NativeSelectOption value="active">Active</NativeSelectOption>
-		<NativeSelectOption value="inactive">Inactive</NativeSelectOption>
-		<NativeSelectOption value="all">All</NativeSelectOption>
-	</NativeSelect>
-	<span class="ml-auto font-mono text-xs text-muted-foreground">{rows.length}</span>
-</div>
+<ListFrame>
+	<FilterBar clear={FILTERS}>
+		<SearchInput label="Search workcenters" placeholder="Search code or name" />
+		<FilterSelect
+			param="status"
+			label="Status"
+			allLabel=""
+			fallback="active"
+			options={[
+				{ value: 'active', label: 'ACTIVE' },
+				{ value: 'inactive', label: 'INACTIVE' },
+				{ value: 'all', label: 'ALL' }
+			]}
+		/>
+	</FilterBar>
 
-<DataTable
-	{rows}
-	{columns}
-	href={(r) => `/workcenters/${r.id}`}
-	emptyLabel="Workcenters"
-	key={(r) => r.id}
->
-	{#snippet emptyAction()}
-		<a href="/workcenters/new" class="font-medium text-info hover:underline">+ ADD</a>
-	{/snippet}
-	{#snippet cell(row, col)}
-		{#if col.key === 'code'}
-			<span class="text-info">{row.code}</span>
-		{:else if col.key === 'is_active'}
-			<!-- Active is the norm; only the exception is stated. -->
-			{#if !row.is_active}<State value="inactive" tone="muted" />{/if}
-		{:else}
-			{@const v = (row as unknown as Record<string, string | number | null>)[col.key]}
-			{#if v === null || v === ''}<span class="text-muted-foreground">—</span>{:else}{v}{/if}
-		{/if}
-	{/snippet}
-</DataTable>
+	<DataTable
+		{rows}
+		{columns}
+		bind:sort={() => sort.value, sort.set}
+		href={(r) => `/workcenters/${r.id}`}
+		emptyLabel="WORKCENTERS"
+		key={(r) => r.id}
+	>
+		{#snippet emptyAction()}
+			{#if filtered}
+				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+			{:else}
+				<a href="/workcenters/new" class="font-medium text-info hover:underline">+ NEW WORKCENTER</a
+				>
+			{/if}
+		{/snippet}
+		{#snippet cell(row, col)}
+			{#if col.key === 'code'}
+				<span class="text-info">{row.code}</span>
+			{:else if col.key === 'is_active'}
+				<!-- Active is the norm; only the exception is stated. -->
+				{#if !row.is_active}<State value="inactive" tone="muted" />{/if}
+			{:else}
+				{@const v = (row as unknown as Record<string, string | number | null>)[col.key]}
+				{#if v === null || v === ''}<span class="text-muted-foreground">—</span>{:else}{v}{/if}
+			{/if}
+		{/snippet}
+	</DataTable>
+</ListFrame>
