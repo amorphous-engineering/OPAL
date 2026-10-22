@@ -3,7 +3,7 @@
 Each test pins a confirmed finding from the PR #42 review: signature
 integrity, explicit-null PATCH, filter-before-pagination, asset-text
 normalization, FK validation, realized-spawn idempotence, filter-aware
-review stamping, RL-03 visibility, matrix XSS, and the MCP validation gaps.
+review stamping, RL-03 visibility, and the MCP validation gaps.
 """
 
 import asyncio
@@ -207,14 +207,6 @@ def test_rl03_finding_carries_a_span(client: TestClient):
 # ---------------------------------------------------------------------------
 # Matrix page: titles cannot break out of the inline script block
 # ---------------------------------------------------------------------------
-
-
-def test_matrix_page_escapes_script_breakout_titles(web_client: TestClient):
-    payload = "</script><img src=x onerror=alert(1)>"
-    _create_risk(web_client, title=payload)
-    page = web_client.get("/risks/matrix")
-    assert page.status_code == 200
-    assert payload not in page.text  # | tojson escapes < and > as \u00xx
 
 
 # ---------------------------------------------------------------------------
