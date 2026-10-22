@@ -256,6 +256,25 @@ def _instance_has_blocker(db: Session, instance_id: int) -> bool:
     )
 
 
+def blocked_instance_ids(db: Session, instance_ids: list[int]) -> set[int]:
+    """Which of these work orders currently have a blocking issue (batch of has_blocker)."""
+    if not instance_ids:
+        return set()
+    rows = (
+        db.query(Issue.procedure_instance_id)
+        .filter(
+            Issue.procedure_instance_id.in_(instance_ids),
+            Issue.deleted_at.is_(None),
+            Issue.status != IssueStatus.CLOSED,
+            Issue.containment != Containment.ADVISORY,
+            or_(Issue.disposition_type.is_(None), Issue.dispositioned_at.is_(None)),
+        )
+        .distinct()
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
 def _execution_label(db: Session, instance_id: int) -> str:
     instance = db.get(ProcedureInstance, instance_id)
     if instance is None:

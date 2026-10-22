@@ -1,6 +1,5 @@
 """Notification system: fan-out, recipients, blocked/unblocked diffing, inbox."""
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -14,7 +13,7 @@ from opal.db.models.notification import (
     category_for,
 )
 from opal.db.models.user import User
-from tests.conftest import TEST_PASSWORD_HASH, login
+from tests.conftest import TEST_PASSWORD_HASH
 
 
 def make_user(db: Session, name: str, username: str, is_active: bool = True) -> User:
@@ -417,105 +416,122 @@ def test_api_rejects_an_unknown_category(
     assert response.status_code == 400
 
 
-# ============ Web ============
+# ============ Inbox filters and actions (API) ============
 
 
-def test_bell_partial_renders(client: TestClient, db_session: Session, test_user: User) -> None:
+def _notify(db: Session, user: User, kind: NotificationKind, title: str, **kw) -> None:
     notifications.notify(
-        db_session,
-        recipients={test_user.id},
-        kind=NotificationKind.ISSUE_ASSIGNED,
-        title="ISS-0001 assigned to you",
+        db,
+        recipients={user.id},
+        kind=kind,
+        title=title,
         href="/issues/1",
         subject_type="issue",
         subject_id=1,
+        **kw,
     )
-    db_session.commit()
-
-    login(client, test_user)
-    response = client.get("/notifications/bell")
-    assert response.status_code == 200
-    assert "ISS-0001 assigned to you" in response.text
-    assert "ALL NOTIFICATIONS" in response.text
+    db.commit()
 
 
-def test_inbox_page_renders_and_filters(
-    client: TestClient, db_session: Session, test_user: User
+def test_api_filters_by_category(
+    client: TestClient, db_session: Session, test_user: User, auth_headers: dict
 ) -> None:
-    notifications.notify(
+    _notify(
         db_session,
-        recipients={test_user.id},
-        kind=NotificationKind.EXECUTION_BLOCKED,
-        title="WO-0001 is blocked",
-        href="/executions/1",
-        subject_type="procedure_instance",
-        subject_id=1,
+        test_user,
+        NotificationKind.EXECUTION_BLOCKED,
+        "WO-0001 is blocked",
         priority=NotificationPriority.HIGH.value,
     )
-    db_session.commit()
 
-    login(client, test_user)
+    r = client.get("/api/notifications?category=executions", headers=auth_headers)
+    assert [i["title"] for i in r.json()["items"]] == ["WO-0001 is blocked"]
+    assert r.json()["items"][0]["category"] == "executions"
 
-    response = client.get("/notifications")
-    assert response.status_code == 200
-    assert "WO-0001 is blocked" in response.text
-
-    response = client.get("/notifications?category=executions")
-    assert "WO-0001 is blocked" in response.text
-
-    response = client.get("/notifications?category=issues")
-    assert "WO-0001 is blocked" not in response.text
+    r = client.get("/api/notifications?category=issues", headers=auth_headers)
+    assert r.json()["items"] == []
 
 
-@pytest.mark.parametrize("sort", ["recent", "priority", "unread", "bogus"])
-def test_inbox_sorting_never_500s(
-    client: TestClient, db_session: Session, test_user: User, sort: str
+def test_api_category_filter_is_applied_before_the_limit(
+    client: TestClient, db_session: Session, test_user: User, auth_headers: dict
 ) -> None:
-    notifications.notify(
-        db_session,
-        recipients={test_user.id},
-        kind=NotificationKind.ISSUE_ASSIGNED,
-        title="T",
-        href="/issues/1",
-        subject_type="issue",
-        subject_id=1,
-    )
-    db_session.commit()
+    """A sparse category must not be cut off by newer rows of another category."""
+    _notify(db_session, test_user, NotificationKind.EXECUTION_BLOCKED, "old exec")
+    for n in range(3):
+        _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, f"issue {n}")
 
-    login(client, test_user)
-    response = client.get(f"/notifications?sort={sort}")
-    assert response.status_code == 200
+    r = client.get("/api/notifications?category=executions&limit=2", headers=auth_headers)
+    assert [i["title"] for i in r.json()["items"]] == ["old exec"]
+    assert r.json()["total"] == 1
 
 
-def test_web_read_redirects_to_the_subject(
-    client: TestClient, db_session: Session, test_user: User
+def test_api_filters_by_read_state(
+    client: TestClient, db_session: Session, test_user: User, auth_headers: dict
 ) -> None:
-    notifications.notify(
-        db_session,
-        recipients={test_user.id},
-        kind=NotificationKind.ISSUE_ASSIGNED,
-        title="T",
-        href="/issues/42",
-        subject_type="issue",
-        subject_id=42,
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "read me")
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "unread")
+    first = rows_for(db_session, test_user.id)[0]
+    assert (
+        client.post(f"/api/notifications/{first.id}/read", headers=auth_headers).status_code == 200
     )
-    db_session.commit()
+
+    unread = client.get("/api/notifications?state=unread", headers=auth_headers).json()
+    assert [i["title"] for i in unread["items"]] == ["unread"]
+    read = client.get("/api/notifications?state=read", headers=auth_headers).json()
+    assert [i["title"] for i in read["items"]] == ["read me"]
+    assert read["unread_count"] == 1
+    assert client.get("/api/notifications?state=bogus", headers=auth_headers).status_code == 400
+
+
+def test_api_sorts_by_priority_and_unread_first(
+    client: TestClient, db_session: Session, test_user: User, auth_headers: dict
+) -> None:
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "low", priority="low")
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "crit", priority="critical")
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "normal")
+
+    by_priority = client.get("/api/notifications?sort=priority", headers=auth_headers).json()
+    assert [i["title"] for i in by_priority["items"]] == ["crit", "normal", "low"]
+
+    low = next(r for r in rows_for(db_session, test_user.id) if r.title == "low")
+    client.post(f"/api/notifications/{low.id}/read", headers=auth_headers)
+    unread_first = client.get("/api/notifications?sort=unread", headers=auth_headers).json()
+    assert unread_first["items"][-1]["title"] == "low"
+
+    assert client.get("/api/notifications?sort=bogus", headers=auth_headers).status_code == 400
+
+
+def test_api_dismiss_removes_from_the_list(
+    client: TestClient, db_session: Session, test_user: User, auth_headers: dict
+) -> None:
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "gone")
     row = rows_for(db_session, test_user.id)[0]
 
-    login(client, test_user)
-    response = client.post(f"/notifications/{row.id}/read", follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["location"] == "/issues/42"
-    assert notifications.unread_count(db_session, test_user.id) == 0
+    assert (
+        client.post(f"/api/notifications/{row.id}/dismiss", headers=auth_headers).status_code == 200
+    )
+    assert client.get("/api/notifications", headers=auth_headers).json()["items"] == []
 
 
-def test_bell_appears_in_the_header(
-    client: TestClient, db_session: Session, test_user: User
+def test_api_read_all(
+    client: TestClient, db_session: Session, test_user: User, auth_headers: dict
 ) -> None:
-    login(client, test_user)
-    response = client.get("/")
-    assert response.status_code == 200
-    assert "/notifications/bell" in response.text
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "a")
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "b")
+
+    r = client.post("/api/notifications/read-all", headers=auth_headers)
+    assert r.json() == {"marked_read": 2}
+    assert client.get("/api/notifications", headers=auth_headers).json()["unread_count"] == 0
+
+
+def test_api_reports_the_actor_by_name(
+    client: TestClient, db_session: Session, test_user: User, auth_headers: dict
+) -> None:
+    actor = make_user(db_session, "Casey Actor", "user.casey")
+    _notify(db_session, test_user, NotificationKind.ISSUE_ASSIGNED, "T", actor_id=actor.id)
+
+    item = client.get("/api/notifications", headers=auth_headers).json()["items"][0]
+    assert item["actor_name"] == "Casey Actor"
 
 
 # ============ Blocked / unblocked, end to end ============

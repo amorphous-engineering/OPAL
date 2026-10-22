@@ -8,9 +8,13 @@ from sqlalchemy import inspect
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_update
+from opal.core.audit_refs import entity_label, resolve_entities
 from opal.db.models.audit import AuditLog
 
 router = APIRouter(prefix="/undo", tags=["undo"])
+
+#: Columns that change on every write; never worth naming in a summary.
+_NOISE_FIELDS = frozenset({"updated_at"})
 
 # Map table_name -> SQLAlchemy model class
 _TABLE_MODEL_MAP: dict[str, type] = {}
@@ -65,6 +69,12 @@ def _get_model_map() -> dict[str, type]:
         _TABLE_MODEL_MAP[table_name] = model
 
     return _TABLE_MODEL_MAP
+
+
+def _describe(db: DbSession, table: str, record_id: int) -> str:
+    """'Issue IT-004': the record's own name, never its database id."""
+    ref = resolve_entities(db, [(table, record_id)])[(table, record_id)]
+    return f"{entity_label(table)} {ref.label}" if ref.label else entity_label(table)
 
 
 class UndoPreview(BaseModel):
@@ -135,9 +145,13 @@ def get_last_undoable(
             reason = "No old values recorded for revert"
 
     # Build summary
-    summary = f"{action.upper()} {table} #{record_id}"
+    summary = f"{action.upper()} {_describe(db, table, record_id)}"
     if action == "update" and entry.old_values and entry.new_values:
-        changed = [k for k in entry.new_values if k in (entry.old_values or {})]
+        changed = [
+            k.replace("_", " ")
+            for k in entry.new_values
+            if k in (entry.old_values or {}) and k not in _NOISE_FIELDS
+        ]
         if changed:
             summary += f" (changed: {', '.join(changed[:5])})"
 
@@ -193,7 +207,7 @@ def undo_last(
             )
         record = db.query(model_cls).filter(model_cls.id == record_id).first()
         if not record:
-            raise HTTPException(status_code=404, detail=f"{table} #{record_id} not found")
+            raise HTTPException(status_code=404, detail=f"{entity_label(table)} no longer exists")
 
         old_values = get_model_dict(record)
         record.soft_delete()
@@ -201,7 +215,7 @@ def undo_last(
         log_update(db, record, old_values, user_id)
         db.commit()
 
-        return UndoResult(success=True, summary=f"Soft-deleted {table} #{record_id}")
+        return UndoResult(success=True, summary=f"Soft-deleted {_describe(db, table, record_id)}")
 
     elif action == "update":
         # Undo update -> revert to old_values
@@ -210,7 +224,7 @@ def undo_last(
 
         record = db.query(model_cls).filter(model_cls.id == record_id).first()
         if not record:
-            raise HTTPException(status_code=404, detail=f"{table} #{record_id} not found")
+            raise HTTPException(status_code=404, detail=f"{entity_label(table)} no longer exists")
 
         # Safety: check record hasn't been modified since the audit entry
         if (
@@ -237,10 +251,14 @@ def undo_last(
         log_update(db, record, old_values, user_id)
         db.commit()
 
-        reverted = [k for k in entry.old_values if k not in skip_fields]
+        reverted = [
+            k.replace("_", " ")
+            for k in (entry.new_values or entry.old_values)
+            if k in entry.old_values and k not in skip_fields
+        ]
         return UndoResult(
             success=True,
-            summary=f"Reverted {table} #{record_id} ({', '.join(reverted[:5])})",
+            summary=f"Reverted {_describe(db, table, record_id)} ({', '.join(reverted[:5])})",
         )
 
     elif action == "delete":
@@ -253,10 +271,12 @@ def undo_last(
 
         record = db.query(model_cls).filter(model_cls.id == record_id).first()
         if not record:
-            raise HTTPException(status_code=404, detail=f"{table} #{record_id} not found")
+            raise HTTPException(status_code=404, detail=f"{entity_label(table)} no longer exists")
 
         if not record.is_deleted:
-            raise HTTPException(status_code=400, detail=f"{table} #{record_id} is not deleted")
+            raise HTTPException(
+                status_code=400, detail=f"{_describe(db, table, record_id)} is not deleted"
+            )
 
         old_values = get_model_dict(record)
         record.restore()
@@ -264,7 +284,7 @@ def undo_last(
         log_update(db, record, old_values, user_id)
         db.commit()
 
-        return UndoResult(success=True, summary=f"Restored {table} #{record_id}")
+        return UndoResult(success=True, summary=f"Restored {_describe(db, table, record_id)}")
 
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action type: {action}")

@@ -4,18 +4,7 @@
 	import { onMount } from 'svelte';
 	import Timestamp from '#lib/components/opal/Timestamp.svelte';
 	import { goto } from '$app/navigation';
-
-	interface Notification {
-		id: number;
-		kind: string;
-		category: string;
-		priority: string;
-		title: string;
-		body: string | null;
-		href: string;
-		created_at: string;
-		read_at: string | null;
-	}
+	import { onNotificationsChanged, type Notification } from './notifications.js';
 
 	let open = $state(false);
 	let unread = $state(0);
@@ -53,7 +42,12 @@
 	onMount(() => {
 		refreshCount();
 		const t = setInterval(refreshCount, 30000);
-		return () => clearInterval(t);
+		// The inbox page changed something: keep the count (and open list) in step.
+		const off = onNotificationsChanged(() => (open ? load() : refreshCount()));
+		return () => {
+			clearInterval(t);
+			off();
+		};
 	});
 
 	$effect(() => {
