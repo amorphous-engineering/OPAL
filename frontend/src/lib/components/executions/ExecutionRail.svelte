@@ -42,7 +42,10 @@
 	const priorityLabel = ['NORMAL', 'HIGH', 'URGENT'];
 </script>
 
-<div class="grid content-start gap-3">
+<!-- The rail never scrolls sideways: every row fits its width (truncate or wrap). -->
+<div
+	class="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 [overflow-wrap:anywhere] [&_table]:table-fixed"
+>
 	<Section title="Online" count={doc.roster.length || undefined}>
 		{#if doc.roster.length}
 			<ul class="m-0 list-none p-0">
