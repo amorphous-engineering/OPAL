@@ -13,6 +13,9 @@ from opal.db.models.audit import AuditLog
 
 router = APIRouter(prefix="/undo", tags=["undo"])
 
+#: Columns that change on every write; never worth naming in a summary.
+_NOISE_FIELDS = frozenset({"updated_at"})
+
 # Map table_name -> SQLAlchemy model class
 _TABLE_MODEL_MAP: dict[str, type] = {}
 
@@ -144,7 +147,11 @@ def get_last_undoable(
     # Build summary
     summary = f"{action.upper()} {_describe(db, table, record_id)}"
     if action == "update" and entry.old_values and entry.new_values:
-        changed = [k for k in entry.new_values if k in (entry.old_values or {})]
+        changed = [
+            k.replace("_", " ")
+            for k in entry.new_values
+            if k in (entry.old_values or {}) and k not in _NOISE_FIELDS
+        ]
         if changed:
             summary += f" (changed: {', '.join(changed[:5])})"
 
@@ -244,7 +251,11 @@ def undo_last(
         log_update(db, record, old_values, user_id)
         db.commit()
 
-        reverted = [k for k in entry.old_values if k not in skip_fields]
+        reverted = [
+            k.replace("_", " ")
+            for k in (entry.new_values or entry.old_values)
+            if k in entry.old_values and k not in skip_fields
+        ]
         return UndoResult(
             success=True,
             summary=f"Reverted {_describe(db, table, record_id)} ({', '.join(reverted[:5])})",

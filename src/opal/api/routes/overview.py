@@ -107,6 +107,8 @@ class RiskRow(BaseModel):
 class Capped(BaseModel, Generic[T]):
     items: list[T]
     total: int
+    # How many of ``total`` are exceptional (blocked/overdue/expired); 0 when none.
+    flagged: int = 0
 
 
 class IssueCounts(BaseModel):
@@ -223,7 +225,11 @@ def _executions(db: Session, user_id: int) -> Capped[ExecutionRow]:
     ]
     # Needs attention first: blocked, then overdue, then mine, then in work before cut.
     rows.sort(key=lambda r: (not r.blocked, not r.overdue, not r.mine, r.status != "in_work"))
-    return Capped(items=rows[:LIST_CAP], total=len(rows))
+    return Capped(
+        items=rows[:LIST_CAP],
+        total=len(rows),
+        flagged=sum(1 for r in rows if r.blocked or r.overdue),
+    )
 
 
 def _on_hand_subquery(db: Session):
@@ -297,6 +303,7 @@ def _purchases(db: Session) -> Capped[PurchaseRow]:
             for p in pos[:LIST_CAP]
         ],
         total=len(pos),
+        flagged=sum(1 for p in pos if p.is_overdue),
     )
 
 
@@ -340,7 +347,11 @@ def _stock_attention(db: Session) -> Capped[StockAttentionRow]:
         )
         for r in exp
     ]
-    return Capped(items=rows[:LIST_CAP], total=len(rows))
+    return Capped(
+        items=rows[:LIST_CAP],
+        total=len(rows),
+        flagged=sum(1 for r in rows if r.kind != "expiring"),
+    )
 
 
 def _risks(db: Session) -> Capped[RiskRow]:

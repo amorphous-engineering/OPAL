@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import AppSidebar from '#lib/components/shell/AppSidebar.svelte';
+	import GlobalKeys from '#lib/components/shell/GlobalKeys.svelte';
 	import CommandPalette from '#lib/components/shell/CommandPalette.svelte';
 	import NotificationBell from '#lib/components/shell/NotificationBell.svelte';
 	import UserMenu from '#lib/components/shell/UserMenu.svelte';
@@ -38,3 +39,4 @@
 </Sidebar.Provider>
 
 <CommandPalette bind:open={paletteOpen} />
+<GlobalKeys />

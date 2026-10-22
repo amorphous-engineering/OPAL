@@ -120,6 +120,17 @@ def test_undo_update_reverts_the_change(client: TestClient) -> None:
     assert client.get(f"/api/parts/{part['id']}").json()["name"] == "Before"
 
 
+def test_undo_summary_names_changed_fields_not_noise(client: TestClient) -> None:
+    part = _make_part(client, name="Before")
+    client.patch(f"/api/parts/{part['id']}", json={"name": "After", "category": "Cat"})
+
+    summary = client.get("/api/undo/last").json()["summary"]
+    assert "name" in summary and "category" in summary
+    assert "updated at" not in summary and "updated_at" not in summary
+    reverted = client.post("/api/undo/last").json()["summary"]
+    assert "name" in reverted and "category" in reverted
+
+
 def test_undo_with_nothing_recent_is_404(client: TestClient) -> None:
     assert client.get("/api/undo/last").status_code == 404
 
@@ -158,7 +169,7 @@ def test_overview_shape_when_empty(client: TestClient) -> None:
     data = client.get("/api/overview").json()
     assert data["issue_counts"]["open"] == 0
     for key in ("issues", "executions", "low_stock", "purchases", "stock_attention", "risks"):
-        assert data[key] == {"items": [], "total": 0}
+        assert data[key] == {"items": [], "total": 0, "flagged": 0}
     assert isinstance(data["activity"], list)
 
 
