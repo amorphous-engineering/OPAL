@@ -30,47 +30,13 @@
 </script>
 
 <!-- Never scrolls sideways: every row fits the sidebar width (truncate or wrap). -->
-<!-- On wide screens the sidebar is one viewport tall and never scrolls as a whole: each
-     card scrolls its own body. Cards whose content fits keep their natural height; the
-     rest share the remaining height evenly (flex 1 1 0, capped at max-content). -->
+<!-- On wide screens the sidebar is one viewport tall and never scrolls as a whole.
+     Operations comes first and takes the room; Online and Issues shrink to their
+     content (capped at 30% each, scrolling inside past that). -->
 <div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full">
-	{#if doc.roster.length}
-		<Section
-			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
-			title="Online"
-			count={doc.roster.length || undefined}
-		>
-			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
-				<ul class="m-0 list-none p-0">
-					{#each doc.roster as r (r.user_id)}
-						<li class="border-b border-border last:border-b-0">
-							<button
-								type="button"
-								class={cn(
-									'flex w-full items-center gap-2 px-3 py-1 text-left font-mono text-xs hover:bg-accent/60',
-									r.stale && 'opacity-50',
-									r.user_id === store.viewerId && 'font-semibold'
-								)}
-								disabled={r.step_order === null}
-								onclick={() => r.step_order !== null && onjump(r.step_order)}
-							>
-								<span class="truncate">{r.name ?? r.initials}</span>
-								{#if r.step_number}<span class="ml-auto text-muted-foreground"
-										>@{r.step_number}</span
-									>{/if}
-							</button>
-						</li>
-					{/each}
-				</ul>
-			</div>
-		</Section>
-	{:else}
-		<EmptyLine label="Online" />
-	{/if}
-
 	{#if ops.length}
 		<Section
-			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
+			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-1 lg:flex-col"
 			title="Operations"
 			count={ops.length || undefined}
 		>
@@ -104,9 +70,43 @@
 		<EmptyLine label="Operations" />
 	{/if}
 
+	{#if doc.roster.length}
+		<Section
+			class="lg:flex lg:max-h-[30%] lg:min-h-0 lg:flex-none lg:flex-col"
+			title="Online"
+			count={doc.roster.length || undefined}
+		>
+			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
+				<ul class="m-0 list-none p-0">
+					{#each doc.roster as r (r.user_id)}
+						<li class="border-b border-border last:border-b-0">
+							<button
+								type="button"
+								class={cn(
+									'flex w-full items-center gap-2 px-3 py-1 text-left font-mono text-xs hover:bg-accent/60',
+									r.stale && 'opacity-50',
+									r.user_id === store.viewerId && 'font-semibold'
+								)}
+								disabled={r.step_order === null}
+								onclick={() => r.step_order !== null && onjump(r.step_order)}
+							>
+								<span class="truncate">{r.name ?? r.initials}</span>
+								{#if r.step_number}<span class="ml-auto text-muted-foreground"
+										>@{r.step_number}</span
+									>{/if}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		</Section>
+	{:else}
+		<EmptyLine label="Online" />
+	{/if}
+
 	{#if doc.issues.length}
 		<Section
-			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
+			class="lg:flex lg:max-h-[30%] lg:min-h-0 lg:flex-none lg:flex-col"
 			title="Issues"
 			count={doc.issues.length || undefined}
 		>
