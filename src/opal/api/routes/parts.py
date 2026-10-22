@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
@@ -75,7 +75,7 @@ class PartCreate(BaseModel):
     procurement: Literal["make", "buy", "both"] | None = None
     tier: int = 1  # Tier level; must be one of the project's configured tiers
     parent_id: int | None = None  # Parent assembly if this is a child part
-    reorder_point: Decimal | None = None
+    reorder_point: Decimal | None = Field(None, ge=0)
     is_tooling: bool = False
     calibration_interval_days: int | None = None
     metadata: dict[str, Any] | None = None
@@ -94,7 +94,7 @@ class PartUpdate(BaseModel):
     procurement: Literal["make", "buy", "both"] | None = None
     tier: int | None = None
     parent_id: int | None = None
-    reorder_point: Decimal | None = None
+    reorder_point: Decimal | None = Field(None, ge=0)
     is_tooling: bool | None = None
     calibration_interval_days: int | None = None
     metadata: dict[str, Any] | None = None
@@ -774,6 +774,19 @@ def update_part(
     if tier_change:
         require_configured_tier(update_data["tier"])
 
+    # Tracking decides how stock is stored (one record per unit vs one lump);
+    # flipping it under existing records would misdescribe them.
+    if "tracking_type" in update_data and update_data["tracking_type"] != part.tracking_type:
+        has_stock = (
+            db.query(InventoryRecord.id).filter(InventoryRecord.part_id == part.id).first()
+            is not None
+        )
+        if has_stock:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{part.internal_pn or part.name} has stock records; tracking cannot change",
+            )
+
     if tier_change and not pn_change:
         # Tier re-sync: the draft gets a fresh number from the new tier's
         # counter; the old number is abandoned permanently (gaps are information)
@@ -1000,6 +1013,9 @@ async def import_preview(
                 preview.reorder_point = float(rp_str)
             except ValueError:
                 preview.errors.append(f"Invalid reorder_point: '{rp_str}'")
+            else:
+                if preview.reorder_point < 0:
+                    preview.errors.append(f"Reorder point cannot be negative, got '{rp_str}'")
 
         # Validate required fields
         if not preview.name:

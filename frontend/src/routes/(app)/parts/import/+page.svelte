@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		ActionLink,
 		DataTable,
 		PageHeader,
 		Section,
@@ -171,11 +172,7 @@
 		<Section title="Imported" class="max-w-3xl">
 			<dl class="grid [grid-template-columns:max-content_1fr] gap-1 gap-x-4 p-3 text-sm">
 				<dt class="label">Created</dt>
-				<dd class="mono">
-					{result.created}{#if result.first_pn}<span class="text-muted-foreground">
-							· {result.first_pn} – {result.last_pn}</span
-						>{/if}
-				</dd>
+				<dd class="mono">{result.created}</dd>
 				<dt class="label">Skipped</dt>
 				<dd class="mono">{result.skipped}</dd>
 				{#if result.errors.length}
@@ -186,9 +183,7 @@
 				{/if}
 			</dl>
 			<div class="border-t border-border px-3 py-2">
-				<a href="/parts?state=draft" class="font-mono text-xs font-medium text-info hover:underline"
-					>DRAFT PARTS →</a
-				>
+				<ActionLink href="/parts?state=draft">DRAFT PARTS →</ActionLink>
 			</div>
 		</Section>
 	{/if}

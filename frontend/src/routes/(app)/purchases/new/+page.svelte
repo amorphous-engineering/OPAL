@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { PageHeader, Section } from '#lib/components/opal/index.js';
+	import { ActionLink, PageHeader, Section } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -152,9 +152,7 @@
 
 	<Section title="LINES" count={rows.filter((r) => r.part).length}>
 		{#snippet actions()}
-			<Button type="button" size="xs" variant="ghost" onclick={() => rows.push(blank())}
-				>+ ADD LINE</Button
-			>
+			<ActionLink onclick={() => rows.push(blank())}>+ ADD LINE</ActionLink>
 		{/snippet}
 		<div class="overflow-x-auto">
 			<table class="w-full border-collapse text-sm">
@@ -203,12 +201,8 @@
 								/></td
 							>
 							<td class="px-3 py-1 text-right"
-								><Button
-									type="button"
-									size="sm"
-									variant="ghost"
-									aria-label={`Remove line ${i + 1}`}
-									onclick={() => rows.splice(i, 1)}>REMOVE</Button
+								><ActionLink danger title={`Remove line ${i + 1}`} onclick={() => rows.splice(i, 1)}
+									>REMOVE</ActionLink
 								></td
 							>
 						</tr>
@@ -229,8 +223,8 @@
 			{error}
 		</p>
 	{/if}
-	<div class="flex gap-2">
+	<div class="flex justify-end gap-2">
+		<Button variant="outline" href="/purchases">CANCEL</Button>
 		<Button type="submit" disabled={busy}>CREATE PURCHASE</Button>
-		<Button variant="ghost" href="/purchases">CANCEL</Button>
 	</div>
 </form>

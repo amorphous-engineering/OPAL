@@ -180,7 +180,7 @@ def test_t2_bulk_no_lot_number_returns_422(
 
     resp = client.post(
         f"/api/purchases/{po['id']}/receive",
-        json={"lines": [{"line_id": line_id, "qty_received": 5, "location": "Rack C"}]},
+        json={"lines": [{"line_id": line_id, "qty_received": 3, "location": "Rack C"}]},
         headers=auth_headers,
     )
     assert resp.status_code == 422
@@ -203,7 +203,7 @@ def test_t2_bulk_with_lot_number_succeeds(
             "lines": [
                 {
                     "line_id": line_id,
-                    "qty_received": 5,
+                    "qty_received": 3,
                     "location": "Rack C",
                     "lot_number": "LOT-2024-001",
                 }
@@ -228,7 +228,7 @@ def test_t3_bulk_no_lot_number_succeeds(
 
     resp = client.post(
         f"/api/purchases/{po['id']}/receive",
-        json={"lines": [{"line_id": line_id, "qty_received": 10, "location": "Bin Z"}]},
+        json={"lines": [{"line_id": line_id, "qty_received": 3, "location": "Bin Z"}]},
         headers=auth_headers,
     )
     assert resp.status_code == 200, resp.text
@@ -285,3 +285,60 @@ def test_t1_serialized_multi_qty_receive_gets_unique_serials(
     serials = [item["lot_number"] for item in items if item["lot_number"]]
     assert len(serials) == 3
     assert len(set(serials)) == 3, f"duplicate serials: {serials}"
+
+
+# ---- Over-receipt ----
+
+
+def test_over_receipt_is_refused_until_confirmed(
+    client: TestClient, auth_headers: dict, t3_bulk_part: dict
+) -> None:
+    """Receiving more than is outstanding needs explicit confirmation."""
+    po = _create_and_order_po(client, auth_headers, t3_bulk_part["id"])  # 3 ordered
+    line_id = po["lines"][0]["id"]
+    url = f"/api/purchases/{po['id']}/receive"
+
+    refused = client.post(
+        url,
+        json={"lines": [{"line_id": line_id, "qty_received": 4, "location": "Bin Z"}]},
+        headers=auth_headers,
+    )
+    assert refused.status_code == 409
+    assert "exceeds the 3 outstanding" in refused.json()["detail"]
+    # Nothing was written
+    assert client.get(f"/api/inventory?part_id={t3_bulk_part['id']}").json()["total"] == 0
+    assert client.get(f"/api/purchases/{po['id']}").json()["status"] == "ordered"
+
+    ok = client.post(
+        url,
+        json={
+            "lines": [
+                {
+                    "line_id": line_id,
+                    "qty_received": 4,
+                    "location": "Bin Z",
+                    "allow_over_receipt": True,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["status"] == "received"
+    assert float(ok.json()["lines"][0]["qty_received"]) == 4
+
+
+def test_receipt_counts_earlier_receipts_against_outstanding(
+    client: TestClient, auth_headers: dict, t3_bulk_part: dict
+) -> None:
+    po = _create_and_order_po(client, auth_headers, t3_bulk_part["id"])  # 3 ordered
+    line_id = po["lines"][0]["id"]
+    url = f"/api/purchases/{po['id']}/receive"
+
+    def recv(qty: int) -> int:
+        body = {"lines": [{"line_id": line_id, "qty_received": qty, "location": "Bin Z"}]}
+        return client.post(url, json=body, headers=auth_headers).status_code
+
+    assert recv(2) == 200
+    assert recv(2) == 409  # only 1 left
+    assert recv(1) == 200

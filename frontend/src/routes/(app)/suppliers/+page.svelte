@@ -7,7 +7,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import ListPager from '#lib/components/purchasing/ListPager.svelte';
+	import { Pager } from '#lib/components/opal/index.js';
 	import { LIST_PAGE_SIZE, type Supplier } from '#lib/components/purchasing/types.js';
 	import type { PageProps } from './$types';
 
@@ -132,7 +132,7 @@
 {/snippet}
 
 {#if data.total > 0}
-	<ListPager
+	<Pager
 		total={data.total}
 		page={data.page}
 		pageSize={LIST_PAGE_SIZE}

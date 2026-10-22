@@ -9,6 +9,7 @@
 	} from '#lib/components/opal/index.js';
 	import { api } from '#lib/api.js';
 	import { datetime } from '#lib/format.js';
+	import { ActionLink } from '#lib/components/opal/index.js';
 	import type { HistoryEntry } from './types.js';
 
 	let { partId, version }: { partId: number; version: string } = $props();
@@ -50,6 +51,9 @@
 	<div class="h-8 animate-pulse border border-border bg-muted/40"></div>
 {:else if items.length}
 	<Section title="History" count={total > items.length ? `${items.length} of ${total}` : total}>
+		{#snippet actions()}
+			<ActionLink href={`/audit?entity=part&record=${partId}`}>AUDIT LOG →</ActionLink>
+		{/snippet}
 		<DataTable rows={items} {columns} key={(h) => h.timestamp + h.action} emptyLabel="HISTORY">
 			{#snippet cell(h, col)}
 				{#if col.key === 'when'}
