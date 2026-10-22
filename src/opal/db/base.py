@@ -14,6 +14,7 @@ from sqlalchemy.orm import (
     mapped_column,
     sessionmaker,
 )
+from sqlalchemy.pool import NullPool
 
 
 class Base(DeclarativeBase):
@@ -166,13 +167,24 @@ def get_engine():
         from opal.config import get_active_settings
 
         settings = get_active_settings()
+        is_sqlite = "sqlite" in settings.database_url
         _engine = create_engine(
             settings.database_url,
-            connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
+            connect_args={"check_same_thread": False} if is_sqlite else {},
             echo=settings.debug,
+            # No pool cap for SQLite: sync dependencies run in a bounded thread
+            # pool, so a burst of requests (a page of image thumbnails) can fill
+            # every thread with requests waiting on a capped pool whose
+            # connections are held by requests waiting on a thread. SQLite
+            # connections are cheap to open per checkout.
+            **(
+                {"poolclass": NullPool}
+                if is_sqlite and ":memory:" not in settings.database_url
+                else {}
+            ),
         )
         # Enable SQLite foreign key support
-        if "sqlite" in settings.database_url:
+        if is_sqlite:
             event.listen(_engine, "connect", _setup_sqlite_pragma)
     return _engine
 

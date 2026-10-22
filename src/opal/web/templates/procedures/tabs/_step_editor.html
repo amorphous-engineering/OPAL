@@ -93,7 +93,7 @@
         <div id="step-images-{{ step.id }}" class="step-image-strip">
             {% for img in step.images %}
             <figure class="step-image" data-image-id="{{ img.id }}">
-                <img src="/api/attachments/{{ img.attachment_id }}/download" alt="{{ img.caption or 'Reference image' }}" style="max-height: 90px; max-width: 140px; border: 1px solid var(--border-color); display: block;">
+                <img loading="lazy" src="/api/attachments/{{ img.attachment_id }}/download" alt="{{ img.caption or 'Reference image' }}" style="max-height: 90px; max-width: 140px; border: 1px solid var(--border-color); display: block;">
                 <input type="text" class="input" value="{{ img.caption or '' }}" placeholder="Caption" maxlength="255"
                        onblur="saveStepImageCaption({{ step.id }}, {{ img.id }}, this.value)" style="width: 140px; font-size: 0.7rem; padding: 1px 4px;">
                 <button type="button" class="btn" data-variant="outline" data-size="xs" style="color: var(--accent-red);" onclick="removeStepImage({{ step.id }}, {{ img.id }})">X</button>

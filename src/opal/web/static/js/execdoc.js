@@ -878,6 +878,7 @@
             const img = document.createElement('img');
             img.className = 'step-photo-thumb';
             img.alt = fieldName;
+            img.loading = 'lazy';
             img.src = `/api/attachments/${id}/download`;
             img.onclick = () => openLightbox(img.src, fieldName);
             item.appendChild(img);
