@@ -1,9 +1,11 @@
 """User management endpoints."""
 
+import re
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr
+from pydantic import AfterValidator, BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,21 @@ router = APIRouter()
 PRESENCE_TIMEOUT_SECONDS = 30
 
 
+def _check_email(value: str) -> str:
+    """Syntax-only email check.
+
+    Deliberately not ``EmailStr``: that rejects reserved names such as ``.local``, which
+    are exactly what small local-first teams use on a LAN.
+    """
+    value = value.strip()
+    if len(value) > 255 or not re.fullmatch(r"[^@\s]+@[^@\s.]+(\.[^@\s.]+)+", value):
+        raise ValueError("Not a valid email address")
+    return value
+
+
+Email = Annotated[str, AfterValidator(_check_email)]
+
+
 class UserCreate(BaseModel):
     """Schema for creating a user.
 
@@ -28,7 +45,7 @@ class UserCreate(BaseModel):
     name: str
     username: str | None = None
     password: str | None = None
-    email: EmailStr | None = None
+    email: Email | None = None
     is_admin: bool = False
 
 
@@ -36,7 +53,7 @@ class UserUpdate(BaseModel):
     """Schema for updating a user."""
 
     name: str | None = None
-    email: EmailStr | None = None
+    email: Email | None = None
     is_active: bool | None = None
     is_admin: bool | None = None
 

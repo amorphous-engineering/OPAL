@@ -3,7 +3,7 @@
  * the server's Origin check covers CSRF. One error shape for the whole app.
  */
 import { goto } from '$app/navigation';
-import { page } from '$app/state';
+import { navigating, page } from '$app/state';
 
 export class ApiError extends Error {
 	status: number;
@@ -18,6 +18,8 @@ export class ApiError extends Error {
 
 /** FastAPI error detail → one readable line. */
 export function formatDetail(detail: unknown, status?: number): string {
+	// A proxy answering for a dead API says only "Bad Gateway".
+	if (status === 502 || status === 503 || status === 504) return 'Cannot reach the OPAL server';
 	if (typeof detail === 'string') return detail;
 	if (Array.isArray(detail)) {
 		// 422 validation: [{loc: [...], msg}]
@@ -70,11 +72,20 @@ async function request<T>(
 		(init.headers as Record<string, string>)['Content-Type'] = 'application/json';
 		init.body = JSON.stringify(body);
 	}
-	const res = await fetchFn(withQuery(`/api${path}`, query), init);
+	let res: Response;
+	try {
+		res = await fetchFn(withQuery(`/api${path}`, query), init);
+	} catch {
+		throw new ApiError(503, 'Cannot reach the OPAL server');
+	}
 	if (res.status === 401 && !path.startsWith('/auth/')) {
 		// Session ended: send the browser to sign in, then back here.
-		const here = page.url.pathname + page.url.search;
-		goto(`/login?next=${encodeURIComponent(here)}`);
+		// A page load that 401s runs mid-navigation: the destination is the page to come back to.
+		// On the very first load neither exists yet, so fall back to the address bar.
+		const at = navigating.to?.url ?? page.url;
+		const here = at.pathname ? at.pathname + at.search : location.pathname + location.search;
+		if (!here.startsWith('/login') && !here.startsWith('/setup') && !here.startsWith('/claim'))
+			goto(`/login?next=${encodeURIComponent(here)}`);
 	}
 	if (!res.ok) {
 		let detail: unknown = res.statusText;
