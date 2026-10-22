@@ -785,6 +785,14 @@ def create_instance(
     if not procedure:
         raise HTTPException(status_code=404, detail="Procedure not found")
 
+    status_value = (
+        procedure.status.value if hasattr(procedure.status, "value") else procedure.status
+    )
+    if status_value == "deprecated":
+        raise HTTPException(
+            status_code=400, detail="Template is deprecated; activate it to cut work orders"
+        )
+
     # Get version
     if data.version_id:
         version = db.query(ProcedureVersion).filter(ProcedureVersion.id == data.version_id).first()

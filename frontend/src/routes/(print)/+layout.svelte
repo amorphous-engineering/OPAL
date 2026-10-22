@@ -3,6 +3,16 @@
 	let { children }: LayoutProps = $props();
 </script>
 
-<div class="min-h-svh bg-muted/40 print:bg-white">
+<!-- Paper is always white on black, whatever the app theme. -->
+<div class="paper min-h-svh bg-white text-black">
 	{@render children()}
 </div>
+
+<style>
+	@media print {
+		:global(html),
+		:global(body) {
+			background: #fff !important;
+		}
+	}
+</style>

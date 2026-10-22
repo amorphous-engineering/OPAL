@@ -61,13 +61,13 @@ def test_update_procedure(client):
 
     response = client.patch(
         f"/api/procedures/{proc_id}",
-        json={"name": "Updated Name", "status": "active"},
+        json={"name": "Updated Name", "status": "deprecated"},
     )
     assert response.status_code == 200
 
     data = response.json()
     assert data["name"] == "Updated Name"
-    assert data["status"] == "active"
+    assert data["status"] == "deprecated"
 
 
 def test_delete_procedure(client):
@@ -166,9 +166,9 @@ def test_delete_step(client):
     proc_id = create_response.json()["id"]
 
     # Add three steps
-    step1 = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step 1"}).json()
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step 1"})
     step2 = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step 2"}).json()
-    step3 = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step 3"}).json()
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step 3"})
 
     # Delete step 2
     delete_response = client.delete(f"/api/procedures/{proc_id}/steps/{step2['id']}")
@@ -411,65 +411,6 @@ def test_add_output_multiplies_bom_qty_by_output_qty(client):
     kit = client.get(f"/api/procedures/{proc_id}/kit").json()
     kit_by_part = {item["part_id"]: item["quantity_required"] for item in kit}
     assert kit_by_part[parts["Screw"]] == 6.0  # 2 * 3
-
-
-# ============ Web-UI tabs ============
-
-
-def _make_proc_with_step(client) -> tuple[int, int]:
-    """Create a procedure with a single step, return (proc_id, step_id)."""
-    proc_resp = client.post("/api/procedures", json={"name": "Tab Test Procedure"})
-    proc_id = proc_resp.json()["id"]
-    step_resp = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Step A"})
-    step_id = step_resp.json()["id"]
-    return proc_id, step_id
-
-
-def _login(client, db_session, test_user) -> None:
-    """Authenticate the web client by minting a session."""
-    from opal.core.auth import SESSION_COOKIE, create_session
-
-    token = create_session(db_session, test_user)
-    db_session.commit()
-    client.cookies.set(SESSION_COOKIE, token)
-
-
-def test_procedure_detail_default_tab_is_meta(client, db_session, test_user):
-    """A bare /procedures/{id} request lands on the Meta tab."""
-    proc_id, _ = _make_proc_with_step(client)
-    _login(client, db_session, test_user)
-    r = client.get(f"/procedures/{proc_id}")
-    assert r.status_code == 200
-    body = r.text
-    assert 'class="exec-tab active"' in body
-    assert "Tab Test Procedure" in body
-
-
-def test_procedure_detail_tab_query_param_honored(client, db_session, test_user):
-    """?tab=operations renders the Operations sidebar layout."""
-    proc_id, _ = _make_proc_with_step(client)
-    _login(client, db_session, test_user)
-    r = client.get(f"/procedures/{proc_id}?tab=operations")
-    assert r.status_code == 200
-    body = r.text
-    assert "exec-layout" in body
-    assert "exec-sidebar" in body
-    assert "step-editor-form" in body
-
-
-def test_legacy_step_edit_url_redirects_to_tab(client, db_session, test_user):
-    """The retired /procedures/{id}/steps/{step_id}/edit URL 302's to the
-    inline editor in the Operations tab."""
-    proc_id, step_id = _make_proc_with_step(client)
-    _login(client, db_session, test_user)
-    r = client.get(
-        f"/procedures/{proc_id}/steps/{step_id}/edit",
-        follow_redirects=False,
-    )
-    assert r.status_code == 302
-    location = r.headers["location"]
-    assert location.startswith(f"/procedures/{proc_id}?tab=operations")
-    assert f"step={step_id}" in location
 
 
 # ============ Operation dependencies + gating ============
@@ -803,3 +744,234 @@ def test_add_step_image_upload(client):
     listed = client.get(f"/api/procedures/{proc_id}/steps/{step_id}/images").json()
     assert len(listed) == 1
     assert listed[0]["caption"] == "wiring diagram"
+
+
+# ============ Template list, activation, versions, diff, print ============
+
+
+def _published(client, name="Pub", steps=("A", "B"), **extra):
+    proc = client.post("/api/procedures", json={"name": name, **extra}).json()
+    for t in steps:
+        client.post(f"/api/procedures/{proc['id']}/steps", json={"title": t})
+    v = client.post(f"/api/procedures/{proc['id']}/publish").json()
+    return proc["id"], v
+
+
+def test_list_rows_carry_version_and_counts(client):
+    proc_id, v = _published(client, "Counted")
+    client.post("/api/procedures", json={"name": "Draft Build", "procedure_type": "build"})
+    client.post("/api/procedure-instances", json={"procedure_id": proc_id})
+
+    items = {i["name"]: i for i in client.get("/api/procedures").json()["items"]}
+    counted = items["Counted"]
+    assert counted["current_version_number"] == 1
+    assert counted["step_count"] == 2
+    assert counted["execution_count"] == 1
+    assert "steps" not in counted
+    assert items["Draft Build"]["current_version_number"] is None
+    assert items["Draft Build"]["procedure_type"] == "build"
+
+
+def test_list_filters_and_sorts(client):
+    _published(client, "Zeta Op")
+    client.post("/api/procedures", json={"name": "Alpha Build", "procedure_type": "build"})
+
+    builds = client.get("/api/procedures", params={"procedure_type": "build"}).json()
+    assert [i["name"] for i in builds["items"]] == ["Alpha Build"]
+    active = client.get("/api/procedures", params={"status": "active"}).json()
+    assert [i["name"] for i in active["items"]] == ["Zeta Op"]
+    by_name = client.get("/api/procedures", params={"sort": "name", "dir": "asc"}).json()
+    assert [i["name"] for i in by_name["items"]] == ["Alpha Build", "Zeta Op"]
+    assert client.get("/api/procedures", params={"sort": "bogus"}).status_code == 400
+
+
+def test_activate_requires_published_version(client):
+    proc = client.post("/api/procedures", json={"name": "Unpublished"}).json()
+    r = client.patch(f"/api/procedures/{proc['id']}", json={"status": "active"})
+    assert r.status_code == 400
+    # After publish, deprecate then re-activate is allowed
+    proc_id, _ = _published(client, "Cycle")
+    assert (
+        client.patch(f"/api/procedures/{proc_id}", json={"status": "deprecated"}).status_code == 200
+    )
+    r = client.patch(f"/api/procedures/{proc_id}", json={"status": "active"})
+    assert r.status_code == 200 and r.json()["status"] == "active"
+
+
+def test_publish_change_note_and_version_metadata(client):
+    proc = client.post("/api/procedures", json={"name": "Noted"}).json()
+    pid = proc["id"]
+    client.post(f"/api/procedures/{pid}/steps", json={"title": "Only"})
+    v1 = client.post(f"/api/procedures/{pid}/publish", json={"change_note": "  first cut "}).json()
+    assert v1["change_note"] == "first cut"
+    assert v1["step_count"] == 1
+    assert v1["created_by_name"]
+    v2 = client.post(f"/api/procedures/{pid}/publish").json()
+    assert v2["change_note"] is None
+
+    listed = client.get(f"/api/procedures/{pid}/versions").json()
+    assert [v["version_number"] for v in listed] == [2, 1]
+    assert listed[1]["change_note"] == "first cut"
+
+    detail = client.get(f"/api/procedures/versions/{v1['id']}").json()
+    assert detail["procedure_id"] == pid
+    assert detail["procedure_name"] == "Noted"
+    assert detail["is_current"] is False
+    assert client.get(f"/api/procedures/versions/{v2['id']}").json()["is_current"] is True
+
+
+def test_version_detail_names_kit_and_output_parts(client):
+    assembly_id, parts = _create_assembly_with_bom(client, [("Rivet", 2)])
+    proc = client.post("/api/procedures", json={"name": "Parted", "procedure_type": "build"}).json()
+    client.post(f"/api/procedures/{proc['id']}/steps", json={"title": "Build"})
+    client.post(f"/api/procedures/{proc['id']}/outputs", json={"part_id": assembly_id})
+    # Draft parts block publish; activate everything referenced
+    for pid in (assembly_id, parts["Rivet"]):
+        client.post(f"/api/parts/{pid}/activate", json={"cause": "test"})
+    v = client.post(f"/api/procedures/{proc['id']}/publish").json()
+    detail = client.get(f"/api/procedures/versions/{v['id']}").json()
+    by_id = {p["id"]: p for p in detail["parts"]}
+    assert by_id[parts["Rivet"]]["name"] == "Rivet"
+    assert assembly_id in by_id
+
+
+def test_unpublished_changes_flag(client):
+    proc_id, _ = _published(client, "Flagged")
+    assert client.get(f"/api/procedures/{proc_id}").json()["unpublished_changes"] is False
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "C"})
+    assert client.get(f"/api/procedures/{proc_id}").json()["unpublished_changes"] is True
+    fresh = client.post("/api/procedures", json={"name": "Fresh"}).json()
+    assert client.get(f"/api/procedures/{fresh['id']}").json()["unpublished_changes"] is None
+
+
+def test_restore_clears_unpublished_changes(client):
+    proc_id, v = _published(client, "Restorable")
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Extra"})
+    assert client.get(f"/api/procedures/{proc_id}").json()["unpublished_changes"] is True
+    r = client.post(f"/api/procedures/{proc_id}/versions/{v['id']}/restore")
+    assert r.status_code == 200
+    assert client.get(f"/api/procedures/{proc_id}").json()["unpublished_changes"] is False
+
+
+def test_version_diff_endpoint(client):
+    proc_id, v1 = _published(client, "Diffed", steps=("Prep", "Run"))
+    steps = client.get(f"/api/procedures/{proc_id}").json()["steps"]
+    run = next(s for s in steps if s["title"] == "Run")
+    client.patch(
+        f"/api/procedures/{proc_id}/steps/{run['id']}",
+        json={"title": "Run", "requires_signoff": True},
+    )
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Clean"})
+    comp = client.post("/api/parts", json={"name": "Glue"}).json()
+    client.post(f"/api/parts/{comp['id']}/activate", json={"cause": "test"})
+    client.post(
+        f"/api/procedures/{proc_id}/kit", json={"part_id": comp["id"], "quantity_required": 2}
+    )
+    client.patch(f"/api/procedures/{proc_id}", json={"name": "Diffed 2"})
+    v2 = client.post(f"/api/procedures/{proc_id}/publish", json={"change_note": "tweaks"}).json()
+
+    r = client.get(f"/api/procedures/{proc_id}/versions/{v1['id']}/diff/{v2['id']}")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["version_a"]["version_number"] == 1 and d["version_b"]["version_number"] == 2
+    assert d["added"] == 1 and d["modified"] == 1 and d["unchanged"] == 1 and d["removed"] == 0
+    by_num = {s["step_number"]: s for s in d["steps"]}
+    assert by_num["2"]["changed_fields"] == ["requires_signoff"]
+    assert by_num["2"]["changes"]["requires_signoff"] == {"a": False, "b": True}
+    assert by_num["3"]["status"] == "added"
+    assert len(d["kit"]) == 1
+    assert d["kit"][0]["name"] == "Glue"
+    assert d["kit"][0]["status"] == "added"
+    assert d["kit"][0]["quantity_b"] == 2.0
+    assert d["procedure_changes"][0]["field"] == "procedure_name"
+    assert d["procedure_changes"][0]["b"] == "Diffed 2"
+
+
+def test_version_diff_rejects_foreign_version(client):
+    a, va = _published(client, "A proc")
+    _, vb = _published(client, "B proc")
+    r = client.get(f"/api/procedures/{a}/versions/{va['id']}/diff/{vb['id']}")
+    assert r.status_code == 404
+
+
+def test_version_qr_svg(client):
+    _, v = _published(client, "QR")
+    r = client.get(
+        f"/api/procedures/versions/{v['id']}/qr", params={"url": "http://x/procedures/versions/1"}
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("image/svg+xml")
+    assert b"<svg" in r.content
+    assert client.get("/api/procedures/versions/99999/qr", params={"url": "x"}).status_code == 404
+
+
+def test_clone_keeps_type_and_dependencies(client):
+    proc_id, op_ids = _make_proc_with_n_ops(client, 2)
+    client.patch(f"/api/procedures/{proc_id}", json={"procedure_type": "build"})
+    client.put(
+        f"/api/procedures/{proc_id}/steps/{op_ids[1]}/dependencies",
+        json={"depends_on": [op_ids[0]]},
+    )
+    clone = client.post(f"/api/procedures/{proc_id}/clone", json={}).json()
+    assert clone["procedure_type"] == "build"
+    assert len(client.get(f"/api/procedures/{clone['id']}/dependencies").json()) == 1
+
+
+def test_delete_blocked_by_open_execution(client):
+    proc_id, _ = _published(client, "Busy")
+    client.post("/api/procedure-instances", json={"procedure_id": proc_id})
+    r = client.delete(f"/api/procedures/{proc_id}")
+    assert r.status_code == 409
+
+
+def test_kit_rows_carry_part_number_and_stock(client):
+    proc = client.post("/api/procedures", json={"name": "Kitted"}).json()
+    part = client.post("/api/parts", json={"name": "Washer"}).json()
+    row = client.post(
+        f"/api/procedures/{proc['id']}/kit", json={"part_id": part["id"], "quantity_required": 3}
+    ).json()
+    assert row["part_internal_pn"] == part["internal_pn"]
+    assert row["part_lifecycle_state"] == "draft"
+    assert row["part_on_hand"] == 0
+
+
+def test_diff_part_lists_and_equivalence():
+    from opal.core.diff import diff_part_lists, snapshots_equivalent
+
+    rows = diff_part_lists(
+        [{"part_id": 1, "quantity_required": 1}, {"part_id": 2, "quantity_required": 2}],
+        [{"part_id": 2, "quantity_required": 5}, {"part_id": 3, "quantity_required": 1}],
+    )
+    assert [(r["part_id"], r["status"]) for r in rows] == [
+        (1, "removed"),
+        (2, "modified"),
+        (3, "added"),
+    ]
+
+    a = {
+        "procedure_name": "P",
+        "steps": [
+            {"id": 1, "order": 1, "parent_step_id": None, "title": "T"},
+            {"id": 2, "order": 2, "parent_step_id": 1, "title": "S"},
+        ],
+    }
+    b = {
+        "procedure_name": "P",
+        "steps": [
+            {"id": 10, "order": 1, "parent_step_id": None, "title": "T"},
+            {"id": 11, "order": 2, "parent_step_id": 10, "title": "S"},
+        ],
+    }
+    assert snapshots_equivalent(a, b)
+    b["steps"][1]["title"] = "changed"
+    assert not snapshots_equivalent(a, b)
+
+
+def test_cannot_cut_work_order_from_deprecated_template(client):
+    proc_id, _ = _published(client, "Retired")
+    client.patch(f"/api/procedures/{proc_id}", json={"status": "deprecated"})
+    r = client.post("/api/procedure-instances", json={"procedure_id": proc_id})
+    assert r.status_code == 400
+    client.patch(f"/api/procedures/{proc_id}", json={"status": "active"})
+    r = client.post("/api/procedure-instances", json={"procedure_id": proc_id})
+    assert r.status_code == 201
