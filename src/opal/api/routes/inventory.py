@@ -7,11 +7,14 @@ from enum import Enum
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
-from opal.core.inventory import generate_opal_number
+from opal.core.designators import generate_serial_number
+from opal.core.genealogy import get_full_genealogy
+from opal.core.inventory import build_ledger, generate_opal_number, receipt_rules
 from opal.core.part_lifecycle import ensure_parts_active
 from opal.db.models import InventoryRecord, Part, StockTestResult, StockTransfer, TestTemplate
 from opal.db.models.inventory import (
@@ -36,6 +39,11 @@ class InventoryCreate(BaseModel):
     location: str
     lot_number: str | None = None
     expiration_date: date | None = None
+    # Apply the part tier's receiving rules (lot required for lot-tracked bulk
+    # parts, generated serials for serial-issuing tiers) exactly as purchase
+    # receiving does. Opt-in so existing API clients keep their behaviour;
+    # the web form always sends it.
+    enforce_tier_rules: bool = False
 
 
 class InventoryUpdate(BaseModel):
@@ -84,6 +92,9 @@ class InventoryResponse(BaseModel):
     part_name: str
     part_external_pn: str | None
     part_uom: str | None = None
+    part_internal_pn: str | None = None
+    part_tracking_type: str | None = None
+    part_is_tooling: bool = False
     quantity: Decimal
     location: str
     lot_number: str | None
@@ -156,6 +167,9 @@ def inventory_to_response(record: InventoryRecord) -> InventoryResponse:
         part_name=record.part.name,
         part_external_pn=record.part.external_pn,
         part_uom=record.part.unit_of_measure,
+        part_internal_pn=record.part.internal_pn,
+        part_tracking_type=record.part.tracking_type,
+        part_is_tooling=bool(record.part.is_tooling),
         quantity=record.quantity,
         location=record.location,
         lot_number=record.lot_number,
@@ -179,20 +193,41 @@ def inventory_to_response(record: InventoryRecord) -> InventoryResponse:
     )
 
 
-@router.get("", response_model=InventoryListResponse)
-def list_inventory(
+def _low_stock_part_ids(db: DbSession):
+    """Subquery: ids of parts whose total on-hand is below their reorder point."""
+    totals = (
+        db.query(
+            InventoryRecord.part_id.label("part_id"),
+            func.coalesce(func.sum(InventoryRecord.quantity), 0).label("total"),
+        )
+        .group_by(InventoryRecord.part_id)
+        .subquery()
+    )
+    return (
+        db.query(Part.id)
+        .outerjoin(totals, Part.id == totals.c.part_id)
+        .filter(
+            Part.deleted_at.is_(None),
+            Part.reorder_point.isnot(None),
+            func.coalesce(totals.c.total, 0) < Part.reorder_point,
+        )
+    )
+
+
+def _filtered_records(
     db: DbSession,
-    pagination: PaginationParams,
-    part_id: int | None = Query(None, description="Filter by part ID"),
-    location: str | None = Query(None, description="Filter by location"),
-    lot_number: str | None = Query(None, description="Filter by lot number"),
-    expired: bool = Query(False, description="Filter to only expired items"),
-    expiring_soon: bool = Query(False, description="Filter to items expiring within 30 days"),
-    calibration_overdue: bool = Query(
-        False, description="Filter to tooling items with overdue calibration"
-    ),
-) -> InventoryListResponse:
-    """List inventory records with optional filtering."""
+    *,
+    part_id: int | None,
+    location: str | None,
+    lot_number: str | None,
+    search: str | None,
+    source_type: str | None,
+    has_stock: bool | None,
+    low_stock: bool,
+    expired: bool,
+    expiring_soon: bool,
+    calibration_overdue: bool,
+):
     query = db.query(InventoryRecord).join(Part).filter(Part.deleted_at.is_(None))
 
     if part_id:
@@ -201,6 +236,26 @@ def list_inventory(
         query = query.filter(InventoryRecord.location == location)
     if lot_number:
         query = query.filter(InventoryRecord.lot_number == lot_number)
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                InventoryRecord.opal_number.ilike(term),
+                InventoryRecord.lot_number.ilike(term),
+                InventoryRecord.location.ilike(term),
+                Part.name.ilike(term),
+                Part.internal_pn.ilike(term),
+                Part.external_pn.ilike(term),
+            )
+        )
+    if source_type:
+        query = query.filter(InventoryRecord.source_type == source_type)
+    if has_stock is True:
+        query = query.filter(InventoryRecord.quantity > 0)
+    elif has_stock is False:
+        query = query.filter(InventoryRecord.quantity <= 0)
+    if low_stock:
+        query = query.filter(InventoryRecord.part_id.in_(_low_stock_part_ids(db).scalar_subquery()))
     if expired:
         query = query.filter(
             InventoryRecord.expiration_date.isnot(None),
@@ -220,10 +275,73 @@ def list_inventory(
             InventoryRecord.calibration_due_at.isnot(None),
             InventoryRecord.calibration_due_at <= now,
         )
+    return query
+
+
+_SORT_COLUMNS = {
+    "opal_number": InventoryRecord.opal_number,
+    "part": Part.internal_pn,
+    "name": Part.name,
+    "location": InventoryRecord.location,
+    "quantity": InventoryRecord.quantity,
+    "lot_number": InventoryRecord.lot_number,
+    "expiration_date": InventoryRecord.expiration_date,
+    "created_at": InventoryRecord.created_at,
+}
+
+
+@router.get("", response_model=InventoryListResponse)
+def list_inventory(
+    db: DbSession,
+    pagination: PaginationParams,
+    part_id: int | None = Query(None, description="Filter by part ID"),
+    location: str | None = Query(None, description="Filter by location"),
+    lot_number: str | None = Query(None, description="Filter by lot number"),
+    search: str | None = Query(
+        None, description="Match OPAL number, lot, location, part name or part number"
+    ),
+    source_type: str | None = Query(None, description="purchase, production, manual, transfer"),
+    has_stock: bool | None = Query(
+        None, description="true: on hand above zero; false: depleted records only"
+    ),
+    low_stock: bool = Query(False, description="Only records of parts below their reorder point"),
+    expired: bool = Query(False, description="Filter to only expired items"),
+    expiring_soon: bool = Query(False, description="Filter to items expiring within 30 days"),
+    calibration_overdue: bool = Query(
+        False, description="Filter to tooling items with overdue calibration"
+    ),
+    sort: str | None = Query(None, description=f"One of: {', '.join(_SORT_COLUMNS)}"),
+    order: str = Query("asc", pattern="^(asc|desc)$"),
+) -> InventoryListResponse:
+    """List inventory records with optional filtering."""
+    if sort is not None and sort not in _SORT_COLUMNS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown sort '{sort}' (expected one of {', '.join(_SORT_COLUMNS)})",
+        )
+    query = _filtered_records(
+        db,
+        part_id=part_id,
+        location=location,
+        lot_number=lot_number,
+        search=search,
+        source_type=source_type,
+        has_stock=has_stock,
+        low_stock=low_stock,
+        expired=expired,
+        expiring_soon=expiring_soon,
+        calibration_overdue=calibration_overdue,
+    )
 
     total = query.count()
+    if sort:
+        column = _SORT_COLUMNS[sort]
+        ordering = [column.desc() if order == "desc" else column.asc(), InventoryRecord.id.desc()]
+    else:
+        ordering = [InventoryRecord.location, InventoryRecord.part_id]
     records = (
-        query.order_by(InventoryRecord.location, InventoryRecord.part_id)
+        query.options(joinedload(InventoryRecord.part))
+        .order_by(*ordering)
         .offset(pagination.skip)
         .limit(pagination.limit)
         .all()
@@ -233,6 +351,123 @@ def list_inventory(
         items=[inventory_to_response(r) for r in records],
         total=total,
     )
+
+
+class StockByPart(BaseModel):
+    """On-hand stock of one part, summed over the matching records."""
+
+    part_id: int
+    internal_pn: str | None
+    external_pn: str | None
+    name: str
+    unit_of_measure: str | None
+    tracking_type: str
+    reorder_point: Decimal | None
+    quantity: Decimal
+    record_count: int
+    locations: list[str]
+    is_low_stock: bool
+
+
+class StockByPartResponse(BaseModel):
+    items: list[StockByPart]
+    total: int
+
+
+@router.get("/by-part", response_model=StockByPartResponse)
+def stock_by_part(
+    db: DbSession,
+    pagination: PaginationParams,
+    location: str | None = Query(None),
+    search: str | None = Query(None),
+    low_stock: bool = Query(False),
+    sort: str = Query("part", pattern="^(part|name|quantity|record_count)$"),
+    order: str = Query("asc", pattern="^(asc|desc)$"),
+) -> StockByPartResponse:
+    """On-hand stock grouped by part. The part's total is always the sum over
+    all its records; ``location`` and ``search`` narrow which parts appear
+    and which records are summed, so a location filter answers "how much of
+    each part is in this location"."""
+    records = _filtered_records(
+        db,
+        part_id=None,
+        location=location,
+        lot_number=None,
+        search=search,
+        source_type=None,
+        has_stock=None,
+        low_stock=low_stock,
+        expired=False,
+        expiring_soon=False,
+        calibration_overdue=False,
+    ).subquery()
+
+    qty = func.coalesce(func.sum(records.c.quantity), 0)
+    count = func.count(records.c.id)
+    sort_column = {
+        "part": Part.internal_pn,
+        "name": Part.name,
+        "quantity": qty,
+        "record_count": count,
+    }[sort]
+    grouped = (
+        db.query(Part, qty.label("qty"), count.label("n"))
+        .join(records, records.c.part_id == Part.id)
+        .group_by(Part.id)
+    )
+    total = grouped.count()
+    rows = (
+        grouped.order_by(sort_column.desc() if order == "desc" else sort_column.asc(), Part.id)
+        .offset(pagination.skip)
+        .limit(pagination.limit)
+        .all()
+    )
+
+    part_ids = [part.id for part, _, _ in rows]
+    location_rows = (
+        db.query(InventoryRecord.part_id, InventoryRecord.location)
+        .filter(InventoryRecord.part_id.in_(part_ids), InventoryRecord.quantity > 0)
+        .distinct()
+        .order_by(InventoryRecord.location)
+        .all()
+        if part_ids
+        else []
+    )
+    locations: dict[int, list[str]] = {}
+    for pid, loc in location_rows:
+        if loc:
+            locations.setdefault(pid, []).append(loc)
+
+    # Low-stock is judged on the part's whole on-hand, not the filtered sum.
+    all_totals = dict(
+        db.query(InventoryRecord.part_id, func.coalesce(func.sum(InventoryRecord.quantity), 0))
+        .filter(InventoryRecord.part_id.in_(part_ids))
+        .group_by(InventoryRecord.part_id)
+        .all()
+        if part_ids
+        else []
+    )
+
+    items = [
+        StockByPart(
+            part_id=part.id,
+            internal_pn=part.internal_pn,
+            external_pn=part.external_pn,
+            name=part.name,
+            unit_of_measure=part.unit_of_measure,
+            tracking_type=part.tracking_type,
+            reorder_point=part.reorder_point,
+            quantity=quantity,
+            record_count=n,
+            locations=locations.get(part.id, []),
+            is_low_stock=bool(
+                part.reorder_point is not None
+                and Decimal(all_totals.get(part.id, 0)) < part.reorder_point
+            ),
+        )
+        for part, quantity, n in rows
+    ]
+    return StockByPartResponse(items=items, total=total)
 
 
 @router.get("/{inventory_id}/qrcode")
@@ -444,6 +679,263 @@ def get_opal_history(
     )
 
 
+# ============ OPAL record detail ============
+
+
+class DetailPart(BaseModel):
+    id: int
+    internal_pn: str | None
+    external_pn: str | None
+    name: str
+    unit_of_measure: str | None
+    tracking_type: str
+    is_tooling: bool
+    tier: int
+    tier_name: str | None
+    lifecycle_state: str
+
+
+class DetailPurchase(BaseModel):
+    id: int
+    reference: str | None
+    supplier: str | None
+
+
+class DetailExecution(BaseModel):
+    id: int
+    work_order_number: str | None
+    serial_number: str | None = None
+
+
+class DetailSource(BaseModel):
+    type: str | None
+    purchase: DetailPurchase | None = None
+    execution: DetailExecution | None = None
+    transferred_from_opal: str | None = None
+
+
+class DetailLedgerRow(BaseModel):
+    kind: str
+    timestamp: str
+    delta: Decimal
+    balance: Decimal
+    quantity: Decimal | None = None
+    reason: str | None = None
+    notes: str | None = None
+    user_name: str | None = None
+    execution: DetailExecution | None = None
+    from_location: str | None = None
+    to_location: str | None = None
+    counterpart_opal: str | None = None
+
+
+class DetailGenealogyRow(BaseModel):
+    opal_number: str
+    part_id: int | None
+    part_number: str | None
+    part_name: str | None
+    quantity_used: Decimal
+    work_order_number: str | None = None
+
+
+class DetailTest(BaseModel):
+    id: int
+    template_id: int | None
+    test_name: str
+    result: str
+    value: str | None
+    notes: str | None
+    tested_at: str | None
+    tested_by_name: str | None
+
+
+class DetailTestTemplate(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    required: bool
+    test_type: str
+    min_value: Decimal | None
+    max_value: Decimal | None
+    unit: str | None
+
+
+class OpalDetailResponse(BaseModel):
+    inventory: InventoryResponse
+    part: DetailPart
+    source: DetailSource
+    ledger: list[DetailLedgerRow]
+    components: list[DetailGenealogyRow]
+    assemblies: list[DetailGenealogyRow]
+    tests: list[DetailTest]
+    test_templates: list[DetailTestTemplate]
+
+
+@router.get("/opal/{opal_number}/detail", response_model=OpalDetailResponse)
+def get_opal_detail(opal_number: str, db: DbSession) -> OpalDetailResponse:
+    """Everything the record page shows: the record, its part, where it came
+    from, the quantity ledger with running balance, genealogy in both
+    directions, and test results against the part's test templates."""
+    from opal.config import get_active_project
+    from opal.db.models.execution import ProcedureInstance
+
+    record = (
+        db.query(InventoryRecord)
+        .join(Part)
+        .filter(InventoryRecord.opal_number == opal_number, Part.deleted_at.is_(None))
+        .first()
+    )
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Inventory record with OPAL number {opal_number} not found",
+        )
+    part = record.part
+
+    project = get_active_project()
+    tier_cfg = project.get_tier(part.tier) if project else None
+
+    # Source
+    source_type = getattr(record.source_type, "value", record.source_type)
+    source = DetailSource(type=source_type)
+    if record.source_purchase_line and record.source_purchase_line.purchase:
+        po = record.source_purchase_line.purchase
+        source.purchase = DetailPurchase(id=po.id, reference=po.reference, supplier=po.supplier)
+    if record.source_production and record.source_production.procedure_instance:
+        inst = record.source_production.procedure_instance
+        source.execution = DetailExecution(
+            id=inst.id,
+            work_order_number=inst.work_order_number,
+            serial_number=record.source_production.serial_number,
+        )
+    if source_type == "transfer" and record.incoming_transfers:
+        first = min(record.incoming_transfers, key=lambda t: t.created_at)
+        if first.source_inventory:
+            source.transferred_from_opal = first.source_inventory.opal_number
+
+    # Ledger
+    entries = build_ledger(record)
+    instance_ids = {e.instance_id for e in entries if e.instance_id}
+    instances = (
+        {
+            i.id: i
+            for i in db.query(ProcedureInstance)
+            .filter(ProcedureInstance.id.in_(instance_ids))
+            .all()
+        }
+        if instance_ids
+        else {}
+    )
+    ledger = [
+        DetailLedgerRow(
+            kind=e.kind,
+            timestamp=e.timestamp.isoformat(),
+            delta=e.delta,
+            balance=e.balance,
+            quantity=e.quantity,
+            reason=e.reason,
+            notes=e.notes,
+            user_name=e.user_name,
+            execution=(
+                DetailExecution(
+                    id=e.instance_id,
+                    work_order_number=instances[e.instance_id].work_order_number,
+                    serial_number=e.serial_number,
+                )
+                if e.instance_id in instances
+                else None
+            ),
+            from_location=e.from_location,
+            to_location=e.to_location,
+            counterpart_opal=e.counterpart_opal,
+        )
+        for e in entries
+    ]
+
+    # Genealogy
+    genealogy = get_full_genealogy(db, opal_number)
+    components = [
+        DetailGenealogyRow(
+            opal_number=c["component_opal_number"],
+            part_id=c["part_id"],
+            part_number=c["part_number"],
+            part_name=c["part_name"],
+            quantity_used=Decimal(str(c["quantity_used"])),
+        )
+        for c in genealogy["components"]
+    ]
+    assemblies = [
+        DetailGenealogyRow(
+            opal_number=a["assembly_opal_number"],
+            part_id=a["part_id"],
+            part_number=a["part_number"],
+            part_name=a["part_name"],
+            quantity_used=Decimal(str(a["quantity_used"])),
+            work_order_number=a["work_order_number"],
+        )
+        for a in genealogy["assemblies_containing"]
+    ]
+
+    results = (
+        db.query(StockTestResult)
+        .filter(StockTestResult.inventory_record_id == record.id)
+        .order_by(StockTestResult.created_at.desc())
+        .all()
+    )
+    templates = (
+        db.query(TestTemplate)
+        .filter(TestTemplate.part_id == record.part_id)
+        .order_by(TestTemplate.sort_order)
+        .all()
+    )
+
+    return OpalDetailResponse(
+        inventory=inventory_to_response(record),
+        part=DetailPart(
+            id=part.id,
+            internal_pn=part.internal_pn,
+            external_pn=part.external_pn,
+            name=part.name,
+            unit_of_measure=part.unit_of_measure,
+            tracking_type=part.tracking_type,
+            is_tooling=bool(part.is_tooling),
+            tier=part.tier,
+            tier_name=tier_cfg.name if tier_cfg else None,
+            lifecycle_state=part.lifecycle_state,
+        ),
+        source=source,
+        ledger=ledger,
+        components=components,
+        assemblies=assemblies,
+        tests=[
+            DetailTest(
+                id=r.id,
+                template_id=r.template_id,
+                test_name=r.test_name,
+                result=getattr(r.result, "value", r.result),
+                value=r.value,
+                notes=r.notes,
+                tested_at=r.tested_at.isoformat() if r.tested_at else None,
+                tested_by_name=r.tested_by_user.name if r.tested_by_user else None,
+            )
+            for r in results
+        ],
+        test_templates=[
+            DetailTestTemplate(
+                id=t.id,
+                name=t.name,
+                description=t.description,
+                required=t.required,
+                test_type=t.test_type,
+                min_value=t.min_value,
+                max_value=t.max_value,
+                unit=t.unit,
+            )
+            for t in templates
+        ],
+    )
+
+
 class InventoryCreateResponse(BaseModel):
     """Schema for inventory creation response (may create multiple records)."""
 
@@ -476,6 +968,24 @@ def create_inventory(
     # never happens as a side effect (raises DraftPartsBlocked -> 409)
     ensure_parts_active(db, [part.id], "inventory record create")
 
+    # Tier rules, driven by the configured tier's semantic fields — the same
+    # ones purchase receiving enforces
+    require_lot, auto_serial = receipt_rules(part) if inv_in.enforce_tier_rules else (False, False)
+    lot_number = inv_in.lot_number.strip() if inv_in.lot_number else None
+    if require_lot and not lot_number:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Tier {part.tier} lot-tracked part '{part.name}' requires a "
+                f"lot_number when receiving."
+            ),
+        )
+    auto_serial = auto_serial and not lot_number
+    if inv_in.quantity <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Quantity must be greater than zero"
+        )
+
     created_records: list[InventoryRecord] = []
 
     if part.tracking_type == TrackingType.SERIALIZED:
@@ -493,7 +1003,7 @@ def create_inventory(
                 part_id=inv_in.part_id,
                 quantity=1,  # Each serialized item has quantity 1
                 location=inv_in.location,
-                lot_number=inv_in.lot_number,
+                lot_number=generate_serial_number(db, part) if auto_serial else lot_number,
                 opal_number=opal_number,
                 source_type=SourceType.MANUAL,
                 expiration_date=inv_in.expiration_date,
@@ -508,7 +1018,7 @@ def create_inventory(
             part_id=inv_in.part_id,
             quantity=inv_in.quantity,
             location=inv_in.location,
-            lot_number=inv_in.lot_number,
+            lot_number=lot_number,
             opal_number=opal_number,
             source_type=SourceType.MANUAL,
             expiration_date=inv_in.expiration_date,
@@ -553,6 +1063,10 @@ class TransferResponse(BaseModel):
     part_id: int
     part_name: str
     quantity: Decimal
+    source_inventory_id: int | None = None
+    target_inventory_id: int | None = None
+    source_opal_number: str | None = None
+    target_opal_number: str | None = None
     source_location: str
     target_location: str
     source_lot_number: str | None
@@ -564,6 +1078,28 @@ class TransferResponse(BaseModel):
     created_at: str
 
     model_config = {"from_attributes": True}
+
+
+def _transfer_response(t: StockTransfer) -> TransferResponse:
+    return TransferResponse(
+        id=t.id,
+        part_id=t.part_id,
+        part_name=t.part.name,
+        quantity=t.quantity,
+        source_inventory_id=t.source_inventory_id,
+        target_inventory_id=t.target_inventory_id,
+        source_opal_number=t.source_inventory.opal_number if t.source_inventory else None,
+        target_opal_number=t.target_inventory.opal_number if t.target_inventory else None,
+        source_location=t.source_location,
+        target_location=t.target_location,
+        source_lot_number=t.source_lot_number,
+        target_lot_number=t.target_lot_number,
+        status=t.status.value if hasattr(t.status, "value") else t.status,
+        notes=t.notes,
+        transferred_by_id=t.transferred_by_id,
+        transferred_at=t.transferred_at.isoformat() if t.transferred_at else None,
+        created_at=t.created_at.isoformat(),
+    )
 
 
 @router.post("/transfer", response_model=TransferResponse, status_code=201)
@@ -609,32 +1145,55 @@ def transfer_stock(
             status_code=400, detail="Cannot transfer to same location with same lot number"
         )
 
-    # Find or create target inventory record
+    # Find or create target inventory record. A serialized unit is never
+    # merged into another record: it keeps its own OPAL number.
+    serialized = source.part.tracking_type == TrackingType.SERIALIZED
     target = (
-        db.query(InventoryRecord)
+        None
+        if serialized
+        else db.query(InventoryRecord)
         .filter(
             InventoryRecord.part_id == source.part_id,
             InventoryRecord.location == data.target_location,
             InventoryRecord.lot_number == target_lot,
+            InventoryRecord.id != source.id,
         )
         .first()
     )
 
+    old_source = get_model_dict(source)
     if target:
-        # SQL-side increment avoids lost updates under concurrency
+        # Merge into the stock already there. SQL-side increment avoids lost
+        # updates under concurrency
         target.quantity = InventoryRecord.quantity + data.quantity
+        source.quantity = InventoryRecord.quantity - data.quantity
+    elif Decimal(data.quantity) == Decimal(source.quantity):
+        # The whole record moves: it keeps its OPAL number, so the physical
+        # item stays traceable (a serialized unit can never be split)
+        source.location = data.target_location
+        source.lot_number = target_lot
+        target = source
     else:
+        if serialized:
+            raise HTTPException(status_code=400, detail="Serialized units cannot be split")
+        # Partial move: the moved quantity becomes its own record with its own
+        # OPAL number, so both halves stay individually traceable
         target = InventoryRecord(
             part_id=source.part_id,
             quantity=data.quantity,
             location=data.target_location,
             lot_number=target_lot,
+            opal_number=generate_opal_number(db),
+            source_type=SourceType.TRANSFER,
+            expiration_date=source.expiration_date,
         )
         db.add(target)
         db.flush()
+        source.quantity = InventoryRecord.quantity - data.quantity
 
-    # Deduct from source (SQL-side decrement, same as above)
-    source.quantity = InventoryRecord.quantity - data.quantity
+    # Capture locations/lots as they were before a relocation overwrote them
+    source_location = old_source["location"]
+    source_lot = old_source["lot_number"]
 
     # Create transfer record
     transfer = StockTransfer(
@@ -642,9 +1201,9 @@ def transfer_stock(
         target_inventory_id=target.id,
         part_id=source.part_id,
         quantity=data.quantity,
-        source_location=source.location,
+        source_location=source_location,
         target_location=data.target_location,
-        source_lot_number=source.lot_number,
+        source_lot_number=source_lot,
         target_lot_number=target_lot,
         status=TransferStatus.COMPLETED,
         notes=data.notes,
@@ -656,22 +1215,11 @@ def transfer_stock(
     log_create(db, transfer, user_id)
     db.commit()
     db.refresh(transfer)
+    db.refresh(source)
+    log_update(db, source, old_source, user_id)
+    db.commit()
 
-    return TransferResponse(
-        id=transfer.id,
-        part_id=transfer.part_id,
-        part_name=source.part.name,
-        quantity=transfer.quantity,
-        source_location=transfer.source_location,
-        target_location=transfer.target_location,
-        source_lot_number=transfer.source_lot_number,
-        target_lot_number=transfer.target_lot_number,
-        status=transfer.status.value if hasattr(transfer.status, "value") else transfer.status,
-        notes=transfer.notes,
-        transferred_by_id=transfer.transferred_by_id,
-        transferred_at=transfer.transferred_at.isoformat() if transfer.transferred_at else None,
-        created_at=transfer.created_at.isoformat(),
-    )
+    return _transfer_response(transfer)
 
 
 @router.get("/transfers", response_model=list[TransferResponse])
@@ -694,24 +1242,7 @@ def list_transfers(
 
     transfers = query.order_by(StockTransfer.created_at.desc()).limit(limit).all()
 
-    return [
-        TransferResponse(
-            id=t.id,
-            part_id=t.part_id,
-            part_name=t.part.name,
-            quantity=t.quantity,
-            source_location=t.source_location,
-            target_location=t.target_location,
-            source_lot_number=t.source_lot_number,
-            target_lot_number=t.target_lot_number,
-            status=t.status.value if hasattr(t.status, "value") else t.status,
-            notes=t.notes,
-            transferred_by_id=t.transferred_by_id,
-            transferred_at=t.transferred_at.isoformat() if t.transferred_at else None,
-            created_at=t.created_at.isoformat(),
-        )
-        for t in transfers
-    ]
+    return [_transfer_response(t) for t in transfers]
 
 
 @router.get("/transfers/{transfer_id}", response_model=TransferResponse)
@@ -724,21 +1255,7 @@ def get_transfer(
     if not transfer:
         raise HTTPException(status_code=404, detail="Transfer not found")
 
-    return TransferResponse(
-        id=transfer.id,
-        part_id=transfer.part_id,
-        part_name=transfer.part.name,
-        quantity=transfer.quantity,
-        source_location=transfer.source_location,
-        target_location=transfer.target_location,
-        source_lot_number=transfer.source_lot_number,
-        target_lot_number=transfer.target_lot_number,
-        status=transfer.status.value if hasattr(transfer.status, "value") else transfer.status,
-        notes=transfer.notes,
-        transferred_by_id=transfer.transferred_by_id,
-        transferred_at=transfer.transferred_at.isoformat() if transfer.transferred_at else None,
-        created_at=transfer.created_at.isoformat(),
-    )
+    return _transfer_response(transfer)
 
 
 @router.get("/{inventory_id}", response_model=InventoryResponse)

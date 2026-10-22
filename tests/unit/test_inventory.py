@@ -586,7 +586,7 @@ def test_locations(client: TestClient, auth_headers: dict, bulk_part: dict) -> N
     assert any(loc["location"] == "LOC-UNIQUE-TEST" for loc in locations)
 
 
-# ============ OPAL detail page (web) ============
+# ============ OPAL record detail ============
 
 
 def _receive_stock(client: TestClient, part_id: int, **overrides) -> dict:
@@ -619,45 +619,38 @@ def _consume_via_execution(client: TestClient, part: dict, inv_record_id: int) -
     return instance_id
 
 
-def test_opal_page_facts_render_as_detail_rows(web_client: TestClient, bulk_part: dict) -> None:
-    """The OPAL # page speaks the part-page grammar: a panel with the actions
-    in its header, facts as detail rows, the part identified by its internal
-    PN — and zero narration."""
-    item = _receive_stock(web_client, bulk_part["id"], lot_number="LOT-2026-03")
-    opal = item["opal_number"]
-
-    page = web_client.get(f"/inventory/opal/{opal}")
-    assert page.status_code == 200
-    body = page.text
-
-    assert "OPAL ITEM" in body
-    assert opal in body
-    # The part fact is the internal PN, linked — not just a name.
-    assert f'href="/parts/{bulk_part["id"]}"' in body
-    assert bulk_part["internal_pn"] in body
-    # Detail-row facts.
-    for label in ("PART", "LOCATION", "QUANTITY", "LOT", "SOURCE", "RECEIVED"):
-        assert f"<th>{label}</th>" in body, label
-    assert "LOT-2026-03" in body
-    # History is a headed table, not prose.
-    assert "TRACEABILITY HISTORY" in body
-    assert "<th>CONTEXT</th>" in body
-    assert "RECEIVED" in body
-    # Narration is banned.
-    assert "Physical Item Traceability" not in body
-    assert "No history available" not in body
-    assert "No tests recorded" not in body
-    assert "No test results recorded" not in body
-    assert "Quantity:" not in body
+def _detail(client: TestClient, opal: str) -> dict:
+    resp = client.get(f"/api/inventory/opal/{opal}/detail")
+    assert resp.status_code == 200, resp.text
+    return resp.json()
 
 
-def test_opal_page_po_source_renders_reference_verbatim(
-    web_client: TestClient, auth_headers: dict, bulk_part: dict
+def test_detail_not_found(client: TestClient) -> None:
+    assert client.get("/api/inventory/opal/OPAL-99999/detail").status_code == 404
+
+
+def test_detail_carries_record_part_and_receipt(client: TestClient, bulk_part: dict) -> None:
+    """The record page needs the part's identity (internal PN, not just the
+    name) and a receipt row carrying the opening quantity."""
+    item = _receive_stock(client, bulk_part["id"], lot_number="LOT-2026-03")
+    body = _detail(client, item["opal_number"])
+
+    assert body["inventory"]["lot_number"] == "LOT-2026-03"
+    assert body["part"]["internal_pn"] == bulk_part["internal_pn"]
+    assert body["part"]["id"] == bulk_part["id"]
+    assert body["source"]["type"] == "manual"
+    assert [r["kind"] for r in body["ledger"]] == ["received"]
+    assert float(body["ledger"][0]["delta"]) == 10
+    assert float(body["ledger"][0]["balance"]) == 10
+    assert body["tests"] == [] and body["test_templates"] == []
+
+
+def test_detail_po_source_is_the_reference_not_a_database_id(
+    client: TestClient, auth_headers: dict, bulk_part: dict
 ) -> None:
-    """Purchase.reference is already the identifier ('PO-0001') — the SOURCE
-    fact and the history CONTEXT render it verbatim, never re-prefixed to
-    'PO-PO-0001' (F8; purchases/detail.html precedent)."""
-    po = web_client.post(
+    """Purchase.reference is already the identifier ('PO-0424'); the source
+    carries it verbatim so the page never has to build one from an id."""
+    po = client.post(
         "/api/purchases",
         json={
             "supplier": "Opal Page Supplier",
@@ -666,8 +659,8 @@ def test_opal_page_po_source_renders_reference_verbatim(
         },
         headers=auth_headers,
     ).json()
-    web_client.patch(f"/api/purchases/{po['id']}", json={"status": "ordered"})
-    recv = web_client.post(
+    client.patch(f"/api/purchases/{po['id']}", json={"status": "ordered"})
+    recv = client.post(
         f"/api/purchases/{po['id']}/receive",
         json={
             "lines": [
@@ -682,58 +675,310 @@ def test_opal_page_po_source_renders_reference_verbatim(
     )
     assert recv.status_code == 200, recv.text
 
-    inv = web_client.get(f"/api/inventory?part_id={bulk_part['id']}").json()["items"][0]
-    page = web_client.get(f"/inventory/opal/{inv['opal_number']}")
-    assert page.status_code == 200
-    body = page.text
-    assert "PO-PO" not in body
-    reference = po["reference"]
-    assert reference and body.count(reference) >= 2  # SOURCE fact + history CONTEXT
+    inv = client.get(f"/api/inventory?part_id={bulk_part['id']}").json()["items"][0]
+    body = _detail(client, inv["opal_number"])
+    assert body["source"]["type"] == "purchase"
+    assert body["source"]["purchase"]["reference"] == po["reference"]
+    assert body["source"]["purchase"]["id"] == po["id"]
 
 
-def test_opal_page_consumption_links_work_order_not_db_id(
-    web_client: TestClient, bulk_part: dict
+def test_detail_ledger_names_the_work_order_and_keeps_a_running_balance(
+    client: TestClient, bulk_part: dict
 ) -> None:
-    """A consumption event names the work order and links the execution —
-    never 'Execution #<database id>'."""
-    item = _receive_stock(web_client, bulk_part["id"])
-    instance_id = _consume_via_execution(web_client, bulk_part, item["id"])
-    wo_number = web_client.get(f"/api/procedure-instances/{instance_id}").json()[
-        "work_order_number"
-    ]
+    """A consumption row names the work order and links its execution, and the
+    receipt row is the opening quantity (current + consumed), not today's
+    on-hand."""
+    item = _receive_stock(client, bulk_part["id"])
+    instance_id = _consume_via_execution(client, bulk_part, item["id"])
+    wo_number = client.get(f"/api/procedure-instances/{instance_id}").json()["work_order_number"]
     assert wo_number
 
-    page = web_client.get(f"/inventory/opal/{item['opal_number']}")
-    assert page.status_code == 200
-    body = page.text
+    body = _detail(client, item["opal_number"])
+    assert float(body["inventory"]["quantity"]) == 5
+    received, consumed = body["ledger"]
+    assert received["kind"] == "received" and float(received["delta"]) == 10
+    assert consumed["kind"] == "consumed" and float(consumed["delta"]) == -5
+    assert float(consumed["balance"]) == 5
+    assert consumed["execution"]["id"] == instance_id
+    assert consumed["execution"]["work_order_number"] == wo_number
 
-    assert "CONSUMED" in body
-    assert f'href="/executions/{instance_id}"' in body
-    assert wo_number in body
-    assert f"Execution #{instance_id}" not in body
+
+def test_detail_ledger_records_adjustments_and_counts(client: TestClient, bulk_part: dict) -> None:
+    item = _receive_stock(client, bulk_part["id"], quantity=20)
+    client.post(
+        f"/api/inventory/{item['id']}/adjust",
+        json={"adjustment": -3, "reason": "damage", "notes": "dropped"},
+    )
+    client.post(f"/api/inventory/{item['id']}/count", json={"counted_quantity": 18})
+
+    body = _detail(client, item["opal_number"])
+    kinds = [r["kind"] for r in body["ledger"]]
+    assert kinds == ["received", "scrapped", "counted"]
+    scrapped = body["ledger"][1]
+    assert scrapped["reason"] == "damage" and scrapped["notes"] == "dropped"
+    assert [float(r["balance"]) for r in body["ledger"]] == [20, 17, 18]
+    assert float(body["inventory"]["quantity"]) == 18
 
 
-def test_opal_page_tests_follow_empty_state_rule(web_client: TestClient, bulk_part: dict) -> None:
-    """No templates and no results: TESTS is absent. A declared template with
-    no results: one empty line, never a header over an empty box."""
-    item = _receive_stock(web_client, bulk_part["id"])
-    page = web_client.get(f"/inventory/opal/{item['opal_number']}")
-    assert "TESTS" not in page.text
-
-    web_client.post(
+def test_detail_tests_and_templates(client: TestClient, bulk_part: dict) -> None:
+    item = _receive_stock(client, bulk_part["id"])
+    client.post(
         f"/api/inventory/parts/{bulk_part['id']}/test-templates",
         json={"name": "Continuity", "test_type": "boolean", "required": True},
     )
-    declared = web_client.get(f"/inventory/opal/{item['opal_number']}").text
-    assert "TESTS" in declared
-    assert "empty-line" in declared
-    assert "1 REQUIRED" in declared
+    body = _detail(client, item["opal_number"])
+    assert [t["name"] for t in body["test_templates"]] == ["Continuity"]
+    assert body["test_templates"][0]["required"] is True
+    assert body["tests"] == []
 
-    resp = web_client.post(
+    resp = client.post(
         f"/api/inventory/{item['id']}/tests",
         json={"test_name": "Continuity", "result": "pass"},
     )
     assert resp.status_code == 201, resp.text
-    recorded = web_client.get(f"/inventory/opal/{item['opal_number']}").text
-    assert "Continuity" in recorded
-    assert "TESTED AT" in recorded
+    body = _detail(client, item["opal_number"])
+    assert body["tests"][0]["test_name"] == "Continuity"
+    assert body["tests"][0]["result"] == "pass"
+    assert body["tests"][0]["tested_by_name"]
+
+
+# ============ Stock list: search, filters, sort ============
+
+
+def test_list_search_matches_opal_part_lot_and_location(
+    client: TestClient, bulk_part: dict, serialized_part: dict
+) -> None:
+    a = _receive_stock(client, bulk_part["id"], location="RACK-ALPHA", lot_number="LOT-Q1")
+    b = _receive_stock(client, serialized_part["id"], quantity=1, location="RACK-BETA")
+
+    def search(term: str) -> set[str]:
+        resp = client.get("/api/inventory", params={"search": term})
+        assert resp.status_code == 200
+        return {i["opal_number"] for i in resp.json()["items"]}
+
+    assert search(a["opal_number"]) == {a["opal_number"]}
+    assert search("RACK-BETA") == {b["opal_number"]}
+    assert search("LOT-Q1") == {a["opal_number"]}
+    assert search("Fasteners M3") == {a["opal_number"]}
+    assert search(serialized_part["internal_pn"]) == {b["opal_number"]}
+    assert search("no-such-thing") == set()
+
+
+def test_list_has_stock_and_source_filters(client: TestClient, bulk_part: dict) -> None:
+    item = _receive_stock(client, bulk_part["id"], quantity=2)
+    client.post(f"/api/inventory/{item['id']}/count", json={"counted_quantity": 0})
+
+    params = {"part_id": bulk_part["id"]}
+    assert client.get("/api/inventory", params={**params, "has_stock": True}).json()["total"] == 0
+    assert client.get("/api/inventory", params={**params, "has_stock": False}).json()["total"] == 1
+    manual = client.get("/api/inventory", params={**params, "source_type": "manual"})
+    assert manual.json()["total"] == 1
+    purchase = client.get("/api/inventory", params={**params, "source_type": "purchase"})
+    assert purchase.json()["total"] == 0
+
+
+def test_list_sort(client: TestClient, bulk_part: dict) -> None:
+    _receive_stock(client, bulk_part["id"], quantity=3, location="SORT-B")
+    _receive_stock(client, bulk_part["id"], quantity=9, location="SORT-A")
+    _receive_stock(client, bulk_part["id"], quantity=6, location="SORT-C")
+
+    def quantities(**params) -> list[float]:
+        resp = client.get("/api/inventory", params={"part_id": bulk_part["id"], **params})
+        return [float(i["quantity"]) for i in resp.json()["items"]]
+
+    assert quantities(sort="quantity", order="asc") == [3, 6, 9]
+    assert quantities(sort="quantity", order="desc") == [9, 6, 3]
+    assert quantities(sort="location") == [9, 3, 6]
+    assert client.get("/api/inventory", params={"sort": "bogus"}).status_code == 400
+
+
+def test_list_low_stock_filters_to_parts_under_reorder_point(
+    client: TestClient, bulk_part: dict
+) -> None:
+    client.patch(f"/api/parts/{bulk_part['id']}", json={"reorder_point": 50})
+    low = _receive_stock(client, bulk_part["id"], quantity=5)
+
+    other = client.post(
+        "/api/parts", json={"name": "Plentiful", "tracking_type": "bulk", "reorder_point": 1}
+    ).json()
+    client.post(f"/api/parts/{other['id']}/activate", json={"cause": "test setup"})
+    _receive_stock(client, other["id"], quantity=100)
+
+    resp = client.get("/api/inventory", params={"low_stock": True})
+    assert {i["opal_number"] for i in resp.json()["items"]} == {low["opal_number"]}
+
+
+def test_stock_by_part_sums_records_and_flags_low_stock(
+    client: TestClient, bulk_part: dict
+) -> None:
+    client.patch(f"/api/parts/{bulk_part['id']}", json={"reorder_point": 100})
+    _receive_stock(client, bulk_part["id"], quantity=4, location="BP-ONE")
+    _receive_stock(client, bulk_part["id"], quantity=6, location="BP-TWO")
+
+    resp = client.get("/api/inventory/by-part", params={"search": bulk_part["internal_pn"]})
+    assert resp.status_code == 200
+    rows = resp.json()["items"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["part_id"] == bulk_part["id"]
+    assert float(row["quantity"]) == 10
+    assert row["record_count"] == 2
+    assert row["locations"] == ["BP-ONE", "BP-TWO"]
+    assert row["is_low_stock"] is True
+
+    narrowed = client.get("/api/inventory/by-part", params={"location": "BP-TWO"}).json()["items"]
+    assert float(narrowed[0]["quantity"]) == 6
+    # Low stock is judged on the part's whole on-hand, not the narrowed sum
+    assert narrowed[0]["is_low_stock"] is True
+
+    assert client.get("/api/inventory/by-part", params={"low_stock": True}).json()["total"] >= 1
+
+
+# ============ Receiving: tier rules ============
+
+
+def test_create_enforces_lot_for_lot_tracked_tier_when_asked(
+    client: TestClient, bulk_part: dict
+) -> None:
+    """Tier 1 requires a lot on bulk receipts (legacy level rules when no
+    tier semantics are configured) — the web form opts in."""
+    payload = {
+        "part_id": bulk_part["id"],
+        "quantity": 4,
+        "location": "TR-1",
+        "enforce_tier_rules": True,
+    }
+    resp = client.post("/api/inventory", json=payload)
+    assert resp.status_code == 422
+    assert "lot_number" in resp.json()["detail"]
+
+    ok = client.post("/api/inventory", json={**payload, "lot_number": "LOT-T1"})
+    assert ok.status_code == 201
+    assert ok.json()["items"][0]["lot_number"] == "LOT-T1"
+
+    # Without the flag the API behaves as before
+    plain = {k: v for k, v in payload.items() if k != "enforce_tier_rules"}
+    assert client.post("/api/inventory", json=plain).status_code == 201
+
+
+def test_create_auto_serial_issues_a_serial_per_unit(
+    client: TestClient, serialized_part: dict
+) -> None:
+    resp = client.post(
+        "/api/inventory",
+        json={
+            "part_id": serialized_part["id"],
+            "quantity": 3,
+            "location": "TR-2",
+            "enforce_tier_rules": True,
+        },
+    )
+    assert resp.status_code == 201
+    lots = [i["lot_number"] for i in resp.json()["items"]]
+    assert all(lots) and len(set(lots)) == 3
+
+    explicit = client.post(
+        "/api/inventory",
+        json={
+            "part_id": serialized_part["id"],
+            "quantity": 1,
+            "location": "TR-2",
+            "lot_number": "MY-SERIAL",
+            "enforce_tier_rules": True,
+        },
+    )
+    assert explicit.json()["items"][0]["lot_number"] == "MY-SERIAL"
+
+
+def test_create_rejects_non_positive_quantity(client: TestClient, bulk_part: dict) -> None:
+    resp = client.post(
+        "/api/inventory", json={"part_id": bulk_part["id"], "quantity": 0, "location": "Z"}
+    )
+    assert resp.status_code == 400
+
+
+# ============ Moves ============
+
+
+def test_partial_move_gives_the_moved_stock_its_own_opal_number(
+    client: TestClient, bulk_part: dict
+) -> None:
+    item = _receive_stock(client, bulk_part["id"], quantity=20, location="MV-FROM")
+    resp = client.post(
+        "/api/inventory/transfer",
+        json={"source_inventory_id": item["id"], "target_location": "MV-TO", "quantity": 8},
+    )
+    assert resp.status_code == 201, resp.text
+    moved = resp.json()
+    assert moved["source_opal_number"] == item["opal_number"]
+    assert moved["target_opal_number"] and moved["target_opal_number"] != item["opal_number"]
+
+    target = client.get(f"/api/inventory/opal/{moved['target_opal_number']}").json()
+    assert float(target["quantity"]) == 8
+    assert target["location"] == "MV-TO"
+    assert target["source_type"] == "transfer"
+
+    # Both halves trace the move
+    src = _detail(client, item["opal_number"])
+    assert [r["kind"] for r in src["ledger"]] == ["received", "moved_out"]
+    assert src["ledger"][-1]["counterpart_opal"] == moved["target_opal_number"]
+    dst = _detail(client, moved["target_opal_number"])
+    assert [r["kind"] for r in dst["ledger"]] == ["moved_in"]
+    assert float(dst["ledger"][0]["balance"]) == 8
+    assert dst["source"]["transferred_from_opal"] == item["opal_number"]
+
+
+def test_whole_move_relocates_the_record_and_keeps_its_opal_number(
+    client: TestClient, serialized_part: dict
+) -> None:
+    item = _receive_stock(client, serialized_part["id"], quantity=1, location="MV-A")
+    resp = client.post(
+        "/api/inventory/transfer",
+        json={"source_inventory_id": item["id"], "target_location": "MV-B", "quantity": 1},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["target_opal_number"] == item["opal_number"]
+    assert resp.json()["source_location"] == "MV-A"
+
+    moved = client.get(f"/api/inventory/opal/{item['opal_number']}").json()
+    assert moved["location"] == "MV-B"
+    assert float(moved["quantity"]) == 1
+    # No ghost zero-quantity record left behind
+    here = client.get("/api/inventory", params={"location": "MV-A"}).json()
+    assert here["total"] == 0
+
+    ledger = _detail(client, item["opal_number"])["ledger"]
+    assert [r["kind"] for r in ledger] == ["received", "moved"]
+    assert ledger[-1]["from_location"] == "MV-A" and ledger[-1]["to_location"] == "MV-B"
+    assert float(ledger[-1]["balance"]) == 1
+
+
+def test_move_merges_into_existing_stock_at_target(client: TestClient, bulk_part: dict) -> None:
+    a = _receive_stock(client, bulk_part["id"], quantity=10, location="MG-A", lot_number="L1")
+    b = _receive_stock(client, bulk_part["id"], quantity=5, location="MG-B", lot_number="L1")
+    resp = client.post(
+        "/api/inventory/transfer",
+        json={"source_inventory_id": a["id"], "target_location": "MG-B", "quantity": 10},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["target_opal_number"] == b["opal_number"]
+    assert float(client.get(f"/api/inventory/{b['id']}").json()["quantity"]) == 15
+    assert float(client.get(f"/api/inventory/{a['id']}").json()["quantity"]) == 0
+
+
+def test_serialized_unit_is_never_split(client: TestClient, serialized_part: dict) -> None:
+    item = _receive_stock(client, serialized_part["id"], quantity=1)
+    resp = client.post(
+        "/api/inventory/transfer",
+        json={"source_inventory_id": item["id"], "target_location": "NOPE", "quantity": 0.5},
+    )
+    assert resp.status_code == 400
+
+
+# ============ Auth ============
+
+
+def test_new_endpoints_require_authentication(client: TestClient) -> None:
+    client.cookies.clear()
+    for path in ("/api/inventory/by-part", "/api/inventory/opal/OPAL-00001/detail"):
+        assert client.get(path, headers={"Authorization": ""}).status_code == 401
