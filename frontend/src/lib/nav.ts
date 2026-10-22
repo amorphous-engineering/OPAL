@@ -10,6 +10,9 @@ export interface NavGroup {
 	items: NavItem[];
 }
 
+/** The group shown in the account menu rather than the toolbar. */
+export const ACCOUNT_GROUP = 'System';
+
 export const NAV: NavGroup[] = [
 	{
 		label: 'Inventory',

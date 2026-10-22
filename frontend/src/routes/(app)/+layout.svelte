@@ -1,6 +1,5 @@
 <script lang="ts">
-	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import AppSidebar from '#lib/components/shell/AppSidebar.svelte';
+	import TopNav from '#lib/components/shell/TopNav.svelte';
 	import GlobalKeys from '#lib/components/shell/GlobalKeys.svelte';
 	import CommandPalette from '#lib/components/shell/CommandPalette.svelte';
 	import NotificationBell from '#lib/components/shell/NotificationBell.svelte';
@@ -34,44 +33,40 @@
 	>Skip to content</a
 >
 
-<Sidebar.Provider style="--sidebar-width: 13rem">
-	<AppSidebar />
-	<!-- The vendored inset renders a <main>; the real one is below, so this one is not a landmark. -->
-	<Sidebar.Inset class="min-w-0" role="presentation">
-		{#if data.demoActive}
-			<div
-				role="status"
-				class="flex h-7 items-center gap-3 border-b border-warn/40 bg-warn-muted px-3 font-mono text-[11px] tracking-wider text-warn uppercase"
-			>
-				<span>Demo database active — changes are deleted on exit</span>
-				{#if data.user.is_admin}<a class="underline" href="/settings">Exit demo</a>{/if}
-			</div>
-		{/if}
-		<header
-			class="sticky top-0 z-30 flex h-11 items-center gap-2 border-b border-border bg-background px-3"
+<div class="flex min-h-svh min-w-0 flex-col">
+	{#if data.demoActive}
+		<div
+			role="status"
+			class="flex h-7 items-center gap-3 border-b border-warn/40 bg-warn-muted px-3 font-mono text-[11px] tracking-wider text-warn uppercase"
 		>
-			<Sidebar.Trigger class="-ml-1" />
-			<div class="mr-2 max-w-64 min-w-0 shrink"><VersionBadge /></div>
-			<button
-				type="button"
-				class="flex h-7 w-full max-w-sm min-w-0 items-center gap-2 border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"
-				aria-haspopup="dialog"
-				aria-keyshortcuts="Control+K Meta+K"
-				onclick={() => (paletteOpen = true)}
-			>
-				<span>Search</span>
-				<span class="ml-auto"><Kbd>⌘K</Kbd></span>
-			</button>
-			<div class="ml-auto flex shrink-0 items-center gap-2">
-				<NotificationBell />
-				<UserMenu />
-			</div>
-		</header>
-		<main id="main" tabindex="-1" class="min-w-0 flex-1 outline-none">
-			{@render children()}
-		</main>
-	</Sidebar.Inset>
-</Sidebar.Provider>
+			<span>Demo database active — changes are deleted on exit</span>
+			{#if data.user.is_admin}<a class="underline" href="/settings">Exit demo</a>{/if}
+		</div>
+	{/if}
+	<header
+		class="sticky top-0 z-30 flex h-11 items-center gap-2 border-b border-border bg-background px-3"
+	>
+		<div class="mr-1 max-w-56 min-w-0 shrink max-[560px]:hidden"><VersionBadge /></div>
+		<TopNav />
+		<button
+			type="button"
+			class="ml-auto flex h-7 max-w-xs min-w-8 flex-1 items-center gap-2 border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"
+			aria-haspopup="dialog"
+			aria-keyshortcuts="Control+K Meta+K"
+			onclick={() => (paletteOpen = true)}
+		>
+			<span class="truncate">Search</span>
+			<span class="ml-auto hidden sm:inline"><Kbd>⌘K</Kbd></span>
+		</button>
+		<div class="flex shrink-0 items-center gap-2">
+			<NotificationBell />
+			<UserMenu />
+		</div>
+	</header>
+	<main id="main" tabindex="-1" class="min-w-0 flex-1 outline-none">
+		{@render children()}
+	</main>
+</div>
 
 <CommandPalette bind:open={paletteOpen} />
 <GlobalKeys />
