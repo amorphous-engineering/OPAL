@@ -34,7 +34,7 @@
 
 	async function configure() {
 		// Project setup is its own page; the flag clears first so the wizard is not re-offered.
-		await finish('/settings/project');
+		await finish('/project/new');
 	}
 
 	async function loadDemo() {

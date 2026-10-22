@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Section, toast, toastError } from '#lib/components/opal/index.js';
+	import { Section, toast } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -35,7 +35,6 @@
 			onchanged();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Could not change the password';
-			toastError(err);
 		} finally {
 			busy = false;
 		}

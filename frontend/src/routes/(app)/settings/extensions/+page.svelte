@@ -69,7 +69,7 @@
 />
 
 <div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Installed" count={data.extensions.items.length}>
 			<DataTable
 				rows={data.extensions.items}
@@ -117,7 +117,7 @@
 		{/if}
 	</div>
 
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if isAdmin}
 			<Section title="Install">
 				<form class="grid gap-3 p-3" onsubmit={install}>

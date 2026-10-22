@@ -79,6 +79,8 @@ def cmd_serve(args: argparse.Namespace) -> None:
         sys.exit(1)
     host = args.host or settings.host
     port = args.port or settings.port
+    # Settings > System reports the address actually served, flags included.
+    settings.host, settings.port = host, port
 
     print(f"Starting OPAL server at http://{host}:{port}")
 
