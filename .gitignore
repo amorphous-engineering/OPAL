@@ -78,3 +78,6 @@ notes/
 
 # Built web client (frontend/ → pnpm build)
 src/opal/web_client/
+
+# Agent worktrees
+.claude/worktrees/
