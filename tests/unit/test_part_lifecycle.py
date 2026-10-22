@@ -343,116 +343,78 @@ def test_mcp_create_purchase_order_blocked_by_draft(db_session):
     assert draft.id in {p["id"] for p in data["draft_parts"]}
 
 
-# ---------------------------------------------------------------------------
-# Web rendering — catches missing templates (e.g. the activate panel partial)
-# that only a clean checkout would miss, not a worktree with stray files
-# ---------------------------------------------------------------------------
+# ============ Part page read model ============
 
 
-def test_draft_part_detail_page_renders_activate_confirm(web_client):
-    part = web_client.post("/api/parts", json={"name": "Web Draft", "tier": 1}).json()
-    page = web_client.get(f"/parts/{part['id']}")
-    assert page.status_code == 200
-    assert "ACTIVATE" in page.text
-    assert "part-tag-state-draft" in page.text
-    # The DB row id appears nowhere as a title; the PN is the page's name
-    assert f"PART #{part['id']}" not in page.text
-    # Voice rules: consequence sentences live only in confirm dialogs
-    # (activate confirm, delete confirm, tier-change confirm in the form JS)
-    assert "Locks PN and tier permanently." in page.text
-    assert page.text.count("permanently") <= 3
-    # Empty relevant sections are one line each, no panels, no narration;
-    # a make part (no external ref) has no SUPPLIERS or PO LINES sections
-    assert page.text.count('class="empty-line"') == 7
-    assert page.text.count('class="panel panel-ledger"') == 0
-    assert ">SUPPLIERS<" not in page.text
-    assert ">PO LINES<" not in page.text
-    assert "No BOM components" not in page.text
-    assert "nothing physical yet" not in page.text
-    # Nothing hides behind disclosure: the identity table is always visible
-    assert "part-identity" in page.text
-    assert "+ details" not in page.text
+def test_draft_part_detail_is_deletable_until_referenced(client):
+    part = _create_part(client, "Detail Draft")
+    detail = client.get(f"/api/parts/{part['id']}/detail").json()
+    assert detail["part"]["lifecycle_state"] == "draft"
+    assert detail["deletable"] is True
+    assert detail["references"] == {}
+    assert detail["activated_by"] is None
+
+    other = _create_part(client, "Detail Component")
+    client.post(f"/api/bom/assemblies/{part['id']}", json={"component_id": other["id"]})
+    detail = client.get(f"/api/parts/{part['id']}/detail").json()
+    assert detail["deletable"] is False
+    assert detail["references"] == {"bom_components": 1}
+    # The component sees the same edge from its side
+    used = client.get(f"/api/parts/{other['id']}/detail").json()
+    assert [row["assembly_internal_pn"] for row in used["where_used"]] == [part["internal_pn"]]
 
 
-def test_active_part_detail_page_renders_locked(web_client):
-    part = web_client.post("/api/parts", json={"name": "Web Active", "tier": 1}).json()
-    web_client.post(f"/api/parts/{part['id']}/activate", json={})
-    page = web_client.get(f"/parts/{part['id']}")
-    assert page.status_code == 200
-    # Locked things look calm: state flips, activation affordance is absent
-    assert "part-tag-state-active" in page.text
-    assert 'onclick="openActivateConfirm()"' not in page.text
-    # EDIT remains (meta fields stay editable); identity inputs are absent
-    # once active. /parts/{id}/edit deep-links to the page with the shared
-    # form overlay open — no intermediate menu.
-    assert ">EDIT<" in page.text
-    edit_page = web_client.get(f"/parts/{part['id']}/edit")
-    assert edit_page.status_code == 200
-    assert 'id="part-form-overlay"' in edit_page.text
-    assert "display: block" in edit_page.text
-    assert 'id="pf-pn"' not in edit_page.text
-    assert 'id="pf-uom"' in edit_page.text
+def test_active_part_detail_is_locked(client):
+    part = _create_part(client, "Detail Active")
+    _activate(client, part["id"], cause="released")
+    detail = client.get(f"/api/parts/{part['id']}/detail").json()
+    assert detail["part"]["lifecycle_state"] == "active"
+    assert detail["part"]["activation_cause"] == "released"
+    assert detail["deletable"] is False
+    assert detail["activated_by"]
 
 
-def test_parts_new_deep_link_opens_create_overlay(web_client):
-    page = web_client.get("/parts/new")
-    assert page.status_code == 200
-    # The parts list with the shared form overlay open — no intermediate page
-    assert 'id="parts-table-body"' in page.text or "PARTS" in page.text
-    assert 'id="part-form-overlay"' in page.text
-    assert "part-tag-forming" in page.text
-    assert "CREATE DRAFT" in page.text
+def test_part_history_records_activation(client):
+    part = _create_part(client, "History Part")
+    _activate(client, part["id"])
+    history = client.get(f"/api/parts/{part['id']}/history").json()
+    assert history["total"] == 2
+    newest = history["items"][0]
+    assert newest["action"] == "update"
+    fields = {c["field"]: c for c in newest["changes"]}
+    assert fields["lifecycle_state"]["old"] == "draft"
+    assert fields["lifecycle_state"]["new"] == "active"
+    assert "updated_at" not in fields
+    assert history["items"][-1]["action"] == "create"
 
 
-def test_parts_new_prefills_parent_from_context(web_client):
-    parent = web_client.post("/api/parts", json={"name": "Vehicle", "tier": 1}).json()
-    page = web_client.get(f"/parts/new?parent_id={parent['id']}")
-    assert page.status_code == 200
-    assert (
-        f'id="pf-parent"\n                                   value="{parent["id"]}"'
-        in page.text.replace("\r", "")
-        or f'value="{parent["id"]}"' in page.text
-    )
-    assert parent["internal_pn"] in page.text
+def test_detail_unknown_part_is_404(client):
+    assert client.get("/api/parts/999999/detail").status_code == 404
+    assert client.get("/api/parts/999999/history").status_code == 404
 
 
-def test_part_page_two_column_layout(web_client):
-    part = web_client.post("/api/parts", json={"name": "Layout Draft", "tier": 1}).json()
-    page = web_client.get(f"/parts/{part['id']}")
-    assert page.status_code == 200
-    assert 'class="part-layout"' in page.text
-    assert page.text.count('class="part-col"') == 2
-    # Order is fixed and global: DESIGN (REQUIREMENTS, TESTS) in the left
-    # column, then STOCK & USE (BOM first, CONSUMED last) in the right —
-    # in both lifecycle states. SUPPLIERS/PO LINES are absent on this make
-    # part (section relevance), so the order check covers what renders.
-    assert page.text.index(">DESIGN<") < page.text.index(">STOCK &amp; USE<")
-    second_col = page.text[page.text.index(">STOCK &amp; USE<") :]
-    assert (
-        page.text.index(">REQUIREMENTS<")
-        < page.text.index(">TESTS<")
-        < page.text.index(">STOCK &amp; USE<")
-    )
-    order = [">BOM<", ">STOCK<", ">WHERE USED<", ">PROCEDURE USE<", ">CONSUMED<"]
-    positions = [second_col.index(label) for label in order]
-    assert positions == sorted(positions)
-    web_client.post(f"/api/parts/{part['id']}/activate", json={})
-    page2 = web_client.get(f"/parts/{part['id']}")
-    assert page2.text.index(">BOM<") < page2.text.index(">STOCK<")
+def test_list_parts_sorting_and_filters(client):
+    a = _create_part(client, "Zeta Sort", procurement="buy")
+    b = _create_part(client, "Alpha Sort", is_tooling=True, calibration_interval_days=365)
+    _activate(client, a["id"])
+
+    by_name = client.get("/api/parts?search=Sort&sort_by=name&sort_order=asc").json()
+    assert [p["name"] for p in by_name["items"]] == ["Alpha Sort", "Zeta Sort"]
+
+    tooling = client.get("/api/parts?search=Sort&tooling=true").json()
+    assert [p["id"] for p in tooling["items"]] == [b["id"]]
+    not_tooling = client.get("/api/parts?search=Sort&tooling=false").json()
+    assert [p["id"] for p in not_tooling["items"]] == [a["id"]]
+
+    bought = client.get("/api/parts?search=Sort&procurement=buy").json()
+    assert [p["id"] for p in bought["items"]] == [a["id"]]
+    assert client.get("/api/parts?procurement=steal").status_code == 422
+    assert client.get("/api/parts?sort_by=bogus").status_code == 400
 
 
-def test_parts_list_columns(web_client):
-    part = web_client.post("/api/parts", json={"name": "List Row", "tier": 1}).json()
-    page = web_client.get("/parts")
-    assert "STATE" in page.text
-    # ID and TIER columns are gone from the table header (TIER remains in
-    # the filter dropdown and the create overlay)
-    header = page.text[page.text.index("<thead>") : page.text.index("</thead>")]
-    assert "ID" not in header and "TIER" not in header
-    assert "STATE" in header and "STOCK" in header
-    rows = web_client.get("/parts/table")
-    assert rows.status_code == 200
-    assert part["internal_pn"] in rows.text
-    # State is a column; database ids render nowhere in rows
-    assert "DRAFT" in rows.text
-    assert f">{part['id']}<" not in rows.text
+def test_part_schema_carries_taxonomy(client):
+    schema = client.get("/api/parts/schema").json()
+    assert schema["tiers"]
+    assert {"level", "name", "code", "default_tracking"} <= set(schema["tiers"][0])
+    assert isinstance(schema["categories"], list)
+    assert isinstance(schema["custom_fields"], list)

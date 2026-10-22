@@ -12,6 +12,9 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import func, or_, select
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams
+from opal.api.routes.bom import BOMLineResponse, get_bom_line_response
+from opal.api.routes.inventory import InventoryResponse, TestTemplateResponse, inventory_to_response
+from opal.api.routes.requirements import get_requirement_response
 from opal.config import get_active_project
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.numbering import (
@@ -30,7 +33,26 @@ from opal.core.part_lifecycle import (
     ensure_identity_mutable,
     reference_counts,
 )
-from opal.db.models import InventoryRecord, Part, Supplier, SupplierPart
+from opal.db.models import (
+    AuditLog,
+    BOMLine,
+    InventoryConsumption,
+    InventoryRecord,
+    Kit,
+    MasterProcedure,
+    OnshapeLink,
+    Part,
+    PartRequirement,
+    ProcedureOutput,
+    Purchase,
+    PurchaseLine,
+    Requirement,
+    StepKit,
+    Supplier,
+    SupplierPart,
+    TestTemplate,
+    User,
+)
 from opal.project import tier_semantics
 
 router = APIRouter()
@@ -124,27 +146,17 @@ class PartListResponse(BaseModel):
     total: int
 
 
-def get_part_with_quantity(db: DbSession, part: Part) -> PartResponse:
-    """Convert part to response with total quantity calculated."""
-    from opal.config import get_active_project
-
-    total_qty = (
-        db.query(func.coalesce(func.sum(InventoryRecord.quantity), 0))
-        .filter(InventoryRecord.part_id == part.id)
-        .scalar()
-    )
-
-    # Try to get tier name from project config
-    tier_name = None
+def _tier_name(level: int) -> str | None:
     project = get_active_project()
-    if project:
-        tier = project.get_tier(part.tier)
-        if tier:
-            tier_name = tier.name
+    tier = project.get_tier(level) if project else None
+    return tier.name if tier else None
 
-    total = total_qty or Decimal(0)
-    is_low = bool(part.reorder_point is not None and total < part.reorder_point)
 
+def _part_response(
+    part: Part, total: Decimal | None, tier_names: dict[int, str | None]
+) -> PartResponse:
+    """Build the response for a part given its on-hand total."""
+    total = total or Decimal(0)
     return PartResponse(
         id=part.id,
         internal_pn=part.internal_pn,
@@ -156,10 +168,10 @@ def get_part_with_quantity(db: DbSession, part: Part) -> PartResponse:
         tracking_type=part.tracking_type,
         procurement=part.procurement,
         tier=part.tier,
-        tier_name=tier_name,
+        tier_name=tier_names.get(part.tier),
         parent_id=part.parent_id,
         reorder_point=part.reorder_point,
-        is_low_stock=is_low,
+        is_low_stock=bool(part.reorder_point is not None and total < part.reorder_point),
         is_tooling=part.is_tooling,
         calibration_interval_days=part.calibration_interval_days,
         metadata=part.metadata_,
@@ -172,11 +184,38 @@ def get_part_with_quantity(db: DbSession, part: Part) -> PartResponse:
     )
 
 
+def get_part_with_quantity(db: DbSession, part: Part) -> PartResponse:
+    """Convert part to response with total quantity calculated."""
+    total_qty = (
+        db.query(func.coalesce(func.sum(InventoryRecord.quantity), 0))
+        .filter(InventoryRecord.part_id == part.id)
+        .scalar()
+    )
+    return _part_response(part, total_qty, {part.tier: _tier_name(part.tier)})
+
+
+# Columns the list can be ordered by (the "stock" key orders by on-hand total)
+_SORT_KEYS = {
+    "id",
+    "internal_pn",
+    "external_pn",
+    "name",
+    "category",
+    "tier",
+    "state",
+    "procurement",
+    "unit_of_measure",
+    "stock",
+    "created_at",
+    "updated_at",
+}
+
+
 @router.get("", response_model=PartListResponse)
 def list_parts(
     db: DbSession,
     pagination: PaginationParams,
-    search: str | None = Query(None, description="Search in name, external_pn, description"),
+    search: str | None = Query(None, description="Search in name, PNs, description"),
     category: str | None = Query(None, description="Filter by category"),
     tier: int | None = Query(
         None, description="Filter by tier level (as configured in the project)"
@@ -185,11 +224,41 @@ def list_parts(
     top_level: bool = Query(
         False, description="Only show parts with no parent (top-level assemblies)"
     ),
+    has_parent: bool | None = Query(
+        None, description="true: only sub-components; false: only top-level parts"
+    ),
     low_stock: bool = Query(False, description="Only show parts below reorder point"),
     state: str | None = Query(None, description="Filter by lifecycle state (draft/active)"),
+    procurement: Literal["make", "buy", "both"] | None = Query(
+        None, description="Filter by procurement declaration"
+    ),
+    tooling: bool | None = Query(None, description="true: only tooling; false: exclude tooling"),
+    sort_by: str = Query("id", description=f"One of: {', '.join(sorted(_SORT_KEYS))}"),
+    sort_order: Literal["asc", "desc"] = Query("desc"),
 ) -> PartListResponse:
-    """List all parts with optional filtering."""
-    query = db.query(Part).filter(Part.deleted_at.is_(None))
+    """List parts with filtering, sorting and pagination."""
+    if sort_by not in _SORT_KEYS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown sort key '{sort_by}' (expected one of {', '.join(sorted(_SORT_KEYS))})",
+        )
+
+    # On-hand total per part, aggregated once and outer-joined so the whole
+    # page comes from a single query
+    qty_subq = (
+        db.query(
+            InventoryRecord.part_id.label("part_id"),
+            func.sum(InventoryRecord.quantity).label("total_qty"),
+        )
+        .group_by(InventoryRecord.part_id)
+        .subquery()
+    )
+    total_qty = func.coalesce(qty_subq.c.total_qty, 0)
+    query = (
+        db.query(Part, total_qty.label("total_qty"))
+        .outerjoin(qty_subq, Part.id == qty_subq.c.part_id)
+        .filter(Part.deleted_at.is_(None))
+    )
 
     if state:
         if state not in PART_LIFECYCLE_STATES:
@@ -199,7 +268,6 @@ def list_parts(
             )
         query = query.filter(Part.lifecycle_state == state)
 
-    # Apply search filter
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -210,42 +278,54 @@ def list_parts(
                 Part.description.ilike(search_term),
             )
         )
-
-    # Apply category filter
     if category:
         query = query.filter(Part.category == category)
-
-    # Apply tier filter
     if tier is not None:
         query = query.filter(Part.tier == tier)
+    if procurement:
+        query = query.filter(Part.procurement == procurement)
+    if tooling is not None:
+        query = query.filter(Part.is_tooling == tooling)
 
-    # Apply parent filter
     if parent_id is not None:
         query = query.filter(Part.parent_id == parent_id)
+    elif has_parent is not None:
+        query = query.filter(Part.parent_id.isnot(None) if has_parent else Part.parent_id.is_(None))
     elif top_level:
         query = query.filter(Part.parent_id.is_(None))
 
     if low_stock:
-        # Filter to parts with reorder_point set, where stock < reorder_point
-        query = query.filter(Part.reorder_point.isnot(None))
-        # We need to compute stock in a subquery
-        stock_subq = (
-            db.query(
-                InventoryRecord.part_id,
-                func.coalesce(func.sum(InventoryRecord.quantity), 0).label("total_qty"),
-            )
-            .group_by(InventoryRecord.part_id)
-            .subquery()
-        )
-        query = query.outerjoin(stock_subq, Part.id == stock_subq.c.part_id).filter(
-            func.coalesce(stock_subq.c.total_qty, 0) < Part.reorder_point
-        )
+        query = query.filter(Part.reorder_point.isnot(None), total_qty < Part.reorder_point)
 
     total = query.count()
-    parts = query.order_by(Part.id.desc()).offset(pagination.skip).limit(pagination.limit).all()
 
+    sort_columns = {
+        "id": Part.id,
+        "internal_pn": Part.internal_pn,
+        "external_pn": Part.external_pn,
+        "name": func.lower(Part.name),
+        "category": Part.category,
+        "tier": Part.tier,
+        "state": Part.lifecycle_state,
+        "procurement": Part.procurement,
+        "unit_of_measure": Part.unit_of_measure,
+        "stock": total_qty,
+        "created_at": Part.created_at,
+        "updated_at": Part.updated_at,
+    }
+    column = sort_columns[sort_by]
+    ordering = column.asc() if sort_order == "asc" else column.desc()
+    rows = (
+        query.order_by(ordering, Part.id.desc())
+        .offset(pagination.skip)
+        .limit(pagination.limit)
+        .all()
+    )
+
+    project = get_active_project()
+    tier_names = {t.level: t.name for t in project.tiers} if project else {}
     return PartListResponse(
-        items=[get_part_with_quantity(db, p) for p in parts],
+        items=[_part_response(part, qty, tier_names) for part, qty in rows],
         total=total,
     )
 
@@ -482,6 +562,114 @@ def list_categories(db: DbSession) -> list[str]:
     return sorted([c[0] for c in categories if c[0]])
 
 
+class SchemaTier(BaseModel):
+    """A configured tier with the semantics that drive numbering and tracking."""
+
+    level: int
+    name: str
+    code: str
+    description: str = ""
+    default_tracking: str
+    require_lot: bool
+    auto_serial: bool
+
+
+class CustomFieldDef(BaseModel):
+    """A project-defined part field, stored under ``metadata[key]``."""
+
+    key: str
+    label: str
+    type: Literal["text", "number", "boolean", "select"] = "text"
+    options: list[str] = []
+    default: Any = None
+    required: bool = False
+
+
+class PartSchema(BaseModel):
+    """Everything a part form or filter needs from project configuration."""
+
+    tiers: list[SchemaTier]
+    categories: list[str]
+    custom_fields: list[CustomFieldDef]
+    numbering_format: str | None = None
+
+
+def _custom_field_defs(raw: dict[str, Any]) -> list[CustomFieldDef]:
+    """Normalise project ``custom_fields`` into definitions.
+
+    Accepts ``key: type``, ``key: [options]`` and ``key: {label, type, options,
+    default, required}`` so hand-written project configs stay valid.
+    """
+    defs: list[CustomFieldDef] = []
+    for key, spec in raw.items():
+        label = str(key).replace("_", " ").strip().title()
+        if isinstance(spec, dict):
+            kind = str(spec.get("type", "select" if spec.get("options") else "text"))
+            options = [str(o) for o in spec.get("options", [])]
+            defs.append(
+                CustomFieldDef(
+                    key=str(key),
+                    label=str(spec.get("label", label)),
+                    type=kind if kind in ("text", "number", "boolean", "select") else "text",
+                    options=options,
+                    default=spec.get("default"),
+                    required=bool(spec.get("required", False)),
+                )
+            )
+        elif isinstance(spec, list):
+            defs.append(
+                CustomFieldDef(
+                    key=str(key), label=label, type="select", options=[str(o) for o in spec]
+                )
+            )
+        else:
+            kind = str(spec) if spec else "text"
+            defs.append(
+                CustomFieldDef(
+                    key=str(key),
+                    label=label,
+                    type=kind if kind in ("text", "number", "boolean", "select") else "text",
+                )
+            )
+    return defs
+
+
+@router.get("/schema", response_model=PartSchema)
+def get_part_schema(db: DbSession) -> PartSchema:
+    """Tier/category taxonomy and custom fields from project configuration."""
+    project = get_active_project()
+    used = {
+        c
+        for (c,) in db.query(Part.category)
+        .filter(Part.deleted_at.is_(None), Part.category.isnot(None))
+        .distinct()
+        .all()
+        if c
+    }
+    categories = used | set(project.categories if project else [])
+    tiers = (
+        [SchemaTier(**t.model_dump()) for t in project.tiers]
+        if project
+        else [
+            SchemaTier(
+                level=level,
+                name=f"Tier {level}",
+                code=str(level),
+                default_tracking=tier_semantics(None, level).default_tracking,
+                require_lot=tier_semantics(None, level).require_lot,
+                auto_serial=tier_semantics(None, level).auto_serial,
+            )
+            for level in (1, 2, 3)
+        ]
+    )
+    return PartSchema(
+        tiers=tiers,
+        categories=sorted(categories, key=str.lower),
+        custom_fields=_custom_field_defs(project.custom_fields) if project else [],
+        numbering_format=project.part_numbering.format if project else None,
+    )
+
+
 @router.get("/{part_id}/qrcode")
 def get_part_qrcode(
     db: DbSession,
@@ -551,6 +739,22 @@ def update_part(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Parent part {part_in.parent_id} not found",
+            )
+        # The parent chain must not lead back to this part
+        ancestor: Part | None = parent
+        seen: set[int] = set()
+        while ancestor is not None and ancestor.id not in seen:
+            if ancestor.id == part_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{parent.internal_pn or parent.name} is inside "
+                    f"{part.internal_pn or part.name}; it cannot be its parent",
+                )
+            seen.add(ancestor.id)
+            ancestor = (
+                db.query(Part).filter(Part.id == ancestor.parent_id).first()
+                if ancestor.parent_id
+                else None
             )
 
     old_values = get_model_dict(part)
@@ -707,6 +911,8 @@ class ImportResult(BaseModel):
     created: int
     skipped: int
     errors: list[str]
+    first_pn: str | None = None
+    last_pn: str | None = None
 
 
 def _normalize_header(header: str) -> str | None:
@@ -773,17 +979,19 @@ async def import_preview(
         preview.external_pn = row_data.get("external_pn") or None
         preview.category = row_data.get("category") or None
         preview.unit_of_measure = row_data.get("unit_of_measure") or None
-        preview.tracking_type = row_data.get("tracking_type") or None
+        preview.tracking_type = (row_data.get("tracking_type") or "").lower() or None
         preview.procurement = (row_data.get("procurement") or "").lower() or None
         preview.description = row_data.get("description") or None
 
-        # Parse tier
+        # Parse tier (blank = the lowest configured tier)
         tier_str = row_data.get("tier", "").strip()
         if tier_str:
             try:
                 preview.tier = int(tier_str)
             except ValueError:
                 preview.errors.append(f"Invalid tier: '{tier_str}'")
+        else:
+            preview.tier = min(valid_tiers)
 
         # Parse reorder_point
         rp_str = row_data.get("reorder_point", "").strip()
@@ -801,7 +1009,7 @@ async def import_preview(
             levels = ", ".join(str(level) for level in sorted(valid_tiers))
             preview.errors.append(f"Tier must be one of {levels}, got {preview.tier}")
 
-        if preview.tracking_type and preview.tracking_type.lower() not in valid_tracking:
+        if preview.tracking_type and preview.tracking_type not in valid_tracking:
             preview.errors.append(
                 f"Tracking type must be 'bulk' or 'serialized', got '{preview.tracking_type}'"
             )
@@ -851,43 +1059,68 @@ def import_parts(
         p.name.lower() for p in db.query(Part.name).filter(Part.deleted_at.is_(None)).all()
     }
 
+    existing_external = {
+        row[0].lower()
+        for row in db.query(Part.external_pn)
+        .filter(Part.deleted_at.is_(None), Part.external_pn.isnot(None))
+        .all()
+    }
+
     created = 0
     skipped = 0
     errors: list[str] = []
+    first_pn: str | None = None
+    last_pn: str | None = None
 
     for i, part_in in enumerate(import_in.rows):
         # Skip duplicates if requested
-        if import_in.skip_duplicates and part_in.name.lower() in existing_names:
+        if import_in.skip_duplicates and (
+            part_in.name.lower() in existing_names
+            or (part_in.external_pn and part_in.external_pn.lower() in existing_external)
+        ):
             skipped += 1
             continue
 
+        # Each row is its own savepoint: a bad row never takes the batch down
         try:
-            internal_pn = next_part_number(db, part_in.tier)
-            part = Part(
-                name=part_in.name,
-                internal_pn=internal_pn,
-                external_pn=part_in.external_pn,
-                description=part_in.description,
-                category=part_in.category,
-                unit_of_measure=part_in.unit_of_measure or "EA",
-                tracking_type=part_in.tracking_type or "bulk",
-                procurement=part_in.procurement or ("buy" if part_in.external_pn else "make"),
-                tier=part_in.tier,
-                reorder_point=part_in.reorder_point,
-                is_tooling=part_in.is_tooling,
-                metadata_=part_in.metadata,
-            )
-            db.add(part)
-            db.flush()
-            log_create(db, part, user_id)
-            existing_names.add(part_in.name.lower())
-            created += 1
+            with db.begin_nested():
+                require_configured_tier(part_in.tier)
+                part = Part(
+                    name=part_in.name,
+                    internal_pn=next_part_number(db, part_in.tier),
+                    external_pn=part_in.external_pn,
+                    description=part_in.description,
+                    category=part_in.category,
+                    unit_of_measure=part_in.unit_of_measure,
+                    tracking_type=part_in.tracking_type or default_tracking_for_tier(part_in.tier),
+                    procurement=part_in.procurement or ("buy" if part_in.external_pn else "make"),
+                    tier=part_in.tier,
+                    reorder_point=part_in.reorder_point,
+                    is_tooling=part_in.is_tooling,
+                    calibration_interval_days=part_in.calibration_interval_days,
+                    metadata_=part_in.metadata,
+                )
+                db.add(part)
+                db.flush()
+                log_create(db, part, user_id)
+        except HTTPException as e:
+            errors.append(f"Row {i + 1}: {e.detail}")
+            continue
         except Exception as e:
-            errors.append(f"Row {i + 1}: {str(e)}")
+            errors.append(f"Row {i + 1}: {e}")
+            continue
+        existing_names.add(part_in.name.lower())
+        if part_in.external_pn:
+            existing_external.add(part_in.external_pn.lower())
+        created += 1
+        first_pn = first_pn or part.internal_pn
+        last_pn = part.internal_pn
 
     db.commit()
 
-    return ImportResult(created=created, skipped=skipped, errors=errors)
+    return ImportResult(
+        created=created, skipped=skipped, errors=errors, first_pn=first_pn, last_pn=last_pn
+    )
 
 
 # --- Supplier cross-reference view ---
@@ -948,3 +1181,436 @@ async def list_part_suppliers(
         )
         for sp in entries
     ]
+
+
+# ============ Part page ============
+
+
+class PartExpects(BaseModel):
+    """Which sections expect content, declared by the part's procurement.
+
+    The empty-state rule has one home: an empty section that is not expected
+    is absent; one that is expected renders as a single line. Sections with
+    rows render regardless, so the client never has to hide data.
+    """
+
+    bom: bool
+    suppliers: bool
+    po_lines: bool
+
+
+def section_expectations(procurement: str) -> PartExpects:
+    """BOM expects content on make|both; suppliers and PO lines on buy|both."""
+    return PartExpects(
+        bom=procurement in ("make", "both"),
+        suppliers=procurement in ("buy", "both"),
+        po_lines=procurement in ("buy", "both"),
+    )
+
+
+class PartRef(BaseModel):
+    """A part named by its number, for links."""
+
+    id: int
+    internal_pn: str | None
+    name: str
+
+
+class PoLineRow(BaseModel):
+    """A purchase line for this part."""
+
+    line_id: int
+    purchase_id: int
+    reference: str | None
+    supplier: str
+    status: str
+    qty_ordered: Decimal
+    qty_received: Decimal
+    unit_cost: Decimal | None
+    target_date: str | None
+
+
+class ProcedureUseRow(BaseModel):
+    """A procedure that kits, consumes, uses as tooling, or produces this part."""
+
+    procedure_id: int
+    procedure_name: str
+    procedure_status: str
+    role: Literal["kit", "consume", "tooling", "produces"]
+    step_number: str | None = None
+    quantity: Decimal
+
+
+class ConsumptionRow(BaseModel):
+    """One consumption of this part's stock."""
+
+    id: int
+    consumed_at: str
+    quantity: Decimal
+    opal_number: str | None
+    execution_id: int | None
+    work_order_number: str | None
+    notes: str | None
+
+
+class RequirementRow(BaseModel):
+    """A requirement allocated to this part."""
+
+    allocation_id: int
+    requirement_id: str
+    requirement_ref_id: int | None
+    title: str | None
+    lifecycle_state: str | None
+    tbd: bool = False
+    tbr: bool = False
+    stale: bool = False
+    status: str
+
+
+class OnshapeRef(BaseModel):
+    """Onshape link status for this part."""
+
+    document_id: str
+    name: str | None
+    part_number: str | None
+    last_synced_at: str | None
+    stale: bool
+
+
+class PartDetailResponse(BaseModel):
+    """Everything the part page shows, in one read."""
+
+    part: PartResponse
+    parent: PartRef | None
+    tier_code: str | None
+    activated_by: str | None
+    expects: PartExpects
+    references: dict[str, int]
+    deletable: bool
+    stock: list[InventoryResponse]
+    bom: list[BOMLineResponse]
+    where_used: list[BOMLineResponse]
+    suppliers: list[PartSupplierResponse]
+    po_lines: list[PoLineRow]
+    procedure_use: list[ProcedureUseRow]
+    consumption: list[ConsumptionRow]
+    consumption_truncated: bool
+    requirements: list[RequirementRow]
+    tests: list[TestTemplateResponse]
+    onshape: OnshapeRef | None
+
+
+_CONSUMPTION_LIMIT = 50
+_PO_LINE_LIMIT = 50
+
+
+def _active_part(db: DbSession, part_id: int) -> Part:
+    part = db.query(Part).filter(Part.id == part_id, Part.deleted_at.is_(None)).first()
+    if not part:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Part {part_id} not found",
+        )
+    return part
+
+
+def _enum_value(value: Any) -> str:
+    return value.value if hasattr(value, "value") else str(value)
+
+
+@router.get("/{part_id}/detail", response_model=PartDetailResponse)
+def get_part_detail(db: DbSession, part_id: int) -> PartDetailResponse:
+    """The part page's read model: the part plus every collection it shows."""
+    part = _active_part(db, part_id)
+    project = get_active_project()
+    tier = project.get_tier(part.tier) if project else None
+    parent = (
+        db.query(Part).filter(Part.id == part.parent_id, Part.deleted_at.is_(None)).first()
+        if part.parent_id
+        else None
+    )
+    activated_by = db.get(User, part.activated_by_id) if part.activated_by_id else None
+
+    stock = (
+        db.query(InventoryRecord)
+        .filter(InventoryRecord.part_id == part.id)
+        .order_by(InventoryRecord.location, InventoryRecord.opal_number)
+        .all()
+    )
+    bom = (
+        db.query(BOMLine)
+        .join(Part, BOMLine.component_id == Part.id)
+        .filter(BOMLine.assembly_id == part.id, Part.deleted_at.is_(None))
+        .order_by(BOMLine.id)
+        .all()
+    )
+    where_used = (
+        db.query(BOMLine)
+        .join(Part, BOMLine.assembly_id == Part.id)
+        .filter(BOMLine.component_id == part.id, Part.deleted_at.is_(None))
+        .order_by(BOMLine.id)
+        .all()
+    )
+    suppliers = (
+        db.query(SupplierPart)
+        .join(Supplier, SupplierPart.supplier_id == Supplier.id)
+        .filter(SupplierPart.part_id == part.id, Supplier.deleted_at.is_(None))
+        .order_by(SupplierPart.is_preferred.desc(), SupplierPart.id)
+        .all()
+    )
+
+    po_rows = (
+        db.query(PurchaseLine, Purchase)
+        .join(Purchase, PurchaseLine.purchase_id == Purchase.id)
+        .filter(PurchaseLine.part_id == part.id)
+        .order_by(Purchase.id.desc(), PurchaseLine.id)
+        .limit(_PO_LINE_LIMIT)
+        .all()
+    )
+    po_lines = [
+        PoLineRow(
+            line_id=line.id,
+            purchase_id=purchase.id,
+            reference=purchase.reference,
+            supplier=purchase.supplier,
+            status=_enum_value(purchase.status),
+            qty_ordered=line.qty_ordered,
+            qty_received=line.qty_received,
+            unit_cost=line.unit_cost,
+            target_date=purchase.target_date.isoformat() if purchase.target_date else None,
+        )
+        for line, purchase in po_rows
+    ]
+
+    procedure_use: list[ProcedureUseRow] = []
+    for kit, proc in (
+        db.query(Kit, MasterProcedure)
+        .join(MasterProcedure, Kit.procedure_id == MasterProcedure.id)
+        .filter(Kit.part_id == part.id, MasterProcedure.deleted_at.is_(None))
+        .order_by(MasterProcedure.name)
+        .all()
+    ):
+        procedure_use.append(
+            ProcedureUseRow(
+                procedure_id=proc.id,
+                procedure_name=proc.name,
+                procedure_status=_enum_value(proc.status),
+                role="kit",
+                quantity=kit.quantity_required,
+            )
+        )
+    for step_kit in db.query(StepKit).filter(StepKit.part_id == part.id).all():
+        proc = step_kit.step.procedure
+        if proc.deleted_at is not None:
+            continue
+        procedure_use.append(
+            ProcedureUseRow(
+                procedure_id=proc.id,
+                procedure_name=proc.name,
+                procedure_status=_enum_value(proc.status),
+                role="tooling" if _enum_value(step_kit.usage_type) == "tooling" else "consume",
+                step_number=step_kit.step.step_number,
+                quantity=step_kit.quantity_required,
+            )
+        )
+    for output, proc in (
+        db.query(ProcedureOutput, MasterProcedure)
+        .join(MasterProcedure, ProcedureOutput.procedure_id == MasterProcedure.id)
+        .filter(ProcedureOutput.part_id == part.id, MasterProcedure.deleted_at.is_(None))
+        .all()
+    ):
+        procedure_use.append(
+            ProcedureUseRow(
+                procedure_id=proc.id,
+                procedure_name=proc.name,
+                procedure_status=_enum_value(proc.status),
+                role="produces",
+                quantity=output.quantity_produced,
+            )
+        )
+
+    consumed = (
+        db.query(InventoryConsumption)
+        .join(InventoryRecord, InventoryConsumption.inventory_record_id == InventoryRecord.id)
+        .filter(InventoryRecord.part_id == part.id)
+        .order_by(InventoryConsumption.created_at.desc(), InventoryConsumption.id.desc())
+        .limit(_CONSUMPTION_LIMIT + 1)
+        .all()
+    )
+    consumption = [
+        ConsumptionRow(
+            id=c.id,
+            consumed_at=c.created_at.isoformat(),
+            quantity=c.quantity,
+            opal_number=c.inventory_record.opal_number,
+            execution_id=c.procedure_instance_id,
+            work_order_number=(
+                c.procedure_instance.work_order_number if c.procedure_instance else None
+            ),
+            notes=c.notes,
+        )
+        for c in consumed[:_CONSUMPTION_LIMIT]
+    ]
+
+    requirement_rows: list[RequirementRow] = []
+    for allocation in (
+        db.query(PartRequirement)
+        .filter(PartRequirement.part_id == part.id)
+        .order_by(PartRequirement.id)
+        .all()
+    ):
+        resolved = get_requirement_response(db, allocation)
+        req = (
+            db.get(Requirement, allocation.requirement_ref_id)
+            if allocation.requirement_ref_id
+            else None
+        )
+        requirement_rows.append(
+            RequirementRow(
+                allocation_id=allocation.id,
+                requirement_id=allocation.requirement_id,
+                requirement_ref_id=allocation.requirement_ref_id,
+                title=resolved.requirement_title,
+                lifecycle_state=req.lifecycle_state if req else None,
+                tbd=bool(req and req.tbd),
+                tbr=bool(req and req.tbr),
+                stale=bool(req and req.stale),
+                status=allocation.status,
+            )
+        )
+
+    tests = (
+        db.query(TestTemplate)
+        .filter(TestTemplate.part_id == part.id)
+        .order_by(TestTemplate.sort_order, TestTemplate.id)
+        .all()
+    )
+    link = db.query(OnshapeLink).filter(OnshapeLink.part_id == part.id).first()
+
+    refs = reference_counts(db, part)
+    return PartDetailResponse(
+        part=get_part_with_quantity(db, part),
+        parent=PartRef(id=parent.id, internal_pn=parent.internal_pn, name=parent.name)
+        if parent
+        else None,
+        tier_code=tier.code if tier else None,
+        activated_by=activated_by.name if activated_by else None,
+        expects=section_expectations(_enum_value(part.procurement)),
+        references=refs,
+        deletable=part.lifecycle_state == PART_DRAFT and not refs,
+        stock=[inventory_to_response(r) for r in stock],
+        bom=[get_bom_line_response(line) for line in bom],
+        where_used=[get_bom_line_response(line) for line in where_used],
+        suppliers=[
+            PartSupplierResponse(
+                id=sp.id,
+                supplier_id=sp.supplier_id,
+                supplier_name=sp.supplier.name,
+                part_id=sp.part_id,
+                part_name=part.name,
+                vendor_pn=sp.vendor_pn,
+                is_preferred=sp.is_preferred,
+                notes=sp.notes,
+                created_at=sp.created_at.strftime("%Y-%m-%dT%H:%M:%S") + "Z",
+            )
+            for sp in suppliers
+        ],
+        po_lines=po_lines,
+        procedure_use=procedure_use,
+        consumption=consumption,
+        consumption_truncated=len(consumed) > _CONSUMPTION_LIMIT,
+        requirements=requirement_rows,
+        tests=[
+            TestTemplateResponse(
+                id=t.id,
+                part_id=t.part_id,
+                name=t.name,
+                description=t.description,
+                required=t.required,
+                test_type=t.test_type,
+                min_value=t.min_value,
+                max_value=t.max_value,
+                unit=t.unit,
+                sort_order=t.sort_order,
+                created_at=t.created_at.isoformat(),
+            )
+            for t in tests
+        ],
+        onshape=OnshapeRef(
+            document_id=link.document_id,
+            name=link.onshape_name,
+            part_number=link.onshape_part_number,
+            last_synced_at=link.last_synced_at.isoformat() if link.last_synced_at else None,
+            stale=link.stale,
+        )
+        if link
+        else None,
+    )
+
+
+class HistoryChange(BaseModel):
+    """One field's before/after in an audit entry."""
+
+    field: str
+    old: Any = None
+    new: Any = None
+
+
+class HistoryEntry(BaseModel):
+    """One audit entry on the part."""
+
+    timestamp: str
+    action: str
+    user_name: str | None
+    changes: list[HistoryChange]
+
+
+class PartHistory(BaseModel):
+    """Newest-first audit excerpt for a part."""
+
+    items: list[HistoryEntry]
+    total: int
+
+
+# Bookkeeping columns that change on every write and say nothing
+_HISTORY_SKIP = {"updated_at", "created_at", "id"}
+
+
+@router.get("/{part_id}/history", response_model=PartHistory)
+def get_part_history(
+    db: DbSession,
+    part_id: int,
+    limit: int = Query(15, ge=1, le=200),
+) -> PartHistory:
+    """The part's audit trail, newest first."""
+    _active_part(db, part_id)
+    query = db.query(AuditLog).filter(AuditLog.table_name == "part", AuditLog.record_id == part_id)
+    total = query.count()
+    entries = query.order_by(AuditLog.timestamp.desc(), AuditLog.id.desc()).limit(limit).all()
+
+    user_ids = {e.user_id for e in entries if e.user_id}
+    names = (
+        {u.id: u.name for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+        if user_ids
+        else {}
+    )
+    items: list[HistoryEntry] = []
+    for e in entries:
+        action = _enum_value(e.action)
+        changes: list[HistoryChange] = []
+        if action == "update" and e.new_values:
+            old = e.old_values or {}
+            changes = [
+                HistoryChange(field=k, old=old.get(k), new=v)
+                for k, v in e.new_values.items()
+                if k not in _HISTORY_SKIP
+            ]
+        items.append(
+            HistoryEntry(
+                timestamp=e.timestamp.isoformat(),
+                action=action,
+                user_name=names.get(e.user_id) if e.user_id else None,
+                changes=changes,
+            )
+        )
+    return PartHistory(items=items, total=total)

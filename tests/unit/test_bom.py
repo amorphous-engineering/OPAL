@@ -215,3 +215,54 @@ def test_delete_bom_line(
     # Verify it's gone
     bom = client.get(f"/api/bom/assemblies/{assembly_part['id']}").json()
     assert len(bom) == 0
+
+
+# ---- Page-facing behaviour ----
+
+
+def test_bom_line_response_names_parts_by_number(client, assembly_part, component_a):
+    resp = client.post(
+        f"/api/bom/assemblies/{assembly_part['id']}", json={"component_id": component_a["id"]}
+    )
+    line = resp.json()
+    assert line["component_internal_pn"] == component_a["internal_pn"]
+    assert line["assembly_internal_pn"] == assembly_part["internal_pn"]
+    assert line["component_state"] == "draft"
+
+
+def test_patch_bom_line_null_clears_refdes_and_notes(client, assembly_part, component_a):
+    line = client.post(
+        f"/api/bom/assemblies/{assembly_part['id']}",
+        json={"component_id": component_a["id"], "reference_designator": "R1", "notes": "n"},
+    ).json()
+
+    # Omitted fields stay
+    kept = client.patch(f"/api/bom/{line['id']}", json={"quantity": 3}).json()
+    assert (kept["reference_designator"], kept["notes"], kept["quantity"]) == ("R1", "n", 3)
+
+    cleared = client.patch(
+        f"/api/bom/{line['id']}", json={"reference_designator": None, "notes": None}
+    ).json()
+    assert cleared["reference_designator"] is None
+    assert cleared["notes"] is None
+    assert cleared["quantity"] == 3
+
+
+def test_add_component_rejects_loop(client, assembly_part, component_a, component_b):
+    base = "/api/bom/assemblies"
+    one = client.post(f"{base}/{assembly_part['id']}", json={"component_id": component_a["id"]})
+    assert one.status_code == 201
+    two = client.post(f"{base}/{component_a['id']}", json={"component_id": component_b["id"]})
+    assert two.status_code == 201
+    # B -> A would close the loop A -> B -> A through the structure
+    loop = client.post(f"{base}/{component_b['id']}", json={"component_id": assembly_part["id"]})
+    assert loop.status_code == 400
+    assert "loop" in loop.json()["detail"]
+
+
+def test_add_component_rejects_zero_quantity(client, assembly_part, component_a):
+    resp = client.post(
+        f"/api/bom/assemblies/{assembly_part['id']}",
+        json={"component_id": component_a["id"], "quantity": 0},
+    )
+    assert resp.status_code == 400

@@ -38,35 +38,34 @@ def test_patch_procurement(web_client):
     assert bad.status_code == 422
 
 
-def test_buy_part_page_has_no_bom_but_one_line_suppliers(web_client):
+def _detail(client, part: dict) -> dict:
+    resp = client.get(f"/api/parts/{part['id']}/detail")
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test_buy_part_expects_suppliers_not_bom(web_client):
     """Exit criterion 6: the lock washer."""
     part = _create(web_client, name="Lock Washer", external_pn="91255A101")
-    page = web_client.get(f"/parts/{part['id']}")
-    assert page.status_code == 200
-    assert ">BOM<" not in page.text
-    assert ">SUPPLIERS<" in page.text
-    assert ">PO LINES<" in page.text
-    # One line with the add affordance, never a header bar over a box
-    suppliers_line = page.text[
-        page.text.index(">SUPPLIERS<") - 200 : page.text.index(">SUPPLIERS<") + 300
-    ]
-    assert "empty-line" in suppliers_line
-    assert "+ ADD" in suppliers_line
-    assert page.text.count('class="panel panel-ledger"') == 0
+    detail = _detail(web_client, part)
+    assert detail["expects"] == {"bom": False, "suppliers": True, "po_lines": True}
+    assert detail["bom"] == []
+    assert detail["suppliers"] == []
 
 
-def test_make_part_page_has_no_supplier_sections(web_client):
+def test_make_part_expects_bom_not_suppliers(web_client):
     """Exit criterion 7: the engine assembly."""
     part = _create(web_client, name="Engine Assembly")
-    page = web_client.get(f"/parts/{part['id']}")
-    assert page.status_code == 200
-    assert ">BOM<" in page.text
-    assert ">SUPPLIERS<" not in page.text
-    assert ">PO LINES<" not in page.text
+    detail = _detail(web_client, part)
+    assert detail["expects"] == {"bom": True, "suppliers": False, "po_lines": False}
 
 
 def test_data_wins_bom_on_buy_part(web_client):
-    """Exit criterion 8: a BOM edge forced onto a buy part renders."""
+    """Exit criterion 8: a BOM edge forced onto a buy part is still returned.
+
+    Expectation is declared intent only; the client renders any collection
+    that has rows regardless of ``expects``.
+    """
     washer = _create(web_client, name="Washer Kit", external_pn="91255A102")
     component = _create(web_client, name="Split Washer", external_pn="91255A103")
     resp = web_client.post(
@@ -75,27 +74,23 @@ def test_data_wins_bom_on_buy_part(web_client):
     )
     assert resp.status_code in (200, 201), resp.text
 
-    page = web_client.get(f"/parts/{washer['id']}")
-    assert ">BOM<" in page.text
-    # Populated: the section is a panel with a headed table, not a line
-    bom_region = page.text[page.text.index(">BOM<") - 300 : page.text.index(">BOM<") + 200]
-    assert "panel-ledger" in bom_region
-    assert page.text.count("Split Washer") >= 1
+    detail = _detail(web_client, washer)
+    assert detail["expects"]["bom"] is False
+    assert [(line["component_name"], line["quantity"]) for line in detail["bom"]] == [
+        ("Split Washer", 4)
+    ]
+    assert detail["bom"][0]["component_internal_pn"] == component["internal_pn"]
 
 
-def test_every_empty_section_is_exactly_one_line(web_client):
-    """Exit criterion 9: empty sections are one line each, on any part."""
-    make_part = _create(web_client, name="Bare Make Part")
-    page = web_client.get(f"/parts/{make_part['id']}")
-    # make: BOM, STOCK, WHERE USED, PROCEDURE USE, CONSUMED, REQUIREMENTS, TESTS
-    assert page.text.count('class="empty-line"') == 7
-
-    buy_part = _create(web_client, name="Bare Buy Part", external_pn="MC-1")
-    page2 = web_client.get(f"/parts/{buy_part['id']}")
-    # buy: SUPPLIERS, PO LINES, STOCK, WHERE USED, PROCEDURE USE, REQUIREMENTS,
-    # TESTS, CONSUMED — BOM absent
-    assert page2.text.count('class="empty-line"') == 8
-    assert page2.text.count('class="panel panel-ledger"') == 0
+def test_expectation_follows_procurement_edits(web_client):
+    part = _create(web_client, name="Flip Part")
+    assert _detail(web_client, part)["expects"]["suppliers"] is False
+    web_client.patch(f"/api/parts/{part['id']}", json={"procurement": "buy"})
+    assert _detail(web_client, part)["expects"] == {
+        "bom": False,
+        "suppliers": True,
+        "po_lines": True,
+    }
 
 
 def test_import_honors_explicit_procurement(web_client):
@@ -121,9 +116,10 @@ def test_import_honors_explicit_procurement(web_client):
     assert by_name["Imported Heuristic"] == "buy"
 
 
-def test_both_renders_all_relevant_sections(web_client):
+def test_both_expects_every_section(web_client):
     part = _create(web_client, name="Make And Buy", procurement="both")
-    page = web_client.get(f"/parts/{part['id']}")
-    assert ">BOM<" in page.text
-    assert ">SUPPLIERS<" in page.text
-    assert ">PO LINES<" in page.text
+    assert _detail(web_client, part)["expects"] == {
+        "bom": True,
+        "suppliers": True,
+        "po_lines": True,
+    }
