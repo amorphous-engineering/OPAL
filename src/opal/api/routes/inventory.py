@@ -39,11 +39,11 @@ class InventoryCreate(BaseModel):
     location: str
     lot_number: str | None = None
     expiration_date: date | None = None
-    # Apply the part tier's receiving rules (lot required for lot-tracked bulk
-    # parts, generated serials for serial-issuing tiers) exactly as purchase
-    # receiving does. Opt-in so existing API clients keep their behaviour;
-    # the web form always sends it.
-    enforce_tier_rules: bool = False
+    # The part tier's receiving rules (lot required for lot-tracked bulk
+    # parts, generated serials for serial-issuing tiers) apply exactly as in
+    # purchase receiving. On by default so no client can create untraceable
+    # stock by omission; send false to bypass deliberately (e.g. data migration).
+    enforce_tier_rules: bool = True
 
 
 class InventoryUpdate(BaseModel):

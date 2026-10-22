@@ -181,7 +181,8 @@ def test_kit_row_label_reads_api_field_names(client) -> None:
 
     api = _tui_client(client)
     part = client.post(
-        "/api/parts", json={"name": "TUI Kit Part", "tracking_type": "bulk", "category": "Misc"}
+        "/api/parts",
+        json={"name": "TUI Kit Part", "tracking_type": "bulk", "category": "Misc", "tier": 3},
     ).json()
     client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
     inv = client.post(

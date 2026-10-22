@@ -11,7 +11,7 @@ def bulk_part(client: TestClient) -> dict:
     """Create a BULK-tracked part."""
     resp = client.post(
         "/api/parts",
-        json={"name": "Fasteners M3", "tracking_type": "bulk", "category": "Fasteners"},
+        json={"name": "Fasteners M3", "tracking_type": "bulk", "category": "Fasteners", "tier": 3},
     )
     assert resp.status_code == 201
     part = resp.json()
@@ -24,7 +24,12 @@ def serialized_part(client: TestClient) -> dict:
     """Create a SERIALIZED-tracked part (default)."""
     resp = client.post(
         "/api/parts",
-        json={"name": "PCB Rev C", "tracking_type": "serialized", "category": "Electronics"},
+        json={
+            "name": "PCB Rev C",
+            "tracking_type": "serialized",
+            "category": "Electronics",
+            "tier": 3,
+        },
     )
     assert resp.status_code == 201
     part = resp.json()
@@ -42,6 +47,7 @@ def tooling_part(client: TestClient) -> dict:
             "is_tooling": True,
             "calibration_interval_days": 365,
             "category": "Tooling",
+            "tier": 3,
         },
     )
     assert resp.status_code == 201
@@ -799,7 +805,8 @@ def test_list_low_stock_filters_to_parts_under_reorder_point(
     low = _receive_stock(client, bulk_part["id"], quantity=5)
 
     other = client.post(
-        "/api/parts", json={"name": "Plentiful", "tracking_type": "bulk", "reorder_point": 1}
+        "/api/parts",
+        json={"name": "Plentiful", "tracking_type": "bulk", "reorder_point": 1, "tier": 3},
     ).json()
     client.post(f"/api/parts/{other['id']}/activate", json={"cause": "test setup"})
     _receive_stock(client, other["id"], quantity=100)
@@ -837,17 +844,13 @@ def test_stock_by_part_sums_records_and_flags_low_stock(
 # ============ Receiving: tier rules ============
 
 
-def test_create_enforces_lot_for_lot_tracked_tier_when_asked(
-    client: TestClient, bulk_part: dict
-) -> None:
-    """Tier 1 requires a lot on bulk receipts (legacy level rules when no
-    tier semantics are configured) — the web form opts in."""
-    payload = {
-        "part_id": bulk_part["id"],
-        "quantity": 4,
-        "location": "TR-1",
-        "enforce_tier_rules": True,
-    }
+def test_create_enforces_tier_lot_rule_by_default(client: TestClient, bulk_part: dict) -> None:
+    """Tier 1 requires a lot on bulk receipts; manual stock obeys the same rule as a PO."""
+    t1 = client.post(
+        "/api/parts", json={"name": "Lot Tracked", "tier": 1, "tracking_type": "bulk"}
+    ).json()
+    client.post(f"/api/parts/{t1['id']}/activate", json={"cause": "test setup"})
+    payload = {"part_id": t1["id"], "quantity": 4, "location": "TR-1"}
     resp = client.post("/api/inventory", json=payload)
     assert resp.status_code == 422
     assert "lot_number" in resp.json()["detail"]
@@ -856,22 +859,26 @@ def test_create_enforces_lot_for_lot_tracked_tier_when_asked(
     assert ok.status_code == 201
     assert ok.json()["items"][0]["lot_number"] == "LOT-T1"
 
-    # Without the flag the API behaves as before
-    plain = {k: v for k, v in payload.items() if k != "enforce_tier_rules"}
-    assert client.post("/api/inventory", json=plain).status_code == 201
+    # Bypass is deliberate and explicit
+    bypass = client.post("/api/inventory", json={**payload, "enforce_tier_rules": False})
+    assert bypass.status_code == 201
+
+    # A tier without the rule needs no lot
+    assert (
+        client.post(
+            "/api/inventory", json={"part_id": bulk_part["id"], "quantity": 4, "location": "TR-1"}
+        ).status_code
+        == 201
+    )
 
 
-def test_create_auto_serial_issues_a_serial_per_unit(
-    client: TestClient, serialized_part: dict
-) -> None:
+def test_create_auto_serial_issues_a_serial_per_unit(client: TestClient) -> None:
+    t1 = client.post(
+        "/api/parts", json={"name": "Serial Issuing", "tier": 1, "tracking_type": "serialized"}
+    ).json()
+    client.post(f"/api/parts/{t1['id']}/activate", json={"cause": "test setup"})
     resp = client.post(
-        "/api/inventory",
-        json={
-            "part_id": serialized_part["id"],
-            "quantity": 3,
-            "location": "TR-2",
-            "enforce_tier_rules": True,
-        },
+        "/api/inventory", json={"part_id": t1["id"], "quantity": 3, "location": "TR-2"}
     )
     assert resp.status_code == 201
     lots = [i["lot_number"] for i in resp.json()["items"]]
@@ -879,13 +886,7 @@ def test_create_auto_serial_issues_a_serial_per_unit(
 
     explicit = client.post(
         "/api/inventory",
-        json={
-            "part_id": serialized_part["id"],
-            "quantity": 1,
-            "location": "TR-2",
-            "lot_number": "MY-SERIAL",
-            "enforce_tier_rules": True,
-        },
+        json={"part_id": t1["id"], "quantity": 1, "location": "TR-2", "lot_number": "MY-SERIAL"},
     )
     assert explicit.json()["items"][0]["lot_number"] == "MY-SERIAL"
 

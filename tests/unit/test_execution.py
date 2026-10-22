@@ -40,7 +40,12 @@ def _create_procedure_with_kit(client, auth_headers):
     # Create kit part
     part_resp = client.post(
         "/api/parts",
-        json={"name": "Kit Resistor", "tracking_type": "bulk", "category": "Electronics"},
+        json={
+            "name": "Kit Resistor",
+            "tracking_type": "bulk",
+            "category": "Electronics",
+            "tier": 3,
+        },
     )
     kit_part_id = part_resp.json()["id"]
     client.post(f"/api/parts/{kit_part_id}/activate", json={"cause": "test setup"})

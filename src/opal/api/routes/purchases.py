@@ -103,6 +103,9 @@ class ReceiveLine(BaseModel):
     qty_received: Decimal
     location: str | None = None
     lot_number: str | None = None
+    # Receiving more than is outstanding is refused unless the caller says the
+    # supplier really shipped over (the receive form asks the user to confirm).
+    allow_over_receipt: bool = False
 
 
 class PurchaseExpenseResponse(BaseModel):
@@ -801,6 +804,15 @@ def receive_purchase(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Received quantity must be positive",
+            )
+        outstanding = line.qty_ordered - line.qty_received
+        if recv.qty_received > outstanding and not recv.allow_over_receipt:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"{line.part.name}: receiving {float(recv.qty_received):g} exceeds the "
+                    f"{float(max(outstanding, 0)):g} outstanding; confirm the over-receipt to proceed"
+                ),
             )
         location = (recv.location or "").strip() or line.destination or purchase.destination
         if not location:

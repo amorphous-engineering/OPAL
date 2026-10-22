@@ -199,8 +199,12 @@ def test_list_parts_paginates_and_reports_total(client):
 
 
 def test_list_parts_sorts_by_stock_and_filters_low_stock(client):
-    low = client.post("/api/parts", json={"name": "Stock Low", "reorder_point": 10}).json()
-    full = client.post("/api/parts", json={"name": "Stock Full", "reorder_point": 1}).json()
+    low = client.post(
+        "/api/parts", json={"name": "Stock Low", "tier": 3, "reorder_point": 10}
+    ).json()
+    full = client.post(
+        "/api/parts", json={"name": "Stock Full", "tier": 3, "reorder_point": 1}
+    ).json()
     client.post(f"/api/parts/{low['id']}/activate", json={})
     client.post(f"/api/parts/{full['id']}/activate", json={})
     for part, qty in ((low, 2), (full, 50)):

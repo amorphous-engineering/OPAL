@@ -243,7 +243,8 @@ def test_overview_requires_auth(app):
 
 def _active_part(client: TestClient, name: str, stock: float | None = None) -> dict:
     part = client.post(
-        "/api/parts", json={"name": name, "tracking_type": "bulk", "category": "Electronics"}
+        "/api/parts",
+        json={"name": name, "tracking_type": "bulk", "category": "Electronics", "tier": 3},
     ).json()
     client.post(f"/api/parts/{part['id']}/activate", json={"cause": "test setup"})
     if stock:
