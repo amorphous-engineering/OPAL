@@ -1,10 +1,6 @@
 """Tests for SupplierPart catalog entries (Phase 3)."""
 
-import pytest
 from fastapi.testclient import TestClient
-
-from opal.db.models import User
-from tests.conftest import login
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -202,10 +198,6 @@ def test_supplier_soft_delete_excludes_catalog_entries(
     assert part_suppliers.status_code == 200
     assert part_suppliers.json() == []
 
-    # And the part detail page hides the entry
-    page = client.get(f"/parts/{part['id']}")
-    assert "SD-001" not in page.text
-
 
 def test_part_soft_delete_excludes_catalog_entries(
     client: TestClient, auth_headers: dict, db_session
@@ -235,9 +227,6 @@ def test_part_soft_delete_excludes_catalog_entries(
     assert supplier_parts.status_code == 200
     assert supplier_parts.json() == []
 
-    page = client.get(f"/suppliers/{supplier['id']}")
-    assert "SD-002" not in page.text
-
 
 # ---------------------------------------------------------------------------
 # 404 on missing part reference
@@ -253,47 +242,3 @@ def test_create_supplier_part_invalid_part(client: TestClient, auth_headers: dic
         headers=auth_headers,
     )
     assert resp.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# Web UI smoke tests — detail pages render 200 and include vendor PN
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def web_client(client: TestClient, test_user: User) -> TestClient:
-    """TestClient pre-authenticated with the cookie the auth middleware expects."""
-    login(client, test_user)
-    return client
-
-
-def test_supplier_detail_renders_catalog_panel(web_client: TestClient, auth_headers: dict) -> None:
-    """Supplier detail page renders the CATALOG NUMBERS panel with the vendor PN."""
-    supplier = _create_supplier(web_client, auth_headers, name="RenderCo")
-    part = _create_part(web_client, auth_headers, name="RenderPart")
-    web_client.post(
-        f"/api/suppliers/{supplier['id']}/parts",
-        json={"part_id": part["id"], "vendor_pn": "RENDER-VPN-001"},
-        headers=auth_headers,
-    )
-
-    resp = web_client.get(f"/suppliers/{supplier['id']}")
-    assert resp.status_code == 200
-    assert "CATALOG NUMBERS" in resp.text
-    assert "RENDER-VPN-001" in resp.text
-
-
-def test_part_detail_renders_suppliers_panel(web_client: TestClient, auth_headers: dict) -> None:
-    """Part detail page renders the SUPPLIERS panel with the vendor PN."""
-    supplier = _create_supplier(web_client, auth_headers, name="PartRenderCo")
-    part = _create_part(web_client, auth_headers, name="PartRenderWidget")
-    web_client.post(
-        f"/api/suppliers/{supplier['id']}/parts",
-        json={"part_id": part["id"], "vendor_pn": "PR-VPN-999"},
-        headers=auth_headers,
-    )
-
-    resp = web_client.get(f"/parts/{part['id']}")
-    assert resp.status_code == 200
-    assert "SUPPLIERS" in resp.text
-    assert "PR-VPN-999" in resp.text

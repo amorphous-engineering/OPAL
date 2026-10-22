@@ -1,6 +1,8 @@
 """Supplier API routes."""
 
 from datetime import UTC, datetime
+from decimal import Decimal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
@@ -9,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
-from opal.db.models import Part, Supplier, SupplierPart
+from opal.db.models import Part, Purchase, PurchaseLine, Supplier, SupplierPart
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
@@ -25,8 +27,8 @@ def _validate_website(value: str | None) -> str | None:
     value = value.strip()
     if not value:
         return None
-    scheme = value.split(":", 1)[0].lower() if ":" in value else ""
-    if scheme not in ("http", "https"):
+    parsed = urlparse(value)
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
         raise ValueError("website must be an http:// or https:// URL")
     return value
 
@@ -77,6 +79,9 @@ class SupplierResponse(BaseModel):
     notes: str | None
     is_active: bool
     purchase_count: int = 0
+    part_count: int = 0
+    created_at: str | None = None
+    updated_at: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -115,17 +120,35 @@ class SupplierPartResponse(BaseModel):
     supplier_name: str
     part_id: int
     part_name: str
+    part_internal_pn: str | None = None
     vendor_pn: str
     is_preferred: bool
     notes: str | None
     created_at: str
+    # Derived from this supplier's most recent PO line for the part
+    last_unit_cost: Decimal | None = None
+    last_ordered_at: str | None = None
 
     model_config = {"from_attributes": True}
 
 
-def _supplier_part_response(sp: SupplierPart) -> SupplierPartResponse:
+def _supplier_part_response(db: DbSession, sp: SupplierPart) -> SupplierPartResponse:
     """Build a SupplierPartResponse from a SupplierPart ORM object."""
+    last = db.execute(
+        select(PurchaseLine.unit_cost, Purchase.created_at)
+        .join(Purchase, PurchaseLine.purchase_id == Purchase.id)
+        .where(
+            Purchase.supplier_id == sp.supplier_id,
+            PurchaseLine.part_id == sp.part_id,
+            PurchaseLine.unit_cost.is_not(None),
+        )
+        .order_by(Purchase.created_at.desc(), PurchaseLine.id.desc())
+        .limit(1)
+    ).first()
     return SupplierPartResponse(
+        part_internal_pn=sp.part.internal_pn,
+        last_unit_cost=last[0] if last else None,
+        last_ordered_at=last[1].isoformat() if last else None,
         id=sp.id,
         supplier_id=sp.supplier_id,
         supplier_name=sp.supplier.name,
@@ -135,6 +158,34 @@ def _supplier_part_response(sp: SupplierPart) -> SupplierPartResponse:
         is_preferred=sp.is_preferred,
         notes=sp.notes,
         created_at=sp.created_at.strftime("%Y-%m-%dT%H:%M:%S") + "Z",
+    )
+
+
+def _supplier_response(db: DbSession, s: Supplier) -> SupplierResponse:
+    purchase_count = db.execute(
+        select(func.count()).select_from(Purchase).where(Purchase.supplier_id == s.id)
+    ).scalar()
+    part_count = db.execute(
+        select(func.count())
+        .select_from(SupplierPart)
+        .join(Part, SupplierPart.part_id == Part.id)
+        .where(SupplierPart.supplier_id == s.id, Part.deleted_at.is_(None))
+    ).scalar()
+    return SupplierResponse(
+        id=s.id,
+        name=s.name,
+        code=s.code,
+        description=s.description,
+        website=s.website,
+        email=s.email,
+        phone=s.phone,
+        address=s.address,
+        notes=s.notes,
+        is_active=s.is_active,
+        purchase_count=purchase_count or 0,
+        part_count=part_count or 0,
+        created_at=s.created_at.isoformat(),
+        updated_at=s.updated_at.isoformat(),
     )
 
 
@@ -160,6 +211,8 @@ def list_suppliers(
     per_page: int = Query(50, ge=1, le=100),
     search: str | None = None,
     is_active: bool | None = None,
+    sort: str = Query("name", pattern="^(name|code)$"),
+    dir: str = Query("asc", pattern="^(asc|desc)$"),
 ):
     """List all suppliers with pagination and filtering."""
     query = select(Supplier).where(Supplier.deleted_at.is_(None))
@@ -181,27 +234,12 @@ def list_suppliers(
 
     # Get paginated results
     offset = (page - 1) * per_page
-    query = query.order_by(Supplier.name).offset(offset).limit(per_page)
+    column = Supplier.name if sort == "name" else Supplier.code
+    ordering = column.asc() if dir == "asc" else column.desc()
+    query = query.order_by(ordering, Supplier.id).offset(offset).limit(per_page)
     suppliers = db.execute(query).scalars().all()
 
-    # Build response with purchase counts
-    items = []
-    for s in suppliers:
-        items.append(
-            SupplierResponse(
-                id=s.id,
-                name=s.name,
-                code=s.code,
-                description=s.description,
-                website=s.website,
-                email=s.email,
-                phone=s.phone,
-                address=s.address,
-                notes=s.notes,
-                is_active=s.is_active,
-                purchase_count=len(s.purchases) if s.purchases else 0,
-            )
-        )
+    items = [_supplier_response(db, s) for s in suppliers]
 
     return SupplierListResponse(
         items=items,
@@ -237,19 +275,7 @@ def create_supplier(
     db.commit()
     db.refresh(supplier)
 
-    return SupplierResponse(
-        id=supplier.id,
-        name=supplier.name,
-        code=supplier.code,
-        description=supplier.description,
-        website=supplier.website,
-        email=supplier.email,
-        phone=supplier.phone,
-        address=supplier.address,
-        notes=supplier.notes,
-        is_active=supplier.is_active,
-        purchase_count=0,
-    )
+    return _supplier_response(db, supplier)
 
 
 @router.get("/{supplier_id}", response_model=SupplierResponse)
@@ -260,19 +286,7 @@ def get_supplier(
     """Get a supplier by ID."""
     supplier = _get_active_supplier(db, supplier_id)
 
-    return SupplierResponse(
-        id=supplier.id,
-        name=supplier.name,
-        code=supplier.code,
-        description=supplier.description,
-        website=supplier.website,
-        email=supplier.email,
-        phone=supplier.phone,
-        address=supplier.address,
-        notes=supplier.notes,
-        is_active=supplier.is_active,
-        purchase_count=len(supplier.purchases) if supplier.purchases else 0,
-    )
+    return _supplier_response(db, supplier)
 
 
 @router.patch("/{supplier_id}", response_model=SupplierResponse)
@@ -303,6 +317,10 @@ def update_supplier(
     old_data = get_model_dict(supplier)
 
     update_data = data.model_dump(exclude_unset=True)
+    # Non-nullable columns: an explicit null means "leave as is"
+    for required in ("name", "is_active"):
+        if update_data.get(required, True) is None:
+            update_data.pop(required)
     for key, value in update_data.items():
         setattr(supplier, key, value)
 
@@ -311,19 +329,7 @@ def update_supplier(
     db.commit()
     db.refresh(supplier)
 
-    return SupplierResponse(
-        id=supplier.id,
-        name=supplier.name,
-        code=supplier.code,
-        description=supplier.description,
-        website=supplier.website,
-        email=supplier.email,
-        phone=supplier.phone,
-        address=supplier.address,
-        notes=supplier.notes,
-        is_active=supplier.is_active,
-        purchase_count=len(supplier.purchases) if supplier.purchases else 0,
-    )
+    return _supplier_response(db, supplier)
 
 
 @router.delete("/{supplier_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -370,7 +376,7 @@ async def list_supplier_parts(
         .scalars()
         .all()
     )
-    return [_supplier_part_response(sp) for sp in entries]
+    return [_supplier_part_response(db, sp) for sp in entries]
 
 
 @router.post(
@@ -417,7 +423,7 @@ async def create_supplier_part(
     log_create(db, sp, user_id)
     db.commit()
     db.refresh(sp)
-    return _supplier_part_response(sp)
+    return _supplier_part_response(db, sp)
 
 
 @router.put(
@@ -454,7 +460,7 @@ async def update_supplier_part(
     log_update(db, sp, old_data, user_id)
     db.commit()
     db.refresh(sp)
-    return _supplier_part_response(sp)
+    return _supplier_part_response(db, sp)
 
 
 @router.delete("/{supplier_id}/parts/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)

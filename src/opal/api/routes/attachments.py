@@ -13,6 +13,7 @@ from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import ProcedureInstance, StepExecution
 from opal.db.models.issue import Issue
+from opal.db.models.purchase import Purchase
 
 router = APIRouter(prefix="/attachments", tags=["attachments"])
 
@@ -24,6 +25,9 @@ ALLOWED_KINDS: set[str | None] = {
     "closeout",
     "capture",
     "step_image",
+    "quote",
+    "invoice",
+    "packing_slip",
 }
 
 
@@ -38,6 +42,7 @@ class AttachmentResponse(BaseModel):
     procedure_instance_id: int | None
     step_execution_id: int | None
     issue_id: int | None = None
+    purchase_id: int | None = None
     procedure_id: int | None = None
     kind: str | None = None
     note: str | None = None
@@ -64,6 +69,7 @@ def _attachment_to_response(att: Attachment) -> AttachmentResponse:
         procedure_instance_id=att.procedure_instance_id,
         step_execution_id=att.step_execution_id,
         issue_id=att.issue_id,
+        purchase_id=att.purchase_id,
         procedure_id=att.procedure_id,
         kind=att.kind,
         note=att.note,
@@ -81,6 +87,7 @@ async def upload_attachment(
     procedure_instance_id: int | None = Form(default=None),
     step_execution_id: int | None = Form(default=None),
     issue_id: int | None = Form(default=None),
+    purchase_id: int | None = Form(default=None),
     procedure_id: int | None = Form(default=None),
     kind: str | None = Form(default=None),
     note: str | None = Form(default=None),
@@ -148,6 +155,9 @@ async def upload_attachment(
         if not issue:
             raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
 
+    if purchase_id and not db.query(Purchase).filter(Purchase.id == purchase_id).first():
+        raise HTTPException(status_code=404, detail=f"Purchase {purchase_id} not found")
+
     if procedure_id:
         from opal.db.models import MasterProcedure
 
@@ -190,6 +200,7 @@ async def upload_attachment(
         procedure_instance_id=procedure_instance_id,
         step_execution_id=step_execution_id,
         issue_id=issue_id,
+        purchase_id=purchase_id,
         procedure_id=procedure_id,
         kind=kind,
         note=note,
@@ -233,6 +244,7 @@ def list_attachments(
     procedure_instance_id: int | None = Query(None),
     step_execution_id: int | None = Query(None),
     issue_id: int | None = Query(None),
+    purchase_id: int | None = Query(None),
     procedure_id: int | None = Query(None),
     kind: str | None = Query(None),
 ) -> list[AttachmentResponse]:
@@ -246,6 +258,8 @@ def list_attachments(
         query = query.filter(Attachment.step_execution_id == step_execution_id)
     if issue_id is not None:
         query = query.filter(Attachment.issue_id == issue_id)
+    if purchase_id is not None:
+        query = query.filter(Attachment.purchase_id == purchase_id)
     if procedure_id is not None:
         query = query.filter(Attachment.procedure_id == procedure_id)
     if kind is not None:

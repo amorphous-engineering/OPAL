@@ -21,7 +21,7 @@ class Attachment(Base, IdMixin, TimestampMixin):
         String(20),
         nullable=True,
         index=True,
-        comment="'inline' = embedded in markdown content; 'reference' = downloadable doc; 'closeout' = end-item closeout photo surfaced in build reports; 'capture' = execution evidence captured at a step; 'step_image' = authored step reference image; null = legacy/unscoped",
+        comment="'inline' = embedded in markdown content; 'reference' = downloadable doc; 'closeout' = end-item closeout photo surfaced in build reports; 'capture' = execution evidence captured at a step; 'step_image' = authored step reference image; 'quote' / 'invoice' / 'packing_slip' = purchase order documents; null = legacy/unscoped",
     )
     note: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Capturer's note on an execution capture"
@@ -45,6 +45,13 @@ class Attachment(Base, IdMixin, TimestampMixin):
         nullable=True,
         index=True,
         comment="Template-level scope: inline images in step instructions / procedure description",
+    )
+
+    purchase_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="Purchase order the file belongs to (quote, invoice, packing slip)",
     )
 
     # Relationships
