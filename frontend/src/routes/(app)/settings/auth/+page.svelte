@@ -104,7 +104,7 @@
 />
 
 <div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-	<form class="grid min-w-0 gap-4" onsubmit={save}>
+	<form class="grid min-w-0 grid-cols-1 gap-4" onsubmit={save}>
 		{#if error}
 			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
 				{error}
@@ -207,7 +207,7 @@
 		</div>
 	</form>
 
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Callback URL">
 			<div class="p-3">
 				<CopyField value={saved.callback_url} label="Callback URL" />

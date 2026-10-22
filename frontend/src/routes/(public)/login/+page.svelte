@@ -20,10 +20,17 @@
 	let password = $state('');
 	let error = $state<string | null>(page.url.searchParams.get('error'));
 	let busy = $state(false);
+	let loadFailed = $state(false);
 	const next = page.url.searchParams.get('next');
 
 	onMount(async () => {
-		config = await getSignInConfig();
+		try {
+			config = await getSignInConfig();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Could not load the sign-in options';
+			loadFailed = true;
+			return;
+		}
 		if (config.needs_setup) return goto('/setup', { replace: true });
 		const user = await session.load().catch(() => null);
 		if (user) goto(landingFor(user, next), { replace: true });
@@ -80,7 +87,11 @@
 {/if}
 
 {#if !config}
-	<div class="h-40 animate-pulse bg-muted"></div>
+	{#if loadFailed}
+		<Button variant="outline" onclick={() => location.reload()}>RETRY</Button>
+	{:else}
+		<div class="h-40 animate-pulse bg-muted"></div>
+	{/if}
 {:else}
 	{#if config.password_login_enabled}
 		<form class="grid gap-3" onsubmit={submit}>

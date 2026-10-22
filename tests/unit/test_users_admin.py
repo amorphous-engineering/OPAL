@@ -85,6 +85,15 @@ def test_duplicate_email_is_a_conflict(client, test_user):
     assert clash.status_code == 409
 
 
+def test_lan_style_email_domains_are_accepted_and_garbage_is_not(client):
+    ok = client.post("/api/users", json={"name": "Lan", "email": "lan@sphinx.local"})
+    assert ok.status_code == 201
+    assert ok.json()["email"] == "lan@sphinx.local"
+    for bad in ("no-at-sign", "a@b", "a b@c.d", "@x.com"):
+        r = client.patch(f"/api/users/{ok.json()['id']}", json={"email": bad})
+        assert r.status_code == 422, bad
+
+
 def test_blank_name_is_rejected(client, test_user):
     response = client.patch(f"/api/users/{test_user.id}", json={"name": "   "})
     assert response.status_code == 400

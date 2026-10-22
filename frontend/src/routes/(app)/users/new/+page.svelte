@@ -44,7 +44,7 @@
 	crumbs={[{ label: 'System' }, { label: 'Users', href: '/users' }, { label: 'New' }]}
 />
 
-<form class="max-w-xl border-b border-border p-4" onsubmit={submit}>
+<form class="max-w-xl p-4" onsubmit={submit}>
 	{#if error}
 		<p
 			role="alert"

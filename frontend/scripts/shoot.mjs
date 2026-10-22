@@ -1,5 +1,5 @@
 // Interactive smoke: sign in as a demo user, visit paths, screenshot each, report console errors.
-//   node scripts/shoot.mjs <webPort> <outDir> <path> [path...]   (env THEME=dark for dark mode)
+//   node scripts/shoot.mjs <webPort> <outDir> <path> [path...]   (dark by default; env THEME=light)
 import { chromium } from '@playwright/test';
 const [port, out, ...paths] = process.argv.slice(2);
 const base = `http://127.0.0.1:${port}`;
@@ -8,6 +8,9 @@ const ctx = await browser.newContext({
 	viewport: { width: 1440, height: 900 },
 	colorScheme: process.env.THEME === 'dark' ? 'dark' : 'light'
 });
+// Dark is the app default; THEME=light stores the user's choice the way the menu does.
+if (process.env.THEME === 'light')
+	await ctx.addInitScript(() => localStorage.setItem('mode-watcher-mode', 'light'));
 const page = await ctx.newPage();
 const errors = [];
 page.on('console', (m) => m.type() === 'error' && errors.push(`[console] ${m.text()}`));
