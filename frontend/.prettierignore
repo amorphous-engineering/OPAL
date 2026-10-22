@@ -7,3 +7,6 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Vendored shadcn-svelte primitives
+src/lib/components/ui/

@@ -16,6 +16,11 @@ class HealthResponse(BaseModel):
     branch: str | None = None
     commit: str | None = None
     dirty: bool = False
+    # Header display: "v1.3.2" or "v1.3.2+devel.6befb6f"; dev builds render
+    # distinctly so a checkout is never mistaken for a release.
+    display: str
+    is_dev: bool = False
+    tooltip: str
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -28,4 +33,7 @@ def health_check() -> HealthResponse:
         branch=info.branch,
         commit=info.commit,
         dirty=info.dirty,
+        display=info.display,
+        is_dev=info.is_dev,
+        tooltip=info.tooltip,
     )

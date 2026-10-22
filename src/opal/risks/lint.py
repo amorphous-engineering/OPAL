@@ -3,7 +3,7 @@
 Same engine pattern as the requirement linter (opal.se.lint): rule metadata
 lives in lint_rules.yaml next to this module, check logic lives here keyed
 by rule name, and findings reuse the LintFinding shape so the inline
-rendering layer (opal.web.lint_markup, the JS overlay) works unchanged.
+underlining (opal.core.lint_segments, drawn by the web client) works unchanged.
 
 Findings never block save — `warn` is advisory everywhere, `block_accept`
 findings are what opal.risks.dispositions.accept() enforces. Spans index

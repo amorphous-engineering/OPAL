@@ -23,7 +23,6 @@ from opal.extensions.content import (
 )
 from opal.extensions.install import InstallError, install_archive, uninstall
 from opal.extensions.manifest import CAPABILITIES, ManifestError, parse_manifest
-from tests.conftest import login
 
 ONSHAPE_ID = "opal.onshape"
 
@@ -452,137 +451,145 @@ def test_import_of_an_unknown_key_raises(db_session: Session, ext_dir: Path) -> 
         import_procedure(db_session, registry.find("acme.qms"), "nope")
 
 
-# ============ Web ============
+# ============ API ============
 
 
-def test_settings_page_lists_extensions(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
-) -> None:
-    login(client, admin_user)
-    response = client.get("/settings")
+def test_list_extensions_includes_bundled_onshape(client: TestClient, ext_dir: Path) -> None:
+    response = client.get("/api/extensions")
     assert response.status_code == 200
-    assert "EXTENSIONS" in response.text
-    assert ONSHAPE_ID in response.text
+    body = response.json()
+    onshape = next(item for item in body["items"] if item["id"] == ONSHAPE_ID)
+    assert onshape["origin"] == ORIGIN_BUNDLED
+    assert onshape["enabled"] is True
+    assert onshape["has_code"] is True
+    assert body["broken"] == []
+    assert body["extension_dir"] == str(ext_dir)
+    assert body["max_archive_bytes"] > 0
 
 
-def test_extensions_page_renders(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
+def test_extension_detail_reports_manifest_and_content(
+    client: TestClient, db_session: Session, ext_dir: Path
 ) -> None:
-    login(client, admin_user)
-    response = client.get("/settings/extensions")
+    install_archive(db_session, content_archive())
+    db_session.commit()
+
+    response = client.get("/api/extensions/acme.qms")
     assert response.status_code == 200
-    assert "INSTALL" in response.text
+    detail = response.json()
+    assert detail["name"] == "ACME QMS Pack"
+    assert detail["declares"]["procedures"] is True
+    assert detail["procedures"] == [
+        {"key": "incoming-inspection", "name": "Incoming Inspection", "type": "op", "steps": 2}
+    ]
+    assert detail["datasets"] == [{"key": "torque-log", "name": "Torque Log", "fields": 2}]
+    assert detail["content_errors"] == []
+    assert detail["is_bundled"] is False
 
 
-def test_extension_detail_renders_the_onshape_panel(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
-) -> None:
-    login(client, admin_user)
-    response = client.get(f"/settings/extensions/{ONSHAPE_ID}")
-    assert response.status_code == 200
-    assert "ONSHAPE INTEGRATION" in response.text
+def test_unknown_extension_is_404(client: TestClient, ext_dir: Path) -> None:
+    assert client.get("/api/extensions/no.such.ext").status_code == 404
 
 
-def test_unknown_extension_detail_redirects(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
-) -> None:
-    login(client, admin_user)
-    response = client.get("/settings/extensions/no.such.ext", follow_redirects=False)
-    assert response.status_code == 302
-
-
-def test_web_install_and_uninstall_roundtrip(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
-) -> None:
-    login(client, admin_user)
-
+def test_api_install_and_uninstall_roundtrip(client: TestClient, ext_dir: Path) -> None:
     response = client.post(
-        "/settings/extensions/install",
+        "/api/extensions/install",
         files={"archive": ("acme.zip", content_archive(), "application/zip")},
     )
-    assert response.status_code == 200
-    assert "Installed acme.qms" in response.text
+    assert response.status_code == 201
+    assert response.json()["id"] == "acme.qms"
     assert (ext_dir / "acme.qms").is_dir()
 
-    response = client.post("/settings/extensions/acme.qms/uninstall")
-    assert response.status_code == 200
-    assert "Uninstalled acme.qms" in response.text
+    response = client.delete("/api/extensions/acme.qms")
+    assert response.status_code == 204
     assert not (ext_dir / "acme.qms").exists()
 
 
-def test_web_install_reports_a_rejected_archive(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
-) -> None:
-    login(client, admin_user)
+def test_api_install_reports_a_rejected_archive(client: TestClient, ext_dir: Path) -> None:
     response = client.post(
-        "/settings/extensions/install",
+        "/api/extensions/install",
         files={"archive": ("bad.zip", b"not a zip at all", "application/zip")},
     )
-    assert response.status_code == 200
-    assert "not a readable ZIP archive" in response.text
+    assert response.status_code == 400
+    assert "not a readable ZIP archive" in response.json()["detail"]
 
 
-def test_non_admin_cannot_install(
-    client: TestClient, db_session: Session, test_user: User, ext_dir: Path
-) -> None:
-    login(client, test_user)
+def test_api_uninstall_refuses_a_bundled_extension(client: TestClient, ext_dir: Path) -> None:
+    response = client.delete(f"/api/extensions/{ONSHAPE_ID}")
+    assert response.status_code == 400
+    assert "bundled" in response.json()["detail"]
+
+
+def test_non_admin_cannot_install(client: TestClient, auth_headers: dict, ext_dir: Path) -> None:
     response = client.post(
-        "/settings/extensions/install",
+        "/api/extensions/install",
         files={"archive": ("acme.zip", content_archive(), "application/zip")},
-        follow_redirects=False,
+        headers=auth_headers,
     )
-    assert response.status_code == 302
+    assert response.status_code == 403
     assert not (ext_dir / "acme.qms").exists()
 
 
-def test_non_admin_cannot_toggle(
-    client: TestClient, db_session: Session, test_user: User, ext_dir: Path
+def test_non_admin_can_read_but_not_toggle(
+    client: TestClient, db_session: Session, auth_headers: dict, ext_dir: Path
 ) -> None:
-    registry.sync(db_session)
-    db_session.commit()
-    login(client, test_user)
-    response = client.post(f"/settings/extensions/{ONSHAPE_ID}/disable", follow_redirects=False)
-    assert response.status_code == 302
+    assert client.get("/api/extensions", headers=auth_headers).status_code == 200
+    response = client.post(f"/api/extensions/{ONSHAPE_ID}/disable", headers=auth_headers)
+    assert response.status_code == 403
     assert registry.is_enabled(db_session, ONSHAPE_ID) is True
 
 
-def test_web_toggle_disables_and_reenables(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
+def test_api_toggle_disables_and_reenables(
+    client: TestClient, db_session: Session, ext_dir: Path
 ) -> None:
-    login(client, admin_user)
-
-    response = client.post(f"/settings/extensions/{ONSHAPE_ID}/disable")
+    response = client.post(f"/api/extensions/{ONSHAPE_ID}/disable")
     assert response.status_code == 200
+    assert response.json()["enabled"] is False
     assert registry.is_enabled(db_session, ONSHAPE_ID) is False
 
-    response = client.post(f"/settings/extensions/{ONSHAPE_ID}/enable")
+    response = client.post(f"/api/extensions/{ONSHAPE_ID}/enable")
     assert response.status_code == 200
+    assert response.json()["enabled"] is True
     assert registry.is_enabled(db_session, ONSHAPE_ID) is True
+
+
+def test_toggle_of_an_unknown_extension_is_404(client: TestClient, ext_dir: Path) -> None:
+    assert client.post("/api/extensions/no.such.ext/disable").status_code == 404
 
 
 def test_import_requires_the_extension_to_be_enabled(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
+    client: TestClient, db_session: Session, ext_dir: Path
 ) -> None:
     install_archive(db_session, content_archive())
     registry.sync(db_session)
     registry.set_enabled(db_session, "acme.qms", False)
     db_session.commit()
 
-    login(client, admin_user)
-    response = client.post("/settings/extensions/acme.qms/import/procedures/incoming-inspection")
-    assert response.status_code == 200
-    assert "Enable this extension" in response.text
+    response = client.post("/api/extensions/acme.qms/import/procedures/incoming-inspection")
+    assert response.status_code == 409
+    assert "Enable this extension" in response.json()["detail"]
     assert db_session.query(MasterProcedure).filter_by(name="Incoming Inspection").count() == 0
 
 
-def test_web_import_creates_the_procedure(
-    client: TestClient, db_session: Session, admin_user: User, ext_dir: Path
+def test_api_import_creates_the_procedure(
+    client: TestClient, db_session: Session, ext_dir: Path
 ) -> None:
     install_archive(db_session, content_archive())
     db_session.commit()
 
-    login(client, admin_user)
-    response = client.post("/settings/extensions/acme.qms/import/procedures/incoming-inspection")
+    response = client.post("/api/extensions/acme.qms/import/procedures/incoming-inspection")
     assert response.status_code == 200
-    assert "Imported Incoming Inspection" in response.text
+    body = response.json()
+    assert body["name"] == "Incoming Inspection"
+    assert body["href"].startswith("/procedures/")
     assert db_session.query(MasterProcedure).filter_by(name="Incoming Inspection").count() == 1
+
+
+def test_api_import_of_an_unknown_template_is_rejected(
+    client: TestClient, db_session: Session, ext_dir: Path
+) -> None:
+    install_archive(db_session, content_archive())
+    db_session.commit()
+    assert client.post("/api/extensions/acme.qms/import/widgets/x").status_code == 404
+    # Last: a rejected import rolls the session back, which in this suite also
+    # discards the shared service-user fixture.
+    assert client.post("/api/extensions/acme.qms/import/procedures/nope").status_code == 400
