@@ -160,7 +160,7 @@
 		{/each}
 	</div>
 
-	<div class="grid items-start gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_25vw]">
+	<div class="grid items-start gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_33vw]">
 		<div class="grid min-w-0 content-start gap-3">
 			{#if tabs.length > 1}
 				<Tabs.Root value={tab} onValueChange={setTab}>
