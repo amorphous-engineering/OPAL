@@ -27,6 +27,7 @@ class Dataset(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     )
 
     # Relationships
+    procedure: Mapped["MasterProcedure | None"] = relationship("MasterProcedure")
     data_points: Mapped[list["DataPoint"]] = relationship(
         "DataPoint", back_populates="dataset", cascade="all, delete-orphan"
     )
@@ -58,6 +59,7 @@ class DataPoint(Base, IdMixin, TimestampMixin):
 
     # Relationships
     dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="data_points")
+    step_execution: Mapped["StepExecution | None"] = relationship("StepExecution")
 
     def __repr__(self) -> str:
         return f"<DataPoint(id={self.id}, dataset_id={self.dataset_id}, recorded_at={self.recorded_at})>"

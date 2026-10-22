@@ -13,11 +13,21 @@ from pydantic import BaseModel, Field
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.db.models.dataset import DataPoint, Dataset
+from opal.db.models.execution import StepExecution
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
 # ============ Schemas ============
+
+
+class DataPointSource(BaseModel):
+    """The execution step that produced a data point."""
+
+    instance_id: int
+    work_order_number: str | None = None
+    step_number_str: str
+    step_title: str | None = None
 
 
 class DataPointResponse(BaseModel):
@@ -28,6 +38,7 @@ class DataPointResponse(BaseModel):
     recorded_at: datetime
     values: dict[str, Any]
     step_execution_id: int | None = None
+    source: DataPointSource | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -41,6 +52,7 @@ class DatasetResponse(BaseModel):
     description: str | None = None
     data_schema: dict[str, Any] = Field(serialization_alias="schema")
     procedure_id: int | None = None
+    procedure_name: str | None = None
     point_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -105,6 +117,64 @@ class ChartDataResponse(BaseModel):
 # ============ Dataset CRUD ============
 
 
+def _point_source(point: DataPoint) -> DataPointSource | None:
+    """Resolve the execution step behind a point (WO number, step number and title)."""
+    step = point.step_execution
+    if step is None:
+        return None
+    title = step.title
+    if title is None and step.instance is not None:
+        for snap in step.instance.version.content.get("steps", []):
+            if snap.get("order") == step.step_number:
+                title = snap.get("title")
+                break
+    return DataPointSource(
+        instance_id=step.instance_id,
+        work_order_number=step.instance.work_order_number if step.instance else None,
+        step_number_str=step.step_number_str,
+        step_title=title,
+    )
+
+
+def _point_to_response(point: DataPoint) -> DataPointResponse:
+    return DataPointResponse(
+        id=point.id,
+        dataset_id=point.dataset_id,
+        recorded_at=point.recorded_at,
+        values=point.values,
+        step_execution_id=point.step_execution_id,
+        source=_point_source(point),
+        created_at=point.created_at,
+    )
+
+
+def _find_dataset(db: DbSession, dataset_id: int) -> Dataset:
+    dataset = (
+        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
+    )
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    return dataset
+
+
+def _validate_values(schema: dict[str, Any], values: dict[str, Any]) -> None:
+    """Reject values that do not fit the schema (unknown field, non-numeric number)."""
+    fields = {f["name"]: f for f in schema.get("fields", []) if "name" in f}
+    if not fields:
+        return
+    for name, value in values.items():
+        field = fields.get(name)
+        if field is None:
+            raise HTTPException(status_code=422, detail=f"Unknown field '{name}'")
+        if value is None:
+            continue
+        kind = field.get("type")
+        if kind == "number" and (isinstance(value, bool) or not isinstance(value, int | float)):
+            raise HTTPException(status_code=422, detail=f"Field '{name}' must be a number")
+        if kind == "boolean" and not isinstance(value, bool):
+            raise HTTPException(status_code=422, detail=f"Field '{name}' must be true or false")
+
+
 def _dataset_to_response(dataset: Dataset) -> DatasetResponse:
     """Convert Dataset model to response."""
     return DatasetResponse(
@@ -113,6 +183,7 @@ def _dataset_to_response(dataset: Dataset) -> DatasetResponse:
         description=dataset.description,
         data_schema=dataset.schema,
         procedure_id=dataset.procedure_id,
+        procedure_name=dataset.procedure.name if dataset.procedure else None,
         point_count=len(dataset.data_points),
         created_at=dataset.created_at,
         updated_at=dataset.updated_at,
@@ -182,11 +253,7 @@ def get_dataset(
     limit_points: int = Query(100, ge=1, le=1000),
 ) -> DatasetDetailResponse:
     """Get dataset by ID with optional data points."""
-    dataset = (
-        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
-    )
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    dataset = _find_dataset(db, dataset_id)
 
     points = []
     if include_points:
@@ -204,20 +271,11 @@ def get_dataset(
         description=dataset.description,
         data_schema=dataset.schema,
         procedure_id=dataset.procedure_id,
+        procedure_name=dataset.procedure.name if dataset.procedure else None,
         point_count=len(dataset.data_points),
         created_at=dataset.created_at,
         updated_at=dataset.updated_at,
-        data_points=[
-            DataPointResponse(
-                id=p.id,
-                dataset_id=p.dataset_id,
-                recorded_at=p.recorded_at,
-                values=p.values,
-                step_execution_id=p.step_execution_id,
-                created_at=p.created_at,
-            )
-            for p in points
-        ],
+        data_points=[_point_to_response(p) for p in points],
     )
 
 
@@ -229,21 +287,19 @@ def update_dataset(
     user_id: CurrentUserId,
 ) -> DatasetResponse:
     """Update a dataset."""
-    dataset = (
-        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
-    )
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    dataset = _find_dataset(db, dataset_id)
 
     old_values = get_model_dict(dataset)
 
+    # An explicit null clears the description or the procedure link.
+    sent = data.model_fields_set
     if data.name is not None:
         dataset.name = data.name
-    if data.description is not None:
-        dataset.description = data.description
+    if "description" in sent:
+        dataset.description = data.description or None
     if data.data_schema is not None:
         dataset.schema = data.data_schema
-    if data.procedure_id is not None:
+    if "procedure_id" in sent:
         dataset.procedure_id = data.procedure_id
 
     log_update(db, dataset, old_values, user_id)
@@ -260,11 +316,7 @@ def delete_dataset(
     user_id: CurrentUserId,
 ) -> None:
     """Soft delete a dataset."""
-    dataset = (
-        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
-    )
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    dataset = _find_dataset(db, dataset_id)
 
     dataset.deleted_at = datetime.now(UTC)
     log_delete(db, dataset, user_id)
@@ -282,11 +334,11 @@ def add_data_point(
     user_id: CurrentUserId,
 ) -> DataPointResponse:
     """Add a data point to a dataset."""
-    dataset = (
-        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
-    )
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    dataset = _find_dataset(db, dataset_id)
+
+    _validate_values(dataset.schema, data.values)
+    if data.step_execution_id is not None and not db.get(StepExecution, data.step_execution_id):
+        raise HTTPException(status_code=422, detail="Step execution not found")
 
     recorded_at = data.recorded_at or datetime.now(UTC)
 
@@ -297,17 +349,12 @@ def add_data_point(
         step_execution_id=data.step_execution_id,
     )
     db.add(point)
+    db.flush()
+    log_create(db, point, user_id)
     db.commit()
     db.refresh(point)
 
-    return DataPointResponse(
-        id=point.id,
-        dataset_id=point.dataset_id,
-        recorded_at=point.recorded_at,
-        values=point.values,
-        step_execution_id=point.step_execution_id,
-        created_at=point.created_at,
-    )
+    return _point_to_response(point)
 
 
 @router.get("/{dataset_id}/points", response_model=list[DataPointResponse])
@@ -320,11 +367,7 @@ def list_data_points(
     offset: int = Query(0, ge=0),
 ) -> list[DataPointResponse]:
     """List data points for a dataset."""
-    dataset = (
-        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
-    )
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    _find_dataset(db, dataset_id)
 
     query = db.query(DataPoint).filter(DataPoint.dataset_id == dataset_id)
 
@@ -335,17 +378,7 @@ def list_data_points(
 
     points = query.order_by(DataPoint.recorded_at.asc()).offset(offset).limit(limit).all()
 
-    return [
-        DataPointResponse(
-            id=p.id,
-            dataset_id=p.dataset_id,
-            recorded_at=p.recorded_at,
-            values=p.values,
-            step_execution_id=p.step_execution_id,
-            created_at=p.created_at,
-        )
-        for p in points
-    ]
+    return [_point_to_response(p) for p in points]
 
 
 @router.delete("/{dataset_id}/points/{point_id}", status_code=204)
@@ -364,6 +397,7 @@ def delete_data_point(
     if not point:
         raise HTTPException(status_code=404, detail="Data point not found")
 
+    log_delete(db, point, user_id)
     db.delete(point)
     db.commit()
 
@@ -384,11 +418,7 @@ def get_chart_data(
 
     Returns data in Chart.js compatible format.
     """
-    dataset = (
-        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
-    )
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    _find_dataset(db, dataset_id)
 
     query = db.query(DataPoint).filter(DataPoint.dataset_id == dataset_id)
 
@@ -457,11 +487,7 @@ def export_dataset_csv(
     db: DbSession,
 ) -> StreamingResponse:
     """Export dataset data points as CSV."""
-    dataset = (
-        db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.deleted_at.is_(None)).first()
-    )
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    dataset = _find_dataset(db, dataset_id)
 
     points = (
         db.query(DataPoint)

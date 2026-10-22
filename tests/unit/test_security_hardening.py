@@ -62,27 +62,8 @@ def test_onshape_add_document_requires_admin(client, auth_headers):
     assert resp.status_code == 403
 
 
-# ── H1: dataset values are HTML-escaped in the detail page (stored XSS) ──
-
-
-def test_dataset_detail_escapes_script_payload(web_client):
-    create = web_client.post(
-        "/api/datasets",
-        json={"name": "XSS probe", "schema": {"fields": [{"name": "note", "type": "text"}]}},
-    )
-    dataset_id = create.json()["id"]
-    web_client.post(
-        f"/api/datasets/{dataset_id}/points",
-        json={"values": {"note": "</script><script>alert(1)</script>"}},
-    )
-
-    page = web_client.get(f"/datasets/{dataset_id}")
-    assert page.status_code == 200
-    html = page.text
-    # The injected sequence must never appear able to close the script element.
-    assert "</script><script>alert(1)" not in html
-    # tojson escapes `<` to < — evidence the safe filter ran.
-    assert "\\u003c" in html
+# ── H1 (dataset XSS) is covered by tests/unit/test_datasets_points.py and the
+#    Playwright check in frontend: the API returns raw strings, the client renders text ──
 
 
 # ── H2 is covered by the updated tests/unit/test_inventory.py::test_update_inventory ──
