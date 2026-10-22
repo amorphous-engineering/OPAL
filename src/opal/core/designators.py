@@ -163,6 +163,18 @@ def generate_serial_number(db: Session, part) -> str:
     return f"{next_num:03d}"
 
 
+def peek_serial_numbers(db: Session, part, count: int) -> list[str]:
+    """The next ``count`` serial numbers for a part, without allocating them."""
+    part_key = part.internal_pn or str(part.id)
+    row = (
+        db.query(DesignatorSequence)
+        .filter(DesignatorSequence.designator_type == f"SN-{part_key}")
+        .first()
+    )
+    start = (row.last_value if row else 0) + 1
+    return [f"{n:03d}" for n in range(start, start + count)]
+
+
 def get_designator_type(designator: str) -> str | None:
     """Extract the type from a designator string.
 
