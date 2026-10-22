@@ -66,8 +66,7 @@
 	<div class="flex items-center gap-2">
 		<span class="label">Data capture</span>
 		<Button size="xs" variant="outline" onclick={addField}>+ FIELD</Button>
-		{#if !fields.length}<span class="font-mono text-xs text-muted-foreground">FIELDS — none</span
-			>{/if}
+		{#if !fields.length}<span class="font-mono text-xs text-muted-foreground">none</span>{/if}
 	</div>
 {/if}
 {#if fields.length}

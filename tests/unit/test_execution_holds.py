@@ -680,6 +680,30 @@ def test_holding_readout_links_to_document_op_param(client):
         assert target["href"].startswith(f"/executions/{instance_id}?op=")
 
 
+def test_holding_readout_previews_proposed_containment(client):
+    """Narrowing OP -> STEP lists the step and its OP; ADVISORY lists nothing."""
+    proc_id = client.post("/api/procedures", json={"name": "Nested"}).json()["id"]
+    op_id = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "OP"}).json()["id"]
+    client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Sub", "parent_step_id": op_id})
+    client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
+        "id"
+    ]
+    # Orders: OP=1, sub-step 1.1=2.
+    resp = _raise_nc(client, instance_id, 2, containment="op")
+    issue_id = resp.json()["id"]
+
+    current = client.get(f"/api/issues/{issue_id}/holding").json()
+    step = client.get(f"/api/issues/{issue_id}/holding", params={"containment": "step"}).json()
+    advisory = client.get(
+        f"/api/issues/{issue_id}/holding", params={"containment": "advisory"}
+    ).json()
+    assert len(current) == 1
+    assert len(step) == 2
+    assert {t["label"] for t in current} <= {t["label"] for t in step}
+    assert advisory == []
+
+
 # ============ 11. Required-data enforcement ============
 
 

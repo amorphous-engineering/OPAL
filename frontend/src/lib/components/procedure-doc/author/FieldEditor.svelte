@@ -146,6 +146,7 @@
 				/>
 			{/if}
 			{#if f.type === 'number'}
+				<span class="label">Min</span>
 				<Input
 					type="number"
 					class="h-7 w-20 font-mono"
@@ -155,6 +156,7 @@
 					onkeydown={stop}
 					oninput={(e) => setNumber('min', e.currentTarget.value)}
 				/>
+				<span class="label">Max</span>
 				<Input
 					type="number"
 					class="h-7 w-20 font-mono"

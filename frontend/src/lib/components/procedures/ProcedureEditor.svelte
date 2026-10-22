@@ -57,7 +57,7 @@
 	>
 		<h2 class="label text-foreground">Operations</h2>
 		<span class="font-mono text-xs text-muted-foreground"
-			>{store.counts.ops} OPS · {store.counts.steps} STEPS</span
+			>{total} STEPS ({store.counts.ops} OP{store.counts.ops === 1 ? '' : 'S'})</span
 		>
 		<span
 			class={cn(

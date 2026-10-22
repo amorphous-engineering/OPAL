@@ -34,13 +34,13 @@
      card scrolls its own body. Cards whose content fits keep their natural height; the
      rest share the remaining height evenly (flex 1 1 0, capped at max-content). -->
 <div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full">
-	<Section
-		class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
-		title="Online"
-		count={doc.roster.length || undefined}
-	>
-		<div class="min-h-0 overflow-x-hidden overflow-y-auto">
-			{#if doc.roster.length}
+	{#if doc.roster.length}
+		<Section
+			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
+			title="Online"
+			count={doc.roster.length || undefined}
+		>
+			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
 				<ul class="m-0 list-none p-0">
 					{#each doc.roster as r (r.user_id)}
 						<li class="border-b border-border last:border-b-0">
@@ -62,19 +62,19 @@
 						</li>
 					{/each}
 				</ul>
-			{:else}
-				<EmptyLine label="Online" />
-			{/if}
-		</div>
-	</Section>
+			</div>
+		</Section>
+	{:else}
+		<EmptyLine label="Online" />
+	{/if}
 
-	<Section
-		class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
-		title="Operations"
-		count={ops.length || undefined}
-	>
-		<div class="min-h-0 overflow-x-hidden overflow-y-auto">
-			{#if ops.length}
+	{#if ops.length}
+		<Section
+			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
+			title="Operations"
+			count={ops.length || undefined}
+		>
+			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
 				<ul class="m-0 list-none p-0">
 					{#each ops as op (op.order)}
 						{@const done = isTerminal(op.status)}
@@ -98,21 +98,22 @@
 						</li>
 					{/each}
 				</ul>
-			{:else}
-				<EmptyLine label="Operations" />
-			{/if}
-		</div>
-	</Section>
-	<Section
-		class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
-		title="Issues"
-		count={doc.issues.length || undefined}
-	>
-		{#snippet actions()}
-			<Button size="xs" variant="ghost" href={`/issues/new?execution=${inst.id}`}>+ NEW</Button>
-		{/snippet}
-		<div class="min-h-0 overflow-x-hidden overflow-y-auto">
-			{#if doc.issues.length}
+			</div>
+		</Section>
+	{:else}
+		<EmptyLine label="Operations" />
+	{/if}
+
+	{#if doc.issues.length}
+		<Section
+			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-[1_1_0] lg:flex-col"
+			title="Issues"
+			count={doc.issues.length || undefined}
+		>
+			{#snippet actions()}
+				<Button size="xs" variant="ghost" href={`/issues/new?execution=${inst.id}`}>+ NEW</Button>
+			{/snippet}
+			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
 				<ul class="m-0 list-none p-0">
 					{#each doc.issues as i (i.id)}
 						<li class="border-b border-border px-3 py-1.5 text-xs last:border-b-0">
@@ -122,7 +123,7 @@
 								>
 								{#if i.raised_step_number}
 									<span class="font-mono text-muted-foreground" title="Raised at step"
-										>{i.raised_step_number}</span
+										>@{i.raised_step_number}</span
 									>
 								{/if}
 								<span class="ml-auto"
@@ -138,9 +139,9 @@
 						</li>
 					{/each}
 				</ul>
-			{:else}
-				<EmptyLine label="Issues" addHref={`/issues/new?execution=${inst.id}`} />
-			{/if}
-		</div>
-	</Section>
+			</div>
+		</Section>
+	{:else}
+		<EmptyLine label="Issues" addHref={`/issues/new?execution=${inst.id}`} />
+	{/if}
 </div>

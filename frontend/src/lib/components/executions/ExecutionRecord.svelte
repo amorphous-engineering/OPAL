@@ -34,20 +34,20 @@
 <div
 	class="grid min-w-0 grid-cols-1 content-start gap-3 [overflow-wrap:anywhere] xl:grid-cols-2 [&_table]:table-fixed"
 >
-	<Section
-		title="Attachments"
-		count={rows.length || doc.attachments.length
-			? rows.reduce((n, s) => n + s.attachments.length, doc.attachments.length)
-			: undefined}
-	>
-		{#snippet actions()}
-			<Button
-				size="xs"
-				variant="ghost"
-				onclick={() => (store.dialog = { kind: 'attach', step: null })}>+ ATTACH</Button
-			>
-		{/snippet}
-		{#if rows.length || doc.attachments.length}
+	{#if rows.length || doc.attachments.length}
+		<Section
+			title="Attachments"
+			count={rows.length || doc.attachments.length
+				? rows.reduce((n, s) => n + s.attachments.length, doc.attachments.length)
+				: undefined}
+		>
+			{#snippet actions()}
+				<Button
+					size="xs"
+					variant="ghost"
+					onclick={() => (store.dialog = { kind: 'attach', step: null })}>+ ATTACH</Button
+				>
+			{/snippet}
 			<div class="grid">
 				{#each rows as s (s.order)}
 					<div
@@ -60,7 +60,7 @@
 						<button
 							type="button"
 							class="mb-1 font-mono text-xs font-medium hover:underline"
-							onclick={() => onjump(s.order)}>{s.number}</button
+							onclick={() => onjump(s.order)}>@{s.number}</button
 						>
 						{@render files(s.attachments)}
 					</div>
@@ -72,16 +72,13 @@
 					</div>
 				{/if}
 			</div>
-		{:else}
-			<EmptyLine
-				label="Attachments"
-				onadd={() => (store.dialog = { kind: 'attach', step: null })}
-			/>
-		{/if}
-	</Section>
+		</Section>
+	{:else}
+		<EmptyLine label="Attachments" onadd={() => (store.dialog = { kind: 'attach', step: null })} />
+	{/if}
 
-	<Section title="Reference documents" count={doc.reference_attachments.length || undefined}>
-		{#if doc.reference_attachments.length}
+	{#if doc.reference_attachments.length}
+		<Section title="Reference documents" count={doc.reference_attachments.length || undefined}>
 			<ul class="m-0 list-none p-0">
 				{#each doc.reference_attachments as a (a.id)}
 					<li
@@ -97,10 +94,10 @@
 					</li>
 				{/each}
 			</ul>
-		{:else}
-			<EmptyLine label="Reference documents" />
-		{/if}
-	</Section>
+		</Section>
+	{:else}
+		<EmptyLine label="Reference documents" />
+	{/if}
 
 	<Section title="Facts">
 		{#snippet actions()}
@@ -136,7 +133,7 @@
 {#snippet files(list: typeof doc.attachments)}
 	<div class="grid gap-1.5">
 		{#each list as a (a.id)}
-			<div class="flex items-start gap-2">
+			<div class="flex flex-wrap items-start gap-x-2 gap-y-0.5">
 				{#if a.mime_type.startsWith('image/')}
 					<button
 						type="button"
@@ -153,13 +150,13 @@
 					</button>
 				{:else}
 					<a
-						class="font-mono text-xs text-info hover:underline"
+						class="basis-full font-mono text-xs text-info hover:underline"
 						href={attachmentUrl(a.id)}
 						target="_blank"
 						rel="noopener">{a.filename}</a
 					>
 				{/if}
-				<div class="min-w-0 font-mono text-[11px] text-muted-foreground">
+				<div class="min-w-0 flex-1 font-mono text-[11px] text-muted-foreground">
 					{#if a.kind === 'closeout'}<span class="text-ok">CLOSEOUT</span> ·{/if}
 					{a.uploaded_by ?? ''}
 					<Timestamp value={a.created_at} />

@@ -207,6 +207,6 @@
 			{/if}
 		</form>
 	{:else if !step.step_kit.length}
-		<span class="font-mono text-xs text-muted-foreground">PARTS — none</span>
+		<span class="font-mono text-xs text-muted-foreground">none</span>
 	{/if}
 </div>

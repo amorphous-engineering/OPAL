@@ -223,6 +223,27 @@ def test_complete_step_reports_instance_completed_on_last_step(client, db_sessio
     assert step1["completed"]["by"] == test_user.name
 
 
+def test_complete_step_reports_awaiting_signoff(client, db_session, test_user):
+    proc_id = client.post("/api/procedures", json={"name": "Signoff"}).json()["id"]
+    client.post(
+        f"/api/procedures/{proc_id}/steps", json={"title": "Torque", "requires_signoff": True}
+    )
+    client.post(f"/api/procedures/{proc_id}/publish")
+    instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
+        "id"
+    ]
+
+    data = _call(
+        server._complete_step,
+        db_session,
+        {"execution_id": instance_id, "user_id": test_user.id, "step_number": 1},
+    )
+    assert data["success"] is True
+    assert data["awaiting_signoff"] is True
+    assert data["status"] == "awaiting_signoff"
+    assert "awaiting sign-off" in data["message"]
+
+
 def test_complete_step_records_completion(client, db_session, test_user):
     instance_id, _ = _create_instance(client)
     args = {"execution_id": instance_id, "user_id": test_user.id}

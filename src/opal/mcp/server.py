@@ -2030,7 +2030,8 @@ async def list_tools() -> list[Tool]:
                 "Complete a step with optional captured data. Requires the "
                 "user_id of the human who performed the work — agents observe, "
                 "attach, and file anomalies, but completion carries a human "
-                "signature."
+                "signature. A step that requires sign-off ends awaiting sign-off "
+                "(awaiting_signoff in the response); sign-off is human-only."
             ),
             inputSchema={
                 "type": "object",
@@ -6311,14 +6312,19 @@ async def _complete_step(db, args: dict) -> list[TextContent]:
         return json_response({"error": "Validation failed", "details": result.validation_errors})
 
     db.commit()
+    label = step_exec.step_number_str or step_exec.step_number
+    status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
+    awaiting = status == "awaiting_signoff"
+    message = f"Step {label} completed by {user.name}"
+    if awaiting:
+        message += "; awaiting sign-off (a human signs off in the web client)"
     return json_response(
         {
             "success": True,
-            "message": (
-                f"Step {step_exec.step_number_str or step_exec.step_number} "
-                f"completed by {user.name}"
-            ),
+            "message": message,
             "step_number": step_exec.step_number,
+            "status": status,
+            "awaiting_signoff": awaiting,
             "instance_completed": result.instance_completed,
         }
     )

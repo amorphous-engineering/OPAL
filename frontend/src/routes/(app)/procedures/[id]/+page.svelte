@@ -131,10 +131,9 @@
 		{#if startable}
 			<Button href={`/executions/new?procedure_id=${p.id}`}>START EXECUTION</Button>
 		{/if}
-		<Button
-			variant={startable && unpublished === false ? 'outline' : 'default'}
-			onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button
-		>
+		{#if unpublished !== false}
+			<Button onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button>
+		{/if}
 		{#if p.status === 'active'}
 			<Button variant="outline" onclick={() => setStatus('deprecated')}>DEPRECATE</Button>
 		{:else if p.status === 'deprecated'}
@@ -182,7 +181,11 @@
 						>
 					{/if}
 				</DetailRow>
-				<DetailRow label="Steps" value={`${opCount} ops · ${subCount} steps`} mono />
+				<DetailRow
+					label="Steps"
+					value={`${opCount + subCount} (${opCount} OP${opCount === 1 ? '' : 'S'})`}
+					mono
+				/>
 				<DetailRow label="Created"><Timestamp value={p.created_at} /></DetailRow>
 				<DetailRow label="Updated"><Timestamp value={p.updated_at} /></DetailRow>
 				<DetailRow label="Description">

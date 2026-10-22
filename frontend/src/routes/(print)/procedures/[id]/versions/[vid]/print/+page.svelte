@@ -111,6 +111,14 @@
 				{@render signLines(s)}
 			</div>
 		{/each}
+		{#if g.subs.length > 0 && g.op.requires_signoff}
+			<div class="border-t border-black px-2.5 py-2 text-[9pt]">
+				<span class="flex items-baseline gap-1"
+					><b>OP sign-off{g.op.required_role ? ` (${g.op.required_role})` : ''}:</b>
+					<span class="inline-block min-w-28 border-b border-black">&nbsp;</span></span
+				>
+			</div>
+		{/if}
 	</section>
 {/snippet}
 

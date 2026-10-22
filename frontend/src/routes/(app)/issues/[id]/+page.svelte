@@ -103,6 +103,9 @@
 	let noteFor = $state<string | null>(null);
 	let note = $state('');
 	let noteBusy = $state(false);
+	// Holds after the proposed narrowing, from the same readout the Holds section uses.
+	let preview = $state<{ label: string }[]>([]);
+	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(' · ');
 
 	async function setContainment(e: Event & { currentTarget: HTMLSelectElement }) {
 		const next = e.currentTarget.value;
@@ -112,7 +115,15 @@
 		if (narrowing && issue.disp_state === 'undispositioned') {
 			select.value = issue.containment;
 			note = '';
+			preview = [];
 			noteFor = next;
+			try {
+				preview = await api.get<{ label: string }[]>(
+					`/issues/${issue.id}/holding?containment=${next}`
+				);
+			} catch (err) {
+				toastError(err);
+			}
 			return;
 		}
 		try {
@@ -310,7 +321,7 @@
 	});
 	const redlineHref = $derived(
 		issue.procedure_instance_id && issue.raised_op_order !== null
-			? `/executions/${issue.procedure_instance_id}?tab=operations&op=${issue.raised_op_order}&redline_issue=${issue.id}`
+			? `/executions/${issue.procedure_instance_id}?op=${issue.raised_op_order}&redline_issue=${issue.id}`
 			: null
 	);
 	const hasRedlineAction = $derived(
@@ -767,7 +778,7 @@
 				<DetailRow label="Raised at" mono>
 					{#if issue.raised_step_label && issue.procedure_instance_id}
 						<a
-							href={`/executions/${issue.procedure_instance_id}?tab=operations&op=${issue.raised_op_order ?? ''}`}
+							href={`/executions/${issue.procedure_instance_id}?op=${issue.raised_op_order ?? ''}`}
 							class="text-info hover:underline">{issue.raised_step_label}</a
 						>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
@@ -778,7 +789,7 @@
 							{#each issue.redline_ops as op (op.step_number)}
 								<li class="flex gap-2 font-mono text-xs">
 									<a
-										href={`/executions/${issue.procedure_instance_id}?tab=operations&op=${op.step_number}`}
+										href={`/executions/${issue.procedure_instance_id}?op=${op.step_number}`}
 										class="text-info hover:underline">{op.label}</a
 									>
 									<span class="truncate font-sans text-sm">{op.title}</span>
@@ -852,7 +863,14 @@
 		<Dialog.Header>
 			<Dialog.Title>Narrow containment to {stateLabel(noteFor)}</Dialog.Title>
 			<Dialog.Description>
-				{issue.issue_number} is undispositioned: this releases a hold. The note is recorded in the thread.
+				{#if preview.length}
+					{issue.issue_number} holds {holdNames(data.holding)}; after this it holds {holdNames(
+						preview
+					)}. The note is recorded in the thread.
+				{:else}
+					This releases {holdNames(data.holding) || 'every hold'} held by {issue.issue_number}. The
+					note is recorded in the thread.
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
@@ -866,7 +884,9 @@
 			<Textarea id="narrow-note" bind:value={note} rows={3} autofocus />
 			<Dialog.Footer class="mt-2">
 				<Button type="button" variant="outline" onclick={() => (noteFor = null)}>CANCEL</Button>
-				<Button type="submit" disabled={noteBusy || !note.trim()}>RELEASE HOLD</Button>
+				<Button type="submit" disabled={noteBusy || !note.trim()}
+					>{preview.length ? 'NARROW' : 'RELEASE HOLD'}</Button
+				>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

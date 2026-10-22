@@ -155,15 +155,24 @@ def scope_label(step_exec: StepExecution) -> str:
     return _op_label(step_exec) if step_exec.level == 0 else _step_label(step_exec)
 
 
-def holding_readout(db: Session, issue: Issue) -> list[dict]:
+def holding_readout(db: Session, issue: Issue, containment: str | None = None) -> list[dict]:
     """What this issue is stopping, as [{label, scope, href}] — the HOLDING
     panel, the disposition confirm sentence, and MCP holds all read from here.
-    Labels are scope + verb ('OP 4 COMPLETE', '4.1 COMPLETE')."""
-    if not issue.is_blocking:
+    Labels are scope + verb ('OP 4 COMPLETE', '4.1 COMPLETE'). `containment`
+    previews the readout as if the issue had that containment (the narrowing
+    dialog): STEP lists the step and the OP that cannot complete over it."""
+    if containment is None:
+        if not issue.is_blocking:
+            return []
+        containment = _val(issue.containment)
+    elif (
+        issue.deleted_at is not None
+        or issue.disp_state != "undispositioned"
+        or containment == Containment.ADVISORY.value
+    ):
         return []
 
     instance_id = issue.procedure_instance_id
-    containment = _val(issue.containment)
 
     instance = (
         db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()

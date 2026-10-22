@@ -36,12 +36,12 @@
 			{step.title}
 		</Dialog.Description>
 	</Dialog.Header>
-	<FormRow label="Reason" for="skip-reason">
-		<Textarea id="skip-reason" rows={3} bind:value={reason} autofocus />
+	<FormRow label="Reason" for="skip-reason" required>
+		<Textarea id="skip-reason" rows={3} bind:value={reason} required autofocus />
 	</FormRow>
 	{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
 	<Dialog.Footer>
 		<Button variant="outline" onclick={() => store.closeDialog()}>CANCEL</Button>
-		<Button type="submit" variant="destructive" disabled={busy}>SKIP STEP</Button>
+		<Button type="submit" variant="destructive" disabled={busy || !reason.trim()}>SKIP STEP</Button>
 	</Dialog.Footer>
 </form>
