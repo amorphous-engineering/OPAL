@@ -23,9 +23,13 @@
 	import PartLines from '#lib/components/procedures/PartLines.svelte';
 	import PublishDialog from '#lib/components/procedures/PublishDialog.svelte';
 	import ReferenceDocs from '#lib/components/procedures/ReferenceDocs.svelte';
-	import StepOutline from '#lib/components/procedures/StepOutline.svelte';
+	import ProcedureEditor from '#lib/components/procedures/ProcedureEditor.svelte';
 	import VersionsSection from '#lib/components/procedures/VersionsSection.svelte';
-	import type { ExecutionRow, IssueRow } from '#lib/components/procedures/types.js';
+	import type {
+		ExecutionRow,
+		IssueRow,
+		ProcedureDetail
+	} from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -34,7 +38,33 @@
 	const currentVersion = $derived(data.versions.find((v) => v.id === p.current_version_id));
 	const nextVersion = $derived((data.versions[0]?.version_number ?? 0) + 1);
 	const startable = $derived(p.status === 'active' && !!p.current_version_id);
-	const stepCount = $derived(p.steps.reduce((n, s) => n + 1 + s.sub_steps.length, 0));
+	// The editor changes the draft under the loaded page: it reports sizes, and the
+	// draft-vs-published state is re-read from the API after edits settle.
+	let live = $state<{ unpublished: boolean | null; ops: number; steps: number } | null>(null);
+	let liveFor = 0;
+	$effect(() => {
+		// A reload of the page data is authoritative again.
+		void data.procedure;
+		live = null;
+	});
+	const unpublished = $derived(live ? live.unpublished : p.unpublished_changes);
+	const opCount = $derived(live?.ops ?? p.steps.length);
+	const subCount = $derived(live?.steps ?? p.steps.reduce((n, s) => n + s.sub_steps.length, 0));
+
+	let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+	function draftChanged(counts: { ops: number; steps: number }) {
+		clearTimeout(refreshTimer);
+		const ticket = ++liveFor;
+		refreshTimer = setTimeout(async () => {
+			try {
+				const fresh = await api.get<ProcedureDetail>(`/procedures/${p.id}`);
+				if (ticket === liveFor)
+					live = { unpublished: fresh.unpublished_changes, ops: counts.ops, steps: counts.steps };
+			} catch {
+				/* the next change re-reads it */
+			}
+		}, 300);
+	}
 	const showOutputs = $derived(p.procedure_type === 'build' || data.outputs.length > 0);
 
 	let publishing = $state(false);
@@ -102,7 +132,7 @@
 			<Button href={`/executions/new?procedure_id=${p.id}`}>START EXECUTION</Button>
 		{/if}
 		<Button
-			variant={startable && p.unpublished_changes === false ? 'outline' : 'default'}
+			variant={startable && unpublished === false ? 'outline' : 'default'}
 			onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button
 		>
 		{#if p.status === 'active'}
@@ -140,9 +170,9 @@
 					{:else}—{/if}
 				</DetailRow>
 				<DetailRow label="Draft">
-					{#if p.unpublished_changes === null}
+					{#if unpublished === null}
 						<span class="font-mono text-xs text-muted-foreground">NEVER PUBLISHED</span>
-					{:else if p.unpublished_changes}
+					{:else if unpublished}
 						<span class="font-mono text-xs text-warn"
 							>CHANGED SINCE v{currentVersion?.version_number}</span
 						>
@@ -152,11 +182,7 @@
 						>
 					{/if}
 				</DetailRow>
-				<DetailRow
-					label="Steps"
-					value={`${p.steps.length} ops · ${stepCount - p.steps.length} steps`}
-					mono
-				/>
+				<DetailRow label="Steps" value={`${opCount} ops · ${subCount} steps`} mono />
 				<DetailRow label="Created"><Timestamp value={p.created_at} /></DetailRow>
 				<DetailRow label="Updated"><Timestamp value={p.updated_at} /></DetailRow>
 				<DetailRow label="Description">
@@ -166,9 +192,6 @@
 				</DetailRow>
 			</DetailTable>
 		</Section>
-
-		<!-- The step editor replaces StepOutline; the rest of this page stays. -->
-		<StepOutline steps={p.steps} onchange={reload} />
 	</div>
 
 	<div class="grid min-w-0 gap-4">
@@ -219,42 +242,6 @@
 			</Section>
 		{/if}
 
-		{#if data.issues.total === 0}
-			<EmptyLine label="Open issues" />
-		{:else}
-			<Section title="Open issues" count={data.issues.total}>
-				{#snippet actions()}
-					{#if data.issues.total > data.issues.items.length}
-						<Button variant="ghost" size="xs" href={`/issues?procedure_id=${p.id}&status=open`}
-							>ALL →</Button
-						>
-					{/if}
-				{/snippet}
-				<DataTable
-					rows={data.issues.items}
-					columns={issueColumns}
-					emptyLabel="Open issues"
-					dense
-					key={(r) => r.id}
-					href={(r) => `/issues/${r.id}`}
-				>
-					{#snippet cell(r, col)}
-						{#if col.key === 'issue_number'}
-							<a href={`/issues/${r.id}`} class="text-info hover:underline"
-								>{r.issue_number ?? '—'}</a
-							>
-						{:else if col.key === 'priority'}
-							<State value={r.priority} />
-						{:else if col.key === 'disp_state'}
-							<State value={r.disp_state} />
-						{:else}
-							{(r as unknown as Record<string, unknown>)[col.key]}
-						{/if}
-					{/snippet}
-				</DataTable>
-			</Section>
-		{/if}
-
 		<VersionsSection
 			procedureId={p.id}
 			versions={data.versions}
@@ -264,10 +251,50 @@
 	</div>
 </div>
 
+<div class="px-4 pb-4">
+	{#key `${p.id}:${p.updated_at}`}
+		<ProcedureEditor procedureId={p.id} onchange={draftChanged} />
+	{/key}
+</div>
+
 <div class="grid gap-4 px-4 pb-4">
 	<PartLines kind="kit" procedureId={p.id} lines={data.kit} onchange={reload} />
 	{#if showOutputs}
 		<PartLines kind="outputs" procedureId={p.id} lines={data.outputs} onchange={reload} />
+	{/if}
+	{#if data.issues.total === 0}
+		<EmptyLine label="Open issues" />
+	{:else}
+		<Section title="Open issues" count={data.issues.total}>
+			{#snippet actions()}
+				{#if data.issues.total > data.issues.items.length}
+					<Button variant="ghost" size="xs" href={`/issues?procedure_id=${p.id}&status=open`}
+						>ALL →</Button
+					>
+				{/if}
+			{/snippet}
+			<DataTable
+				rows={data.issues.items}
+				columns={issueColumns}
+				emptyLabel="Open issues"
+				dense
+				key={(r) => r.id}
+				href={(r) => `/issues/${r.id}`}
+			>
+				{#snippet cell(r, col)}
+					{#if col.key === 'issue_number'}
+						<a href={`/issues/${r.id}`} class="text-info hover:underline">{r.issue_number ?? '—'}</a
+						>
+					{:else if col.key === 'priority'}
+						<State value={r.priority} />
+					{:else if col.key === 'disp_state'}
+						<State value={r.disp_state} />
+					{:else}
+						{(r as unknown as Record<string, unknown>)[col.key]}
+					{/if}
+				{/snippet}
+			</DataTable>
+		</Section>
 	{/if}
 </div>
 
@@ -275,7 +302,7 @@
 	bind:open={publishing}
 	procedureId={p.id}
 	{nextVersion}
-	unchanged={p.unpublished_changes === false}
+	unchanged={unpublished === false}
 	onpublished={reload}
 />
 <DetailsDialog
