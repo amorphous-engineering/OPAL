@@ -4,14 +4,16 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import AuditContext, get_model_dict, log_create, log_delete, log_update
+from opal.core.diff import diff_part_lists, diff_procedure_versions, snapshots_equivalent
 from opal.core.part_lifecycle import DraftPartsBlocked, draft_parts_in
-from opal.db.models import Kit, Part, ProcedureOutput
+from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput
+from opal.db.models.execution import InstanceStatus, ProcedureInstance
 from opal.db.models.procedure import (
     MasterProcedure,
     ProcedureStatus,
@@ -65,14 +67,33 @@ class ProcedureResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     steps: list[StepSchema] = []
+    # Computed on GET /{id} only: does the draft differ from the current
+    # published version? None when nothing is published yet.
+    unpublished_changes: bool | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ProcedureListItem(BaseModel):
+    """One row of the procedure list: no step tree, with version and counts."""
+
+    id: int
+    name: str
+    description: str | None = None
+    status: str
+    procedure_type: str = "op"
+    current_version_id: int | None = None
+    current_version_number: int | None = None
+    step_count: int = 0
+    execution_count: int = 0
+    created_at: datetime
+    updated_at: datetime
 
 
 class ProcedureListResponse(BaseModel):
     """Paginated procedure list."""
 
-    items: list[ProcedureResponse]
+    items: list[ProcedureListItem]
     total: int
     page: int
     page_size: int
@@ -130,6 +151,12 @@ class StepReorder(BaseModel):
     step_ids: list[int] = Field(..., description="Step IDs in new order")
 
 
+class PublishRequest(BaseModel):
+    """Optional publish payload."""
+
+    change_note: str | None = Field(None, max_length=2000)
+
+
 class VersionResponse(BaseModel):
     """Procedure version response."""
 
@@ -137,8 +164,19 @@ class VersionResponse(BaseModel):
     version_number: int
     created_at: datetime
     created_by_id: int | None = None
+    created_by_name: str | None = None
+    change_note: str | None = None
+    step_count: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class VersionPart(BaseModel):
+    """Part identity for a part id referenced by a version snapshot."""
+
+    id: int
+    internal_pn: str | None = None
+    name: str
 
 
 class VersionDetailResponse(BaseModel):
@@ -149,6 +187,15 @@ class VersionDetailResponse(BaseModel):
     content: dict[str, Any]
     created_at: datetime
     created_by_id: int | None = None
+    created_by_name: str | None = None
+    change_note: str | None = None
+    procedure_id: int
+    procedure_name: str
+    procedure_type: str = "op"
+    is_current: bool = False
+    # Parts named by kit_items / output_items / step_kit, so a snapshot view
+    # can show part numbers without one lookup per row.
+    parts: list[VersionPart] = []
 
     model_config = {"from_attributes": True}
 
@@ -159,7 +206,10 @@ class KitItemResponse(BaseModel):
     id: int
     part_id: int
     part_name: str
+    part_internal_pn: str | None = None
     part_external_pn: str | None = None
+    part_lifecycle_state: str | None = None
+    part_on_hand: float | None = None
     quantity_required: float
 
 
@@ -225,7 +275,61 @@ def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
     return [build_schema(s) for s in normal_ops + contingency_ops]
 
 
+def _enum_value(v: Any) -> str:
+    return v.value if hasattr(v, "value") else str(v)
+
+
+def _on_hand(db: DbSession, part_ids: list[int]) -> dict[int, float]:
+    """Total stock per part id in one query."""
+    if not part_ids:
+        return {}
+    rows = (
+        db.query(InventoryRecord.part_id, func.coalesce(func.sum(InventoryRecord.quantity), 0))
+        .filter(InventoryRecord.part_id.in_(part_ids))
+        .group_by(InventoryRecord.part_id)
+        .all()
+    )
+    return {pid: float(total) for pid, total in rows}
+
+
+def _kit_response(k: Kit, on_hand: dict[int, float]) -> KitItemResponse:
+    return KitItemResponse(
+        id=k.id,
+        part_id=k.part_id,
+        part_name=k.part.name,
+        part_internal_pn=k.part.internal_pn,
+        part_external_pn=k.part.external_pn,
+        part_lifecycle_state=k.part.lifecycle_state,
+        part_on_hand=on_hand.get(k.part_id, 0.0),
+        quantity_required=float(k.quantity_required),
+    )
+
+
+def _output_response(o: ProcedureOutput) -> "OutputResponse":
+    return OutputResponse(
+        id=o.id,
+        part_id=o.part_id,
+        part_name=o.part.name,
+        part_internal_pn=o.part.internal_pn,
+        part_external_pn=o.part.external_pn,
+        part_lifecycle_state=o.part.lifecycle_state,
+        quantity_produced=float(o.quantity_produced),
+    )
+
+
 # ============ Procedure CRUD ============
+
+
+_LIST_SORTS = (
+    "name",
+    "status",
+    "type",
+    "version",
+    "steps",
+    "executions",
+    "created_at",
+    "updated_at",
+)
 
 
 @router.get("", response_model=ProcedureListResponse)
@@ -233,30 +337,87 @@ def list_procedures(
     db: DbSession,
     search: str | None = Query(None),
     status: str | None = Query(None),
+    procedure_type: str | None = Query(None),
+    sort: str = Query("updated_at"),
+    dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> ProcedureListResponse:
-    """List procedures with optional search and filter."""
-    query = db.query(MasterProcedure).filter(MasterProcedure.deleted_at.is_(None))
+    """List procedures with search, filters, sort, and per-row counts."""
+    if sort not in _LIST_SORTS:
+        raise HTTPException(status_code=400, detail=f"Unknown sort: {sort}")
+
+    step_counts = (
+        db.query(ProcedureStep.procedure_id.label("pid"), func.count(ProcedureStep.id).label("n"))
+        .group_by(ProcedureStep.procedure_id)
+        .subquery()
+    )
+    exec_counts = (
+        db.query(
+            ProcedureInstance.procedure_id.label("pid"),
+            func.count(ProcedureInstance.id).label("n"),
+        )
+        .group_by(ProcedureInstance.procedure_id)
+        .subquery()
+    )
+    steps_col = func.coalesce(step_counts.c.n, 0)
+    execs_col = func.coalesce(exec_counts.c.n, 0)
+    query = (
+        db.query(MasterProcedure, ProcedureVersion.version_number, steps_col, execs_col)
+        .outerjoin(ProcedureVersion, ProcedureVersion.id == MasterProcedure.current_version_id)
+        .outerjoin(step_counts, step_counts.c.pid == MasterProcedure.id)
+        .outerjoin(exec_counts, exec_counts.c.pid == MasterProcedure.id)
+        .filter(MasterProcedure.deleted_at.is_(None))
+    )
 
     if search:
         search_term = f"%{search}%"
-        query = query.filter(MasterProcedure.name.ilike(search_term))
-
+        query = query.filter(
+            MasterProcedure.name.ilike(search_term) | MasterProcedure.description.ilike(search_term)
+        )
     if status:
         query = query.filter(MasterProcedure.status == status)
+    if procedure_type:
+        query = query.filter(MasterProcedure.procedure_type == procedure_type)
 
     total = query.count()
 
-    procedures = (
-        query.order_by(MasterProcedure.id.desc())
+    sort_cols = {
+        "name": func.lower(MasterProcedure.name),
+        "status": MasterProcedure.status,
+        "type": MasterProcedure.procedure_type,
+        "version": ProcedureVersion.version_number,
+        "steps": steps_col,
+        "executions": execs_col,
+        "created_at": MasterProcedure.created_at,
+        "updated_at": MasterProcedure.updated_at,
+    }
+    col = sort_cols[sort]
+    ordering = col.asc() if dir == "asc" else col.desc()
+    rows = (
+        query.order_by(ordering, MasterProcedure.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
 
     return ProcedureListResponse(
-        items=[ProcedureResponse.model_validate(p) for p in procedures],
+        items=[
+            ProcedureListItem(
+                id=p.id,
+                name=p.name,
+                description=p.description,
+                status=_enum_value(p.status),
+                procedure_type=_enum_value(p.procedure_type),
+                current_version_id=p.current_version_id,
+                current_version_number=version_number,
+                step_count=step_count,
+                execution_count=exec_count,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+            for p, version_number, step_count, exec_count in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -303,7 +464,15 @@ def get_procedure(
     # Build hierarchical step structure
     steps = _build_step_hierarchy(procedure.steps)
 
+    unpublished: bool | None = None
+    if procedure.current_version_id:
+        current = db.get(ProcedureVersion, procedure.current_version_id)
+        if current:
+            draft = _build_snapshot(db, procedure, list(procedure.steps))
+            unpublished = not snapshots_equivalent(draft, current.content)
+
     return ProcedureResponse(
+        unpublished_changes=unpublished,
         id=procedure.id,
         name=procedure.name,
         description=procedure.description,
@@ -344,9 +513,14 @@ def update_procedure(
         procedure.description = data.description
     if data.status is not None:
         try:
-            procedure.status = ProcedureStatus(data.status).value
+            new_status = ProcedureStatus(data.status).value
         except ValueError as err:
             raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
+        if new_status == ProcedureStatus.ACTIVE.value and not procedure.current_version_id:
+            raise HTTPException(
+                status_code=400, detail="Publish a version before activating this template"
+            )
+        procedure.status = new_status
     if data.procedure_type is not None:
         try:
             procedure.procedure_type = ProcedureType(data.procedure_type).value
@@ -376,6 +550,20 @@ def delete_procedure(
     )
     if not procedure:
         raise HTTPException(status_code=404, detail="Procedure not found")
+
+    open_executions = (
+        db.query(ProcedureInstance)
+        .filter(
+            ProcedureInstance.procedure_id == procedure_id,
+            ProcedureInstance.status.in_([InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value]),
+        )
+        .count()
+    )
+    if open_executions:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{open_executions} execution(s) are still open against this template",
+        )
 
     procedure.deleted_at = datetime.now(UTC)
     log_delete(db, procedure, user_id)
@@ -961,58 +1149,11 @@ def set_step_dependencies(
 # ============ Versions ============
 
 
-@router.post("/{procedure_id}/publish", response_model=VersionResponse, status_code=201)
-def publish_version(
-    procedure_id: int,
-    db: DbSession,
-    user_id: CurrentUserId,
-) -> VersionResponse:
-    """Publish current steps as a new immutable version."""
-    procedure = (
-        db.query(MasterProcedure)
-        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
-        .first()
-    )
-    if not procedure:
-        raise HTTPException(status_code=404, detail="Procedure not found")
-
-    # Get current steps
-    steps = (
-        db.query(ProcedureStep)
-        .filter(ProcedureStep.procedure_id == procedure_id)
-        .order_by(ProcedureStep.order)
-        .all()
-    )
-
-    if not steps:
-        raise HTTPException(status_code=400, detail="Cannot publish procedure with no steps")
-
-    # Publish is the procedure's commitment moment — its kit and outputs
-    # must not hold draft parts (authoring with drafts is legal; executing
-    # isn't). Raises DraftPartsBlocked -> 409 with the draft list.
-    publish_step_ids = [s.id for s in steps]
-    referenced_parts = [
-        k.part for k in db.query(Kit).filter(Kit.procedure_id == procedure_id).all()
-    ]
-    referenced_parts += [
-        sk.part for sk in db.query(StepKit).filter(StepKit.step_id.in_(publish_step_ids)).all()
-    ]
-    referenced_parts += [
-        o.part
-        for o in db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == procedure_id)
-    ]
-    drafts = draft_parts_in(referenced_parts)
-    if drafts:
-        raise DraftPartsBlocked(f"publish of procedure {procedure_id}", drafts)
-
-    # Get next version number
-    max_version = (
-        db.query(func.max(ProcedureVersion.version_number))
-        .filter(ProcedureVersion.procedure_id == procedure_id)
-        .scalar()
-    )
-    next_version = (max_version or 0) + 1
-
+def _build_snapshot(
+    db: DbSession, procedure: MasterProcedure, steps: list[ProcedureStep]
+) -> dict[str, Any]:
+    """The immutable content a publish would freeze, built from the live draft."""
+    steps = sorted(steps, key=lambda s: s.order)
     # Bulk-load step kit items for all steps in this procedure
     step_ids = [s.id for s in steps]
     all_step_kits = db.query(StepKit).filter(StepKit.step_id.in_(step_ids)).all()
@@ -1081,9 +1222,9 @@ def publish_version(
         }
 
     # Snapshot kit and output items alongside steps
-    kit_items = db.query(Kit).filter(Kit.procedure_id == procedure_id).all()
+    kit_items = db.query(Kit).filter(Kit.procedure_id == procedure.id).all()
     output_items = (
-        db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == procedure_id).all()
+        db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == procedure.id).all()
     )
 
     content = {
@@ -1099,6 +1240,66 @@ def publish_version(
             for o in output_items
         ],
     }
+
+    return content
+
+
+@router.post("/{procedure_id}/publish", response_model=VersionResponse, status_code=201)
+def publish_version(
+    procedure_id: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+    data: PublishRequest | None = None,
+) -> VersionResponse:
+    """Publish current steps as a new immutable version."""
+    procedure = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
+        .first()
+    )
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+
+    # Get current steps
+    steps = (
+        db.query(ProcedureStep)
+        .filter(ProcedureStep.procedure_id == procedure_id)
+        .order_by(ProcedureStep.order)
+        .all()
+    )
+
+    if not steps:
+        raise HTTPException(status_code=400, detail="Cannot publish procedure with no steps")
+
+    # Publish is the procedure's commitment moment — its kit and outputs
+    # must not hold draft parts (authoring with drafts is legal; executing
+    # isn't). Raises DraftPartsBlocked -> 409 with the draft list.
+    publish_step_ids = [s.id for s in steps]
+    referenced_parts = [
+        k.part for k in db.query(Kit).filter(Kit.procedure_id == procedure_id).all()
+    ]
+    referenced_parts += [
+        sk.part for sk in db.query(StepKit).filter(StepKit.step_id.in_(publish_step_ids)).all()
+    ]
+    referenced_parts += [
+        o.part
+        for o in db.query(ProcedureOutput).filter(ProcedureOutput.procedure_id == procedure_id)
+    ]
+    drafts = draft_parts_in(referenced_parts)
+    if drafts:
+        raise DraftPartsBlocked(f"publish of procedure {procedure_id}", drafts)
+
+    # Get next version number
+    max_version = (
+        db.query(func.max(ProcedureVersion.version_number))
+        .filter(ProcedureVersion.procedure_id == procedure_id)
+        .scalar()
+    )
+    next_version = (max_version or 0) + 1
+
+    content = _build_snapshot(db, procedure, steps)
+    if data and data.change_note and data.change_note.strip():
+        content["change_note"] = data.change_note.strip()
 
     version = ProcedureVersion(
         procedure_id=procedure_id,
@@ -1117,7 +1318,19 @@ def publish_version(
     db.commit()
     db.refresh(version)
 
-    return VersionResponse.model_validate(version)
+    return _version_response(version)
+
+
+def _version_response(v: ProcedureVersion) -> VersionResponse:
+    return VersionResponse(
+        id=v.id,
+        version_number=v.version_number,
+        created_at=v.created_at,
+        created_by_id=v.created_by_id,
+        created_by_name=v.created_by_user.name if v.created_by_user else None,
+        change_note=v.content.get("change_note"),
+        step_count=len(v.content.get("steps", [])),
+    )
 
 
 @router.get("/{procedure_id}/versions", response_model=list[VersionResponse])
@@ -1141,7 +1354,7 @@ def list_versions(
         .all()
     )
 
-    return [VersionResponse.model_validate(v) for v in versions]
+    return [_version_response(v) for v in versions]
 
 
 @router.get("/versions/{version_id}", response_model=VersionDetailResponse)
@@ -1153,8 +1366,172 @@ def get_version(
     version = db.query(ProcedureVersion).filter(ProcedureVersion.id == version_id).first()
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
+    procedure = version.procedure
 
-    return VersionDetailResponse.model_validate(version)
+    part_ids = {
+        i["part_id"]
+        for key in ("kit_items", "output_items")
+        for i in version.content.get(key, [])
+        if "part_id" in i
+    }
+    part_ids |= {
+        sk["part_id"]
+        for s in version.content.get("steps", [])
+        for sk in s.get("step_kit", [])
+        if "part_id" in sk
+    }
+    parts = (
+        db.query(Part).filter(Part.id.in_(part_ids)).order_by(Part.internal_pn).all()
+        if part_ids
+        else []
+    )
+    base = _version_response(version)
+    return VersionDetailResponse(
+        id=version.id,
+        version_number=version.version_number,
+        content=version.content,
+        created_at=version.created_at,
+        created_by_id=version.created_by_id,
+        created_by_name=base.created_by_name,
+        change_note=base.change_note,
+        procedure_id=procedure.id,
+        procedure_name=procedure.name,
+        procedure_type=_enum_value(procedure.procedure_type),
+        is_current=procedure.current_version_id == version.id,
+        parts=[VersionPart(id=p.id, internal_pn=p.internal_pn, name=p.name) for p in parts],
+    )
+
+
+@router.get("/versions/{version_id}/qr")
+def version_qr(version_id: int, db: DbSession, url: str = Query(..., max_length=2000)) -> Response:
+    """QR code (SVG) for a traveler. The client passes the URL to encode: it is the one
+    that knows which origin the shop floor reaches the app on."""
+    import io
+
+    import segno
+
+    if not db.query(ProcedureVersion.id).filter(ProcedureVersion.id == version_id).first():
+        raise HTTPException(status_code=404, detail="Version not found")
+    buf = io.BytesIO()
+    segno.make(url).save(buf, kind="svg", scale=3, border=1, xmldecl=False)
+    return Response(content=buf.getvalue(), media_type="image/svg+xml")
+
+
+class StepDiffSchema(BaseModel):
+    status: str
+    step_number: str
+    title_a: str | None = None
+    title_b: str | None = None
+    changed_fields: list[str] = []
+    # Old/new value for each changed field, keyed by field name.
+    changes: dict[str, dict[str, Any]] = {}
+
+
+class PartDiffSchema(BaseModel):
+    part_id: int
+    internal_pn: str | None = None
+    name: str | None = None
+    status: str
+    quantity_a: float | None = None
+    quantity_b: float | None = None
+
+
+class VersionDiffResponse(BaseModel):
+    procedure_id: int
+    procedure_name: str
+    version_a: VersionResponse
+    version_b: VersionResponse
+    procedure_changes: list[dict[str, Any]]
+    steps: list[StepDiffSchema]
+    kit: list[PartDiffSchema]
+    outputs: list[PartDiffSchema]
+    added: int
+    removed: int
+    modified: int
+    unchanged: int
+
+
+@router.get("/{procedure_id}/versions/{v1_id}/diff/{v2_id}", response_model=VersionDiffResponse)
+def diff_versions(procedure_id: int, v1_id: int, v2_id: int, db: DbSession) -> VersionDiffResponse:
+    """Step-, kit- and output-level diff between two published versions of a procedure."""
+    procedure = (
+        db.query(MasterProcedure)
+        .filter(MasterProcedure.id == procedure_id, MasterProcedure.deleted_at.is_(None))
+        .first()
+    )
+    if not procedure:
+        raise HTTPException(status_code=404, detail="Procedure not found")
+    versions = {
+        v.id: v
+        for v in db.query(ProcedureVersion)
+        .filter(
+            ProcedureVersion.procedure_id == procedure_id,
+            ProcedureVersion.id.in_([v1_id, v2_id]),
+        )
+        .all()
+    }
+    va, vb = versions.get(v1_id), versions.get(v2_id)
+    if not va or not vb:
+        raise HTTPException(status_code=404, detail="Version not found for this procedure")
+
+    proc_changes, step_diffs = diff_procedure_versions(va.content, vb.content)
+    kit = diff_part_lists(va.content.get("kit_items", []), vb.content.get("kit_items", []))
+    outs = diff_part_lists(
+        va.content.get("output_items", []),
+        vb.content.get("output_items", []),
+        qty_key="quantity_produced",
+    )
+    part_ids = {d["part_id"] for d in kit + outs}
+    part_map = (
+        {p.id: p for p in db.query(Part).filter(Part.id.in_(part_ids)).all()} if part_ids else {}
+    )
+
+    def part_rows(rows: list[dict[str, Any]]) -> list[PartDiffSchema]:
+        out = []
+        for d in rows:
+            part = part_map.get(d["part_id"])
+            out.append(
+                PartDiffSchema(
+                    **d,
+                    internal_pn=part.internal_pn if part else None,
+                    name=part.name if part else None,
+                )
+            )
+        return out
+
+    steps_out = []
+    for d in step_diffs:
+        sa, sb = d.step_a, d.step_b
+        steps_out.append(
+            StepDiffSchema(
+                status=d.status,
+                step_number=(sa or sb)["step_number"],  # type: ignore[index]
+                title_a=sa["title"] if sa else None,
+                title_b=sb["title"] if sb else None,
+                changed_fields=d.changed_fields,
+                changes={
+                    f: {"a": sa.get(f) if sa else None, "b": sb.get(f) if sb else None}
+                    for f in d.changed_fields
+                },
+            )
+        )
+    counts = {
+        k: sum(1 for d in step_diffs if d.status == k)
+        for k in ("added", "removed", "modified", "unchanged")
+    }
+    return VersionDiffResponse(
+        procedure_id=procedure.id,
+        procedure_name=procedure.name,
+        version_a=_version_response(va),
+        version_b=_version_response(vb),
+        procedure_changes=[
+            {"field": f, "a": va.content.get(f), "b": vb.content.get(f)} for f in proc_changes
+        ],
+        steps=steps_out,
+        kit=part_rows(kit),
+        outputs=part_rows(outs),
+        **counts,
+    )
 
 
 @router.post("/{procedure_id}/versions/{version_id}/restore", response_model=ProcedureResponse)
@@ -1289,16 +1666,8 @@ def get_kit(
         db.query(Kit).join(Part).filter(Kit.procedure_id == procedure_id).order_by(Part.name).all()
     )
 
-    return [
-        KitItemResponse(
-            id=k.id,
-            part_id=k.part_id,
-            part_name=k.part.name,
-            part_external_pn=k.part.external_pn,
-            quantity_required=float(k.quantity_required),
-        )
-        for k in kit_items
-    ]
+    on_hand = _on_hand(db, [k.part_id for k in kit_items])
+    return [_kit_response(k, on_hand) for k in kit_items]
 
 
 @router.post("/{procedure_id}/kit", response_model=KitItemResponse, status_code=201)
@@ -1340,13 +1709,7 @@ def add_kit_item(
     db.commit()
     db.refresh(kit_item)
 
-    return KitItemResponse(
-        id=kit_item.id,
-        part_id=kit_item.part_id,
-        part_name=part.name,
-        part_external_pn=part.external_pn,
-        quantity_required=float(kit_item.quantity_required),
-    )
+    return _kit_response(kit_item, _on_hand(db, [kit_item.part_id]))
 
 
 @router.patch("/{procedure_id}/kit/{kit_id}", response_model=KitItemResponse)
@@ -1368,13 +1731,7 @@ def update_kit_item(
     db.commit()
     db.refresh(kit_item)
 
-    return KitItemResponse(
-        id=kit_item.id,
-        part_id=kit_item.part_id,
-        part_name=kit_item.part.name,
-        part_external_pn=kit_item.part.external_pn,
-        quantity_required=float(kit_item.quantity_required),
-    )
+    return _kit_response(kit_item, _on_hand(db, [kit_item.part_id]))
 
 
 @router.delete("/{procedure_id}/kit/{part_id}", status_code=204)
@@ -1405,7 +1762,9 @@ class OutputResponse(BaseModel):
     id: int
     part_id: int
     part_name: str
+    part_internal_pn: str | None = None
     part_external_pn: str | None
+    part_lifecycle_state: str | None = None
     quantity_produced: float
 
     model_config = {"from_attributes": True}
@@ -1438,16 +1797,7 @@ def get_outputs(
     if not procedure:
         raise HTTPException(status_code=404, detail="Procedure not found")
 
-    return [
-        OutputResponse(
-            id=o.id,
-            part_id=o.part_id,
-            part_name=o.part.name,
-            part_external_pn=o.part.external_pn,
-            quantity_produced=float(o.quantity_produced),
-        )
-        for o in procedure.outputs
-    ]
+    return [_output_response(o) for o in procedure.outputs]
 
 
 @router.post("/{procedure_id}/outputs", response_model=OutputResponse, status_code=201)
@@ -1519,13 +1869,7 @@ def add_output(
     db.commit()
     db.refresh(output)
 
-    return OutputResponse(
-        id=output.id,
-        part_id=output.part_id,
-        part_name=part.name,
-        part_external_pn=part.external_pn,
-        quantity_produced=float(output.quantity_produced),
-    )
+    return _output_response(output)
 
 
 @router.patch("/{procedure_id}/outputs/{part_id}", response_model=OutputResponse)
@@ -1553,13 +1897,7 @@ def update_output(
     db.commit()
     db.refresh(output)
 
-    return OutputResponse(
-        id=output.id,
-        part_id=output.part_id,
-        part_name=output.part.name,
-        part_external_pn=output.part.external_pn,
-        quantity_produced=float(output.quantity_produced),
-    )
+    return _output_response(output)
 
 
 @router.delete("/{procedure_id}/outputs/{part_id}", status_code=204)
@@ -1843,6 +2181,7 @@ def clone_procedure(
     new_procedure = MasterProcedure(
         name=clone_name,
         description=source.description,
+        procedure_type=source.procedure_type,
         status=ProcedureStatus.DRAFT,
         current_version_id=None,
     )
@@ -1893,6 +2232,16 @@ def clone_procedure(
             )
             if new_step:
                 new_step.parent_step_id = step_id_map[source_step.parent_step_id]
+
+    # Clone step dependencies (remapped to the new step ids)
+    for dep in db.query(StepDependency).filter(StepDependency.step_id.in_(list(step_id_map))):
+        if dep.depends_on_step_id in step_id_map:
+            db.add(
+                StepDependency(
+                    step_id=step_id_map[dep.step_id],
+                    depends_on_step_id=step_id_map[dep.depends_on_step_id],
+                )
+            )
 
     # Clone step-level kit items
     if data.copy_kit:

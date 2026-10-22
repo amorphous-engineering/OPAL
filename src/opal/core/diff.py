@@ -22,6 +22,11 @@ _STEP_COMPARE_FIELDS = [
     "required_role",
     "caution",
     "required_data_schema",
+    "requires_signoff",
+    "strict_sequence",
+    "depends_on",
+    "step_kit",
+    "images",
 ]
 
 
@@ -86,3 +91,58 @@ def _step_sort_key(sn: str) -> tuple:
         except ValueError:
             nums.append(0)
     return (is_contingency, nums)
+
+
+def diff_part_lists(
+    list_a: list[dict[str, Any]],
+    list_b: list[dict[str, Any]],
+    qty_key: str = "quantity_required",
+) -> list[dict[str, Any]]:
+    """Compare two snapshot part lists (kit_items / output_items) by part id.
+
+    Returns one row per part that is added, removed, or changed in quantity
+    (unchanged parts are omitted).
+    """
+    a = {i["part_id"]: float(i.get(qty_key, 0)) for i in list_a if "part_id" in i}
+    b = {i["part_id"]: float(i.get(qty_key, 0)) for i in list_b if "part_id" in i}
+    rows: list[dict[str, Any]] = []
+    for pid in sorted(set(a) | set(b)):
+        if pid not in b:
+            rows.append(
+                {"part_id": pid, "status": "removed", "quantity_a": a[pid], "quantity_b": None}
+            )
+        elif pid not in a:
+            rows.append(
+                {"part_id": pid, "status": "added", "quantity_a": None, "quantity_b": b[pid]}
+            )
+        elif a[pid] != b[pid]:
+            rows.append(
+                {"part_id": pid, "status": "modified", "quantity_a": a[pid], "quantity_b": b[pid]}
+            )
+    return rows
+
+
+def _normalized(content: dict[str, Any]) -> dict[str, Any]:
+    """Snapshot content with database identity removed, so a restored or re-created
+    draft that reads the same compares equal to the version it came from."""
+    steps = content.get("steps", [])
+    order_by_id = {s.get("id"): s.get("order") for s in steps}
+    norm_steps = []
+    for s in steps:
+        n = {k: v for k, v in s.items() if k not in ("id", "parent_step_id", "images")}
+        n["parent_order"] = order_by_id.get(s.get("parent_step_id"))
+        n["images"] = [i.get("caption") for i in s.get("images", [])]
+        n["step_kit"] = sorted(s.get("step_kit", []), key=lambda k: k.get("part_id", 0))
+        norm_steps.append(n)
+    return {
+        "name": content.get("procedure_name"),
+        "description": content.get("procedure_description"),
+        "steps": sorted(norm_steps, key=lambda s: s.get("order", 0)),
+        "kit": sorted(content.get("kit_items", []), key=lambda k: k.get("part_id", 0)),
+        "outputs": sorted(content.get("output_items", []), key=lambda k: k.get("part_id", 0)),
+    }
+
+
+def snapshots_equivalent(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """True when two snapshot contents describe the same procedure."""
+    return _normalized(a) == _normalized(b)
