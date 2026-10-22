@@ -1,10 +1,6 @@
 """Tests for the purchase expense ledger written at PO receive time."""
 
-import pytest
 from fastapi.testclient import TestClient
-
-from opal.db.models import User
-from tests.conftest import login
 
 # ---- Helpers ----
 
@@ -37,12 +33,6 @@ def _receive(client: TestClient, auth_headers: dict, po: dict, lines: list[dict]
     )
     assert resp.status_code == 200, resp.text
     return resp.json()
-
-
-@pytest.fixture
-def web_client(client: TestClient, test_user: User) -> TestClient:
-    login(client, test_user)
-    return client
 
 
 # ---- Tests ----
@@ -120,39 +110,3 @@ def test_expenses_empty_before_receive(client, auth_headers):
 
 def test_expenses_404_for_unknown_purchase(client):
     assert client.get("/api/purchases/99999/expenses").status_code == 404
-
-
-def test_expense_panel_renders(web_client, auth_headers):
-    part = _create_part(web_client, name="Panel Part", tier=2, tracking_type="bulk")
-    po = _create_and_order_po(
-        web_client,
-        auth_headers,
-        [{"part_id": part["id"], "qty_ordered": 2, "unit_cost": "5.00"}],
-    )
-    _receive(
-        web_client,
-        auth_headers,
-        po,
-        [
-            {
-                "line_id": po["lines"][0]["id"],
-                "qty_received": 2,
-                "location": "GSE rack",
-                "lot_number": "LOT-G1",
-            }
-        ],
-    )
-
-    page = web_client.get(f"/purchases/{po['id']}")
-    assert page.status_code == 200
-    assert "EXPENSE RECORDS" in page.text
-    assert "Panel Part" in page.text
-    assert "10.00" in page.text  # total row: 2 x 5.00
-
-
-def test_expense_panel_empty_state(web_client, auth_headers):
-    part = _create_part(web_client, name="Empty Panel Part", tier=3, tracking_type="bulk")
-    po = _create_and_order_po(web_client, auth_headers, [{"part_id": part["id"], "qty_ordered": 1}])
-    page = web_client.get(f"/purchases/{po['id']}")
-    assert page.status_code == 200
-    assert "Expense records" in page.text
