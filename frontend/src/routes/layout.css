@@ -165,3 +165,43 @@
 		@apply font-mono text-[11px] font-medium tracking-wider text-muted-foreground uppercase;
 	}
 }
+
+/* Rendered markdown (authored content). */
+@layer components {
+	.prose-opal {
+		@apply text-sm leading-relaxed;
+	}
+	.prose-opal :where(p, ul, ol, pre, blockquote, table) {
+		@apply my-2 first:mt-0 last:mb-0;
+	}
+	.prose-opal :where(ul) {
+		@apply list-disc pl-5;
+	}
+	.prose-opal :where(ol) {
+		@apply list-decimal pl-5;
+	}
+	.prose-opal :where(h1, h2, h3, h4) {
+		@apply mt-3 mb-1 font-semibold;
+	}
+	.prose-opal :where(code) {
+		@apply bg-muted px-1 font-mono text-[0.85em];
+	}
+	.prose-opal :where(pre) {
+		@apply overflow-x-auto border border-border bg-muted p-2 font-mono text-xs;
+	}
+	.prose-opal :where(a) {
+		@apply text-info underline;
+	}
+	.prose-opal :where(blockquote) {
+		@apply border-l-2 border-border pl-3 text-muted-foreground;
+	}
+	.prose-opal :where(table) {
+		@apply w-full border-collapse text-xs;
+	}
+	.prose-opal :where(th, td) {
+		@apply border border-border px-2 py-1 text-left;
+	}
+	.prose-opal :where(img) {
+		@apply max-h-80 border border-border;
+	}
+}
