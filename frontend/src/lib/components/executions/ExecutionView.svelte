@@ -182,7 +182,7 @@
 			{/if}
 		</div>
 		<aside
-			class="min-w-0 lg:sticky lg:top-14 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto"
+			class="min-w-0 overflow-x-hidden lg:sticky lg:top-14 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto"
 			aria-label="Online, issues, attachments, facts"
 		>
 			<ExecutionRail {store} onedit={() => (editing = true)} />
