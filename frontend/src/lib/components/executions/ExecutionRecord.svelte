@@ -32,7 +32,7 @@
 </script>
 
 <div
-	class="grid min-w-0 grid-cols-1 content-start gap-3 [overflow-wrap:anywhere] xl:grid-cols-2 [&_table]:table-fixed"
+	class="grid max-w-5xl min-w-0 content-start gap-3 [overflow-wrap:anywhere] [&_table]:table-fixed"
 >
 	{#if rows.length || doc.attachments.length}
 		<Section
@@ -106,7 +106,7 @@
 		<DetailTable>
 			<DetailRow label="Procedure"
 				><a
-					class="block max-w-44 truncate text-info hover:underline"
+					class="text-info hover:underline"
 					title={inst.procedure.name}
 					href={`/procedures/${inst.procedure.id}`}>{inst.procedure.name}</a
 				></DetailRow

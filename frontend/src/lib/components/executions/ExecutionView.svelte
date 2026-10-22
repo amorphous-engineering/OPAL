@@ -5,9 +5,8 @@
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { confirm, PageHeader, State, toastError } from '#lib/components/opal/index.js';
+	import { confirm, PageHeader, State, TabStrip, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
 	import { session } from '#lib/session.svelte.js';
 	import { ExecutionStore } from '#lib/execution/store.svelte.js';
@@ -180,13 +179,11 @@
 			<ExecutionNav {store} onjump={jump} />
 		</aside>
 		<div class="grid min-w-0 content-start gap-3">
-			<Tabs.Root value={tab} onValueChange={setTab}>
-				<Tabs.List variant="line" class="border-b border-border">
-					{#each tabs as t (t.id)}
-						<Tabs.Trigger value={t.id} class="flex-none px-3">{t.label.toUpperCase()}</Tabs.Trigger>
-					{/each}
-				</Tabs.List>
-			</Tabs.Root>
+			<TabStrip
+				tabs={tabs.map((t) => ({ ...t, label: t.label.toUpperCase() }))}
+				value={tab}
+				onchange={setTab}
+			/>
 			{#if tab === 'document'}
 				<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency_ops} />
 			{:else if tab === 'data'}

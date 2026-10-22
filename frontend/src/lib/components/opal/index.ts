@@ -24,6 +24,7 @@ export { default as EmptyLine } from './EmptyLine.svelte';
 export { default as PageHeader } from './PageHeader.svelte';
 export { default as Section } from './Section.svelte';
 export { default as State } from './State.svelte';
+export { default as TabStrip } from './TabStrip.svelte';
 export { default as Timestamp } from './Timestamp.svelte';
 export { confirm } from './confirm.svelte';
 export { toast, toastError } from './toast.js';
