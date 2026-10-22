@@ -114,7 +114,9 @@ def onshape_status() -> OnshapeStatusResponse:
                 {
                     "name": doc.name,
                     "document_id": doc.document_id,
+                    "workspace_id": doc.workspace_id,
                     "element_id": doc.element_id,
+                    "element_type": doc.element_type,
                     "auto_sync": doc.auto_sync,
                 }
             )

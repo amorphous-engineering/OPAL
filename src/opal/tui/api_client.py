@@ -658,8 +658,10 @@ class OpalAPIClient:
     # ── Users ──────────────────────────────────────────────────────────
 
     def list_users(self) -> dict[str, Any]:
-        """List users."""
-        resp = self.client.get(self._url("/users"), headers=self._headers())
+        """List active users (the roster endpoint now includes deactivated accounts)."""
+        resp = self.client.get(
+            self._url("/users"), params={"is_active": "true"}, headers=self._headers()
+        )
         resp.raise_for_status()
         return resp.json()
 
