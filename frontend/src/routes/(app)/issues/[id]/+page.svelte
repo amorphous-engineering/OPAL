@@ -103,6 +103,9 @@
 	let noteFor = $state<string | null>(null);
 	let note = $state('');
 	let noteBusy = $state(false);
+	// Holds after the proposed narrowing, from the same readout the Holds section uses.
+	let preview = $state<{ label: string }[]>([]);
+	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(' · ');
 
 	async function setContainment(e: Event & { currentTarget: HTMLSelectElement }) {
 		const next = e.currentTarget.value;
@@ -112,7 +115,15 @@
 		if (narrowing && issue.disp_state === 'undispositioned') {
 			select.value = issue.containment;
 			note = '';
+			preview = [];
 			noteFor = next;
+			try {
+				preview = await api.get<{ label: string }[]>(
+					`/issues/${issue.id}/holding?containment=${next}`
+				);
+			} catch (err) {
+				toastError(err);
+			}
 			return;
 		}
 		try {
@@ -852,7 +863,14 @@
 		<Dialog.Header>
 			<Dialog.Title>Narrow containment to {stateLabel(noteFor)}</Dialog.Title>
 			<Dialog.Description>
-				{issue.issue_number} is undispositioned: this releases a hold. The note is recorded in the thread.
+				{#if preview.length}
+					{issue.issue_number} holds {holdNames(data.holding)}; after this it holds {holdNames(
+						preview
+					)}. The note is recorded in the thread.
+				{:else}
+					This releases {holdNames(data.holding) || 'every hold'} held by {issue.issue_number}. The
+					note is recorded in the thread.
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
@@ -866,7 +884,9 @@
 			<Textarea id="narrow-note" bind:value={note} rows={3} autofocus />
 			<Dialog.Footer class="mt-2">
 				<Button type="button" variant="outline" onclick={() => (noteFor = null)}>CANCEL</Button>
-				<Button type="submit" disabled={noteBusy || !note.trim()}>RELEASE HOLD</Button>
+				<Button type="submit" disabled={noteBusy || !note.trim()}
+					>{preview.length ? 'NARROW' : 'RELEASE HOLD'}</Button
+				>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

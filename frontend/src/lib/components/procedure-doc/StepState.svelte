@@ -6,18 +6,27 @@
 
 	let { step, opHeld = false }: { step: DocStep; opHeld?: boolean } = $props();
 
-	const hm = (v: string | null | undefined) => (v ? datetime(v).slice(11) : '');
+	// Completion stamp: local ISO date and minute, then who (name, initials as fallback).
+	const who = $derived(step.completed?.by ?? step.completed?.initials ?? '');
 	const raised = $derived(step.holds.filter((h) => h.kind === 'raised'));
 	const bound = $derived(step.holds.filter((h) => h.kind === 'bound'));
 </script>
 
 <span class="font-mono text-xs font-medium whitespace-nowrap">
 	{#if step.status === 'completed' || step.status === 'signed_off'}
-		<span class="text-ok" title={iso(step.completed?.at)}
-			>{step.completed?.initials ?? ''} {hm(step.completed?.at)}</span
+		<span class="inline-flex items-baseline gap-1.5 text-ok" title={iso(step.completed?.at)}
+			><time datetime={iso(step.completed?.at)}>{datetime(step.completed?.at)}</time><span
+				class="max-w-[9rem] truncate">{who}</span
+			></span
 		>
 	{:else if step.status === 'skipped'}
-		<span class="text-muted-foreground">SKIPPED {step.completed?.initials ?? ''}</span>
+		<span
+			class="inline-flex items-baseline gap-1.5 text-muted-foreground"
+			title={iso(step.completed?.at)}
+			>SKIPPED <time datetime={iso(step.completed?.at)}>{datetime(step.completed?.at)}</time><span
+				class="max-w-[9rem] truncate">{who}</span
+			></span
+		>
 	{:else if raised.length}
 		<span class="text-warn"
 			>HELD

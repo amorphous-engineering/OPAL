@@ -37,7 +37,7 @@
 
 <div class="flex flex-wrap items-center gap-x-3 gap-y-2" data-actions={step.order}>
 	{#if scope === 'step'}
-		{#if a.claim && (workable || awaiting)}
+		{#if a.claim && workable}
 			{#if claimGates.length && !claimed}
 				<span class="inline-flex items-center gap-2">
 					<Button size="xs" variant="outline" disabled>CLAIM</Button>

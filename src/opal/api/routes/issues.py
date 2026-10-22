@@ -673,15 +673,16 @@ def get_issue_steps(
 def get_issue_holding(
     issue_id: int,
     db: DbSession,
+    containment: Containment | None = None,
 ) -> list[dict]:
     """What this issue is stopping: [{label, scope, href}], empty for advisory
-    or dispositioned issues. The disposition confirm dialog reads its
-    consequence sentence from here."""
+    or dispositioned issues. The disposition and narrowing dialogs read their
+    consequence sentence from here; `containment` previews a proposed scope."""
     issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    return holding_readout(db, issue)
+    return holding_readout(db, issue, containment.value if containment else None)
 
 
 @router.patch("/{issue_id}", response_model=IssueResponse)

@@ -205,7 +205,9 @@
 					<span class="text-sm font-medium">{preview.procedure_name}</span>
 					<span class="font-mono">v{preview.version_number}</span>
 					<span class="font-mono text-muted-foreground"
-						>{preview.op_count} OP{preview.op_count === 1 ? '' : 'S'} · {preview.step_count} STEPS</span
+						>{preview.step_count} STEPS ({preview.op_count} OP{preview.op_count === 1
+							? ''
+							: 'S'})</span
 					>
 					<State value={preview.procedure_type} tone="muted" />
 					{#if preview.kit.length || preview.step_kit.length}
