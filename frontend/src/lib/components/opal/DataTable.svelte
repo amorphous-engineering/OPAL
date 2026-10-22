@@ -4,6 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { cn } from '#lib/utils.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import EmptyLine from './EmptyLine.svelte';
 	import type { Column } from './types.js';
 
@@ -21,7 +22,8 @@
 		rowClass,
 		key: rowKey,
 		class: className,
-		dense = false
+		dense = false,
+		selected = $bindable<(string | number)[] | undefined>(undefined)
 	}: {
 		rows: T[];
 		columns: Column<T>[];
@@ -38,6 +40,8 @@
 		key?: (row: T) => string | number;
 		class?: string;
 		dense?: boolean;
+		/** Row selection by `key`; pass an array (even empty) to show the checkbox column. */
+		selected?: (string | number)[];
 	} = $props();
 
 	function value(row: T, col: Column<T>) {
@@ -80,6 +84,21 @@
 		else goto(h);
 	}
 
+	const keys = $derived(rows.map((r, i) => (rowKey ? rowKey(r) : i)));
+	const allSelected = $derived(
+		!!selected && keys.length > 0 && keys.every((k) => selected!.includes(k))
+	);
+	function toggleAll(on: boolean) {
+		if (!selected) return;
+		selected = on
+			? [...selected, ...keys.filter((k) => !selected!.includes(k))]
+			: selected.filter((k) => !keys.includes(k));
+	}
+	function toggleRow(k: string | number, on: boolean) {
+		if (!selected) return;
+		selected = on ? [...selected, k] : selected.filter((x) => x !== k);
+	}
+
 	const clickable = $derived(!!href || !!onrowclick);
 	const alignClass = { left: 'text-left', right: 'text-right', center: 'text-center' };
 </script>
@@ -95,6 +114,15 @@
 		<table class="w-full border-collapse text-sm">
 			<thead>
 				<tr class="border-b border-border bg-muted/60">
+					{#if selected}
+						<th scope="col" class="h-8 w-9 px-3">
+							<Checkbox
+								checked={allSelected}
+								onCheckedChange={(v) => toggleAll(!!v)}
+								aria-label="Select all rows"
+							/>
+						</th>
+					{/if}
 					{#each columns as col (col.key)}
 						<th
 							scope="col"
@@ -130,7 +158,7 @@
 				{#if loading && rows.length === 0}
 					{#each [0, 1, 2] as i (i)}
 						<tr class="border-b border-border">
-							<td colspan={columns.length} class="h-8 px-3"
+							<td colspan={columns.length + (selected ? 1 : 0)} class="h-8 px-3"
 								><div class="h-3 w-1/3 animate-pulse bg-muted"></div></td
 							>
 						</tr>
@@ -138,6 +166,7 @@
 				{/if}
 				{#each sorted as row, i (rowKey ? rowKey(row) : i)}
 					{@const h = href?.(row)}
+					{@const rk = rowKey ? rowKey(row) : i}
 					<tr
 						class={cn(
 							'border-b border-border align-top',
@@ -149,6 +178,15 @@
 						tabindex={clickable ? 0 : undefined}
 						data-href={h}
 					>
+						{#if selected}
+							<td class="w-9 px-3 py-1.5 align-middle">
+								<Checkbox
+									checked={selected.includes(rk)}
+									onCheckedChange={(v) => toggleRow(rk, !!v)}
+									aria-label="Select row"
+								/>
+							</td>
+						{/if}
 						{#each columns as col, ci (col.key)}
 							<td
 								class={cn(

@@ -89,9 +89,10 @@
 		if (overLines.length > 0) {
 			const ok = await confirm({
 				title: 'Receive more than ordered?',
-				body: overLines
-					.map((l) => `${l.part_name}: ${fmtQty(over(l), l.unit_of_measure)} over`)
-					.join('\n'),
+				body:
+					overLines
+						.map((l) => `${l.part_name}: ${fmtQty(over(l), l.unit_of_measure)} over`)
+						.join('\n') + '\nThe excess is received into stock and costed on this order.',
 				action: 'RECEIVE'
 			});
 			if (!ok) return;

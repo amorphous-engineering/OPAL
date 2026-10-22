@@ -14,7 +14,7 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
 	import { api } from '#lib/api.js';
-	import ActionLink from './ActionLink.svelte';
+	import { ActionLink } from '#lib/components/opal/index.js';
 	import FormField from './FormField.svelte';
 	import { act } from './actions.js';
 	import type { PartDetail, PartSupplier } from './types.js';

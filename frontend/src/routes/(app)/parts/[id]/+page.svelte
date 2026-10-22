@@ -78,9 +78,7 @@
 			/>{/if}
 	{/snippet}
 	{#snippet actions()}
-		<Button variant="outline" size="sm" href={`/label?part=${part.id}`} target="_blank"
-			>PRINT LABEL</Button
-		>
+		<Button variant="outline" size="sm" href={`/label?part=${part.id}`}>PRINT LABEL</Button>
 		<Button
 			variant="outline"
 			size="sm"

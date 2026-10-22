@@ -16,7 +16,8 @@ from opal.core.designators import generate_serial_number
 from opal.core.genealogy import get_full_genealogy
 from opal.core.inventory import build_ledger, generate_opal_number, receipt_rules
 from opal.core.part_lifecycle import ensure_parts_active
-from opal.db.models import InventoryRecord, Part, StockTestResult, StockTransfer, TestTemplate
+from opal.db.models import InventoryRecord, Part, StockTestResult, StockTransfer, TestTemplate, User
+from opal.db.models.audit import AuditAction, AuditLog
 from opal.db.models.inventory import (
     ConsumptionType,
     InventoryConsumption,
@@ -815,6 +816,21 @@ def get_opal_detail(opal_number: str, db: DbSession) -> OpalDetailResponse:
 
     # Ledger
     entries = build_ledger(record)
+    receipt = next((e for e in entries if e.kind == "received" and not e.user_name), None)
+    if receipt:
+        # The opening receipt is not a movement row; its author is the creator in the audit log
+        created = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.table_name == record.__tablename__,
+                AuditLog.record_id == record.id,
+                AuditLog.action == AuditAction.CREATE,
+            )
+            .first()
+        )
+        if created and created.user_id:
+            author = db.get(User, created.user_id)
+            receipt.user_name = author.name if author else None
     instance_ids = {e.instance_id for e in entries if e.instance_id}
     instances = (
         {

@@ -15,7 +15,7 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { money } from '#lib/format.js';
-	import ListPager from '#lib/components/purchasing/ListPager.svelte';
+	import { Pager } from '#lib/components/opal/index.js';
 	import {
 		LIST_PAGE_SIZE,
 		PURCHASE_STATUSES,
@@ -202,7 +202,7 @@
 </DataTable>
 
 {#if data.total > 0}
-	<ListPager
+	<Pager
 		total={data.total}
 		page={data.page}
 		pageSize={LIST_PAGE_SIZE}

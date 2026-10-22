@@ -879,6 +879,7 @@ def receive_purchase(
                 )
                 db.add(inv_record)
                 db.flush()  # Ensure OPAL is committed before generating next
+                log_create(db, inv_record, user_id)
         else:
             # Bulk parts: one OPAL number for the entire received quantity
             opal_number = generate_opal_number(db)
@@ -893,6 +894,7 @@ def receive_purchase(
             )
             db.add(inv_record)
             db.flush()
+            log_create(db, inv_record, user_id)
 
         # Expense ledger: one immutable record per received line
         unit_cost = line.unit_cost

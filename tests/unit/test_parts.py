@@ -286,3 +286,22 @@ def test_import_skips_duplicate_external_pn(client):
     )
     body = resp.json()
     assert (body["created"], body["skipped"]) == (1, 1)
+
+
+def test_tracking_cannot_change_once_stock_exists(client):
+    part = client.post(
+        "/api/parts", json={"name": "Tracked Thing", "tier": 3, "tracking_type": "bulk"}
+    ).json()
+    # A part with no stock may still change tracking
+    resp = client.patch(f"/api/parts/{part['id']}", json={"tracking_type": "serialized"})
+    assert resp.status_code == 200
+    client.patch(f"/api/parts/{part['id']}", json={"tracking_type": "bulk"})
+    client.post(f"/api/parts/{part['id']}/activate", json={})
+    client.post("/api/inventory", json={"part_id": part["id"], "quantity": 5, "location": "A"})
+
+    resp = client.patch(f"/api/parts/{part['id']}", json={"tracking_type": "serialized"})
+    assert resp.status_code == 409
+    assert "tracking cannot change" in resp.json()["detail"]
+    # Same value is not a change
+    resp = client.patch(f"/api/parts/{part['id']}", json={"tracking_type": "bulk"})
+    assert resp.status_code == 200

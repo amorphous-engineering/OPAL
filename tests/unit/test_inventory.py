@@ -726,6 +726,26 @@ def test_detail_ledger_records_adjustments_and_counts(client: TestClient, bulk_p
     assert float(body["inventory"]["quantity"]) == 18
 
 
+def test_detail_ledger_names_who_received_the_stock(client: TestClient, bulk_part: dict) -> None:
+    """The opening receipt carries its author, for manual receipts and PO receipts alike."""
+    manual = _receive_stock(client, bulk_part["id"], quantity=5)
+    assert _detail(client, manual["opal_number"])["ledger"][0]["user_name"] == "Test Client"
+
+    po = client.post(
+        "/api/purchases",
+        json={"supplier": "ACME", "lines": [{"part_id": bulk_part["id"], "qty_ordered": 4}]},
+    ).json()
+    client.patch(f"/api/purchases/{po['id']}", json={"status": "ordered"})
+    line = po["lines"][0]["id"]
+    resp = client.post(
+        f"/api/purchases/{po['id']}/receive",
+        json={"lines": [{"line_id": line, "qty_received": 4, "location": "PO-LOC"}]},
+    )
+    assert resp.status_code == 200, resp.text
+    opal = client.get(f"/api/purchases/{po['id']}/inventory").json()[0]["opal_number"]
+    assert _detail(client, opal)["ledger"][0]["user_name"] == "Test Client"
+
+
 def test_detail_tests_and_templates(client: TestClient, bulk_part: dict) -> None:
     item = _receive_stock(client, bulk_part["id"])
     client.post(

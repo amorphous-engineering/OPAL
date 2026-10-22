@@ -25,7 +25,7 @@
 			href={page > 1 ? href(page - 1) : undefined}
 			disabled={page <= 1}>← PREV</Button
 		>
-		<span class="px-2 tabular-nums">{page} / {pages}</span>
+		<span class="px-2 tabular-nums">PAGE {page}/{pages}</span>
 		<Button
 			size="xs"
 			variant="outline"

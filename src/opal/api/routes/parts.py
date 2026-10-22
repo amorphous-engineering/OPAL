@@ -774,6 +774,19 @@ def update_part(
     if tier_change:
         require_configured_tier(update_data["tier"])
 
+    # Tracking decides how stock is stored (one record per unit vs one lump);
+    # flipping it under existing records would misdescribe them.
+    if "tracking_type" in update_data and update_data["tracking_type"] != part.tracking_type:
+        has_stock = (
+            db.query(InventoryRecord.id).filter(InventoryRecord.part_id == part.id).first()
+            is not None
+        )
+        if has_stock:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{part.internal_pn or part.name} has stock records; tracking cannot change",
+            )
+
     if tier_change and not pn_change:
         # Tier re-sync: the draft gets a fresh number from the new tier's
         # counter; the old number is abandoned permanently (gaps are information)
