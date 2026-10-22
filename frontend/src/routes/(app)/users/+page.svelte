@@ -114,7 +114,7 @@
 			{#if methods.length}
 				<span class="font-mono text-xs">{methods.join(' · ')}</span>
 			{:else}
-				<State value="no_credentials" tone="warn" label="NONE" />
+				<State value="unclaimed" tone="warn" />
 			{/if}
 		{:else if col.key === 'last_seen_at'}
 			{#if u.is_online}
