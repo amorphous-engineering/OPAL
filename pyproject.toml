@@ -19,7 +19,6 @@ dependencies = [
     "alembic>=1.14.0",
     "pydantic[email]>=2.10.0",
     "pydantic-settings>=2.14.2",  # GHSA-4xgf-cpjx-pc3j (NestedSecrets symlink escape)
-    "jinja2>=3.1.4",
     # >=0.0.30: earlier versions have a quadratic urlencoded-parse DoS
     # (PYSEC-2026-3036/3037) reachable on every form POST, incl. /login.
     "python-multipart>=0.0.30",

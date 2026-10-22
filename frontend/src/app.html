@@ -4,6 +4,16 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<script>
+			// Dark is OPAL's default theme. mode-watcher persists "system" before it
+			// reads its defaultMode, so seed the stored choice ahead of it.
+			try {
+				if (!localStorage.getItem('mode-watcher-mode'))
+					localStorage.setItem('mode-watcher-mode', 'dark');
+			} catch {
+				/* storage unavailable: mode-watcher falls back to the system setting */
+			}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

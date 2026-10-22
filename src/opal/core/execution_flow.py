@@ -477,6 +477,83 @@ class CompleteResult:
     validation_errors: list[str] = field(default_factory=list)
 
 
+def step_requires_signoff(version: ProcedureVersion | None, step_exec: StepExecution) -> bool:
+    """Whether finishing this step needs a sign-off: the published step's flag,
+    or the ad-hoc flag on the execution row (redline steps)."""
+    if step_exec.requires_signoff:
+        return True
+    if version is None:
+        return False
+    for step in version.content.get("steps", []):
+        if step.get("order") == step_exec.step_number:
+            return bool(step.get("requires_signoff"))
+    return False
+
+
+@dataclass
+class SignoffResult:
+    step_exec: StepExecution
+    instance_completed: bool = False
+
+
+def signoff_step_flow(
+    db: Session, instance: ProcedureInstance, step_exec: StepExecution, user_id: int
+) -> SignoffResult:
+    """SIGN OFF is the terminal commitment for a step or OP awaiting sign-off.
+    Same containment gate as COMPLETE; cascades OP and instance completion."""
+    inst_status = _status_value(instance.status)
+    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
+        raise FlowError("Instance is not active")
+
+    step_status = _status_value(step_exec.status)
+    if step_status == StepStatus.SIGNED_OFF.value:
+        raise FlowError("Step already signed off")
+    if step_status in (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value):
+        raise FlowError(
+            "Step has sub-steps that are not yet complete"
+            if step_exec.level == 0
+            else "Step must be completed before it can be signed off"
+        )
+    if step_status != StepStatus.AWAITING_SIGNOFF.value:
+        raise FlowError(f"Cannot sign off step in {step_status} status")
+
+    # Same containment gate as COMPLETE (sequence gates were met at completion).
+    blockers = held_scope_blockers(db, instance, step_exec)
+    if blockers:
+        raise FlowError("Cannot sign off: " + "; ".join(b.message for b in blockers))
+
+    now = datetime.now(UTC)
+    flipped = (
+        db.query(StepExecution)
+        .filter(
+            StepExecution.id == step_exec.id,
+            StepExecution.status == StepStatus.AWAITING_SIGNOFF,
+        )
+        .update(
+            {
+                StepExecution.status: StepStatus.SIGNED_OFF,
+                StepExecution.signed_off_at: now,
+                StepExecution.signed_off_by_id: user_id,
+            },
+            synchronize_session=False,
+        )
+    )
+    if not flipped:
+        db.rollback()
+        raise FlowError("Step already signed off")
+    db.expire(step_exec)
+
+    old_instance_status = _status_value(instance.status)
+    check_instance_completion(db, instance)
+    return SignoffResult(
+        step_exec=step_exec,
+        instance_completed=(
+            old_instance_status != InstanceStatus.COMPLETED.value
+            and _status_value(instance.status) == InstanceStatus.COMPLETED.value
+        ),
+    )
+
+
 def complete_step_flow(
     db: Session,
     instance: ProcedureInstance,
@@ -495,11 +572,9 @@ def complete_step_flow(
     step_status = _status_value(step_exec.status)
     if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
         raise FlowError("Step already completed")
-    if step_status not in (
-        StepStatus.PENDING.value,
-        StepStatus.IN_PROGRESS.value,
-        StepStatus.AWAITING_SIGNOFF.value,
-    ):
+    if step_status == StepStatus.AWAITING_SIGNOFF.value:
+        raise FlowError("Step is complete and awaiting sign-off")
+    if step_status not in (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value):
         raise FlowError(f"Cannot complete step in {step_status} status")
 
     holds = complete_blockers(db, instance, step_exec)
@@ -513,6 +588,14 @@ def complete_step_flow(
 
     instance_started = mark_instance_in_work(db, instance)
 
+    # A step that requires sign-off is not done when its operator completes
+    # it: it waits for a sign-off (signoff_step_flow) before it is terminal.
+    done_status = (
+        StepStatus.AWAITING_SIGNOFF
+        if step_requires_signoff(version, step_exec)
+        else StepStatus.COMPLETED
+    )
+
     # Re-assert the precondition as a guarded UPDATE: two users completing
     # the same step inside one poll window serialize at the write, and the
     # loser gets a clean refusal instead of double-writing completed_by.
@@ -521,13 +604,11 @@ def complete_step_flow(
         db.query(StepExecution)
         .filter(
             StepExecution.id == step_exec.id,
-            StepExecution.status.in_(
-                [StepStatus.PENDING, StepStatus.IN_PROGRESS, StepStatus.AWAITING_SIGNOFF]
-            ),
+            StepExecution.status.in_([StepStatus.PENDING, StepStatus.IN_PROGRESS]),
         )
         .update(
             {
-                StepExecution.status: StepStatus.COMPLETED,
+                StepExecution.status: done_status,
                 StepExecution.completed_at: now,
                 StepExecution.completed_by_id: user_id,
             },
@@ -600,13 +681,17 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
                 step_status = _status_value(step_exec.status)
                 if step_status in (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value):
                     all_children_done = all(
-                        _status_value(c.status)
-                        in (StepStatus.COMPLETED.value, StepStatus.SKIPPED.value)
-                        for c in children
+                        _status_value(c.status) in TERMINAL_STEP_STATUSES for c in children
                     )
                     scope_held = _row_held(step_exec) or any(_row_held(c) for c in children)
                     if all_children_done and not scope_held:
-                        step_exec.status = StepStatus.COMPLETED
+                        # An OP that requires sign-off waits for one once its
+                        # children are done; otherwise it completes itself.
+                        step_exec.status = (
+                            StepStatus.AWAITING_SIGNOFF
+                            if step_requires_signoff(version, step_exec)
+                            else StepStatus.COMPLETED
+                        )
                         step_exec.completed_at = datetime.now(UTC)
 
                         def _to_aware(dt: datetime) -> datetime:

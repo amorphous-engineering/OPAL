@@ -5,6 +5,7 @@
 	import CommandPalette from '#lib/components/shell/CommandPalette.svelte';
 	import NotificationBell from '#lib/components/shell/NotificationBell.svelte';
 	import UserMenu from '#lib/components/shell/UserMenu.svelte';
+	import VersionBadge from '#lib/components/shell/VersionBadge.svelte';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import type { LayoutProps } from './$types';
 
@@ -26,6 +27,7 @@
 			class="sticky top-0 z-30 flex h-11 items-center gap-2 border-b border-border bg-background px-3"
 		>
 			<Sidebar.Trigger class="-ml-1" />
+			<div class="mr-2 max-w-64 min-w-0 shrink"><VersionBadge /></div>
 			<button
 				type="button"
 				class="flex h-7 w-full max-w-sm min-w-0 items-center gap-2 border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"

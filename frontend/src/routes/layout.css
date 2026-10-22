@@ -9,93 +9,100 @@
 @custom-variant data-unchecked (&:is([data-state='unchecked']));
 
 /*
- * OPAL design tokens. US Graphics register: dense, explicit, high contrast.
- * No radii, no shadows, no gradients. Functional colour only:
- * ok = green, warn = yellow, error = red, info = blue.
+ * OPAL design tokens — the original OPAL palette on Lyra's neutral greys.
+ * US Graphics register: dense, explicit, high contrast; no radii, shadows or
+ * gradients. Colour is functional only:
+ *   primary (blue)   the action: primary buttons, the commit moment
+ *   info (orange)    OPAL orange — identifiers, links, focus, in-flight state;
+ *                    identifier + action, never content
+ *   ok / warn / error  green / yellow / red state words
+ * Dark is the default theme (see ModeWatcher in routes/+layout.svelte).
  */
 :root {
 	--radius: 0rem;
-	--background: oklch(0.99 0 0);
-	--foreground: oklch(0.16 0 0);
+	--background: oklch(1 0 0);
+	--foreground: oklch(0.145 0 0);
 	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.16 0 0);
+	--card-foreground: oklch(0.145 0 0);
 	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.16 0 0);
-	--primary: oklch(0.2 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.95 0 0);
-	--secondary-foreground: oklch(0.2 0 0);
-	--muted: oklch(0.955 0 0);
-	--muted-foreground: oklch(0.45 0 0);
-	--accent: oklch(0.94 0 0);
-	--accent-foreground: oklch(0.2 0 0);
-	--destructive: oklch(0.55 0.21 27);
-	--border: oklch(0.86 0 0);
-	--input: oklch(0.82 0 0);
-	--ring: oklch(0.55 0 0);
-	--ok: oklch(0.52 0.14 150);
-	--ok-muted: oklch(0.95 0.04 150);
-	--warn: oklch(0.62 0.14 75);
-	--warn-muted: oklch(0.96 0.05 90);
-	--error: oklch(0.55 0.21 27);
-	--error-muted: oklch(0.96 0.03 27);
-	--info: oklch(0.5 0.14 250);
-	--info-muted: oklch(0.95 0.03 250);
-	--chart-1: oklch(0.5 0.14 250);
-	--chart-2: oklch(0.52 0.14 150);
-	--chart-3: oklch(0.62 0.14 75);
-	--chart-4: oklch(0.55 0.21 27);
-	--chart-5: oklch(0.5 0.12 300);
-	--sidebar: oklch(0.975 0 0);
-	--sidebar-foreground: oklch(0.2 0 0);
-	--sidebar-primary: oklch(0.2 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.93 0 0);
-	--sidebar-accent-foreground: oklch(0.16 0 0);
-	--sidebar-border: oklch(0.88 0 0);
-	--sidebar-ring: oklch(0.55 0 0);
+	--popover-foreground: oklch(0.145 0 0);
+	--primary: #1e66f5;
+	--primary-foreground: #ffffff;
+	--secondary: oklch(0.97 0 0);
+	--secondary-foreground: oklch(0.205 0 0);
+	--muted: oklch(0.97 0 0);
+	--muted-foreground: oklch(0.556 0 0);
+	--accent: oklch(0.97 0 0);
+	--accent-foreground: oklch(0.205 0 0);
+	--destructive: #d20f39;
+	--border: oklch(0.922 0 0);
+	--input: oklch(0.922 0 0);
+	--ring: #c2410c;
+	--ok: #40a02b;
+	--warn: #df8e1d;
+	--error: #d20f39;
+	--info: #c2410c;
+	--dev: #1e66f5;
+	--chart-1: #1e66f5;
+	--chart-2: #40a02b;
+	--chart-3: #df8e1d;
+	--chart-4: #d20f39;
+	--chart-5: #c2410c;
+	--sidebar: oklch(0.985 0 0);
+	--sidebar-foreground: oklch(0.145 0 0);
+	--sidebar-primary: #1e66f5;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: oklch(0.97 0 0);
+	--sidebar-accent-foreground: oklch(0.205 0 0);
+	--sidebar-border: oklch(0.922 0 0);
+	--sidebar-ring: #c2410c;
 }
 
 .dark {
-	--background: oklch(0.15 0 0);
-	--foreground: oklch(0.94 0 0);
-	--card: oklch(0.18 0 0);
-	--card-foreground: oklch(0.94 0 0);
-	--popover: oklch(0.19 0 0);
-	--popover-foreground: oklch(0.94 0 0);
-	--primary: oklch(0.93 0 0);
-	--primary-foreground: oklch(0.16 0 0);
-	--secondary: oklch(0.24 0 0);
-	--secondary-foreground: oklch(0.94 0 0);
-	--muted: oklch(0.22 0 0);
-	--muted-foreground: oklch(0.68 0 0);
-	--accent: oklch(0.25 0 0);
-	--accent-foreground: oklch(0.94 0 0);
-	--destructive: oklch(0.66 0.19 25);
-	--border: oklch(0.3 0 0);
-	--input: oklch(0.34 0 0);
-	--ring: oklch(0.6 0 0);
-	--ok: oklch(0.72 0.16 150);
-	--ok-muted: oklch(0.26 0.05 150);
-	--warn: oklch(0.8 0.14 85);
-	--warn-muted: oklch(0.28 0.05 85);
-	--error: oklch(0.68 0.19 25);
-	--error-muted: oklch(0.27 0.06 25);
-	--info: oklch(0.7 0.13 250);
-	--info-muted: oklch(0.26 0.05 250);
-	--chart-1: oklch(0.7 0.13 250);
-	--chart-2: oklch(0.72 0.16 150);
-	--chart-3: oklch(0.8 0.14 85);
-	--chart-4: oklch(0.68 0.19 25);
-	--chart-5: oklch(0.7 0.12 300);
-	--sidebar: oklch(0.17 0 0);
-	--sidebar-foreground: oklch(0.9 0 0);
-	--sidebar-primary: oklch(0.93 0 0);
-	--sidebar-primary-foreground: oklch(0.16 0 0);
-	--sidebar-accent: oklch(0.24 0 0);
-	--sidebar-accent-foreground: oklch(0.94 0 0);
-	--sidebar-border: oklch(0.28 0 0);
-	--sidebar-ring: oklch(0.6 0 0);
+	--background: oklch(0.145 0 0);
+	--foreground: oklch(0.985 0 0);
+	--card: oklch(0.205 0 0);
+	--card-foreground: oklch(0.985 0 0);
+	--popover: oklch(0.205 0 0);
+	--popover-foreground: oklch(0.985 0 0);
+	--primary: #4a9eff;
+	--primary-foreground: #ffffff;
+	--secondary: oklch(0.269 0 0);
+	--secondary-foreground: oklch(0.985 0 0);
+	--muted: oklch(0.269 0 0);
+	--muted-foreground: oklch(0.708 0 0);
+	--accent: oklch(0.269 0 0);
+	--accent-foreground: oklch(0.985 0 0);
+	--destructive: #f87171;
+	--border: oklch(1 0 0 / 10%);
+	--input: oklch(1 0 0 / 15%);
+	--ring: #fb923c;
+	--ok: #4ade80;
+	--warn: #fbbf24;
+	--error: #f87171;
+	--info: #fb923c;
+	--dev: #4a9eff;
+	--chart-1: #4a9eff;
+	--chart-2: #4ade80;
+	--chart-3: #fbbf24;
+	--chart-4: #f87171;
+	--chart-5: #fb923c;
+	--sidebar: oklch(0.205 0 0);
+	--sidebar-foreground: oklch(0.985 0 0);
+	--sidebar-primary: #4a9eff;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: oklch(0.269 0 0);
+	--sidebar-accent-foreground: oklch(0.985 0 0);
+	--sidebar-border: oklch(1 0 0 / 10%);
+	--sidebar-ring: #fb923c;
+}
+
+/* State tints: the state colour at low opacity over whatever is beneath. */
+:root {
+	--ok-muted: color-mix(in oklab, var(--ok) 12%, transparent);
+	--warn-muted: color-mix(in oklab, var(--warn) 14%, transparent);
+	--error-muted: color-mix(in oklab, var(--error) 12%, transparent);
+	--info-muted: color-mix(in oklab, var(--info) 12%, transparent);
 }
 
 @theme inline {

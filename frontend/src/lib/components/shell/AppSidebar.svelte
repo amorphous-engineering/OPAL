@@ -6,11 +6,9 @@
 </script>
 
 <Sidebar.Root collapsible="offcanvas">
-	<Sidebar.Header class="h-11 justify-center border-b border-sidebar-border px-3">
-		<a href="/" class="font-mono text-sm font-bold tracking-[0.2em]" aria-label="OPAL, overview"
-			>OPAL</a
-		>
-	</Sidebar.Header>
+	<!-- The wordmark and build live in the header bar (VersionBadge), visible
+	     whether or not the sidebar is open. This row keeps the nav aligned. -->
+	<Sidebar.Header class="h-11 border-b border-sidebar-border"></Sidebar.Header>
 	<Sidebar.Content class="gap-0">
 		<nav aria-label="Primary" class="contents">
 			<Sidebar.Group class="py-1">
