@@ -44,7 +44,7 @@
 				<span class="label">Images</span>
 				<Button size="xs" variant="outline" onclick={() => picker?.click()}>+ IMAGE</Button>
 				{#if !images.length}<span class="font-mono text-xs text-muted-foreground"
-						>IMAGES — none</span
+						>none</span
 					>{/if}
 				<input
 					bind:this={picker}

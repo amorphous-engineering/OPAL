@@ -103,7 +103,7 @@
 </script>
 
 <PageHeader
-	title="Cut work orders"
+	title="Cut work order"
 	crumbs={[{ label: 'Executions', href: '/executions' }, { label: 'Cut' }]}
 />
 
@@ -157,7 +157,7 @@
 			<FormRow
 				label="Work order"
 				for="cut-wo"
-				hint={n > 1 ? 'Numbers are generated for a batch.' : 'Generated when blank.'}
+				hint={n > 1 ? 'Numbers are generated for a batch.' : undefined}
 			>
 				<Input
 					id="cut-wo"
