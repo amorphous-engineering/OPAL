@@ -16,6 +16,7 @@ from opal.api.routes import (
     datasets,
     events,
     execution,
+    extensions,
     health,
     inventory,
     issues,
@@ -30,6 +31,7 @@ from opal.api.routes import (
     requirements,
     risks,
     search,
+    settings,
     suppliers,
     undo,
     users,
@@ -74,5 +76,7 @@ protected.include_router(
     onshape.router
 )  # Has its own /onshape prefix; endpoints check onshape_enabled
 protected.include_router(welcome.router)  # Has its own /welcome prefix
+protected.include_router(settings.router)  # Has its own /settings prefix
+protected.include_router(extensions.router)  # Has its own /extensions prefix
 
 router.include_router(protected)

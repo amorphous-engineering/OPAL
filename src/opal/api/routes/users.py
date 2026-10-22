@@ -4,11 +4,13 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams, RequiredAdmin, RequiredUser
 from opal.core.audit import get_model_dict, log_create, log_update
 from opal.core.events import emit_user_activity
-from opal.db.models import User
+from opal.db.models import PasskeyCredential, User
 
 router = APIRouter()
 
@@ -50,6 +52,13 @@ class UserResponse(BaseModel):
     is_admin: bool
     created_at: str
     updated_at: str
+    last_seen_at: str | None = None
+    current_activity: str | None = None
+    is_online: bool = False
+    # Sign-in facts an admin needs to decide how to hand an account over.
+    has_password: bool = False
+    has_passkey: bool = False
+    sso_linked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -61,32 +70,81 @@ class UserListResponse(BaseModel):
     total: int
 
 
+def _is_online(user: User) -> bool:
+    if not user.last_seen_at:
+        return False
+    cutoff = datetime.now(UTC).timestamp() - PRESENCE_TIMEOUT_SECONDS
+    return user.last_seen_at.timestamp() > cutoff
+
+
+def user_response(db: Session, user: User) -> UserResponse:
+    """Build the API shape for one user."""
+    has_passkey = (
+        db.query(PasskeyCredential.id).filter(PasskeyCredential.user_id == user.id).first()
+        is not None
+    )
+    return UserResponse(
+        id=user.id,
+        name=user.name,
+        username=user.username,
+        email=user.email,
+        is_active=user.is_active,
+        is_admin=user.is_admin,
+        created_at=user.created_at.isoformat(),
+        updated_at=user.updated_at.isoformat(),
+        last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
+        current_activity=user.current_activity,
+        is_online=_is_online(user),
+        has_password=user.password_hash is not None,
+        has_passkey=has_passkey,
+        sso_linked=user.oidc_subject is not None,
+    )
+
+
+def _active_admin_count(db: Session) -> int:
+    return db.query(User).filter(User.is_admin.is_(True), User.is_active.is_(True)).count()
+
+
 @router.get("", response_model=UserListResponse)
 def list_users(
     db: DbSession,
     pagination: PaginationParams,
     admin: RequiredAdmin,
+    search: str | None = None,
+    is_active: bool | None = None,
 ) -> UserListResponse:
-    """List all users. Requires admin."""
-    query = db.query(User).filter(User.is_active == True)  # noqa: E712
-    total = query.count()
-    users = query.offset(pagination.skip).limit(pagination.limit).all()
+    """List users by name. Requires admin.
 
-    return UserListResponse(
-        items=[
-            UserResponse(
-                id=u.id,
-                name=u.name,
-                email=u.email,
-                is_active=u.is_active,
-                is_admin=u.is_admin,
-                created_at=u.created_at.isoformat(),
-                updated_at=u.updated_at.isoformat(),
-            )
-            for u in users
-        ],
-        total=total,
-    )
+    ``is_active`` filters to active or deactivated accounts; omit for both.
+    ``search`` matches name, username and email.
+    """
+    query = db.query(User)
+    if is_active is not None:
+        query = query.filter(User.is_active.is_(is_active))
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(User.name.ilike(term), User.username.ilike(term), User.email.ilike(term))
+        )
+    total = query.count()
+    users = query.order_by(User.name).offset(pagination.skip).limit(pagination.limit).all()
+    return UserListResponse(items=[user_response(db, u) for u in users], total=total)
+
+
+class DirectoryEntry(BaseModel):
+    id: int
+    name: str
+    username: str
+
+
+@router.get("/directory", response_model=list[DirectoryEntry])
+def user_directory(db: DbSession, user: RequiredUser) -> list[DirectoryEntry]:
+    """Active users by name, for assignee and owner pickers. Any signed-in user.
+
+    Carries no email and no role: those stay behind the admin-only listing.
+    """
+    rows = db.query(User).filter(User.is_active.is_(True)).order_by(User.name).all()
+    return [DirectoryEntry(id=u.id, name=u.name, username=u.username) for u in rows]
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -103,6 +161,11 @@ def create_user(
         if error := validate_password_strength(user_in.password):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
         password_hash = hash_password(user_in.password)
+    if user_in.email and db.query(User).filter(User.email == user_in.email).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Email {user_in.email} already belongs to another account",
+        )
     username_source = user_in.username or (user_in.email or "").split("@")[0] or user_in.name
     user = User(
         name=user_in.name,
@@ -117,45 +180,106 @@ def create_user(
     log_create(db, user, admin.id)
     db.commit()
     db.refresh(user)
-
-    return UserResponse(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        is_active=user.is_active,
-        is_admin=user.is_admin,
-        created_at=user.created_at.isoformat(),
-        updated_at=user.updated_at.isoformat(),
-    )
+    return user_response(db, user)
 
 
-@router.get("/{user_id}", response_model=UserResponse)
-def get_user(
-    db: DbSession,
-    user_id: int,
-    admin: RequiredAdmin,
-) -> UserResponse:
-    """Get a specific user. Admin-only: the response carries email and the
-    admin flag, matching the admin gate on ``list_users``."""
+def _visible_user(db: Session, user_id: int, acting: User) -> User:
+    """The user row, if ``acting`` may see it: admins see anyone, others only themselves."""
+    if not acting.is_admin and acting.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
+    return user
 
-    return UserResponse(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        is_active=user.is_active,
-        is_admin=user.is_admin,
-        created_at=user.created_at.isoformat(),
-        updated_at=user.updated_at.isoformat(),
+
+@router.get("/{user_id:int}", response_model=UserResponse)
+def get_user(
+    db: DbSession,
+    user_id: int,
+    acting_user: RequiredUser,
+) -> UserResponse:
+    """Get a specific user. Admins may read anyone; others only themselves."""
+    return user_response(db, _visible_user(db, user_id, acting_user))
+
+
+class ActivityEntry(BaseModel):
+    timestamp: str
+    table: str
+    action: str
+    subject: str | None
+
+
+_SUBJECT_KEYS = (
+    "internal_pn",
+    "opal_number",
+    "req_number",
+    "risk_number",
+    "issue_number",
+    "po_number",
+    "work_order_number",
+    "name",
+    "title",
+    "label",
+)
+
+
+def _subject_for(db: Session, table: str, record_id: int, values: dict) -> str | None:
+    """Human identifier of an audited record: from the change itself, else the live row."""
+    for key in _SUBJECT_KEYS:
+        if values.get(key):
+            return str(values[key])
+    from opal.db.base import Base
+
+    for mapper in Base.registry.mappers:
+        if getattr(mapper.class_, "__tablename__", None) == table:
+            row = db.get(mapper.class_, record_id)
+            if row is None:
+                return None
+            for key in _SUBJECT_KEYS:
+                if getattr(row, key, None):
+                    return str(getattr(row, key))
+            return None
+    return None
+
+
+@router.get("/{user_id:int}/activity", response_model=list[ActivityEntry])
+def user_activity(
+    db: DbSession,
+    user_id: int,
+    acting_user: RequiredUser,
+    limit: int = 15,
+) -> list[ActivityEntry]:
+    """The user's most recent audited changes, newest first."""
+    from opal.db.models.audit import AuditLog
+
+    _visible_user(db, user_id, acting_user)
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.user_id == user_id)
+        .order_by(AuditLog.timestamp.desc(), AuditLog.id.desc())
+        .limit(max(1, min(limit, 100)))
+        .all()
     )
+    entries = []
+    for row in rows:
+        values = row.new_values or row.old_values or {}
+        subject = _subject_for(db, row.table_name, row.record_id, values)
+        entries.append(
+            ActivityEntry(
+                timestamp=row.timestamp.isoformat(),
+                table=row.table_name,
+                action=str(getattr(row.action, "value", row.action)),
+                subject=subject,
+            )
+        )
+    return entries
 
 
-@router.patch("/{user_id}", response_model=UserResponse)
+@router.patch("/{user_id:int}", response_model=UserResponse)
 def update_user(
     db: DbSession,
     user_id: int,
@@ -166,7 +290,7 @@ def update_user(
 
     Non-admins can only edit their own name/email.
     Admins can edit any user, including is_admin and is_active.
-    Cannot remove admin from the last admin user.
+    Cannot remove admin from, or deactivate, the last active admin.
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -194,44 +318,49 @@ def update_user(
                 detail=f"Cannot change fields: {', '.join(disallowed)}",
             )
 
-    # Prevent removing last admin
-    if "is_admin" in update_data and not update_data["is_admin"] and user.is_admin:
-        admin_count = (
-            db.query(User)
-            .filter(
-                User.is_admin.is_(True),
-                User.is_active.is_(True),
-            )
-            .count()
+    if "name" in update_data:
+        update_data["name"] = (update_data["name"] or "").strip()
+        if not update_data["name"]:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name is required")
+
+    if update_data.get("email") and update_data["email"] != user.email:
+        clash = (
+            db.query(User).filter(User.email == update_data["email"], User.id != user.id).first()
         )
-        if admin_count <= 1:
+        if clash:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot remove the last admin",
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Email {update_data['email']} already belongs to another account",
             )
+
+    # Prevent removing the last admin, by demotion or by deactivation
+    loses_admin = (update_data.get("is_admin") is False and user.is_admin) or (
+        update_data.get("is_active") is False and user.is_admin and user.is_active
+    )
+    if loses_admin and _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove the last admin",
+        )
 
     old_data = get_model_dict(user)
 
     for field, value in update_data.items():
         setattr(user, field, value)
 
+    if update_data.get("is_active") is False:
+        from opal.core.auth import revoke_all_sessions
+
+        revoke_all_sessions(db, user.id)
+
     db.flush()
     log_update(db, user, old_data, acting_user.id)
     db.commit()
     db.refresh(user)
-
-    return UserResponse(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        is_active=user.is_active,
-        is_admin=user.is_admin,
-        created_at=user.created_at.isoformat(),
-        updated_at=user.updated_at.isoformat(),
-    )
+    return user_response(db, user)
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id:int}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     db: DbSession,
     user_id: int,
@@ -257,29 +386,23 @@ def delete_user(
         )
 
     # Prevent deactivating last admin
-    if user.is_admin:
-        admin_count = (
-            db.query(User)
-            .filter(
-                User.is_admin.is_(True),
-                User.is_active.is_(True),
-            )
-            .count()
+    if user.is_admin and user.is_active and _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot deactivate the last admin",
         )
-        if admin_count <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot deactivate the last admin",
-            )
+
+    from opal.core.auth import revoke_all_sessions
 
     old_data = get_model_dict(user)
     user.is_active = False
+    revoke_all_sessions(db, user.id)
     db.flush()
     log_update(db, user, old_data, acting_user.id)
     db.commit()
 
 
-@router.post("/{user_id}/reset-password")
+@router.post("/{user_id:int}/reset-password")
 def reset_password(
     db: DbSession,
     user_id: int,
@@ -287,8 +410,9 @@ def reset_password(
 ) -> dict:
     """Clear a user's password and revoke their sessions. Requires admin.
 
-    The user sets a new password on their next login (same trust-on-first-use
-    flow as accounts migrated from the pre-credential era).
+    The owner then claims the account through an admin-issued claim link
+    (see ``issue_claim_link``). Resetting your own password here would lock
+    you out, so that goes through ``POST /auth/password`` instead.
     """
     from opal.core.auth import revoke_all_sessions
 
@@ -297,6 +421,11 @@ def reset_password(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
+        )
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Change your own password instead of resetting it",
         )
 
     old_data = get_model_dict(user)
@@ -343,7 +472,7 @@ class ClaimLinkResponse(BaseModel):
     expires_at: datetime
 
 
-@router.post("/{user_id}/claim-link", response_model=ClaimLinkResponse)
+@router.post("/{user_id:int}/claim-link", response_model=ClaimLinkResponse)
 def issue_claim_link(
     user_id: int, request: Request, db: DbSession, admin: RequiredAdmin
 ) -> ClaimLinkResponse:
@@ -437,7 +566,7 @@ def get_online_users(
     return result
 
 
-@router.get("/{user_id}/presence", response_model=OnlineUserResponse)
+@router.get("/{user_id:int}/presence", response_model=OnlineUserResponse)
 def get_user_presence(
     user_id: int,
     db: DbSession,
@@ -447,10 +576,7 @@ def get_user_presence(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    is_online = False
-    if user.last_seen_at:
-        cutoff = datetime.now(UTC).timestamp() - PRESENCE_TIMEOUT_SECONDS
-        is_online = user.last_seen_at.timestamp() > cutoff
+    is_online = _is_online(user)
 
     return OnlineUserResponse(
         id=user.id,

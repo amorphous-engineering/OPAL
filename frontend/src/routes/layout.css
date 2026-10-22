@@ -4,6 +4,9 @@
 @import '@fontsource-variable/jetbrains-mono';
 
 @custom-variant dark (&:is(.dark *));
+/* bits-ui exposes state as data-state="checked"; the vendored switch/checkbox style data-checked. */
+@custom-variant data-checked (&:is([data-state='checked']));
+@custom-variant data-unchecked (&:is([data-state='unchecked']));
 
 /*
  * OPAL design tokens. US Graphics register: dense, explicit, high contrast.

@@ -474,32 +474,31 @@ def test_mcp_activation_blocked_at_dispatch_by_default(client):
     assert payload["human_action_required"] is True
 
 
-def test_agent_activation_toggle(client, db_session, admin_user):
-    """Admin opt-in stores/clears the authorizing operator; page reflects it."""
+def test_agent_activation_toggle(client, db_session, admin_user, admin_headers):
+    """Admin opt-in stores/clears the authorizing operator; the API reflects it."""
     from opal.config import get_app_setting
-    from tests.conftest import login
 
-    login(client, admin_user)
-    page = client.get("/settings")
-    assert page.status_code == 200
-    assert "MCP AGENT" in page.text and "HUMAN ONLY" in page.text
+    off = client.get("/api/settings/agent-activation", headers=admin_headers)
+    assert off.status_code == 200
+    assert off.json() == {"enabled": False, "authorized_by": None}
 
-    r = client.post("/settings/agent-activation", data={"enabled": "true"}, follow_redirects=False)
-    assert r.status_code == 302
+    r = client.put("/api/settings/agent-activation", json={"enabled": True}, headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json() == {"enabled": True, "authorized_by": admin_user.name}
     assert get_app_setting(db_session, "mcp_agent_activation_operator_id") == str(admin_user.id)
-    assert "AGENT ENABLED" in client.get("/settings").text
+    assert client.get("/api/settings/agent-activation", headers=admin_headers).json()["enabled"]
 
-    r = client.post("/settings/agent-activation", data={}, follow_redirects=False)
-    assert r.status_code == 302
+    r = client.put("/api/settings/agent-activation", json={"enabled": False}, headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["enabled"] is False
     assert get_app_setting(db_session, "mcp_agent_activation_operator_id") in (None, "")
 
 
-def test_agent_activation_toggle_requires_admin(client, db_session, test_user):
-    from tests.conftest import login
-
-    login(client, test_user)  # non-admin
-    r = client.post("/settings/agent-activation", data={"enabled": "true"}, follow_redirects=False)
-    assert r.status_code in (302, 403)
+def test_agent_activation_toggle_requires_admin(client, db_session, test_user, auth_headers):
     from opal.config import get_app_setting
 
+    r = client.put("/api/settings/agent-activation", json={"enabled": True}, headers=auth_headers)
+    assert r.status_code == 403
     assert get_app_setting(db_session, "mcp_agent_activation_operator_id") in (None, "")
+    # Reading the state is open to any signed-in user.
+    assert client.get("/api/settings/agent-activation", headers=auth_headers).status_code == 200
