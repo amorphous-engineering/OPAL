@@ -428,13 +428,6 @@ def review_stamp(
     }
 
 
-@router.get("/options")
-def get_risk_options(db: DbSession) -> dict:
-    """Pickers for the register: active users who can own a risk. /users is admin-only."""
-    users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
-    return {"owners": [{"id": u.id, "name": u.name} for u in users]}
-
-
 # ============ Risk CRUD ============
 
 

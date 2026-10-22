@@ -103,10 +103,7 @@
 	}
 </script>
 
-<PageHeader
-	title="New issue"
-	crumbs={[{ label: 'Quality' }, { label: 'Issues', href: '/issues' }, { label: 'New' }]}
-/>
+<PageHeader title="New issue" crumbs={[{ label: 'Issues', href: '/issues' }, { label: 'New' }]} />
 
 <form class="grid max-w-5xl gap-4 p-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" onsubmit={submit}>
 	<div class="grid content-start gap-3">

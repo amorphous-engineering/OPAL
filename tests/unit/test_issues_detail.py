@@ -56,7 +56,7 @@ def test_detail_lists_linked_risks(client):
 
 def test_patch_null_clears_links_and_assignee(client):
     proc_id, wo_id = _wo(client, "WO-ISS-2")
-    me = client.get("/api/issues/assignees").json()[0]["id"]
+    me = client.get("/api/users/directory").json()[0]["id"]
     issue = client.post(
         "/api/issues",
         json={
@@ -131,7 +131,7 @@ def test_list_default_order_puts_blocking_first(client):
 
 
 def test_list_sort_search_and_assignee_filter(client):
-    me = client.get("/api/issues/assignees").json()[0]["id"]
+    me = client.get("/api/users/directory").json()[0]["id"]
     a = client.post("/api/issues", json={"title": "Bravo", "priority": "low"}).json()
     b = client.post(
         "/api/issues", json={"title": "Alpha", "priority": "critical", "assigned_to_id": me}

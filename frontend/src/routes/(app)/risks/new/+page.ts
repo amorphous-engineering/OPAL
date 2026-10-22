@@ -4,7 +4,7 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	const http = api.using(fetch);
-	const { owners } = await http.get<{ owners: Owner[] }>('/risks/options');
+	const owners = await http.get<Owner[]>('/users/directory');
 	// Context pre-fill: /risks/new?asset_part_id=12 (from a part page) names the asset already.
 	let asset: { id: number; label: string } | null = null;
 	const partId = url.searchParams.get('asset_part_id');

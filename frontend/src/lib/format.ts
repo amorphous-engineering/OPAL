@@ -3,7 +3,7 @@
  * in dense index rows, always with the full timestamp as its title.
  */
 
-function toDate(value: string | Date | null | undefined): Date | null {
+export function toDate(value: string | Date | null | undefined): Date | null {
 	if (!value) return null;
 	// Naive server timestamps are UTC.
 	const d =

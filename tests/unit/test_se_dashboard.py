@@ -172,9 +172,3 @@ def test_dossier_flowdown_and_delete_rules(client, db_session):
     assert done["readiness"] is None
     assert done["can_delete"] is False
     assert done["baseline_events"][0]["revision"] == 1
-
-
-def test_assignees_lists_active_users_for_non_admins(client, auth_headers, test_user):
-    resp = client.get("/api/requirements/assignees", headers=auth_headers)
-    assert resp.status_code == 200
-    assert test_user.name in [u["name"] for u in resp.json()]

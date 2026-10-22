@@ -306,10 +306,3 @@ def test_preview_validation(client: TestClient):
     proc_id = _publish(client)
     bad = client.get(f"{BASE}/preview", params={"procedure_id": proc_id, "version_id": 9999})
     assert bad.status_code == 404
-
-
-def test_assignees_visible_to_non_admin(client: TestClient, auth_headers: dict, test_user):
-    resp = client.get(f"{BASE}/assignees", headers=auth_headers)
-    assert resp.status_code == 200
-    assert {"id": test_user.id, "name": test_user.name} in resp.json()
-    assert all(set(u) == {"id", "name"} for u in resp.json())

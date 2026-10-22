@@ -505,7 +505,7 @@ def export_dataset_csv(
     writer.writerow([_csv_safe(c) for c in ["recorded_at", *field_names]])
 
     for point in points:
-        row = [point.recorded_at.strftime("%Y-%m-%dT%H:%M:%S")]
+        row = [point.recorded_at.strftime("%Y-%m-%dT%H:%M:%SZ")]  # stored as UTC
         for fname in field_names:
             row.append(point.values.get(fname, ""))
         writer.writerow([_csv_safe(c) for c in row])

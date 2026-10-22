@@ -3,14 +3,14 @@
 	// series needs no legend; the section title and the field picker name it.
 	import { LineChart } from 'layerchart';
 	import * as Chart from '#lib/components/ui/chart/index.js';
-	import { datetime } from '#lib/format.js';
+	import { datetime, toDate } from '#lib/format.js';
 	import type { DataPoint, SchemaField } from './types.js';
 
 	let { points, field }: { points: DataPoint[]; field: SchemaField } = $props();
 
 	const rows = $derived(
 		points
-			.map((p) => ({ at: new Date(p.recorded_at), value: p.values[field.name] }))
+			.map((p) => ({ at: toDate(p.recorded_at) ?? new Date(NaN), value: p.values[field.name] }))
 			.filter((r): r is { at: Date; value: number } => typeof r.value === 'number')
 			.sort((a, b) => a.at.getTime() - b.at.getTime())
 	);
@@ -26,7 +26,7 @@
 		{field.name} — no numeric values recorded
 	</p>
 {:else}
-	<Chart.Container {config} class="aspect-auto h-72 w-full justify-start px-3 pt-3 pb-1">
+	<Chart.Container {config} class="aspect-auto h-72 w-full justify-start pt-3 pr-8 pb-1 pl-3">
 		<LineChart
 			data={rows}
 			x="at"
@@ -34,7 +34,7 @@
 			points={{ r: 4 }}
 			props={{
 				spline: { strokeWidth: 2 },
-				xAxis: { ticks: 6 },
+				xAxis: { ticks: 6, format: (v: Date) => datetime(v) },
 				yAxis: { ticks: 5 }
 			}}
 		>

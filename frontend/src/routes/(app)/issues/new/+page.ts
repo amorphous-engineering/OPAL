@@ -49,7 +49,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		partId ? orNull(client.get<PartDto>(`/parts/${partId}`)) : null,
 		procedureId ? orNull(client.get<ProcedureDto>(`/procedures/${procedureId}`)) : null,
 		executionId ? orNull(client.get<InstanceDto>(`/procedure-instances/${executionId}`)) : null,
-		client.get<Assignee[]>('/issues/assignees')
+		client.get<Assignee[]>('/users/directory')
 	]);
 
 	const step = instance?.step_executions.find((s) => s.id === stepId) ?? null;

@@ -98,16 +98,17 @@
 
 <PageHeader title={ds.name} crumbs={[{ label: 'Datasets', href: '/datasets' }, { label: ds.name }]}>
 	{#snippet actions()}
+		<Button size="sm" variant="ghost" href={`/audit?entity=dataset&record=${ds.id}`}>AUDIT</Button>
 		<Button size="sm" onclick={() => (addOpen = true)}>+ ADD POINT</Button>
 		<Button variant="outline" size="sm" onclick={() => (editOpen = true)}>EDIT</Button>
 		<Button variant="outline" size="sm" href={`/api/datasets/${ds.id}/export`} download
 			>EXPORT CSV</Button
 		>
-		<Button variant="outline" size="sm" onclick={removeDataset}>DELETE</Button>
+		<Button variant="destructive" size="sm" onclick={removeDataset}>DELETE</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<div class="grid items-start gap-4 lg:grid-cols-2">
 		<Section title="Dataset">
 			<DetailTable>
@@ -123,7 +124,6 @@
 						<span class="whitespace-pre-wrap">{ds.description}</span>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
-				<DetailRow label="Points" value={ds.point_count} mono />
 				<DetailRow label="Created"><Timestamp value={ds.created_at} /></DetailRow>
 				<DetailRow label="Updated"><Timestamp value={ds.updated_at} /></DetailRow>
 			</DetailTable>
@@ -153,7 +153,7 @@
 		</Section>
 	</div>
 
-	{#if numeric.length && chartField}
+	{#if numeric.length && chartField && points.length}
 		<Section title="Chart">
 			{#snippet actions()}
 				{#if numeric.length > 1}
@@ -177,10 +177,12 @@
 		</Section>
 	{/if}
 
-	<Section title="Data points" count={ds.point_count}>
-		{#if points.length === 0}
+	{#if points.length === 0}
+		<div class="border border-border bg-card">
 			<EmptyLine label="Data points" onadd={() => (addOpen = true)} />
-		{:else}
+		</div>
+	{:else}
+		<Section title="Data points" count={ds.point_count}>
 			<DataTable rows={points} {columns} emptyLabel="Data points" key={(p) => p.id} dense>
 				{#snippet cell(row, col)}
 					{#if col.key === 'recorded_at'}
@@ -209,8 +211,8 @@
 					Latest {ds.data_points.length} of {ds.point_count}. The CSV export has all points.
 				</p>
 			{/if}
-		{/if}
-	</Section>
+		</Section>
+	{/if}
 </div>
 
 <AddPointDialog bind:open={addOpen} datasetId={ds.id} {fields} onadded={invalidateAll} />
