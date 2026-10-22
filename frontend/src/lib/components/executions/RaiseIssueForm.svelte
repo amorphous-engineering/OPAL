@@ -116,11 +116,7 @@
 		</FormRow>
 	</div>
 	{#if containment === 'step'}
-		<FormRow
-			label="Resolve by"
-			for="ri-boundary"
-			hint="Holds that step's COMPLETE until disposition."
-		>
+		<FormRow label="Resolve by" for="ri-boundary">
 			<NativeSelect id="ri-boundary" class="w-full" bind:value={boundary}>
 				<option value="">{step.number}, this step</option>
 				{#each candidates.filter((c) => c.order !== step.order) as c (c.order)}

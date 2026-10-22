@@ -321,7 +321,7 @@
 	});
 	const redlineHref = $derived(
 		issue.procedure_instance_id && issue.raised_op_order !== null
-			? `/executions/${issue.procedure_instance_id}?tab=operations&op=${issue.raised_op_order}&redline_issue=${issue.id}`
+			? `/executions/${issue.procedure_instance_id}?op=${issue.raised_op_order}&redline_issue=${issue.id}`
 			: null
 	);
 	const hasRedlineAction = $derived(
@@ -778,7 +778,7 @@
 				<DetailRow label="Raised at" mono>
 					{#if issue.raised_step_label && issue.procedure_instance_id}
 						<a
-							href={`/executions/${issue.procedure_instance_id}?tab=operations&op=${issue.raised_op_order ?? ''}`}
+							href={`/executions/${issue.procedure_instance_id}?op=${issue.raised_op_order ?? ''}`}
 							class="text-info hover:underline">{issue.raised_step_label}</a
 						>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
@@ -789,7 +789,7 @@
 							{#each issue.redline_ops as op (op.step_number)}
 								<li class="flex gap-2 font-mono text-xs">
 									<a
-										href={`/executions/${issue.procedure_instance_id}?tab=operations&op=${op.step_number}`}
+										href={`/executions/${issue.procedure_instance_id}?op=${op.step_number}`}
 										class="text-info hover:underline">{op.label}</a
 									>
 									<span class="truncate font-sans text-sm">{op.title}</span>

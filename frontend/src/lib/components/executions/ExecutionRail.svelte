@@ -46,8 +46,8 @@
 <div
 	class="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 [overflow-wrap:anywhere] [&_table]:table-fixed"
 >
-	<Section title="Online" count={doc.roster.length || undefined}>
-		{#if doc.roster.length}
+	{#if doc.roster.length}
+		<Section title="Online" count={doc.roster.length || undefined}>
 			<ul class="m-0 list-none p-0">
 				{#each doc.roster as r (r.user_id)}
 					<li class="border-b border-border last:border-b-0">
@@ -68,13 +68,13 @@
 					</li>
 				{/each}
 			</ul>
-		{:else}
-			<EmptyLine label="Online" />
-		{/if}
-	</Section>
+		</Section>
+	{:else}
+		<EmptyLine label="Online" />
+	{/if}
 
-	<Section title="Operations" count={ops.length || undefined}>
-		{#if ops.length}
+	{#if ops.length}
+		<Section title="Operations" count={ops.length || undefined}>
 			<ul class="m-0 list-none p-0">
 				{#each ops as op (op.order)}
 					{@const done = isTerminal(op.status)}
@@ -98,16 +98,16 @@
 					</li>
 				{/each}
 			</ul>
-		{:else}
-			<EmptyLine label="Operations" />
-		{/if}
-	</Section>
+		</Section>
+	{:else}
+		<EmptyLine label="Operations" />
+	{/if}
 
-	<Section title="Issues" count={doc.issues.length || undefined}>
-		{#snippet actions()}
-			<Button size="xs" variant="ghost" href={`/issues/new?execution=${inst.id}`}>+ NEW</Button>
-		{/snippet}
-		{#if doc.issues.length}
+	{#if doc.issues.length}
+		<Section title="Issues" count={doc.issues.length || undefined}>
+			{#snippet actions()}
+				<Button size="xs" variant="ghost" href={`/issues/new?execution=${inst.id}`}>+ NEW</Button>
+			{/snippet}
 			<ul class="m-0 list-none p-0">
 				{#each doc.issues as i (i.id)}
 					<li class="border-b border-border px-3 py-1.5 text-xs last:border-b-0">
@@ -117,7 +117,7 @@
 							>
 							{#if i.raised_step_number}
 								<span class="font-mono text-muted-foreground" title="Raised at step"
-									>{i.raised_step_number}</span
+									>@{i.raised_step_number}</span
 								>
 							{/if}
 							<span class="ml-auto"
@@ -133,25 +133,25 @@
 					</li>
 				{/each}
 			</ul>
-		{:else}
-			<EmptyLine label="Issues" addHref={`/issues/new?execution=${inst.id}`} />
-		{/if}
-	</Section>
+		</Section>
+	{:else}
+		<EmptyLine label="Issues" addHref={`/issues/new?execution=${inst.id}`} />
+	{/if}
 
-	<Section
-		title="Attachments"
-		count={rows.length || doc.attachments.length
-			? rows.reduce((n, s) => n + s.attachments.length, doc.attachments.length)
-			: undefined}
-	>
-		{#snippet actions()}
-			<Button
-				size="xs"
-				variant="ghost"
-				onclick={() => (store.dialog = { kind: 'attach', step: null })}>+ ATTACH</Button
-			>
-		{/snippet}
-		{#if rows.length || doc.attachments.length}
+	{#if rows.length || doc.attachments.length}
+		<Section
+			title="Attachments"
+			count={rows.length || doc.attachments.length
+				? rows.reduce((n, s) => n + s.attachments.length, doc.attachments.length)
+				: undefined}
+		>
+			{#snippet actions()}
+				<Button
+					size="xs"
+					variant="ghost"
+					onclick={() => (store.dialog = { kind: 'attach', step: null })}>+ ATTACH</Button
+				>
+			{/snippet}
 			<div class="grid">
 				{#each rows as s (s.order)}
 					<div
@@ -176,16 +176,13 @@
 					</div>
 				{/if}
 			</div>
-		{:else}
-			<EmptyLine
-				label="Attachments"
-				onadd={() => (store.dialog = { kind: 'attach', step: null })}
-			/>
-		{/if}
-	</Section>
+		</Section>
+	{:else}
+		<EmptyLine label="Attachments" onadd={() => (store.dialog = { kind: 'attach', step: null })} />
+	{/if}
 
-	<Section title="Reference documents" count={doc.reference_attachments.length || undefined}>
-		{#if doc.reference_attachments.length}
+	{#if doc.reference_attachments.length}
+		<Section title="Reference documents" count={doc.reference_attachments.length || undefined}>
 			<ul class="m-0 list-none p-0">
 				{#each doc.reference_attachments as a (a.id)}
 					<li
@@ -201,10 +198,10 @@
 					</li>
 				{/each}
 			</ul>
-		{:else}
-			<EmptyLine label="Reference documents" />
-		{/if}
-	</Section>
+		</Section>
+	{:else}
+		<EmptyLine label="Reference documents" />
+	{/if}
 
 	<Section title="Facts">
 		{#snippet actions()}

@@ -470,7 +470,10 @@ export class ExecutionStore implements DocController {
 				toast.error(
 					'Cannot complete: ' +
 						Object.entries(errs)
-							.map(([k, v]) => `${k} ${v.toLowerCase()}`)
+							.map(([k, v]) => {
+								const f = step.data_schema?.fields?.find((x) => x.name === k);
+								return `${f?.label ?? k}: ${v.toLowerCase()}`;
+							})
 							.join('; ')
 				);
 				return;
