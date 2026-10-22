@@ -9,91 +9,93 @@
 @custom-variant data-unchecked (&:is([data-state='unchecked']));
 
 /*
- * OPAL design tokens — the original OPAL palette on Lyra's neutral greys.
+ * OPAL design tokens — OPAL's original palette (master, pre-Basecoat).
  * US Graphics register: dense, explicit, high contrast; no radii, shadows or
  * gradients. Colour is functional only:
- *   primary (blue)   the action: primary buttons, the commit moment
- *   info (orange)    OPAL orange — identifiers, links, focus, in-flight state;
- *                    identifier + action, never content
+ *   OPAL orange   identifier + action: primary buttons, links, focus, in-flight
+ *                 state ("info"); never content
  *   ok / warn / error  green / yellow / red state words
- * Dark is the default theme (see ModeWatcher in routes/+layout.svelte).
+ *   dev blue      only the version badge of a development build
+ * Dark is the default and the original theme, value for value. Light is a
+ * plain neutral counterpart (deeper shades of the same hues for contrast on
+ * white) — no Catppuccin.
  */
 :root {
 	--radius: 0rem;
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: #1e66f5;
+	--background: #fafafa;
+	--foreground: #171717;
+	--card: #ffffff;
+	--card-foreground: #171717;
+	--popover: #ffffff;
+	--popover-foreground: #171717;
+	--primary: #c2410c;
 	--primary-foreground: #ffffff;
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--destructive: #d20f39;
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
+	--secondary: #f0f0f0;
+	--secondary-foreground: #171717;
+	--muted: #f0f0f0;
+	--muted-foreground: #666666;
+	--accent: #ebebeb;
+	--accent-foreground: #171717;
+	--destructive: #dc2626;
+	--border: #d4d4d4;
+	--input: #c4c4c4;
 	--ring: #c2410c;
-	--ok: #40a02b;
-	--warn: #df8e1d;
-	--error: #d20f39;
+	--ok: #15803d;
+	--warn: #b45309;
+	--error: #dc2626;
 	--info: #c2410c;
-	--dev: #1e66f5;
-	--chart-1: #1e66f5;
-	--chart-2: #40a02b;
-	--chart-3: #df8e1d;
-	--chart-4: #d20f39;
-	--chart-5: #c2410c;
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: #1e66f5;
+	--dev: #2563eb;
+	--chart-1: #c2410c;
+	--chart-2: #15803d;
+	--chart-3: #b45309;
+	--chart-4: #dc2626;
+	--chart-5: #2563eb;
+	--sidebar: #f0f0f0;
+	--sidebar-foreground: #171717;
+	--sidebar-primary: #c2410c;
 	--sidebar-primary-foreground: #ffffff;
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
+	--sidebar-accent: #ebebeb;
+	--sidebar-accent-foreground: #171717;
+	--sidebar-border: #d4d4d4;
 	--sidebar-ring: #c2410c;
 }
 
 .dark {
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: #4a9eff;
-	--primary-foreground: #ffffff;
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
+	--background: #0a0a0a;
+	--foreground: #e0e0e0;
+	--card: #141414;
+	--card-foreground: #e0e0e0;
+	--popover: #141414;
+	--popover-foreground: #e0e0e0;
+	--primary: #fb923c;
+	--primary-foreground: #0a0a0a;
+	--secondary: #1e1e1e;
+	--secondary-foreground: #e0e0e0;
+	--muted: #1e1e1e;
+	--muted-foreground: #888888;
+	--accent: #1e1e1e;
+	--accent-foreground: #e0e0e0;
 	--destructive: #f87171;
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
+	--border: #333333;
+	--input: #444444;
 	--ring: #fb923c;
 	--ok: #4ade80;
 	--warn: #fbbf24;
 	--error: #f87171;
 	--info: #fb923c;
 	--dev: #4a9eff;
-	--chart-1: #4a9eff;
+	--chart-1: #fb923c;
 	--chart-2: #4ade80;
 	--chart-3: #fbbf24;
 	--chart-4: #f87171;
-	--chart-5: #fb923c;
-	--sidebar: oklch(0.205 0 0);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: #4a9eff;
-	--sidebar-primary-foreground: #ffffff;
-	--sidebar-accent: oklch(0.269 0 0);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
+	--chart-5: #4a9eff;
+	--sidebar: #141414;
+	--sidebar-foreground: #e0e0e0;
+	--sidebar-primary: #fb923c;
+	--sidebar-primary-foreground: #0a0a0a;
+	--sidebar-accent: #1e1e1e;
+	--sidebar-accent-foreground: #e0e0e0;
+	--sidebar-border: #333333;
 	--sidebar-ring: #fb923c;
 }
 
