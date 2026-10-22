@@ -13,11 +13,20 @@
 	import StepBody from './StepBody.svelte';
 	import StepRow from './StepRow.svelte';
 	import StepState from './StepState.svelte';
+	import AuthorChips from './author/AuthorChips.svelte';
+	import CautionEditor from './author/CautionEditor.svelte';
+	import MarkdownEditor from './author/MarkdownEditor.svelte';
+	import RowTools from './author/RowTools.svelte';
+	import SaveBadge from './author/SaveBadge.svelte';
+	import StepProps from './author/StepProps.svelte';
+	import TitleInput from './author/TitleInput.svelte';
+	import { dragOver, dropHere, dropMarker } from './author/dnd.js';
 	import { isTerminal, type DocOp } from './types.js';
 
 	let { op }: { op: DocOp } = $props();
 	const ctl = useDoc();
 
+	const au = $derived(ctl.mode === 'author' ? ctl.author : undefined);
 	const leaf = $derived(op.steps.length === 0);
 	const terminal = $derived(isTerminal(op.status));
 	const key = $derived(`op:${op.order}`);
@@ -51,6 +60,7 @@
 {/if}
 <section
 	id={`op-${op.order}`}
+	data-drop-row={au ? '' : undefined}
 	data-op-order={op.order}
 	data-op-status={op.status}
 	class={cn(
@@ -64,10 +74,16 @@
 		id={leaf ? `step-${op.order}` : undefined}
 		data-order={leaf ? op.order : undefined}
 		class={cn(
-			'flex min-h-9 cursor-pointer items-center gap-2 bg-muted/60 px-3 py-1 hover:bg-accent/60',
+			'group/row flex min-h-9 cursor-pointer items-center gap-2 bg-muted/60 px-3 py-1 hover:bg-accent/60',
 			open && 'border-b border-border',
-			focused && 'outline outline-1 -outline-offset-1 outline-ring/60'
+			focused && 'outline outline-1 -outline-offset-1 outline-ring/60',
+			au && dropMarker(au, op.order),
+			au?.drag.id === op.order && 'opacity-40'
 		)}
+		ondragover={au
+			? (e) => dragOver(au, e, op.order, !au.ops().some((o) => o.order === au.drag.id))
+			: undefined}
+		ondrop={au ? (e) => dropHere(au, e, op.order) : undefined}
 		role="button"
 		tabindex="-1"
 		aria-expanded={open}
@@ -87,13 +103,17 @@
 			aria-hidden="true">{open ? '▾' : '▸'}</span
 		>
 		<span class="shrink-0 font-mono text-xs font-semibold">OP {op.number}</span>
-		<span
-			class={cn(
-				'min-w-0 flex-1 truncate text-sm font-medium',
-				terminal && 'text-muted-foreground',
-				op.status === 'skipped' && 'line-through'
-			)}>{op.title}</span
-		>
+		{#if au}
+			<TitleInput step={op.step} class="font-medium" />
+		{:else}
+			<span
+				class={cn(
+					'min-w-0 flex-1 truncate text-sm font-medium',
+					terminal && 'text-muted-foreground',
+					op.status === 'skipped' && 'line-through'
+				)}>{op.title}</span
+			>
+		{/if}
 		{#if op.is_contingency}
 			<span
 				class="inline-flex h-5 items-center border border-warn/50 px-1.5 font-mono text-[11px] font-medium text-warn"
@@ -113,8 +133,19 @@
 				title={op.caution}>CAUTION</span
 			>
 		{/if}
+		{#if au && op.waiting_on_ops.length}
+			<span
+				class="hidden font-mono text-[11px] whitespace-nowrap text-muted-foreground md:inline"
+				title="Starts after these OPs are done">AFTER OP {op.waiting_on_ops.join(', ')}</span
+			>
+		{/if}
+		{#if au && leaf}<AuthorChips step={op.step} />{/if}
 		{#if leaf}<CursorChips cursors={op.step.cursors} viewerId={ctl.viewerId} />{/if}
-		{#if !leaf}
+		{#if au && !leaf}
+			<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
+				>{op.steps.length} {op.steps.length === 1 ? 'STEP' : 'STEPS'}</span
+			>
+		{:else if !leaf}
 			<span class="flex items-center gap-2">
 				<span class="hidden h-1.5 w-16 bg-border sm:block" aria-hidden="true"
 					><span class="block h-full bg-ok" style:width={`${pct}%`}></span></span
@@ -129,7 +160,12 @@
 			</span>
 		{/if}
 		<span class="shrink-0 text-right">
-			{#if ctl.active && op.holds.length}
+			{#if au}
+				<span class="flex items-center gap-2">
+					<SaveBadge step={op.step} quiet />
+					<RowTools step={op.step} {op} isOp={true} />
+				</span>
+			{:else if ctl.active && op.holds.length}
 				<span
 					class="font-mono text-xs font-medium whitespace-nowrap text-warn"
 					title="OP COMPLETE is held until disposition"
@@ -154,7 +190,19 @@
 		{#if leaf}
 			<StepBody step={op.step} {op} />
 		{:else}
-			{#if op.caution || op.instructions}
+			{#if au}
+				<div class="grid gap-3 border-b border-border px-3 py-3">
+					<div class="-mb-1 flex min-h-4 justify-end"><SaveBadge step={op.step} /></div>
+					<CautionEditor step={op.step} />
+					<MarkdownEditor
+						id={`instr-${op.order}`}
+						label="Instructions"
+						value={op.instructions}
+						onchange={(v) => au.edit(op.step, { instructions: v })}
+					/>
+					<StepProps step={op.step} {op} isOp={true} />
+				</div>
+			{:else if op.caution || op.instructions}
 				<div class="grid gap-3 border-b border-border px-3 py-3">
 					<CautionBlock text={op.caution} />
 					{#if op.instructions}
@@ -166,6 +214,15 @@
 			{#each op.steps as s (s.order)}
 				<StepRow step={s} {op} />
 			{/each}
+			{#if au}
+				<div class="border-t border-border bg-muted/20 px-3 py-1">
+					<Button
+						size="xs"
+						variant="ghost"
+						onclick={() => au.addStep(op, op.steps[op.steps.length - 1] ?? op.step)}>+ STEP</Button
+					>
+				</div>
+			{/if}
 			{#if footer}
 				<div class="flex flex-wrap items-center gap-3 border-t border-border bg-muted/30 px-3 py-2">
 					<StepActions step={op.step} {op} scope="op" />

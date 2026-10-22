@@ -12,6 +12,10 @@
 	import CaptureReadout from './CaptureReadout.svelte';
 	import StepNotes from './StepNotes.svelte';
 	import StepActions from './StepActions.svelte';
+	import CautionEditor from './author/CautionEditor.svelte';
+	import MarkdownEditor from './author/MarkdownEditor.svelte';
+	import SaveBadge from './author/SaveBadge.svelte';
+	import StepProps from './author/StepProps.svelte';
 	import type { DocOp, DocStep } from './types.js';
 
 	let { step, op }: { step: DocStep; op: DocOp } = $props();
@@ -22,6 +26,7 @@
 			ctl.active &&
 			(step.status === 'pending' || step.status === 'in_progress')
 	);
+	const authoring = $derived(ctl.mode === 'author');
 	const raised = $derived(step.holds.filter((h) => h.disposition_state === 'undispositioned'));
 	const hasFields = $derived((step.data_schema?.fields?.length ?? 0) > 0);
 </script>
@@ -52,17 +57,28 @@
 		</div>
 	{/if}
 
-	<CautionBlock text={step.caution} />
+	{#if authoring}
+		<div class="-mb-1 flex min-h-4 justify-end"><SaveBadge {step} /></div>
+		<CautionEditor {step} />
+		<MarkdownEditor
+			id={`instr-${step.order}`}
+			label="Instructions"
+			value={step.instructions}
+			onchange={(v) => ctl.author?.edit(step, { instructions: v })}
+		/>
+	{:else}
+		<CautionBlock text={step.caution} />
 
-	{#if step.instructions}
-		<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
-		<div class="prose-opal max-w-3xl">{@html markdown(step.instructions)}</div>
+		{#if step.instructions}
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
+			<div class="prose-opal max-w-3xl">{@html markdown(step.instructions)}</div>
+		{/if}
 	{/if}
-	<StepImages images={step.images} />
+	<StepImages images={step.images} {step} />
 	<StepKit {step} />
 
-	{#if hasFields}
-		{#if workable}
+	{#if hasFields || authoring}
+		{#if workable || authoring}
 			<CaptureFields {step} />
 		{:else}
 			<CaptureReadout {step} />
@@ -89,5 +105,8 @@
 
 	{#if ctl.mode === 'execute'}
 		<StepActions {step} {op} />
+	{/if}
+	{#if authoring}
+		<StepProps {step} {op} isOp={op.step === step} />
 	{/if}
 </div>

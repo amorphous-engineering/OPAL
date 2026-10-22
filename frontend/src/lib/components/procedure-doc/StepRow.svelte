@@ -1,12 +1,18 @@
 <script lang="ts">
 	// One step: a single dense line (number, title, who, evidence, state) that
 	// expands into its body. Expanded until complete; the host decides `open`.
+	// In author mode the title is a field and the line carries structure tools.
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
 	import CursorChips from './CursorChips.svelte';
 	import RoleChip from './RoleChip.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepState from './StepState.svelte';
+	import AuthorChips from './author/AuthorChips.svelte';
+	import RowTools from './author/RowTools.svelte';
+	import SaveBadge from './author/SaveBadge.svelte';
+	import TitleInput from './author/TitleInput.svelte';
+	import { dragOver, dropHere, dropMarker } from './author/dnd.js';
 	import { isTerminal, type DocOp, type DocStep } from './types.js';
 
 	let {
@@ -21,6 +27,7 @@
 	} = $props();
 
 	const ctl = useDoc();
+	const au = $derived(ctl.mode === 'author' ? ctl.author : undefined);
 	const terminal = $derived(isTerminal(step.status));
 	const key = $derived(`step:${step.order}`);
 	const open = $derived(ctl.isOpen(key, terminal));
@@ -34,12 +41,18 @@
 <div
 	id={`step-${step.order}`}
 	data-order={step.order}
+	role={au ? 'group' : undefined}
 	data-status={step.status}
+	data-drop-row={au ? '' : undefined}
 	class={cn(
-		'border-b border-border last:border-b-0',
+		'group/row border-b border-border last:border-b-0',
 		claimed && 'shadow-[inset_2px_0_0_var(--primary)]',
-		focused && 'bg-accent/40 outline outline-1 -outline-offset-1 outline-ring/60'
+		focused && 'bg-accent/40 outline outline-1 -outline-offset-1 outline-ring/60',
+		au && dropMarker(au, step.order),
+		au?.drag.id === step.order && 'opacity-40'
 	)}
+	ondragover={au ? (e) => dragOver(au, e, step.order) : undefined}
+	ondrop={au ? (e) => dropHere(au, e, step.order) : undefined}
 >
 	<div
 		class={cn(
@@ -65,9 +78,14 @@
 			aria-hidden="true">{open ? '▾' : '▸'}</span
 		>
 		<span class="w-10 shrink-0 font-mono text-xs font-medium tabular-nums">{step.number}</span>
-		<span class={cn('min-w-0 flex-1 truncate text-sm', step.status === 'skipped' && 'line-through')}
-			>{step.title}</span
-		>
+		{#if au}
+			<TitleInput {step} />
+		{:else}
+			<span
+				class={cn('min-w-0 flex-1 truncate text-sm', step.status === 'skipped' && 'line-through')}
+				>{step.title}</span
+			>
+		{/if}
 		<RoleChip role={step.role} />
 		{#if step.caution}
 			<span
@@ -75,6 +93,7 @@
 				title={step.caution}>CAUTION</span
 			>
 		{/if}
+		{#if au}<AuthorChips {step} />{/if}
 		<CursorChips cursors={step.cursors} viewerId={ctl.viewerId} />
 		{#if nAtt || nNote}
 			<span class="font-mono text-[11px] whitespace-nowrap text-muted-foreground">
@@ -95,7 +114,12 @@
 				{#if nNote}<span title="Operator notes">{nNote} NOTE{nNote > 1 ? 'S' : ''}</span>{/if}
 			</span>
 		{/if}
-		<span class="min-w-24 shrink-0 text-right"><StepState {step} {opHeld} /></span>
+		{#if au}
+			<SaveBadge {step} quiet />
+			<RowTools {step} {op} isOp={false} />
+		{:else}
+			<span class="min-w-24 shrink-0 text-right"><StepState {step} {opHeld} /></span>
+		{/if}
 	</div>
 	{#if open && !bodyless}
 		<div class="border-t border-border/60 bg-background pl-8"><StepBody {step} {op} /></div>

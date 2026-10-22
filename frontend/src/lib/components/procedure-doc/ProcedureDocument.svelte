@@ -3,6 +3,7 @@
 	// divider. The host supplies a controller (state + actions); this component
 	// only lays the document out.
 	import { EmptyLine } from '#lib/components/opal/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { provideDoc, type DocController } from './controller.js';
 	import Lightbox from './Lightbox.svelte';
 	import OpCard from './OpCard.svelte';
@@ -16,6 +17,7 @@
 
 	// svelte-ignore state_referenced_locally
 	provideDoc(controller);
+	const au = $derived(controller.mode === 'author' ? controller.author : undefined);
 </script>
 
 <div class="grid gap-2" data-doc-mode={controller.mode}>
@@ -31,8 +33,19 @@
 			<OpCard {op} />
 		{/each}
 	{/if}
-	{#if !ops.length && !contingency.length}
+	{#if !ops.length && !contingency.length && !au}
 		<EmptyLine label="Operations" />
+	{/if}
+	{#if au}
+		<div class="flex flex-wrap items-center gap-2">
+			<Button size="sm" variant="outline" onclick={() => au.addOp()}>+ OP</Button>
+			<Button size="sm" variant="ghost" onclick={() => au.addOp({ contingency: true })}
+				>+ CONTINGENCY OP</Button
+			>
+			{#if !ops.length && !contingency.length}
+				<span class="font-mono text-xs text-muted-foreground">OPERATIONS — none</span>
+			{/if}
+		</div>
 	{/if}
 </div>
 <Lightbox />
