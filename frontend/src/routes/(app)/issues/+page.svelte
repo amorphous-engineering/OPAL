@@ -83,8 +83,8 @@
 		{ key: 'links', label: 'Linked' },
 		{
 			key: 'created',
-			label: 'Age',
-			width: '4.5rem',
+			label: 'Created',
+			width: '10rem',
 			align: 'right',
 			sortable: true,
 			sortValue: (i) => i.created_at
@@ -92,139 +92,156 @@
 	];
 </script>
 
-<PageHeader title="Issues" crumbs={[{ label: 'Quality' }, { label: 'Issues' }]}>
-	{#snippet meta()}<span class="mono">{data.issues.total}</span> shown by current filters{/snippet}
+<PageHeader title="Issues">
+	{#snippet meta()}<span class="mono"
+			>{data.issues.total} {data.issues.total === 1 ? 'issue' : 'issues'}</span
+		>{/snippet}
 	{#snippet actions()}
 		<Button href="/issues/new" size="sm">+ NEW ISSUE</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-	<Input
-		type="search"
-		class="w-64"
-		placeholder="Search number or title"
-		aria-label="Search issues"
-		bind:value={search}
-		oninput={onSearch}
-	/>
-	<NativeSelect
-		size="sm"
-		aria-label="Filter by type"
-		value={params.get('type') ?? ''}
-		onchange={(e) => setParams({ type: e.currentTarget.value || null })}
-	>
-		<NativeSelectOption value="">All types</NativeSelectOption>
-		{#each ISSUE_TYPES as t (t)}<NativeSelectOption value={t}>{stateLabel(t)}</NativeSelectOption
-			>{/each}
-	</NativeSelect>
-	<NativeSelect
-		size="sm"
-		aria-label="Filter by state"
-		value={params.get('state') ?? ''}
-		onchange={(e) => setParams({ state: e.currentTarget.value || null })}
-	>
-		<NativeSelectOption value="">All states</NativeSelectOption>
-		{#each STATES as s (s)}<NativeSelectOption value={s}>{stateLabel(s)}</NativeSelectOption>{/each}
-	</NativeSelect>
-	<NativeSelect
-		size="sm"
-		aria-label="Filter by priority"
-		value={params.get('priority') ?? ''}
-		onchange={(e) => setParams({ priority: e.currentTarget.value || null })}
-	>
-		<NativeSelectOption value="">All priorities</NativeSelectOption>
-		{#each PRIORITIES as p (p)}<NativeSelectOption value={p}>{stateLabel(p)}</NativeSelectOption
-			>{/each}
-	</NativeSelect>
-	<NativeSelect
-		size="sm"
-		aria-label="Filter by assignee"
-		value={params.get('assignee') ?? ''}
-		onchange={(e) => setParams({ assignee: e.currentTarget.value || null })}
-	>
-		<NativeSelectOption value="">Anyone</NativeSelectOption>
-		{#if session.user}
-			<NativeSelectOption value={String(session.user.id)}>Me</NativeSelectOption>
-		{/if}
-		{#each data.assignees.filter((a) => a.id !== session.user?.id) as a (a.id)}
-			<NativeSelectOption value={String(a.id)}>{a.name}</NativeSelectOption>
-		{/each}
-	</NativeSelect>
-	{#if filtered}
-		<Button
-			size="sm"
-			variant="outline"
-			onclick={() => {
-				search = '';
-				goto('/issues', { replace: true });
-			}}>CLEAR</Button
-		>
-	{/if}
-</div>
+<div class="p-4">
+	<div class="border border-border bg-card">
+		<div class="flex flex-wrap items-center gap-2 border-b border-border p-2">
+			<Input
+				type="search"
+				class="h-7 w-72"
+				placeholder="Search number or title"
+				aria-label="Search issues"
+				bind:value={search}
+				oninput={onSearch}
+			/>
+			<NativeSelect
+				size="sm"
+				aria-label="Filter by type"
+				value={params.get('type') ?? ''}
+				onchange={(e) => setParams({ type: e.currentTarget.value || null })}
+			>
+				<NativeSelectOption value="">All types</NativeSelectOption>
+				{#each ISSUE_TYPES as t (t)}<NativeSelectOption value={t}
+						>{stateLabel(t)}</NativeSelectOption
+					>{/each}
+			</NativeSelect>
+			<NativeSelect
+				size="sm"
+				aria-label="Filter by state"
+				value={params.get('state') ?? ''}
+				onchange={(e) => setParams({ state: e.currentTarget.value || null })}
+			>
+				<NativeSelectOption value="">All states</NativeSelectOption>
+				{#each STATES as s (s)}<NativeSelectOption value={s}>{stateLabel(s)}</NativeSelectOption
+					>{/each}
+			</NativeSelect>
+			<NativeSelect
+				size="sm"
+				aria-label="Filter by priority"
+				value={params.get('priority') ?? ''}
+				onchange={(e) => setParams({ priority: e.currentTarget.value || null })}
+			>
+				<NativeSelectOption value="">All priorities</NativeSelectOption>
+				{#each PRIORITIES as p (p)}<NativeSelectOption value={p}>{stateLabel(p)}</NativeSelectOption
+					>{/each}
+			</NativeSelect>
+			<NativeSelect
+				size="sm"
+				aria-label="Filter by assignee"
+				value={params.get('assignee') ?? ''}
+				onchange={(e) => setParams({ assignee: e.currentTarget.value || null })}
+			>
+				<NativeSelectOption value="">Anyone</NativeSelectOption>
+				{#if session.user}
+					<NativeSelectOption value={String(session.user.id)}>Me</NativeSelectOption>
+				{/if}
+				{#each data.assignees.filter((a) => a.id !== session.user?.id) as a (a.id)}
+					<NativeSelectOption value={String(a.id)}>{a.name}</NativeSelectOption>
+				{/each}
+			</NativeSelect>
+			{#if filtered}
+				<Button
+					size="sm"
+					variant="outline"
+					onclick={() => {
+						search = '';
+						goto('/issues', { replace: true });
+					}}>CLEAR</Button
+				>
+			{/if}
+		</div>
 
-<DataTable
-	rows={data.issues.items}
-	{columns}
-	bind:sort={() => sort, onSort}
-	serverSort
-	href={(i) => `/issues/${i.id}`}
-	key={(i) => i.id}
-	emptyLabel={filtered ? 'Matching issues' : 'Issues'}
->
-	{#snippet cell(i, col)}
-		{#if col.key === 'number'}
-			<span class="text-info">{i.issue_number}</span>
-		{:else if col.key === 'title'}
-			{i.title}
-		{:else if col.key === 'type'}
-			<span class="font-mono text-xs">{TYPE_ABBREV[i.issue_type] ?? i.issue_type}</span>
-		{:else if col.key === 'state'}
-			<State value={i.disp_state} tone={stateTone(i.disp_state)} />
-		{:else if col.key === 'priority'}
-			<State value={i.priority} tone={priorityTone(i.priority)} />
-		{:else if col.key === 'assignee'}
-			{#if i.assigned_to_name}{i.assigned_to_name}{:else}<span class="text-muted-foreground">—</span
-				>{/if}
-		{:else if col.key === 'links'}
-			{#if i.part_number || i.work_order_number || i.procedure_name}
-				<span class="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs">
-					{#if i.part_number}<a href={`/parts/${i.part_id}`} class="text-info hover:underline"
-							>{i.part_number}</a
+		<DataTable
+			rows={data.issues.items}
+			{columns}
+			bind:sort={() => sort, onSort}
+			serverSort
+			href={(i) => `/issues/${i.id}`}
+			key={(i) => i.id}
+			emptyLabel={filtered ? 'Matching issues' : 'Issues'}
+		>
+			{#snippet cell(i, col)}
+				{#if col.key === 'number'}
+					<span class="text-info">{i.issue_number}</span>
+				{:else if col.key === 'title'}
+					{i.title}
+				{:else if col.key === 'type'}
+					<span class="font-mono text-xs">{TYPE_ABBREV[i.issue_type] ?? i.issue_type}</span>
+				{:else if col.key === 'state'}
+					<State value={i.disp_state} tone={stateTone(i.disp_state)} />
+				{:else if col.key === 'priority'}
+					<State value={i.priority} tone={priorityTone(i.priority)} />
+				{:else if col.key === 'assignee'}
+					{#if i.assigned_to_name}{i.assigned_to_name}{:else}<span class="text-muted-foreground"
+							>—</span
 						>{/if}
-					{#if i.work_order_number}<a
-							href={`/executions/${i.procedure_instance_id}`}
-							class="text-info hover:underline">{i.work_order_number}</a
-						>{/if}
-					{#if i.procedure_name && !i.work_order_number}<a
-							href={`/procedures/${i.procedure_id}`}
-							class="text-info hover:underline">{i.procedure_name}</a
-						>{/if}
-				</span>
-			{:else}<span class="text-muted-foreground">—</span>{/if}
-		{:else if col.key === 'created'}
-			<Timestamp value={i.created_at} relative />
-		{/if}
-	{/snippet}
-	{#snippet emptyAction()}
-		<a href="/issues/new" class="font-medium text-info hover:underline">+ NEW ISSUE</a>
-	{/snippet}
-</DataTable>
+				{:else if col.key === 'links'}
+					{#if i.part_number || i.work_order_number || i.procedure_name}
+						<span class="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs">
+							{#if i.part_number}<a href={`/parts/${i.part_id}`} class="text-info hover:underline"
+									>{i.part_number}</a
+								>{/if}
+							{#if i.work_order_number}<a
+									href={`/executions/${i.procedure_instance_id}`}
+									class="text-info hover:underline">{i.work_order_number}</a
+								>{/if}
+							{#if i.procedure_name && !i.work_order_number}<a
+									href={`/procedures/${i.procedure_id}`}
+									class="text-info hover:underline">{i.procedure_name}</a
+								>{/if}
+						</span>
+					{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else if col.key === 'created'}
+					<Timestamp value={i.created_at} />
+				{/if}
+			{/snippet}
+			{#snippet emptyAction()}
+				<a href="/issues/new" class="font-medium text-info hover:underline">+ NEW ISSUE</a>
+			{/snippet}
+		</DataTable>
 
-{#if pages > 1}
-	<div class="flex items-center gap-3 border-b border-border px-4 py-2 font-mono text-xs">
-		<Button
-			size="xs"
-			variant="outline"
-			disabled={pageNo <= 1}
-			onclick={() => setParams({ page: String(pageNo - 1) }, true)}>PREV</Button
-		>
-		<span class="tabular-nums">PAGE {pageNo} OF {pages}</span>
-		<Button
-			size="xs"
-			variant="outline"
-			disabled={pageNo >= pages}
-			onclick={() => setParams({ page: String(pageNo + 1) }, true)}>NEXT</Button
-		>
+		{#if data.issues.total > 0}
+			<div
+				class="flex items-center gap-3 border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground"
+			>
+				<span class="tabular-nums"
+					>{(pageNo - 1) * PAGE_SIZE + 1}–{Math.min(pageNo * PAGE_SIZE, data.issues.total)} of {data
+						.issues.total}</span
+				>
+				<div class="ml-auto flex items-center gap-2">
+					<Button
+						variant="outline"
+						size="xs"
+						disabled={pageNo <= 1}
+						onclick={() => setParams({ page: String(pageNo - 1) }, true)}>← PREV</Button
+					>
+					<span class="tabular-nums">PAGE {pageNo}/{pages}</span>
+					<Button
+						variant="outline"
+						size="xs"
+						disabled={pageNo >= pages}
+						onclick={() => setParams({ page: String(pageNo + 1) }, true)}>NEXT →</Button
+					>
+				</div>
+			</div>
+		{/if}
 	</div>
-{/if}
+</div>

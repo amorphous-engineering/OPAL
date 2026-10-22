@@ -6,7 +6,6 @@
 		DataTable,
 		EmptyLine,
 		PageHeader,
-		Section,
 		State,
 		Timestamp,
 		confirm,
@@ -61,7 +60,7 @@
 		{ key: 'disposition', label: 'Disposition', sortable: true, width: '8rem' },
 		{ key: 'score', label: 'Score', sortable: true, width: '6rem' },
 		{ key: 'owner', label: 'Owner', width: '10rem' },
-		{ key: 'reviewed', label: 'Reviewed', sortable: true, width: '6rem' }
+		{ key: 'reviewed', label: 'Reviewed', sortable: true, width: '10rem' }
 	];
 
 	const sort = $derived({ key: q.sort, dir: q.dir as 'asc' | 'desc' });
@@ -129,154 +128,163 @@
 </script>
 
 <PageHeader title="Risks">
+	{#snippet meta()}
+		<span class="mono">{total} {total === 1 ? 'risk' : 'risks'}</span>
+	{/snippet}
 	{#snippet actions()}
-		<Button variant="outline" onclick={stamp} disabled={!total}>MARK REVIEWED</Button>
-		<Button variant="outline" href="/risks/matrix">MATRIX</Button>
-		<Button href="/risks/new">+ NEW RISK</Button>
+		<Button size="sm" variant="outline" onclick={stamp} disabled={!total}>MARK REVIEWED</Button>
+		<Button size="sm" variant="outline" href="/risks/matrix">MATRIX</Button>
+		<Button size="sm" href="/risks/new">+ NEW RISK</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-3 p-4">
-	<div class="flex flex-wrap items-center gap-2">
-		<Input
-			class="w-64"
-			type="search"
-			placeholder="Search number or title"
-			aria-label="Search risks"
-			bind:value={search}
-			oninput={onSearch}
-		/>
-		<NativeSelect
-			aria-label="Disposition"
-			value={q.disposition ?? ''}
-			onchange={(e) => setParams({ disposition: e.currentTarget.value })}
-		>
-			<NativeSelectOption value="">All dispositions</NativeSelectOption>
-			{#each DISPOSITIONS as d (d)}<NativeSelectOption value={d}
-					>{d.toUpperCase()}</NativeSelectOption
-				>{/each}
-		</NativeSelect>
-		<NativeSelect
-			aria-label="Severity"
-			value={q.severity ?? ''}
-			onchange={(e) => setParams({ severity: e.currentTarget.value })}
-		>
-			<NativeSelectOption value="">All severities</NativeSelectOption>
-			{#each SEVERITIES as s (s.value)}<NativeSelectOption value={s.value}
-					>{s.label}</NativeSelectOption
-				>{/each}
-		</NativeSelect>
-		<NativeSelect
-			aria-label="Owner"
-			value={q.owner_id ?? ''}
-			onchange={(e) => setParams({ owner_id: e.currentTarget.value })}
-		>
-			<NativeSelectOption value="">All owners</NativeSelectOption>
-			{#each data.owners as o (o.id)}<NativeSelectOption value={String(o.id)}
-					>{o.name}</NativeSelectOption
-				>{/each}
-		</NativeSelect>
-		<div class="flex items-center gap-1.5">
-			<Checkbox
-				id="live-only"
-				checked={q.active === '1'}
-				onCheckedChange={(v) => setParams({ active: v ? '1' : null })}
+<div class="p-4">
+	<div class="border border-border bg-card">
+		<div class="flex flex-wrap items-center gap-2 border-b border-border p-2">
+			<Input
+				class="h-7 w-72"
+				type="search"
+				placeholder="Search number or title"
+				aria-label="Search risks"
+				bind:value={search}
+				oninput={onSearch}
 			/>
-			<Label for="live-only">Live only</Label>
-		</div>
-		{#if hasFilters}
-			<Button
-				variant="ghost"
-				size="sm"
-				onclick={() => {
-					search = '';
-					goto(page.url.pathname, { replace: true, reset: false });
-				}}>CLEAR FILTERS</Button
+			<NativeSelect
+				aria-label="Disposition"
+				value={q.disposition ?? ''}
+				onchange={(e) => setParams({ disposition: e.currentTarget.value })}
 			>
+				<NativeSelectOption value="">All dispositions</NativeSelectOption>
+				{#each DISPOSITIONS as d (d)}<NativeSelectOption value={d}
+						>{d.toUpperCase()}</NativeSelectOption
+					>{/each}
+			</NativeSelect>
+			<NativeSelect
+				aria-label="Severity"
+				value={q.severity ?? ''}
+				onchange={(e) => setParams({ severity: e.currentTarget.value })}
+			>
+				<NativeSelectOption value="">All severities</NativeSelectOption>
+				{#each SEVERITIES as s (s.value)}<NativeSelectOption value={s.value}
+						>{s.label}</NativeSelectOption
+					>{/each}
+			</NativeSelect>
+			<NativeSelect
+				aria-label="Owner"
+				value={q.owner_id ?? ''}
+				onchange={(e) => setParams({ owner_id: e.currentTarget.value })}
+			>
+				<NativeSelectOption value="">All owners</NativeSelectOption>
+				{#each data.owners as o (o.id)}<NativeSelectOption value={String(o.id)}
+						>{o.name}</NativeSelectOption
+					>{/each}
+			</NativeSelect>
+			<div class="flex items-center gap-1.5">
+				<Checkbox
+					id="live-only"
+					checked={q.active === '1' || q.active === 'true'}
+					onCheckedChange={(v) => setParams({ active: v ? '1' : null })}
+				/>
+				<Label for="live-only">Live only</Label>
+			</div>
+			{#if hasFilters}
+				<Button
+					variant="ghost"
+					size="sm"
+					onclick={() => {
+						search = '';
+						goto(page.url.pathname, { replace: true, reset: false });
+					}}>CLEAR FILTERS</Button
+				>
+			{/if}
+		</div>
+
+		{#if cellLabel}
+			<p class="border-b border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
+				Matrix cell <span class="text-foreground">{cellLabel}</span> ·
+				<a class="text-info hover:underline" href="/risks/matrix">MATRIX</a>
+			</p>
+		{/if}
+
+		{#if data.error}
+			<p
+				role="alert"
+				class="border-b border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+			>
+				{data.error}
+			</p>
+		{/if}
+
+		{#if total === 0}
+			<div>
+				<EmptyLine label={hasFilters ? 'Matching risks' : 'Risks'}>
+					{#snippet action()}
+						{#if hasFilters}
+							<a class="font-medium text-info hover:underline" href="/risks">CLEAR FILTERS</a>
+						{:else}
+							<a class="font-medium text-info hover:underline" href="/risks/new">+ ADD</a>
+						{/if}
+					{/snippet}
+				</EmptyLine>
+			</div>
+		{:else}
+			<div>
+				<DataTable
+					rows={data.list.items}
+					{columns}
+					serverSort
+					bind:sort={() => sort, setSort}
+					href={(r) => `/risks/${r.id}`}
+					key={(r) => r.id}
+					emptyLabel={hasFilters ? 'Matching risks' : 'Risks'}
+				>
+					{#snippet cell(r, col)}
+						{#if col.key === 'risk_number'}
+							<span class="font-mono text-info">{r.risk_number}</span>
+						{:else if col.key === 'title'}
+							{r.title}
+						{:else if col.key === 'asset'}
+							{#if r.asset_display}<span
+									class="block max-w-[32rem] truncate text-muted-foreground"
+									title={r.asset_display}>{r.asset_display}</span
+								>{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else if col.key === 'disposition'}
+							<State value={r.disposition} tone={dispositionTone(r.disposition)} />
+						{:else if col.key === 'score'}
+							<Score
+								score={r.score}
+								severity={r.severity}
+								residual={r.residual_score}
+								residualSeverity={r.residual_severity}
+							/>
+						{:else if col.key === 'owner'}
+							{#if r.owner_name}{r.owner_name}{:else}<span class="text-muted-foreground">—</span
+								>{/if}
+						{:else if col.key === 'reviewed'}
+							<Timestamp value={r.last_reviewed_at} />
+						{/if}
+					{/snippet}
+				</DataTable>
+				{#if total > PAGE_SIZE}
+					<div class="flex items-center gap-2 border-t border-border px-3 py-1.5 font-mono text-xs">
+						<span class="text-muted-foreground">{first}–{last} of {total}</span>
+						<div class="ml-auto flex gap-1">
+							<Button
+								variant="outline"
+								size="xs"
+								disabled={pageNo <= 1}
+								onclick={() => setParams({ page: String(pageNo - 1) })}>PREV</Button
+							>
+							<Button
+								variant="outline"
+								size="xs"
+								disabled={last >= total}
+								onclick={() => setParams({ page: String(pageNo + 1) })}>NEXT</Button
+							>
+						</div>
+					</div>
+				{/if}
+			</div>
 		{/if}
 	</div>
-
-	{#if cellLabel}
-		<p class="font-mono text-xs text-muted-foreground">
-			Matrix cell <span class="text-foreground">{cellLabel}</span> ·
-			<a class="text-info hover:underline" href="/risks/matrix">MATRIX</a>
-		</p>
-	{/if}
-
-	{#if data.error}
-		<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
-			{data.error}
-		</p>
-	{/if}
-
-	{#if total === 0}
-		<div class="border border-border bg-card">
-			<EmptyLine label={hasFilters ? 'Matching risks' : 'Risks'}>
-				{#snippet action()}
-					{#if hasFilters}
-						<a class="font-medium text-info hover:underline" href="/risks">CLEAR FILTERS</a>
-					{:else}
-						<a class="font-medium text-info hover:underline" href="/risks/new">+ ADD</a>
-					{/if}
-				{/snippet}
-			</EmptyLine>
-		</div>
-	{:else}
-		<Section title="Risk register" count={total}>
-			<DataTable
-				rows={data.list.items}
-				{columns}
-				serverSort
-				bind:sort={() => sort, setSort}
-				href={(r) => `/risks/${r.id}`}
-				key={(r) => r.id}
-				emptyLabel={hasFilters ? 'Matching risks' : 'Risks'}
-			>
-				{#snippet cell(r, col)}
-					{#if col.key === 'risk_number'}
-						<span class="font-mono text-info">{r.risk_number}</span>
-					{:else if col.key === 'title'}
-						{r.title}
-					{:else if col.key === 'asset'}
-						{#if r.asset_display}<span
-								class="block max-w-[32rem] truncate text-muted-foreground"
-								title={r.asset_display}>{r.asset_display}</span
-							>{:else}<span class="text-muted-foreground">—</span>{/if}
-					{:else if col.key === 'disposition'}
-						<State value={r.disposition} tone={dispositionTone(r.disposition)} />
-					{:else if col.key === 'score'}
-						<Score
-							score={r.score}
-							severity={r.severity}
-							residual={r.residual_score}
-							residualSeverity={r.residual_severity}
-						/>
-					{:else if col.key === 'owner'}
-						{#if r.owner_name}{r.owner_name}{:else}<span class="text-muted-foreground">—</span>{/if}
-					{:else if col.key === 'reviewed'}
-						<Timestamp value={r.last_reviewed_at} relative />
-					{/if}
-				{/snippet}
-			</DataTable>
-			{#if total > PAGE_SIZE}
-				<div class="flex items-center gap-2 border-t border-border px-3 py-1.5 font-mono text-xs">
-					<span class="text-muted-foreground">{first}–{last} of {total}</span>
-					<div class="ml-auto flex gap-1">
-						<Button
-							variant="outline"
-							size="xs"
-							disabled={pageNo <= 1}
-							onclick={() => setParams({ page: String(pageNo - 1) })}>PREV</Button
-						>
-						<Button
-							variant="outline"
-							size="xs"
-							disabled={last >= total}
-							onclick={() => setParams({ page: String(pageNo + 1) })}>NEXT</Button
-						>
-					</div>
-				</div>
-			{/if}
-		</Section>
-	{/if}
 </div>

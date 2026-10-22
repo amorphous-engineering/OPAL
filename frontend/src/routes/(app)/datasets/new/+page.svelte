@@ -87,8 +87,12 @@
 
 	<Section title="Fields" count={rows.length}>
 		{#snippet actions()}
-			<Button type="button" variant="ghost" size="xs" onclick={() => rows.push(blank())}
-				>+ ADD FIELD</Button
+			<Button
+				type="button"
+				variant="ghost"
+				size="xs"
+				class="font-mono text-info"
+				onclick={() => rows.push(blank())}>+ ADD FIELD</Button
 			>
 		{/snippet}
 		<table class="w-full border-collapse text-sm">

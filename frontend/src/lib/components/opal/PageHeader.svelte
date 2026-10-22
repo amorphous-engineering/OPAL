@@ -8,7 +8,8 @@
 		crumbs = [],
 		state,
 		actions,
-		meta
+		meta,
+		heading
 	}: {
 		title: string;
 		identifier?: string | null;
@@ -16,6 +17,8 @@
 		state?: Snippet;
 		actions?: Snippet;
 		meta?: Snippet;
+		/** Replaces the plain title (in-place editing); `title` still names the browser tab. */
+		heading?: Snippet;
 	} = $props();
 </script>
 
@@ -37,7 +40,9 @@
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
 		{#if identifier}<span class="font-mono text-base font-semibold text-info">{identifier}</span
 			>{/if}
-		<h1 class="text-lg font-semibold tracking-tight">{title}</h1>
+		{#if heading}{@render heading()}{:else}<h1 class="text-lg font-semibold tracking-tight">
+				{title}
+			</h1>{/if}
 		{@render state?.()}
 		<div class="ml-auto flex flex-wrap items-center gap-2">{@render actions?.()}</div>
 	</div>

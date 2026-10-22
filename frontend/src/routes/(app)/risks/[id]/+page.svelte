@@ -165,8 +165,18 @@
 <PageHeader
 	title={risk.title}
 	identifier={risk.risk_number}
-	crumbs={[{ label: 'Risks', href: '/risks' }]}
+	crumbs={[{ label: 'Risks', href: '/risks' }, { label: risk.risk_number }]}
 >
+	{#snippet heading()}
+		<h1 class="min-w-0 text-lg font-semibold tracking-tight [&>div]:items-center">
+			<EditableText
+				label="title"
+				value={risk.title}
+				maxlength={255}
+				onsave={(v) => (v ? patch({ title: v }) : Promise.resolve(false))}
+			/>
+		</h1>
+	{/snippet}
 	{#snippet state()}
 		<Score
 			class="text-base font-semibold"
@@ -178,12 +188,13 @@
 		<State value={risk.disposition} tone={dispositionTone(risk.disposition)} />
 	{/snippet}
 	{#snippet actions()}
-		<Button variant="outline" onclick={markReviewed}>MARK REVIEWED</Button>
-		<Button variant="destructive" onclick={remove}>DELETE</Button>
+		<Button size="sm" variant="ghost" href={`/audit?entity=risk&record=${risk.id}`}>AUDIT</Button>
+		<Button size="sm" variant="outline" onclick={markReviewed}>MARK REVIEWED</Button>
+		<Button size="sm" variant="destructive" onclick={remove}>DELETE</Button>
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<div
 		class={[
 			'border border-border bg-card px-3 py-2 text-sm',
@@ -201,14 +212,6 @@
 		<div class="grid gap-4">
 			<Section title="Scenario">
 				<DetailTable>
-					<DetailRow label="Title">
-						<EditableText
-							label="title"
-							value={risk.title}
-							maxlength={255}
-							onsave={(v) => (v ? patch({ title: v }) : Promise.resolve(false))}
-						/>
-					</DetailRow>
 					<DetailRow label="Condition">
 						<EditableText
 							label="condition"
@@ -391,7 +394,7 @@
 
 			<Section title="Disposition">
 				<DetailTable>
-					<DetailRow label="Disposition">
+					<DetailRow label="State">
 						<div class="flex flex-wrap items-center gap-3">
 							<State value={risk.disposition} tone={dispositionTone(risk.disposition)} />
 							{#if !terminal}

@@ -253,7 +253,7 @@
 
 <svelte:window {onkeydown} />
 
-<PageHeader title="Requirements" crumbs={[{ label: 'Quality' }]}>
+<PageHeader title="Requirements">
 	{#snippet actions()}
 		<div class="flex">
 			<Button
@@ -277,7 +277,7 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<StatusPanel summary={data.summary} />
 
 	<Section

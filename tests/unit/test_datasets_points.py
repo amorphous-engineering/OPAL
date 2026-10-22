@@ -88,3 +88,14 @@ def test_data_point_changes_are_audited(client, db_session):
     client.delete(f"/api/datasets/{dataset_id}/points/{point['id']}")
     rows = db_session.query(AuditLog).filter_by(table_name="data_point").all()
     assert len(rows) == 2
+
+
+def test_csv_export_timestamps_are_iso_utc(client):
+    dataset_id = _mk(client, [{"name": "p", "type": "number"}])
+    client.post(
+        f"/api/datasets/{dataset_id}/points",
+        json={"values": {"p": 5}, "recorded_at": "2026-10-22T22:38:32Z"},
+    )
+    rows = client.get(f"/api/datasets/{dataset_id}/export").text.splitlines()
+    assert rows[0] == "recorded_at,p"
+    assert rows[1] == "2026-10-22T22:38:32Z,5"
