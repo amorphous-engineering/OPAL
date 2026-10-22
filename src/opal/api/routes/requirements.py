@@ -331,6 +331,17 @@ def update_requirement(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Parent requirement {data.parent_id} not found",
             )
+        # Walk up from the proposed parent; meeting this row means a cycle.
+        cursor: Requirement | None = parent
+        seen: set[int] = set()
+        while cursor is not None and cursor.id not in seen:
+            if cursor.id == req.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A requirement cannot be parented under its own descendant",
+                )
+            seen.add(cursor.id)
+            cursor = cursor.parent
 
     old_values = get_model_dict(req)
     # Nullable fields clear on explicit null (model_fields_set distinguishes

@@ -131,12 +131,22 @@ def test_allocations_follow_the_revision_chain(client, db_session, test_user):
         json={"requirement_id": req.req_number},
         headers=headers,
     )
+    dossier = client.get(f"/api/requirements/{req.id}/dossier").json()
+    client.post(f"/api/requirements/allocations/{dossier['allocations'][0]['id']}/verify", json={})
     client.post(f"/api/requirements/{req.id}/baseline", headers=headers)
+    assert client.get(f"/api/requirements/{req.id}/dossier").json()["verification"] == "verified"
     rev2 = client.post(f"/api/requirements/{req.id}/revise", headers=headers).json()
 
     dossier = client.get(f"/api/requirements/{rev2['id']}/dossier").json()
     (alloc,) = dossier["allocations"]
     assert alloc["against_revision"] == 1  # allocated to rev 1, still listed on rev 2
+    # A verification closed against rev 1 does not verify rev 2.
+    assert alloc["status"] == "verified" and alloc["outdated"] is True
+    assert dossier["verification"] == "open"
+    row = next(
+        i for i in client.get("/api/requirements/tree").json()["items"] if i["id"] == rev2["id"]
+    )
+    assert row["verification"] == "open"
 
 
 def test_dossier_flowdown_and_delete_rules(client, db_session):

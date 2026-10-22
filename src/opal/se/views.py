@@ -39,8 +39,15 @@ LIVE_STATES = (
 _SATISFIED = ("verified", "waived")
 
 
-def verification_status(allocations: list[dict[str, Any]]) -> str:
-    """Roll allocation statuses into one word.
+def is_outdated(allocation: dict[str, Any], revision: int) -> bool:
+    """Verified or waived against an older revision than the one in force."""
+    return allocation["status"] in _SATISFIED and allocation["against_revision"] < revision
+
+
+def verification_status(allocations: list[dict[str, Any]], revision: int) -> str:
+    """Roll allocation statuses into one word for the given revision.
+
+    A verification closed against an older revision does not verify this one.
 
     unallocated  no part carries the requirement
     not_applicable  every allocation is marked not applicable
@@ -48,13 +55,12 @@ def verification_status(allocations: list[dict[str, Any]]) -> str:
     partial      some applicable allocations are dealt with, some open
     open         none dealt with
     """
-    statuses = [a["status"] for a in allocations]
-    if not statuses:
+    if not allocations:
         return "unallocated"
-    applicable = [s for s in statuses if s != "not_applicable"]
+    applicable = [a for a in allocations if a["status"] != "not_applicable"]
     if not applicable:
         return "not_applicable"
-    done = sum(1 for s in applicable if s in _SATISFIED)
+    done = sum(1 for a in applicable if a["status"] in _SATISFIED and not is_outdated(a, revision))
     if done == len(applicable):
         return "verified"
     return "partial" if done else "open"
@@ -151,7 +157,7 @@ def requirement_tree(db: Session) -> dict[str, Any]:
                     {"part_id": a["part_id"], "name": a["part_name"], "status": a["status"]}
                     for a in allocations
                 ],
-                "verification": verification_status(allocations),
+                "verification": verification_status(allocations, r.revision),
             }
         )
     return {"items": items, "total": len(items), "queue_count": len(ready_requirement_ids(db))}
@@ -187,6 +193,8 @@ def requirement_dossier(db: Session, req: Requirement) -> dict[str, Any]:
         .all()
     )
     own_allocations = allocations_by_number(db).get(req.req_number, [])
+    for a in own_allocations:
+        a["outdated"] = is_outdated(a, req.revision)
     baselined_by = db.get(User, req.baselined_by_id) if req.baselined_by_id else None
     predecessor = db.get(Requirement, req.supersedes_id) if req.supersedes_id else None
     baseline_events = [
@@ -238,7 +246,7 @@ def requirement_dossier(db: Session, req: Requirement) -> dict[str, Any]:
             for c in children
         ],
         "allocations": own_allocations,
-        "verification": verification_status(own_allocations),
+        "verification": verification_status(own_allocations, req.revision),
         "revisions": [
             {
                 "id": r.id,
@@ -395,7 +403,7 @@ def requirements_summary(db: Session) -> dict[str, Any]:
     child_parents = {r.parent_id for r in rows if r.parent_id}
     verification = {"verified": 0, "partial": 0, "open": 0, "unallocated": 0, "not_applicable": 0}
     for r in rows:
-        verification[verification_status(alloc.get(r.req_number, []))] += 1
+        verification[verification_status(alloc.get(r.req_number, []), r.revision)] += 1
 
     def ref(r: Requirement) -> dict[str, Any]:
         return {"id": r.id, "req_number": r.req_number, "title": r.title}

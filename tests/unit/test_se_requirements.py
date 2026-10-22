@@ -694,3 +694,15 @@ def test_api_patch_explicit_null_clears_parent(client):
     assert r.status_code == 200, r.text
     assert r.json()["parent_id"] is None
     assert client.get(f"/api/requirements/{child['id']}").json()["parent_id"] is None
+
+
+def test_api_patch_refuses_parent_cycle(client):
+    """Re-parenting a requirement under its own descendant would loop the tree."""
+    root = _api_create(client, title="Vehicle", level=0)
+    mid = _api_create(client, title="Engine", level=1, parent_id=root["id"])
+    leaf = _api_create(client, title="Injector", level=2, parent_id=mid["id"])
+
+    r = client.patch(f"/api/requirements/{root['id']}", json={"parent_id": leaf["id"]})
+    assert r.status_code == 400
+    assert "descendant" in r.json()["detail"]
+    assert client.get(f"/api/requirements/{root['id']}").json()["parent_id"] is None
