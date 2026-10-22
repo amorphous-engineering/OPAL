@@ -23,14 +23,14 @@ await page.goto(`${base}/login`);
 await page.waitForSelector('#username');
 await page.screenshot({ path: `${out}/login.png` });
 await page.fill('#username', process.env.OPAL_USER ?? 'build');
-await page.fill('#password', 'kestrel-demo');
+await page.fill('#password', process.env.OPAL_PASS ?? 'kestrel-demo');
 await page.click('button[type=submit]');
 await page.waitForURL((u) => !u.pathname.startsWith('/login'));
 for (const p of paths) {
 	await page.goto(`${base}${p}`);
 	await page.waitForLoadState('networkidle');
 	const name = p.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'root';
-	await page.screenshot({ path: `${out}/${name}.png`, fullPage: true });
+	await page.screenshot({ path: `${out}/${name}.png`, fullPage: process.env.FULL !== '0' });
 	console.log(`shot ${p} -> ${out}/${name}.png`);
 }
 console.log(errors.length ? errors.join('\n') : 'no errors');
