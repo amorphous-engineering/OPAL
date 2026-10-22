@@ -43,9 +43,7 @@
 			<div class="flex items-center gap-2">
 				<span class="label">Images</span>
 				<Button size="xs" variant="outline" onclick={() => picker?.click()}>+ IMAGE</Button>
-				{#if !images.length}<span class="font-mono text-xs text-muted-foreground"
-						>none</span
-					>{/if}
+				{#if !images.length}<span class="font-mono text-xs text-muted-foreground">none</span>{/if}
 				<input
 					bind:this={picker}
 					type="file"

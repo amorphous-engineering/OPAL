@@ -164,7 +164,7 @@
 						<button
 							type="button"
 							class="mb-1 font-mono text-xs font-medium hover:underline"
-							onclick={() => store.jumpTo(s.order)}>{s.number}</button
+							onclick={() => store.jumpTo(s.order)}>@{s.number}</button
 						>
 						{@render files(s.attachments)}
 					</div>
@@ -237,7 +237,7 @@
 {#snippet files(list: typeof doc.attachments)}
 	<div class="grid gap-1.5">
 		{#each list as a (a.id)}
-			<div class="flex items-start gap-2">
+			<div class="flex flex-wrap items-start gap-x-2 gap-y-0.5">
 				{#if a.mime_type.startsWith('image/')}
 					<button
 						type="button"
@@ -254,13 +254,13 @@
 					</button>
 				{:else}
 					<a
-						class="font-mono text-xs text-info hover:underline"
+						class="basis-full font-mono text-xs text-info hover:underline"
 						href={attachmentUrl(a.id)}
 						target="_blank"
 						rel="noopener">{a.filename}</a
 					>
 				{/if}
-				<div class="min-w-0 font-mono text-[11px] text-muted-foreground">
+				<div class="min-w-0 flex-1 font-mono text-[11px] text-muted-foreground">
 					{#if a.kind === 'closeout'}<span class="text-ok">CLOSEOUT</span> ·{/if}
 					{a.uploaded_by ?? ''}
 					<Timestamp value={a.created_at} />
