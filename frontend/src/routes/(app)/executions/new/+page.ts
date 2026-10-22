@@ -14,6 +14,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	const procedures = res.items
 		.filter((p) => p.current_version_id !== null)
 		.sort((a, b) => a.name.localeCompare(b.name));
-	const wanted = Number(url.searchParams.get('procedure'));
-	return { procedures, preselect: procedures.some((p) => p.id === wanted) ? wanted : null };
+	// Context pre-fill from the invoking page (template or published version).
+	const wanted = Number(url.searchParams.get('procedure_id') ?? url.searchParams.get('procedure'));
+	const version = Number(url.searchParams.get('version_id')) || null;
+	const preselect = procedures.some((p) => p.id === wanted) ? wanted : null;
+	return { procedures, preselect, preselectVersion: preselect ? version : null };
 };

@@ -23,9 +23,14 @@
 		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 	};
 
+	// The form edits a snapshot of the facts taken when the dialog opens.
+	// svelte-ignore state_referenced_locally
 	let workOrder = $state(facts.work_order ?? '');
+	// svelte-ignore state_referenced_locally
 	let scheduled = $state(local(facts.scheduled_start_at));
+	// svelte-ignore state_referenced_locally
 	let target = $state(local(facts.target_completion_at));
+	// svelte-ignore state_referenced_locally
 	let priority = $state(String(facts.priority));
 	let busy = $state(false);
 	let error = $state<string | null>(null);

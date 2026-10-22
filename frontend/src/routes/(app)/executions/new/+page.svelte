@@ -16,7 +16,8 @@
 
 	// svelte-ignore state_referenced_locally
 	let procedureId = $state(data.preselect ? String(data.preselect) : '');
-	let versionId = $state('');
+	// svelte-ignore state_referenced_locally
+	let versionId = $state(data.preselectVersion ? String(data.preselectVersion) : '');
 	let quantity = $state('1');
 	let workOrder = $state('');
 	let scheduled = $state('');
