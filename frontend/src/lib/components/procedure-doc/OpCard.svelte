@@ -22,7 +22,7 @@
 	import StepProps from './author/StepProps.svelte';
 	import TitleInput from './author/TitleInput.svelte';
 	import { dragOver, dropHere, dropMarker } from './author/dnd.js';
-	import { isTerminal, type DocOp } from './types.js';
+	import { isBlocked, isTerminal, type DocOp } from './types.js';
 
 	let { op }: { op: DocOp } = $props();
 	const ctl = useDoc();
@@ -31,9 +31,24 @@
 	const leaf = $derived(op.steps.length === 0);
 	const terminal = $derived(isTerminal(op.status));
 	const key = $derived(`op:${op.order}`);
-	const open = $derived(ctl.isOpen(key, terminal));
+	// Fold what cannot be acted on yet: a leaf OP that is held or waiting, an OP
+	// waiting on another OP or a redline. Unfinished sub-steps never fold an OP.
+	const blocked = $derived(
+		ctl.mode === 'execute' &&
+			(leaf
+				? isBlocked(op.step)
+				: !terminal &&
+					op.step.complete_blockers.some((b) => b.kind === 'dependency' || b.kind === 'redline'))
+	);
+	const open = $derived(ctl.isOpen(key, terminal, blocked));
 	const focused = $derived(ctl.focusedOrder === op.order);
-	const claimed = $derived(ctl.claimedOrder === op.order);
+	const current = $derived(leaf && ctl.mode === 'execute' && ctl.currentOrder === op.order);
+	// CLAIM stays visible where it matters (my OP, the OP of the next step); elsewhere on hover.
+	const claimHere = $derived(
+		ctl.claimedOrder === op.order ||
+			(ctl.currentOrder != null &&
+				(ctl.currentOrder === op.order || op.steps.some((s) => s.order === ctl.currentOrder)))
+	);
 	const pct = $derived(op.progress.total ? (op.progress.done / op.progress.total) * 100 : 0);
 	const deletable = $derived(
 		op.is_ad_hoc &&
@@ -68,7 +83,7 @@
 		'border border-border bg-card',
 		op.is_contingency && 'border-dashed',
 		op.is_ad_hoc && 'border-warn/50',
-		claimed && 'shadow-[inset_2px_0_0_var(--primary)]'
+		current && 'shadow-[inset_2px_0_0_var(--info)]'
 	)}
 >
 	<div
@@ -77,7 +92,7 @@
 		class={cn(
 			'group/row flex min-h-9 cursor-pointer items-center gap-2 bg-muted/60 px-3 py-1 hover:bg-accent/60',
 			open && 'border-b border-border',
-			focused && 'outline outline-1 -outline-offset-1 outline-ring/60',
+			focused && 'outline outline-1 -outline-offset-1 outline-foreground/25',
 			au && dropMarker(au, op.order),
 			au?.drag.id === op.order && 'opacity-40'
 		)}
@@ -90,12 +105,12 @@
 		aria-expanded={open}
 		onclick={() => {
 			ctl.setFocus(op.order);
-			ctl.toggle(key, terminal);
+			ctl.toggle(key, terminal, blocked);
 		}}
 		onkeydown={(e) => {
 			if (e.key === 'Enter' || e.key === ' ') {
 				e.preventDefault();
-				ctl.toggle(key, terminal);
+				ctl.toggle(key, terminal, blocked);
 			}
 		}}
 	>
@@ -148,7 +163,7 @@
 		{/if}
 		{#if au}<AuthorChips step={op.step} />{/if}
 		<CursorChips cursors={op.step.cursors} viewerId={ctl.viewerId} />
-		<OpClaim {op} />
+		<OpClaim {op} prominent={claimHere} />
 		{#if au && !leaf}
 			<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
 				>{op.steps.length} {op.steps.length === 1 ? 'STEP' : 'STEPS'}</span
@@ -174,20 +189,15 @@
 					<RowTools step={op.step} {op} isOp={true} />
 				</span>
 			{:else if ctl.active && op.holds.length}
+				<!-- The hold's issue number lives on the row it blocks; here, only that the OP is held. -->
 				<span
 					class="font-mono text-xs font-medium whitespace-nowrap text-warn"
-					title="OP COMPLETE is held until disposition"
-					>HELD BY
-					{#each op.holds as h, i (h.issue_id)}
-						{#if i > 0}<span> · </span>{/if}<a
-							class="underline"
-							href={`/issues/${h.issue_id}`}
-							onclick={(e) => e.stopPropagation()}>{h.issue_number}</a
-						>{/each}</span
+					title={`OP COMPLETE is held until disposition: ${op.holds.map((h) => h.issue_number).join(', ')}`}
+					>HELD{op.holds.length > 1 ? ` ×${op.holds.length}` : ''}</span
 				>
 			{:else if ctl.active && op.waiting_on_ops.length}
-				<span class="font-mono text-xs font-medium whitespace-nowrap text-warn"
-					>WAITING ON OP {op.waiting_on_ops.join(', ')}</span
+				<span class="font-mono text-xs font-medium whitespace-nowrap text-muted-foreground"
+					>AFTER OP {op.waiting_on_ops.join(', ')}</span
 				>
 			{:else if leaf || terminal || op.step.status === 'awaiting_signoff'}
 				<StepState step={op.step} />

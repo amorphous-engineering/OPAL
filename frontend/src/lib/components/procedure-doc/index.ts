@@ -38,5 +38,5 @@ export type {
 	StockRecord,
 	WorkcenterOption
 } from './controller.js';
-export { isTerminal, visibleRows, TERMINAL_STATUSES } from './types.js';
+export { isActionable, isBlocked, isTerminal, visibleRows, TERMINAL_STATUSES } from './types.js';
 export type * from './types.js';

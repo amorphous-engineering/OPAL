@@ -188,11 +188,24 @@
 				<ExecutionNav {store} onjump={jump} />
 			</aside>
 			<div class="flex min-h-0 min-w-0 flex-col gap-3">
-				<TabStrip
-					tabs={tabs.map((t) => ({ ...t, label: t.label.toUpperCase() }))}
-					value={tab}
-					onchange={setTab}
-				/>
+				<div class="flex items-center gap-2 border-b border-border">
+					<TabStrip
+						tabs={tabs.map((t) => ({ ...t, label: t.label.toUpperCase() }))}
+						value={tab}
+						onchange={setTab}
+						class="flex-1 border-b-0"
+					/>
+					{#if tab === 'document'}
+						<Button
+							size="xs"
+							variant="outline"
+							class={store.focusMode ? 'border-info text-info' : 'text-muted-foreground'}
+							aria-pressed={store.focusMode}
+							title="Show only the operation being worked"
+							onclick={() => store.setFocusMode(!store.focusMode)}>FOCUS</Button
+						>
+					{/if}
+				</div>
 				<div id="exec-scroll" class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4">
 					{#if tab === 'document'}
 						<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency_ops} />

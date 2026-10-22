@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Presence: who has claimed this step. The viewer's own chip is filled.
+	// Presence: who has claimed this OP. The viewer's own chip is outlined bolder.
 	import { cn } from '#lib/utils.js';
 	import type { DocCursor } from './types.js';
 
@@ -13,7 +13,7 @@
 				class={cn(
 					'inline-flex h-5 min-w-6 items-center justify-center border px-1 font-mono text-[11px] font-medium',
 					c.user_id === viewerId
-						? 'border-primary bg-primary text-primary-foreground'
+						? 'border-foreground/60 font-semibold text-foreground'
 						: 'border-border text-foreground',
 					c.stale && 'opacity-50'
 				)}

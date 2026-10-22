@@ -139,9 +139,12 @@ export interface DocController {
 	focusedOrder: number | null;
 	/** The viewer's claimed step (presence), or null. */
 	claimedOrder: number | null;
-	/** Is the OP card (key `op:3`) or step body (`step:5`) expanded? */
-	isOpen(key: string, terminal: boolean): boolean;
-	toggle(key: string, terminal: boolean): void;
+	/** Is the OP card (key `op:3`) or step body (`step:5`) expanded? Defaults: open
+	 *  unless finished — or `blocked` (nothing to act on yet). */
+	isOpen(key: string, terminal: boolean, blocked?: boolean): boolean;
+	toggle(key: string, terminal: boolean, blocked?: boolean): void;
+	/** The one step the page points at: the next thing to do. Gets the accent. */
+	currentOrder?: number | null;
 	setFocus(order: number): void;
 	/** Data capture: viewer's unsaved value for a field (falls back to the stored one). */
 	fieldValue(step: DocStep, name: string): unknown;

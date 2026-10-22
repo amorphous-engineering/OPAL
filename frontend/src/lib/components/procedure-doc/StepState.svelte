@@ -4,7 +4,7 @@
 	import { datetime, iso } from '#lib/format.js';
 	import type { DocStep } from './types.js';
 
-	let { step, opHeld = false }: { step: DocStep; opHeld?: boolean } = $props();
+	let { step }: { step: DocStep } = $props();
 
 	// Completion stamp: local ISO date and minute, then who (name, initials as fallback).
 	const who = $derived(step.completed?.by ?? step.completed?.initials ?? '');
@@ -14,7 +14,9 @@
 
 <span class="font-mono text-xs font-medium whitespace-nowrap">
 	{#if step.status === 'completed' || step.status === 'signed_off'}
-		<span class="inline-flex items-baseline gap-1.5 text-ok" title={iso(step.completed?.at)}
+		<span
+			class="inline-flex items-baseline gap-1.5 font-normal text-muted-foreground"
+			title={iso(step.completed?.at)}
 			><time datetime={iso(step.completed?.at)}>{datetime(step.completed?.at)}</time><span
 				class="max-w-[9rem] truncate">{who}</span
 			></span
@@ -29,7 +31,7 @@
 		>
 	{:else if raised.length}
 		<span class="text-warn"
-			>HELD
+			>HELD BY
 			{#each raised as h, i (h.issue_id)}
 				{#if i > 0},
 				{/if}<a
@@ -52,8 +54,6 @@
 	{:else if step.status === 'awaiting_signoff'}
 		<span class="text-warn">AWAITING SIGN-OFF</span>
 	{:else if step.waiting}
-		<span class="text-warn">{step.waiting}</span>
-	{:else if opHeld && step.status === 'pending'}
-		<span class="text-warn">OP ON HOLD</span>
+		<span class="text-muted-foreground">{step.waiting.replace(/^WAITING ON /, 'AFTER ')}</span>
 	{/if}
 </span>

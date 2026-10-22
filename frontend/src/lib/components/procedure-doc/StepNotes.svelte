@@ -41,11 +41,14 @@
 	<div class="grid gap-1 border-t border-border pt-2" data-notes>
 		<span class="label">Notes</span>
 		{#each step.notes as n (n.id)}
-			<div class="font-mono text-xs text-muted-foreground">
-				<time datetime={iso(n.created_at)} title={iso(n.created_at)}
-					>{datetime(n.created_at).slice(11)}</time
+			<div class="flex items-baseline gap-2 text-sm">
+				<span class="shrink-0 font-mono text-[11px] text-muted-foreground"
+					><time datetime={iso(n.created_at)} title={iso(n.created_at)}
+						>{datetime(n.created_at)}</time
+					>
+					{n.author ?? initials(n.author)}</span
 				>
-				{initials(n.author)} · <span class="whitespace-pre-wrap text-foreground">{n.body}</span>
+				<span class="whitespace-pre-wrap">{n.body}</span>
 			</div>
 		{/each}
 		{#if ctl.actions.addNote}
@@ -55,7 +58,7 @@
 					maxlength={2000}
 					placeholder="Add note"
 					aria-label={`Add note to ${step.number}`}
-					class="h-7 max-w-xl font-mono"
+					class="h-7 max-w-xl"
 					data-note-input={step.order}
 				/>
 				<Button type="submit" size="xs" variant="outline" disabled={busy || !body.trim()}

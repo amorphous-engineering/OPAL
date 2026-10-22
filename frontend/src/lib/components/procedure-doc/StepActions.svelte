@@ -16,6 +16,12 @@
 		ctl.active && (step.status === 'pending' || step.status === 'in_progress')
 	);
 	const awaiting = $derived(ctl.active && step.status === 'awaiting_signoff');
+	// Why SKIP / COMPLETE are inert, once (same message counted once).
+	const reasons = $derived(
+		[...step.complete_blockers, ...step.skip_blockers].filter(
+			(b, i, all) => all.findIndex((x) => x.message === b.message) === i
+		)
+	);
 	let busy = $state(false);
 
 	async function run(fn: (() => Promise<void>) | undefined) {
@@ -43,28 +49,28 @@
 	{/if}
 	{#if scope === 'step'}
 		{#if a.skip && workable}
-			{#if step.skip_blockers.length}
-				<span class="inline-flex items-center gap-2">
-					<Button size="xs" variant="outline" disabled>SKIP</Button>
-					<GateReason blockers={step.skip_blockers} />
-				</span>
-			{:else}
-				<Button size="xs" variant="outline" onclick={() => a.skip!(step)}>SKIP</Button>
-			{/if}
+			<Button
+				size="xs"
+				variant="outline"
+				disabled={step.skip_blockers.length > 0}
+				onclick={() => a.skip!(step)}>SKIP</Button
+			>
 		{/if}
 	{/if}
 	{#if a.signoff && awaiting}
 		<Button size="xs" disabled={busy} onclick={() => run(() => a.signoff!(step))}>SIGN OFF</Button>
 	{:else if scope === 'step' && a.complete && workable}
 		{#if step.complete_blockers.length}
-			<span class="inline-flex items-center gap-2">
-				<Button size="xs" disabled>COMPLETE</Button>
-				<GateReason blockers={step.complete_blockers} />
-			</span>
+			<!-- Inert: an outline, never a dimmed fill that reads as half-active. -->
+			<Button size="xs" variant="outline" disabled>COMPLETE</Button>
 		{:else}
 			<Button size="xs" disabled={busy} onclick={() => run(() => a.complete!(step))}
 				>COMPLETE</Button
 			>
 		{/if}
+	{/if}
+	{#if scope === 'step' && workable && reasons.length}
+		<!-- One reason line for every inert control above. -->
+		<GateReason blockers={reasons} />
 	{/if}
 </div>

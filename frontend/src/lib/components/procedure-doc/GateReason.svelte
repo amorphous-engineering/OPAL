@@ -3,7 +3,9 @@
 	// full list rides in the tooltip. Issue-backed blockers link to the issue.
 	import type { DocBlocker } from './types.js';
 
-	let { blockers }: { blockers: DocBlocker[] } = $props();
+	let { blockers: all }: { blockers: DocBlocker[] } = $props();
+	// A hold is already named on the step's row; repeat only other reasons.
+	const blockers = $derived(all.filter((b) => b.kind !== 'nc'));
 
 	const first = $derived(blockers[0]);
 	const parts = $derived(first && !first.issue_number ? first.message.split(', ') : []);
@@ -16,7 +18,7 @@
 </script>
 
 {#if first}
-	<span class="font-mono text-[11px] text-warn" title={full}>
+	<span class="font-mono text-[11px] text-muted-foreground" title={full}>
 		{#if first.issue_number}
 			held by <a class="underline" href={`/issues/${first.issue_id}`}>{first.issue_number}</a>
 		{:else}

@@ -1,13 +1,14 @@
 <script lang="ts">
 	// CLAIM / CLAIMED on an OP header: claims are per OP (one operator works an
-	// OP). Inert with its reason while the OP is gated by a dependency or a
-	// redline; unfinished sub-steps never gate it — working them is the point.
+	// OP). Absent while the OP is gated by a dependency or a redline (the header
+	// says what it waits on); unfinished sub-steps never gate it. Off the OP being
+	// worked it shows only on hover or keyboard focus, so headers stay quiet.
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { useDoc } from './controller.js';
-	import GateReason from './GateReason.svelte';
+	import { cn } from '#lib/utils.js';
 	import { isTerminal, type DocOp } from './types.js';
 
-	let { op }: { op: DocOp } = $props();
+	let { op, prominent = true }: { op: DocOp; prominent?: boolean } = $props();
 	const ctl = useDoc();
 
 	const claimed = $derived(ctl.claimedOrder === op.order);
@@ -35,26 +36,17 @@
 	}
 </script>
 
-{#if show}
-	{#if gates.length && !claimed}
-		<span
-			class="inline-flex items-center gap-2"
-			role="presentation"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<Button size="xs" variant="outline" disabled>CLAIM</Button>
-			<GateReason blockers={gates} />
-		</span>
-	{:else}
-		<Button
-			size="xs"
-			variant={claimed ? 'default' : 'outline'}
-			aria-pressed={claimed}
-			title={claimed
-				? `Release OP ${op.number}`
-				: `Claim OP ${op.number}: mark it as yours to work`}
-			disabled={busy}
-			onclick={toggle}>{claimed ? 'CLAIMED' : 'CLAIM'}</Button
-		>
-	{/if}
+{#if show && (!gates.length || claimed)}
+	<Button
+		size="xs"
+		variant="outline"
+		class={cn(
+			claimed ? 'border-foreground/60 text-foreground' : 'text-muted-foreground',
+			!prominent && !claimed && 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100'
+		)}
+		aria-pressed={claimed}
+		title={claimed ? `Release OP ${op.number}` : `Claim OP ${op.number}: mark it as yours to work`}
+		disabled={busy}
+		onclick={toggle}>{claimed ? 'CLAIMED' : 'CLAIM'}</Button
+	>
 {/if}

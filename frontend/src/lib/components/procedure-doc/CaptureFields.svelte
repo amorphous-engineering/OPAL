@@ -75,7 +75,7 @@
 			{@const id = `cap-${step.order}-${f.name}`}
 			{@const err = errors[f.name]}
 			<div class="grid content-start gap-1">
-				<label for={id} class="label">
+				<label for={id} class="text-sm font-medium text-foreground">
 					{f.label ?? f.name}{#if f.unit}&nbsp;({f.unit}){/if}{#if f.required}<span
 							class="text-error"
 						>

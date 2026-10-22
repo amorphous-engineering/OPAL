@@ -211,3 +211,18 @@ export function visibleRows(
 export function isTerminal(status: string): boolean {
 	return TERMINAL_STATUSES.includes(status);
 }
+
+/** Blockers that mean "nothing to do here yet": a hold, a sequence or OP wait, a redline. */
+const WAIT_KINDS = ['nc', 'sequence', 'dependency', 'redline'];
+
+/** A step (or leaf OP) that is open for work but cannot be acted on yet. */
+export function isBlocked(step: DocStep): boolean {
+	return (
+		!isTerminal(step.status) && step.complete_blockers.some((b) => WAIT_KINDS.includes(b.kind))
+	);
+}
+
+/** Can the operator work this step right now? */
+export function isActionable(step: DocStep): boolean {
+	return (step.status === 'pending' || step.status === 'in_progress') && !isBlocked(step);
+}

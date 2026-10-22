@@ -16,6 +16,7 @@
 import { api } from '#lib/api.js';
 import { confirm, toast, toastError } from '#lib/components/opal/index.js';
 import {
+	isActionable,
 	isTerminal,
 	visibleRows,
 	type ConsumeItem,
@@ -234,6 +235,42 @@ export class ExecutionStore implements DocController {
 		}
 	}
 
+	/** The next thing to do: the focused step if it is actionable, else the first
+	 *  actionable step of the claimed OP, else the first actionable step. */
+	currentOrder = $derived.by(() => {
+		if (!this.doc) return null;
+		const rows = this.allOps.flatMap((op) =>
+			op.steps.length ? op.steps.map((step) => ({ op, step })) : [{ op, step: op.step }]
+		);
+		const focused = rows.find((r) => r.step.order === this.focusedOrder);
+		if (focused && isActionable(focused.step)) return focused.step.order;
+		const claimed = rows.find((r) => r.op.order === this.claimedOrder && isActionable(r.step));
+		if (claimed) return claimed.step.order;
+		return rows.find((r) => isActionable(r.step))?.step.order ?? null;
+	});
+
+	/** Focus mode: collapse every OP but the one being worked. Remembered per browser. */
+	focusMode = $state(read<boolean>('opal.exec.focusMode', false));
+	private focusOverride = $state<number | null>(null);
+
+	/** The OP focus mode keeps open: chosen by the operator, else the claimed OP, else
+	 *  the OP of the current step. */
+	get focusOp(): number | null {
+		if (this.focusOverride !== null) return this.focusOverride;
+		if (this.claimedOrder !== null) return this.claimedOrder;
+		const cur = this.currentOrder;
+		return cur === null ? null : (this.findStep(cur)?.op.order ?? null);
+	}
+	set focusOp(order: number | null) {
+		this.focusOverride = order;
+	}
+
+	setFocusMode(on: boolean) {
+		this.focusMode = on;
+		this.focusOverride = null;
+		write('opal.exec.focusMode', on);
+	}
+
 	private firstActionable() {
 		return visibleRows(this.allOps, () => true).find(
 			(r) =>
@@ -309,13 +346,20 @@ export class ExecutionStore implements DocController {
 
 	// ---------- controller: expansion & focus ----------
 
-	isOpen(key: string, terminal: boolean): boolean {
-		return this.overrides[key] ?? !terminal;
+	isOpen(key: string, terminal: boolean, blocked = false): boolean {
+		// Focus mode: only the OP being worked is open; the rest fold to their header.
+		if (this.focusMode && key.startsWith('op:')) return Number(key.slice(3)) === this.focusOp;
+		return this.overrides[key] ?? (!terminal && !blocked);
 	}
 
-	toggle(key: string, terminal: boolean) {
-		const next = !this.isOpen(key, terminal);
-		if (next === !terminal) delete this.overrides[key];
+	toggle(key: string, terminal: boolean, blocked = false) {
+		if (this.focusMode && key.startsWith('op:')) {
+			// Opening another OP in focus mode moves the focus there.
+			this.focusOp = Number(key.slice(3)) === this.focusOp ? null : Number(key.slice(3));
+			return;
+		}
+		const next = !this.isOpen(key, terminal, blocked);
+		if (next === (!terminal && !blocked)) delete this.overrides[key];
 		else this.overrides[key] = next;
 		write(this.key('open'), this.overrides);
 	}

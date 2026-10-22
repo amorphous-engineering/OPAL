@@ -13,7 +13,7 @@
 	import SaveBadge from './author/SaveBadge.svelte';
 	import TitleInput from './author/TitleInput.svelte';
 	import { dragOver, dropHere, dropMarker } from './author/dnd.js';
-	import { isTerminal, type DocOp, type DocStep } from './types.js';
+	import { isBlocked, isTerminal, type DocOp, type DocStep } from './types.js';
 
 	let {
 		step,
@@ -30,11 +30,14 @@
 	const au = $derived(ctl.mode === 'author' ? ctl.author : undefined);
 	const terminal = $derived(isTerminal(step.status));
 	const key = $derived(`step:${step.order}`);
-	const open = $derived(ctl.isOpen(key, terminal));
+	// A step with nothing to act on yet (held, waiting) folds to its line.
+	const blocked = $derived(ctl.mode === 'execute' && isBlocked(step));
+	const open = $derived(ctl.isOpen(key, terminal, blocked));
 	const focused = $derived(ctl.focusedOrder === step.order);
+	// The one accent on the page: the next thing to do.
+	const current = $derived(ctl.mode === 'execute' && ctl.currentOrder === step.order);
 	const nAtt = $derived(step.attachments.length);
 	const nNote = $derived(step.notes.length);
-	const opHeld = $derived(op.holds.length > 0);
 </script>
 
 <div
@@ -45,7 +48,8 @@
 	data-drop-row={au ? '' : undefined}
 	class={cn(
 		'group/row border-b border-border last:border-b-0',
-		focused && 'bg-accent/40 outline outline-1 -outline-offset-1 outline-ring/60',
+		current && 'shadow-[inset_2px_0_0_var(--info)]',
+		focused && 'bg-accent/40 outline outline-1 -outline-offset-1 outline-foreground/25',
 		au && dropMarker(au, step.order),
 		au?.drag.id === step.order && 'opacity-40'
 	)}
@@ -55,19 +59,19 @@
 	<div
 		class={cn(
 			'flex min-h-8 cursor-pointer items-center gap-2 px-3 py-1 hover:bg-accent/50',
-			terminal && 'text-muted-foreground'
+			(terminal || blocked) && 'text-muted-foreground'
 		)}
 		role="button"
 		tabindex="-1"
 		aria-expanded={open}
 		onclick={() => {
 			ctl.setFocus(step.order);
-			ctl.toggle(key, terminal);
+			ctl.toggle(key, terminal, blocked);
 		}}
 		onkeydown={(e) => {
 			if (e.key === 'Enter' || e.key === ' ') {
 				e.preventDefault();
-				ctl.toggle(key, terminal);
+				ctl.toggle(key, terminal, blocked);
 			}
 		}}
 	>
@@ -122,7 +126,7 @@
 			<SaveBadge {step} quiet />
 			<RowTools {step} {op} isOp={false} />
 		{:else}
-			<span class="min-w-24 shrink-0 text-right"><StepState {step} {opHeld} /></span>
+			<span class="min-w-24 shrink-0 text-right"><StepState {step} /></span>
 		{/if}
 	</div>
 	{#if open && !bodyless}

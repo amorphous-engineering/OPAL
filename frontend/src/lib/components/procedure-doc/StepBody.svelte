@@ -27,24 +27,10 @@
 			(step.status === 'pending' || step.status === 'in_progress')
 	);
 	const authoring = $derived(ctl.mode === 'author');
-	const raised = $derived(step.holds.filter((h) => h.disposition_state === 'undispositioned'));
 	const hasFields = $derived((step.data_schema?.fields?.length ?? 0) > 0);
 </script>
 
 <div class="grid gap-3 px-3 py-3" data-step-body={step.order}>
-	{#if raised.length}
-		<div class="border border-warn/50 bg-warn-muted px-3 py-2 text-xs" role="status">
-			<span class="label text-warn">Held by</span>
-			{#each raised as h, i (h.issue_id)}
-				{#if i > 0}<span class="text-muted-foreground">, </span>{/if}
-				<a class="font-mono text-info hover:underline" href={`/issues/${h.issue_id}`}
-					>{h.issue_number}</a
-				>
-				<span class="text-muted-foreground">{h.title}</span>
-			{/each}
-			<span class="text-muted-foreground">— undispositioned</span>
-		</div>
-	{/if}
 	{#if step.issue_history.length}
 		<div class="font-mono text-[11px] text-muted-foreground">
 			{#each step.issue_history as i, n (i.issue_id)}
