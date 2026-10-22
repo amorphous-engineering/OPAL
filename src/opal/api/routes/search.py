@@ -125,8 +125,8 @@ def _purchase_result(po: Purchase) -> SearchResult:
     return SearchResult(
         entity_type="purchase",
         id=po.id,
-        label=f"PO-{po.id}",
-        sublabel=po.reference,
+        label=po.reference or f"PO-{po.id}",
+        sublabel=po.supplier_rel.name if po.supplier_rel else po.supplier,
         url=f"/purchases/{po.id}",
         status=_status_value(po.status),
     )

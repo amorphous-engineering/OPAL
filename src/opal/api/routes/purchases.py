@@ -428,6 +428,7 @@ def list_purchases(
     pagination: PaginationParams,
     status_filter: PurchaseStatus | None = Query(None, alias="status"),
     open_only: bool = Query(False, alias="open", description="Draft, ordered, partial, on hold"),
+    awaiting: bool = Query(False, description="Ordered or partially received (awaiting receipt)"),
     overdue: bool = Query(False),
     supplier: str | None = Query(None, description="Supplier name contains"),
     supplier_id: int | None = Query(None),
@@ -449,6 +450,10 @@ def list_purchases(
         query = query.filter(Purchase.status == status_filter)
     if open_only:
         query = query.filter(Purchase.status.in_([s.value for s in OPEN_STATUSES]))
+    if awaiting:
+        query = query.filter(
+            Purchase.status.in_([PurchaseStatus.ORDERED.value, PurchaseStatus.PARTIAL.value])
+        )
     if overdue:
         query = query.filter(
             Purchase.target_date < date.today(),

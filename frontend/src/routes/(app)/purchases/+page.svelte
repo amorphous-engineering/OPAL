@@ -63,6 +63,7 @@
 			allLabel="All statuses"
 			options={[
 				{ value: 'open', label: 'OPEN' },
+				{ value: 'awaiting', label: 'AWAITING RECEIPT' },
 				...PURCHASE_STATUSES.map((s) => ({ value: s, label: stateLabel(s) }))
 			]}
 		/>

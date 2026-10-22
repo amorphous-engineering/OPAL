@@ -247,7 +247,7 @@
 
 <svelte:window {onkeydown} />
 
-<PageHeader title="Requirements" crumbs={[{ label: 'Quality' }]}>
+<PageHeader title="Requirements">
 	{#snippet actions()}
 		<div class="flex">
 			<Button

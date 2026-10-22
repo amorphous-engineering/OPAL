@@ -88,7 +88,7 @@
 			value: o.purchases.total,
 			sub: `${o.purchases.flagged} overdue`,
 			tone: o.purchases.flagged > 0 ? 'warn' : 'default',
-			href: '/purchases?status=open'
+			href: '/purchases?status=awaiting'
 		},
 		{
 			label: 'Calibration / expiry',
@@ -347,7 +347,7 @@
 			<Section title="Purchases awaiting receipt" count={shown(o.purchases)}>
 				{#snippet actions()}
 					<a
-						href="/purchases?status=open"
+						href="/purchases?status=awaiting"
 						class="font-mono text-[11px] text-info uppercase hover:underline">All</a
 					>
 				{/snippet}

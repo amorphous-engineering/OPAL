@@ -301,6 +301,8 @@ def test_list_filters_and_sort(client: TestClient) -> None:
 
     assert client.get("/api/purchases", params={"status": "ordered"}).json()["total"] == 1
     assert client.get("/api/purchases", params={"open": "true"}).json()["total"] == 2
+    awaiting = client.get("/api/purchases", params={"awaiting": "true"}).json()
+    assert [p["id"] for p in awaiting["items"]] == [a["id"]]
     overdue = client.get("/api/purchases", params={"overdue": "true"}).json()
     assert [p["id"] for p in overdue["items"]] == [b["id"]]
     assert client.get("/api/purchases", params={"q": "other"}).json()["total"] == 1
