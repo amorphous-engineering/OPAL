@@ -1,6 +1,6 @@
 <script lang="ts">
-	// The side rail: people, navigation, issues, evidence, reference documents
-	// and work-order facts. Heavy content lives here, never inline in the document.
+	// The DETAILS tab: issues, evidence, reference documents and work-order
+	// facts — the record around the work rather than the work itself.
 	import { cn } from '#lib/utils.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import {
@@ -8,13 +8,16 @@
 		DetailTable,
 		EmptyLine,
 		Section,
-		State,
 		Timestamp
 	} from '#lib/components/opal/index.js';
-	import { attachmentUrl, lightbox, isTerminal } from '#lib/components/procedure-doc/index.js';
+	import { attachmentUrl, lightbox } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 
-	let { store, onedit }: { store: ExecutionStore; onedit: () => void } = $props();
+	let {
+		store,
+		onedit,
+		onjump
+	}: { store: ExecutionStore; onedit: () => void; onjump: (order: number) => void } = $props();
 
 	const doc = $derived(store.doc!);
 	const inst = $derived(doc.instance);
@@ -23,121 +26,14 @@
 	const rows = $derived(
 		ops.flatMap((op) => [op.step, ...op.steps]).filter((s) => s.attachments.length > 0)
 	);
-	const issueTone = (state: string) =>
-		state === 'undispositioned'
-			? 'error'
-			: state === 'dispositioned'
-				? 'ok'
-				: state === 'open'
-					? 'warn'
-					: 'muted';
-	const issueLabel = (state: string) =>
-		state === 'undispositioned'
-			? 'UNDISP'
-			: state === 'dispositioned'
-				? "DISP'D"
-				: state.toUpperCase();
 	const size = (n: number) =>
 		n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 	const priorityLabel = ['NORMAL', 'HIGH', 'URGENT'];
 </script>
 
-<!-- The rail never scrolls sideways: every row fits its width (truncate or wrap). -->
 <div
-	class="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 [overflow-wrap:anywhere] [&_table]:table-fixed"
+	class="grid min-w-0 grid-cols-1 content-start gap-3 [overflow-wrap:anywhere] xl:grid-cols-2 [&_table]:table-fixed"
 >
-	<Section title="Online" count={doc.roster.length || undefined}>
-		{#if doc.roster.length}
-			<ul class="m-0 list-none p-0">
-				{#each doc.roster as r (r.user_id)}
-					<li class="border-b border-border last:border-b-0">
-						<button
-							type="button"
-							class={cn(
-								'flex w-full items-center gap-2 px-3 py-1 text-left font-mono text-xs hover:bg-accent/60',
-								r.stale && 'opacity-50',
-								r.user_id === store.viewerId && 'font-semibold'
-							)}
-							disabled={r.step_order === null}
-							onclick={() => r.step_order !== null && store.jumpTo(r.step_order)}
-						>
-							<span class="truncate">{r.name ?? r.initials}</span>
-							{#if r.step_number}<span class="ml-auto text-muted-foreground">@{r.step_number}</span
-								>{/if}
-						</button>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<EmptyLine label="Online" />
-		{/if}
-	</Section>
-
-	<Section title="Operations" count={ops.length || undefined}>
-		{#if ops.length}
-			<ul class="m-0 list-none p-0">
-				{#each ops as op (op.order)}
-					{@const done = isTerminal(op.status)}
-					<li class="border-b border-border last:border-b-0">
-						<button
-							type="button"
-							class="flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-accent/60"
-							onclick={() => store.jumpTo(op.order)}
-						>
-							<span class="w-8 shrink-0 font-mono font-medium">{op.number}</span>
-							<span class={cn('min-w-0 flex-1 truncate', done && 'text-muted-foreground')}
-								>{op.title}</span
-							>
-							{#if op.steps.length}
-								<span
-									class={cn('font-mono tabular-nums', done ? 'text-ok' : 'text-muted-foreground')}
-									>{op.progress.done}/{op.progress.total}</span
-								>
-							{/if}
-						</button>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<EmptyLine label="Operations" />
-		{/if}
-	</Section>
-
-	<Section title="Issues" count={doc.issues.length || undefined}>
-		{#snippet actions()}
-			<Button size="xs" variant="ghost" href={`/issues/new?execution=${inst.id}`}>+ NEW</Button>
-		{/snippet}
-		{#if doc.issues.length}
-			<ul class="m-0 list-none p-0">
-				{#each doc.issues as i (i.id)}
-					<li class="border-b border-border px-3 py-1.5 text-xs last:border-b-0">
-						<div class="flex items-center gap-2">
-							<a class="font-mono font-medium text-info hover:underline" href={`/issues/${i.id}`}
-								>{i.issue_number}</a
-							>
-							{#if i.raised_step_number}
-								<span class="font-mono text-muted-foreground" title="Raised at step"
-									>{i.raised_step_number}</span
-								>
-							{/if}
-							<span class="ml-auto"
-								><State
-									value={i.state}
-									tone={issueTone(i.state)}
-									label={issueLabel(i.state)}
-									badge={i.state === 'undispositioned'}
-								/></span
-							>
-						</div>
-						<div class="truncate text-muted-foreground" title={i.title}>{i.title}</div>
-					</li>
-				{/each}
-			</ul>
-		{:else}
-			<EmptyLine label="Issues" addHref={`/issues/new?execution=${inst.id}`} />
-		{/if}
-	</Section>
-
 	<Section
 		title="Attachments"
 		count={rows.length || doc.attachments.length
@@ -164,7 +60,7 @@
 						<button
 							type="button"
 							class="mb-1 font-mono text-xs font-medium hover:underline"
-							onclick={() => store.jumpTo(s.order)}>{s.number}</button
+							onclick={() => onjump(s.order)}>{s.number}</button
 						>
 						{@render files(s.attachments)}
 					</div>

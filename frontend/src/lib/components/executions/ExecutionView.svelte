@@ -1,7 +1,8 @@
 <script lang="ts">
 	// The execution document page: header and blocking state over the live
-	// document, with the rail beside it.
-	import { onMount } from 'svelte';
+	// document, the OP index and roster in a left sidebar, the surrounding
+	// record (issues, evidence, facts) in the DETAILS tab.
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { confirm, PageHeader, State, toastError } from '#lib/components/opal/index.js';
@@ -12,7 +13,8 @@
 	import { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import DataPanel from './DataPanel.svelte';
 	import ExecutionDialogs from './ExecutionDialogs.svelte';
-	import ExecutionRail from './ExecutionRail.svelte';
+	import ExecutionNav from './ExecutionNav.svelte';
+	import ExecutionRecord from './ExecutionRecord.svelte';
 	import MaterialPanel from './MaterialPanel.svelte';
 
 	let { id }: { id: number } = $props();
@@ -54,7 +56,8 @@
 	const tabs = $derived([
 		{ id: 'document', label: 'Document' },
 		...(hasData ? [{ id: 'data', label: 'Data' }] : []),
-		...(doc?.material_relevant ? [{ id: 'material', label: 'Material' }] : [])
+		...(doc?.material_relevant ? [{ id: 'material', label: 'Material' }] : []),
+		{ id: 'details', label: 'Details' }
 	]);
 	const tab = $derived(
 		tabs.find((t) => t.id === page.url.searchParams.get('tab'))?.id ?? 'document'
@@ -68,7 +71,16 @@
 		const url = new URL(page.url.href);
 		if (value === 'document') url.searchParams.delete('tab');
 		else url.searchParams.set('tab', value);
-		goto(url, { replace: true, reset: false });
+		return goto(url, { replace: true, reset: false });
+	}
+
+	/** Jump to a row in the document, switching to the document tab first. */
+	async function jump(order: number) {
+		if (tab !== 'document') {
+			await setTab('document');
+			await tick();
+		}
+		store.jumpTo(order);
 	}
 
 	async function abort() {
@@ -160,33 +172,31 @@
 		{/each}
 	</div>
 
-	<div class="grid items-start gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_33vw]">
+	<div class="grid items-start gap-4 p-4 lg:grid-cols-[minmax(15rem,20vw)_minmax(0,1fr)]">
+		<aside
+			class="min-w-0 overflow-x-hidden lg:sticky lg:top-14 lg:h-[calc(100svh-4.5rem)] lg:overflow-y-hidden"
+			aria-label="Online, operations and issues"
+		>
+			<ExecutionNav {store} onjump={jump} />
+		</aside>
 		<div class="grid min-w-0 content-start gap-3">
-			{#if tabs.length > 1}
-				<Tabs.Root value={tab} onValueChange={setTab}>
-					<Tabs.List variant="line" class="border-b border-border">
-						{#each tabs as t (t.id)}
-							<Tabs.Trigger value={t.id} class="flex-none px-3"
-								>{t.label.toUpperCase()}</Tabs.Trigger
-							>
-						{/each}
-					</Tabs.List>
-				</Tabs.Root>
-			{/if}
+			<Tabs.Root value={tab} onValueChange={setTab}>
+				<Tabs.List variant="line" class="border-b border-border">
+					{#each tabs as t (t.id)}
+						<Tabs.Trigger value={t.id} class="flex-none px-3">{t.label.toUpperCase()}</Tabs.Trigger>
+					{/each}
+				</Tabs.List>
+			</Tabs.Root>
 			{#if tab === 'document'}
 				<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency_ops} />
 			{:else if tab === 'data'}
 				<DataPanel {store} />
 			{:else if tab === 'material'}
 				<MaterialPanel {store} />
+			{:else if tab === 'details'}
+				<ExecutionRecord {store} onedit={() => (editing = true)} onjump={jump} />
 			{/if}
 		</div>
-		<aside
-			class="min-w-0 overflow-x-hidden lg:sticky lg:top-14 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto"
-			aria-label="Online, issues, attachments, facts"
-		>
-			<ExecutionRail {store} onedit={() => (editing = true)} />
-		</aside>
 	</div>
 	<ExecutionDialogs {store} bind:editing />
 {/if}
