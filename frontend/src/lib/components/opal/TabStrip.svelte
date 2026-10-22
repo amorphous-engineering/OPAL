@@ -1,6 +1,6 @@
 <script lang="ts">
 	// A page's view switcher, in the same register as the top-nav buttons:
-	// mono uppercase, muted until hovered; the active tab is OPAL orange, boxed.
+	// mono uppercase, muted until hovered; the active tab is the accent colour, boxed.
 	// bits-ui supplies the tablist semantics (arrow keys, aria-selected).
 	import { Tabs } from 'bits-ui';
 	import { cn } from '#lib/utils.js';

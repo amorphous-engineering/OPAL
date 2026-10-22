@@ -15,10 +15,11 @@
  * OPAL design tokens — OPAL's original palette (master, pre-Basecoat).
  * US Graphics register: dense, explicit, high contrast; no radii, shadows or
  * gradients. Colour is functional only:
- *   OPAL orange   identifier + action: primary buttons, links, focus, in-flight
+ *   blue          identifier + action: primary buttons, links, focus, in-flight
  *                 state ("info"); never content
+ *   OPAL orange   the wordmark only (--brand)
  *   ok / warn / error  green / yellow / red state words
- *   dev blue      only the version badge of a development build
+ *   dev blue      the version string of a development build
  * Dark is the default and the original theme, value for value. Light is a
  * plain neutral counterpart (deeper shades of the same hues for contrast on
  * white) — no Catppuccin.
@@ -31,7 +32,7 @@
 	--card-foreground: #171717;
 	--popover: #ffffff;
 	--popover-foreground: #171717;
-	--primary: #c2410c;
+	--primary: #2563eb;
 	--primary-foreground: #ffffff;
 	--secondary: #f0f0f0;
 	--secondary-foreground: #171717;
@@ -42,25 +43,26 @@
 	--destructive: #dc2626;
 	--border: #d4d4d4;
 	--input: #c4c4c4;
-	--ring: #c2410c;
+	--ring: #2563eb;
 	--ok: #15803d;
 	--warn: #b45309;
 	--error: #dc2626;
-	--info: #c2410c;
+	--info: #2563eb;
+	--brand: #c2410c;
 	--dev: #2563eb;
-	--chart-1: #c2410c;
+	--chart-1: #2563eb;
 	--chart-2: #15803d;
 	--chart-3: #b45309;
 	--chart-4: #dc2626;
-	--chart-5: #2563eb;
+	--chart-5: #c2410c;
 	--sidebar: #f0f0f0;
 	--sidebar-foreground: #171717;
-	--sidebar-primary: #c2410c;
+	--sidebar-primary: #2563eb;
 	--sidebar-primary-foreground: #ffffff;
 	--sidebar-accent: #ebebeb;
 	--sidebar-accent-foreground: #171717;
 	--sidebar-border: #d4d4d4;
-	--sidebar-ring: #c2410c;
+	--sidebar-ring: #2563eb;
 }
 
 .dark {
@@ -70,7 +72,7 @@
 	--card-foreground: #e0e0e0;
 	--popover: #141414;
 	--popover-foreground: #e0e0e0;
-	--primary: #fb923c;
+	--primary: #4a9eff;
 	--primary-foreground: #0a0a0a;
 	--secondary: #1e1e1e;
 	--secondary-foreground: #e0e0e0;
@@ -81,25 +83,26 @@
 	--destructive: #f87171;
 	--border: #333333;
 	--input: #444444;
-	--ring: #fb923c;
+	--ring: #4a9eff;
 	--ok: #4ade80;
 	--warn: #fbbf24;
 	--error: #f87171;
-	--info: #fb923c;
+	--info: #4a9eff;
+	--brand: #fb923c;
 	--dev: #4a9eff;
-	--chart-1: #fb923c;
+	--chart-1: #4a9eff;
 	--chart-2: #4ade80;
 	--chart-3: #fbbf24;
 	--chart-4: #f87171;
-	--chart-5: #4a9eff;
+	--chart-5: #fb923c;
 	--sidebar: #141414;
 	--sidebar-foreground: #e0e0e0;
-	--sidebar-primary: #fb923c;
+	--sidebar-primary: #4a9eff;
 	--sidebar-primary-foreground: #0a0a0a;
 	--sidebar-accent: #1e1e1e;
 	--sidebar-accent-foreground: #e0e0e0;
 	--sidebar-border: #333333;
-	--sidebar-ring: #fb923c;
+	--sidebar-ring: #4a9eff;
 }
 
 /* State tints: the state colour at low opacity over whatever is beneath. */
