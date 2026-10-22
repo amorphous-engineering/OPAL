@@ -185,3 +185,100 @@ def test_is_tooling_honored_on_every_tier(client):
         "/api/parts", json={"name": "Bench Meter", "tier": 3, "is_tooling": True}
     ).json()
     assert loose["is_tooling"] is True
+
+
+# ---- Page-facing behaviour ----
+
+
+def test_list_parts_paginates_and_reports_total(client):
+    for i in range(5):
+        client.post("/api/parts", json={"name": f"Paged {i}"})
+    page = client.get("/api/parts?search=Paged&limit=2&skip=2&sort_by=name&sort_order=asc").json()
+    assert page["total"] == 5
+    assert [p["name"] for p in page["items"]] == ["Paged 2", "Paged 3"]
+
+
+def test_list_parts_sorts_by_stock_and_filters_low_stock(client):
+    low = client.post("/api/parts", json={"name": "Stock Low", "reorder_point": 10}).json()
+    full = client.post("/api/parts", json={"name": "Stock Full", "reorder_point": 1}).json()
+    client.post(f"/api/parts/{low['id']}/activate", json={})
+    client.post(f"/api/parts/{full['id']}/activate", json={})
+    for part, qty in ((low, 2), (full, 50)):
+        resp = client.post(
+            "/api/inventory", json={"part_id": part["id"], "quantity": qty, "location": "BIN-1"}
+        )
+        assert resp.status_code == 201, resp.text
+
+    ordered = client.get("/api/parts?search=Stock&sort_by=stock&sort_order=desc").json()["items"]
+    assert [p["name"] for p in ordered] == ["Stock Full", "Stock Low"]
+    assert float(ordered[0]["total_quantity"]) == 50
+
+    only_low = client.get("/api/parts?search=Stock&low_stock=true").json()["items"]
+    assert [p["name"] for p in only_low] == ["Stock Low"]
+    assert only_low[0]["is_low_stock"] is True
+
+
+def test_list_parts_has_parent_filter(client):
+    parent = client.post("/api/parts", json={"name": "HP Parent"}).json()
+    child = client.post("/api/parts", json={"name": "HP Child", "parent_id": parent["id"]}).json()
+    subs = client.get("/api/parts?search=HP&has_parent=true").json()["items"]
+    assert [p["id"] for p in subs] == [child["id"]]
+    tops = client.get("/api/parts?search=HP&has_parent=false").json()["items"]
+    assert [p["id"] for p in tops] == [parent["id"]]
+
+
+def test_part_cannot_be_parented_under_its_own_descendant(client):
+    top = client.post("/api/parts", json={"name": "Cycle Top"}).json()
+    mid = client.post("/api/parts", json={"name": "Cycle Mid", "parent_id": top["id"]}).json()
+    resp = client.patch(f"/api/parts/{top['id']}", json={"parent_id": mid["id"]})
+    assert resp.status_code == 400
+
+
+def test_parent_can_be_cleared(client):
+    top = client.post("/api/parts", json={"name": "Clear Top"}).json()
+    kid = client.post("/api/parts", json={"name": "Clear Kid", "parent_id": top["id"]}).json()
+    cleared = client.patch(f"/api/parts/{kid['id']}", json={"parent_id": None}).json()
+    assert cleared["parent_id"] is None
+
+
+def test_import_uses_tier_default_tracking(client):
+    resp = client.post(
+        "/api/parts/import",
+        json={
+            "rows": [
+                {"name": "Imp Flight", "tier": 1},
+                {"name": "Imp Loose", "tier": 3},
+            ]
+        },
+    )
+    body = resp.json()
+    assert body["created"] == 2
+    assert body["errors"] == []
+    assert body["first_pn"] and body["last_pn"]
+    by_name = {p["name"]: p for p in client.get("/api/parts?search=Imp ").json()["items"]}
+    assert by_name["Imp Flight"]["tracking_type"] == "serialized"
+    assert by_name["Imp Loose"]["tracking_type"] == "bulk"
+
+
+def test_import_preview_resolves_blank_tier(client):
+    csv_body = "Name,Tracking\nPreview Blank,BULK\n"
+    resp = client.post("/api/parts/import/preview", files={"file": ("p.csv", csv_body, "text/csv")})
+    row = resp.json()["rows"][0]
+    assert row["valid"] is True
+    assert row["tier"] == 1
+    assert row["tracking_type"] == "bulk"
+
+
+def test_import_skips_duplicate_external_pn(client):
+    client.post("/api/parts", json={"name": "Existing Widget", "external_pn": "EXT-DUP-1"})
+    resp = client.post(
+        "/api/parts/import",
+        json={
+            "rows": [
+                {"name": "Different Name", "external_pn": "ext-dup-1"},
+                {"name": "Fresh Name", "external_pn": "EXT-NEW"},
+            ]
+        },
+    )
+    body = resp.json()
+    assert (body["created"], body["skipped"]) == (1, 1)

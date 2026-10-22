@@ -32,10 +32,14 @@ class BOMLineResponse(BaseModel):
 
     id: int
     assembly_id: int
+    assembly_internal_pn: str | None = None
+    assembly_name: str | None = None
     component_id: int
+    component_internal_pn: str | None = None
     component_name: str
     component_external_pn: str | None
     component_tier: int
+    component_state: str | None = None
     quantity: int
     reference_designator: str | None
     notes: str | None
@@ -49,6 +53,7 @@ class BOMTreeNode(BaseModel):
     """Schema for a node in the BOM tree."""
 
     part_id: int
+    internal_pn: str | None = None
     name: str
     external_pn: str | None
     tier: int
@@ -57,15 +62,36 @@ class BOMTreeNode(BaseModel):
     children: list["BOMTreeNode"] = []
 
 
+def _contains(db: DbSession, root_id: int, target_id: int) -> bool:
+    """True if ``target_id`` appears anywhere under ``root_id`` in the BOM."""
+    seen: set[int] = set()
+    frontier = {root_id}
+    while frontier:
+        if target_id in frontier:
+            return True
+        seen |= frontier
+        frontier = {
+            component_id
+            for (component_id,) in db.query(BOMLine.component_id)
+            .filter(BOMLine.assembly_id.in_(frontier))
+            .all()
+        } - seen
+    return False
+
+
 def get_bom_line_response(line: BOMLine) -> BOMLineResponse:
     """Convert BOMLine to response."""
     return BOMLineResponse(
         id=line.id,
         assembly_id=line.assembly_id,
+        assembly_internal_pn=line.assembly.internal_pn,
+        assembly_name=line.assembly.name,
         component_id=line.component_id,
+        component_internal_pn=line.component.internal_pn,
         component_name=line.component.name,
         component_external_pn=line.component.external_pn,
         component_tier=line.component.tier,
+        component_state=line.component.lifecycle_state,
         quantity=line.quantity,
         reference_designator=line.reference_designator,
         notes=line.notes,
@@ -92,7 +118,8 @@ def build_bom_tree(
         rows = (
             db.query(BOMLine, Part)
             .join(Part, BOMLine.component_id == Part.id)
-            .filter(BOMLine.assembly_id.in_(frontier))
+            .filter(BOMLine.assembly_id.in_(frontier), Part.deleted_at.is_(None))
+            .order_by(BOMLine.id)
             .all()
         )
         next_frontier: set[int] = set()
@@ -108,6 +135,7 @@ def build_bom_tree(
         if node_part.id in visited:
             return BOMTreeNode(
                 part_id=node_part.id,
+                internal_pn=node_part.internal_pn,
                 name=f"{node_part.name} [CIRCULAR REF]",
                 external_pn=node_part.external_pn,
                 tier=node_part.tier,
@@ -122,6 +150,7 @@ def build_bom_tree(
         ]
         return BOMTreeNode(
             part_id=node_part.id,
+            internal_pn=node_part.internal_pn,
             name=node_part.name,
             external_pn=node_part.external_pn,
             tier=node_part.tier,
@@ -146,7 +175,13 @@ def get_assembly_bom(
             detail=f"Part {assembly_id} not found",
         )
 
-    lines = db.query(BOMLine).filter(BOMLine.assembly_id == assembly_id).all()
+    lines = (
+        db.query(BOMLine)
+        .join(Part, BOMLine.component_id == Part.id)
+        .filter(BOMLine.assembly_id == assembly_id, Part.deleted_at.is_(None))
+        .order_by(BOMLine.id)
+        .all()
+    )
     return [get_bom_line_response(line) for line in lines]
 
 
@@ -179,7 +214,13 @@ def get_where_used(
             detail=f"Part {component_id} not found",
         )
 
-    lines = db.query(BOMLine).filter(BOMLine.component_id == component_id).all()
+    lines = (
+        db.query(BOMLine)
+        .join(Part, BOMLine.assembly_id == Part.id)
+        .filter(BOMLine.component_id == component_id, Part.deleted_at.is_(None))
+        .order_by(BOMLine.id)
+        .all()
+    )
     return [get_bom_line_response(line) for line in lines]
 
 
@@ -216,6 +257,21 @@ def add_component_to_assembly(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A part cannot be a component of itself",
+        )
+
+    if line_in.quantity < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Quantity must be at least 1",
+        )
+
+    # A component that already contains this assembly (at any depth) would
+    # close a loop in the structure
+    if _contains(db, line_in.component_id, assembly_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{component.internal_pn or component.name} already contains "
+            f"{assembly.internal_pn or assembly.name} in its BOM; adding it would create a loop",
         )
 
     # Check for existing line
@@ -264,19 +320,19 @@ def update_bom_line(
 
     old_values = get_model_dict(line)
 
-    if line_in.quantity is not None:
-        if line_in.quantity < 1:
+    # exclude_unset: an explicit null clears refdes/notes, an omitted field is untouched
+    changes = line_in.model_dump(exclude_unset=True)
+    if "quantity" in changes:
+        if changes["quantity"] is None or changes["quantity"] < 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Quantity must be at least 1",
             )
-        line.quantity = line_in.quantity
-
-    if line_in.reference_designator is not None:
-        line.reference_designator = line_in.reference_designator
-
-    if line_in.notes is not None:
-        line.notes = line_in.notes
+        line.quantity = changes["quantity"]
+    if "reference_designator" in changes:
+        line.reference_designator = changes["reference_designator"] or None
+    if "notes" in changes:
+        line.notes = changes["notes"] or None
 
     db.commit()
     db.refresh(line)
