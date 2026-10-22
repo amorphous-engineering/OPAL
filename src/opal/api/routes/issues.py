@@ -399,14 +399,6 @@ def get_issue_priorities() -> list[str]:
     return [p.value for p in IssuePriority]
 
 
-@router.get("/assignees", response_model=list[Assignee])
-def list_assignees(db: DbSession) -> list[Assignee]:
-    """Active users an issue can be assigned to (open to every signed-in user;
-    the admin-only /users list is not)."""
-    users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
-    return [Assignee(id=u.id, name=u.name) for u in users]
-
-
 @router.get("/disposition-types", response_model=list[str])
 def get_disposition_types() -> list[str]:
     """Get all disposition types."""

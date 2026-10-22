@@ -23,7 +23,7 @@ export const load: PageLoad = async ({ fetch, params, depends }) => {
 		client.get<IssueComment[]>(`/issues/${id}/comments`),
 		client.get<Attachment[]>('/attachments', { issue_id: id }),
 		client.get<StepOption[]>(`/issues/${id}/steps`),
-		client.get<Assignee[]>('/issues/assignees')
+		client.get<Assignee[]>('/users/directory')
 	]);
 	return { issue, holding, comments, attachments, steps, assignees };
 };

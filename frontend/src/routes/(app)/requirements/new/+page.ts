@@ -6,7 +6,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	const a = api.using(fetch);
 	const [tree, assignees] = await Promise.all([
 		a.get<TreeResponse>('/requirements/tree'),
-		a.get<{ id: number; name: string }[]>('/requirements/assignees')
+		a.get<{ id: number; name: string }[]>('/users/directory')
 	]);
 	const parent = url.searchParams.get('parent');
 	return {

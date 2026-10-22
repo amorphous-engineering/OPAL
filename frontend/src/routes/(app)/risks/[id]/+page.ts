@@ -16,9 +16,9 @@ export const load: PageLoad = async ({ fetch, params }) => {
 			http.get<Risk>(`/risks/${id}`),
 			http.get<Readiness>(`/risks/${id}/readiness`),
 			http.get<HistoryRow[]>(`/risks/${id}/history`),
-			http.get<{ owners: Owner[] }>('/risks/options')
+			http.get<Owner[]>('/users/directory')
 		]);
-		return { risk, readiness, history, owners: options.owners };
+		return { risk, readiness, history, owners: options };
 	} catch (e) {
 		if (e instanceof ApiError && (e.status === 404 || e.status === 422))
 			error(404, 'Risk not found');

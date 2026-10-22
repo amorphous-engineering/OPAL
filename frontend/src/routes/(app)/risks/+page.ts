@@ -24,9 +24,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	try {
 		const [list, options] = await Promise.all([
 			http.get<Page<Risk>>('/risks', { ...query, page_size: PAGE_SIZE }),
-			http.get<{ owners: Owner[] }>('/risks/options')
+			http.get<Owner[]>('/users/directory')
 		]);
-		return { list, owners: options.owners, query, error: null };
+		return { list, owners: options, query, error: null };
 	} catch (e) {
 		return {
 			list: { items: [], total: 0 } as Page<Risk>,

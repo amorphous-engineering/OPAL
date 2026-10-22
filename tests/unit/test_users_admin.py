@@ -118,3 +118,13 @@ def test_user_activity_lists_recent_audited_changes(client, admin_user, admin_he
     assert first["table"] == "user"
     assert first["subject"] == "Audited Person"
     assert first["timestamp"]
+
+
+def test_directory_lists_only_active_users_by_name(client, db_session, auth_headers):
+    from opal.db.models import User
+
+    db_session.add(User(name="Gone Pal", username="gonepal", is_active=False))
+    db_session.commit()
+    names = [u["name"] for u in client.get("/api/users/directory", headers=auth_headers).json()]
+    assert "Gone Pal" not in names
+    assert names == sorted(names)
