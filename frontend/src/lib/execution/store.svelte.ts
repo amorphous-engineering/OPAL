@@ -336,7 +336,8 @@ export class ExecutionStore implements DocController {
 		setTimeout(() => {
 			const el =
 				document.getElementById(`step-${step.order}`) ?? document.getElementById(`op-${op.order}`);
-			el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			// An OP lands at the top of the pane (its steps follow); a step is centred.
+			el?.scrollIntoView({ behavior: 'smooth', block: order === op.order ? 'start' : 'center' });
 		}, 30);
 		setTimeout(() => (this.pulse = null), 1600);
 	}

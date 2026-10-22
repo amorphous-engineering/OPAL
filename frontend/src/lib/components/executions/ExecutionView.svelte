@@ -113,86 +113,98 @@
 		</p>
 	</div>
 {:else}
-	<PageHeader
-		identifier={inst.work_order ?? 'EXECUTION'}
-		title={inst.procedure.name}
-		crumbs={[
-			{ label: 'Executions', href: '/executions' },
-			{ label: inst.work_order ?? 'Execution' }
-		]}
-	>
-		{#snippet state()}
-			<span class="font-mono text-xs text-muted-foreground">v{inst.version.number}</span>
-			<State value={inst.status} badge={inst.status === 'aborted'} />
-			{#if inst.priority > 0}
-				<State
-					value="priority"
-					tone={inst.priority > 1 ? 'error' : 'warn'}
-					label={inst.priority > 1 ? 'URGENT' : 'HIGH'}
-					badge
-				/>
-			{/if}
-		{/snippet}
-		{#snippet actions()}
-			{#if inst.status === 'completed'}
-				<Button
-					size="sm"
-					variant="outline"
-					href={`/executions/${inst.id}/report`}
-					target="_blank"
-					rel="noopener">REPORT</Button
-				>
-			{/if}
-			{#if inst.active}
-				<Button size="sm" variant="destructive" onclick={abort}>ABORT</Button>
-			{/if}
-		{/snippet}
-	</PageHeader>
-
-	<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
-		<div class="flex items-center gap-2" title="Steps complete">
-			<div
-				class="h-1.5 w-40 bg-border"
-				role="progressbar"
-				aria-label="Steps complete"
-				aria-valuenow={Math.round(pct)}
-				aria-valuemin={0}
-				aria-valuemax={100}
+	<!-- On wide screens the page is locked to the viewport: header, progress strip and
+	     tabs stay put; only the tab content scrolls, beside the fixed-height sidebar. -->
+	<div class="flex min-w-0 flex-col lg:h-[calc(100svh-var(--shell-h))]">
+		<div class="shrink-0">
+			<PageHeader
+				identifier={inst.work_order ?? 'EXECUTION'}
+				title={inst.procedure.name}
+				crumbs={[
+					{ label: 'Executions', href: '/executions' },
+					{ label: inst.work_order ?? 'Execution' }
+				]}
 			>
-				<div class="h-full bg-ok" style:width={`${pct}%`}></div>
-			</div>
-			<span class="font-mono text-xs tabular-nums">{doc.progress.done}/{doc.progress.total}</span>
-		</div>
-		{#each holds as h (h.issue_id)}
-			<span class="font-mono text-xs text-warn">
-				HELD BY <a class="underline" href={`/issues/${h.issue_id}`}>{h.issue_number}</a>
-				{#if h.blocks.length}<span class="text-muted-foreground">({h.blocks.join(', ')})</span>{/if}
-			</span>
-		{/each}
-	</div>
+				{#snippet state()}
+					<span class="font-mono text-xs text-muted-foreground">v{inst.version.number}</span>
+					<State value={inst.status} badge={inst.status === 'aborted'} />
+					{#if inst.priority > 0}
+						<State
+							value="priority"
+							tone={inst.priority > 1 ? 'error' : 'warn'}
+							label={inst.priority > 1 ? 'URGENT' : 'HIGH'}
+							badge
+						/>
+					{/if}
+				{/snippet}
+				{#snippet actions()}
+					{#if inst.status === 'completed'}
+						<Button
+							size="sm"
+							variant="outline"
+							href={`/executions/${inst.id}/report`}
+							target="_blank"
+							rel="noopener">REPORT</Button
+						>
+					{/if}
+					{#if inst.active}
+						<Button size="sm" variant="destructive" onclick={abort}>ABORT</Button>
+					{/if}
+				{/snippet}
+			</PageHeader>
 
-	<div class="grid items-start gap-4 p-4 lg:grid-cols-[minmax(15rem,20vw)_minmax(0,1fr)]">
-		<aside
-			class="min-w-0 overflow-x-hidden lg:sticky lg:top-14 lg:h-[calc(100svh-4.5rem)] lg:overflow-y-hidden"
-			aria-label="Online, operations and issues"
+			<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
+				<div class="flex items-center gap-2" title="Steps complete">
+					<div
+						class="h-1.5 w-40 bg-border"
+						role="progressbar"
+						aria-label="Steps complete"
+						aria-valuenow={Math.round(pct)}
+						aria-valuemin={0}
+						aria-valuemax={100}
+					>
+						<div class="h-full bg-ok" style:width={`${pct}%`}></div>
+					</div>
+					<span class="font-mono text-xs tabular-nums"
+						>{doc.progress.done}/{doc.progress.total}</span
+					>
+				</div>
+				{#each holds as h (h.issue_id)}
+					<span class="font-mono text-xs text-warn">
+						HELD BY <a class="underline" href={`/issues/${h.issue_id}`}>{h.issue_number}</a>
+						{#if h.blocks.length}<span class="text-muted-foreground">({h.blocks.join(', ')})</span
+							>{/if}
+					</span>
+				{/each}
+			</div>
+		</div>
+		<div
+			class="grid min-h-0 flex-1 items-start gap-4 p-4 lg:grid-cols-[minmax(15rem,20vw)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
 		>
-			<ExecutionNav {store} onjump={jump} />
-		</aside>
-		<div class="grid min-w-0 content-start gap-3">
-			<TabStrip
-				tabs={tabs.map((t) => ({ ...t, label: t.label.toUpperCase() }))}
-				value={tab}
-				onchange={setTab}
-			/>
-			{#if tab === 'document'}
-				<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency_ops} />
-			{:else if tab === 'data'}
-				<DataPanel {store} />
-			{:else if tab === 'material'}
-				<MaterialPanel {store} />
-			{:else if tab === 'details'}
-				<ExecutionRecord {store} onedit={() => (editing = true)} onjump={jump} />
-			{/if}
+			<aside
+				class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
+				aria-label="Online, operations and issues"
+			>
+				<ExecutionNav {store} onjump={jump} />
+			</aside>
+			<div class="flex min-h-0 min-w-0 flex-col gap-3">
+				<TabStrip
+					tabs={tabs.map((t) => ({ ...t, label: t.label.toUpperCase() }))}
+					value={tab}
+					onchange={setTab}
+				/>
+				<div id="exec-scroll" class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4">
+					{#if tab === 'document'}
+						<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency_ops} />
+					{:else if tab === 'data'}
+						<DataPanel {store} />
+					{:else if tab === 'material'}
+						<MaterialPanel {store} />
+					{:else if tab === 'details'}
+						<ExecutionRecord {store} onedit={() => (editing = true)} onjump={jump} />
+					{/if}
+				</div>
+			</div>
 		</div>
 	</div>
 	<ExecutionDialogs {store} bind:editing />
