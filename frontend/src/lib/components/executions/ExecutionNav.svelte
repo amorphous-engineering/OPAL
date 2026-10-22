@@ -92,7 +92,7 @@
 							>
 								<span class="truncate">{r.name ?? r.initials}</span>
 								{#if r.step_number}<span class="ml-auto text-muted-foreground"
-										>@{r.step_number}</span
+										>OP {r.step_number}</span
 									>{/if}
 							</button>
 						</li>

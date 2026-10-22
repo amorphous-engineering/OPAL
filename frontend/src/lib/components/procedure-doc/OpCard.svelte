@@ -8,6 +8,7 @@
 	import { useDoc } from './controller.js';
 	import CautionBlock from './CautionBlock.svelte';
 	import CursorChips from './CursorChips.svelte';
+	import OpClaim from './OpClaim.svelte';
 	import RoleChip from './RoleChip.svelte';
 	import StepActions from './StepActions.svelte';
 	import StepBody from './StepBody.svelte';
@@ -32,7 +33,7 @@
 	const key = $derived(`op:${op.order}`);
 	const open = $derived(ctl.isOpen(key, terminal));
 	const focused = $derived(ctl.focusedOrder === op.order);
-	const claimed = $derived(leaf && ctl.claimedOrder === op.order);
+	const claimed = $derived(ctl.claimedOrder === op.order);
 	const pct = $derived(op.progress.total ? (op.progress.done / op.progress.total) * 100 : 0);
 	const deletable = $derived(
 		op.is_ad_hoc &&
@@ -146,7 +147,8 @@
 			>
 		{/if}
 		{#if au}<AuthorChips step={op.step} />{/if}
-		{#if leaf}<CursorChips cursors={op.step.cursors} viewerId={ctl.viewerId} />{/if}
+		<CursorChips cursors={op.step.cursors} viewerId={ctl.viewerId} />
+		<OpClaim {op} />
 		{#if au && !leaf}
 			<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
 				>{op.steps.length} {op.steps.length === 1 ? 'STEP' : 'STEPS'}</span

@@ -173,7 +173,7 @@ def test_leave_keeps_claim_and_release_clears_it(client, auth_headers):
 # ============ 5. complete records completed_by; cursor unaffected ============
 
 
-def test_complete_records_completed_by_and_keeps_cursor(client, auth_headers, test_user):
+def test_complete_records_completed_by_and_releases_finished_op(client, auth_headers, test_user):
     instance_id = _create_instance(client)
 
     _focus(client, instance_id, 1, headers=auth_headers)
@@ -193,8 +193,8 @@ def test_complete_records_completed_by_and_keeps_cursor(client, auth_headers, te
     assert step1["completed"]["by"] == "Test User"
     assert step1["completed"]["initials"] == "TU"
     assert step1["completed"]["at"] is not None
-    # Completion does not touch presence — the cursor survives.
-    assert [c["user_id"] for c in step1["cursors"]] == [test_user.id]
+    # Claims are per OP: step 1 is a whole OP, so finishing it ends the claim.
+    assert step1["cursors"] == []
 
 
 # ============ 6. complete by another user while focused ============
@@ -230,7 +230,7 @@ def test_skip_with_other_users_cursor_succeeds(client, auth_headers):
     assert resp.json()["status"] == "skipped"
 
 
-def test_skip_keeps_cursor(client, auth_headers, test_user):
+def test_skip_releases_finished_op(client, auth_headers, test_user):
     instance_id = _create_instance(client)
 
     _focus(client, instance_id, 1, headers=auth_headers)
@@ -244,7 +244,7 @@ def test_skip_keeps_cursor(client, auth_headers, test_user):
     state = _state(client, instance_id)
     step1 = _step(state, 1)
     assert step1["status"] == "skipped"
-    assert [c["user_id"] for c in step1["cursors"]] == [test_user.id]
+    assert step1["cursors"] == []
 
 
 # ============ 8. complete without any cursor ============
@@ -348,5 +348,64 @@ def test_claim_refused_on_finished_step(client, auth_headers):
     assert resp.status_code == 200, resp.text
 
     resp = _focus(client, instance_id, 1, headers=auth_headers)
+    assert resp.status_code == 409
+    assert "finished" in resp.json()["detail"]
+
+
+# ============ per-OP claims ============
+
+
+def _create_op_instance(client):
+    """One OP with two sub-steps, published and cut; returns (instance_id, numbers)."""
+    proc_id = client.post("/api/procedures", json={"name": "Claim per OP"}).json()["id"]
+    op = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Assemble"}).json()
+    for title in ("Fit", "Torque"):
+        client.post(
+            f"/api/procedures/{proc_id}/steps", json={"title": title, "parent_step_id": op["id"]}
+        )
+    client.post(f"/api/procedures/{proc_id}/publish")
+    inst = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()
+    return inst["id"], {s["step_number_str"]: s["step_number"] for s in inst["step_executions"]}
+
+
+def test_claiming_a_step_claims_its_op(client, auth_headers, test_user):
+    instance_id, n = _create_op_instance(client)
+
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/focus",
+        json={"step_number": n["1.2"]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["step_number"] == n["1"]
+
+    state = _state(client, instance_id)
+    assert [c["user_id"] for c in _step(state, n["1"])["cursors"]] == [test_user.id]
+    assert _step(state, n["1.2"])["cursors"] == []
+
+
+def test_op_claim_survives_its_steps_and_ends_with_the_op(client, auth_headers, test_user):
+    instance_id, n = _create_op_instance(client)
+    _focus(client, instance_id, n["1"], headers=auth_headers)
+
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{n['1.1']}/complete", json={})
+    state = _state(client, instance_id)
+    assert [c["user_id"] for c in _step(state, n["1"])["cursors"]] == [test_user.id]
+
+    client.post(f"/api/procedure-instances/{instance_id}/steps/{n['1.2']}/complete", json={})
+    state = _state(client, instance_id)
+    assert _step(state, n["1"])["status"] == "completed"
+    assert _step(state, n["1"])["cursors"] == []
+
+
+def test_claiming_a_finished_op_is_refused(client, auth_headers):
+    instance_id, n = _create_op_instance(client)
+    for k in ("1.1", "1.2"):
+        client.post(f"/api/procedure-instances/{instance_id}/steps/{n[k]}/complete", json={})
+    resp = client.post(
+        f"/api/procedure-instances/{instance_id}/focus",
+        json={"step_number": n["1.1"]},
+        headers=auth_headers,
+    )
     assert resp.status_code == 409
     assert "finished" in resp.json()["detail"]

@@ -298,8 +298,58 @@ def skip_blockers(
 # ============ Presence (focus) ============
 
 
-def instance_cursors(db: Session, instance_id: int) -> list[StepFocus]:
-    return db.query(StepFocus).filter(StepFocus.instance_id == instance_id).all()
+@dataclass(frozen=True)
+class Claim:
+    """A user's claim on a work order, resolved to the OP it covers."""
+
+    instance_id: int
+    user_id: int
+    step_execution_id: int  # the OP row
+    focused_at: datetime
+
+
+def claim_op(step_exec: StepExecution, rows: list[StepExecution]) -> StepExecution:
+    """The OP a claim on ``step_exec`` covers: the row itself for an OP, its
+    parent OP for a sub-step. Claims are per OP — one operator works an OP."""
+    if step_exec.level == 0 or step_exec.parent_step_order is None:
+        return step_exec
+    for row in rows:
+        if row.step_number == step_exec.parent_step_order:
+            return row
+    return step_exec
+
+
+def claims_for_instances(db: Session, instance_ids: list[int]) -> dict[int, list[Claim]]:
+    """Live claims per work order, each resolved to its OP. Claims left on a
+    finished OP (or from before claims were per OP, on a sub-step) resolve the
+    same way; an OP that reached a terminal status is no longer claimed."""
+    if not instance_ids:
+        return {}
+    focuses = db.query(StepFocus).filter(StepFocus.instance_id.in_(instance_ids)).all()
+    if not focuses:
+        return {}
+    rows_by_instance: dict[int, list[StepExecution]] = {}
+    for row in db.query(StepExecution).filter(
+        StepExecution.instance_id.in_({f.instance_id for f in focuses})
+    ):
+        rows_by_instance.setdefault(row.instance_id, []).append(row)
+    out: dict[int, list[Claim]] = {}
+    for f in sorted(focuses, key=lambda f: f.focused_at):
+        rows = rows_by_instance.get(f.instance_id, [])
+        target = next((r for r in rows if r.id == f.step_execution_id), None)
+        if target is None:
+            continue
+        op = claim_op(target, rows)
+        if _status_value(op.status) in TERMINAL_STEP_STATUSES:
+            continue
+        out.setdefault(f.instance_id, []).append(
+            Claim(f.instance_id, f.user_id, op.id, f.focused_at)
+        )
+    return out
+
+
+def instance_cursors(db: Session, instance_id: int) -> list[Claim]:
+    return claims_for_instances(db, [instance_id]).get(instance_id, [])
 
 
 def focus_step(
@@ -308,8 +358,10 @@ def focus_step(
     step_exec: StepExecution,
     user: User,
 ) -> StepFocus:
-    """Move a user's cursor to a step. Presence only: no gate checks, no
-    audit event — the only durable side effect is first-focus telemetry."""
+    """Claim the OP ``step_exec`` belongs to for a user (one claim per user per
+    work order). Presence only: no audit event — the only durable side effect
+    is first-focus telemetry on the OP."""
+    step_exec = claim_op(step_exec, list(instance.step_executions))
     now = datetime.now(UTC)
     # Atomic upsert: two tabs posting the same user's first focus must not
     # race the unique (instance, user) row into an IntegrityError.
@@ -759,7 +811,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
         return snapshot_parent.get(se.step_number)
 
     cursors = instance_cursors(db, instance.id)
-    cursors_by_step: dict[int, list[StepFocus]] = {}
+    cursors_by_step: dict[int, list[Claim]] = {}
     for cursor in sorted(cursors, key=lambda c: c.focused_at):
         cursors_by_step.setdefault(cursor.step_execution_id, []).append(cursor)
     hold_state = get_hold_state(db, instance.id)
@@ -795,7 +847,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
             last_seen = last_seen.replace(tzinfo=UTC)
         return (now - last_seen).total_seconds() > PRESENCE_STALE_SECONDS
 
-    def _cursor_entry(cursor: StepFocus) -> dict[str, Any]:
+    def _cursor_entry(cursor: Claim) -> dict[str, Any]:
         user = user_lookup.get(cursor.user_id)
         return {
             "user_id": cursor.user_id,

@@ -33,6 +33,8 @@ from opal.core.execution_flow import (
     add_step_note,
     build_execution_state,
     check_instance_completion,
+    claim_op,
+    claims_for_instances,
     clear_focus,
     complete_step_flow,
     focus_step,
@@ -465,10 +467,7 @@ def executions_overview(
         .all()
     }
     ids = [i.id for i in instances]
-    cursors_by_instance: dict[int, list[StepFocus]] = {}
-    if ids:
-        for c in db.query(StepFocus).filter(StepFocus.instance_id.in_(ids)).all():
-            cursors_by_instance.setdefault(c.instance_id, []).append(c)
+    cursors_by_instance = claims_for_instances(db, ids)
     user_ids = {c.user_id for cs in cursors_by_instance.values() for c in cs}
     user_ids |= {i.started_by_id for i in instances if i.started_by_id}
     users = (
@@ -1030,7 +1029,8 @@ def update_instance(
 
 
 class FocusMove(BaseModel):
-    """Claim a step: the caller says they are working here. Presence, not an event."""
+    """Claim an OP: the caller says they are working on it. Presence, not an event.
+    ``step_number`` may name the OP or any of its steps; the claim covers the OP."""
 
     step_number: int
 
@@ -1042,7 +1042,7 @@ async def move_focus(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> dict:
-    """Claim a step for the caller (one claim per user per work order).
+    """Claim an OP for the caller (one claim per user per work order).
     Broadcast to the document; never recorded. Reading a step never moves
     the claim — only this explicit call does."""
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
@@ -1060,13 +1060,15 @@ async def move_focus(
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    # A claim says "I am working here": it is refused where work cannot
-    # happen yet — a finished step, or one still gated by its sequence,
-    # an OP dependency, or an open redline.
+    # A claim says "I am working on this OP": it is refused where work cannot
+    # happen — a finished OP, or one still gated by an OP dependency or an
+    # open redline.
+    step_exec = claim_op(step_exec, list(instance.step_executions))
     status = step_exec.status.value if hasattr(step_exec.status, "value") else step_exec.status
     if status in ("completed", "signed_off", "skipped"):
-        raise HTTPException(status_code=409, detail="Step is finished")
-    gates = sequence_blockers(db, instance, step_exec)
+        raise HTTPException(status_code=409, detail="Operation is finished")
+    # Unfinished sub-steps never gate the claim: working them is the point.
+    gates = [b for b in sequence_blockers(db, instance, step_exec) if b.kind != "children"]
     if gates:
         raise HTTPException(status_code=409, detail="; ".join(b.message for b in gates))
 
@@ -1080,10 +1082,10 @@ async def move_focus(
     focus = focus_step(db, instance, step_exec, user)
     db.commit()
 
-    await emit_cursor_moved(instance_id, data.step_number, user_id, user.name)
+    await emit_cursor_moved(instance_id, step_exec.step_number, user_id, user.name)
 
     return {
-        "step_number": data.step_number,
+        "step_number": step_exec.step_number,
         "focused_at": focus.focused_at.isoformat(),
     }
 

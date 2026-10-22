@@ -257,8 +257,8 @@ def test_complete_step_records_completion(client, db_session, test_user):
     assert step1["status"] == "completed"
     assert step1["completed"]["by"] == test_user.name
     assert step1["completed"]["initials"] == "TU"
-    # Completing releases nothing — the cursor stays where the user is.
-    assert [c["user_id"] for c in step1["cursors"]] == [test_user.id]
+    # Claims are per OP: a finished OP is no longer claimed.
+    assert step1["cursors"] == []
 
 
 # ============ attach_to_step ============

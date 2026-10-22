@@ -32,7 +32,6 @@
 	const key = $derived(`step:${step.order}`);
 	const open = $derived(ctl.isOpen(key, terminal));
 	const focused = $derived(ctl.focusedOrder === step.order);
-	const claimed = $derived(ctl.claimedOrder === step.order);
 	const nAtt = $derived(step.attachments.length);
 	const nNote = $derived(step.notes.length);
 	const opHeld = $derived(op.holds.length > 0);
@@ -46,7 +45,6 @@
 	data-drop-row={au ? '' : undefined}
 	class={cn(
 		'group/row border-b border-border last:border-b-0',
-		claimed && 'shadow-[inset_2px_0_0_var(--primary)]',
 		focused && 'bg-accent/40 outline outline-1 -outline-offset-1 outline-ring/60',
 		au && dropMarker(au, step.order),
 		au?.drag.id === step.order && 'opacity-40'

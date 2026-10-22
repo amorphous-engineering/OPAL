@@ -138,7 +138,7 @@
 					<span class="font-mono text-xs">
 						{#each r.working as w, i (w.user_id)}{#if i > 0},
 							{/if}{w.name ?? '?'}{#if w.step_number}<span class="text-muted-foreground">
-									@{w.step_number}</span
+									OP {w.step_number}</span
 								>{/if}{/each}
 					</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}

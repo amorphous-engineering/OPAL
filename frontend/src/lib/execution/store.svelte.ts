@@ -377,10 +377,11 @@ export class ExecutionStore implements DocController {
 			} else {
 				this.toggle(`step:${cur.step.order}`, isTerminal(cur.step.status));
 			}
-		} else if (e.key === 'c' && this.active && (!isHeader || leaf)) {
+		} else if (e.key === 'c' && this.active) {
+			// Claims are per OP: c claims (or releases) the OP the cursor is in.
 			e.preventDefault();
-			if (this.claimedOrder === cur.step.order) this.actions.release?.();
-			else this.actions.claim?.(cur.step);
+			if (this.claimedOrder === cur.op.order) this.actions.release?.();
+			else this.actions.claim?.(cur.op.step);
 		} else if (e.key === 'n' && (!isHeader || leaf)) {
 			e.preventDefault();
 			const order = cur.step.order;
@@ -448,11 +449,13 @@ export class ExecutionStore implements DocController {
 	actions: DocActions = {
 		claim: async (step) => {
 			try {
-				await api.post(this.url('/focus'), { step_number: step.order });
-				this.claimedOrder = step.order;
+				const r = await api.post<{ step_number: number }>(this.url('/focus'), {
+					step_number: step.order
+				});
+				this.claimedOrder = r.step_number; // the OP the claim covers
 				await this.pollNow();
 			} catch (e) {
-				toastError(e, 'Could not claim step');
+				toastError(e, 'Could not claim operation');
 			}
 		},
 		release: async () => {

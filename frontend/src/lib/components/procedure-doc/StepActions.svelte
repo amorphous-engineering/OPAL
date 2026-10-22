@@ -16,12 +16,6 @@
 		ctl.active && (step.status === 'pending' || step.status === 'in_progress')
 	);
 	const awaiting = $derived(ctl.active && step.status === 'awaiting_signoff');
-	const claimed = $derived(ctl.claimedOrder === step.order);
-	const claimGates = $derived(
-		step.complete_blockers.filter((b) =>
-			['sequence', 'dependency', 'redline', 'children'].includes(b.kind)
-		)
-	);
 	let busy = $state(false);
 
 	async function run(fn: (() => Promise<void>) | undefined) {
@@ -37,24 +31,6 @@
 
 <div class="flex flex-wrap items-center gap-x-3 gap-y-2" data-actions={step.order}>
 	{#if scope === 'step'}
-		{#if a.claim && workable}
-			{#if claimGates.length && !claimed}
-				<span class="inline-flex items-center gap-2">
-					<Button size="xs" variant="outline" disabled>CLAIM</Button>
-					<GateReason blockers={claimGates} />
-				</span>
-			{:else}
-				<Button
-					size="xs"
-					variant={claimed ? 'default' : 'outline'}
-					aria-pressed={claimed}
-					title={claimed ? 'Release this step' : 'Mark this step as where you are working'}
-					disabled={busy}
-					onclick={() => run(claimed ? a.release : () => a.claim!(step))}
-					>{claimed ? 'CLAIMED' : 'CLAIM'}</Button
-				>
-			{/if}
-		{/if}
 		{#if a.attach}
 			<Button size="xs" variant="outline" onclick={() => a.attach!(step)}>ATTACH</Button>
 		{/if}
