@@ -2,11 +2,7 @@
 // for information about these interfaces
 declare global {
 	namespace App {
-		interface Error {
-			message: string;
-			/** The API's HTTP status when a load threw an API failure instead of calling error(). */
-			status?: number;
-		}
+		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
 		// interface PageState {}

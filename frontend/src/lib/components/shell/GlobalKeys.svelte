@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Global shortcuts that are not the command palette: undo and Alt+letter navigation.
-	// Never fires while the user is typing, so text-field undo keeps working.
+	// Never fires while the user is typing (text-field undo keeps working, Alt+letter cannot eat input)
+	// or while a dialog is open.
 	import { goto } from '$app/navigation';
 	import { mode, setMode } from 'mode-watcher';
 	import { NAV_SHORTCUTS } from '#lib/shortcuts.js';
@@ -9,13 +10,16 @@
 	function typing(target: EventTarget | null): boolean {
 		const el = target as HTMLElement | null;
 		if (!el) return false;
-		return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+		return (
+			el.isContentEditable ||
+			['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) ||
+			!!el.closest('[role="dialog"], [role="alertdialog"]')
+		);
 	}
 
 	function onkeydown(e: KeyboardEvent) {
-		if (e.defaultPrevented) return;
+		if (e.defaultPrevented || typing(e.target)) return;
 		if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
-			if (typing(e.target)) return;
 			e.preventDefault();
 			undoLast();
 			return;

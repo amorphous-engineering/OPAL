@@ -5,7 +5,7 @@
 	import { PageHeader } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 
-	const status = $derived(page.error?.status ?? page.status);
+	const status = $derived(page.status);
 	const title = $derived(
 		status === 404
 			? 'Not found'

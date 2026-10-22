@@ -153,6 +153,12 @@
 	html {
 		font-size: 14px;
 	}
+	/* Keyboard focus is always visible on plain links and focusable rows; the vendored
+	   controls draw their own ring. Zero specificity so any component ring wins. */
+	:where(a, tr[tabindex], [role='button'], summary):focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: -1px;
+	}
 	body {
 		@apply bg-background font-sans text-foreground antialiased;
 		font-feature-settings: 'cv11', 'ss01';

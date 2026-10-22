@@ -12,27 +12,36 @@
 	let paletteOpen = $state(false);
 </script>
 
+<a
+	href="#main"
+	class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:border focus:border-border focus:bg-background focus:px-3 focus:py-1.5 focus:text-sm"
+	>Skip to content</a
+>
+
 <Sidebar.Provider style="--sidebar-width: 13rem">
 	<AppSidebar />
-	<Sidebar.Inset class="min-w-0">
+	<!-- The vendored inset renders a <main>; the real one is below, so this one is not a landmark. -->
+	<Sidebar.Inset class="min-w-0" role="presentation">
 		<header
 			class="sticky top-0 z-30 flex h-11 items-center gap-2 border-b border-border bg-background px-3"
 		>
 			<Sidebar.Trigger class="-ml-1" />
 			<button
 				type="button"
-				class="flex h-7 w-full max-w-sm items-center gap-2 border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"
+				class="flex h-7 w-full max-w-sm min-w-0 items-center gap-2 border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"
+				aria-haspopup="dialog"
+				aria-keyshortcuts="Control+K Meta+K"
 				onclick={() => (paletteOpen = true)}
 			>
 				<span>Search</span>
 				<span class="ml-auto"><Kbd>⌘K</Kbd></span>
 			</button>
-			<div class="ml-auto flex items-center gap-2">
+			<div class="ml-auto flex shrink-0 items-center gap-2">
 				<NotificationBell />
 				<UserMenu />
 			</div>
 		</header>
-		<main class="min-w-0 flex-1">
+		<main id="main" tabindex="-1" class="min-w-0 flex-1 outline-none">
 			{@render children()}
 		</main>
 	</Sidebar.Inset>
