@@ -4,8 +4,8 @@ import json
 
 from opal.core.designators import generate_requirement_number
 from opal.db.models import AuditLog, Requirement
-from opal.se.redline import redline_html, redline_segments
-from tests.conftest import login, user_headers
+from opal.se.redline import redline_segments
+from tests.conftest import user_headers
 
 GOOD = "The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
 
@@ -120,25 +120,32 @@ def test_redline_segments_word_diff():
     assert "engine" not in deleted and "engine" not in inserted  # unchanged words stay equal
 
 
-def test_redline_html_escapes_and_marks():
-    html = str(redline_html("keep <old> word", "keep <new> word"))
-    assert "&lt;old&gt;" in html and "&lt;new&gt;" in html
-    assert '<del class="redline-del">' in html
-    assert '<ins class="redline-ins">' in html
-
-
-def test_redline_partial_defaults_to_superseded_revision(client, db_session, test_user):
-    login(client, test_user)
+def test_redline_endpoint_defaults_to_superseded_revision(client, db_session, test_user):
     parent, _, rev2_id = _baseline_revise_baseline(client, db_session, test_user)
-    resp = client.get(f"/requirements/{rev2_id}/redline")
+    resp = client.get(f"/api/requirements/{rev2_id}/redline")
     assert resp.status_code == 200
-    assert "rev 1 → rev 2" in resp.text
-    assert "redline-del" in resp.text and "redline-ins" in resp.text
+    body = resp.json()
+    assert (body["rev_a"], body["rev_b"]) == (1, 2)
+    ops = {s["op"] for s in body["statement"]}
+    assert {"delete", "insert"} <= ops
 
-    explicit = client.get(f"/requirements/{rev2_id}/redline?rev_a=1&rev_b=2")
+    explicit = client.get(f"/api/requirements/{rev2_id}/redline?rev_a=1&rev_b=2")
     assert explicit.status_code == 200
-    missing = client.get(f"/requirements/{rev2_id}/redline?rev_a=9")
+    missing = client.get(f"/api/requirements/{rev2_id}/redline?rev_a=9")
     assert missing.status_code == 404
+
+
+def test_stale_flag_visible_in_tree_dossier_and_summary(client, db_session, test_user):
+    _, child, _ = _baseline_revise_baseline(client, db_session, test_user)
+    tree = {i["id"]: i for i in client.get("/api/requirements/tree").json()["items"]}
+    assert tree[child.id]["stale"] is True
+    dossier = client.get(f"/api/requirements/{child.id}/dossier").json()
+    assert dossier["stale"] is True
+    summary = client.get("/api/requirements/summary").json()
+    assert [r["id"] for r in summary["stale"]] == [child.id]
+
+    client.post(f"/api/requirements/{child.id}/reaffirm", headers=user_headers(test_user))
+    assert client.get("/api/requirements/summary").json()["stale"] == []
 
 
 # ============ MCP parity ============

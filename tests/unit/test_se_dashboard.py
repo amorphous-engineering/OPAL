@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from opal.core.designators import generate_requirement_number
 from opal.db.models import Requirement
 from opal.se.dashboard import old_block_lint_drafts, overdue_tbrs
-from tests.conftest import login, user_headers
+from tests.conftest import user_headers
 
 GOOD = "The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
 
@@ -67,23 +67,34 @@ def test_old_block_lint_drafts_window_and_severity(db_session, test_user):
     assert fresh_dirty.id not in [r.id for r in result]
 
 
-# ============ Web surfaces ============
+# ============ API surfaces ============
 
 
-def test_dashboard_has_no_traceability_widget(client, db_session, test_user):
-    """The traceability panel was removed from the dashboard (rehearsal
-    feedback 2026-07-06); the helpers remain for a future requirements-page
-    home."""
-    test_user.needs_onboarding = False
+def test_summary_rolls_up_coverage_and_red_items(client, db_session, test_user):
+    root = _make_req(db_session, level=0)
+    leaf = _make_req(db_session, level=1, parent_id=root.id)
+    _make_req(db_session, tbr=True, tbr_due=datetime.now(UTC) - timedelta(days=3))
     db_session.commit()
-    login(client, test_user)
-    page = client.get("/")
-    assert page.status_code == 200
-    assert "TRACEABILITY" not in page.text
+    part = client.post("/api/parts", json={"name": "Feed Manifold"}).json()
+    client.post(
+        f"/api/requirements/parts/{part['id']}",
+        json={"requirement_id": leaf.req_number},
+        headers=user_headers(test_user),
+    )
+
+    summary = client.get("/api/requirements/summary").json()
+    assert summary["total"] == 3
+    assert summary["by_state"] == {"draft": 3}
+    # root has a child, so the leaves are the leaf and the TBR row
+    assert summary["coverage"]["leaves"] == 2
+    assert summary["coverage"]["leaves_allocated"] == 1
+    assert summary["verification"]["open"] == 1
+    assert summary["verification"]["unallocated"] == 2
+    assert len(summary["overdue_tbrs"]) == 1
+    assert summary["overdue_tbrs"][0]["owner"] == "(no owner)"
 
 
-def test_part_page_shows_allocated_requirement_with_state(client, db_session, test_user):
-    login(client, test_user)
+def test_allocation_shows_in_dossier_and_tree_with_verification(client, db_session, test_user):
     part = client.post("/api/parts", json={"name": "Feed Manifold"}).json()
     req = _make_req(db_session, title="Feed pressure")
     db_session.commit()
@@ -95,9 +106,65 @@ def test_part_page_shows_allocated_requirement_with_state(client, db_session, te
     )
     assert assign.status_code == 201, assign.text
 
-    page = client.get(f"/parts/{part['id']}")
-    assert page.status_code == 200
-    assert ">REQUIREMENTS<" in page.text  # section header label
-    assert req.req_number in page.text
-    assert "DRAFT" in page.text
-    assert f"/requirements/{req.id}" in page.text  # table row links to the dossier
+    dossier = client.get(f"/api/requirements/{req.id}/dossier").json()
+    (alloc,) = dossier["allocations"]
+    assert alloc["part_name"] == "Feed Manifold"
+    assert dossier["verification"] == "open"
+    assert dossier["can_delete"] is False  # allocated: cancel instead
+
+    row = next(i for i in client.get("/api/requirements/tree").json()["items"] if i["id"] == req.id)
+    assert [p["name"] for p in row["parts"]] == ["Feed Manifold"]
+
+    client.post(f"/api/requirements/allocations/{alloc['id']}/verify", json={})
+    dossier = client.get(f"/api/requirements/{req.id}/dossier").json()
+    assert dossier["verification"] == "verified"
+    assert dossier["allocations"][0]["verified_by"] is not None
+
+
+def test_allocations_follow_the_revision_chain(client, db_session, test_user):
+    part = client.post("/api/parts", json={"name": "Bracket"}).json()
+    req = _make_req(db_session)
+    db_session.commit()
+    headers = user_headers(test_user)
+    client.post(
+        f"/api/requirements/parts/{part['id']}",
+        json={"requirement_id": req.req_number},
+        headers=headers,
+    )
+    client.post(f"/api/requirements/{req.id}/baseline", headers=headers)
+    rev2 = client.post(f"/api/requirements/{req.id}/revise", headers=headers).json()
+
+    dossier = client.get(f"/api/requirements/{rev2['id']}/dossier").json()
+    (alloc,) = dossier["allocations"]
+    assert alloc["against_revision"] == 1  # allocated to rev 1, still listed on rev 2
+
+
+def test_dossier_flowdown_and_delete_rules(client, db_session):
+    root = _make_req(db_session, level=0)
+    mid = _make_req(db_session, level=1, parent_id=root.id)
+    leaf = _make_req(db_session, level=2, parent_id=mid.id)
+    db_session.commit()
+
+    dossier = client.get(f"/api/requirements/{leaf.id}/dossier").json()
+    assert [p["req_number"] for p in dossier["parent_chain"]] == [
+        root.req_number,
+        mid.req_number,
+    ]
+    assert dossier["can_delete"] is True
+    assert dossier["readiness"]["ready"] is True
+
+    top = client.get(f"/api/requirements/{root.id}/dossier").json()
+    assert [c["req_number"] for c in top["children"]] == [mid.req_number]
+    assert top["can_delete"] is False
+
+    client.post(f"/api/requirements/{leaf.id}/baseline")
+    done = client.get(f"/api/requirements/{leaf.id}/dossier").json()
+    assert done["readiness"] is None
+    assert done["can_delete"] is False
+    assert done["baseline_events"][0]["revision"] == 1
+
+
+def test_assignees_lists_active_users_for_non_admins(client, auth_headers, test_user):
+    resp = client.get("/api/requirements/assignees", headers=auth_headers)
+    assert resp.status_code == 200
+    assert test_user.name in [u["name"] for u in resp.json()]

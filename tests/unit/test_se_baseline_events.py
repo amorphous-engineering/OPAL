@@ -5,7 +5,7 @@ import json
 from opal.core.designators import generate_requirement_number
 from opal.db.models import BaselineEvent, BaselineEventItem, Requirement
 from opal.se.readiness import ready_requirement_ids
-from tests.conftest import login, user_headers
+from tests.conftest import user_headers
 
 GOOD = "The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
 
@@ -92,25 +92,37 @@ def test_queue_endpoint_equals_ready_set(client, db_session):
 
     resp = client.get("/api/requirements/queue")
     assert resp.status_code == 200
-    assert resp.json() == {"count": 1, "ids": [ready.id]}
-    assert resp.json()["ids"] == ready_requirement_ids(db_session)
+    body = resp.json()
+    assert (body["count"], body["ids"]) == (1, [ready.id])
+    assert body["ids"] == ready_requirement_ids(db_session)
+    (item,) = body["items"]
+    assert item["req_number"] == ready.req_number
+    assert item["change"] is None  # first revision: nothing to compare
 
 
-# ============ Web pages ============
+# ============ Queue and event views ============
 
 
-def test_queue_and_baselines_pages_render(client, db_session, test_user):
-    login(client, test_user)
+def test_queue_items_carry_review_context(client, db_session, test_user):
     parent = _make_req(db_session, level=0, title="Mission root")
     child = _make_req(db_session, level=1, title="Derived", parent_id=parent.id)
     db_session.commit()
 
-    queue = client.get("/requirements/queue")
-    assert queue.status_code == 200
-    assert "BASELINE QUEUE · 2" in queue.text
-    assert child.req_number in queue.text  # embedded queue JSON
+    queue = client.get("/api/requirements/queue").json()
+    assert queue["count"] == 2
+    by_number = {i["req_number"]: i for i in queue["items"]}
+    assert by_number[child.req_number]["chain"][0]["req_number"] == parent.req_number
+    assert by_number[parent.req_number]["children_count"] == 1
+    # lowest level first: the review walks the flow-down top to bottom
+    assert queue["items"][0]["id"] == parent.id
 
-    # Commit a batch, then the events lens shows it with the locked set.
+
+def test_baseline_events_list_and_detail(client, db_session, test_user):
+    parent = _make_req(db_session, level=0, title="Mission root")
+    child = _make_req(db_session, level=1, title="Derived", parent_id=parent.id)
+    db_session.commit()
+    assert client.get("/api/requirements/baselines").json() == []
+
     resp = client.post(
         "/api/requirements/baseline-batch",
         json={"ids": [parent.id, child.id], "label": "l0-freeze"},
@@ -118,27 +130,50 @@ def test_queue_and_baselines_pages_render(client, db_session, test_user):
     )
     event_id = resp.json()["event_id"]
 
-    listing = client.get("/requirements/baselines")
-    assert listing.status_code == 200
-    assert "l0-freeze" in listing.text
+    (listed,) = client.get("/api/requirements/baselines").json()
+    assert listed["label"] == "l0-freeze"
+    assert listed["locked"] == 2
+    assert listed["signed_by"] == test_user.name
 
-    detail = client.get(f"/requirements/baselines/{event_id}")
-    assert detail.status_code == 200
-    assert parent.req_number in detail.text
-    assert child.req_number in detail.text
-    assert test_user.name in detail.text
-
-    # Tree header advertises the queue only when something is ready.
-    empty_tree = client.get("/requirements")
-    assert "BASELINE QUEUE ·" not in empty_tree.text
+    detail = client.get(f"/api/requirements/baselines/{event_id}").json()
+    assert {i["req_number"] for i in detail["items"]} == {parent.req_number, child.req_number}
+    assert all(i["previous_revision"] is None for i in detail["items"])
+    assert client.get("/api/requirements/baselines/99999").status_code == 404
 
 
-def test_tree_header_shows_queue_button_when_ready(client, db_session, test_user):
-    login(client, test_user)
-    _make_req(db_session)
+def test_baseline_event_reports_what_a_revision_changed(client, db_session, test_user):
+    req = _make_req(db_session)
     db_session.commit()
-    page = client.get("/requirements")
-    assert "BASELINE QUEUE · 1" in page.text
+    headers = user_headers(test_user)
+    client.post(f"/api/requirements/{req.id}/baseline", headers=headers)
+    rev2_id = client.post(f"/api/requirements/{req.id}/revise", headers=headers).json()["id"]
+    client.patch(
+        f"/api/requirements/{rev2_id}",
+        json={"statement": "The engine shall sustain a chamber pressure of 25 bar ± 1 bar."},
+        headers=headers,
+    )
+    client.post(f"/api/requirements/{rev2_id}/baseline", headers=headers)
+
+    events = client.get("/api/requirements/baselines").json()
+    newest = max(events, key=lambda e: e["id"])
+    assert newest["revised"] == 1
+    detail = client.get(f"/api/requirements/baselines/{newest['id']}").json()
+    (item,) = detail["items"]
+    assert item["previous_revision"] == 1 and item["revision"] == 2
+    assert item["changed"] == ["statement"]
+    inserted = "".join(s["text"] for s in item["diff"]["statement"] if s["op"] == "insert")
+    assert "25" in inserted
+
+
+def test_tree_reports_queue_count_and_lint(client, db_session):
+    assert client.get("/api/requirements/tree").json()["queue_count"] == 0
+    _make_req(db_session)
+    vague = _make_req(db_session, statement="The engine shall vent as appropriate.")
+    db_session.commit()
+    tree = client.get("/api/requirements/tree").json()
+    assert tree["queue_count"] == 1
+    row = next(i for i in tree["items"] if i["id"] == vague.id)
+    assert any(f["severity"] == "block_baseline" and "span" in f for f in row["lint"])
 
 
 # ============ MCP parity ============
