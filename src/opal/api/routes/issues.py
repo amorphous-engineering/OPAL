@@ -10,15 +10,17 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, case, or_
+from sqlalchemy.orm import joinedload
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core import notifications
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
 from opal.core.events import emit_issue_dispositioned
-from opal.core.execution_flow import recheck_instance_completion
-from opal.core.holds import holding_readout
-from opal.db.models.execution import StepExecution
+from opal.core.execution_flow import recheck_instance_completion, version_step_map
+from opal.core.holds import holding_readout, scope_label
+from opal.db.models.execution import ProcedureInstance, StepExecution
 from opal.db.models.issue import (
     CONTAINMENT_RANK,
     Containment,
@@ -29,8 +31,14 @@ from opal.db.models.issue import (
     IssueType,
 )
 from opal.db.models.issue_comment import IssueComment
+from opal.db.models.part import Part
+from opal.db.models.procedure import MasterProcedure, ProcedureVersion
+from opal.db.models.risk import Risk
+from opal.db.models.user import User
 
 router = APIRouter(prefix="/issues", tags=["issues"])
+
+_SORT_KEYS = ("number", "title", "type", "state", "priority", "created", "updated")
 
 
 def _get_enum_val(obj: object, attr: str) -> str:
@@ -109,8 +117,60 @@ class IssueResponse(BaseModel):
     dispositioned_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    # Display names for the linked records, so no client lookup is needed.
+    part_number: str | None = None
+    part_name: str | None = None
+    procedure_name: str | None = None
+    work_order_number: str | None = None
+    raised_by_name: str | None = None
+    assigned_to_name: str | None = None
+    dispositioned_by_name: str | None = None
+    self_dispositioned: bool = False
+    raised_step_label: str | None = None
+    containment_step_label: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class LinkedRisk(BaseModel):
+    """A risk this issue responds to, or the risk that realized into it."""
+
+    risk_id: int
+    risk_number: str
+    title: str
+    relation: str  # mitigation | research | realized
+
+
+class RedlineOp(BaseModel):
+    """A redline operation spawned on the work order for this issue."""
+
+    step_number: int
+    label: str
+    title: str
+    status: str
+
+
+class IssueDetailResponse(IssueResponse):
+    """Single-issue view: the issue plus what it touches."""
+
+    raised_op_order: int | None = None
+    risks: list[LinkedRisk] = []
+    redline_ops: list[RedlineOp] = []
+
+
+class Assignee(BaseModel):
+    """An active user an issue can be assigned to."""
+
+    id: int
+    name: str
+
+
+class StepOption(BaseModel):
+    """A step of the issue's work order, for choosing a containment boundary."""
+
+    id: int
+    label: str
+    title: str
 
 
 class IssueListResponse(BaseModel):
@@ -191,10 +251,22 @@ class IssueCommentResponse(BaseModel):
     id: int
     issue_id: int
     user_id: int | None = None
+    user_name: str | None = None
     body: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def of(cls, comment: IssueComment) -> "IssueCommentResponse":
+        return cls(
+            id=comment.id,
+            issue_id=comment.issue_id,
+            user_id=comment.user_id,
+            user_name=comment.user.name if comment.user else None,
+            body=comment.body,
+            created_at=comment.created_at,
+        )
 
 
 class IssueCommentCreate(BaseModel):
@@ -239,6 +311,70 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
         dispositioned_at=issue.dispositioned_at,
         created_at=issue.created_at,
         updated_at=issue.updated_at,
+        part_number=issue.part.internal_pn if issue.part else None,
+        part_name=issue.part.name if issue.part else None,
+        procedure_name=issue.procedure.name if issue.procedure else None,
+        work_order_number=(
+            (issue.procedure_instance.work_order_number or f"WO #{issue.procedure_instance.id}")
+            if issue.procedure_instance
+            else None
+        ),
+        raised_by_name=issue.raised_by.name if issue.raised_by else None,
+        assigned_to_name=issue.assigned_to.name if issue.assigned_to else None,
+        dispositioned_by_name=issue.dispositioned_by.name if issue.dispositioned_by else None,
+        self_dispositioned=issue.self_dispositioned,
+        raised_step_label=scope_label(issue.raised_step) if issue.raised_step else None,
+        containment_step_label=(
+            scope_label(issue.containment_step) if issue.containment_step else None
+        ),
+    )
+
+
+def _issue_to_detail(db, issue: Issue) -> IssueDetailResponse:
+    """Issue plus linked risks and spawned redline ops."""
+    base = _issue_to_response(issue).model_dump()
+    raised_op_order = None
+    if issue.raised_step is not None and issue.procedure_instance_id is not None:
+        raised = issue.raised_step
+        raised_op_order = raised.step_number if raised.level == 0 else raised.parent_step_order
+
+    risks = [
+        LinkedRisk(
+            risk_id=link.risk_id,
+            risk_number=link.risk.risk_number,
+            title=link.risk.title,
+            relation=link.role,
+        )
+        for link in issue.risk_links
+        if link.risk is not None and link.risk.deleted_at is None
+    ]
+    realized = (
+        db.query(Risk).filter(Risk.realized_issue_id == issue.id, Risk.deleted_at.is_(None)).all()
+    )
+    risks += [
+        LinkedRisk(risk_id=r.id, risk_number=r.risk_number, title=r.title, relation="realized")
+        for r in realized
+    ]
+
+    redlines = (
+        db.query(StepExecution)
+        .filter(StepExecution.ad_hoc_issue_id == issue.id, StepExecution.level == 0)
+        .order_by(StepExecution.step_number)
+        .all()
+    )
+    return IssueDetailResponse(
+        **base,
+        raised_op_order=raised_op_order,
+        risks=risks,
+        redline_ops=[
+            RedlineOp(
+                step_number=op.step_number,
+                label=scope_label(op),
+                title=op.title or "",
+                status=_get_enum_val(op, "status"),
+            )
+            for op in redlines
+        ],
     )
 
 
@@ -261,6 +397,14 @@ def get_issue_statuses() -> list[str]:
 def get_issue_priorities() -> list[str]:
     """Get all issue priorities."""
     return [p.value for p in IssuePriority]
+
+
+@router.get("/assignees", response_model=list[Assignee])
+def list_assignees(db: DbSession) -> list[Assignee]:
+    """Active users an issue can be assigned to (open to every signed-in user;
+    the admin-only /users list is not)."""
+    users = db.query(User).filter(User.is_active == True).order_by(User.name).all()  # noqa: E712
+    return [Assignee(id=u.id, name=u.name) for u in users]
 
 
 @router.get("/disposition-types", response_model=list[str])
@@ -286,18 +430,26 @@ def list_issues(
     status: str | None = Query(None),
     disp_state: str | None = Query(None),
     priority: str | None = Query(None),
+    assigned_to_id: int | None = Query(None),
     part_id: int | None = Query(None),
     procedure_id: int | None = Query(None),
     procedure_instance_id: int | None = Query(None),
+    sort: str | None = Query(None, description=f"One of {', '.join(_SORT_KEYS)}"),
+    dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> IssueListResponse:
-    """List issues with optional filters."""
+    """List issues with optional filters. Without `sort`, undispositioned
+    containment-bearing issues come first, then newest first."""
     query = db.query(Issue).filter(Issue.deleted_at.is_(None))
 
     if search:
         search_term = f"%{search}%"
-        query = query.filter(Issue.title.ilike(search_term))
+        query = query.filter(
+            or_(Issue.title.ilike(search_term), Issue.issue_number.ilike(search_term))
+        )
+    if assigned_to_id:
+        query = query.filter(Issue.assigned_to_id == assigned_to_id)
 
     if issue_type:
         query = query.filter(Issue.issue_type == issue_type)
@@ -316,7 +468,28 @@ def list_issues(
 
     total = query.count()
 
-    issues = query.order_by(Issue.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    if sort is not None and sort not in _SORT_KEYS:
+        raise HTTPException(status_code=400, detail=f"Invalid sort: {sort}")
+    if sort is None:
+        order = [case((_blocking_clause(), 0), else_=1), Issue.id.desc()]
+    else:
+        column = _sort_column(sort)
+        order = [column.asc() if dir == "asc" else column.desc(), Issue.id.desc()]
+
+    issues = (
+        query.options(
+            joinedload(Issue.part),
+            joinedload(Issue.procedure),
+            joinedload(Issue.procedure_instance),
+            joinedload(Issue.assigned_to),
+            joinedload(Issue.raised_by),
+            joinedload(Issue.dispositioned_by),
+        )
+        .order_by(*order)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
     return IssueListResponse(
         items=[_issue_to_response(i) for i in issues],
@@ -326,12 +499,39 @@ def list_issues(
     )
 
 
+def _blocking_clause():
+    """SQL twin of Issue.is_blocking for open issues."""
+    signed = and_(Issue.disposition_type.isnot(None), Issue.dispositioned_at.isnot(None))
+    return and_(
+        Issue.status != IssueStatus.CLOSED,
+        Issue.containment != Containment.ADVISORY,
+        ~signed,
+    )
+
+
+def _sort_column(sort: str):
+    if sort == "priority":
+        return case(
+            (Issue.priority == IssuePriority.CRITICAL, 4),
+            (Issue.priority == IssuePriority.HIGH, 3),
+            (Issue.priority == IssuePriority.MEDIUM, 2),
+            else_=1,
+        )
+    if sort == "state":
+        return case((_blocking_clause(), 0), (Issue.status != IssueStatus.CLOSED, 1), else_=2)
+    return {
+        "number": Issue.issue_number,
+        "title": Issue.title,
+        "type": Issue.issue_type,
+        "created": Issue.created_at,
+        "updated": Issue.updated_at,
+    }[sort]
+
+
 def _filter_disp_state(query, disp_state: str):
     """The four-value STATE filter, matching what the list column renders:
     open = advisory-open; undispositioned / dispositioned = containment-bearing
     only; closed = closed."""
-    from sqlalchemy import and_, or_
-
     signed = and_(Issue.disposition_type.isnot(None), Issue.dispositioned_at.isnot(None))
     bearing = Issue.containment != Containment.ADVISORY
     if disp_state == "closed":
@@ -387,6 +587,17 @@ def create_issue(
         db, containment, data.containment_step_id, data.raised_step_id, data.procedure_instance_id
     )
 
+    # The work order already names its procedure; don't ask the caller twice.
+    procedure_id = data.procedure_id
+    if procedure_instance_id is not None:
+        wo = db.get(ProcedureInstance, procedure_instance_id)
+        if wo is None:
+            raise HTTPException(
+                status_code=400, detail=f"Work order {procedure_instance_id} not found"
+            )
+        if procedure_id is None:
+            procedure_id = wo.procedure_id
+
     issue = Issue(
         issue_number=generate_issue_number(db),
         title=data.title,
@@ -403,7 +614,7 @@ def create_issue(
         actual_behavior=data.actual_behavior,
         expected_benefit=data.expected_benefit,
         part_id=data.part_id,
-        procedure_id=data.procedure_id,
+        procedure_id=procedure_id,
         procedure_instance_id=procedure_instance_id,
         raised_step_id=data.raised_step_id,
         raised_by_id=user_id,
@@ -423,17 +634,47 @@ def create_issue(
     return _issue_to_response(issue)
 
 
-@router.get("/{issue_id}", response_model=IssueResponse)
+@router.get("/{issue_id}", response_model=IssueDetailResponse)
 def get_issue(
     issue_id: int,
     db: DbSession,
-) -> IssueResponse:
-    """Get issue by ID."""
+) -> IssueDetailResponse:
+    """Get issue by ID, with linked risks and redline ops."""
     issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    return _issue_to_response(issue)
+    return _issue_to_detail(db, issue)
+
+
+@router.get("/{issue_id}/steps", response_model=list[StepOption])
+def get_issue_steps(
+    issue_id: int,
+    db: DbSession,
+) -> list[StepOption]:
+    """Steps of the issue's work order — the candidates for a containment
+    boundary. Empty while the issue is not linked to a work order."""
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    if issue.procedure_instance_id is None:
+        return []
+    steps = (
+        db.query(StepExecution)
+        .filter(StepExecution.instance_id == issue.procedure_instance_id)
+        .order_by(StepExecution.step_number)
+        .all()
+    )
+    instance = db.get(ProcedureInstance, issue.procedure_instance_id)
+    titles = version_step_map(db.get(ProcedureVersion, instance.version_id) if instance else None)
+    return [
+        StepOption(
+            id=s.id,
+            label=scope_label(s),
+            title=s.title or titles.get(s.step_number, {}).get("title", ""),
+        )
+        for s in steps
+    ]
 
 
 @router.get("/{issue_id}/holding", response_model=list[dict])
@@ -510,12 +751,18 @@ def update_issue(
         issue.actual_behavior = data.actual_behavior
     if data.expected_benefit is not None:
         issue.expected_benefit = data.expected_benefit
-    if data.part_id is not None:
+    # Links: an explicit null clears, an omitted field is untouched.
+    sent = data.model_fields_set
+    if "part_id" in sent:
+        if data.part_id is not None and db.get(Part, data.part_id) is None:
+            raise HTTPException(status_code=400, detail=f"Part {data.part_id} not found")
         issue.part_id = data.part_id
-    if data.procedure_id is not None:
+    if "procedure_id" in sent:
+        if data.procedure_id is not None and db.get(MasterProcedure, data.procedure_id) is None:
+            raise HTTPException(status_code=400, detail=f"Procedure {data.procedure_id} not found")
         issue.procedure_id = data.procedure_id
-    if data.procedure_instance_id is not None:
-        issue.procedure_instance_id = data.procedure_instance_id
+    if "procedure_instance_id" in sent and data.procedure_instance_id != watched_instance:
+        _relink_instance(db, issue, data.procedure_instance_id)
     if data.root_cause is not None:
         issue.root_cause = data.root_cause
     if data.corrective_action is not None:
@@ -542,7 +789,9 @@ def update_issue(
                     ) from err
         if data.disposition_rationale is not None:
             issue.disposition_rationale = data.disposition_rationale
-    if data.assigned_to_id is not None:
+    if "assigned_to_id" in sent:
+        if data.assigned_to_id is not None and db.get(User, data.assigned_to_id) is None:
+            raise HTTPException(status_code=400, detail=f"User {data.assigned_to_id} not found")
         issue.assigned_to_id = data.assigned_to_id
 
     log_update(db, issue, old_values, user_id)
@@ -561,6 +810,37 @@ def update_issue(
     db.refresh(issue)
 
     return _issue_to_response(issue)
+
+
+def _relink_instance(db, issue: Issue, new_instance_id: int | None) -> None:
+    """Point the issue at another work order, or detach it.
+
+    Detaching an undispositioned containment-bearing issue would silently
+    release its hold, so that is refused; so is leaving a step anchor behind
+    in the old work order."""
+    if new_instance_id is None:
+        if issue.is_blocking:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{issue.issue_number} is undispositioned; "
+                "sign a disposition before detaching its work order",
+            )
+    else:
+        wo = db.get(ProcedureInstance, new_instance_id)
+        if wo is None:
+            raise HTTPException(status_code=400, detail=f"Work order {new_instance_id} not found")
+        if issue.procedure_id is None:
+            issue.procedure_id = wo.procedure_id
+    for step_id in (issue.containment_step_id, issue.raised_step_id):
+        if step_id is None:
+            continue
+        step = db.get(StepExecution, step_id)
+        if step is not None and step.instance_id != new_instance_id:
+            raise HTTPException(
+                status_code=400,
+                detail="A step anchor belongs to the current work order; clear the boundary first",
+            )
+    issue.procedure_instance_id = new_instance_id
 
 
 def _validate_close(issue: Issue, data: IssueUpdate | None = None) -> None:
@@ -764,7 +1044,7 @@ def create_issue_comment(
     db.commit()
     db.refresh(comment)
 
-    return IssueCommentResponse.model_validate(comment)
+    return IssueCommentResponse.of(comment)
 
 
 @router.get("/{issue_id}/comments", response_model=list[IssueCommentResponse])
@@ -784,4 +1064,4 @@ def list_issue_comments(
         .all()
     )
 
-    return [IssueCommentResponse.model_validate(c) for c in comments]
+    return [IssueCommentResponse.of(c) for c in comments]
