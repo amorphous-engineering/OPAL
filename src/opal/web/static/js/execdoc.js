@@ -79,6 +79,15 @@
         localStorage.setItem(storageKey, JSON.stringify(t));
     }
 
+    function clearToggle(key) {
+        const t = loadToggles();
+        if (!(key in t)) return;
+        delete t[key];
+        localStorage.setItem(storageKey, JSON.stringify(t));
+    }
+
+    const TERMINAL = ['completed', 'signed_off', 'skipped'];
+
     function applyStoredToggles() {
         const t = loadToggles();
         for (const [key, expanded] of Object.entries(t)) {
@@ -130,13 +139,22 @@
             const row = document.getElementById(`step-${order}`);
             if (!row) return;
             const wasOpen = !!row.querySelector('.doc-step-body:not([hidden])');
+            const wasTerminal = TERMINAL.includes(row.dataset.status);
             const tpl = document.createElement('template');
             tpl.innerHTML = html.trim();
             const fresh = tpl.content.firstElementChild;
             if (!fresh) return;
-            if (wasOpen) {
-                const body = fresh.querySelector('.doc-step-body');
-                if (body) body.hidden = false;
+            const body = fresh.querySelector('.doc-step-body');
+            if (body) {
+                // A step that just reached a terminal status collapses, and its
+                // stored toggle is dropped so a reload agrees; any other swap
+                // keeps the row as the operator left it.
+                if (!wasTerminal && TERMINAL.includes(fresh.dataset.status)) {
+                    body.hidden = true;
+                    clearToggle(`step_${order}`);
+                } else {
+                    body.hidden = !wasOpen;
+                }
             }
             row.replaceWith(fresh);
             if (focusedOrder !== null && parseInt(fresh.dataset.order) === focusedOrder) {
@@ -338,8 +356,14 @@
             if (!el) continue;
             const bucket = leavesByParent[s.order] || { done: ['completed', 'signed_off', 'skipped'].includes(s.status) ? 1 : 0, total: 1 };
             const done = ['completed', 'signed_off', 'skipped'].includes(s.status);
+            const wasDone = el.classList.contains('is-done');
             el.textContent = `${bucket.done}/${bucket.total}`;
             el.classList.toggle('is-done', done);
+            // An OP that just completed collapses, like its steps.
+            if (done && !wasDone) {
+                setOpExpanded(card, false, false);
+                clearToggle(`op_${s.order}`);
+            }
             const mini = document.querySelector(`[data-minimap-op="${s.order}"] [data-minimap-prog]`);
             if (mini) {
                 mini.textContent = `${bucket.done}/${bucket.total}`;

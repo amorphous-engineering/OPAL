@@ -31,7 +31,8 @@
             {{ ex.state_cell(step, bound_holds_by_se, step_holding_ncs, gate_text, parent_held) }}
         </span>
     </div>
-    <div class="doc-step-body" hidden>
+    {# Same policy as OP cards: nothing loads collapsed unless it is complete. #}
+    <div class="doc-step-body"{% if is_terminal %} hidden{% endif %}>
         {% if step.status == 'on_hold' and exec %}
         {% set hold_ncs = step_holding_ncs.get(exec.id, []) %}
         <div class="alert step-hold-banner"><h2>ON HOLD</h2><section>Awaiting disposition on
