@@ -38,7 +38,7 @@
 		gap: calc(var(--h) * 0.08);
 		background: #fff;
 		color: #000;
-		font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+		font-family: var(--font-mono);
 		overflow: hidden;
 		break-inside: avoid;
 	}
@@ -75,7 +75,7 @@
 		line-height: 1.1;
 	}
 	.name {
-		font-family: 'Inter Variable', system-ui, sans-serif;
+		font-family: var(--font-sans);
 		font-size: calc(var(--h) * 0.095);
 		line-height: 1.15;
 		display: -webkit-box;
