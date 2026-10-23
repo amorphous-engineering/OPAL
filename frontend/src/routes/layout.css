@@ -20,54 +20,53 @@
  *   OPAL orange   the wordmark only (--brand)
  *   ok / warn / error  green / yellow / red state words
  *   dev blue      the version string of a development build
- * Dark is the default and the original theme, value for value. Light follows the
- * Radix Colors sand scale (see its block below) — no Catppuccin.
+ * Dark is the default and the original theme, value for value. Light is
+ * shadcn-svelte's neutral theme (see its block below) — no Catppuccin.
  */
 :root {
-	/* Light, built on the Radix Colors "sand" scale and its step roles (radix-ui.com/colors):
-	   panels step 1 (never pure white: glare), page and header band step 3, hover step 4,
-	   non-interactive rules step 6 (table rows and separators stay quiet), input borders
-	   step 8, text step 12 (~16:1, not 21:1: less halation over long reading), muted text
-	   step 11 (~6:1). State and accent colours are each hue's text step 11, darkened just
-	   enough to hold 4.5:1 on the page and header band as well as on panels. */
+	/* Light: shadcn-svelte's official "neutral" theme, verbatim
+	   (shadcn-svelte.com/registry/colors/neutral.json, the base colour in components.json),
+	   except radius (OPAL is square). OPAL's own tokens, which shadcn does not define,
+	   use Tailwind's palette: ok green-700, warn amber-700, info/dev blue-600, brand
+	   orange-700; error is shadcn's destructive. */
 	--radius: 0rem;
-	--background: #f1f0ef;
-	--foreground: #21201c;
-	--card: #fdfdfc;
-	--card-foreground: #21201c;
-	--popover: #fdfdfc;
-	--popover-foreground: #21201c;
-	--primary: #0c6dc2;
-	--primary-foreground: #fdfdfc;
-	--secondary: #f1f0ef;
-	--secondary-foreground: #21201c;
-	--muted: #f1f0ef;
-	--muted-foreground: #63635e;
-	--accent: #e9e8e6;
-	--accent-foreground: #21201c;
-	--destructive: #cc2c31;
-	--border: #dad9d6;
-	--input: #bcbbb5;
-	--ring: #0c6dc2;
-	--ok: #1e7951;
-	--warn: #9c5b00;
-	--error: #cc2c31;
-	--info: #0c6dc2;
-	--brand: #ba4700;
-	--dev: #0c6dc2;
-	--chart-1: #0c6dc2;
-	--chart-2: #1e7951;
-	--chart-3: #9c5b00;
-	--chart-4: #cc2c31;
-	--chart-5: #ba4700;
-	--sidebar: #f1f0ef;
-	--sidebar-foreground: #21201c;
-	--sidebar-primary: #0c6dc2;
-	--sidebar-primary-foreground: #fdfdfc;
-	--sidebar-accent: #e9e8e6;
-	--sidebar-accent-foreground: #21201c;
-	--sidebar-border: #dad9d6;
-	--sidebar-ring: #0c6dc2;
+	--background: oklch(1 0 0);
+	--foreground: oklch(0.145 0 0);
+	--card: oklch(1 0 0);
+	--card-foreground: oklch(0.145 0 0);
+	--popover: oklch(1 0 0);
+	--popover-foreground: oklch(0.145 0 0);
+	--primary: oklch(0.205 0 0);
+	--primary-foreground: oklch(0.985 0 0);
+	--secondary: oklch(0.97 0 0);
+	--secondary-foreground: oklch(0.205 0 0);
+	--muted: oklch(0.97 0 0);
+	--muted-foreground: oklch(0.556 0 0);
+	--accent: oklch(0.97 0 0);
+	--accent-foreground: oklch(0.205 0 0);
+	--destructive: oklch(0.577 0.245 27.325);
+	--border: oklch(0.922 0 0);
+	--input: oklch(0.922 0 0);
+	--ring: oklch(0.708 0 0);
+	--ok: oklch(0.527 0.154 150.069);
+	--warn: oklch(0.555 0.163 48.998);
+	--error: oklch(0.577 0.245 27.325);
+	--info: oklch(0.546 0.245 262.881);
+	--brand: oklch(0.553 0.195 38.402);
+	--dev: oklch(0.546 0.245 262.881);
+	--chart-1: oklch(0.546 0.245 262.881);
+	--chart-2: oklch(0.527 0.154 150.069);
+	--chart-3: oklch(0.555 0.163 48.998);
+	--chart-4: oklch(0.577 0.245 27.325);
+	--chart-5: oklch(0.553 0.195 38.402);
+	--sidebar: oklch(0.985 0 0);
+	--sidebar-foreground: oklch(0.145 0 0);
+	--sidebar-primary: oklch(0.205 0 0);
+	--sidebar-primary-foreground: oklch(0.985 0 0);
+	--sidebar-accent: oklch(0.97 0 0);
+	--sidebar-accent-foreground: oklch(0.205 0 0);
+	--sidebar-border: oklch(0.922 0 0);
+	--sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
