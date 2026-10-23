@@ -599,9 +599,7 @@
 				</DataTable>
 			</Section>
 		{:else}
-			<div class="border border-border bg-card">
-				<EmptyLine label="Attachments" action={addFiles} />
-			</div>
+			<EmptyLine label="Attachments" action={addFiles} />
 		{/if}
 	</div>
 
@@ -690,7 +688,7 @@
 					</ul>
 				</Section>
 			{:else}
-				<div class="border border-border bg-card"><EmptyLine label="Holds" /></div>
+				<EmptyLine label="Holds" />
 			{/if}
 		{/if}
 
@@ -867,9 +865,11 @@
 				{#if linkingRisk}{@render riskPicker()}{/if}
 			</Section>
 		{:else}
-			<div class="border border-border bg-card">
+			<div>
 				<EmptyLine label="Risks" onadd={() => (linkingRisk = !linkingRisk)} addLabel="+ LINK" />
-				{#if linkingRisk}{@render riskPicker()}{/if}
+				{#if linkingRisk}<div class="border border-t-0 border-border bg-card">
+						{@render riskPicker()}
+					</div>{/if}
 			</div>
 		{/if}
 	</div>

@@ -121,7 +121,7 @@
 			</DataTable>
 		</Section>
 	{:else}
-		<EmptyLine label="WHERE USED" />
+		<EmptyLine label="WHERE USED" empty="Not used in any assembly." />
 	{/if}
 
 	<!-- PROCEDURE USE -->
@@ -152,7 +152,7 @@
 			</DataTable>
 		</Section>
 	{:else}
-		<EmptyLine label="PROCEDURE USE" />
+		<EmptyLine label="PROCEDURE USE" empty="Not used in any procedure." />
 	{/if}
 
 	<!-- CONSUMED -->
@@ -189,6 +189,6 @@
 			</DataTable>
 		</Section>
 	{:else}
-		<EmptyLine label="CONSUMED" />
+		<EmptyLine label="CONSUMED" empty="Nothing consumed." />
 	{/if}
 {/if}

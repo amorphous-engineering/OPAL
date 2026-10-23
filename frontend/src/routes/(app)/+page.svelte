@@ -512,6 +512,6 @@
 			</DataTable>
 		</Section>
 	{:else}
-		<div class="border border-border bg-card"><EmptyLine label="ACTIVITY" /></div>
+		<EmptyLine label="ACTIVITY" />
 	{/if}
 </div>

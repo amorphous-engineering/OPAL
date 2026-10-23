@@ -219,6 +219,6 @@
 			<SyncLogTable {logs} />
 		</Section>
 	{:else}
-		<div class="border border-border bg-card"><EmptyLine label="Sync log" /></div>
+		<EmptyLine label="Sync log" empty="No sync runs." />
 	{/if}
 {/if}

@@ -73,11 +73,9 @@
 		</div>
 	</Section>
 {:else}
-	<div class="border border-border bg-card">
-		{#if isAdmin}
-			<EmptyLine label="Project" addHref="/project/new" addLabel="+ CONFIGURE" />
-		{:else}
-			<EmptyLine label="Project" />
-		{/if}
-	</div>
+	{#if isAdmin}
+		<EmptyLine label="Project" addHref="/project/new" addLabel="+ CONFIGURE" />
+	{:else}
+		<EmptyLine label="Project" />
+	{/if}
 {/if}

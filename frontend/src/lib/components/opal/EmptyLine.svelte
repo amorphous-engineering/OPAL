@@ -1,35 +1,66 @@
 <script lang="ts">
-	// The empty-state rule: an empty relevant section is ONE line —
-	// `LABEL — none · + ADD`. Never a header over an empty box, never narration.
+	// An empty table keeps its table's shape: the panel header (title, add action) over
+	// one line saying it is empty. Inside a panel that already has the header (a Section or
+	// a list frame), only the line.
 	import type { Snippet } from 'svelte';
+	import { inFrame } from './frame.js';
+	import Section from './Section.svelte';
 
 	let {
 		label,
+		empty,
 		onadd,
 		addHref,
 		addLabel = '+ ADD',
 		action
 	}: {
 		label: string;
+		/** The empty sentence; default "No <label>." */
+		empty?: string;
 		onadd?: () => void;
 		addHref?: string;
 		addLabel?: string;
 		action?: Snippet;
 	} = $props();
+
+	const framed = inFrame();
+	const ACRONYMS = new Set(['bom', 'po', 'wo', 'op', 'nc', 'opal', 'pn']);
+	const sentence = $derived(
+		empty ??
+			`No ${label
+				.split(/\s+/)
+				.map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.toLowerCase()))
+				.join(' ')}.`
+	);
+	const hasAdd = $derived(!!action || !!addHref || !!onadd);
 </script>
 
-<div class="flex h-8 items-center gap-2 border-b border-border px-3 font-mono text-xs">
-	<span class="font-medium tracking-wider text-muted-foreground uppercase">{label}</span>
-	<span class="text-muted-foreground">— none</span>
+{#snippet add()}
 	{#if action}
-		<span class="text-muted-foreground">·</span>{@render action()}
+		{@render action()}
 	{:else if addHref}
-		<span class="text-muted-foreground">·</span>
-		<a href={addHref} class="font-medium text-info hover:underline">{addLabel}</a>
+		<a
+			href={addHref}
+			class="font-mono text-xs font-medium tracking-wider text-info uppercase hover:underline"
+			>{addLabel}</a
+		>
 	{:else if onadd}
-		<span class="text-muted-foreground">·</span>
-		<button type="button" class="font-medium text-info hover:underline" onclick={onadd}
-			>{addLabel}</button
+		<button
+			type="button"
+			class="font-mono text-xs font-medium tracking-wider text-info uppercase hover:underline"
+			onclick={onadd}>{addLabel}</button
 		>
 	{/if}
-</div>
+{/snippet}
+
+{#if framed}
+	<div class="flex min-h-8 items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground">
+		<span>{sentence}</span>
+		{#if hasAdd}<span class="ml-auto">{@render add()}</span>{/if}
+	</div>
+{:else}
+	<Section title={label}>
+		{#snippet actions()}{@render add()}{/snippet}
+		<div class="px-3 py-2 text-sm text-muted-foreground">{sentence}</div>
+	</Section>
+{/if}

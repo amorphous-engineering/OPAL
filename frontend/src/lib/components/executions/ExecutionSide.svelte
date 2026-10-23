@@ -52,7 +52,7 @@
 			</div>
 		</Section>
 	{:else}
-		<EmptyLine label="Online" />
+		<EmptyLine label="Online" empty="No one online." />
 	{/if}
 
 	{#if doc.issues.length}

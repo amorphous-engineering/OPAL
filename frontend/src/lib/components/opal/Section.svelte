@@ -2,6 +2,7 @@
 	// Structure: a panel with a header bar (label, count, actions) over its body.
 	import type { Snippet } from 'svelte';
 	import { cn } from '#lib/utils.js';
+	import { provideFrame } from './frame.js';
 
 	let {
 		title,
@@ -18,6 +19,9 @@
 		class?: string;
 		id?: string;
 	} = $props();
+
+	// Children render inside this panel's frame (an empty table is only its line).
+	provideFrame();
 </script>
 
 <section {id} class={cn('border border-border bg-card', className)}>

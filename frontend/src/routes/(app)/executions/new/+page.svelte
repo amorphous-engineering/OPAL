@@ -198,7 +198,7 @@
 				{previewError}
 			</p>
 		{:else if !preview}
-			<EmptyLine label="Preview" />
+			<EmptyLine label="Preview" empty="Nothing to preview." />
 		{:else}
 			<Section title="Procedure">
 				<div class="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-xs">

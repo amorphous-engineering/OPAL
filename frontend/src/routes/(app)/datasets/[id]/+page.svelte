@@ -178,9 +178,7 @@
 	{/if}
 
 	{#if points.length === 0}
-		<div class="border border-border bg-card">
-			<EmptyLine label="Data points" onadd={() => (addOpen = true)} />
-		</div>
+		<EmptyLine label="Data points" onadd={() => (addOpen = true)} />
 	{:else}
 		<Section title="Data points" count={ds.point_count}>
 			<DataTable rows={points} {columns} emptyLabel="Data points" key={(p) => p.id} dense>

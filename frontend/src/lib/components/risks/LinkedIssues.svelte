@@ -133,12 +133,12 @@
 		{#if adding}{@render form()}{/if}
 	</Section>
 {:else}
-	<div class="border border-border bg-card">
+	<div>
 		<EmptyLine
 			label="Linked issues"
 			onadd={() => (adding = !adding)}
 			addLabel={adding ? 'DONE' : '+ ADD'}
 		/>
-		{#if adding}{@render form()}{/if}
+		{#if adding}<div class="border border-t-0 border-border bg-card">{@render form()}</div>{/if}
 	</div>
 {/if}

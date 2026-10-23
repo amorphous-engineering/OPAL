@@ -198,7 +198,7 @@
 
 <div class="grid grid-cols-1 gap-4 p-4">
 	{#if !items.length}
-		<EmptyLine label="Ready to baseline" />
+		<EmptyLine label="Ready to baseline" empty="Nothing ready to baseline." />
 	{:else}
 		<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
 			{#if current}

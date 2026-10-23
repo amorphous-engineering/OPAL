@@ -20,7 +20,7 @@
 </script>
 
 {#if entries.length === 0}
-	<div class="border border-border bg-card"><EmptyLine label="Activity" /></div>
+	<EmptyLine label="Activity" />
 {:else}
 	<Section title="Recent activity" count={entries.length}>
 		{#snippet actions()}

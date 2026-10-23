@@ -378,7 +378,7 @@
 				{@render genealogy(d.components, false)}
 			</Section>
 		{:else if d.source.type === 'production'}
-			<div class="border border-border bg-card"><EmptyLine label="Components" /></div>
+			<EmptyLine label="Components" />
 		{/if}
 		{#if d.assemblies.length}
 			<Section title="Used in" count={d.assemblies.length}>
@@ -432,9 +432,7 @@
 					</DataTable>
 				</Section>
 			{:else}
-				<div class="border border-border bg-card">
-					<EmptyLine label="Tests" onadd={() => openTest(null)} addLabel="+ RUN" />
-				</div>
+				<EmptyLine label="Tests" onadd={() => openTest(null)} addLabel="+ RUN" />
 			{/if}
 		{/if}
 	</div>
