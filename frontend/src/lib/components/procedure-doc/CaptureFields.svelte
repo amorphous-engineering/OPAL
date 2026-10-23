@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Data capture for a step, from its schema. Values live in the controller
 	// (drafts), never in this component, so a document refresh cannot clobber
-	// what the operator is typing. Saved with COMPLETE.
+	// what the operator is typing. Saved with the first sign-off.
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';

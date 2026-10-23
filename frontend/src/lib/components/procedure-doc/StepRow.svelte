@@ -8,6 +8,7 @@
 	import RoleChip from './RoleChip.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepState from './StepState.svelte';
+	import StepTitleActions from './StepTitleActions.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
 	import RowTools from './author/RowTools.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
@@ -89,12 +90,6 @@
 			>
 		{/if}
 		<RoleChip role={step.role} />
-		{#if step.requires_signoff && !terminal}
-			<span
-				class="inline-flex h-5 items-center border border-info/50 px-1.5 font-mono text-[11px] font-medium text-info"
-				title="Requires sign-off">SIGN-OFF</span
-			>
-		{/if}
 		{#if au}<AuthorChips {step} />{/if}
 		<CursorChips cursors={step.cursors} viewerId={ctl.viewerId} />
 		{#if nAtt || nNote}
@@ -121,6 +116,7 @@
 			<RowTools {step} {op} isOp={false} />
 		{:else}
 			<span class="min-w-24 shrink-0 text-right"><StepState {step} /></span>
+			<StepTitleActions {step} />
 		{/if}
 	</div>
 	{#if open && !bodyless}

@@ -511,44 +511,43 @@ export class ExecutionStore implements DocController {
 				toastError(e, 'Could not release claim');
 			}
 		},
-		complete: async (step) => {
-			const errs = this.validate(step);
-			this.errors[step.order] = errs;
-			if (Object.keys(errs).length) {
-				toast.error(
-					'Cannot complete: ' +
-						Object.entries(errs)
-							.map(([k, v]) => {
-								const f = step.data_schema?.fields?.find((x) => x.name === k);
-								return `${f?.label ?? k}: ${v.toLowerCase()}`;
-							})
-							.join('; ')
-				);
-				return;
+		sign: async (step, slot) => {
+			// Slot 0 is the old COMPLETE: it carries the captured data and its validation.
+			let data: Record<string, unknown> | undefined;
+			if (slot === 0) {
+				const errs = this.validate(step);
+				this.errors[step.order] = errs;
+				if (Object.keys(errs).length) {
+					toast.error(
+						'Cannot sign off: ' +
+							Object.entries(errs)
+								.map(([k, v]) => {
+									const f = step.data_schema?.fields?.find((x) => x.name === k);
+									return `${f?.label ?? k}: ${v.toLowerCase()}`;
+								})
+								.join('; ')
+					);
+					return;
+				}
+				data = this.payload(step);
 			}
 			try {
-				const data = this.payload(step);
-				await api.post(
-					this.url(`/steps/${step.order}/complete`),
-					data ? { data_captured: data } : {}
-				);
-				delete this.drafts[step.order];
-				write(this.key('draft'), this.drafts);
-				if (this.claimedOrder === step.order) await api.del(this.url('/focus')).catch(() => {});
+				await api.post(this.url(`/steps/${step.order}/signoffs/${slot}`), {
+					data_captured: data ?? null
+				});
+				if (slot === 0) {
+					delete this.drafts[step.order];
+					write(this.key('draft'), this.drafts);
+				}
 				await this.changed();
-				this.advanceFrom(step.order);
-			} catch (e) {
-				toastError(e, 'Failed to complete step');
-				await this.refresh();
-			}
-		},
-		signoff: async (step) => {
-			try {
-				await api.post(this.url(`/steps/${step.order}/signoff`));
-				if (this.claimedOrder === step.order) await api.del(this.url('/focus')).catch(() => {});
-				await this.changed();
+				const now = this.findStep(step.order)?.step;
+				if (now && isTerminal(now.status)) {
+					if (this.claimedOrder === step.order) await api.del(this.url('/focus')).catch(() => {});
+					this.advanceFrom(step.order);
+				}
 			} catch (e) {
 				toastError(e, 'Failed to sign off step');
+				await this.refresh();
 			}
 		},
 		skip: (step) => (this.dialog = { kind: 'skip', step }),
@@ -621,7 +620,7 @@ export class ExecutionStore implements DocController {
 		}
 	};
 
-	/** After COMPLETE, move the keyboard cursor to the next open step. */
+	/** After the step completes, move the keyboard cursor to the next open step. */
 	private advanceFrom(order: number) {
 		const rows = visibleRows(this.allOps, (op) =>
 			this.isOpen(`op:${op.order}`, isTerminal(op.status))
