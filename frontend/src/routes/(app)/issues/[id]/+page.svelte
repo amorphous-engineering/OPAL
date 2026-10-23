@@ -899,7 +899,7 @@
 			<Dialog.Description>The comment is recorded in the thread.</Dialog.Description>
 		</Dialog.Header>
 		<form
-			class="grid gap-1.5"
+			class="grid grid-cols-1 gap-1.5"
 			onsubmit={(e) => {
 				e.preventDefault();
 				submitReturn();
