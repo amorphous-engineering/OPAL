@@ -45,7 +45,17 @@ def test_directory_is_open_to_users_and_hides_contact_details(client, test_user,
     response = client.get("/api/users/directory", headers=auth_headers)
     assert response.status_code == 200
     entry = next(u for u in response.json() if u["id"] == test_user.id)
-    assert set(entry) == {"id", "name", "username"}
+    assert "email" not in entry
+    assert set(entry) == {
+        "id",
+        "name",
+        "username",
+        "job_title",
+        "phone",
+        "workcenter",
+        "roles",
+        "avatar_url",
+    }
     assert client.get("/api/users", headers=auth_headers).status_code == 403
 
 

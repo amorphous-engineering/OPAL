@@ -11,6 +11,10 @@ fact and one home.
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from sqlalchemy.orm import Session
+
+from opal.core.roles import UnknownRoleError, canonical_role_name
+
 PRIMARY_LABEL = "Primary buyoff"
 SECONDARY_LABEL = "Secondary buyoff"
 OP_LABEL = "Sign-off"
@@ -21,6 +25,10 @@ MAX_ROLE = 50
 
 class SignoffError(ValueError):
     """A sign-off definition list is malformed."""
+
+
+class UnknownSignoffRole(SignoffError, UnknownRoleError):
+    """A sign-off slot names a role that does not exist (a 400, not a 422)."""
 
 
 def _slot(label: str, role: str | None) -> dict[str, Any]:
@@ -147,6 +155,7 @@ def write_signoff_fields(
     signoffs: Sequence[Mapping[str, Any]] | None | Any = UNSET,
     requires_signoff: bool | Any = UNSET,
     required_role: str | None | Any = UNSET,
+    db: Session | None = None,
 ) -> None:
     """The one write path for a template step's sign-off fields.
 
@@ -154,7 +163,17 @@ def write_signoff_fields(
     legacy ``requires_signoff`` / ``required_role`` from it. Legacy-only writes
     keep working: they land on the legacy columns and, when the step already has
     an explicit list, are carried into it so the two never disagree.
+    With ``db``, every role must be an existing role (else UnknownRoleError) and
+    is stored in the role's canonical casing.
     Raises SignoffError on a malformed list."""
+    if db is not None:
+        try:
+            if signoffs is not UNSET and signoffs is not None:
+                signoffs = [{**s, "role": canonical_role_name(db, s.get("role"))} for s in signoffs]
+            if required_role is not UNSET:
+                required_role = canonical_role_name(db, required_role)
+        except UnknownRoleError as err:
+            raise UnknownSignoffRole(str(err)) from err
     if signoffs is not UNSET:
         if signoffs is None:
             step.signoffs = None

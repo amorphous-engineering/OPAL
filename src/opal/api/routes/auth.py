@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from opal.api.deps import DbSession, RequiredUser
 from opal.api.net import client_ip, request_is_secure, set_session_cookie
@@ -30,6 +31,7 @@ from opal.core.auth import (
     verify_password,
     verify_payload,
 )
+from opal.core.people import profile_fields
 from opal.db.models import ApiToken, AuthSession, PasskeyCredential, User
 
 public_router = APIRouter(prefix="/auth", tags=["auth"])
@@ -57,9 +59,10 @@ def _require_passkeys_enabled() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _user_payload(user: User) -> dict:
+def _user_payload(db: Session, user: User) -> dict:
     """The signed-in identity as the web client sees it."""
     return {
+        **profile_fields(db, user),
         "id": user.id,
         "username": user.username,
         "name": user.name,
@@ -82,7 +85,7 @@ def _session_response(request: Request, db: DbSession, user: User, auth_method: 
         ip_address=client_ip(request),
     )
     db.commit()
-    response = JSONResponse({"user": _user_payload(user)})
+    response = JSONResponse({"user": _user_payload(db, user)})
     set_session_cookie(response, request, token)
     return response
 
@@ -373,8 +376,8 @@ def delete_passkey(passkey_id: int, db: DbSession, user: RequiredUser) -> None:
 
 
 @router.get("/me")
-def whoami(user: RequiredUser) -> dict:
-    return _user_payload(user)
+def whoami(db: DbSession, user: RequiredUser) -> dict:
+    return _user_payload(db, user)
 
 
 class ProfileUpdate(BaseModel):
@@ -387,7 +390,7 @@ def complete_profile(body: ProfileUpdate, db: DbSession, user: RequiredUser) -> 
     user.name = body.name.strip()
     user.needs_profile_setup = False
     db.commit()
-    return _user_payload(user)
+    return _user_payload(db, user)
 
 
 class PasswordChange(BaseModel):

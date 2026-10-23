@@ -48,6 +48,7 @@ from opal.db.models.purchase import Purchase, PurchaseExpense, PurchaseLine
 from opal.db.models.reference import IssueReference, ReferenceType, RiskReference
 from opal.db.models.requirement import Requirement, VerificationMethod
 from opal.db.models.risk import Risk, RiskDisposition, RiskIssueLink, RiskIssueRole
+from opal.db.models.role import Role, UserRole
 from opal.db.models.supplier import Supplier, SupplierPart
 from opal.db.models.user import User
 from opal.db.models.workcenter import Workcenter
@@ -94,6 +95,7 @@ __all__ = [
     "ReferenceType",
     "Requirement",
     "Risk",
+    "Role",
     "RiskDisposition",
     "RiskIssueLink",
     "RiskIssueRole",
@@ -111,6 +113,7 @@ __all__ = [
     "SupplierPart",
     "TestTemplate",
     "User",
+    "UserRole",
     "VerificationMethod",
     "Workcenter",
 ]

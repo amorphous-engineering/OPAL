@@ -3264,7 +3264,7 @@
        "caution": "WARNING: The igniter is now armed.",
        "requires_signoff": true,
        "schema": null,
-       "required_role": "TEST"
+       "required_role": "Engineer"
       },
       {
        "title": "Clear pad, start cameras",
@@ -3436,7 +3436,7 @@
          }
         ]
        },
-       "required_role": "TEST"
+       "required_role": "Engineer"
       },
       {
        "title": "Flight observation \u2014 ascent and apogee event",

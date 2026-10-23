@@ -1,6 +1,14 @@
 """Procedures API tests."""
 
-from tests.conftest import user_headers
+import pytest
+
+from tests.conftest import grant_client_roles, user_headers
+
+
+@pytest.fixture(autouse=True)
+def _template_roles(client, db_session):
+    """Template roles must exist; the client holds the ones used here."""
+    grant_client_roles(db_session, "QE", "MFG-LEAD")
 
 
 def test_create_procedure(client):

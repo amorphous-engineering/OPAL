@@ -8,10 +8,19 @@ evidence and material. Controls are inert exactly when the step's
 
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from opal.db.models.execution import InstanceStatus, ProcedureInstance
+from tests.conftest import grant_client_roles
+
+
+@pytest.fixture(autouse=True)
+def _template_roles(client, db_session):
+    """Template roles must exist; the client holds the ones used here."""
+    grant_client_roles(db_session, "TC", "QE", "MFG-LEAD")
+
 
 # ============ builders ============
 

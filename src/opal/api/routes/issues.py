@@ -16,6 +16,7 @@ from sqlalchemy.orm import joinedload
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core import issue_flow, notifications
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
+from opal.core.avatars import avatar_url
 from opal.core.designators import generate_issue_number
 from opal.core.events import emit_issue_dispositioned
 from opal.core.execution_flow import recheck_instance_completion, version_step_map
@@ -262,6 +263,7 @@ class IssueCommentResponse(BaseModel):
     issue_id: int
     user_id: int | None = None
     user_name: str | None = None
+    user_avatar_url: str | None = None
     body: str
     created_at: datetime
 
@@ -274,6 +276,7 @@ class IssueCommentResponse(BaseModel):
             issue_id=comment.issue_id,
             user_id=comment.user_id,
             user_name=comment.user.name if comment.user else None,
+            user_avatar_url=avatar_url(comment.user),
             body=comment.body,
             created_at=comment.created_at,
         )

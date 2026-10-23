@@ -188,3 +188,26 @@ def user_headers(user: User) -> dict[str, str]:
     _, raw_token = create_api_token(db, user, "tests-inline")
     db.commit()
     return {"Authorization": f"Bearer {raw_token}"}
+
+
+def grant_roles(db: Session, user: User, *names: str) -> None:
+    """Make sure each named role exists and ``user`` holds it."""
+    from opal.core.roles import find_role
+    from opal.db.models import Role, UserRole
+
+    for name in names:
+        role = find_role(db, name)
+        if role is None:
+            role = Role(name=name)
+            db.add(role)
+            db.flush()
+        held = db.query(UserRole).filter(UserRole.user_id == user.id, UserRole.role_id == role.id)
+        if held.first() is None:
+            db.add(UserRole(user_id=user.id, role_id=role.id))
+    db.commit()
+
+
+def grant_client_roles(db: Session, *names: str) -> None:
+    """Grant roles to the ``client`` fixture's service user."""
+    service = db.query(User).filter(User.username == "test.client").one()
+    grant_roles(db, service, *names)

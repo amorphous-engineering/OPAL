@@ -46,11 +46,13 @@ from opal.db.models import (
     Requirement,
     Risk,
     RiskIssueLink,
+    Role,
     StepDependency,
     StepExecution,
     Supplier,
     TestTemplate,
     User,
+    UserRole,
     Workcenter,
 )
 from opal.db.models.execution import (
@@ -97,6 +99,7 @@ def seed_database(db: Session) -> None:
     _seed_project_config(db)
     users = _seed_users(db)
     workcenters = _seed_workcenters(db)
+    _seed_roles(db, users, workcenters)
     suppliers = _seed_suppliers(db, parts_data)
     parts = _seed_parts(db, parts_data, suppliers, users, now)
     _seed_bom(db, parts_data, parts)
@@ -183,6 +186,35 @@ def _seed_users(db: Session) -> dict[str, User]:
     db.add_all(items)
     db.flush()
     return {u.username: u for u in items}
+
+
+# username -> (job title, workcenter code, roles). Roles are qualifications: only a
+# holder can sign a slot that names one, and being admin does not stand in for it.
+_DEMO_PEOPLE = {
+    "build": ("Build Lead", "BENCH", ["Technician", "Engineer", "QA"]),
+    "test": ("Test Engineer", "PAD", ["Technician", "Engineer"]),
+    "qa": ("Quality Inspector", "STORE", ["QA"]),
+}
+_ROLE_DESCRIPTIONS = {
+    "Technician": "Performs build and assembly steps.",
+    "Engineer": "Verifies engineering-critical steps and test setups.",
+    "QA": "Inspects and buys off quality-critical steps.",
+}
+
+
+def _seed_roles(db: Session, users: dict[str, User], workcenters: dict[str, Workcenter]) -> None:
+    roles = {n: Role(name=n, description=d) for n, d in _ROLE_DESCRIPTIONS.items()}
+    db.add_all(roles.values())
+    db.flush()
+    for username, (title, wc_code, held) in _DEMO_PEOPLE.items():
+        user = users[username]
+        user.job_title = title
+        user.workcenter_id = workcenters[wc_code].id
+        for name in held:
+            db.add(
+                UserRole(user_id=user.id, role_id=roles[name].id, granted_by_id=users["build"].id)
+            )
+    db.flush()
 
 
 def _seed_workcenters(db: Session) -> dict[str, Workcenter]:
