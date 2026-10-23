@@ -2,6 +2,7 @@
 	import { goto, refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
+		Avatar,
 		confirm,
 		PageHeader,
 		Section,
@@ -129,6 +130,12 @@
 		? [{ label: 'System' }, { label: 'Users', href: '/users' }, { label: profile.name }]
 		: [{ label: 'Profile' }]}
 >
+	{#snippet heading()}
+		<span class="flex items-center gap-2">
+			<Avatar user={profile} size="md" />
+			<h1 class="text-lg font-semibold tracking-tight">{profile.name}</h1>
+		</span>
+	{/snippet}
 	{#snippet state()}
 		{#if !profile.is_active}<State value="inactive" tone="muted" badge />{/if}
 	{/snippet}
@@ -157,6 +164,8 @@
 			{isSelf}
 			onupdate={(u) => {
 				profile = u;
+				if (isSelf && session.user)
+					session.set({ ...session.user, name: u.name, avatar_url: u.avatar_url ?? null });
 				refreshAll();
 			}}
 		/>

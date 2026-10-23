@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import {
+		Avatar,
 		DataTable,
 		FilterBar,
 		FilterSelect,
@@ -135,11 +136,18 @@
 				</span>
 			{:else if col.key === 'working'}
 				{#if r.working.length}
-					<span class="font-mono text-xs">
-						{#each r.working as w, i (w.user_id)}{#if i > 0},
-							{/if}{w.name ?? '?'}{#if w.step_number}<span class="text-muted-foreground">
-									OP {w.step_number}</span
-								>{/if}{/each}
+					<span class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs">
+						{#each r.working as w (w.user_id)}
+							<span class="inline-flex items-center gap-1.5">
+								<Avatar
+									user={{ id: w.user_id, name: w.name, avatar_url: w.avatar_url }}
+									size="xs"
+								/>
+								{w.name ?? '?'}{#if w.step_number}<span class="text-muted-foreground">
+										OP {w.step_number}</span
+									>{/if}
+							</span>
+						{/each}
 					</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'held_by'}

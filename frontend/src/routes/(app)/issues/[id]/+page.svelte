@@ -18,7 +18,8 @@
 		confirm,
 		toast,
 		toastError,
-		type Column
+		type Column,
+		Avatar
 	} from '#lib/components/opal/index.js';
 	import EntityPicker from '#lib/components/issues/EntityPicker.svelte';
 	import InlineText from '#lib/components/issues/InlineText.svelte';
@@ -505,6 +506,10 @@
 					{#each data.comments as c (c.id)}
 						<li class="px-3 py-2">
 							<div class="mb-0.5 flex items-baseline gap-2 text-xs">
+								{#if c.user_id}<Avatar
+										user={{ id: c.user_id, name: c.user_name, avatar_url: c.user_avatar_url }}
+										size="xs"
+									/>{/if}
 								<span class="font-medium">{c.user_name ?? 'System'}</span>
 								<Timestamp value={c.created_at} />
 							</div>
