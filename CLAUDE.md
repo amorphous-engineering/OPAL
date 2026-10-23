@@ -85,7 +85,7 @@ resolves — it knows nothing about how the session was obtained. **No request h
 identity.** The web client signs in through `/api/auth/config`, `/login`, `/logout`, `/setup`
 (first admin) and `/claim` (admin-issued claim links).
 
-Methods, each independently toggleable from `/settings/auth`:
+Methods, each independently toggleable from `/settings#sign-in`:
 - **Password** (`OPAL_PASSWORD_LOGIN_ENABLED`, default on) — username + argon2id
 - **Passkeys** (`OPAL_PASSKEYS_ENABLED`, default on) — FIDO2, see `src/opal/core/webauthn.py`
 - **OIDC** (`OPAL_OIDC_ENABLED`, default off) — see `src/opal/core/oidc.py`

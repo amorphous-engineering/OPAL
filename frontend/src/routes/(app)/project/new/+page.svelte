@@ -7,4 +7,6 @@
 	title="New project"
 	crumbs={[{ label: 'System' }, { label: 'Settings', href: '/settings' }, { label: 'Project' }]}
 />
-<ProjectForm existing={null} />
+<div class="mx-auto w-full max-w-5xl p-4">
+	<ProjectForm existing={null} />
+</div>

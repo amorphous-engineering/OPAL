@@ -1,22 +1,13 @@
 <script lang="ts">
 	import { DetailRow, DetailTable, Section, State } from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import type { SignInConfig } from '#lib/session.svelte.js';
-	import type { AuthSettings } from './types.js';
 
-	let {
-		signIn,
-		auth,
-		isAdmin
-	}: { signIn: SignInConfig; auth: AuthSettings | null; isAdmin: boolean } = $props();
+	let { signIn }: { signIn: SignInConfig } = $props();
 
 	const on = (v: boolean) => (v ? 'ENABLED' : 'DISABLED');
 </script>
 
 <Section title="Sign-in methods">
-	{#snippet actions()}
-		{#if isAdmin}<Button variant="ghost" size="xs" href="/settings/auth">EDIT</Button>{/if}
-	{/snippet}
 	<DetailTable>
 		<DetailRow label="Password">
 			<State
@@ -41,7 +32,6 @@
 		</DetailRow>
 		{#if signIn.oidc_enabled}
 			<DetailRow label="Provider" value={signIn.oidc_provider_name} />
-			{#if auth}<DetailRow label="Issuer" mono value={auth.oidc_issuer} />{/if}
 		{/if}
 	</DetailTable>
 </Section>
