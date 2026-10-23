@@ -26,8 +26,6 @@
 	const rows = $derived(
 		ops.flatMap((op) => [op.step, ...op.steps]).filter((s) => s.attachments.length > 0)
 	);
-	const size = (n: number) =>
-		n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 	const priorityLabel = ['NORMAL', 'HIGH', 'URGENT'];
 </script>
 
@@ -75,28 +73,6 @@
 		</Section>
 	{:else}
 		<EmptyLine label="Attachments" onadd={() => (store.dialog = { kind: 'attach', step: null })} />
-	{/if}
-
-	{#if doc.reference_attachments.length}
-		<Section title="Reference documents" count={doc.reference_attachments.length || undefined}>
-			<ul class="m-0 list-none p-0">
-				{#each doc.reference_attachments as a (a.id)}
-					<li
-						class="flex items-center gap-2 border-b border-border px-3 py-1 text-xs last:border-b-0"
-					>
-						<a
-							class="min-w-0 flex-1 truncate font-mono text-info hover:underline"
-							href={attachmentUrl(a.id)}
-							target="_blank"
-							rel="noopener">{a.filename}</a
-						>
-						<span class="font-mono text-muted-foreground">{size(a.size_bytes)}</span>
-					</li>
-				{/each}
-			</ul>
-		</Section>
-	{:else}
-		<EmptyLine label="Reference documents" />
 	{/if}
 
 	<Section title="Facts">

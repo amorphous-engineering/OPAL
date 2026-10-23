@@ -13,6 +13,7 @@
 	import DataPanel from './DataPanel.svelte';
 	import ExecutionDialogs from './ExecutionDialogs.svelte';
 	import ExecutionNav from './ExecutionNav.svelte';
+	import ExecutionSide from './ExecutionSide.svelte';
 	import ExecutionRecord from './ExecutionRecord.svelte';
 	import MaterialPanel from './MaterialPanel.svelte';
 
@@ -179,11 +180,11 @@
 			</div>
 		</div>
 		<div
-			class="grid min-h-0 flex-1 items-start gap-4 p-4 lg:grid-cols-[minmax(15rem,20vw)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
+			class="grid min-h-0 flex-1 items-start gap-4 p-4 lg:grid-cols-[minmax(13rem,16vw)_minmax(0,1fr)_minmax(15rem,20vw)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
 		>
 			<aside
 				class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
-				aria-label="Online, operations and issues"
+				aria-label="Operations"
 			>
 				<ExecutionNav {store} onjump={jump} />
 			</aside>
@@ -218,6 +219,12 @@
 					{/if}
 				</div>
 			</div>
+			<aside
+				class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
+				aria-label="Online, issues and reference documents"
+			>
+				<ExecutionSide {store} onjump={jump} />
+			</aside>
 		</div>
 	</div>
 	<ExecutionDialogs {store} bind:editing />

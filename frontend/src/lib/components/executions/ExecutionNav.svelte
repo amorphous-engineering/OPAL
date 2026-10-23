@@ -1,42 +1,25 @@
 <script lang="ts">
-	// Left sidebar: who is working where, the OP index and the issues raised
-	// against this work order. Document entries jump
-	// to its row in the document (onjump switches to the document tab first).
+	// Left sidebar: the OP index. Each entry jumps to its OP in the document
+	// (onjump switches to the document tab first).
 	import { cn } from '#lib/utils.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { EmptyLine, Section, State } from '#lib/components/opal/index.js';
+	import { EmptyLine, Section } from '#lib/components/opal/index.js';
 	import { isTerminal } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 
 	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
 
 	const doc = $derived(store.doc!);
-	const inst = $derived(doc.instance);
 	const ops = $derived([...doc.ops, ...doc.contingency_ops]);
-	const issueTone = (state: string) =>
-		state === 'undispositioned'
-			? 'error'
-			: state === 'dispositioned'
-				? 'ok'
-				: state === 'open'
-					? 'warn'
-					: 'muted';
-	const issueLabel = (state: string) =>
-		state === 'undispositioned'
-			? 'UNDISP'
-			: state === 'dispositioned'
-				? "DISP'D"
-				: state.toUpperCase();
 </script>
 
 <!-- Never scrolls sideways: every row fits the sidebar width (truncate or wrap). -->
-<!-- On wide screens the sidebar is one viewport tall and never scrolls as a whole.
-     Operations comes first and takes the room; Online and Issues shrink to their
-     content (capped at 30% each, scrolling inside past that). -->
+<!-- On wide screens the sidebar is one viewport tall and never scrolls as a whole;
+     the operations card is only as tall as its content, scrolling inside when the
+     column runs out. -->
 <div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full">
 	{#if ops.length}
 		<Section
-			class="lg:flex lg:max-h-max lg:min-h-0 lg:flex-1 lg:flex-col"
+			class="lg:flex lg:min-h-0 lg:flex-[0_1_auto] lg:flex-col"
 			title="Operations"
 			count={ops.length || undefined}
 		>
@@ -68,80 +51,5 @@
 		</Section>
 	{:else}
 		<EmptyLine label="Operations" />
-	{/if}
-
-	{#if doc.roster.length}
-		<Section
-			class="lg:flex lg:max-h-[30%] lg:min-h-0 lg:flex-none lg:flex-col"
-			title="Online"
-			count={doc.roster.length || undefined}
-		>
-			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
-				<ul class="m-0 list-none p-0">
-					{#each doc.roster as r (r.user_id)}
-						<li class="border-b border-border last:border-b-0">
-							<button
-								type="button"
-								class={cn(
-									'flex w-full items-center gap-2 px-3 py-1 text-left font-mono text-xs hover:bg-accent/60',
-									r.stale && 'opacity-50',
-									r.user_id === store.viewerId && 'font-semibold'
-								)}
-								disabled={r.step_order === null}
-								onclick={() => r.step_order !== null && onjump(r.step_order)}
-							>
-								<span class="truncate">{r.name ?? r.initials}</span>
-								{#if r.step_number}<span class="ml-auto text-muted-foreground"
-										>OP {r.step_number}</span
-									>{/if}
-							</button>
-						</li>
-					{/each}
-				</ul>
-			</div>
-		</Section>
-	{:else}
-		<EmptyLine label="Online" />
-	{/if}
-
-	{#if doc.issues.length}
-		<Section
-			class="lg:flex lg:max-h-[30%] lg:min-h-0 lg:flex-none lg:flex-col"
-			title="Issues"
-			count={doc.issues.length || undefined}
-		>
-			{#snippet actions()}
-				<Button size="xs" variant="ghost" href={`/issues/new?execution=${inst.id}`}>+ NEW</Button>
-			{/snippet}
-			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
-				<ul class="m-0 list-none p-0">
-					{#each doc.issues as i (i.id)}
-						<li class="border-b border-border px-3 py-1.5 text-xs last:border-b-0">
-							<div class="flex items-center gap-2">
-								<a class="font-mono font-medium text-info hover:underline" href={`/issues/${i.id}`}
-									>{i.issue_number}</a
-								>
-								{#if i.raised_step_number}
-									<span class="font-mono text-muted-foreground" title="Raised at step"
-										>@{i.raised_step_number}</span
-									>
-								{/if}
-								<span class="ml-auto"
-									><State
-										value={i.state}
-										tone={issueTone(i.state)}
-										label={issueLabel(i.state)}
-										badge={i.state === 'undispositioned'}
-									/></span
-								>
-							</div>
-							<div class="truncate text-muted-foreground" title={i.title}>{i.title}</div>
-						</li>
-					{/each}
-				</ul>
-			</div>
-		</Section>
-	{:else}
-		<EmptyLine label="Issues" addHref={`/issues/new?execution=${inst.id}`} />
 	{/if}
 </div>
