@@ -12,8 +12,7 @@
 		type Tone
 	} from '#lib/components/opal/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
-	import { actionTone, changeSummary, type AuditEntry } from '#lib/components/audit/audit.js';
+	import { changeSummary, type AuditEntry } from '#lib/components/audit/audit.js';
 	import type {
 		ExecutionRow,
 		IssueRow,
@@ -23,7 +22,6 @@
 		StockAttentionRow
 	} from '#lib/components/overview/types.js';
 	import { qty, stateLabel } from '#lib/format.js';
-	import { ACTION_SHORTCUTS, NAV_SHORTCUTS } from '#lib/shortcuts.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -157,12 +155,40 @@
 		{ key: 'score', label: 'Score', align: 'right', mono: true, width: '4rem' },
 		{ key: 'disposition', label: 'Disposition', width: '6.5rem' }
 	];
-	const activityCols: Column<AuditEntry>[] = [
+	/** Consecutive entries by the same person doing the same thing to the same record: one row. */
+	interface ActivityRow extends AuditEntry {
+		times: number;
+		summary: string;
+	}
+	const activity = $derived.by(() => {
+		const rows: ActivityRow[] = [];
+		for (const e of o.activity) {
+			const prev = rows.at(-1);
+			const summary = changeSummary(e);
+			if (
+				prev &&
+				prev.user_id === e.user_id &&
+				prev.action === e.action &&
+				prev.entity_type === e.entity_type &&
+				prev.record_label === e.record_label &&
+				prev.href === e.href
+			) {
+				prev.times += 1;
+				if (!prev.summary.split(', ').includes(summary))
+					prev.summary = `${prev.summary}, ${summary}`;
+				continue;
+			}
+			rows.push({ ...e, times: 1, summary });
+		}
+		return rows;
+	});
+
+	const activityCols: Column<ActivityRow>[] = [
 		{ key: 'timestamp', label: 'When', width: '9rem' },
 		{ key: 'user_name', label: 'User', width: '9rem' },
 		{ key: 'action', label: 'Action', width: '5rem' },
 		{ key: 'entity_label', label: 'Entity', width: '9rem' },
-		{ key: 'record_label', label: 'Record', width: '10rem' },
+		{ key: 'record_label', label: 'Record', width: '16rem' },
 		{ key: 'change', label: 'Change' }
 	];
 
@@ -216,13 +242,19 @@
 			>
 				<div class="label">{s.label}</div>
 				<div
-					class="font-mono text-2xl leading-8 font-semibold tabular-nums {s.value === 0
-						? 'text-muted-foreground'
-						: valueClass[s.tone]}"
+					class="font-mono text-2xl leading-8 tabular-nums {s.value === 0
+						? 'text-muted-foreground/50'
+						: `font-semibold ${valueClass[s.tone]}`}"
 				>
 					{s.value}
 				</div>
-				<div class="font-mono text-[11px] text-muted-foreground">{s.sub}</div>
+				<div
+					class="font-mono text-[11px] {s.value === 0
+						? 'text-muted-foreground/50'
+						: 'text-muted-foreground'}"
+				>
+					{s.sub}
+				</div>
 			</a>
 		{/each}
 	</div>
@@ -246,9 +278,11 @@
 				>
 					{#snippet cell(r, col)}
 						{#if col.key === 'issue_number'}
-							<span class="font-mono text-info">{r.issue_number}</span>
+							<span class="font-mono whitespace-nowrap text-info">{r.issue_number}</span>
 						{:else if col.key === 'title'}
-							<span class={r.mine ? 'font-medium' : ''}>{r.title}</span>
+							<span class="block truncate {r.mine ? 'font-medium' : ''}" title={r.title}
+								>{r.title}</span
+							>
 						{:else if col.key === 'priority'}
 							<State value={r.priority} tone={priorityTone(r.priority)} />
 						{:else if col.key === 'assignee'}
@@ -263,8 +297,6 @@
 					{/snippet}
 				</DataTable>
 			</Section>
-		{:else}
-			<div class="border border-border bg-card"><EmptyLine label="OPEN ISSUES" /></div>
 		{/if}
 
 		{#if o.executions.items.length}
@@ -284,11 +316,13 @@
 				>
 					{#snippet cell(r, col)}
 						{#if col.key === 'label'}
-							<span class="font-mono text-info">{r.label}</span>
+							<span class="font-mono whitespace-nowrap text-info">{r.label}</span>
 							{#if r.mine}<span class="ml-1 font-mono text-[11px] text-muted-foreground">YOU</span
 								>{/if}
 						{:else if col.key === 'procedure'}
-							{r.procedure ?? dash}
+							<span class="block truncate" title={r.procedure ?? undefined}
+								>{r.procedure ?? dash}</span
+							>
 						{:else if col.key === 'progress'}
 							{r.steps_done}/{r.steps_total}
 						{:else if col.key === 'flag'}
@@ -305,8 +339,6 @@
 					{/snippet}
 				</DataTable>
 			</Section>
-		{:else}
-			<div class="border border-border bg-card"><EmptyLine label="ACTIVE EXECUTIONS" /></div>
 		{/if}
 
 		{#if o.low_stock.items.length}
@@ -326,7 +358,7 @@
 				>
 					{#snippet cell(r, col)}
 						{#if col.key === 'part_number'}
-							<span class="font-mono text-info">{r.part_number ?? dash}</span>
+							<span class="font-mono whitespace-nowrap text-info">{r.part_number ?? dash}</span>
 						{:else if col.key === 'name'}
 							{r.name}
 						{:else if col.key === 'on_hand'}
@@ -339,8 +371,6 @@
 					{/snippet}
 				</DataTable>
 			</Section>
-		{:else}
-			<div class="border border-border bg-card"><EmptyLine label="LOW STOCK" /></div>
 		{/if}
 
 		{#if o.purchases.items.length}
@@ -361,7 +391,7 @@
 				>
 					{#snippet cell(r, col)}
 						{#if col.key === 'reference'}
-							<span class="font-mono text-info">{r.reference}</span>
+							<span class="font-mono whitespace-nowrap text-info">{r.reference}</span>
 						{:else if col.key === 'supplier'}
 							{r.supplier}
 						{:else if col.key === 'status'}
@@ -377,10 +407,6 @@
 					{/snippet}
 				</DataTable>
 			</Section>
-		{:else}
-			<div class="border border-border bg-card">
-				<EmptyLine label="PURCHASES AWAITING RECEIPT" />
-			</div>
 		{/if}
 
 		{#if o.stock_attention.items.length}
@@ -401,7 +427,7 @@
 				>
 					{#snippet cell(r, col)}
 						{#if col.key === 'opal_number'}
-							<span class="font-mono text-info">{r.opal_number ?? dash}</span>
+							<span class="font-mono whitespace-nowrap text-info">{r.opal_number ?? dash}</span>
 						{:else if col.key === 'part_name'}
 							{#if r.part_number}<span class="mr-1 font-mono text-xs text-muted-foreground"
 									>{r.part_number}</span
@@ -414,8 +440,6 @@
 					{/snippet}
 				</DataTable>
 			</Section>
-		{:else}
-			<div class="border border-border bg-card"><EmptyLine label="CALIBRATION AND EXPIRY" /></div>
 		{/if}
 
 		{#if o.risks.items.length}
@@ -436,7 +460,7 @@
 				>
 					{#snippet cell(r, col)}
 						{#if col.key === 'risk_number'}
-							<span class="font-mono text-info">{r.risk_number}</span>
+							<span class="font-mono whitespace-nowrap text-info">{r.risk_number}</span>
 						{:else if col.key === 'title'}
 							{r.title}
 						{:else if col.key === 'score'}
@@ -447,8 +471,6 @@
 					{/snippet}
 				</DataTable>
 			</Section>
-		{:else}
-			<div class="border border-border bg-card"><EmptyLine label="HIGH RISKS" /></div>
 		{/if}
 	</div>
 
@@ -460,7 +482,7 @@
 				>
 			{/snippet}
 			<DataTable
-				rows={o.activity}
+				rows={activity}
 				columns={activityCols}
 				href={(r) => r.href}
 				key={(r) => r.id}
@@ -473,18 +495,22 @@
 					{:else if col.key === 'user_name'}
 						{r.user_name ?? dash}
 					{:else if col.key === 'action'}
-						<State
-							value={r.action}
-							tone={actionTone[r.action as keyof typeof actionTone] ?? 'default'}
-						/>
+						<span
+							class="font-mono text-xs uppercase {r.action === 'delete'
+								? 'text-error'
+								: 'text-muted-foreground'}">{r.action}</span
+						>
 					{:else if col.key === 'entity_label'}
-						{r.entity_label}
+						{r.entity_label}{#if r.times > 1}<span
+								class="ml-1.5 font-mono text-xs text-muted-foreground">×{r.times}</span
+							>{/if}
 					{:else if col.key === 'record_label'}
-						{#if r.record_label}<span class="font-mono {r.href ? 'text-info' : ''}"
-								>{r.record_label}</span
+						{#if r.record_label}<span
+								class="block truncate {r.href ? 'text-info' : ''}"
+								title={r.record_label}>{r.record_label}</span
 							>{:else}<span class="text-muted-foreground">{dash}</span>{/if}
 					{:else}
-						<span class="font-mono text-xs">{changeSummary(r)}</span>
+						<span class="font-mono text-xs text-muted-foreground">{r.summary}</span>
 					{/if}
 				{/snippet}
 			</DataTable>
@@ -492,12 +518,4 @@
 	{:else}
 		<div class="border border-border bg-card"><EmptyLine label="ACTIVITY" /></div>
 	{/if}
-
-	<Section title="Keyboard">
-		<div class="flex flex-wrap gap-x-5 gap-y-1.5 px-3 py-2 text-xs">
-			{#each [...ACTION_SHORTCUTS, ...NAV_SHORTCUTS] as s (s.keys)}
-				<span class="inline-flex items-center gap-1.5"><Kbd>{s.keys}</Kbd>{s.label}</span>
-			{/each}
-		</div>
-	</Section>
 </div>
