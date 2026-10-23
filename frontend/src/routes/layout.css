@@ -114,6 +114,9 @@
 }
 
 @theme inline {
+	/* The one spacing step every p-/m-/gap-/h-/w- class multiplies (Tailwind's default is
+	   0.25rem). ~15% more air than the default keeps dense tables readable. */
+	--spacing: 0.2875rem;
 	--font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 	--radius-sm: 0rem;
