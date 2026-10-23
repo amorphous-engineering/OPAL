@@ -37,6 +37,15 @@ class IssueStatus(str, Enum):
     CLOSED = "closed"
 
 
+class TicketState(str, Enum):
+    """Derived ticket progress (see Issue.ticket_state)."""
+
+    PENDING = "pending"
+    IN_WORK = "in_work"
+    IN_REVIEW = "in_review"
+    DONE = "done"
+
+
 class IssuePriority(str, Enum):
     """Issue priority level."""
 
@@ -136,6 +145,23 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         DateTime(timezone=True), nullable=True
     )
 
+    # Ticket-state stamps (see Issue.ticket_state). Closing, review requests
+    # and work starts each record who and when; reopening clears the stamps.
+    work_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    work_started_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    review_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    review_requested_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Optional links - an issue can link to any of these (or none)
     part_id: Mapped[int | None] = mapped_column(
         ForeignKey("part.id", ondelete="SET NULL"), nullable=True, index=True
@@ -187,6 +213,11 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     dispositioned_by: Mapped["User | None"] = relationship(
         "User", foreign_keys=[dispositioned_by_id]
     )
+    work_started_by: Mapped["User | None"] = relationship("User", foreign_keys=[work_started_by_id])
+    review_requested_by: Mapped["User | None"] = relationship(
+        "User", foreign_keys=[review_requested_by_id]
+    )
+    closed_by: Mapped["User | None"] = relationship("User", foreign_keys=[closed_by_id])
     comments: Mapped[list["IssueComment"]] = relationship(
         "IssueComment",
         back_populates="issue",
@@ -218,6 +249,18 @@ class Issue(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
         if not self.containment_bearing:
             return status
         return "dispositioned" if self.dispositioned else "undispositioned"
+
+    @property
+    def ticket_state(self) -> str:
+        """The ticket's progress, one definition: pending | in_work | in_review | done.
+        Independent of the hold (is_blocking), which is about disposition."""
+        status = self.status.value if hasattr(self.status, "value") else self.status
+        if status == IssueStatus.CLOSED.value:
+            return TicketState.DONE.value
+        if self.review_requested_at is not None:
+            return TicketState.IN_REVIEW.value
+        started = self.dispositioned if self.containment_bearing else self.work_started_at
+        return TicketState.IN_WORK.value if started else TicketState.PENDING.value
 
     @property
     def is_blocking(self) -> bool:

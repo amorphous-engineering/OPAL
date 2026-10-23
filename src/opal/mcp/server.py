@@ -14,6 +14,7 @@ from mcp.types import TextContent, Tool
 from sqlalchemy import func
 
 from opal.config import get_active_project, get_active_settings
+from opal.core import issue_flow
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import (
     generate_designator,
@@ -799,6 +800,13 @@ async def list_tools() -> list[Tool]:
                             "dispositioned (containment-bearing only), closed"
                         ),
                     },
+                    "state": {
+                        "type": "string",
+                        "description": (
+                            "Filter by ticket state: pending, in_work, in_review, done "
+                            "(comma-separate several)"
+                        ),
+                    },
                     "issue_type": {
                         "type": "string",
                         "description": "Filter by type: bug, task, improvement, non_conformance",
@@ -900,6 +908,26 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["issue_id", "user_id", "disposition_type", "rationale"],
+            },
+        ),
+        Tool(
+            name="advance_issue",
+            description=(
+                "Move an issue through its ticket states (pending → in_work → in_review → "
+                "done). start: advisory issue pending → in_work (containment-bearing issues "
+                "enter in_work via sign_disposition). review: in_work → in_review. return: "
+                "in_review → in_work, comment required. Sign-off to done is a human action in OPAL. "
+                "user_id must be a human."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "integer"},
+                    "action": {"type": "string", "enum": ["start", "review", "return"]},
+                    "user_id": {"type": "integer", "description": "Human user acting"},
+                    "comment": {"type": "string", "description": "Required for return"},
+                },
+                "required": ["issue_id", "action", "user_id"],
             },
         ),
         Tool(
@@ -2401,6 +2429,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _attach_to_step(db, arguments)
         elif name == "add_step_note":
             return await _add_step_note(db, arguments)
+        elif name == "advance_issue":
+            return await _advance_issue(db, arguments)
         elif name == "bind_issue_hold":
             return await _bind_issue_hold(db, arguments)
 
@@ -2943,6 +2973,7 @@ def _issue_summary(db, issue: Issue) -> dict:
         "type": issue.issue_type.value if hasattr(issue.issue_type, "value") else issue.issue_type,
         "status": issue.status.value if hasattr(issue.status, "value") else issue.status,
         "disp_state": issue.disp_state,
+        "ticket_state": issue.ticket_state,
         "priority": issue.priority.value if hasattr(issue.priority, "value") else issue.priority,
         "containment": issue.containment.value
         if hasattr(issue.containment, "value")
@@ -2977,6 +3008,12 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
         else:
             return json_response({"success": False, "error": f"Invalid disp_state: {disp_state}"})
 
+    if args.get("state"):
+        try:
+            query = issue_flow.filter_ticket_state(query, [args["state"]])
+        except issue_flow.IssueFlowError as err:
+            return json_response({"success": False, "error": str(err)})
+
     if args.get("issue_type"):
         query = query.filter(Issue.issue_type == args["issue_type"])
 
@@ -2994,6 +3031,7 @@ async def _list_issues(db, args: dict) -> list[TextContent]:
                     "type": i.issue_type.value if hasattr(i.issue_type, "value") else i.issue_type,
                     "status": i.status.value if hasattr(i.status, "value") else i.status,
                     "disp_state": i.disp_state,
+                    "ticket_state": i.ticket_state,
                     "containment": i.containment.value
                     if hasattr(i.containment, "value")
                     else i.containment,
@@ -3063,6 +3101,34 @@ async def _raise_issue(db, args: dict) -> list[TextContent]:
             "message": f"Raised {issue.issue_number} '{issue.title}'",
             "issue": _issue_summary(db, issue),
         }
+    )
+
+
+async def _advance_issue(db, args: dict) -> list[TextContent]:
+    """Ticket-state transition: start | review | return (sign-off is human-only)."""
+    user, err = _require_human_user(db, args)
+    if err:
+        return err
+    issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
+    if not issue:
+        return json_response({"success": False, "error": "Issue not found"})
+    action = args["action"]
+    try:
+        if action == "start":
+            issue_flow.start_work(db, issue, user.id)
+        elif action == "review":
+            issue_flow.request_review(db, issue, user.id)
+        elif action == "return":
+            issue_flow.return_from_review(db, issue, user.id, args.get("comment") or "")
+        else:
+            return json_response({"success": False, "error": f"Invalid action: {action}"})
+    except issue_flow.IssueFlowError as e:
+        return json_response({"success": False, "error": str(e)})
+    db.commit()
+    db.refresh(issue)
+    return json_response(
+        {"success": True, "message": f"{issue.issue_number} is {issue.ticket_state}"}
+        | _issue_summary(db, issue)
     )
 
 

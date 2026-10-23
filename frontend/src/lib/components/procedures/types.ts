@@ -184,7 +184,7 @@ export interface IssueRow {
 	issue_number: string | null;
 	title: string;
 	priority: string;
-	disp_state: string;
+	ticket_state: string;
 }
 
 export interface StepDiff {

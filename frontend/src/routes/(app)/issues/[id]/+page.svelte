@@ -29,7 +29,8 @@
 		ISSUE_TYPES,
 		PRIORITIES,
 		kb,
-		stateTone,
+		ticketLabel,
+		ticketTone,
 		type Attachment,
 		type Issue
 	} from '#lib/components/issues/issues.js';
@@ -65,18 +66,35 @@
 	const needsCorrective = $derived(
 		issue.issue_type === 'non_conformance' && !issue.corrective_action?.trim()
 	);
-	const canClose = $derived(!closed && (issue.dispositioned || !bearing) && !needsCorrective);
-	const closeBlock = $derived(
-		!issue.dispositioned && bearing
-			? `${issue.issue_number} is undispositioned`
-			: needsCorrective
-				? 'Corrective action is required to close'
-				: undefined
-	);
+	const ticket = $derived(issue.ticket_state);
+	// Work starts at the signed disposition for containment-bearing issues.
+	const startedAt = $derived(bearing ? issue.dispositioned_at : issue.work_started_at);
+	const startedBy = $derived(bearing ? issue.dispositioned_by_name : issue.work_started_by_name);
 
-	async function close() {
-		await act(() => patch({ status: 'closed' }));
+	const transition = (path: string, body?: unknown) =>
+		act(async () => {
+			await api.post(`/issues/${issue.id}/${path}`, body);
+			await refresh();
+		});
+
+	let returning = $state(false);
+	let returnComment = $state('');
+	let returnBusy = $state(false);
+	async function submitReturn() {
+		if (!returnComment.trim()) return;
+		returnBusy = true;
+		try {
+			await api.post(`/issues/${issue.id}/review/return`, { comment: returnComment.trim() });
+			returning = false;
+			returnComment = '';
+			await refresh();
+		} catch (e) {
+			toastError(e);
+		} finally {
+			returnBusy = false;
+		}
 	}
+
 	async function reopen() {
 		await act(() => patch({ status: 'open' }));
 	}
@@ -335,6 +353,14 @@
 	}
 </script>
 
+{#snippet stamp(by: string | null, at: string | null)}
+	{#if at}
+		{by ?? '—'} · <Timestamp value={at} />
+	{:else}
+		<span class="text-muted-foreground">—</span>
+	{/if}
+{/snippet}
+
 {#snippet textRow(
 	label: string,
 	field: keyof Issue,
@@ -363,24 +389,24 @@
 		</h1>
 	{/snippet}
 	{#snippet state()}
-		<State
-			value={issue.disp_state}
-			tone={stateTone(issue.disp_state)}
-			badge={issue.disp_state === 'undispositioned'}
-		/>
+		<State value={ticket} label={ticketLabel(ticket)} tone={ticketTone(ticket)} badge />
 	{/snippet}
 	{#snippet actions()}
 		<Button size="sm" variant="ghost" href={`/audit?entity=issue&record=${issue.id}`}>AUDIT</Button>
-		{#if closed}
+		{#if ticket === 'done'}
 			<Button size="sm" variant="outline" onclick={reopen}>REOPEN</Button>
-		{:else}
+		{:else if ticket === 'pending' && !bearing}
+			<Button size="sm" onclick={() => transition('start')}>START WORK</Button>
+		{:else if ticket === 'in_work'}
+			<Button size="sm" onclick={() => transition('review')}>SUBMIT FOR REVIEW</Button>
+		{:else if ticket === 'in_review'}
 			<Button
 				size="sm"
-				variant="outline"
-				disabled={!canClose}
-				title={canClose ? undefined : closeBlock}
-				onclick={close}>CLOSE</Button
+				disabled={needsCorrective}
+				title={needsCorrective ? 'Corrective action is required to sign off' : undefined}
+				onclick={() => transition('signoff')}>SIGN OFF</Button
 			>
+			<Button size="sm" variant="outline" onclick={() => (returning = true)}>RETURN</Button>
 		{/if}
 		<Button size="sm" variant="destructive" onclick={remove}>DELETE</Button>
 	{/snippet}
@@ -406,7 +432,7 @@
 				{#if typeFields.nc || typeFields.bug || issue.root_cause || issue.corrective_action}
 					{@render textRow('Root cause', 'root_cause')}
 					{@render textRow('Corrective action', 'corrective_action', {
-						hint: typeFields.nc && !closed ? 'required to close' : undefined
+						hint: typeFields.nc && !closed ? 'required for sign-off' : undefined
 					})}
 				{/if}
 			</DetailTable>
@@ -639,6 +665,15 @@
 				</DetailRow>
 				<DetailRow label="Raised by" value={issue.raised_by_name} />
 				<DetailRow label="Created"><Timestamp value={issue.created_at} /></DetailRow>
+				<DetailRow label="Work started">
+					{@render stamp(startedBy, startedAt)}
+				</DetailRow>
+				<DetailRow label="Review requested">
+					{@render stamp(issue.review_requested_by_name, issue.review_requested_at)}
+				</DetailRow>
+				<DetailRow label="Closed">
+					{@render stamp(issue.closed_by_name, issue.closed_at)}
+				</DetailRow>
 				<DetailRow label="Updated"><Timestamp value={issue.updated_at} /></DetailRow>
 			</DetailTable>
 		</Section>
@@ -857,6 +892,29 @@
 		</div>
 	</div>
 {/snippet}
+
+<Dialog.Root open={returning} onOpenChange={(v) => !v && (returning = false)}>
+	<Dialog.Content>
+		<Dialog.Header>
+			<Dialog.Title>Return {issue.issue_number} to work</Dialog.Title>
+			<Dialog.Description>The comment is recorded in the thread.</Dialog.Description>
+		</Dialog.Header>
+		<form
+			class="grid gap-1.5"
+			onsubmit={(e) => {
+				e.preventDefault();
+				submitReturn();
+			}}
+		>
+			<Label for="return-comment">Comment</Label>
+			<Textarea id="return-comment" bind:value={returnComment} rows={3} autofocus />
+			<Dialog.Footer class="mt-2">
+				<Button type="button" variant="outline" onclick={() => (returning = false)}>CANCEL</Button>
+				<Button type="submit" disabled={returnBusy || !returnComment.trim()}>RETURN</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
 
 <Dialog.Root open={noteFor !== null} onOpenChange={(v) => !v && (noteFor = null)}>
 	<Dialog.Content>

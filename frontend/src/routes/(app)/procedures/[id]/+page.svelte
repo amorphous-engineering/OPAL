@@ -17,6 +17,7 @@
 		toastError
 	} from '#lib/components/opal/index.js';
 	import type { Column } from '#lib/components/opal/index.js';
+	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import CloneDialog from '#lib/components/procedures/CloneDialog.svelte';
 	import DetailsDialog from '#lib/components/procedures/DetailsDialog.svelte';
@@ -117,7 +118,7 @@
 		{ key: 'issue_number', label: 'Issue', width: '8rem', mono: true },
 		{ key: 'title', label: 'Title' },
 		{ key: 'priority', label: 'Priority', width: '6rem' },
-		{ key: 'disp_state', label: 'Disposition', width: '9rem' }
+		{ key: 'ticket_state', label: 'State', width: '9rem' }
 	];
 </script>
 
@@ -290,8 +291,12 @@
 						>
 					{:else if col.key === 'priority'}
 						<State value={r.priority} />
-					{:else if col.key === 'disp_state'}
-						<State value={r.disp_state} />
+					{:else if col.key === 'ticket_state'}
+						<State
+							value={r.ticket_state}
+							label={ticketLabel(r.ticket_state)}
+							tone={ticketTone(r.ticket_state)}
+						/>
 					{:else}
 						{(r as unknown as Record<string, unknown>)[col.key]}
 					{/if}

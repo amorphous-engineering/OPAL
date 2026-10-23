@@ -14,7 +14,7 @@ from sqlalchemy import and_, case, or_
 from sqlalchemy.orm import joinedload
 
 from opal.api.deps import CurrentUserId, DbSession
-from opal.core import notifications
+from opal.core import issue_flow, notifications
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.designators import generate_issue_number
 from opal.core.events import emit_issue_dispositioned
@@ -97,6 +97,16 @@ class IssueResponse(BaseModel):
     containment_step_id: int | None = None
     disp_state: str
     dispositioned: bool
+    ticket_state: str
+    work_started_at: datetime | None = None
+    work_started_by_id: int | None = None
+    work_started_by_name: str | None = None
+    review_requested_at: datetime | None = None
+    review_requested_by_id: int | None = None
+    review_requested_by_name: str | None = None
+    closed_at: datetime | None = None
+    closed_by_id: int | None = None
+    closed_by_name: str | None = None
     part_id: int | None = None
     procedure_id: int | None = None
     procedure_instance_id: int | None = None
@@ -289,6 +299,18 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
         containment_step_id=issue.containment_step_id,
         disp_state=issue.disp_state,
         dispositioned=issue.dispositioned,
+        ticket_state=issue.ticket_state,
+        work_started_at=issue.work_started_at,
+        work_started_by_id=issue.work_started_by_id,
+        work_started_by_name=issue.work_started_by.name if issue.work_started_by else None,
+        review_requested_at=issue.review_requested_at,
+        review_requested_by_id=issue.review_requested_by_id,
+        review_requested_by_name=(
+            issue.review_requested_by.name if issue.review_requested_by else None
+        ),
+        closed_at=issue.closed_at,
+        closed_by_id=issue.closed_by_id,
+        closed_by_name=issue.closed_by.name if issue.closed_by else None,
         part_id=issue.part_id,
         procedure_id=issue.procedure_id,
         procedure_instance_id=issue.procedure_instance_id,
@@ -421,6 +443,9 @@ def list_issues(
     issue_type: str | None = Query(None),
     status: str | None = Query(None),
     disp_state: str | None = Query(None),
+    state: list[str] | None = Query(
+        None, description="Ticket state(s): pending|in_work|in_review|done; repeat or comma-list"
+    ),
     priority: str | None = Query(None),
     assigned_to_id: int | None = Query(None),
     part_id: int | None = Query(None),
@@ -449,6 +474,11 @@ def list_issues(
         query = query.filter(Issue.status == status)
     if disp_state:
         query = _filter_disp_state(query, disp_state)
+    if state:
+        try:
+            query = issue_flow.filter_ticket_state(query, state)
+        except issue_flow.IssueFlowError as err:
+            raise HTTPException(status_code=400, detail=str(err)) from err
     if priority:
         query = query.filter(Issue.priority == priority)
     if part_id:
@@ -724,6 +754,13 @@ def update_issue(
             raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
         if new_status == IssueStatus.CLOSED:
             _validate_close(issue, data)
+            if previous_status != IssueStatus.CLOSED.value:
+                issue.closed_at = datetime.now(UTC)
+                issue.closed_by_id = user_id
+        elif previous_status == IssueStatus.CLOSED.value:
+            # Reopen: clear the stamps so the state re-derives.
+            issue.closed_at = issue.closed_by_id = None
+            issue.review_requested_at = issue.review_requested_by_id = None
         issue.status = new_status
     if data.priority is not None:
         try:
@@ -805,6 +842,69 @@ def update_issue(
     return _issue_to_response(issue)
 
 
+def _load_issue(db, issue_id: int) -> Issue:
+    issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return issue
+
+
+def _flow(db, issue_id: int, user_id: int, step) -> IssueResponse:
+    """Run one ticket-state transition and answer with the issue."""
+    issue = _load_issue(db, issue_id)
+    try:
+        step(issue)
+    except issue_flow.IssueFlowError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    db.commit()
+    db.refresh(issue)
+    return _issue_to_response(issue)
+
+
+@router.post("/{issue_id}/start", response_model=IssueResponse)
+def start_work(issue_id: int, db: DbSession, user_id: CurrentUserId) -> IssueResponse:
+    """Advisory issue: pending → in work. Containment-bearing issues enter
+    work by signing the disposition."""
+    return _flow(db, issue_id, user_id, lambda i: issue_flow.start_work(db, i, user_id))
+
+
+@router.post("/{issue_id}/review", response_model=IssueResponse)
+def request_review(issue_id: int, db: DbSession, user_id: CurrentUserId) -> IssueResponse:
+    """In work → in review."""
+    return _flow(db, issue_id, user_id, lambda i: issue_flow.request_review(db, i, user_id))
+
+
+class ReviewReturn(BaseModel):
+    """Return an issue from review to work."""
+
+    comment: str = Field(..., min_length=1)
+
+
+@router.post("/{issue_id}/review/return", response_model=IssueResponse)
+def return_from_review(
+    issue_id: int, data: ReviewReturn, db: DbSession, user_id: CurrentUserId
+) -> IssueResponse:
+    """In review → in work. The comment is stored as an issue comment."""
+
+    def step(issue: Issue) -> None:
+        note = issue_flow.return_from_review(db, issue, user_id, data.comment)
+        notifications.issue_commented(db, issue, note.body, user_id)
+
+    return _flow(db, issue_id, user_id, step)
+
+
+@router.post("/{issue_id}/signoff", response_model=IssueResponse)
+def sign_off(issue_id: int, db: DbSession, user_id: CurrentUserId) -> IssueResponse:
+    """In review → done: closes the issue under the same rules as closing."""
+
+    def step(issue: Issue) -> None:
+        was_blocking = notifications.has_blocker(db, issue.procedure_instance_id)
+        issue_flow.sign_off(db, issue, user_id)
+        issue_flow.after_close(db, issue, was_blocking, user_id)
+
+    return _flow(db, issue_id, user_id, step)
+
+
 def _relink_instance(db, issue: Issue, new_instance_id: int | None) -> None:
     """Point the issue at another work order, or detach it.
 
@@ -837,25 +937,10 @@ def _relink_instance(db, issue: Issue, new_instance_id: int | None) -> None:
 
 
 def _validate_close(issue: Issue, data: IssueUpdate | None = None) -> None:
-    """Closing an undispositioned containment-bearing issue is impossible —
-    disposition first, always. Advisory issues close freely. NC-type issues
-    additionally require corrective action text (type-based, any containment)."""
-    if issue.containment_bearing and not issue.dispositioned:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{issue.issue_number} is undispositioned; sign a disposition before closing",
-        )
-    issue_type = _get_enum_val(issue, "issue_type")
-    if issue_type == IssueType.NON_CONFORMANCE.value:
-        corrective = issue.corrective_action
-        if data is not None and data.corrective_action is not None:
-            corrective = data.corrective_action
-        if not (corrective or "").strip():
-            raise HTTPException(
-                status_code=400,
-                detail=f"{issue.issue_number} is a non-conformance; "
-                "corrective action is required to close",
-            )
+    try:
+        issue_flow.validate_close(issue, data.corrective_action if data else None)
+    except issue_flow.IssueFlowError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
 
 
 @router.post("/{issue_id}/disposition", response_model=IssueResponse)

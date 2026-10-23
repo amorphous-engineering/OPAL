@@ -1377,6 +1377,10 @@ def _seed_issues(
         "material; document-only error.",
         dispositioned_at=now - timedelta(days=28),
         dispositioned_by_id=build.id,
+        review_requested_at=now - timedelta(days=27),
+        review_requested_by_id=qa.id,
+        closed_at=now - timedelta(days=26),
+        closed_by_id=build.id,
         created_at=now - timedelta(days=29),
     )
     db.add(screws)

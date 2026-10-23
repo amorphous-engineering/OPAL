@@ -71,6 +71,7 @@ def _issue_row(i: Issue, step_numbers: dict[int, str]) -> dict[str, Any]:
         "priority": enum_value(i.priority),
         "status": enum_value(i.status),
         "state": i.disp_state,
+        "ticket_state": i.ticket_state,
         "containment": enum_value(i.containment),
         "disposition_type": enum_value(i.disposition_type),
         "is_blocking": i.is_blocking,
@@ -86,6 +87,7 @@ def _hold_entry(i: Issue, kind: str) -> dict[str, Any]:
         "title": i.title,
         "kind": kind,
         "disposition_state": i.disp_state,
+        "ticket_state": i.ticket_state,
     }
 
 
@@ -200,6 +202,7 @@ def build_execution_document(
                     "issue_id": iss.id,
                     "issue_number": iss.issue_number,
                     "state": iss.disp_state,
+                    "ticket_state": iss.ticket_state,
                     "disposition_type": enum_value(iss.disposition_type),
                 }
             )
