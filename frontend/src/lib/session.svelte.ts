@@ -6,6 +6,8 @@ export interface CurrentUser {
 	username: string;
 	name: string;
 	email: string | null;
+	avatar_url?: string | null;
+	job_title?: string | null;
 	is_admin: boolean;
 	needs_onboarding: boolean;
 	needs_profile_setup: boolean;
