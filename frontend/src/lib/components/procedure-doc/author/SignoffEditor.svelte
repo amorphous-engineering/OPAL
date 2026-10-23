@@ -3,31 +3,28 @@
 	// (label | role | signature | action), with label and role as inputs, a remove
 	// X per row, and + SIGN-OFF. A leaf step keeps at least one row; an OP with
 	// sub-steps may have none. Saves go through the authoring store.
-	import { EmptyLine } from '#lib/components/opal/index.js';
+	import { EmptyLine, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import { roleNames } from '#lib/components/users/roles.js';
 	import { useDoc } from '../controller.js';
 	import type { DocOp, DocStep, SignoffDef } from '../types.js';
 
 	let { step, op }: { step: DocStep; op: DocOp } = $props();
 	const au = useDoc().author!;
-	const pid = $derived(`so-${step.order}`);
 
 	const rows = $derived(step.signoff_defs ?? []);
 	const mayBeEmpty = $derived(op.step === step && op.steps.length > 0);
-	const roles = $derived(
-		[
-			...new Set(
-				au
-					.ops()
-					.flatMap((o) => [
-						...(o.step.signoff_defs ?? []).map((d) => d.role),
-						...o.steps.flatMap((s) => (s.signoff_defs ?? []).map((d) => d.role))
-					])
-					.filter((r): r is string => !!r)
-			)
-		].sort()
-	);
+	let known = $state<string[]>([]);
+	$effect(() => {
+		roleNames()
+			.then((n) => (known = n))
+			.catch(toastError);
+	});
+	/** Roles to offer, plus the row's own role when it no longer exists. */
+	const optionsFor = (role: string | null) =>
+		role && !known.some((n) => n.toLowerCase() === role.toLowerCase()) ? [role] : [];
 
 	const save = (next: SignoffDef[]) => au.edit(step, { signoffs: next });
 	const patch = (i: number, p: Partial<SignoffDef>) =>
@@ -66,17 +63,22 @@
 							/>
 						</td>
 						<td class="w-36 px-2 py-1">
-							<Input
+							<NativeSelect
 								aria-label={`Sign-off ${i + 1} role`}
-								list={`${pid}-roles`}
-								maxlength={50}
-								placeholder="ROLE"
-								class="h-7 font-mono uppercase"
-								value={s.role ?? ''}
+								size="sm"
+								class="w-full"
+								value={known.find((n) => n.toLowerCase() === s.role?.toLowerCase()) ?? s.role ?? ''}
 								onkeydown={(e) => e.stopPropagation()}
-								oninput={(e) =>
-									patch(i, { role: e.currentTarget.value.trim() ? e.currentTarget.value : null })}
-							/>
+								onchange={(e) => patch(i, { role: e.currentTarget.value || null })}
+							>
+								<NativeSelectOption value="">—</NativeSelectOption>
+								{#each known as n (n)}
+									<NativeSelectOption value={n}>{n}</NativeSelectOption>
+								{/each}
+								{#each optionsFor(s.role) as n (n)}
+									<NativeSelectOption value={n}>{n} (no such role)</NativeSelectOption>
+								{/each}
+							</NativeSelect>
 						</td>
 						<td class="px-3 py-1 text-muted-foreground">–</td>
 						<td class="w-20 px-2 py-1 text-right">
@@ -94,9 +96,6 @@
 				{/each}
 			</tbody>
 		</table>
-		<datalist id={`${pid}-roles`}
-			>{#each roles as r (r)}<option value={r}></option>{/each}</datalist
-		>
 		<button
 			type="button"
 			class="mt-1 font-mono text-xs font-medium text-info hover:underline"

@@ -21,6 +21,8 @@
 	import ProfileSection from '#lib/components/users/ProfileSection.svelte';
 	import SessionsSection from '#lib/components/users/SessionsSection.svelte';
 	import TokensSection from '#lib/components/users/TokensSection.svelte';
+	import RolesSection from '#lib/components/users/RolesSection.svelte';
+	import type { RoleRef } from '#lib/components/users/roles.js';
 	import type { UserRecord } from '#lib/components/users/types.js';
 	import type { PageProps } from './$types';
 
@@ -169,6 +171,7 @@
 				refreshAll();
 			}}
 		/>
+		<RolesSection userId={profile.id} roles={(profile as { roles?: RoleRef[] }).roles} {isAdmin} />
 		{#if needsClaim}
 			{#key profile.id}
 				<ClaimSection userId={profile.id} {autoIssue} />
