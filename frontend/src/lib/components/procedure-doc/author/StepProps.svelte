@@ -95,7 +95,7 @@
 					aria-pressed={waits.has(o.order)}
 					title={o.title}
 					class={cn(
-						'inline-flex h-6 items-center border px-2 font-mono text-xs',
+						'inline-flex h-6 items-center rounded-md border px-2 font-mono text-xs',
 						waits.has(o.order)
 							? 'border-primary bg-primary text-primary-foreground'
 							: 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'

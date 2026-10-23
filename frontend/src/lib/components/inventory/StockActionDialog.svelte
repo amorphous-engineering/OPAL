@@ -265,7 +265,7 @@
 			{#if error}
 				<p
 					role="alert"
-					class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 				>
 					{error}
 				</p>

@@ -40,7 +40,10 @@
 
 <div class="grid grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[minmax(0,48rem)_20rem]">
 	{#if data.error}
-		<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
+		<p
+			role="alert"
+			class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+		>
 			{data.error}
 		</p>
 	{:else if m}
@@ -87,7 +90,7 @@
 											{#if res}
 												<a
 													href={live(`residual_probability=${p}&residual_impact=${i}`)}
-													class="border border-foreground/50 px-1 font-mono text-xs leading-4 hover:bg-background/60"
+													class="rounded-sm border border-foreground/50 px-1 font-mono text-xs leading-4 hover:bg-background/60"
 													>{res}</a
 												>
 											{/if}
@@ -101,7 +104,8 @@
 				<p class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
 					{#each SEVERITIES as s (s.value)}
 						<span class="flex items-center gap-1.5">
-							<span class={cn('inline-block size-3 border border-border', cellTone[s.value])}
+							<span
+								class={cn('inline-block size-3 rounded-sm border border-border', cellTone[s.value])}
 							></span>
 							{s.label}
 						</span>

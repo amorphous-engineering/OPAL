@@ -194,7 +194,10 @@
 
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		{#if previewError}
-			<p role="alert" class="border border-error/40 bg-error-muted px-3 py-2 text-xs text-error">
+			<p
+				role="alert"
+				class="rounded-md border border-error/40 bg-error-muted px-3 py-2 text-xs text-error"
+			>
 				{previewError}
 			</p>
 		{:else if !preview}

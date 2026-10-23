@@ -73,7 +73,7 @@
 
 {#if op.is_ad_hoc && op.redline}
 	<a
-		class="mb-px flex h-7 items-center gap-2 border border-warn/50 bg-warn-muted px-3 font-mono text-xs text-warn hover:underline"
+		class="mb-px flex h-7 items-center gap-2 rounded-md border border-warn/50 bg-warn-muted px-3 font-mono text-xs text-warn hover:underline"
 		href={`/issues/${op.redline.issue_id}`}
 		title="Open the authorizing NC">REDLINE · {op.redline.issue_number} · {op.redline.title}</a
 	>
@@ -84,7 +84,7 @@
 	data-op-order={op.order}
 	data-op-status={op.status}
 	class={cn(
-		'border border-border bg-card',
+		'overflow-hidden rounded-lg border border-border bg-card',
 		op.is_contingency && 'border-dashed',
 		op.is_ad_hoc && 'border-warn/50',
 		current && 'shadow-[inset_2px_0_0_var(--info)]'
@@ -136,13 +136,13 @@
 		{/if}
 		{#if op.is_contingency}
 			<span
-				class="inline-flex h-5 items-center border border-warn/50 px-1.5 font-mono text-xs font-medium text-warn"
+				class="inline-flex h-5 items-center rounded-md border border-warn/50 px-1.5 font-mono text-xs font-medium text-warn"
 				>CONTINGENCY</span
 			>
 		{/if}
 		{#if op.strict_sequence}
 			<span
-				class="inline-flex h-5 items-center border border-border px-1.5 font-mono text-xs font-medium text-muted-foreground"
+				class="inline-flex h-5 items-center rounded-md border border-border px-1.5 font-mono text-xs font-medium text-muted-foreground"
 				title="Sub-steps complete in order">SEQ</span
 			>
 		{/if}

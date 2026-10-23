@@ -78,7 +78,7 @@
 	}
 
 	const tool =
-		'inline-flex h-6 min-w-6 cursor-pointer items-center justify-center border border-border bg-background px-1.5 font-mono text-xs select-none hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring';
+		'inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border border-border bg-background px-1.5 font-mono text-xs select-none hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring';
 </script>
 
 <Dialog.Root
@@ -152,7 +152,9 @@
 				}}
 			/>
 			{#if files.length}
-				<ul class="grid grid-cols-1 border border-border font-mono text-xs">
+				<ul
+					class="grid grid-cols-1 overflow-hidden rounded-lg border border-border font-mono text-xs"
+				>
 					{#each files as f, i (f.name + i)}
 						<li class="flex items-center gap-2 border-b border-border px-2 py-1 last:border-b-0">
 							<span class="min-w-0 flex-1 truncate">{f.name}</span>

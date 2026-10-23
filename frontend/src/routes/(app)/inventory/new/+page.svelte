@@ -166,7 +166,7 @@
 			</DataTable>
 		</Section>
 	{:else}
-		<form onsubmit={submit} class="border border-border bg-card">
+		<form onsubmit={submit} class="rounded-lg border border-border bg-card">
 			<DetailTable>
 				<DetailRow label="Part *">
 					{#if part}
@@ -190,7 +190,9 @@
 								oninput={onSearch}
 							/>
 							{#if results.length}
-								<ul class="absolute z-20 mt-0.5 w-full border border-border bg-popover">
+								<ul
+									class="absolute z-20 mt-0.5 w-full overflow-hidden rounded-md border border-border bg-popover"
+								>
 									{#each results as p (p.id)}
 										<li>
 											<button
@@ -264,7 +266,7 @@
 			{#if error}
 				<p
 					role="alert"
-					class="mx-3 mb-3 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+					class="mx-3 mb-3 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 				>
 					{error}
 				</p>

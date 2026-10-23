@@ -49,7 +49,10 @@
 <h1 class="mb-4 text-lg font-semibold">Set password</h1>
 
 {#if invalid}
-	<p role="alert" class="mb-3 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
+	<p
+		role="alert"
+		class="mb-3 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+	>
 		This link is invalid or has expired.
 	</p>
 	<Button variant="outline" href="/login">SIGN IN</Button>
@@ -57,7 +60,7 @@
 	{#if error}
 		<p
 			role="alert"
-			class="mb-3 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+			class="mb-3 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 		>
 			{error}
 		</p>

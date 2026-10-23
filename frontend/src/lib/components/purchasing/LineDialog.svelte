@@ -84,7 +84,7 @@
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="line-part">Part</Label>
 				{#if line}
-					<div class="flex h-8 items-center gap-2 border border-border px-2.5 text-xs">
+					<div class="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-xs">
 						<span class="font-mono text-info">{line.part_internal_pn ?? '—'}</span>
 						<span class="truncate">{line.part_name}</span>
 					</div>
@@ -141,7 +141,7 @@
 			{#if error}
 				<p
 					role="alert"
-					class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 				>
 					{error}
 				</p>

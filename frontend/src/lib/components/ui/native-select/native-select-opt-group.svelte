@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { cn, type WithElementRef } from '#lib/utils.js';
-	import type { HTMLOptgroupAttributes } from 'svelte/elements';
+	import { cn, type WithElementRef } from "#lib/utils.js";
+	import type { HTMLOptgroupAttributes } from "svelte/elements";
 
 	let {
 		ref = $bindable(null),
@@ -13,7 +13,7 @@
 <optgroup
 	bind:this={ref}
 	data-slot="native-select-optgroup"
-	class={cn('bg-[Canvas] text-[CanvasText]', className)}
+	class={cn("bg-[Canvas] text-[CanvasText]", className)}
 	{...restProps}
 >
 	{@render children?.()}

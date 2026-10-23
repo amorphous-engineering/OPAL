@@ -81,7 +81,10 @@
 <h1 class="mb-4 text-lg font-semibold">Sign in</h1>
 
 {#if error}
-	<p role="alert" class="mb-3 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
+	<p
+		role="alert"
+		class="mb-3 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+	>
 		{error}
 	</p>
 {/if}

@@ -154,7 +154,7 @@
 	{#if data.error}
 		<p
 			role="alert"
-			class="m-2 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+			class="m-2 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 		>
 			{data.error}
 		</p>

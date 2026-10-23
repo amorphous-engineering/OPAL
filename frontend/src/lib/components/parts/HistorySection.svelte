@@ -48,7 +48,7 @@
 </script>
 
 {#if !loaded}
-	<div class="h-8 animate-pulse border border-border bg-muted/40"></div>
+	<div class="h-8 animate-pulse rounded-lg border border-border bg-muted/40"></div>
 {:else if items.length}
 	<Section title="History" count={total > items.length ? `${items.length} of ${total}` : total}>
 		{#snippet actions()}

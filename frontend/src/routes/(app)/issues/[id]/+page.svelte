@@ -872,7 +872,7 @@
 		{:else}
 			<div>
 				<EmptyLine label="Risks" onadd={() => (linkingRisk = !linkingRisk)} addLabel="+ LINK" />
-				{#if linkingRisk}<div class="border border-t-0 border-border bg-card">
+				{#if linkingRisk}<div class="rounded-b-lg border border-t-0 border-border bg-card">
 						{@render riskPicker()}
 					</div>{/if}
 			</div>

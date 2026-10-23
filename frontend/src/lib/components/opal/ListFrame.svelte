@@ -9,5 +9,5 @@
 </script>
 
 <div class="p-4">
-	<div class="border border-border bg-card">{@render children()}</div>
+	<div class="overflow-hidden rounded-lg border border-border bg-card">{@render children()}</div>
 </div>

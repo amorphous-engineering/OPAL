@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **OPAL (Operations, Procedures, Assets, Logistics)** is a local-first ERP system for small teams and hardware projects. Single SQLite database, runs on one machine, accessible over local network. No cloud dependencies.
 
-- **Stack**: Python 3.11+, FastAPI, SQLAlchemy 2.0+, Alembic, SQLite. Web client: SvelteKit 3 (Svelte 5 runes, single-page app) + [shadcn-svelte](https://shadcn-svelte.com) (Lyra style) + Tailwind 4, in `frontend/`
+- **Stack**: Python 3.11+, FastAPI, SQLAlchemy 2.0+, Alembic, SQLite. Web client: SvelteKit 3 (Svelte 5 runes, single-page app) + [shadcn-svelte](https://shadcn-svelte.com) (Mira style) + Tailwind 4, in `frontend/`
 - **Package managers**: [uv](https://astral.sh/uv) (Python), pnpm (web client)
 
 ## Commands
@@ -56,9 +56,9 @@ uv run pyinstaller opal.spec                         # Output: dist/opal
 - SvelteKit 3, `ssr = false` (pure SPA), adapter-static writing to `../src/opal/web_client`. Vite proxies `/api` and `/oidc` to the API in dev (`changeOrigin: false` so the CSRF Origin check passes).
 - Imports use Node subpath aliases **with explicit extensions**: `#lib/api.js`, `#lib/components/opal/index.js`, `#lib/components/ui/button/index.js`. Extensionless `#lib/...` does not resolve.
 - `src/lib/api.ts` — the one API client (`api.get/post/...`; `api.using(fetch)` in `load`); 401 → `/login?next=`. `session.svelte.ts` — signed-in user. `format.ts` — ISO timestamps, quantities, state labels. `markdown.ts` — the only way to render authored markdown (`{@html markdown(x)}`, DOMPurify; enforced by `tests/unit/test_web_client_safety.py`).
-- `src/lib/components/ui/` — vendored shadcn-svelte (Lyra) primitives; don't hand-edit or reformat. `src/lib/components/opal/` — OPAL's grammar: `PageHeader`, `Section`, `DataTable`, `DetailTable`/`DetailRow`, `EmptyLine`, `State`, `Timestamp`, `confirm()`, `toast`. `src/lib/components/procedure-doc/` — the procedure document (OP cards, step rows, step bodies) shared by execution (`mode: 'execute'`), authoring (`'author'`) and published snapshots (`'readonly'`).
+- `src/lib/components/ui/` — vendored shadcn-svelte (Mira) primitives; don't hand-edit or reformat. `src/lib/components/opal/` — OPAL's grammar: `PageHeader`, `Section`, `DataTable`, `DetailTable`/`DetailRow`, `EmptyLine`, `State`, `Timestamp`, `confirm()`, `toast`. `src/lib/components/procedure-doc/` — the procedure document (OP cards, step rows, step bodies) shared by execution (`mode: 'execute'`), authoring (`'author'`) and published snapshots (`'readonly'`).
 - Routes: `(public)` sign-in pages, `(app)` the signed-in shell, `(print)`/`(report)` printable pages without the shell. URL scheme matches the API's entity hrefs (`/parts/12`, `/executions/3`, …). List filters and sort live in the query string.
-- Design tokens (light/dark, `ok`/`warn`/`error`/`info` state colours, no radii) are in `src/routes/layout.css`.
+- Design tokens (light/dark, `ok`/`warn`/`error`/`info` state colours, one radius scale) are in `src/routes/layout.css`.
 
 ### Code organization
 - `src/opal/api/routes/` — FastAPI JSON API endpoints
@@ -116,7 +116,7 @@ a fresh install is always admin regardless, so an operator cannot lock themselve
 
 ## UI/UX Philosophy (US Graphics Style)
 
-Dense, explicit, functional. Expose state and inner workings. Data tables over cards. Monospace for data-heavy areas (part numbers, IDs, timestamps). No rounded corners, shadows, or gradients. No progressive disclosure — show all relevant information. High-contrast functional color palette (green=good, yellow=warning, red=error).
+Dense, explicit, functional. Expose state and inner workings. Data tables over cards. Monospace for data-heavy areas (part numbers, IDs, timestamps). Small, consistent corner radii (shadcn Mira); no shadows or gradients. No progressive disclosure — show all relevant information. High-contrast functional color palette (green=good, yellow=warning, red=error).
 
 **One fact, one home.** Every other appearance is a live reference, never a copy. Test: if updating something requires touching two places, the design is wrong — delete one occurrence or derive it. PRs that violate this must argue against it by name.
 

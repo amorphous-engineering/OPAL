@@ -108,7 +108,7 @@
 						data-pswp
 						href={attachmentUrl(a.id)}
 						data-pswp-caption={a.note ?? a.filename}
-						class="shrink-0 border border-border"
+						class="shrink-0 rounded-md border border-border"
 						aria-label={`Enlarge ${a.filename}`}
 					>
 						<img

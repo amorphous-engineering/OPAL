@@ -197,7 +197,7 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<div
 		class={[
-			'border border-border bg-card px-3 py-2 text-sm',
+			'rounded-lg border border-border bg-card px-3 py-2 text-sm',
 			!risk.statement && 'font-mono text-xs text-muted-foreground'
 		]}
 	>

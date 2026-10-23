@@ -72,7 +72,7 @@
 		{id}
 		type="button"
 		class={cn(
-			'flex h-8 w-full min-w-0 items-center gap-2 border border-input bg-transparent px-2.5 text-left text-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30',
+			'flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 text-left text-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30',
 			className
 		)}
 	>

@@ -9,7 +9,7 @@
 	<div
 		role="note"
 		aria-label="Caution"
-		class="grid grid-cols-1 gap-1 border border-l-[3px] border-error/40 border-l-error bg-card px-4 py-3"
+		class="grid grid-cols-1 gap-1 rounded-lg border border-l-[3px] border-error/40 border-l-error bg-card px-4 py-3"
 	>
 		<div class="font-mono text-sm font-semibold tracking-wider text-error uppercase">Caution</div>
 		<div class="text-sm leading-relaxed whitespace-pre-wrap text-foreground">{text}</div>

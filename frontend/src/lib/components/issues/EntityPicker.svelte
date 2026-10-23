@@ -109,7 +109,7 @@
 	{#if open}
 		<ul
 			role="listbox"
-			class="absolute top-full left-0 z-40 mt-px max-h-60 w-full min-w-64 overflow-y-auto border border-border bg-popover text-xs shadow-none"
+			class="absolute top-full left-0 z-40 mt-px max-h-60 w-full min-w-64 overflow-y-auto rounded-md border border-border bg-popover text-xs shadow-none"
 		>
 			{#each results as r, i (r.id)}
 				<li

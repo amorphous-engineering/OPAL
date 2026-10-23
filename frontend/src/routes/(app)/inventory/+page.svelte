@@ -83,7 +83,9 @@
 		<SearchInput label="Search stock" placeholder="OPAL number, part, lot, location" />
 
 		{#if data.partId}
-			<span class="flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs">
+			<span
+				class="flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs"
+			>
 				<span class="text-muted-foreground uppercase">Part</span>
 				{data.records[0]?.part_internal_pn ?? data.parts[0]?.internal_pn ?? 'selected'}
 				<button
@@ -163,7 +165,7 @@
 	{#if data.error}
 		<p
 			role="alert"
-			class="m-4 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+			class="m-4 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 		>
 			{data.error}
 		</p>

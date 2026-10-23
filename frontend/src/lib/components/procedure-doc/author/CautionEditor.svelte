@@ -12,7 +12,7 @@
 <div
 	role="note"
 	class={cn(
-		'border px-3 py-2 text-xs',
+		'rounded-lg border px-3 py-2 text-xs',
 		step.caution ? 'border-error/50 bg-error-muted' : 'border-border bg-muted/30'
 	)}
 >

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Menubar as MenubarPrimitive } from 'bits-ui';
+	import { Menubar as MenubarPrimitive } from "bits-ui";
 	import CaretRightIcon from 'phosphor-svelte/lib/CaretRight';
-	import { cn, type WithoutChild } from '#lib/utils.js';
+	import { cn, type WithoutChild } from "#lib/utils.js";
 
 	let {
 		ref = $bindable(null),
@@ -19,7 +19,7 @@
 	data-slot="menubar-sub-trigger"
 	data-inset={inset}
 	class={cn(
-		"flex cursor-default items-center gap-2 rounded-none px-2 py-2 text-xs outline-none select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-8 data-open:bg-accent data-open:text-accent-foreground [&_svg:not([class*='size-'])]:size-4",
+		"focus:bg-accent focus:text-accent-foreground data-open:bg-accent data-open:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground min-h-7 gap-2 rounded-md px-2 py-1 text-xs data-inset:pl-7.5 [&_svg:not([class*='size-'])]:size-3.5 flex cursor-default items-center outline-none select-none",
 		className
 	)}
 	{...restProps}

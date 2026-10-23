@@ -12,7 +12,7 @@
 	type="text"
 	data-title-input={step.order}
 	class={cn(
-		'min-w-0 flex-1 rounded-none border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-border focus:border-ring focus:bg-background focus:outline-none',
+		'min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-border focus:border-ring focus:bg-background focus:outline-none',
 		!step.title.trim() && 'border-error/60',
 		className
 	)}

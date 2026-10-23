@@ -213,7 +213,7 @@
 	{#snippet actions()}
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger
-				class="inline-flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
+				class="inline-flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
 			>
 				+ New
 			</DropdownMenu.Trigger>
@@ -232,7 +232,7 @@
 
 <div class="space-y-4 p-4">
 	<div
-		class="grid grid-cols-2 border border-border bg-card sm:grid-cols-4 xl:grid-cols-7"
+		class="grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-4 xl:grid-cols-7"
 		aria-label="Attention summary"
 	>
 		{#each stats as s (s.label)}

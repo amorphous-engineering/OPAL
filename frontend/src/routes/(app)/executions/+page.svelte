@@ -72,7 +72,7 @@
 				<button
 					type="button"
 					class={cn(
-						'-ml-px inline-flex h-7 items-center gap-1.5 border border-border px-2.5 font-mono text-xs font-medium tracking-wider uppercase first:ml-0 hover:bg-accent',
+						'-ml-px inline-flex h-7 items-center gap-1.5 border border-border px-2.5 font-mono text-xs font-medium tracking-wider uppercase first:ml-0 first:rounded-l-md last:rounded-r-md hover:bg-accent',
 						status === c.id && 'bg-primary text-primary-foreground hover:bg-primary'
 					)}
 					aria-pressed={status === c.id}

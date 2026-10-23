@@ -95,7 +95,7 @@
 {#if isDraft}
 	<div
 		role="status"
-		class="mx-4 mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border border-warn/50 bg-warn-muted px-3 py-2"
+		class="mx-4 mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-warn/50 bg-warn-muted px-3 py-2"
 	>
 		<State value="draft" tone="warn" badge />
 		<dl

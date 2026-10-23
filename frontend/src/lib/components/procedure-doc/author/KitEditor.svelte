@@ -137,7 +137,10 @@
 		</table>
 	{/if}
 	{#if adding}
-		<form class="grid grid-cols-1 gap-2 border border-border bg-muted/30 p-2" onsubmit={add}>
+		<form
+			class="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/30 p-2"
+			onsubmit={add}
+		>
 			{#if chosen}
 				<div class="flex flex-wrap items-center gap-2 text-xs">
 					<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
@@ -185,7 +188,9 @@
 						>CANCEL</Button
 					>
 				</div>
-				<ul class="m-0 max-h-48 list-none overflow-y-auto border border-border bg-background p-0">
+				<ul
+					class="m-0 max-h-48 list-none overflow-y-auto rounded-md border border-border bg-background p-0"
+				>
 					{#each hits as p (p.id)}
 						<li class="border-b border-border last:border-b-0">
 							<button

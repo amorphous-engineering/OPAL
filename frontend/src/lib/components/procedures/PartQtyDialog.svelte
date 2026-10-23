@@ -87,7 +87,7 @@
 			{#if chosen}
 				<div class="grid grid-cols-1 gap-1.5">
 					<span class="label">Part</span>
-					<div class="flex items-center gap-2 border border-border px-2 py-1.5 text-xs">
+					<div class="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
 						<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
 						<span class="truncate">{chosen.name}</span>
 						<button
@@ -120,7 +120,10 @@
 						oninput={onInput}
 					/>
 				</div>
-				<ul class="max-h-56 overflow-y-auto border border-border" aria-label="Matching parts">
+				<ul
+					class="max-h-56 overflow-y-auto rounded-md border border-border"
+					aria-label="Matching parts"
+				>
 					{#each hits as p (p.id)}
 						<li class="border-b border-border last:border-b-0">
 							<button

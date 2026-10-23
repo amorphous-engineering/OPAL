@@ -53,7 +53,7 @@
 
 <section aria-label="Operations" data-editor>
 	<header
-		class="sticky top-12 z-10 flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1 border border-border bg-muted px-3 py-1"
+		class="sticky top-12 z-10 flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-muted px-3 py-1"
 	>
 		<h2 class="label text-foreground">Operations</h2>
 		<span class="font-mono text-xs text-muted-foreground"
@@ -107,7 +107,7 @@
 
 	{#if store.stale}
 		<div
-			class="flex items-center gap-3 border border-t-0 border-warn/50 bg-warn-muted px-3 py-1.5 text-xs"
+			class="flex items-center gap-3 rounded-b-lg border border-t-0 border-warn/50 bg-warn-muted px-3 py-1.5 text-xs"
 			role="status"
 		>
 			<span class="font-mono text-warn">CHANGED ELSEWHERE</span>
@@ -118,13 +118,16 @@
 	{#if store.loading}
 		<div class="mt-3 h-24 animate-pulse bg-muted"></div>
 	{:else if store.error}
-		<p role="alert" class="mt-3 border border-error/40 bg-error-muted px-3 py-2 text-xs text-error">
+		<p
+			role="alert"
+			class="mt-3 rounded-md border border-error/40 bg-error-muted px-3 py-2 text-xs text-error"
+		>
 			{store.error}
 		</p>
 	{:else}
 		<div class="mt-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
 			<nav
-				class="hidden max-h-[calc(100svh-7rem)] overflow-y-auto border border-border bg-card lg:sticky lg:top-24 lg:block"
+				class="hidden max-h-[calc(100svh-7rem)] overflow-y-auto rounded-lg border border-border bg-card lg:sticky lg:top-24 lg:block"
 				aria-label="Outline"
 			>
 				<ol class="m-0 list-none p-0">
