@@ -63,7 +63,6 @@
 	const tab = $derived(
 		tabs.find((t) => t.id === page.url.searchParams.get('tab'))?.id ?? 'document'
 	);
-	const pct = $derived(doc?.progress.total ? (doc.progress.done / doc.progress.total) * 100 : 0);
 	const holds = $derived(
 		(doc?.holds ?? []).filter((h) => h.disposition_state === 'undispositioned')
 	);
@@ -158,30 +157,17 @@
 				{/snippet}
 			</PageHeader>
 
-			<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
-				<div class="flex items-center gap-2" title="Steps complete">
-					<div
-						class="h-1.5 w-40 bg-border"
-						role="progressbar"
-						aria-label="Steps complete"
-						aria-valuenow={Math.round(pct)}
-						aria-valuemin={0}
-						aria-valuemax={100}
-					>
-						<div class="h-full bg-ok" style:width={`${pct}%`}></div>
-					</div>
-					<span class="font-mono text-xs tabular-nums"
-						>{doc.progress.done}/{doc.progress.total}</span
-					>
+			{#if holds.length}
+				<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
+					{#each holds as h (h.issue_id)}
+						<span class="font-mono text-xs text-warn">
+							HELD BY <a class="underline" href={`/issues/${h.issue_id}`}>{h.issue_number}</a>
+							{#if h.blocks.length}<span class="text-muted-foreground">({h.blocks.join(', ')})</span
+								>{/if}
+						</span>
+					{/each}
 				</div>
-				{#each holds as h (h.issue_id)}
-					<span class="font-mono text-xs text-warn">
-						HELD BY <a class="underline" href={`/issues/${h.issue_id}`}>{h.issue_number}</a>
-						{#if h.blocks.length}<span class="text-muted-foreground">({h.blocks.join(', ')})</span
-							>{/if}
-					</span>
-				{/each}
-			</div>
+			{/if}
 		</div>
 		<div
 			class="grid min-h-0 flex-1 grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[fit-content(20%)_minmax(0,1fr)_fit-content(20%)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"

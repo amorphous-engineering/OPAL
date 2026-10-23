@@ -10,6 +10,7 @@
 
 	const doc = $derived(store.doc!);
 	const ops = $derived([...doc.ops, ...doc.contingency_ops]);
+	const pct = $derived(doc.progress.total ? (doc.progress.done / doc.progress.total) * 100 : 0);
 </script>
 
 <!-- Never scrolls sideways: every row fits the sidebar width (truncate or wrap). -->
@@ -17,6 +18,24 @@
      the operations card is only as tall as its content, scrolling inside when the
      column runs out. -->
 <div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full">
+	<Section
+		class="lg:flex-none"
+		title="Progress"
+		count={`${doc.progress.done}/${doc.progress.total}`}
+	>
+		<div class="px-3 py-2.5" title="Steps complete">
+			<div
+				class="h-1.5 w-full bg-border"
+				role="progressbar"
+				aria-label="Steps complete"
+				aria-valuenow={Math.round(pct)}
+				aria-valuemin={0}
+				aria-valuemax={100}
+			>
+				<div class="h-full bg-ok" style:width={`${pct}%`}></div>
+			</div>
+		</div>
+	</Section>
 	{#if ops.length}
 		<Section
 			class="lg:flex lg:min-h-0 lg:flex-[0_1_auto] lg:flex-col"
