@@ -58,7 +58,7 @@
 >
 	<div
 		class={cn(
-			'flex min-h-8 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1 hover:bg-accent/50',
+			'sticky top-[calc(--spacing(11)+var(--op-head))] z-10 flex min-h-8 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 bg-card px-3 py-1 hover:bg-accent lg:top-(--op-head)',
 			(terminal || blocked) && 'text-muted-foreground'
 		)}
 		role="button"

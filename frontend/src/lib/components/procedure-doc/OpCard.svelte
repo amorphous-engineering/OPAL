@@ -42,6 +42,10 @@
 					op.step.complete_blockers.some((b) => b.kind === 'dependency' || b.kind === 'redline'))
 	);
 	const open = $derived(ctl.isOpen(key, terminal, blocked));
+	// The title bar sticks while the OP scrolls by (below the app bar on narrow screens,
+	// where the page scrolls; at the pane top from lg, where the document pane scrolls);
+	// steps stick just below it.
+	let headHeight = $state(0);
 	const focused = $derived(ctl.focusedOrder === op.order);
 	const current = $derived(leaf && ctl.mode === 'execute' && ctl.currentOrder === op.order);
 	// CLAIM stays visible where it matters (my OP, the OP of the next step); elsewhere on hover.
@@ -83,8 +87,11 @@
 	data-drop-row={au ? '' : undefined}
 	data-op-order={op.order}
 	data-op-status={op.status}
+	style:--op-head={`${headHeight}px`}
 	class={cn(
-		'overflow-hidden rounded-lg border border-border bg-card',
+		// clip, not hidden: rounds the corners without becoming a scroll container,
+		// which would stop the title bars from sticking.
+		'overflow-clip rounded-lg border border-border bg-card',
 		op.is_contingency && 'border-dashed',
 		op.is_ad_hoc && 'border-warn/50',
 		current && 'shadow-[inset_2px_0_0_var(--info)]'
@@ -93,8 +100,9 @@
 	<div
 		id={leaf ? `step-${op.order}` : undefined}
 		data-order={leaf ? op.order : undefined}
+		bind:clientHeight={headHeight}
 		class={cn(
-			'group/row flex min-h-9 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 bg-muted/60 px-3 py-1 hover:bg-accent/60',
+			'group/row sticky top-11 z-20 flex min-h-9 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 bg-[color-mix(in_oklab,var(--muted)_60%,var(--card))] px-3 py-1 hover:bg-accent lg:top-0',
 			open && 'border-b border-border',
 			focused && 'outline outline-1 -outline-offset-1 outline-foreground/25',
 			au && dropMarker(au, op.order),
