@@ -15,6 +15,8 @@
 
 	let all = $state<Role[]>([]);
 	let busy = $state(false);
+	// Bumped after a refused change so the checkboxes snap back to the server's truth.
+	let rev = $state(0);
 	const held = $derived(new Set((roles ?? []).map((r) => r.id)));
 
 	$effect(() => {
@@ -36,6 +38,7 @@
 			await refreshAll();
 		} catch (err) {
 			toastError(err);
+			rev++;
 		} finally {
 			busy = false;
 		}
@@ -58,12 +61,12 @@
 				{#each all as r (r.id)}
 					<li class="border-b border-border last:border-b-0">
 						<label class="flex items-center gap-2 px-3 py-1.5 text-sm">
-							<Checkbox
-								checked={held.has(r.id)}
-								disabled={busy}
-								onCheckedChange={(v) => toggle(r, !!v)}
-								aria-label={r.name}
-							/>
+							{#key rev}<Checkbox
+									checked={held.has(r.id)}
+									disabled={busy}
+									onCheckedChange={(v) => toggle(r, !!v)}
+									aria-label={r.name}
+								/>{/key}
 							<span class="font-medium">{r.name}</span>
 							{#if r.description}<span class="text-muted-foreground">{r.description}</span>{/if}
 						</label>
