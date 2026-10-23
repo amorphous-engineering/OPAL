@@ -7,6 +7,7 @@
 	import { page } from '$app/state';
 	import { confirm, PageHeader, State, TabStrip, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { cn } from '#lib/utils.js';
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
 	import { session } from '#lib/session.svelte.js';
 	import { ExecutionStore } from '#lib/execution/store.svelte.js';
@@ -189,24 +190,24 @@
 				<ExecutionNav {store} onjump={jump} />
 			</aside>
 			<div class="flex min-h-0 min-w-0 flex-col gap-3">
-				<div class="flex items-center gap-2 border-b border-border">
-					<TabStrip
-						tabs={tabs.map((t) => ({ ...t, label: t.label.toUpperCase() }))}
-						value={tab}
-						onchange={setTab}
-						class="flex-1 border-b-0"
-					/>
-					{#if tab === 'document'}
-						<Button
-							size="xs"
-							variant="outline"
-							class={store.focusMode ? 'border-info text-info' : 'text-muted-foreground'}
-							aria-pressed={store.focusMode}
-							title="Show only the operation being worked"
-							onclick={() => store.setFocusMode(!store.focusMode)}>FOCUS</Button
-						>
-					{/if}
-				</div>
+				<TabStrip {tabs} value={tab} onchange={setTab} class="shrink-0">
+					{#snippet end()}
+						{#if tab === 'document'}
+							<button
+								type="button"
+								class={cn(
+									'px-3 font-mono text-[11px] font-medium tracking-wider uppercase outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
+									store.focusMode
+										? 'bg-card text-info'
+										: 'text-muted-foreground hover:text-foreground'
+								)}
+								aria-pressed={store.focusMode}
+								title="Show only the operation being worked"
+								onclick={() => store.setFocusMode(!store.focusMode)}>Focus</button
+							>
+						{/if}
+					{/snippet}
+				</TabStrip>
 				<div id="exec-scroll" class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4">
 					{#if tab === 'document'}
 						<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency_ops} />
