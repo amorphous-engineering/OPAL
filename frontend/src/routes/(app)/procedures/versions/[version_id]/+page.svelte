@@ -119,11 +119,11 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-	<div class="grid min-w-0 gap-4">
+<div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<SnapshotSteps steps={v.content.steps} />
 	</div>
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Details">
 			<DetailTable>
 				<DetailRow label="Template">

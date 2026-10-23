@@ -217,12 +217,12 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <form
-	class="grid gap-4 p-4 xl:grid-cols-[minmax(0,48rem)_24rem]"
+	class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,48rem)_24rem]"
 	onsubmit={submit}
 	{onkeydown}
 	novalidate
 >
-	<div class="grid min-w-0 content-start gap-4">
+	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		{#if error}
 			<p
 				role="alert"
@@ -233,7 +233,7 @@
 		{/if}
 
 		<Section title="Identity">
-			<div class="grid gap-4 p-3">
+			<div class="grid grid-cols-1 gap-4 p-3">
 				{#if draft}
 					<FormField label="Tier" required>
 						{#if schema.tiers.length > 5}
@@ -265,14 +265,14 @@
 							</div>
 						{/if}
 						{#if tierInfo}
-							<p class="font-mono text-[11px] text-muted-foreground">
+							<p class="font-mono text-xs text-muted-foreground">
 								{tierInfo.default_tracking.toUpperCase()} default{tierInfo.require_lot
 									? ' · LOT REQUIRED'
 									: ''}{tierInfo.auto_serial ? ' · AUTO SERIAL' : ''}
 							</p>
 						{/if}
 					</FormField>
-					<div class="grid gap-4 sm:grid-cols-2">
+					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<FormField label="Internal PN" for="pf-pn">
 							<Input
 								id="pf-pn"
@@ -317,7 +317,7 @@
 		</Section>
 
 		<Section title="Procurement and stock">
-			<div class="grid gap-4 p-3 sm:grid-cols-2">
+			<div class="grid grid-cols-1 gap-4 p-3 sm:grid-cols-2">
 				<FormField label="Procurement" for="pf-proc">
 					<NativeSelect.Root
 						id="pf-proc"
@@ -359,7 +359,7 @@
 		</Section>
 
 		<Section title="Structure and tooling">
-			<div class="grid gap-4 p-3 sm:grid-cols-2">
+			<div class="grid grid-cols-1 gap-4 p-3 sm:grid-cols-2">
 				<FormField label="Parent assembly" for="pf-parent" class="sm:col-span-2">
 					<PartPicker
 						id="pf-parent"
@@ -394,7 +394,7 @@
 		</Section>
 
 		<Section title={schema.custom_fields.length ? 'Custom fields' : 'Metadata'}>
-			<div class="grid gap-4 p-3 sm:grid-cols-2">
+			<div class="grid grid-cols-1 gap-4 p-3 sm:grid-cols-2">
 				{#each schema.custom_fields as f (f.key)}
 					{#if f.type === 'boolean'}
 						<div class="flex items-center gap-2">

@@ -25,12 +25,14 @@
 					<Button size="xs" variant="ghost" onclick={() => (open = true)}>+ ADD</Button>
 				{/if}
 			{/snippet}
-			<div class="grid">
+			<div class="grid grid-cols-1">
 				{#each step.notes as n (n.id)}
 					{@const files = n.attachments ?? []}
 					{@const images = files.filter((f) => f.is_image)}
 					{@const others = files.filter((f) => !f.is_image)}
-					<article class="grid gap-1.5 border-b border-border px-3 py-2 last:border-b-0">
+					<article
+						class="grid grid-cols-1 gap-1.5 border-b border-border px-3 py-2 last:border-b-0"
+					>
 						<header class="flex items-baseline justify-between gap-3">
 							<span class="text-xs font-semibold">{n.author?.name ?? '—'}</span>
 							<Timestamp value={n.created_at} />
@@ -58,7 +60,7 @@
 							</div>
 						{/if}
 						{#if others.length}
-							<ul class="grid gap-0.5 font-mono text-xs">
+							<ul class="grid grid-cols-1 gap-0.5 font-mono text-xs">
 								{#each others as f (f.id)}
 									<li>
 										<a

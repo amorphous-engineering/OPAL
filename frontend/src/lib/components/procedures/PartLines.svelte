@@ -136,7 +136,7 @@
 				{:else if col.key === 'actions'}
 					<button
 						type="button"
-						class="font-mono text-[11px] text-muted-foreground hover:text-error"
+						class="font-mono text-xs text-muted-foreground hover:text-error"
 						aria-label={`Remove ${row.part_name}`}
 						onclick={() => remove(row)}>REMOVE</button
 					>
@@ -145,7 +145,7 @@
 		</DataTable>
 		{#if isKit}
 			<div
-				class="flex gap-4 border-t border-border bg-muted/40 px-3 py-1 font-mono text-[11px] uppercase"
+				class="flex gap-4 border-t border-border bg-muted/40 px-3 py-1 font-mono text-xs uppercase"
 			>
 				<span class="text-muted-foreground"
 					>{rows.length} {rows.length === 1 ? 'line' : 'lines'}</span

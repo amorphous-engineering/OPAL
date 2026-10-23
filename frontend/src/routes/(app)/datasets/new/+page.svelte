@@ -62,18 +62,18 @@
 	crumbs={[{ label: 'Datasets', href: '/datasets' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-3xl gap-4 p-4" onsubmit={submit}>
+<form class="grid max-w-3xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
 	<Section title="Dataset">
-		<div class="grid gap-3 p-3">
-			<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-3 p-3">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ds-name">Name</Label>
 				<Input id="ds-name" bind:value={name} required maxlength={255} />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ds-desc">Description</Label>
 				<Textarea id="ds-desc" bind:value={description} rows={2} />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ds-proc">Procedure</Label>
 				<NativeSelect id="ds-proc" bind:value={procedure} class="w-full max-w-sm">
 					<NativeSelectOption value="">None</NativeSelectOption>
@@ -100,7 +100,7 @@
 				<tr class="border-b border-border bg-muted/60">
 					{#each ['Name', 'Type', 'Unit', 'Chart', ''] as h (h)}
 						<th
-							class="h-8 px-3 text-left font-mono text-[11px] font-medium tracking-wider text-muted-foreground uppercase"
+							class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase"
 							>{h}</th
 						>
 					{/each}

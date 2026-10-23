@@ -26,7 +26,7 @@
 				>{/if}
 		</AlertDialog.Header>
 		{#if o.typeToConfirm}
-			<label class="grid gap-1.5 text-xs">
+			<label class="grid grid-cols-1 gap-1.5 text-xs">
 				<span class="label"
 					>Type <span class="font-mono text-foreground normal-case">{o.typeToConfirm}</span></span
 				>

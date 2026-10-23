@@ -47,7 +47,7 @@
 
 <svelte:head><title>First-run setup · OPAL</title></svelte:head>
 
-<h1 class="text-base font-semibold">First administrator</h1>
+<h1 class="text-lg font-semibold">First administrator</h1>
 <p class="mb-4 text-xs text-muted-foreground">This account administers the instance.</p>
 
 {#if error}
@@ -56,11 +56,11 @@
 	</p>
 {/if}
 
-<form class="grid gap-3" onsubmit={submit}>
-	<div class="grid gap-1.5">
+<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="name">Name</Label><Input id="name" bind:value={name} autocomplete="name" required />
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="email">Email</Label><Input
 			id="email"
 			type="email"
@@ -68,7 +68,7 @@
 			autocomplete="email"
 		/>
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="username">Username</Label>
 		<Input
 			id="username"
@@ -78,7 +78,7 @@
 			required
 		/>
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="password">Password</Label>
 		<Input
 			id="password"
@@ -88,7 +88,7 @@
 			required
 		/>
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="confirm">Confirm password</Label>
 		<Input
 			id="confirm"

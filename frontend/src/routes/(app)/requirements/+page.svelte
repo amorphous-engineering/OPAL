@@ -304,7 +304,7 @@
 			<FilterToggle param="stale" label="Stale only" />
 			{#snippet end()}
 				{#if view === 'tree'}
-					<span class="font-mono text-[11px] whitespace-nowrap text-muted-foreground"
+					<span class="hidden font-mono text-xs whitespace-nowrap text-muted-foreground md:inline"
 						>j/k move · ←/→ fold · enter open · c flow down · / filter · b queue</span
 					>
 				{/if}
@@ -337,7 +337,7 @@
 								/>{/if}</span
 						>
 					{:else if col.key === 'flags'}
-						<span class="flex gap-2 font-mono text-[11px] font-medium">
+						<span class="flex gap-2 font-mono text-xs font-medium">
 							{#if r.tbd}<span class="text-error">TBD</span>{/if}
 							{#if r.tbr}<span class="text-warn">TBR</span>{/if}
 							{#if r.stale}<span
@@ -368,7 +368,7 @@
 							{#each [['Number', 'w-44'], ['Title', 'w-64'], ['Statement', ''], ['State', 'w-28'], ['L', 'w-10'], ['Verification', 'w-44'], ['Parts', 'w-44'], ['Flags', 'w-24'], ['Age', 'w-14']] as [label, w] (label)}
 								<th
 									scope="col"
-									class="h-8 px-3 text-left font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase {w}"
+									class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase {w}"
 									>{label}</th
 								>
 							{/each}
@@ -403,7 +403,7 @@
 									<a href={`/requirements/${r.id}`} class="mono text-info hover:underline"
 										>{r.req_number}</a
 									>
-									{#if r.revision > 1}<span class="mono text-[11px] text-muted-foreground"
+									{#if r.revision > 1}<span class="mono text-xs text-muted-foreground"
 											>r{r.revision}</span
 										>{/if}
 								</td>
@@ -456,7 +456,7 @@
 									{:else}<span class="text-muted-foreground">—</span>{/if}
 								</td>
 								<td class="px-3 py-1">
-									<span class="flex gap-2 font-mono text-[11px] font-medium">
+									<span class="flex gap-2 font-mono text-xs font-medium">
 										{#if r.tbd}<span class="text-error">TBD</span>{/if}
 										{#if r.tbr}<span class="text-warn">TBR</span>{/if}
 										{#if r.stale}<span

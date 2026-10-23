@@ -91,7 +91,7 @@
 		></textarea>
 	</div>
 	{#if summary.length}
-		<ul class="mt-1 grid gap-0.5 font-mono text-[11px]" aria-label="Lint findings">
+		<ul class="mt-1 grid grid-cols-1 gap-0.5 font-mono text-xs" aria-label="Lint findings">
 			{#each summary as { f, n } (f.severity + f.message)}
 				<li class={f.severity === 'block_baseline' ? 'text-error' : 'text-warn'}>
 					{f.rule}

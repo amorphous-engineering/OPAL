@@ -26,7 +26,7 @@
 {#if badge}
 	<span
 		class={cn(
-			'inline-flex h-5 items-center border px-1.5 font-mono text-[11px] font-medium tracking-wide whitespace-nowrap',
+			'inline-flex h-5 items-center border px-1.5 font-mono text-xs font-medium tracking-wide whitespace-nowrap',
 			toneBox[t],
 			className
 		)}>{text}</span

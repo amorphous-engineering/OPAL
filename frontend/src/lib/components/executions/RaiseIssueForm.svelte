@@ -77,7 +77,7 @@
 	}
 </script>
 
-<form class="grid gap-3" onsubmit={submit}>
+<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 	<Dialog.Header>
 		<Dialog.Title>Raise issue</Dialog.Title>
 		<Dialog.Description>

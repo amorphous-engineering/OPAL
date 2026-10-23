@@ -28,7 +28,7 @@
 	<!-- Breadcrumbs: their own compact strip, segments ruled apart, a divider below. -->
 	<nav
 		aria-label="Breadcrumb"
-		class="flex h-7 items-stretch overflow-x-auto border-b border-border bg-muted/30 font-mono text-[11px] tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+		class="flex h-7 items-stretch overflow-x-auto border-b border-border bg-muted/30 font-mono text-xs tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 	>
 		{#each crumbs as c, i (i)}
 			{#if c.href}
@@ -48,8 +48,7 @@
 {/if}
 <div class="border-b border-border bg-background px-4 py-2.5">
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-		{#if identifier}<span class="font-mono text-base font-semibold text-info">{identifier}</span
-			>{/if}
+		{#if identifier}<span class="font-mono text-lg font-semibold text-info">{identifier}</span>{/if}
 		{#if heading}{@render heading()}{:else}<h1 class="text-lg font-semibold tracking-tight">
 				{title}
 			</h1>{/if}

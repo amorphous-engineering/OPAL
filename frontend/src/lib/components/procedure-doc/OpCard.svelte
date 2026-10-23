@@ -1,5 +1,5 @@
 <script lang="ts">
-	// One OP: a card with a header bar (number, title, flags, progress, holds)
+	// One OP: a card with a header bar (number, title, flags, step count, holds)
 	// over its steps. An OP without sub-steps is its own single step and shows
 	// that step's body directly. Expanded until complete.
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -50,7 +50,6 @@
 			(ctl.currentOrder != null &&
 				(ctl.currentOrder === op.order || op.steps.some((s) => s.order === ctl.currentOrder)))
 	);
-	const pct = $derived(op.progress.total ? (op.progress.done / op.progress.total) * 100 : 0);
 	const deletable = $derived(
 		op.is_ad_hoc &&
 			op.status === 'pending' &&
@@ -95,7 +94,7 @@
 		id={leaf ? `step-${op.order}` : undefined}
 		data-order={leaf ? op.order : undefined}
 		class={cn(
-			'group/row flex min-h-9 cursor-pointer items-center gap-2 bg-muted/60 px-3 py-1 hover:bg-accent/60',
+			'group/row flex min-h-9 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 bg-muted/60 px-3 py-1 hover:bg-accent/60',
 			open && 'border-b border-border',
 			focused && 'outline outline-1 -outline-offset-1 outline-foreground/25',
 			au && dropMarker(au, op.order),
@@ -120,7 +119,7 @@
 		}}
 	>
 		<span
-			class="w-3 shrink-0 text-center font-mono text-[11px] text-muted-foreground"
+			class="w-3 shrink-0 text-center font-mono text-xs text-muted-foreground"
 			aria-hidden="true">{open ? '▾' : '▸'}</span
 		>
 		<span class="shrink-0 font-mono text-xs font-semibold">OP {op.number}</span>
@@ -137,19 +136,19 @@
 		{/if}
 		{#if op.is_contingency}
 			<span
-				class="inline-flex h-5 items-center border border-warn/50 px-1.5 font-mono text-[11px] font-medium text-warn"
+				class="inline-flex h-5 items-center border border-warn/50 px-1.5 font-mono text-xs font-medium text-warn"
 				>CONTINGENCY</span
 			>
 		{/if}
 		{#if op.strict_sequence}
 			<span
-				class="inline-flex h-5 items-center border border-border px-1.5 font-mono text-[11px] font-medium text-muted-foreground"
+				class="inline-flex h-5 items-center border border-border px-1.5 font-mono text-xs font-medium text-muted-foreground"
 				title="Sub-steps complete in order">SEQ</span
 			>
 		{/if}
 		{#if au && op.waiting_on_ops.length}
 			<span
-				class="hidden font-mono text-[11px] whitespace-nowrap text-muted-foreground md:inline"
+				class="hidden font-mono text-xs whitespace-nowrap text-muted-foreground md:inline"
 				title="Starts after these OPs are done">AFTER OP {op.waiting_on_ops.join(', ')}</span
 			>
 		{/if}
@@ -161,18 +160,10 @@
 				>{op.steps.length} {op.steps.length === 1 ? 'STEP' : 'STEPS'}</span
 			>
 		{:else if !leaf}
-			<span class="flex items-center gap-2">
-				<span class="hidden h-1.5 w-16 bg-border sm:block" aria-hidden="true"
-					><span class="block h-full bg-ok" style:width={`${pct}%`}></span></span
-				>
-				<span
-					class={cn(
-						'font-mono text-xs tabular-nums',
-						terminal ? 'text-ok' : 'text-muted-foreground'
-					)}
-					title="Steps complete">{op.progress.done}/{op.progress.total}</span
-				>
-			</span>
+			<span
+				class={cn('font-mono text-xs tabular-nums', terminal ? 'text-ok' : 'text-muted-foreground')}
+				title="Steps complete">{op.progress.done}/{op.progress.total}</span
+			>
 		{/if}
 		<span class="shrink-0 text-right">
 			{#if au}
@@ -215,7 +206,7 @@
 			<StepBody step={op.step} {op} />
 		{:else}
 			{#if au}
-				<div class="grid gap-3 border-b border-border px-3 py-3">
+				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
 					<div class="-mb-1 flex min-h-4 justify-end"><SaveBadge step={op.step} /></div>
 					<CautionEditor step={op.step} />
 					<MarkdownEditor
@@ -228,7 +219,7 @@
 					<StepProps step={op.step} {op} isOp={true} />
 				</div>
 			{:else if op.caution || op.instructions}
-				<div class="grid gap-3 border-b border-border px-3 py-3">
+				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
 					<CautionBlock text={op.caution} />
 					{#if op.instructions}
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
@@ -249,7 +240,7 @@
 				</div>
 			{/if}
 			{#if footer}
-				<div class="grid gap-2 border-t border-border bg-muted/30 px-3 py-3">
+				<div class="grid grid-cols-1 gap-2 border-t border-border bg-muted/30 px-3 py-3">
 					{#if opSignoffs}<SignoffTable step={op.step} {op} />{/if}
 					{#if deletable}
 						<Button size="xs" variant="destructive" onclick={() => ctl.actions.deleteRedline?.(op)}

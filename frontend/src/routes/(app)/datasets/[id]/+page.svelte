@@ -109,7 +109,7 @@
 </PageHeader>
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
-	<div class="grid items-start gap-4 lg:grid-cols-2">
+	<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
 		<Section title="Dataset">
 			<DetailTable>
 				<DetailRow label="Procedure">

@@ -55,19 +55,19 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header><Dialog.Title>Edit template</Dialog.Title></Dialog.Header>
-		<form class="grid gap-3" onsubmit={submit}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="edit-name">Name</Label>
 				<Input id="edit-name" bind:value={f.name} required maxlength={255} />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="edit-type">Type</Label>
 				<NativeSelect id="edit-type" bind:value={f.type}>
 					<NativeSelectOption value="op">OP — work order, no output</NativeSelectOption>
 					<NativeSelectOption value="build">BUILD — produces an assembly</NativeSelectOption>
 				</NativeSelect>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="edit-desc">Description (markdown)</Label>
 				<Textarea id="edit-desc" rows={6} bind:value={f.description} />
 			</div>

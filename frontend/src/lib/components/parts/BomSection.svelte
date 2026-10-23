@@ -240,36 +240,38 @@
 	{/if}
 {:else if hasDepth}
 	<Section title="Structure" count={flat.length}>
-		<table class="w-full border-collapse text-sm">
-			<thead>
-				<tr class="border-b border-border bg-muted/60">
-					<th class="label h-8 px-3 text-left font-medium">PN</th>
-					<th class="label h-8 px-3 text-left font-medium">Name</th>
-					<th class="label h-8 px-3 text-right font-medium">Qty</th>
-					<th
-						class="label h-8 px-3 text-right font-medium"
-						title="Quantity per one of this assembly">Total</th
-					>
-				</tr>
-			</thead>
-			<tbody>
-				{#each flat as f, i (i)}
-					<tr class="border-b border-border">
-						<td
-							class="mono px-3 py-1 whitespace-nowrap"
-							style:padding-left={`${0.75 + f.depth * 1.25}rem`}
+		<div class="overflow-x-auto">
+			<table class="w-full border-collapse text-sm">
+				<thead>
+					<tr class="border-b border-border bg-muted/60">
+						<th class="label h-8 px-3 text-left font-medium">PN</th>
+						<th class="label h-8 px-3 text-left font-medium">Name</th>
+						<th class="label h-8 px-3 text-right font-medium">Qty</th>
+						<th
+							class="label h-8 px-3 text-right font-medium"
+							title="Quantity per one of this assembly">Total</th
 						>
-							<span class="text-muted-foreground">{f.depth ? '└ ' : ''}</span><a
-								href={`/parts/${f.node.part_id}`}
-								class="text-info hover:underline">{f.node.internal_pn ?? '—'}</a
-							>
-						</td>
-						<td class="px-3 py-1">{f.node.name}</td>
-						<td class="mono px-3 py-1 text-right">{qty(f.node.quantity)}</td>
-						<td class="mono px-3 py-1 text-right">{qty(f.ext)}</td>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each flat as f, i (i)}
+						<tr class="border-b border-border">
+							<td
+								class="mono px-3 py-1 whitespace-nowrap"
+								style:padding-left={`${0.75 + f.depth * 1.25}rem`}
+							>
+								<span class="text-muted-foreground">{f.depth ? '└ ' : ''}</span><a
+									href={`/parts/${f.node.part_id}`}
+									class="text-info hover:underline">{f.node.internal_pn ?? '—'}</a
+								>
+							</td>
+							<td class="px-3 py-1">{f.node.name}</td>
+							<td class="mono px-3 py-1 text-right">{qty(f.node.quantity)}</td>
+							<td class="mono px-3 py-1 text-right">{qty(f.ext)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</Section>
 {/if}

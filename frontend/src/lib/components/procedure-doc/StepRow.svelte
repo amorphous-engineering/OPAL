@@ -58,7 +58,7 @@
 >
 	<div
 		class={cn(
-			'flex min-h-8 cursor-pointer items-center gap-2 px-3 py-1 hover:bg-accent/50',
+			'flex min-h-8 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1 hover:bg-accent/50',
 			(terminal || blocked) && 'text-muted-foreground'
 		)}
 		role="button"
@@ -76,7 +76,7 @@
 		}}
 	>
 		<span
-			class="w-3 shrink-0 text-center font-mono text-[11px] text-muted-foreground"
+			class="w-3 shrink-0 text-center font-mono text-xs text-muted-foreground"
 			aria-hidden="true">{open ? '▾' : '▸'}</span
 		>
 		<span class="w-10 shrink-0 font-mono text-xs font-medium tabular-nums">{step.number}</span>
@@ -91,7 +91,7 @@
 		{#if au}<AuthorChips {step} />{/if}
 		<CursorChips cursors={step.cursors} viewerId={ctl.viewerId} />
 		{#if nAtt || nNote}
-			<span class="font-mono text-[11px] whitespace-nowrap text-muted-foreground">
+			<span class="font-mono text-xs whitespace-nowrap text-muted-foreground">
 				{#if nAtt}
 					{#if ctl.actions.showEvidence}
 						<button

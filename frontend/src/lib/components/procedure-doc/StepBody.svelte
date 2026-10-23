@@ -30,9 +30,9 @@
 	const hasFields = $derived((step.data_schema?.fields?.length ?? 0) > 0);
 </script>
 
-<div class="grid gap-3 px-3 py-3" data-step-body={step.order}>
+<div class="grid grid-cols-1 gap-3 px-3 py-3" data-step-body={step.order}>
 	{#if step.issue_history.length}
-		<div class="font-mono text-[11px] text-muted-foreground">
+		<div class="font-mono text-xs text-muted-foreground">
 			{#each step.issue_history as i, n (i.issue_id)}
 				{#if n > 0}<span> · </span>{/if}<a
 					class="text-info hover:underline"

@@ -60,16 +60,16 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-w-md">
 		<Dialog.Header><Dialog.Title>Edit dataset</Dialog.Title></Dialog.Header>
-		<form class="grid gap-3" onsubmit={submit}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ed-name">Name</Label>
 				<Input id="ed-name" bind:value={name} required maxlength={255} />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ed-desc">Description</Label>
 				<Textarea id="ed-desc" bind:value={description} rows={3} />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ed-proc">Procedure</Label>
 				<NativeSelect id="ed-proc" bind:value={procedure} class="w-full">
 					<NativeSelectOption value="">None</NativeSelectOption>

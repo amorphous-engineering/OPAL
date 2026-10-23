@@ -59,9 +59,9 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-w-md">
 		<Dialog.Header><Dialog.Title>Add data point</Dialog.Title></Dialog.Header>
-		<form class="grid gap-3" onsubmit={submit}>
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			{#each fields as f (f.name)}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for={`pt-${f.name}`}>{f.name}{f.unit ? ` (${f.unit})` : ''}</Label>
 					{#if f.type === 'boolean'}
 						<NativeSelect id={`pt-${f.name}`} bind:value={inputs[f.name]}>

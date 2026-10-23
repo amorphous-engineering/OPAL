@@ -24,7 +24,7 @@
 					>
 				{/each}
 			</div>
-			<div class="mt-1 text-[11px] text-muted-foreground">This browser only.</div>
+			<div class="mt-1 text-xs text-muted-foreground">This browser only.</div>
 		</DetailRow>
 	</DetailTable>
 </Section>

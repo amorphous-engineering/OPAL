@@ -272,7 +272,7 @@
 		<h1 class="min-w-0 text-lg font-semibold tracking-tight">
 			{#if mutable}
 				<Input
-					class="h-8 w-[min(60ch,60vw)] text-base font-semibold"
+					class="h-8 w-[min(60ch,60vw)] text-lg font-semibold"
 					aria-label="Title"
 					bind:value={title}
 					maxlength={255}
@@ -339,7 +339,9 @@
 				{/if}
 			</DetailRow>
 		</DetailTable>
-		<div class="grid border-t border-border md:grid-cols-2 md:divide-x md:divide-border">
+		<div
+			class="grid grid-cols-1 border-t border-border md:grid-cols-2 md:divide-x md:divide-border"
+		>
 			<DetailTable>
 				<DetailRow label="Category">
 					{#if mutable}
@@ -592,7 +594,7 @@
 							>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
 						{#if a.outdated}<span
-								class="ml-2 font-mono text-[11px] font-medium text-warn"
+								class="ml-2 font-mono text-xs font-medium text-warn"
 								title={`Closed against rev ${a.against_revision}; rev ${req.revision} is not verified`}
 								>OUTDATED</span
 							>{/if}
@@ -648,7 +650,7 @@
 			{/snippet}
 		</DataTable>
 		{#if req.revisions.length > 1}
-			<div class="grid gap-2 border-t border-border p-3">
+			<div class="grid grid-cols-1 gap-2 border-t border-border p-3">
 				<div class="flex items-center gap-2">
 					<span class="label">Redline</span>
 					<NativeSelect size="sm" bind:value={revA} aria-label="Redline from revision">

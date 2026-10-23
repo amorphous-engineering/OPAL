@@ -213,7 +213,7 @@
 	{#snippet actions()}
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger
-				class="inline-flex h-7 items-center gap-2 border border-border px-2 font-mono text-[11px] tracking-wider uppercase hover:bg-accent"
+				class="inline-flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
 			>
 				+ New
 			</DropdownMenu.Trigger>
@@ -249,7 +249,7 @@
 					{s.value}
 				</div>
 				<div
-					class="font-mono text-[11px] {s.value === 0
+					class="font-mono text-xs {s.value === 0
 						? 'text-muted-foreground/50'
 						: 'text-muted-foreground'}"
 				>
@@ -259,13 +259,13 @@
 		{/each}
 	</div>
 
-	<div class="grid items-start gap-4 xl:grid-cols-2">
+	<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
 		{#if o.issues.items.length}
 			<Section title="Issues" count={shown(o.issues)}>
 				{#snippet actions()}
 					<a
 						href="/issues?status=open"
-						class="font-mono text-[11px] text-info uppercase hover:underline">All open</a
+						class="font-mono text-xs text-info uppercase hover:underline">All open</a
 					>
 				{/snippet}
 				<DataTable
@@ -302,8 +302,7 @@
 		{#if o.executions.items.length}
 			<Section title="Executions" count={shown(o.executions)}>
 				{#snippet actions()}
-					<a href="/executions" class="font-mono text-[11px] text-info uppercase hover:underline"
-						>All</a
+					<a href="/executions" class="font-mono text-xs text-info uppercase hover:underline">All</a
 					>
 				{/snippet}
 				<DataTable
@@ -317,8 +316,7 @@
 					{#snippet cell(r, col)}
 						{#if col.key === 'label'}
 							<span class="font-mono whitespace-nowrap text-info">{r.label}</span>
-							{#if r.mine}<span class="ml-1 font-mono text-[11px] text-muted-foreground">YOU</span
-								>{/if}
+							{#if r.mine}<span class="ml-1 font-mono text-xs text-muted-foreground">YOU</span>{/if}
 						{:else if col.key === 'procedure'}
 							<span class="block truncate" title={r.procedure ?? undefined}
 								>{r.procedure ?? dash}</span
@@ -344,7 +342,7 @@
 		{#if o.low_stock.items.length}
 			<Section title="Low stock" count={shown(o.low_stock)}>
 				{#snippet actions()}
-					<a href="/parts?low=1" class="font-mono text-[11px] text-info uppercase hover:underline"
+					<a href="/parts?low=1" class="font-mono text-xs text-info uppercase hover:underline"
 						>All</a
 					>
 				{/snippet}
@@ -378,7 +376,7 @@
 				{#snippet actions()}
 					<a
 						href="/purchases?status=awaiting"
-						class="font-mono text-[11px] text-info uppercase hover:underline">All</a
+						class="font-mono text-xs text-info uppercase hover:underline">All</a
 					>
 				{/snippet}
 				<DataTable
@@ -414,7 +412,7 @@
 				{#snippet actions()}
 					<a
 						href="/inventory?flag=attention"
-						class="font-mono text-[11px] text-info uppercase hover:underline">Stock</a
+						class="font-mono text-xs text-info uppercase hover:underline">Stock</a
 					>
 				{/snippet}
 				<DataTable
@@ -447,7 +445,7 @@
 				{#snippet actions()}
 					<a
 						href="/risks?severity=high&active=1"
-						class="font-mono text-[11px] text-info uppercase hover:underline">All</a
+						class="font-mono text-xs text-info uppercase hover:underline">All</a
 					>
 				{/snippet}
 				<DataTable
@@ -477,9 +475,7 @@
 	{#if o.activity.length}
 		<Section title="Recent activity">
 			{#snippet actions()}
-				<a href="/audit" class="font-mono text-[11px] text-info uppercase hover:underline"
-					>Audit log</a
-				>
+				<a href="/audit" class="font-mono text-xs text-info uppercase hover:underline">Audit log</a>
 			{/snippet}
 			<DataTable
 				rows={activity}

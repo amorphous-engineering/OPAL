@@ -11,7 +11,7 @@
 </script>
 
 {#if state === 'error'}
-	<span class="inline-flex items-center gap-1.5 font-mono text-[11px] text-error" role="alert">
+	<span class="inline-flex items-center gap-1.5 font-mono text-xs text-error" role="alert">
 		<span class="max-w-64 truncate" title={message ?? ''}
 			>NOT SAVED{message ? ` · ${message}` : ''}</span
 		>
@@ -25,9 +25,9 @@
 		>
 	</span>
 {:else if state === 'saving' || state === 'dirty'}
-	<span class="font-mono text-[11px] text-warn" aria-live="polite"
+	<span class="font-mono text-xs text-warn" aria-live="polite"
 		>{state === 'saving' ? 'SAVING' : 'UNSAVED'}</span
 	>
 {:else if state === 'saved' && !quiet}
-	<span class={cn('font-mono text-[11px] text-muted-foreground')} aria-live="polite">SAVED</span>
+	<span class={cn('font-mono text-xs text-muted-foreground')} aria-live="polite">SAVED</span>
 {/if}

@@ -165,7 +165,7 @@
 	}
 </script>
 
-<div class="grid gap-4">
+<div class="grid grid-cols-1 gap-4">
 	{#if doc.kit_relevant}
 		<Section title="Kit" count={doc.kit.items.length || undefined}>
 			{#snippet actions()}
@@ -180,7 +180,7 @@
 							<tr class="border-b border-border bg-muted/60 text-left">
 								{#each [['PART', ''], ['REQUIRED', 'text-right'], ['AVAILABLE', 'text-right'], ['CONSUMED', 'text-right'], ['VARIANCE', 'text-right'], ['SOURCE', ''], ['QTY', '']] as [h, c] (h)}
 									<th
-										class={`h-8 px-3 font-mono text-[11px] font-medium tracking-wider text-muted-foreground ${c}`}
+										class={`h-8 px-3 font-mono text-xs font-medium tracking-wider text-muted-foreground ${c}`}
 										>{h}</th
 									>
 								{/each}
@@ -350,7 +350,7 @@
 						finalize();
 					}}
 				>
-					<label class="grid gap-1">
+					<label class="grid grid-cols-1 gap-1">
 						<span class="label">Storage location <span class="text-error">*</span></span>
 						<Input bind:value={location} class="w-64 font-mono" placeholder="SHELF-A1" required />
 					</label>
@@ -365,7 +365,7 @@
 					<tr class="border-b border-border bg-muted/60 text-left">
 						{#each ['PART', 'EXPECTED', 'QTY', 'LOCATION', 'LOT', 'SERIAL'] as h (h)}
 							<th
-								class="h-8 px-3 font-mono text-[11px] font-medium tracking-wider text-muted-foreground"
+								class="h-8 px-3 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 								>{h}</th
 							>
 						{/each}

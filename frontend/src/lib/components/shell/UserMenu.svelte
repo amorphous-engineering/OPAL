@@ -14,7 +14,7 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger
 		aria-label="Account menu"
-		class="inline-flex h-7 items-center gap-2 border border-border px-2 font-mono text-[11px] tracking-wider uppercase hover:bg-accent"
+		class="inline-flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
 	>
 		{session.user?.username ?? '—'}
 	</DropdownMenu.Trigger>

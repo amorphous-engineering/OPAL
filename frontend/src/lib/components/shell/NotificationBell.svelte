@@ -57,12 +57,11 @@
 
 <Popover.Root bind:open>
 	<Popover.Trigger
-		class="relative inline-flex h-7 items-center gap-1.5 border border-border px-2 font-mono text-[11px] tracking-wider uppercase hover:bg-accent"
+		class="relative inline-flex h-7 items-center gap-1.5 border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
 		aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
 	>
 		Inbox
-		{#if unread > 0}<span class="bg-error px-1 text-[10px] text-white tabular-nums">{unread}</span
-			>{/if}
+		{#if unread > 0}<span class="bg-error px-1 text-xs text-white tabular-nums">{unread}</span>{/if}
 	</Popover.Trigger>
 	<Popover.Content align="end" class="w-96 p-0">
 		<div class="flex h-8 items-center border-b border-border px-3">
@@ -70,7 +69,7 @@
 			<span class="mono ml-2 text-xs text-muted-foreground">{unread} unread</span>
 			{#if unread > 0}
 				<button
-					class="ml-auto font-mono text-[11px] text-info uppercase hover:underline"
+					class="ml-auto font-mono text-xs text-info uppercase hover:underline"
 					onclick={readAll}>Mark all read</button
 				>
 			{/if}
@@ -96,7 +95,7 @@
 		</div>
 		<a
 			href="/notifications"
-			class="block border-t border-border px-3 py-1.5 text-center font-mono text-[11px] text-info uppercase hover:underline"
+			class="block border-t border-border px-3 py-1.5 text-center font-mono text-xs text-info uppercase hover:underline"
 			onclick={() => (open = false)}>All notifications</a
 		>
 	</Popover.Content>

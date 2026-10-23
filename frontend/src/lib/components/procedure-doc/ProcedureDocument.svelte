@@ -19,7 +19,7 @@
 	const au = $derived(controller.mode === 'author' ? controller.author : undefined);
 </script>
 
-<div class="grid gap-2" data-doc-mode={controller.mode}>
+<div class="grid grid-cols-1 gap-2" data-doc-mode={controller.mode}>
 	{#each ops as op (op.order)}
 		<OpCard {op} />
 	{/each}

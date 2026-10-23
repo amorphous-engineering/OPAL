@@ -47,7 +47,7 @@
 	}
 </script>
 
-<form class="grid gap-3" onsubmit={submit}>
+<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 	<Dialog.Header>
 		<Dialog.Title>Add redline OP</Dialog.Title>
 		<Dialog.Description>
@@ -65,10 +65,10 @@
 	<FormRow label="Redline OP title" for="rl-title" required>
 		<Input id="rl-title" bind:value={title} maxlength={255} required autofocus />
 	</FormRow>
-	<div class="grid gap-2">
+	<div class="grid grid-cols-1 gap-2">
 		<span class="label">Sub-steps</span>
 		{#each steps as s, i (i)}
-			<div class="grid gap-1.5 border border-border p-2">
+			<div class="grid grid-cols-1 gap-1.5 border border-border p-2">
 				<div class="flex items-center gap-2">
 					<span class="font-mono text-xs text-muted-foreground">{i + 1}.</span>
 					<Input

@@ -26,5 +26,5 @@
 		{label}{#if required}<span class="text-error" aria-hidden="true">*</span>{/if}
 	</Label>
 	{@render children()}
-	{#if hint}<p class="font-mono text-[11px] text-muted-foreground">{hint}</p>{/if}
+	{#if hint}<p class="font-mono text-xs text-muted-foreground">{hint}</p>{/if}
 </div>

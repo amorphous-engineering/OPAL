@@ -113,7 +113,7 @@
 	}
 </script>
 
-<div class="grid gap-3 border-t border-border bg-muted/30 p-3">
+<div class="grid grid-cols-1 gap-3 border-t border-border bg-muted/30 p-3">
 	<h3 class="label text-foreground">Set {target}</h3>
 
 	{#if target === 'mitigate'}
@@ -138,16 +138,16 @@
 			>
 		</p>
 	{:else if target === 'watch'}
-		<div class="grid gap-3 sm:grid-cols-2">
-			<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="watch-observable">Observable</Label>
 				<Input id="watch-observable" class="font-mono" bind:value={observable} maxlength={255} />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="watch-threshold">Threshold</Label>
 				<Input id="watch-threshold" class="font-mono" bind:value={threshold} maxlength={255} />
 			</div>
-			<div class="grid gap-1.5 sm:col-span-2">
+			<div class="grid grid-cols-1 gap-1.5 sm:col-span-2">
 				<Label for="watch-contingency">Contingency <span class="label">optional</span></Label>
 				<Input id="watch-contingency" class="font-mono" bind:value={contingency} />
 			</div>
@@ -197,7 +197,7 @@
 	{/if}
 
 	{#if check?.needs_note}
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="disposition-note"
 				>{risk.disposition === 'accepted' && target !== 'closed'
 					? 'Un-accept note'
@@ -214,7 +214,7 @@
 	{/if}
 
 	{#if blockers.length}
-		<ul class="grid gap-0.5 font-mono text-xs text-error">
+		<ul class="grid grid-cols-1 gap-0.5 font-mono text-xs text-error">
 			{#each blockers as b (b)}<li>{b}</li>{/each}
 		</ul>
 	{/if}

@@ -19,7 +19,7 @@
 			<tr class="border-b border-border">
 				{#each cols as c (c)}
 					<th
-						class="h-6 px-3 text-left font-mono text-[11px] font-medium tracking-wider text-muted-foreground uppercase"
+						class="h-6 px-3 text-left font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase"
 						>{c}</th
 					>
 				{/each}

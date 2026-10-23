@@ -47,7 +47,7 @@
 					>{sub.step_number}</td
 				>
 				<td class="px-3 py-1">{sub.title}</td>
-				<td class="px-3 py-1 text-right font-mono text-[11px] text-muted-foreground uppercase">
+				<td class="px-3 py-1 text-right font-mono text-xs text-muted-foreground uppercase">
 					{#if sub.signoffs?.length}{sub.signoffs.map((x) => x.label).join(' · ')}{/if}
 				</td>
 				<td class="px-3 py-1 text-right font-mono text-xs text-muted-foreground">

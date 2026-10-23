@@ -21,7 +21,7 @@
 {/snippet}
 
 <Section title="STATUS" count={`${summary.total} live`}>
-	<div class="grid divide-border md:grid-cols-2 md:divide-x">
+	<div class="grid grid-cols-1 divide-border md:grid-cols-2 md:divide-x">
 		<DetailTable>
 			<DetailRow label="States" mono>
 				{#each ['draft', 'preliminary', 'baselined'] as s (s)}

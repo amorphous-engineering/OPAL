@@ -100,10 +100,10 @@
 	crumbs={[{ label: 'Purchases', href: '/purchases' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-5xl gap-4 p-4" onsubmit={submit}>
+<form class="grid max-w-5xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
 	<Section title="ORDER">
-		<div class="grid gap-3 p-3 md:grid-cols-2">
-			<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="po-supplier">Supplier</Label>
 				<NativeSelect id="po-supplier" bind:value={supplierId} class="w-full">
 					<option value="">Other (enter name)</option>
@@ -113,12 +113,12 @@
 				</NativeSelect>
 			</div>
 			{#if !supplierId}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="po-supplier-name">Supplier name</Label>
 					<Input id="po-supplier-name" bind:value={otherName} maxlength={255} />
 				</div>
 			{/if}
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="po-ref">Reference</Label>
 				<Input
 					id="po-ref"
@@ -128,22 +128,22 @@
 					class="font-mono"
 				/>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="po-supplier-ref">Supplier reference</Label>
 				<Input id="po-supplier-ref" bind:value={supplierRef} maxlength={100} class="font-mono" />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="po-target">Target date</Label>
 				<Input id="po-target" type="date" bind:value={targetDate} class="font-mono" />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="po-dest">Destination</Label>
 				<Input id="po-dest" bind:value={destination} list="po-locations" maxlength={255} />
 				<datalist id="po-locations">
 					{#each data.locations as l (l)}<option value={l}></option>{/each}
 				</datalist>
 			</div>
-			<div class="grid gap-1.5 md:col-span-2">
+			<div class="grid grid-cols-1 gap-1.5 md:col-span-2">
 				<Label for="po-notes">Notes</Label>
 				<Textarea id="po-notes" bind:value={notes} rows={2} class="text-xs" />
 			</div>
@@ -161,7 +161,7 @@
 						{#each ['PART', 'QUANTITY', 'UNIT COST', 'DESTINATION', ''] as h (h)}
 							<th
 								scope="col"
-								class="h-8 px-3 text-left font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+								class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 								>{h}</th
 							>
 						{/each}

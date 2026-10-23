@@ -18,7 +18,7 @@
 </script>
 
 {#if first}
-	<span class="font-mono text-[11px] text-muted-foreground" title={full}>
+	<span class="font-mono text-xs text-muted-foreground" title={full}>
 		{#if first.issue_number}
 			held by <a class="underline" href={`/issues/${first.issue_id}`}>{first.issue_number}</a>
 		{:else}

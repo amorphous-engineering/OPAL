@@ -87,9 +87,9 @@
 		<Dialog.Header>
 			<Dialog.Title class="text-sm font-semibold">{test ? 'Edit test' : 'Run test'}</Dialog.Title>
 		</Dialog.Header>
-		<form onsubmit={submit} class="grid gap-3">
+		<form onsubmit={submit} class="grid grid-cols-1 gap-3">
 			{#if !test && templates.length}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="t-template">Template</Label>
 					<NativeSelect
 						id="t-template"
@@ -104,11 +104,11 @@
 					</NativeSelect>
 				</div>
 			{/if}
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label class="label" for="t-name">Test</Label>
 				<Input id="t-name" bind:value={name} required readonly={!!template && !test} />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label class="label" for="t-result">Result</Label>
 				<NativeSelect id="t-result" class="w-full" bind:value={result}>
 					<option value="pass">Pass</option>
@@ -116,13 +116,13 @@
 					<option value="pending">Pending</option>
 				</NativeSelect>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label class="label" for="t-value">Value{template?.unit ? ` (${template.unit})` : ''}</Label
 				>
 				<Input id="t-value" class="font-mono" bind:value />
 				{#if range}<p class="font-mono text-xs text-muted-foreground">Range {range}</p>{/if}
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label class="label" for="t-notes">Notes</Label>
 				<Textarea id="t-notes" rows={2} bind:value={notes} />
 			</div>

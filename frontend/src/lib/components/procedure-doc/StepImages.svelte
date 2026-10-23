@@ -60,7 +60,7 @@
 		{/if}
 		<div class="flex flex-wrap gap-2" use:gallery>
 			{#each images as img (img.id ?? img.attachment_id)}
-				<figure class="m-0 grid gap-1" data-image-id={img.id}>
+				<figure class="m-0 grid grid-cols-1 gap-1" data-image-id={img.id}>
 					<a
 						data-pswp
 						href={attachmentUrl(img.attachment_id)}
@@ -80,7 +80,7 @@
 						<input
 							type="text"
 							maxlength={255}
-							class="h-6 w-full max-w-56 border border-input bg-transparent px-1.5 font-mono text-[11px] focus:border-ring focus:outline-none"
+							class="h-6 w-full max-w-56 border border-input bg-transparent px-1.5 font-mono text-xs focus:border-ring focus:outline-none"
 							placeholder="Caption"
 							aria-label="Caption"
 							value={img.caption ?? ''}
@@ -109,7 +109,7 @@
 							>
 						</div>
 					{:else if img.caption}
-						<figcaption class="max-w-56 font-mono text-[11px] text-muted-foreground">
+						<figcaption class="max-w-56 font-mono text-xs text-muted-foreground">
 							{img.caption}
 						</figcaption>
 					{/if}

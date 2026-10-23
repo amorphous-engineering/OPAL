@@ -105,15 +105,18 @@
 
 <PageHeader title="New issue" crumbs={[{ label: 'Issues', href: '/issues' }, { label: 'New' }]} />
 
-<form class="grid max-w-5xl gap-4 p-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" onsubmit={submit}>
-	<div class="grid content-start gap-3">
-		<div class="grid gap-1.5">
+<form
+	class="grid max-w-5xl grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+	onsubmit={submit}
+>
+	<div class="grid grid-cols-1 content-start gap-3">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="title">Title</Label>
 			<Input id="title" bind:value={title} required maxlength={255} autofocus />
 		</div>
 
-		<div class="grid gap-3 sm:grid-cols-2">
-			<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="type">Type</Label>
 				<NativeSelect id="type" bind:value={type} class="w-full">
 					{#each ISSUE_TYPES as t (t)}
@@ -121,7 +124,7 @@
 					{/each}
 				</NativeSelect>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="priority">Priority</Label>
 				<NativeSelect id="priority" bind:value={priority} class="w-full">
 					{#each PRIORITIES as p (p)}
@@ -131,7 +134,7 @@
 			</div>
 		</div>
 
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="containment">Containment</Label>
 			<NativeSelect id="containment" bind:value={containment} class="w-full">
 				{#each CONTAINMENTS as c (c)}
@@ -140,33 +143,33 @@
 			</NativeSelect>
 		</div>
 
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="description">Description</Label>
 			<Textarea id="description" bind:value={description} rows={4} onkeydown={ctrlEnter} />
 		</div>
 
 		{#if type === 'non_conformance'}
-			<div class="grid gap-3 sm:grid-cols-2">
-				<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="should-be">Should be</Label>
 					<Textarea id="should-be" bind:value={shouldBe} rows={3} onkeydown={ctrlEnter} />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="actual">Is</Label>
 					<Textarea id="actual" bind:value={actual} rows={3} onkeydown={ctrlEnter} />
 				</div>
 			</div>
 		{:else if type === 'bug'}
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="steps">Steps to reproduce</Label>
 				<Textarea id="steps" bind:value={steps} rows={3} onkeydown={ctrlEnter} />
 			</div>
-			<div class="grid gap-3 sm:grid-cols-2">
-				<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="expected">Expected behavior</Label>
 					<Textarea id="expected" bind:value={expected} rows={2} onkeydown={ctrlEnter} />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="actual-behavior">Actual behavior</Label>
 					<Textarea
 						id="actual-behavior"
@@ -177,7 +180,7 @@
 				</div>
 			</div>
 		{:else if type === 'improvement'}
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="benefit">Expected benefit</Label>
 				<Textarea id="benefit" bind:value={benefit} rows={2} onkeydown={ctrlEnter} />
 			</div>
@@ -194,9 +197,9 @@
 		</div>
 	</div>
 
-	<div class="grid content-start gap-3">
+	<div class="grid grid-cols-1 content-start gap-3">
 		<Section title="Assignment">
-			<div class="grid gap-1.5 p-3">
+			<div class="grid grid-cols-1 gap-1.5 p-3">
 				<Label for="assignee">Assigned to</Label>
 				<NativeSelect id="assignee" bind:value={assignee} class="w-full">
 					<NativeSelectOption value="">Unassigned</NativeSelectOption>
@@ -233,7 +236,7 @@
 						{step.label}
 						<button
 							type="button"
-							class="ml-2 text-[11px] text-info uppercase hover:underline"
+							class="ml-2 text-xs text-info uppercase hover:underline"
 							onclick={() => (step = null)}>CLEAR</button
 						>
 					</DetailRow>
@@ -255,7 +258,7 @@
 			<span class={kind === 'execution' ? 'mono' : ''}>{current.label}</span>
 			<button
 				type="button"
-				class="ml-auto font-mono text-[11px] tracking-wider text-info uppercase hover:underline"
+				class="ml-auto font-mono text-xs tracking-wider text-info uppercase hover:underline"
 				onclick={() => set(null)}>CLEAR</button
 			>
 		</span>

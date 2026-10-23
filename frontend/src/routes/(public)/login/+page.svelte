@@ -78,7 +78,7 @@
 
 <svelte:head><title>Sign in · OPAL</title></svelte:head>
 
-<h1 class="mb-4 text-base font-semibold">Sign in</h1>
+<h1 class="mb-4 text-lg font-semibold">Sign in</h1>
 
 {#if error}
 	<p role="alert" class="mb-3 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
@@ -94,8 +94,8 @@
 	{/if}
 {:else}
 	{#if config.password_login_enabled}
-		<form class="grid gap-3" onsubmit={submit}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="username">Username</Label>
 				<Input
 					id="username"
@@ -105,7 +105,7 @@
 					required
 				/>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="password">Password</Label>
 				<Input
 					id="password"
@@ -119,10 +119,10 @@
 		</form>
 	{/if}
 	{#if (config.passkeys_enabled && passkeysSupported()) || config.oidc_enabled}
-		<div class="my-4 flex items-center gap-2 font-mono text-[11px] text-muted-foreground uppercase">
+		<div class="my-4 flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
 			<span class="h-px flex-1 bg-border"></span>or<span class="h-px flex-1 bg-border"></span>
 		</div>
-		<div class="grid gap-2">
+		<div class="grid grid-cols-1 gap-2">
 			{#if config.passkeys_enabled && passkeysSupported()}
 				<Button variant="outline" disabled={busy} onclick={passkey}>SIGN IN WITH PASSKEY</Button>
 			{/if}

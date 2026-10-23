@@ -64,7 +64,7 @@
 </script>
 
 {#if editing}
-	<div class="grid gap-1.5 py-0.5">
+	<div class="grid grid-cols-1 gap-1.5 py-0.5">
 		{#if multiline}
 			<Textarea
 				bind:value={draft}
@@ -98,7 +98,7 @@
 		</div>
 		<button
 			type="button"
-			class="shrink-0 font-mono text-[11px] tracking-wider text-info uppercase hover:underline"
+			class="shrink-0 font-mono text-xs tracking-wider text-info uppercase hover:underline"
 			aria-label={`Edit ${label}`}
 			onclick={start}>EDIT</button
 		>

@@ -77,12 +77,12 @@
 				{parent ? `Flow down from ${parent.req_number}` : 'New level-0 requirement'}
 			</Dialog.Title>
 		</Dialog.Header>
-		<form class="grid gap-3" onsubmit={submit}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="qc-title">Title</Label>
 				<Input id="qc-title" bind:ref={titleEl} bind:value={title} maxlength={255} required />
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="qc-statement">Shall statement</Label>
 				<LintEditor
 					id="qc-statement"
@@ -92,7 +92,7 @@
 				/>
 			</div>
 			<Dialog.Footer class="items-center">
-				<span class="mr-auto font-mono text-[11px] text-muted-foreground">⌘↵ create</span>
+				<span class="mr-auto font-mono text-xs text-muted-foreground">⌘↵ create</span>
 				<Dialog.Close>
 					{#snippet child({ props })}<Button variant="outline" {...props}>DONE</Button>{/snippet}
 				</Dialog.Close>

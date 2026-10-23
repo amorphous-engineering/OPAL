@@ -78,19 +78,19 @@
 
 <PageHeader title="New risk" crumbs={[{ label: 'Risks', href: '/risks' }, { label: 'New' }]} />
 
-<form class="grid max-w-3xl gap-4 p-4" onsubmit={submit}>
+<form class="grid max-w-3xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
 	{#if error}
 		<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
 			{error}
 		</p>
 	{/if}
 
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="title">Title</Label>
 		<Input id="title" bind:value={title} maxlength={255} required autofocus />
 	</div>
 
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="condition">Condition <span class="label">present fact, true now</span></Label>
 		<LintField
 			id="condition"
@@ -100,7 +100,7 @@
 		/>
 	</div>
 
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="departure"
 			>Departure <span class="label">future undesired event; probability scores this</span></Label
 		>
@@ -112,7 +112,7 @@
 		/>
 	</div>
 
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="asset-text"
 			>Asset <span class="label">what is exposed: a part, or a name</span></Label
 		>
@@ -144,7 +144,7 @@
 		</div>
 	</div>
 
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="consequence"
 			>Consequence <span class="label">measurable impact; impact scores this</span></Label
 		>
@@ -156,8 +156,8 @@
 		/>
 	</div>
 
-	<div class="grid gap-3 sm:grid-cols-3">
-		<div class="grid content-start gap-1.5">
+	<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+		<div class="grid grid-cols-1 content-start gap-1.5">
 			<Label for="owner">Owner</Label>
 			<NativeSelect id="owner" class="w-full" bind:value={ownerId}>
 				<NativeSelectOption value="">—</NativeSelectOption>
@@ -166,7 +166,7 @@
 					>{/each}
 			</NativeSelect>
 		</div>
-		<div class="grid content-start gap-1.5">
+		<div class="grid grid-cols-1 content-start gap-1.5">
 			<Label for="probability">Probability</Label>
 			<NativeSelect id="probability" class="w-full" bind:value={probability}>
 				{#each PROBABILITY as p (p.value)}<NativeSelectOption value={String(p.value)}
@@ -174,7 +174,7 @@
 					>{/each}
 			</NativeSelect>
 		</div>
-		<div class="grid content-start gap-1.5">
+		<div class="grid grid-cols-1 content-start gap-1.5">
 			<Label for="impact">Impact</Label>
 			<NativeSelect id="impact" class="w-full" bind:value={impact}>
 				{#each IMPACT as p (p.value)}<NativeSelectOption value={String(p.value)}
@@ -185,7 +185,7 @@
 	</div>
 
 	<div class="flex flex-wrap items-end gap-3">
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="res-p">Residual probability</Label>
 			<NativeSelect id="res-p" bind:value={residualProbability}>
 				<NativeSelectOption value="">—</NativeSelectOption>
@@ -194,7 +194,7 @@
 					>{/each}
 			</NativeSelect>
 		</div>
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="res-i">Residual impact</Label>
 			<NativeSelect id="res-i" bind:value={residualImpact}>
 				<NativeSelectOption value="">—</NativeSelectOption>
@@ -203,10 +203,10 @@
 					>{/each}
 			</NativeSelect>
 		</div>
-		<div class="ml-auto grid gap-1.5 text-right">
+		<div class="ml-auto grid grid-cols-1 gap-1.5 text-right">
 			<span class="label">Score</span>
 			<Score
-				class="text-2xl font-semibold"
+				class="text-lg font-semibold"
 				{score}
 				severity={severityOf(score)}
 				{residual}
@@ -215,7 +215,7 @@
 		</div>
 	</div>
 
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="description">Narrative <span class="label">context, evidence, markdown</span></Label
 		>
 		<Textarea id="description" bind:value={description} rows={4} onkeydown={submitOnCtrlEnter} />

@@ -117,6 +117,19 @@
 	/* The one spacing step every p-/m-/gap-/h-/w- class multiplies (Tailwind's default is
 	   0.25rem). ~15% more air than the default keeps dense tables readable. */
 	--spacing: 0.2875rem;
+	/* Type ramp: four sizes, nothing else (root is 14px, so rem = 14px).
+	   xs 12px labels, timestamps, chips, mono metadata
+	   sm 13px body, tables, forms (the default)
+	   lg 16px page and dialog titles
+	   2xl 22px stat figures */
+	--text-xs: calc(12rem / 14);
+	--text-xs--line-height: 1.333;
+	--text-sm: calc(13rem / 14);
+	--text-sm--line-height: 1.538;
+	--text-lg: calc(16rem / 14);
+	--text-lg--line-height: 1.5;
+	--text-2xl: calc(22rem / 14);
+	--text-2xl--line-height: 1.273;
 	--font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 	--radius-sm: 0rem;
@@ -178,7 +191,7 @@
 		outline-offset: -1px;
 	}
 	body {
-		@apply bg-background font-sans text-foreground antialiased;
+		@apply bg-background font-sans text-sm text-foreground antialiased;
 	}
 }
 
@@ -188,7 +201,7 @@
 		@apply font-mono tabular-nums;
 	}
 	.label {
-		@apply font-mono text-[11px] font-medium tracking-wider text-muted-foreground uppercase;
+		@apply font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase;
 	}
 }
 

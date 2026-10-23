@@ -61,7 +61,7 @@
 							class="text-muted-foreground">—</span
 						>{/if}
 				{:else if col.key === 'actions'}
-					<span class="font-mono text-[11px] whitespace-nowrap">
+					<span class="font-mono text-xs whitespace-nowrap">
 						{#if previous(v)}
 							<a
 								class="text-info hover:underline"

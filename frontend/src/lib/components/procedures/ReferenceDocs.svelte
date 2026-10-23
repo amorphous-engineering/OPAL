@@ -106,7 +106,7 @@
 				{:else if col.key === 'actions'}
 					<button
 						type="button"
-						class="font-mono text-[11px] text-muted-foreground hover:text-error"
+						class="font-mono text-xs text-muted-foreground hover:text-error"
 						onclick={() => remove(d)}>DELETE</button
 					>
 				{:else}

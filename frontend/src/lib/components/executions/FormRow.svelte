@@ -17,10 +17,10 @@
 	} = $props();
 </script>
 
-<div class="grid content-start gap-1">
+<div class="grid grid-cols-1 content-start gap-1">
 	<label class="label" for={forId}
 		>{label}{#if required}<span class="text-error"> *</span>{/if}</label
 	>
 	{@render children()}
-	{#if hint}<p class="text-[11px] text-muted-foreground">{hint}</p>{/if}
+	{#if hint}<p class="text-xs text-muted-foreground">{hint}</p>{/if}
 </div>

@@ -163,8 +163,7 @@
 						{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
 								>{r.sublabel}</span
 							>{/if}
-						{#if r.status}<span
-								class="ml-auto font-mono text-[11px] text-muted-foreground uppercase"
+						{#if r.status}<span class="ml-auto font-mono text-xs text-muted-foreground uppercase"
 								>{r.status.replace(/_/g, ' ')}</span
 							>{/if}
 					</Command.Item>
@@ -179,7 +178,7 @@
 						{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
 								>{r.sublabel}</span
 							>{/if}
-						<span class="ml-auto font-mono text-[11px] text-muted-foreground uppercase"
+						<span class="ml-auto font-mono text-xs text-muted-foreground uppercase"
 							>{label(r.entity_type)}</span
 						>
 					</Command.Item>

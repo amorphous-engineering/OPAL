@@ -49,8 +49,8 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header><Dialog.Title>Clone template</Dialog.Title></Dialog.Header>
-		<form class="grid gap-3" onsubmit={submit}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="clone-name">Name</Label>
 				<Input id="clone-name" bind:value={newName} required maxlength={255} />
 			</div>

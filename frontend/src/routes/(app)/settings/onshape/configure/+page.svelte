@@ -77,7 +77,7 @@
 	]}
 />
 
-<div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+<div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
 	<form class="grid min-w-0 grid-cols-1 gap-4" onsubmit={save}>
 		{#if error}
 			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
@@ -85,12 +85,12 @@
 			</p>
 		{/if}
 		<Section title="API credentials">
-			<div class="grid gap-3 p-3">
-				<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-3 p-3">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="access">Access key</Label>
 					<Input id="access" class="font-mono" bind:value={accessKey} autocomplete="off" />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="secret">Secret key</Label>
 					<Input
 						id="secret"
@@ -107,11 +107,11 @@
 						</div>
 					{/if}
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="base">API base URL</Label>
 					<Input id="base" class="font-mono" bind:value={baseUrl} />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="poll">Poll interval (minutes)</Label>
 					<Input
 						id="poll"
@@ -121,9 +121,9 @@
 						step={1}
 						bind:value={poll}
 					/>
-					<span class="text-[11px] text-muted-foreground">0 turns automatic pulls off.</span>
+					<span class="text-xs text-muted-foreground">0 turns automatic pulls off.</span>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="webhook">Webhook secret</Label>
 					<Input
 						id="webhook"

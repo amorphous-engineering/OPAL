@@ -60,7 +60,7 @@
 	}
 </script>
 
-<div class="grid gap-1.5" data-step-kit-editor={step.order}>
+<div class="grid grid-cols-1 gap-1.5" data-step-kit-editor={step.order}>
 	<div class="flex items-center gap-2">
 		<span class="label">Step parts</span>
 		{#if !adding}
@@ -72,8 +72,7 @@
 			<thead>
 				<tr class="border-b border-border bg-muted/60 text-left">
 					{#each ['PART', 'REQ', 'TYPE', 'NOTES', ''] as h (h)}
-						<th
-							class="h-7 px-2 font-mono text-[11px] font-medium tracking-wider text-muted-foreground"
+						<th class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 							>{h}</th
 						>
 					{/each}
@@ -138,14 +137,14 @@
 		</table>
 	{/if}
 	{#if adding}
-		<form class="grid gap-2 border border-border bg-muted/30 p-2" onsubmit={add}>
+		<form class="grid grid-cols-1 gap-2 border border-border bg-muted/30 p-2" onsubmit={add}>
 			{#if chosen}
 				<div class="flex flex-wrap items-center gap-2 text-xs">
 					<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
 					<span class="min-w-0 truncate">{chosen.name}</span>
 					<button
 						type="button"
-						class="font-mono text-[11px] text-info hover:underline"
+						class="font-mono text-xs text-info hover:underline"
 						onclick={() => (chosen = null)}>CHANGE</button
 					>
 					<Input

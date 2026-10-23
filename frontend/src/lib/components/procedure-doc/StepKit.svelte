@@ -71,7 +71,7 @@
 {#if ctl.mode === 'author'}
 	<KitEditor {step} />
 {:else if step.step_kit.length || step.consumptions.length}
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<span class="label">Step parts</span>
 		{#if open.length}
 			<table class="w-full border-collapse text-xs">
@@ -79,7 +79,7 @@
 					<tr class="border-b border-border bg-muted/60 text-left">
 						{#each ['PART', 'REQ', 'TYPE', 'SOURCE', 'QTY'] as h (h)}
 							<th
-								class="h-7 px-2 font-mono text-[11px] font-medium tracking-wider text-muted-foreground"
+								class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 								>{h}</th
 							>
 						{/each}

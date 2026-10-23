@@ -134,7 +134,7 @@
 						{#each ['When', 'User', 'Action', 'Entity', 'Record', 'Change'] as h (h)}
 							<th
 								scope="col"
-								class="h-8 px-3 text-left font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+								class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 								>{h}</th
 							>
 						{/each}

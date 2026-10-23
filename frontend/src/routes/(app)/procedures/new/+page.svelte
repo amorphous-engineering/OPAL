@@ -39,24 +39,24 @@
 	crumbs={[{ label: 'Templates', href: '/procedures' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-2xl gap-4 px-4 py-4" onsubmit={submit}>
+<form class="grid max-w-2xl grid-cols-1 gap-4 px-4 py-4" onsubmit={submit}>
 	{#if error}
 		<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
 			{error}
 		</p>
 	{/if}
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="name">Name</Label>
 		<Input id="name" bind:value={name} required maxlength={255} autofocus />
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="type">Type</Label>
 		<NativeSelect id="type" bind:value={type} class="max-w-xs">
 			<NativeSelectOption value="op">OP — work order, no output</NativeSelectOption>
 			<NativeSelectOption value="build">BUILD — produces an assembly</NativeSelectOption>
 		</NativeSelect>
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="description">Description (markdown)</Label>
 		<Textarea id="description" rows={6} bind:value={description} />
 	</div>

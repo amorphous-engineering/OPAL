@@ -29,7 +29,7 @@
 						loading="lazy"
 						class="max-h-40 border border-border"
 					/>
-					{#if img.caption}<figcaption class="mt-0.5 text-[11px] text-muted-foreground">
+					{#if img.caption}<figcaption class="mt-0.5 text-xs text-muted-foreground">
 							{img.caption}
 						</figcaption>{/if}
 				</figure>
@@ -105,7 +105,7 @@
 				<div class="flex items-baseline gap-3">
 					<span class="font-mono text-xs text-muted-foreground">{s.step_number}</span>
 					<span>{s.title}</span>
-					<span class="ml-auto flex gap-3 font-mono text-[11px] text-muted-foreground uppercase">
+					<span class="ml-auto flex gap-3 font-mono text-xs text-muted-foreground uppercase">
 						{#if s.required_data_schema?.fields?.length}<span>data</span>{/if}
 						{#if s.estimated_duration_minutes}<span>{duration(s.estimated_duration_minutes)}</span
 							>{/if}

@@ -94,7 +94,7 @@
 			<Button size="xs" variant="outline" onclick={discard} disabled={busy}>DISCARD</Button>
 		</div>
 		<Dialog.Description class="sr-only">Markdown note with optional files</Dialog.Description>
-		<div class="grid gap-2">
+		<div class="grid grid-cols-1 gap-2">
 			<markdown-toolbar for={bodyId} class="flex flex-wrap items-center gap-1">
 				<md-bold class={tool} title="Bold" aria-label="Bold"><b>B</b></md-bold>
 				<md-italic class={tool} title="Italic" aria-label="Italic"><i>I</i></md-italic>
@@ -152,7 +152,7 @@
 				}}
 			/>
 			{#if files.length}
-				<ul class="grid border border-border font-mono text-xs">
+				<ul class="grid grid-cols-1 border border-border font-mono text-xs">
 					{#each files as f, i (f.name + i)}
 						<li class="flex items-center gap-2 border-b border-border px-2 py-1 last:border-b-0">
 							<span class="min-w-0 flex-1 truncate">{f.name}</span>

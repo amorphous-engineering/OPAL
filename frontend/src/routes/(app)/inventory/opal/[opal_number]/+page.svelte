@@ -187,7 +187,7 @@
 	</PageHeader>
 
 	<div class="space-y-4 p-4">
-		<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,48rem)_max-content]">
+		<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,48rem)_max-content]">
 			<Section title="Record">
 				{#snippet actions()}
 					<ActionLink onclick={openEdit}>EDIT</ActionLink>
@@ -288,7 +288,7 @@
 					alt="QR code for {rec.opal_number}"
 					class="size-32 bg-white p-1"
 				/>
-				<p class="mt-1.5 text-center font-mono text-[11px] text-muted-foreground">
+				<p class="mt-1.5 text-center font-mono text-xs text-muted-foreground">
 					{rec.opal_number}
 				</p>
 			</div>
@@ -460,14 +460,14 @@
 			<Dialog.Header>
 				<Dialog.Title class="text-sm font-semibold">Edit record</Dialog.Title>
 			</Dialog.Header>
-			<form onsubmit={saveEdit} class="grid gap-3">
-				<div class="grid gap-1.5">
+			<form onsubmit={saveEdit} class="grid grid-cols-1 gap-3">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="e-lot"
 						>{d.part.tracking_type === 'serialized' ? 'Lot / serial' : 'Lot'}</Label
 					>
 					<Input id="e-lot" class="font-mono" bind:value={editLot} autocomplete="off" />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="e-exp">Expires</Label>
 					<Input id="e-exp" type="date" class="font-mono" bind:value={editExp} />
 				</div>

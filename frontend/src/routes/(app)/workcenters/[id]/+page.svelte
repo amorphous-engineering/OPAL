@@ -100,7 +100,7 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-1 gap-4 p-4">
 	<Section title="Workcenter" class="max-w-3xl">
 		<DetailTable>
 			<DetailRow label="Code" value={wc.code} mono />

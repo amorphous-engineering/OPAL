@@ -386,8 +386,8 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-	<div class="grid content-start gap-4">
+<div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="Details">
 			<DetailTable>
 				{@render textRow('Description', 'description')}
@@ -489,7 +489,7 @@
 				</ul>
 			{/if}
 			<form
-				class="grid gap-1.5 border-t border-border p-3 first:border-t-0"
+				class="grid grid-cols-1 gap-1.5 border-t border-border p-3 first:border-t-0"
 				onsubmit={(e) => {
 					e.preventDefault();
 					postComment();
@@ -565,7 +565,7 @@
 						{:else}
 							<button
 								type="button"
-								class="font-mono text-[11px] tracking-wider text-error uppercase hover:underline"
+								class="font-mono text-xs tracking-wider text-error uppercase hover:underline"
 								onclick={() => removeAttachment(a)}>DELETE</button
 							>
 						{/if}
@@ -579,7 +579,7 @@
 		{/if}
 	</div>
 
-	<div class="grid content-start gap-4">
+	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="Issue">
 			<DetailTable>
 				<DetailRow label="Type">
@@ -670,16 +670,16 @@
 							onpick={(r) => link('part_id', r.id)}
 						/>
 					{:else}
-						<div class="flex items-baseline gap-2">
+						<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
 							{#if issue.part_id}
 								<a
 									href={`/parts/${issue.part_id}`}
 									class="font-mono whitespace-nowrap text-info hover:underline"
 									>{issue.part_number ?? issue.part_name}</a
 								>
-								<span class="truncate text-muted-foreground">{issue.part_name}</span>
+								<span class="min-w-0 truncate text-muted-foreground">{issue.part_name}</span>
 							{:else}<span class="text-muted-foreground">—</span>{/if}
-							<span class="ml-auto flex gap-2 font-mono text-[11px] tracking-wider uppercase">
+							<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
 								<button
 									type="button"
 									class="text-info hover:underline"
@@ -703,13 +703,13 @@
 							onpick={(r) => link('procedure_id', r.id)}
 						/>
 					{:else}
-						<div class="flex items-baseline gap-2">
+						<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
 							{#if issue.procedure_id}
 								<a href={`/procedures/${issue.procedure_id}`} class="text-info hover:underline"
 									>{issue.procedure_name}</a
 								>
 							{:else}<span class="text-muted-foreground">—</span>{/if}
-							<span class="ml-auto flex gap-2 font-mono text-[11px] tracking-wider uppercase">
+							<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
 								<button
 									type="button"
 									class="text-info hover:underline"
@@ -734,14 +734,14 @@
 							onpick={(r) => link('procedure_instance_id', r.id)}
 						/>
 					{:else}
-						<div class="flex items-baseline gap-2">
+						<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
 							{#if issue.procedure_instance_id}
 								<a
 									href={`/executions/${issue.procedure_instance_id}`}
 									class="font-mono text-info hover:underline">{issue.work_order_number}</a
 								>
 							{:else}<span class="text-muted-foreground">—</span>{/if}
-							<span class="ml-auto flex gap-2 font-mono text-[11px] tracking-wider uppercase">
+							<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
 								<button
 									type="button"
 									class="text-info hover:underline"
@@ -785,7 +785,7 @@
 				</DetailRow>
 				{#if issue.redline_ops.length}
 					<DetailRow label="Redline ops">
-						<ul class="grid gap-0.5">
+						<ul class="grid grid-cols-1 gap-0.5">
 							{#each issue.redline_ops as op (op.step_number)}
 								<li class="flex gap-2 font-mono text-xs">
 									<a
@@ -816,14 +816,13 @@
 								>{r.risk_number}</a
 							>
 							<span class="truncate">{r.title}</span>
-							<span
-								class="ml-auto font-mono text-[11px] tracking-wider text-muted-foreground uppercase"
+							<span class="ml-auto font-mono text-xs tracking-wider text-muted-foreground uppercase"
 								>{riskRoleLabel(r.relation)}</span
 							>
 							{#if r.relation !== 'realized'}
 								<button
 									type="button"
-									class="font-mono text-[11px] tracking-wider text-info uppercase hover:underline"
+									class="font-mono text-xs tracking-wider text-info uppercase hover:underline"
 									onclick={() => unlinkRisk(r.risk_id, r.risk_number)}>UNLINK</button
 								>
 							{/if}
@@ -874,7 +873,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
-			class="grid gap-1.5"
+			class="grid grid-cols-1 gap-1.5"
 			onsubmit={(e) => {
 				e.preventDefault();
 				commitNarrowing();

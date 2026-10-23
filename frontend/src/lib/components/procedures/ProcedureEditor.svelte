@@ -122,7 +122,7 @@
 			{store.error}
 		</p>
 	{:else}
-		<div class="mt-3 grid items-start gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
+		<div class="mt-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
 			<nav
 				class="hidden max-h-[calc(100svh-7rem)] overflow-y-auto border border-border bg-card lg:sticky lg:top-24 lg:block"
 				aria-label="Outline"
@@ -140,7 +140,7 @@
 							>
 								<span class="w-7 shrink-0 font-mono text-muted-foreground">{op.number}</span>
 								<span class="min-w-0 flex-1 truncate">{op.title || '—'}</span>
-								<span class="shrink-0 font-mono text-[11px] text-muted-foreground"
+								<span class="shrink-0 font-mono text-xs text-muted-foreground"
 									>{op.steps.length || ''}</span
 								>
 							</button>
@@ -154,7 +154,7 @@
 				{:else}
 					<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency} />
 					{#if total > 0}
-						<p class="mt-2 font-mono text-[11px] text-muted-foreground">
+						<p class="mt-2 font-mono text-xs text-muted-foreground">
 							J/K MOVE · ENTER EDIT TITLE · E OPEN/CLOSE · A ADD STEP · O ADD OP · D DUPLICATE · X
 							DELETE · ALT+UP/DOWN MOVE · P PREVIEW
 						</p>

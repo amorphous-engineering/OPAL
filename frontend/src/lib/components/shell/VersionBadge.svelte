@@ -25,8 +25,7 @@
 	<!-- The wordmark is OPAL orange; it is the one place the brand colour appears. -->
 	<span class="text-sm font-bold tracking-[0.2em] text-[var(--brand)]">OPAL</span>
 	{#if health}
-		<span
-			class="truncate text-[11px] {health.is_dev ? 'text-[var(--dev)]' : 'text-muted-foreground'}"
+		<span class="truncate text-xs {health.is_dev ? 'text-[var(--dev)]' : 'text-muted-foreground'}"
 			>{health.display}</span
 		>
 	{/if}

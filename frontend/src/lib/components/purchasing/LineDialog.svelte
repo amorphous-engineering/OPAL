@@ -80,8 +80,8 @@
 		<Dialog.Header>
 			<Dialog.Title>{line ? 'Edit line' : 'Add line'}</Dialog.Title>
 		</Dialog.Header>
-		<form class="grid gap-3" onsubmit={submit}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="line-part">Part</Label>
 				{#if line}
 					<div class="flex h-8 items-center gap-2 border border-border px-2.5 text-xs">
@@ -93,7 +93,7 @@
 				{/if}
 			</div>
 			<div class="grid grid-cols-2 gap-3">
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="line-qty"
 						>Quantity{line?.unit_of_measure && line.unit_of_measure !== 'ea'
 							? ` (${line.unit_of_measure})`
@@ -109,7 +109,7 @@
 						class="font-mono"
 					/>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="line-cost">Unit cost</Label>
 					<Input
 						id="line-cost"
@@ -122,7 +122,7 @@
 					/>
 				</div>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="line-dest">Destination</Label>
 				<Input
 					id="line-dest"
@@ -134,7 +134,7 @@
 					{#each locations as l (l)}<option value={l}></option>{/each}
 				</datalist>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="line-notes">Notes</Label>
 				<Input id="line-notes" bind:value={notes} />
 			</div>

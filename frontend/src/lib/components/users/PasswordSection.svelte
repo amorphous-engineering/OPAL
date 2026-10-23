@@ -42,14 +42,14 @@
 </script>
 
 <Section title="Password">
-	<form class="grid max-w-sm gap-3 p-3" onsubmit={submit}>
+	<form class="grid max-w-sm grid-cols-1 gap-3 p-3" onsubmit={submit}>
 		{#if error}
 			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
 				{error}
 			</p>
 		{/if}
 		{#if hasPassword}
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="pw-current">Current password</Label>
 				<Input
 					id="pw-current"
@@ -60,7 +60,7 @@
 				/>
 			</div>
 		{/if}
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="pw-new">New password</Label>
 			<Input
 				id="pw-new"
@@ -70,9 +70,9 @@
 				autocomplete="new-password"
 				required
 			/>
-			<span class="text-[11px] text-muted-foreground">At least 10 characters.</span>
+			<span class="text-xs text-muted-foreground">At least 10 characters.</span>
 		</div>
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="pw-confirm">Confirm new password</Label>
 			<Input
 				id="pw-confirm"

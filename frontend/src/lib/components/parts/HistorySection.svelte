@@ -65,7 +65,7 @@
 				{:else}
 					{@const rows = h.changes.filter((c) => !HIDE.has(c.field))}
 					{#if rows.length}
-						<ul class="grid gap-0.5">
+						<ul class="grid grid-cols-1 gap-0.5">
 							{#each rows as c (c.field)}
 								<li class="text-xs">
 									<span class="label mr-2">{c.field.replace(/_/g, ' ')}</span>

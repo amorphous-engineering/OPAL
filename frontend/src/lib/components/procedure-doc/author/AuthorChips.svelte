@@ -6,7 +6,7 @@
 
 	let { step }: { step: DocStep } = $props();
 	const fields = $derived(step.data_schema?.fields?.length ?? 0);
-	const chip = 'font-mono text-[11px] whitespace-nowrap text-muted-foreground hidden md:inline';
+	const chip = 'font-mono text-xs whitespace-nowrap text-muted-foreground hidden md:inline';
 </script>
 
 {#if step.estimated_duration_minutes}<span class={chip} title="Estimate"

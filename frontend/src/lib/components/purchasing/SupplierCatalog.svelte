@@ -145,8 +145,8 @@
 		<Dialog.Header
 			><Dialog.Title>{editing ? 'Edit catalog entry' : 'Add part'}</Dialog.Title></Dialog.Header
 		>
-		<form class="grid gap-3" onsubmit={submit}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="cat-part">Part</Label>
 				{#if editing}
 					<div class="flex h-8 items-center gap-2 border border-border px-2.5 text-xs">
@@ -157,7 +157,7 @@
 					<PartPicker id="cat-part" bind:value={part} activeOnly={false} />
 				{/if}
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="cat-pn">Supplier part number</Label>
 				<Input id="cat-pn" bind:value={vendorPn} required maxlength={255} class="font-mono" />
 			</div>
@@ -165,7 +165,7 @@
 				<Checkbox id="cat-pref" bind:checked={preferred} />
 				<Label for="cat-pref" class="text-xs">Preferred supplier for this part</Label>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="cat-notes">Notes</Label>
 				<Input id="cat-notes" bind:value={notes} />
 			</div>

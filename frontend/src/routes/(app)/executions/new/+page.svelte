@@ -107,9 +107,9 @@
 	crumbs={[{ label: 'Executions', href: '/executions' }, { label: 'Cut' }]}
 />
 
-<div class="grid items-start gap-4 p-4 lg:grid-cols-[26rem_minmax(0,1fr)]">
+<div class="grid grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[26rem_minmax(0,1fr)]">
 	<Section title="Cut">
-		<form class="grid gap-3 p-3" onsubmit={submit}>
+		<form class="grid grid-cols-1 gap-3 p-3" onsubmit={submit}>
 			<FormRow label="Procedure" for="cut-procedure" required>
 				<NativeSelect
 					id="cut-procedure"
@@ -192,7 +192,7 @@
 		</form>
 	</Section>
 
-	<div class="grid min-w-0 content-start gap-4">
+	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		{#if previewError}
 			<p role="alert" class="border border-error/40 bg-error-muted px-3 py-2 text-xs text-error">
 				{previewError}
@@ -228,7 +228,7 @@
 							<tr class="border-b border-border bg-muted/60 text-left">
 								{#each ['PART', 'QTY EACH', 'SERIALS'] as h (h)}
 									<th
-										class="h-8 px-3 font-mono text-[11px] font-medium tracking-wider text-muted-foreground"
+										class="h-8 px-3 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 										>{h}</th
 									>
 								{/each}

@@ -12,7 +12,7 @@
 	const groupActive = (g: (typeof NAV)[number]) => g.items.some((i) => isActive(path, i.href));
 
 	const trigger =
-		'inline-flex h-7 items-center gap-1 border border-transparent px-2 font-mono text-[11px] font-medium tracking-wider uppercase hover:bg-accent data-[state=open]:bg-accent';
+		'inline-flex h-7 items-center gap-1 border border-transparent px-2 font-mono text-xs font-medium tracking-wider uppercase hover:bg-accent data-[state=open]:bg-accent';
 </script>
 
 <nav aria-label="Primary" class="flex shrink-0 items-center gap-0.5">
@@ -26,7 +26,7 @@
 		{#each groups as g (g.label)}
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger class={cn(trigger, groupActive(g) && 'border-border text-info')}>
-					{g.label}<span aria-hidden="true" class="text-[9px]">▾</span>
+					{g.label}<span aria-hidden="true" class="text-xs">▾</span>
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="start" class="min-w-40">
 					{#each g.items as item (item.href)}
@@ -50,7 +50,7 @@
 	<div class="min-[900px]:hidden">
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger class={cn(trigger, 'border-border')}>
-				Menu<span aria-hidden="true" class="text-[9px]">▾</span>
+				Menu<span aria-hidden="true" class="text-xs">▾</span>
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="start" class="max-h-[80svh] min-w-48 overflow-y-auto">
 				<DropdownMenu.Item>

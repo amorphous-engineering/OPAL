@@ -78,12 +78,12 @@
 			{#if required.length}
 				<span
 					class={cn(
-						'font-mono text-[11px]',
+						'font-mono text-xs',
 						recorded === required.length ? 'text-ok' : 'text-muted-foreground'
 					)}>{recorded}/{required.length} required recorded</span
 				>
 			{:else if fields.length}
-				<span class="font-mono text-[11px] text-muted-foreground"
+				<span class="font-mono text-xs text-muted-foreground"
 					>{fields.length} {fields.length === 1 ? 'field' : 'fields'}</span
 				>
 			{/if}
@@ -100,16 +100,16 @@
 			{@const id = `cap-${step.order}-${f.name}`}
 			{@const err = errors[f.name]}
 			<div
-				class="grid items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(10rem,18rem)_minmax(0,26rem)]"
+				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(10rem,18rem)_minmax(0,26rem)]"
 			>
-				<div class="grid gap-0.5 sm:pt-1.5">
+				<div class="grid grid-cols-1 gap-0.5 sm:pt-1.5">
 					<label for={id} class="text-sm font-medium text-foreground">
 						{f.label ?? f.name}{#if f.required}<span class="text-error" title="Required">
 								*</span
 							>{/if}
 					</label>
 					{#if f.unit || f.min != null || f.max != null}
-						<span class="font-mono text-[11px] text-muted-foreground"
+						<span class="font-mono text-xs text-muted-foreground"
 							>{#if f.min != null || f.max != null}{f.min ?? '…'} – {f.max ??
 									'…'}{/if}{#if f.unit}{f.min != null || f.max != null
 									? ' '
@@ -117,7 +117,7 @@
 						>
 					{/if}
 				</div>
-				<div class="grid min-w-0 gap-1">
+				<div class="grid min-w-0 grid-cols-1 gap-1">
 					{#if f.type === 'number'}
 						<Input
 							{id}
@@ -162,11 +162,11 @@
 						/>
 					{:else if f.type === 'photo'}
 						{@const photos = ids(ctl.fieldValue(step, f.name))}
-						<div class="grid gap-1.5">
+						<div class="grid grid-cols-1 gap-1.5">
 							{#if photos.length}
 								<div class="flex flex-wrap gap-2" use:gallery>
 									{#each photos as pid (pid)}
-										<div class="grid gap-1">
+										<div class="grid grid-cols-1 gap-1">
 											<a
 												data-pswp
 												href={attachmentUrl(pid)}
@@ -211,7 +211,7 @@
 							oninput={(e) => ctl.setField(step, f.name, e.currentTarget.value || null)}
 						/>
 					{/if}
-					{#if err}<p class="text-[11px] text-error">{err}</p>{/if}
+					{#if err}<p class="text-xs text-error">{err}</p>{/if}
 				</div>
 				{#if authoring}<div class="sm:col-span-2"><FieldEditor {step} index={i} /></div>{/if}
 			</div>

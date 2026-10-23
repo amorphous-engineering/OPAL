@@ -44,8 +44,8 @@
 	}
 </script>
 
-<form class="grid gap-3" onsubmit={submit}>
-	<div class="grid gap-1.5">
+<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="wc-code">Code</Label>
 		<Input
 			id="wc-code"
@@ -56,15 +56,15 @@
 			placeholder="AB1"
 		/>
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="wc-name">Name</Label>
 		<Input id="wc-name" bind:value={name} required maxlength={255} />
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="wc-loc">Location</Label>
 		<Input id="wc-loc" bind:value={location} maxlength={255} />
 	</div>
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="wc-desc">Description</Label>
 		<Textarea id="wc-desc" bind:value={description} rows={3} />
 	</div>

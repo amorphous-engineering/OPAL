@@ -83,7 +83,7 @@
 
 <Section title="API tokens" count={loaded ? tokens.length : undefined}>
 	{#if revealed}
-		<div class="grid gap-2 border-b border-border bg-warn-muted p-3">
+		<div class="grid grid-cols-1 gap-2 border-b border-border bg-warn-muted p-3">
 			<div class="text-xs">
 				<span class="font-medium">{revealed.name}</span>
 				<span class="text-muted-foreground">

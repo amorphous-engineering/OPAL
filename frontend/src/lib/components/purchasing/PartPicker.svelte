@@ -84,7 +84,7 @@
 						<span class="font-mono text-info">{p.internal_pn ?? '—'}</span>
 						<span class="truncate">{p.name}</span>
 						{#if p.procurement}<span
-								class="ml-auto font-mono text-[11px] text-muted-foreground uppercase"
+								class="ml-auto font-mono text-xs text-muted-foreground uppercase"
 								>{p.procurement}</span
 							>{/if}
 					</Command.Item>

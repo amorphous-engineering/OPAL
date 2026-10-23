@@ -83,21 +83,21 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
-		<form class="grid gap-3" onsubmit={submit}>
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			{#if chosen}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<span class="label">Part</span>
 					<div class="flex items-center gap-2 border border-border px-2 py-1.5 text-xs">
 						<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
 						<span class="truncate">{chosen.name}</span>
 						<button
 							type="button"
-							class="ml-auto font-mono text-[11px] text-info hover:underline"
+							class="ml-auto font-mono text-xs text-info hover:underline"
 							onclick={() => (chosen = null)}>CHANGE</button
 						>
 					</div>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="part-qty">{qtyLabel}</Label>
 					<Input
 						id="part-qty"
@@ -110,7 +110,7 @@
 					/>
 				</div>
 			{:else}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="part-search">Part</Label>
 					<Input
 						id="part-search"

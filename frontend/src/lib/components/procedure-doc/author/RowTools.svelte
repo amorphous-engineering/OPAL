@@ -9,7 +9,7 @@
 	const au = useDoc().author!;
 
 	const btn =
-		'inline-flex h-6 min-w-6 items-center justify-center px-1 font-mono text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-ring';
+		'inline-flex h-6 min-w-6 items-center justify-center px-1 font-mono text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-ring';
 	const label = $derived(isOp ? `OP ${step.number}` : `step ${step.number}`);
 </script>
 

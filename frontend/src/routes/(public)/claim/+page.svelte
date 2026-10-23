@@ -46,7 +46,7 @@
 
 <svelte:head><title>Set password · OPAL</title></svelte:head>
 
-<h1 class="mb-4 text-base font-semibold">Set password</h1>
+<h1 class="mb-4 text-lg font-semibold">Set password</h1>
 
 {#if invalid}
 	<p role="alert" class="mb-3 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
@@ -62,12 +62,12 @@
 			{error}
 		</p>
 	{/if}
-	<form class="grid gap-3" onsubmit={submit}>
-		<div class="grid gap-1.5">
+	<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label>Username</Label>
 			<div class="mono text-sm">{username}</div>
 		</div>
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="password">Password</Label>
 			<Input
 				id="password"
@@ -77,7 +77,7 @@
 				required
 			/>
 		</div>
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="confirm">Confirm password</Label>
 			<Input
 				id="confirm"

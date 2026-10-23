@@ -11,7 +11,7 @@
 		{#each cursors as c (c.user_id)}
 			<span
 				class={cn(
-					'inline-flex h-5 min-w-6 items-center justify-center border px-1 font-mono text-[11px] font-medium',
+					'inline-flex h-5 min-w-6 items-center justify-center border px-1 font-mono text-xs font-medium',
 					c.user_id === viewerId
 						? 'border-foreground/60 font-semibold text-foreground'
 						: 'border-border text-foreground',

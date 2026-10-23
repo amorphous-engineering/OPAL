@@ -61,7 +61,7 @@
 	}
 </script>
 
-<div class="grid gap-1.5">
+<div class="grid grid-cols-1 gap-1.5">
 	<div class="flex flex-wrap items-center gap-1">
 		<label class="label" for={id}>{label}</label>
 		<span class="ml-auto flex items-center gap-1">
@@ -86,7 +86,7 @@
 			/>
 		</span>
 	</div>
-	<div class="grid items-start gap-3 lg:grid-cols-2">
+	<div class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
 		<Textarea
 			{id}
 			bind:ref={area}

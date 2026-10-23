@@ -78,7 +78,7 @@
 </script>
 
 {#if editing}
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		{#if lint}
 			<LintField field={lint} bind:value={draft} {onkeydown} />
 		{:else if multiline}

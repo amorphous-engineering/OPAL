@@ -30,7 +30,7 @@
 </script>
 
 <div
-	class="grid max-w-5xl min-w-0 content-start gap-3 [overflow-wrap:anywhere] [&_table]:table-fixed"
+	class="grid max-w-5xl min-w-0 grid-cols-1 content-start gap-3 [overflow-wrap:anywhere] [&_table]:table-fixed"
 >
 	{#if rows.length || doc.attachments.length}
 		<Section
@@ -39,7 +39,7 @@
 				? rows.reduce((n, s) => n + s.attachments.length, doc.attachments.length)
 				: undefined}
 		>
-			<div class="grid">
+			<div class="grid grid-cols-1">
 				{#each rows as s (s.order)}
 					<div
 						id={`evidence-${s.order}`}
@@ -100,7 +100,7 @@
 </div>
 
 {#snippet files(list: typeof doc.attachments)}
-	<div class="grid gap-1.5" use:gallery>
+	<div class="grid grid-cols-1 gap-1.5" use:gallery>
 		{#each list as a (a.id)}
 			<div class="flex flex-wrap items-start gap-x-2 gap-y-0.5">
 				{#if a.mime_type.startsWith('image/')}
@@ -126,7 +126,7 @@
 						rel="noopener">{a.filename}</a
 					>
 				{/if}
-				<div class="min-w-0 flex-1 font-mono text-[11px] text-muted-foreground">
+				<div class="min-w-0 flex-1 font-mono text-xs text-muted-foreground">
 					{#if a.kind === 'closeout'}<span class="text-ok">CLOSEOUT</span> ·{/if}
 					{a.uploaded_by ?? ''}
 					<Timestamp value={a.created_at} />

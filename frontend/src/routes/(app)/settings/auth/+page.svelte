@@ -103,7 +103,7 @@
 	crumbs={[{ label: 'System' }, { label: 'Settings', href: '/settings' }, { label: 'Sign-in' }]}
 />
 
-<div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+<div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
 	<form class="grid min-w-0 grid-cols-1 gap-4" onsubmit={save}>
 		{#if error}
 			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
@@ -112,7 +112,7 @@
 		{/if}
 
 		<Section title="Local credentials">
-			<div class="grid gap-3 p-3">
+			<div class="grid grid-cols-1 gap-3 p-3">
 				<div class="flex items-center gap-2">
 					<Switch id="password" bind:checked={passwordLogin} />
 					<Label for="password">Username and password</Label>
@@ -125,12 +125,12 @@
 		</Section>
 
 		<Section title="OpenID Connect">
-			<div class="grid gap-3 p-3">
+			<div class="grid grid-cols-1 gap-3 p-3">
 				<div class="flex items-center gap-2">
 					<Switch id="oidc" bind:checked={oidc} />
 					<Label for="oidc">Single sign-on</Label>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="issuer">Issuer URL</Label>
 					<Input
 						id="issuer"
@@ -140,11 +140,11 @@
 						placeholder="https://id.example.com"
 					/>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="client-id">Client id</Label>
 					<Input id="client-id" class="font-mono" bind:value={clientId} autocomplete="off" />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="client-secret">Client secret</Label>
 					<Input
 						id="client-secret"
@@ -163,19 +163,19 @@
 						</div>
 					{/if}
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="provider">Provider name</Label>
 					<Input id="provider" bind:value={provider} placeholder="Pocket ID" />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="scopes">Scopes</Label>
 					<Input id="scopes" class="font-mono" bind:value={scopes} />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="groups">Groups claim</Label>
 					<Input id="groups" class="font-mono" bind:value={groupsClaim} />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="admin-group">Admin group</Label>
 					<Input
 						id="admin-group"
@@ -184,7 +184,7 @@
 						placeholder="opal-admins"
 					/>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="base-url">Public base URL</Label>
 					<Input
 						id="base-url"

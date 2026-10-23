@@ -54,7 +54,7 @@
 						{#if s.signed_by}
 							<span class="inline-flex items-center gap-2">
 								<span
-									class="inline-flex h-5 min-w-6 items-center justify-center border border-border px-1 text-[11px] font-medium"
+									class="inline-flex h-5 min-w-6 items-center justify-center border border-border px-1 text-xs font-medium"
 									aria-hidden="true">{initials(s.signed_by.name)}</span
 								>
 								<span>
@@ -73,7 +73,7 @@
 					<td class="w-32 px-3 py-2 text-right">
 						{#if signed}
 							<span
-								class="inline-flex h-5 items-center border border-border px-1.5 text-[11px] font-medium text-muted-foreground"
+								class="inline-flex h-5 items-center border border-border px-1.5 text-xs font-medium text-muted-foreground"
 								>COMPLETE</span
 							>
 						{:else if sign}

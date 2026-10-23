@@ -25,7 +25,7 @@
 </script>
 
 <div class="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-3">
-	<div class="grid content-start gap-1">
+	<div class="grid grid-cols-1 content-start gap-1">
 		<label for={`${pid}-est`} class="label">Estimate (min)</label>
 		<Input
 			id={`${pid}-est`}
@@ -43,7 +43,7 @@
 			}}
 		/>
 	</div>
-	<div class="grid content-start gap-1">
+	<div class="grid grid-cols-1 content-start gap-1">
 		<label for={`${pid}-wc`} class="label">Workcenter</label>
 		<NativeSelect
 			id={`${pid}-wc`}
@@ -59,7 +59,7 @@
 		</NativeSelect>
 	</div>
 	{#if isOp}
-		<div class="grid content-start gap-1">
+		<div class="grid grid-cols-1 content-start gap-1">
 			<span class="label">Contingency</span>
 			<label class="flex h-8 items-center gap-2 text-xs">
 				<Checkbox
@@ -71,7 +71,7 @@
 			</label>
 		</div>
 		{#if op.steps.length}
-			<div class="grid content-start gap-1">
+			<div class="grid grid-cols-1 content-start gap-1">
 				<span class="label">Sequence</span>
 				<label class="flex h-8 items-center gap-2 text-xs">
 					<Checkbox
@@ -86,7 +86,7 @@
 	{/if}
 </div>
 {#if isOp}
-	<div class="mt-3 grid gap-1" data-waits-on>
+	<div class="mt-3 grid grid-cols-1 gap-1" data-waits-on>
 		<span class="label">Waits on</span>
 		<div class="flex flex-wrap gap-1">
 			{#each others as o (o.order)}
@@ -95,7 +95,7 @@
 					aria-pressed={waits.has(o.order)}
 					title={o.title}
 					class={cn(
-						'inline-flex h-6 items-center border px-2 font-mono text-[11px]',
+						'inline-flex h-6 items-center border px-2 font-mono text-xs',
 						waits.has(o.order)
 							? 'border-primary bg-primary text-primary-foreground'
 							: 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'

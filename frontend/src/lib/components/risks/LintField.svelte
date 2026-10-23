@@ -69,7 +69,7 @@
 	});
 </script>
 
-<div class="grid">
+<div class="grid grid-cols-1">
 	<div
 		aria-hidden="true"
 		class="pointer-events-none col-start-1 row-start-1 min-h-12 overflow-hidden border border-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-transparent"
@@ -92,7 +92,7 @@
 	/>
 </div>
 {#if messages.length}
-	<ul class="mt-1 grid gap-0.5 font-mono text-[11px]">
+	<ul class="mt-1 grid grid-cols-1 gap-0.5 font-mono text-xs">
 		{#each messages as m (m.rule + m.message)}
 			<li class={m.severity === 'block' ? 'text-error' : 'text-warn'}>
 				{m.rule} · {m.message}

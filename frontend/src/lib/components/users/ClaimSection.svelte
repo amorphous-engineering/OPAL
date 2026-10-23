@@ -34,7 +34,7 @@
 			>{link ? 'ISSUE NEW LINK' : 'ISSUE CLAIM LINK'}</Button
 		>
 	{/snippet}
-	<div class="grid gap-2 p-3">
+	<div class="grid grid-cols-1 gap-2 p-3">
 		{#if link}
 			<CopyField value={claimUrl(link)} label="Claim link" />
 			<div class="text-xs text-muted-foreground">

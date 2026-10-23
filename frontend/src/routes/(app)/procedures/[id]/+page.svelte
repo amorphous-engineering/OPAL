@@ -155,8 +155,8 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid items-start gap-4 p-4 xl:grid-cols-2">
-	<div class="grid min-w-0 gap-4">
+<div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-2">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Details">
 			<DetailTable>
 				<DetailRow label="Type" value={p.procedure_type.toUpperCase()} mono />
@@ -197,7 +197,7 @@
 		</Section>
 	</div>
 
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if data.executions.total === 0}
 			{#if startable}
 				<EmptyLine label="Executions">
@@ -260,7 +260,7 @@
 	{/key}
 </div>
 
-<div class="grid gap-4 px-4 pb-4">
+<div class="grid grid-cols-1 gap-4 px-4 pb-4">
 	<PartLines kind="kit" procedureId={p.id} lines={data.kit} onchange={reload} />
 	{#if showOutputs}
 		<PartLines kind="outputs" procedureId={p.id} lines={data.outputs} onchange={reload} />

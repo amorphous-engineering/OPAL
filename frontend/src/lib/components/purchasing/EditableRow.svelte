@@ -84,7 +84,7 @@
 <tr class="group/row border-b border-border last:border-b-0">
 	<th
 		scope="row"
-		class="w-40 py-1.5 pr-3 pl-3 text-left align-top font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+		class="w-40 py-1.5 pr-3 pl-3 text-left align-top font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 		>{label}</th
 	>
 	<td class="py-1.5 pr-3 align-top" bind:this={root}>
@@ -128,7 +128,7 @@
 				{#if editable}
 					<button
 						type="button"
-						class="font-mono text-[11px] tracking-wider text-muted-foreground uppercase opacity-0 group-hover/row:opacity-100 hover:text-info focus-visible:opacity-100"
+						class="font-mono text-xs tracking-wider text-muted-foreground uppercase opacity-0 group-hover/row:opacity-100 hover:text-info focus-visible:opacity-100"
 						onclick={start}
 						aria-label={`Edit ${label}`}>Edit</button
 					>

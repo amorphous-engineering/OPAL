@@ -106,8 +106,8 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-	<div class="grid min-w-0 gap-4">
+<div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Extension">
 			<DetailTable>
 				<DetailRow label="Version" mono value={ext.version} />
@@ -150,7 +150,7 @@
 		{/if}
 	</div>
 
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if ext.id === 'opal.onshape'}
 			<OnshapePanel enabled={ext.enabled} {isAdmin} />
 		{/if}

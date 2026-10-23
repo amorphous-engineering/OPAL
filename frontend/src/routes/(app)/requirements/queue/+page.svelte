@@ -196,18 +196,18 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-1 gap-4 p-4">
 	{#if !items.length}
 		<EmptyLine label="Ready to baseline" />
 	{:else}
-		<div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
+		<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
 			{#if current}
 				<Section
 					title={`${current.req_number} REV ${current.revision}`}
 					count={`${cursor + 1} of ${items.length}`}
 				>
 					{#snippet actions()}
-						<span class="mr-2 hidden font-mono text-[11px] text-muted-foreground md:inline"
+						<span class="mr-2 hidden font-mono text-xs text-muted-foreground md:inline"
 							>a approve · s skip · e edit · j/k move · esc abandon</span
 						>
 						<Button size="xs" onclick={() => disposition('approve')}>APPROVE</Button>
@@ -252,7 +252,7 @@
 						{/if}
 						{#if current.change}
 							<DetailRow label={`Change since rev ${current.change.rev_a}`}>
-								<div class="grid gap-1">
+								<div class="grid grid-cols-1 gap-1">
 									<Redline segments={current.change.statement} />
 									<Redline segments={current.change.rationale} />
 								</div>
@@ -262,7 +262,7 @@
 				</Section>
 			{/if}
 
-			<div class="grid gap-4">
+			<div class="grid grid-cols-1 gap-4">
 				<Section title="QUEUE" count={`${staged.length} approved · ${skipped.length} skipped`}>
 					<DataTable
 						rows={items}
@@ -288,7 +288,7 @@
 
 				<Section title="COMMIT" count={stagedItems.length}>
 					<form
-						class="grid gap-3 p-3"
+						class="grid grid-cols-1 gap-3 p-3"
 						onsubmit={(e) => {
 							e.preventDefault();
 							commit();
@@ -302,7 +302,7 @@
 								{error}
 							</p>
 						{/if}
-						<div class="grid gap-1.5">
+						<div class="grid grid-cols-1 gap-1.5">
 							<Label for="q-label">Label</Label>
 							<Input
 								id="q-label"
@@ -312,11 +312,11 @@
 								class="font-mono"
 							/>
 						</div>
-						<div class="grid gap-1.5">
+						<div class="grid grid-cols-1 gap-1.5">
 							<Label for="q-note">Note</Label>
 							<Textarea id="q-note" bind:value={note} rows={2} />
 						</div>
-						<p class="font-mono text-[11px] text-muted-foreground">
+						<p class="font-mono text-xs text-muted-foreground">
 							signed {session.user?.name ?? '—'} · {iso(new Date()).slice(0, 19)}Z
 						</p>
 						<Button type="submit" disabled={busy || !stagedItems.length}

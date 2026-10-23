@@ -56,7 +56,7 @@
 	}
 </script>
 
-<form class="grid gap-3" onsubmit={submit}>
+<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 	<Dialog.Header><Dialog.Title>Edit work order</Dialog.Title></Dialog.Header>
 	<FormRow label="Work order" for="wo-number">
 		<Input id="wo-number" bind:value={workOrder} class="font-mono" maxlength={100} />

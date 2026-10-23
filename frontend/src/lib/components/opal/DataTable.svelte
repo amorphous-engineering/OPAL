@@ -134,7 +134,7 @@
 									: 'descending'
 								: undefined}
 							class={cn(
-								'h-8 px-3 font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase',
+								'h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase',
 								alignClass[col.align ?? 'left']
 							)}
 						>
@@ -144,7 +144,7 @@
 									class="inline-flex items-center gap-1 uppercase hover:text-foreground"
 									onclick={() => toggleSort(col)}
 								>
-									{col.label}<span class="w-2 text-[10px]"
+									{col.label}<span class="w-2 text-xs"
 										>{sort?.key === col.key ? (sort.dir === 'asc' ? '▲' : '▼') : ''}</span
 									>
 								</button>

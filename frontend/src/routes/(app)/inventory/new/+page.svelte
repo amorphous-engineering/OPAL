@@ -173,7 +173,7 @@
 						<div class="flex items-center gap-2">
 							<span class="font-mono text-info">{part.internal_pn ?? '—'}</span>
 							<span>{part.name}</span>
-							<span class="font-mono text-[11px] text-muted-foreground uppercase"
+							<span class="font-mono text-xs text-muted-foreground uppercase"
 								>{part.tracking_type}{part.tier_name ? ` · ${part.tier_name}` : ''}</span
 							>
 							<Button size="xs" variant="ghost" class="ml-auto" onclick={() => (part = null)}
@@ -200,7 +200,7 @@
 											>
 												<span class="font-mono text-info">{p.internal_pn ?? '—'}</span>
 												<span class="truncate">{p.name}</span>
-												<span class="ml-auto font-mono text-[11px] text-muted-foreground uppercase"
+												<span class="ml-auto font-mono text-xs text-muted-foreground uppercase"
 													>{p.tracking_type}</span
 												>
 											</button>

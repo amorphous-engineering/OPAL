@@ -25,7 +25,7 @@
 	<Section title="Recent activity" count={entries.length}>
 		{#snippet actions()}
 			<a
-				class="font-mono text-[11px] tracking-wider text-info uppercase hover:underline"
+				class="font-mono text-xs tracking-wider text-info uppercase hover:underline"
 				href={`/audit?user=${userId}`}>AUDIT LOG</a
 			>
 		{/snippet}

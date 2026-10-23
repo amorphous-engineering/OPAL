@@ -66,7 +66,7 @@
 			>
 		</DetailTable>
 
-		<div class="grid gap-4 md:grid-cols-2">
+		<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 			<Section title="Set up project">
 				<div class="space-y-3 p-3 text-sm">
 					<p>Project name, inventory tiers, part numbering, categories and requirements.</p>
@@ -99,7 +99,7 @@
 			<Button size="sm" disabled={busy !== null} onclick={() => finish()}>GET STARTED</Button>
 		{/snippet}
 	</PageHeader>
-	<div class="grid max-w-6xl gap-4 p-4 lg:grid-cols-2">
+	<div class="grid max-w-6xl grid-cols-1 gap-4 p-4 lg:grid-cols-2">
 		<Section title="What OPAL is">
 			<DetailTable>
 				<DetailRow label="Database"
@@ -182,7 +182,7 @@
 		</Section>
 
 		<Section title="Navigation" class="lg:col-span-2">
-			<div class="grid gap-x-8 md:grid-cols-2">
+			<div class="grid grid-cols-1 gap-x-8 md:grid-cols-2">
 				<DetailTable>
 					{#each ACTION_SHORTCUTS as s (s.keys)}
 						<DetailRow label={s.keys} mono>{s.label}</DetailRow>

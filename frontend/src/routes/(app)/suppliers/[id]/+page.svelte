@@ -71,7 +71,7 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4 xl:grid-cols-[minmax(0,34rem)_minmax(0,1fr)]">
+<div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,34rem)_minmax(0,1fr)]">
 	<Section title="SUPPLIER" class="content-start">
 		<DetailTable>
 			<EditableRow
@@ -165,7 +165,7 @@
 		</DetailTable>
 	</Section>
 
-	<div class="grid min-w-0 content-start gap-4">
+	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		{#if data.purchases.length === 0}
 			<EmptyLine label="Purchase orders" />
 		{:else}

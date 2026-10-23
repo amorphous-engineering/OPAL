@@ -99,7 +99,7 @@
 	>
 		<State value="draft" tone="warn" badge />
 		<dl
-			class="grid min-w-0 flex-1 [grid-template-columns:max-content_1fr] gap-x-3 gap-y-0.5 text-xs"
+			class="grid min-w-0 flex-1 [grid-template-columns:max-content_1fr] grid-cols-1 gap-x-3 gap-y-0.5 text-xs"
 		>
 			<dt class="label">Blocks</dt>
 			<dd>PO lines · stock receipts · executions · consumption · production output</dd>
@@ -114,12 +114,14 @@
 	</div>
 {/if}
 
-<div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(24rem,30rem)_minmax(0,1fr)]">
-	<div class="grid min-w-0 gap-3">
+<div
+	class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(24rem,30rem)_minmax(0,1fr)]"
+>
+	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<IdentitySection {detail} fields={data.fields} />
 		<DesignSections {detail} />
 	</div>
-	<div class="grid min-w-0 gap-3">
+	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<BomSection {detail} />
 		<StockSection {detail} />
 		<UsageSections {detail} group="purchasing" />

@@ -230,7 +230,10 @@
 	const catalog = $derived(existing?.requirements ?? []);
 </script>
 
-<form class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" onsubmit={save}>
+<form
+	class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+	onsubmit={save}
+>
 	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if error}
 			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
@@ -239,12 +242,12 @@
 		{/if}
 
 		<Section title="Project">
-			<div class="grid gap-3 p-3">
-				<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-3 p-3">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="p-name">Name</Label>
 					<Input id="p-name" bind:value={name} required autocomplete="off" />
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="p-desc">Description</Label>
 					<Textarea id="p-desc" bind:value={description} rows={2} />
 				</div>
@@ -261,7 +264,7 @@
 						<tr class="border-b border-border bg-muted/60">
 							{#each ['Level', 'Name', 'Code', 'Description', 'Tracking', 'Lot required', 'Auto serial', ''] as h (h)}
 								<th
-									class="h-8 px-2 text-left font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+									class="h-8 px-2 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 									>{h}</th
 								>
 							{/each}
@@ -329,7 +332,7 @@
 		</Section>
 
 		<Section title="Categories" count={categories.length}>
-			<div class="grid gap-2 p-3">
+			<div class="grid grid-cols-1 gap-2 p-3">
 				{#if categories.length}
 					<div class="flex flex-wrap gap-1">
 						{#each categories as c (c)}
@@ -372,7 +375,7 @@
 				<Button variant="ghost" size="xs" onclick={addField}>+ ADD FIELD</Button>
 			{/snippet}
 			{#if fields.length}
-				<div class="grid gap-2 p-3">
+				<div class="grid grid-cols-1 gap-2 p-3">
 					{#each fields as f (f.id)}
 						<div class="flex gap-2">
 							<Input
@@ -402,13 +405,13 @@
 
 	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Part numbering">
-			<div class="grid gap-3 p-3">
+			<div class="grid grid-cols-1 gap-3 p-3">
 				<div class="grid grid-cols-3 gap-3">
-					<div class="grid gap-1.5">
+					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="pn-prefix">Prefix</Label>
 						<Input id="pn-prefix" class="font-mono" bind:value={prefix} placeholder="e.g. RV1" />
 					</div>
-					<div class="grid gap-1.5">
+					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="pn-sep">Separator</Label>
 						<NativeSelect.Root id="pn-sep" bind:value={separator} class="w-full">
 							<NativeSelect.Option value="-">- dash</NativeSelect.Option>
@@ -417,7 +420,7 @@
 							<NativeSelect.Option value="">none</NativeSelect.Option>
 						</NativeSelect.Root>
 					</div>
-					<div class="grid gap-1.5">
+					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="pn-digits">Sequence digits</Label>
 						<NativeSelect.Root id="pn-digits" bind:value={digits} class="w-full">
 							{#each [3, 4, 5, 6] as d (d)}
@@ -426,7 +429,7 @@
 						</NativeSelect.Root>
 					</div>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="pn-format">Format</Label>
 					<Input
 						id="pn-format"
@@ -434,7 +437,7 @@
 						bind:value={format}
 						aria-invalid={formatProblem ? true : undefined}
 					/>
-					<span class="font-mono text-[11px] text-muted-foreground"
+					<span class="font-mono text-xs text-muted-foreground"
 						>{'{prefix} {sep} {tier_code} {tier_name} {tier_level} {sequence}'}</span
 					>
 					{#if formatProblem}<span class="text-xs text-error">{formatProblem}</span>{/if}

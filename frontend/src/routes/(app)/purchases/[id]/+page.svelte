@@ -170,8 +170,8 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4 xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
-	<div class="grid content-start gap-4">
+<div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
+	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="ORDER">
 			<DetailTable>
 				<EditableRow
@@ -259,7 +259,7 @@
 		</Section>
 	</div>
 
-	<div class="grid min-w-0 content-start gap-4">
+	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		{#if po.lines.length === 0}
 			<EmptyLine label="Lines">
 				{#snippet action()}
@@ -322,7 +322,7 @@
 	</div>
 </div>
 
-<div class="grid gap-4 px-4 pb-4">
+<div class="grid grid-cols-1 gap-4 px-4 pb-4">
 	{#if canReceive}
 		<ReceiveSection purchase={po} locations={data.locations} onreceived={refresh} />
 	{/if}

@@ -71,7 +71,7 @@
 
 <form class="max-w-3xl p-4" onsubmit={submit}>
 	<Section title="DRAFT">
-		<div class="grid gap-4 p-4">
+		<div class="grid grid-cols-1 gap-4 p-4">
 			{#if error}
 				<p
 					role="alert"
@@ -80,7 +80,7 @@
 					{error}
 				</p>
 			{/if}
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="title">Title</Label>
 				<Input
 					id="title"
@@ -90,7 +90,7 @@
 					placeholder="Short name, e.g. Chamber pressure"
 				/>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="statement">Shall statement</Label>
 				<LintEditor
 					id="statement"
@@ -99,7 +99,7 @@
 					placeholder="The <subject> shall <one thought>, e.g. The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
 				/>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="rationale">Rationale</Label>
 				<Textarea
 					id="rationale"
@@ -108,8 +108,8 @@
 					placeholder="Where the number came from and what it protects. Required before baseline."
 				/>
 			</div>
-			<div class="grid items-start gap-4 sm:grid-cols-2">
-				<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="parent">Parent</Label>
 					<NativeSelect id="parent" bind:value={parentId} class="w-full">
 						<NativeSelectOption value="">None (level 0)</NativeSelectOption>
@@ -119,11 +119,11 @@
 							>
 						{/each}
 					</NativeSelect>
-					<p class="font-mono text-[11px] text-muted-foreground">
+					<p class="font-mono text-xs text-muted-foreground">
 						Level {parent ? parent.level + 1 : 0}
 					</p>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="method">Verification method</Label>
 					<NativeSelect id="method" bind:value={method} class="w-full">
 						<NativeSelectOption value="">Not set</NativeSelectOption>
@@ -132,7 +132,7 @@
 						{/each}
 					</NativeSelect>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="category">Category</Label>
 					<Input
 						id="category"
@@ -158,8 +158,8 @@
 				</label>
 			</div>
 			{#if tbr}
-				<div class="grid items-start gap-4 sm:grid-cols-2">
-					<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
+					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="owner">TBR owner</Label>
 						<NativeSelect id="owner" bind:value={owner} class="w-full">
 							<NativeSelectOption value="">Not set</NativeSelectOption>
@@ -168,7 +168,7 @@
 							{/each}
 						</NativeSelect>
 					</div>
-					<div class="grid gap-1.5">
+					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="due">TBR due</Label>
 						<Input id="due" type="date" bind:value={due} class="w-44 font-mono" />
 					</div>

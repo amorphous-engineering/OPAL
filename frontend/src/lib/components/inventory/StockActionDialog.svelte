@@ -154,9 +154,9 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<form onsubmit={submit} class="grid gap-3">
+		<form onsubmit={submit} class="grid grid-cols-1 gap-3">
 			{#if action === 'adjust'}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="adj-reason">Reason</Label>
 					<NativeSelect id="adj-reason" class="w-full" bind:value={reason}>
 						<option value="found">Found (add)</option>
@@ -166,7 +166,7 @@
 					</NativeSelect>
 				</div>
 				{#if reason === 'correction'}
-					<div class="grid gap-1.5">
+					<div class="grid grid-cols-1 gap-1.5">
 						<Label class="label" for="adj-dir">Direction</Label>
 						<NativeSelect id="adj-dir" class="w-full" bind:value={direction}>
 							<option value="add">Add</option>
@@ -174,7 +174,7 @@
 						</NativeSelect>
 					</div>
 				{/if}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="adj-amount">Quantity</Label>
 					<Input
 						id="adj-amount"
@@ -194,7 +194,7 @@
 					</p>
 				</div>
 			{:else if action === 'count'}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="count-qty">Counted quantity</Label>
 					<Input
 						id="count-qty"
@@ -210,7 +210,7 @@
 					</p>
 				</div>
 			{:else}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="mv-qty">Quantity</Label>
 					<Input
 						id="mv-qty"
@@ -229,7 +229,7 @@
 						</p>
 					{/if}
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="mv-loc">To location</Label>
 					<Input
 						id="mv-loc"
@@ -243,7 +243,7 @@
 						{#each locations as l (l)}<option value={l}></option>{/each}
 					</datalist>
 				</div>
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="mv-lot">To lot</Label>
 					<Input
 						id="mv-lot"
@@ -256,7 +256,7 @@
 			{/if}
 
 			{#if action !== 'count'}
-				<div class="grid gap-1.5">
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label class="label" for="act-notes">Notes</Label>
 					<Textarea id="act-notes" rows={2} bind:value={notes} />
 				</div>

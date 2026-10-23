@@ -114,7 +114,7 @@
 						{#each [['ITEM', 'left'], ['QTY', 'right'], ['UNIT COST', 'right'], ['TOTAL', 'right'], ['TIER', 'left'], ['RECORDED', 'left'], ['', 'left']] as [h, a] (h)}
 							<th
 								scope="col"
-								class="h-8 px-3 font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+								class="h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 								class:text-right={a === 'right'}
 								class:text-left={a === 'left'}>{h}</th
 							>
@@ -161,7 +161,7 @@
 						<th
 							scope="row"
 							colspan="3"
-							class="px-3 py-1.5 text-left font-mono text-[11px] tracking-wider text-muted-foreground uppercase"
+							class="px-3 py-1.5 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase"
 							>TOTAL</th
 						>
 						<td class="px-3 py-1.5 text-right font-mono font-medium tabular-nums"
@@ -178,14 +178,14 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-sm">
 		<Dialog.Header><Dialog.Title>Add charge</Dialog.Title></Dialog.Header>
-		<form class="grid gap-3" onsubmit={add}>
-			<div class="grid gap-1.5">
+		<form class="grid grid-cols-1 gap-3" onsubmit={add}>
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="charge-kind">Kind</Label>
 				<NativeSelect id="charge-kind" bind:value={kind} class="w-full">
 					{#each KINDS as k (k)}<option value={k}>{k.toUpperCase()}</option>{/each}
 				</NativeSelect>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="charge-amount">Amount</Label>
 				<Input
 					id="charge-amount"
@@ -197,7 +197,7 @@
 					class="font-mono"
 				/>
 			</div>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="charge-note">Note</Label>
 				<Input id="charge-note" bind:value={note} maxlength={500} />
 			</div>

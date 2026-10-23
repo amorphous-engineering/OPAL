@@ -18,7 +18,7 @@
 				<tr class="border-b border-border last:border-b-0">
 					<th
 						scope="row"
-						class="w-48 py-1 pr-3 text-left align-top font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+						class="w-48 py-1 pr-3 text-left align-top font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 					>
 						{f.label ?? f.name}{#if f.unit}&nbsp;({f.unit}){/if}
 					</th>

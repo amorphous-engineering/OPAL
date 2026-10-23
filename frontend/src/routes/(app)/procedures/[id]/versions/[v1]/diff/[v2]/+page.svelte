@@ -150,8 +150,8 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid items-start gap-4 p-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-	<div class="grid min-w-0 gap-4">
+<div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section
 			title="Steps"
 			count={`${d.added} ADDED · ${d.removed} REMOVED · ${d.modified} MODIFIED`}
@@ -159,7 +159,7 @@
 			{#snippet actions()}
 				<div class="flex items-center gap-2">
 					<Checkbox id="show-unchanged" bind:checked={showUnchanged} />
-					<Label for="show-unchanged" class="font-mono text-[11px] uppercase"
+					<Label for="show-unchanged" class="font-mono text-xs uppercase"
 						>Unchanged ({d.unchanged})</Label
 					>
 				</div>
@@ -180,7 +180,7 @@
 						<span class={r.status === 'added' ? 'text-ok' : ''}>{r.title_b ?? '—'}</span>
 					{:else if col.key === 'changed_fields'}
 						{#if shownFields(r).length}
-							<ul class="grid gap-0.5 font-mono text-xs">
+							<ul class="grid grid-cols-1 gap-0.5 font-mono text-xs">
 								{#each shownFields(r) as f (f)}<li>{describe(f, r.changes[f])}</li>{/each}
 							</ul>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
@@ -194,7 +194,7 @@
 		{@render partDiff('Outputs', d.outputs)}
 	</div>
 
-	<div class="grid min-w-0 gap-4">
+	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Versions">
 			<DetailTable>
 				<DetailRow label={`v${a.version_number}`}>

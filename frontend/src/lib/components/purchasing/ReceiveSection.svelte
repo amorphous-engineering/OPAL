@@ -120,7 +120,7 @@
 						{#each [['PART', 'left'], ['NAME', 'left'], ['OUTSTANDING', 'right'], ['RECEIVE QTY', 'left'], ['LOCATION', 'left'], ['LOT / SERIAL', 'left']] as [h, a] (h)}
 							<th
 								scope="col"
-								class="h-8 px-3 font-mono text-[11px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+								class="h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 								class:text-right={a === 'right'}
 								class:text-left={a === 'left'}>{h}</th
 							>
@@ -148,7 +148,7 @@
 									bind:value={row.qty}
 									aria-label={`Receive quantity for ${l.part_name}`}
 									class="h-7 w-28 font-mono text-xs"
-								/>{#if over(l) > 0}<span class="mt-0.5 block font-mono text-[11px] text-warn"
+								/>{#if over(l) > 0}<span class="mt-0.5 block font-mono text-xs text-warn"
 										>+{fmtQty(over(l), l.unit_of_measure)} OVER</span
 									>{/if}</td
 							>

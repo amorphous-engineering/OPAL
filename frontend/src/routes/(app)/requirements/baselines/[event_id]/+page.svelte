@@ -37,7 +37,7 @@
 	]}
 />
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-1 gap-4 p-4">
 	<Section title="EVENT">
 		<DetailTable>
 			<DetailRow label="Label" value={ev.label} mono />
@@ -68,13 +68,13 @@
 				{:else if col.key === 'title'}{i.title}
 				{:else if col.key === 'statement'}
 					{#if i.diff}
-						<div class="grid gap-1">
+						<div class="grid grid-cols-1 gap-1">
 							{#if i.changed.length}
-								<span class="font-mono text-[11px] text-muted-foreground uppercase"
+								<span class="font-mono text-xs text-muted-foreground uppercase"
 									>{i.changed.join(', ').replace(/_/g, ' ')}</span
 								>
 							{:else}
-								<span class="font-mono text-[11px] text-muted-foreground uppercase"
+								<span class="font-mono text-xs text-muted-foreground uppercase"
 									>no content change</span
 								>
 							{/if}

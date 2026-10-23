@@ -99,7 +99,7 @@
 
 {#if f}
 	<div
-		class="mt-1 grid gap-1.5 border border-dashed border-border bg-muted/30 p-1.5"
+		class="mt-1 grid grid-cols-1 gap-1.5 border border-dashed border-border bg-muted/30 p-1.5"
 		data-field-editor
 	>
 		<div class="grid grid-cols-2 gap-1.5">
@@ -211,6 +211,6 @@
 					})}
 			/>
 		{/if}
-		{#if dup}<p class="text-[11px] text-error">Name already used by another field</p>{/if}
+		{#if dup}<p class="text-xs text-error">Name already used by another field</p>{/if}
 	</div>
 {/if}

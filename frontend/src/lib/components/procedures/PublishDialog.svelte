@@ -92,20 +92,20 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
-			class="grid gap-3"
+			class="grid grid-cols-1 gap-3"
 			onsubmit={(e) => {
 				e.preventDefault();
 				publish();
 			}}
 		>
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="change-note">Change note</Label>
 				<Textarea id="change-note" rows={3} bind:value={note} maxlength={2000} />
 			</div>
 			{#if drafts.length}
 				<div role="alert" class="border border-warn/50 bg-warn-muted p-2 text-xs">
 					<p class="mb-1.5 font-mono font-medium text-warn uppercase">Draft parts block publish</p>
-					<ul class="grid gap-1">
+					<ul class="grid grid-cols-1 gap-1">
 						{#each drafts as p (p.id)}
 							<li class="flex items-center gap-2">
 								<span class="font-mono">{p.internal_pn ?? '—'}</span>

@@ -53,12 +53,12 @@
 			{error}
 		</p>
 	{/if}
-	<div class="grid gap-4">
-		<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-4">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="name">Name</Label>
 			<Input id="name" bind:value={name} maxlength={255} required autocomplete="off" />
 		</div>
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="username">Username</Label>
 			<Input
 				id="username"
@@ -70,11 +70,11 @@
 				placeholder="From email or name when blank"
 			/>
 		</div>
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="email">Email</Label>
 			<Input id="email" type="email" bind:value={email} maxlength={255} autocomplete="off" />
 		</div>
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="password">Initial password</Label>
 			<Input
 				id="password"

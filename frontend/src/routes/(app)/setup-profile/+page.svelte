@@ -22,10 +22,10 @@
 </script>
 
 <div class="mx-auto mt-16 max-w-sm border border-border bg-card p-4">
-	<h1 class="mb-4 text-base font-semibold">Display name</h1>
+	<h1 class="mb-4 text-lg font-semibold">Display name</h1>
 	{#if error}<p role="alert" class="mb-3 text-xs text-error">{error}</p>{/if}
-	<form class="grid gap-3" onsubmit={submit}>
-		<div class="grid gap-1.5">
+	<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="name">Name</Label><Input id="name" bind:value={name} required />
 		</div>
 		<Button type="submit">SAVE</Button>

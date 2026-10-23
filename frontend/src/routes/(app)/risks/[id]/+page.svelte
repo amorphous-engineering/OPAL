@@ -179,7 +179,7 @@
 	{/snippet}
 	{#snippet state()}
 		<Score
-			class="text-base font-semibold"
+			class="text-lg font-semibold"
 			score={risk.score}
 			severity={risk.severity}
 			residual={risk.residual_score}
@@ -208,8 +208,8 @@
 		{/if}
 	</div>
 
-	<div class="grid items-start gap-4 xl:grid-cols-2">
-		<div class="grid gap-4">
+	<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+		<div class="grid grid-cols-1 gap-4">
 			<Section title="Scenario">
 				<DetailTable>
 					<DetailRow label="Condition">
@@ -318,7 +318,7 @@
 			{/if}
 		</div>
 
-		<div class="grid gap-4">
+		<div class="grid grid-cols-1 gap-4">
 			<Section title="Scoring">
 				<DetailTable>
 					<DetailRow label="Owner">
@@ -514,7 +514,7 @@
 					{:else if col.key === 'by'}
 						{h.by ?? '—'}
 					{:else if col.key === 'changes'}
-						<ul class="grid gap-0.5 font-mono text-xs">
+						<ul class="grid grid-cols-1 gap-0.5 font-mono text-xs">
 							{#each h.changes as c (c.field)}
 								<li class="whitespace-nowrap">
 									<span class="text-muted-foreground"

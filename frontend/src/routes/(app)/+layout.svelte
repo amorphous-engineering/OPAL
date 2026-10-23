@@ -42,7 +42,7 @@
 	{#if data.demoActive}
 		<div
 			role="status"
-			class="flex h-7 items-center gap-3 border-b border-warn/40 bg-warn-muted px-3 font-mono text-[11px] tracking-wider text-warn uppercase"
+			class="flex h-7 items-center gap-3 border-b border-warn/40 bg-warn-muted px-3 font-mono text-xs tracking-wider text-warn uppercase"
 		>
 			<span>Demo database active — changes are deleted on exit</span>
 			{#if data.user.is_admin}<a class="underline" href="/settings">Exit demo</a>{/if}

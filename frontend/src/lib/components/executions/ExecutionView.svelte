@@ -181,7 +181,7 @@
 			</div>
 		</div>
 		<div
-			class="grid min-h-0 flex-1 items-start gap-4 p-4 lg:grid-cols-[fit-content(20%)_minmax(0,1fr)_fit-content(20%)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
+			class="grid min-h-0 flex-1 grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[fit-content(20%)_minmax(0,1fr)_fit-content(20%)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
 		>
 			<aside
 				class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
@@ -196,7 +196,7 @@
 							<button
 								type="button"
 								class={cn(
-									'px-3 font-mono text-[11px] font-medium tracking-wider uppercase outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
+									'px-3 font-mono text-xs font-medium tracking-wider uppercase outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
 									store.focusMode
 										? 'bg-card text-info'
 										: 'text-muted-foreground hover:text-foreground'

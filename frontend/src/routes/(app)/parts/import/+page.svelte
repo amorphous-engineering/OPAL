@@ -134,10 +134,10 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid gap-4 p-4">
+<div class="grid grid-cols-1 gap-4 p-4">
 	<Section title="File" class="max-w-3xl">
 		<div class="flex flex-wrap items-end gap-3 p-3">
-			<div class="grid gap-1.5">
+			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="csv" class="label">CSV file</Label>
 				<Input
 					id="csv"
@@ -170,7 +170,9 @@
 
 	{#if result}
 		<Section title="Imported" class="max-w-3xl">
-			<dl class="grid [grid-template-columns:max-content_1fr] gap-1 gap-x-4 p-3 text-sm">
+			<dl
+				class="grid [grid-template-columns:max-content_1fr] grid-cols-1 gap-1 gap-x-4 p-3 text-sm"
+			>
 				<dt class="label">Created</dt>
 				<dd class="mono">{result.created}</dd>
 				<dt class="label">Skipped</dt>
