@@ -1,5 +1,8 @@
 <script lang="ts">
-	// Captured data as facts: label / value rows, a dash for absence.
+	// Captured data on a step that is no longer being worked: the same DATA panel the
+	// operator filled in (header count, one field per row, label and spec on the left),
+	// with the recorded value where the input was. A dash for absence.
+	import { cn } from '#lib/utils.js';
 	import { attachmentUrl, gallery } from './viewer.js';
 	import type { DocStep } from './types.js';
 
@@ -8,52 +11,82 @@
 	const fields = $derived(step.data_schema?.fields ?? []);
 	const ids = (v: unknown): number[] =>
 		Array.isArray(v) ? (v as number[]) : typeof v === 'number' ? [v] : [];
+	const present = (v: unknown) =>
+		v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
+	const required = $derived(fields.filter((f) => f.required));
+	const recorded = $derived(required.filter((f) => present(step.data_captured?.[f.name])).length);
 </script>
 
 {#if fields.length}
-	<table class="w-full border-collapse text-xs">
-		<tbody>
-			{#each fields as f (f.name)}
-				{@const raw = step.data_captured?.[f.name]}
-				<tr class="border-b border-border last:border-b-0">
-					<th
-						scope="row"
-						class="w-48 py-1 pr-3 text-left align-top font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
-					>
-						{f.label ?? f.name}{#if f.unit}&nbsp;({f.unit}){/if}
-					</th>
-					<td class="py-1 font-mono tabular-nums">
-						{#if f.type === 'photo'}
-							<span use:gallery>
+	<section class="border border-border bg-muted/40" aria-label="Captured data">
+		<header class="flex h-8 items-center gap-3 border-b border-border px-3">
+			<span class="label text-foreground">Data</span>
+			{#if required.length}
+				<span
+					class={cn(
+						'font-mono text-xs',
+						recorded === required.length ? 'text-ok' : 'text-muted-foreground'
+					)}>{recorded}/{required.length} required recorded</span
+				>
+			{:else}
+				<span class="font-mono text-xs text-muted-foreground"
+					>{fields.length} {fields.length === 1 ? 'field' : 'fields'}</span
+				>
+			{/if}
+		</header>
+		{#each fields as f (f.name)}
+			{@const raw = step.data_captured?.[f.name]}
+			<div
+				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(10rem,18rem)_minmax(0,26rem)]"
+			>
+				<div class="grid grid-cols-1 gap-0.5 sm:pt-1.5">
+					<span class="text-sm font-medium text-foreground">
+						{f.label ?? f.name}{#if f.required}<span class="text-error" title="Required">
+								*</span
+							>{/if}
+					</span>
+					{#if f.unit || f.min != null || f.max != null}
+						<span class="font-mono text-xs text-muted-foreground"
+							>{#if f.min != null || f.max != null}{f.min ?? '…'} – {f.max ??
+									'…'}{/if}{#if f.unit}{f.min != null || f.max != null
+									? ' '
+									: ''}{f.unit}{/if}</span
+						>
+					{/if}
+				</div>
+				<div class="flex min-h-8 min-w-0 items-center font-mono text-sm tabular-nums">
+					{#if f.type === 'photo'}
+						{#if ids(raw).length}
+							<div class="flex flex-wrap gap-2" use:gallery>
 								{#each ids(raw) as pid (pid)}
 									<a
 										data-pswp
 										href={attachmentUrl(pid)}
 										data-pswp-caption={f.label ?? f.name}
-										class="mr-2 inline-block border border-border"
+										class="block aspect-[4/3] h-16 overflow-hidden border border-border bg-muted"
 										aria-label={`Enlarge ${f.label ?? f.name}`}
 									>
 										<img
 											loading="lazy"
 											src={attachmentUrl(pid)}
 											alt={f.label ?? f.name}
-											class="h-12 w-auto"
+											class="size-full object-cover"
 										/>
 									</a>
-								{:else}
-									<span class="text-muted-foreground">—</span>
 								{/each}
-							</span>
-						{:else if raw === null || raw === undefined || raw === ''}
-							<span class="text-muted-foreground">—</span>
-						{:else if f.type === 'checkbox'}
-							{raw ? 'YES' : 'NO'}
+							</div>
 						{:else}
-							{raw}
+							<span class="text-muted-foreground">—</span>
 						{/if}
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+					{:else if !present(raw)}
+						<span class="text-muted-foreground">—</span>
+					{:else if f.type === 'checkbox'}
+						{raw ? 'YES' : 'NO'}
+					{:else}
+						<span class="break-words">{raw}</span>
+					{/if}
+				</div>
+			</div>
+		{/each}
+	</section>
 {/if}
