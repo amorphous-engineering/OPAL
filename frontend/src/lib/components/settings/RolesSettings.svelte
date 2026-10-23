@@ -16,9 +16,59 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { api } from '#lib/api.js';
-	import { resetRoleNames, type Member, type Role } from '#lib/components/users/roles.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import {
+		resetRoleNames,
+		sortRoles,
+		type Member,
+		type Role
+	} from '#lib/components/users/roles.js';
 
-	let { roles, people, isAdmin }: { roles: Role[]; people: Member[]; isAdmin: boolean } = $props();
+	let {
+		roles: unsorted,
+		people,
+		isAdmin
+	}: { roles: Role[]; people: Member[]; isAdmin: boolean } = $props();
+
+	const roles = $derived(sortRoles(unsorted));
+
+	interface Gate {
+		key: string;
+		label: string;
+		description: string | null;
+		role_ids: number[];
+	}
+	let gates = $state<Gate[]>([]);
+	let gateBusy = $state<string | null>(null);
+	const adminRole = $derived(roles.find((r) => r.key === 'admin'));
+
+	async function loadGates() {
+		try {
+			gates = await api.get<Gate[]>('/gates');
+		} catch (err) {
+			toastError(err);
+		}
+	}
+	$effect(() => {
+		void loadGates();
+	});
+
+	async function toggleGate(g: Gate, role: Role, on: boolean) {
+		if (gateBusy) return;
+		gateBusy = g.key;
+		const ids = g.role_ids.filter((id) => id !== role.id && id !== adminRole?.id);
+		if (on) ids.push(role.id);
+		try {
+			const next = await api.put<Gate | undefined>(`/gates/${g.key}`, { role_ids: ids });
+			g.role_ids = next?.role_ids ?? ids;
+			toast.success(`${g.label}: ${on ? 'granted to' : 'removed from'} ${role.name}`);
+		} catch (err) {
+			toastError(err);
+			await loadGates();
+		} finally {
+			gateBusy = null;
+		}
+	}
 
 	const columns: Column<Role>[] = [
 		{ key: 'name', label: 'Name', sortable: true },
@@ -155,6 +205,9 @@
 			{#snippet cell(r, col)}
 				{#if col.key === 'name'}
 					<span class="font-medium">{r.name}</span>
+					{#if r.is_system}
+						<span class="ml-2 font-mono text-xs tracking-wider text-muted-foreground">SYSTEM</span>
+					{/if}
 				{:else if col.key === 'description'}
 					{#if r.description}{r.description}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else}
@@ -163,10 +216,54 @@
 			{/snippet}
 		</DataTable>
 	</Section>
+	<Section title="Gates" count={gates.length}>
+		{#if gates.length === 0}
+			<EmptyLine label="gates" />
+		{:else}
+			<div class="overflow-x-auto">
+				<table class="w-full text-sm" aria-label="Gates">
+					<thead>
+						<tr class="border-b border-border text-left font-mono text-xs text-muted-foreground">
+							<th class="px-3 py-1.5 font-medium">GATE</th>
+							{#each roles as r (r.id)}
+								<th class="px-3 py-1.5 text-center font-medium">{r.name}</th>
+							{/each}
+						</tr>
+					</thead>
+					<tbody>
+						{#each gates as g (g.key)}
+							<tr class="border-b border-border last:border-b-0" data-gate={g.key}>
+								<td class="px-3 py-1.5">
+									<div class="font-medium">{g.label}</div>
+									{#if g.description}
+										<div class="text-xs text-muted-foreground">{g.description}</div>
+									{/if}
+								</td>
+								{#each roles as r (r.id)}
+									{@const isAdminRole = r.key === 'admin'}
+									<td class="px-3 py-1.5 text-center">
+										<Checkbox
+											checked={isAdminRole || g.role_ids.includes(r.id)}
+											disabled={isAdminRole || !isAdmin || gateBusy === g.key}
+											onCheckedChange={(v) => toggleGate(g, r, !!v)}
+											aria-label={`${r.name} passes ${g.label}`}
+											title={isAdminRole ? 'Admin passes all gates' : undefined}
+										/>
+									</td>
+								{/each}
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+	</Section>
 	{#if selected}
 		<Section title={selected.name}>
 			{#snippet actions()}
-				{#if isAdmin}
+				{#if selected.is_system}
+					<span class="font-mono text-xs tracking-wider text-muted-foreground">SYSTEM</span>
+				{:else if isAdmin}
 					<Button size="xs" variant="destructive" onclick={remove}>DELETE</Button>
 				{/if}
 			{/snippet}
@@ -174,7 +271,11 @@
 				<form onsubmit={save}>
 					<DetailTable>
 						<DetailRow label="Name">
-							<Input aria-label="Name" class="h-7 max-w-xs" maxlength={50} bind:value={name} />
+							{#if selected.is_system}
+								<span class="font-medium">{selected.name}</span>
+							{:else}
+								<Input aria-label="Name" class="h-7 max-w-xs" maxlength={50} bind:value={name} />
+							{/if}
 						</DetailRow>
 						<DetailRow label="Description">
 							<Input

@@ -6,6 +6,9 @@ export interface Role {
 	name: string;
 	description: string | null;
 	member_count: number;
+	/** Predefined role (engineer, technician, quality, admin); cannot be renamed or deleted. */
+	key?: string | null;
+	is_system?: boolean;
 }
 
 export interface RoleRef {
@@ -24,7 +27,12 @@ export interface Member {
 
 /** `GET /roles` answers a list; tolerate an `items` envelope. */
 export function roleList(res: Role[] | { items: Role[] }): Role[] {
-	return Array.isArray(res) ? res : res.items;
+	return sortRoles(Array.isArray(res) ? res : res.items);
+}
+
+/** System roles first, then custom roles; each group keeps its incoming order. */
+export function sortRoles(roles: Role[]): Role[] {
+	return [...roles].sort((a, b) => Number(!!b.is_system) - Number(!!a.is_system));
 }
 
 let names: Promise<string[]> | null = null;
