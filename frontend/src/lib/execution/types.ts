@@ -248,6 +248,13 @@ export interface Report {
 		operator: string | null;
 		signoff: string | null;
 		signoff_at: string | null;
+		signoffs: {
+			slot: number;
+			label: string;
+			role: string | null;
+			signed_by: string | null;
+			signed_at: string | null;
+		}[];
 	}[];
 	data_collects: {
 		step_number: string;

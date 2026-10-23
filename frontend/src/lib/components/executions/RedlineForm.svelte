@@ -80,7 +80,9 @@
 					/>
 					<label class="flex items-center gap-1.5 text-xs whitespace-nowrap">
 						<Checkbox bind:checked={s.requires_signoff} />
-						<span class="font-mono">SIGN-OFF</span>
+						<span class="font-mono" title="Adds a second sign-off after the primary one"
+							>+ SECOND SIGN-OFF</span
+						>
 					</label>
 					<Button
 						size="xs"

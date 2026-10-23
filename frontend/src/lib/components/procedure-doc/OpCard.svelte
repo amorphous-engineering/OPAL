@@ -15,6 +15,7 @@
 	import StepState from './StepState.svelte';
 	import StepTitleActions from './StepTitleActions.svelte';
 	import SignoffTable from './SignoffTable.svelte';
+	import SignoffEditor from './author/SignoffEditor.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
 	import CautionEditor from './author/CautionEditor.svelte';
 	import MarkdownEditor from './author/MarkdownEditor.svelte';
@@ -225,6 +226,7 @@
 						value={op.instructions}
 						onchange={(v) => au.edit(op.step, { instructions: v })}
 					/>
+					<SignoffEditor step={op.step} {op} />
 					<StepProps step={op.step} {op} isOp={true} />
 				</div>
 			{:else if op.caution || op.instructions}

@@ -975,3 +975,19 @@ def test_cannot_cut_work_order_from_deprecated_template(client):
     client.patch(f"/api/procedures/{proc_id}", json={"status": "active"})
     r = client.post("/api/procedure-instances", json={"procedure_id": proc_id})
     assert r.status_code == 201
+
+
+def test_version_detail_carries_effective_signoffs(client):
+    proc = client.post("/api/procedures", json={"name": "Signed"}).json()
+    pid = proc["id"]
+    step = client.post(f"/api/procedures/{pid}/steps", json={"title": "Run"}).json()
+    client.patch(
+        f"/api/procedures/{pid}/steps/{step['id']}",
+        json={"signoffs": [{"label": "Primary", "role": "QE"}, {"label": "Second", "role": None}]},
+    )
+    v = client.post(f"/api/procedures/{pid}/publish").json()
+    steps = client.get(f"/api/procedures/versions/{v['id']}").json()["content"]["steps"]
+    assert steps[0]["signoffs"] == [
+        {"label": "Primary", "role": "QE"},
+        {"label": "Second", "role": None},
+    ]

@@ -110,7 +110,7 @@
 					><tr
 						><th>Step</th><th>Title</th><th>Status</th><th>Started</th><th>Completed</th><th
 							>Operator</th
-						><th>Sign-off</th></tr
+						><th>Sign-offs</th></tr
 					></thead
 				>
 				<tbody>
@@ -120,7 +120,15 @@
 							<td style:padding-left={`${0.5 + o.level * 0.75}rem`}>{o.title}</td>
 							<td>{stateLabel(o.status)}</td>
 							<td>{ts(o.started_at)}</td><td>{ts(o.completed_at)}</td>
-							<td>{dash(o.operator)}</td><td>{dash(o.signoff)}</td>
+							<td>{dash(o.operator)}</td>
+							<td>
+								{#each o.signoffs as so (so.slot)}
+									<div data-signoff={so.slot}>
+										<b>{so.label}</b>{so.role ? ` (${so.role})` : ''}: {dash(so.signed_by)}
+										<span class="whitespace-nowrap">{ts(so.signed_at)}</span>
+									</div>
+								{:else}—{/each}
+							</td>
 						</tr>
 					{/each}
 				</tbody>

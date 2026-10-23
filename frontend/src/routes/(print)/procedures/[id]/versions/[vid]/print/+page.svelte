@@ -35,20 +35,23 @@
 {/snippet}
 
 {#snippet signLines(s: SnapshotStep)}
-	<div class="mt-2 flex gap-6 border-t border-neutral-400 pt-1.5 text-[9pt]">
-		<span class="flex items-baseline gap-1"
-			>Operator: <span class="inline-block min-w-28 border-b border-black">&nbsp;</span></span
-		>
-		<span class="flex items-baseline gap-1"
-			>Time: <span class="inline-block min-w-24 border-b border-black">&nbsp;</span></span
-		>
-		{#if s.requires_signoff}
-			<span class="flex items-baseline gap-1"
-				><b>Sign-off{s.required_role ? ` (${s.required_role})` : ''}:</b>
-				<span class="inline-block min-w-28 border-b border-black">&nbsp;</span></span
-			>
-		{/if}
-	</div>
+	{#if s.signoffs?.length}
+		<div class="mt-2 border-t border-neutral-400 pt-1.5 text-[9pt]">
+			{#each s.signoffs as so, i (i)}
+				<div class="flex items-baseline gap-4 py-1" data-signoff={i}>
+					<b class="w-40 shrink-0">{so.label}</b>
+					<span class="w-24 shrink-0">{so.role ?? ''}</span>
+					<span class="flex flex-1 items-baseline gap-1"
+						>Signed <span class="inline-block min-w-40 flex-1 border-b border-black">&nbsp;</span
+						></span
+					>
+					<span class="flex items-baseline gap-1"
+						>Date <span class="inline-block min-w-28 border-b border-black">&nbsp;</span></span
+					>
+				</div>
+			{/each}
+		</div>
+	{/if}
 {/snippet}
 
 {#snippet body(s: SnapshotStep)}
@@ -111,13 +114,8 @@
 				{@render signLines(s)}
 			</div>
 		{/each}
-		{#if g.subs.length > 0 && g.op.requires_signoff}
-			<div class="border-t border-black px-2.5 py-2 text-[9pt]">
-				<span class="flex items-baseline gap-1"
-					><b>OP sign-off{g.op.required_role ? ` (${g.op.required_role})` : ''}:</b>
-					<span class="inline-block min-w-28 border-b border-black">&nbsp;</span></span
-				>
-			</div>
+		{#if g.subs.length > 0}
+			<div class="border-t border-black px-2.5 pb-1">{@render signLines(g.op)}</div>
 		{/if}
 	</section>
 {/snippet}

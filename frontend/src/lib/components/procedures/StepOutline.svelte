@@ -48,7 +48,7 @@
 				>
 				<td class="px-3 py-1">{sub.title}</td>
 				<td class="px-3 py-1 text-right font-mono text-[11px] text-muted-foreground uppercase">
-					{#if sub.requires_signoff}signoff{/if}
+					{#if sub.signoffs?.length}{sub.signoffs.map((x) => x.label).join(' · ')}{/if}
 				</td>
 				<td class="px-3 py-1 text-right font-mono text-xs text-muted-foreground">
 					{sub.estimated_duration_minutes ? duration(sub.estimated_duration_minutes) : '—'}

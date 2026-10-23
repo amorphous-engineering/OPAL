@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Properties of an OP or step that the document shows as chips and gates:
-	// who, how long, where, sign-off; for an OP also contingency, sequence, order.
+	// how long, where; for an OP also contingency, sequence, order.
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
@@ -12,16 +12,6 @@
 	const au = useDoc().author!;
 	const pid = $derived(`prop-${step.order}`);
 
-	const roles = $derived(
-		[
-			...new Set(
-				au
-					.ops()
-					.flatMap((o) => [o.role, ...o.steps.map((s) => s.role)])
-					.filter((r): r is string => !!r)
-			)
-		].sort()
-	);
 	const others = $derived(au.ops().filter((o) => o.order !== op.order));
 	const waits = $derived(new Set(op.depends_on ?? []));
 
@@ -35,23 +25,6 @@
 </script>
 
 <div class="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-3">
-	<div class="grid content-start gap-1">
-		<label for={`${pid}-role`} class="label">Role</label>
-		<Input
-			id={`${pid}-role`}
-			list={`${pid}-roles`}
-			maxlength={50}
-			placeholder="QE, MFG-LEAD"
-			class="font-mono uppercase"
-			value={step.role ?? ''}
-			onkeydown={(e) => e.stopPropagation()}
-			oninput={(e) =>
-				au.edit(step, { role: e.currentTarget.value.trim() ? e.currentTarget.value : null })}
-		/>
-		<datalist id={`${pid}-roles`}
-			>{#each roles as r (r)}<option value={r}></option>{/each}</datalist
-		>
-	</div>
 	<div class="grid content-start gap-1">
 		<label for={`${pid}-est`} class="label">Estimate (min)</label>
 		<Input
@@ -84,17 +57,6 @@
 			<option value="">—</option>
 			{#each au.workcenters as w (w.id)}<option value={w.id}>{w.code} {w.name}</option>{/each}
 		</NativeSelect>
-	</div>
-	<div class="grid content-start gap-1">
-		<span class="label">Sign-off</span>
-		<label class="flex h-8 items-center gap-2 text-xs">
-			<Checkbox
-				id={`${pid}-sign`}
-				checked={step.requires_signoff}
-				onCheckedChange={(c) => au.edit(step, { requires_signoff: !!c })}
-			/>
-			Required
-		</label>
 	</div>
 	{#if isOp}
 		<div class="grid content-start gap-1">

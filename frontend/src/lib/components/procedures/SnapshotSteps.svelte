@@ -67,6 +67,25 @@
 			{s.step_kit.map((k) => `${k.part_name} × ${qty(k.quantity_required)}`).join(' · ')}
 		</p>
 	{/if}
+	{@render signoffs(s)}
+{/snippet}
+
+{#snippet signoffs(s: SnapshotStep)}
+	{#if s.signoffs?.length}
+		<table
+			class="my-1 w-full max-w-xl border border-border font-mono text-xs"
+			aria-label="Sign-offs"
+		>
+			<tbody>
+				{#each s.signoffs as so, i (i)}
+					<tr class="border-b border-border last:border-b-0" data-signoff={i}>
+						<td class="w-44 px-2 py-1 font-sans text-sm font-medium">{so.label}</td>
+						<td class="px-2 py-1 text-muted-foreground">{so.role ?? '–'}</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
 {/snippet}
 
 {#snippet group(g: OpGroup)}
@@ -75,8 +94,6 @@
 			<span class="font-mono font-medium">OP {g.op.step_number}</span>
 			<span class="font-medium">{g.op.title}</span>
 			<span class="ml-auto flex gap-3 font-mono text-xs text-muted-foreground">
-				{#if g.op.requires_signoff}<span class="uppercase">signoff</span>{/if}
-				{#if g.op.required_role}<span class="uppercase">{g.op.required_role}</span>{/if}
 				<span>{g.subs.length} {g.subs.length === 1 ? 'step' : 'steps'}</span>
 				{#if g.op.estimated_duration_minutes}<span>{duration(g.op.estimated_duration_minutes)}</span
 					>{/if}
@@ -89,9 +106,7 @@
 					<span class="font-mono text-xs text-muted-foreground">{s.step_number}</span>
 					<span>{s.title}</span>
 					<span class="ml-auto flex gap-3 font-mono text-[11px] text-muted-foreground uppercase">
-						{#if s.requires_signoff}<span>signoff</span>{/if}
 						{#if s.required_data_schema?.fields?.length}<span>data</span>{/if}
-						{#if s.required_role}<span>{s.required_role}</span>{/if}
 						{#if s.estimated_duration_minutes}<span>{duration(s.estimated_duration_minutes)}</span
 							>{/if}
 					</span>

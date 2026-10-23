@@ -31,6 +31,8 @@ export interface DraftStep {
 	requires_signoff: boolean;
 	estimated_duration_minutes: number | null;
 	required_role: string | null;
+	/** The effective sign-off definitions, slot order. */
+	signoffs: { label: string; role: string | null }[];
 	caution: string | null;
 	strict_sequence: boolean;
 	workcenter_id: number | null;
