@@ -8,9 +8,9 @@
  *  - Rows are never replaced under an operator: a refresh keeps the previous
  *    object for every OP and step whose data did not change, and data-capture
  *    drafts live here, outside the rows.
- *  - Expansion: everything is open until it is complete. A step or OP collapses
- *    when it reaches a terminal status, here or remotely; otherwise the
- *    operator's choice is kept (persisted per execution).
+ *  - Expansion: everything is open until it is complete, held and waiting steps
+ *    included. A step or OP collapses when it reaches a terminal status, here or
+ *    remotely; otherwise the operator's choice is kept (persisted per execution).
  *  - Presence is the explicit claim. Focus (keyboard cursor) is local only.
  */
 import { api } from '#lib/api.js';
@@ -353,13 +353,15 @@ export class ExecutionStore implements DocController {
 
 	// ---------- controller: expansion & focus ----------
 
-	isOpen(key: string, terminal: boolean, blocked = false): boolean {
-		return this.overrides[key] ?? (!terminal && !blocked);
+	// Open until complete. Hosts pass `blocked` too; execution keeps held and waiting
+	// work open so it stays readable.
+	isOpen(key: string, terminal: boolean): boolean {
+		return this.overrides[key] ?? !terminal;
 	}
 
-	toggle(key: string, terminal: boolean, blocked = false) {
-		const next = !this.isOpen(key, terminal, blocked);
-		if (next === (!terminal && !blocked)) delete this.overrides[key];
+	toggle(key: string, terminal: boolean) {
+		const next = !this.isOpen(key, terminal);
+		if (next === !terminal) delete this.overrides[key];
 		else this.overrides[key] = next;
 		write(this.key('open'), this.overrides);
 	}
