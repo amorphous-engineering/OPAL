@@ -16,33 +16,9 @@
 	let { data }: PageProps = $props();
 	const isAdmin = $derived(!!session.user?.is_admin);
 	const onshape = $derived(data.extensions.items.find((e) => e.id === 'opal.onshape') ?? null);
-
-	const toc = $derived([
-		{ id: 'project', label: 'Project' },
-		{ id: 'sign-in', label: 'Sign-in' },
-		{ id: 'roles', label: 'Roles' },
-		{ id: 'extensions', label: 'Extensions' },
-		...(onshape ? [{ id: 'onshape', label: 'Onshape' }] : []),
-		{ id: 'agent', label: 'Agent' },
-		...(isAdmin ? [{ id: 'lifecycle', label: 'Lifecycle' }] : []),
-		{ id: 'system', label: 'System' }
-	]);
 </script>
 
 <PageHeader title="Settings" crumbs={[{ label: 'System' }, { label: 'Settings' }]} />
-
-<nav
-	aria-label="On this page"
-	class="flex h-7 items-stretch overflow-x-auto border-b border-border bg-muted/30 font-mono text-xs tracking-wider whitespace-nowrap text-muted-foreground uppercase"
->
-	{#each toc as t (t.id)}
-		<a
-			href={`#${t.id}`}
-			class="flex items-center border-r border-border px-3 hover:bg-accent hover:text-foreground"
-			>{t.label}</a
-		>
-	{/each}
-</nav>
 
 <div class="mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 p-4">
 	<SettingsGroup id="project" title="Project">
