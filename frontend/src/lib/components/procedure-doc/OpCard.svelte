@@ -143,12 +143,6 @@
 			>
 		{/if}
 		<RoleChip role={op.role} />
-		{#if op.caution}
-			<span
-				class="inline-flex h-5 items-center border border-error/50 px-1.5 font-mono text-[11px] font-medium text-error"
-				title={op.caution}>CAUTION</span
-			>
-		{/if}
 		{#if au && op.waiting_on_ops.length}
 			<span
 				class="hidden font-mono text-[11px] whitespace-nowrap text-muted-foreground md:inline"

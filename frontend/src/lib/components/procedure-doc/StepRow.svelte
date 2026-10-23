@@ -89,12 +89,6 @@
 			>
 		{/if}
 		<RoleChip role={step.role} />
-		{#if step.caution}
-			<span
-				class="inline-flex h-5 items-center border border-error/50 px-1.5 font-mono text-[11px] font-medium text-error"
-				title={step.caution}>CAUTION</span
-			>
-		{/if}
 		{#if step.requires_signoff && !terminal}
 			<span
 				class="inline-flex h-5 items-center border border-info/50 px-1.5 font-mono text-[11px] font-medium text-info"
