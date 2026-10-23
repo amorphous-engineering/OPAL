@@ -9,7 +9,7 @@
  * will be a different set of actions on the same components.
  */
 import { getContext, setContext } from 'svelte';
-import type { DocMode, DocOp, DocSchema, DocStep } from './types.js';
+import type { DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
 
 export interface StockRecord {
 	id: number;
@@ -33,7 +33,11 @@ export interface DocActions {
 	/** Mark this step as where the viewer is working (one claim per user). */
 	claim?(step: DocStep): Promise<void>;
 	release?(): Promise<void>;
+	/** Sign one sign-off slot. Slot 0 carries the captured data and the old COMPLETE gate. */
+	sign?(step: DocStep, slot: number): Promise<void>;
+	/** @deprecated replaced by `sign`; removed by the sign-off agent. */
 	complete?(step: DocStep): Promise<void>;
+	/** @deprecated replaced by `sign`; removed by the sign-off agent. */
 	signoff?(step: DocStep): Promise<void>;
 	/** Open the skip dialog. */
 	skip?(step: DocStep): void;
@@ -43,10 +47,12 @@ export interface DocActions {
 	redline?(op: DocOp): void;
 	/** Delete a not-yet-started redline OP. */
 	deleteRedline?(op: DocOp): Promise<void>;
+	/** @deprecated files go on execution notes; removed by the notes agent. */
 	attach?(step: DocStep): void;
 	/** Bring a step's evidence into view (the host keeps evidence outside the document). */
 	showEvidence?(step: DocStep): void;
-	addNote?(step: DocStep, body: string): Promise<boolean>;
+	/** Add a markdown execution note with files attached to it. */
+	addNote?(step: DocStep, body: string, files?: File[]): Promise<boolean>;
 	consume?(step: DocStep, items: ConsumeItem[]): Promise<boolean>;
 	loadStock?(partId: number): Promise<StockRecord[]>;
 	/** Upload photos for a photo capture field; resolves to the new attachment ids. */
@@ -62,6 +68,7 @@ export interface StepEdit {
 	caution?: string | null;
 	role?: string | null;
 	requires_signoff?: boolean;
+	signoffs?: SignoffDef[] | null;
 	estimated_duration_minutes?: number | null;
 	is_contingency?: boolean;
 	strict_sequence?: boolean;

@@ -83,11 +83,39 @@ export interface DocCursor {
 	stale: boolean;
 }
 
+export interface DocNoteFile {
+	id: number;
+	filename: string;
+	mime_type: string;
+	size_bytes: number;
+	url: string;
+	is_image: boolean;
+}
+
 export interface DocNote {
 	id: number;
 	author: string | null;
 	created_at: string;
+	/** Markdown. */
 	body: string;
+	attachments: DocNoteFile[];
+}
+
+/** One sign-off slot of a step or OP. The server decides `can_sign` and `blockers`. */
+export interface DocSignoff {
+	slot: number;
+	label: string;
+	role: string | null;
+	signed_by: { id: number; name: string } | null;
+	signed_at: string | null;
+	can_sign: boolean;
+	blockers: DocBlocker[];
+}
+
+/** An authored sign-off definition (template). */
+export interface SignoffDef {
+	label: string;
+	role: string | null;
 }
 
 export interface DocAttachment {
@@ -158,6 +186,10 @@ export interface DocStep {
 	complete_blockers: DocBlocker[];
 	skip_blockers: DocBlocker[];
 	notes: DocNote[];
+	/** Sign-off slots in order; a step is complete when every slot is signed. */
+	signoffs: DocSignoff[];
+	/** Authored sign-off definitions (authoring mode). */
+	signoff_defs?: SignoffDef[];
 	attachments: DocAttachment[];
 	consumptions: DocConsumption[];
 	/** "WAITING ON OP 2" / "WAITING ON 1.1 +1" */

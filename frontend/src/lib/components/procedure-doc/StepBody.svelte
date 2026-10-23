@@ -1,8 +1,7 @@
 <script lang="ts">
 	// Everything about one step, in reading order: holds and context, caution,
-	// instructions, reference images, parts, data capture, notes, actions.
+	// instructions, reference images, parts, data capture, execution notes, sign-offs.
 	import { markdown } from '#lib/markdown.js';
-	import { datetime, iso } from '#lib/format.js';
 	import { stateLabel } from '#lib/format.js';
 	import { useDoc } from './controller.js';
 	import CautionBlock from './CautionBlock.svelte';
@@ -10,8 +9,9 @@
 	import StepKit from './StepKit.svelte';
 	import CaptureFields from './CaptureFields.svelte';
 	import CaptureReadout from './CaptureReadout.svelte';
-	import StepNotes from './StepNotes.svelte';
-	import StepActions from './StepActions.svelte';
+	import ExecutionNotes from './ExecutionNotes.svelte';
+	import SignoffTable from './SignoffTable.svelte';
+	import SignoffEditor from './author/SignoffEditor.svelte';
 	import CautionEditor from './author/CautionEditor.svelte';
 	import MarkdownEditor from './author/MarkdownEditor.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
@@ -77,21 +77,16 @@
 			{step.skip_reason}
 		</div>
 	{/if}
-	{#if step.signed_off}
-		<div class="font-mono text-xs text-muted-foreground">
-			<span class="label">Signed off</span>
-			{step.signed_off.by ?? '—'}
-			<time datetime={iso(step.signed_off.at)} title={iso(step.signed_off.at)}
-				>{datetime(step.signed_off.at)}</time
-			>
-		</div>
+	{#if !authoring}
+		<ExecutionNotes {step} />
 	{/if}
 
-	<StepNotes {step} />
-
-	{#if ctl.mode === 'execute'}
-		<StepActions {step} {op} />
+	{#if authoring}
+		<SignoffEditor {step} {op} />
+	{:else}
+		<SignoffTable {step} {op} />
 	{/if}
+
 	{#if authoring}
 		<StepProps {step} {op} isOp={op.step === step} />
 	{/if}

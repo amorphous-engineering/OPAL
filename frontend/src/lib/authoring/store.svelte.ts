@@ -330,6 +330,7 @@ export class AuthorStore implements DocController {
 			complete_blockers: [],
 			skip_blockers: [],
 			notes: [],
+			signoffs: [],
 			attachments: [],
 			consumptions: [],
 			waiting: null

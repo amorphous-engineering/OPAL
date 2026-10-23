@@ -16,6 +16,8 @@ export { default as StepBody } from './StepBody.svelte';
 export { default as StepActions } from './StepActions.svelte';
 export { default as StepKit } from './StepKit.svelte';
 export { default as StepNotes } from './StepNotes.svelte';
+export { default as ExecutionNotes } from './ExecutionNotes.svelte';
+export { default as SignoffTable } from './SignoffTable.svelte';
 export { default as StepImages } from './StepImages.svelte';
 export { default as StepState } from './StepState.svelte';
 export { default as CaptureFields } from './CaptureFields.svelte';
