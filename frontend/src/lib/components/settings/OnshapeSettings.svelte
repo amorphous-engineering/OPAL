@@ -323,7 +323,7 @@
 				</div>
 			</Section>
 			<div class="flex gap-2">
-				<Button type="submit" disabled={saving}>SAVE</Button>
+				<Button type="submit" class="flex-1" disabled={saving}>SAVE</Button>
 			</div>
 		</form>
 	{/if}

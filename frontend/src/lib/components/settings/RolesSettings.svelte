@@ -185,8 +185,10 @@
 							/>
 						</DetailRow>
 					</DetailTable>
-					<div class="flex justify-end border-t border-border px-3 py-1.5">
-						<Button type="submit" size="xs" disabled={busy || !dirty || !name.trim()}>SAVE</Button>
+					<div class="flex border-t border-border px-3 py-1.5">
+						<Button type="submit" size="xs" class="flex-1" disabled={busy || !dirty || !name.trim()}
+							>SAVE</Button
+						>
 					</div>
 				</form>
 			{:else}

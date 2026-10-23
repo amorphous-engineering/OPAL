@@ -225,6 +225,6 @@
 	</Section>
 
 	<div class="flex gap-2">
-		<Button type="submit" disabled={busy}>SAVE</Button>
+		<Button type="submit" class="flex-1" disabled={busy}>SAVE</Button>
 	</div>
 </form>
