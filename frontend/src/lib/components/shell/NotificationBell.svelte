@@ -57,7 +57,7 @@
 
 <Popover.Root bind:open>
 	<Popover.Trigger
-		class="relative inline-flex h-(--control-md) items-center gap-1.5 rounded-md border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
+		class="relative inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
 		aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
 	>
 		Inbox
