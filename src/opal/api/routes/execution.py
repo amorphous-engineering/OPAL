@@ -39,9 +39,12 @@ from opal.core.execution_flow import (
     complete_step_flow,
     focus_step,
     mark_instance_in_work,
+    row_has_children,
     sequence_blockers,
+    sign_step_flow,
     signoff_step_flow,
     skip_blockers,
+    step_signoff_defs,
     touch_user_presence,
 )
 from opal.core.execution_report import build_execution_report, qr_svg
@@ -59,6 +62,7 @@ from opal.db.models.execution import (
     StepExecution,
     StepFocus,
     StepNote,
+    StepSignoff,
     StepStatus,
 )
 from opal.db.models.inventory import (
@@ -94,6 +98,21 @@ class StepNoteResponse(BaseModel):
     body: str
 
 
+class SignoffUser(BaseModel):
+    id: int
+    name: str | None = None
+
+
+class SignoffSlotResponse(BaseModel):
+    """One sign-off slot of a step: its definition and, once signed, the signature."""
+
+    slot: int
+    label: str
+    role: str | None = None
+    signed_by: SignoffUser | None = None
+    signed_at: datetime | None = None
+
+
 class StepExecutionResponse(BaseModel):
     """Step execution response."""
 
@@ -110,6 +129,7 @@ class StepExecutionResponse(BaseModel):
     notes: list[StepNoteResponse] = []
     signed_off_at: datetime | None = None
     signed_off_by_id: int | None = None
+    signoffs: list[SignoffSlotResponse] = []
     duration_seconds: int | None = None
 
     model_config = {"from_attributes": True}
@@ -125,9 +145,34 @@ def _note_response(note: StepNote) -> StepNoteResponse:
     )
 
 
+def _signoff_slots(step_exec: StepExecution) -> list[SignoffSlotResponse]:
+    """Every slot of the row's effective sign-off list, signed or not."""
+    instance = step_exec.instance
+    defs = step_signoff_defs(instance.version, step_exec, row_has_children(instance, step_exec))
+    records = {r.slot: r for r in step_exec.signoff_records}
+    out: list[SignoffSlotResponse] = []
+    for n, d in enumerate(defs):
+        rec = records.get(n)
+        out.append(
+            SignoffSlotResponse(
+                slot=n,
+                label=rec.label if rec else d["label"],
+                role=rec.role if rec else d["role"],
+                signed_by=SignoffUser(
+                    id=rec.signed_by_id, name=rec.signed_by.name if rec.signed_by else None
+                )
+                if rec and rec.signed_by_id
+                else None,
+                signed_at=rec.signed_at if rec else None,
+            )
+        )
+    return out
+
+
 def _step_response(step_exec: StepExecution) -> StepExecutionResponse:
     """The one serializer for a step execution row."""
     return StepExecutionResponse(
+        signoffs=_signoff_slots(step_exec),
         id=step_exec.id,
         step_number=step_exec.step_number,
         step_number_str=step_exec.step_number_str,
@@ -275,9 +320,13 @@ def list_instances(
     instances = (
         query.options(
             joinedload(ProcedureInstance.procedure),
+            selectinload(ProcedureInstance.version),
             selectinload(ProcedureInstance.step_executions)
             .selectinload(StepExecution.notes)
             .joinedload(StepNote.author),
+            selectinload(ProcedureInstance.step_executions)
+            .selectinload(StepExecution.signoff_records)
+            .joinedload(StepSignoff.signed_by),
         )
         .order_by(ProcedureInstance.id.desc())
         .offset((page - 1) * page_size)
@@ -1123,19 +1172,12 @@ def get_execution_state(
     return build_execution_state(db, instance)
 
 
-@router.post("/{instance_id}/steps/{step_number}/complete", response_model=StepExecutionResponse)
-async def complete_step(
-    instance_id: int,
-    step_number: int,
-    data: StepComplete,
-    db: DbSession,
-    user_id: CurrentUserId,
-) -> StepExecutionResponse:
-    """Complete a step execution with optional data capture."""
+def _get_instance_step(
+    db: DbSession, instance_id: int, step_number: int
+) -> tuple[ProcedureInstance, StepExecution]:
     instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
-
     step_exec = (
         db.query(StepExecution)
         .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
@@ -1143,18 +1185,18 @@ async def complete_step(
     )
     if not step_exec:
         raise HTTPException(status_code=404, detail="Step not found")
+    return instance, step_exec
 
-    try:
-        result = complete_step_flow(
-            db,
-            instance,
-            step_exec,
-            user_id,
-            data_captured=data.data_captured,
-            notes=data.notes,
-        )
-    except FlowError as err:
-        raise HTTPException(status_code=err.status_code, detail=err.message) from err
+
+async def _finish_signature(
+    db: DbSession,
+    instance: ProcedureInstance,
+    step_exec: StepExecution,
+    result: Any,
+    user_id: int,
+) -> StepExecutionResponse:
+    """Commit a signature and emit its events: one tail for COMPLETE, SIGN OFF and
+    the slot endpoint."""
     if result.validation_errors:
         raise HTTPException(status_code=422, detail=result.validation_errors)
 
@@ -1165,18 +1207,71 @@ async def complete_step(
 
     db.commit()
     db.refresh(step_exec)
+    db.expire(step_exec, ["signoff_records"])
     db.refresh(instance)
 
-    # Emit real-time events
-    await emit_step_completed(instance_id, step_number, user_id, user_name)
+    await emit_step_completed(instance.id, step_exec.step_number, user_id, user_name)
     if result.instance_started:
-        await emit_instance_started(instance_id, instance.procedure_id, user_id, user_name)
+        await emit_instance_started(instance.id, instance.procedure_id, user_id, user_name)
     if result.instance_completed:
         await emit_instance_completed(
-            instance_id, instance.procedure_id, InstanceStatus.COMPLETED.value
+            instance.id, instance.procedure_id, InstanceStatus.COMPLETED.value
         )
-
     return _step_response(step_exec)
+
+
+@router.post("/{instance_id}/steps/{step_number}/complete", response_model=StepExecutionResponse)
+async def complete_step(
+    instance_id: int,
+    step_number: int,
+    data: StepComplete,
+    db: DbSession,
+    user_id: CurrentUserId,
+) -> StepExecutionResponse:
+    """Sign slot 0 of a step with optional data capture (the old COMPLETE)."""
+    instance, step_exec = _get_instance_step(db, instance_id, step_number)
+    try:
+        result = complete_step_flow(
+            db, instance, step_exec, user_id, data_captured=data.data_captured, notes=data.notes
+        )
+    except FlowError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.message) from err
+    return await _finish_signature(db, instance, step_exec, result, user_id)
+
+
+class SignoffSign(BaseModel):
+    """Sign one slot. Data capture rides with slot 0."""
+
+    data_captured: dict[str, Any] | None = None
+
+
+@router.post(
+    "/{instance_id}/steps/{step_number}/signoffs/{slot}", response_model=StepExecutionResponse
+)
+async def sign_step_slot(
+    instance_id: int,
+    step_number: int,
+    slot: int,
+    db: DbSession,
+    user_id: CurrentUserId,
+    data: SignoffSign | None = None,
+) -> StepExecutionResponse:
+    """Sign slot ``slot`` of a step's or OP's sign-off list. The step completes
+    with its last slot. Slot 0 carries the old COMPLETE gate (sequence, holds,
+    required data); later slots may be signed in any order after it."""
+    instance, step_exec = _get_instance_step(db, instance_id, step_number)
+    try:
+        result = sign_step_flow(
+            db,
+            instance,
+            step_exec,
+            slot,
+            user_id,
+            data_captured=data.data_captured if data else None,
+        )
+    except FlowError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.message) from err
+    return await _finish_signature(db, instance, step_exec, result, user_id)
 
 
 class StepNoteCreate(BaseModel):
@@ -1299,38 +1394,14 @@ async def signoff_step(
     db: DbSession,
     user_id: CurrentUserId,
 ) -> StepExecutionResponse:
-    """Sign off on a step in AWAITING_SIGNOFF status.
-
-    This applies to parent OPs (after all sub-steps complete) and any step
-    with requires_signoff=True. Only steps in AWAITING_SIGNOFF status
-    can be signed off.
-    """
-    instance = db.query(ProcedureInstance).filter(ProcedureInstance.id == instance_id).first()
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
-
-    step_exec = (
-        db.query(StepExecution)
-        .filter(StepExecution.instance_id == instance_id, StepExecution.step_number == step_number)
-        .first()
-    )
-    if not step_exec:
-        raise HTTPException(status_code=404, detail="Step not found")
-
+    """Sign the next unsigned slot of a step awaiting sign-off (a wrapper over
+    the slot endpoint for the TUI and scripts)."""
+    instance, step_exec = _get_instance_step(db, instance_id, step_number)
     try:
         result = signoff_step_flow(db, instance, step_exec, user_id)
     except FlowError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
-
-    db.commit()
-    db.refresh(step_exec)
-    if result.instance_completed:
-        db.refresh(instance)
-        await emit_instance_completed(
-            instance_id, instance.procedure_id, InstanceStatus.COMPLETED.value
-        )
-
-    return _step_response(step_exec)
+        raise HTTPException(status_code=err.status_code, detail=err.message) from err
+    return await _finish_signature(db, instance, step_exec, result, user_id)
 
 
 @router.post("/{instance_id}/steps/{step_number}/nc", status_code=201)

@@ -7,7 +7,13 @@ from opal.db.models.auth import ApiToken, AuthSession, PasskeyCredential, Webaut
 from opal.db.models.baseline_event import BaselineEvent, BaselineEventItem
 from opal.db.models.dataset import DataPoint, Dataset
 from opal.db.models.designator import DesignatorSequence
-from opal.db.models.execution import ProcedureInstance, StepExecution, StepFocus, StepNote
+from opal.db.models.execution import (
+    ProcedureInstance,
+    StepExecution,
+    StepFocus,
+    StepNote,
+    StepSignoff,
+)
 from opal.db.models.extension import Extension
 from opal.db.models.genealogy import AssemblyComponent
 from opal.db.models.inventory import (
@@ -98,6 +104,7 @@ __all__ = [
     "StepImage",
     "StepKit",
     "StepNote",
+    "StepSignoff",
     "StockTestResult",
     "StockTransfer",
     "Supplier",

@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from opal.db.models.execution import ProcedureInstance, StepExecution
+from opal.db.models.execution import ProcedureInstance, StepExecution, StepSignoff
 from opal.db.models.issue import Containment, Issue, IssueStatus
 from opal.db.models.notification import Notification, NotificationKind, NotificationPriority
 from opal.db.models.user import User
@@ -96,6 +96,12 @@ def instance_operators(db: Session, instance_id: int) -> set[int]:
     )
     for completed, signed in rows:
         operators.update(uid for uid in (completed, signed) if uid is not None)
+    operators.update(
+        uid
+        for (uid,) in db.query(StepSignoff.signed_by_id)
+        .join(StepExecution, StepExecution.id == StepSignoff.step_execution_id)
+        .filter(StepExecution.instance_id == instance_id, StepSignoff.signed_by_id.isnot(None))
+    )
 
     return operators
 

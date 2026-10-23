@@ -108,6 +108,11 @@ class ProcedureStep(Base, IdMixin, TimestampMixin):
     requires_signoff: Mapped[bool] = mapped_column(
         default=False, nullable=False, comment="Step requires sign-off to complete"
     )
+    signoffs: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="[{label, role}] sign-off definitions; NULL = derive from requires_signoff/role",
+    )
     estimated_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     required_role: Mapped[str | None] = mapped_column(
         String(50),

@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from opal.core.signoffs import effective_signoffs
+
 
 @dataclass
 class StepDiff:
@@ -23,6 +25,7 @@ _STEP_COMPARE_FIELDS = [
     "caution",
     "required_data_schema",
     "requires_signoff",
+    "signoffs",
     "strict_sequence",
     "depends_on",
     "step_kit",
@@ -45,9 +48,14 @@ def diff_procedure_versions(
         if content_a.get(pf) != content_b.get(pf):
             proc_changes.append(pf)
 
-    # Build step lookups keyed by step_number
-    steps_a = {s["step_number"]: s for s in content_a.get("steps", []) if "step_number" in s}
-    steps_b = {s["step_number"]: s for s in content_b.get("steps", []) if "step_number" in s}
+    # Build step lookups keyed by step_number. Sign-offs compare as the effective
+    # list, so a legacy snapshot (no list) equals its explicit rewrite.
+    steps_a = {
+        s["step_number"]: s for s in _with_effective_signoffs(content_a) if "step_number" in s
+    }
+    steps_b = {
+        s["step_number"]: s for s in _with_effective_signoffs(content_b) if "step_number" in s
+    }
 
     all_step_numbers = sorted(
         set(steps_a.keys()) | set(steps_b.keys()),
@@ -77,6 +85,13 @@ def diff_procedure_versions(
                 diffs.append(StepDiff(status="unchanged", step_a=sa, step_b=sb))
 
     return proc_changes, diffs
+
+
+def _with_effective_signoffs(content: dict[str, Any]) -> list[dict[str, Any]]:
+    """Snapshot steps with ``signoffs`` replaced by the effective list."""
+    steps = content.get("steps", [])
+    parents = {s.get("parent_step_id") for s in steps if s.get("parent_step_id") is not None}
+    return [{**s, "signoffs": effective_signoffs(s, s.get("id") in parents)} for s in steps]
 
 
 def _step_sort_key(sn: str) -> tuple:
@@ -125,7 +140,7 @@ def diff_part_lists(
 def _normalized(content: dict[str, Any]) -> dict[str, Any]:
     """Snapshot content with database identity removed, so a restored or re-created
     draft that reads the same compares equal to the version it came from."""
-    steps = content.get("steps", [])
+    steps = _with_effective_signoffs(content)
     order_by_id = {s.get("id"): s.get("order") for s in steps}
     norm_steps = []
     for s in steps:

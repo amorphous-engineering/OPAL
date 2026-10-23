@@ -876,7 +876,7 @@ def test_version_diff_endpoint(client):
     assert d["version_a"]["version_number"] == 1 and d["version_b"]["version_number"] == 2
     assert d["added"] == 1 and d["modified"] == 1 and d["unchanged"] == 1 and d["removed"] == 0
     by_num = {s["step_number"]: s for s in d["steps"]}
-    assert by_num["2"]["changed_fields"] == ["requires_signoff"]
+    assert by_num["2"]["changed_fields"] == ["requires_signoff", "signoffs"]
     assert by_num["2"]["changes"]["requires_signoff"] == {"a": False, "b": True}
     assert by_num["3"]["status"] == "added"
     assert len(d["kit"]) == 1
