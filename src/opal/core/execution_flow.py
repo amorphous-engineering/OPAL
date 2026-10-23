@@ -32,7 +32,7 @@ from opal.core.audit import log_create
 from opal.core.avatars import avatar_url
 from opal.core.holds import HoldState, blocking_issues_for_instance, get_hold_state
 from opal.core.holds import enum_value as _status_value  # enum-unwrap, one home in core/holds
-from opal.core.roles import role_names_of
+from opal.core.roles import holds_slot_role, role_names_of
 from opal.core.signoffs import effective_signoffs
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
@@ -633,7 +633,7 @@ def slot_gate(
     if user_id is not None and role:
         if holder_roles is None:
             holder_roles = role_names_of(db, user_id)
-        if role.strip().lower() not in holder_roles:
+        if not holds_slot_role(holder_roles, role):
             blockers = [*blockers, Blocker(kind="role", message=f"Requires {role}")]
     return not blockers, blockers
 
@@ -688,7 +688,7 @@ def sign_step_flow(
         raise FlowError(f"Cannot complete step in {step_status} status")
 
     role = defs[slot].get("role")
-    if role and role.strip().lower() not in role_names_of(db, user_id):
+    if role and not holds_slot_role(role_names_of(db, user_id), role):
         raise FlowError(f"Requires role {role}", status_code=403)
 
     can_sign, blockers = slot_gate(db, instance, step_exec, slot, defs, signed)

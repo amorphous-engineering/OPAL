@@ -27,6 +27,7 @@ from opal.core.designators import (
     generate_serial_number,
     generate_work_order_number,
 )
+from opal.core.roles import ensure_system_roles
 from opal.core.signoffs import effective_for, effective_signoffs
 from opal.db.models import (
     BOMLine,
@@ -46,7 +47,6 @@ from opal.db.models import (
     Requirement,
     Risk,
     RiskIssueLink,
-    Role,
     StepDependency,
     StepExecution,
     Supplier,
@@ -189,23 +189,17 @@ def _seed_users(db: Session) -> dict[str, User]:
 
 
 # username -> (job title, workcenter code, roles). Roles are qualifications: only a
-# holder can sign a slot that names one, and being admin does not stand in for it.
+# holder (or an admin) can sign a slot that names one. Admin membership is the
+# is_admin flag on the user ("build"), not a grant.
 _DEMO_PEOPLE = {
-    "build": ("Build Lead", "BENCH", ["Technician", "Engineer", "QA"]),
+    "build": ("Build Lead", "BENCH", ["Engineer"]),
     "test": ("Test Engineer", "PAD", ["Technician", "Engineer"]),
-    "qa": ("Quality Inspector", "STORE", ["QA"]),
-}
-_ROLE_DESCRIPTIONS = {
-    "Technician": "Performs build and assembly steps.",
-    "Engineer": "Verifies engineering-critical steps and test setups.",
-    "QA": "Inspects and buys off quality-critical steps.",
+    "qa": ("Quality Inspector", "STORE", ["Quality"]),
 }
 
 
 def _seed_roles(db: Session, users: dict[str, User], workcenters: dict[str, Workcenter]) -> None:
-    roles = {n: Role(name=n, description=d) for n, d in _ROLE_DESCRIPTIONS.items()}
-    db.add_all(roles.values())
-    db.flush()
+    roles = {r.name: r for r in ensure_system_roles(db)}
     for username, (title, wc_code, held) in _DEMO_PEOPLE.items():
         user = users[username]
         user.job_title = title

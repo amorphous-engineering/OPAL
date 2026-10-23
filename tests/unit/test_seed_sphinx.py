@@ -167,9 +167,9 @@ def test_launch_contingency_ops(seeded):
     safe_down = by_parent[contingencies[0]["id"]]
     assert [s["step_number"] for s in safe_down] == [f"C1.{i}" for i in range(1, 7)]
     assert all(s["is_contingency"] for s in safe_down)
-    # The safety-walk gate keeps its QA signoff after the move.
+    # The safety-walk gate keeps its Quality signoff after the move.
     walk = next(s for s in safe_down if s["title"] == "Safety walk — 100-foot hold")
-    assert walk["requires_signoff"] and walk["required_role"] == "QA"
+    assert walk["requires_signoff"] and walk["required_role"] == "Quality"
     # Moved, not duplicated: the nominal shutdown op keeps only its 4 nominal steps.
     shutdown = next(s for s in ops if s["title"] == "Launchpad Shutdown")
     assert len(by_parent[shutdown["id"]]) == 4

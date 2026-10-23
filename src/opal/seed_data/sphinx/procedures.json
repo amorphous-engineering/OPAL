@@ -3195,7 +3195,7 @@
          }
         ]
        },
-       "required_role": "QA"
+       "required_role": "Quality"
       },
       {
        "title": "Fill valve and vehicle valve checkouts",
@@ -3641,7 +3641,7 @@
          }
         ]
        },
-       "required_role": "QA"
+       "required_role": "Quality"
       },
       {
        "title": "Staged approach \u2014 50 ft / 20 ft / 10 ft",

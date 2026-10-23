@@ -333,6 +333,11 @@ def factory_reset() -> None:
     configure_for_project(database_path=real_db_path())
     reinitialize_engine()
     get_active_settings().ensure_directories()
+    from opal.core.roles import ensure_system_roles
+
+    with SessionLocal() as db:
+        ensure_system_roles(db)
+        db.commit()
 
     # Now remove the old upload directory (after ensure_directories so the
     # fresh upload_dir exists and we only delete the old one if it differs).

@@ -20,6 +20,7 @@ from opal.core.avatars import avatar_url
 from opal.core.designators import generate_issue_number
 from opal.core.events import emit_issue_dispositioned
 from opal.core.execution_flow import recheck_instance_completion, version_step_map
+from opal.core.gates import GateDenied, gate_allows, gate_refusal, require_gate
 from opal.core.holds import holding_readout, scope_label
 from opal.db.models.execution import ProcedureInstance, StepExecution
 from opal.db.models.issue import (
@@ -167,6 +168,10 @@ class IssueDetailResponse(IssueResponse):
     raised_op_order: int | None = None
     risks: list[LinkedRisk] = []
     redline_ops: list[RedlineOp] = []
+    # Per viewer: whether the signed-in user passes the gate, and why not.
+    can_disposition: bool = True
+    can_approve: bool = True
+    gate_reasons: dict[str, str] = {}
 
 
 class Assignee(BaseModel):
@@ -355,8 +360,23 @@ def _issue_to_response(issue: Issue) -> IssueResponse:
     )
 
 
-def _issue_to_detail(db, issue: Issue) -> IssueDetailResponse:
-    """Issue plus linked risks and spawned redline ops."""
+def _require_gate(db, user_id: int | None, key: str) -> None:
+    """403 "Requires <roles>" unless the signed-in user passes the gate."""
+    try:
+        require_gate(db, user_id, key)
+    except GateDenied as err:
+        raise HTTPException(status_code=403, detail=str(err)) from err
+
+
+def _issue_to_detail(db, issue: Issue, viewer_id: int | None = None) -> IssueDetailResponse:
+    """Issue plus linked risks, spawned redline ops and the viewer's gate flags."""
+    reasons: dict[str, str] = {}
+    can_disposition = gate_allows(db, viewer_id, "issue.disposition")
+    if not can_disposition:
+        reasons["disposition"] = gate_refusal(db, "issue.disposition")
+    can_approve = gate_allows(db, viewer_id, "issue.approve")
+    if not can_approve:
+        reasons["approve"] = gate_refusal(db, "issue.approve")
     base = _issue_to_response(issue).model_dump()
     raised_op_order = None
     if issue.raised_step is not None and issue.procedure_instance_id is not None:
@@ -389,6 +409,9 @@ def _issue_to_detail(db, issue: Issue) -> IssueDetailResponse:
     )
     return IssueDetailResponse(
         **base,
+        can_disposition=can_disposition,
+        can_approve=can_approve,
+        gate_reasons=reasons,
         raised_op_order=raised_op_order,
         risks=risks,
         redline_ops=[
@@ -663,13 +686,14 @@ def create_issue(
 def get_issue(
     issue_id: int,
     db: DbSession,
+    user_id: CurrentUserId,
 ) -> IssueDetailResponse:
     """Get issue by ID, with linked risks and redline ops."""
     issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    return _issue_to_detail(db, issue)
+    return _issue_to_detail(db, issue, user_id)
 
 
 @router.get("/{issue_id}/steps", response_model=list[StepOption])
@@ -756,6 +780,8 @@ def update_issue(
         except ValueError as err:
             raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}") from err
         if new_status == IssueStatus.CLOSED:
+            if previous_status != IssueStatus.CLOSED.value:
+                _require_gate(db, user_id, "issue.approve")
             _validate_close(issue, data)
             if previous_status != IssueStatus.CLOSED.value:
                 issue.closed_at = datetime.now(UTC)
@@ -898,7 +924,9 @@ def return_from_review(
 
 @router.post("/{issue_id}/signoff", response_model=IssueResponse)
 def sign_off(issue_id: int, db: DbSession, user_id: CurrentUserId) -> IssueResponse:
-    """In review → done: closes the issue under the same rules as closing."""
+    """In review → done: closes the issue under the same rules as closing.
+    Needs the ``issue.approve`` gate."""
+    _require_gate(db, user_id, "issue.approve")
 
     def step(issue: Issue) -> None:
         was_blocking = notifications.has_blocker(db, issue.procedure_instance_id)
@@ -959,6 +987,7 @@ async def sign_disposition(
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
+    _require_gate(db, user_id, "issue.disposition")
     if _get_enum_val(issue, "status") == IssueStatus.CLOSED.value:
         raise HTTPException(status_code=400, detail="Issue is closed")
     if issue.dispositioned:
