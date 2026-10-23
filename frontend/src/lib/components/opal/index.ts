@@ -20,6 +20,8 @@ export {
 } from './listquery.js';
 export { default as DetailRow } from './DetailRow.svelte';
 export { default as DetailTable } from './DetailTable.svelte';
+export { default as Avatar } from './Avatar.svelte';
+export type { AvatarUser } from './Avatar.svelte';
 export { default as EmptyLine } from './EmptyLine.svelte';
 export { default as PageHeader } from './PageHeader.svelte';
 export { default as Section } from './Section.svelte';
