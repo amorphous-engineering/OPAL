@@ -27,10 +27,15 @@
 				<ul class="m-0 list-none p-0">
 					{#each ops as op (op.order)}
 						{@const done = isTerminal(op.status)}
+						{@const selected = store.focusMode && store.focusOp === op.order}
 						<li class="border-b border-border last:border-b-0">
 							<button
 								type="button"
-								class="flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-accent/60"
+								class={cn(
+									'flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-accent/60',
+									selected && 'bg-accent shadow-[inset_2px_0_0_var(--info)]'
+								)}
+								aria-current={selected ? 'true' : undefined}
 								onclick={() => onjump(op.order)}
 							>
 								<span class="w-8 shrink-0 font-mono font-medium">{op.number}</span>

@@ -248,12 +248,12 @@ export class ExecutionStore implements DocController {
 		return rows.find((r) => isActionable(r.step))?.step.order ?? null;
 	});
 
-	/** Focus mode: collapse every OP but the one being worked. Remembered per browser. */
+	/** Focus mode: show only the OP selected in the sidebar, hide the rest. Remembered per browser. */
 	focusMode = $state(read<boolean>('opal.exec.focusMode', false));
 	private focusOverride = $state<number | null>(null);
 
-	/** The OP focus mode keeps open: chosen by the operator, else the claimed OP, else
-	 *  the OP of the current step. */
+	/** The OP focus mode shows: selected in the sidebar, else the claimed OP, else the OP
+	 *  of the current step. */
 	get focusOp(): number | null {
 		if (this.focusOverride !== null) return this.focusOverride;
 		if (this.claimedOrder !== null) return this.claimedOrder;
@@ -262,6 +262,14 @@ export class ExecutionStore implements DocController {
 	}
 	set focusOp(order: number | null) {
 		this.focusOverride = order;
+	}
+
+	/** The OPs the document renders: all of them, or only the focused one in focus mode. */
+	get shownOps(): DocOp[] {
+		const all = this.allOps;
+		if (!this.focusMode) return all;
+		const only = all.filter((o) => o.order === this.focusOp);
+		return only.length ? only : all;
 	}
 
 	setFocusMode(on: boolean) {
@@ -346,17 +354,10 @@ export class ExecutionStore implements DocController {
 	// ---------- controller: expansion & focus ----------
 
 	isOpen(key: string, terminal: boolean, blocked = false): boolean {
-		// Focus mode: only the OP being worked is open; the rest fold to their header.
-		if (this.focusMode && key.startsWith('op:')) return Number(key.slice(3)) === this.focusOp;
 		return this.overrides[key] ?? (!terminal && !blocked);
 	}
 
 	toggle(key: string, terminal: boolean, blocked = false) {
-		if (this.focusMode && key.startsWith('op:')) {
-			// Opening another OP in focus mode moves the focus there.
-			this.focusOp = Number(key.slice(3)) === this.focusOp ? null : Number(key.slice(3));
-			return;
-		}
 		const next = !this.isOpen(key, terminal, blocked);
 		if (next === (!terminal && !blocked)) delete this.overrides[key];
 		else this.overrides[key] = next;
@@ -372,6 +373,8 @@ export class ExecutionStore implements DocController {
 		const hit = this.findStep(order);
 		if (!hit) return;
 		const { op, step } = hit;
+		// Focus mode: jumping selects the OP, which hides every other one.
+		if (this.focusMode) this.focusOp = op.order;
 		const opTerminal = isTerminal(op.status);
 		if (!this.isOpen(`op:${op.order}`, opTerminal)) this.toggle(`op:${op.order}`, opTerminal);
 		this.focusedOrder = order;
@@ -393,7 +396,7 @@ export class ExecutionStore implements DocController {
 		const t = e.target as HTMLElement | null;
 		if (t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable)) return;
 		if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
-		const rows = visibleRows(this.allOps, (op) =>
+		const rows = visibleRows(this.shownOps, (op) =>
 			this.isOpen(`op:${op.order}`, isTerminal(op.status))
 		);
 		if (!rows.length) return;
@@ -630,7 +633,7 @@ export class ExecutionStore implements DocController {
 
 	/** After the step completes, move the keyboard cursor to the next open step. */
 	private advanceFrom(order: number) {
-		const rows = visibleRows(this.allOps, (op) =>
+		const rows = visibleRows(this.shownOps, (op) =>
 			this.isOpen(`op:${op.order}`, isTerminal(op.status))
 		).filter((r) => r.step !== r.op.step || r.op.steps.length === 0);
 		const i = rows.findIndex((r) => r.step.order === order);

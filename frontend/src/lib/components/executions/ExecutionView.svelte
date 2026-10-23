@@ -202,7 +202,7 @@
 										: 'text-muted-foreground hover:text-foreground'
 								)}
 								aria-pressed={store.focusMode}
-								title="Show only the operation being worked"
+								title="Show only the operation selected in the sidebar"
 								onclick={() => store.setFocusMode(!store.focusMode)}>Focus</button
 							>
 						{/if}
@@ -210,7 +210,11 @@
 				</TabStrip>
 				<div id="exec-scroll" class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4">
 					{#if tab === 'document'}
-						<ProcedureDocument controller={store} ops={doc.ops} contingency={doc.contingency_ops} />
+						<ProcedureDocument
+							controller={store}
+							ops={doc.ops.filter((o) => store.shownOps.includes(o))}
+							contingency={doc.contingency_ops.filter((o) => store.shownOps.includes(o))}
+						/>
 					{:else if tab === 'data'}
 						<DataPanel {store} />
 					{:else if tab === 'material'}
