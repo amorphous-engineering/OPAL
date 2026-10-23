@@ -1,6 +1,6 @@
 {
 	"$schema": "https://shadcn-svelte.com/schema.json",
-	"style": "lyra",
+	"style": "mira",
 	"tailwind": {
 		"css": "src/routes/layout.css",
 		"baseColor": "neutral"

@@ -99,7 +99,7 @@
 
 {#if f}
 	<div
-		class="mt-1 grid grid-cols-1 gap-1.5 border border-dashed border-border bg-muted/30 p-1.5"
+		class="mt-1 grid grid-cols-1 gap-1.5 rounded-md border border-dashed border-border bg-muted/30 p-1.5"
 		data-field-editor
 	>
 		<div class="grid grid-cols-2 gap-1.5">

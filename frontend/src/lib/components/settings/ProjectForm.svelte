@@ -232,7 +232,10 @@
 <form class="grid grid-cols-1 gap-4" onsubmit={save}>
 	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if error}
-			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
+			<p
+				role="alert"
+				class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+			>
 				{error}
 			</p>
 		{/if}
@@ -333,7 +336,7 @@
 					<div class="flex flex-wrap gap-1">
 						{#each categories as c (c)}
 							<span
-								class="inline-flex h-6 items-center gap-1 border border-border bg-muted pr-0.5 pl-2 font-mono text-xs"
+								class="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-muted pr-0.5 pl-2 font-mono text-xs"
 							>
 								{c}
 								<button

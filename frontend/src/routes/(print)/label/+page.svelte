@@ -92,7 +92,7 @@
 {#if data.failures.length}
 	<ul
 		role="alert"
-		class="m-4 space-y-0.5 border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error print:hidden"
+		class="m-4 space-y-0.5 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error print:hidden"
 	>
 		{#each data.failures as f (f)}<li>{f}</li>{/each}
 	</ul>

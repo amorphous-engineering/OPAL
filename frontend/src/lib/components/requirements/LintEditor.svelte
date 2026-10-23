@@ -70,7 +70,7 @@
 	<div class="relative">
 		<div
 			aria-hidden="true"
-			class="pointer-events-none absolute inset-0 overflow-hidden border border-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-transparent"
+			class="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-transparent"
 		>
 			{#each segments as s, i (i)}{#if s.severity}<span
 						class={cn(
@@ -87,7 +87,7 @@
 			{placeholder}
 			{required}
 			rows="3"
-			class="relative block field-sizing-content min-h-16 w-full border border-input bg-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+			class="relative block field-sizing-content min-h-16 w-full rounded-md border border-input bg-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
 		></textarea>
 	</div>
 	{#if summary.length}

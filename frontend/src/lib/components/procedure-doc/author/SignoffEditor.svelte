@@ -48,54 +48,58 @@
 	{#if rows.length === 0}
 		<EmptyLine label="Sign-offs" onadd={add} addLabel="+ SIGN-OFF" />
 	{:else}
-		<table class="w-full border border-border font-mono text-xs" aria-label="Sign-offs">
-			<tbody>
-				{#each rows as s, i (i)}
-					<tr class="border-b border-border last:border-b-0" data-slot={i}>
-						<td class="w-44 px-2 py-1">
-							<Input
-								aria-label={`Sign-off ${i + 1} label`}
-								maxlength={100}
-								class="h-7 font-sans text-sm font-medium"
-								value={s.label}
-								onkeydown={(e) => e.stopPropagation()}
-								oninput={(e) => patch(i, { label: e.currentTarget.value })}
-							/>
-						</td>
-						<td class="w-36 px-2 py-1">
-							<NativeSelect
-								aria-label={`Sign-off ${i + 1} role`}
-								size="sm"
-								class="w-full"
-								value={known.find((n) => n.toLowerCase() === s.role?.toLowerCase()) ?? s.role ?? ''}
-								onkeydown={(e) => e.stopPropagation()}
-								onchange={(e) => patch(i, { role: e.currentTarget.value || null })}
-							>
-								<NativeSelectOption value="">—</NativeSelectOption>
-								{#each known as n (n)}
-									<NativeSelectOption value={n}>{n}</NativeSelectOption>
-								{/each}
-								{#each optionsFor(s.role) as n (n)}
-									<NativeSelectOption value={n}>{n} (no such role)</NativeSelectOption>
-								{/each}
-							</NativeSelect>
-						</td>
-						<td class="px-3 py-1 text-muted-foreground">–</td>
-						<td class="w-20 px-2 py-1 text-right">
-							<Button
-								type="button"
-								size="xs"
-								variant="outline"
-								aria-label={`Remove sign-off ${i + 1}`}
-								title={locked ? 'A step keeps at least one sign-off' : 'Remove sign-off'}
-								disabled={locked}
-								onclick={() => remove(i)}>X</Button
-							>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+		<div class="overflow-hidden rounded-lg border border-border">
+			<table class="w-full font-mono text-xs" aria-label="Sign-offs">
+				<tbody>
+					{#each rows as s, i (i)}
+						<tr class="border-b border-border last:border-b-0" data-slot={i}>
+							<td class="w-44 px-2 py-1">
+								<Input
+									aria-label={`Sign-off ${i + 1} label`}
+									maxlength={100}
+									class="h-7 font-sans text-sm font-medium"
+									value={s.label}
+									onkeydown={(e) => e.stopPropagation()}
+									oninput={(e) => patch(i, { label: e.currentTarget.value })}
+								/>
+							</td>
+							<td class="w-36 px-2 py-1">
+								<NativeSelect
+									aria-label={`Sign-off ${i + 1} role`}
+									size="sm"
+									class="w-full"
+									value={known.find((n) => n.toLowerCase() === s.role?.toLowerCase()) ??
+										s.role ??
+										''}
+									onkeydown={(e) => e.stopPropagation()}
+									onchange={(e) => patch(i, { role: e.currentTarget.value || null })}
+								>
+									<NativeSelectOption value="">—</NativeSelectOption>
+									{#each known as n (n)}
+										<NativeSelectOption value={n}>{n}</NativeSelectOption>
+									{/each}
+									{#each optionsFor(s.role) as n (n)}
+										<NativeSelectOption value={n}>{n} (no such role)</NativeSelectOption>
+									{/each}
+								</NativeSelect>
+							</td>
+							<td class="px-3 py-1 text-muted-foreground">–</td>
+							<td class="w-20 px-2 py-1 text-right">
+								<Button
+									type="button"
+									size="xs"
+									variant="outline"
+									aria-label={`Remove sign-off ${i + 1}`}
+									title={locked ? 'A step keeps at least one sign-off' : 'Remove sign-off'}
+									disabled={locked}
+									onclick={() => remove(i)}>X</Button
+								>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 		<button
 			type="button"
 			class="mt-1 font-mono text-xs font-medium text-info hover:underline"

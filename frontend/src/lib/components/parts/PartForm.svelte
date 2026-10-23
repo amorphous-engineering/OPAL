@@ -226,7 +226,7 @@
 		{#if error}
 			<p
 				role="alert"
-				class="border border-error/40 bg-error-muted px-3 py-2 font-mono text-xs text-error"
+				class="rounded-md border border-error/40 bg-error-muted px-3 py-2 font-mono text-xs text-error"
 			>
 				{error}
 			</p>

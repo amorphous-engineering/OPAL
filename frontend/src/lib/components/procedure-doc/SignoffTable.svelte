@@ -30,53 +30,55 @@
 </script>
 
 {#if rows.length}
-	<table
-		class="w-full border border-border font-mono text-xs"
-		aria-label="Sign-offs"
-		data-signoffs={step.order}
-		data-op={op.order}
-	>
-		<tbody>
-			{#each rows as s (s.slot)}
-				{@const signed = s.signed_by !== null}
-				<tr class="border-b border-border last:border-b-0" data-slot={s.slot}>
-					<td class="w-44 px-3 py-2 font-sans text-sm font-medium">{s.label}</td>
-					<td class="w-28 px-3 py-2 text-muted-foreground">{s.role ?? '–'}</td>
-					<td class="px-3 py-2">
-						{#if s.signed_by}
-							<span class="inline-flex items-center gap-2">
-								<Avatar user={s.signed_by} size="sm" />
-								<span>
-									Signed by <span class="font-sans font-medium">{s.signed_by.name}</span>
-									<time datetime={iso(s.signed_at)} title={iso(s.signed_at)}
-										>{datetime(s.signed_at)}</time
-									>
+	<div class="overflow-hidden rounded-lg border border-border">
+		<table
+			class="w-full font-mono text-xs"
+			aria-label="Sign-offs"
+			data-signoffs={step.order}
+			data-op={op.order}
+		>
+			<tbody>
+				{#each rows as s (s.slot)}
+					{@const signed = s.signed_by !== null}
+					<tr class="border-b border-border last:border-b-0" data-slot={s.slot}>
+						<td class="w-44 px-3 py-2 font-sans text-sm font-medium">{s.label}</td>
+						<td class="w-28 px-3 py-2 text-muted-foreground">{s.role ?? '–'}</td>
+						<td class="px-3 py-2">
+							{#if s.signed_by}
+								<span class="inline-flex items-center gap-2">
+									<Avatar user={s.signed_by} size="sm" />
+									<span>
+										Signed by <span class="font-sans font-medium">{s.signed_by.name}</span>
+										<time datetime={iso(s.signed_at)} title={iso(s.signed_at)}
+											>{datetime(s.signed_at)}</time
+										>
+									</span>
 								</span>
-							</span>
-						{:else if sign && !s.can_sign && s.blockers.length}
-							<GateReason blockers={s.blockers} />
-						{:else}
-							<span class="text-muted-foreground">–</span>
-						{/if}
-					</td>
-					<td class="w-32 px-3 py-2 text-right">
-						{#if signed}
-							<span
-								class="inline-flex h-5 items-center border border-border px-1.5 text-xs font-medium text-muted-foreground"
-								>COMPLETE</span
-							>
-						{:else if sign}
-							<Button
-								size="xs"
-								variant={s.can_sign ? 'default' : 'outline'}
-								disabled={!s.can_sign || busy !== null}
-								class={cn(!s.can_sign && 'cursor-not-allowed')}
-								onclick={() => run(s.slot)}>SIGN OFF</Button
-							>
-						{/if}
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+							{:else if sign && !s.can_sign && s.blockers.length}
+								<GateReason blockers={s.blockers} />
+							{:else}
+								<span class="text-muted-foreground">–</span>
+							{/if}
+						</td>
+						<td class="w-32 px-3 py-2 text-right">
+							{#if signed}
+								<span
+									class="inline-flex h-5 items-center rounded-md border border-border px-1.5 text-xs font-medium text-muted-foreground"
+									>COMPLETE</span
+								>
+							{:else if sign}
+								<Button
+									size="xs"
+									variant={s.can_sign ? 'default' : 'outline'}
+									disabled={!s.can_sign || busy !== null}
+									class={cn(!s.can_sign && 'cursor-not-allowed')}
+									onclick={() => run(s.slot)}>SIGN OFF</Button
+								>
+							{/if}
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
 {/if}

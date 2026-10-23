@@ -49,7 +49,7 @@
 										data-pswp
 										href={attachmentUrl(f.id)}
 										data-pswp-caption={f.filename}
-										class="block border border-border"
+										class="block rounded-md border border-border"
 										aria-label={`Enlarge ${f.filename}`}
 									>
 										<img

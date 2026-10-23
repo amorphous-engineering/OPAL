@@ -29,7 +29,7 @@
 
 <a
 	href="#main"
-	class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:border focus:border-border focus:bg-background focus:px-3 focus:py-1.5 focus:text-sm"
+	class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-1.5 focus:text-sm"
 	>Skip to content</a
 >
 
@@ -55,7 +55,7 @@
 		<TopNav />
 		<button
 			type="button"
-			class="ml-auto flex h-7 max-w-xs min-w-8 flex-1 items-center gap-2 border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"
+			class="ml-auto flex h-7 max-w-xs min-w-8 flex-1 items-center gap-2 rounded-md border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"
 			aria-haspopup="dialog"
 			aria-keyshortcuts="Control+K Meta+K"
 			onclick={() => (paletteOpen = true)}

@@ -107,7 +107,10 @@
 	<div class="p-4"><div class="h-24 animate-pulse bg-muted"></div></div>
 {:else if store.error || !doc || !inst}
 	<div class="p-4">
-		<p role="alert" class="border border-error/40 bg-error-muted px-3 py-2 text-xs text-error">
+		<p
+			role="alert"
+			class="rounded-md border border-error/40 bg-error-muted px-3 py-2 text-xs text-error"
+		>
 			{store.error ?? 'Execution not found'}
 		</p>
 		<p class="mt-2 text-xs">

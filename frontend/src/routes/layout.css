@@ -13,7 +13,7 @@
 
 /*
  * OPAL design tokens — OPAL's original palette (master, pre-Basecoat).
- * US Graphics register: dense, explicit, high contrast; no radii, shadows or
+ * US Graphics register: dense, explicit, high contrast; one small radius scale (shadcn Mira), no shadows or
  * gradients. Colour is functional only:
  *   blue          identifier + action: primary buttons, links, focus, in-flight
  *                 state ("info"); never content
@@ -26,10 +26,10 @@
 :root {
 	/* Light: shadcn-svelte's official "neutral" theme, verbatim
 	   (shadcn-svelte.com/registry/colors/neutral.json, the base colour in components.json),
-	   except radius (OPAL is square). OPAL's own tokens, which shadcn does not define,
+	   except nothing: radius is shadcn's standard 0.625rem (Mira style). OPAL's own tokens, which shadcn does not define,
 	   use Tailwind's palette: ok green-700, warn amber-700, info/dev blue-600, brand
 	   orange-700; error is shadcn's destructive. */
-	--radius: 0rem;
+	--radius: 0.625rem;
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
 	--card: oklch(1 0 0);
@@ -136,10 +136,14 @@
 	--text-2xl--line-height: 1.273;
 	--font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-	--radius-sm: 0rem;
-	--radius-md: 0rem;
-	--radius-lg: 0rem;
-	--radius-xl: 0rem;
+	--radius-xs: calc(var(--radius) - 6px);
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+	--radius-2xl: calc(var(--radius) + 8px);
+	--radius-3xl: calc(var(--radius) + 12px);
+	--radius-4xl: calc(var(--radius) + 16px);
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);

@@ -24,7 +24,7 @@
 	provideFrame();
 </script>
 
-<section {id} class={cn('border border-border bg-card', className)}>
+<section {id} class={cn('overflow-hidden rounded-lg border border-border bg-card', className)}>
 	<header class="flex h-8 items-center gap-2 border-b border-border bg-muted/60 px-3">
 		<h2 class="label text-foreground">{title}</h2>
 		{#if count !== undefined}<span class="mono text-xs text-muted-foreground">{count}</span>{/if}

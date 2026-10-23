@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { RangeCalendar as RangeCalendarPrimitive } from 'bits-ui';
+	import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
 	import CaretDownIcon from 'phosphor-svelte/lib/CaretDown';
-	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
+	import { cn, type WithoutChildrenOrChild } from "#lib/utils.js";
 
 	let {
 		ref = $bindable(null),
@@ -14,7 +14,7 @@
 
 <span
 	class={cn(
-		'relative flex rounded-md border border-input shadow-xs has-focus:border-ring has-focus:ring-[3px] has-focus:ring-ring/50',
+		"relative flex rounded-md border border-input shadow-xs has-focus:border-ring has-focus:ring-[3px] has-focus:ring-ring/50",
 		className
 	)}
 >
@@ -37,7 +37,7 @@
 				aria-hidden="true"
 			>
 				{monthItems.find((item) => item.value === value)?.label || selectedMonthItem.label}
-				<CaretDownIcon class={cn('size-4', className)} />
+				<CaretDownIcon class={cn("size-4", className)} />
 			</span>
 		{/snippet}
 	</RangeCalendarPrimitive.MonthSelect>

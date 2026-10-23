@@ -1,6 +1,6 @@
 <script lang="ts">
 	// A person: their avatar photo (uploaded or from the sign-in provider), else their
-	// initials in a square. Square like everything else in OPAL. One component wherever
+	// initials in a box with the theme radius. One component wherever
 	// a person appears (signatures, notes, presence, comments, menus, lists, profile).
 	import { cn } from '#lib/utils.js';
 
@@ -48,7 +48,11 @@
 		alt={user.name ?? ''}
 		title={user.name ?? undefined}
 		loading="lazy"
-		class={cn('shrink-0 border border-border bg-muted object-cover', box[size], className)}
+		class={cn(
+			'shrink-0 rounded-md border border-border bg-muted object-cover',
+			box[size],
+			className
+		)}
 		onerror={() => (failed = true)}
 	/>
 {:else}

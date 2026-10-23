@@ -59,7 +59,7 @@
 {#if data.mode === 'setup'}
 	<PageHeader title="Welcome to OPAL" />
 	<div class="max-w-4xl space-y-4 p-4">
-		<DetailTable class="border border-border bg-card">
+		<DetailTable class="overflow-hidden rounded-lg border border-border bg-card">
 			<DetailRow label="What OPAL is"
 				>A local-first ERP for hardware projects: parts, stock, procedures, issues and risks in one
 				database on this machine.</DetailRow

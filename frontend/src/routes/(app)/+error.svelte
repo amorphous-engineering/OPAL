@@ -20,7 +20,7 @@
 <PageHeader {title} identifier={String(status)} />
 
 <div class="p-4">
-	<div class="max-w-2xl border border-border bg-card">
+	<div class="max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
 		<p role="alert" class="px-3 py-2 text-sm">{page.error?.message ?? 'Something went wrong'}</p>
 		<div class="flex items-center gap-2 border-t border-border p-2">
 			<Button size="sm" variant="outline" onclick={() => history.back()}>BACK</Button>

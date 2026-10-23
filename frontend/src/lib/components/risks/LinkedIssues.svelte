@@ -139,6 +139,8 @@
 			onadd={() => (adding = !adding)}
 			addLabel={adding ? 'DONE' : '+ ADD'}
 		/>
-		{#if adding}<div class="border border-t-0 border-border bg-card">{@render form()}</div>{/if}
+		{#if adding}<div class="rounded-b-lg border border-t-0 border-border bg-card">
+				{@render form()}
+			</div>{/if}
 	</div>
 {/if}

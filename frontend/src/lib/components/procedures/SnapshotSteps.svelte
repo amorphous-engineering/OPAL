@@ -27,7 +27,7 @@
 						src={`/api/attachments/${img.attachment_id}/download`}
 						alt={img.caption ?? ''}
 						loading="lazy"
-						class="max-h-40 border border-border"
+						class="max-h-40 rounded-md border border-border"
 					/>
 					{#if img.caption}<figcaption class="mt-0.5 text-xs text-muted-foreground">
 							{img.caption}
@@ -72,19 +72,18 @@
 
 {#snippet signoffs(s: SnapshotStep)}
 	{#if s.signoffs?.length}
-		<table
-			class="my-1 w-full max-w-xl border border-border font-mono text-xs"
-			aria-label="Sign-offs"
-		>
-			<tbody>
-				{#each s.signoffs as so, i (i)}
-					<tr class="border-b border-border last:border-b-0" data-signoff={i}>
-						<td class="w-44 px-2 py-1 font-sans text-sm font-medium">{so.label}</td>
-						<td class="px-2 py-1 text-muted-foreground">{so.role ?? '–'}</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+		<div class="my-1 max-w-xl overflow-hidden rounded-lg border border-border">
+			<table class="w-full font-mono text-xs" aria-label="Sign-offs">
+				<tbody>
+					{#each s.signoffs as so, i (i)}
+						<tr class="border-b border-border last:border-b-0" data-signoff={i}>
+							<td class="w-44 px-2 py-1 font-sans text-sm font-medium">{so.label}</td>
+							<td class="px-2 py-1 text-muted-foreground">{so.role ?? '–'}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	{/if}
 {/snippet}
 

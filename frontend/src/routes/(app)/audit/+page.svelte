@@ -100,7 +100,9 @@
 		<FilterDate param="from" label="From" max={to || undefined} />
 		<FilterDate param="to" label="To" min={from || undefined} />
 		{#if record && entity}
-			<div class="flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs">
+			<div
+				class="flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs"
+			>
 				<span class="text-muted-foreground uppercase">Record</span>
 				<span>{recordEntry?.record_label ?? recordEntry?.entity_label ?? entity}</span>
 				<button

@@ -20,7 +20,7 @@
 <div class="flex items-start gap-2">
 	<code
 		aria-label={label}
-		class="min-w-0 flex-1 border border-border bg-muted px-2 py-1 font-mono text-xs break-all select-all"
+		class="min-w-0 flex-1 rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs break-all select-all"
 		>{value}</code
 	>
 	<Button variant="outline" size="sm" onclick={copy}>{copied ? 'COPIED' : 'COPY'}</Button>

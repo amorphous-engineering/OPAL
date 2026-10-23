@@ -65,7 +65,7 @@
 						data-pswp
 						href={attachmentUrl(img.attachment_id)}
 						data-pswp-caption={img.caption ?? ''}
-						class="block aspect-[4/3] h-28 overflow-hidden border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
+						class="block aspect-[4/3] h-28 overflow-hidden rounded-md border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
 						aria-label={img.caption ? `Enlarge: ${img.caption}` : 'Enlarge reference image'}
 					>
 						<img
@@ -80,7 +80,7 @@
 						<input
 							type="text"
 							maxlength={255}
-							class="h-6 w-full max-w-56 border border-input bg-transparent px-1.5 font-mono text-xs focus:border-ring focus:outline-none"
+							class="h-6 w-full max-w-56 rounded-md border border-input bg-transparent px-1.5 font-mono text-xs focus:border-ring focus:outline-none"
 							placeholder="Caption"
 							aria-label="Caption"
 							value={img.caption ?? ''}

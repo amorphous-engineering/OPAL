@@ -147,7 +147,7 @@
 	/>
 	<p
 		role="alert"
-		class="m-4 max-w-xl border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+		class="m-4 max-w-xl rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 	>
 		{data.error ?? 'Record not found'}
 	</p>
@@ -281,7 +281,7 @@
 				</DetailTable>
 			</Section>
 
-			<div class="border border-border bg-card p-3">
+			<div class="rounded-lg border border-border bg-card p-3">
 				<!-- QR codes are black on transparent; a white ground keeps them scannable in dark mode. -->
 				<img
 					src="/api/inventory/{rec.id}/qrcode"
@@ -472,7 +472,7 @@
 				{#if editError}
 					<p
 						role="alert"
-						class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
+						class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
 					>
 						{editError}
 					</p>

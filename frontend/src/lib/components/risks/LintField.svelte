@@ -72,7 +72,7 @@
 <div class="grid grid-cols-1">
 	<div
 		aria-hidden="true"
-		class="pointer-events-none col-start-1 row-start-1 min-h-12 overflow-hidden border border-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-transparent"
+		class="pointer-events-none col-start-1 row-start-1 min-h-12 overflow-hidden rounded-md border border-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-transparent"
 	>
 		{#each current as s, i (i)}{#if s.severity}<span
 					class={cn(

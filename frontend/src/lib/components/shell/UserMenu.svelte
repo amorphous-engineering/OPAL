@@ -15,7 +15,7 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger
 		aria-label="Account menu"
-		class="inline-flex h-7 items-center gap-2 border border-border px-1.5 text-sm hover:bg-accent data-[state=open]:bg-accent sm:px-2"
+		class="inline-flex h-7 items-center gap-2 rounded-md border border-border px-1.5 text-sm hover:bg-accent data-[state=open]:bg-accent sm:px-2"
 	>
 		<Avatar user={session.user} size="xs" />
 		<span class="hidden max-w-48 truncate sm:inline">{session.user?.name ?? '—'}</span>

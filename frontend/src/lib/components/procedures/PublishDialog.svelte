@@ -103,7 +103,7 @@
 				<Textarea id="change-note" rows={3} bind:value={note} maxlength={2000} />
 			</div>
 			{#if drafts.length}
-				<div role="alert" class="border border-warn/50 bg-warn-muted p-2 text-xs">
+				<div role="alert" class="rounded-md border border-warn/50 bg-warn-muted p-2 text-xs">
 					<p class="mb-1.5 font-mono font-medium text-warn uppercase">Draft parts block publish</p>
 					<ul class="grid grid-cols-1 gap-1">
 						{#each drafts as p (p.id)}
