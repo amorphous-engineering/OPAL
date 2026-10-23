@@ -63,7 +63,10 @@ def test_client_carries_no_pictographs() -> None:
 
 # Radius is one knob: editing --radius in layout.css alone changes every corner, so
 # OPAL's own code may only use the token classes (rounded-sm/md/lg/xl, side variants).
-BAD_RADIUS = re.compile(r"(?<![\w-])(?:rounded(?![\w-])|rounded-(?:[a-z]{1,2}-)?(?:none|\[))")
+# Bare `rounded`, blanket `rounded-none` and any arbitrary `rounded-[..]` bypass the tokens.
+# A side/corner-specific `-none` (e.g. `rounded-b-none`) squares a joint where two boxes meet
+# and stays correct for any --radius, so it is allowed.
+BAD_RADIUS = re.compile(r"(?<![\w-])(?:rounded(?![\w-])|rounded-none\b|rounded-(?:[a-z]{1,2}-)?\[)")
 
 
 def test_radius_comes_from_tokens() -> None:

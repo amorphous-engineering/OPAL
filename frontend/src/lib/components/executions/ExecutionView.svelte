@@ -192,8 +192,15 @@
 			>
 				<ExecutionNav {store} onjump={jump} />
 			</aside>
-			<div class="flex min-h-0 min-w-0 flex-col gap-3">
-				<TabStrip {tabs} value={tab} onchange={setTab} class="shrink-0">
+			<!-- On DOCUMENT the tab bar and the first OP card share an edge (no gap, square
+			     joint), so a pinned OP title bar sits flush under the tabs. -->
+			<div class={cn('flex min-h-0 min-w-0 flex-col', tab === 'document' ? 'gap-0' : 'gap-3')}>
+				<TabStrip
+					{tabs}
+					value={tab}
+					onchange={setTab}
+					class={cn('shrink-0', tab === 'document' && 'rounded-b-none')}
+				>
 					{#snippet end()}
 						{#if tab === 'document'}
 							<button
@@ -211,7 +218,10 @@
 						{/if}
 					{/snippet}
 				</TabStrip>
-				<div id="exec-scroll" class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4">
+				<div
+					id="exec-scroll"
+					class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4 [&_[data-doc-mode]>section:first-of-type]:rounded-t-none [&_[data-doc-mode]>section:first-of-type]:border-t-0"
+				>
 					{#if tab === 'document'}
 						<ProcedureDocument
 							controller={store}
