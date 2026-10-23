@@ -265,3 +265,58 @@
 	font-size: var(--text-xs);
 	line-height: var(--text-xs--line-height);
 }
+
+/*
+ * Control heights: the one place to make buttons, inputs, selects and toggles taller or
+ * shorter. Root is 14px, so calc(24rem / 14) = 24px. Vendored (Mira) components size
+ * controls with h-5..h-8 / size-5..size-8; these rules route those onto the tokens so the
+ * vendored files stay pristine. OPAL's own controls use h-(--control-*) directly.
+ */
+:root {
+	--control-xs: calc(24rem / 14);
+	--control-sm: calc(28rem / 14);
+	--control-md: calc(32rem / 14);
+	--control-lg: calc(36rem / 14);
+}
+:is([data-slot='button'], [data-slot='toggle'], [data-slot='toggle-group-item']).h-5 {
+	height: var(--control-xs);
+}
+:is(
+	[data-slot='button'],
+	[data-slot='toggle'],
+	[data-slot='toggle-group-item'],
+	[data-slot='input']
+).h-6,
+:is([data-slot='native-select'], [data-slot='select-trigger'])[data-size='sm'] {
+	height: var(--control-sm);
+}
+:is(
+	[data-slot='button'],
+	[data-slot='toggle'],
+	[data-slot='toggle-group-item'],
+	[data-slot='input'],
+	[data-slot='input-group']
+).h-7,
+[data-slot='native-select']:not([data-size='sm']),
+[data-slot='select-trigger']:not([data-size='sm']) {
+	height: var(--control-md);
+}
+:is([data-slot='button'], [data-slot='toggle'], [data-slot='toggle-group-item']).h-8 {
+	height: var(--control-lg);
+}
+[data-slot='button'].size-5 {
+	width: var(--control-xs);
+	height: var(--control-xs);
+}
+[data-slot='button'].size-6 {
+	width: var(--control-sm);
+	height: var(--control-sm);
+}
+[data-slot='button'].size-7 {
+	width: var(--control-md);
+	height: var(--control-md);
+}
+[data-slot='button'].size-8 {
+	width: var(--control-lg);
+	height: var(--control-lg);
+}

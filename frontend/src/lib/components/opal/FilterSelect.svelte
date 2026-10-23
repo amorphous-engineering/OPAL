@@ -38,7 +38,6 @@
 </script>
 
 <NativeSelect.Root
-	size="sm"
 	aria-label={label}
 	class={className}
 	{value}
