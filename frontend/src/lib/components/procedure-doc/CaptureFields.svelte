@@ -4,7 +4,7 @@
 	// what the operator is typing. Saved with the first sign-off.
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
@@ -34,9 +34,7 @@
 	const filled = (v: unknown) =>
 		v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
 	const required = $derived(fields.filter((f) => f.required));
-	const recorded = $derived(
-		required.filter((f) => filled(ctl.fieldValue(step, f.name)) || f.type === 'checkbox').length
-	);
+	const recorded = $derived(required.filter((f) => filled(ctl.fieldValue(step, f.name))).length);
 	let uploading = $state(false);
 
 	const ids = (v: unknown): number[] =>
@@ -72,8 +70,11 @@
 {#if fields.length || authoring}
 	<!-- Data capture is its own panel: one field per row, label and spec on the
 	     left, the input on the right, so it never reads as part of the prose. -->
-	<section class="border border-border bg-muted/40" aria-label="Data capture">
-		<header class="flex h-8 items-center gap-3 border-b border-border px-3">
+	<section
+		class="border border-border bg-muted/40 sm:grid sm:grid-cols-[fit-content(66%)_minmax(0,1fr)]"
+		aria-label="Data capture"
+	>
+		<header class="flex h-8 items-center gap-3 border-b border-border px-3 sm:col-span-full">
 			<span class="label text-foreground">Data</span>
 			{#if required.length}
 				<span
@@ -94,13 +95,13 @@
 			{/if}
 		</header>
 		{#if !fields.length}
-			<p class="px-3 py-2 font-mono text-xs text-muted-foreground">none</p>
+			<p class="px-3 py-2 font-mono text-xs text-muted-foreground sm:col-span-full">none</p>
 		{/if}
 		{#each fields as f, i (authoring ? i : f.name)}
 			{@const id = `cap-${step.order}-${f.name}`}
 			{@const err = errors[f.name]}
 			<div
-				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(10rem,18rem)_minmax(0,26rem)]"
+				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 sm:col-span-full sm:grid-cols-subgrid [header+&]:border-t-0"
 			>
 				<div class="grid grid-cols-1 gap-0.5 sm:pt-1.5">
 					<label for={id} class="text-sm font-medium text-foreground">
@@ -117,7 +118,7 @@
 						>
 					{/if}
 				</div>
-				<div class="grid min-w-0 grid-cols-1 gap-1">
+				<div class="grid min-w-0 grid-cols-1 gap-1 sm:max-w-[26rem]">
 					{#if f.type === 'number'}
 						<Input
 							{id}
@@ -134,13 +135,32 @@
 							}}
 						/>
 					{:else if f.type === 'checkbox'}
-						<div class="flex h-8 items-center gap-2">
-							<Checkbox
-								{id}
-								checked={!!ctl.fieldValue(step, f.name)}
-								onCheckedChange={(c) => ctl.setField(step, f.name, !!c)}
-							/>
-						</div>
+						{@const b = ctl.fieldValue(step, f.name)}
+						<!-- An explicit choice: unset until the operator picks TRUE or FALSE. -->
+						<ToggleGroup.Root
+							type="single"
+							variant="outline"
+							size="sm"
+							spacing={0}
+							class="w-fit font-mono"
+							{id}
+							aria-label={f.label ?? f.name}
+							aria-invalid={!!err}
+							value={b === true ? 'true' : b === false ? 'false' : ''}
+							onValueChange={(v: string) =>
+								ctl.setField(step, f.name, v === 'true' ? true : v === 'false' ? false : null)}
+						>
+							<ToggleGroup.Item
+								value="true"
+								class="px-3 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+								>TRUE</ToggleGroup.Item
+							>
+							<ToggleGroup.Item
+								value="false"
+								class="px-3 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+								>FALSE</ToggleGroup.Item
+							>
+						</ToggleGroup.Root>
 					{:else if f.type === 'select'}
 						<NativeSelect
 							{id}

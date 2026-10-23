@@ -18,8 +18,11 @@
 </script>
 
 {#if fields.length}
-	<section class="border border-border bg-muted/40" aria-label="Captured data">
-		<header class="flex h-8 items-center gap-3 border-b border-border px-3">
+	<section
+		class="border border-border bg-muted/40 sm:grid sm:grid-cols-[fit-content(66%)_minmax(0,1fr)]"
+		aria-label="Captured data"
+	>
+		<header class="flex h-8 items-center gap-3 border-b border-border px-3 sm:col-span-full">
 			<span class="label text-foreground">Data</span>
 			{#if required.length}
 				<span
@@ -37,7 +40,7 @@
 		{#each fields as f (f.name)}
 			{@const raw = step.data_captured?.[f.name]}
 			<div
-				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(10rem,18rem)_minmax(0,26rem)]"
+				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 sm:col-span-full sm:grid-cols-subgrid [header+&]:border-t-0"
 			>
 				<div class="grid grid-cols-1 gap-0.5 sm:pt-1.5">
 					<span class="text-sm font-medium text-foreground">
@@ -81,7 +84,7 @@
 					{:else if !present(raw)}
 						<span class="text-muted-foreground">—</span>
 					{:else if f.type === 'checkbox'}
-						{raw ? 'YES' : 'NO'}
+						{raw ? 'TRUE' : 'FALSE'}
 					{:else}
 						<span class="break-words">{raw}</span>
 					{/if}

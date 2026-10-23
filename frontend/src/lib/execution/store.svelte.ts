@@ -464,7 +464,7 @@ export class ExecutionStore implements DocController {
 		for (const f of step.data_schema?.fields ?? []) {
 			const v = this.fieldValue(step, f.name);
 			const empty = v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length);
-			if (f.required && f.type !== 'checkbox' && empty) out[f.name] = 'Required';
+			if (f.required && empty) out[f.name] = 'Required';
 			else if (f.type === 'number' && !empty) {
 				const n = Number(v);
 				if (Number.isNaN(n)) out[f.name] = 'Not a number';
@@ -483,7 +483,7 @@ export class ExecutionStore implements DocController {
 		const data: Record<string, unknown> = {};
 		for (const f of fields) {
 			const v = this.fieldValue(step, f.name);
-			if (f.type === 'checkbox') data[f.name] = !!v;
+			if (f.type === 'checkbox') data[f.name] = typeof v === 'boolean' ? v : null;
 			else if (v === undefined || v === '' || (Array.isArray(v) && !v.length)) data[f.name] = null;
 			else data[f.name] = v;
 		}
