@@ -18,6 +18,7 @@ from opal.core.signoffs import (
     UNSET,
     SignoffError,
     effective_for,
+    effective_signoffs,
     write_signoff_fields,
 )
 from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput, Workcenter
@@ -1814,10 +1815,18 @@ def get_version(
         else []
     )
     base = _version_response(version)
+    steps = version.content.get("steps", [])
+    parent_ids = {s.get("parent_step_id") for s in steps if s.get("parent_step_id") is not None}
+    content = {
+        **version.content,
+        "steps": [
+            {**s, "signoffs": effective_signoffs(s, s.get("id") in parent_ids)} for s in steps
+        ],
+    }
     return VersionDetailResponse(
         id=version.id,
         version_number=version.version_number,
-        content=version.content,
+        content=content,
         created_at=version.created_at,
         created_by_id=version.created_by_id,
         created_by_name=base.created_by_name,

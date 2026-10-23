@@ -33,6 +33,7 @@
 		caution: 'caution',
 		required_data_schema: 'data fields',
 		requires_signoff: 'signoff',
+		signoffs: 'sign-offs',
 		strict_sequence: 'strict sequence',
 		depends_on: 'dependencies',
 		step_kit: 'step kit',
@@ -55,8 +56,24 @@
 	}
 
 	/** "duration: 5 → 10" for short scalars; just the field name for long or structured values. */
+	function signoffList(v: unknown): string {
+		if (!Array.isArray(v) || v.length === 0) return 'none';
+		return v
+			.map((x: { label: string; role: string | null }) =>
+				x.role ? `${x.label} (${x.role})` : x.label
+			)
+			.join(', ');
+	}
+
+	/** The sign-off list is the one home of sign-off and role; those derived fields stay quiet. */
+	function shownFields(r: StepDiff): string[] {
+		if (!r.changed_fields.includes('signoffs')) return r.changed_fields;
+		return r.changed_fields.filter((f) => f !== 'requires_signoff' && f !== 'required_role');
+	}
+
 	function describe(field: string, ch: { a: unknown; b: unknown }): string {
 		const label = FIELD_LABELS[field] ?? field;
+		if (field === 'signoffs') return `${label}: ${signoffList(ch.a)} → ${signoffList(ch.b)}`;
 		const simple = (v: unknown) =>
 			v === null ||
 			v === undefined ||
@@ -162,9 +179,9 @@
 					{:else if col.key === 'title_b'}
 						<span class={r.status === 'added' ? 'text-ok' : ''}>{r.title_b ?? '—'}</span>
 					{:else if col.key === 'changed_fields'}
-						{#if r.changed_fields.length}
+						{#if shownFields(r).length}
 							<ul class="grid gap-0.5 font-mono text-xs">
-								{#each r.changed_fields as f (f)}<li>{describe(f, r.changes[f])}</li>{/each}
+								{#each shownFields(r) as f (f)}<li>{describe(f, r.changes[f])}</li>{/each}
 							</ul>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else}

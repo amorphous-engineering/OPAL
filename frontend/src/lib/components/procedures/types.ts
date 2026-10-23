@@ -13,6 +13,7 @@ export interface StepNode {
 	instructions: string | null;
 	is_contingency: boolean;
 	requires_signoff: boolean;
+	signoffs?: { label: string; role: string | null }[];
 	estimated_duration_minutes: number | null;
 	required_role: string | null;
 	caution: string | null;
@@ -95,6 +96,7 @@ export interface SnapshotStep {
 	required_data_schema: { fields?: DataField[] } | null;
 	is_contingency: boolean;
 	requires_signoff: boolean;
+	signoffs?: { label: string; role: string | null }[];
 	estimated_duration_minutes: number | null;
 	required_role: string | null;
 	caution: string | null;

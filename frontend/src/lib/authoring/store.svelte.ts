@@ -23,6 +23,7 @@ import type {
 	DocActions,
 	DocController,
 	DocOp,
+	DocSignoff,
 	DocStep,
 	PartHit,
 	SaveState,
@@ -54,6 +55,18 @@ function write(key: string, value: unknown) {
 }
 
 const norm = (v: string | null | undefined) => (v ? v : null);
+
+/** The definitions as unsigned slots, for the preview's sign-off table. */
+const previewSlots = (defs: { label: string; role: string | null }[]): DocSignoff[] =>
+	defs.map((d, slot) => ({
+		slot,
+		label: d.label,
+		role: d.role ?? null,
+		signed_by: null,
+		signed_at: null,
+		can_sign: true,
+		blockers: []
+	}));
 
 interface Job {
 	key: string;
@@ -230,8 +243,16 @@ export class AuthorStore implements DocController {
 			set('title', 'title', d.title);
 			set('instructions', 'instructions', d.instructions);
 			set('caution', 'caution', d.caution);
-			set('role', 'role', d.required_role);
-			set('requires_signoff', 'requires_signoff', d.requires_signoff);
+			if (!dirty(d.id, 'signoffs')) {
+				set('role', 'role', d.required_role);
+				set('requires_signoff', 'requires_signoff', d.requires_signoff);
+				const defs = (d.signoffs ?? []).map((x) => ({ label: x.label, role: x.role ?? null }));
+				if (JSON.stringify(st.signoff_defs ?? []) !== JSON.stringify(defs)) {
+					st.signoff_defs = defs;
+					st.signoffs = previewSlots(defs);
+					st.signoffs = previewSlots(defs);
+				}
+			}
 			set('estimated_duration_minutes', 'estimated_duration_minutes', d.estimated_duration_minutes);
 			set('is_contingency', 'is_contingency', d.is_contingency);
 			set('workcenter_id', 'workcenter_id', d.workcenter_id);
@@ -330,7 +351,8 @@ export class AuthorStore implements DocController {
 			complete_blockers: [],
 			skip_blockers: [],
 			notes: [],
-			signoffs: [],
+			signoffs: previewSlots(d.signoffs ?? []),
+			signoff_defs: (d.signoffs ?? []).map((x) => ({ label: x.label, role: x.role ?? null })),
 			attachments: [],
 			consumptions: [],
 			waiting: null
@@ -497,6 +519,10 @@ export class AuthorStore implements DocController {
 		if ('caution' in patch) body.caution = norm(patch.caution);
 		if ('role' in patch) body.required_role = norm(patch.role);
 		if ('requires_signoff' in patch) body.requires_signoff = patch.requires_signoff;
+		if ('signoffs' in patch)
+			body.signoffs = patch.signoffs
+				? patch.signoffs.map((x) => ({ label: x.label.trim(), role: norm(x.role) }))
+				: null;
 		if ('estimated_duration_minutes' in patch)
 			body.estimated_duration_minutes = patch.estimated_duration_minutes ?? null;
 		if ('is_contingency' in patch) body.is_contingency = patch.is_contingency;
@@ -524,8 +550,19 @@ export class AuthorStore implements DocController {
 		const keys = Object.keys(apply) as (keyof StepEdit)[];
 		if (!keys.length) return;
 		for (const k of keys) {
-			const field = k === 'data_schema' ? 'data_schema' : k;
-			s[field] = apply[k];
+			if (k === 'signoffs') continue;
+			s[k] = apply[k];
+		}
+		if ('signoffs' in apply) {
+			const defs = (apply.signoffs ?? []).map((x) => ({ label: x.label, role: x.role ?? null }));
+			st.signoff_defs = defs;
+			st.signoffs = previewSlots(defs);
+			// The legacy facts are derived from the list: slot 0's role; a second slot
+			// (a leaf) or any slot (an OP with sub-steps) means sign-off is required.
+			const hasKids = !!op && op.steps.length > 0;
+			st.role = defs[0]?.role ?? null;
+			st.requires_signoff = hasKids ? defs.length > 0 : defs.length > 1;
+			if (op) op.role = st.role;
 		}
 		if (op) {
 			for (const k of OP_MIRROR)
@@ -536,7 +573,14 @@ export class AuthorStore implements DocController {
 		const merged = { ...(this.pending.get(st.order) ?? {}), ...apply };
 		this.pending.set(st.order, merged);
 		const textual = keys.some((k) =>
-			['title', 'instructions', 'caution', 'role', 'estimated_duration_minutes'].includes(k)
+			[
+				'title',
+				'instructions',
+				'caution',
+				'role',
+				'signoffs',
+				'estimated_duration_minutes'
+			].includes(k)
 		);
 		this.schedule(`step:${st.order}`, st.order, textual ? TEXT_DELAY : 0, () =>
 			this.saveStep(st.order)
@@ -939,8 +983,7 @@ export class AuthorStore implements DocController {
 			d.title,
 			norm(d.instructions),
 			norm(d.caution),
-			norm(d.required_role),
-			d.requires_signoff,
+			(d.signoffs ?? []).map((x) => [x.label, norm(x.role)]),
 			d.estimated_duration_minutes ?? null,
 			d.is_contingency,
 			d.strict_sequence,
@@ -977,6 +1020,7 @@ export class AuthorStore implements DocController {
 				required_data_schema: st.data_schema,
 				is_contingency: st.is_contingency,
 				requires_signoff: st.requires_signoff,
+				signoffs: (st.signoff_defs ?? []).map((x) => ({ label: x.label, role: x.role })),
 				estimated_duration_minutes: st.estimated_duration_minutes ?? null,
 				required_role: st.role,
 				caution: st.caution,
