@@ -368,7 +368,8 @@ def test_first_user_is_admin_regardless_of_groups(db_session, config):
 
 
 def test_admin_group_grants_and_revokes(db_session, config):
-    db_session.add(User(name="Seed", username="seed", is_active=True))
+    # Another active admin exists, so revoking this one leaves the instance administered.
+    db_session.add(User(name="Seed", username="seed", is_active=True, is_admin=True))
     db_session.flush()
 
     granted = oidc.resolve_identity(
@@ -383,6 +384,36 @@ def test_admin_group_grants_and_revokes(db_session, config):
     )
     assert revoked.id == granted.id
     assert revoked.is_admin is False
+
+
+def test_missing_groups_claim_leaves_admin_unchanged(db_session, config):
+    """A misnamed groups claim (or missing groups scope) is no evidence: never demote."""
+    db_session.add(User(name="Other", username="other-admin", is_active=True, is_admin=True))
+    db_session.flush()
+    user = oidc.resolve_identity(
+        db_session, config, {"sub": "m1", "email": "m@example.test", "groups": ["opal-admins"]}
+    )
+    assert user.is_admin is True
+
+    misnamed = oidc.OidcConfig(**{**config.__dict__, "groups_claim": "opal_users"})
+    again = oidc.resolve_identity(
+        db_session, misnamed, {"sub": "m1", "email": "m@example.test", "groups": ["eng"]}
+    )
+    assert again.is_admin is True
+
+
+def test_last_admin_is_never_demoted_by_group_sync(db_session, config):
+    db_session.add(User(name="Seed", username="seed-plain", is_active=True))
+    db_session.flush()
+    user = oidc.resolve_identity(
+        db_session, config, {"sub": "l1", "email": "l@example.test", "groups": ["opal-admins"]}
+    )
+    assert user.is_admin is True
+
+    again = oidc.resolve_identity(
+        db_session, config, {"sub": "l1", "email": "l@example.test", "groups": ["eng"]}
+    )
+    assert again.is_admin is True  # the only admin: kept, and logged
 
 
 def test_blank_admin_group_leaves_admin_alone(db_session, config):

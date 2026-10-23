@@ -314,6 +314,42 @@ def cmd_mcp(args: argparse.Namespace) -> None:
     asyncio.run(run_server())
 
 
+def cmd_admin(args: argparse.Namespace) -> None:
+    """Grant (or revoke) administrator on a user, from the server's shell.
+
+    The recovery path when an instance has no working admin (e.g. an OIDC group mapping
+    went wrong). Audit-logged with no acting user: whoever ran it had shell access."""
+    _setup_project(args)
+
+    from opal.core.audit import get_model_dict, log_update
+    from opal.db.models.user import User
+    from opal.db.session import get_session
+
+    with get_session() as db:
+        user = db.query(User).filter(User.username == args.username).first()
+        if user is None:
+            print(f"No user {args.username!r}.", file=sys.stderr)
+            sys.exit(1)
+        want = not args.revoke
+        if user.is_admin == want:
+            print(f"{user.username} is already {'an admin' if want else 'not an admin'}.")
+            return
+        if not want:
+            others = (
+                db.query(User.id)
+                .filter(User.is_admin.is_(True), User.is_active.is_(True), User.id != user.id)
+                .first()
+            )
+            if others is None:
+                print(f"Refused: {user.username} is the last active admin.", file=sys.stderr)
+                sys.exit(1)
+        old = get_model_dict(user)
+        user.is_admin = want
+        log_update(db, user, old, None)
+        db.commit()
+        print(f"{user.username} is {'now an admin' if want else 'no longer an admin'}.")
+
+
 def cmd_audit_prune(args: argparse.Namespace) -> None:
     """Prune (and optionally archive) audit log entries older than a cutoff."""
     import json
@@ -474,6 +510,14 @@ def main() -> None:
     mcp_parser.set_defaults(func=cmd_mcp)
 
     # audit command
+    admin_parser = subparsers.add_parser(
+        "admin", help="Grant (or --revoke) administrator on a user (recovery)"
+    )
+    admin_parser.add_argument("username", help="The user's username")
+    admin_parser.add_argument("--revoke", action="store_true", help="Remove admin instead")
+    add_project_args(admin_parser)
+    admin_parser.set_defaults(func=cmd_admin)
+
     audit_parser = subparsers.add_parser("audit", help="Audit log maintenance")
     audit_sub = audit_parser.add_subparsers(dest="audit_command", required=True)
     prune_parser = audit_sub.add_parser(

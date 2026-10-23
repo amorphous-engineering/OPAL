@@ -469,12 +469,65 @@ def resolve_identity(db: Session, config: OidcConfig, claims: dict[str, Any]) ->
         if clash is None:
             user.email = email
     if config.admin_group and not bootstrap_admin:
-        user.is_admin = grants_admin
+        _sync_admin(db, config, claims, groups, user, grants_admin)
     if user.needs_profile_setup and user.name.strip():
         user.needs_profile_setup = False
 
     db.flush()
     return user
+
+
+def _sync_admin(
+    db: Session,
+    config: OidcConfig,
+    claims: dict[str, Any],
+    groups: list[str],
+    user: User,
+    grants_admin: bool,
+) -> None:
+    """Map the admin group onto ``is_admin`` — but never on missing evidence, and never
+    so that the instance is left without an administrator.
+
+    A token without the configured groups claim says nothing about membership (usually a
+    misnamed claim or a missing ``groups`` scope), so admin is left as it is. Removing
+    admin from the last active administrator would lock everyone out of settings; that
+    is refused and logged instead (recover deliberately with ``opal admin``).
+    """
+    if grants_admin == user.is_admin:
+        return
+    if config.groups_claim not in claims:
+        logger.warning(
+            "OIDC groups claim %r is not in the token for %s (claims present: %s); "
+            "admin left unchanged. Check the groups claim name and the requested scopes.",
+            config.groups_claim,
+            user.username,
+            ", ".join(sorted(claims)),
+        )
+        return
+    if not grants_admin:
+        other_admins = (
+            db.query(User.id)
+            .filter(User.is_admin.is_(True), User.is_active.is_(True), User.id != user.id)
+            .first()
+        )
+        if other_admins is None:
+            logger.warning(
+                "OIDC sign-in for %s would remove admin (groups %s lack %r), but they are "
+                "the last active administrator; admin kept.",
+                user.username,
+                groups,
+                config.admin_group,
+            )
+            return
+    logger.info(
+        "OIDC admin group sync: %s admin %s -> %s (groups %s, admin group %r)",
+        user.username,
+        user.is_admin,
+        grants_admin,
+        groups,
+        config.admin_group,
+    )
+    user.is_admin = grants_admin
 
 
 def _provision(

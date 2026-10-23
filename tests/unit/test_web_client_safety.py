@@ -108,7 +108,12 @@ def test_vendored_arbitrary_font_sizes_map_to_tokens() -> None:
         for path in VENDORED.rglob("*.svelte")
         for m in ARBITRARY_TEXT.finditer(path.read_text(encoding="utf-8"))
     }
-    unmapped = sorted(v for v in used if f".text-\\[{v.replace('.', '\\.')}\\]" not in css)
-    assert not unmapped, "vendored font sizes not mapped to a ramp token in layout.css: " + ", ".join(
-        unmapped
+
+    def selector(size: str) -> str:
+        escaped = size.replace(".", "\\.")
+        return ".text-\\[" + escaped + "\\]"
+
+    unmapped = sorted(v for v in used if selector(v) not in css)
+    assert not unmapped, (
+        "vendored font sizes not mapped to a ramp token in layout.css: " + ", ".join(unmapped)
     )
