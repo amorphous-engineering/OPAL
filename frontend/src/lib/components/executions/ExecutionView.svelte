@@ -180,7 +180,7 @@
 			</div>
 		</div>
 		<div
-			class="grid min-h-0 flex-1 items-start gap-4 p-4 lg:grid-cols-[minmax(13rem,16vw)_minmax(0,1fr)_minmax(15rem,20vw)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
+			class="grid min-h-0 flex-1 items-start gap-4 p-4 lg:grid-cols-[fit-content(20%)_minmax(0,1fr)_fit-content(20%)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
 		>
 			<aside
 				class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
