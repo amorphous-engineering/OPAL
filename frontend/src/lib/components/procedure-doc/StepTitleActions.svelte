@@ -3,7 +3,7 @@
 	// with the blockers' reason as its title; + ISSUE TICKET. Execute mode, active WO only.
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { useDoc } from './controller.js';
-	import type { DocStep } from './types.js';
+	import { isTerminal, type DocStep } from './types.js';
 
 	let { step }: { step: DocStep } = $props();
 	const ctl = useDoc();
@@ -32,7 +32,7 @@
 				onclick={() => a.skip!(step)}>SKIP</Button
 			>
 		{/if}
-		{#if a.raiseIssue}
+		{#if a.raiseIssue && !isTerminal(step.status)}
 			<Button size="xs" variant="outline" onclick={() => a.raiseIssue!(step)}>+ ISSUE TICKET</Button
 			>
 		{/if}
