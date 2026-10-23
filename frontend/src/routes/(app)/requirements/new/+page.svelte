@@ -6,7 +6,7 @@
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import { PageHeader, Section, toastError } from '#lib/components/opal/index.js';
+	import { PageHeader, Section, toastError, ErrorBanner } from '#lib/components/opal/index.js';
 	import { api, ApiError } from '#lib/api.js';
 	import LintEditor from '#lib/components/requirements/LintEditor.svelte';
 	import { VERIFICATION_METHODS } from '#lib/components/requirements/lifecycle.js';
@@ -72,14 +72,7 @@
 <form class="max-w-3xl p-4" onsubmit={submit}>
 	<Section title="DRAFT">
 		<div class="grid grid-cols-1 gap-4 p-4">
-			{#if error}
-				<p
-					role="alert"
-					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{error}
-				</p>
-			{/if}
+			<ErrorBanner message={error} />
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="title">Title</Label>
 				<Input

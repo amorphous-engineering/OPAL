@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { api } from '#lib/api.js';
-	import { PageHeader, Section, State, toastError } from '#lib/components/opal/index.js';
+	import {
+		PageHeader,
+		Section,
+		State,
+		toastError,
+		ErrorBanner
+	} from '#lib/components/opal/index.js';
 	import type { Column } from '#lib/components/opal/index.js';
 	import { DataTable, EmptyLine } from '#lib/components/opal/index.js';
 	import FormRow from '#lib/components/executions/FormRow.svelte';
@@ -194,12 +200,7 @@
 
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		{#if previewError}
-			<p
-				role="alert"
-				class="rounded-md border border-error/40 bg-error-muted px-3 py-2 text-xs text-error"
-			>
-				{previewError}
-			</p>
+			<ErrorBanner message={previewError} />
 		{:else if !preview}
 			<EmptyLine label="Preview" empty="Nothing to preview." />
 		{:else}

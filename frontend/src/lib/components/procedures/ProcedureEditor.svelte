@@ -8,7 +8,7 @@
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
 	import { AuthorStore } from '#lib/authoring/store.svelte.js';
 	import { PreviewController } from '#lib/authoring/preview.svelte.js';
-	import { Timestamp } from '#lib/components/opal/index.js';
+	import { Timestamp, ErrorBanner } from '#lib/components/opal/index.js';
 
 	let {
 		procedureId,
@@ -118,12 +118,7 @@
 	{#if store.loading}
 		<div class="mt-3 h-24 animate-pulse bg-muted"></div>
 	{:else if store.error}
-		<p
-			role="alert"
-			class="mt-3 rounded-md border border-error/40 bg-error-muted px-3 py-2 text-xs text-error"
-		>
-			{store.error}
-		</p>
+		<ErrorBanner message={store.error} class="mt-3" />
 	{:else}
 		<div class="mt-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
 			<nav

@@ -11,7 +11,8 @@
 		DetailTable,
 		PageHeader,
 		Section,
-		toastError
+		toastError,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
@@ -188,14 +189,7 @@
 			</div>
 		{/if}
 
-		{#if error}
-			<p
-				role="alert"
-				class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-			>
-				{error}
-			</p>
-		{/if}
+		<ErrorBanner message={error} />
 		<div class="flex gap-2">
 			<Button type="submit" disabled={busy || !title.trim()}>CREATE</Button>
 			<Button variant="outline" href="/issues">CANCEL</Button>

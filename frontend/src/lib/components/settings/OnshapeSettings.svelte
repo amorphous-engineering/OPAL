@@ -12,7 +12,8 @@
 		State,
 		toast,
 		toastError,
-		type Column
+		type Column,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -230,14 +231,7 @@
 
 	{#if isAdmin && enabled && saved}
 		<form class="grid grid-cols-1 gap-4" onsubmit={saveSettings}>
-			{#if saveError}
-				<p
-					role="alert"
-					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{saveError}
-				</p>
-			{/if}
+			<ErrorBanner message={saveError} />
 			<Section title="API credentials">
 				{#snippet actions()}
 					<Button

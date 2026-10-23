@@ -16,7 +16,8 @@
 		toast,
 		toastError,
 		urlSort,
-		type Column
+		type Column,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import Score from '#lib/components/risks/Score.svelte';
@@ -151,14 +152,7 @@
 		</p>
 	{/if}
 
-	{#if data.error}
-		<p
-			role="alert"
-			class="m-2 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-		>
-			{data.error}
-		</p>
-	{/if}
+	<ErrorBanner message={data.error} class="m-2" />
 
 	<DataTable
 		rows={data.list.items}

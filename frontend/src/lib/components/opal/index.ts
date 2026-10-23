@@ -23,6 +23,7 @@ export { default as DetailTable } from './DetailTable.svelte';
 export { default as Avatar } from './Avatar.svelte';
 export type { AvatarUser } from './Avatar.svelte';
 export { default as EntityPicker, type PickerOption } from './EntityPicker.svelte';
+export { default as ErrorBanner } from './ErrorBanner.svelte';
 export { default as EmptyLine } from './EmptyLine.svelte';
 export { default as PageHeader } from './PageHeader.svelte';
 export { default as Section } from './Section.svelte';

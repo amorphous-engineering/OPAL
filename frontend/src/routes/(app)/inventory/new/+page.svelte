@@ -7,7 +7,8 @@
 		DetailTable,
 		PageHeader,
 		Section,
-		toast
+		toast,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -199,14 +200,7 @@
 					<Input aria-label="Expires" type="date" class="w-44 font-mono" bind:value={expiration} />
 				</DetailRow>
 			</DetailTable>
-			{#if error}
-				<p
-					role="alert"
-					class="mx-3 mb-3 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{error}
-				</p>
-			{/if}
+			<ErrorBanner message={error} class="mx-3 mb-3" />
 			<div class="flex justify-end gap-2 border-t border-border bg-muted/40 px-3 py-2">
 				<Button variant="outline" href={part ? `/parts/${part.id}` : '/inventory'}>CANCEL</Button>
 				<Button type="submit" disabled={busy || !valid}>RECEIVE</Button>

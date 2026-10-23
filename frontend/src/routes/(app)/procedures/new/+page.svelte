@@ -6,7 +6,7 @@
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { api } from '#lib/api.js';
-	import { PageHeader, toastError } from '#lib/components/opal/index.js';
+	import { PageHeader, toastError, ErrorBanner } from '#lib/components/opal/index.js';
 
 	let name = $state('');
 	let description = $state('');
@@ -40,14 +40,7 @@
 />
 
 <form class="grid max-w-2xl grid-cols-1 gap-4 px-4 py-4" onsubmit={submit}>
-	{#if error}
-		<p
-			role="alert"
-			class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-		>
-			{error}
-		</p>
-	{/if}
+	<ErrorBanner message={error} />
 	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="name">Name</Label>
 		<Input id="name" bind:value={name} required maxlength={255} autofocus />

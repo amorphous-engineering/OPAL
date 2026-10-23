@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Section, toast } from '#lib/components/opal/index.js';
+	import { Section, toast, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -43,14 +43,7 @@
 
 <Section title="Password">
 	<form class="grid max-w-sm grid-cols-1 gap-3 p-3" onsubmit={submit}>
-		{#if error}
-			<p
-				role="alert"
-				class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-			>
-				{error}
-			</p>
-		{/if}
+		<ErrorBanner message={error} />
 		{#if hasPassword}
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="pw-current">Current password</Label>

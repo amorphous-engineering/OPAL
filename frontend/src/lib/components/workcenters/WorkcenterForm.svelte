@@ -1,5 +1,6 @@
 <script lang="ts">
 	// One form for create (page) and edit (dialog). Code is uppercased by the server.
+	import { ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -72,14 +73,7 @@
 		<Switch id="wc-active" bind:checked={active} />
 		<Label for="wc-active">Active</Label>
 	</div>
-	{#if error}
-		<p
-			role="alert"
-			class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-		>
-			{error}
-		</p>
-	{/if}
+	<ErrorBanner message={error} />
 	<div class="flex justify-end gap-2">
 		{@render cancel()}
 		<Button type="submit" disabled={busy || !code.trim() || !name.trim()}>{submitLabel}</Button>

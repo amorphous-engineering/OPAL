@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ActionLink, PageHeader, Section } from '#lib/components/opal/index.js';
+	import { ActionLink, PageHeader, Section, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -220,14 +220,7 @@
 		</div>
 	</Section>
 
-	{#if error}
-		<p
-			role="alert"
-			class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-		>
-			{error}
-		</p>
-	{/if}
+	<ErrorBanner message={error} />
 	<div class="flex justify-end gap-2">
 		<Button variant="outline" href="/purchases">CANCEL</Button>
 		<Button type="submit" disabled={busy}>CREATE PURCHASE</Button>

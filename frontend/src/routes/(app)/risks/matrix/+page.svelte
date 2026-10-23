@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { DetailRow, DetailTable, PageHeader, Section } from '#lib/components/opal/index.js';
+	import {
+		DetailRow,
+		DetailTable,
+		PageHeader,
+		Section,
+		ErrorBanner
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { SEVERITIES, severityOf, type Severity } from '#lib/components/risks/types.js';
@@ -40,12 +46,7 @@
 
 <div class="grid grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[minmax(0,48rem)_20rem]">
 	{#if data.error}
-		<p
-			role="alert"
-			class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-		>
-			{data.error}
-		</p>
+		<ErrorBanner message={data.error} />
 	{:else if m}
 		<Section title="Live risks by probability and impact" count={m.total_risks}>
 			<div class="overflow-x-auto p-3">

@@ -9,7 +9,8 @@
 		Timestamp,
 		confirm,
 		toastError,
-		type Column
+		type Column,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -169,14 +170,7 @@
 				<Label for="cat-notes">Notes</Label>
 				<Input id="cat-notes" bind:value={notes} />
 			</div>
-			{#if error}
-				<p
-					role="alert"
-					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{error}
-				</p>
-			{/if}
+			<ErrorBanner message={error} />
 			<Dialog.Footer>
 				<Button type="button" variant="ghost" onclick={() => (open = false)}>CANCEL</Button>
 				<Button type="submit" disabled={busy}>{editing ? 'SAVE' : 'ADD PART'}</Button>

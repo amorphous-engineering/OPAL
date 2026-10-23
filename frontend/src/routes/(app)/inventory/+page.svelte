@@ -13,7 +13,8 @@
 		Timestamp,
 		setQuery,
 		urlSort,
-		type Column
+		type Column,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { date, qty } from '#lib/format.js';
@@ -163,12 +164,7 @@
 	</FilterBar>
 
 	{#if data.error}
-		<p
-			role="alert"
-			class="m-4 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-		>
-			{data.error}
-		</p>
+		<ErrorBanner message={data.error} class="m-4" />
 	{:else if data.view === 'records'}
 		<DataTable
 			rows={data.records}

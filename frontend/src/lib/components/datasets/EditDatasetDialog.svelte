@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { api } from '#lib/api.js';
-	import { toastError } from '#lib/components/opal/index.js';
+	import { toastError, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -78,14 +78,7 @@
 					{/each}
 				</NativeSelect>
 			</div>
-			{#if error}
-				<p
-					role="alert"
-					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{error}
-				</p>
-			{/if}
+			<ErrorBanner message={error} />
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (open = false)}>CANCEL</Button>
 				<Button type="submit" disabled={busy || !name.trim()}>SAVE</Button>

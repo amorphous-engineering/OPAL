@@ -7,7 +7,8 @@
 		Section,
 		toast,
 		toastError,
-		type Column
+		type Column,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -231,14 +232,7 @@
 
 <form class="grid grid-cols-1 gap-4" onsubmit={save}>
 	<div class="grid min-w-0 grid-cols-1 gap-4">
-		{#if error}
-			<p
-				role="alert"
-				class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-			>
-				{error}
-			</p>
-		{/if}
+		<ErrorBanner message={error} />
 
 		<Section title="General">
 			<div class="grid grid-cols-1 gap-3 p-3">

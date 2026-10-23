@@ -5,7 +5,14 @@
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { confirm, PageHeader, State, TabStrip, toastError } from '#lib/components/opal/index.js';
+	import {
+		confirm,
+		PageHeader,
+		State,
+		TabStrip,
+		toastError,
+		ErrorBanner
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
@@ -106,12 +113,7 @@
 	<div class="p-4"><div class="h-24 animate-pulse bg-muted"></div></div>
 {:else if store.error || !doc || !inst}
 	<div class="p-4">
-		<p
-			role="alert"
-			class="rounded-md border border-error/40 bg-error-muted px-3 py-2 text-xs text-error"
-		>
-			{store.error ?? 'Execution not found'}
-		</p>
+		<ErrorBanner message={store.error ?? 'Execution not found'} />
 		<p class="mt-2 text-xs">
 			<a class="text-info hover:underline" href="/executions">Back to executions</a>
 		</p>

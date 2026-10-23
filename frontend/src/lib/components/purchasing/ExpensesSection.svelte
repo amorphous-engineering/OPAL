@@ -6,7 +6,8 @@
 		EmptyLine,
 		Timestamp,
 		confirm,
-		toastError
+		toastError,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -201,14 +202,7 @@
 				<Label for="charge-note">Note</Label>
 				<Input id="charge-note" bind:value={note} maxlength={500} />
 			</div>
-			{#if error}
-				<p
-					role="alert"
-					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{error}
-				</p>
-			{/if}
+			<ErrorBanner message={error} />
 			<Dialog.Footer>
 				<Button type="button" variant="ghost" onclick={() => (open = false)}>CANCEL</Button>
 				<Button type="submit" disabled={busy}>ADD CHARGE</Button>

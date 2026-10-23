@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Receive against open lines: quantity, location, lot. Blank quantity leaves a line outstanding.
-	import { Section, confirm } from '#lib/components/opal/index.js';
+	import { Section, confirm, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { api, ApiError } from '#lib/api.js';
@@ -183,14 +183,7 @@
 		<datalist id="receive-locations">
 			{#each locations as loc (loc)}<option value={loc}></option>{/each}
 		</datalist>
-		{#if error}
-			<p
-				role="alert"
-				class="mx-3 mt-3 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-			>
-				{error}
-			</p>
-		{/if}
+		<ErrorBanner message={error} class="mx-3 mt-3" />
 		<div class="flex justify-end gap-2 p-3">
 			<Button type="button" variant="outline" onclick={fillAll}>FILL ALL</Button>
 			<Button type="submit" disabled={busy}>RECEIVE</Button>

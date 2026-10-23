@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
+	import { ErrorBanner } from '#lib/components/opal/index.js';
 	import LabelFace from '#lib/components/labels/LabelFace.svelte';
 	import { DEFAULT_SIZE, LABEL_SIZES, sizeFor } from '#lib/components/labels/sizes.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -90,12 +91,11 @@
 </div>
 
 {#if data.failures.length}
-	<ul
-		role="alert"
-		class="m-4 space-y-0.5 rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error print:hidden"
-	>
-		{#each data.failures as f (f)}<li>{f}</li>{/each}
-	</ul>
+	<ErrorBanner class="m-4 print:hidden">
+		<ul class="space-y-0.5">
+			{#each data.failures as f (f)}<li>{f}</li>{/each}
+		</ul>
+	</ErrorBanner>
 {/if}
 
 {#if !sheets.length && !data.failures.length}

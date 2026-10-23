@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Record a test result against a stock record, from a part test template or custom.
 	import { api } from '#lib/api.js';
-	import { toast } from '#lib/components/opal/index.js';
+	import { toast, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -126,14 +126,7 @@
 				<Label class="label" for="t-notes">Notes</Label>
 				<Textarea id="t-notes" rows={2} bind:value={notes} />
 			</div>
-			{#if error}
-				<p
-					role="alert"
-					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{error}
-				</p>
-			{/if}
+			<ErrorBanner message={error} />
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (open = false)}>CANCEL</Button>
 				<Button type="submit" disabled={busy || !name.trim()}>{test ? 'SAVE' : 'RECORD'}</Button>

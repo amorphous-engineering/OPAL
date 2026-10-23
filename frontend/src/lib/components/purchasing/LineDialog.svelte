@@ -1,5 +1,6 @@
 <script lang="ts">
 	// Add or edit one PO line. Edit keeps the part fixed; remove + re-add to change it.
+	import { ErrorBanner } from '#lib/components/opal/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -138,14 +139,7 @@
 				<Label for="line-notes">Notes</Label>
 				<Input id="line-notes" bind:value={notes} />
 			</div>
-			{#if error}
-				<p
-					role="alert"
-					class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-				>
-					{error}
-				</p>
-			{/if}
+			<ErrorBanner message={error} />
 			<Dialog.Footer>
 				<Button variant="ghost" type="button" onclick={() => (open = false)}>CANCEL</Button>
 				<Button type="submit" disabled={busy}>{line ? 'SAVE' : 'ADD LINE'}</Button>

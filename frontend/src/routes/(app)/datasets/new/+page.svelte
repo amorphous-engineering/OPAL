@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { api } from '#lib/api.js';
-	import { PageHeader, Section, toastError } from '#lib/components/opal/index.js';
+	import { PageHeader, Section, toastError, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -143,14 +143,7 @@
 		</table>
 	</Section>
 
-	{#if error}
-		<p
-			role="alert"
-			class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-		>
-			{error}
-		</p>
-	{/if}
+	<ErrorBanner message={error} />
 	<div class="flex gap-2">
 		<Button type="submit" disabled={busy || !name.trim()}>CREATE</Button>
 		<Button variant="outline" href="/datasets">CANCEL</Button>

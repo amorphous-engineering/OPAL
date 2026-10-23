@@ -18,7 +18,8 @@
 		State,
 		toast,
 		confirm,
-		type Column
+		type Column,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { api, ApiError, formatDetail } from '#lib/api.js';
 	import { iso } from '#lib/format.js';
@@ -294,14 +295,7 @@
 							commit();
 						}}
 					>
-						{#if error}
-							<p
-								role="alert"
-								class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-							>
-								{error}
-							</p>
-						{/if}
+						<ErrorBanner message={error} />
 						<div class="grid grid-cols-1 gap-1.5">
 							<Label for="q-label">Label</Label>
 							<Input

@@ -2,7 +2,14 @@
 	// The one part form: create and edit share it. Identity (tier, PN) is
 	// mutable only while the part is a draft; once active it renders as facts.
 	import { goto } from '$app/navigation';
-	import { Section, DetailRow, DetailTable, confirm, toast } from '#lib/components/opal/index.js';
+	import {
+		Section,
+		DetailRow,
+		DetailTable,
+		confirm,
+		toast,
+		ErrorBanner
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -223,14 +230,7 @@
 	novalidate
 >
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
-		{#if error}
-			<p
-				role="alert"
-				class="rounded-md border border-error/40 bg-error-muted px-3 py-2 font-mono text-xs text-error"
-			>
-				{error}
-			</p>
-		{/if}
+		<ErrorBanner message={error} class="font-mono" />
 
 		<Section title="Identity">
 			<div class="grid grid-cols-1 gap-4 p-3">

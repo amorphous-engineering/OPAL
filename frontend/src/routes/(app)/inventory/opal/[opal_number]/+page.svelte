@@ -24,7 +24,8 @@
 		State,
 		Timestamp,
 		toast,
-		toastError
+		toastError,
+		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -145,12 +146,7 @@
 		title={data.opal}
 		crumbs={[{ label: 'Stock', href: '/inventory' }, { label: data.opal }]}
 	/>
-	<p
-		role="alert"
-		class="m-4 max-w-xl rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-	>
-		{data.error ?? 'Record not found'}
-	</p>
+	<ErrorBanner message={data.error ?? 'Record not found'} class="m-4 max-w-xl" />
 {:else}
 	<PageHeader
 		identifier={rec.opal_number}
@@ -469,14 +465,7 @@
 					<Label class="label" for="e-exp">Expires</Label>
 					<Input id="e-exp" type="date" class="font-mono" bind:value={editExp} />
 				</div>
-				{#if editError}
-					<p
-						role="alert"
-						class="rounded-md border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error"
-					>
-						{editError}
-					</p>
-				{/if}
+				<ErrorBanner message={editError} />
 				<Dialog.Footer>
 					<Button type="button" variant="outline" onclick={() => (editOpen = false)}>CANCEL</Button>
 					<Button type="submit" disabled={editBusy}>SAVE</Button>
