@@ -1,7 +1,9 @@
 """Role (qualification) management.
 
 Admins keep the list of roles and grant them to users (``PUT /users/{id}/roles``).
-A template sign-off slot names a role; only a holder can sign it.
+A template sign-off slot names a role; only a holder (or an admin) can sign it.
+Four system roles exist on every install and cannot be deleted or renamed; the
+Admin role's members are the users with ``is_admin``.
 """
 
 from typing import Any
@@ -14,8 +16,8 @@ from sqlalchemy.orm import Session
 from opal.api.deps import DbSession, RequiredAdmin, RequiredUser
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.people import person_ref
-from opal.core.roles import find_role
-from opal.db.models import Role, User, UserRole
+from opal.core.roles import ADMIN_KEY, SYSTEM_ROLES, find_role
+from opal.db.models import Role, RoleGate, User, UserRole
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -50,6 +52,8 @@ class RoleResponse(BaseModel):
     id: int
     name: str
     description: str | None
+    key: str | None = None
+    is_system: bool = False
     member_count: int
     created_at: str
     updated_at: str
@@ -67,7 +71,18 @@ def _member_counts(db: Session) -> dict[int, int]:
         .group_by(UserRole.role_id)
         .all()
     )
-    return dict(rows)
+    counts = dict(rows)
+    admins = db.query(User).filter(User.is_admin.is_(True), User.is_active.is_(True)).count()
+    for (rid,) in db.query(Role.id).filter(Role.key == ADMIN_KEY):
+        counts[rid] = admins  # Admin membership IS the flag
+    return counts
+
+
+def _system_first(role: Role) -> tuple[int, int, str]:
+    keys = list(SYSTEM_ROLES)
+    if role.key in keys:
+        return (0, keys.index(role.key), "")
+    return (1, 0, role.name.lower())
 
 
 def _response(role: Role, counts: dict[int, int]) -> RoleResponse:
@@ -75,6 +90,8 @@ def _response(role: Role, counts: dict[int, int]) -> RoleResponse:
         id=role.id,
         name=role.name,
         description=role.description,
+        key=role.key,
+        is_system=role.is_system,
         member_count=counts.get(role.id, 0),
         created_at=role.created_at.isoformat(),
         updated_at=role.updated_at.isoformat(),
@@ -90,9 +107,11 @@ def _live_role(db: Session, role_id: int) -> Role:
 
 @router.get("", response_model=list[RoleResponse])
 def list_roles(db: DbSession, user: RequiredUser) -> list[RoleResponse]:
-    """Live roles by name, each with its count of active members."""
+    """Live roles, system roles first (Engineer, Technician, Quality, Admin) then
+    custom roles by name, each with its count of active members."""
     counts = _member_counts(db)
-    roles = db.query(Role).filter(Role.deleted_at.is_(None)).order_by(func.lower(Role.name)).all()
+    roles = db.query(Role).filter(Role.deleted_at.is_(None)).all()
+    roles.sort(key=_system_first)
     return [_response(r, counts) for r in roles]
 
 
@@ -100,13 +119,21 @@ def list_roles(db: DbSession, user: RequiredUser) -> list[RoleResponse]:
 def get_role(role_id: int, db: DbSession, user: RequiredUser) -> RoleDetail:
     """One role with its active members."""
     role = _live_role(db, role_id)
-    members = (
-        db.query(User)
-        .join(UserRole, UserRole.user_id == User.id)
-        .filter(UserRole.role_id == role.id, User.is_active.is_(True))
-        .order_by(User.name)
-        .all()
-    )
+    if role.key == ADMIN_KEY:
+        members = (
+            db.query(User)
+            .filter(User.is_admin.is_(True), User.is_active.is_(True))
+            .order_by(User.name)
+            .all()
+        )
+    else:
+        members = (
+            db.query(User)
+            .join(UserRole, UserRole.user_id == User.id)
+            .filter(UserRole.role_id == role.id, User.is_active.is_(True))
+            .order_by(User.name)
+            .all()
+        )
     base = _response(role, {role.id: len(members)})
     return RoleDetail(**base.model_dump(), members=[person_ref(m) for m in members])
 
@@ -149,6 +176,10 @@ def update_role(
     fields = data.model_fields_set
     if "name" in fields and data.name is None:
         raise HTTPException(status_code=400, detail="Role name is required")
+    if role.is_system and data.name is not None and data.name != role.name:
+        raise HTTPException(
+            status_code=400, detail=f"{role.name} is a system role; it cannot be renamed"
+        )
     if data.name is not None:
         clash = find_role(db, data.name)
         if clash is not None and clash.id != role.id:
@@ -169,9 +200,16 @@ def update_role(
 def delete_role(role_id: int, db: DbSession, admin: RequiredAdmin) -> None:
     """Soft-delete a role and drop its grants. Admin only."""
     role = _live_role(db, role_id)
+    if role.is_system:
+        raise HTTPException(
+            status_code=400, detail=f"{role.name} is a system role; it cannot be deleted"
+        )
     for grant in db.query(UserRole).filter(UserRole.role_id == role.id).all():
         log_delete(db, grant, admin.id)
         db.delete(grant)
+    for gate in db.query(RoleGate).filter(RoleGate.role_id == role.id).all():
+        log_delete(db, gate, admin.id)
+        db.delete(gate)
     log_delete(db, role, admin.id)
     role.soft_delete()
     db.commit()

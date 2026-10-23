@@ -18,6 +18,7 @@ from sqlalchemy import create_engine, event
 from opal.db.base import _get_alembic_config
 
 PREV_REV = "c8d2e4f6a1b3"
+ROLES_REV = "d5a7c3e91f40"  # this migration; later ones have their own tests
 STAMP = "2026-01-02 03:04:05.000000"
 
 
@@ -146,7 +147,7 @@ def test_roles_backfill_grants_every_used_name_to_every_active_user(tmp_path):
     conn.commit()
     conn.close()
 
-    _alembic(db, "upgrade", "head")
+    _alembic(db, "upgrade", ROLES_REV)
 
     conn = sqlite3.connect(db)
     roles = dict(conn.execute("SELECT id, name FROM role").fetchall())
@@ -174,7 +175,7 @@ def test_roles_backfill_grants_every_used_name_to_every_active_user(tmp_path):
     assert conn.execute("SELECT count(*) FROM user").fetchone()[0] == 3  # users survive
     conn.close()
 
-    _alembic(db, "upgrade", "head")
+    _alembic(db, "upgrade", ROLES_REV)
     conn = sqlite3.connect(db)
     assert conn.execute("SELECT count(*) FROM role").fetchone()[0] == 4
     assert conn.execute("SELECT count(*) FROM user_role").fetchone()[0] == 8
@@ -189,7 +190,7 @@ def test_roles_migration_on_a_database_with_no_roles(tmp_path):
     conn.commit()
     conn.close()
 
-    _alembic(db, "upgrade", "head")
+    _alembic(db, "upgrade", ROLES_REV)
     conn = sqlite3.connect(db)
     assert conn.execute("SELECT count(*) FROM role").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM user_role").fetchone()[0] == 0

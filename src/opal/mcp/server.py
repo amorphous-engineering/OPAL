@@ -30,6 +30,7 @@ from opal.core.execution_flow import (
     recheck_instance_completion,
 )
 from opal.core.execution_flow import add_step_note as flow_add_step_note
+from opal.core.gates import GateDenied, require_gate
 from opal.core.holds import get_holds_payload, holding_readout
 from opal.core.numbering import (
     PartNumberError,
@@ -3143,6 +3144,11 @@ async def _sign_disposition(db, args: dict) -> list[TextContent]:
     issue = db.query(Issue).filter(Issue.id == args["issue_id"], Issue.deleted_at.is_(None)).first()
     if not issue:
         return json_response({"success": False, "error": "Issue not found"})
+
+    try:
+        require_gate(db, user, "issue.disposition")
+    except GateDenied as e:
+        return json_response({"success": False, "error": str(e)})
 
     status = issue.status.value if hasattr(issue.status, "value") else issue.status
     if status == IssueStatus.CLOSED.value:

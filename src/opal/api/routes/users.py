@@ -15,7 +15,7 @@ from opal.core import avatars
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.events import emit_user_activity
 from opal.core.people import profile_fields
-from opal.core.roles import roles_by_user
+from opal.core.roles import ADMIN_KEY, roles_by_user
 from opal.db.models import PasskeyCredential, Role, User, UserRole, Workcenter
 
 router = APIRouter()
@@ -669,19 +669,32 @@ class UserRolesSet(BaseModel):
 def set_user_roles(
     user_id: int, data: UserRolesSet, db: DbSession, admin: RequiredAdmin
 ) -> UserResponse:
-    """Replace the roles a user holds with exactly ``role_ids``. Admin only."""
+    """Replace the roles a user holds with exactly ``role_ids``. Admin only.
+
+    The Admin role is not a stored grant: including or excluding its id sets or
+    clears ``is_admin``. Removing the last active admin is refused."""
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
     wanted = set(data.role_ids)
     live = {
-        r.id for r in db.query(Role).filter(Role.id.in_(wanted), Role.deleted_at.is_(None)).all()
+        r.id: r for r in db.query(Role).filter(Role.id.in_(wanted), Role.deleted_at.is_(None)).all()
     }
-    missing = wanted - live
+    missing = wanted - set(live)
     if missing:
         raise HTTPException(
             status_code=400, detail=f"Unknown role id(s): {', '.join(map(str, sorted(missing)))}"
         )
+    admin_ids = {rid for rid, r in live.items() if r.key == ADMIN_KEY}
+    want_admin = bool(admin_ids)
+    wanted -= admin_ids
+    if user.is_admin and not want_admin and user.is_active and _active_admin_count(db) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot remove the last admin")
+    if user.is_admin != want_admin:
+        old_user = get_model_dict(user)
+        user.is_admin = want_admin
+        db.flush()
+        log_update(db, user, old_user, admin.id)
     grants = db.query(UserRole).filter(UserRole.user_id == user.id).all()
     held = {g.role_id for g in grants}
     for grant in grants:

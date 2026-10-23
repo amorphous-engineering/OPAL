@@ -211,3 +211,12 @@ def grant_client_roles(db: Session, *names: str) -> None:
     """Grant roles to the ``client`` fixture's service user."""
     service = db.query(User).filter(User.username == "test.client").one()
     grant_roles(db, service, *names)
+
+
+def system_roles(db: Session) -> dict[str, Any]:
+    """Create the four system roles (and their default gates) and return them by key."""
+    from opal.core.roles import ensure_system_roles
+
+    roles = {r.key: r for r in ensure_system_roles(db)}
+    db.commit()
+    return roles

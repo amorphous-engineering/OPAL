@@ -225,21 +225,26 @@ def test_only_a_role_holder_can_sign_a_role_slot(client, db_session, work_order)
     holder = _user(db_session, "holder")
     grant_roles(db_session, holder, "Engineer")
     plain = _user(db_session, "plain")
-    boss = _user(db_session, "boss", admin=True)  # admin does not stand in for a role
 
     refused = _sign(client, iid, n["1.1"], 0, user_headers(plain))
     assert refused.status_code == 403
     assert refused.json()["detail"] == "Requires role Engineer"
-    admin_refused = _sign(client, iid, n["1.1"], 0, user_headers(boss))
-    assert admin_refused.status_code == 403
-    assert admin_refused.json()["detail"] == "Requires role Engineer"
 
     # Case does not matter: the check is against the live role.
     ok = _sign(client, iid, n["1.1"], 0, user_headers(holder))
     assert ok.status_code == 200, ok.text
 
-    # The later slot names no role: open to everyone, the admin without roles included.
+    # The later slot names no role: open to everyone.
     assert _sign(client, iid, n["1.1"], 1, user_headers(plain)).status_code == 200
+
+
+def test_admin_passes_any_slot_role(client, db_session, work_order):
+    """God mode: an admin signs a slot whose role they do not hold, and the
+    document says so for that viewer."""
+    iid, n = work_order
+    boss = _user(db_session, "boss", admin=True)
+    assert _slot(client, iid, n["1.1"], 0, user_headers(boss))["can_sign"] is True
+    assert _sign(client, iid, n["1.1"], 0, user_headers(boss)).status_code == 200
 
 
 def test_slot_without_a_role_is_open_to_all(client, db_session, work_order):

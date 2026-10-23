@@ -257,6 +257,14 @@ def init_database(engine=None) -> None:
 
         # Stamp alembic version so future migrations know the starting point
         _stamp_alembic_head(engine)
+
+        # The four system roles (and their default gates) exist on every install;
+        # migrations create them for old databases, this covers new ones.
+        from opal.core.roles import ensure_system_roles
+
+        with Session(engine) as seed_db:
+            ensure_system_roles(seed_db)
+            seed_db.commit()
         logger.info("Database initialized at current schema version.")
     else:
         # Existing database: run migrations to apply any pending changes
