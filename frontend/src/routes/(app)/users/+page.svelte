@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import {
+		Avatar,
 		DataTable,
 		FilterBar,
 		FilterSelect,
@@ -29,6 +30,18 @@
 	const columns: Column<UserRecord>[] = [
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'username', label: 'Username', mono: true, sortable: true },
+		{
+			key: 'job_title',
+			label: 'Job title',
+			sortable: true,
+			sortValue: (u) => u.job_title ?? ''
+		},
+		{
+			key: 'workcenter',
+			label: 'Workcenter',
+			sortable: true,
+			sortValue: (u) => u.workcenter?.name ?? ''
+		},
 		{ key: 'email', label: 'Email', sortable: true },
 		{
 			key: 'is_admin',
@@ -89,8 +102,16 @@
 		{/snippet}
 		{#snippet cell(u, col)}
 			{#if col.key === 'name'}
-				<span class="font-medium">{u.name}</span>
+				<span class="inline-flex items-center gap-2">
+					<Avatar user={u} size="xs" />
+					<span class="font-medium">{u.name}</span>
+				</span>
 				{#if !u.is_active}<State value="inactive" tone="muted" class="ml-2" />{/if}
+			{:else if col.key === 'job_title'}
+				{#if u.job_title}{u.job_title}{:else}<span class="text-muted-foreground">—</span>{/if}
+			{:else if col.key === 'workcenter'}
+				{#if u.workcenter}{u.workcenter.name}{:else}<span class="text-muted-foreground">—</span
+					>{/if}
 			{:else if col.key === 'email'}
 				{#if u.email}{u.email}{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'is_admin'}

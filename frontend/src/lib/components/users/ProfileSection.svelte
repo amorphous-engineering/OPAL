@@ -11,6 +11,9 @@
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import type { Workcenter } from '#lib/components/workcenters/types.js';
+	import AvatarEditor from './AvatarEditor.svelte';
 	import { api } from '#lib/api.js';
 	import { session } from '#lib/session.svelte.js';
 	import { signInMethods, type UserRecord } from './types.js';
@@ -31,10 +34,21 @@
 	let busy = $state(false);
 	let name = $state('');
 	let email = $state('');
+	let jobTitle = $state('');
+	let phone = $state('');
+	let workcenterId = $state('');
+	let workcenters = $state<Workcenter[]>([]);
 
 	function start() {
 		name = profile.name;
 		email = profile.email ?? '';
+		jobTitle = profile.job_title ?? '';
+		phone = profile.phone ?? '';
+		workcenterId = profile.workcenter ? String(profile.workcenter.id) : '';
+		api
+			.get<Workcenter[]>('/workcenters')
+			.then((w) => (workcenters = w.filter((x) => x.is_active || String(x.id) === workcenterId)))
+			.catch(toastError);
 		editing = true;
 	}
 
@@ -44,10 +58,18 @@
 		try {
 			const updated = await api.patch<UserRecord>(`/users/${profile.id}`, {
 				name: name.trim(),
-				email: email.trim() || null
+				email: email.trim() || null,
+				job_title: jobTitle.trim() || null,
+				phone: phone.trim() || null,
+				workcenter_id: workcenterId ? Number(workcenterId) : null
 			});
 			onupdate(updated);
-			if (isSelf && session.user) session.set({ ...session.user, name: updated.name });
+			if (isSelf && session.user)
+				session.set({
+					...session.user,
+					name: updated.name,
+					avatar_url: updated.avatar_url ?? null
+				});
 			editing = false;
 			toast.success('Profile saved');
 		} catch (err) {
@@ -66,6 +88,7 @@
 			<Button variant="ghost" size="xs" onclick={start}>EDIT</Button>
 		{/if}
 	{/snippet}
+	<AvatarEditor {profile} {canEdit} {onupdate} />
 	<form onsubmit={save}>
 		<DetailTable>
 			<DetailRow label="Name">
@@ -91,6 +114,45 @@
 					/>
 				{:else if profile.email}
 					<a class="text-info hover:underline" href={`mailto:${profile.email}`}>{profile.email}</a>
+				{:else}<span class="text-muted-foreground">—</span>{/if}
+			</DetailRow>
+			<DetailRow label="Job title">
+				{#if editing}
+					<Input
+						bind:value={jobTitle}
+						aria-label="Job title"
+						maxlength={120}
+						class="h-7 max-w-sm"
+					/>
+				{:else if profile.job_title}{profile.job_title}{:else}<span class="text-muted-foreground"
+						>—</span
+					>{/if}
+			</DetailRow>
+			<DetailRow label="Phone">
+				{#if editing}
+					<Input
+						type="tel"
+						bind:value={phone}
+						aria-label="Phone"
+						maxlength={40}
+						class="h-7 max-w-sm"
+					/>
+				{:else if profile.phone}<span class="font-mono text-xs">{profile.phone}</span>{:else}<span
+						class="text-muted-foreground">—</span
+					>{/if}
+			</DetailRow>
+			<DetailRow label="Workcenter">
+				{#if editing}
+					<NativeSelect bind:value={workcenterId} aria-label="Workcenter" class="h-7 max-w-sm">
+						<NativeSelectOption value="">—</NativeSelectOption>
+						{#each workcenters as w (w.id)}
+							<NativeSelectOption value={String(w.id)}>{w.name}</NativeSelectOption>
+						{/each}
+					</NativeSelect>
+				{:else if profile.workcenter}
+					<a class="text-info hover:underline" href={`/workcenters/${profile.workcenter.id}`}
+						>{profile.workcenter.name}</a
+					>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			</DetailRow>
 			<DetailRow label="Role">

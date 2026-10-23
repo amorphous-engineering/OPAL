@@ -2,7 +2,7 @@
 	// Execution notes: a record of what happened at this step. Markdown body, images as
 	// thumbnails that open the viewer, other files as links. Present in every status,
 	// including finished work orders; `+ ADD` whenever the host offers `addNote`.
-	import { EmptyLine, Section, Timestamp } from '#lib/components/opal/index.js';
+	import { Avatar, EmptyLine, Section, Timestamp } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { markdown } from '#lib/markdown.js';
 	import { useDoc } from './controller.js';
@@ -34,7 +34,10 @@
 						class="grid grid-cols-1 gap-1.5 border-b border-border px-3 py-2 last:border-b-0"
 					>
 						<header class="flex items-baseline justify-between gap-3">
-							<span class="text-xs font-semibold">{n.author?.name ?? '—'}</span>
+							<span class="inline-flex items-center gap-2">
+								{#if n.author}<Avatar user={n.author} size="xs" />{/if}
+								<span class="text-xs font-semibold">{n.author?.name ?? '—'}</span>
+							</span>
 							<Timestamp value={n.created_at} />
 						</header>
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
