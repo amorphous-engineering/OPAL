@@ -43,12 +43,6 @@
 			sortValue: (u) => u.workcenter?.name ?? ''
 		},
 		{ key: 'email', label: 'Email', sortable: true },
-		{
-			key: 'is_admin',
-			label: 'Access',
-			sortable: true,
-			sortValue: (u) => (u.is_admin ? 0 : 1)
-		},
 		{ key: 'roles', label: 'Roles', sortable: false },
 		{ key: 'sign_in', label: 'Sign-in', sortable: false },
 		{
@@ -115,10 +109,6 @@
 					>{/if}
 			{:else if col.key === 'email'}
 				{#if u.email}{u.email}{:else}<span class="text-muted-foreground">—</span>{/if}
-			{:else if col.key === 'is_admin'}
-				{#if u.is_admin}<State value="admin" tone="warn" />{:else}<span
-						class="font-mono text-xs text-muted-foreground">USER</span
-					>{/if}
 			{:else if col.key === 'roles'}
 				{@const held = (u as { roles?: { id: number; name: string }[] }).roles ?? []}
 				{#if held.length}

@@ -58,6 +58,10 @@ export const CONTAINMENT_OPTION: Record<string, string> = {
 };
 
 export interface Issue {
+	/** Per-viewer gate flags; reasons name the roles a refused viewer lacks. */
+	can_disposition?: boolean;
+	can_approve?: boolean;
+	gate_reasons?: { disposition?: string; approve?: string };
 	id: number;
 	issue_number: string | null;
 	title: string;

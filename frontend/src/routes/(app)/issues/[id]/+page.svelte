@@ -349,6 +349,10 @@
 			!!redlineHref
 	);
 
+	// Gate flags come from the server per viewer; absent means allowed.
+	const cannotApprove = $derived(issue.can_approve === false);
+	const cannotDisposition = $derived(issue.can_disposition === false);
+
 	function text(field: keyof Issue) {
 		return async (v: string | null) => patch({ [field]: v ?? '' });
 	}
@@ -403,10 +407,19 @@
 		{:else if ticket === 'in_review'}
 			<Button
 				size="sm"
-				disabled={needsCorrective}
-				title={needsCorrective ? 'Corrective action is required to sign off' : undefined}
+				disabled={needsCorrective || cannotApprove}
+				title={cannotApprove
+					? issue.gate_reasons?.approve
+					: needsCorrective
+						? 'Corrective action is required to sign off'
+						: undefined}
 				onclick={() => transition('signoff')}>SIGN OFF</Button
 			>
+			{#if cannotApprove}
+				<span class="font-mono text-xs text-muted-foreground" data-gate-reason="approve"
+					>{issue.gate_reasons?.approve ?? 'Requires approval role'}</span
+				>
+			{/if}
 			<Button size="sm" variant="outline" onclick={() => (returning = true)}>RETURN</Button>
 		{/if}
 		<Button size="sm" variant="destructive" onclick={remove}>DELETE</Button>
@@ -488,12 +501,21 @@
 						<DetailRow label="Signature">
 							<Button
 								size="sm"
-								disabled={dispBusy || !dispType || !dispRationale.trim()}
-								title={!dispType || !dispRationale.trim()
-									? `missing: ${[!dispType && 'type', !dispRationale.trim() && 'rationale'].filter(Boolean).join(', ')}`
-									: undefined}
+								disabled={dispBusy || cannotDisposition || !dispType || !dispRationale.trim()}
+								title={cannotDisposition
+									? issue.gate_reasons?.disposition
+									: !dispType || !dispRationale.trim()
+										? `missing: ${[!dispType && 'type', !dispRationale.trim() && 'rationale'].filter(Boolean).join(', ')}`
+										: undefined}
 								onclick={sign}>SIGN DISPOSITION</Button
 							>
+							{#if cannotDisposition}
+								<span
+									class="ml-2 font-mono text-xs text-muted-foreground"
+									data-gate-reason="disposition"
+									>{issue.gate_reasons?.disposition ?? 'Requires disposition role'}</span
+								>
+							{/if}
 						</DetailRow>
 					{/if}
 				</DetailTable>

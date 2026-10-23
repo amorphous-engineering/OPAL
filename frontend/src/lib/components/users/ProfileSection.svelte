@@ -155,11 +155,6 @@
 					>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			</DetailRow>
-			<DetailRow label="Access">
-				{#if profile.is_admin}<State value="admin" tone="warn" />{:else}<span
-						class="font-mono text-xs">USER</span
-					>{/if}
-			</DetailRow>
 			<DetailRow label="Status">
 				{#if profile.is_active}<State value="active" />{:else}<State
 						value="inactive"
