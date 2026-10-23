@@ -252,3 +252,16 @@
 		@apply max-h-80 border border-border;
 	}
 }
+
+/*
+ * Vendored shadcn (Mira) components hard-code a few font sizes that assume a 16px root
+ * (`text-[0.625rem]` = 10px there, 8.75px here). Map each onto the type ramp so the
+ * vendored files stay pristine (re-vendor safe) and type still follows the tokens.
+ * Unlayered, so it wins over the generated utility. Every arbitrary size the vendored
+ * components use must appear here (enforced by tests/unit/test_web_client_safety.py).
+ */
+.text-\[0\.625rem\],
+.text-\[0\.8rem\] {
+	font-size: var(--text-xs);
+	line-height: var(--text-xs--line-height);
+}
