@@ -8,7 +8,7 @@
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { api, ApiError } from '#lib/api.js';
 	import { money } from '#lib/format.js';
-	import PartPicker from '#lib/components/purchasing/PartPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import type { PickedPart } from '#lib/components/purchasing/types.js';
 	import type { PageProps } from './$types';
 
@@ -170,7 +170,9 @@
 				<tbody>
 					{#each rows as row, i (row.key)}
 						<tr class="border-b border-border align-top">
-							<td class="w-80 px-3 py-1"><PartPicker bind:value={row.part} /></td>
+							<td class="w-80 px-3 py-1"
+								><PartPicker bind:value={row.part} activeOnly meta="procurement" /></td
+							>
 							<td class="px-3 py-1"
 								><Input
 									type="number"

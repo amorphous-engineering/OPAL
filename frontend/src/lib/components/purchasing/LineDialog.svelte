@@ -6,7 +6,7 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { api } from '#lib/api.js';
 	import { ApiError } from '#lib/api.js';
-	import PartPicker from './PartPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import { num, type PickedPart, type PurchaseLine } from './types.js';
 
 	let {
@@ -89,7 +89,7 @@
 						<span class="truncate">{line.part_name}</span>
 					</div>
 				{:else}
-					<PartPicker id="line-part" bind:value={part} />
+					<PartPicker id="line-part" bind:value={part} activeOnly meta="procurement" />
 				{/if}
 			</div>
 			<div class="grid grid-cols-2 gap-3">

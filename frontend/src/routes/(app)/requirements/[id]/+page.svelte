@@ -23,7 +23,7 @@
 	import { iso } from '#lib/format.js';
 	import { session } from '#lib/session.svelte.js';
 	import LintEditor from '#lib/components/requirements/LintEditor.svelte';
-	import PartPicker from '#lib/components/requirements/PartPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import QuickCreate from '#lib/components/requirements/QuickCreate.svelte';
 	import Redline from '#lib/components/requirements/Redline.svelte';
 	import {
@@ -557,7 +557,9 @@
 		<Section title="PARTS" count={req.allocations.length}>
 			{#snippet actions()}
 				{#if !terminal}<PartPicker
-						onpick={assign}
+						align="end"
+						trigger={assignPart}
+						onselect={(p) => p && assign(p)}
 						exclude={req.allocations.map((a) => a.part_id)}
 					/>{/if}
 			{/snippet}
@@ -622,7 +624,11 @@
 		</Section>
 	{:else if !terminal}
 		<EmptyLine label="Parts">
-			{#snippet action()}<PartPicker onpick={assign} />{/snippet}
+			{#snippet action()}<PartPicker
+					align="end"
+					trigger={assignPart}
+					onselect={(p) => p && assign(p)}
+				/>{/snippet}
 		</EmptyLine>
 	{/if}
 
@@ -702,3 +708,7 @@
 	parent={{ id: req.id, req_number: req.req_number, level: req.level, category: req.category }}
 	oncreated={() => invalidateAll()}
 />
+
+{#snippet assignPart({ props }: { props: Record<string, unknown> })}
+	<Button variant="ghost" size="xs" {...props} class="font-mono text-info">+ ASSIGN PART</Button>
+{/snippet}

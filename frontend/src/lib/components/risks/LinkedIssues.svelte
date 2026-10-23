@@ -14,7 +14,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { api } from '#lib/api.js';
-	import EntityPicker from './EntityPicker.svelte';
+	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
 	import { searchIssues } from './pickers.js';
 	import type { LinkedIssue, Risk } from './types.js';
 

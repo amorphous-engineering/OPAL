@@ -109,7 +109,6 @@ export interface AuthorActions {
 	setCaption(step: DocStep, imageId: number, caption: string): void;
 	removeImage(step: DocStep, imageId: number): Promise<void>;
 	moveImage(step: DocStep, imageId: number, direction: -1 | 1): Promise<void>;
-	searchParts(q: string): Promise<PartHit[]>;
 	addKit(
 		step: DocStep,
 		part: PartHit,

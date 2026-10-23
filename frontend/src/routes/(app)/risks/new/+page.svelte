@@ -7,10 +7,10 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-	import EntityPicker from '#lib/components/risks/EntityPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
+	import { partLabel } from '#lib/components/parts/types.js';
 	import LintField from '#lib/components/risks/LintField.svelte';
 	import Score from '#lib/components/risks/Score.svelte';
-	import { searchParts } from '#lib/components/risks/pickers.js';
 	import { IMPACT, PROBABILITY, severityOf, type Risk } from '#lib/components/risks/types.js';
 	import { api } from '#lib/api.js';
 	import type { PageProps } from './$types';
@@ -126,12 +126,11 @@
 				>
 				<Button variant="ghost" size="xs" onclick={() => (asset = null)}>CLEAR</Button>
 			{:else}
-				<EntityPicker
-					label="PICK PART"
-					placeholder="Search parts"
-					search={searchParts}
-					onpick={(o) => {
-						asset = { id: o.value, label: `${o.label} ${o.sub ?? ''}`.trim() };
+				<PartPicker
+					trigger={pickPart}
+					onselect={(p) => {
+						if (!p) return;
+						asset = { id: p.id, label: partLabel(p) };
 						assetText = '';
 					}}
 				/>
@@ -229,3 +228,7 @@
 		<Button variant="outline" href="/risks">CANCEL</Button>
 	</div>
 </form>
+
+{#snippet pickPart({ props }: { props: Record<string, unknown> })}
+	<Button {...props} variant="outline" size="sm">PICK PART</Button>
+{/snippet}

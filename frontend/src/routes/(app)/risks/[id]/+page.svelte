@@ -21,10 +21,9 @@
 	import { markdown } from '#lib/markdown.js';
 	import DispositionPanel from '#lib/components/risks/DispositionPanel.svelte';
 	import EditableText from '#lib/components/risks/EditableText.svelte';
-	import EntityPicker from '#lib/components/risks/EntityPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import LinkedIssues from '#lib/components/risks/LinkedIssues.svelte';
 	import Score from '#lib/components/risks/Score.svelte';
-	import { searchParts } from '#lib/components/risks/pickers.js';
 	import {
 		DISPOSITIONS,
 		IMPACT,
@@ -231,12 +230,7 @@
 					<DetailRow label="Asset">
 						{#if editingAsset}
 							<div class="flex flex-wrap items-center gap-2">
-								<EntityPicker
-									label="PICK PART"
-									placeholder="Search parts"
-									search={searchParts}
-									onpick={(o) => setAsset(o.value, null)}
-								/>
+								<PartPicker trigger={pickPart} onselect={(p) => p && setAsset(p.id, null)} />
 								<span class="label">or</span>
 								<Input
 									class="w-64"
@@ -534,3 +528,7 @@
 		<EmptyLine label="History" />
 	{/if}
 </div>
+
+{#snippet pickPart({ props }: { props: Record<string, unknown> })}
+	<Button {...props} variant="outline" size="sm">PICK PART</Button>
+{/snippet}

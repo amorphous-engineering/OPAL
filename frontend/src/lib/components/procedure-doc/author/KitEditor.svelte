@@ -5,7 +5,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import { toastError } from '#lib/components/opal/index.js';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import { useDoc, type PartHit } from '../controller.js';
 	import type { DocStep } from '../types.js';
 
@@ -13,43 +13,20 @@
 	const au = useDoc().author!;
 
 	let adding = $state(false);
-	let query = $state('');
-	let hits = $state<PartHit[]>([]);
 	let chosen = $state<PartHit | null>(null);
 	let qty = $state('1');
 	let usage = $state('consume');
 	let notes = $state('');
-	let searching = $state(false);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	let queryEl = $state<HTMLInputElement | null>(null);
 
 	const taken = $derived(new Set(step.step_kit.map((k) => k.part_id)));
 
-	async function search(q: string) {
-		searching = true;
-		try {
-			hits = (await au.searchParts(q)).filter((p) => !taken.has(p.id));
-		} catch (e) {
-			toastError(e);
-		} finally {
-			searching = false;
-		}
-	}
-
-	function open() {
+	function open(p: PartHit | null) {
+		if (!p) return;
 		adding = true;
-		query = '';
-		chosen = null;
+		chosen = p;
 		qty = '1';
 		usage = 'consume';
 		notes = '';
-		search('');
-		setTimeout(() => queryEl?.focus(), 30);
-	}
-
-	function onQuery() {
-		clearTimeout(timer);
-		timer = setTimeout(() => search(query), 200);
 	}
 
 	async function add(e: Event) {
@@ -64,7 +41,11 @@
 	<div class="flex items-center gap-2">
 		<span class="label">Step parts</span>
 		{#if !adding}
-			<Button size="xs" variant="outline" onclick={open}>+ PART</Button>
+			<PartPicker exclude={[...taken]} onselect={open}>
+				{#snippet trigger({ props })}
+					<Button {...props} size="xs" variant="outline">+ PART</Button>
+				{/snippet}
+			</PartPicker>
 		{/if}
 	</div>
 	{#if step.step_kit.length}
@@ -136,79 +117,40 @@
 			</tbody>
 		</table>
 	{/if}
-	{#if adding}
+	{#if adding && chosen}
 		<form
 			class="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/30 p-2"
 			onsubmit={add}
 		>
-			{#if chosen}
-				<div class="flex flex-wrap items-center gap-2 text-xs">
-					<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
-					<span class="min-w-0 truncate">{chosen.name}</span>
-					<button
-						type="button"
-						class="font-mono text-xs text-info hover:underline"
-						onclick={() => (chosen = null)}>CHANGE</button
-					>
-					<Input
-						type="number"
-						min="0"
-						step="any"
-						class="ml-auto h-7 w-24 font-mono"
-						aria-label="Quantity"
-						bind:value={qty}
-						required
-					/>
-					<NativeSelect size="sm" aria-label="Usage" bind:value={usage}>
-						<option value="consume">CONSUME</option>
-						<option value="tooling">TOOLING</option>
-					</NativeSelect>
-					<Input class="h-7 w-48" aria-label="Notes" placeholder="Notes" bind:value={notes} />
-					<Button type="submit" size="xs" disabled={!(Number(qty) > 0)}>ADD</Button>
-					<Button type="button" size="xs" variant="outline" onclick={() => (adding = false)}
-						>CANCEL</Button
-					>
-				</div>
-			{:else}
-				<div class="flex items-center gap-2">
-					<Input
-						bind:ref={queryEl}
-						class="h-7 max-w-sm"
-						placeholder="Search parts by name or number"
-						aria-label="Search parts"
-						autocomplete="off"
-						bind:value={query}
-						oninput={onQuery}
-						onkeydown={(e) => {
-							e.stopPropagation();
-							if (e.key === 'Escape') adding = false;
-						}}
-					/>
-					<Button type="button" size="xs" variant="outline" onclick={() => (adding = false)}
-						>CANCEL</Button
-					>
-				</div>
-				<ul
-					class="m-0 max-h-48 list-none overflow-y-auto rounded-md border border-border bg-background p-0"
+			<div class="flex flex-wrap items-center gap-2 text-xs">
+				<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
+				<span class="min-w-0 truncate">{chosen.name}</span>
+				<PartPicker exclude={[...taken]} onselect={(p: PartHit | null) => p && (chosen = p)}>
+					{#snippet trigger({ props })}
+						<button {...props} type="button" class="font-mono text-xs text-info hover:underline"
+							>CHANGE</button
+						>
+					{/snippet}
+				</PartPicker>
+				<Input
+					type="number"
+					min="0"
+					step="any"
+					class="ml-auto h-7 w-24 font-mono"
+					aria-label="Quantity"
+					bind:value={qty}
+					required
+				/>
+				<NativeSelect size="sm" aria-label="Usage" bind:value={usage}>
+					<option value="consume">CONSUME</option>
+					<option value="tooling">TOOLING</option>
+				</NativeSelect>
+				<Input class="h-7 w-48" aria-label="Notes" placeholder="Notes" bind:value={notes} />
+				<Button type="submit" size="xs" disabled={!(Number(qty) > 0)}>ADD</Button>
+				<Button type="button" size="xs" variant="outline" onclick={() => (adding = false)}
+					>CANCEL</Button
 				>
-					{#each hits as p (p.id)}
-						<li class="border-b border-border last:border-b-0">
-							<button
-								type="button"
-								class="flex w-full items-center gap-2 px-2 py-1 text-left text-xs hover:bg-accent"
-								onclick={() => (chosen = p)}
-							>
-								<span class="w-24 shrink-0 font-mono text-info">{p.internal_pn ?? '—'}</span>
-								<span class="truncate">{p.name}</span>
-							</button>
-						</li>
-					{:else}
-						<li class="px-2 py-1 font-mono text-xs text-muted-foreground">
-							{searching ? '…' : 'PARTS — none'}
-						</li>
-					{/each}
-				</ul>
-			{/if}
+			</div>
 		</form>
 	{:else if !step.step_kit.length}
 		<span class="font-mono text-xs text-muted-foreground">none</span>

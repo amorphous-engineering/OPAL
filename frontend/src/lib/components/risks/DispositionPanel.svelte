@@ -8,7 +8,7 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { toast, toastError } from '#lib/components/opal/index.js';
 	import { api } from '#lib/api.js';
-	import EntityPicker from './EntityPicker.svelte';
+	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
 	import { searchIssues } from './pickers.js';
 	import type { Risk } from './types.js';
 

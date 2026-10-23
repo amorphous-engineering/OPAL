@@ -1,27 +1,23 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { onDestroy } from 'svelte';
-	import { api, type Page } from '#lib/api.js';
+	import { api } from '#lib/api.js';
 	import {
 		DataTable,
 		DetailRow,
 		DetailTable,
 		PageHeader,
 		Section,
-		toast,
-		toastError
+		toast
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import type { InventoryItem, PickedPart } from '#lib/components/inventory/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	let part = $derived<PickedPart | null>(data.part);
-	let search = $state('');
-	let results = $state<PickedPart[]>([]);
-	let searched = $state(false);
 	let quantity = $state('1');
 	let location = $state('');
 	let lot = $state('');
@@ -29,42 +25,8 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let created = $state<InventoryItem[] | null>(null);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	let seq = 0;
-
-	onDestroy(() => clearTimeout(timer));
-
-	function onSearch() {
-		clearTimeout(timer);
-		const q = search.trim();
-		if (!q) {
-			results = [];
-			searched = false;
-			return;
-		}
-		timer = setTimeout(async () => {
-			const mine = ++seq;
-			try {
-				const r = await api.get<Page<PickedPart>>('/parts', {
-					search: q,
-					state: 'active',
-					limit: 8
-				});
-				if (mine === seq) {
-					results = r.items;
-					searched = true;
-				}
-			} catch (e) {
-				toastError(e);
-			}
-		}, 200);
-	}
-
 	function pick(p: PickedPart) {
 		part = p;
-		results = [];
-		search = '';
-		searched = false;
 		quantity = '1';
 		lot = '';
 	}
@@ -181,38 +143,12 @@
 							>
 						</div>
 					{:else}
-						<div class="relative">
-							<Input
-								aria-label="Part"
-								placeholder="Part number or name"
-								autocomplete="off"
-								bind:value={search}
-								oninput={onSearch}
-							/>
-							{#if results.length}
-								<ul
-									class="absolute z-20 mt-0.5 w-full overflow-hidden rounded-md border border-border bg-popover"
-								>
-									{#each results as p (p.id)}
-										<li>
-											<button
-												type="button"
-												class="flex w-full items-center gap-2 border-b border-border px-2 py-1.5 text-left last:border-b-0 hover:bg-accent"
-												onclick={() => pick(p)}
-											>
-												<span class="font-mono text-info">{p.internal_pn ?? '—'}</span>
-												<span class="truncate">{p.name}</span>
-												<span class="ml-auto font-mono text-xs text-muted-foreground uppercase"
-													>{p.tracking_type}</span
-												>
-											</button>
-										</li>
-									{/each}
-								</ul>
-							{:else if searched}
-								<p class="mt-1 font-mono text-xs text-muted-foreground">No active part matches</p>
-							{/if}
-						</div>
+						<PartPicker
+							placeholder="Part number or name"
+							activeOnly
+							meta="tracking_type"
+							onselect={(p: PickedPart | null) => p && pick(p)}
+						/>
 					{/if}
 				</DetailRow>
 				<DetailRow label={serialized ? 'Units *' : 'Quantity *'}>

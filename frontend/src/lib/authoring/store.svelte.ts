@@ -889,11 +889,6 @@ export class AuthorStore implements DocController {
 
 	// ---------- step parts ----------
 
-	searchParts = async (q: string): Promise<PartHit[]> => {
-		const r = await api.get<{ items: PartHit[] }>('/parts', { search: q, limit: 8 });
-		return r.items;
-	};
-
 	addKit = async (
 		step: DocStep,
 		part: PartHit,

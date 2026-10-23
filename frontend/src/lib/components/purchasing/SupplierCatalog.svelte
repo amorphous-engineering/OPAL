@@ -18,7 +18,7 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { api, ApiError } from '#lib/api.js';
 	import { money } from '#lib/format.js';
-	import PartPicker from './PartPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import type { PickedPart, SupplierPart } from './types.js';
 
 	let {
@@ -154,7 +154,7 @@
 						<span class="truncate">{editing.part_name}</span>
 					</div>
 				{:else}
-					<PartPicker id="cat-part" bind:value={part} activeOnly={false} />
+					<PartPicker id="cat-part" bind:value={part} meta="procurement" />
 				{/if}
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">

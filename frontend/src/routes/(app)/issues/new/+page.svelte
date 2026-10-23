@@ -13,7 +13,9 @@
 		Section,
 		toastError
 	} from '#lib/components/opal/index.js';
-	import EntityPicker from '#lib/components/issues/EntityPicker.svelte';
+	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
+	import { searchKind } from '#lib/components/issues/pickers.js';
 	import {
 		CONTAINMENTS,
 		CONTAINMENT_OPTION,
@@ -266,11 +268,21 @@
 			>
 		</span>
 	{:else}
-		<EntityPicker
-			{kind}
-			{placeholder}
-			label={placeholder}
-			onpick={(r) => set({ id: r.id, label: r.label, sub: r.sublabel })}
-		/>
+		{#if kind === 'part'}
+			<PartPicker
+				{placeholder}
+				onselect={(p) => p && set({ id: p.id, label: p.name, sub: p.internal_pn })}
+			/>
+		{:else}
+			<EntityPicker
+				{placeholder}
+				label={placeholder}
+				search={searchKind(kind)}
+				onpick={(o) =>
+					set(
+						o.sub ? { id: o.value, label: o.sub, sub: o.label } : { id: o.value, label: o.label }
+					)}
+			/>
+		{/if}
 	{/if}
 {/snippet}

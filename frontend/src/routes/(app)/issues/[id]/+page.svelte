@@ -11,6 +11,7 @@
 		DetailRow,
 		DetailTable,
 		EmptyLine,
+		EntityPicker,
 		PageHeader,
 		Section,
 		State,
@@ -21,7 +22,8 @@
 		type Column,
 		Avatar
 	} from '#lib/components/opal/index.js';
-	import EntityPicker from '#lib/components/issues/EntityPicker.svelte';
+	import PartPicker from '#lib/components/parts/PartPicker.svelte';
+	import { searchKind } from '#lib/components/issues/pickers.js';
 	import InlineText from '#lib/components/issues/InlineText.svelte';
 	import {
 		CONTAINMENTS,
@@ -233,12 +235,10 @@
 	}
 
 	// ---- Links ----
-	let pickingLink = $state<'part' | 'procedure' | 'execution' | null>(null);
 	async function link(
 		field: 'part_id' | 'procedure_id' | 'procedure_instance_id',
 		id: number | null
 	) {
-		pickingLink = null;
 		await act(() => patch({ [field]: id }));
 	}
 
@@ -722,100 +722,89 @@
 		<Section title="Links">
 			<DetailTable>
 				<DetailRow label="Part">
-					{#if pickingLink === 'part'}
-						<EntityPicker
-							kind="part"
-							label="Search parts"
-							placeholder="Search parts"
-							onpick={(r) => link('part_id', r.id)}
-						/>
-					{:else}
-						<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
-							{#if issue.part_id}
-								<a
-									href={`/parts/${issue.part_id}`}
-									class="font-mono whitespace-nowrap text-info hover:underline"
-									>{issue.part_number ?? issue.part_name}</a
-								>
-								<span class="min-w-0 truncate text-muted-foreground">{issue.part_name}</span>
-							{:else}<span class="text-muted-foreground">—</span>{/if}
-							<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
-								<button
+					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
+						{#if issue.part_id}
+							<a
+								href={`/parts/${issue.part_id}`}
+								class="font-mono whitespace-nowrap text-info hover:underline"
+								>{issue.part_number ?? issue.part_name}</a
+							>
+							<span class="min-w-0 truncate text-muted-foreground">{issue.part_name}</span>
+						{:else}<span class="text-muted-foreground">—</span>{/if}
+						<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
+							<PartPicker align="end" onselect={(p) => p && link('part_id', p.id)}>
+								{#snippet trigger({ props })}
+									<button {...props} type="button" class="text-info hover:underline"
+										>{issue.part_id ? 'CHANGE' : 'SET'}</button
+									>
+								{/snippet}
+							</PartPicker>
+							{#if issue.part_id}<button
 									type="button"
 									class="text-info hover:underline"
-									onclick={() => (pickingLink = 'part')}>{issue.part_id ? 'CHANGE' : 'SET'}</button
-								>
-								{#if issue.part_id}<button
-										type="button"
-										class="text-info hover:underline"
-										onclick={() => link('part_id', null)}>CLEAR</button
-									>{/if}
-							</span>
-						</div>
-					{/if}
+									onclick={() => link('part_id', null)}>CLEAR</button
+								>{/if}
+						</span>
+					</div>
 				</DetailRow>
 				<DetailRow label="Procedure">
-					{#if pickingLink === 'procedure'}
-						<EntityPicker
-							kind="procedure"
-							label="Search procedures"
-							placeholder="Search procedures"
-							onpick={(r) => link('procedure_id', r.id)}
-						/>
-					{:else}
-						<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
-							{#if issue.procedure_id}
-								<a href={`/procedures/${issue.procedure_id}`} class="text-info hover:underline"
-									>{issue.procedure_name}</a
-								>
-							{:else}<span class="text-muted-foreground">—</span>{/if}
-							<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
-								<button
+					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
+						{#if issue.procedure_id}
+							<a href={`/procedures/${issue.procedure_id}`} class="text-info hover:underline"
+								>{issue.procedure_name}</a
+							>
+						{:else}<span class="text-muted-foreground">—</span>{/if}
+						<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
+							<EntityPicker
+								label="Search procedures"
+								placeholder="Search procedures"
+								align="end"
+								search={searchKind('procedure')}
+								onpick={(o) => link('procedure_id', o.value)}
+							>
+								{#snippet trigger({ props })}
+									<button {...props} type="button" class="text-info hover:underline"
+										>{issue.procedure_id ? 'CHANGE' : 'SET'}</button
+									>
+								{/snippet}
+							</EntityPicker>
+							{#if issue.procedure_id}<button
 									type="button"
 									class="text-info hover:underline"
-									onclick={() => (pickingLink = 'procedure')}
-									>{issue.procedure_id ? 'CHANGE' : 'SET'}</button
-								>
-								{#if issue.procedure_id}<button
-										type="button"
-										class="text-info hover:underline"
-										onclick={() => link('procedure_id', null)}>CLEAR</button
-									>{/if}
-							</span>
-						</div>
-					{/if}
+									onclick={() => link('procedure_id', null)}>CLEAR</button
+								>{/if}
+						</span>
+					</div>
 				</DetailRow>
 				<DetailRow label="Execution">
-					{#if pickingLink === 'execution'}
-						<EntityPicker
-							kind="execution"
-							label="Search executions"
-							placeholder="Search executions"
-							onpick={(r) => link('procedure_instance_id', r.id)}
-						/>
-					{:else}
-						<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
-							{#if issue.procedure_instance_id}
-								<a
-									href={`/executions/${issue.procedure_instance_id}`}
-									class="font-mono text-info hover:underline">{issue.work_order_number}</a
-								>
-							{:else}<span class="text-muted-foreground">—</span>{/if}
-							<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
-								<button
+					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
+						{#if issue.procedure_instance_id}
+							<a
+								href={`/executions/${issue.procedure_instance_id}`}
+								class="font-mono text-info hover:underline">{issue.work_order_number}</a
+							>
+						{:else}<span class="text-muted-foreground">—</span>{/if}
+						<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
+							<EntityPicker
+								label="Search executions"
+								placeholder="Search executions"
+								align="end"
+								search={searchKind('execution')}
+								onpick={(o) => link('procedure_instance_id', o.value)}
+							>
+								{#snippet trigger({ props })}
+									<button {...props} type="button" class="text-info hover:underline"
+										>{issue.procedure_instance_id ? 'CHANGE' : 'SET'}</button
+									>
+								{/snippet}
+							</EntityPicker>
+							{#if issue.procedure_instance_id}<button
 									type="button"
 									class="text-info hover:underline"
-									onclick={() => (pickingLink = 'execution')}
-									>{issue.procedure_instance_id ? 'CHANGE' : 'SET'}</button
-								>
-								{#if issue.procedure_instance_id}<button
-										type="button"
-										class="text-info hover:underline"
-										onclick={() => link('procedure_instance_id', null)}>CLEAR</button
-									>{/if}
-							</span>
-						</div>
-					{/if}
+									onclick={() => link('procedure_instance_id', null)}>CLEAR</button
+								>{/if}
+						</span>
+					</div>
 				</DetailRow>
 				<DetailRow label="Boundary">
 					{#if issue.procedure_instance_id && data.steps.length}
@@ -910,10 +899,10 @@
 		</NativeSelect>
 		<div class="min-w-0 flex-1">
 			<EntityPicker
-				kind="risk"
 				label="Search risks"
 				placeholder="Search risks"
-				onpick={(r) => linkRisk(r.id)}
+				search={searchKind('risk')}
+				onpick={(o) => linkRisk(o.value)}
 			/>
 		</div>
 	</div>
