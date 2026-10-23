@@ -315,8 +315,11 @@
 				>
 					{#snippet cell(r, col)}
 						{#if col.key === 'label'}
-							<span class="font-mono whitespace-nowrap text-info">{r.label}</span>
-							{#if r.mine}<span class="ml-1 font-mono text-xs text-muted-foreground">YOU</span>{/if}
+							<span class="whitespace-nowrap"
+								><span class="font-mono text-info">{r.label}</span>{#if r.mine}<span
+										class="ml-1 font-mono text-xs text-muted-foreground">YOU</span
+									>{/if}</span
+							>
 						{:else if col.key === 'procedure'}
 							<span class="block truncate" title={r.procedure ?? undefined}
 								>{r.procedure ?? dash}</span

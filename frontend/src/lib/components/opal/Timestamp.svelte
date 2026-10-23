@@ -12,7 +12,9 @@
 {#if !value}
 	<span class="text-muted-foreground">—</span>
 {:else}
-	<time class="font-mono text-xs tabular-nums" datetime={iso(value)} title={iso(value)}
-		>{relative ? age(value) : dateOnly ? date(value) : datetime(value)}</time
+	<time
+		class="font-mono text-xs whitespace-nowrap tabular-nums"
+		datetime={iso(value)}
+		title={iso(value)}>{relative ? age(value) : dateOnly ? date(value) : datetime(value)}</time
 	>
 {/if}

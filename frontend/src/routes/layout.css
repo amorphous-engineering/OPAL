@@ -20,49 +20,51 @@
  *   OPAL orange   the wordmark only (--brand)
  *   ok / warn / error  green / yellow / red state words
  *   dev blue      the version string of a development build
- * Dark is the default and the original theme, value for value. Light is a
- * plain neutral counterpart (deeper shades of the same hues for contrast on
- * white) — no Catppuccin.
+ * Dark is the default and the original theme, value for value. Light is ink on
+ * paper (see its block below) — no Catppuccin.
  */
 :root {
+	/* Light: ink on paper. A warm paper page, white panels on it, true-black ink, rules
+	   dark enough to read as rules, a warm-grey header band. Every text colour holds
+	   >= 4.5:1 on white and on the paper (muted text ~7:1). */
 	--radius: 0rem;
-	--background: #fafafa;
-	--foreground: #171717;
+	--background: #efede8;
+	--foreground: #111111;
 	--card: #ffffff;
-	--card-foreground: #171717;
+	--card-foreground: #111111;
 	--popover: #ffffff;
-	--popover-foreground: #171717;
-	--primary: #2563eb;
+	--popover-foreground: #111111;
+	--primary: #1d4ed8;
 	--primary-foreground: #ffffff;
-	--secondary: #f0f0f0;
-	--secondary-foreground: #171717;
-	--muted: #f0f0f0;
-	--muted-foreground: #666666;
-	--accent: #ebebeb;
-	--accent-foreground: #171717;
-	--destructive: #dc2626;
-	--border: #d4d4d4;
-	--input: #c4c4c4;
-	--ring: #2563eb;
-	--ok: #15803d;
-	--warn: #b45309;
-	--error: #dc2626;
-	--info: #2563eb;
-	--brand: #c2410c;
-	--dev: #2563eb;
-	--chart-1: #2563eb;
-	--chart-2: #15803d;
-	--chart-3: #b45309;
-	--chart-4: #dc2626;
-	--chart-5: #c2410c;
-	--sidebar: #f0f0f0;
-	--sidebar-foreground: #171717;
-	--sidebar-primary: #2563eb;
+	--secondary: #e6e3dc;
+	--secondary-foreground: #111111;
+	--muted: #e6e3dc;
+	--muted-foreground: #55524b;
+	--accent: #dedad2;
+	--accent-foreground: #111111;
+	--destructive: #b91c1c;
+	--border: #bdb8ae;
+	--input: #8f8a80;
+	--ring: #1d4ed8;
+	--ok: #116b32;
+	--warn: #9a4a05;
+	--error: #b91c1c;
+	--info: #1d4ed8;
+	--brand: #b23b0a;
+	--dev: #1d4ed8;
+	--chart-1: #1d4ed8;
+	--chart-2: #116b32;
+	--chart-3: #9a4a05;
+	--chart-4: #b91c1c;
+	--chart-5: #b23b0a;
+	--sidebar: #e6e3dc;
+	--sidebar-foreground: #111111;
+	--sidebar-primary: #1d4ed8;
 	--sidebar-primary-foreground: #ffffff;
-	--sidebar-accent: #ebebeb;
-	--sidebar-accent-foreground: #171717;
-	--sidebar-border: #d4d4d4;
-	--sidebar-ring: #2563eb;
+	--sidebar-accent: #dedad2;
+	--sidebar-accent-foreground: #111111;
+	--sidebar-border: #bdb8ae;
+	--sidebar-ring: #1d4ed8;
 }
 
 .dark {
