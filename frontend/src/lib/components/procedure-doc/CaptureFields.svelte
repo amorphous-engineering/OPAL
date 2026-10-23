@@ -8,6 +8,7 @@
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
+	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
 	import FieldEditor from './author/FieldEditor.svelte';
 	import { attachmentUrl, lightbox } from './lightbox.svelte.js';
@@ -30,6 +31,12 @@
 		});
 	}
 	const errors = $derived(ctl.fieldErrors(step));
+	const filled = (v: unknown) =>
+		v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
+	const required = $derived(fields.filter((f) => f.required));
+	const recorded = $derived(
+		required.filter((f) => filled(ctl.fieldValue(step, f.name)) || f.type === 'checkbox').length
+	);
 	let uploading = $state(false);
 
 	const ids = (v: unknown): number[] =>
@@ -62,122 +69,151 @@
 	}
 </script>
 
-{#if authoring}
-	<div class="flex items-center gap-2">
-		<span class="label">Data capture</span>
-		<Button size="xs" variant="outline" onclick={addField}>+ FIELD</Button>
-		{#if !fields.length}<span class="font-mono text-xs text-muted-foreground">none</span>{/if}
-	</div>
-{/if}
-{#if fields.length}
-	<div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-4 gap-y-3">
+{#if fields.length || authoring}
+	<!-- Data capture is its own panel: one field per row, label and spec on the
+	     left, the input on the right, so it never reads as part of the prose. -->
+	<section class="border border-border bg-muted/40" aria-label="Data capture">
+		<header class="flex h-8 items-center gap-3 border-b border-border px-3">
+			<span class="label text-foreground">Data</span>
+			{#if required.length}
+				<span
+					class={cn(
+						'font-mono text-[11px]',
+						recorded === required.length ? 'text-ok' : 'text-muted-foreground'
+					)}>{recorded}/{required.length} required recorded</span
+				>
+			{:else if fields.length}
+				<span class="font-mono text-[11px] text-muted-foreground"
+					>{fields.length} {fields.length === 1 ? 'field' : 'fields'}</span
+				>
+			{/if}
+			{#if authoring}
+				<span class="ml-auto"
+					><Button size="xs" variant="outline" onclick={addField}>+ FIELD</Button></span
+				>
+			{/if}
+		</header>
+		{#if !fields.length}
+			<p class="px-3 py-2 font-mono text-xs text-muted-foreground">none</p>
+		{/if}
 		{#each fields as f, i (authoring ? i : f.name)}
 			{@const id = `cap-${step.order}-${f.name}`}
 			{@const err = errors[f.name]}
-			<div class="grid content-start gap-1">
-				<label for={id} class="text-sm font-medium text-foreground">
-					{f.label ?? f.name}{#if f.unit}&nbsp;({f.unit}){/if}{#if f.required}<span
-							class="text-error"
+			<div
+				class="grid items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(10rem,18rem)_minmax(0,26rem)]"
+			>
+				<div class="grid gap-0.5 sm:pt-1.5">
+					<label for={id} class="text-sm font-medium text-foreground">
+						{f.label ?? f.name}{#if f.required}<span class="text-error" title="Required">
+								*</span
+							>{/if}
+					</label>
+					{#if f.unit || f.min != null || f.max != null}
+						<span class="font-mono text-[11px] text-muted-foreground"
+							>{#if f.min != null || f.max != null}{f.min ?? '…'} – {f.max ??
+									'…'}{/if}{#if f.unit}{f.min != null || f.max != null
+									? ' '
+									: ''}{f.unit}{/if}</span
 						>
-							*</span
-						>{/if}
-				</label>
-				{#if f.type === 'number'}
-					<Input
-						{id}
-						type="number"
-						min={f.min}
-						max={f.max}
-						step={f.step ?? 'any'}
-						class="font-mono"
-						aria-invalid={!!err}
-						value={text(ctl.fieldValue(step, f.name))}
-						oninput={(e) => {
-							const v = (e.currentTarget as HTMLInputElement).value;
-							ctl.setField(step, f.name, v === '' ? null : Number(v));
-						}}
-					/>
-				{:else if f.type === 'checkbox'}
-					<div class="flex h-8 items-center gap-2">
-						<Checkbox
-							{id}
-							checked={!!ctl.fieldValue(step, f.name)}
-							onCheckedChange={(c) => ctl.setField(step, f.name, !!c)}
-						/>
-						<span class="text-xs">{f.label ?? f.name}</span>
-					</div>
-				{:else if f.type === 'select'}
-					<NativeSelect
-						{id}
-						class="w-full"
-						aria-invalid={!!err}
-						value={text(ctl.fieldValue(step, f.name))}
-						onchange={(e) => ctl.setField(step, f.name, e.currentTarget.value || null)}
-					>
-						<option value="">—</option>
-						{#each f.options ?? [] as opt (opt)}<option value={opt}>{opt}</option>{/each}
-					</NativeSelect>
-				{:else if f.type === 'textarea'}
-					<Textarea
-						{id}
-						rows={f.rows ?? 2}
-						aria-invalid={!!err}
-						value={text(ctl.fieldValue(step, f.name))}
-						oninput={(e) => ctl.setField(step, f.name, e.currentTarget.value || null)}
-					/>
-				{:else if f.type === 'photo'}
-					{@const photos = ids(ctl.fieldValue(step, f.name))}
-					<div class="grid gap-1.5">
-						{#if photos.length}
-							<div class="flex flex-wrap gap-2">
-								{#each photos as pid (pid)}
-									<div class="grid gap-1">
-										<button
-											type="button"
-											class="block border border-border"
-											onclick={() => lightbox.open(attachmentUrl(pid), f.label ?? f.name)}
-											aria-label={`Enlarge ${f.label ?? f.name}`}
-										>
-											<img
-												loading="lazy"
-												src={attachmentUrl(pid)}
-												alt={f.label ?? f.name}
-												class="h-16 w-auto object-cover"
-											/>
-										</button>
-										<Button
-											size="xs"
-											variant="outline"
-											onclick={() => removePhoto(f.name, pid)}
-											aria-label={`Remove photo ${pid}`}>REMOVE</Button
-										>
-									</div>
-								{/each}
-							</div>
-						{/if}
+					{/if}
+				</div>
+				<div class="grid min-w-0 gap-1">
+					{#if f.type === 'number'}
 						<Input
 							{id}
-							type="file"
-							accept="image/*"
-							capture="environment"
-							multiple={!!f.multiple}
-							disabled={uploading || authoring}
-							onchange={(e) => pick(f.name, !!f.multiple, e)}
+							type="number"
+							min={f.min}
+							max={f.max}
+							step={f.step ?? 'any'}
+							class="font-mono"
+							aria-invalid={!!err}
+							value={text(ctl.fieldValue(step, f.name))}
+							oninput={(e) => {
+								const v = (e.currentTarget as HTMLInputElement).value;
+								ctl.setField(step, f.name, v === '' ? null : Number(v));
+							}}
 						/>
-					</div>
-				{:else}
-					<Input
-						{id}
-						type="text"
-						placeholder={f.placeholder}
-						aria-invalid={!!err}
-						value={text(ctl.fieldValue(step, f.name))}
-						oninput={(e) => ctl.setField(step, f.name, e.currentTarget.value || null)}
-					/>
-				{/if}
-				{#if err}<p class="text-[11px] text-error">{err}</p>{/if}
-				{#if authoring}<FieldEditor {step} index={i} />{/if}
+					{:else if f.type === 'checkbox'}
+						<div class="flex h-8 items-center gap-2">
+							<Checkbox
+								{id}
+								checked={!!ctl.fieldValue(step, f.name)}
+								onCheckedChange={(c) => ctl.setField(step, f.name, !!c)}
+							/>
+						</div>
+					{:else if f.type === 'select'}
+						<NativeSelect
+							{id}
+							class="w-full"
+							aria-invalid={!!err}
+							value={text(ctl.fieldValue(step, f.name))}
+							onchange={(e) => ctl.setField(step, f.name, e.currentTarget.value || null)}
+						>
+							<option value="">—</option>
+							{#each f.options ?? [] as opt (opt)}<option value={opt}>{opt}</option>{/each}
+						</NativeSelect>
+					{:else if f.type === 'textarea'}
+						<Textarea
+							{id}
+							rows={f.rows ?? 2}
+							aria-invalid={!!err}
+							value={text(ctl.fieldValue(step, f.name))}
+							oninput={(e) => ctl.setField(step, f.name, e.currentTarget.value || null)}
+						/>
+					{:else if f.type === 'photo'}
+						{@const photos = ids(ctl.fieldValue(step, f.name))}
+						<div class="grid gap-1.5">
+							{#if photos.length}
+								<div class="flex flex-wrap gap-2">
+									{#each photos as pid (pid)}
+										<div class="grid gap-1">
+											<button
+												type="button"
+												class="block aspect-[4/3] h-16 overflow-hidden border border-border bg-muted"
+												onclick={() => lightbox.open(attachmentUrl(pid), f.label ?? f.name)}
+												aria-label={`Enlarge ${f.label ?? f.name}`}
+											>
+												<img
+													loading="lazy"
+													src={attachmentUrl(pid)}
+													alt={f.label ?? f.name}
+													class="size-full object-cover"
+												/>
+											</button>
+											<Button
+												size="xs"
+												variant="outline"
+												onclick={() => removePhoto(f.name, pid)}
+												aria-label={`Remove photo ${pid}`}>REMOVE</Button
+											>
+										</div>
+									{/each}
+								</div>
+							{/if}
+							<Input
+								{id}
+								type="file"
+								accept="image/*"
+								capture="environment"
+								multiple={!!f.multiple}
+								disabled={uploading || authoring}
+								onchange={(e) => pick(f.name, !!f.multiple, e)}
+							/>
+						</div>
+					{:else}
+						<Input
+							{id}
+							type="text"
+							placeholder={f.placeholder}
+							aria-invalid={!!err}
+							value={text(ctl.fieldValue(step, f.name))}
+							oninput={(e) => ctl.setField(step, f.name, e.currentTarget.value || null)}
+						/>
+					{/if}
+					{#if err}<p class="text-[11px] text-error">{err}</p>{/if}
+				</div>
+				{#if authoring}<div class="sm:col-span-2"><FieldEditor {step} index={i} /></div>{/if}
 			</div>
 		{/each}
-	</div>
+	</section>
 {/if}

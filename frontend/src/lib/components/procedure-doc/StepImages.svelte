@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Authored reference imagery: instruction content, lazy-loaded, opens in the
-	// lightbox. In author mode each figure carries caption, order and removal,
+	// lightbox. Thumbnails are uniform 4:3 plates the image fills (cover); the
+	// lightbox shows the whole image. In author mode each figure carries caption, order and removal,
 	// and a picker adds more.
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
@@ -62,7 +63,7 @@
 				<figure class="m-0 grid gap-1" data-image-id={img.id}>
 					<button
 						type="button"
-						class="block border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
+						class="block aspect-[4/3] h-28 overflow-hidden border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
 						onclick={() => lightbox.open(attachmentUrl(img.attachment_id), img.caption)}
 						aria-label={img.caption ? `Enlarge: ${img.caption}` : 'Enlarge reference image'}
 					>
@@ -71,7 +72,7 @@
 							decoding="async"
 							src={attachmentUrl(img.attachment_id)}
 							alt={img.caption ?? 'Reference image'}
-							class="h-28 w-auto max-w-56 object-contain"
+							class="size-full object-cover"
 						/>
 					</button>
 					{#if au && step}
