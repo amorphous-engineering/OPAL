@@ -263,6 +263,7 @@ def get_holds_payload(db: Session, instance_id: int) -> dict:
                 "title": issue.title,
                 "priority": _val(issue.priority),
                 "containment": _val(issue.containment),
+                "ticket_state": issue.ticket_state,
                 "raised_step_id": issue.raised_step_id,
                 "containment_step_id": issue.containment_step_id,
                 "blocks": [t["label"] for t in holding_readout(db, issue)],

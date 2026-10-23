@@ -1094,6 +1094,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                     "issue_number": issue.issue_number,
                     "title": issue.title,
                     "disposition_state": issue.disp_state,
+                    "ticket_state": issue.ticket_state,
                     "blocks": [],
                 },
             )

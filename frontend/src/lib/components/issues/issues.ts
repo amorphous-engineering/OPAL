@@ -12,7 +12,35 @@ export const DISPOSITIONS = [
 	'return_to_supplier',
 	'no_defect'
 ] as const;
-export const STATES = ['open', 'undispositioned', 'dispositioned', 'closed'] as const;
+/** Ticket progress, in order. Colour is semantic: red = untouched, amber = in flight, green = done. */
+export const TICKET_STATES = ['pending', 'in_work', 'in_review', 'done'] as const;
+export type TicketState = (typeof TICKET_STATES)[number];
+
+export const TICKET_LABEL: Record<TicketState, string> = {
+	pending: 'PENDING',
+	in_work: 'IN WORK',
+	in_review: 'IN REVIEW',
+	done: 'DONE'
+};
+
+const TICKET_TONE: Record<TicketState, Tone> = {
+	pending: 'error',
+	in_work: 'warn',
+	in_review: 'warn',
+	done: 'ok'
+};
+
+export function ticketLabel(state: string): string {
+	return TICKET_LABEL[state as TicketState] ?? state.replace(/_/g, ' ').toUpperCase();
+}
+
+export function ticketTone(state: string): Tone {
+	return TICKET_TONE[state as TicketState] ?? 'default';
+}
+
+/** Issue-list STATE filter: the default view is everything not done. */
+export const STATE_FILTER_DEFAULT = 'active';
+export const ACTIVE_STATES = 'pending,in_work,in_review';
 
 export const TYPE_ABBREV: Record<string, string> = {
 	non_conformance: 'NC',
@@ -41,6 +69,16 @@ export interface Issue {
 	containment_step_id: number | null;
 	disp_state: string;
 	dispositioned: boolean;
+	ticket_state: TicketState;
+	work_started_at: string | null;
+	work_started_by_id: number | null;
+	work_started_by_name: string | null;
+	review_requested_at: string | null;
+	review_requested_by_id: number | null;
+	review_requested_by_name: string | null;
+	closed_at: string | null;
+	closed_by_id: number | null;
+	closed_by_name: string | null;
 	part_id: number | null;
 	procedure_id: number | null;
 	procedure_instance_id: number | null;
@@ -126,14 +164,6 @@ export interface Attachment {
 	size_bytes: number;
 	uploaded_by_name: string | null;
 	created_at: string;
-}
-
-/** Disposition gate state in state colour; ordinary open work stays neutral. */
-export function stateTone(disp: string): Tone {
-	if (disp === 'undispositioned') return 'error';
-	if (disp === 'dispositioned') return 'ok';
-	if (disp === 'closed') return 'muted';
-	return 'default';
 }
 
 export function priorityTone(p: string): Tone {

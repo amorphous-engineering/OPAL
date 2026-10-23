@@ -5,26 +5,13 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { EmptyLine, Section, State } from '#lib/components/opal/index.js';
 	import { attachmentUrl } from '#lib/components/procedure-doc/index.js';
+	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 
 	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
 
 	const doc = $derived(store.doc!);
 	const inst = $derived(doc.instance);
-	const issueTone = (state: string) =>
-		state === 'undispositioned'
-			? 'error'
-			: state === 'dispositioned'
-				? 'ok'
-				: state === 'open'
-					? 'warn'
-					: 'muted';
-	const issueLabel = (state: string) =>
-		state === 'undispositioned'
-			? 'UNDISP'
-			: state === 'dispositioned'
-				? "DISP'D"
-				: state.toUpperCase();
 	const size = (n: number) =>
 		n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 </script>
@@ -92,10 +79,10 @@
 								{/if}
 								<span class="ml-auto"
 									><State
-										value={i.state}
-										tone={issueTone(i.state)}
-										label={issueLabel(i.state)}
-										badge={i.state === 'undispositioned'}
+										value={i.ticket_state}
+										tone={ticketTone(i.ticket_state)}
+										label={ticketLabel(i.ticket_state)}
+										badge
 									/></span
 								>
 							</div>

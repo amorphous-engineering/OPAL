@@ -18,10 +18,12 @@
 	import {
 		ISSUE_TYPES,
 		PRIORITIES,
-		STATES,
+		STATE_FILTER_DEFAULT,
+		TICKET_STATES,
 		TYPE_ABBREV,
 		priorityTone,
-		stateTone,
+		ticketLabel,
+		ticketTone,
 		type Issue
 	} from '#lib/components/issues/issues.js';
 	import { session } from '#lib/session.svelte.js';
@@ -60,7 +62,13 @@
 		},
 		{ key: 'title', label: 'Title', sortable: true, sortValue: (i) => i.title },
 		{ key: 'type', label: 'Type', width: '5rem', sortable: true, sortValue: (i) => i.issue_type },
-		{ key: 'state', label: 'State', width: '9rem', sortable: true, sortValue: (i) => i.disp_state },
+		{
+			key: 'state',
+			label: 'State',
+			width: '9rem',
+			sortable: true,
+			sortValue: (i) => i.ticket_state
+		},
 		{ key: 'priority', label: 'Pri', width: '6rem', sortable: true, sortValue: (i) => i.priority },
 		{ key: 'assignee', label: 'Assignee', width: '10rem' },
 		{ key: 'links', label: 'Linked' },
@@ -94,19 +102,15 @@
 			options={ISSUE_TYPES.map((t) => ({ value: t, label: stateLabel(t) }))}
 		/>
 		<FilterSelect
-			param="status"
-			label="Status"
-			allLabel="All statuses"
-			options={[
-				{ value: 'open', label: 'OPEN' },
-				{ value: 'closed', label: 'CLOSED' }
-			]}
-		/>
-		<FilterSelect
 			param="state"
-			label="Disposition state"
-			allLabel="All states"
-			options={STATES.map((s) => ({ value: s, label: stateLabel(s) }))}
+			label="State"
+			allLabel=""
+			fallback={STATE_FILTER_DEFAULT}
+			options={[
+				{ value: STATE_FILTER_DEFAULT, label: 'NOT DONE' },
+				{ value: 'all', label: 'ALL STATES' },
+				...TICKET_STATES.map((s) => ({ value: s, label: ticketLabel(s) }))
+			]}
 		/>
 		<FilterSelect
 			param="priority"
@@ -144,7 +148,11 @@
 			{:else if col.key === 'type'}
 				<span class="font-mono text-xs">{TYPE_ABBREV[i.issue_type] ?? i.issue_type}</span>
 			{:else if col.key === 'state'}
-				<State value={i.disp_state} tone={stateTone(i.disp_state)} />
+				<State
+					value={i.ticket_state}
+					label={ticketLabel(i.ticket_state)}
+					tone={ticketTone(i.ticket_state)}
+				/>
 			{:else if col.key === 'priority'}
 				<State value={i.priority} tone={priorityTone(i.priority)} />
 			{:else if col.key === 'assignee'}

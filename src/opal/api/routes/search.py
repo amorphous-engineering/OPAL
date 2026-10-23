@@ -60,7 +60,7 @@ def _issue_result(i: Issue) -> SearchResult:
         label=i.title,
         sublabel=i.issue_number,
         url=f"/issues/{i.id}",
-        status=_status_value(i.status),
+        status=i.ticket_state,
     )
 
 

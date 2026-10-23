@@ -23,6 +23,7 @@ export interface HoldEntry {
 	issue_number: string;
 	title: string;
 	disposition_state: string;
+	ticket_state: string;
 	blocks: string[];
 }
 
@@ -35,6 +36,8 @@ export interface IssueRow {
 	status: string;
 	/** undispositioned | dispositioned | open | closed */
 	state: string;
+	/** pending | in_work | in_review | done */
+	ticket_state: string;
 	containment: string;
 	disposition_type: string | null;
 	is_blocking: boolean;
