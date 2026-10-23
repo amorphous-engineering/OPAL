@@ -40,6 +40,7 @@
 	}
 	let gates = $state<Gate[]>([]);
 	let gateBusy = $state<string | null>(null);
+	let gateRev = $state(0);
 	const adminRole = $derived(roles.find((r) => r.key === 'admin'));
 
 	async function loadGates() {
@@ -64,6 +65,7 @@
 			toast.success(`${g.label}: ${on ? 'granted to' : 'removed from'} ${role.name}`);
 		} catch (err) {
 			toastError(err);
+			gateRev++;
 			await loadGates();
 		} finally {
 			gateBusy = null;
@@ -242,13 +244,13 @@
 								{#each roles as r (r.id)}
 									{@const isAdminRole = r.key === 'admin'}
 									<td class="px-3 py-1.5 text-center">
-										<Checkbox
-											checked={isAdminRole || g.role_ids.includes(r.id)}
-											disabled={isAdminRole || !isAdmin || gateBusy === g.key}
-											onCheckedChange={(v) => toggleGate(g, r, !!v)}
-											aria-label={`${r.name} passes ${g.label}`}
-											title={isAdminRole ? 'Admin passes all gates' : undefined}
-										/>
+										{#key gateRev}<Checkbox
+												checked={isAdminRole || g.role_ids.includes(r.id)}
+												disabled={isAdminRole || !isAdmin || gateBusy === g.key}
+												onCheckedChange={(v) => toggleGate(g, r, !!v)}
+												aria-label={`${r.name} passes ${g.label}`}
+												title={isAdminRole ? 'Admin passes all gates' : undefined}
+											/>{/key}
 									</td>
 								{/each}
 							</tr>
