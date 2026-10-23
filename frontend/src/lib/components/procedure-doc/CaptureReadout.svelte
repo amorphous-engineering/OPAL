@@ -19,7 +19,7 @@
 
 {#if fields.length}
 	<section
-		class="overflow-hidden rounded-lg border border-border bg-muted/40 sm:grid sm:grid-cols-[fit-content(66%)_minmax(0,1fr)]"
+		class="overflow-hidden rounded-lg border border-border bg-muted/40 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
 		aria-label="Captured data"
 	>
 		<header class="flex h-8 items-center gap-3 border-b border-border px-3 sm:col-span-full">

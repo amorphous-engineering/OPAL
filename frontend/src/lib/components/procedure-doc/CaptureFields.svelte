@@ -71,7 +71,7 @@
 	<!-- Data capture is its own panel: one field per row, label and spec on the
 	     left, the input on the right, so it never reads as part of the prose. -->
 	<section
-		class="overflow-hidden rounded-lg border border-border bg-muted/40 sm:grid sm:grid-cols-[fit-content(66%)_minmax(0,1fr)]"
+		class="overflow-hidden rounded-lg border border-border bg-muted/40 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
 		aria-label="Data capture"
 	>
 		<header class="flex h-8 items-center gap-3 border-b border-border px-3 sm:col-span-full">
