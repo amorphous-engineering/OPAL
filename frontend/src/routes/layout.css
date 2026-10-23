@@ -20,51 +20,54 @@
  *   OPAL orange   the wordmark only (--brand)
  *   ok / warn / error  green / yellow / red state words
  *   dev blue      the version string of a development build
- * Dark is the default and the original theme, value for value. Light is ink on
- * paper (see its block below) — no Catppuccin.
+ * Dark is the default and the original theme, value for value. Light follows the
+ * Radix Colors sand scale (see its block below) — no Catppuccin.
  */
 :root {
-	/* Light: ink on paper. A warm paper page, white panels on it, true-black ink, rules
-	   dark enough to read as rules, a warm-grey header band. Every text colour holds
-	   >= 4.5:1 on white and on the paper (muted text ~7:1). */
+	/* Light, built on the Radix Colors "sand" scale and its step roles (radix-ui.com/colors):
+	   panels step 1 (never pure white: glare), page and header band step 3, hover step 4,
+	   non-interactive rules step 6 (table rows and separators stay quiet), input borders
+	   step 8, text step 12 (~16:1, not 21:1: less halation over long reading), muted text
+	   step 11 (~6:1). State and accent colours are each hue's text step 11, darkened just
+	   enough to hold 4.5:1 on the page and header band as well as on panels. */
 	--radius: 0rem;
-	--background: #efede8;
-	--foreground: #111111;
-	--card: #ffffff;
-	--card-foreground: #111111;
-	--popover: #ffffff;
-	--popover-foreground: #111111;
-	--primary: #1d4ed8;
-	--primary-foreground: #ffffff;
-	--secondary: #e6e3dc;
-	--secondary-foreground: #111111;
-	--muted: #e6e3dc;
-	--muted-foreground: #55524b;
-	--accent: #dedad2;
-	--accent-foreground: #111111;
-	--destructive: #b91c1c;
-	--border: #bdb8ae;
-	--input: #8f8a80;
-	--ring: #1d4ed8;
-	--ok: #116b32;
-	--warn: #9a4a05;
-	--error: #b91c1c;
-	--info: #1d4ed8;
-	--brand: #b23b0a;
-	--dev: #1d4ed8;
-	--chart-1: #1d4ed8;
-	--chart-2: #116b32;
-	--chart-3: #9a4a05;
-	--chart-4: #b91c1c;
-	--chart-5: #b23b0a;
-	--sidebar: #e6e3dc;
-	--sidebar-foreground: #111111;
-	--sidebar-primary: #1d4ed8;
-	--sidebar-primary-foreground: #ffffff;
-	--sidebar-accent: #dedad2;
-	--sidebar-accent-foreground: #111111;
-	--sidebar-border: #bdb8ae;
-	--sidebar-ring: #1d4ed8;
+	--background: #f1f0ef;
+	--foreground: #21201c;
+	--card: #fdfdfc;
+	--card-foreground: #21201c;
+	--popover: #fdfdfc;
+	--popover-foreground: #21201c;
+	--primary: #0c6dc2;
+	--primary-foreground: #fdfdfc;
+	--secondary: #f1f0ef;
+	--secondary-foreground: #21201c;
+	--muted: #f1f0ef;
+	--muted-foreground: #63635e;
+	--accent: #e9e8e6;
+	--accent-foreground: #21201c;
+	--destructive: #cc2c31;
+	--border: #dad9d6;
+	--input: #bcbbb5;
+	--ring: #0c6dc2;
+	--ok: #1e7951;
+	--warn: #9c5b00;
+	--error: #cc2c31;
+	--info: #0c6dc2;
+	--brand: #ba4700;
+	--dev: #0c6dc2;
+	--chart-1: #0c6dc2;
+	--chart-2: #1e7951;
+	--chart-3: #9c5b00;
+	--chart-4: #cc2c31;
+	--chart-5: #ba4700;
+	--sidebar: #f1f0ef;
+	--sidebar-foreground: #21201c;
+	--sidebar-primary: #0c6dc2;
+	--sidebar-primary-foreground: #fdfdfc;
+	--sidebar-accent: #e9e8e6;
+	--sidebar-accent-foreground: #21201c;
+	--sidebar-border: #dad9d6;
+	--sidebar-ring: #0c6dc2;
 }
 
 .dark {
