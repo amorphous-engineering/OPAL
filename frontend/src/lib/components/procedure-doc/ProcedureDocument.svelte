@@ -5,7 +5,6 @@
 	import { EmptyLine } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { provideDoc, type DocController } from './controller.js';
-	import Lightbox from './Lightbox.svelte';
 	import OpCard from './OpCard.svelte';
 	import type { DocOp } from './types.js';
 
@@ -48,4 +47,3 @@
 		</div>
 	{/if}
 </div>
-<Lightbox />

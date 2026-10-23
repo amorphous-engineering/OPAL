@@ -11,7 +11,7 @@
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
 	import FieldEditor from './author/FieldEditor.svelte';
-	import { attachmentUrl, lightbox } from './lightbox.svelte.js';
+	import { attachmentUrl, gallery } from './viewer.js';
 	import type { DocStep } from './types.js';
 
 	let { step }: { step: DocStep } = $props();
@@ -164,13 +164,14 @@
 						{@const photos = ids(ctl.fieldValue(step, f.name))}
 						<div class="grid gap-1.5">
 							{#if photos.length}
-								<div class="flex flex-wrap gap-2">
+								<div class="flex flex-wrap gap-2" use:gallery>
 									{#each photos as pid (pid)}
 										<div class="grid gap-1">
-											<button
-												type="button"
+											<a
+												data-pswp
+												href={attachmentUrl(pid)}
+												data-pswp-caption={f.label ?? f.name}
 												class="block aspect-[4/3] h-16 overflow-hidden border border-border bg-muted"
-												onclick={() => lightbox.open(attachmentUrl(pid), f.label ?? f.name)}
 												aria-label={`Enlarge ${f.label ?? f.name}`}
 											>
 												<img
@@ -179,7 +180,7 @@
 													alt={f.label ?? f.name}
 													class="size-full object-cover"
 												/>
-											</button>
+											</a>
 											<Button
 												size="xs"
 												variant="outline"

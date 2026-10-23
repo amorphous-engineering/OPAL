@@ -43,8 +43,6 @@ export interface DocActions {
 	redline?(op: DocOp): void;
 	/** Delete a not-yet-started redline OP. */
 	deleteRedline?(op: DocOp): Promise<void>;
-	/** @deprecated files go on execution notes; removed by the notes agent. */
-	attach?(step: DocStep): void;
 	/** Bring a step's evidence into view (the host keeps evidence outside the document). */
 	showEvidence?(step: DocStep): void;
 	/** Add a markdown execution note with files attached to it. */

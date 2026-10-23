@@ -47,7 +47,6 @@ export class PreviewController implements DocController {
 		},
 		sign: this.inert,
 		skip: () => void this.inert(),
-		raiseIssue: () => void this.inert(),
-		attach: () => void this.inert()
+		raiseIssue: () => void this.inert()
 	};
 }
