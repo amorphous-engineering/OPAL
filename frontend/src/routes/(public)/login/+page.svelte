@@ -3,6 +3,8 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { api, ApiError } from '#lib/api.js';
@@ -93,7 +95,7 @@
 	{#if loadFailed}
 		<Button variant="outline" onclick={() => location.reload()}>RETRY</Button>
 	{:else}
-		<div class="h-40 animate-pulse bg-muted"></div>
+		<Skeleton class="h-40" />
 	{/if}
 {:else}
 	{#if config.password_login_enabled}
@@ -123,7 +125,7 @@
 	{/if}
 	{#if (config.passkeys_enabled && passkeysSupported()) || config.oidc_enabled}
 		<div class="my-4 flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
-			<span class="h-px flex-1 bg-border"></span>or<span class="h-px flex-1 bg-border"></span>
+			<Separator class="flex-1" />or<Separator class="flex-1" />
 		</div>
 		<div class="grid grid-cols-1 gap-2">
 			{#if config.passkeys_enabled && passkeysSupported()}

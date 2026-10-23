@@ -2,6 +2,7 @@
 	// Data capture for a step, from its schema. Values live in the controller
 	// (drafts), never in this component, so a document refresh cannot clobber
 	// what the operator is typing. Saved with the first sign-off.
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
@@ -104,11 +105,11 @@
 				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 sm:col-span-full sm:grid-cols-subgrid [header+&]:border-t-0"
 			>
 				<div class="grid grid-cols-1 gap-0.5 sm:pt-1.5">
-					<label for={id} class="text-sm font-medium text-foreground">
+					<Label for={id} class="block text-sm leading-normal font-medium text-foreground">
 						{f.label ?? f.name}{#if f.required}<span class="text-error" title="Required">
 								*</span
 							>{/if}
-					</label>
+					</Label>
 					{#if f.unit || f.min != null || f.max != null}
 						<span class="font-mono text-xs text-muted-foreground"
 							>{#if f.min != null || f.max != null}{f.min ?? '…'} – {f.max ??

@@ -11,6 +11,7 @@
 		type Column,
 		type Tone
 	} from '#lib/components/opal/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { changeSummary, type AuditEntry } from '#lib/components/audit/audit.js';
 	import type {
@@ -212,10 +213,12 @@
 <PageHeader title="Overview">
 	{#snippet actions()}
 		<DropdownMenu.Root>
-			<DropdownMenu.Trigger
-				class="inline-flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
-			>
-				+ New
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button variant="outline" class="gap-2 font-mono font-normal tracking-wider" {...props}
+						>+ NEW</Button
+					>
+				{/snippet}
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end" class="w-40">
 				{#each CREATE as [label, href] (href)}

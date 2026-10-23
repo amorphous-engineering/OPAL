@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Properties of an OP or step that the document shows as chips and gates:
 	// how long, where; for an OP also contingency, sequence, order.
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
@@ -90,17 +91,13 @@
 		<span class="label">Waits on</span>
 		<div class="flex flex-wrap gap-1">
 			{#each others as o (o.order)}
-				<button
-					type="button"
+				<Button
+					size="sm"
+					variant={waits.has(o.order) ? 'default' : 'outline'}
 					aria-pressed={waits.has(o.order)}
 					title={o.title}
-					class={cn(
-						'inline-flex h-6 items-center rounded-md border px-2 font-mono text-xs',
-						waits.has(o.order)
-							? 'border-primary bg-primary text-primary-foreground'
-							: 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-					)}
-					onclick={() => toggleWait(o.order)}>OP {o.number}</button
+					class={cn('font-mono', !waits.has(o.order) && 'text-muted-foreground')}
+					onclick={() => toggleWait(o.order)}>OP {o.number}</Button
 				>
 			{:else}
 				<span class="font-mono text-xs text-muted-foreground">—</span>

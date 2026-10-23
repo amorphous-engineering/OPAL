@@ -5,6 +5,7 @@
 	import NotificationBell from '#lib/components/shell/NotificationBell.svelte';
 	import UserMenu from '#lib/components/shell/UserMenu.svelte';
 	import VersionBadge from '#lib/components/shell/VersionBadge.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import { api } from '#lib/api.js';
 	import type { LayoutProps } from './$types';
@@ -53,16 +54,16 @@
 	>
 		<div class="mr-1 max-w-56 min-w-0 shrink max-[560px]:hidden"><VersionBadge /></div>
 		<TopNav />
-		<button
-			type="button"
-			class="ml-auto flex h-7 max-w-xs min-w-8 flex-1 items-center gap-2 rounded-md border border-border px-2 text-left text-xs text-muted-foreground hover:bg-accent"
+		<Button
+			variant="ghost"
+			class="ml-auto h-7 max-w-xs min-w-8 flex-1 justify-start gap-2 border-border px-2 text-left font-normal text-muted-foreground hover:bg-accent hover:text-muted-foreground"
 			aria-haspopup="dialog"
 			aria-keyshortcuts="Control+K Meta+K"
 			onclick={() => (paletteOpen = true)}
 		>
 			<span class="truncate">Search</span>
 			<span class="ml-auto hidden sm:inline"><Kbd>⌘K</Kbd></span>
-		</button>
+		</Button>
 		<div class="flex shrink-0 items-center gap-2">
 			<NotificationBell />
 			<UserMenu />

@@ -4,6 +4,7 @@
 	import { onDestroy } from 'svelte';
 	import { api } from '#lib/api.js';
 	import { cn } from '#lib/utils.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { lintSegments, FIELD_RULES } from './lint.js';
 	import type { Finding } from './types.js';
 
@@ -79,16 +80,16 @@
 						)}>{s.text}</span
 					>{:else}{s.text}{/if}{/each}
 		</div>
-		<textarea
+		<Textarea
 			{id}
 			bind:value
 			{oninput}
 			onblur={() => onsave?.(value)}
 			{placeholder}
 			{required}
-			rows="3"
-			class="relative block field-sizing-content min-h-16 w-full rounded-md border border-input bg-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-		></textarea>
+			rows={3}
+			class="relative block bg-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap focus-visible:ring-1 focus-visible:ring-ring/50 md:text-xs dark:bg-transparent"
+		/>
 	</div>
 	{#if summary.length}
 		<ul class="mt-1 grid grid-cols-1 gap-0.5 font-mono text-xs" aria-label="Lint findings">

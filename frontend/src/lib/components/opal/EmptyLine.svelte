@@ -3,6 +3,7 @@
 	// one line saying it is empty. Inside a panel that already has the header (a Section or
 	// a list frame), only the line.
 	import type { Snippet } from 'svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { inFrame } from './frame.js';
 	import Section from './Section.svelte';
 
@@ -45,10 +46,10 @@
 			>{addLabel}</a
 		>
 	{:else if onadd}
-		<button
-			type="button"
-			class="font-mono text-xs font-medium tracking-wider text-info uppercase hover:underline"
-			onclick={onadd}>{addLabel}</button
+		<Button
+			variant="link"
+			class="h-auto border-0 p-0 font-mono tracking-wider text-info uppercase"
+			onclick={onadd}>{addLabel}</Button
 		>
 	{/if}
 {/snippet}

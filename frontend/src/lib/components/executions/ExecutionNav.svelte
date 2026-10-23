@@ -3,6 +3,7 @@
 	// (onjump switches to the document tab first).
 	import { cn } from '#lib/utils.js';
 	import { EmptyLine, Section } from '#lib/components/opal/index.js';
+	import { Progress } from '#lib/components/ui/progress/index.js';
 	import { isTerminal } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 
@@ -24,16 +25,11 @@
 		count={`${doc.progress.done}/${doc.progress.total}`}
 	>
 		<div class="px-3 py-2.5" title="Steps complete">
-			<div
-				class="h-1.5 w-full bg-border"
-				role="progressbar"
+			<Progress
+				value={Math.round(pct)}
 				aria-label="Steps complete"
-				aria-valuenow={Math.round(pct)}
-				aria-valuemin={0}
-				aria-valuemax={100}
-			>
-				<div class="h-full bg-ok" style:width={`${pct}%`}></div>
-			</div>
+				class="h-1.5 bg-border [&_[data-slot=progress-indicator]]:bg-ok"
+			/>
 		</div>
 	</Section>
 	{#if ops.length}

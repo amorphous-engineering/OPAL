@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { api, ApiError } from '#lib/api.js';
@@ -93,5 +94,5 @@
 		<Button type="submit" disabled={busy}>SET PASSWORD</Button>
 	</form>
 {:else}
-	<div class="h-24 animate-pulse bg-muted"></div>
+	<Skeleton class="h-24" />
 {/if}

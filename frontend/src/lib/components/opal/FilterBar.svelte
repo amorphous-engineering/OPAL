@@ -3,6 +3,7 @@
 	// (shown only while a filter is active). Every control writes to the URL.
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { hasParams, setQuery } from './listquery.js';
 
 	let {
@@ -36,10 +37,8 @@
 >
 	{@render children()}
 	{#if active}
-		<button
-			type="button"
-			class="font-mono text-xs font-medium text-info hover:underline"
-			onclick={reset}>CLEAR</button
+		<Button variant="link" class="h-auto border-0 p-0 font-mono text-info" onclick={reset}
+			>CLEAR</Button
 		>
 	{/if}
 	{#if end}<div class="ml-auto flex items-center gap-3">{@render end()}</div>{/if}

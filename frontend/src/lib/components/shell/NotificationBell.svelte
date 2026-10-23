@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
 	import { api } from '#lib/api.js';
 	import { onMount } from 'svelte';
@@ -70,9 +71,10 @@
 			<span class="label text-foreground">Notifications</span>
 			<span class="mono ml-2 text-xs text-muted-foreground">{unread} unread</span>
 			{#if unread > 0}
-				<button
-					class="ml-auto font-mono text-xs text-info uppercase hover:underline"
-					onclick={readAll}>Mark all read</button
+				<Button
+					variant="link"
+					class="ml-auto h-auto border-0 p-0 font-mono font-normal text-info uppercase"
+					onclick={readAll}>Mark all read</Button
 				>
 			{/if}
 		</div>

@@ -2,6 +2,7 @@
 	// Text action in a header bar or row: accent = action (register rule 3).
 	import type { Snippet } from 'svelte';
 	import { cn } from '#lib/utils.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 
 	let {
 		href,
@@ -33,5 +34,7 @@
 {#if href}
 	<a {href} {title} class={cls}>{@render children()}</a>
 {:else}
-	<button type="button" {onclick} {disabled} {title} class={cls}>{@render children()}</button>
+	<Button variant="link" {onclick} {disabled} {title} class={cn('h-auto border-0 p-0', cls)}
+		>{@render children()}</Button
+	>
 {/if}

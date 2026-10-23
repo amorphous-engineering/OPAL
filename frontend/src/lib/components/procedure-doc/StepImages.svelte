@@ -3,6 +3,7 @@
 	// the image viewer. Thumbnails are uniform 4:3 plates the image fills (cover); the
 	// viewer shows the whole image. In author mode each figure carries caption, order and removal,
 	// and a picker adds more.
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
@@ -77,10 +78,10 @@
 						/>
 					</a>
 					{#if au && step}
-						<input
+						<Input
 							type="text"
 							maxlength={255}
-							class="h-6 w-full max-w-56 rounded-md border border-input bg-transparent px-1.5 font-mono text-xs focus:border-ring focus:outline-none"
+							class="h-6 max-w-56 px-1.5 font-mono text-xs"
 							placeholder="Caption"
 							aria-label="Caption"
 							value={img.caption ?? ''}
