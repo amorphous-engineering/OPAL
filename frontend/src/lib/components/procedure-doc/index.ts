@@ -15,7 +15,6 @@ export { default as StepRow } from './StepRow.svelte';
 export { default as StepBody } from './StepBody.svelte';
 export { default as StepActions } from './StepActions.svelte';
 export { default as StepKit } from './StepKit.svelte';
-export { default as StepNotes } from './StepNotes.svelte';
 export { default as ExecutionNotes } from './ExecutionNotes.svelte';
 export { default as SignoffTable } from './SignoffTable.svelte';
 export { default as StepImages } from './StepImages.svelte';
@@ -26,8 +25,7 @@ export { default as CautionBlock } from './CautionBlock.svelte';
 export { default as RoleChip } from './RoleChip.svelte';
 export { default as CursorChips } from './CursorChips.svelte';
 export { default as GateReason } from './GateReason.svelte';
-export { default as Lightbox } from './Lightbox.svelte';
-export { lightbox, attachmentUrl } from './lightbox.svelte.js';
+export { attachmentUrl, gallery } from './viewer.js';
 export { provideDoc, useDoc } from './controller.js';
 export type {
 	AuthorActions,

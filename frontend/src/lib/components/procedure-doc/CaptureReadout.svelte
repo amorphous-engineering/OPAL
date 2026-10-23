@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Captured data as facts: label / value rows, a dash for absence.
-	import { attachmentUrl, lightbox } from './lightbox.svelte.js';
+	import { attachmentUrl, gallery } from './viewer.js';
 	import type { DocStep } from './types.js';
 
 	let { step }: { step: DocStep } = $props();
@@ -24,23 +24,26 @@
 					</th>
 					<td class="py-1 font-mono tabular-nums">
 						{#if f.type === 'photo'}
-							{#each ids(raw) as pid (pid)}
-								<button
-									type="button"
-									class="mr-2 inline-block border border-border"
-									onclick={() => lightbox.open(attachmentUrl(pid), f.label ?? f.name)}
-									aria-label={`Enlarge ${f.label ?? f.name}`}
-								>
-									<img
-										loading="lazy"
-										src={attachmentUrl(pid)}
-										alt={f.label ?? f.name}
-										class="h-12 w-auto"
-									/>
-								</button>
-							{:else}
-								<span class="text-muted-foreground">—</span>
-							{/each}
+							<span use:gallery>
+								{#each ids(raw) as pid (pid)}
+									<a
+										data-pswp
+										href={attachmentUrl(pid)}
+										data-pswp-caption={f.label ?? f.name}
+										class="mr-2 inline-block border border-border"
+										aria-label={`Enlarge ${f.label ?? f.name}`}
+									>
+										<img
+											loading="lazy"
+											src={attachmentUrl(pid)}
+											alt={f.label ?? f.name}
+											class="h-12 w-auto"
+										/>
+									</a>
+								{:else}
+									<span class="text-muted-foreground">—</span>
+								{/each}
+							</span>
 						{:else if raw === null || raw === undefined || raw === ''}
 							<span class="text-muted-foreground">—</span>
 						{:else if f.type === 'checkbox'}

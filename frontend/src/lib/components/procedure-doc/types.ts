@@ -94,7 +94,7 @@ export interface DocNoteFile {
 
 export interface DocNote {
 	id: number;
-	author: string | null;
+	author: { id: number; name: string } | null;
 	created_at: string;
 	/** Markdown. */
 	body: string;

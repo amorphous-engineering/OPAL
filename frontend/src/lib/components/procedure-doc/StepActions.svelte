@@ -37,9 +37,6 @@
 
 <div class="flex flex-wrap items-center gap-x-3 gap-y-2" data-actions={step.order}>
 	{#if scope === 'step'}
-		{#if a.attach}
-			<Button size="xs" variant="outline" onclick={() => a.attach!(step)}>ATTACH</Button>
-		{/if}
 		{#if a.raiseIssue && ctl.active}
 			<Button size="xs" variant="outline" onclick={() => a.raiseIssue!(step)}>RAISE ISSUE</Button>
 		{/if}

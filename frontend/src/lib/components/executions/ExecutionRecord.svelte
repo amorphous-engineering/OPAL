@@ -10,7 +10,7 @@
 		Section,
 		Timestamp
 	} from '#lib/components/opal/index.js';
-	import { attachmentUrl, lightbox } from '#lib/components/procedure-doc/index.js';
+	import { attachmentUrl, gallery } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 
 	let {
@@ -39,13 +39,6 @@
 				? rows.reduce((n, s) => n + s.attachments.length, doc.attachments.length)
 				: undefined}
 		>
-			{#snippet actions()}
-				<Button
-					size="xs"
-					variant="ghost"
-					onclick={() => (store.dialog = { kind: 'attach', step: null })}>+ ATTACH</Button
-				>
-			{/snippet}
 			<div class="grid">
 				{#each rows as s (s.order)}
 					<div
@@ -72,7 +65,7 @@
 			</div>
 		</Section>
 	{:else}
-		<EmptyLine label="Attachments" onadd={() => (store.dialog = { kind: 'attach', step: null })} />
+		<EmptyLine label="Attachments" />
 	{/if}
 
 	<Section title="Facts">
@@ -107,14 +100,15 @@
 </div>
 
 {#snippet files(list: typeof doc.attachments)}
-	<div class="grid gap-1.5">
+	<div class="grid gap-1.5" use:gallery>
 		{#each list as a (a.id)}
 			<div class="flex flex-wrap items-start gap-x-2 gap-y-0.5">
 				{#if a.mime_type.startsWith('image/')}
-					<button
-						type="button"
+					<a
+						data-pswp
+						href={attachmentUrl(a.id)}
+						data-pswp-caption={a.note ?? a.filename}
 						class="shrink-0 border border-border"
-						onclick={() => lightbox.open(attachmentUrl(a.id), a.note ?? a.filename)}
 						aria-label={`Enlarge ${a.filename}`}
 					>
 						<img
@@ -123,7 +117,7 @@
 							alt={a.filename}
 							class="size-12 object-cover"
 						/>
-					</button>
+					</a>
 				{:else}
 					<a
 						class="basis-full font-mono text-xs text-info hover:underline"

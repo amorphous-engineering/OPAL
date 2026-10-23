@@ -54,7 +54,6 @@ export type OpenDialog =
 	| { kind: 'skip'; step: DocStep }
 	| { kind: 'issue'; step: DocStep }
 	| { kind: 'redline'; op: DocOp; issueId?: number }
-	| { kind: 'attach'; step: DocStep | null }
 	| null;
 
 export class ExecutionStore implements DocController {
@@ -554,7 +553,6 @@ export class ExecutionStore implements DocController {
 		skip: (step) => (this.dialog = { kind: 'skip', step }),
 		raiseIssue: (step) => (this.dialog = { kind: 'issue', step }),
 		redline: (op) => (this.dialog = { kind: 'redline', op }),
-		attach: (step) => (this.dialog = { kind: 'attach', step }),
 		deleteRedline: async (op) => {
 			if (
 				!(await confirm({
@@ -572,13 +570,23 @@ export class ExecutionStore implements DocController {
 				toastError(e, 'Failed to delete redline');
 			}
 		},
-		addNote: async (step, body) => {
+		addNote: async (step, body, files = []) => {
 			try {
-				await api.post(this.url(`/steps/${step.order}/notes`), { body });
+				const note = await api.post<{ id: number }>(this.url(`/steps/${step.order}/notes`), {
+					body
+				});
+				for (const file of files) {
+					const fd = new FormData();
+					fd.append('file', file);
+					fd.append('step_note_id', String(note.id));
+					await api.post('/attachments/upload', fd);
+				}
 				await this.changed();
 				return true;
 			} catch (e) {
 				toastError(e, 'Failed to add note');
+				// The note may already exist; show it rather than invite a duplicate.
+				await this.changed().catch(() => {});
 				return false;
 			}
 		},
@@ -680,19 +688,6 @@ export class ExecutionStore implements DocController {
 		steps: { title: string; instructions: string | null; requires_signoff: boolean }[];
 	}) {
 		await api.post(this.url('/ad-hoc-ops'), body);
-		await this.changed();
-	}
-
-	async attachFiles(step: DocStep | null, files: File[], note: string, closeout: boolean) {
-		for (const file of files) {
-			const fd = new FormData();
-			fd.append('file', file);
-			if (step) fd.append('step_execution_id', String(step.execution_id));
-			else fd.append('procedure_instance_id', String(this.id));
-			fd.append('kind', !step && closeout ? 'closeout' : 'capture');
-			if (note.trim()) fd.append('note', note.trim());
-			await api.post('/attachments/upload', fd);
-		}
 		await this.changed();
 	}
 

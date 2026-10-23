@@ -1,12 +1,12 @@
 <script lang="ts">
 	// Authored reference imagery: instruction content, lazy-loaded, opens in the
-	// lightbox. Thumbnails are uniform 4:3 plates the image fills (cover); the
-	// lightbox shows the whole image. In author mode each figure carries caption, order and removal,
+	// the image viewer. Thumbnails are uniform 4:3 plates the image fills (cover); the
+	// viewer shows the whole image. In author mode each figure carries caption, order and removal,
 	// and a picker adds more.
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
-	import { attachmentUrl, lightbox } from './lightbox.svelte.js';
+	import { attachmentUrl, gallery } from './viewer.js';
 	import type { DocImage, DocStep } from './types.js';
 
 	let { images, step }: { images: DocImage[]; step?: DocStep } = $props();
@@ -58,13 +58,14 @@
 				/>
 			</div>
 		{/if}
-		<div class="flex flex-wrap gap-2">
+		<div class="flex flex-wrap gap-2" use:gallery>
 			{#each images as img (img.id ?? img.attachment_id)}
 				<figure class="m-0 grid gap-1" data-image-id={img.id}>
-					<button
-						type="button"
+					<a
+						data-pswp
+						href={attachmentUrl(img.attachment_id)}
+						data-pswp-caption={img.caption ?? ''}
 						class="block aspect-[4/3] h-28 overflow-hidden border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
-						onclick={() => lightbox.open(attachmentUrl(img.attachment_id), img.caption)}
 						aria-label={img.caption ? `Enlarge: ${img.caption}` : 'Enlarge reference image'}
 					>
 						<img
@@ -74,7 +75,7 @@
 							alt={img.caption ?? 'Reference image'}
 							class="size-full object-cover"
 						/>
-					</button>
+					</a>
 					{#if au && step}
 						<input
 							type="text"

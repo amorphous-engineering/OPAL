@@ -2,7 +2,6 @@
 	// All modal forms of the execution document, driven by store.dialog.
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
-	import AttachForm from './AttachForm.svelte';
 	import EditForm from './EditForm.svelte';
 	import RaiseIssueForm from './RaiseIssueForm.svelte';
 	import RedlineForm from './RedlineForm.svelte';
@@ -33,8 +32,6 @@
 			<SkipForm {store} step={d.step} />
 		{:else if d?.kind === 'redline'}
 			<RedlineForm {store} op={d.op} preselect={d.issueId} />
-		{:else if d?.kind === 'attach'}
-			<AttachForm {store} step={d.step} />
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>

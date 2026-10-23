@@ -1,0 +1,37 @@
+/* PhotoSwipe chrome in OPAL tokens: square, flat, monospace. */
+.pswp {
+	--pswp-bg: #000;
+	--pswp-placeholder-bg: var(--muted);
+	--pswp-icon-color: #fff;
+	--pswp-icon-color-secondary: #000;
+	--pswp-icon-stroke-color: #000;
+	--pswp-error-text-color: var(--error);
+	--pswp-root-z-index: 100000;
+	font-family: var(--font-mono);
+}
+.pswp__button,
+.pswp__top-bar,
+.pswp__img {
+	border-radius: 0;
+}
+.pswp__counter {
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	text-shadow: none;
+	color: #fff;
+}
+.pswp__caption {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	padding: 0.375rem 0.75rem;
+	background: rgb(0 0 0 / 0.7);
+	color: #fff;
+	font-size: 0.75rem;
+	text-align: center;
+	pointer-events: none;
+}
+.pswp__caption[hidden] {
+	display: none;
+}
