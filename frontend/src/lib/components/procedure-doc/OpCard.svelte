@@ -10,10 +10,11 @@
 	import CursorChips from './CursorChips.svelte';
 	import OpClaim from './OpClaim.svelte';
 	import RoleChip from './RoleChip.svelte';
-	import StepActions from './StepActions.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepRow from './StepRow.svelte';
 	import StepState from './StepState.svelte';
+	import StepTitleActions from './StepTitleActions.svelte';
+	import SignoffTable from './SignoffTable.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
 	import CautionEditor from './author/CautionEditor.svelte';
 	import MarkdownEditor from './author/MarkdownEditor.svelte';
@@ -57,14 +58,18 @@
 			!!ctl.actions.deleteRedline &&
 			ctl.active
 	);
-	const footer = $derived(
+	const redlinable = $derived(
 		ctl.mode === 'execute' &&
 			ctl.active &&
-			!leaf &&
-			((op.open_ncs.length > 0 && !op.is_ad_hoc && !!ctl.actions.redline) ||
-				op.step.status === 'awaiting_signoff' ||
-				deletable)
+			op.open_ncs.length > 0 &&
+			!op.is_ad_hoc &&
+			!!ctl.actions.redline
 	);
+	// OP-level sign-offs (an OP with sub-steps signs after its steps are done).
+	const opSignoffs = $derived(
+		!leaf && ctl.mode !== 'author' && (op.step.signoffs ?? []).length > 0
+	);
+	const footer = $derived(opSignoffs || (ctl.mode === 'execute' && deletable));
 </script>
 
 {#if op.is_ad_hoc && op.redline}
@@ -149,12 +154,6 @@
 				title="Starts after these OPs are done">AFTER OP {op.waiting_on_ops.join(', ')}</span
 			>
 		{/if}
-		{#if op.step.requires_signoff && !terminal}
-			<span
-				class="inline-flex h-5 items-center border border-info/50 px-1.5 font-mono text-[11px] font-medium text-info"
-				title="Requires sign-off">SIGN-OFF</span
-			>
-		{/if}
 		{#if au}<AuthorChips step={op.step} />{/if}
 		<CursorChips cursors={op.step.cursors} viewerId={ctl.viewerId} />
 		<OpClaim {op} prominent={claimHere} />
@@ -197,6 +196,20 @@
 				<StepState step={op.step} />
 			{/if}
 		</span>
+		{#if !au}
+			{#if redlinable}
+				<span
+					class="shrink-0"
+					role="presentation"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
+					><Button size="xs" variant="outline" onclick={() => ctl.actions.redline?.(op)}
+						>+ REDLINE</Button
+					></span
+				>
+			{/if}
+			{#if leaf}<StepTitleActions step={op.step} />{/if}
+		{/if}
 	</div>
 	{#if open}
 		{#if leaf}
@@ -236,8 +249,8 @@
 				</div>
 			{/if}
 			{#if footer}
-				<div class="flex flex-wrap items-center gap-3 border-t border-border bg-muted/30 px-3 py-2">
-					<StepActions step={op.step} {op} scope="op" />
+				<div class="grid gap-2 border-t border-border bg-muted/30 px-3 py-3">
+					{#if opSignoffs}<SignoffTable step={op.step} {op} />{/if}
 					{#if deletable}
 						<Button size="xs" variant="destructive" onclick={() => ctl.actions.deleteRedline?.(op)}
 							>DELETE REDLINE</Button

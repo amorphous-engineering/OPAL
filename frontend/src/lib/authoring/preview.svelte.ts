@@ -45,8 +45,7 @@ export class PreviewController implements DocController {
 		release: async () => {
 			this.claimedOrder = null;
 		},
-		complete: this.inert,
-		signoff: this.inert,
+		sign: this.inert,
 		skip: () => void this.inert(),
 		raiseIssue: () => void this.inert(),
 		attach: () => void this.inert()

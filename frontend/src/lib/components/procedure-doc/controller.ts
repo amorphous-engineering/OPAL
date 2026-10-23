@@ -35,10 +35,6 @@ export interface DocActions {
 	release?(): Promise<void>;
 	/** Sign one sign-off slot. Slot 0 carries the captured data and the old COMPLETE gate. */
 	sign?(step: DocStep, slot: number): Promise<void>;
-	/** @deprecated replaced by `sign`; removed by the sign-off agent. */
-	complete?(step: DocStep): Promise<void>;
-	/** @deprecated replaced by `sign`; removed by the sign-off agent. */
-	signoff?(step: DocStep): Promise<void>;
 	/** Open the skip dialog. */
 	skip?(step: DocStep): void;
 	/** Open the raise-issue dialog at this step. */

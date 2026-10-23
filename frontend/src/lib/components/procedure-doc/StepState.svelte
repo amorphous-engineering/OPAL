@@ -7,7 +7,17 @@
 	let { step }: { step: DocStep } = $props();
 
 	// Completion stamp: local ISO date and minute, then who (name, initials as fallback).
-	const who = $derived(step.completed?.by ?? step.completed?.initials ?? '');
+	// The last signature is the completion when sign-offs exist.
+	const last = $derived(
+		[...(step.signoffs ?? [])]
+			.filter((x) => x.signed_by && x.signed_at)
+			.sort((x, y) => (x.signed_at! < y.signed_at! ? -1 : 1))
+			.at(-1)
+	);
+	const stamp = $derived(last?.signed_at ?? step.completed?.at);
+	const who = $derived(
+		last?.signed_by?.name ?? step.completed?.by ?? step.completed?.initials ?? ''
+	);
 	const raised = $derived(step.holds.filter((h) => h.kind === 'raised'));
 	const bound = $derived(step.holds.filter((h) => h.kind === 'bound'));
 </script>
@@ -16,16 +26,14 @@
 	{#if step.status === 'completed' || step.status === 'signed_off'}
 		<span
 			class="inline-flex items-baseline gap-1.5 font-normal text-muted-foreground"
-			title={iso(step.completed?.at)}
-			><time datetime={iso(step.completed?.at)}>{datetime(step.completed?.at)}</time><span
-				class="max-w-[9rem] truncate">{who}</span
+			title={iso(stamp)}
+			><time datetime={iso(stamp)}>{datetime(stamp)}</time><span class="max-w-[9rem] truncate"
+				>{who}</span
 			></span
 		>
 	{:else if step.status === 'skipped'}
-		<span
-			class="inline-flex items-baseline gap-1.5 text-muted-foreground"
-			title={iso(step.completed?.at)}
-			>SKIPPED <time datetime={iso(step.completed?.at)}>{datetime(step.completed?.at)}</time><span
+		<span class="inline-flex items-baseline gap-1.5 text-muted-foreground" title={iso(stamp)}
+			>SKIPPED <time datetime={iso(stamp)}>{datetime(stamp)}</time><span
 				class="max-w-[9rem] truncate">{who}</span
 			></span
 		>

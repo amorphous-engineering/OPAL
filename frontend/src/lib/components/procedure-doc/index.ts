@@ -13,7 +13,6 @@ export { default as ProcedureDocument } from './ProcedureDocument.svelte';
 export { default as OpCard } from './OpCard.svelte';
 export { default as StepRow } from './StepRow.svelte';
 export { default as StepBody } from './StepBody.svelte';
-export { default as StepActions } from './StepActions.svelte';
 export { default as StepKit } from './StepKit.svelte';
 export { default as StepNotes } from './StepNotes.svelte';
 export { default as ExecutionNotes } from './ExecutionNotes.svelte';
