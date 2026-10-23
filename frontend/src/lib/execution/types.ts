@@ -12,6 +12,7 @@ export interface RosterEntry {
 	user_id: number;
 	name: string | null;
 	initials: string;
+	avatar_url?: string | null;
 	step_order: number | null;
 	step_number: string | null;
 	focused_at: string | null;
@@ -174,7 +175,12 @@ export interface OverviewRow {
 	progress_done: number;
 	progress_total: number;
 	held_by: string[];
-	working: { user_id: number; name: string | null; step_number: string | null }[];
+	working: {
+		user_id: number;
+		name: string | null;
+		avatar_url?: string | null;
+		step_number: string | null;
+	}[];
 }
 
 export interface Overview {

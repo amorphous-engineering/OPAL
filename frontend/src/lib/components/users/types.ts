@@ -13,6 +13,10 @@ export interface UserRecord {
 	has_password: boolean;
 	has_passkey: boolean;
 	sso_linked: boolean;
+	avatar_url?: string | null;
+	job_title?: string | null;
+	phone?: string | null;
+	workcenter?: { id: number; name: string } | null;
 }
 
 export interface ActivityEntry {

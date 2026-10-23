@@ -79,6 +79,7 @@ export interface DocCursor {
 	user_id: number;
 	name: string | null;
 	initials: string;
+	avatar_url?: string | null;
 	focused_at: string | null;
 	stale: boolean;
 }
@@ -94,7 +95,7 @@ export interface DocNoteFile {
 
 export interface DocNote {
 	id: number;
-	author: { id: number; name: string } | null;
+	author: { id: number; name: string; avatar_url?: string | null } | null;
 	created_at: string;
 	/** Markdown. */
 	body: string;
@@ -106,7 +107,7 @@ export interface DocSignoff {
 	slot: number;
 	label: string;
 	role: string | null;
-	signed_by: { id: number; name: string } | null;
+	signed_by: { id: number; name: string; avatar_url?: string | null } | null;
 	signed_at: string | null;
 	can_sign: boolean;
 	blockers: DocBlocker[];

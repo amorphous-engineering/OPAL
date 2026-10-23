@@ -3,7 +3,7 @@
 	// procedure's reference documents. Roster entries jump into the document.
 	import { cn } from '#lib/utils.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { EmptyLine, Section, State } from '#lib/components/opal/index.js';
+	import { Avatar, EmptyLine, Section, State } from '#lib/components/opal/index.js';
 	import { attachmentUrl } from '#lib/components/procedure-doc/index.js';
 	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
@@ -41,6 +41,10 @@
 								disabled={r.step_order === null}
 								onclick={() => r.step_order !== null && onjump(r.step_order)}
 							>
+								<Avatar
+									user={{ id: r.user_id, name: r.name ?? r.initials, avatar_url: r.avatar_url }}
+									size="xs"
+								/>
 								<span class="truncate">{r.name ?? r.initials}</span>
 								{#if r.step_number}<span class="ml-auto text-muted-foreground"
 										>OP {r.step_number}</span

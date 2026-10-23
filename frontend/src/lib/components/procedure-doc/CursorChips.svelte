@@ -1,5 +1,6 @@
 <script lang="ts">
 	// Presence: who has claimed this OP. The viewer's own chip is outlined bolder.
+	import { Avatar } from '#lib/components/opal/index.js';
 	import { cn } from '#lib/utils.js';
 	import type { DocCursor } from './types.js';
 
@@ -9,16 +10,14 @@
 {#if cursors.length}
 	<span class="inline-flex items-center gap-1">
 		{#each cursors as c (c.user_id)}
-			<span
+			<Avatar
+				user={{ id: c.user_id, name: c.name ?? c.initials, avatar_url: c.avatar_url }}
+				size="xs"
 				class={cn(
-					'inline-flex h-5 min-w-6 items-center justify-center border px-1 font-mono text-xs font-medium',
-					c.user_id === viewerId
-						? 'border-foreground/60 font-semibold text-foreground'
-						: 'border-border text-foreground',
+					c.user_id === viewerId && 'border-foreground/60 font-semibold',
 					c.stale && 'opacity-50'
 				)}
-				title={c.name ? `${c.name}${c.stale ? ' (idle)' : ''}` : ''}>{c.initials}</span
-			>
+			/>
 		{/each}
 	</span>
 {/if}
