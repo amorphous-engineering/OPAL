@@ -46,13 +46,13 @@
 	<Section title="Roles" count={held.size}>
 		{#snippet actions()}
 			<a
-				href="/settings/roles"
+				href="/settings#roles"
 				class="font-mono text-xs font-medium tracking-wider text-info uppercase hover:underline"
 				>MANAGE ROLES</a
 			>
 		{/snippet}
 		{#if all.length === 0}
-			<EmptyLine label="roles" addHref="/settings/roles" addLabel="+ NEW ROLE" />
+			<EmptyLine label="roles" addHref="/settings#roles" addLabel="+ NEW ROLE" />
 		{:else}
 			<ul>
 				{#each all as r (r.id)}

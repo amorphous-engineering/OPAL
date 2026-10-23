@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Project configuration: create (first run) or edit. One form, one save.
-	import { goto, refreshAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import {
 		confirm,
 		DataTable,
@@ -181,7 +181,6 @@
 				await api.put('/project/config', body);
 				toast.success('Project saved');
 				await refreshAll();
-				await goto('/settings');
 			} else {
 				await api.post('/project/config', body);
 				// Creating the project is the last step of first-run onboarding.
@@ -230,10 +229,7 @@
 	const catalog = $derived(existing?.requirements ?? []);
 </script>
 
-<form
-	class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
-	onsubmit={save}
->
+<form class="grid grid-cols-1 gap-4" onsubmit={save}>
 	<div class="grid min-w-0 grid-cols-1 gap-4">
 		{#if error}
 			<p role="alert" class="border border-error/40 bg-error-muted px-2 py-1.5 text-xs text-error">
@@ -241,7 +237,7 @@
 			</p>
 		{/if}
 
-		<Section title="Project">
+		<Section title="General">
 			<div class="grid grid-cols-1 gap-3 p-3">
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="p-name">Name</Label>
@@ -401,12 +397,9 @@
 				</div>
 			{/if}
 		</Section>
-	</div>
-
-	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Part numbering">
 			<div class="grid grid-cols-1 gap-3 p-3">
-				<div class="grid grid-cols-3 gap-3">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="pn-prefix">Prefix</Label>
 						<Input id="pn-prefix" class="font-mono" bind:value={prefix} placeholder="e.g. RV1" />
@@ -479,7 +472,7 @@
 			<Button type="submit" disabled={busy || !name.trim()}
 				>{existing ? 'SAVE PROJECT' : 'CREATE PROJECT'}</Button
 			>
-			<Button variant="outline" href={existing ? '/settings' : '/'}>CANCEL</Button>
+			{#if !existing}<Button variant="outline" href="/">CANCEL</Button>{/if}
 		</div>
 	</div>
 </form>

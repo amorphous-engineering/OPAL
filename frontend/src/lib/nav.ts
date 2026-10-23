@@ -45,8 +45,7 @@ export const NAV: NavGroup[] = [
 		items: [
 			{ href: '/audit', label: 'Audit log' },
 			{ href: '/users', label: 'Users', adminOnly: true },
-			{ href: '/settings', label: 'Settings' },
-			{ href: '/settings/roles', label: 'Roles' }
+			{ href: '/settings', label: 'Settings' }
 		]
 	}
 ];

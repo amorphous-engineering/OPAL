@@ -7,9 +7,13 @@
 
 <Section title="System">
 	<DetailTable>
-		<DetailRow label="OPAL version" mono value={system.opal_version} />
+		<DetailRow label="OPAL version"
+			><span class="font-mono break-all">{system.opal_version}</span></DetailRow
+		>
 		<DetailRow label="Python" mono value={system.python_version} />
-		<DetailRow label="Platform" mono value={system.platform} />
+		<DetailRow label="Platform"
+			><span class="font-mono break-all">{system.platform}</span></DetailRow
+		>
 		<DetailRow label="Server" mono value={system.server} />
 		<DetailRow label="Debug">
 			{#if system.debug}<State value="on" tone="warn" label="ON" />{:else}<span

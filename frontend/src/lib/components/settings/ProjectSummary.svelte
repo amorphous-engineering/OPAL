@@ -7,10 +7,9 @@
 		Section,
 		type Column
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import type { ProjectConfig, Tier } from './types.js';
 
-	let { project, isAdmin }: { project: ProjectConfig | null; isAdmin: boolean } = $props();
+	let { project }: { project: ProjectConfig | null } = $props();
 
 	const columns: Column<Tier>[] = [
 		{ key: 'level', label: 'Level', mono: true, width: '4rem' },
@@ -28,9 +27,6 @@
 
 {#if project}
 	<Section title="Project">
-		{#snippet actions()}
-			{#if isAdmin}<Button variant="ghost" size="xs" href="/project/edit">EDIT</Button>{/if}
-		{/snippet}
 		<DetailTable>
 			<DetailRow label="Name" value={project.name} />
 			<DetailRow label="Description" value={project.description} />
@@ -73,9 +69,5 @@
 		</div>
 	</Section>
 {:else}
-	{#if isAdmin}
-		<EmptyLine label="Project" addHref="/project/new" addLabel="+ CONFIGURE" />
-	{:else}
-		<EmptyLine label="Project" />
-	{/if}
+	<EmptyLine label="Project" />
 {/if}
