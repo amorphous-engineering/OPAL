@@ -24,19 +24,29 @@
 
 <svelte:head><title>{identifier ? `${identifier} ${title}` : title} · OPAL</title></svelte:head>
 
-<div class="border-b border-border bg-background px-4 pt-3 pb-3">
-	{#if crumbs.length}
-		<nav
-			aria-label="Breadcrumb"
-			class="mb-1 flex items-center gap-1 font-mono text-[11px] tracking-wider text-muted-foreground uppercase"
-		>
-			{#each crumbs as c, i (i)}
-				{#if i > 0}<span aria-hidden="true">/</span>{/if}
-				{#if c.href}<a href={c.href} class="hover:text-foreground hover:underline">{c.label}</a
-					>{:else}<span>{c.label}</span>{/if}
-			{/each}
-		</nav>
-	{/if}
+{#if crumbs.length}
+	<!-- Breadcrumbs: their own compact strip, segments ruled apart, a divider below. -->
+	<nav
+		aria-label="Breadcrumb"
+		class="flex h-7 items-stretch overflow-x-auto border-b border-border bg-muted/30 font-mono text-[11px] tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+	>
+		{#each crumbs as c, i (i)}
+			{#if c.href}
+				<a
+					href={c.href}
+					class="flex items-center border-r border-border px-3 hover:bg-accent hover:text-foreground"
+					>{c.label}</a
+				>
+			{:else}
+				<span
+					class="flex items-center border-r border-border px-3 text-foreground"
+					aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c.label}</span
+				>
+			{/if}
+		{/each}
+	</nav>
+{/if}
+<div class="border-b border-border bg-background px-4 py-2.5">
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
 		{#if identifier}<span class="font-mono text-base font-semibold text-info">{identifier}</span
 			>{/if}
