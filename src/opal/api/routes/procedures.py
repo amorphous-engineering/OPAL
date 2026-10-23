@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Response, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func
 
 from opal.api.deps import CurrentUserId, DbSession
@@ -14,6 +14,12 @@ from opal.core import procedure_tree as tree
 from opal.core.audit import AuditContext, get_model_dict, log_create, log_delete, log_update
 from opal.core.diff import diff_part_lists, diff_procedure_versions, snapshots_equivalent
 from opal.core.part_lifecycle import DraftPartsBlocked, draft_parts_in
+from opal.core.signoffs import (
+    UNSET,
+    SignoffError,
+    effective_for,
+    write_signoff_fields,
+)
 from opal.db.models import InventoryRecord, Kit, Part, ProcedureOutput, Workcenter
 from opal.db.models.execution import InstanceStatus, ProcedureInstance
 from opal.db.models.procedure import (
@@ -34,6 +40,13 @@ router = APIRouter(prefix="/procedures", tags=["procedures"])
 # ============ Schemas ============
 
 
+class SignoffDef(BaseModel):
+    """One sign-off slot of a step definition."""
+
+    label: str = Field(..., min_length=1, max_length=100)
+    role: str | None = Field(None, max_length=50)
+
+
 class StepSchema(BaseModel):
     """Procedure step response."""
 
@@ -47,6 +60,7 @@ class StepSchema(BaseModel):
     required_data_schema: dict[str, Any] | None = None
     is_contingency: bool = False
     requires_signoff: bool = False
+    signoffs: list[SignoffDef] = []  # the effective list (see core/signoffs)
     estimated_duration_minutes: int | None = None
     required_role: str | None = None
     caution: str | None = None
@@ -55,6 +69,20 @@ class StepSchema(BaseModel):
     sub_steps: list["StepSchema"] = []
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _effective_signoffs(cls, data: Any) -> Any:
+        """Serve the effective sign-off list, never the raw (nullable) column."""
+        if isinstance(data, ProcedureStep):
+            values = {
+                name: getattr(data, name)
+                for name in cls.model_fields
+                if name != "signoffs" and hasattr(data, name)
+            }
+            values["signoffs"] = effective_for(data, bool(data.sub_steps))
+            return values
+        return data
 
 
 class ProcedureResponse(BaseModel):
@@ -126,6 +154,11 @@ class StepCreate(BaseModel):
     required_data_schema: dict[str, Any] | None = None
     is_contingency: bool = False
     requires_signoff: bool = False
+    signoffs: list[SignoffDef] | None = Field(
+        None,
+        description="Ordered sign-off slots; the step is complete when all are signed. "
+        "Omit to derive from requires_signoff / required_role.",
+    )
     estimated_duration_minutes: int | None = Field(None, ge=1)
     required_role: str | None = Field(None, max_length=50)
     caution: str | None = None
@@ -147,6 +180,9 @@ class StepUpdate(BaseModel):
     required_data_schema: dict[str, Any] | None = None
     is_contingency: bool | None = None
     requires_signoff: bool | None = None
+    signoffs: list[SignoffDef] | None = Field(
+        None, description="Replace the sign-off slots; explicit null resets to derived"
+    )
     estimated_duration_minutes: int | None = Field(None, ge=1)
     required_role: str | None = Field(None, max_length=50)
     caution: str | None = None
@@ -272,6 +308,7 @@ def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
             required_data_schema=step.required_data_schema,
             is_contingency=step.is_contingency,
             requires_signoff=step.requires_signoff,
+            signoffs=effective_for(step, bool(sub_steps)),
             estimated_duration_minutes=step.estimated_duration_minutes,
             required_role=step.required_role,
             caution=step.caution,
@@ -761,6 +798,11 @@ def add_step(
         strict_sequence=data.strict_sequence,
         workcenter_id=data.workcenter_id,
     )
+    if data.signoffs is not None:
+        try:
+            write_signoff_fields(step, False, signoffs=[s.model_dump() for s in data.signoffs])
+        except SignoffError as err:
+            raise HTTPException(status_code=422, detail=str(err)) from err
     db.add(step)
     db.flush()
 
@@ -824,12 +866,21 @@ def update_step(
             )
         step.is_contingency = data.is_contingency
         regroup = True
-    if data.requires_signoff is not None:
-        step.requires_signoff = data.requires_signoff
-    # Explicit null clears these: a stale safety callout must be removable,
-    # or it re-snapshots into every future published version
-    if "required_role" in data.model_fields_set:
-        step.required_role = data.required_role
+    # Sign-offs: an explicit list wins and derives the legacy fields; legacy-only
+    # writes still work and are carried into an existing explicit list.
+    try:
+        write_signoff_fields(
+            step,
+            bool(step.sub_steps),
+            signoffs=(None if data.signoffs is None else [s.model_dump() for s in data.signoffs])
+            if "signoffs" in data.model_fields_set
+            else UNSET,
+            requires_signoff=data.requires_signoff if data.requires_signoff is not None else UNSET,
+            # Explicit null clears the role: a stale callout must be removable
+            required_role=data.required_role if "required_role" in data.model_fields_set else UNSET,
+        )
+    except SignoffError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
     if "caution" in data.model_fields_set:
         step.caution = data.caution
     if data.strict_sequence is not None:
@@ -902,6 +953,7 @@ def duplicate_step(
             required_data_schema=copy.deepcopy(src.required_data_schema),
             is_contingency=src.is_contingency,
             requires_signoff=src.requires_signoff,
+            signoffs=copy.deepcopy(src.signoffs),
             estimated_duration_minutes=src.estimated_duration_minutes,
             required_role=src.required_role,
             caution=src.caution,
@@ -1038,6 +1090,7 @@ class DraftStep(BaseModel):
     required_data_schema: dict[str, Any] | None = None
     is_contingency: bool = False
     requires_signoff: bool = False
+    signoffs: list[SignoffDef] = []  # the effective list
     estimated_duration_minutes: int | None = None
     required_role: str | None = None
     caution: str | None = None
@@ -1062,6 +1115,7 @@ def get_draft(procedure_id: int, db: DbSession) -> DraftResponse:
     _require_live_procedure(db, procedure_id)
     steps = tree.document_order(_procedure_steps(db, procedure_id))
     ids = [s.id for s in steps]
+    parent_ids = {s.parent_step_id for s in steps if s.parent_step_id is not None}
 
     images: dict[int, list[StepImage]] = {}
     kits: dict[int, list[StepKit]] = {}
@@ -1093,6 +1147,7 @@ def get_draft(procedure_id: int, db: DbSession) -> DraftResponse:
                 required_data_schema=s.required_data_schema,
                 is_contingency=s.is_contingency,
                 requires_signoff=s.requires_signoff,
+                signoffs=effective_for(s, s.id in parent_ids),
                 estimated_duration_minutes=s.estimated_duration_minutes,
                 required_role=s.required_role,
                 caution=s.caution,
@@ -1527,6 +1582,7 @@ def _build_snapshot(
     steps = sorted(steps, key=lambda s: s.order)
     # Bulk-load step kit items for all steps in this procedure
     step_ids = [s.id for s in steps]
+    parent_ids = {s.parent_step_id for s in steps if s.parent_step_id is not None}
     all_step_kits = db.query(StepKit).filter(StepKit.step_id.in_(step_ids)).all()
     step_kit_map: dict[int, list[StepKit]] = {}
     for sk in all_step_kits:
@@ -1568,6 +1624,7 @@ def _build_snapshot(
             "required_data_schema": step.required_data_schema,
             "is_contingency": step.is_contingency,
             "requires_signoff": step.requires_signoff,
+            "signoffs": effective_for(step, step.id in parent_ids),
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "required_role": step.required_role,
             "caution": step.caution,
@@ -1957,6 +2014,7 @@ def restore_from_version(
                 required_data_schema=step_data.get("required_data_schema"),
                 is_contingency=step_data.get("is_contingency", False),
                 requires_signoff=step_data.get("requires_signoff", False),
+                signoffs=copy.deepcopy(step_data.get("signoffs")),
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
                 required_role=step_data.get("required_role"),
                 caution=step_data.get("caution"),
@@ -1982,6 +2040,7 @@ def restore_from_version(
                 required_data_schema=step_data.get("required_data_schema"),
                 is_contingency=step_data.get("is_contingency", False),
                 requires_signoff=step_data.get("requires_signoff", False),
+                signoffs=copy.deepcopy(step_data.get("signoffs")),
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
                 required_role=step_data.get("required_role"),
                 caution=step_data.get("caution"),
@@ -2583,6 +2642,7 @@ def clone_procedure(
             required_data_schema=source_step.required_data_schema,
             is_contingency=source_step.is_contingency,
             requires_signoff=source_step.requires_signoff,
+            signoffs=copy.deepcopy(source_step.signoffs),
             estimated_duration_minutes=source_step.estimated_duration_minutes,
             required_role=source_step.required_role,
             caution=source_step.caution,

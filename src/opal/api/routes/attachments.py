@@ -12,7 +12,7 @@ from opal.api.deps import CurrentUserId, DbSession
 from opal.config import get_active_settings
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.db.models.attachment import Attachment
-from opal.db.models.execution import ProcedureInstance, StepExecution
+from opal.db.models.execution import ProcedureInstance, StepExecution, StepNote
 from opal.db.models.issue import Issue
 from opal.db.models.purchase import Purchase
 
@@ -42,6 +42,7 @@ class AttachmentResponse(BaseModel):
     size_bytes: int
     procedure_instance_id: int | None
     step_execution_id: int | None
+    step_note_id: int | None = None
     issue_id: int | None = None
     purchase_id: int | None = None
     procedure_id: int | None = None
@@ -69,6 +70,7 @@ def _attachment_to_response(att: Attachment) -> AttachmentResponse:
         size_bytes=att.size_bytes,
         procedure_instance_id=att.procedure_instance_id,
         step_execution_id=att.step_execution_id,
+        step_note_id=att.step_note_id,
         issue_id=att.issue_id,
         purchase_id=att.purchase_id,
         procedure_id=att.procedure_id,
@@ -87,6 +89,7 @@ async def upload_attachment(
     file: UploadFile,
     procedure_instance_id: int | None = Form(default=None),
     step_execution_id: int | None = Form(default=None),
+    step_note_id: int | None = Form(default=None),
     issue_id: int | None = Form(default=None),
     purchase_id: int | None = Form(default=None),
     procedure_id: int | None = Form(default=None),
@@ -105,6 +108,7 @@ async def upload_attachment(
         file,
         procedure_instance_id=procedure_instance_id,
         step_execution_id=step_execution_id,
+        step_note_id=step_note_id,
         issue_id=issue_id,
         purchase_id=purchase_id,
         procedure_id=procedure_id,
@@ -121,6 +125,7 @@ async def store_attachment(
     *,
     procedure_instance_id: int | None = None,
     step_execution_id: int | None = None,
+    step_note_id: int | None = None,
     issue_id: int | None = None,
     purchase_id: int | None = None,
     procedure_id: int | None = None,
@@ -181,6 +186,21 @@ async def store_attachment(
                 status_code=404, detail=f"Step execution {step_execution_id} not found"
             )
 
+    if step_note_id:
+        step_note = db.query(StepNote).filter(StepNote.id == step_note_id).first()
+        if not step_note:
+            raise HTTPException(status_code=404, detail=f"Step note {step_note_id} not found")
+        # A note's files live on the note's step, in the note's work order.
+        if step_execution_id and step_execution_id != step_note.step_execution_id:
+            raise HTTPException(status_code=400, detail="Note does not belong to this step")
+        note_instance_id = step_note.step_execution.instance_id
+        if procedure_instance_id and procedure_instance_id != note_instance_id:
+            raise HTTPException(
+                status_code=400, detail="Note does not belong to this procedure instance"
+            )
+        step_execution_id = step_note.step_execution_id
+        procedure_instance_id = note_instance_id
+
     if issue_id:
         issue = db.query(Issue).filter(Issue.id == issue_id, Issue.deleted_at.is_(None)).first()
         if not issue:
@@ -230,6 +250,7 @@ async def store_attachment(
         size_bytes=len(content),
         procedure_instance_id=procedure_instance_id,
         step_execution_id=step_execution_id,
+        step_note_id=step_note_id,
         issue_id=issue_id,
         purchase_id=purchase_id,
         procedure_id=procedure_id,
@@ -273,6 +294,7 @@ def list_attachments(
     db: DbSession,
     procedure_instance_id: int | None = Query(None),
     step_execution_id: int | None = Query(None),
+    step_note_id: int | None = Query(None),
     issue_id: int | None = Query(None),
     purchase_id: int | None = Query(None),
     procedure_id: int | None = Query(None),
@@ -286,6 +308,8 @@ def list_attachments(
         query = query.filter(Attachment.procedure_instance_id == procedure_instance_id)
     if step_execution_id is not None:
         query = query.filter(Attachment.step_execution_id == step_execution_id)
+    if step_note_id is not None:
+        query = query.filter(Attachment.step_note_id == step_note_id)
     if issue_id is not None:
         query = query.filter(Attachment.issue_id == issue_id)
     if purchase_id is not None:

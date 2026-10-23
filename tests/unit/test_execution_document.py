@@ -449,7 +449,8 @@ def test_notes_are_ordered_and_authored(client: TestClient):
     notes = _step(_doc(client, instance_id), 1)["notes"]
     assert [n["body"] for n in notes] == ["coolant pressure drifting", "second observation"]
     assert notes[0]["created_at"][:19] == first.json()["created_at"][:19]
-    assert notes[0]["author"] == "Test Client"
+    assert notes[0]["author"]["name"] == "Test Client"
+    assert notes[0]["attachments"] == []
 
 
 def test_notes_survive_closeout(client: TestClient, db_session: Session):

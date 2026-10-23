@@ -27,6 +27,7 @@ from opal.core.designators import (
     generate_serial_number,
     generate_work_order_number,
 )
+from opal.core.signoffs import effective_for, effective_signoffs
 from opal.db.models import (
     BOMLine,
     Issue,
@@ -52,7 +53,13 @@ from opal.db.models import (
     User,
     Workcenter,
 )
-from opal.db.models.execution import InstanceStatus, StepFocus, StepNote, StepStatus
+from opal.db.models.execution import (
+    InstanceStatus,
+    StepFocus,
+    StepNote,
+    StepSignoff,
+    StepStatus,
+)
 from opal.db.models.inventory import (
     InventoryConsumption,
     InventoryProduction,
@@ -481,6 +488,7 @@ def _publish(db: Session, proc: MasterProcedure) -> ProcedureVersion:
         .all()
     )
     step_ids = [s.id for s in steps]
+    parent_ids = {s.parent_step_id for s in steps if s.parent_step_id is not None}
     step_kit_map: dict[int, list[StepKit]] = {}
     for sk in db.query(StepKit).filter(StepKit.step_id.in_(step_ids)).all():
         step_kit_map.setdefault(sk.step_id, []).append(sk)
@@ -509,6 +517,7 @@ def _publish(db: Session, proc: MasterProcedure) -> ProcedureVersion:
                 "required_data_schema": s.required_data_schema,
                 "is_contingency": s.is_contingency,
                 "requires_signoff": s.requires_signoff,
+                "signoffs": effective_for(s, s.id in parent_ids),
                 "estimated_duration_minutes": s.estimated_duration_minutes,
                 "required_role": s.required_role,
                 "caution": s.caution,
@@ -871,18 +880,40 @@ def _cut_instance(
     return inst, by_number
 
 
+def _parent_ids(version: ProcedureVersion) -> frozenset[int]:
+    """Ids of the snapshot steps that carry sub-steps (OPs)."""
+    return frozenset(
+        s["parent_step_id"] for s in version.content["steps"] if s["parent_step_id"] is not None
+    )
+
+
 def _complete_step(
     se: StepExecution,
     step: dict,
     at: datetime,
     user: User,
     data: dict | None = None,
+    *,
+    parents: frozenset[int] = frozenset(),
 ) -> None:
-    se.status = StepStatus.SIGNED_OFF if step["requires_signoff"] else StepStatus.COMPLETED
+    se.status = StepStatus.COMPLETED
     se.started_at = at
     se.completed_at = at + timedelta(minutes=9)
     se.completed_by_id = user.id
-    if step["requires_signoff"]:
+    # Every slot of the step's sign-off list is signed (what the execution flow
+    # records on the last signature).
+    defs = effective_signoffs(step, step["id"] in parents)
+    for slot, d in enumerate(defs):
+        se.signoff_records.append(
+            StepSignoff(
+                slot=slot,
+                label=d["label"],
+                role=d["role"],
+                signed_by_id=user.id,
+                signed_at=se.completed_at,
+            )
+        )
+    if len(defs) > 1:
         se.signed_off_at = se.completed_at
         se.signed_off_by_id = user.id
     if data is not None:
@@ -1021,7 +1052,9 @@ def _seed_executions(
     for s in veh_version.content["steps"]:
         se = wo1_steps[s["step_number"]]
         user = (build, test, qa)[s["order"] % 3]
-        _complete_step(se, s, t, user, _WO1_DATA.get(s["step_number"]))
+        _complete_step(
+            se, s, t, user, _WO1_DATA.get(s["step_number"]), parents=_parent_ids(veh_version)
+        )
         t += timedelta(minutes=20)
     for step_num, username, ago, body in _WO1_NOTES:
         db.add(
@@ -1109,6 +1142,7 @@ def _seed_executions(
                 t,
                 user,
                 {"ends_square": "Square — checked both ends"} if num == "1.1" else None,
+                parents=_parent_ids(veh_version),
             )
             t += timedelta(minutes=11)
     # The crew's position is presence (cursor), not status — the step ahead
@@ -1163,7 +1197,7 @@ def _seed_executions(
     )
     t = wo4_start
     for s in valve_version.content["steps"]:
-        _complete_step(wo4_steps[s["step_number"]], s, t, test)
+        _complete_step(wo4_steps[s["step_number"]], s, t, test, parents=_parent_ids(valve_version))
         t += timedelta(minutes=13)
     valve_kit = db.query(Kit).filter(Kit.procedure_id == valve_proc.id).all()
     _consume_kit(db, wo4, valve_kit, parts, part_key_by_id, inventory, test)

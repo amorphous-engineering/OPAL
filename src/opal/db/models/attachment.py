@@ -37,6 +37,12 @@ class Attachment(Base, IdMixin, TimestampMixin):
     step_execution_id: Mapped[int | None] = mapped_column(
         ForeignKey("step_execution.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    step_note_id: Mapped[int | None] = mapped_column(
+        ForeignKey("step_note.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="Execution note this file is attached to (also carries step_execution_id)",
+    )
     issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issue.id", ondelete="CASCADE"), nullable=True, index=True
     )
