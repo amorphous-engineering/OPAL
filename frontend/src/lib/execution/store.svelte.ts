@@ -535,6 +535,13 @@ export class ExecutionStore implements DocController {
 				}
 				data = this.payload(step);
 			}
+			// Signing is the commitment: it cannot be undone, so it is always confirmed.
+			const ok = await confirm({
+				title: 'Are you sure you want to sign off this step?',
+				body: 'Ensure all instructions have been completed and all data collects have been entered correctly. This cannot be reverted.',
+				action: 'SIGN'
+			});
+			if (!ok) return;
 			try {
 				await api.post(this.url(`/steps/${step.order}/signoffs/${slot}`), {
 					data_captured: data ?? null
