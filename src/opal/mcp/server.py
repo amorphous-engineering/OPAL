@@ -2926,7 +2926,7 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
     )
     if args.get("signoffs") is not None:
         try:
-            write_signoff_fields(step, False, signoffs=args["signoffs"])
+            write_signoff_fields(step, False, signoffs=args["signoffs"], db=db)
         except SignoffError as err:
             return json_response({"error": str(err)})
     db.add(step)
@@ -4893,6 +4893,7 @@ async def _update_step(db, args: dict) -> list[TextContent]:
             if "requires_signoff" in args
             else UNSET,
             required_role=args.get("required_role", UNSET),
+            db=db,
         )
     except SignoffError as err:
         return json_response({"error": str(err)})
@@ -6248,7 +6249,7 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
         )
         if step.get("signoffs") is not None:
             try:
-                write_signoff_fields(ps, False, signoffs=step["signoffs"])
+                write_signoff_fields(ps, False, signoffs=step["signoffs"], db=db)
             except SignoffError as err:
                 return json_response({"error": str(err)})
         db.add(ps)

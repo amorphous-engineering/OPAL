@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opal.db.base import Base, IdMixin, TimestampMixin
@@ -42,6 +42,25 @@ class User(Base, IdMixin, TimestampMixin):
     needs_profile_setup: Mapped[bool] = mapped_column(default=False, nullable=False)
     needs_onboarding: Mapped[bool] = mapped_column(default=True, nullable=False)
 
+    # Profile
+    job_title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    workcenter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workcenter.id", ondelete="SET NULL"), nullable=True
+    )
+    avatar_filename: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="File under <upload_dir>/avatars"
+    )
+    avatar_mime: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    avatar_source: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+        comment="upload | oidc | removed (removed: do not refill from the IdP) | NULL",
+    )
+    avatar_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Presence tracking
     last_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="Heartbeat timestamp for presence"
@@ -51,6 +70,7 @@ class User(Base, IdMixin, TimestampMixin):
     )
 
     # Relationships (back-references)
+    workcenter: Mapped["Workcenter | None"] = relationship("Workcenter")
     procedure_versions: Mapped[list["ProcedureVersion"]] = relationship(
         "ProcedureVersion", back_populates="created_by_user"
     )

@@ -12,6 +12,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core.audit import get_model_dict, log_create, log_update
+from opal.core.avatars import avatar_url
 from opal.core.designators import (
     generate_issue_number,
     generate_opal_number,
@@ -94,6 +95,7 @@ class StepNoteResponse(BaseModel):
     id: int
     author_id: int | None = None
     author: str | None = None
+    author_avatar_url: str | None = None
     created_at: datetime
     body: str
 
@@ -101,6 +103,7 @@ class StepNoteResponse(BaseModel):
 class SignoffUser(BaseModel):
     id: int
     name: str | None = None
+    avatar_url: str | None = None
 
 
 class SignoffSlotResponse(BaseModel):
@@ -140,6 +143,7 @@ def _note_response(note: StepNote) -> StepNoteResponse:
         id=note.id,
         author_id=note.author_id,
         author=note.author.name if note.author else None,
+        author_avatar_url=avatar_url(note.author),
         created_at=note.created_at,
         body=note.body,
     )
@@ -159,7 +163,9 @@ def _signoff_slots(step_exec: StepExecution) -> list[SignoffSlotResponse]:
                 label=rec.label if rec else d["label"],
                 role=rec.role if rec else d["role"],
                 signed_by=SignoffUser(
-                    id=rec.signed_by_id, name=rec.signed_by.name if rec.signed_by else None
+                    id=rec.signed_by_id,
+                    name=rec.signed_by.name if rec.signed_by else None,
+                    avatar_url=avatar_url(rec.signed_by),
                 )
                 if rec and rec.signed_by_id
                 else None,

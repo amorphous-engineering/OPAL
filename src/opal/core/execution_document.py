@@ -20,7 +20,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from opal.core import execution_flow as exec_flow
+from opal.core.avatars import avatar_url
 from opal.core.holds import enum_value, get_hold_state
+from opal.core.people import person_ref
+from opal.core.roles import role_names_of
 from opal.core.signoffs import derive_legacy
 from opal.db.models import InventoryRecord, Kit, User
 from opal.db.models.attachment import Attachment
@@ -164,6 +167,7 @@ def build_execution_document(
             {
                 "user_id": c.user_id,
                 "name": u.name if u else None,
+                "avatar_url": avatar_url(u),
                 "initials": exec_flow.user_initials(u.name if u else None),
                 "focused_at": _iso(c.focused_at),
                 "stale": stale(u),
@@ -172,6 +176,8 @@ def build_execution_document(
         if viewer_id is not None and c.user_id == viewer_id:
             target = se_by_id.get(c.step_execution_id)
             my_cursor_order = target.step_number if target else None
+
+    viewer_roles = role_names_of(db, viewer_id) if viewer_id is not None else None
 
     # ---- holds & gates ----
     hold_state = get_hold_state(db, instance.id)
@@ -251,7 +257,7 @@ def build_execution_document(
 
     def person(uid: int | None) -> dict[str, Any] | None:
         u = users.get(uid) if uid else None
-        return {"id": u.id, "name": u.name} if u else None
+        return person_ref(u)
 
     # ---- consumption ----
     consumptions = (
@@ -318,7 +324,16 @@ def build_execution_document(
         for n, d in enumerate(defs):
             rec = recs.get(n)
             can_sign, slot_b = exec_flow.slot_gate(
-                db, instance, se, n, defs, recs, hold_state, complete=complete_b
+                db,
+                instance,
+                se,
+                n,
+                defs,
+                recs,
+                hold_state,
+                complete=complete_b,
+                user_id=viewer_id,
+                holder_roles=viewer_roles,
             )
             signoffs.append(
                 {
@@ -365,12 +380,17 @@ def build_execution_document(
             "started_at": _iso(se.started_at),
             "completed": {
                 "by": completer.name if completer else None,
+                "by_avatar_url": avatar_url(completer),
                 "initials": exec_flow.user_initials(completer.name if completer else None),
                 "at": _iso(se.completed_at),
             }
             if status in ("completed", "signed_off", "skipped")
             else None,
-            "signed_off": {"by": uname(se.signed_off_by_id), "at": _iso(se.signed_off_at)}
+            "signed_off": {
+                "by": uname(se.signed_off_by_id),
+                "by_avatar_url": avatar_url(users.get(se.signed_off_by_id)),
+                "at": _iso(se.signed_off_at),
+            }
             if se.signed_off_at
             else None,
             "duration_seconds": se.duration_seconds,

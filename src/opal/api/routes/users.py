@@ -4,15 +4,19 @@ import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import AfterValidator, BaseModel
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
+from pydantic import AfterValidator, BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from opal.api.deps import CurrentUserId, DbSession, PaginationParams, RequiredAdmin, RequiredUser
-from opal.core.audit import get_model_dict, log_create, log_update
+from opal.core import avatars
+from opal.core.audit import get_model_dict, log_create, log_delete, log_update
 from opal.core.events import emit_user_activity
-from opal.db.models import PasskeyCredential, User
+from opal.core.people import profile_fields
+from opal.core.roles import roles_by_user
+from opal.db.models import PasskeyCredential, Role, User, UserRole, Workcenter
 
 router = APIRouter()
 
@@ -56,6 +60,19 @@ class UserUpdate(BaseModel):
     email: Email | None = None
     is_active: bool | None = None
     is_admin: bool | None = None
+    job_title: str | None = Field(None, max_length=120)
+    phone: str | None = Field(None, max_length=40)
+    workcenter_id: int | None = None
+
+
+class WorkcenterRef(BaseModel):
+    id: int
+    name: str
+
+
+class RoleRef(BaseModel):
+    id: int
+    name: str
 
 
 class UserResponse(BaseModel):
@@ -76,6 +93,11 @@ class UserResponse(BaseModel):
     has_password: bool = False
     has_passkey: bool = False
     sso_linked: bool = False
+    job_title: str | None = None
+    phone: str | None = None
+    workcenter: WorkcenterRef | None = None
+    roles: list[RoleRef] = []
+    avatar_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -94,8 +116,8 @@ def _is_online(user: User) -> bool:
     return user.last_seen_at.timestamp() > cutoff
 
 
-def user_response(db: Session, user: User) -> UserResponse:
-    """Build the API shape for one user."""
+def user_response(db: Session, user: User, roles: list[dict] | None = None) -> UserResponse:
+    """Build the API shape for one user. ``roles`` skips the per-user role query."""
     has_passkey = (
         db.query(PasskeyCredential.id).filter(PasskeyCredential.user_id == user.id).first()
         is not None
@@ -115,6 +137,7 @@ def user_response(db: Session, user: User) -> UserResponse:
         has_password=user.password_hash is not None,
         has_passkey=has_passkey,
         sso_linked=user.oidc_subject is not None,
+        **profile_fields(db, user, roles),
     )
 
 
@@ -145,23 +168,38 @@ def list_users(
         )
     total = query.count()
     users = query.order_by(User.name).offset(pagination.skip).limit(pagination.limit).all()
-    return UserListResponse(items=[user_response(db, u) for u in users], total=total)
+    roles = roles_by_user(db, [u.id for u in users])
+    return UserListResponse(
+        items=[user_response(db, u, roles.get(u.id, [])) for u in users], total=total
+    )
 
 
 class DirectoryEntry(BaseModel):
     id: int
     name: str
     username: str
+    job_title: str | None = None
+    phone: str | None = None
+    workcenter: WorkcenterRef | None = None
+    roles: list[RoleRef] = []
+    avatar_url: str | None = None
 
 
 @router.get("/directory", response_model=list[DirectoryEntry])
 def user_directory(db: DbSession, user: RequiredUser) -> list[DirectoryEntry]:
     """Active users by name, for assignee and owner pickers. Any signed-in user.
 
-    Carries no email and no role: those stay behind the admin-only listing.
+    Carries no email: that stays behind the admin-only listing. Roles are
+    qualifications, visible to everyone who works beside the holder.
     """
     rows = db.query(User).filter(User.is_active.is_(True)).order_by(User.name).all()
-    return [DirectoryEntry(id=u.id, name=u.name, username=u.username) for u in rows]
+    roles = roles_by_user(db, [u.id for u in rows])
+    return [
+        DirectoryEntry(
+            id=u.id, name=u.name, username=u.username, **profile_fields(db, u, roles.get(u.id, []))
+        )
+        for u in rows
+    ]
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -305,7 +343,7 @@ def update_user(
 ) -> UserResponse:
     """Update a user.
 
-    Non-admins can only edit their own name/email.
+    Non-admins can only edit their own name, email, job title, phone and workcenter.
     Admins can edit any user, including is_admin and is_active.
     Cannot remove admin from, or deactivate, the last active admin.
     """
@@ -326,8 +364,7 @@ def update_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot edit other users",
             )
-        # Can only change name and email
-        allowed_fields = {"name", "email"}
+        allowed_fields = {"name", "email", "job_title", "phone", "workcenter_id"}
         disallowed = set(update_data.keys()) - allowed_fields
         if disallowed:
             raise HTTPException(
@@ -339,6 +376,15 @@ def update_user(
         update_data["name"] = (update_data["name"] or "").strip()
         if not update_data["name"]:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name is required")
+
+    for key in ("job_title", "phone"):
+        if key in update_data:
+            update_data[key] = (update_data[key] or "").strip() or None
+    wc_id = update_data.get("workcenter_id")
+    if wc_id is not None and db.get(Workcenter, wc_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Workcenter {wc_id} not found"
+        )
 
     if update_data.get("email") and update_data["email"] != user.email:
         clash = (
@@ -479,6 +525,11 @@ class OnlineUserResponse(BaseModel):
     last_seen_at: str
     current_activity: str | None
     is_online: bool
+    job_title: str | None = None
+    phone: str | None = None
+    workcenter: WorkcenterRef | None = None
+    roles: list[RoleRef] = []
+    avatar_url: str | None = None
 
 
 CLAIM_LINK_TTL = timedelta(days=7)
@@ -564,6 +615,7 @@ def get_online_users(
 
     users = db.query(User).filter(User.is_active == True, User.last_seen_at.isnot(None)).all()  # noqa: E712
 
+    roles = roles_by_user(db, [u.id for u in users])
     result = []
     for user in users:
         if user.last_seen_at:
@@ -575,6 +627,7 @@ def get_online_users(
                     last_seen_at=user.last_seen_at.isoformat(),
                     current_activity=user.current_activity,
                     is_online=is_online,
+                    **profile_fields(db, user, roles.get(user.id, [])),
                 )
             )
 
@@ -601,4 +654,121 @@ def get_user_presence(
         last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else "",
         current_activity=user.current_activity,
         is_online=is_online,
+        **profile_fields(db, user),
+    )
+
+
+# ============ Roles ============
+
+
+class UserRolesSet(BaseModel):
+    role_ids: list[int]
+
+
+@router.put("/{user_id:int}/roles", response_model=UserResponse)
+def set_user_roles(
+    user_id: int, data: UserRolesSet, db: DbSession, admin: RequiredAdmin
+) -> UserResponse:
+    """Replace the roles a user holds with exactly ``role_ids``. Admin only."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+    wanted = set(data.role_ids)
+    live = {
+        r.id for r in db.query(Role).filter(Role.id.in_(wanted), Role.deleted_at.is_(None)).all()
+    }
+    missing = wanted - live
+    if missing:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown role id(s): {', '.join(map(str, sorted(missing)))}"
+        )
+    grants = db.query(UserRole).filter(UserRole.user_id == user.id).all()
+    held = {g.role_id for g in grants}
+    for grant in grants:
+        if grant.role_id not in wanted:
+            log_delete(db, grant, admin.id)
+            db.delete(grant)
+    for role_id in sorted(wanted - held):
+        grant = UserRole(user_id=user.id, role_id=role_id, granted_by_id=admin.id)
+        db.add(grant)
+        db.flush()
+        log_create(db, grant, admin.id)
+    db.commit()
+    return user_response(db, user)
+
+
+# ============ Avatars ============
+
+AVATAR_TYPES = ("image/png", "image/jpeg", "image/webp", "image/gif")
+
+
+def _self_or_admin(user_id: int, acting: User) -> None:
+    if acting.id != user_id and not acting.is_admin:
+        raise HTTPException(status_code=403, detail="Cannot change another user's avatar")
+
+
+@router.post("/{user_id:int}/avatar", response_model=UserResponse)
+async def upload_avatar(
+    user_id: int, file: UploadFile, db: DbSession, acting_user: RequiredUser
+) -> UserResponse:
+    """Set the user's photo (PNG, JPEG, WebP or GIF, at most 2 MB). The user
+    themself or an admin. The client sends a 256x256 square."""
+    _self_or_admin(user_id, acting_user)
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+    if file.content_type not in AVATAR_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type '{file.content_type}' is not allowed. Allowed: "
+            + ", ".join(AVATAR_TYPES),
+        )
+    data = await file.read(avatars.MAX_AVATAR_BYTES + 1)
+    if len(data) > avatars.MAX_AVATAR_BYTES:
+        raise HTTPException(
+            status_code=413, detail=f"Avatar too large. Max: {avatars.MAX_AVATAR_BYTES} bytes"
+        )
+    mime = avatars.sniff_image(data)
+    if mime is None:
+        raise HTTPException(status_code=400, detail="File is not a PNG, JPEG, WebP or GIF image")
+    old = get_model_dict(user)
+    avatars.store_avatar(user, data, mime, "upload")
+    db.flush()
+    log_update(db, user, old, acting_user.id)
+    db.commit()
+    db.refresh(user)
+    return user_response(db, user)
+
+
+@router.delete("/{user_id:int}/avatar", response_model=UserResponse)
+def delete_avatar(user_id: int, db: DbSession, acting_user: RequiredUser) -> UserResponse:
+    """Remove the user's photo; initials show instead and the OIDC provider's
+    picture will not refill it. The user themself or an admin."""
+    _self_or_admin(user_id, acting_user)
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+    old = get_model_dict(user)
+    avatars.remove_avatar(user)
+    db.flush()
+    log_update(db, user, old, acting_user.id)
+    db.commit()
+    db.refresh(user)
+    return user_response(db, user)
+
+
+@router.get("/{user_id:int}/avatar")
+def get_avatar(user_id: int, db: DbSession, acting_user: RequiredUser) -> FileResponse:
+    """The photo. The URL carries a version (``?v=``) so it caches for a year."""
+    user = db.get(User, user_id)
+    path = avatars.avatar_path(user) if user and user.avatar_source != "removed" else None
+    if user is None or path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="No avatar")
+    return FileResponse(
+        path,
+        media_type=user.avatar_mime or "application/octet-stream",
+        headers={
+            "Cache-Control": "private, max-age=31536000",
+            "X-Content-Type-Options": "nosniff",
+        },
     )

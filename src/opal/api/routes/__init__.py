@@ -30,6 +30,7 @@ from opal.api.routes import (
     reports,
     requirements,
     risks,
+    roles,
     search,
     settings,
     suppliers,
@@ -58,6 +59,7 @@ protected.include_router(procedures.router)  # Has its own /procedures prefix
 protected.include_router(execution.router)  # Has its own /procedure-instances prefix
 protected.include_router(issues.router)  # Has its own /issues prefix
 protected.include_router(risks.router)  # Has its own /risks prefix
+protected.include_router(roles.router)  # Has its own /roles prefix
 protected.include_router(datasets.router)  # Has its own /datasets prefix
 protected.include_router(notifications.router)  # Has its own /notifications prefix
 protected.include_router(workcenters.router)  # Has its own /workcenters prefix

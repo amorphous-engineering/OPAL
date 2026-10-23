@@ -14,9 +14,11 @@ from opal.core import procedure_tree as tree
 from opal.core.audit import AuditContext, get_model_dict, log_create, log_delete, log_update
 from opal.core.diff import diff_part_lists, diff_procedure_versions, snapshots_equivalent
 from opal.core.part_lifecycle import DraftPartsBlocked, draft_parts_in
+from opal.core.roles import UnknownRoleError, canonical_role_name
 from opal.core.signoffs import (
     UNSET,
     SignoffError,
+    UnknownSignoffRole,
     effective_for,
     effective_signoffs,
     write_signoff_fields,
@@ -782,6 +784,11 @@ def add_step(
     )
     next_order = (max_order or 0) + 1
 
+    try:
+        required_role = canonical_role_name(db, data.required_role)
+    except UnknownRoleError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
     step = ProcedureStep(
         procedure_id=procedure_id,
         parent_step_id=data.parent_step_id,
@@ -794,14 +801,18 @@ def add_step(
         is_contingency=is_contingency,
         requires_signoff=data.requires_signoff,
         estimated_duration_minutes=data.estimated_duration_minutes,
-        required_role=data.required_role,
+        required_role=required_role,
         caution=data.caution,
         strict_sequence=data.strict_sequence,
         workcenter_id=data.workcenter_id,
     )
     if data.signoffs is not None:
         try:
-            write_signoff_fields(step, False, signoffs=[s.model_dump() for s in data.signoffs])
+            write_signoff_fields(
+                step, False, signoffs=[s.model_dump() for s in data.signoffs], db=db
+            )
+        except UnknownSignoffRole as err:
+            raise HTTPException(status_code=400, detail=str(err)) from err
         except SignoffError as err:
             raise HTTPException(status_code=422, detail=str(err)) from err
     db.add(step)
@@ -879,7 +890,10 @@ def update_step(
             requires_signoff=data.requires_signoff if data.requires_signoff is not None else UNSET,
             # Explicit null clears the role: a stale callout must be removable
             required_role=data.required_role if "required_role" in data.model_fields_set else UNSET,
+            db=db,
         )
+    except UnknownSignoffRole as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
     except SignoffError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
     if "caution" in data.model_fields_set:

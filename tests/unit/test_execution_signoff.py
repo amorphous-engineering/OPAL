@@ -10,6 +10,14 @@ from opal.core import execution_flow as flow
 from opal.core.signoffs import effective_signoffs
 from opal.db.models.execution import ProcedureInstance, StepExecution, StepSignoff
 from opal.db.models.procedure import ProcedureVersion
+from tests.conftest import grant_client_roles
+
+
+@pytest.fixture(autouse=True)
+def _template_roles(client, db_session):
+    """Template roles must exist; the client holds the ones used here."""
+    grant_client_roles(db_session, "QE", "Technician", "Engineer", "Lead", "Tech", "QA")
+
 
 # ============ effective_signoffs (the one definition) ============
 

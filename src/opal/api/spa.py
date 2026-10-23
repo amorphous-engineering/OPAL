@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 
 from opal.api.deps import DbSession
 from opal.api.net import client_ip, request_is_secure, set_session_cookie
+from opal.core import avatars
 from opal.core.auth import create_session
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,8 @@ def oidc_callback(
     except oidc.OidcError as exc:
         db.rollback()
         return _login_error(str(exc))
+    # Best effort: a missing, slow or invalid picture never blocks sign-in.
+    avatars.refresh_from_oidc(db, user, claims)
 
     token = create_session(
         db,

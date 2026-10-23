@@ -29,8 +29,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from opal.core.audit import log_create
+from opal.core.avatars import avatar_url
 from opal.core.holds import HoldState, blocking_issues_for_instance, get_hold_state
 from opal.core.holds import enum_value as _status_value  # enum-unwrap, one home in core/holds
+from opal.core.roles import role_names_of
 from opal.core.signoffs import effective_signoffs
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
@@ -590,13 +592,19 @@ def slot_gate(
     signed: Mapping[int, Any],
     hold_state: HoldState | None = None,
     complete: list[Blocker] | None = None,
+    user_id: int | None = None,
+    holder_roles: set[str] | None = None,
 ) -> tuple[bool, list[Blocker]]:
     """(can_sign, blockers) for one slot. The one fold behind both the sign
     endpoint's refusal and the document's ``can_sign`` / ``blockers``.
 
     Slot 0 is the old COMPLETE: the step is open and every sequence, hold and
     children gate is clear. Later slots need slot 0 and a clear held scope, and
-    may then be signed in any order."""
+    may then be signed in any order.
+
+    With ``user_id`` the gate is per signer: a slot naming a role the user does
+    not hold gets a ``role`` blocker. ``holder_roles`` (lower-cased names of the
+    user's live roles) saves the lookup when many slots are asked in a row."""
     active = (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value)
     if _status_value(instance.status) not in active:
         return False, []
@@ -621,6 +629,12 @@ def slot_gate(
         return False, []
     else:
         blockers = held_scope_blockers(db, instance, step_exec, hold_state)
+    role = defs[slot].get("role")
+    if user_id is not None and role:
+        if holder_roles is None:
+            holder_roles = role_names_of(db, user_id)
+        if role.strip().lower() not in holder_roles:
+            blockers = [*blockers, Blocker(kind="role", message=f"Requires {role}")]
     return not blockers, blockers
 
 
@@ -672,6 +686,10 @@ def sign_step_flow(
         raise FlowError("Step already completed" if slot == 0 else "Step already signed off")
     if step_status == StepStatus.ON_HOLD.value:
         raise FlowError(f"Cannot complete step in {step_status} status")
+
+    role = defs[slot].get("role")
+    if role and role.strip().lower() not in role_names_of(db, user_id):
+        raise FlowError(f"Requires role {role}", status_code=403)
 
     can_sign, blockers = slot_gate(db, instance, step_exec, slot, defs, signed)
     if not can_sign:
@@ -946,6 +964,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
         return {
             "user_id": cursor.user_id,
             "name": user.name if user else None,
+            "avatar_url": avatar_url(user),
             "initials": user_initials(user.name if user else None),
             "focused_at": _iso(cursor.focused_at),
             "stale": _stale(user),
@@ -1005,6 +1024,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                 "cursors": [_cursor_entry(c) for c in step_cursors],
                 "completed": {
                     "by": completer.name if completer else None,
+                    "by_avatar_url": avatar_url(completer),
                     "initials": user_initials(completer.name if completer else None),
                     "at": _iso(se.completed_at),
                 }
@@ -1038,6 +1058,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
                             if n.author_id and n.author_id in user_lookup
                             else None
                         ),
+                        "author_avatar_url": avatar_url(user_lookup.get(n.author_id)),
                         "created_at": _iso(n.created_at),
                         "body": n.body,
                     }
@@ -1057,6 +1078,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
             {
                 "user_id": cursor.user_id,
                 "name": user.name if user else None,
+                "avatar_url": avatar_url(user),
                 "initials": user_initials(user.name if user else None),
                 "step_order": se.step_number if se else None,
                 "step_number": step_display(se) if se else None,
@@ -1074,6 +1096,7 @@ def build_execution_state(db: Session, instance: ProcedureInstance) -> dict[str,
             {
                 "user_id": uid,
                 "name": user.name if user else p.get("user_name"),
+                "avatar_url": avatar_url(user),
                 "initials": user_initials(user.name if user else p.get("user_name")),
                 "step_order": None,
                 "step_number": None,
