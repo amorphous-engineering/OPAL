@@ -1,5 +1,6 @@
 """OPAL MCP Server implementation."""
 
+import copy
 import json
 import logging
 import re
@@ -43,6 +44,7 @@ from opal.core.part_lifecycle import (
     draft_parts_in,
     ensure_parts_active,
 )
+from opal.core.signoffs import UNSET, SignoffError, effective_for, write_signoff_fields
 from opal.db.base import LifecycleState, SessionLocal
 from opal.db.models import (
     BOMLine,
@@ -344,8 +346,25 @@ async def list_tools() -> list[Tool]:
                     },
                     "requires_signoff": {
                         "type": "boolean",
-                        "description": "Step requires sign-off to complete (default false)",
+                        "description": "Step requires a second (secondary buyoff) sign-off "
+                        "to complete (default false)",
                         "default": False,
+                    },
+                    "signoffs": {
+                        "type": "array",
+                        "description": (
+                            "Ordered sign-off slots [{label, role}]; the step is complete "
+                            "when every slot is signed. Overrides requires_signoff / "
+                            "required_role, which are then derived from it."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "role": {"type": ["string", "null"]},
+                            },
+                            "required": ["label"],
+                        },
                     },
                     "estimated_duration_minutes": {
                         "type": "integer",
@@ -425,7 +444,7 @@ async def list_tools() -> list[Tool]:
             name="update_step",
             description=(
                 "Update a step's title, instructions, is_contingency, "
-                "requires_signoff, estimated_duration_minutes, required_role, "
+                "requires_signoff, signoffs, estimated_duration_minutes, required_role, "
                 "caution, or required_data_schema. Step_number, level, parent, "
                 "and order are not editable here — use reorder_steps for ordering."
             ),
@@ -438,6 +457,22 @@ async def list_tools() -> list[Tool]:
                     "instructions": {"type": "string"},
                     "is_contingency": {"type": "boolean"},
                     "requires_signoff": {"type": "boolean"},
+                    "signoffs": {
+                        "type": "array",
+                        "description": (
+                            "Ordered sign-off slots [{label, role}]; the step is complete "
+                            "when every slot is signed. Overrides requires_signoff / "
+                            "required_role, which are then derived from it."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "role": {"type": ["string", "null"]},
+                            },
+                            "required": ["label"],
+                        },
+                    },
                     "estimated_duration_minutes": {"type": "integer", "minimum": 1},
                     "required_role": {"type": "string"},
                     "caution": {"type": "string"},
@@ -1904,6 +1939,11 @@ async def list_tools() -> list[Tool]:
                                 "required_role": {"type": "string"},
                                 "caution": {"type": "string"},
                                 "requires_signoff": {"type": "boolean", "default": False},
+                                "signoffs": {
+                                    "type": "array",
+                                    "description": "Ordered sign-off slots [{label, role}]",
+                                    "items": {"type": "object"},
+                                },
                                 "estimated_duration_minutes": {"type": "integer", "minimum": 1},
                                 "workcenter_id": {"type": "integer"},
                                 "step_kits": {
@@ -2854,6 +2894,11 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
         caution=args.get("caution"),
         strict_sequence=args.get("strict_sequence", False),
     )
+    if args.get("signoffs") is not None:
+        try:
+            write_signoff_fields(step, False, signoffs=args["signoffs"])
+        except SignoffError as err:
+            return json_response({"error": str(err)})
     db.add(step)
     db.flush()
 
@@ -2879,6 +2924,7 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
                 "instructions": step.instructions,
                 "is_contingency": step.is_contingency,
                 "requires_signoff": step.requires_signoff,
+                "signoffs": effective_for(step, False),
                 "estimated_duration_minutes": step.estimated_duration_minutes,
                 "required_role": step.required_role,
                 "caution": step.caution,
@@ -4572,6 +4618,7 @@ def _serialize_step(step: ProcedureStep) -> dict:
         "required_data_schema": step.required_data_schema,
         "is_contingency": step.is_contingency,
         "requires_signoff": step.requires_signoff,
+        "signoffs": effective_for(step, bool(step.sub_steps)),
         "estimated_duration_minutes": step.estimated_duration_minutes,
         "required_role": step.required_role,
         "caution": step.caution,
@@ -4769,12 +4816,20 @@ async def _update_step(db, args: dict) -> list[TextContent]:
         step.instructions = args["instructions"]
     if "is_contingency" in args:
         step.is_contingency = bool(args["is_contingency"])
-    if "requires_signoff" in args:
-        step.requires_signoff = bool(args["requires_signoff"])
     if "estimated_duration_minutes" in args:
         step.estimated_duration_minutes = args["estimated_duration_minutes"]
-    if "required_role" in args:
-        step.required_role = args["required_role"]
+    try:
+        write_signoff_fields(
+            step,
+            bool(step.sub_steps),
+            signoffs=args.get("signoffs", UNSET),
+            requires_signoff=bool(args["requires_signoff"])
+            if "requires_signoff" in args
+            else UNSET,
+            required_role=args.get("required_role", UNSET),
+        )
+    except SignoffError as err:
+        return json_response({"error": str(err)})
     if "caution" in args:
         step.caution = args["caution"]
     if "strict_sequence" in args:
@@ -5492,6 +5547,7 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
     next_version = (max_version or 0) + 1
 
     step_ids = [s.id for s in steps]
+    snapshot_parent_ids = {s.parent_step_id for s in steps if s.parent_step_id is not None}
     all_step_kits = db.query(StepKit).filter(StepKit.step_id.in_(step_ids)).all()
     step_kit_map: dict[int, list[StepKit]] = {}
     for sk in all_step_kits:
@@ -5529,6 +5585,7 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
             "required_data_schema": step.required_data_schema,
             "is_contingency": step.is_contingency,
             "requires_signoff": step.requires_signoff,
+            "signoffs": effective_for(step, step.id in snapshot_parent_ids),
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "required_role": step.required_role,
             "caution": step.caution,
@@ -5672,6 +5729,7 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
             required_data_schema=s.required_data_schema,
             is_contingency=s.is_contingency,
             requires_signoff=s.requires_signoff,
+            signoffs=copy.deepcopy(s.signoffs),
             estimated_duration_minutes=s.estimated_duration_minutes,
             required_role=s.required_role,
             caution=s.caution,
@@ -6122,6 +6180,11 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
             estimated_duration_minutes=step.get("estimated_duration_minutes"),
             workcenter_id=step.get("workcenter_id"),
         )
+        if step.get("signoffs") is not None:
+            try:
+                write_signoff_fields(ps, False, signoffs=step["signoffs"])
+            except SignoffError as err:
+                return json_response({"error": str(err)})
         db.add(ps)
         db.flush()
         log_create(db, ps)

@@ -17,7 +17,7 @@ from opal.core.holds import enum_value
 from opal.db.models import InventoryRecord, User
 from opal.db.models.attachment import Attachment
 from opal.db.models.dataset import DataPoint, Dataset
-from opal.db.models.execution import ProcedureInstance
+from opal.db.models.execution import ProcedureInstance, StepSignoff
 from opal.db.models.inventory import InventoryProduction
 from opal.db.models.issue import Issue
 from opal.db.models.procedure import ProcedureOutput, ProcedureVersion
@@ -44,6 +44,15 @@ def build_execution_report(db: Session, instance: ProcedureInstance) -> dict[str
     }
     if instance.started_by_id:
         user_ids.add(instance.started_by_id)
+    signoffs_by_se: dict[int, list[StepSignoff]] = {}
+    for rec in (
+        db.query(StepSignoff)
+        .filter(StepSignoff.step_execution_id.in_([se.id for se in step_execs] or [0]))
+        .order_by(StepSignoff.slot)
+    ):
+        signoffs_by_se.setdefault(rec.step_execution_id, []).append(rec)
+        if rec.signed_by_id:
+            user_ids.add(rec.signed_by_id)
     users = {u.id: u.name for u in db.query(User).filter(User.id.in_(user_ids)).all()}
 
     def title_of(se) -> str:
@@ -61,6 +70,16 @@ def build_execution_report(db: Session, instance: ProcedureInstance) -> dict[str
             "operator": users.get(se.completed_by_id),
             "signoff": users.get(se.signed_off_by_id),
             "signoff_at": _iso(se.signed_off_at),
+            "signoffs": [
+                {
+                    "slot": r.slot,
+                    "label": r.label,
+                    "role": r.role,
+                    "signed_by": users.get(r.signed_by_id),
+                    "signed_at": _iso(r.signed_at),
+                }
+                for r in signoffs_by_se.get(se.id, [])
+            ],
         }
         for se in step_execs
     ]

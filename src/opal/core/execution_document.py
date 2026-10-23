@@ -21,9 +21,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from opal.core import execution_flow as exec_flow
 from opal.core.holds import enum_value, get_hold_state
+from opal.core.signoffs import derive_legacy
 from opal.db.models import InventoryRecord, Kit, User
 from opal.db.models.attachment import Attachment
-from opal.db.models.execution import ProcedureInstance, StepExecution
+from opal.db.models.execution import ProcedureInstance, StepExecution, StepSignoff
 from opal.db.models.inventory import (
     InventoryConsumption,
     InventoryProduction,
@@ -123,6 +124,12 @@ def build_execution_document(
     user_ids |= {se.completed_by_id for se in step_execs if se.completed_by_id}
     user_ids |= {se.signed_off_by_id for se in step_execs if se.signed_off_by_id}
     user_ids |= {n.author_id for ns in step_notes.values() for n in ns if n.author_id}
+    signoff_recs: dict[int, dict[int, StepSignoff]] = {}
+    if se_ids:
+        for rec in db.query(StepSignoff).filter(StepSignoff.step_execution_id.in_(se_ids)):
+            signoff_recs.setdefault(rec.step_execution_id, {})[rec.slot] = rec
+            if rec.signed_by_id:
+                user_ids.add(rec.signed_by_id)
     for p in instance.participants or []:
         if p.get("user_id"):
             user_ids.add(p["user_id"])
@@ -199,6 +206,7 @@ def build_execution_document(
 
     # ---- evidence ----
     atts_by_se: dict[int, list[Attachment]] = {}
+    atts_by_note: dict[int, list[Attachment]] = {}
     wo_atts: list[Attachment] = []
     scope = Attachment.procedure_instance_id == instance.id
     if se_ids:
@@ -209,7 +217,9 @@ def build_execution_document(
         .filter(scope)
         .order_by(Attachment.created_at.asc())
     ):
-        if att.step_execution_id:
+        if att.step_note_id:
+            atts_by_note.setdefault(att.step_note_id, []).append(att)
+        elif att.step_execution_id:
             atts_by_se.setdefault(att.step_execution_id, []).append(att)
         elif att.procedure_instance_id == instance.id:
             wo_atts.append(att)
@@ -225,6 +235,20 @@ def build_execution_document(
             "uploaded_by": a.uploaded_by.name if a.uploaded_by else None,
             "created_at": _iso(a.created_at),
         }
+
+    def note_att_row(a: Attachment) -> dict[str, Any]:
+        return {
+            "id": a.id,
+            "filename": a.original_filename,
+            "mime_type": a.mime_type,
+            "size_bytes": a.size_bytes,
+            "url": f"/api/attachments/{a.id}/download",
+            "is_image": (a.mime_type or "").startswith("image/"),
+        }
+
+    def person(uid: int | None) -> dict[str, Any] | None:
+        u = users.get(uid) if uid else None
+        return {"id": u.id, "name": u.name} if u else None
 
     # ---- consumption ----
     consumptions = (
@@ -283,6 +307,30 @@ def build_execution_document(
         number = display_number(se, op_number)
         complete_b = exec_flow.complete_blockers(db, instance, se, hold_state)
         skip_b = exec_flow.skip_blockers(db, instance, se, hold_state)
+        defs = exec_flow.step_signoff_defs(
+            version, se, is_op and bool(children_of.get(se.step_number))
+        )
+        recs = signoff_recs.get(se.id, {})
+        signoffs = []
+        for n, d in enumerate(defs):
+            rec = recs.get(n)
+            can_sign, slot_b = exec_flow.slot_gate(
+                db, instance, se, n, defs, recs, hold_state, complete=complete_b
+            )
+            signoffs.append(
+                {
+                    "slot": n,
+                    "label": rec.label if rec else d["label"],
+                    "role": rec.role if rec else d["role"],
+                    "signed_by": person(rec.signed_by_id) if rec else None,
+                    "signed_at": _iso(rec.signed_at) if rec else None,
+                    "can_sign": can_sign,
+                    "blockers": [_blocker(b) for b in slot_b],
+                }
+            )
+        requires_signoff, first_role = derive_legacy(
+            defs, is_op and bool(children_of.get(se.step_number))
+        )
         schema = se.required_data_schema or vs.get("required_data_schema")
         skip_reason = None
         if status == "skipped" and isinstance(se.data_captured, dict):
@@ -298,8 +346,9 @@ def build_execution_document(
             "status": status,
             "instructions": se.instructions if se.ad_hoc_issue_id else vs.get("instructions"),
             "caution": vs.get("caution"),
-            "role": vs.get("required_role"),
-            "requires_signoff": bool(se.requires_signoff or vs.get("requires_signoff")),
+            "role": first_role if signoffs else vs.get("required_role"),
+            "requires_signoff": requires_signoff,
+            "signoffs": signoffs,
             "is_contingency": bool(vs.get("is_contingency", False)),
             "estimated_duration_minutes": vs.get("estimated_duration_minutes"),
             "images": vs.get("images") or [],
@@ -331,9 +380,10 @@ def build_execution_document(
             "notes": [
                 {
                     "id": n.id,
-                    "author": uname(n.author_id),
+                    "author": person(n.author_id),
                     "created_at": _iso(n.created_at),
                     "body": n.body,
+                    "attachments": [note_att_row(a) for a in atts_by_note.get(n.id, [])],
                 }
                 for n in step_notes.get(se.id, [])
             ],
@@ -421,7 +471,8 @@ def build_execution_document(
             "status": op_step["status"],
             "instructions": op_step["instructions"],
             "caution": vs.get("caution"),
-            "role": vs.get("required_role"),
+            "role": op_step["role"],
+            "signoffs": op_step["signoffs"],
             "strict_sequence": strict,
             "is_contingency": bool(vs.get("is_contingency", False)),
             "is_ad_hoc": is_redline,

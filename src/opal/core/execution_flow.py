@@ -18,17 +18,20 @@ so it does not pretend to):
 The blocking computation has one home: core/holds.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from opal.core.audit import log_create
 from opal.core.holds import HoldState, blocking_issues_for_instance, get_hold_state
 from opal.core.holds import enum_value as _status_value  # enum-unwrap, one home in core/holds
+from opal.core.signoffs import effective_signoffs
 from opal.db.models.attachment import Attachment
 from opal.db.models.execution import (
     InstanceStatus,
@@ -36,6 +39,7 @@ from opal.db.models.execution import (
     StepExecution,
     StepFocus,
     StepNote,
+    StepSignoff,
     StepStatus,
 )
 from opal.db.models.inventory import InventoryConsumption, InventoryProduction, ProductionStatus
@@ -59,9 +63,11 @@ class FlowError(Exception):
 
     status_code = 400
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.message = message
+        if status_code is not None:
+            self.status_code = status_code
 
 
 def user_initials(name: str | None) -> str:
@@ -522,88 +528,251 @@ def validate_data_captured(
 
 
 @dataclass
-class CompleteResult:
+class SignResult:
+    """Outcome of one signature (or of the COMPLETE / SIGN OFF wrappers)."""
+
     step_exec: StepExecution
     instance_completed: bool = False
     instance_started: bool = False  # this event moved the WO out of CUT
     validation_errors: list[str] = field(default_factory=list)
+    slot: int = 0
+    step_completed: bool = False  # this signature was the step's last one
 
 
-def step_requires_signoff(version: ProcedureVersion | None, step_exec: StepExecution) -> bool:
-    """Whether finishing this step needs a sign-off: the published step's flag,
-    or the ad-hoc flag on the execution row (redline steps)."""
-    if step_exec.requires_signoff:
-        return True
-    if version is None:
-        return False
-    for step in version.content.get("steps", []):
-        if step.get("order") == step_exec.step_number:
-            return bool(step.get("requires_signoff"))
-    return False
+# The two historical result types are the same shape now.
+CompleteResult = SignResult
+SignoffResult = SignResult
 
 
-@dataclass
-class SignoffResult:
-    step_exec: StepExecution
-    instance_completed: bool = False
+def row_has_children(instance: ProcedureInstance, step_exec: StepExecution) -> bool:
+    """Whether this row is an OP carrying sub-steps."""
+    return step_exec.level == 0 and any(
+        other.parent_step_order == step_exec.step_number for other in instance.step_executions
+    )
 
 
-def signoff_step_flow(
-    db: Session, instance: ProcedureInstance, step_exec: StepExecution, user_id: int
-) -> SignoffResult:
-    """SIGN OFF is the terminal commitment for a step or OP awaiting sign-off.
-    Same containment gate as COMPLETE; cascades OP and instance completion."""
+def step_signoff_defs(
+    version: ProcedureVersion | None, step_exec: StepExecution, has_children: bool
+) -> list[dict[str, Any]]:
+    """The effective sign-off slots of one execution row (core/signoffs holds
+    the definition; this only picks the right source mapping).
+
+    Ad-hoc (redline) rows carry their own definition; snapshot rows read the
+    published version. A row-level ``requires_signoff`` flag still counts."""
+    if step_exec.ad_hoc_issue_id is not None:
+        source: dict[str, Any] = {
+            "signoffs": step_exec.signoffs,
+            "requires_signoff": step_exec.requires_signoff,
+        }
+    else:
+        source = dict(version_step_map(version).get(step_exec.step_number) or {})
+        if step_exec.requires_signoff:
+            source["requires_signoff"] = True
+        if step_exec.signoffs is not None:
+            source["signoffs"] = step_exec.signoffs
+    return effective_signoffs(source, has_children)
+
+
+def signed_slots(db: Session, step_exec: StepExecution) -> dict[int, StepSignoff]:
+    """Signatures recorded on a row, keyed by slot (a fresh read)."""
+    return {
+        s.slot: s
+        for s in db.query(StepSignoff).filter(StepSignoff.step_execution_id == step_exec.id).all()
+    }
+
+
+def slot_gate(
+    db: Session,
+    instance: ProcedureInstance,
+    step_exec: StepExecution,
+    slot: int,
+    defs: list[dict[str, Any]],
+    signed: Mapping[int, Any],
+    hold_state: HoldState | None = None,
+    complete: list[Blocker] | None = None,
+) -> tuple[bool, list[Blocker]]:
+    """(can_sign, blockers) for one slot. The one fold behind both the sign
+    endpoint's refusal and the document's ``can_sign`` / ``blockers``.
+
+    Slot 0 is the old COMPLETE: the step is open and every sequence, hold and
+    children gate is clear. Later slots need slot 0 and a clear held scope, and
+    may then be signed in any order."""
+    active = (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value)
+    if _status_value(instance.status) not in active:
+        return False, []
+    status = _status_value(step_exec.status)
+    if slot in signed or status in TERMINAL_STEP_STATUSES:
+        return False, []
+    if status == StepStatus.ON_HOLD.value:
+        return False, [Blocker(kind="hold", message="Step is on hold")]
+    open_states = (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value)
+    if slot == 0:
+        if status in open_states:
+            blockers = (
+                complete
+                if complete is not None
+                else complete_blockers(db, instance, step_exec, hold_state)
+            )
+        else:  # awaiting_signoff with slot 0 unsigned: an OP whose children finished
+            blockers = held_scope_blockers(db, instance, step_exec, hold_state)
+    elif 0 not in signed:
+        blockers = [Blocker(kind="signoff", message=f"Waiting on {defs[0]['label']}")]
+    elif status != StepStatus.AWAITING_SIGNOFF.value:
+        return False, []
+    else:
+        blockers = held_scope_blockers(db, instance, step_exec, hold_state)
+    return not blockers, blockers
+
+
+def sign_step_flow(
+    db: Session,
+    instance: ProcedureInstance,
+    step_exec: StepExecution,
+    slot: int,
+    user_id: int,
+    data_captured: dict[str, Any] | None = None,
+    notes: str | None = None,
+) -> SignResult:
+    """Sign one slot of a step's (or OP's) sign-off list: the only commitment
+    path. A step is complete when its last slot is signed.
+
+    Slot 0 is what COMPLETE used to be: gates, required data (stored with the
+    signature), and the work order moving out of CUT. A step with more slots then
+    waits in AWAITING_SIGNOFF; the last signature makes it COMPLETED. Two signers
+    of one slot serialize on the (step, slot) unique key and the loser is
+    refused cleanly."""
     inst_status = _status_value(instance.status)
     if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
         raise FlowError("Instance is not active")
 
-    step_status = _status_value(step_exec.status)
-    if step_status == StepStatus.SIGNED_OFF.value:
-        raise FlowError("Step already signed off")
-    if step_status in (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value):
-        raise FlowError(
-            "Step has sub-steps that are not yet complete"
-            if step_exec.level == 0
-            else "Step must be completed before it can be signed off"
-        )
-    if step_status != StepStatus.AWAITING_SIGNOFF.value:
-        raise FlowError(f"Cannot sign off step in {step_status} status")
+    version = db.get(ProcedureVersion, instance.version_id)
+    defs = step_signoff_defs(version, step_exec, row_has_children(instance, step_exec))
+    if not defs:
+        # An OP without sign-offs completes by itself when its sub-steps do; a
+        # manual COMPLETE only explains what it is waiting on.
+        waiting = complete_blockers(db, instance, step_exec)
+        if waiting:
+            raise FlowError("Cannot complete: " + "; ".join(b.message for b in waiting))
+        raise FlowError("This OP has no sign-offs; it completes when its sub-steps do")
+    if slot < 0 or slot >= len(defs):
+        raise FlowError(f"No sign-off {slot} on this step", status_code=404)
 
-    # Same containment gate as COMPLETE (sequence gates were met at completion).
-    blockers = held_scope_blockers(db, instance, step_exec)
-    if blockers:
-        raise FlowError("Cannot sign off: " + "; ".join(b.message for b in blockers))
+    db.refresh(step_exec)
+    step_status = _status_value(step_exec.status)
+    signed = signed_slots(db, step_exec)
+    if slot in signed:
+        if slot == 0 and step_status == StepStatus.AWAITING_SIGNOFF.value:
+            raise FlowError("Step is complete and awaiting sign-off")
+        if slot == 0:
+            raise FlowError("Step already completed")
+        raise FlowError(f"{defs[slot]['label']} already signed")
+    if step_status == StepStatus.SKIPPED.value:
+        raise FlowError("Cannot sign a skipped step")
+    if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
+        raise FlowError("Step already completed" if slot == 0 else "Step already signed off")
+    if step_status == StepStatus.ON_HOLD.value:
+        raise FlowError(f"Cannot complete step in {step_status} status")
+
+    can_sign, blockers = slot_gate(db, instance, step_exec, slot, defs, signed)
+    if not can_sign:
+        verb = "complete" if slot == 0 else "sign off"
+        raise FlowError(f"Cannot {verb}: " + "; ".join(b.message for b in blockers))
+
+    instance_started = False
+    if slot == 0:
+        errors = validate_data_captured(version, step_exec, data_captured)
+        if errors:
+            return SignResult(step_exec=step_exec, slot=slot, validation_errors=errors)
+        instance_started = mark_instance_in_work(db, instance)
 
     now = datetime.now(UTC)
+    # The unique (step, slot) key is the guard: a concurrent signer of this slot
+    # loses at the insert and gets a clean refusal.
+    try:
+        with db.begin_nested():
+            db.add(
+                StepSignoff(
+                    step_execution_id=step_exec.id,
+                    slot=slot,
+                    label=defs[slot]["label"],
+                    role=defs[slot]["role"],
+                    signed_by_id=user_id,
+                    signed_at=now,
+                )
+            )
+            db.flush()
+    except IntegrityError as err:
+        db.rollback()
+        raise FlowError("Already signed") from err
+
+    last = len(signed) + 1 >= len(defs)
+    target = StepStatus.COMPLETED if last else StepStatus.AWAITING_SIGNOFF
+    values: dict[Any, Any] = {StepExecution.status: target}
+    from_states = [StepStatus.AWAITING_SIGNOFF]
+    if slot == 0:
+        from_states += [StepStatus.PENDING, StepStatus.IN_PROGRESS]
+        if step_status in (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value):
+            values[StepExecution.completed_at] = now
+            values[StepExecution.completed_by_id] = user_id
+    elif last:
+        # Keep the legacy columns readable for reports that still look at them.
+        values[StepExecution.signed_off_at] = now
+        values[StepExecution.signed_off_by_id] = user_id
     flipped = (
         db.query(StepExecution)
-        .filter(
-            StepExecution.id == step_exec.id,
-            StepExecution.status == StepStatus.AWAITING_SIGNOFF,
-        )
-        .update(
-            {
-                StepExecution.status: StepStatus.SIGNED_OFF,
-                StepExecution.signed_off_at: now,
-                StepExecution.signed_off_by_id: user_id,
-            },
-            synchronize_session=False,
-        )
+        .filter(StepExecution.id == step_exec.id, StepExecution.status.in_(from_states))
+        .update(values, synchronize_session=False)
     )
     if not flipped:
         db.rollback()
-        raise FlowError("Step already signed off")
+        raise FlowError("Step already completed")
     db.expire(step_exec)
+
+    if slot == 0:
+        if step_status == StepStatus.PENDING.value and step_exec.started_at is None:
+            step_exec.started_at = now
+        if data_captured:
+            step_exec.data_captured = data_captured
+        if notes and notes.strip():
+            add_step_note(db, step_exec, notes, user_id)
 
     old_instance_status = _status_value(instance.status)
     check_instance_completion(db, instance)
-    return SignoffResult(
+    return SignResult(
         step_exec=step_exec,
         instance_completed=(
             old_instance_status != InstanceStatus.COMPLETED.value
             and _status_value(instance.status) == InstanceStatus.COMPLETED.value
         ),
+        instance_started=instance_started,
+        slot=slot,
+        step_completed=last,
     )
+
+
+def signoff_step_flow(
+    db: Session, instance: ProcedureInstance, step_exec: StepExecution, user_id: int
+) -> SignResult:
+    """SIGN OFF wrapper: sign the next unsigned slot after slot 0."""
+    defs = step_signoff_defs(
+        db.get(ProcedureVersion, instance.version_id),
+        step_exec,
+        row_has_children(instance, step_exec),
+    )
+    status = _status_value(step_exec.status)
+    if status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
+        raise FlowError("Step already signed off")
+    if status in (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value):
+        raise FlowError(
+            "Step has sub-steps that are not yet complete"
+            if step_exec.level == 0
+            else "Step must be completed before it can be signed off"
+        )
+    signed = signed_slots(db, step_exec)
+    nxt = next((n for n in range(1 if 0 in signed else 0, len(defs)) if n not in signed), None)
+    if nxt is None:
+        raise FlowError(f"Cannot sign off step in {status} status")
+    return sign_step_flow(db, instance, step_exec, nxt, user_id)
 
 
 def complete_step_flow(
@@ -613,84 +782,9 @@ def complete_step_flow(
     user_id: int,
     data_captured: dict[str, Any] | None = None,
     notes: str | None = None,
-) -> CompleteResult:
-    """COMPLETE is the commitment moment: it checks the undispositioned-issue
-    and sequence state of its scope, validates required data, and cascades
-    instance completion."""
-    inst_status = _status_value(instance.status)
-    if inst_status not in (InstanceStatus.CUT.value, InstanceStatus.IN_WORK.value):
-        raise FlowError("Instance is not active")
-
-    step_status = _status_value(step_exec.status)
-    if step_status in (StepStatus.COMPLETED.value, StepStatus.SIGNED_OFF.value):
-        raise FlowError("Step already completed")
-    if step_status == StepStatus.AWAITING_SIGNOFF.value:
-        raise FlowError("Step is complete and awaiting sign-off")
-    if step_status not in (StepStatus.PENDING.value, StepStatus.IN_PROGRESS.value):
-        raise FlowError(f"Cannot complete step in {step_status} status")
-
-    holds = complete_blockers(db, instance, step_exec)
-    if holds:
-        raise FlowError("Cannot complete: " + "; ".join(b.message for b in holds))
-
-    version = db.get(ProcedureVersion, instance.version_id)
-    errors = validate_data_captured(version, step_exec, data_captured)
-    if errors:
-        return CompleteResult(step_exec=step_exec, validation_errors=errors)
-
-    instance_started = mark_instance_in_work(db, instance)
-
-    # A step that requires sign-off is not done when its operator completes
-    # it: it waits for a sign-off (signoff_step_flow) before it is terminal.
-    done_status = (
-        StepStatus.AWAITING_SIGNOFF
-        if step_requires_signoff(version, step_exec)
-        else StepStatus.COMPLETED
-    )
-
-    # Re-assert the precondition as a guarded UPDATE: two users completing
-    # the same step inside one poll window serialize at the write, and the
-    # loser gets a clean refusal instead of double-writing completed_by.
-    now = datetime.now(UTC)
-    flipped = (
-        db.query(StepExecution)
-        .filter(
-            StepExecution.id == step_exec.id,
-            StepExecution.status.in_([StepStatus.PENDING, StepStatus.IN_PROGRESS]),
-        )
-        .update(
-            {
-                StepExecution.status: done_status,
-                StepExecution.completed_at: now,
-                StepExecution.completed_by_id: user_id,
-            },
-            synchronize_session=False,
-        )
-    )
-    if not flipped:
-        db.rollback()
-        raise FlowError("Step already completed")
-    db.expire(step_exec)
-
-    if step_status == StepStatus.PENDING.value and step_exec.started_at is None:
-        step_exec.started_at = now
-    if data_captured:
-        step_exec.data_captured = data_captured
-    if notes and notes.strip():
-        add_step_note(db, step_exec, notes, user_id)
-
-    old_instance_status = _status_value(instance.status)
-    check_instance_completion(db, instance)
-
-    instance_completed = (
-        old_instance_status != InstanceStatus.COMPLETED.value
-        and _status_value(instance.status) == InstanceStatus.COMPLETED.value
-    )
-    return CompleteResult(
-        step_exec=step_exec,
-        instance_completed=instance_completed,
-        instance_started=instance_started,
-    )
+) -> SignResult:
+    """COMPLETE wrapper: sign slot 0, with its data and note."""
+    return sign_step_flow(db, instance, step_exec, 0, user_id, data_captured, notes)
 
 
 def recheck_instance_completion(db: Session, issue: Issue) -> None:
@@ -741,7 +835,7 @@ def check_instance_completion(db: Session, instance: ProcedureInstance) -> None:
                         # children are done; otherwise it completes itself.
                         step_exec.status = (
                             StepStatus.AWAITING_SIGNOFF
-                            if step_requires_signoff(version, step_exec)
+                            if step_signoff_defs(version, step_exec, True)
                             else StepStatus.COMPLETED
                         )
                         step_exec.completed_at = datetime.now(UTC)

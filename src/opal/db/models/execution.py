@@ -185,6 +185,11 @@ class StepExecution(Base, IdMixin, TimestampMixin):
     requires_signoff: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, comment="Ad-hoc sign-off flag"
     )
+    signoffs: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Ad-hoc rows: [{label, role}] sign-off definitions; snapshot rows read the version",
+    )
 
     # Relationships
     instance: Mapped["ProcedureInstance"] = relationship(
@@ -214,6 +219,12 @@ class StepExecution(Base, IdMixin, TimestampMixin):
         back_populates="step_execution",
         cascade="all, delete-orphan",
         order_by="StepNote.created_at, StepNote.id",
+    )
+    signoff_records: Mapped[list["StepSignoff"]] = relationship(
+        "StepSignoff",
+        back_populates="step_execution",
+        cascade="all, delete-orphan",
+        order_by="StepSignoff.slot",
     )
 
     @property
@@ -249,6 +260,36 @@ class StepNote(Base, IdMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<StepNote(id={self.id}, step_execution_id={self.step_execution_id})>"
+
+
+class StepSignoff(Base, IdMixin, TimestampMixin):
+    """One signature on a step or OP: slot n of its effective sign-off list.
+
+    Label and role are copied from the effective definition at signing time, so
+    the record reads the same after the template changes. A step is complete
+    when every slot of its effective list has a row here.
+    """
+
+    __table_args__ = (UniqueConstraint("step_execution_id", "slot", name="uq_step_signoff_slot"),)
+
+    step_execution_id: Mapped[int] = mapped_column(
+        ForeignKey("step_execution.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    signed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    step_execution: Mapped["StepExecution"] = relationship(
+        "StepExecution", back_populates="signoff_records"
+    )
+    signed_by: Mapped["User | None"] = relationship("User")
+
+    def __repr__(self) -> str:
+        return f"<StepSignoff(step_execution_id={self.step_execution_id}, slot={self.slot})>"
 
 
 class StepFocus(Base, IdMixin, TimestampMixin):
