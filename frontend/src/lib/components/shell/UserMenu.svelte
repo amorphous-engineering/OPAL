@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { mode, setMode } from 'mode-watcher';
 	import { ACCOUNT_GROUP, NAV } from '#lib/nav.js';
+	import { Avatar } from '#lib/components/opal/index.js';
 	import { session } from '#lib/session.svelte.js';
 
 	async function signOut() {
@@ -14,12 +15,22 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger
 		aria-label="Account menu"
-		class="inline-flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
+		class="inline-flex h-7 items-center gap-2 border border-border px-1.5 text-sm hover:bg-accent data-[state=open]:bg-accent sm:px-2"
 	>
-		{session.user?.username ?? '—'}
+		<Avatar user={session.user} size="xs" />
+		<span class="hidden max-w-48 truncate sm:inline">{session.user?.name ?? '—'}</span>
+		<span aria-hidden="true" class="text-xs text-muted-foreground">▾</span>
 	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end" class="w-48">
-		<DropdownMenu.Label class="text-xs">{session.user?.name}</DropdownMenu.Label>
+	<DropdownMenu.Content align="end" class="w-64">
+		<div class="flex items-center gap-3 px-2 py-2">
+			<Avatar user={session.user} size="md" />
+			<div class="min-w-0">
+				<div class="truncate text-sm font-medium">{session.user?.name}</div>
+				<div class="truncate font-mono text-xs text-muted-foreground">
+					{session.user?.job_title || session.user?.username}
+				</div>
+			</div>
+		</div>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item onSelect={() => goto(`/users/${session.user?.id}`)}
 			>Profile</DropdownMenu.Item
