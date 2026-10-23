@@ -5,7 +5,6 @@
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
 	import CursorChips from './CursorChips.svelte';
-	import RoleChip from './RoleChip.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepState from './StepState.svelte';
 	import StepTitleActions from './StepTitleActions.svelte';
@@ -89,7 +88,6 @@
 				>{step.title}</span
 			>
 		{/if}
-		<RoleChip role={step.role} />
 		{#if au}<AuthorChips {step} />{/if}
 		<CursorChips cursors={step.cursors} viewerId={ctl.viewerId} />
 		{#if nAtt || nNote}

@@ -21,7 +21,6 @@ export { default as StepState } from './StepState.svelte';
 export { default as CaptureFields } from './CaptureFields.svelte';
 export { default as CaptureReadout } from './CaptureReadout.svelte';
 export { default as CautionBlock } from './CautionBlock.svelte';
-export { default as RoleChip } from './RoleChip.svelte';
 export { default as CursorChips } from './CursorChips.svelte';
 export { default as GateReason } from './GateReason.svelte';
 export { attachmentUrl, gallery } from './viewer.js';

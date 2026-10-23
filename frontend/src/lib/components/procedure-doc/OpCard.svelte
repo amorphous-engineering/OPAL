@@ -9,7 +9,6 @@
 	import CautionBlock from './CautionBlock.svelte';
 	import CursorChips from './CursorChips.svelte';
 	import OpClaim from './OpClaim.svelte';
-	import RoleChip from './RoleChip.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepRow from './StepRow.svelte';
 	import StepState from './StepState.svelte';
@@ -148,7 +147,6 @@
 				title="Sub-steps complete in order">SEQ</span
 			>
 		{/if}
-		<RoleChip role={op.role} />
 		{#if au && op.waiting_on_ops.length}
 			<span
 				class="hidden font-mono text-[11px] whitespace-nowrap text-muted-foreground md:inline"
