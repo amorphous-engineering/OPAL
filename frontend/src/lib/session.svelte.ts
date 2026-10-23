@@ -9,7 +9,6 @@ export interface CurrentUser {
 	avatar_url?: string | null;
 	job_title?: string | null;
 	is_admin: boolean;
-	avatar_url?: string | null;
 	needs_onboarding: boolean;
 	needs_profile_setup: boolean;
 }
