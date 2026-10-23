@@ -3,6 +3,7 @@
 	// caution, data field, image and step kit exactly as frozen at publish.
 	import { EmptyLine, Section } from '#lib/components/opal/index.js';
 	import { duration, qty } from '#lib/format.js';
+	import { CautionBlock } from '#lib/components/procedure-doc/index.js';
 	import Prose from './Prose.svelte';
 	import { groupOps, type OpGroup, type SnapshotStep } from './types.js';
 
@@ -13,10 +14,7 @@
 
 {#snippet detail(s: SnapshotStep)}
 	{#if s.caution}
-		<p class="my-1 border border-warn/50 bg-warn-muted px-2 py-1 text-xs">
-			<span class="font-mono font-medium text-warn uppercase">Caution</span>
-			{s.caution}
-		</p>
+		<div class="my-1"><CautionBlock text={s.caution} /></div>
 	{/if}
 	{#if s.instructions}
 		<Prose source={s.instructions} class="my-1" />

@@ -20,7 +20,7 @@
 	<textarea
 		{id}
 		rows="1"
-		class="field-sizing-content min-h-6 w-full resize-none border border-transparent bg-transparent px-1 text-xs whitespace-pre-wrap text-foreground placeholder:text-muted-foreground hover:border-error/30 focus:border-ring focus:bg-background focus:outline-none"
+		class="field-sizing-content min-h-6 w-full resize-none border border-transparent bg-transparent px-1 text-sm leading-relaxed whitespace-pre-wrap text-foreground placeholder:text-muted-foreground hover:border-error/30 focus:border-ring focus:bg-background focus:outline-none"
 		placeholder="Hazard text"
 		value={step.caution ?? ''}
 		onkeydown={(e) => e.stopPropagation()}
