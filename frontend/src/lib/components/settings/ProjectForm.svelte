@@ -6,7 +6,6 @@
 		DataTable,
 		Section,
 		toast,
-		toastError,
 		type Column,
 		ErrorBanner
 	} from '#lib/components/opal/index.js';
@@ -16,7 +15,7 @@
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { api, ApiError } from '#lib/api.js';
+	import { ApiError, opal } from '#lib/api.js';
 	import type { ProjectConfig } from './types.js';
 
 	let { existing }: { existing: ProjectConfig | null } = $props();
@@ -58,9 +57,9 @@
 					name: t.name,
 					code: t.code,
 					description: t.description,
-					tracking: t.default_tracking ?? 'bulk',
-					requireLot: !!t.require_lot,
-					autoSerial: !!t.auto_serial
+					tracking: t.defaultTracking,
+					requireLot: t.requireLot,
+					autoSerial: t.autoSerial
 				}))
 			: DEFAULT_TIERS.map(([n, c, tr, lot, ser], i) => ({
 					id: nextId++,
@@ -73,21 +72,21 @@
 					autoSerial: ser
 				}))
 	);
-	let prefix = $state(seed?.part_numbering.prefix ?? '');
-	let separator = $state(seed?.part_numbering.separator ?? '-');
-	let digits = $state(String(seed?.part_numbering.sequence_digits ?? 4));
-	let format = $state(seed?.part_numbering.format ?? '{prefix}{sep}{tier_code}{sep}{sequence}');
+	let prefix = $state(seed?.partNumbering.prefix ?? '');
+	let separator = $state(seed?.partNumbering.separator ?? '-');
+	let digits = $state(String(seed?.partNumbering.sequenceDigits ?? 4));
+	let format = $state(seed?.partNumbering.format ?? '{prefix}{sep}{tier_code}{sep}{sequence}');
 	let categories = $state<string[]>(seed ? [...seed.categories] : []);
 	let categoryDraft = $state('');
 	let fields = $state<FieldRow[]>(
-		Object.entries(seed?.custom_fields ?? {}).map(([key, value]) => ({
+		Object.entries(seed?.customFields ?? {}).map(([key, value]) => ({
 			id: nextId++,
 			key,
 			value: typeof value === 'string' ? value : JSON.stringify(value)
 		}))
 	);
 	// Non-string custom field values survive an edit untouched.
-	const originalFields = seed?.custom_fields ?? {};
+	const originalFields = seed?.customFields ?? {};
 
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -163,29 +162,29 @@
 				name: t.name,
 				code: t.code.toUpperCase(),
 				description: t.description,
-				default_tracking: t.tracking,
-				require_lot: t.requireLot,
-				auto_serial: t.autoSerial
+				defaultTracking: t.tracking,
+				requireLot: t.requireLot,
+				autoSerial: t.autoSerial
 			})),
-			part_numbering: {
+			partNumbering: {
 				prefix,
 				separator,
-				sequence_digits: parseInt(digits, 10),
+				sequenceDigits: parseInt(digits, 10),
 				format
 			},
 			categories,
-			custom_fields: custom
+			customFields: custom
 		};
 		busy = true;
 		try {
 			if (existing) {
-				await api.put('/project/config', body);
+				await opal.org.project.update(body);
 				toast.success('Project saved');
 				await refreshAll();
 			} else {
-				await api.post('/project/config', body);
+				await opal.org.project.create(body);
 				// Creating the project is the last step of first-run onboarding.
-				await api.post('/welcome/complete').catch(() => {});
+				await opal.org.welcome.complete({}).catch(() => {});
 				toast.success('Project created');
 				window.location.assign('/');
 			}
@@ -207,19 +206,6 @@
 			if (!ok) return;
 		}
 		tiers = tiers.filter((x) => x.id !== t.id);
-	}
-
-	async function importCatalog() {
-		try {
-			const r = await api.post<{ created: string[]; skipped: string[]; relinked: number }>(
-				'/project/requirements/import'
-			);
-			toast.success(
-				`Imported ${r.created.length} requirement(s), ${r.skipped.length} already present`
-			);
-		} catch (err) {
-			toastError(err);
-		}
 	}
 
 	const previewColumns: Column<TierRow>[] = [
@@ -448,9 +434,6 @@
 
 		{#if catalog.length}
 			<Section title="Requirement catalog" count={catalog.length}>
-				{#snippet actions()}
-					<Button variant="ghost" size="xs" onclick={importCatalog}>IMPORT</Button>
-				{/snippet}
 				<DataTable
 					rows={catalog}
 					columns={[

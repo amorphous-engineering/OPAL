@@ -35,6 +35,8 @@ export interface Ctx {
 	actor: Actor;
 	/** Name of the running operation; recorded on every audit row. */
 	op: string;
+	/** Unique per operation call; recorded on every audit row the call writes. */
+	invocation?: string;
 	cookies?: CookieJar;
 	request?: RequestInfo;
 }

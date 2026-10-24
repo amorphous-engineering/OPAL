@@ -9,6 +9,8 @@
 		name?: string | null;
 		/** Server-provided URL, cache-busted; absent when the user has no avatar. */
 		avatar_url?: string | null;
+		// added by org: the new server's camelCase spelling of the same field
+		avatarUrl?: string | null;
 	}
 
 	let {
@@ -35,18 +37,19 @@
 			.map((w) => w[0]?.toUpperCase())
 			.join('') || '?'
 	);
+	const src = $derived(user?.avatarUrl ?? user?.avatar_url ?? null);
 	let failed = $state(false);
 	$effect(() => {
-		void user?.avatar_url;
+		void src;
 		failed = false;
 	});
 </script>
 
-{#if user?.avatar_url && !failed}
+{#if src && !failed}
 	<img
-		src={user.avatar_url}
-		alt={user.name ?? ''}
-		title={user.name ?? undefined}
+		{src}
+		alt={user?.name ?? ''}
+		title={user?.name ?? undefined}
 		loading="lazy"
 		class={cn(
 			'shrink-0 rounded-md border border-border bg-muted object-cover',

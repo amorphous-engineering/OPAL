@@ -15,14 +15,14 @@
 		{ key: 'level', label: 'Level', mono: true, width: '4rem' },
 		{ key: 'name', label: 'Name' },
 		{ key: 'code', label: 'Code', mono: true },
-		{ key: 'default_tracking', label: 'Tracking' },
-		{ key: 'require_lot', label: 'Lot' },
-		{ key: 'auto_serial', label: 'Serial' },
+		{ key: 'defaultTracking', label: 'Tracking' },
+		{ key: 'requireLot', label: 'Lot' },
+		{ key: 'autoSerial', label: 'Serial' },
 		{ key: 'description', label: 'Description' }
 	];
 
-	const customFields = $derived(Object.entries(project?.custom_fields ?? {}));
-	const flag = (v: boolean | null) => (v ? 'REQUIRED' : '—');
+	const customFields = $derived(Object.entries(project?.customFields ?? {}));
+	const flag = (v: boolean) => (v ? 'REQUIRED' : '—');
 </script>
 
 {#if project}
@@ -30,16 +30,16 @@
 		<DetailTable>
 			<DetailRow label="Name" value={project.name} />
 			<DetailRow label="Description" value={project.description} />
-			<DetailRow label="Number format" mono value={project.part_numbering.format} />
-			<DetailRow label="Prefix" mono value={project.part_numbering.prefix} />
+			<DetailRow label="Number format" mono value={project.partNumbering.format} />
+			<DetailRow label="Prefix" mono value={project.partNumbering.prefix} />
 			<DetailRow
 				label="Separator"
 				mono
-				value={project.part_numbering.separator === ''
+				value={project.partNumbering.separator === ''
 					? '(none)'
-					: project.part_numbering.separator}
+					: project.partNumbering.separator}
 			/>
-			<DetailRow label="Sequence digits" mono value={project.part_numbering.sequence_digits} />
+			<DetailRow label="Sequence digits" mono value={project.partNumbering.sequenceDigits} />
 			<DetailRow label="Categories">
 				{#if project.categories.length}
 					<span class="font-mono text-xs">{project.categories.join(' · ')}</span>
@@ -52,12 +52,12 @@
 		<div class="border-t border-border">
 			<DataTable rows={project.tiers} {columns} emptyLabel="TIERS" key={(t) => t.level} dense>
 				{#snippet cell(t, col)}
-					{#if col.key === 'default_tracking'}
-						<span class="font-mono text-xs uppercase">{t.default_tracking ?? '—'}</span>
-					{:else if col.key === 'require_lot'}
-						<span class="font-mono text-xs">{flag(t.require_lot)}</span>
-					{:else if col.key === 'auto_serial'}
-						<span class="font-mono text-xs">{t.auto_serial ? 'AUTO' : '—'}</span>
+					{#if col.key === 'defaultTracking'}
+						<span class="font-mono text-xs uppercase">{t.defaultTracking}</span>
+					{:else if col.key === 'requireLot'}
+						<span class="font-mono text-xs">{flag(t.requireLot)}</span>
+					{:else if col.key === 'autoSerial'}
+						<span class="font-mono text-xs">{t.autoSerial ? 'AUTO' : '—'}</span>
 					{:else if col.key === 'description'}
 						{#if t.description}{t.description}{:else}<span class="text-muted-foreground">—</span
 							>{/if}

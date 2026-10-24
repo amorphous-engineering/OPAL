@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { invalidate } from '$app/navigation';
+	import { api, opal } from '#lib/api.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -12,7 +12,6 @@
 		DetailRow,
 		DetailTable,
 		EmptyLine,
-		EntityPicker,
 		PageHeader,
 		Section,
 		State,
@@ -24,20 +23,20 @@
 		Avatar
 	} from '#lib/components/opal/index.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
-	import { searchKind } from '#lib/components/issues/pickers.js';
 	import InlineText from '#lib/components/issues/InlineText.svelte';
+	import { CONTAINMENT_OPTION, kb, ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import {
 		CONTAINMENTS,
-		CONTAINMENT_OPTION,
-		DISPOSITIONS,
+		CONTAINMENT_RANK,
+		DISPOSITION_TYPES,
+		ISSUE_PRIORITIES,
 		ISSUE_TYPES,
-		PRIORITIES,
-		kb,
-		ticketLabel,
-		ticketTone,
+		type Containment,
 		type Attachment,
-		type Issue
-	} from '#lib/components/issues/issues.js';
+		type DispositionType,
+		type IssuePriority,
+		type IssueType
+	} from '@opal/shared';
 	import { session } from '#lib/session.svelte.js';
 	import { markdown } from '#lib/markdown.js';
 	import { stateLabel } from '#lib/format.js';
@@ -47,13 +46,16 @@
 	const issue = $derived(data.issue);
 	const bearing = $derived(issue.containment !== 'advisory');
 	const closed = $derived(issue.status === 'closed');
-	const type = $derived(issue.issue_type);
+	const voided = $derived(issue.status === 'void');
+	const type = $derived(issue.issueType);
 
 	const refresh = () => invalidate('issue:detail');
 
-	/** PATCH one or more fields; reload the page data. */
-	async function patch(fields: Record<string, unknown>) {
-		await api.patch(`/issues/${issue.id}`, fields);
+	type Patch = Omit<Parameters<typeof opal.issues.update>[0], 'id'>;
+
+	/** Edit one or more fields; reload the page data. */
+	async function patch(fields: Patch) {
+		await opal.issues.update({ id: issue.id, ...fields });
 		await refresh();
 	}
 
@@ -68,16 +70,16 @@
 
 	// ---- Header actions ----
 	const needsCorrective = $derived(
-		issue.issue_type === 'non_conformance' && !issue.corrective_action?.trim()
+		issue.issueType === 'non_conformance' && !issue.correctiveAction?.trim()
 	);
-	const ticket = $derived(issue.ticket_state);
+	const ticket = $derived(issue.ticketState);
 	// Work starts at the signed disposition for containment-bearing issues.
-	const startedAt = $derived(bearing ? issue.dispositioned_at : issue.work_started_at);
-	const startedBy = $derived(bearing ? issue.dispositioned_by_name : issue.work_started_by_name);
+	const startedAt = $derived(bearing ? issue.dispositionedAt : issue.workStartedAt);
+	const startedBy = $derived(bearing ? issue.dispositionedBy?.name : issue.workStartedBy?.name);
 
-	const transition = (path: string, body?: unknown) =>
+	const transition = (step: 'start' | 'review' | 'signOff') =>
 		act(async () => {
-			await api.post(`/issues/${issue.id}/${path}`, body);
+			await opal.issues[step]({ id: issue.id });
 			await refresh();
 		});
 
@@ -88,7 +90,7 @@
 		if (!returnComment.trim()) return;
 		returnBusy = true;
 		try {
-			await api.post(`/issues/${issue.id}/review/return`, { comment: returnComment.trim() });
+			await opal.issues.returnFromReview({ id: issue.id, comment: returnComment.trim() });
 			returning = false;
 			returnComment = '';
 			await refresh();
@@ -102,54 +104,52 @@
 	async function reopen() {
 		await act(() => patch({ status: 'open' }));
 	}
-	async function remove() {
-		const ok = await confirm({
-			title: `Delete ${issue.issue_number}`,
-			body:
-				bearing && !issue.dispositioned
-					? 'Deleting this issue releases every hold it places. Comments and attachments are removed from view.'
-					: 'The issue disappears from lists and search. Comments and attachments are removed from view.',
-			action: 'DELETE',
-			destructive: true
-		});
-		if (!ok) return;
-		await act(async () => {
-			await api.del(`/issues/${issue.id}`);
-			toast.success(`${issue.issue_number} deleted`);
-			await goto('/issues');
-		});
+	let voiding = $state(false);
+	let voidReason = $state('');
+	let voidBusy = $state(false);
+	async function submitVoid() {
+		if (!voidReason.trim()) return;
+		voidBusy = true;
+		try {
+			await opal.issues.void({ id: issue.id, reason: voidReason.trim() });
+			toast.success(`${issue.issueNumber} voided`);
+			voiding = false;
+			voidReason = '';
+			await refresh();
+		} catch (e) {
+			toastError(e);
+		} finally {
+			voidBusy = false;
+		}
 	}
 
 	// ---- Containment ----
-	const RANK: Record<string, number> = { advisory: 0, step: 1, op: 2, wo: 3 };
-	let noteFor = $state<string | null>(null);
+	let noteFor = $state<Containment | null>(null);
 	let note = $state('');
 	let noteBusy = $state(false);
 	// Holds after the proposed narrowing, from the same readout the Holds section uses.
-	let preview = $state<{ label: string }[]>([]);
+	let preview = $state<{ label: string; href: string }[]>([]);
 	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(' · ');
 
 	async function setContainment(e: Event & { currentTarget: HTMLSelectElement }) {
-		const next = e.currentTarget.value;
+		const next = e.currentTarget.value as Containment;
 		const select = e.currentTarget;
 		if (next === issue.containment) return;
-		const narrowing = RANK[next] < RANK[issue.containment];
-		if (narrowing && issue.disp_state === 'undispositioned') {
+		const narrowing = CONTAINMENT_RANK[next] < CONTAINMENT_RANK[issue.containment];
+		if (narrowing && issue.dispState === 'undispositioned') {
 			select.value = issue.containment;
 			note = '';
 			preview = [];
 			noteFor = next;
 			try {
-				preview = await api.get<{ label: string }[]>(
-					`/issues/${issue.id}/holding?containment=${next}`
-				);
+				preview = await opal.issues.holding({ id: issue.id, containment: next });
 			} catch (err) {
 				toastError(err);
 			}
 			return;
 		}
 		try {
-			await api.post(`/issues/${issue.id}/containment`, { containment: next });
+			await opal.issues.setContainment({ id: issue.id, containment: next });
 			await refresh();
 		} catch (err) {
 			toastError(err);
@@ -161,7 +161,8 @@
 		if (!noteFor || !note.trim()) return;
 		noteBusy = true;
 		try {
-			await api.post(`/issues/${issue.id}/containment`, {
+			await opal.issues.setContainment({
+				id: issue.id,
 				containment: noteFor,
 				note: note.trim()
 			});
@@ -177,35 +178,36 @@
 	async function setBoundary(e: Event & { currentTarget: HTMLSelectElement }) {
 		const v = e.currentTarget.value;
 		await act(async () => {
-			await api.post(`/issues/${issue.id}/containment`, {
+			await opal.issues.setContainment({
+				id: issue.id,
 				containment: issue.containment,
-				containment_step_id: v ? Number(v) : null
+				containmentStepId: v ? Number(v) : null
 			});
 			await refresh();
 		});
 	}
 
 	// ---- Disposition ----
-	let dispType = $state('');
+	let dispType = $state<DispositionType | ''>('');
 	let dispRationale = $state('');
 	let dispBusy = $state(false);
 	// Seed the draft from the server and re-seed when the issue changes.
 	let seededFor = $state<string>('');
 	$effect(() => {
-		const key = `${issue.id}:${issue.updated_at}`;
+		const key = `${issue.id}:${issue.updatedAt}`;
 		if (key !== seededFor) {
 			seededFor = key;
-			dispType = issue.disposition_type ?? '';
-			dispRationale = issue.disposition_rationale ?? '';
+			dispType = issue.dispositionType ?? '';
+			dispRationale = issue.dispositionRationale ?? '';
 		}
 	});
 
 	async function saveDraft() {
-		if (issue.dispositioned) return;
-		const changes: Record<string, unknown> = {};
-		if (dispType !== (issue.disposition_type ?? '')) changes.disposition_type = dispType;
-		if (dispRationale !== (issue.disposition_rationale ?? ''))
-			changes.disposition_rationale = dispRationale;
+		if (issue.dispositioned || voided) return;
+		const changes: Patch = {};
+		if (dispType !== (issue.dispositionType ?? '')) changes.dispositionType = dispType || null;
+		if (dispRationale !== (issue.dispositionRationale ?? ''))
+			changes.dispositionRationale = dispRationale;
 		if (!Object.keys(changes).length) return;
 		await act(() => patch(changes));
 	}
@@ -214,18 +216,19 @@
 		if (!dispType || !dispRationale.trim()) return;
 		dispBusy = true;
 		try {
-			const holds = await api.get<{ label: string }[]>(`/issues/${issue.id}/holding`);
+			const holds = await opal.issues.holding({ id: issue.id });
 			const ok = await confirm({
-				title: `Sign disposition of ${issue.issue_number}`,
+				title: `Sign disposition of ${issue.issueNumber}`,
 				body: `${stateLabel(dispType)} signed by ${session.user?.name ?? 'you'}. ${
 					holds.length ? `Releases ${holds.map((h) => h.label).join(' · ')}.` : 'Nothing is held.'
 				} A signed disposition cannot be edited.`,
 				action: 'SIGN'
 			});
 			if (!ok) return;
-			await api.post(`/issues/${issue.id}/disposition`, {
-				disposition_type: dispType,
-				disposition_rationale: dispRationale.trim()
+			await opal.issues.signDisposition({
+				id: issue.id,
+				dispositionType: dispType,
+				dispositionRationale: dispRationale.trim()
 			});
 			await refresh();
 		} catch (e) {
@@ -236,33 +239,15 @@
 	}
 
 	// ---- Links ----
-	async function link(
-		field: 'part_id' | 'procedure_id' | 'procedure_instance_id',
-		id: number | null
-	) {
-		await act(() => patch({ [field]: id }));
-	}
-
-	// ---- Risks ----
-	let linkingRisk = $state(false);
-	let riskRole = $state('mitigation');
-	async function linkRisk(riskId: number) {
+	async function addPart(partId: number) {
 		await act(async () => {
-			await api.post(`/risks/${riskId}/issues`, { issue_id: issue.id, role: riskRole });
-			linkingRisk = false;
+			await opal.issues.addLink({ id: issue.id, kind: 'part', targetId: partId });
 			await refresh();
 		});
 	}
-	async function unlinkRisk(riskId: number, number: string) {
-		const ok = await confirm({
-			title: `Unlink ${number}`,
-			body: `${issue.issue_number} stops counting as a response to ${number}.`,
-			action: 'UNLINK',
-			destructive: true
-		});
-		if (!ok) return;
+	async function removeLink(linkId: number) {
 		await act(async () => {
-			await api.del(`/risks/${riskId}/issues/${issue.id}`);
+			await opal.issues.removeLink({ id: issue.id, linkId });
 			await refresh();
 		});
 	}
@@ -274,7 +259,7 @@
 		if (!comment.trim()) return;
 		commentBusy = true;
 		try {
-			await api.post(`/issues/${issue.id}/comments`, { body: comment.trim() });
+			await opal.issues.addComment({ id: issue.id, body: comment.trim() });
 			comment = '';
 			await refresh();
 		} catch (e) {
@@ -296,9 +281,10 @@
 		for (const file of files) {
 			const fd = new FormData();
 			fd.append('file', file);
-			fd.append('issue_id', String(issue.id));
+			fd.append('ownerType', 'issue');
+			fd.append('ownerId', String(issue.id));
 			try {
-				await api.post('/attachments/upload', fd);
+				await api.post('/attachments', fd);
 			} catch (e) {
 				failed.push(`${file.name}: ${e instanceof Error ? e.message : 'failed'}`);
 			}
@@ -312,14 +298,14 @@
 
 	async function removeAttachment(a: Attachment) {
 		const ok = await confirm({
-			title: `Delete ${a.original_filename}`,
-			body: 'The file is removed from the server.',
+			title: `Delete ${a.filename}`,
+			body: 'The file is removed from the issue.',
 			action: 'DELETE',
 			destructive: true
 		});
 		if (!ok) return;
 		await act(async () => {
-			await api.del(`/attachments/${a.id}`);
+			await opal.platform.attachments.delete({ id: a.id });
 			await refresh();
 		});
 	}
@@ -340,22 +326,33 @@
 		improvement: type === 'improvement'
 	});
 	const redlineHref = $derived(
-		issue.procedure_instance_id && issue.raised_op_order !== null
-			? `/executions/${issue.procedure_instance_id}?op=${issue.raised_op_order}&redline_issue=${issue.id}`
+		issue.executionId && issue.raisedOpOrder !== null
+			? `/executions/${issue.executionId}?op=${issue.raisedOpOrder}&redline_issue=${issue.id}`
 			: null
 	);
 	const hasRedlineAction = $derived(
 		issue.dispositioned &&
-			['rework', 'repair'].includes(issue.disposition_type ?? '') &&
+			['rework', 'repair'].includes(issue.dispositionType ?? '') &&
 			!!redlineHref
 	);
 
-	// Gate flags come from the server per viewer; absent means allowed.
-	const cannotApprove = $derived(issue.can_approve === false);
-	const cannotDisposition = $derived(issue.can_disposition === false);
+	// Gate flags come from the server per viewer.
+	const cannotApprove = $derived(!issue.canApprove);
+	const cannotDisposition = $derived(!issue.canDisposition);
 
-	function text(field: keyof Issue) {
-		return async (v: string | null) => patch({ [field]: v ?? '' });
+	type TextField =
+		| 'title'
+		| 'description'
+		| 'shouldBe'
+		| 'actual'
+		| 'stepsToReproduce'
+		| 'expectedBehavior'
+		| 'actualBehavior'
+		| 'expectedBenefit'
+		| 'rootCause'
+		| 'correctiveAction';
+	function text(field: TextField) {
+		return async (v: string | null) => patch({ [field]: v });
 	}
 </script>
 
@@ -369,13 +366,13 @@
 
 {#snippet textRow(
 	label: string,
-	field: keyof Issue,
+	field: TextField,
 	opts?: { required?: boolean; rich?: boolean; hint?: string }
 )}
 	<DetailRow {label}>
 		<InlineText
 			{label}
-			value={issue[field] as string | null}
+			value={issue[field]}
 			multiline
 			rich={opts?.rich ?? true}
 			hint={opts?.hint}
@@ -386,8 +383,8 @@
 
 <PageHeader
 	title={issue.title}
-	identifier={issue.issue_number}
-	crumbs={[{ label: 'Issues', href: '/issues' }, { label: issue.issue_number ?? 'Issue' }]}
+	identifier={issue.issueNumber}
+	crumbs={[{ label: 'Issues', href: '/issues' }, { label: issue.issueNumber }]}
 >
 	{#snippet heading()}
 		<h1 class="min-w-0 text-lg font-semibold tracking-tight [&>div]:items-center">
@@ -395,11 +392,17 @@
 		</h1>
 	{/snippet}
 	{#snippet state()}
-		<State value={ticket} label={ticketLabel(ticket)} tone={ticketTone(ticket)} badge />
+		{#if voided}
+			<State value="void" label="VOID" tone="muted" badge />
+		{:else}
+			<State value={ticket} label={ticketLabel(ticket)} tone={ticketTone(ticket)} badge />
+		{/if}
 	{/snippet}
 	{#snippet actions()}
 		<Button size="sm" variant="ghost" href={`/audit?entity=issue&record=${issue.id}`}>AUDIT</Button>
-		{#if ticket === 'done'}
+		{#if voided}
+			<!-- a void issue is terminal -->
+		{:else if ticket === 'done'}
 			<Button size="sm" variant="outline" onclick={reopen}>REOPEN</Button>
 		{:else if ticket === 'pending' && !bearing}
 			<Button size="sm" onclick={() => transition('start')}>START WORK</Button>
@@ -410,20 +413,22 @@
 				size="sm"
 				disabled={needsCorrective || cannotApprove}
 				title={cannotApprove
-					? issue.gate_reasons?.approve
+					? issue.gateReasons.approve
 					: needsCorrective
 						? 'Corrective action is required to sign off'
 						: undefined}
-				onclick={() => transition('signoff')}>SIGN OFF</Button
+				onclick={() => transition('signOff')}>SIGN OFF</Button
 			>
 			{#if cannotApprove}
 				<span class="font-mono text-xs text-muted-foreground" data-gate-reason="approve"
-					>{issue.gate_reasons?.approve ?? 'Requires approval role'}</span
+					>{issue.gateReasons.approve ?? 'Requires approval role'}</span
 				>
 			{/if}
 			<Button size="sm" variant="outline" onclick={() => (returning = true)}>RETURN</Button>
 		{/if}
-		<Button size="sm" variant="destructive" onclick={remove}>DELETE</Button>
+		{#if !voided}
+			<Button size="sm" variant="destructive" onclick={() => (voiding = true)}>VOID</Button>
+		{/if}
 	{/snippet}
 </PageHeader>
 
@@ -432,44 +437,44 @@
 		<Section title="Details">
 			<DetailTable>
 				{@render textRow('Description', 'description')}
-				{#if typeFields.nc || issue.should_be || issue.actual}
-					{@render textRow('Should be', 'should_be')}
+				{#if typeFields.nc || issue.shouldBe || issue.actual}
+					{@render textRow('Should be', 'shouldBe')}
 					{@render textRow('Is', 'actual')}
 				{/if}
-				{#if typeFields.bug || issue.steps_to_reproduce || issue.expected_behavior || issue.actual_behavior}
-					{@render textRow('Steps to reproduce', 'steps_to_reproduce')}
-					{@render textRow('Expected behavior', 'expected_behavior')}
-					{@render textRow('Actual behavior', 'actual_behavior')}
+				{#if typeFields.bug || issue.stepsToReproduce || issue.expectedBehavior || issue.actualBehavior}
+					{@render textRow('Steps to reproduce', 'stepsToReproduce')}
+					{@render textRow('Expected behavior', 'expectedBehavior')}
+					{@render textRow('Actual behavior', 'actualBehavior')}
 				{/if}
-				{#if typeFields.improvement || issue.expected_benefit}
-					{@render textRow('Expected benefit', 'expected_benefit')}
+				{#if typeFields.improvement || issue.expectedBenefit}
+					{@render textRow('Expected benefit', 'expectedBenefit')}
 				{/if}
-				{#if typeFields.nc || typeFields.bug || issue.root_cause || issue.corrective_action}
-					{@render textRow('Root cause', 'root_cause')}
-					{@render textRow('Corrective action', 'corrective_action', {
+				{#if typeFields.nc || typeFields.bug || issue.rootCause || issue.correctiveAction}
+					{@render textRow('Root cause', 'rootCause')}
+					{@render textRow('Corrective action', 'correctiveAction', {
 						hint: typeFields.nc && !closed ? 'required for sign-off' : undefined
 					})}
 				{/if}
 			</DetailTable>
 		</Section>
 
-		{#if issue.dispositioned || (bearing && !closed)}
+		{#if issue.dispositioned || (bearing && !closed && !voided)}
 			<Section title="Disposition">
 				{#snippet actions()}
-					{#if issue.self_dispositioned}
+					{#if issue.selfDispositioned}
 						<State value="self_dispositioned" tone="warn" badge label="SELF-DISPOSITIONED" />
 					{/if}
 				{/snippet}
 				<DetailTable>
 					{#if issue.dispositioned}
-						<DetailRow label="Type" mono value={stateLabel(issue.disposition_type)} />
+						<DetailRow label="Type" mono value={stateLabel(issue.dispositionType)} />
 						<DetailRow label="Rationale">
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-							<div class="prose-opal">{@html markdown(issue.disposition_rationale)}</div>
+							<div class="prose-opal">{@html markdown(issue.dispositionRationale)}</div>
 						</DetailRow>
 						<DetailRow label="Signed by">
-							{issue.dispositioned_by_name ?? '—'} ·
-							<Timestamp value={issue.dispositioned_at} />
+							{issue.dispositionedBy?.name ?? '—'} ·
+							<Timestamp value={issue.dispositionedAt} />
 						</DetailRow>
 						{#if hasRedlineAction && redlineHref}
 							<DetailRow label="Redline">
@@ -486,7 +491,7 @@
 								class="w-56"
 							>
 								<NativeSelectOption value="">—</NativeSelectOption>
-								{#each DISPOSITIONS as d (d)}
+								{#each DISPOSITION_TYPES as d (d)}
 									<NativeSelectOption value={d}>{stateLabel(d)}</NativeSelectOption>
 								{/each}
 							</NativeSelect>
@@ -506,7 +511,7 @@
 								size="sm"
 								disabled={dispBusy || cannotDisposition || !dispType || !dispRationale.trim()}
 								title={cannotDisposition
-									? issue.gate_reasons?.disposition
+									? issue.gateReasons.disposition
 									: !dispType || !dispRationale.trim()
 										? `missing: ${[!dispType && 'type', !dispRationale.trim() && 'rationale'].filter(Boolean).join(', ')}`
 										: undefined}
@@ -516,7 +521,7 @@
 								<span
 									class="ml-2 font-mono text-xs text-muted-foreground"
 									data-gate-reason="disposition"
-									>{issue.gate_reasons?.disposition ?? 'Requires disposition role'}</span
+									>{issue.gateReasons.disposition ?? 'Requires disposition role'}</span
 								>
 							{/if}
 						</DetailRow>
@@ -531,12 +536,9 @@
 					{#each data.comments as c (c.id)}
 						<li class="px-3 py-2">
 							<div class="mb-0.5 flex items-baseline gap-2 text-xs">
-								{#if c.user_id}<Avatar
-										user={{ id: c.user_id, name: c.user_name, avatar_url: c.user_avatar_url }}
-										size="xs"
-									/>{/if}
-								<span class="font-medium">{c.user_name ?? 'System'}</span>
-								<Timestamp value={c.created_at} />
+								{#if c.user}<Avatar user={{ id: c.user.id, name: c.user.name }} size="xs" />{/if}
+								<span class="font-medium">{c.user?.name ?? 'System'}</span>
+								<Timestamp value={c.createdAt} />
 							</div>
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 							<div class="prose-opal text-sm">{@html markdown(c.body)}</div>
@@ -560,12 +562,19 @@
 		</Section>
 
 		{#snippet addFiles()}
-			<Button size="xs" variant="outline" disabled={uploading} onclick={() => fileInput?.click()}>
-				+ ADD FILE
-			</Button>
-			<Button size="xs" variant="outline" disabled={uploading} onclick={() => cameraInput?.click()}>
-				CAMERA
-			</Button>
+			{#if !voided}
+				<Button size="xs" variant="outline" disabled={uploading} onclick={() => fileInput?.click()}>
+					+ ADD FILE
+				</Button>
+				<Button
+					size="xs"
+					variant="outline"
+					disabled={uploading}
+					onclick={() => cameraInput?.click()}
+				>
+					CAMERA
+				</Button>
+			{/if}
 		{/snippet}
 		<input
 			bind:this={fileInput}
@@ -595,19 +604,15 @@
 				>
 					{#snippet cell(a, col)}
 						{#if col.key === 'file'}
-							<a
-								href={`/api/attachments/${a.id}/download`}
-								class="font-mono text-info hover:underline"
-								download>{a.original_filename}</a
-							>
+							<a href={a.href} class="font-mono text-info hover:underline" download>{a.filename}</a>
 						{:else if col.key === 'type'}
-							<span class="font-mono text-xs text-muted-foreground">{a.mime_type}</span>
+							<span class="font-mono text-xs text-muted-foreground">{a.mimeType}</span>
 						{:else if col.key === 'size'}
-							{kb(a.size_bytes)}
+							{kb(a.sizeBytes)}
 						{:else if col.key === 'by'}
-							{a.uploaded_by_name ?? '—'}
+							{a.uploadedByName ?? '—'}
 						{:else if col.key === 'at'}
-							<Timestamp value={a.created_at} />
+							<Timestamp value={a.createdAt} />
 						{:else}
 							<button
 								type="button"
@@ -630,8 +635,8 @@
 					<NativeSelect
 						size="sm"
 						aria-label="Type"
-						value={issue.issue_type}
-						onchange={(e) => act(() => patch({ issue_type: e.currentTarget.value }))}
+						value={issue.issueType}
+						onchange={(e) => act(() => patch({ issueType: e.currentTarget.value as IssueType }))}
 					>
 						{#each ISSUE_TYPES as t (t)}<NativeSelectOption value={t}
 								>{stateLabel(t)}</NativeSelectOption
@@ -643,9 +648,9 @@
 						size="sm"
 						aria-label="Priority"
 						value={issue.priority}
-						onchange={(e) => act(() => patch({ priority: e.currentTarget.value }))}
+						onchange={(e) => act(() => patch({ priority: e.currentTarget.value as IssuePriority }))}
 					>
-						{#each PRIORITIES as p (p)}<NativeSelectOption value={p}
+						{#each ISSUE_PRIORITIES as p (p)}<NativeSelectOption value={p}
 								>{stateLabel(p)}</NativeSelectOption
 							>{/each}
 					</NativeSelect>
@@ -656,7 +661,7 @@
 						aria-label="Containment"
 						value={issue.containment}
 						onchange={setContainment}
-						disabled={closed}
+						disabled={closed || voided}
 					>
 						{#each CONTAINMENTS as c (c)}<NativeSelectOption value={c}
 								>{CONTAINMENT_OPTION[c]}</NativeSelectOption
@@ -667,11 +672,11 @@
 					<NativeSelect
 						size="sm"
 						aria-label="Assigned to"
-						value={issue.assigned_to_id === null ? '' : String(issue.assigned_to_id)}
+						value={issue.assignedTo === null ? '' : String(issue.assignedTo.id)}
 						onchange={(e) =>
 							act(() =>
 								patch({
-									assigned_to_id: e.currentTarget.value ? Number(e.currentTarget.value) : null
+									assignedToId: e.currentTarget.value ? Number(e.currentTarget.value) : null
 								})
 							)}
 					>
@@ -681,18 +686,18 @@
 						{/each}
 					</NativeSelect>
 				</DetailRow>
-				<DetailRow label="Raised by" value={issue.raised_by_name} />
-				<DetailRow label="Created"><Timestamp value={issue.created_at} /></DetailRow>
+				<DetailRow label="Raised by" value={issue.raisedBy?.name} />
+				<DetailRow label="Created"><Timestamp value={issue.createdAt} /></DetailRow>
 				<DetailRow label="Work started">
-					{@render stamp(startedBy, startedAt)}
+					{@render stamp(startedBy ?? null, startedAt)}
 				</DetailRow>
 				<DetailRow label="Review requested">
-					{@render stamp(issue.review_requested_by_name, issue.review_requested_at)}
+					{@render stamp(issue.reviewRequestedBy?.name ?? null, issue.reviewRequestedAt)}
 				</DetailRow>
 				<DetailRow label="Closed">
-					{@render stamp(issue.closed_by_name, issue.closed_at)}
+					{@render stamp(issue.closedBy?.name ?? null, issue.closedAt)}
 				</DetailRow>
-				<DetailRow label="Updated"><Timestamp value={issue.updated_at} /></DetailRow>
+				<DetailRow label="Updated"><Timestamp value={issue.updatedAt} /></DetailRow>
 			</DetailTable>
 		</Section>
 
@@ -713,99 +718,70 @@
 		{/if}
 
 		<Section title="Links">
+			{#snippet actions()}
+				{#if !voided}
+					<PartPicker align="end" onselect={(p) => p && addPart(p.id)}>
+						{#snippet trigger({ props })}
+							<Button {...props} size="xs" variant="outline">+ PART</Button>
+						{/snippet}
+					</PartPicker>
+				{/if}
+			{/snippet}
 			<DetailTable>
-				<DetailRow label="Part">
-					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
-						{#if issue.part_id}
-							<a
-								href={`/parts/${issue.part_id}`}
-								class="font-mono whitespace-nowrap text-info hover:underline"
-								>{issue.part_number ?? issue.part_name}</a
-							>
-							<span class="min-w-0 truncate text-muted-foreground">{issue.part_name}</span>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
-						<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
-							<PartPicker align="end" onselect={(p) => p && link('part_id', p.id)}>
-								{#snippet trigger({ props })}
-									<button {...props} type="button" class="text-info hover:underline"
-										>{issue.part_id ? 'CHANGE' : 'SET'}</button
+				<DetailRow label="Parts">
+					{#if issue.links.length}
+						<ul class="grid grid-cols-1 gap-0.5">
+							{#each issue.links as l (l.id)}
+								<li class="flex min-w-0 items-baseline gap-2">
+									<a href={l.href} class="font-mono whitespace-nowrap text-info hover:underline"
+										>{l.label}</a
 									>
-								{/snippet}
-							</PartPicker>
-							{#if issue.part_id}<button
-									type="button"
-									class="text-info hover:underline"
-									onclick={() => link('part_id', null)}>CLEAR</button
-								>{/if}
-						</span>
-					</div>
+									<span class="min-w-0 truncate text-muted-foreground">{l.sublabel}</span>
+									{#if !voided}
+										<button
+											type="button"
+											class="ml-auto font-mono text-xs tracking-wider text-info uppercase hover:underline"
+											onclick={() => removeLink(l.id)}>REMOVE</button
+										>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Procedure">
-					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
-						{#if issue.procedure_id}
-							<a href={`/procedures/${issue.procedure_id}`} class="text-info hover:underline"
-								>{issue.procedure_name}</a
-							>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
-						<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
-							<EntityPicker
-								label="Search procedures"
-								placeholder="Search procedures"
-								align="end"
-								search={searchKind('procedure')}
-								onpick={(o) => link('procedure_id', o.value)}
-							>
-								{#snippet trigger({ props })}
-									<button {...props} type="button" class="text-info hover:underline"
-										>{issue.procedure_id ? 'CHANGE' : 'SET'}</button
-									>
-								{/snippet}
-							</EntityPicker>
-							{#if issue.procedure_id}<button
-									type="button"
-									class="text-info hover:underline"
-									onclick={() => link('procedure_id', null)}>CLEAR</button
-								>{/if}
-						</span>
-					</div>
+					{#if issue.execution?.procedureId}
+						<a
+							href={`/procedures/${issue.execution.procedureId}`}
+							class="text-info hover:underline">{issue.execution.procedureName}</a
+						>
+					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Execution">
 					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
-						{#if issue.procedure_instance_id}
+						{#if issue.execution}
 							<a
-								href={`/executions/${issue.procedure_instance_id}`}
-								class="font-mono text-info hover:underline">{issue.work_order_number}</a
+								href={`/executions/${issue.execution.id}`}
+								class="font-mono text-info hover:underline">{issue.execution.label ?? 'Work order'}</a
 							>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
-						<span class="ml-auto flex gap-2 font-mono text-xs tracking-wider uppercase">
-							<EntityPicker
-								label="Search executions"
-								placeholder="Search executions"
-								align="end"
-								search={searchKind('execution')}
-								onpick={(o) => link('procedure_instance_id', o.value)}
-							>
-								{#snippet trigger({ props })}
-									<button {...props} type="button" class="text-info hover:underline"
-										>{issue.procedure_instance_id ? 'CHANGE' : 'SET'}</button
-									>
-								{/snippet}
-							</EntityPicker>
-							{#if issue.procedure_instance_id}<button
+							{#if !voided}
+								<button
 									type="button"
-									class="text-info hover:underline"
-									onclick={() => link('procedure_instance_id', null)}>CLEAR</button
-								>{/if}
-						</span>
+									class="ml-auto font-mono text-xs tracking-wider text-info uppercase hover:underline"
+									onclick={() => act(() => patch({ executionId: null }))}>CLEAR</button
+								>
+							{/if}
+						{:else}<span class="text-muted-foreground">—</span>{/if}
 					</div>
 				</DetailRow>
 				<DetailRow label="Boundary">
-					{#if issue.procedure_instance_id && data.steps.length}
+					{#if issue.execution && data.steps.length}
 						<NativeSelect
 							size="sm"
 							aria-label="Containment boundary step"
-							value={issue.containment_step_id === null ? '' : String(issue.containment_step_id)}
+							value={issue.containmentStepId === null ? '' : String(issue.containmentStepId)}
 							onchange={setBoundary}
+							disabled={voided}
 							class="max-w-full"
 						>
 							<NativeSelectOption value="">—</NativeSelectOption>
@@ -815,23 +791,25 @@
 								>
 							{/each}
 						</NativeSelect>
+					{:else if issue.containmentStepLabel}
+						<span class="font-mono">{issue.containmentStepLabel}</span>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Raised at" mono>
-					{#if issue.raised_step_label && issue.procedure_instance_id}
+					{#if issue.raisedStepLabel && issue.execution}
 						<a
-							href={`/executions/${issue.procedure_instance_id}?op=${issue.raised_op_order ?? ''}`}
-							class="text-info hover:underline">{issue.raised_step_label}</a
+							href={`/executions/${issue.execution.id}?op=${issue.raisedOpOrder ?? ''}`}
+							class="text-info hover:underline">{issue.raisedStepLabel}</a
 						>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
-				{#if issue.redline_ops.length}
+				{#if issue.redlineOps.length}
 					<DetailRow label="Redline ops">
 						<ul class="grid grid-cols-1 gap-0.5">
-							{#each issue.redline_ops as op (op.step_number)}
+							{#each issue.redlineOps as op (op.stepNumber)}
 								<li class="flex gap-2 font-mono text-xs">
 									<a
-										href={`/executions/${issue.procedure_instance_id}?op=${op.step_number}`}
+										href={`/executions/${issue.executionId}?op=${op.stepNumber}`}
 										class="text-info hover:underline">{op.label}</a
 									>
 									<span class="truncate font-sans text-sm">{op.title}</span>
@@ -846,65 +824,30 @@
 
 		{#if issue.risks.length}
 			<Section title="Risks" count={issue.risks.length}>
-				{#snippet actions()}
-					<Button size="xs" variant="outline" onclick={() => (linkingRisk = !linkingRisk)}
-						>+ LINK</Button
-					>
-				{/snippet}
 				<ul class="divide-y divide-border">
-					{#each issue.risks as r (r.risk_id + r.relation)}
+					{#each issue.risks as r (r.riskId + r.relation)}
 						<li class="flex items-baseline gap-2 px-3 py-1.5 text-sm">
-							<a href={`/risks/${r.risk_id}`} class="font-mono text-info hover:underline"
-								>{r.risk_number}</a
+							<a href={`/risks/${r.riskId}`} class="font-mono text-info hover:underline"
+								>{r.riskNumber}</a
 							>
 							<span class="truncate">{r.title}</span>
 							<span class="ml-auto font-mono text-xs tracking-wider text-muted-foreground uppercase"
 								>{riskRoleLabel(r.relation)}</span
 							>
-							{#if r.relation !== 'realized'}
-								<button
-									type="button"
-									class="font-mono text-xs tracking-wider text-info uppercase hover:underline"
-									onclick={() => unlinkRisk(r.risk_id, r.risk_number)}>UNLINK</button
-								>
-							{/if}
 						</li>
 					{/each}
 				</ul>
-				{#if linkingRisk}{@render riskPicker()}{/if}
 			</Section>
 		{:else}
-			<div>
-				<EmptyLine label="Risks" onadd={() => (linkingRisk = !linkingRisk)} addLabel="+ LINK" />
-				{#if linkingRisk}<div class="rounded-b-lg border border-t-0 border-border bg-card">
-						{@render riskPicker()}
-					</div>{/if}
-			</div>
+			<EmptyLine label="Risks" />
 		{/if}
 	</div>
 </div>
 
-{#snippet riskPicker()}
-	<div class="flex items-center gap-2 border-t border-border p-3">
-		<NativeSelect size="sm" aria-label="Role" bind:value={riskRole}>
-			<NativeSelectOption value="mitigation">MITIGATION</NativeSelectOption>
-			<NativeSelectOption value="research">RESEARCH</NativeSelectOption>
-		</NativeSelect>
-		<div class="min-w-0 flex-1">
-			<EntityPicker
-				label="Search risks"
-				placeholder="Search risks"
-				search={searchKind('risk')}
-				onpick={(o) => linkRisk(o.value)}
-			/>
-		</div>
-	</div>
-{/snippet}
-
 <Dialog.Root open={returning} onOpenChange={(v) => !v && (returning = false)}>
 	<Dialog.Content>
 		<Dialog.Header>
-			<Dialog.Title>Return {issue.issue_number} to work</Dialog.Title>
+			<Dialog.Title>Return {issue.issueNumber} to work</Dialog.Title>
 			<Dialog.Description>The comment is recorded in the thread.</Dialog.Description>
 		</Dialog.Header>
 		<form
@@ -924,17 +867,49 @@
 	</Dialog.Content>
 </Dialog.Root>
 
+<Dialog.Root open={voiding} onOpenChange={(v) => !v && (voiding = false)}>
+	<Dialog.Content>
+		<Dialog.Header>
+			<Dialog.Title>Void {issue.issueNumber}</Dialog.Title>
+			<Dialog.Description>
+				{#if bearing && !issue.dispositioned}
+					Voiding releases {holdNames(data.holding) || 'every hold'} held by {issue.issueNumber}. The
+					issue stays on record as void.
+				{:else}
+					The issue stays on record as void and cannot be edited.
+				{/if}
+			</Dialog.Description>
+		</Dialog.Header>
+		<form
+			class="grid grid-cols-1 gap-1.5"
+			onsubmit={(e) => {
+				e.preventDefault();
+				submitVoid();
+			}}
+		>
+			<Label for="void-reason">Reason</Label>
+			<Textarea id="void-reason" bind:value={voidReason} rows={3} autofocus />
+			<Dialog.Footer class="mt-2">
+				<Button type="button" variant="outline" onclick={() => (voiding = false)}>CANCEL</Button>
+				<Button type="submit" variant="destructive" disabled={voidBusy || !voidReason.trim()}
+					>VOID</Button
+				>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
 <Dialog.Root open={noteFor !== null} onOpenChange={(v) => !v && (noteFor = null)}>
 	<Dialog.Content>
 		<Dialog.Header>
 			<Dialog.Title>Narrow containment to {stateLabel(noteFor)}</Dialog.Title>
 			<Dialog.Description>
 				{#if preview.length}
-					{issue.issue_number} holds {holdNames(data.holding)}; after this it holds {holdNames(
+					{issue.issueNumber} holds {holdNames(data.holding)}; after this it holds {holdNames(
 						preview
 					)}. The note is recorded in the thread.
 				{:else}
-					This releases {holdNames(data.holding) || 'every hold'} held by {issue.issue_number}. The
+					This releases {holdNames(data.holding) || 'every hold'} held by {issue.issueNumber}. The
 					note is recorded in the thread.
 				{/if}
 			</Dialog.Description>

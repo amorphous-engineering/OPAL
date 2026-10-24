@@ -1,53 +1,59 @@
 <script lang="ts">
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { onMount } from 'svelte';
 	import Timestamp from '#lib/components/opal/Timestamp.svelte';
 	import { goto } from '$app/navigation';
+	import { onServerEvent } from './events.js';
 	import { onNotificationsChanged, type Notification } from './notifications.js';
 
+	/** Count from the shell's page data, so the first paint has it. */
+	let { initialUnread = 0 }: { initialUnread?: number } = $props();
+
 	let open = $state(false);
-	let unread = $state(0);
+	// svelte-ignore state_referenced_locally
+	let unread = $state(initialUnread);
 	let items = $state<Notification[]>([]);
 
 	async function refreshCount() {
 		try {
-			unread = (await api.get<{ unread_count: number }>('/notifications/unread-count'))
-				.unread_count;
+			unread = (await opal.platform.notifications.unreadCount({})).unreadCount;
 		} catch {
 			/* signed out or offline; the bell just stays quiet */
 		}
 	}
 
 	async function load() {
-		const r = await api.get<{ items: Notification[]; unread_count: number }>('/notifications', {
-			limit: 20
-		});
+		const r = await opal.platform.notifications.list({ limit: 20, sort: 'recent' });
 		items = r.items;
-		unread = r.unread_count;
+		unread = r.unreadCount;
 	}
 
 	async function openItem(n: Notification) {
-		if (!n.read_at) await api.post(`/notifications/${n.id}/read`).catch(() => {});
+		if (!n.readAt) await opal.platform.notifications.read({ id: n.id }).catch(() => {});
 		open = false;
 		goto(n.href);
 		refreshCount();
 	}
 
 	async function readAll() {
-		await api.post('/notifications/read-all');
+		await opal.platform.notifications.readAll({});
 		await load();
 	}
 
 	onMount(() => {
 		refreshCount();
-		const t = setInterval(refreshCount, 30000);
-		// The inbox page changed something: keep the count (and open list) in step.
-		const off = onNotificationsChanged(() => (open ? load() : refreshCount()));
+		const sync = () => (open ? load() : refreshCount());
+		// A slow poll covers a dropped event stream.
+		const t = setInterval(refreshCount, 60000);
+		// The inbox page changed something, or the server raised a notification for us.
+		const offChanged = onNotificationsChanged(sync);
+		const offEvent = onServerEvent('notification', sync);
 		return () => {
 			clearInterval(t);
-			off();
+			offChanged();
+			offEvent();
 		};
 	});
 
@@ -81,15 +87,15 @@
 		<div class="max-h-96 overflow-y-auto">
 			{#each items as n (n.id)}
 				<button
-					class="block w-full border-b border-border px-3 py-2 text-left hover:bg-accent {n.read_at
+					class="block w-full border-b border-border px-3 py-2 text-left hover:bg-accent {n.readAt
 						? 'text-muted-foreground'
 						: ''}"
 					onclick={() => openItem(n)}
 				>
 					<div class="flex items-baseline gap-2">
-						{#if !n.read_at}<span class="size-1.5 shrink-0 bg-info" aria-label="Unread"></span>{/if}
-						<span class="truncate text-sm {n.read_at ? '' : 'font-medium'}">{n.title}</span>
-						<span class="ml-auto shrink-0"><Timestamp value={n.created_at} relative /></span>
+						{#if !n.readAt}<span class="size-1.5 shrink-0 bg-info" aria-label="Unread"></span>{/if}
+						<span class="truncate text-sm {n.readAt ? '' : 'font-medium'}">{n.title}</span>
+						<span class="ml-auto shrink-0"><Timestamp value={n.createdAt} relative /></span>
 					</div>
 					{#if n.body}<div class="mt-0.5 truncate text-xs text-muted-foreground">{n.body}</div>{/if}
 				</button>

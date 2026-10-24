@@ -12,9 +12,9 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+		import AvatarEditor from './AvatarEditor.svelte';
+	import { opal } from '#lib/api.js';
 	import type { Workcenter } from '#lib/components/workcenters/types.js';
-	import AvatarEditor from './AvatarEditor.svelte';
-	import { api } from '#lib/api.js';
 	import { session } from '#lib/session.svelte.js';
 	import { signInMethods, type UserRecord } from './types.js';
 
@@ -42,12 +42,12 @@
 	function start() {
 		name = profile.name;
 		email = profile.email ?? '';
-		jobTitle = profile.job_title ?? '';
+		jobTitle = profile.jobTitle ?? '';
 		phone = profile.phone ?? '';
 		workcenterId = profile.workcenter ? String(profile.workcenter.id) : '';
-		api
-			.get<Workcenter[]>('/workcenters')
-			.then((w) => (workcenters = w.filter((x) => x.is_active || String(x.id) === workcenterId)))
+		opal.org.workcenters
+			.list({})
+			.then((w) => (workcenters = w.filter((x) => x.isActive || String(x.id) === workcenterId)))
 			.catch(toastError);
 		editing = true;
 	}
@@ -56,19 +56,20 @@
 		e.preventDefault();
 		busy = true;
 		try {
-			const updated = await api.patch<UserRecord>(`/users/${profile.id}`, {
+			const updated = await opal.org.users.update({
+				id: profile.id,
 				name: name.trim(),
 				email: email.trim() || null,
-				job_title: jobTitle.trim() || null,
+				jobTitle: jobTitle.trim() || null,
 				phone: phone.trim() || null,
-				workcenter_id: workcenterId ? Number(workcenterId) : null
+				workcenterId: workcenterId ? Number(workcenterId) : null
 			});
 			onupdate(updated);
 			if (isSelf && session.user)
 				session.set({
 					...session.user,
 					name: updated.name,
-					avatar_url: updated.avatar_url ?? null
+					avatar_url: updated.avatarUrl
 				});
 			editing = false;
 			toast.success('Profile saved');
@@ -124,7 +125,7 @@
 						maxlength={120}
 						class="h-7 max-w-sm"
 					/>
-				{:else if profile.job_title}{profile.job_title}{:else}<span class="text-muted-foreground"
+				{:else if profile.jobTitle}{profile.jobTitle}{:else}<span class="text-muted-foreground"
 						>—</span
 					>{/if}
 			</DetailRow>
@@ -156,7 +157,7 @@
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			</DetailRow>
 			<DetailRow label="Status">
-				{#if profile.is_active}<State value="active" />{:else}<State
+				{#if profile.isActive}<State value="active" />{:else}<State
 						value="inactive"
 						tone="muted"
 					/>{/if}
@@ -168,14 +169,8 @@
 					<State value="unclaimed" tone="warn" />
 				{/if}
 			</DetailRow>
-			<DetailRow label="Last seen">
-				{#if profile.is_online}<State value="online" tone="ok" />{:else}<Timestamp
-						value={profile.last_seen_at}
-					/>{/if}
-			</DetailRow>
-			<DetailRow label="Activity" value={profile.current_activity} mono />
-			<DetailRow label="Created"><Timestamp value={profile.created_at} /></DetailRow>
-			<DetailRow label="Updated"><Timestamp value={profile.updated_at} /></DetailRow>
+			<DetailRow label="Created"><Timestamp value={profile.createdAt} /></DetailRow>
+			<DetailRow label="Updated"><Timestamp value={profile.updatedAt} /></DetailRow>
 		</DetailTable>
 		{#if editing}
 			<div class="flex gap-2 border-t border-border px-3 py-2">

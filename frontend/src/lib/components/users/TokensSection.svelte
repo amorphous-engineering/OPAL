@@ -10,16 +10,10 @@
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import CopyField from './CopyField.svelte';
 
-	interface ApiToken {
-		id: number;
-		name: string;
-		created_at: string;
-		last_used_at: string | null;
-		expires_at: string | null;
-	}
+	type ApiToken = Awaited<ReturnType<typeof opal.auth.tokens.list>>['items'][number];
 
 	let tokens = $state<ApiToken[]>([]);
 	let loaded = $state(false);
@@ -27,10 +21,10 @@
 	let days = $state('');
 	let busy = $state(false);
 	/** The raw token, shown once, right after creation. */
-	let revealed = $state<{ name: string; token: string; expires_at: string | null } | null>(null);
+	let revealed = $state<{ name: string; token: string; expiresAt: string | null } | null>(null);
 
 	async function load() {
-		tokens = await api.get<ApiToken[]>('/auth/tokens');
+		tokens = (await opal.auth.tokens.list({})).items;
 		loaded = true;
 	}
 
@@ -43,9 +37,9 @@
 		busy = true;
 		try {
 			const ttl = parseInt(days, 10);
-			revealed = await api.post('/auth/tokens', {
+			revealed = await opal.auth.tokens.create({
 				name: name.trim(),
-				expires_in_days: ttl > 0 ? ttl : null
+				expiresInDays: ttl > 0 ? ttl : undefined
 			});
 			name = days = '';
 			await load();
@@ -65,7 +59,7 @@
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/auth/tokens/${t.id}`);
+			await opal.auth.tokens.revoke({ id: t.id });
 			await load();
 		} catch (err) {
 			toastError(err);
@@ -74,9 +68,9 @@
 
 	const columns: Column<ApiToken>[] = [
 		{ key: 'name', label: 'Name' },
-		{ key: 'created_at', label: 'Created', class: 'whitespace-nowrap' },
-		{ key: 'last_used_at', label: 'Last used', class: 'whitespace-nowrap' },
-		{ key: 'expires_at', label: 'Expires', class: 'whitespace-nowrap' },
+		{ key: 'createdAt', label: 'Created', class: 'whitespace-nowrap' },
+		{ key: 'lastUsedAt', label: 'Last used', class: 'whitespace-nowrap' },
+		{ key: 'expiresAt', label: 'Expires', class: 'whitespace-nowrap' },
 		{ key: 'actions', label: '', width: '5rem', align: 'right' }
 	];
 </script>
@@ -93,7 +87,7 @@
 			<CopyField value={revealed.token} label="API token" />
 			<div class="flex items-center gap-3 text-xs text-muted-foreground">
 				<span>
-					{#if revealed.expires_at}Expires <Timestamp value={revealed.expires_at} />{:else}Never
+					{#if revealed.expiresAt}Expires <Timestamp value={revealed.expiresAt} />{:else}Never
 						expires{/if}
 				</span>
 				<Button variant="outline" size="xs" onclick={() => (revealed = null)}>DONE</Button>
@@ -104,10 +98,10 @@
 		<DataTable rows={tokens} {columns} emptyLabel="API TOKENS" dense>
 			{#snippet cell(t, col)}
 				{#if col.key === 'name'}{t.name}
-				{:else if col.key === 'created_at'}<Timestamp value={t.created_at} dateOnly />
-				{:else if col.key === 'last_used_at'}<Timestamp value={t.last_used_at} dateOnly />
-				{:else if col.key === 'expires_at'}
-					{#if t.expires_at}<Timestamp value={t.expires_at} dateOnly />{:else}<span
+				{:else if col.key === 'createdAt'}<Timestamp value={t.createdAt} dateOnly />
+				{:else if col.key === 'lastUsedAt'}<Timestamp value={t.lastUsedAt} dateOnly />
+				{:else if col.key === 'expiresAt'}
+					{#if t.expiresAt}<Timestamp value={t.expiresAt} dateOnly />{:else}<span
 							class="font-mono text-xs text-muted-foreground">NEVER</span
 						>{/if}
 				{:else}

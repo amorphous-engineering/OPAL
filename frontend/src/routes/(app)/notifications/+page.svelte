@@ -14,7 +14,7 @@
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { notifyChanged, type Notification } from '#lib/components/shell/notifications.js';
 	import type { PageProps } from './$types';
 
@@ -26,11 +26,11 @@
 	});
 
 	const columns: Column<Notification>[] = [
-		{ key: 'created_at', label: 'When', width: '10.5rem' },
+		{ key: 'createdAt', label: 'When', width: '10.5rem' },
 		{ key: 'category', label: 'Category', width: '8rem' },
 		{ key: 'priority', label: 'Priority', width: '6rem' },
 		{ key: 'title', label: 'Notification' },
-		{ key: 'actor_name', label: 'From', width: '10rem' },
+		{ key: 'actorName', label: 'From', width: '10rem' },
 		{ key: 'actions', label: '', width: '12rem', align: 'right' }
 	];
 
@@ -41,7 +41,7 @@
 
 	async function open(n: Notification) {
 		try {
-			if (!n.read_at) await api.post(`/notifications/${n.id}/read`);
+			if (!n.readAt) await opal.platform.notifications.read({ id: n.id });
 			notifyChanged();
 		} catch (e) {
 			toastError(e);
@@ -51,7 +51,7 @@
 
 	async function markRead(n: Notification) {
 		try {
-			await api.post(`/notifications/${n.id}/read`);
+			await opal.platform.notifications.read({ id: n.id });
 			await refresh();
 		} catch (e) {
 			toastError(e);
@@ -60,7 +60,7 @@
 
 	async function dismiss(n: Notification) {
 		try {
-			await api.post(`/notifications/${n.id}/dismiss`);
+			await opal.platform.notifications.dismiss({ id: n.id });
 			await refresh();
 		} catch (e) {
 			toastError(e);
@@ -71,7 +71,7 @@
 	async function readAll() {
 		busy = true;
 		try {
-			await api.post('/notifications/read-all');
+			await opal.platform.notifications.readAll({});
 			await refresh();
 		} catch (e) {
 			toastError(e);
@@ -86,10 +86,10 @@
 
 <PageHeader title="Notifications">
 	{#snippet meta()}
-		<span class="font-mono">{data.unread_count} unread</span>
+		<span class="font-mono">{data.unreadCount} unread</span>
 	{/snippet}
 	{#snippet actions()}
-		<Button variant="outline" size="sm" disabled={busy || data.unread_count === 0} onclick={readAll}
+		<Button variant="outline" size="sm" disabled={busy || data.unreadCount === 0} onclick={readAll}
 			>MARK ALL READ</Button
 		>
 	{/snippet}
@@ -140,17 +140,17 @@
 		onrowclick={open}
 		emptyLabel="NOTIFICATIONS"
 		emptyAction={filtered ? clearAction : undefined}
-		rowClass={(n) => (n.read_at ? 'text-muted-foreground' : undefined)}
+		rowClass={(n) => (n.readAt ? 'text-muted-foreground' : undefined)}
 	>
 		{#snippet cell(n, col)}
-			{#if col.key === 'created_at'}
+			{#if col.key === 'createdAt'}
 				<span class="inline-flex items-center gap-1.5">
 					<span
-						class="size-1.5 shrink-0 {n.read_at ? '' : 'bg-info'}"
-						role={n.read_at ? undefined : 'img'}
-						aria-label={n.read_at ? undefined : 'Unread'}
+						class="size-1.5 shrink-0 {n.readAt ? '' : 'bg-info'}"
+						role={n.readAt ? undefined : 'img'}
+						aria-label={n.readAt ? undefined : 'Unread'}
 					></span>
-					<Timestamp value={n.created_at} />
+					<Timestamp value={n.createdAt} />
 				</span>
 			{:else if col.key === 'category'}
 				<span class="font-mono text-xs uppercase">{n.category}</span>
@@ -159,18 +159,18 @@
 			{:else if col.key === 'title'}
 				<a
 					href={n.href}
-					class="{n.read_at ? '' : 'font-medium'} hover:underline"
+					class="{n.readAt ? '' : 'font-medium'} hover:underline"
 					onclick={(e) => {
 						e.preventDefault();
 						open(n);
 					}}>{n.title}</a
 				>
 				{#if n.body}<div class="text-xs text-muted-foreground">{n.body}</div>{/if}
-			{:else if col.key === 'actor_name'}
-				{#if n.actor_name}{n.actor_name}{:else}<span class="text-muted-foreground">—</span>{/if}
+			{:else if col.key === 'actorName'}
+				{#if n.actorName}{n.actorName}{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else}
 				<span class="inline-flex gap-1">
-					{#if !n.read_at}
+					{#if !n.readAt}
 						<Button variant="outline" size="xs" onclick={() => markRead(n)}>MARK READ</Button>
 					{/if}
 					<Button variant="outline" size="xs" onclick={() => dismiss(n)}>DISMISS</Button>

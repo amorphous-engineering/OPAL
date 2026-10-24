@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -14,16 +14,16 @@
 		toastError,
 		ErrorBanner
 	} from '#lib/components/opal/index.js';
-	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
-	import { searchKind } from '#lib/components/issues/pickers.js';
+	import { CONTAINMENT_OPTION } from '#lib/components/issues/issues.js';
 	import {
 		CONTAINMENTS,
-		CONTAINMENT_OPTION,
+		ISSUE_PRIORITIES,
 		ISSUE_TYPES,
-		PRIORITIES,
-		type Issue
-	} from '#lib/components/issues/issues.js';
+		type Containment,
+		type IssuePriority,
+		type IssueType
+	} from '@opal/shared';
 	import { stateLabel } from '#lib/format.js';
 	import type { Ctx } from './+page.js';
 	import type { PageProps } from './$types';
@@ -32,13 +32,12 @@
 
 	// Reset when the invoking context (the query string) changes.
 	let part = $state<Ctx | null>(null);
-	let procedure = $state<Ctx | null>(null);
 	let execution = $state<Ctx | null>(null);
 	let step = $state<Ctx | null>(null);
 	let title = $state('');
-	let type = $state('task');
-	let priority = $state('medium');
-	let containment = $state('advisory');
+	let type = $state<IssueType>('task');
+	let priority = $state<IssuePriority>('medium');
+	let containment = $state<Containment>('advisory');
 	let description = $state('');
 	let shouldBe = $state('');
 	let actual = $state('');
@@ -52,12 +51,11 @@
 
 	$effect(() => {
 		part = data.ctx.part;
-		procedure = data.ctx.procedure;
 		execution = data.ctx.execution;
 		step = data.ctx.step;
 		title = data.defaults.title;
-		type = data.defaults.type;
-		containment = data.defaults.containment;
+		type = data.defaults.type as IssueType;
+		containment = data.defaults.containment as Containment;
 	});
 
 	async function submit(e: SubmitEvent) {
@@ -65,31 +63,30 @@
 		if (!title.trim()) return;
 		busy = true;
 		error = null;
-		const body: Record<string, unknown> = {
+		const text = (v: string) => v.trim() || null;
+		const body = {
 			title: title.trim(),
-			description: description.trim() || null,
-			issue_type: type,
+			description: text(description),
+			issueType: type,
 			priority,
 			containment,
-			part_id: part?.id ?? null,
-			procedure_id: procedure?.id ?? null,
-			procedure_instance_id: execution?.id ?? null,
-			raised_step_id: step?.id ?? null,
-			containment_step_id: step && containment !== 'advisory' ? step.id : null,
-			assigned_to_id: assignee ? Number(assignee) : null
+			executionId: execution?.id ?? null,
+			raisedStepId: step?.id ?? null,
+			containmentStepId: step && containment !== 'advisory' ? step.id : null,
+			assignedToId: assignee ? Number(assignee) : null,
+			links: part ? [{ kind: 'part' as const, targetId: part.id }] : [],
+			...(type === 'non_conformance' ? { shouldBe: text(shouldBe), actual: text(actual) } : {}),
+			...(type === 'bug'
+				? {
+						stepsToReproduce: text(steps),
+						expectedBehavior: text(expected),
+						actualBehavior: text(actualBehavior)
+					}
+				: {}),
+			...(type === 'improvement' ? { expectedBenefit: text(benefit) } : {})
 		};
-		if (type === 'non_conformance') {
-			body.should_be = shouldBe.trim() || null;
-			body.actual = actual.trim() || null;
-		} else if (type === 'bug') {
-			body.steps_to_reproduce = steps.trim() || null;
-			body.expected_behavior = expected.trim() || null;
-			body.actual_behavior = actualBehavior.trim() || null;
-		} else if (type === 'improvement') {
-			body.expected_benefit = benefit.trim() || null;
-		}
 		try {
-			const issue = await api.post<Issue>('/issues', body);
+			const issue = await opal.issues.create(body);
 			await goto(`/issues/${issue.id}`);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Could not create the issue';
@@ -131,7 +128,7 @@
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="priority">Priority</Label>
 				<NativeSelect id="priority" bind:value={priority} class="w-full">
-					{#each PRIORITIES as p (p)}
+					{#each ISSUE_PRIORITIES as p (p)}
 						<NativeSelectOption value={p}>{stateLabel(p)}</NativeSelectOption>
 					{/each}
 				</NativeSelect>
@@ -213,24 +210,15 @@
 		<Section title="Links">
 			<DetailTable>
 				<DetailRow label="Part">
-					{@render link(part, 'part', 'Search parts', (c) => (part = c))}
+					{@render link(part, 'part', (c) => (part = c))}
 				</DetailRow>
 				<DetailRow label="Execution">
-					{@render link(execution, 'execution', 'Search executions', (c) => {
+					{@render link(execution, 'execution', (c) => {
 						execution = c;
 						// A different execution invalidates its step anchor.
 						step = null;
 					})}
 				</DetailRow>
-				{#if !execution || procedure}
-					<DetailRow label="Procedure">
-						{#if execution}
-							{procedure?.label}
-						{:else}
-							{@render link(procedure, 'procedure', 'Search procedures', (c) => (procedure = c))}
-						{/if}
-					</DetailRow>
-				{/if}
 				{#if step}
 					<DetailRow label="Raised at" mono>
 						{step.label}
@@ -246,12 +234,7 @@
 	</div>
 </form>
 
-{#snippet link(
-	current: Ctx | null,
-	kind: 'part' | 'procedure' | 'execution',
-	placeholder: string,
-	set: (c: Ctx | null) => void
-)}
+{#snippet link(current: Ctx | null, kind: 'part' | 'execution', set: (c: Ctx | null) => void)}
 	{#if current}
 		<span class="flex items-baseline gap-2">
 			{#if current.sub}<span class="mono text-info">{current.sub}</span>{/if}
@@ -262,22 +245,16 @@
 				onclick={() => set(null)}>CLEAR</button
 			>
 		</span>
+	{:else if kind === 'part'}
+		<PartPicker
+			placeholder="Search parts"
+			onselect={(p) => {
+				if (!p) return;
+				const row = p as unknown as Record<string, string | null>;
+				set({ id: p.id, label: p.name, sub: row.internalPn ?? row.internal_pn });
+			}}
+		/>
 	{:else}
-		{#if kind === 'part'}
-			<PartPicker
-				{placeholder}
-				onselect={(p) => p && set({ id: p.id, label: p.name, sub: p.internal_pn })}
-			/>
-		{:else}
-			<EntityPicker
-				{placeholder}
-				label={placeholder}
-				search={searchKind(kind)}
-				onpick={(o) =>
-					set(
-						o.sub ? { id: o.value, label: o.sub, sub: o.label } : { id: o.value, label: o.label }
-					)}
-			/>
-		{/if}
+		<span class="text-muted-foreground">—</span>
 	{/if}
 {/snippet}

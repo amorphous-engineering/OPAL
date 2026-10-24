@@ -7,7 +7,7 @@
 	// delta), count (reconcile to a physical number), move (relocate or split).
 	// Every one writes a ledger row server-side.
 	import { goto } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { toast, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -16,7 +16,7 @@
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { qty } from '#lib/format.js';
-	import type { InventoryItem } from './types.js';
+	import type { AdjustReason, StockRecord } from '@opal/shared';
 
 	let {
 		open = $bindable(false),
@@ -28,16 +28,16 @@
 	}: {
 		open: boolean;
 		action: StockAction;
-		record: InventoryItem;
+		record: StockRecord;
 		locations: string[];
 		/** Adjust only: start on this reason (SCRAP opens with `scrap`). */
 		reason?: string;
 		ondone: () => void | Promise<void>;
 	} = $props();
 
-	const current = $derived(Number(record.quantity));
-	const serialized = $derived(record.part_tracking_type === 'serialized');
-	const uom = $derived(record.part_uom);
+	const current = $derived(Number(record.balance));
+	const serialized = $derived(record.partTrackingType === 'serialized');
+	const uom = $derived(record.partUom);
 
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -95,7 +95,7 @@
 			Number(moveQty) <= current &&
 			!!toLocation.trim() &&
 			(toLocation.trim() !== record.location ||
-				(toLot.trim() !== '' && toLot.trim() !== record.lot_number))
+				(toLot.trim() !== '' && toLot.trim() !== record.lotNumber))
 		);
 	});
 
@@ -106,30 +106,31 @@
 		error = null;
 		try {
 			if (action === 'adjust') {
-				await api.post(`/inventory/${record.id}/adjust`, {
-					adjustment: delta,
-					reason,
+				await opal.inventory.adjust({
+					id: record.id,
+					adjustment: `${sign < 0 ? '-' : ''}${amount}`,
+					reason: reason as AdjustReason,
 					notes: notes.trim() || null
 				});
-				toast.success(`${record.opal_number} on hand ${qty(newOnHand, uom)}`);
+				toast.success(`${record.opalNumber} on hand ${qty(newOnHand, uom)}`);
 			} else if (action === 'count') {
-				await api.post(`/inventory/${record.id}/count`, { counted_quantity: Number(counted) });
-				toast.success(`${record.opal_number} counted ${qty(counted, uom)}`);
+				await opal.inventory.count({ id: record.id, countedQuantity: counted });
+				toast.success(`${record.opalNumber} counted ${qty(counted, uom)}`);
 			} else {
-				const moved = await api.post<{ target_opal_number: string | null }>('/inventory/transfer', {
-					source_inventory_id: record.id,
-					target_location: toLocation.trim(),
-					quantity: Number(moveQty),
-					target_lot_number: toLot.trim() || null,
+				const moved = await opal.inventory.transfer({
+					sourceId: record.id,
+					targetLocation: toLocation.trim(),
+					quantity: moveQty,
+					targetLotNumber: toLot.trim() || null,
 					notes: notes.trim() || null
 				});
-				const other = moved.target_opal_number;
-				if (other && other !== record.opal_number) {
+				const other = moved.target.opalNumber;
+				if (other !== record.opalNumber) {
 					toast.success(`${qty(moveQty, uom)} moved to ${toLocation.trim()} as ${other}`, {
 						action: { label: 'OPEN', onClick: () => goto(`/inventory/opal/${other}`) }
 					});
 				} else {
-					toast.success(`${record.opal_number} moved to ${toLocation.trim()}`);
+					toast.success(`${record.opalNumber} moved to ${toLocation.trim()}`);
 				}
 			}
 			open = false;
@@ -147,7 +148,7 @@
 		<Dialog.Header>
 			<Dialog.Title class="flex items-baseline gap-2 text-sm font-semibold">
 				{title}
-				<span class="font-mono text-xs font-normal text-info">{record.opal_number}</span>
+				<span class="font-mono text-xs font-normal text-info">{record.opalNumber}</span>
 			</Dialog.Title>
 			<Dialog.Description class="font-mono text-xs text-muted-foreground">
 				On hand {qty(current, uom)} · {record.location || '—'}
@@ -249,7 +250,7 @@
 						id="mv-lot"
 						class="font-mono"
 						autocomplete="off"
-						placeholder={record.lot_number ?? ''}
+						placeholder={record.lotNumber ?? ''}
 						bind:value={toLot}
 					/>
 				</div>

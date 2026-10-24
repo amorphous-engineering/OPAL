@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { DetailRow, DetailTable, Section, State } from '#lib/components/opal/index.js';
+	import { DetailRow, DetailTable, Section } from '#lib/components/opal/index.js';
 	import { bytes, type SystemInfo } from './types.js';
 
 	let { system }: { system: SystemInfo } = $props();
@@ -8,27 +8,18 @@
 <Section title="System">
 	<DetailTable>
 		<DetailRow label="OPAL version"
-			><span class="font-mono break-all">{system.opal_version}</span></DetailRow
+			><span class="font-mono break-all">{system.opalVersion}</span></DetailRow
 		>
-		<DetailRow label="Python" mono value={system.python_version} />
+		<DetailRow label="Runtime" mono value={system.runtime} />
 		<DetailRow label="Platform"
 			><span class="font-mono break-all">{system.platform}</span></DetailRow
 		>
 		<DetailRow label="Server" mono value={system.server} />
-		<DetailRow label="Debug">
-			{#if system.debug}<State value="on" tone="warn" label="ON" />{:else}<span
-					class="font-mono text-xs">OFF</span
-				>{/if}
-		</DetailRow>
 		<DetailRow label="Data directory"
-			><span class="font-mono break-all">{system.data_dir}</span></DetailRow
+			><span class="font-mono break-all">{system.dataDir}</span></DetailRow
 		>
-		<DetailRow label="Database"><span class="font-mono break-all">{system.db_path}</span></DetailRow
+		<DetailRow label="Database"><span class="font-mono break-all">{system.dbPath}</span></DetailRow
 		>
-		<DetailRow label="Database size" mono value={bytes(system.db_size_bytes)} />
-		<DetailRow label="Upload directory"
-			><span class="font-mono break-all">{system.upload_dir}</span></DetailRow
-		>
-		<DetailRow label="Max upload" mono value={bytes(system.max_upload_bytes)} />
+		<DetailRow label="Database size" mono value={bytes(system.dbSizeBytes)} />
 	</DetailTable>
 </Section>

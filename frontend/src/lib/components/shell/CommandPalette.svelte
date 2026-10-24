@@ -4,17 +4,11 @@
 	// the last records opened from here.
 	import * as Command from '#lib/components/ui/command/index.js';
 	import { goto } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import type { SearchHit } from '@opal/shared';
 	import { NAV } from '#lib/nav.js';
 
-	interface SearchResult {
-		entity_type: string;
-		id: number;
-		label: string;
-		sublabel: string | null;
-		url: string;
-		status: string | null;
-	}
+	type SearchResult = SearchHit;
 
 	/** Result groups, in display order. Keys are the API's entity_type values. */
 	const TYPES: Record<string, string> = {
@@ -63,14 +57,16 @@
 
 	function loadRecent() {
 		try {
-			recent = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+			const saved = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as Partial<SearchResult>[];
+			// Entries saved by older builds carry `url`, not `href`.
+			recent = saved.filter((r): r is SearchResult => typeof r.href === 'string');
 		} catch {
 			recent = [];
 		}
 	}
 
 	function remember(r: SearchResult) {
-		recent = [r, ...recent.filter((x) => x.url !== r.url)].slice(0, RECENT_MAX);
+		recent = [r, ...recent.filter((x) => x.href !== r.href)].slice(0, RECENT_MAX);
 		try {
 			localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
 		} catch {
@@ -94,7 +90,7 @@
 		searching = true;
 		timer = setTimeout(async () => {
 			try {
-				const r = await api.get<SearchResult[]>('/search', { q });
+				const r = await opal.platform.search.query({ q, limit: 5 });
 				if (mine === seq) results = r;
 			} catch {
 				if (mine === seq) results = [];
@@ -120,11 +116,17 @@
 
 	const needle = $derived(query.trim().toLowerCase());
 	const grouped = $derived(
-		Object.entries(TYPES)
+		[
+			...Object.entries(TYPES),
+			// Types no list above names still show, after the known ones.
+			...[...new Set(results.map((r) => r.entityType))]
+				.filter((t) => !(t in TYPES))
+				.map((t) => [t, t.replace(/_/g, ' ').toUpperCase()] as const)
+		]
 			.map(([type, heading]) => ({
 				type,
 				heading,
-				rows: results.filter((r) => r.entity_type === type)
+				rows: results.filter((r) => r.entityType === type)
 			}))
 			.filter((g) => g.rows.length)
 	);
@@ -157,8 +159,8 @@
 		{/if}
 		{#each grouped as g (g.type)}
 			<Command.Group heading={g.heading}>
-				{#each g.rows as r (r.entity_type + r.id)}
-					<Command.Item value={`${r.entity_type}-${r.id}`} onSelect={() => go(r.url, r)}>
+				{#each g.rows as r (r.entityType + r.id)}
+					<Command.Item value={`${r.entityType}-${r.id}`} onSelect={() => go(r.href, r)}>
 						<span class="truncate">{r.label}</span>
 						{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
 								>{r.sublabel}</span
@@ -172,14 +174,14 @@
 		{/each}
 		{#if !needle && recent.length}
 			<Command.Group heading="RECENT">
-				{#each recent as r (r.url)}
-					<Command.Item value={`recent-${r.url}`} onSelect={() => go(r.url, r)}>
+				{#each recent as r (r.href)}
+					<Command.Item value={`recent-${r.href}`} onSelect={() => go(r.href, r)}>
 						<span class="truncate">{r.label}</span>
 						{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
 								>{r.sublabel}</span
 							>{/if}
 						<span class="ml-auto font-mono text-xs text-muted-foreground uppercase"
-							>{label(r.entity_type)}</span
+							>{label(r.entityType)}</span
 						>
 					</Command.Item>
 				{/each}

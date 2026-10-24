@@ -3,7 +3,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 
 	let { hasPassword, onchanged }: { hasPassword: boolean; onchanged: () => void } = $props();
 
@@ -22,14 +22,14 @@
 		}
 		busy = true;
 		try {
-			const r = await api.post<{ other_sessions_revoked: number }>('/auth/password', {
-				current_password: current,
-				new_password: next
+			const r = await opal.auth.password.change({
+				currentPassword: hasPassword ? current : undefined,
+				newPassword: next
 			});
 			current = next = confirmNext = '';
 			toast.success(
-				r.other_sessions_revoked
-					? `Password changed. ${r.other_sessions_revoked} other session(s) signed out.`
+				r.otherSessionsRevoked
+					? `Password changed. ${r.otherSessionsRevoked} other session(s) signed out.`
 					: 'Password changed'
 			);
 			onchanged();

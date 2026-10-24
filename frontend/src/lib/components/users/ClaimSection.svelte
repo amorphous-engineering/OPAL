@@ -3,19 +3,19 @@
 	import { onMount } from 'svelte';
 	import { Section, Timestamp, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import CopyField from './CopyField.svelte';
-	import { claimUrl, type ClaimLink } from './types.js';
+	import { claimUrl } from './types.js';
 
 	let { userId, autoIssue = false }: { userId: number; autoIssue?: boolean } = $props();
 
-	let link = $state<ClaimLink | null>(null);
+	let link = $state<{ token: string; expiresAt: string } | null>(null);
 	let busy = $state(false);
 
 	async function issue() {
 		busy = true;
 		try {
-			link = await api.post<ClaimLink>(`/users/${userId}/claim-link`);
+			link = await opal.auth.claimLinks.create({ userId });
 		} catch (err) {
 			toastError(err);
 		} finally {
@@ -36,9 +36,9 @@
 	{/snippet}
 	<div class="grid grid-cols-1 gap-2 p-3">
 		{#if link}
-			<CopyField value={claimUrl(link)} label="Claim link" />
+			<CopyField value={claimUrl(link.token)} label="Claim link" />
 			<div class="text-xs text-muted-foreground">
-				Single use, expires <Timestamp value={link.expires_at} />
+				Single use, expires <Timestamp value={link.expiresAt} />
 			</div>
 		{:else}
 			<div class="text-xs text-muted-foreground">No password set. No link issued yet.</div>

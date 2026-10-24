@@ -3,16 +3,9 @@
  * One flow for every entry point: the Ctrl/Cmd+Z shortcut and the audit page.
  */
 import { invalidateAll } from '$app/navigation';
-import { api, ApiError } from '#lib/api.js';
+import { ApiError, opal } from '#lib/api.js';
+import type { UndoPreview } from '@opal/shared';
 import { confirm, toast, toastError } from '#lib/components/opal/index.js';
-
-interface UndoPreview {
-	action: string;
-	summary: string;
-	timestamp: string;
-	can_undo: boolean;
-	reason: string | null;
-}
 
 let busy = false;
 
@@ -22,7 +15,7 @@ export async function undoLast(): Promise<void> {
 	try {
 		let preview: UndoPreview;
 		try {
-			preview = await api.get<UndoPreview>('/undo/last');
+			preview = await opal.platform.undo.preview({});
 		} catch (e) {
 			if (e instanceof ApiError && e.status === 404) {
 				toast('Nothing to undo');
@@ -30,7 +23,7 @@ export async function undoLast(): Promise<void> {
 			}
 			throw e;
 		}
-		if (!preview.can_undo) {
+		if (!preview.canUndo) {
 			toast.error(preview.reason ?? 'The last change cannot be undone');
 			return;
 		}
@@ -40,7 +33,7 @@ export async function undoLast(): Promise<void> {
 			action: 'UNDO'
 		});
 		if (!ok) return;
-		const result = await api.post<{ summary: string }>('/undo/last');
+		const result = await opal.platform.undo.last({});
 		toast.success(result.summary);
 		await invalidateAll();
 	} catch (e) {

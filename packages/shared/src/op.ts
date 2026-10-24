@@ -28,6 +28,13 @@ export interface OpContract<I extends z.ZodType = z.ZodType, O extends z.ZodType
 	mcp: boolean;
 	/** Refused for API-token actors: authoritative human acts such as sign-offs. */
 	humanOnly?: boolean;
+	/**
+	 * A non-JSON response (CSV, SVG). The output schema is then `z.string()` and
+	 * the handler returns the body. Link to it with `opUrl()`; do not fetch it as JSON.
+	 */
+	produces?: 'text/csv' | 'image/svg+xml' | 'text/plain';
+	/** File name for a download (sets Content-Disposition: attachment). */
+	filename?: string;
 }
 
 export function op<I extends z.ZodType, O extends z.ZodType>(c: OpContract<I, O>): OpContract<I, O> {

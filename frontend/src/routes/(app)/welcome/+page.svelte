@@ -9,7 +9,7 @@
 		toastError
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { api, opal } from '#lib/api.js';
 	import { session } from '#lib/session.svelte.js';
 	import { ACTION_SHORTCUTS, NAV_SHORTCUTS } from '#lib/shortcuts.js';
 	import type { PageProps } from './$types';
@@ -22,7 +22,7 @@
 	async function finish(to = '/') {
 		busy = 'complete';
 		try {
-			await api.post('/welcome/complete');
+			await opal.org.welcome.complete({});
 			await session.load();
 			await goto(to);
 		} catch (e) {

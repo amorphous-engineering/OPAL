@@ -5,8 +5,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { api, ApiError } from '#lib/api.js';
-	import type { UserRecord } from '#lib/components/users/types.js';
+	import { ApiError, opal } from '#lib/api.js';
 
 	let name = $state('');
 	let username = $state('');
@@ -21,12 +20,12 @@
 		busy = true;
 		error = null;
 		try {
-			const created = await api.post<UserRecord>('/users', {
+			const created = await opal.org.users.create({
 				name: name.trim(),
 				username: username.trim() || null,
 				email: email.trim() || null,
 				password: password || null,
-				is_admin: isAdmin
+				isAdmin
 			});
 			// No password means the owner has to claim the account: hand the admin
 			// the claim link straight away instead of making them hunt for it.

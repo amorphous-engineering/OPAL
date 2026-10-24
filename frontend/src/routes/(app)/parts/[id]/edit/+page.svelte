@@ -8,17 +8,17 @@
 
 <PageHeader
 	title={data.part.name}
-	identifier={data.part.internal_pn}
+	identifier={data.part.internalPn}
 	crumbs={[
 		{ label: 'Parts', href: '/parts' },
-		{ label: data.part.internal_pn ?? data.part.name, href: `/parts/${data.part.id}` },
+		{ label: data.part.internalPn, href: `/parts/${data.part.id}` },
 		{ label: 'Edit' }
 	]}
 >
 	{#snippet state()}
-		{#if data.part.lifecycle_state === 'draft'}<State value="draft" tone="warn" badge />{/if}
+		{#if data.part.state === 'draft'}<State value="draft" tone="warn" badge />{/if}
 	{/snippet}
 </PageHeader>
 {#key data.part.id}
-	<PartForm schema={data.schema} part={data.part} parent={data.parent} />
+	<PartForm schema={data.schema} part={data.part} />
 {/key}

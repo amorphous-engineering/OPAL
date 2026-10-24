@@ -25,7 +25,7 @@
 		tierCode?: string | null;
 		uom?: string;
 		tracking?: string | null;
-		state?: 'draft' | 'active';
+		state?: 'draft' | 'active' | 'obsolete';
 		qr?: string | null;
 		print?: boolean;
 		class?: string;
@@ -89,8 +89,13 @@
 		<span
 			class={cn(
 				'font-semibold',
-				!print && (state === 'draft' ? 'text-warn' : 'text-muted-foreground')
-			)}>{state === 'draft' ? 'DRAFT' : 'ACTIVE'}</span
+				!print &&
+					(state === 'draft'
+						? 'text-warn'
+						: state === 'obsolete'
+							? 'text-error'
+							: 'text-muted-foreground')
+			)}>{state.toUpperCase()}</span
 		>
 	</div>
 </div>

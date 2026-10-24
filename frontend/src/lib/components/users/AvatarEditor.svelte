@@ -3,8 +3,8 @@
 	// to a square and resized to 256 px in the browser before it is sent.
 	import { Avatar, confirm, toast, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
-	import { squareAvatar } from './avatar.js';
+	import { opal } from '#lib/api.js';
+	import { squareAvatar, toBase64 } from './avatar.js';
 	import type { UserRecord } from './types.js';
 
 	let {
@@ -23,10 +23,7 @@
 		busy = true;
 		try {
 			const blob = await squareAvatar(file);
-			const form = new FormData();
-			form.append('file', blob, blob.type === 'image/webp' ? 'avatar.webp' : 'avatar.png');
-			await api.post(`/users/${profile.id}/avatar`, form);
-			onupdate(await api.get<UserRecord>(`/users/${profile.id}`));
+			onupdate(await opal.org.users.uploadAvatar({ id: profile.id, data: await toBase64(blob) }));
 			toast.success('Avatar saved');
 		} catch (err) {
 			toastError(err);
@@ -45,8 +42,7 @@
 		if (!ok) return;
 		busy = true;
 		try {
-			await api.del(`/users/${profile.id}/avatar`);
-			onupdate({ ...profile, avatar_url: null });
+			onupdate(await opal.org.users.removeAvatar({ id: profile.id }));
 			toast.success('Avatar removed');
 		} catch (err) {
 			toastError(err);
@@ -70,9 +66,9 @@
 				onchange={picked}
 			/>
 			<Button variant="outline" size="sm" disabled={busy} onclick={() => input?.click()}
-				>{profile.avatar_url ? 'REPLACE AVATAR' : 'UPLOAD AVATAR'}</Button
+				>{profile.avatarUrl ? 'REPLACE AVATAR' : 'UPLOAD AVATAR'}</Button
 			>
-			{#if profile.avatar_url}
+			{#if profile.avatarUrl}
 				<Button variant="outline" size="sm" disabled={busy} onclick={remove}>REMOVE AVATAR</Button>
 			{/if}
 		</div>

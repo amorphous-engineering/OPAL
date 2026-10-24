@@ -7,8 +7,8 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api, ApiError } from '#lib/api.js';
-	import { session, landingFor, type CurrentUser } from '#lib/session.svelte.js';
+	import { ApiError, opal } from '#lib/api.js';
+	import { session, landingFor, toCurrentUser } from '#lib/session.svelte.js';
 
 	const token = page.url.searchParams.get('token') ?? '';
 	let username = $state<string | null>(null);
@@ -20,7 +20,7 @@
 
 	onMount(async () => {
 		try {
-			username = (await api.get<{ username: string }>('/auth/claim', { token })).username;
+			username = (await opal.auth.claim.status({ token })).username;
 		} catch {
 			invalid = true;
 		}
@@ -35,9 +35,10 @@
 		}
 		busy = true;
 		try {
-			const r = await api.post<{ user: CurrentUser }>('/auth/claim', { token, password });
-			session.set(r.user);
-			await goto(landingFor(r.user, null), { replace: true });
+			const r = await opal.auth.claim.complete({ token, password });
+			const user = toCurrentUser(r.user);
+			session.set(user);
+			await goto(landingFor(user, null), { replace: true });
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Could not set password';
 		} finally {

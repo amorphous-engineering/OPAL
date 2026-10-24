@@ -3,8 +3,8 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api, ApiError } from '#lib/api.js';
-	import { session, landingFor, type CurrentUser } from '#lib/session.svelte.js';
+	import { ApiError, opal } from '#lib/api.js';
+	import { session, landingFor } from '#lib/session.svelte.js';
 
 	let name = $state(session.user?.name ?? '');
 	let error = $state<string | null>(null);
@@ -12,9 +12,10 @@
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		try {
-			const user = await api.post<CurrentUser>('/auth/profile', { name });
-			session.set(user);
-			goto(landingFor(user, null), { replace: true });
+			await opal.org.users.setupProfile({ name });
+			// Re-read the identity so the profile-setup flag clears everywhere.
+			const user = await session.load();
+			goto(user ? landingFor(user, null) : '/', { replace: true });
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Could not save';
 		}

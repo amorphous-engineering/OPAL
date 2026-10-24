@@ -15,9 +15,9 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { api } from '#lib/api.js';
 	import { qty } from '#lib/format.js';
-	import FormField from './FormField.svelte';
-	import { act } from './actions.js';
-	import type { PartDetail, StockRecord } from './types.js';
+	import FormField from '../FormField.svelte';
+	import { act } from '../actions.js';
+	import type { PartDetail, StockRecord } from './legacy-types.js';
 
 	let { detail }: { detail: PartDetail } = $props();
 	const part = $derived(detail.part);

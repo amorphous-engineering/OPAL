@@ -4,8 +4,8 @@
 	import { refreshAll } from '$app/navigation';
 	import { EmptyLine, Section, toast, toastError } from '#lib/components/opal/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import { api } from '#lib/api.js';
-	import { roleList, type Role, type RoleRef } from './roles.js';
+	import { opal } from '#lib/api.js';
+	import { sortRoles, type Role, type RoleRef } from './roles.js';
 
 	let {
 		userId,
@@ -21,9 +21,9 @@
 
 	$effect(() => {
 		if (!isAdmin) return;
-		api
-			.get<Role[] | { items: Role[] }>('/roles')
-			.then((r) => (all = roleList(r)))
+		opal.org.roles
+			.list({})
+			.then((r) => (all = sortRoles(r)))
 			.catch(toastError);
 	});
 
@@ -33,7 +33,7 @@
 		const ids = (roles ?? []).map((r) => r.id).filter((id) => id !== role.id);
 		if (on) ids.push(role.id);
 		try {
-			await api.put(`/users/${userId}/roles`, { role_ids: ids });
+			await opal.org.users.setRoles({ id: userId, roleIds: ids });
 			toast.success(on ? `${role.name} granted` : `${role.name} removed`);
 			await refreshAll();
 		} catch (err) {

@@ -27,7 +27,7 @@
 
 	const rows = $derived(
 		data.workcenters.filter((w) =>
-			data.status === 'all' ? true : data.status === 'inactive' ? !w.is_active : w.is_active
+			data.status === 'all' ? true : data.status === 'inactive' ? !w.isActive : w.isActive
 		)
 	);
 
@@ -36,14 +36,14 @@
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'location', label: 'Location', sortable: true },
 		{
-			key: 'default_step_count',
+			key: 'defaultStepCount',
 			label: 'Default steps',
 			align: 'right',
 			mono: true,
 			sortable: true
 		},
-		{ key: 'queued_step_count', label: 'Queued', align: 'right', mono: true, sortable: true },
-		{ key: 'is_active', label: 'Status', width: '6rem' }
+		{ key: 'queuedStepCount', label: 'Queued', align: 'right', mono: true, sortable: true },
+		{ key: 'isActive', label: 'Status', width: '6rem' }
 	];
 </script>
 
@@ -91,9 +91,9 @@
 		{#snippet cell(row, col)}
 			{#if col.key === 'code'}
 				<span class="text-info">{row.code}</span>
-			{:else if col.key === 'is_active'}
+			{:else if col.key === 'isActive'}
 				<!-- Active is the norm; only the exception is stated. -->
-				{#if !row.is_active}<State value="inactive" tone="muted" />{/if}
+				{#if !row.isActive}<State value="inactive" tone="muted" />{/if}
 			{:else}
 				{@const v = (row as unknown as Record<string, string | number | null>)[col.key]}
 				{#if v === null || v === ''}<span class="text-muted-foreground">—</span>{:else}{v}{/if}

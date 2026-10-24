@@ -37,8 +37,8 @@ export function toCurrentUser(u: AuthUser): CurrentUser {
 		name: u.name,
 		email: u.email,
 		is_admin: u.isAdmin,
-		needs_onboarding: false,
-		needs_profile_setup: false
+		needs_onboarding: u.needsOnboarding,
+		needs_profile_setup: u.needsProfileSetup
 	};
 }
 

@@ -1,15 +1,4 @@
-export interface Notification {
-	id: number;
-	kind: string;
-	category: string;
-	priority: string;
-	title: string;
-	body: string | null;
-	href: string;
-	created_at: string;
-	read_at: string | null;
-	actor_name: string | null;
-}
+export type { Notification } from '@opal/shared';
 
 /** The bell and the notifications page share one inbox; this keeps the bell's count live. */
 const EVENT = 'opal:notifications-changed';

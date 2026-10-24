@@ -11,7 +11,7 @@
 		toastError
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { session } from '#lib/session.svelte.js';
 	import ActivitySection from '#lib/components/users/ActivitySection.svelte';
 	import ClaimSection from '#lib/components/users/ClaimSection.svelte';
@@ -22,7 +22,6 @@
 	import SessionsSection from '#lib/components/users/SessionsSection.svelte';
 	import TokensSection from '#lib/components/users/TokensSection.svelte';
 	import RolesSection from '#lib/components/users/RolesSection.svelte';
-	import type { RoleRef } from '#lib/components/users/roles.js';
 	import type { UserRecord } from '#lib/components/users/types.js';
 	import type { PageProps } from './$types';
 
@@ -38,20 +37,20 @@
 	let sessionsVersion = $state(0);
 	let passkeysEnabled = $state(true);
 	/** Reset or a fresh account leaves it passwordless: show the claim section. */
-	const needsClaim = $derived(profile.is_active && !profile.has_password && !isSelf);
+	const needsClaim = $derived(profile.isActive && !profile.hasPassword && !isSelf);
 	const autoIssue = $derived(page.url.searchParams.get('claim') === '1');
 
 	$effect(() => {
 		if (!isSelf) return;
-		api
-			.get<{ passkeys_enabled: boolean }>('/auth/config')
-			.then((c) => (passkeysEnabled = c.passkeys_enabled))
+		opal.auth
+			.config({})
+			.then((c) => (passkeysEnabled = c.passkeysEnabled))
 			.catch(() => {});
 	});
 
-	async function patch(body: Record<string, unknown>, done: string) {
+	async function patch(body: { isAdmin?: boolean; isActive?: boolean }, done: string) {
 		try {
-			profile = await api.patch<UserRecord>(`/users/${profile.id}`, body);
+			profile = await opal.org.users.update({ id: profile.id, ...body });
 			toast.success(done);
 			await refreshAll();
 		} catch (err) {
@@ -60,7 +59,7 @@
 	}
 
 	async function toggleAdmin() {
-		const grant = !profile.is_admin;
+		const grant = !profile.isAdmin;
 		const ok = await confirm({
 			title: grant
 				? `Make ${profile.name} an administrator?`
@@ -72,20 +71,20 @@
 			destructive: !grant
 		});
 		if (ok)
-			await patch({ is_admin: grant }, grant ? 'Administrator added' : 'Administrator removed');
+			await patch({ isAdmin: grant }, grant ? 'Administrator added' : 'Administrator removed');
 	}
 
 	async function toggleActive() {
-		if (profile.is_active) {
+		if (profile.isActive) {
 			const ok = await confirm({
 				title: `Deactivate ${profile.name}?`,
 				body: 'They are signed out everywhere and cannot sign in. Their history stays.',
 				action: 'DEACTIVATE',
 				destructive: true
 			});
-			if (ok) await patch({ is_active: false }, 'Account deactivated');
+			if (ok) await patch({ isActive: false }, 'Account deactivated');
 		} else {
-			await patch({ is_active: true }, 'Account reactivated');
+			await patch({ isActive: true }, 'Account reactivated');
 		}
 	}
 
@@ -98,7 +97,7 @@
 		});
 		if (!ok) return;
 		try {
-			await api.post(`/users/${profile.id}/reset-password`);
+			await opal.org.users.resetPassword({ id: profile.id });
 			await goto(`/users/${profile.id}?claim=1`, { replace: true, refreshAll: true });
 			toast.success('Password cleared');
 		} catch (err) {
@@ -116,7 +115,7 @@
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/users/${profile.id}`);
+			await opal.org.users.deactivate({ id: profile.id });
 			session.set(null);
 			await goto('/login');
 		} catch (err) {
@@ -139,19 +138,19 @@
 		</span>
 	{/snippet}
 	{#snippet state()}
-		{#if !profile.is_active}<State value="inactive" tone="muted" badge />{/if}
+		{#if !profile.isActive}<State value="inactive" tone="muted" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
 		{#if isAdmin}
 			<Button variant="outline" size="sm" onclick={toggleAdmin}
-				>{profile.is_admin ? 'REMOVE ADMIN' : 'MAKE ADMIN'}</Button
+				>{profile.isAdmin ? 'REMOVE ADMIN' : 'MAKE ADMIN'}</Button
 			>
 			{#if !isSelf}
-				{#if profile.is_active && profile.has_password}
+				{#if profile.isActive && profile.hasPassword}
 					<Button variant="outline" size="sm" onclick={resetPassword}>RESET PASSWORD</Button>
 				{/if}
 				<Button variant="outline" size="sm" onclick={toggleActive}
-					>{profile.is_active ? 'DEACTIVATE' : 'REACTIVATE'}</Button
+					>{profile.isActive ? 'DEACTIVATE' : 'REACTIVATE'}</Button
 				>
 			{/if}
 		{/if}
@@ -167,18 +166,18 @@
 			onupdate={(u) => {
 				profile = u;
 				if (isSelf && session.user)
-					session.set({ ...session.user, name: u.name, avatar_url: u.avatar_url ?? null });
+					session.set({ ...session.user, name: u.name, avatar_url: u.avatarUrl });
 				refreshAll();
 			}}
 		/>
-		<RolesSection userId={profile.id} roles={(profile as { roles?: RoleRef[] }).roles} {isAdmin} />
+		<RolesSection userId={profile.id} roles={profile.roles} {isAdmin} />
 		{#if needsClaim}
 			{#key profile.id}
 				<ClaimSection userId={profile.id} {autoIssue} />
 			{/key}
 		{/if}
 		{#if isSelf}
-			<PasswordSection hasPassword={profile.has_password} onchanged={() => sessionsVersion++} />
+			<PasswordSection hasPassword={profile.hasPassword} onchanged={() => sessionsVersion++} />
 			<PreferencesSection />
 		{/if}
 	</div>

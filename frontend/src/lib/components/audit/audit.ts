@@ -1,26 +1,8 @@
-/** Audit log entry as served by /api/audit (and the overview activity feed). */
+/** Audit entries as served by `opal.platform.audit.list` (and the overview activity feed). */
 import { datetime } from '#lib/format.js';
 
-export interface FieldChange {
-	field: string;
-	old: unknown;
-	new: unknown;
-	old_label: string | null;
-	new_label: string | null;
-}
-
-export interface AuditEntry {
-	id: number;
-	timestamp: string;
-	action: 'create' | 'update' | 'delete' | string;
-	entity_type: string;
-	entity_label: string;
-	record_label: string | null;
-	href: string | null;
-	user_id: number | null;
-	user_name: string | null;
-	changes: FieldChange[];
-}
+export type { AuditEntry, FieldChange } from '@opal/shared';
+import type { AuditEntry } from '@opal/shared';
 
 export const AUDIT_PAGE_SIZE = 100;
 
@@ -36,9 +18,12 @@ export function formatValue(value: unknown, label?: string | null): string {
 	return String(value);
 }
 
-/** snake_case column → readable field name. */
+/** camelCase column → readable field name: `activatedById` → `activated by`. */
 export function fieldName(field: string): string {
-	return field.replace(/_id$/, '').replace(/_/g, ' ');
+	return field
+		.replace(/Id$/, '')
+		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+		.toLowerCase();
 }
 
 /** What an entry did, in one short line: the fields touched. */

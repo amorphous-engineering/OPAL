@@ -7,9 +7,9 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import FormField from './FormField.svelte';
-	import type { SchemaTier } from './types.js';
+	import type { SchemaTier } from '@opal/shared';
 
 	let { tiers, open = $bindable(false) }: { tiers: SchemaTier[]; open?: boolean } = $props();
 
@@ -22,11 +22,12 @@
 		e.preventDefault();
 		busy = true;
 		try {
-			const r = await api.post<{ first_pn: string; last_pn: string; parts: unknown[] }>(
-				'/parts/reserve',
-				{ tier: Number(tier), count: Number(count), name_prefix: prefix.trim() || null }
-			);
-			toast.success(`Reserved ${r.parts.length}: ${r.first_pn} – ${r.last_pn}`);
+			const r = await opal.parts.reserve({
+				tier: Number(tier),
+				count: Number(count),
+				namePrefix: prefix.trim() || undefined
+			});
+			toast.success(`Reserved ${r.parts.length}: ${r.firstPn} – ${r.lastPn}`);
 			open = false;
 			await goto('/parts?state=draft', { invalidateAll: true });
 		} catch (err) {

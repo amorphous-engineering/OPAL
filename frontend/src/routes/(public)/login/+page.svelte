@@ -9,6 +9,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { ApiError, opal } from '#lib/api.js';
+	import { getAssertion, passkeysSupported } from '#lib/webauthn.js';
 	import {
 		session,
 		getSignInConfig,
@@ -42,6 +43,33 @@
 	async function done(user: CurrentUser) {
 		session.set(user);
 		await goto(landingFor(user, next), { replace: true });
+	}
+
+	// Browsers expose WebAuthn on HTTPS and localhost only, never for a bare IP address.
+	const passkeyUsable = $derived(
+		!!config?.passkeysEnabled &&
+			typeof window !== 'undefined' &&
+			window.isSecureContext &&
+			!/^[\d.]+$|:/.test(location.hostname) &&
+			passkeysSupported()
+	);
+
+	async function passkeySignIn() {
+		busy = true;
+		error = null;
+		try {
+			const options = await opal.auth.passkeys.loginBegin({ rpId: location.hostname });
+			const credential = await getAssertion(options);
+			const r = await opal.auth.passkeys.loginComplete({ credential });
+			await done(toCurrentUser(r.user));
+		} catch (err) {
+			// Dismissing the browser prompt is not an error worth reporting.
+			if (!(err instanceof DOMException && err.name === 'NotAllowedError')) {
+				error = err instanceof ApiError ? err.message : 'Passkey sign-in failed';
+			}
+		} finally {
+			busy = false;
+		}
 	}
 
 	async function submit(e: SubmitEvent) {
@@ -98,17 +126,26 @@
 			<Button type="submit" disabled={busy}>SIGN IN</Button>
 		</form>
 	{/if}
-	{#if config.oidcEnabled}
+	{#if passkeyUsable || config.oidcEnabled}
 		{#if config.passwordLoginEnabled}
 			<div class="my-4 flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
 				<Separator class="flex-1" />or<Separator class="flex-1" />
 			</div>
 		{/if}
-		<Button
-			variant="outline"
-			class="w-full"
-			href={`/oidc/login?next=${encodeURIComponent(next ?? '/')}`}
-			data-sveltekit-reload>SIGN IN WITH SSO</Button
-		>
+		<div class="grid grid-cols-1 gap-2">
+			{#if passkeyUsable}
+				<Button variant="outline" class="w-full" disabled={busy} onclick={passkeySignIn}
+					>SIGN IN WITH PASSKEY</Button
+				>
+			{/if}
+			{#if config.oidcEnabled}
+				<Button
+					variant="outline"
+					class="w-full"
+					href={`/oidc/login?next=${encodeURIComponent(next ?? '/')}`}
+					data-sveltekit-reload>SIGN IN WITH {(config.oidcProviderName ?? 'SSO').toUpperCase()}</Button
+				>
+			{/if}
+		</div>
 	{/if}
 {/if}

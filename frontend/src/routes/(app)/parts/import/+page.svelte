@@ -12,39 +12,14 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { qty } from '#lib/format.js';
-
-	interface Row {
-		row_number: number;
-		name: string | null;
-		external_pn: string | null;
-		tier: number | null;
-		category: string | null;
-		unit_of_measure: string | null;
-		tracking_type: string | null;
-		procurement: string | null;
-		description: string | null;
-		reorder_point: number | null;
-		errors: string[];
-		warnings: string[];
-		valid: boolean;
-	}
-	interface Preview {
-		total_rows: number;
-		valid_rows: number;
-		error_rows: number;
-		warning_rows: number;
-		rows: Row[];
-		headers_found: string[];
-	}
-	interface Result {
-		created: number;
-		skipped: number;
-		errors: string[];
-		first_pn: string | null;
-		last_pn: string | null;
-	}
+	import type {
+		ImportPreview as Preview,
+		ImportPreviewRow as Row,
+		ImportResult as Result,
+		PartCreate
+	} from '@opal/shared';
 
 	let files = $state<FileList | undefined>();
 	let preview = $state<Preview | null>(null);
@@ -61,9 +36,7 @@
 		filename = file.name;
 		busy = true;
 		try {
-			const form = new FormData();
-			form.append('file', file);
-			preview = await api.post<Preview>('/parts/import/preview', form);
+			preview = await opal.parts.importPreview({ csv: await file.text() });
 		} catch (e) {
 			toastError(e);
 		} finally {
@@ -79,21 +52,23 @@
 		if (!preview) return;
 		busy = true;
 		try {
-			result = await api.post<Result>('/parts/import', {
-				skip_duplicates: skipDuplicates,
+			result = await opal.parts.import({
+				skipDuplicates,
 				rows: preview.rows
 					.filter((r) => r.valid)
-					.map((r) => ({
-						name: r.name,
-						external_pn: r.external_pn,
-						tier: r.tier ?? undefined,
-						category: r.category,
-						unit_of_measure: r.unit_of_measure ?? undefined,
-						tracking_type: r.tracking_type,
-						procurement: r.procurement ?? undefined,
-						description: r.description,
-						reorder_point: r.reorder_point
-					}))
+					.map(
+						(r): PartCreate => ({
+							name: r.name!,
+							externalPn: r.externalPn,
+							tier: r.tier ?? 1,
+							category: r.category,
+							unitOfMeasure: r.unitOfMeasure ?? undefined,
+							trackingType: (r.trackingType as PartCreate['trackingType']) ?? undefined,
+							procurement: (r.procurement as PartCreate['procurement']) ?? undefined,
+							description: r.description,
+							reorderPoint: r.reorderPoint
+						})
+					)
 			});
 			preview = null;
 			files = undefined;
@@ -117,13 +92,13 @@
 	}
 
 	const columns: Column<Row>[] = [
-		{ key: 'row_number', label: 'Row', width: '4rem', mono: true, align: 'right' },
+		{ key: 'rowNumber', label: 'Row', width: '4rem', mono: true, align: 'right' },
 		{ key: 'name', label: 'Name' },
-		{ key: 'external_pn', label: 'External PN', mono: true, width: '12rem' },
+		{ key: 'externalPn', label: 'External PN', mono: true, width: '12rem' },
 		{ key: 'tier', label: 'Tier', width: '4rem', mono: true },
 		{ key: 'category', label: 'Category', width: '9rem' },
 		{ key: 'procurement', label: 'Proc', width: '5rem' },
-		{ key: 'reorder_point', label: 'Reorder', width: '6rem', align: 'right', mono: true },
+		{ key: 'reorderPoint', label: 'Reorder', width: '6rem', align: 'right', mono: true },
 		{ key: 'result', label: 'Result', width: '20rem' }
 	];
 </script>
@@ -161,9 +136,9 @@
 		</div>
 		{#if preview}
 			<p class="border-t border-border px-3 py-2 font-mono text-xs text-muted-foreground">
-				{filename} · {preview.total_rows} rows · {preview.valid_rows} valid · {preview.error_rows} errors
+				{filename} · {preview.totalRows} rows · {preview.validRows} valid · {preview.errorRows} errors
 				·
-				{preview.warning_rows} duplicates · columns {preview.headers_found.join(', ')}
+				{preview.warningRows} duplicates · columns {preview.headersFound.join(', ')}
 			</p>
 		{/if}
 	</Section>
@@ -191,11 +166,11 @@
 	{/if}
 
 	{#if preview}
-		<Section title="Preview" count={preview.total_rows}>
+		<Section title="Preview" count={preview.totalRows}>
 			<DataTable
 				rows={preview.rows}
 				{columns}
-				key={(r) => r.row_number}
+				key={(r) => r.rowNumber}
 				rowClass={(r) => (r.valid ? undefined : 'bg-error-muted/40')}
 				emptyLabel="ROWS"
 			>
@@ -212,8 +187,8 @@
 						{:else}
 							<State value="ok" tone="ok" label="OK" />
 						{/if}
-					{:else if col.key === 'reorder_point'}
-						{r.reorder_point === null ? '—' : qty(r.reorder_point)}
+					{:else if col.key === 'reorderPoint'}
+						{r.reorderPoint === null ? '—' : qty(r.reorderPoint)}
 					{:else}
 						{@const v = (r as unknown as Record<string, unknown>)[col.key]}
 						{#if v === null || v === ''}<span class="text-muted-foreground">—</span>{:else}{v}{/if}

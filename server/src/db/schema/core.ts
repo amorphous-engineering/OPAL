@@ -63,6 +63,8 @@ export const auditLog = sqliteTable(
 		entityId: integer('entity_id').notNull(),
 		action: text('action').notNull(),
 		op: text('op').notNull(),
+		/** One id per operation call: every row one call wrote shares it (undo reverses a whole call). */
+		invocation: text('invocation'),
 		actorUserId: integer('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
 		actorTokenId: integer('actor_token_id').references(() => apiToken.id, {
 			onDelete: 'set null'

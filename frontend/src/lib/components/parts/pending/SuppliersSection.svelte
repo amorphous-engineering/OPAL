@@ -15,9 +15,9 @@
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
 	import { api } from '#lib/api.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
-	import FormField from './FormField.svelte';
-	import { act } from './actions.js';
-	import type { PartDetail, PartSupplier } from './types.js';
+	import FormField from '../FormField.svelte';
+	import { act } from '../actions.js';
+	import type { PartDetail, PartSupplier } from './legacy-types.js';
 
 	let { detail }: { detail: PartDetail } = $props();
 	const part = $derived(detail.part);

@@ -7,4 +7,4 @@
 </script>
 
 <PageHeader title="New part" crumbs={[{ label: 'Parts', href: '/parts' }, { label: 'New' }]} />
-<PartForm schema={data.schema} parent={data.parent} tier={data.tier} />
+<PartForm schema={data.schema} assembly={data.assembly} tier={data.tier} />

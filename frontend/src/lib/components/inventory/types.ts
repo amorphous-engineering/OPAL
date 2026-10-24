@@ -1,149 +1,7 @@
-/** Shapes returned by /api/inventory. Decimals arrive as numbers or strings. */
-type Dec = number | string;
+/** Display helpers for stock. The data shapes come from `@opal/shared`. */
+import type { StockLedgerRow, StockSource } from '@opal/shared';
 
-export interface InventoryItem {
-	id: number;
-	part_id: number;
-	part_name: string;
-	part_external_pn: string | null;
-	part_uom: string | null;
-	part_internal_pn: string | null;
-	part_tracking_type: string | null;
-	part_is_tooling: boolean;
-	quantity: Dec;
-	location: string;
-	lot_number: string | null;
-	last_counted_at: string | null;
-	opal_number: string | null;
-	source_type: string | null;
-	expiration_date: string | null;
-	is_expired: boolean;
-	days_until_expiration: number | null;
-	last_calibrated_at: string | null;
-	calibration_due_at: string | null;
-	calibration_status: 'ok' | 'due_soon' | 'overdue' | null;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface StockByPart {
-	part_id: number;
-	internal_pn: string | null;
-	external_pn: string | null;
-	name: string;
-	unit_of_measure: string | null;
-	tracking_type: string;
-	reorder_point: Dec | null;
-	quantity: Dec;
-	record_count: number;
-	locations: string[];
-	is_low_stock: boolean;
-}
-
-export interface LocationSummary {
-	location: string;
-	total_records: number;
-	total_parts: number;
-}
-
-export interface DetailExecution {
-	id: number;
-	work_order_number: string | null;
-	serial_number: string | null;
-}
-
-export interface LedgerRow {
-	kind: string;
-	timestamp: string;
-	delta: Dec;
-	balance: Dec;
-	quantity: Dec | null;
-	reason: string | null;
-	notes: string | null;
-	user_name: string | null;
-	execution: DetailExecution | null;
-	from_location: string | null;
-	to_location: string | null;
-	counterpart_opal: string | null;
-}
-
-export interface GenealogyRow {
-	opal_number: string;
-	part_id: number | null;
-	part_number: string | null;
-	part_name: string | null;
-	quantity_used: Dec;
-	work_order_number: string | null;
-}
-
-export interface StockTest {
-	id: number;
-	template_id: number | null;
-	test_name: string;
-	result: 'pass' | 'fail' | 'pending';
-	value: string | null;
-	notes: string | null;
-	tested_at: string | null;
-	tested_by_name: string | null;
-}
-
-export interface StockTestTemplate {
-	id: number;
-	name: string;
-	description: string | null;
-	required: boolean;
-	test_type: string;
-	min_value: Dec | null;
-	max_value: Dec | null;
-	unit: string | null;
-}
-
-export interface OpalDetail {
-	inventory: InventoryItem;
-	part: {
-		id: number;
-		internal_pn: string | null;
-		external_pn: string | null;
-		name: string;
-		unit_of_measure: string | null;
-		tracking_type: string;
-		is_tooling: boolean;
-		tier: number;
-		tier_name: string | null;
-		lifecycle_state: string;
-	};
-	source: {
-		type: string | null;
-		purchase: { id: number; reference: string | null; supplier: string | null } | null;
-		execution: DetailExecution | null;
-		transferred_from_opal: string | null;
-	};
-	ledger: LedgerRow[];
-	components: GenealogyRow[];
-	assemblies: GenealogyRow[];
-	tests: StockTest[];
-	test_templates: StockTestTemplate[];
-}
-
-export interface PickedPart {
-	id: number;
-	internal_pn: string | null;
-	external_pn: string | null;
-	name: string;
-	unit_of_measure: string;
-	tracking_type: string;
-	tier: number;
-	tier_name: string | null;
-	lifecycle_state: string;
-}
-
-export interface TierRule {
-	level: number;
-	require_lot: boolean;
-	auto_serial: boolean;
-}
-
-export const SOURCE_LABEL: Record<string, string> = {
+export const SOURCE_LABEL: Record<StockSource, string> = {
 	purchase: 'PURCHASE',
 	production: 'PRODUCED',
 	manual: 'MANUAL',
@@ -151,27 +9,46 @@ export const SOURCE_LABEL: Record<string, string> = {
 };
 
 export function sourceLabel(type: string | null | undefined): string {
-	return type ? (SOURCE_LABEL[type] ?? type.toUpperCase()) : '—';
+	return type ? (SOURCE_LABEL[type as StockSource] ?? type.toUpperCase()) : '—';
 }
 
-/** Ledger event kinds → state word and tone. */
-export const LEDGER_KIND: Record<
-	string,
-	{ label: string; tone: 'ok' | 'warn' | 'error' | 'info' | 'muted' | 'default' }
-> = {
-	received: { label: 'RECEIVED', tone: 'ok' },
-	produced: { label: 'PRODUCED', tone: 'ok' },
-	planned: { label: 'PLANNED', tone: 'muted' },
-	consumed: { label: 'CONSUMED', tone: 'warn' },
-	tooling: { label: 'TOOLING', tone: 'info' },
-	scrapped: { label: 'SCRAPPED', tone: 'error' },
-	adjusted: { label: 'ADJUSTED', tone: 'default' },
-	counted: { label: 'COUNTED', tone: 'info' },
-	moved_in: { label: 'MOVED IN', tone: 'info' },
-	moved_out: { label: 'MOVED OUT', tone: 'info' },
-	moved: { label: 'MOVED', tone: 'info' }
+type Tone = 'ok' | 'warn' | 'error' | 'info' | 'muted' | 'default';
+
+/** State word and tone of a ledger row. */
+export function ledgerKind(row: Pick<StockLedgerRow, 'kind' | 'qty' | 'reason'>): {
+	label: string;
+	tone: Tone;
+} {
+	const n = Number(row.qty);
+	switch (row.kind) {
+		case 'receive':
+			return { label: 'RECEIVED', tone: 'ok' };
+		case 'produce':
+			return { label: 'PRODUCED', tone: 'ok' };
+		case 'consume':
+			if (row.reason === 'tooling') return { label: 'TOOLING', tone: 'info' };
+			if (row.reason === 'scrap') return { label: 'SCRAPPED', tone: 'error' };
+			return { label: 'CONSUMED', tone: 'warn' };
+		case 'adjust':
+			return row.reason === 'scrap' || row.reason === 'damage'
+				? { label: 'SCRAPPED', tone: 'error' }
+				: { label: 'ADJUSTED', tone: 'default' };
+		case 'count':
+			return { label: 'COUNTED', tone: 'info' };
+		case 'transfer':
+			return { label: n > 0 ? 'MOVED IN' : n < 0 ? 'MOVED OUT' : 'MOVED', tone: 'info' };
+	}
+}
+
+/** Link columns that other areas add to a move, as something a person can read or follow. */
+const LINKS: Record<string, { label: string; href?: (id: number) => string }> = {
+	executionId: { label: 'EXECUTION', href: (id) => `/executions/${id}` },
+	purchaseLineId: { label: 'PURCHASE' }
 };
 
-export function num(v: Dec | null | undefined): number {
-	return v === null || v === undefined || v === '' ? 0 : Number(v);
+export function moveLinks(links: Record<string, number>): { label: string; href: string | null }[] {
+	return Object.entries(links).flatMap(([k, id]) => {
+		const l = LINKS[k];
+		return l ? [{ label: l.label, href: l.href ? l.href(id) : null }] : [];
+	});
 }

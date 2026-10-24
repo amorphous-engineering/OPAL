@@ -15,7 +15,7 @@
 
 	let { data }: PageProps = $props();
 	const isAdmin = $derived(!!session.user?.is_admin);
-	const onshape = $derived(data.extensions.items.find((e) => e.id === 'opal.onshape') ?? null);
+	const onshape = $derived(data.extensions?.items.find((e) => e.id === 'opal.onshape') ?? null);
 </script>
 
 <PageHeader title="Settings" crumbs={[{ label: 'System' }, { label: 'Settings' }]} />
@@ -25,21 +25,25 @@
 		<ProjectSettings project={data.project} {isAdmin} />
 	</SettingsGroup>
 
-	<SettingsGroup id="sign-in" title="Sign-in">
-		{#if data.auth}
-			<AuthSettings auth={data.auth} />
-		{:else}
-			<AuthSummary signIn={data.signIn} />
-		{/if}
-	</SettingsGroup>
+	{#if data.auth || data.signIn}
+		<SettingsGroup id="sign-in" title="Sign-in">
+			{#if data.auth}
+				<AuthSettings auth={data.auth} />
+			{:else if data.signIn}
+				<AuthSummary signIn={data.signIn} />
+			{/if}
+		</SettingsGroup>
+	{/if}
 
 	<SettingsGroup id="roles" title="Roles">
 		<RolesSettings roles={data.roles} people={data.people} {isAdmin} />
 	</SettingsGroup>
 
-	<SettingsGroup id="extensions" title="Extensions">
-		<ExtensionSettings extensions={data.extensions} details={data.extensionDetails} {isAdmin} />
-	</SettingsGroup>
+	{#if data.extensions}
+		<SettingsGroup id="extensions" title="Extensions">
+			<ExtensionSettings extensions={data.extensions} details={data.extensionDetails} {isAdmin} />
+		</SettingsGroup>
+	{/if}
 
 	{#if onshape}
 		<SettingsGroup id="onshape" title="Onshape">
@@ -51,7 +55,7 @@
 		<AgentSection agent={data.agent} {isAdmin} />
 	</SettingsGroup>
 
-	{#if isAdmin}
+	{#if isAdmin && data.lifecycle}
 		<SettingsGroup id="lifecycle" title="Lifecycle">
 			<LifecycleSections lifecycle={data.lifecycle} />
 		</SettingsGroup>

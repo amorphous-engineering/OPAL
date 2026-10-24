@@ -11,17 +11,9 @@
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 
-	interface AuthSession {
-		id: number;
-		auth_method: string;
-		created_at: string;
-		last_seen_at: string | null;
-		user_agent: string | null;
-		ip_address: string | null;
-		current: boolean;
-	}
+	type AuthSession = Awaited<ReturnType<typeof opal.auth.sessions.list>>['items'][number];
 
 	// `version` changes whenever another section did something that affects sessions.
 	let { version = 0 }: { version?: number } = $props();
@@ -30,7 +22,7 @@
 	let loaded = $state(false);
 
 	async function load() {
-		sessions = await api.get<AuthSession[]>('/auth/sessions');
+		sessions = (await opal.auth.sessions.list({})).items;
 		loaded = true;
 	}
 
@@ -45,7 +37,7 @@
 
 	async function revoke(s: AuthSession) {
 		try {
-			await api.del(`/auth/sessions/${s.id}`);
+			await opal.auth.sessions.revoke({ id: s.id });
 			await load();
 		} catch (err) {
 			toastError(err);
@@ -61,7 +53,7 @@
 		});
 		if (!ok) return;
 		try {
-			const r = await api.post<{ revoked: number }>('/auth/sessions/revoke-others');
+			const r = await opal.auth.sessions.revokeOthers({});
 			await load();
 			toast.success(`${r.revoked} session(s) signed out`);
 		} catch (err) {
@@ -70,10 +62,10 @@
 	}
 
 	const columns: Column<AuthSession>[] = [
-		{ key: 'auth_method', label: 'Method', class: 'whitespace-nowrap' },
-		{ key: 'last_seen_at', label: 'Last seen', class: 'whitespace-nowrap' },
-		{ key: 'user_agent', label: 'Client' },
-		{ key: 'ip_address', label: 'Address', mono: true, class: 'whitespace-nowrap' },
+		{ key: 'method', label: 'Method', class: 'whitespace-nowrap' },
+		{ key: 'lastSeenAt', label: 'Last seen', class: 'whitespace-nowrap' },
+		{ key: 'userAgent', label: 'Client' },
+		{ key: 'ipAddress', label: 'Address', mono: true, class: 'whitespace-nowrap' },
 		{ key: 'actions', label: '', width: '5rem', align: 'right' }
 	];
 	const others = $derived(sessions.filter((s) => !s.current).length);
@@ -87,18 +79,18 @@
 	{/snippet}
 	<DataTable rows={sessions} {columns} loading={!loaded} emptyLabel="SESSIONS" dense>
 		{#snippet cell(s, col)}
-			{#if col.key === 'auth_method'}
-				<span class="font-mono text-xs uppercase">{s.auth_method}</span>
+			{#if col.key === 'method'}
+				<span class="font-mono text-xs uppercase">{s.method}</span>
 				{#if s.current}<State value="this" tone="info" label="THIS" class="ml-1" />{/if}
-			{:else if col.key === 'last_seen_at'}
-				<Timestamp value={s.last_seen_at} />
-			{:else if col.key === 'user_agent'}
+			{:else if col.key === 'lastSeenAt'}
+				<Timestamp value={s.lastSeenAt} />
+			{:else if col.key === 'userAgent'}
 				<span
 					class="block max-w-xs truncate text-xs text-muted-foreground"
-					title={s.user_agent ?? ''}>{s.user_agent ?? '—'}</span
+					title={s.userAgent ?? ''}>{s.userAgent ?? '—'}</span
 				>
-			{:else if col.key === 'ip_address'}
-				{s.ip_address ?? '—'}
+			{:else if col.key === 'ipAddress'}
+				{s.ipAddress ?? '—'}
 			{:else if !s.current}
 				<Button variant="ghost" size="xs" class="text-destructive" onclick={() => revoke(s)}
 					>REVOKE</Button

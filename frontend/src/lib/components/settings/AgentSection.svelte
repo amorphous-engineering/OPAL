@@ -8,7 +8,7 @@
 		toastError
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import type { AgentActivation } from './types.js';
 
 	let { agent, isAdmin }: { agent: AgentActivation; isAdmin: boolean } = $props();
@@ -25,7 +25,7 @@
 			if (!ok) return;
 		}
 		try {
-			state = await api.put<AgentActivation>('/settings/agent-activation', { enabled });
+			state = await opal.org.settings.setAgentActivation({ enabled });
 		} catch (err) {
 			toastError(err);
 		}
@@ -48,6 +48,6 @@
 					label="HUMAN ONLY"
 				/>{/if}
 		</DetailRow>
-		{#if state.enabled}<DetailRow label="Authorized by" value={state.authorized_by} />{/if}
+		{#if state.enabled}<DetailRow label="Authorized by" value={state.authorizedBy} />{/if}
 	</DetailTable>
 </Section>

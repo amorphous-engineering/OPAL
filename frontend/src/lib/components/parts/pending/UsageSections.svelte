@@ -11,7 +11,7 @@
 	} from '#lib/components/opal/index.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
 	import { money, qty, stateLabel } from '#lib/format.js';
-	import type { BomLine, Consumption, PartDetail, PoLine, ProcedureUse } from './types.js';
+	import type { BomLine, Consumption, PartDetail, PoLine, ProcedureUse } from './legacy-types.js';
 
 	let { detail, group }: { detail: PartDetail; group: 'purchasing' | 'usage' } = $props();
 

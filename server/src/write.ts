@@ -13,13 +13,16 @@ import { auditLog } from './db/schema/index.ts';
 type AnyTable = SQLiteTable & { id: any; $inferInsert: any; $inferSelect: any };
 
 /** Secrets never reach the audit log. */
-const REDACTED = new Set(['passwordHash', 'tokenHash']);
+const REDACTED = new Set(['passwordHash', 'tokenHash', 'clientSecret']);
 function redact(row: unknown): unknown {
 	if (!row || typeof row !== 'object') return row ?? null;
 	return Object.fromEntries(
 		Object.entries(row).map(([k, v]) => [k, REDACTED.has(k) && v != null ? '[redacted]' : v])
 	);
 }
+
+/** Sign-in bookkeeping, not business data: no audit rows. */
+const UNAUDITED = new Set(['session']);
 
 function audit(
 	ctx: Ctx,
@@ -29,6 +32,7 @@ function audit(
 	before: unknown,
 	after: unknown
 ) {
+	if (UNAUDITED.has(getTableName(table))) return;
 	ctx.db
 		.insert(auditLog)
 		.values({
@@ -37,6 +41,7 @@ function audit(
 			entityId,
 			action,
 			op: ctx.op,
+			invocation: ctx.invocation ?? null,
 			actorUserId: ctx.actor.kind === 'user' || ctx.actor.kind === 'token' ? ctx.actor.userId : null,
 			actorTokenId: ctx.actor.kind === 'token' ? ctx.actor.tokenId : null,
 			before: redact(before),

@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { createApp } from '../src/app.ts';
 import type { Actor } from '../src/context.ts';
-import { openDb } from '../src/db/client.ts';
+import { openTestDb } from './helpers/db.ts';
 import { apiToken, auditLog, user } from '../src/db/schema/index.ts';
 import { implement } from '../src/registry.ts';
 import { mountMcp } from '../src/mcp/index.ts';
@@ -28,7 +28,7 @@ function text(r: unknown): string {
 
 describe('mcp', () => {
 	test('lists tools with JSON schemas and creates a part as the token actor', async () => {
-		const db = openDb(':memory:');
+		const db = (await openTestDb());
 		const now = new Date().toISOString();
 		db.insert(user).values({ username: 'bot', name: 'Bot', createdAt: now, updatedAt: now }).run();
 		db.insert(apiToken).values({ userId: 1, name: 't', tokenHash: 'h', createdAt: now }).run();
@@ -56,7 +56,7 @@ describe('mcp', () => {
 	});
 
 	test('invalid input is an error result naming the field', async () => {
-		const app = createApp({ db: openDb(':memory:'), resolveActor: () => token });
+		const app = createApp({ db: (await openTestDb()), resolveActor: () => token });
 		const { client, connected } = connect(app);
 		await connected;
 		const res = await client.callTool({ name: 'parts_create', arguments: { tier: 0 } });
@@ -67,7 +67,7 @@ describe('mcp', () => {
 	});
 
 	test('anonymous requests get 401 with WWW-Authenticate', async () => {
-		const app = createApp({ db: openDb(':memory:'), resolveActor: () => ({ kind: 'anonymous' }) });
+		const app = createApp({ db: (await openTestDb()), resolveActor: () => ({ kind: 'anonymous' }) });
 		const res = await app.request('/mcp', { method: 'POST', body: '{}' });
 		expect(res.status).toBe(401);
 		expect(res.headers.get('www-authenticate')).toContain('Bearer');
@@ -87,7 +87,7 @@ describe('mcp', () => {
 		});
 		const impl = implement(signoff, () => ({ ok: true as const }));
 		const app = new Hono();
-		mountMcp(app, [impl], openDb(':memory:'), () => token);
+		mountMcp(app, [impl], (await openTestDb()), () => token);
 		const { client, connected } = connect(app);
 		await connected;
 		const res = await client.callTool({ name: 'test_signoff', arguments: {} });

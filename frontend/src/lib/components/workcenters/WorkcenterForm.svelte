@@ -31,7 +31,7 @@
 	let name = $state(init?.name ?? '');
 	let location = $state(init?.location ?? '');
 	let description = $state(init?.description ?? '');
-	let active = $state(init?.is_active ?? true);
+	let active = $state(init?.isActive ?? true);
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
@@ -40,7 +40,7 @@
 			name: name.trim(),
 			location: location.trim() || null,
 			description: description.trim() || null,
-			is_active: active
+			isActive: active
 		});
 	}
 </script>

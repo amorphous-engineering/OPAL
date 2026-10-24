@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import {
 		PageHeader,
 		Section,
@@ -27,17 +27,17 @@
 	const byProcedure = $derived.by(() => {
 		const m = new SvelteMap<
 			number,
-			{ procedure_id: number; procedure_name: string; status: string; steps: string[] }
+			{ procedureId: number; procedureName: string; status: string; steps: string[] }
 		>();
-		for (const s of work.default_steps) {
-			const g = m.get(s.procedure_id) ?? {
-				procedure_id: s.procedure_id,
-				procedure_name: s.procedure_name,
-				status: s.procedure_status,
+		for (const s of work.defaultSteps) {
+			const g = m.get(s.procedureId) ?? {
+				procedureId: s.procedureId,
+				procedureName: s.procedureName,
+				status: s.procedureStatus,
 				steps: []
 			};
-			g.steps.push(s.step_number);
-			m.set(s.procedure_id, g);
+			g.steps.push(s.stepNumber);
+			m.set(s.procedureId, g);
 		}
 		return [...m.values()];
 	});
@@ -50,7 +50,7 @@
 		busy = true;
 		error = null;
 		try {
-			await api.patch(`/workcenters/${wc.id}`, v);
+			await opal.org.workcenters.update({ id: wc.id, ...v });
 			editOpen = false;
 			await invalidateAll();
 		} catch (e) {
@@ -73,7 +73,7 @@
 		)
 			return;
 		try {
-			await api.patch(`/workcenters/${wc.id}`, { is_active: active });
+			await opal.org.workcenters.update({ id: wc.id, isActive: active });
 			toast.success(active ? 'Workcenter activated' : 'Workcenter deactivated');
 			await invalidateAll();
 		} catch (e) {
@@ -88,11 +88,11 @@
 	crumbs={[{ label: 'Workcenters', href: '/workcenters' }, { label: wc.code }]}
 >
 	{#snippet state()}
-		{#if !wc.is_active}<State value="inactive" tone="muted" badge />{/if}
+		{#if !wc.isActive}<State value="inactive" tone="muted" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
 		<Button size="sm" variant="outline" onclick={() => (editOpen = true)}>EDIT</Button>
-		{#if wc.is_active}
+		{#if wc.isActive}
 			<Button size="sm" variant="outline" onclick={() => setActive(false)}>DEACTIVATE</Button>
 		{:else}
 			<Button size="sm" variant="outline" onclick={() => setActive(true)}>ACTIVATE</Button>
@@ -120,47 +120,47 @@
 				{ key: 'wo', label: 'Execution', width: '10rem' },
 				{ key: 'procedure', label: 'Procedure' },
 				{ key: 'step', label: 'Step' },
-				{ key: 'step_status', label: 'Step state', width: '9rem' },
+				{ key: 'stepStatus', label: 'Step state', width: '9rem' },
 				{ key: 'due', label: 'Due', width: '9rem' }
 			]}
-			href={(r) => `/executions/${r.instance_id}`}
+			href={(r) => `/executions/${r.instanceId}`}
 			emptyLabel="Queue"
-			key={(r) => `${r.instance_id}:${r.step_number_str}`}
+			key={(r) => `${r.instanceId}:${r.stepNumberStr}`}
 			dense
 		>
 			{#snippet cell(row, col)}
 				{#if col.key === 'wo'}
-					<span class="font-mono text-info">{row.work_order_number ?? 'Execution'}</span>
+					<span class="font-mono text-info">{row.workOrderNumber ?? 'Execution'}</span>
 				{:else if col.key === 'procedure'}
-					{row.procedure_name}
+					{row.procedureName}
 				{:else if col.key === 'step'}
-					<span class="font-mono text-xs">{row.step_number_str}</span>
-					{row.step_title ?? ''}
-				{:else if col.key === 'step_status'}
-					{#if row.step_status !== 'pending'}<State value={row.step_status} />
+					<span class="font-mono text-xs">{row.stepNumberStr}</span>
+					{row.stepTitle ?? ''}
+				{:else if col.key === 'stepStatus'}
+					{#if row.stepStatus !== 'pending'}<State value={row.stepStatus} />
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else}
-					<Timestamp value={row.target_completion_at} dateOnly />
+					<Timestamp value={row.targetCompletionAt} dateOnly />
 				{/if}
 			{/snippet}
 		</DataTable>
 	</Section>
 
-	<Section title="Default steps" count={work.default_steps.length}>
+	<Section title="Default steps" count={work.defaultSteps.length}>
 		<DataTable
 			rows={byProcedure}
 			columns={[
 				{ key: 'procedure', label: 'Procedure' },
 				{ key: 'steps', label: 'Steps' }
 			]}
-			href={(r) => `/procedures/${r.procedure_id}`}
+			href={(r) => `/procedures/${r.procedureId}`}
 			emptyLabel="Default steps"
-			key={(r) => r.procedure_id}
+			key={(r) => r.procedureId}
 			dense
 		>
 			{#snippet cell(row, col)}
 				{#if col.key === 'procedure'}
-					{row.procedure_name}
+					{row.procedureName}
 					{#if row.status !== 'active'}
 						<State value={row.status} />
 					{/if}

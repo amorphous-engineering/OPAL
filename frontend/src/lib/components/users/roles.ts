@@ -1,15 +1,7 @@
-import { api } from '#lib/api.js';
+import { opal } from '#lib/api.js';
+import type { Role } from '@opal/shared';
 
-/** A role (qualification) as the roles list reports it. */
-export interface Role {
-	id: number;
-	name: string;
-	description: string | null;
-	member_count: number;
-	/** Predefined role (engineer, technician, quality, admin); cannot be renamed or deleted. */
-	key?: string | null;
-	is_system?: boolean;
-}
+export type { Role };
 
 export interface RoleRef {
 	id: number;
@@ -21,27 +13,22 @@ export interface Member {
 	id: number;
 	name: string;
 	username?: string;
-	avatar_url?: string | null;
+	avatarUrl?: string | null;
 	roles?: RoleRef[];
-}
-
-/** `GET /roles` answers a list; tolerate an `items` envelope. */
-export function roleList(res: Role[] | { items: Role[] }): Role[] {
-	return sortRoles(Array.isArray(res) ? res : res.items);
 }
 
 /** System roles first, then custom roles; each group keeps its incoming order. */
 export function sortRoles(roles: Role[]): Role[] {
-	return [...roles].sort((a, b) => Number(!!b.is_system) - Number(!!a.is_system));
+	return [...roles].sort((a, b) => Number(b.isSystem) - Number(a.isSystem));
 }
 
 let names: Promise<string[]> | null = null;
 
 /** Role names for pickers; fetched once per page load. */
 export function roleNames(): Promise<string[]> {
-	names ??= api
-		.get<Role[] | { items: Role[] }>('/roles')
-		.then((r) => roleList(r).map((x) => x.name))
+	names ??= opal.org.roles
+		.list({})
+		.then((r) => sortRoles(r).map((x) => x.name))
 		.catch((e) => {
 			names = null;
 			throw e;

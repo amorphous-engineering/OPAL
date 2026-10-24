@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { PageHeader, Section, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import WorkcenterForm from '#lib/components/workcenters/WorkcenterForm.svelte';
-	import type { Workcenter, WorkcenterInput } from '#lib/components/workcenters/types.js';
+	import type { WorkcenterInput } from '#lib/components/workcenters/types.js';
 
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -13,7 +13,7 @@
 		busy = true;
 		error = null;
 		try {
-			const wc = await api.post<Workcenter>('/workcenters', v);
+			const wc = await opal.org.workcenters.create(v);
 			await goto(`/workcenters/${wc.id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create workcenter';

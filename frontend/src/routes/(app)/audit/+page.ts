@@ -1,11 +1,7 @@
-import { api } from '#lib/api.js';
-import { AUDIT_PAGE_SIZE as PAGE_SIZE, type AuditEntry } from '#lib/components/audit/audit.js';
+import { opal } from '#lib/api.js';
+import { AUDIT_PAGE_SIZE as PAGE_SIZE } from '#lib/components/audit/audit.js';
+import { AUDIT_ACTIONS } from '@opal/shared';
 import type { PageLoad } from './$types';
-
-export interface Facets {
-	entity_types: { value: string; label: string }[];
-	users: { id: number; name: string }[];
-}
 
 /** A local calendar day (YYYY-MM-DD) as a UTC instant, so "today" means the viewer's today. */
 function localDayStart(day: string, plusDays = 0): string | undefined {
@@ -19,17 +15,18 @@ export const load: PageLoad = async ({ url, fetch }) => {
 	const page = Math.max(1, Number(q.get('page')) || 1);
 	const from = q.get('from') ?? '';
 	const to = q.get('to') ?? '';
-	const client = api.using(fetch);
+	const action = AUDIT_ACTIONS.find((a) => a === q.get('action'));
+	const client = opal.using(fetch).platform.audit;
 	const [facets, list] = await Promise.all([
-		client.get<Facets>('/audit/facets'),
-		client.get<{ items: AuditEntry[]; total: number }>('/audit', {
-			table_name: q.get('entity'),
-			record_id: q.get('record'),
-			action: q.get('action'),
-			user_id: q.get('user'),
-			date_from: localDayStart(from),
-			date_to: localDayStart(to, 1),
-			skip: (page - 1) * PAGE_SIZE,
+		client.facets({}),
+		client.list({
+			entity: q.get('entity') || undefined,
+			entityId: Number(q.get('record')) || undefined,
+			action,
+			userId: Number(q.get('user')) || undefined,
+			from: localDayStart(from),
+			to: localDayStart(to, 1),
+			offset: (page - 1) * PAGE_SIZE,
 			limit: PAGE_SIZE
 		})
 	]);

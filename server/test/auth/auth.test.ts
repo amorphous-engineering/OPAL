@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { createApp } from '../src/app.ts';
-import { verifyPassword } from '../src/auth/tokens.ts';
-import { openDb } from '../src/db/client.ts';
-import { apiToken, auditLog, session } from '../src/db/schema/index.ts';
+import { verifyPassword } from '../../src/auth/tokens.ts';
+import { apiToken, auditLog, session } from '../../src/db/schema/index.ts';
+import { harness } from './helpers.ts';
 
 // Made by legacy argon2-cffi: PasswordHasher().hash('kestrel-demo')
 const LEGACY_HASH =
@@ -10,15 +9,8 @@ const LEGACY_HASH =
 
 const ADMIN = { username: 'Abby', name: 'Abby', password: 'correct-horse-battery' };
 
-function setup() {
-	const db = openDb(':memory:');
-	const app = createApp({ db });
-	const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
-		app.request(`http://opal.test/api${path}`, {
-			method,
-			headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...headers },
-			body: body ? JSON.stringify(body) : undefined
-		});
+async function setup() {
+	const { db, call } = await harness();
 	return { db, call };
 }
 
@@ -28,14 +20,14 @@ function cookieOf(res: Response): string {
 }
 
 async function signedIn() {
-	const s = setup();
+	const s = await setup();
 	const res = await s.call('POST', '/auth/setup', ADMIN);
 	return { ...s, cookie: cookieOf(res), res };
 }
 
 describe('auth', () => {
 	test('setup only works once', async () => {
-		const { call } = setup();
+		const { call } = await setup();
 		expect((await (await call('GET', '/auth/config')).json()).needsSetup).toBe(true);
 		const first = await call('POST', '/auth/setup', ADMIN);
 		expect(first.status).toBe(200);

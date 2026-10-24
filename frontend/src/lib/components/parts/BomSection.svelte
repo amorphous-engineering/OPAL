@@ -13,13 +13,14 @@
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import { formatQty, parseQty, QTY_SCALE, type BomLine, type BomTreeNode, type PartDetail } from '@opal/shared';
 	import { qty } from '#lib/format.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
 	import FormField from './FormField.svelte';
 	import PartPicker from './PartPicker.svelte';
 	import { act } from './actions.js';
-	import type { BomLine, BomTreeNode, PartDetail, PartRef } from './types.js';
+	import type { PartRef } from './types.js';
 
 	let { detail, view = 'lines' }: { detail: PartDetail; view?: 'lines' | 'tree' } = $props();
 	const part = $derived(detail.part);
@@ -48,8 +49,8 @@
 
 	function startEdit(l: BomLine) {
 		editId = l.id;
-		eQty = String(l.quantity);
-		eRef = l.reference_designator ?? '';
+		eQty = l.quantity;
+		eRef = l.referenceDesignator ?? '';
 		eNotes = l.notes ?? '';
 	}
 
@@ -57,9 +58,10 @@
 		busy = true;
 		const ok = await act(
 			() =>
-				api.patch(`/bom/${l.id}`, {
-					quantity: Number(eQty),
-					reference_designator: eRef.trim() || null,
+				opal.parts.bom.update({
+					lineId: l.id,
+					quantity: eQty.trim(),
+					referenceDesignator: eRef.trim() || null,
 					notes: eNotes.trim() || null
 				}),
 			'BOM line saved'
@@ -70,12 +72,12 @@
 
 	async function remove(l: BomLine) {
 		const ok = await confirm({
-			title: `Remove ${l.component_internal_pn ?? l.component_name} from the BOM`,
-			body: `The line leaves the ${part.internal_pn} BOM. The part itself is unchanged.`,
+			title: `Remove ${l.componentPn} from the BOM`,
+			body: `The line leaves the ${part.internalPn} BOM. The part itself is unchanged.`,
 			action: 'REMOVE',
 			destructive: true
 		});
-		if (ok) await act(() => api.del(`/bom/${l.id}`), 'Removed from BOM');
+		if (ok) await act(() => opal.parts.bom.remove({ lineId: l.id }), 'Removed from BOM');
 	}
 
 	async function add(e: SubmitEvent) {
@@ -84,10 +86,11 @@
 		busy = true;
 		const ok = await act(
 			() =>
-				api.post(`/bom/assemblies/${part.id}`, {
-					component_id: picked!.id,
-					quantity: Number(addQty),
-					reference_designator: addRef.trim() || null,
+				opal.parts.bom.add({
+					id: part.id,
+					componentId: picked!.id,
+					quantity: addQty.trim() || '1',
+					referenceDesignator: addRef.trim() || null,
 					notes: addNotes.trim() || null
 				}),
 			`${picked.internal_pn} added`
@@ -111,8 +114,8 @@
 			tree = null;
 			return;
 		}
-		api
-			.get<BomTreeNode>(`/bom/assemblies/${id}/tree`)
+		opal.parts.bom
+			.tree({ id })
 			.then((t) => (tree = t))
 			.catch(() => (tree = null));
 	});
@@ -120,17 +123,18 @@
 	interface Flat {
 		node: BomTreeNode;
 		depth: number;
-		ext: number;
+		ext: string;
 	}
 	const flat = $derived.by(() => {
 		const out: Flat[] = [];
 		const walk = (n: BomTreeNode, depth: number, mult: number) => {
 			for (const c of n.children) {
-				out.push({ node: c, depth, ext: mult * c.quantity });
-				walk(c, depth + 1, mult * c.quantity);
+				const ext = Math.round((mult * parseQty(c.quantity)) / QTY_SCALE);
+				out.push({ node: c, depth, ext: formatQty(ext as ReturnType<typeof parseQty>) });
+				if (!c.circular) walk(c, depth + 1, ext);
 			}
 		};
-		if (tree) walk(tree, 0, 1);
+		if (tree) walk(tree, 0, QTY_SCALE);
 		return out;
 	});
 	const hasDepth = $derived(flat.some((f) => f.depth > 0));
@@ -149,12 +153,12 @@
 			<PartPicker
 				id="bom-component"
 				bind:value={picked}
-				exclude={[part.id, ...lines.map((l) => l.component_id)]}
+				exclude={[part.id, ...lines.map((l) => l.componentId)]}
 				placeholder="Search parts"
 			/>
 		</FormField>
 		<FormField label="Qty" for="bom-qty" class="w-20">
-			<Input id="bom-qty" type="number" min="1" step="1" bind:value={addQty} required />
+			<Input id="bom-qty" class="font-mono" inputmode="decimal" bind:value={addQty} required />
 		</FormField>
 		<FormField label="Refdes" for="bom-ref" class="w-32">
 			<Input id="bom-ref" class="font-mono" bind:value={addRef} />
@@ -164,7 +168,7 @@
 		</FormField>
 		<Button type="submit" size="sm" disabled={busy || !picked}>ADD</Button>
 		<a
-			href={`/parts/new?parent_id=${part.id}`}
+			href={`/parts/new?assembly=${part.id}`}
 			class="pb-2 font-mono text-xs font-medium text-info hover:underline">+ NEW PART</a
 		>
 	</form>
@@ -178,29 +182,32 @@
 				rows={lines}
 				{columns}
 				key={(l) => l.id}
-				href={(l) => (editId === l.id ? null : `/parts/${l.component_id}`)}
+				href={(l) => (editId === l.id ? null : `/parts/${l.componentId}`)}
 				emptyLabel="BOM"
 			>
 				{#snippet cell(l, col)}
 					{#if col.key === 'pn'}
-						<a href={`/parts/${l.component_id}`} class="text-info hover:underline"
-							>{l.component_internal_pn ?? '—'}</a
+						<a href={`/parts/${l.componentId}`} class="text-info hover:underline"
+							>{l.componentPn}</a
 						>
 					{:else if col.key === 'name'}
-						{l.component_name}
-						{#if l.component_state === 'draft'}<State
+						{l.componentName}
+						{#if l.componentState === 'draft'}<State
 								value="draft"
 								tone="warn"
+								badge
+								class="ml-2"
+							/>{:else if l.componentState === 'obsolete'}<State
+								value="obsolete"
+								tone="error"
 								badge
 								class="ml-2"
 							/>{/if}
 					{:else if editId === l.id}
 						{#if col.key === 'qty'}
 							<Input
-								type="number"
-								min="1"
-								step="1"
-								class="h-7 w-16 text-right font-mono"
+								inputmode="decimal"
+								class="h-7 w-20 text-right font-mono"
 								aria-label="Quantity"
 								bind:value={eQty}
 							/>
@@ -217,7 +224,7 @@
 					{:else if col.key === 'qty'}
 						{qty(l.quantity)}
 					{:else if col.key === 'ref'}
-						{#if l.reference_designator}{l.reference_designator}{:else}<span
+						{#if l.referenceDesignator}{l.referenceDesignator}{:else}<span
 								class="text-muted-foreground">—</span
 							>{/if}
 					{:else if col.key === 'notes'}
@@ -261,11 +268,13 @@
 								style:padding-left={`${0.75 + f.depth * 1.25}rem`}
 							>
 								<span class="text-muted-foreground">{f.depth ? '└ ' : ''}</span><a
-									href={`/parts/${f.node.part_id}`}
-									class="text-info hover:underline">{f.node.internal_pn ?? '—'}</a
+									href={`/parts/${f.node.partId}`}
+									class="text-info hover:underline">{f.node.internalPn}</a
 								>
 							</td>
-							<td class="px-3 py-1">{f.node.name}</td>
+							<td class="px-3 py-1"
+								>{f.node.name}{#if f.node.circular}<span class="label ml-2 text-error">Circular</span>{/if}</td
+							>
 							<td class="mono px-3 py-1 text-right">{qty(f.node.quantity)}</td>
 							<td class="mono px-3 py-1 text-right">{qty(f.ext)}</td>
 						</tr>

@@ -1,2 +1,660 @@
-/** Contracts for the inventory area. */
-export const inventory = {};
+/**
+ * Inventory: stock records (one per physical lot or serial at a location) and the
+ * `stock_move` ledger. A record has no quantity column. Its balance is the sum of its moves.
+ */
+import { z } from 'zod';
+import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
+import { zQty } from '../qty.ts';
+import { zTimestamp } from '../time.ts';
+
+export const MOVE_KINDS = ['receive', 'consume', 'produce', 'adjust', 'count', 'transfer'] as const;
+export type MoveKind = (typeof MOVE_KINDS)[number];
+
+export const STOCK_SOURCES = ['purchase', 'production', 'manual', 'transfer'] as const;
+export type StockSource = (typeof STOCK_SOURCES)[number];
+
+/** Reasons a person can give an adjustment. `cycle_count` writes a count move instead. */
+export const ADJUST_REASONS = ['found', 'correction', 'damage', 'scrap', 'cycle_count'] as const;
+export type AdjustReason = (typeof ADJUST_REASONS)[number];
+
+export const STOCK_TEST_RESULTS = ['pass', 'fail', 'pending'] as const;
+export const STOCK_TEST_TYPES = ['boolean', 'numeric', 'text'] as const;
+export const CALIBRATION_STATUSES = ['ok', 'due_soon', 'overdue'] as const;
+export type CalibrationStatus = (typeof CALIBRATION_STATUSES)[number];
+
+export const STOCK_SORT_KEYS = [
+	'opalNumber',
+	'part',
+	'name',
+	'location',
+	'quantity',
+	'lotNumber',
+	'expirationDate',
+	'createdAt'
+] as const;
+export const STOCK_BY_PART_SORT_KEYS = ['part', 'name', 'quantity', 'recordCount'] as const;
+
+/** Days ahead that count as "expiring soon" and "calibration due soon". */
+export const STOCK_ATTENTION_DAYS = 30;
+
+export const zStockDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+
+/** Query strings carry booleans as text. */
+export const zStockFlag = z
+	.union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+	.transform((v) => v === true || v === 'true' || v === '1');
+
+/** Link columns other areas add to a move (purchase line, execution, step). Non-null ones only. */
+export const zStockMoveLinks = z.record(z.string(), z.number().int());
+
+export const zStockRecord = z.object({
+	id: z.number().int(),
+	opalNumber: z.string(),
+	partId: z.number().int(),
+	partInternalPn: z.string(),
+	partName: z.string(),
+	partExternalPn: z.string().nullable(),
+	partUom: z.string(),
+	partTrackingType: z.enum(['serialized', 'bulk']),
+	partIsTooling: z.boolean(),
+	/** Sum of the record's moves. */
+	balance: zQty,
+	location: z.string(),
+	lotNumber: z.string().nullable(),
+	serialNumber: z.string().nullable(),
+	alias: z.string().nullable(),
+	sourceType: z.enum(STOCK_SOURCES),
+	expirationDate: zStockDate.nullable(),
+	isExpired: z.boolean(),
+	daysUntilExpiration: z.number().int().nullable(),
+	lastCountedAt: zTimestamp.nullable(),
+	lastCalibratedAt: zTimestamp.nullable(),
+	calibrationDueAt: zTimestamp.nullable(),
+	calibrationStatus: z.enum(CALIBRATION_STATUSES).nullable(),
+	createdAt: zTimestamp,
+	updatedAt: zTimestamp
+});
+export type StockRecord = z.infer<typeof zStockRecord>;
+
+const zStockPage = zPage(zStockRecord).extend({ total: z.number().int() });
+
+export const zStockByPart = z.object({
+	partId: z.number().int(),
+	internalPn: z.string(),
+	externalPn: z.string().nullable(),
+	name: z.string(),
+	unitOfMeasure: z.string(),
+	trackingType: z.enum(['serialized', 'bulk']),
+	reorderPoint: zQty.nullable(),
+	/** Sum over the records that match the filters. */
+	balance: zQty,
+	recordCount: z.number().int(),
+	/** Locations that hold stock of the part. */
+	locations: z.array(z.string()),
+	isLowStock: z.boolean()
+});
+export type StockByPart = z.infer<typeof zStockByPart>;
+
+export const zStockLocation = z.object({
+	location: z.string(),
+	recordCount: z.number().int(),
+	partCount: z.number().int()
+});
+export type StockLocation = z.infer<typeof zStockLocation>;
+
+export const zStockLedgerRow = z.object({
+	id: z.number().int(),
+	kind: z.enum(MOVE_KINDS),
+	at: zTimestamp,
+	/** Signed. Zero for a whole-record relocation and for tooling use. */
+	qty: zQty,
+	/** Balance of the record after this move. */
+	balance: zQty,
+	reason: z.string().nullable(),
+	notes: z.string().nullable(),
+	actorName: z.string().nullable(),
+	fromLocation: z.string().nullable(),
+	toLocation: z.string().nullable(),
+	fromLot: z.string().nullable(),
+	toLot: z.string().nullable(),
+	/** OPAL number of the other record of a transfer. */
+	counterpartOpal: z.string().nullable(),
+	/** Non-null link columns: purchaseLineId, executionId, ... Added by the areas that own them. */
+	links: zStockMoveLinks
+});
+export type StockLedgerRow = z.infer<typeof zStockLedgerRow>;
+
+export const zStockMoveRow = zStockLedgerRow.omit({ balance: true }).extend({
+	opalNumber: z.string(),
+	partId: z.number().int(),
+	partInternalPn: z.string(),
+	partName: z.string()
+});
+export type StockMoveRow = z.infer<typeof zStockMoveRow>;
+
+export const zStockGenealogyRow = z.object({
+	/** 1 = direct component (or direct assembly). 2 = one level further. */
+	depth: z.number().int(),
+	/** The OPAL number this row hangs from: the assembly for components, the component for used-in. */
+	viaOpal: z.string(),
+	opalNumber: z.string(),
+	partId: z.number().int(),
+	partInternalPn: z.string(),
+	partName: z.string(),
+	qtyUsed: zQty,
+	/** Time of the first consume move that links the pair. */
+	at: zTimestamp
+});
+export type StockGenealogyRow = z.infer<typeof zStockGenealogyRow>;
+
+export const zStockGenealogy = z.object({
+	opalNumber: z.string(),
+	components: z.array(zStockGenealogyRow),
+	usedIn: z.array(zStockGenealogyRow)
+});
+
+export const zStockTestTemplate = z.object({
+	id: z.number().int(),
+	partId: z.number().int(),
+	name: z.string(),
+	description: z.string().nullable(),
+	required: z.boolean(),
+	testType: z.enum(STOCK_TEST_TYPES),
+	minValue: zQty.nullable(),
+	maxValue: zQty.nullable(),
+	unit: z.string().nullable(),
+	sortOrder: z.number().int(),
+	createdAt: zTimestamp
+});
+export type StockTestTemplate = z.infer<typeof zStockTestTemplate>;
+
+export const zStockTestTemplateCreate = z.object({
+	name: z.string().trim().min(1).max(255),
+	description: z.string().nullable().optional(),
+	required: z.boolean().default(false),
+	testType: z.enum(STOCK_TEST_TYPES).default('boolean'),
+	minValue: zQty.nullable().optional(),
+	maxValue: zQty.nullable().optional(),
+	unit: z.string().trim().max(50).nullable().optional(),
+	sortOrder: z.number().int().default(0)
+});
+
+export const zStockTestResult = z.object({
+	id: z.number().int(),
+	stockId: z.number().int(),
+	templateId: z.number().int().nullable(),
+	testName: z.string(),
+	result: z.enum(STOCK_TEST_RESULTS),
+	value: z.string().nullable(),
+	notes: z.string().nullable(),
+	testedAt: zTimestamp.nullable(),
+	testedByName: z.string().nullable(),
+	createdAt: zTimestamp
+});
+export type StockTestResult = z.infer<typeof zStockTestResult>;
+
+export const zStockTestResultInput = z.object({
+	testName: z.string().trim().min(1).max(255),
+	templateId: z.number().int().nullable().optional(),
+	result: z.enum(STOCK_TEST_RESULTS).default('pending'),
+	value: z.string().max(255).nullable().optional(),
+	notes: z.string().nullable().optional()
+});
+
+export const zStockTestStatus = z.object({
+	stockId: z.number().int(),
+	total: z.number().int(),
+	passed: z.number().int(),
+	failed: z.number().int(),
+	pending: z.number().int(),
+	requiredPassed: z.boolean(),
+	missingRequired: z.array(z.string()),
+	overall: z.enum(STOCK_TEST_RESULTS)
+});
+export type StockTestStatus = z.infer<typeof zStockTestStatus>;
+
+export const zStockDetail = z.object({
+	record: zStockRecord,
+	part: z.object({
+		id: z.number().int(),
+		internalPn: z.string(),
+		externalPn: z.string().nullable(),
+		name: z.string(),
+		unitOfMeasure: z.string(),
+		trackingType: z.enum(['serialized', 'bulk']),
+		isTooling: z.boolean(),
+		tier: z.number().int(),
+		tierName: z.string().nullable(),
+		state: z.enum(['draft', 'active', 'obsolete'])
+	}),
+	source: z.object({
+		type: z.enum(STOCK_SOURCES),
+		/** Links on the move that created the record. */
+		links: zStockMoveLinks,
+		transferredFromOpal: z.string().nullable()
+	}),
+	/** Oldest first, with a running balance. */
+	ledger: z.array(zStockLedgerRow),
+	components: z.array(zStockGenealogyRow),
+	usedIn: z.array(zStockGenealogyRow),
+	tests: z.array(zStockTestResult),
+	testTemplates: z.array(zStockTestTemplate),
+	testStatus: zStockTestStatus
+});
+export type StockDetail = z.infer<typeof zStockDetail>;
+
+export const zStockCreate = z.object({
+	partId: zId,
+	quantity: zQty,
+	location: z.string().trim().min(1).max(255),
+	lotNumber: z.string().trim().max(100).nullable().optional(),
+	serialNumber: z.string().trim().max(100).nullable().optional(),
+	alias: z.string().trim().max(100).nullable().optional(),
+	expirationDate: zStockDate.nullable().optional(),
+	/** The part tier's receiving rules apply unless this is false (data migration). */
+	enforceTierRules: z.boolean().default(true)
+});
+
+export const zStockUpdate = z.object({
+	id: zId,
+	lotNumber: z.string().trim().max(100).nullable().optional(),
+	serialNumber: z.string().trim().max(100).nullable().optional(),
+	alias: z.string().trim().max(100).nullable().optional(),
+	expirationDate: zStockDate.nullable().optional()
+});
+
+export const zStockTransferInput = z.object({
+	sourceId: zId,
+	targetLocation: z.string().trim().min(1).max(255),
+	quantity: zQty,
+	targetLotNumber: z.string().trim().max(100).nullable().optional(),
+	notes: z.string().nullable().optional()
+});
+
+export const zReceivingRules = z.object({
+	partId: z.number().int(),
+	requireLot: z.boolean(),
+	autoSerial: z.boolean(),
+	tierName: z.string().nullable()
+});
+
+export const zLowStockPart = z.object({
+	partId: z.number().int(),
+	internalPn: z.string(),
+	name: z.string(),
+	unitOfMeasure: z.string(),
+	onHand: zQty,
+	reorderPoint: zQty
+});
+
+export const zCalibrationReport = z.object({
+	overdue: z.array(zStockRecord),
+	dueSoon: z.array(zStockRecord)
+});
+
+export const zPartStockSummary = z.object({
+	partId: z.number().int(),
+	partName: z.string(),
+	internalPn: z.string(),
+	tier: z.number().int(),
+	totalQty: zQty,
+	recordCount: z.number().int(),
+	byLocation: z.array(
+		z.object({ location: z.string(), qty: zQty, opalNumber: z.string() })
+	),
+	isTooling: z.boolean(),
+	calibrationDueAt: zTimestamp.nullable(),
+	calibrationStatus: z.enum(['ok', 'overdue', 'unknown']).nullable(),
+	calibrationIntervalDays: z.number().int().nullable()
+});
+
+export const zStockLabel = z.object({
+	key: z.string(),
+	kind: z.enum(['stock', 'part']),
+	/** OPAL number for stock, part number for parts. */
+	primary: z.string(),
+	secondary: z.string().nullable(),
+	name: z.string(),
+	lotNumber: z.string().nullable(),
+	serialNumber: z.string().nullable(),
+	location: z.string().nullable(),
+	balance: zQty.nullable(),
+	unitOfMeasure: z.string(),
+	trackingType: z.enum(['serialized', 'bulk']),
+	expirationDate: zStockDate.nullable(),
+	tier: z.number().int().nullable(),
+	tierName: z.string().nullable(),
+	partState: z.enum(['draft', 'active', 'obsolete']).nullable(),
+	/** The scan target, encoded in the QR code. */
+	url: z.string(),
+	qrSvg: z.string()
+});
+export type StockLabel = z.infer<typeof zStockLabel>;
+
+const stockFilters = z.object({
+	partId: zId.optional(),
+	location: z.string().optional(),
+	q: z.string().optional(),
+	lowStock: zStockFlag.optional()
+});
+
+export const inventory = {
+	list: op({
+		name: 'inventory.list',
+		method: 'GET',
+		path: '/inventory',
+		summary:
+			'List stock records with balances. Filter by part, location, lot, text, source, depletion, low stock, expiry and calibration.',
+		input: zPageInput.merge(stockFilters).extend({
+			lotNumber: z.string().optional(),
+			sourceType: z.enum(STOCK_SOURCES).optional(),
+			hasStock: zStockFlag.optional(),
+			expired: zStockFlag.optional(),
+			expiringSoon: zStockFlag.optional(),
+			calibrationOverdue: zStockFlag.optional(),
+			attention: zStockFlag.optional(),
+			sort: z.enum(STOCK_SORT_KEYS).optional(),
+			order: z.enum(['asc', 'desc']).default('asc')
+		}),
+		output: zStockPage,
+		access: 'signed-in',
+		mcp: true
+	}),
+	byPart: op({
+		name: 'inventory.byPart',
+		method: 'GET',
+		path: '/inventory/by-part',
+		summary: 'On-hand stock grouped by part.',
+		input: zPageInput.merge(stockFilters).extend({
+			sort: z.enum(STOCK_BY_PART_SORT_KEYS).default('part'),
+			order: z.enum(['asc', 'desc']).default('asc')
+		}),
+		output: zPage(zStockByPart).extend({ total: z.number().int() }),
+		access: 'signed-in',
+		mcp: true
+	}),
+	locations: op({
+		name: 'inventory.locations',
+		method: 'GET',
+		path: '/inventory/locations',
+		summary: 'Stock locations with record and part counts.',
+		input: z.object({}),
+		output: z.array(zStockLocation),
+		access: 'signed-in',
+		mcp: true
+	}),
+	labels: op({
+		name: 'inventory.labels',
+		method: 'GET',
+		path: '/inventory/labels',
+		summary:
+			'StockLabel data with QR codes. `inventory` and `part` are comma lists of OPAL numbers and part ids. `origin` is the web address the QR codes point at.',
+		input: z.object({
+			inventory: z.string().optional(),
+			part: z.string().optional(),
+			origin: z.string().optional()
+		}),
+		output: z.object({ labels: z.array(zStockLabel), failures: z.array(z.string()) }),
+		access: 'signed-in',
+		mcp: false
+	}),
+	receivingRules: op({
+		name: 'inventory.receivingRules',
+		method: 'GET',
+		path: '/inventory/receiving-rules',
+		summary: 'What the part tier requires when stock is received: a lot number, or generated serials.',
+		input: z.object({ partId: zId }),
+		output: zReceivingRules,
+		access: 'signed-in',
+		mcp: true
+	}),
+	calibration: op({
+		name: 'inventory.calibration',
+		method: 'GET',
+		path: '/inventory/calibration',
+		summary: 'Tooling records whose calibration is overdue or due within 30 days.',
+		input: z.object({}),
+		output: zCalibrationReport,
+		access: 'signed-in',
+		mcp: true
+	}),
+	lowStock: op({
+		name: 'inventory.lowStock',
+		method: 'GET',
+		path: '/inventory/low-stock',
+		summary: 'Parts whose total on-hand is below their reorder point.',
+		input: z.object({}),
+		output: z.array(zLowStockPart),
+		access: 'signed-in',
+		mcp: true
+	}),
+	moves: op({
+		name: 'inventory.moves',
+		method: 'GET',
+		path: '/inventory/moves',
+		summary: 'The stock ledger across records, newest first. Filter by part, location, kind.',
+		input: zPageInput.extend({
+			partId: zId.optional(),
+			location: z.string().optional(),
+			kind: z.enum(MOVE_KINDS).optional()
+		}),
+		output: zPage(zStockMoveRow),
+		access: 'signed-in',
+		mcp: true
+	}),
+	create: op({
+		name: 'inventory.create',
+		method: 'POST',
+		path: '/inventory',
+		summary:
+			'Receive stock by hand. A serialized part gets one record per unit; a bulk part gets one record. Each record has its own OPAL number.',
+		input: zStockCreate,
+		output: z.object({ items: z.array(zStockRecord) }),
+		access: 'signed-in',
+		mcp: true
+	}),
+	transfer: op({
+		name: 'inventory.transfer',
+		method: 'POST',
+		path: '/inventory/transfer',
+		summary:
+			'Move stock to another location or lot. A whole move keeps the OPAL number. A partial move creates a record with a new OPAL number, or merges into the stock already there.',
+		input: zStockTransferInput,
+		output: z.object({ source: zStockRecord, target: zStockRecord }),
+		access: 'signed-in',
+		mcp: true
+	}),
+	getByOpal: op({
+		name: 'inventory.getByOpal',
+		method: 'GET',
+		path: '/inventory/opal/:opalNumber',
+		summary: 'Look up a stock record by OPAL number.',
+		input: z.object({ opalNumber: z.string() }),
+		output: zStockRecord,
+		access: 'signed-in',
+		mcp: true
+	}),
+	detail: op({
+		name: 'inventory.detail',
+		method: 'GET',
+		path: '/inventory/opal/:opalNumber/detail',
+		summary:
+			'Everything the record page shows: record, part, source, ledger, genealogy both ways, tests.',
+		input: z.object({ opalNumber: z.string() }),
+		output: zStockDetail,
+		access: 'signed-in',
+		mcp: true
+	}),
+	history: op({
+		name: 'inventory.history',
+		method: 'GET',
+		path: '/inventory/opal/:opalNumber/history',
+		summary: 'The ledger of one OPAL number, oldest first, with a running balance.',
+		input: z.object({ opalNumber: z.string() }),
+		output: z.array(zStockLedgerRow),
+		access: 'signed-in',
+		mcp: true
+	}),
+	genealogy: op({
+		name: 'inventory.genealogy',
+		method: 'GET',
+		path: '/inventory/opal/:opalNumber/genealogy',
+		summary:
+			'Components that went into this item and assemblies it went into. `depth` follows the tree further (1 to 8).',
+		input: z.object({ opalNumber: z.string(), depth: z.coerce.number().int().min(1).max(8).default(1) }),
+		output: zStockGenealogy,
+		access: 'signed-in',
+		mcp: true
+	}),
+	partSummary: op({
+		name: 'inventory.partSummary',
+		method: 'GET',
+		path: '/inventory/parts/:partId/summary',
+		summary: 'Stock summary of a part: total on hand, records by location, calibration status.',
+		input: z.object({ partId: zId }),
+		output: zPartStockSummary,
+		access: 'signed-in',
+		mcp: true
+	}),
+	templates: {
+		list: op({
+			name: 'inventory.templates.list',
+			method: 'GET',
+			path: '/inventory/parts/:partId/test-templates',
+			summary: 'Test templates of a part.',
+			input: z.object({ partId: zId }),
+			output: z.array(zStockTestTemplate),
+			access: 'signed-in',
+			mcp: true
+		}),
+		create: op({
+			name: 'inventory.templates.create',
+			method: 'POST',
+			path: '/inventory/parts/:partId/test-templates',
+			summary: 'Add a test template to a part.',
+			input: zStockTestTemplateCreate.extend({ partId: zId }),
+			output: zStockTestTemplate,
+			access: 'signed-in',
+			mcp: true
+		}),
+		delete: op({
+			name: 'inventory.templates.delete',
+			method: 'DELETE',
+			path: '/inventory/parts/:partId/test-templates/:templateId',
+			summary: 'Delete a test template. Results already recorded keep their test name.',
+			input: z.object({ partId: zId, templateId: zId }),
+			output: zOk,
+			access: 'signed-in',
+			mcp: true
+		})
+	},
+	get: op({
+		name: 'inventory.get',
+		method: 'GET',
+		path: '/inventory/:id',
+		summary: 'Get one stock record.',
+		input: z.object({ id: zId }),
+		output: zStockRecord,
+		access: 'signed-in',
+		mcp: true
+	}),
+	update: op({
+		name: 'inventory.update',
+		method: 'PATCH',
+		path: '/inventory/:id',
+		summary:
+			'Edit lot, serial, alias or expiration date. Quantity changes only through adjust, count and transfer.',
+		input: zStockUpdate,
+		output: zStockRecord,
+		access: 'signed-in',
+		mcp: true
+	}),
+	adjust: op({
+		name: 'inventory.adjust',
+		method: 'POST',
+		path: '/inventory/:id/adjust',
+		summary:
+			'Add or remove stock with a reason. `found` must add. `damage` and `scrap` must remove. The balance cannot go below zero.',
+		input: z.object({
+			id: zId,
+			adjustment: zQty,
+			reason: z.enum(ADJUST_REASONS),
+			notes: z.string().nullable().optional()
+		}),
+		output: zStockRecord,
+		access: 'signed-in',
+		mcp: true
+	}),
+	count: op({
+		name: 'inventory.count',
+		method: 'POST',
+		path: '/inventory/:id/count',
+		summary: 'Record a physical count. The difference to the balance becomes a count move.',
+		input: z.object({ id: zId, countedQuantity: zQty, notes: z.string().nullable().optional() }),
+		output: zStockRecord,
+		access: 'signed-in',
+		mcp: true
+	}),
+	calibrate: op({
+		name: 'inventory.calibrate',
+		method: 'POST',
+		path: '/inventory/:id/calibrate',
+		summary: 'Record a calibration of a tooling item. The next due date follows the part interval.',
+		input: z.object({ id: zId }),
+		output: zStockRecord,
+		access: 'signed-in',
+		mcp: true
+	}),
+	tests: {
+		list: op({
+			name: 'inventory.tests.list',
+			method: 'GET',
+			path: '/inventory/:id/tests',
+			summary: 'Test results of a stock record, newest first.',
+			input: z.object({ id: zId }),
+			output: z.array(zStockTestResult),
+			access: 'signed-in',
+			mcp: true
+		}),
+		create: op({
+			name: 'inventory.tests.create',
+			method: 'POST',
+			path: '/inventory/:id/tests',
+			summary: 'Record a test result against a stock record.',
+			input: zStockTestResultInput.extend({ id: zId }),
+			output: zStockTestResult,
+			access: 'signed-in',
+			mcp: true
+		}),
+		update: op({
+			name: 'inventory.tests.update',
+			method: 'PATCH',
+			path: '/inventory/:id/tests/:testId',
+			summary: 'Change a test result.',
+			input: zStockTestResultInput.extend({ id: zId, testId: zId }),
+			output: zStockTestResult,
+			access: 'signed-in',
+			mcp: true
+		}),
+		delete: op({
+			name: 'inventory.tests.delete',
+			method: 'DELETE',
+			path: '/inventory/:id/tests/:testId',
+			summary: 'Delete a test result.',
+			input: z.object({ id: zId, testId: zId }),
+			output: zOk,
+			access: 'signed-in',
+			mcp: true
+		}),
+		status: op({
+			name: 'inventory.tests.status',
+			method: 'GET',
+			path: '/inventory/:id/test-status',
+			summary: 'Counts of passed, failed and pending tests, and whether the required tests passed.',
+			input: z.object({ id: zId }),
+			output: zStockTestStatus,
+			access: 'signed-in',
+			mcp: true
+		})
+	}
+};

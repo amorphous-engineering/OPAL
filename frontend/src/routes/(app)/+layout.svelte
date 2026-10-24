@@ -7,16 +7,20 @@
 	import VersionBadge from '#lib/components/shell/VersionBadge.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
 	let paletteOpen = $state(false);
 
-	// Presence: the Users pages show who is online, which needs a pulse while a tab is open.
+	// Presence: the Users pages show who is online and what they are doing. The pulse runs
+	// while a tab is visible; the activity is the page the person is on.
 	$effect(() => {
+		const activity = page.url.pathname;
 		const beat = () => {
-			if (document.visibilityState === 'visible') api.post('/users/heartbeat', {}).catch(() => {});
+			if (document.visibilityState === 'visible')
+				opal.platform.presence.heartbeat({ activity }).catch(() => {});
 		};
 		beat();
 		const timer = setInterval(beat, 15_000);
@@ -52,7 +56,7 @@
 	<header
 		class="sticky top-0 z-30 flex h-11 items-center gap-2 border-b border-border bg-background px-3"
 	>
-		<div class="mr-1 max-w-56 min-w-0 shrink max-[560px]:hidden"><VersionBadge /></div>
+		<div class="mr-1 max-w-56 min-w-0 shrink max-[560px]:hidden"><VersionBadge about={data.about} /></div>
 		<TopNav />
 		<Button
 			variant="ghost"
@@ -65,7 +69,7 @@
 			<span class="ml-auto hidden sm:inline"><Kbd>⌘K</Kbd></span>
 		</Button>
 		<div class="flex shrink-0 items-center gap-2">
-			<NotificationBell />
+			<NotificationBell initialUnread={data.unreadCount} />
 			<UserMenu />
 		</div>
 	</header>

@@ -6,10 +6,10 @@
 	import * as Command from '#lib/components/ui/command/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { toastError } from '#lib/components/opal/index.js';
 	import { cn } from '#lib/utils.js';
-	import type { Part, PartRef } from './types.js';
+	import { type PartRef, type PickedPart, toPickedPart } from './types.js';
 
 	let {
 		value = $bindable<T | null>(null),
@@ -43,7 +43,7 @@
 
 	let open = $state(false);
 	let query = $state('');
-	let results = $state<Part[]>([]);
+	let results = $state<PickedPart[]>([]);
 	let loading = $state(false);
 	let seq = 0;
 
@@ -55,14 +55,14 @@
 		const timer = setTimeout(
 			async () => {
 				try {
-					const r = await api.get<{ items: Part[] }>('/parts', {
-						search: q,
+					const r = await opal.parts.list({
+						q: q || undefined,
 						state: activeOnly ? 'active' : undefined,
 						limit: 12,
-						sort_by: 'internal_pn',
-						sort_order: 'asc'
+						sort: 'internalPn',
+						dir: 'asc'
 					});
-					if (mine === seq) results = r.items;
+					if (mine === seq) results = r.items.map(toPickedPart);
 				} catch (e) {
 					if (mine === seq) results = [];
 					toastError(e);

@@ -16,16 +16,13 @@
 		type Column
 	} from '#lib/components/opal/index.js';
 	import {
-		ISSUE_TYPES,
-		PRIORITIES,
 		STATE_FILTER_DEFAULT,
-		TICKET_STATES,
 		TYPE_ABBREV,
 		priorityTone,
 		ticketLabel,
-		ticketTone,
-		type Issue
+		ticketTone
 	} from '#lib/components/issues/issues.js';
+	import { ISSUE_PRIORITIES, ISSUE_TYPES, TICKET_STATES, type Issue } from '@opal/shared';
 	import { session } from '#lib/session.svelte.js';
 	import { stateLabel } from '#lib/format.js';
 	import type { PageProps } from './$types';
@@ -43,7 +40,6 @@
 		'priority',
 		'assignee',
 		'part',
-		'procedure',
 		'execution'
 	];
 	const filtered = $derived.by(() => {
@@ -58,16 +54,16 @@
 			mono: true,
 			width: '7rem',
 			sortable: true,
-			sortValue: (i) => i.issue_number
+			sortValue: (i) => i.issueNumber
 		},
 		{ key: 'title', label: 'Title', sortable: true, sortValue: (i) => i.title },
-		{ key: 'type', label: 'Type', width: '5rem', sortable: true, sortValue: (i) => i.issue_type },
+		{ key: 'type', label: 'Type', width: '5rem', sortable: true, sortValue: (i) => i.issueType },
 		{
 			key: 'state',
 			label: 'State',
 			width: '9rem',
 			sortable: true,
-			sortValue: (i) => i.ticket_state
+			sortValue: (i) => i.ticketState
 		},
 		{ key: 'priority', label: 'Pri', width: '6rem', sortable: true, sortValue: (i) => i.priority },
 		{ key: 'assignee', label: 'Assignee', width: '10rem' },
@@ -78,7 +74,7 @@
 			width: '10rem',
 			align: 'right',
 			sortable: true,
-			sortValue: (i) => i.created_at
+			sortValue: (i) => i.createdAt
 		}
 	];
 </script>
@@ -116,7 +112,7 @@
 			param="priority"
 			label="Priority"
 			allLabel="All priorities"
-			options={PRIORITIES.map((p) => ({ value: p, label: stateLabel(p) }))}
+			options={ISSUE_PRIORITIES.map((p) => ({ value: p, label: stateLabel(p) }))}
 		/>
 		<FilterSelect
 			param="assignee"
@@ -142,41 +138,42 @@
 	>
 		{#snippet cell(i, col)}
 			{#if col.key === 'number'}
-				<span class="text-info">{i.issue_number}</span>
+				<span class="text-info">{i.issueNumber}</span>
 			{:else if col.key === 'title'}
 				{i.title}
 			{:else if col.key === 'type'}
-				<span class="font-mono text-xs">{TYPE_ABBREV[i.issue_type] ?? i.issue_type}</span>
+				<span class="font-mono text-xs">{TYPE_ABBREV[i.issueType] ?? i.issueType}</span>
 			{:else if col.key === 'state'}
-				<State
-					value={i.ticket_state}
-					label={ticketLabel(i.ticket_state)}
-					tone={ticketTone(i.ticket_state)}
-				/>
+				{#if i.status === 'void'}
+					<State value="void" label="VOID" tone="muted" />
+				{:else}
+					<State
+						value={i.ticketState}
+						label={ticketLabel(i.ticketState)}
+						tone={ticketTone(i.ticketState)}
+					/>
+				{/if}
 			{:else if col.key === 'priority'}
 				<State value={i.priority} tone={priorityTone(i.priority)} />
 			{:else if col.key === 'assignee'}
-				{#if i.assigned_to_name}{i.assigned_to_name}{:else}<span class="text-muted-foreground"
+				{#if i.assignedTo}{i.assignedTo.name}{:else}<span class="text-muted-foreground"
 						>—</span
 					>{/if}
 			{:else if col.key === 'links'}
-				{#if i.part_number || i.work_order_number || i.procedure_name}
+				{#if i.links.length || i.execution}
 					<span class="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs">
-						{#if i.part_number}<a href={`/parts/${i.part_id}`} class="text-info hover:underline"
-								>{i.part_number}</a
-							>{/if}
-						{#if i.work_order_number}<a
-								href={`/executions/${i.procedure_instance_id}`}
-								class="text-info hover:underline">{i.work_order_number}</a
-							>{/if}
-						{#if i.procedure_name && !i.work_order_number}<a
-								href={`/procedures/${i.procedure_id}`}
-								class="text-info hover:underline">{i.procedure_name}</a
-							>{/if}
+						{#each i.links as l (l.id)}
+							<a href={l.href} class="text-info hover:underline">{l.label}</a>
+						{/each}
+						{#if i.execution}
+							<a href={`/executions/${i.execution.id}`} class="text-info hover:underline"
+								>{i.execution.label ?? 'Work order'}</a
+							>
+						{/if}
 					</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'created'}
-				<Timestamp value={i.created_at} />
+				<Timestamp value={i.createdAt} />
 			{/if}
 		{/snippet}
 		{#snippet emptyAction()}

@@ -71,7 +71,7 @@ export async function runOp<C extends OpContract>(
 	if (!parsed.success) {
 		throw new OpalError(422, 'invalid_input', 'Invalid input', zodFields(parsed.error));
 	}
-	const ctx: Ctx = { db, actor, op: contract.name, ...http };
+	const ctx: Ctx = { db, actor, op: contract.name, invocation: crypto.randomUUID(), ...http };
 	const exec = async () => contract.output.parse(await impl.handler(ctx, parsed.data as z.output<C['input']>)) as OpOutput<C>;
 	if (contract.method === 'GET') return exec();
 	return serialized(async () => {
@@ -110,6 +110,11 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 					ip: hc.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null
 				}
 			});
+			if (c.produces) {
+				const headers: Record<string, string> = { 'content-type': `${c.produces}; charset=utf-8` };
+				if (c.filename) headers['content-disposition'] = `attachment; filename="${c.filename}"`;
+				return hc.body(String(out), 200, headers);
+			}
 			return hc.json(out as object, c.method === 'POST' && c.name.endsWith('.create') ? 201 : 200);
 		});
 	}

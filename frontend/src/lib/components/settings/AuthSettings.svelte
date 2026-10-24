@@ -14,42 +14,35 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { api, ApiError } from '#lib/api.js';
-	import type { AuthSettings as AuthConfig } from '#lib/components/settings/types.js';
+	import { ApiError, opal } from '#lib/api.js';
+	import type { AuthSettings as AuthConfig, DiscoveryResult } from '@opal/shared';
 	import CopyField from '#lib/components/users/CopyField.svelte';
 
-	let { auth }: { auth: AuthConfig } = $props();
+	// The settings page loads the stored settings; the type is the contract's.
+	let { auth }: { auth: unknown } = $props();
 	// The form is seeded once from the stored settings and reseeded by each save.
-	const seed = untrack(() => auth);
-
-	interface Discovery {
-		ok: boolean;
-		message: string;
-		authorization_endpoint: string | null;
-		token_endpoint: string | null;
-		userinfo_endpoint: string | null;
-		jwks_uri: string | null;
-	}
+	const seed = untrack(() => auth as AuthConfig);
 
 	// The form starts from the stored settings and is reseeded after every save.
 	let saved = $state<AuthConfig>(seed);
-	let passwordLogin = $state(seed.password_login_enabled);
-	let passkeys = $state(seed.passkeys_enabled);
-	let oidc = $state(seed.oidc_enabled);
-	let issuer = $state(seed.oidc_issuer);
-	let clientId = $state(seed.oidc_client_id);
+	let passwordLogin = $state(seed.passwordLoginEnabled);
+	let passkeys = $state(seed.passkeysEnabled);
+	let oidc = $state(seed.oidcEnabled);
+	let issuer = $state(seed.oidcIssuer);
+	let clientId = $state(seed.oidcClientId);
 	let clientSecret = $state('');
 	let clearSecret = $state(false);
-	let provider = $state(seed.oidc_provider_name);
-	let scopes = $state(seed.oidc_scopes);
-	let groupsClaim = $state(seed.oidc_groups_claim);
-	let adminGroup = $state(seed.oidc_admin_group);
-	let baseUrl = $state(seed.oidc_redirect_base_url);
-	let autoCreate = $state(seed.oidc_auto_create_users);
+	let provider = $state(seed.oidcProviderName);
+	let scopes = $state(seed.oidcScopes);
+	let groupsClaim = $state(seed.oidcGroupsClaim);
+	let adminGroup = $state(seed.oidcAdminGroup);
+	let baseUrl = $state(seed.oidcRedirectBaseUrl);
+	let autoCreate = $state(seed.oidcAutoCreateUsers);
+	const callbackUrl = $derived(saved.callbackUrl ?? `${location.origin}/oidc/callback`);
 
 	let busy = $state(false);
 	let error = $state<string | null>(null);
-	let discovery = $state<Discovery | null>(null);
+	let discovery = $state<DiscoveryResult | null>(null);
 	let testing = $state(false);
 
 	async function save(e: SubmitEvent) {
@@ -57,24 +50,25 @@
 		busy = true;
 		error = null;
 		try {
-			saved = await api.put<AuthConfig>('/settings/auth', {
-				password_login_enabled: passwordLogin,
-				passkeys_enabled: passkeys,
-				oidc_enabled: oidc,
-				oidc_issuer: issuer,
-				oidc_client_id: clientId,
-				oidc_client_secret: clientSecret,
-				clear_client_secret: clearSecret,
-				oidc_scopes: scopes,
-				oidc_provider_name: provider,
-				oidc_groups_claim: groupsClaim,
-				oidc_admin_group: adminGroup,
-				oidc_auto_create_users: autoCreate,
-				oidc_redirect_base_url: baseUrl
+			saved = await opal.auth.settings.update({
+				passwordLoginEnabled: passwordLogin,
+				passkeysEnabled: passkeys,
+				oidcEnabled: oidc,
+				oidcIssuer: issuer,
+				oidcClientId: clientId,
+				oidcClientSecret: clientSecret,
+				clearClientSecret: clearSecret,
+				oidcScopes: scopes,
+				oidcProviderName: provider,
+				oidcGroupsClaim: groupsClaim,
+				oidcAdminGroup: adminGroup,
+				oidcAutoCreateUsers: autoCreate,
+				oidcRedirectBaseUrl: baseUrl
 			});
 			clientSecret = '';
 			clearSecret = false;
-			issuer = saved.oidc_issuer;
+			issuer = saved.oidcIssuer;
+			baseUrl = saved.oidcRedirectBaseUrl;
 			toast.success('Sign-in settings saved');
 			void refreshAll();
 		} catch (err) {
@@ -88,7 +82,7 @@
 		testing = true;
 		discovery = null;
 		try {
-			discovery = await api.post<Discovery>('/settings/auth/test');
+			discovery = await opal.auth.settings.testDiscovery({});
 		} catch (err) {
 			toastError(err);
 		} finally {
@@ -141,9 +135,9 @@
 					type="password"
 					bind:value={clientSecret}
 					autocomplete="new-password"
-					placeholder={saved.has_client_secret ? 'Stored. Blank keeps it.' : 'None (public client)'}
+					placeholder={saved.hasClientSecret ? 'Stored. Blank keeps it.' : 'None (public client)'}
 				/>
-				{#if saved.has_client_secret}
+				{#if saved.hasClientSecret}
 					<div class="flex items-center gap-2">
 						<Switch id="clear-secret" size="sm" bind:checked={clearSecret} />
 						<Label for="clear-secret">Clear the stored secret</Label>
@@ -190,7 +184,7 @@
 
 	<Section title="Callback URL">
 		<div class="p-3">
-			<CopyField value={saved.callback_url} label="Callback URL" />
+			<CopyField value={callbackUrl} label="Callback URL" />
 		</div>
 	</Section>
 	<Section title="Provider discovery">
@@ -206,12 +200,12 @@
 				/>
 				<span class="ml-2 text-xs">{discovery.message}</span>
 			</div>
-			{#if discovery.authorization_endpoint}
+			{#if discovery.authorizationEndpoint}
 				<DetailTable>
-					<DetailRow label="Authorization" mono value={discovery.authorization_endpoint} />
-					<DetailRow label="Token" mono value={discovery.token_endpoint} />
-					<DetailRow label="Userinfo" mono value={discovery.userinfo_endpoint} />
-					<DetailRow label="JWKS" mono value={discovery.jwks_uri} />
+					<DetailRow label="Authorization" mono value={discovery.authorizationEndpoint} />
+					<DetailRow label="Token" mono value={discovery.tokenEndpoint} />
+					<DetailRow label="Userinfo" mono value={discovery.userinfoEndpoint} />
+					<DetailRow label="JWKS" mono value={discovery.jwksUri} />
 				</DetailTable>
 			{/if}
 		{:else}

@@ -1,51 +1,7 @@
 import { ApiError } from '#lib/api.js';
 
-export interface Tier {
-	level: number;
-	name: string;
-	code: string;
-	description: string;
-	default_tracking: 'serialized' | 'bulk' | null;
-	require_lot: boolean | null;
-	auto_serial: boolean | null;
-}
-
-export interface PartNumbering {
-	prefix: string;
-	separator: string;
-	sequence_digits: number;
-	format: string;
-}
-
-export interface RequirementCatalogEntry {
-	id: string;
-	title: string;
-	description: string;
-	category: string;
-}
-
-export interface ProjectConfig {
-	name: string;
-	description: string;
-	tiers: Tier[];
-	part_numbering: PartNumbering;
-	categories: string[];
-	requirements: RequirementCatalogEntry[];
-	custom_fields: Record<string, unknown>;
-}
-
-export interface SystemInfo {
-	opal_version: string;
-	python_version: string;
-	platform: string;
-	server: string;
-	debug: boolean;
-	data_dir: string;
-	db_path: string;
-	db_size_bytes: number | null;
-	upload_dir: string;
-	max_upload_bytes: number;
-}
+// Project, system and agent types come from the shared contracts (org area).
+export type { AgentActivation, PartNumbering, ProjectConfig, SystemInfo, Tier } from '@opal/shared';
 
 export interface AuthSettings {
 	password_login_enabled: boolean;
@@ -61,11 +17,6 @@ export interface AuthSettings {
 	oidc_auto_create_users: boolean;
 	oidc_redirect_base_url: string;
 	callback_url: string;
-}
-
-export interface AgentActivation {
-	enabled: boolean;
-	authorized_by: string | null;
 }
 
 export interface LifecycleState {

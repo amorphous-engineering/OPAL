@@ -33,16 +33,16 @@
 					>
 					{#if entry.action === 'update'}
 						<td class="max-w-md px-3 py-1 align-top font-mono break-words text-error"
-							>{formatValue(c.old, c.old_label)}</td
+							>{formatValue(c.old, c.oldLabel)}</td
 						>
 						<td class="max-w-md px-3 py-1 align-top font-mono break-words text-ok"
-							>{formatValue(c.new, c.new_label)}</td
+							>{formatValue(c.new, c.newLabel)}</td
 						>
 					{:else}
 						<td class="max-w-2xl px-3 py-1 align-top font-mono break-words"
 							>{entry.action === 'create'
-								? formatValue(c.new, c.new_label)
-								: formatValue(c.old, c.old_label)}</td
+								? formatValue(c.new, c.newLabel)
+								: formatValue(c.old, c.oldLabel)}</td
 						>
 					{/if}
 				</tr>

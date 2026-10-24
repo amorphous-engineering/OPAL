@@ -1,5 +1,6 @@
 /** Every table. Each area owns one file; this index is the one list drizzle-kit reads. */
 export * from './core.ts';
+export * from './auth.ts';
 export * from './parts.ts';
 export * from './org.ts';
 export * from './platform.ts';

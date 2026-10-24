@@ -57,7 +57,7 @@
 		if (e.action !== 'update' || e.changes.length === 0) return null;
 		const c = e.changes[0];
 		const clip = (s: string) => (s.length > 40 ? `${s.slice(0, 40)}…` : s);
-		return `${fieldName(c.field)}: ${clip(formatValue(c.old, c.old_label))} → ${clip(formatValue(c.new, c.new_label))}`;
+		return `${fieldName(c.field)}: ${clip(formatValue(c.old, c.oldLabel))} → ${clip(formatValue(c.new, c.newLabel))}`;
 	}
 
 	const recordEntry = $derived(record ? data.items[0] : null);
@@ -79,7 +79,7 @@
 			label="Entity"
 			allLabel="All entities"
 			alsoClear={['record']}
-			options={data.facets.entity_types}
+			options={data.facets.entities}
 		/>
 		<FilterSelect
 			param="action"
@@ -104,7 +104,7 @@
 				class="flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs"
 			>
 				<span class="text-muted-foreground uppercase">Record</span>
-				<span>{recordEntry?.record_label ?? recordEntry?.entity_label ?? entity}</span>
+				<span>{recordEntry?.recordLabel ?? recordEntry?.entityLabel ?? entity}</span>
 				<button
 					type="button"
 					class="text-info hover:underline"
@@ -161,12 +161,12 @@
 									aria-label="Toggle field changes"
 									onclick={() => toggle(e)}
 								>
-									<Timestamp value={e.timestamp} />
+									<Timestamp value={e.at} />
 								</button>
 							</td>
 							<td class="px-3 py-1.5 whitespace-nowrap">
-								{#if e.user_name}
-									<a href="/users/{e.user_id}" class="hover:underline">{e.user_name}</a>
+								{#if e.userName}
+									<a href="/users/{e.userId}" class="hover:underline">{e.userName}</a>
 								{:else}
 									<span class="text-muted-foreground">—</span>
 								{/if}
@@ -179,19 +179,19 @@
 							</td>
 							<td class="px-3 py-1.5 whitespace-nowrap">
 								<a
-									href="?{new URLSearchParams({ entity: e.entity_type })}"
+									href="?{new URLSearchParams({ entity: e.entity })}"
 									class="hover:underline"
 									onclick={(ev) => {
 										ev.preventDefault();
-										setQuery({ entity: e.entity_type, record: null });
-									}}>{e.entity_label}</a
+										setQuery({ entity: e.entity, record: null });
+									}}>{e.entityLabel}</a
 								>
 							</td>
 							<td class="px-3 py-1.5 whitespace-nowrap">
-								{#if e.href && e.record_label}
-									<a href={e.href} class="font-mono text-info hover:underline">{e.record_label}</a>
-								{:else if e.record_label}
-									<span class="font-mono">{e.record_label}</span>
+								{#if e.href && e.recordLabel}
+									<a href={e.href} class="font-mono text-info hover:underline">{e.recordLabel}</a>
+								{:else if e.recordLabel}
+									<span class="font-mono">{e.recordLabel}</span>
 								{:else}
 									<span class="text-muted-foreground">—</span>
 								{/if}

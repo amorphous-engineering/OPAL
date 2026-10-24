@@ -5,8 +5,15 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { ApiError, opal } from '#lib/api.js';
-	import { session, getSignInConfig, landingFor, toCurrentUser } from '#lib/session.svelte.js';
+	import {
+		session,
+		getSignInConfig,
+		landingFor,
+		toCurrentUser,
+		type AuthConfig
+	} from '#lib/session.svelte.js';
 
 	let name = $state('');
 	let email = $state('');
@@ -15,9 +22,10 @@
 	let confirmPw = $state('');
 	let error = $state<string | null>(null);
 	let busy = $state(false);
+	let config = $state<AuthConfig | null>(null);
 
 	onMount(async () => {
-		const config = await getSignInConfig().catch(() => null);
+		config = await getSignInConfig().catch(() => null);
 		if (config && !config.needsSetup) goto('/login', { replace: true });
 	});
 
@@ -93,3 +101,11 @@
 	</div>
 	<Button type="submit" disabled={busy}>CREATE ADMINISTRATOR</Button>
 </form>
+{#if config?.oidcEnabled}
+	<div class="my-4 flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
+		<Separator class="flex-1" />or<Separator class="flex-1" />
+	</div>
+	<Button variant="outline" class="w-full" href="/oidc/login" data-sveltekit-reload
+		>SIGN IN WITH {(config.oidcProviderName ?? 'SSO').toUpperCase()}</Button
+	>
+{/if}

@@ -1,5 +1,5 @@
-import { conflict, contracts, notFound, OpalError } from '@opal/shared';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { conflict, contracts, forbidden, notFound, now, OpalError } from '@opal/shared';
+import { and, count, desc, eq, gt, isNull } from 'drizzle-orm';
 import {
 	addMs,
 	API_TOKEN_PREFIX,
@@ -10,67 +10,127 @@ import {
 	newToken,
 	normalizeUsername,
 	SESSION_COOKIE,
-	SESSION_LIFETIME_MS,
 	validatePasswordStrength,
 	verifyPassword
 } from '../auth/tokens.ts';
+import { signPayload, verifyPayload } from '../auth/signing.ts';
 import type { Ctx } from '../context.ts';
+import type { Db } from '../db/client.ts';
+import { profileState } from '../services/org/profiles.ts';
 import { apiToken, session, user } from '../db/schema/index.ts';
-import { type Impl, implement } from '../registry.ts';
-import { insert, update } from '../write.ts';
+import { passkeyCredential, webauthnChallenge } from '../db/schema/auth.ts';
+import { type Impl, implement, serialized } from '../registry.ts';
+import { oidcActive, readSettings, type SignInSettings, writeSetting } from '../services/auth/settings.ts';
+import {
+	activeUser,
+	beginAuthentication,
+	beginRegistration,
+	completeAuthentication,
+	completeRegistration,
+	consumeChallenge,
+	PASSKEY_STATE_COOKIE,
+	PasskeyError,
+	rpIdFor,
+	storeChallenge,
+	touchCredential
+} from '../services/auth/passkeys.ts';
+import { resetDiscoveryCache, testDiscovery } from '../services/auth/oidc.ts';
+import { revokeSessions, startSession, type UserRow } from '../services/auth/sessions.ts';
+import { insert, remove, update } from '../write.ts';
 
-type UserRow = typeof user.$inferSelect;
-
-const present = (u: UserRow) => ({
+const present = (db: Db, u: UserRow) => ({
 	id: u.id,
 	username: u.username,
 	name: u.name,
 	email: u.email,
-	isAdmin: u.isAdmin
+	isAdmin: u.isAdmin,
+	...profileState(db, u.id)
 });
-
-const envOn = (name: string, fallback: boolean) => {
-	const v = process.env[name];
-	return v === undefined ? fallback : /^(1|true|yes|on)$/i.test(v);
-};
-const passwordLoginEnabled = () => envOn('OPAL_PASSWORD_LOGIN_ENABLED', true);
-
-/** Mint a session and set the cookie. The method column keeps passkey and OIDC open. */
-function startSession(ctx: Ctx, u: UserRow, method: string): void {
-	const raw = newToken();
-	insert(ctx, session, {
-		userId: u.id,
-		tokenHash: hashToken(raw),
-		method,
-		expiresAt: addMs(SESSION_LIFETIME_MS),
-		lastSeenAt: new Date().toISOString(),
-		userAgent: ctx.request?.userAgent?.slice(0, 255) || null,
-		ipAddress: ctx.request?.ip?.slice(0, 64) || null
-	});
-	ctx.cookies?.set(SESSION_COOKIE, raw, {
-		httpOnly: true,
-		sameSite: 'Lax',
-		secure: ctx.cookies.secure,
-		maxAge: SESSION_LIFETIME_MS / 1000
-	});
-}
 
 const needsSetup = (ctx: Ctx) => ctx.db.select({ n: count() }).from(user).get()!.n === 0;
 
+const invalid = (field: string, message: string) =>
+	new OpalError(422, 'invalid_input', 'Invalid input', { [field]: message });
+
+function userId(ctx: Ctx): number {
+	if (ctx.actor.kind !== 'user' && ctx.actor.kind !== 'token') throw forbidden();
+	return ctx.actor.userId;
+}
+
+const currentSessionId = (ctx: Ctx) => (ctx.actor.kind === 'user' ? ctx.actor.sessionId : undefined);
+
+// ---------------------------------------------------------------- passkey cookie helpers
+
+function setStateCookie(ctx: Ctx, payload: Record<string, unknown>): void {
+	ctx.cookies?.set(PASSKEY_STATE_COOKIE, signPayload(payload, 300_000), {
+		httpOnly: true,
+		sameSite: 'Lax',
+		secure: ctx.cookies.secure,
+		maxAge: 300
+	});
+}
+
+/** A failed attempt must not be retryable on the same challenge, but a throw rolls the write back. */
+function burnAfterRollback(ctx: Ctx, nonce: unknown): void {
+	if (typeof nonce !== 'string') return;
+	void serialized(async () => {
+		ctx.db.delete(webauthnChallenge).where(eq(webauthnChallenge.nonce, nonce)).run();
+	});
+}
+
+function requirePasskeys(s: SignInSettings): void {
+	if (!s.passkeysEnabled) throw forbidden('Passkeys are disabled on this OPAL instance');
+}
+
+const passkeyInfo = (r: typeof passkeyCredential.$inferSelect) => ({
+	id: r.id,
+	name: r.name,
+	createdAt: r.createdAt,
+	lastUsedAt: r.lastUsedAt,
+	transports: r.transports
+});
+
+// ---------------------------------------------------------------- settings view
+
+const settingsView = (s: SignInSettings) => ({
+	passwordLoginEnabled: s.passwordLoginEnabled,
+	passkeysEnabled: s.passkeysEnabled,
+	oidcEnabled: s.oidcEnabled,
+	oidcIssuer: s.oidcIssuer,
+	oidcClientId: s.oidcClientId,
+	hasClientSecret: !!s.oidcClientSecret,
+	oidcScopes: s.oidcScopes,
+	oidcProviderName: s.oidcProviderName,
+	oidcGroupsClaim: s.oidcGroupsClaim,
+	oidcAdminGroup: s.oidcAdminGroup,
+	oidcAutoCreateUsers: s.oidcAutoCreateUsers,
+	oidcRedirectBaseUrl: s.oidcRedirectBaseUrl,
+	callbackUrl: s.oidcRedirectBaseUrl ? `${s.oidcRedirectBaseUrl}/oidc/callback` : null
+});
+
+const flag = (v: boolean) => (v ? 'true' : 'false');
+
 export const authImpls = [
-	implement(contracts.auth.config, (ctx) => ({
-		needsSetup: needsSetup(ctx),
-		passwordLoginEnabled: passwordLoginEnabled(),
-		passkeysEnabled: false,
-		oidcEnabled: false
-	})),
+	implement(contracts.auth.config, (ctx) => {
+		const s = readSettings(ctx.db);
+		const oidc = oidcActive(s);
+		return {
+			needsSetup: needsSetup(ctx),
+			passwordLoginEnabled: s.passwordLoginEnabled,
+			passkeysEnabled: s.passkeysEnabled,
+			oidcEnabled: oidc,
+			oidcProviderName: oidc ? s.oidcProviderName : null
+		};
+	}),
 
 	implement(contracts.auth.setup, async (ctx, input) => {
 		if (!needsSetup(ctx)) throw conflict('setup_complete', 'Setup is already complete');
 		const username = normalizeUsername(input.username);
-		if (!username) throw new OpalError(422, 'invalid_input', 'Invalid input', { username: 'Username is required' });
+		if (!username) throw invalid('username', 'Username is required');
 		const weak = validatePasswordStrength(input.password);
-		if (weak) throw new OpalError(422, 'invalid_input', 'Invalid input', { password: weak });
+		if (weak) throw invalid('password', weak);
+		// Always credentialed: an admin who lives only in an identity provider has no way back in
+		// when the provider is down.
 		const u = insert(ctx, user, {
 			username,
 			name: input.name,
@@ -80,11 +140,13 @@ export const authImpls = [
 			isActive: true
 		});
 		startSession(ctx, u, 'password');
-		return { user: present(u) };
+		return { user: present(ctx.db, u) };
 	}),
 
 	implement(contracts.auth.login, async (ctx, input) => {
-		if (!passwordLoginEnabled()) throw new OpalError(403, 'forbidden', 'Password sign-in is disabled');
+		if (!readSettings(ctx.db).passwordLoginEnabled) {
+			throw new OpalError(403, 'forbidden', 'Password sign-in is disabled');
+		}
 		const username = input.username.trim().toLowerCase();
 		const key = `${ctx.request?.ip ?? 'unknown'}:${username}`;
 		if (loginThrottle.blocked(key)) {
@@ -100,7 +162,7 @@ export const authImpls = [
 		}
 		loginThrottle.reset(key);
 		startSession(ctx, u, 'password');
-		return { user: present(u) };
+		return { user: present(ctx.db, u) };
 	}),
 
 	implement(contracts.auth.logout, (ctx) => {
@@ -115,8 +177,241 @@ export const authImpls = [
 		const id = ctx.actor.kind === 'user' || ctx.actor.kind === 'token' ? ctx.actor.userId : null;
 		const u = id === null ? undefined : ctx.db.select().from(user).where(eq(user.id, id)).get();
 		if (!u) throw notFound('User');
-		return present(u);
+		return present(ctx.db, u);
 	}),
+
+	// ------------------------------------------------------------ password
+
+	implement(contracts.auth.password.change, async (ctx, input) => {
+		const u = ctx.db.select().from(user).where(eq(user.id, userId(ctx))).get();
+		if (!u) throw notFound('User');
+		// Accounts without a password (single sign-on) may set a first one without proving a current one.
+		if (u.passwordHash && !(await verifyPassword(u.passwordHash, input.currentPassword ?? ''))) {
+			throw forbidden('Current password is incorrect');
+		}
+		const weak = validatePasswordStrength(input.newPassword);
+		if (weak) throw invalid('newPassword', weak);
+		update(ctx, user, u.id, { passwordHash: await hashPassword(input.newPassword) });
+		return { ok: true as const, otherSessionsRevoked: revokeSessions(ctx, u.id, currentSessionId(ctx)) };
+	}),
+
+	// ------------------------------------------------------------ sessions
+
+	implement(contracts.auth.sessions.list, (ctx) => {
+		const current = currentSessionId(ctx);
+		const rows = ctx.db
+			.select()
+			.from(session)
+			.where(
+				and(eq(session.userId, userId(ctx)), isNull(session.revokedAt), gt(session.expiresAt, now()))
+			)
+			.orderBy(desc(session.lastSeenAt), desc(session.id))
+			.all();
+		return {
+			items: rows.map((r) => ({
+				id: r.id,
+				method: r.method,
+				createdAt: r.createdAt,
+				lastSeenAt: r.lastSeenAt,
+				userAgent: r.userAgent,
+				ipAddress: r.ipAddress,
+				current: r.id === current
+			}))
+		};
+	}),
+
+	implement(contracts.auth.sessions.revoke, (ctx, input) => {
+		const row = ctx.db.select().from(session).where(eq(session.id, input.id)).get();
+		if (!row || row.userId !== userId(ctx)) throw notFound('Session');
+		if (!row.revokedAt) update(ctx, session, row.id, { revokedAt: new Date().toISOString() });
+		return { ok: true as const };
+	}),
+
+	implement(contracts.auth.sessions.revokeOthers, (ctx) => ({
+		ok: true as const,
+		revoked: revokeSessions(ctx, userId(ctx), currentSessionId(ctx))
+	})),
+
+	// ------------------------------------------------------------ passkeys
+
+	implement(contracts.auth.passkeys.list, (ctx) => ({
+		items: ctx.db
+			.select()
+			.from(passkeyCredential)
+			.where(eq(passkeyCredential.userId, userId(ctx)))
+			.orderBy(passkeyCredential.id)
+			.all()
+			.map(passkeyInfo)
+	})),
+
+	implement(contracts.auth.passkeys.rename, (ctx, input) => {
+		const row = ctx.db.select().from(passkeyCredential).where(eq(passkeyCredential.id, input.id)).get();
+		if (!row || row.userId !== userId(ctx)) throw notFound('Passkey');
+		return passkeyInfo(update(ctx, passkeyCredential, row.id, { name: input.name }));
+	}),
+
+	implement(contracts.auth.passkeys.delete, (ctx, input) => {
+		const row = ctx.db.select().from(passkeyCredential).where(eq(passkeyCredential.id, input.id)).get();
+		if (!row || row.userId !== userId(ctx)) throw notFound('Passkey');
+		remove(ctx, passkeyCredential, row.id);
+		return { ok: true as const };
+	}),
+
+	implement(contracts.auth.passkeys.registerBegin, async (ctx, input) => {
+		const s = readSettings(ctx.db);
+		requirePasskeys(s);
+		const u = ctx.db.select().from(user).where(eq(user.id, userId(ctx))).get();
+		if (!u) throw notFound('User');
+		const rpId = rpIdFor(s.passkeyRpId, input.rpId);
+		const { options, state } = await beginRegistration(ctx.db, u, rpId);
+		const nonce = storeChallenge(ctx.db, 'register', rpId, state, u.id);
+		setStateCookie(ctx, { kind: 'register', nonce, uid: u.id });
+		return { publicKey: options as unknown as Record<string, unknown> };
+	}),
+
+	implement(contracts.auth.passkeys.registerComplete, async (ctx, input) => {
+		requirePasskeys(readSettings(ctx.db));
+		const uid = userId(ctx);
+		const payload = verifyPayload(ctx.cookies?.get(PASSKEY_STATE_COOKIE));
+		const challenge =
+			payload && payload.kind === 'register' && payload.uid === uid
+				? consumeChallenge(ctx.db, payload.nonce as string, 'register')
+				: null;
+		if (!challenge || challenge.userId !== uid) {
+			burnAfterRollback(ctx, payload?.nonce);
+			throw new OpalError(400, 'bad_challenge', 'Missing or expired registration challenge');
+		}
+		try {
+			const made = await completeRegistration(challenge, input.credential as never);
+			const row = insert(ctx, passkeyCredential, {
+				userId: uid,
+				credentialId: made.credentialId,
+				publicKey: made.publicKey,
+				signCount: made.signCount,
+				name: input.name.slice(0, 100) || 'Passkey',
+				aaguid: made.aaguid,
+				transports: made.transports,
+				lastUsedAt: null
+			});
+			ctx.cookies?.delete(PASSKEY_STATE_COOKIE, { secure: ctx.cookies.secure });
+			return { ok: true as const, id: row.id, name: row.name };
+		} catch (e) {
+			if (e instanceof PasskeyError || e instanceof Error) {
+				throw new OpalError(400, 'passkey_failed', `Passkey registration failed: ${e.message}`);
+			}
+			throw e;
+		}
+	}),
+
+	implement(contracts.auth.passkeys.loginBegin, async (ctx, input) => {
+		const s = readSettings(ctx.db);
+		requirePasskeys(s);
+		const rpId = rpIdFor(s.passkeyRpId, input.rpId);
+		const { options, state } = await beginAuthentication(rpId);
+		const nonce = storeChallenge(ctx.db, 'login', rpId, state);
+		setStateCookie(ctx, { kind: 'login', nonce });
+		return { publicKey: options as unknown as Record<string, unknown> };
+	}),
+
+	implement(contracts.auth.passkeys.loginComplete, async (ctx, input) => {
+		requirePasskeys(readSettings(ctx.db));
+		const payload = verifyPayload(ctx.cookies?.get(PASSKEY_STATE_COOKIE));
+		const challenge =
+			payload && payload.kind === 'login' ? consumeChallenge(ctx.db, payload.nonce as string, 'login') : null;
+		if (!challenge) {
+			burnAfterRollback(ctx, payload?.nonce);
+			throw new OpalError(400, 'bad_challenge', 'Missing or expired passkey challenge');
+		}
+		const result = await completeAuthentication(ctx.db, challenge, input.credential as never);
+		const u = result ? activeUser(ctx.db, result.row.userId) : undefined;
+		if (!result || !u) {
+			burnAfterRollback(ctx, payload?.nonce);
+			throw new OpalError(401, 'passkey_failed', 'Passkey authentication failed');
+		}
+		touchCredential(ctx.db, result.row.id, result.counter, result.row.signCount);
+		startSession(ctx, u, 'passkey');
+		ctx.cookies?.delete(PASSKEY_STATE_COOKIE, { secure: ctx.cookies.secure });
+		return { user: present(ctx.db, u) };
+	}),
+
+	// ------------------------------------------------------------ claim links
+
+	implement(contracts.auth.claim.status, (ctx, input) => {
+		const u = claimable(ctx, input.token);
+		if (!u) throw new OpalError(404, 'not_found', 'This link is invalid or has expired');
+		return { username: u.username };
+	}),
+
+	implement(contracts.auth.claim.complete, async (ctx, input) => {
+		const u = claimable(ctx, input.token);
+		if (!u) throw new OpalError(404, 'not_found', 'This link is invalid or has expired');
+		const weak = validatePasswordStrength(input.password);
+		if (weak) throw invalid('password', weak);
+		const claimed = update(ctx, user, u.id, { passwordHash: await hashPassword(input.password) });
+		startSession(ctx, claimed, 'password');
+		return { user: present(ctx.db, claimed) };
+	}),
+
+	implement(contracts.auth.claimLinks.create, (ctx, input) => {
+		const u = ctx.db.select().from(user).where(eq(user.id, input.userId)).get();
+		if (!u) throw notFound('User');
+		if (!u.isActive || u.passwordHash) {
+			throw new OpalError(400, 'not_claimable', 'This account already has a password; no claim link is needed');
+		}
+		return {
+			token: signPayload({ kind: 'account-claim', uid: u.id }, CLAIM_LINK_TTL_MS),
+			expiresAt: addMs(CLAIM_LINK_TTL_MS)
+		};
+	}),
+
+	// ------------------------------------------------------------ settings
+
+	implement(contracts.auth.settings.get, (ctx) => settingsView(readSettings(ctx.db))),
+
+	implement(contracts.auth.settings.update, (ctx, input) => {
+		const issuer = input.oidcIssuer.trim().replace(/\/+$/, '');
+		const clientId = input.oidcClientId.trim();
+		const scopes = input.oidcScopes.trim() || 'openid profile email';
+		if (input.oidcEnabled) {
+			if (!issuer || !clientId) {
+				throw invalid('oidcIssuer', 'An issuer URL and client id are required to enable OIDC.');
+			}
+			// Every token exchange posts the client credential to this host: https, or loopback in development.
+			if (!issuer.startsWith('https://') && !/^http:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(issuer)) {
+				throw invalid('oidcIssuer', 'The issuer URL must be https:// (or a localhost URL for development).');
+			}
+			if (!scopes.split(/\s+/).includes('openid')) {
+				throw invalid('oidcScopes', "The scopes must include 'openid'.");
+			}
+		}
+		// Locking out every interactive sign-in leaves only API tokens, which cannot reach the web UI.
+		if (!input.passwordLoginEnabled && !(input.oidcEnabled && issuer)) {
+			throw invalid(
+				'passwordLoginEnabled',
+				'Disabling password sign-in requires a working OIDC provider; otherwise nobody can reach the web UI.'
+			);
+		}
+		writeSetting(ctx, 'password_login_enabled', flag(input.passwordLoginEnabled));
+		writeSetting(ctx, 'passkeys_enabled', flag(input.passkeysEnabled));
+		writeSetting(ctx, 'oidc_enabled', flag(input.oidcEnabled));
+		writeSetting(ctx, 'oidc_issuer', issuer);
+		writeSetting(ctx, 'oidc_client_id', clientId);
+		if (input.clearClientSecret) writeSetting(ctx, 'oidc_client_secret', '');
+		else if (input.oidcClientSecret) writeSetting(ctx, 'oidc_client_secret', input.oidcClientSecret);
+		writeSetting(ctx, 'oidc_scopes', scopes);
+		writeSetting(ctx, 'oidc_provider_name', input.oidcProviderName.trim() || 'SSO');
+		writeSetting(ctx, 'oidc_groups_claim', input.oidcGroupsClaim.trim() || 'groups');
+		writeSetting(ctx, 'oidc_admin_group', input.oidcAdminGroup.trim());
+		writeSetting(ctx, 'oidc_auto_create_users', flag(input.oidcAutoCreateUsers));
+		writeSetting(ctx, 'oidc_redirect_base_url', input.oidcRedirectBaseUrl.trim().replace(/\/+$/, ''));
+		// Metadata is cached per issuer; a settings change must not be served stale.
+		resetDiscoveryCache();
+		return settingsView(readSettings(ctx.db));
+	}),
+
+	implement(contracts.auth.settings.testDiscovery, (ctx) => testDiscovery(readSettings(ctx.db))),
+
+	// ------------------------------------------------------------ API tokens
 
 	implement(contracts.auth.tokens.list, (ctx) => {
 		const id = userId(ctx);
@@ -156,9 +451,12 @@ export const authImpls = [
 	})
 ] as Impl[];
 
-function userId(ctx: Ctx): number {
-	if (ctx.actor.kind !== 'user' && ctx.actor.kind !== 'token') {
-		throw new OpalError(403, 'forbidden', 'Not permitted');
-	}
-	return ctx.actor.userId;
+const CLAIM_LINK_TTL_MS = 7 * 86_400_000;
+
+/** The account a claim link names, while it is still unclaimed. */
+function claimable(ctx: Ctx, token: string): UserRow | undefined {
+	const payload = verifyPayload(token);
+	if (!payload || payload.kind !== 'account-claim' || typeof payload.uid !== 'number') return undefined;
+	const u = ctx.db.select().from(user).where(eq(user.id, payload.uid)).get();
+	return u && u.isActive && !u.passwordHash ? u : undefined;
 }

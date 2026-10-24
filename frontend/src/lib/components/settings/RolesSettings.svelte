@@ -15,8 +15,9 @@
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import type { GateInfo } from '@opal/shared';
 	import {
 		resetRoleNames,
 		sortRoles,
@@ -32,20 +33,14 @@
 
 	const roles = $derived(sortRoles(unsorted));
 
-	interface Gate {
-		key: string;
-		label: string;
-		description: string | null;
-		role_ids: number[];
-	}
-	let gates = $state<Gate[]>([]);
+	let gates = $state<GateInfo[]>([]);
 	let gateBusy = $state<string | null>(null);
 	let gateRev = $state(0);
 	const adminRole = $derived(roles.find((r) => r.key === 'admin'));
 
 	async function loadGates() {
 		try {
-			gates = await api.get<Gate[]>('/gates');
+			gates = await opal.org.gates.list({});
 		} catch (err) {
 			toastError(err);
 		}
@@ -54,14 +49,14 @@
 		void loadGates();
 	});
 
-	async function toggleGate(g: Gate, role: Role, on: boolean) {
+	async function toggleGate(g: GateInfo, role: Role, on: boolean) {
 		if (gateBusy) return;
 		gateBusy = g.key;
-		const ids = g.role_ids.filter((id) => id !== role.id && id !== adminRole?.id);
+		const ids = g.roleIds.filter((id) => id !== role.id && id !== adminRole?.id);
 		if (on) ids.push(role.id);
 		try {
-			const next = await api.put<Gate | undefined>(`/gates/${g.key}`, { role_ids: ids });
-			g.role_ids = next?.role_ids ?? ids;
+			const next = await opal.org.gates.set({ key: g.key, roleIds: ids });
+			g.roleIds = next.roleIds;
 			toast.success(`${g.label}: ${on ? 'granted to' : 'removed from'} ${role.name}`);
 		} catch (err) {
 			toastError(err);
@@ -75,7 +70,7 @@
 	const columns: Column<Role>[] = [
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'description', label: 'Description' },
-		{ key: 'member_count', label: 'Members', align: 'right', mono: true, sortable: true }
+		{ key: 'memberCount', label: 'Members', align: 'right', mono: true, sortable: true }
 	];
 
 	const selected = $derived(
@@ -106,7 +101,7 @@
 		if (busy || !newName.trim()) return;
 		busy = true;
 		try {
-			const r = await api.post<Role>('/roles', {
+			const r = await opal.org.roles.create({
 				name: newName.trim(),
 				description: newDescription.trim() || null
 			});
@@ -128,7 +123,8 @@
 		if (busy || !selected || !dirty || !name.trim()) return;
 		busy = true;
 		try {
-			await api.patch(`/roles/${selected.id}`, {
+			await opal.org.roles.update({
+				id: selected.id,
 				name: name.trim(),
 				description: description.trim() || null
 			});
@@ -147,13 +143,13 @@
 		const role = selected;
 		const ok = await confirm({
 			title: `Delete the role ${role.name}?`,
-			body: `${role.member_count} ${role.member_count === 1 ? 'user loses' : 'users lose'} it. Template sign-offs naming it can no longer be signed until they name another role.`,
+			body: `${role.memberCount} ${role.memberCount === 1 ? 'user loses' : 'users lose'} it. Template sign-offs naming it can no longer be signed until they name another role.`,
 			action: 'DELETE ROLE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/roles/${role.id}`);
+			await opal.org.roles.delete({ id: role.id });
 			resetRoleNames();
 			toast.success('Role deleted');
 			await goto('/settings#roles');
@@ -207,13 +203,13 @@
 			{#snippet cell(r, col)}
 				{#if col.key === 'name'}
 					<span class="font-medium">{r.name}</span>
-					{#if r.is_system}
+					{#if r.isSystem}
 						<span class="ml-2 font-mono text-xs tracking-wider text-muted-foreground">SYSTEM</span>
 					{/if}
 				{:else if col.key === 'description'}
 					{#if r.description}{r.description}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else}
-					{r.member_count}
+					{r.memberCount}
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -245,7 +241,7 @@
 									{@const isAdminRole = r.key === 'admin'}
 									<td class="px-3 py-1.5 text-center">
 										{#key gateRev}<Checkbox
-												checked={isAdminRole || g.role_ids.includes(r.id)}
+												checked={isAdminRole || g.roleIds.includes(r.id)}
 												disabled={isAdminRole || !isAdmin || gateBusy === g.key}
 												onCheckedChange={(v) => toggleGate(g, r, !!v)}
 												aria-label={`${r.name} passes ${g.label}`}
@@ -263,7 +259,7 @@
 	{#if selected}
 		<Section title={selected.name}>
 			{#snippet actions()}
-				{#if selected.is_system}
+				{#if selected.isSystem}
 					<span class="font-mono text-xs tracking-wider text-muted-foreground">SYSTEM</span>
 				{:else if isAdmin}
 					<Button size="xs" variant="destructive" onclick={remove}>DELETE</Button>
@@ -273,7 +269,7 @@
 				<form onsubmit={save}>
 					<DetailTable>
 						<DetailRow label="Name">
-							{#if selected.is_system}
+							{#if selected.isSystem}
 								<span class="font-medium">{selected.name}</span>
 							{:else}
 								<Input aria-label="Name" class="h-7 max-w-xs" maxlength={50} bind:value={name} />

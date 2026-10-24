@@ -1,6 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import { api, ApiError } from '#lib/api.js';
-import type { ActivityEntry, UserRecord } from '#lib/components/users/types.js';
+import { ApiError, opal } from '#lib/api.js';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params, parent, fetch }) => {
@@ -10,11 +9,11 @@ export const load: PageLoad = async ({ params, parent, fetch }) => {
 	// Non-admins may only open their own profile.
 	if (!me.is_admin && id !== me.id) redirect(307, `/users/${me.id}`);
 
-	const http = api.using(fetch);
+	const http = opal.using(fetch).org.users;
 	try {
 		const [user, activity] = await Promise.all([
-			http.get<UserRecord>(`/users/${id}`),
-			http.get<ActivityEntry[]>(`/users/${id}/activity`, { limit: 15 })
+			http.get({ id }),
+			http.activity({ id, limit: 15 })
 		]);
 		return { profile: user, activity, isSelf: me.id === id };
 	} catch (e) {

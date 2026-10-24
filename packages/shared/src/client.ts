@@ -54,3 +54,8 @@ export function createClient<T extends ContractTree>(tree: T, transport: Transpo
 	}
 	return out as Client<T>;
 }
+
+/** URL of an operation below /api, for links and downloads (`produces` contracts). */
+export function opUrl(c: OpContract, input: Record<string, unknown> = {}): string {
+	return `/api${buildRequest(c, input).url}`;
+}

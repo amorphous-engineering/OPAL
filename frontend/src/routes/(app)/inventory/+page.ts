@@ -1,9 +1,11 @@
-import { api, ApiError } from '#lib/api.js';
-import type {
-	InventoryItem,
-	LocationSummary,
-	StockByPart
-} from '#lib/components/inventory/types.js';
+import { ApiError, opal } from '#lib/api.js';
+import {
+	STOCK_BY_PART_SORT_KEYS,
+	STOCK_SORT_KEYS,
+	type StockByPart,
+	type StockLocation,
+	type StockRecord
+} from '@opal/shared';
 import type { PageLoad } from './$types';
 
 const PAGE_SIZE = 50;
@@ -16,78 +18,92 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	const view: 'records' | 'parts' = p.get('view') === 'parts' ? 'parts' : 'records';
 	const q = p.get('q')?.trim() ?? '';
 	const location = p.get('location') ?? '';
-	const partId = p.get('part_id') ?? '';
+	const partId = Number(p.get('part_id')) || undefined;
 	const source = p.get('source') ?? '';
 	const flag = (FLAGS as readonly string[]).includes(p.get('flag') ?? '')
 		? (p.get('flag') as Flag)
 		: '';
 	const depleted = p.get('depleted') === '1';
-	const sort = p.get('sort') ?? (view === 'parts' ? 'part' : 'created_at');
-	const order = p.get('dir') === 'asc' ? 'asc' : p.get('dir') === 'desc' ? 'desc' : null;
+	const sortParam = p.get('sort') ?? '';
+	const dir = p.get('dir');
 	const page = Math.max(1, Number(p.get('page')) || 1);
+	const cursor = page > 1 ? String((page - 1) * PAGE_SIZE) : undefined;
 
-	const client = api.using(fetch);
-	const paging = { skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE };
+	const client = opal.using(fetch);
 	const base = {
-		search: q,
+		q: q || undefined,
+		location: location || undefined,
+		partId,
+		lowStock: flag === 'low' ? true : undefined,
+		cursor,
+		limit: PAGE_SIZE
+	};
+	const result = {
+		view,
+		q,
 		location,
-		part_id: partId || undefined,
-		low_stock: flag === 'low' ? true : undefined,
-		sort,
-		order: order ?? (view === 'parts' || sort !== 'created_at' ? 'asc' : 'desc'),
-		...paging
+		partId: partId ?? null,
+		source,
+		flag,
+		depleted,
+		page,
+		pageSize: PAGE_SIZE
 	};
 
 	try {
-		const [locations, result] = await Promise.all([
-			client.get<LocationSummary[]>('/inventory/locations'),
-			view === 'parts'
-				? client.get<{ items: StockByPart[]; total: number }>('/inventory/by-part', base)
-				: client.get<{ items: InventoryItem[]; total: number }>('/inventory', {
-						...base,
-						source_type: source,
-						has_stock: depleted ? undefined : true,
-						attention: flag === 'attention' ? true : undefined,
-						expired: flag === 'expired' ? true : undefined,
-						expiring_soon: flag === 'expiring' ? true : undefined,
-						calibration_overdue: flag === 'calibration' ? true : undefined
-					})
-		]);
-		return {
-			view,
-			records: view === 'records' ? (result.items as InventoryItem[]) : [],
-			parts: view === 'parts' ? (result.items as StockByPart[]) : [],
-			total: result.total,
-			locations,
-			q,
-			location,
-			partId,
-			source,
-			flag,
-			depleted,
+		const locations = await client.inventory.locations({});
+		if (view === 'parts') {
+			const sort = (STOCK_BY_PART_SORT_KEYS as readonly string[]).includes(sortParam)
+				? (sortParam as (typeof STOCK_BY_PART_SORT_KEYS)[number])
+				: 'part';
+			const order = dir === 'desc' ? 'desc' : 'asc';
+			const list = await client.inventory.byPart({ ...base, sort, order });
+			return {
+				...result,
+				sort,
+				order,
+				records: [] as StockRecord[],
+				parts: list.items,
+				total: list.total,
+				locations,
+				error: null as string | null
+			};
+		}
+		const sort = (STOCK_SORT_KEYS as readonly string[]).includes(sortParam)
+			? (sortParam as (typeof STOCK_SORT_KEYS)[number])
+			: 'createdAt';
+		const order =
+			dir === 'asc' ? 'asc' : dir === 'desc' ? 'desc' : sort === 'createdAt' ? 'desc' : 'asc';
+		const list = await client.inventory.list({
+			...base,
 			sort,
-			order: base.order as 'asc' | 'desc',
-			page,
-			pageSize: PAGE_SIZE,
+			order,
+			sourceType: (source || undefined) as 'purchase' | undefined,
+			hasStock: depleted ? undefined : true,
+			attention: flag === 'attention' ? true : undefined,
+			expired: flag === 'expired' ? true : undefined,
+			expiringSoon: flag === 'expiring' ? true : undefined,
+			calibrationOverdue: flag === 'calibration' ? true : undefined
+		});
+		return {
+			...result,
+			sort,
+			order,
+			records: list.items,
+			parts: [] as StockByPart[],
+			total: list.total,
+			locations,
 			error: null as string | null
 		};
 	} catch (e) {
 		return {
-			view,
-			records: [] as InventoryItem[],
+			...result,
+			sort: sortParam,
+			order: 'asc' as const,
+			records: [] as StockRecord[],
 			parts: [] as StockByPart[],
 			total: 0,
-			locations: [] as LocationSummary[],
-			q,
-			location,
-			partId,
-			source,
-			flag,
-			depleted,
-			sort,
-			order: 'asc' as 'asc' | 'desc',
-			page,
-			pageSize: PAGE_SIZE,
+			locations: [] as StockLocation[],
 			error: e instanceof ApiError || e instanceof Error ? e.message : 'Could not load stock'
 		};
 	}

@@ -1,19 +1,14 @@
-import { api } from '#lib/api.js';
-import type { Notification } from '#lib/components/shell/notifications.js';
+import { opal } from '#lib/api.js';
+import { NOTIFICATION_CATEGORIES, NOTIFICATION_SORTS, NOTIFICATION_STATES } from '@opal/shared';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ url, fetch, depends }) => {
 	depends('app:notifications');
 	const q = url.searchParams;
-	const list = await api.using(fetch).get<{
-		items: Notification[];
-		unread_count: number;
-		total: number;
-	}>('/notifications', {
-		state: q.get('state'),
-		category: q.get('category'),
-		sort: q.get('sort'),
+	return opal.using(fetch).platform.notifications.list({
+		state: NOTIFICATION_STATES.find((s) => s === q.get('state')),
+		category: NOTIFICATION_CATEGORIES.find((c) => c === q.get('category')),
+		sort: NOTIFICATION_SORTS.find((s) => s === q.get('sort')) ?? 'recent',
 		limit: 200
 	});
-	return list;
 };

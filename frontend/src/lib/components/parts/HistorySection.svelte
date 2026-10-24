@@ -7,10 +7,10 @@
 		Timestamp,
 		type Column
 	} from '#lib/components/opal/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { datetime } from '#lib/format.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
-	import type { HistoryEntry } from './types.js';
+	import type { PartHistoryEntry as HistoryEntry } from '@opal/shared';
 
 	let { partId, version }: { partId: number; version: string } = $props();
 
@@ -18,13 +18,13 @@
 	let total = $state(0);
 	let loaded = $state(false);
 
-	// Hidden bookkeeping and raw ids are not facts a reader wants.
-	const HIDE = new Set(['activated_by_id', 'deleted_at']);
+	// Raw ids are not facts a reader wants.
+	const HIDE = new Set(['activatedById', 'obsoletedById']);
 
 	$effect(() => {
 		void version;
-		api
-			.get<{ items: HistoryEntry[]; total: number }>(`/parts/${partId}/history`, { limit: 12 })
+		opal.parts
+			.history({ id: partId, limit: 12 })
 			.then((r) => {
 				items = r.items;
 				total = r.total;
@@ -40,6 +40,8 @@
 		{ key: 'changes', label: 'Changes' }
 	];
 
+	const fieldLabel = (f: string) => f.replace(/([A-Z])/g, ' $1').toLowerCase();
+
 	function fmt(v: unknown): string {
 		if (v === null || v === undefined || v === '') return '—';
 		if (typeof v === 'string' && /^\d{4}-\d\d-\d\dT/.test(v)) return datetime(v);
@@ -54,12 +56,12 @@
 		{#snippet actions()}
 			<ActionLink href={`/audit?entity=part&record=${partId}`}>AUDIT LOG →</ActionLink>
 		{/snippet}
-		<DataTable rows={items} {columns} key={(h) => h.timestamp + h.action} emptyLabel="HISTORY">
+		<DataTable rows={items} {columns} key={(h) => h.at + h.action + h.op} emptyLabel="HISTORY">
 			{#snippet cell(h, col)}
 				{#if col.key === 'when'}
-					<Timestamp value={h.timestamp} />
+					<Timestamp value={h.at} />
 				{:else if col.key === 'who'}
-					{#if h.user_name}{h.user_name}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if h.userName}{h.userName}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else if col.key === 'action'}
 					<span class="font-mono text-xs text-muted-foreground">{h.action.toUpperCase()}</span>
 				{:else}
@@ -68,7 +70,7 @@
 						<ul class="grid grid-cols-1 gap-0.5">
 							{#each rows as c (c.field)}
 								<li class="text-xs">
-									<span class="label mr-2">{c.field.replace(/_/g, ' ')}</span>
+									<span class="label mr-2">{fieldLabel(c.field)}</span>
 									<span class="mono text-muted-foreground">{fmt(c.old)}</span>
 									<span aria-hidden="true">→</span>
 									<span class="mono">{fmt(c.new)}</span>

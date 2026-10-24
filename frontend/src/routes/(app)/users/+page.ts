@@ -1,6 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { api } from '#lib/api.js';
-import type { UserRecord } from '#lib/components/users/types.js';
+import { opal } from '#lib/api.js';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent, url, fetch }) => {
@@ -10,10 +9,10 @@ export const load: PageLoad = async ({ parent, url, fetch }) => {
 
 	const q = url.searchParams.get('q') ?? '';
 	const status = url.searchParams.get('status') ?? 'active';
-	const res = await api.using(fetch).get<{ items: UserRecord[]; total: number }>('/users', {
-		search: q,
-		is_active: status === 'all' ? undefined : status === 'inactive' ? false : true,
-		limit: 1000
+	const res = await opal.using(fetch).org.users.list({
+		search: q || undefined,
+		isActive: status === 'all' ? undefined : status !== 'inactive',
+		limit: 500
 	});
 	return { users: res.items, total: res.total, q, status };
 };

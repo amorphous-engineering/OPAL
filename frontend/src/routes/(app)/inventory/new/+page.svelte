@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import {
 		DataTable,
 		DetailRow,
@@ -13,37 +13,41 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
-	import type { InventoryItem, PickedPart } from '#lib/components/inventory/types.js';
+	import type { PickedPart } from '#lib/components/parts/types.js';
+	import type { StockRecord } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	let part = $derived<PickedPart | null>(data.part);
+	let rules = $derived(data.rules);
 	let quantity = $state('1');
 	let location = $state('');
 	let lot = $state('');
+	let serial = $state('');
 	let expiration = $state('');
 	let busy = $state(false);
 	let error = $state<string | null>(null);
-	let created = $state<InventoryItem[] | null>(null);
-	function pick(p: PickedPart) {
+	let created = $state<StockRecord[] | null>(null);
+	async function pick(p: PickedPart) {
 		part = p;
 		quantity = '1';
 		lot = '';
+		serial = '';
+		rules = null;
+		try {
+			rules = await opal.inventory.receivingRules({ partId: p.id });
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Could not load receiving rules';
+		}
 	}
 
 	const serialized = $derived(part?.tracking_type === 'serialized');
 
-	// Tier rules from the project config; legacy level rules when the tier is not configured.
-	const rule = $derived.by(() => {
-		if (!part) return { requireLot: false, autoSerial: false };
-		const t = data.tiers.find((x) => x.level === part!.tier);
-		const requireLot = t ? t.require_lot : part.tier === 1 || part.tier === 2;
-		const autoSerial = t ? t.auto_serial : part.tier === 1;
-		return {
-			requireLot: requireLot && !serialized,
-			autoSerial: autoSerial && serialized
-		};
+	// What the part's tier asks of a receipt: a lot for bulk stock, generated serials for units.
+	const rule = $derived({
+		requireLot: rules?.requireLot ?? false,
+		autoSerial: rules?.autoSerial ?? false
 	});
 
 	const count = $derived(Math.max(0, Math.floor(Number(quantity)) || 0));
@@ -52,7 +56,8 @@
 			Number(quantity) > 0 &&
 			(!serialized || Number.isInteger(Number(quantity))) &&
 			!!location.trim() &&
-			(!rule.requireLot || !!lot.trim())
+			(!rule.requireLot || !!lot.trim()) &&
+			!(serialized && count > 1 && !!serial.trim())
 	);
 
 	async function submit(e: SubmitEvent) {
@@ -61,17 +66,18 @@
 		busy = true;
 		error = null;
 		try {
-			const r = await api.post<{ items: InventoryItem[] }>('/inventory', {
-				part_id: part.id,
-				quantity: Number(quantity),
+			const r = await opal.inventory.create({
+				partId: part.id,
+				quantity: quantity.trim(),
 				location: location.trim(),
-				lot_number: lot.trim() || null,
-				expiration_date: expiration || null,
-				enforce_tier_rules: true
+				lotNumber: lot.trim() || null,
+				serialNumber: serial.trim() || null,
+				expirationDate: expiration || null,
+				enforceTierRules: true
 			});
 			if (r.items.length === 1) {
-				toast.success(`Received ${r.items[0].opal_number}`);
-				await goto(`/inventory/opal/${r.items[0].opal_number}`);
+				toast.success(`Received ${r.items[0].opalNumber}`);
+				await goto(`/inventory/opal/${r.items[0].opalNumber}`);
 			} else {
 				created = r.items;
 			}
@@ -101,8 +107,7 @@
 				<Button
 					size="xs"
 					variant="outline"
-					href="/label?inventory={created!.map((i) => i.opal_number).join(',')}"
-					>PRINT LABELS</Button
+					href="/label?inventory={created!.map((i) => i.opalNumber).join(',')}">PRINT LABELS</Button
 				>
 				<Button size="xs" variant="outline" onclick={another}>RECEIVE MORE</Button>
 			{/snippet}
@@ -110,18 +115,18 @@
 				rows={created}
 				columns={[
 					{ key: 'opal_number', label: 'OPAL', mono: true },
-					{ key: 'lot_number', label: serialized ? 'Lot / serial' : 'Lot', mono: true },
+					{ key: 'serial', label: serialized ? 'Lot / serial' : 'Lot', mono: true },
 					{ key: 'location', label: 'Location', mono: true }
 				]}
-				href={(r) => `/inventory/opal/${r.opal_number}`}
+				href={(r) => `/inventory/opal/${r.opalNumber}`}
 				emptyLabel="Records"
 				key={(r) => r.id}
 			>
 				{#snippet cell(r, col)}
 					{#if col.key === 'opal_number'}
-						<span class="font-semibold text-info">{r.opal_number}</span>
-					{:else if col.key === 'lot_number'}
-						{r.lot_number ?? '—'}
+						<span class="font-semibold text-info">{r.opalNumber}</span>
+					{:else if col.key === 'serial'}
+						{r.serialNumber ?? r.lotNumber ?? '—'}
 					{:else}
 						{r.location}
 					{/if}
@@ -137,7 +142,7 @@
 							<span class="font-mono text-info">{part.internal_pn ?? '—'}</span>
 							<span>{part.name}</span>
 							<span class="font-mono text-xs text-muted-foreground uppercase"
-								>{part.tracking_type}{part.tier_name ? ` · ${part.tier_name}` : ''}</span
+								>{part.tracking_type}{rules?.tierName ? ` · ${rules?.tierName}` : ''}</span
 							>
 							<Button size="xs" variant="ghost" class="ml-auto" onclick={() => (part = null)}
 								>CHANGE</Button
@@ -186,16 +191,27 @@
 						{#each data.locations as l (l)}<option value={l}></option>{/each}
 					</datalist>
 				</DetailRow>
-				<DetailRow label={`${serialized ? 'Lot / serial' : 'Lot'}${rule.requireLot ? ' *' : ''}`}>
+				<DetailRow label={`Lot${rule.requireLot ? ' *' : ''}`}>
 					<Input
-						aria-label={serialized ? 'Lot / serial' : 'Lot'}
+						aria-label="Lot"
 						class="max-w-xs font-mono"
-						placeholder={rule.autoSerial ? 'Generated per unit' : ''}
 						bind:value={lot}
 						required={rule.requireLot}
 						autocomplete="off"
 					/>
 				</DetailRow>
+				{#if serialized}
+					<DetailRow label="Serial">
+						<Input
+							aria-label="Serial"
+							class="max-w-xs font-mono"
+							placeholder={rule.autoSerial ? 'Generated per unit' : ''}
+							bind:value={serial}
+							disabled={count > 1}
+							autocomplete="off"
+						/>
+					</DetailRow>
+				{/if}
 				<DetailRow label="Expires">
 					<Input aria-label="Expires" type="date" class="w-44 font-mono" bind:value={expiration} />
 				</DetailRow>

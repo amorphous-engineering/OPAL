@@ -18,24 +18,19 @@
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { date, qty } from '#lib/format.js';
-	import {
-		sourceLabel,
-		type InventoryItem,
-		type StockByPart
-	} from '#lib/components/inventory/types.js';
+	import { sourceLabel } from '#lib/components/inventory/types.js';
+	import type { StockByPart, StockRecord } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	// Sort defaults depend on the view; the URL carries only a deviation.
 	const sorter = $derived(
-		urlSort(
-			data.view === 'parts' ? { key: 'part', dir: 'asc' } : { key: 'created_at', dir: 'desc' }
-		)
+		urlSort(data.view === 'parts' ? { key: 'part', dir: 'asc' } : { key: 'createdAt', dir: 'desc' })
 	);
 
-	const recordColumns: Column<InventoryItem>[] = [
-		{ key: 'opal_number', label: 'OPAL', sortable: true, mono: true, width: '9rem' },
+	const recordColumns: Column<StockRecord>[] = [
+		{ key: 'opalNumber', label: 'OPAL', sortable: true, mono: true, width: '9rem' },
 		{ key: 'part', label: 'Part', sortable: true },
 		{ key: 'location', label: 'Location', sortable: true, mono: true, class: 'whitespace-nowrap' },
 		{
@@ -46,18 +41,24 @@
 			mono: true,
 			class: 'whitespace-nowrap'
 		},
-		{ key: 'lot_number', label: 'Lot', sortable: true, mono: true, class: 'whitespace-nowrap' },
-		{ key: 'source_type', label: 'Source' },
-		{ key: 'expiration_date', label: 'Expires', sortable: true, mono: true },
-		{ key: 'calibration_due_at', label: 'Cal due', mono: true },
-		{ key: 'created_at', label: 'Received', sortable: true }
+		{
+			key: 'lotNumber',
+			label: 'Lot / serial',
+			sortable: true,
+			mono: true,
+			class: 'whitespace-nowrap'
+		},
+		{ key: 'sourceType', label: 'Source' },
+		{ key: 'expirationDate', label: 'Expires', sortable: true, mono: true },
+		{ key: 'calibrationDueAt', label: 'Cal due', mono: true },
+		{ key: 'createdAt', label: 'Received', sortable: true }
 	];
 
 	const partColumns: Column<StockByPart>[] = [
 		{ key: 'part', label: 'Part', sortable: true },
 		{ key: 'quantity', label: 'On hand', sortable: true, align: 'right', mono: true },
-		{ key: 'reorder_point', label: 'Reorder at', align: 'right', mono: true },
-		{ key: 'record_count', label: 'Records', sortable: true, align: 'right', mono: true },
+		{ key: 'reorderPoint', label: 'Reorder at', align: 'right', mono: true },
+		{ key: 'recordCount', label: 'Records', sortable: true, align: 'right', mono: true },
 		{ key: 'locations', label: 'Locations', mono: true }
 	];
 
@@ -88,7 +89,7 @@
 				class="flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs"
 			>
 				<span class="text-muted-foreground uppercase">Part</span>
-				{data.records[0]?.part_internal_pn ?? data.parts[0]?.internal_pn ?? 'selected'}
+				{data.records[0]?.partInternalPn ?? data.parts[0]?.internalPn ?? 'selected'}
 				<button
 					type="button"
 					class="text-info hover:underline"
@@ -116,9 +117,7 @@
 			param="location"
 			label="Location"
 			allLabel="All locations"
-			options={data.locations
-				.filter((l) => l.location)
-				.map((l) => ({ value: l.location as string, label: l.location as string }))}
+			options={data.locations.map((l) => ({ value: l.location, label: l.location }))}
 		/>
 
 		{#if data.view === 'records'}
@@ -172,60 +171,61 @@
 			serverSort
 			bind:sort={() => sorter.value, sorter.set}
 			bind:selected={picked}
-			href={(r) => (r.opal_number ? `/inventory/opal/${r.opal_number}` : null)}
+			href={(r) => `/inventory/opal/${r.opalNumber}`}
 			emptyLabel={filtered ? 'Stock matching these filters' : 'Stock'}
-			key={(r) => r.opal_number ?? r.id}
+			key={(r) => r.opalNumber}
 		>
 			{#snippet emptyAction()}
 				<a href="/inventory/new" class="font-medium text-info hover:underline">+ RECEIVE</a>
 			{/snippet}
 			{#snippet cell(r, col)}
-				{#if col.key === 'opal_number'}
-					<span class="font-semibold text-info">{r.opal_number ?? '—'}</span>
+				{#if col.key === 'opalNumber'}
+					<span class="font-semibold text-info">{r.opalNumber}</span>
 				{:else if col.key === 'part'}
-					<a href="/parts/{r.part_id}" class="hover:underline">
-						<span class="font-mono text-info">{r.part_internal_pn ?? '—'}</span>
-						<span class="ml-1.5">{r.part_name}</span>
+					<a href="/parts/{r.partId}" class="hover:underline">
+						<span class="font-mono text-info">{r.partInternalPn}</span>
+						<span class="ml-1.5">{r.partName}</span>
 					</a>
 				{:else if col.key === 'location'}
 					{#if r.location}{r.location}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else if col.key === 'quantity'}
-					<span class={Number(r.quantity) === 0 ? 'text-muted-foreground' : ''}
-						>{qty(r.quantity, r.part_uom)}</span
+					<span class={Number(r.balance) === 0 ? 'text-muted-foreground' : ''}
+						>{qty(r.balance, r.partUom)}</span
 					>
-				{:else if col.key === 'lot_number'}
-					{#if r.lot_number}{r.lot_number}{:else}<span class="text-muted-foreground">—</span>{/if}
-				{:else if col.key === 'source_type'}
-					<span class="font-mono text-xs text-muted-foreground">{sourceLabel(r.source_type)}</span>
-				{:else if col.key === 'expiration_date'}
-					{#if r.expiration_date}
-						{date(r.expiration_date)}
-						{#if r.is_expired}<State value="expired" tone="error" label="EXPIRED" class="ml-1" />
-						{:else if r.days_until_expiration !== null && r.days_until_expiration <= 30}<State
+				{:else if col.key === 'lotNumber'}
+					{@const lot = r.serialNumber ?? r.lotNumber}
+					{#if lot}{lot}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else if col.key === 'sourceType'}
+					<span class="font-mono text-xs text-muted-foreground">{sourceLabel(r.sourceType)}</span>
+				{:else if col.key === 'expirationDate'}
+					{#if r.expirationDate}
+						{date(r.expirationDate)}
+						{#if r.isExpired}<State value="expired" tone="error" label="EXPIRED" class="ml-1" />
+						{:else if r.daysUntilExpiration !== null && r.daysUntilExpiration <= 30}<State
 								value="expiring"
 								tone="warn"
-								label="{r.days_until_expiration}D"
+								label="{r.daysUntilExpiration}D"
 								class="ml-1"
 							/>{/if}
 					{:else}<span class="text-muted-foreground">—</span>{/if}
-				{:else if col.key === 'calibration_due_at'}
-					{#if r.part_is_tooling && r.calibration_due_at}
-						{date(r.calibration_due_at)}
-						{#if r.calibration_status === 'overdue'}<State
+				{:else if col.key === 'calibrationDueAt'}
+					{#if r.partIsTooling && r.calibrationDueAt}
+						{date(r.calibrationDueAt)}
+						{#if r.calibrationStatus === 'overdue'}<State
 								value="overdue"
 								tone="error"
 								label="OVERDUE"
 								class="ml-1"
 							/>
-						{:else if r.calibration_status === 'due_soon'}<State
+						{:else if r.calibrationStatus === 'due_soon'}<State
 								value="due"
 								tone="warn"
 								label="DUE"
 								class="ml-1"
 							/>{/if}
 					{:else}<span class="text-muted-foreground">—</span>{/if}
-				{:else if col.key === 'created_at'}
-					<Timestamp value={r.created_at} dateOnly />
+				{:else if col.key === 'createdAt'}
+					<Timestamp value={r.createdAt} dateOnly />
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -235,25 +235,25 @@
 			columns={partColumns}
 			serverSort
 			bind:sort={() => sorter.value, sorter.set}
-			href={(r) => `/inventory?q=${encodeURIComponent(r.internal_pn ?? r.name)}`}
+			href={(r) => `/inventory?part_id=${r.partId}`}
 			emptyLabel={filtered ? 'Parts matching these filters' : 'Stock'}
-			key={(r) => r.part_id}
+			key={(r) => r.partId}
 		>
 			{#snippet cell(r, col)}
 				{#if col.key === 'part'}
-					<a href="/parts/{r.part_id}" class="hover:underline">
-						<span class="font-mono text-info">{r.internal_pn ?? '—'}</span>
+					<a href="/parts/{r.partId}" class="hover:underline">
+						<span class="font-mono text-info">{r.internalPn}</span>
 						<span class="ml-1.5">{r.name}</span>
 					</a>
 				{:else if col.key === 'quantity'}
-					{qty(r.quantity, r.unit_of_measure)}
-					{#if r.is_low_stock}<State value="low" tone="warn" label="LOW" class="ml-1" />{/if}
-				{:else if col.key === 'reorder_point'}
-					{#if r.reorder_point !== null}{qty(r.reorder_point)}{:else}<span
+					{qty(r.balance, r.unitOfMeasure)}
+					{#if r.isLowStock}<State value="low" tone="warn" label="LOW" class="ml-1" />{/if}
+				{:else if col.key === 'reorderPoint'}
+					{#if r.reorderPoint !== null}{qty(r.reorderPoint)}{:else}<span
 							class="text-muted-foreground">—</span
 						>{/if}
-				{:else if col.key === 'record_count'}
-					{r.record_count}
+				{:else if col.key === 'recordCount'}
+					{r.recordCount}
 				{:else if col.key === 'locations'}
 					{#if r.locations.length}{r.locations.join(', ')}{:else}<span class="text-muted-foreground"
 							>—</span
