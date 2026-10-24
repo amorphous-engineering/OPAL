@@ -1,6 +1,6 @@
 <script lang="ts">
 	// ISO 8601 timestamp; `relative` only for dense index rows (full value in title).
-	import { age, datetime, date, iso } from '#lib/format.js';
+	import { age, datetime, date, iso, tip } from '#lib/format.js';
 
 	let {
 		value,
@@ -15,6 +15,6 @@
 	<time
 		class="font-mono text-xs whitespace-nowrap tabular-nums"
 		datetime={iso(value)}
-		title={iso(value)}>{relative ? age(value) : dateOnly ? date(value) : datetime(value)}</time
+		title={tip(value)}>{relative ? age(value) : dateOnly ? date(value) : datetime(value)}</time
 	>
 {/if}

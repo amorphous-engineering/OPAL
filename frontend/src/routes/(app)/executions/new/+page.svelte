@@ -15,7 +15,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import { qty } from '#lib/format.js';
+	import { fromInput, qty } from '#lib/format.js';
 	import { EXECUTION_PRIORITIES, type CutPreview, type ExecutionPriority } from '@opal/shared';
 	type PreviewPart = CutPreview['kit'][number];
 	import type { PageProps } from './$types';
@@ -96,8 +96,8 @@
 				projectId: projectId || undefined,
 				woNumber: n === 1 && workOrder.trim() ? workOrder.trim() : undefined,
 				quantity: n,
-				scheduledStartAt: scheduled ? new Date(scheduled).toISOString() : undefined,
-				targetCompletionAt: target ? new Date(target).toISOString() : undefined,
+				scheduledStartAt: scheduled ? fromInput(scheduled) : undefined,
+				targetCompletionAt: target ? fromInput(target) : undefined,
 				priority
 			});
 			// One work order opens; a batch lands on the list of what was cut.

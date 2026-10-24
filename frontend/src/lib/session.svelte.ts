@@ -12,6 +12,7 @@ export interface CurrentUser {
 	is_admin: boolean;
 	needs_onboarding: boolean;
 	needs_profile_setup: boolean;
+	time_display: 'local' | 'utc';
 }
 
 /** `GET /auth/config` from the old API; the settings page still reads it. */
@@ -38,7 +39,8 @@ export function toCurrentUser(u: AuthUser): CurrentUser {
 		email: u.email,
 		is_admin: u.isAdmin,
 		needs_onboarding: u.needsOnboarding,
-		needs_profile_setup: u.needsProfileSetup
+		needs_profile_setup: u.needsProfileSetup,
+		time_display: u.timeDisplay
 	};
 }
 
@@ -61,6 +63,19 @@ class Session {
 	set(user: CurrentUser | null) {
 		this.user = user;
 		this.loaded = true;
+	}
+
+	/** Save the time display choice and apply it at once; a failed save restores the old one. */
+	async setTimeDisplay(timeDisplay: 'local' | 'utc') {
+		if (!this.user) return;
+		const before = this.user.time_display;
+		this.user.time_display = timeDisplay;
+		try {
+			await opal.org.users.setTimeDisplay({ timeDisplay });
+		} catch (e) {
+			if (this.user) this.user.time_display = before;
+			throw e;
+		}
 	}
 
 	async logout() {

@@ -22,7 +22,7 @@
 		ErrorBanner
 	} from '#lib/components/opal/index.js';
 	import { opal, ApiError } from '#lib/api.js';
-	import { iso } from '#lib/format.js';
+	import { datetimeSec } from '#lib/format.js';
 	import { session } from '#lib/session.svelte.js';
 	import Redline from '#lib/components/requirements/Redline.svelte';
 	import type { QueueItem } from '#lib/components/requirements/types.js';
@@ -308,7 +308,7 @@
 							<Textarea id="q-note" bind:value={note} rows={2} />
 						</div>
 						<p class="font-mono text-xs text-muted-foreground">
-							signed {session.user?.name ?? '—'} · {iso(new Date()).slice(0, 19)}Z
+							signed {session.user?.name ?? '—'} · {datetimeSec(new Date())}
 						</p>
 						<Button type="submit" disabled={busy || !stagedItems.length}
 							>COMMIT BASELINE · {stagedItems.length}</Button

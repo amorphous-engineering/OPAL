@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fromInput } from '#lib/format.js';
 	import { opal } from '#lib/api.js';
 	import { toastError, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -52,7 +53,7 @@
 				id: datasetId,
 				values,
 				// A datetime-local value is local time; send it as an ISO instant.
-				recordedAt: recordedAt ? new Date(recordedAt).toISOString() : undefined
+				recordedAt: recordedAt ? fromInput(recordedAt) : undefined
 			});
 			open = false;
 			await onadded();

@@ -62,6 +62,7 @@ export const orgImpls = [
 	implement(c.users.uploadAvatar, (ctx, input) => users.uploadAvatar(ctx, input.id, input.data)),
 	implement(c.users.removeAvatar, (ctx, input) => users.deleteAvatar(ctx, input.id)),
 	implement(c.users.profileState, (ctx) => users.myProfileState(ctx)),
+	implement(c.users.setTimeDisplay, (ctx, input) => users.setTimeDisplay(ctx, input.timeDisplay)),
 	implement(c.users.setupProfile, (ctx, input) => users.setupProfile(ctx, input.name)),
 	// roles and gates
 	implement(c.roles.list, (ctx) => roles.listRoles(ctx)),

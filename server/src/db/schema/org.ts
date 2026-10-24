@@ -40,6 +40,8 @@ export const userProfile = sqliteTable('user_profile', {
 	/** upload | oidc | removed (removed: do not refill from the identity provider) */
 	avatarSource: text('avatar_source'),
 	avatarUpdatedAt: text('avatar_updated_at'),
+	/** How the UI shows times: local (the browser's zone) or utc. Storage stays UTC. */ // added by time-display
+	timeDisplay: text('time_display', { enum: ['local', 'utc'] }).notNull().default('local'),
 	needsProfileSetup: integer('needs_profile_setup', { mode: 'boolean' }).notNull().default(false),
 	needsOnboarding: integer('needs_onboarding', { mode: 'boolean' }).notNull().default(true),
 	createdAt: createdAt(),

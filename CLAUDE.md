@@ -3,9 +3,9 @@
 Local-first system for hardware teams: parts, stock, purchasing, procedures and their
 execution, issues, risks, requirements. One binary, one SQLite file, served on the local network.
 
-The backend is TypeScript. `legacy/` holds the old Python backend as a reference for business
-rules and as the source of the one-time import. It is frozen and is deleted at cutover. Do not
-add features to it. Extensions and Onshape are postponed until the extension system is redesigned.
+The backend is TypeScript. The Python 1.x backend is gone from the tree (git history before the
+cutover commit has it). `src/import` reads 1.x databases once. Extensions and Onshape are
+postponed until the extension system is redesigned.
 
 One instance is one organization. Risks, requirements, issues, procedures, executions and datasets
 each belong to a required project. Parts, stock, purchasing, users and settings are
@@ -16,7 +16,6 @@ organization-wide.
 - `packages/shared` — zod schemas, enums, operation contracts, `Qty`, the typed client. The only home for API types.
 - `server` — Bun + Hono. `src/db/schema/<area>.ts` (tables), `src/services` (business rules), `src/ops` (handlers bound to contracts), `src/auth`, `src/mcp`, `src/import` (legacy import), `src/supervisor`.
 - `frontend` — SvelteKit SPA (Svelte 5 runes, shadcn-svelte, Tailwind 4). Builds to `frontend/build`, which the server embeds.
-- `legacy` — the Python backend. Run it with `uv` from inside `legacy/`.
 
 ## Commands
 
@@ -64,9 +63,8 @@ Handlers are thin. Business rules live in `server/src/services`.
 - Never run the server against the default data folder. It holds the user's real database. Set `OPAL_DATA_DIR` to a temp folder.
 - `bun test`. Each test opens `openDb(':memory:')` and calls the app with `app.request()`. No server process.
 - Name tests after the business rule they check.
-- `legacy/tests` is the list of rules to port. It does not test the new server.
 - Every operation needs at least one HTTP-level test (`test:ops` checks it).
-- Real data for screen checks: copy `notes/fixtures/legacy-seed.db` (local) or `server/assets/demo-seed.db` into a temp `OPAL_DATA_DIR` as `opal.db`. The first start imports it. Sign in as `build` / `kestrel-demo`.
+- Real data for screen checks: copy `server/assets/demo-seed.db` (a 1.x demo database) into a temp `OPAL_DATA_DIR` as `opal.db`. The first start imports it. Sign in as `build` / `kestrel-demo`.
 
 ## UI
 

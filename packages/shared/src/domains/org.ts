@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { zTimeDisplay } from './auth.ts';
 
 /** A boolean that arrives as 'true' or 'false' in a query string. */
 const zQueryBool = z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]);
@@ -222,6 +223,16 @@ const users = {
 		summary: 'Whether the signed-in user still owes a display name or the orientation.',
 		input: zEmpty,
 		output: zProfileState,
+		access: 'signed-in',
+		mcp: false
+	}),
+	setTimeDisplay: op({
+		name: 'users.setTimeDisplay',
+		method: 'PUT',
+		path: '/users/me/time-display',
+		summary: 'Choose whether the signed-in user sees times in the browser zone or in UTC.',
+		input: z.object({ timeDisplay: zTimeDisplay }),
+		output: z.object({ timeDisplay: zTimeDisplay }),
 		access: 'signed-in',
 		mcp: false
 	}),

@@ -292,6 +292,11 @@ function me(ctx: Ctx): number {
 
 export const myProfileState = (ctx: Ctx) => profileState(ctx.db, me(ctx));
 
+export function setTimeDisplay(ctx: Ctx, timeDisplay: 'local' | 'utc') {
+	upsertProfile(ctx, me(ctx), { timeDisplay });
+	return { timeDisplay };
+}
+
 export function setupProfile(ctx: Ctx, name: string): OrgUser {
 	const id = me(ctx);
 	const target = row(ctx.db, id);

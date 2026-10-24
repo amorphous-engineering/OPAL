@@ -9,7 +9,8 @@ import { openSchemaDb } from '../src/db/dev-schema.ts';
 import { buildDemoContent } from '../src/services/reports/demo.ts';
 import { buildLegacyFixture, PNG } from './fixtures/legacy-data.ts';
 
-const SEED = join(import.meta.dir, '../../notes/fixtures/legacy-seed.db');
+// The committed 1.x demo database: the import test runs in CI too.
+const SEED = join(import.meta.dir, '../assets/demo-seed.db');
 const dirs: string[] = [];
 const tmp = () => {
 	const d = mkdtempSync(join(tmpdir(), 'opal-import-'));

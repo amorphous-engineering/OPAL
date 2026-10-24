@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { op, zId, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
 
+/** How the UI shows times. Storage is always UTC. */
+export const zTimeDisplay = z.enum(['local', 'utc']);
+export type TimeDisplay = z.infer<typeof zTimeDisplay>;
+
 export const zAuthUser = z.object({
 	id: z.number().int(),
 	username: z.string(),
@@ -9,7 +13,8 @@ export const zAuthUser = z.object({
 	email: z.string().nullable(),
 	isAdmin: z.boolean(),
 	needsProfileSetup: z.boolean(),
-	needsOnboarding: z.boolean()
+	needsOnboarding: z.boolean(),
+	timeDisplay: zTimeDisplay
 });
 export type AuthUser = z.infer<typeof zAuthUser>;
 

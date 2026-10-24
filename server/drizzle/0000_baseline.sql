@@ -223,6 +223,7 @@ CREATE TABLE `user_profile` (
 	`avatar_mime` text,
 	`avatar_source` text,
 	`avatar_updated_at` text,
+	`time_display` text DEFAULT 'local' NOT NULL,
 	`needs_profile_setup` integer DEFAULT false NOT NULL,
 	`needs_onboarding` integer DEFAULT true NOT NULL,
 	`created_at` text NOT NULL,

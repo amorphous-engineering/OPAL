@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fromInput, toInput } from '#lib/format.js';
 	// Work order facts that can change after the cut: number, schedule, priority.
 	import { toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -17,13 +18,8 @@
 		onclose
 	}: { store: ExecutionStore; facts: InstanceFacts; onclose: () => void } = $props();
 
-	// <input type="datetime-local"> wants local "YYYY-MM-DDTHH:mm".
-	const local = (iso: string | null) => {
-		if (!iso) return '';
-		const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
-		const p = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-	};
+	// <input type="datetime-local"> holds the chosen zone's "YYYY-MM-DDTHH:mm".
+	const local = toInput;
 
 	// The form edits a snapshot of the facts taken when the dialog opens.
 	// svelte-ignore state_referenced_locally
@@ -47,8 +43,8 @@
 			await store.update({
 				woNumber: workOrder.trim() || undefined,
 				projectId: projectId !== facts.project.id ? projectId : undefined,
-				scheduledStartAt: scheduled ? new Date(scheduled).toISOString() : null,
-				targetCompletionAt: target ? new Date(target).toISOString() : null,
+				scheduledStartAt: scheduled ? (fromInput(scheduled) ?? null) : null,
+				targetCompletionAt: target ? (fromInput(target) ?? null) : null,
 				priority
 			});
 			onclose();

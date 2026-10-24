@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { stateLabel } from '#lib/format.js';
+	import { datetimeSec, stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import ReportChart from '#lib/components/executions/ReportChart.svelte';
 	import { contracts, opUrl } from '@opal/shared';
@@ -8,11 +8,8 @@
 	let { data }: PageProps = $props();
 	const r = $derived(data.report);
 
-	/** ISO 8601, UTC, to the second. */
-	const ts = (v: string | null | undefined) =>
-		v
-			? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : `${v}Z`).toISOString().slice(0, 19) + 'Z'
-			: '—';
+	/** To the second, in the user's chosen zone (zone named). */
+	const ts = (v: string | null | undefined) => datetimeSec(v);
 	const dash = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
 </script>

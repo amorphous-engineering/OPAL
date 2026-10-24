@@ -78,7 +78,6 @@ opal.project.yaml
 notes/
 
 # Built web client (frontend/ → pnpm build)
-legacy/src/opal/web_client/
 frontend/build/
 
 # Node

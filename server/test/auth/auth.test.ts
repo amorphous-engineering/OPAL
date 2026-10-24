@@ -46,7 +46,9 @@ describe('auth', () => {
 		const login = await call('POST', '/auth/login', { username: 'abby', password: ADMIN.password });
 		expect(login.status).toBe(200);
 		const me = await call('GET', '/auth/me', undefined, { cookie: cookieOf(login) });
-		expect((await me.json()).username).toBe('abby');
+		const body = await me.json();
+		expect(body.username).toBe('abby');
+		expect(body.timeDisplay).toBe('local');
 		expect((await call('GET', '/auth/me')).status).toBe(401);
 	});
 

@@ -1,1 +1,0 @@
-"""OPAL integrations package."""

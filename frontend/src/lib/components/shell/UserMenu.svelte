@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { mode, setMode } from 'mode-watcher';
 	import { ACCOUNT_GROUP, NAV } from '#lib/nav.js';
-	import { Avatar } from '#lib/components/opal/index.js';
+	import { Avatar, toastError } from '#lib/components/opal/index.js';
 	import { session } from '#lib/session.svelte.js';
 
 	async function signOut() {
@@ -42,6 +42,15 @@
 		{/each}
 		<DropdownMenu.Item onSelect={() => setMode(mode.current === 'dark' ? 'light' : 'dark')}>
 			{mode.current === 'dark' ? 'Light theme' : 'Dark theme'}
+		</DropdownMenu.Item>
+		<DropdownMenu.Item
+			closeOnSelect={false}
+			onSelect={() =>
+				session
+					.setTimeDisplay(session.user?.time_display === 'utc' ? 'local' : 'utc')
+					.catch((e) => toastError(e, 'Time display not saved'))}
+		>
+			Time: {session.user?.time_display === 'utc' ? 'UTC' : 'Local'}
 		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item variant="destructive" onSelect={signOut}>Sign out</DropdownMenu.Item>

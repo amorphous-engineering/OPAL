@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9dd13f23-5ebb-4d52-99fe-19e2625b5417",
+  "id": "b5fbd2fb-1d09-43a9-8bf2-f661e02361f5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "api_token": {
@@ -1491,6 +1491,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "time_display": {
+          "name": "time_display",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'local'"
         },
         "needs_profile_setup": {
           "name": "needs_profile_setup",

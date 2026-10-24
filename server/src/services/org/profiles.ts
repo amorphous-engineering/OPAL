@@ -17,6 +17,10 @@ export function upsertProfile(ctx: Ctx, userId: number, patch: Patch) {
 	return update(ctx, userProfile, row.id, patch);
 }
 
+export function timeDisplayOf(db: Db, userId: number): 'local' | 'utc' {
+	return getProfile(db, userId)?.timeDisplay ?? 'local';
+}
+
 /** Flags that drive the first-run screens. A user without a row still owes the orientation. */
 export function profileState(db: Db, userId: number) {
 	const p = getProfile(db, userId);

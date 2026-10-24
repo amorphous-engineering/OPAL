@@ -20,7 +20,7 @@
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { opal } from '#lib/api.js';
-	import { iso } from '#lib/format.js';
+	import { datetimeSec } from '#lib/format.js';
 	import { session } from '#lib/session.svelte.js';
 	import LintEditor from '#lib/components/requirements/LintEditor.svelte';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
@@ -79,7 +79,7 @@
 		save({ [field]: value.trim() === '' ? null : value } as Patch);
 	}
 
-	const nowIso = () => iso(new Date()).slice(0, 19) + 'Z';
+	const nowIso = () => datetimeSec(new Date());
 	const who = () => session.user?.name ?? 'unknown user';
 
 	// ---- lifecycle actions ----

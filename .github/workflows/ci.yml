@@ -47,29 +47,3 @@ jobs:
           for i in $(seq 1 30); do curl -sf localhost:8080/api/health && break; sleep 1; done
           curl -sf localhost:8080/api/health
           curl -sf localhost:8080/ | grep -q '<html'
-
-  legacy-python:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: legacy
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@v4
-
-      - name: Install dependencies
-        run: uv sync --extra dev
-
-      - name: Lint
-        run: uv run ruff check src/
-
-      - name: Format check
-        run: uv run ruff format --check src/
-
-      - name: Test
-        run: uv run pytest

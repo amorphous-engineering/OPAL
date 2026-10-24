@@ -1,13 +1,16 @@
 <script lang="ts">
-	// The bottom status line: server state, the live database file, and UTC time.
+	// The bottom status line: server state, the live database file, and the clock in the user's
+	// chosen zone (local or UTC), labelled.
+	import { clock, iso, zoneLabel } from '#lib/format.js';
 	// `online` comes from the presence heartbeat in the app layout.
 	let { dbPath, online }: { dbPath: string; online: boolean } = $props();
 
-	const utc = () => `${new Date().toISOString().replace('T', ' ').slice(0, 19)}Z`;
-	let now = $state(utc());
+	let at = $state(new Date());
+	const now = $derived(clock(at));
+	const zone = $derived(zoneLabel(at));
 
 	$effect(() => {
-		const timer = setInterval(() => (now = utc()), 1000);
+		const timer = setInterval(() => (at = new Date()), 1000);
 		return () => clearInterval(timer);
 	});
 </script>
@@ -22,5 +25,5 @@
 	<span class="min-w-0 flex-1 truncate text-left [direction:rtl]" title={dbPath}>
 		<bdi>DB: {dbPath}</bdi>
 	</span>
-	<time class="whitespace-nowrap" datetime={now}>{now}</time>
+	<time class="whitespace-nowrap" datetime={iso(at)} title={iso(at)}>{now} {zone}</time>
 </footer>

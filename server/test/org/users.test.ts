@@ -246,6 +246,20 @@ describe('onboarding', () => {
 		expect((await call(bob, 'GET', '/welcome')).json.mode).toBe('tutorial');
 	});
 
+	test('each user chooses local or UTC time display, and cannot change another user', async () => {
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		const amy = makeUser('amy', { admin: true });
+		expect((await call(bob, 'PUT', '/users/me/time-display', { timeDisplay: 'utc' })).json).toEqual({ timeDisplay: 'utc' });
+		expect((await call(bob, 'PUT', '/users/me/time-display', { timeDisplay: 'moon' })).status).toBe(422);
+		expect((await call(null, 'PUT', '/users/me/time-display', { timeDisplay: 'utc' })).status).toBe(401);
+		// The operation takes no user id: an admin changes only their own choice.
+		expect((await call(amy, 'PUT', '/users/me/time-display', { timeDisplay: 'utc' })).status).toBe(200);
+		expect((await call(amy, 'PUT', '/users/me/time-display', { timeDisplay: 'local' })).status).toBe(200);
+		expect((await call(bob, 'GET', '/auth/me')).json.timeDisplay).toBe('utc');
+		expect((await call(amy, 'GET', '/auth/me')).json.timeDisplay).toBe('local');
+	});
+
 	test('setting up a profile sets the display name', async () => {
 		const { call, makeUser } = await setup();
 		const bob = makeUser('bob');

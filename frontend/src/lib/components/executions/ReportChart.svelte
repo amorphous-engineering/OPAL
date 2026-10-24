@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { datetimeSec } from '#lib/format.js';
 	// A plain SVG line chart for the printed report: one numeric field over time.
 	let {
 		points,
@@ -28,7 +29,7 @@
 	const x = (t: number) => pad.l + (t1 === t0 ? 0.5 : (t - t0) / (t1 - t0)) * (W - pad.l - pad.r);
 	const y = (v: number) => pad.t + (1 - (v - lo) / span) * (H - pad.t - pad.b);
 	const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-	const iso = (t: number) => new Date(t).toISOString().slice(0, 19).replace('T', ' ') + 'Z';
+	const iso = (t: number) => datetimeSec(new Date(t));
 </script>
 
 {#if data.length}
