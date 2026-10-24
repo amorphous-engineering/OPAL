@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { PageHeader, Section, toastError, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -8,18 +8,42 @@
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-	import type { DatasetSummary, SchemaField } from '#lib/components/datasets/types.js';
+	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte'; // added by projects
+	import type { SchemaField } from '#lib/components/datasets/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	type Row = { name: string; type: SchemaField['type']; unit: string; chart: boolean };
-	const blank = (): Row => ({ name: '', type: 'number', unit: '', chart: true });
+	type Row = {
+		name: string;
+		type: SchemaField['type'];
+		unit: string;
+		chart: boolean;
+		required: boolean;
+		min: string;
+		max: string;
+	};
+	const blank = (): Row => ({
+		name: '',
+		type: 'number',
+		unit: '',
+		chart: true,
+		required: false,
+		min: '',
+		max: ''
+	});
 
 	let name = $state('');
 	let description = $state('');
 	// svelte-ignore state_referenced_locally
 	let procedure = $state(data.procedure);
+	// added by projects: the project comes from the page it was opened from, else from the procedure.
+	// svelte-ignore state_referenced_locally
+	let projectId = $state(data.projectId);
+	$effect(() => {
+		const linked = data.procedures.find((p) => String(p.id) === procedure)?.projectId;
+		if (linked && !data.projectId) projectId = linked;
+	});
 	let rows = $state<Row[]>([blank()]);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -33,7 +57,10 @@
 				name: r.name.trim(),
 				type: r.type,
 				...(r.unit.trim() ? { unit: r.unit.trim() } : {}),
-				...(r.type === 'number' && r.chart ? { chart: true } : {})
+				...(r.type === 'number' && r.chart ? { chart: true } : {}),
+				...(r.required ? { required: true } : {}),
+				...(r.type === 'number' && r.min.trim() !== '' ? { min: Number(r.min) } : {}),
+				...(r.type === 'number' && r.max.trim() !== '' ? { max: Number(r.max) } : {})
 			}));
 		if (fields.length === 0) return (error = 'At least one field is required');
 		const names = fields.map((f) => f.name);
@@ -41,10 +68,11 @@
 		if (dup) return (error = `Field name '${dup}' is used twice`);
 		busy = true;
 		try {
-			const created = await api.post<DatasetSummary>('/datasets', {
+			const created = await opal.datasets.create({
+				projectId, // added by projects
 				name: name.trim(),
 				description: description.trim() || null,
-				procedure_id: procedure ? Number(procedure) : null,
+				procedureId: procedure ? Number(procedure) : null,
 				schema: { fields }
 			});
 			await goto(`/datasets/${created.id}`);
@@ -62,9 +90,13 @@
 	crumbs={[{ label: 'Datasets', href: '/datasets' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-3xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
+<form class="grid max-w-4xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
 	<Section title="Dataset">
 		<div class="grid grid-cols-1 gap-3 p-3">
+			<div class="grid grid-cols-1 gap-1.5">
+				<Label for="ds-project">Project</Label>
+				<ProjectSelect id="ds-project" bind:value={projectId} />
+			</div>
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ds-name">Name</Label>
 				<Input id="ds-name" bind:value={name} required maxlength={255} />
@@ -98,7 +130,7 @@
 		<table class="w-full border-collapse text-sm">
 			<thead>
 				<tr class="border-b border-border bg-muted/60">
-					{#each ['Name', 'Type', 'Unit', 'Chart', ''] as h (h)}
+					{#each ['Name', 'Type', 'Unit', 'Min', 'Max', 'Required', 'Chart', ''] as h (h)}
 						<th
 							class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase"
 							>{h}</th
@@ -110,10 +142,10 @@
 				{#each rows as row, i (i)}
 					<tr class="border-b border-border last:border-b-0">
 						<td class="px-3 py-1.5"
-							><Input bind:value={row.name} aria-label={`Field ${i + 1} name`} /></td
+							><Input bind:value={row.name} aria-label={`Field ${i + 1} name`} class="min-w-40" /></td
 						>
 						<td class="px-3 py-1.5">
-							<NativeSelect bind:value={row.type} aria-label={`Field ${i + 1} type`}>
+							<NativeSelect bind:value={row.type} aria-label={`Field ${i + 1} type`} class="min-w-28">
 								<NativeSelectOption value="number">Number</NativeSelectOption>
 								<NativeSelectOption value="text">Text</NativeSelectOption>
 								<NativeSelectOption value="boolean">Boolean</NativeSelectOption>
@@ -123,6 +155,19 @@
 						<td class="px-3 py-1.5"
 							><Input bind:value={row.unit} aria-label={`Field ${i + 1} unit`} class="w-28" /></td
 						>
+						<td class="px-3 py-1.5">
+							{#if row.type === 'number'}
+								<Input bind:value={row.min} type="number" step="any" aria-label={`Field ${i + 1} minimum`} class="w-24" />
+							{:else}<span class="text-muted-foreground">—</span>{/if}
+						</td>
+						<td class="px-3 py-1.5">
+							{#if row.type === 'number'}
+								<Input bind:value={row.max} type="number" step="any" aria-label={`Field ${i + 1} maximum`} class="w-24" />
+							{:else}<span class="text-muted-foreground">—</span>{/if}
+						</td>
+						<td class="px-3 py-1.5">
+							<Checkbox bind:checked={row.required} aria-label={`Field ${i + 1} required`} />
+						</td>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<Checkbox bind:checked={row.chart} aria-label={`Field ${i + 1} charted`} />
@@ -145,7 +190,7 @@
 
 	<ErrorBanner message={error} />
 	<div class="flex gap-2">
-		<Button type="submit" disabled={busy || !name.trim()}>CREATE</Button>
+		<Button type="submit" disabled={busy || !name.trim() || !projectId}>CREATE</Button>
 		<Button variant="outline" href="/datasets">CANCEL</Button>
 	</div>
 </form>

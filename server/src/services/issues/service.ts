@@ -25,6 +25,7 @@ import { actorUserId, type Ctx } from '../../context.ts';
 import { issue, issueComment, issueLink, part, risk, user } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { nextDesignator } from '../designators.ts';
+import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
 import { holdsGate } from '../org/gates.ts';
 import { hasBlocker } from './holds.ts';
 import { excerpt, issueHooks, notify } from './hooks.ts';
@@ -106,6 +107,7 @@ function linksFor(ctx: Ctx, issueIds: number[]): Map<number, IssueLink[]> {
 }
 
 function hydrate(ctx: Ctx, rows: IssueRow[]): Issue[] {
+	const projects = projectRefs(ctx.db, rows.map((r) => r.projectId)); // added by projects
 	const userIds = new Set<number>();
 	for (const r of rows) {
 		for (const u of [
@@ -141,6 +143,9 @@ function hydrate(ctx: Ctx, rows: IssueRow[]): Issue[] {
 	return rows.map((r) => ({
 		id: r.id,
 		issueNumber: r.issueNumber,
+		projectId: r.projectId, // added by projects
+		projectCode: projects.get(r.projectId)?.code ?? '', // added by projects
+		projectName: projects.get(r.projectId)?.name ?? '', // added by projects
 		title: r.title,
 		description: r.description,
 		issueType: r.issueType,
@@ -228,6 +233,7 @@ export function list(
 		cursor?: string;
 		limit: number;
 		q?: string;
+		projectId?: number; // added by projects
 		issueType?: IssueRow['issueType'];
 		status?: IssueRow['status'];
 		dispState?: Parameters<typeof dispStateSql>[0];
@@ -250,6 +256,7 @@ export function list(
 	const like_ = input.q ? `%${input.q}%` : undefined;
 	const where = and(
 		like_ ? or(like(issue.title, like_), like(issue.issueNumber, like_)) : undefined,
+		input.projectId ? eq(issue.projectId, input.projectId) : undefined, // added by projects
 		input.assignedToId ? eq(issue.assignedToId, input.assignedToId) : undefined,
 		input.issueType ? eq(issue.issueType, input.issueType) : undefined,
 		input.status ? eq(issue.status, input.status) : undefined,
@@ -367,6 +374,7 @@ const norm = (v: string | null | undefined) => (v == null || v.trim() === '' ? n
 // ---- create ----
 
 export function create(ctx: Ctx, input: z.output<typeof zIssueCreate>): Issue {
+	requireActiveProject(ctx.db, input.projectId); // added by projects
 	checkAssignee(ctx, input.assignedToId);
 	checkExecution(ctx, input.executionId);
 	for (const l of input.links) checkLinkTarget(ctx, l.kind, l.targetId);
@@ -387,6 +395,7 @@ export function create(ctx: Ctx, input: z.output<typeof zIssueCreate>): Issue {
 		() => {
 			created = insert(ctx, issue, {
 				issueNumber: nextDesignator(ctx, 'IT'),
+				projectId: input.projectId, // added by projects
 				title: input.title,
 				description: norm(input.description),
 				issueType: input.issueType,
@@ -456,6 +465,10 @@ export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Iss
 	const patch: Partial<typeof issue.$inferInsert> = {};
 
 	if (input.title !== undefined) patch.title = input.title;
+	if (input.projectId !== undefined && input.projectId !== before.projectId) { // added by projects
+		requireActiveProject(ctx.db, input.projectId);
+		patch.projectId = input.projectId;
+	}
 	if (input.issueType !== undefined) patch.issueType = input.issueType;
 	if (input.priority !== undefined) patch.priority = input.priority;
 	for (const f of TEXT_FIELDS) if (input[f] !== undefined) patch[f] = norm(input[f]);

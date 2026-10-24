@@ -10,14 +10,14 @@
 	let { data, onchange }: { data: TemplateData; onchange: () => void | Promise<void> } = $props();
 
 	const p = $derived(data.procedure);
-	const showOutputs = $derived(p.procedure_type === 'build' || data.outputs.length > 0);
+	const showOutputs = $derived(p.procedureType === 'build' || data.outputs.length > 0);
 </script>
 
 <div class="grid grid-cols-1 gap-3">
 	<Section title="Details">
 		<DetailTable>
-			<DetailRow label="Created"><Timestamp value={p.created_at} /></DetailRow>
-			<DetailRow label="Updated"><Timestamp value={p.updated_at} /></DetailRow>
+			<DetailRow label="Created"><Timestamp value={p.createdAt} /></DetailRow>
+			<DetailRow label="Updated"><Timestamp value={p.updatedAt} /></DetailRow>
 			<DetailRow label="Description">
 				{#if p.description}
 					<Prose source={p.description} />
@@ -34,6 +34,6 @@
 	<VersionsSection
 		procedureId={p.id}
 		versions={data.versions}
-		currentVersionId={p.current_version_id}
+		currentVersionId={p.currentVersionId}
 	/>
 </div>

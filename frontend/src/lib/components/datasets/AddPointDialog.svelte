@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { toastError, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import type { PointValues } from '@opal/shared';
 	import type { SchemaField } from './types.js';
 
 	let {
@@ -20,6 +21,7 @@
 		onadded: () => void | Promise<void>;
 	} = $props();
 
+	let recordedAt = $state('');
 	let inputs = $state<Record<string, string>>({});
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -27,13 +29,14 @@
 	$effect(() => {
 		if (open) {
 			inputs = {};
+			recordedAt = '';
 			error = null;
 		}
 	});
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		const values: Record<string, unknown> = {};
+		const values: PointValues = {};
 		for (const f of fields) {
 			const raw = inputs[f.name];
 			if (raw === undefined || raw === '') continue;
@@ -44,7 +47,12 @@
 		busy = true;
 		error = null;
 		try {
-			await api.post(`/datasets/${datasetId}/points`, { values });
+			await opal.datasets.points.add({
+				id: datasetId,
+				values,
+				// A datetime-local value is local time; send it as an ISO instant.
+				recordedAt: recordedAt ? new Date(recordedAt).toISOString() : undefined
+			});
 			open = false;
 			await onadded();
 		} catch (err) {
@@ -60,6 +68,10 @@
 	<Dialog.Content class="max-w-md">
 		<Dialog.Header><Dialog.Title>Add data point</Dialog.Title></Dialog.Header>
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<div class="grid grid-cols-1 gap-1.5">
+				<Label for="pt-recorded-at">Recorded</Label>
+				<Input id="pt-recorded-at" type="datetime-local" bind:value={recordedAt} />
+			</div>
 			{#each fields as f (f.name)}
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for={`pt-${f.name}`}>{f.name}{f.unit ? ` (${f.unit})` : ''}</Label>

@@ -2,7 +2,7 @@
 	// Shall-statement editor: lint-as-you-type. An overlay under the transparent
 	// textarea draws the underlines; the findings list below says what each is.
 	import { onDestroy } from 'svelte';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { cn } from '#lib/utils.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { lintSegments, FIELD_RULES } from './lint.js';
@@ -43,7 +43,7 @@
 		const mine = ++seq;
 		timer = setTimeout(async () => {
 			try {
-				const r = await api.post<{ findings: Finding[] }>('/requirements/lint', {
+				const r = await opal.requirements.lint({
 					statement: text
 				});
 				if (mine === seq) live = r.findings;

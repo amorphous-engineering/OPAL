@@ -7,16 +7,19 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte'; // added by projects
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import { partLabel } from '#lib/components/parts/types.js';
 	import LintField from '#lib/components/risks/LintField.svelte';
 	import Score from '#lib/components/risks/Score.svelte';
-	import { IMPACT, PROBABILITY, severityOf, type Risk } from '#lib/components/risks/types.js';
-	import { api } from '#lib/api.js';
+	import { IMPACT, PROBABILITY, severityOf } from '#lib/components/risks/types.js';
+	import { opal } from '#lib/api.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
+	// svelte-ignore state_referenced_locally
+	let projectId = $state(data.projectId); // added by projects
 	let title = $state('');
 	let condition = $state('');
 	let departure = $state('');
@@ -45,18 +48,19 @@
 		busy = true;
 		error = null;
 		try {
-			const risk = await api.post<Risk>('/risks', {
+			const risk = await opal.risks.create({
+				projectId, // added by projects
 				title: title.trim(),
 				condition: condition.trim() || null,
 				departure: departure.trim() || null,
-				asset_part_id: asset?.id ?? null,
-				asset_text: asset ? null : assetText.trim() || null,
+				assetPartId: asset?.id ?? null,
+				assetText: asset ? null : assetText.trim() || null,
 				consequence: consequence.trim() || null,
-				owner_id: ownerId ? Number(ownerId) : null,
+				ownerId: ownerId ? Number(ownerId) : null,
 				probability: Number(probability),
 				impact: Number(impact),
-				residual_probability: residualProbability ? Number(residualProbability) : null,
-				residual_impact: residualImpact ? Number(residualImpact) : null,
+				residualProbability: residualProbability ? Number(residualProbability) : null,
+				residualImpact: residualImpact ? Number(residualImpact) : null,
 				description: description.trim() || null
 			});
 			await goto(`/risks/${risk.id}`);
@@ -80,6 +84,11 @@
 
 <form class="grid max-w-3xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
 	<ErrorBanner message={error} />
+
+	<div class="grid grid-cols-1 gap-1.5">
+		<Label for="project">Project</Label>
+		<ProjectSelect id="project" bind:value={projectId} />
+	</div>
 
 	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="title">Title</Label>
@@ -223,7 +232,7 @@
 	</div>
 
 	<div class="flex gap-2">
-		<Button type="submit" disabled={busy || !title.trim()}>CREATE</Button>
+		<Button type="submit" disabled={busy || !title.trim() || !projectId}>CREATE</Button>
 		<Button variant="outline" href="/risks">CANCEL</Button>
 	</div>
 </form>

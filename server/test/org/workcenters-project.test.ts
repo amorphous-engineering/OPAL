@@ -66,26 +66,26 @@ const config = (over: Record<string, unknown> = {}) => ({
 	...over
 });
 
-describe('project configuration', () => {
+describe('organization settings', () => {
 	test('it is absent before setup, then created once with trimmed and de-duplicated categories', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		expect((await call(admin, 'GET', '/project/config')).status).toBe(404);
-		const made = await call(admin, 'POST', '/project/config', config());
+		expect((await call(admin, 'GET', '/settings/organization')).status).toBe(404);
+		const made = await call(admin, 'POST', '/settings/organization', config());
 		expect(made.status).toBe(201);
 		expect(made.json.categories).toEqual(['Avionics', 'Structures']);
-		expect((await call(admin, 'GET', '/project/config')).json.name).toBe('Bento');
-		expect((await call(admin, 'POST', '/project/config', config())).status).toBe(400);
+		expect((await call(admin, 'GET', '/settings/organization')).json.name).toBe('Bento');
+		expect((await call(admin, 'POST', '/settings/organization', config())).status).toBe(400);
 	});
 
 	test('tier semantics default from the level and an update that omits them keeps the stored values', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		const made = (await call(admin, 'POST', '/project/config', config())).json;
+		const made = (await call(admin, 'POST', '/settings/organization', config())).json;
 		expect(made.tiers[0]).toMatchObject({ defaultTracking: 'serialized', requireLot: true, autoSerial: true });
 		expect(made.tiers[1]).toMatchObject({ defaultTracking: 'serialized', requireLot: true, autoSerial: false });
 		const edited = config({ tiers: [{ level: 1, name: 'Flight', code: 'F', requireLot: false }, { level: 2, name: 'Ground', code: 'G' }] });
-		const upd = (await call(admin, 'PUT', '/project/config', edited)).json;
+		const upd = (await call(admin, 'PUT', '/settings/organization', edited)).json;
 		expect(upd.tiers[0]).toMatchObject({ requireLot: false, autoSerial: true });
 	});
 
@@ -99,7 +99,7 @@ describe('project configuration', () => {
 	])('invalid project input %#is refused', async (over, fragment) => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		const r = await call(admin, 'POST', '/project/config', config(over));
+		const r = await call(admin, 'POST', '/settings/organization', config(over));
 		expect(r.status).toBe(422);
 		expect(r.text).toContain(fragment);
 	});
@@ -109,7 +109,7 @@ describe('project configuration', () => {
 		async (format) => {
 			const { call, makeUser } = await setup();
 			const admin = makeUser('root', { admin: true });
-			const r = await call(admin, 'POST', '/project/config', config({ partNumbering: { prefix: 'BP', format } }));
+			const r = await call(admin, 'POST', '/settings/organization', config({ partNumbering: { prefix: 'BP', format } }));
 			expect(r.status).toBe(422);
 		}
 	);
@@ -117,43 +117,43 @@ describe('project configuration', () => {
 	test('a part number format may embed a literal separator', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		const r = await call(admin, 'POST', '/project/config', config({ partNumbering: { prefix: 'BP', format: '{prefix}.{tier_code}.{sequence}' } }));
+		const r = await call(admin, 'POST', '/settings/organization', config({ partNumbering: { prefix: 'BP', format: '{prefix}.{tier_code}.{sequence}' } }));
 		expect(r.status).toBe(201);
 	});
 
 	test('custom fields round trip and survive an update that omits them', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		const made = await call(admin, 'POST', '/project/config', config({ customFields: { customer: 'ACME', rev: 'B' } }));
+		const made = await call(admin, 'POST', '/settings/organization', config({ customFields: { customer: 'ACME', rev: 'B' } }));
 		expect(made.json.customFields).toEqual({ customer: 'ACME', rev: 'B' });
-		expect((await call(admin, 'PUT', '/project/config', config({ name: 'Renamed' }))).json.customFields).toEqual({ customer: 'ACME', rev: 'B' });
-		expect((await call(admin, 'PUT', '/project/config', config({ customFields: {} }))).json.customFields).toEqual({});
+		expect((await call(admin, 'PUT', '/settings/organization', config({ name: 'Renamed' }))).json.customFields).toEqual({ customer: 'ACME', rev: 'B' });
+		expect((await call(admin, 'PUT', '/settings/organization', config({ customFields: {} }))).json.customFields).toEqual({});
 	});
 
 	test('project writes are admin only', async () => {
 		const { call, makeUser } = await setup();
 		const bob = makeUser('bob');
-		expect((await call(bob, 'POST', '/project/config', config())).status).toBe(403);
-		expect((await call(bob, 'PUT', '/project/config', config())).status).toBe(403);
+		expect((await call(bob, 'POST', '/settings/organization', config())).status).toBe(403);
+		expect((await call(bob, 'PUT', '/settings/organization', config())).status).toBe(403);
 	});
 
 	test('removing a tier that parts use is refused and nothing is applied', async () => {
 		const { db, call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		await call(admin, 'POST', '/project/config', config());
+		await call(admin, 'POST', '/settings/organization', config());
 		const ts = new Date().toISOString();
 		db.insert(part).values({ internalPn: 'BP-G-0001', name: 'Bracket', unitOfMeasure: 'ea', trackingType: 'bulk', procurement: 'make', tier: 2, state: 'draft', createdAt: ts, updatedAt: ts } as never).run();
-		const r = await call(admin, 'PUT', '/project/config', config({ tiers: [{ level: 1, name: 'Flight', code: 'F' }] }));
+		const r = await call(admin, 'PUT', '/settings/organization', config({ tiers: [{ level: 1, name: 'Flight', code: 'F' }] }));
 		expect(r.status).toBe(409);
 		expect(r.json.message).toContain('Ground');
-		expect((await call(admin, 'GET', '/project/config')).json.tiers).toHaveLength(2);
+		expect((await call(admin, 'GET', '/settings/organization')).json.tiers).toHaveLength(2);
 	});
 
 	test('removing an unused tier keeps the other levels', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		await call(admin, 'POST', '/project/config', config());
-		const r = await call(admin, 'PUT', '/project/config', config({ tiers: [{ level: 2, name: 'Ground', code: 'G' }] }));
+		await call(admin, 'POST', '/settings/organization', config());
+		const r = await call(admin, 'PUT', '/settings/organization', config({ tiers: [{ level: 2, name: 'Ground', code: 'G' }] }));
 		expect(r.json.tiers.map((t: any) => t.level)).toEqual([2]);
 	});
 
@@ -172,11 +172,11 @@ describe('project configuration', () => {
 			}),
 			createdAt: ts, updatedAt: ts
 		}).run();
-		const got = (await call(admin, 'GET', '/project/config')).json;
+		const got = (await call(admin, 'GET', '/settings/organization')).json;
 		expect(got.partNumbering).toEqual({ prefix: 'X', separator: '_', sequenceDigits: 3, format: '{prefix}{sep}{sequence}' });
 		expect(got.tiers[0]).toMatchObject({ defaultTracking: 'bulk', requireLot: false, autoSerial: false });
 		expect(got.customFields).toEqual({ a: 1 });
-		await call(admin, 'PUT', '/project/config', config({ tiers: [{ level: 3, name: 'Loose', code: 'L' }] }));
+		await call(admin, 'PUT', '/settings/organization', config({ tiers: [{ level: 3, name: 'Loose', code: 'L' }] }));
 		const raw = JSON.parse(db.select().from(setting).all().find((s) => s.key === 'project_config')!.value!);
 		expect(raw.onshape).toEqual({ documents: [{ name: 'd' }] });
 		expect(raw.part_numbering).toBeUndefined();
@@ -185,10 +185,10 @@ describe('project configuration', () => {
 	test('the preview renders a part number for a tier and refuses an unknown tier', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
-		await call(admin, 'POST', '/project/config', config());
-		const r = await call(admin, 'POST', '/project/preview-part-number', { tierLevel: 2, sequence: 7 });
+		await call(admin, 'POST', '/settings/organization', config());
+		const r = await call(admin, 'POST', '/settings/preview-part-number', { tierLevel: 2, sequence: 7 });
 		expect(r.json).toEqual({ partNumber: 'BP-G-0007', tierName: 'Ground' });
-		expect((await call(admin, 'POST', '/project/preview-part-number', { tierLevel: 9 })).status).toBe(400);
+		expect((await call(admin, 'POST', '/settings/preview-part-number', { tierLevel: 9 })).status).toBe(400);
 	});
 });
 
@@ -204,7 +204,7 @@ describe('part numbers', () => {
 
 	test('with a project the number follows the scheme', async () => {
 		const { db, call, makeUser } = await setup();
-		await call(makeUser('root', { admin: true }), 'POST', '/project/config', config());
+		await call(makeUser('root', { admin: true }), 'POST', '/settings/organization', config());
 		expect(nextPartNumber(ctxOf(db), 1)).toBe('BP-F-0001');
 		expect(nextPartNumber(ctxOf(db), 2)).toBe('BP-G-0001');
 		expect(() => nextPartNumber(ctxOf(db), 9)).toThrow('Unknown tier level: 9');
@@ -213,8 +213,8 @@ describe('part numbers', () => {
 	test('the preview does not use the number up', async () => {
 		const { db, call, makeUser } = await setup();
 		const bob = makeUser('bob');
-		const first = (await call(bob, 'GET', '/project/next-part-number?tier=1')).json;
-		const second = (await call(bob, 'GET', '/project/next-part-number?tier=1')).json;
+		const first = (await call(bob, 'GET', '/settings/next-part-number?tier=1')).json;
+		const second = (await call(bob, 'GET', '/settings/next-part-number?tier=1')).json;
 		expect(first).toEqual(second);
 		expect(nextPartNumber(ctxOf(db), 1)).toBe(first.partNumber);
 		expect(peekNextPartNumber(db, 1).sequence).toBe(first.sequence + 1);
@@ -254,7 +254,7 @@ describe('part numbers', () => {
 
 	test('the sequence is padded to the digits of the scheme but never cut', async () => {
 		const { db, call, makeUser } = await setup();
-		await call(makeUser('root', { admin: true }), 'POST', '/project/config', config({ partNumbering: { prefix: 'P', separator: '-', sequenceDigits: 2, format: '{prefix}{sep}{sequence}' } }));
+		await call(makeUser('root', { admin: true }), 'POST', '/settings/organization', config({ partNumbering: { prefix: 'P', separator: '-', sequenceDigits: 2, format: '{prefix}{sep}{sequence}' } }));
 		expect(registerPartNumber(ctxOf(db), 1, 'P-123')).toBe(123);
 		expect(nextPartNumber(ctxOf(db), 1)).toBe('P-124');
 	});

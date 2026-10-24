@@ -3,9 +3,9 @@
 	// overlay (the server computes the runs), and each distinct finding is
 	// listed beneath. Lint is advisory here; it never interrupts typing.
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { cn } from '#lib/utils.js';
-	import type { LintSegment } from './types.js';
+	import type { RiskLintSegment as LintSegment } from '@opal/shared';
 
 	let {
 		value = $bindable(''),
@@ -41,11 +41,9 @@
 		const mine = ++seq;
 		const timer = setTimeout(async () => {
 			try {
-				const r = await api.post<{ segments: Record<string, LintSegment[]> }>('/risks/lint', {
-					[field]: text
-				});
+				const r = await opal.risks.lint({ [field]: text });
 				if (mine === seq) {
-					segments = r.segments[field] ?? [];
+					segments = r.segments[field];
 					linted = text;
 				}
 			} catch {

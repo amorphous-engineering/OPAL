@@ -13,21 +13,21 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import { RISK_ISSUE_ROLES, type Risk, type RiskIssueRole, type RiskLinkedIssue } from '@opal/shared';
 	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
 	import { searchIssues } from './pickers.js';
-	import type { LinkedIssue, Risk } from './types.js';
 
 	let { risk }: { risk: Risk } = $props();
 
-	const ROLES = ['mitigation', 'research'];
+	const ROLES = RISK_ISSUE_ROLES;
 	let adding = $state(false);
-	let role = $state('mitigation');
+	let role = $state<RiskIssueRole>('mitigation');
 	let title = $state('');
 	let busy = $state(false);
 
-	const columns: Column<LinkedIssue>[] = [
-		{ key: 'issue_number', label: 'Issue', mono: true, width: '8rem' },
+	const columns: Column<RiskLinkedIssue>[] = [
+		{ key: 'issueNumber', label: 'Issue', mono: true, width: '8rem' },
 		{ key: 'title', label: 'Title' },
 		{ key: 'role', label: 'Role', width: '8rem' },
 		{ key: 'status', label: 'Status', width: '8rem' },
@@ -49,13 +49,13 @@
 
 	/** Issues already on the risk cannot be linked twice. */
 	async function searchUnlinked(q: string) {
-		const linked = new Set(risk.linked_issues.map((l) => l.issue_id));
+		const linked = new Set(risk.linkedIssues.map((l) => l.issueId));
 		return (await searchIssues(q)).filter((o) => !linked.has(o.value));
 	}
 
 	const link = (issueId: number, number: string) =>
 		run(
-			() => api.post(`/risks/${risk.id}/issues`, { issue_id: issueId, role }),
+			() => opal.risks.linkIssue({ id: risk.id, issueId, role }),
 			`${number} linked as ${role}`
 		);
 
@@ -63,14 +63,14 @@
 		const t = title.trim();
 		if (!t) return;
 		await run(
-			() => api.post(`/risks/${risk.id}/issues/spawn`, { role, title: t }),
+			() => opal.risks.spawnIssue({ id: risk.id, role, title: t }),
 			'Issue created and linked'
 		);
 		title = '';
 	}
 
-	const unlink = (l: LinkedIssue) =>
-		run(() => api.del(`/risks/${risk.id}/issues/${l.issue_id}`), `${l.issue_number} unlinked`);
+	const unlink = (l: RiskLinkedIssue) =>
+		run(() => opal.risks.unlinkIssue({ id: risk.id, issueId: l.issueId }), `${l.issueNumber} unlinked`);
 </script>
 
 {#snippet form()}
@@ -101,23 +101,23 @@
 	</div>
 {/snippet}
 
-{#if risk.linked_issues.length}
-	<Section title="Linked issues" count={risk.linked_issues.length}>
+{#if risk.linkedIssues.length}
+	<Section title="Linked issues" count={risk.linkedIssues.length}>
 		{#snippet actions()}
 			<Button variant="ghost" size="xs" onclick={() => (adding = !adding)}
 				>{adding ? 'DONE' : '+ ADD'}</Button
 			>
 		{/snippet}
 		<DataTable
-			rows={risk.linked_issues}
+			rows={risk.linkedIssues}
 			{columns}
-			href={(l) => `/issues/${l.issue_id}`}
-			key={(l) => l.issue_id}
+			href={(l) => `/issues/${l.issueId}`}
+			key={(l) => l.issueId}
 			emptyLabel="Linked issues"
 		>
 			{#snippet cell(l, col)}
-				{#if col.key === 'issue_number'}
-					<span class="text-info">{l.issue_number}</span>
+				{#if col.key === 'issueNumber'}
+					<span class="text-info">{l.issueNumber}</span>
 				{:else if col.key === 'title'}
 					{l.title}
 				{:else if col.key === 'role'}

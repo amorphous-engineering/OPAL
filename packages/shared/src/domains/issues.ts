@@ -90,6 +90,9 @@ export type StepOption = z.infer<typeof zStepOption>;
 export const zIssue = z.object({
 	id: z.number().int(),
 	issueNumber: z.string(),
+	projectId: z.number().int(), // added by projects
+	projectCode: z.string(), // added by projects
+	projectName: z.string(), // added by projects
 	title: z.string(),
 	description: z.string().nullable(),
 	issueType: z.enum(ISSUE_TYPES),
@@ -167,6 +170,7 @@ const text = z.string().nullable().optional();
 const zLinkInput = z.object({ kind: z.enum(ISSUE_LINK_KINDS), targetId: zId });
 
 export const zIssueCreate = z.object({
+	projectId: zId, // added by projects
 	title: z.string().trim().min(1).max(255),
 	description: text,
 	issueType: z.enum(ISSUE_TYPES).default('task'),
@@ -187,6 +191,7 @@ export const zIssueCreate = z.object({
 
 export const zIssueUpdate = z.object({
 	id: zId,
+	projectId: zId.optional(), // added by projects
 	title: z.string().trim().min(1).max(255).optional(),
 	description: text,
 	issueType: z.enum(ISSUE_TYPES).optional(),
@@ -218,6 +223,7 @@ export const issues = {
 			'List issues. Default order: undispositioned containment issues first, then newest. `state` is a comma list of ticket states.',
 		input: zPageInput.extend({
 			q: z.string().optional(),
+			projectId: zId.optional(), // added by projects
 			issueType: z.enum(ISSUE_TYPES).optional(),
 			status: z.enum(ISSUE_STATUSES).optional(),
 			dispState: z.enum(DISP_STATES).optional(),

@@ -1,4 +1,4 @@
-/** Contracts for the org area: users, roles, gates, workcenters, project, settings, onboarding. */
+/** Contracts for the org area: users, roles, gates, workcenters, projects, organization settings, onboarding. */
 import { z } from 'zod';
 import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
@@ -531,7 +531,7 @@ export const zRequirementCatalogEntry = z.object({
 	category: z.string().default('')
 });
 
-export const zProjectConfig = z.object({
+export const zOrgSettings = z.object({
 	name: z.string(),
 	description: z.string(),
 	tiers: z.array(zTier),
@@ -540,9 +540,9 @@ export const zProjectConfig = z.object({
 	requirements: z.array(zRequirementCatalogEntry),
 	customFields: z.record(z.string(), z.unknown())
 });
-export type ProjectConfig = z.infer<typeof zProjectConfig>;
+export type OrgSettings = z.infer<typeof zOrgSettings>;
 
-export const zProjectConfigInput = z
+export const zOrgSettingsInput = z
 	.object({
 		name: z.string().trim().min(1, 'must not be blank'),
 		description: z.string().default(''),
@@ -561,60 +561,97 @@ export const zProjectConfigInput = z
 		}
 	});
 
-const project = {
-	get: op({
-		name: 'project.get',
+// ---------------------------------------------------------------- projects
+
+export const PROJECT_STATES = ['active', 'archived'] as const;
+export type ProjectState = (typeof PROJECT_STATES)[number];
+
+/** A project wherever a scoped record shows it. */
+export const zProjectRef = z.object({ id: z.number().int(), code: z.string(), name: z.string() });
+export type ProjectRef = z.infer<typeof zProjectRef>;
+
+export const zProject = z.object({
+	id: z.number().int(),
+	code: z.string(),
+	name: z.string(),
+	description: z.string().nullable(),
+	state: z.enum(PROJECT_STATES),
+	archivedAt: zTimestamp.nullable(),
+	createdAt: zTimestamp,
+	updatedAt: zTimestamp
+});
+export type Project = z.infer<typeof zProject>;
+
+const zProjectCode = z
+	.string()
+	.trim()
+	.min(1, 'must not be blank')
+	.max(24)
+	.refine((c) => !/\s/.test(c), 'must not contain spaces');
+
+const projects = {
+	list: op({
+		name: 'projects.list',
 		method: 'GET',
-		path: '/project/config',
-		summary: 'The project configuration: tiers, part numbering scheme, categories. 404 before setup.',
-		input: zEmpty,
-		output: zProjectConfig,
+		path: '/projects',
+		summary: 'List projects by code. `state` narrows to active or archived projects.',
+		input: zPageInput.extend({ state: z.enum(PROJECT_STATES).optional(), search: z.string().optional() }),
+		output: zPage(zProject),
+		access: 'signed-in',
+		mcp: true
+	}),
+	get: op({
+		name: 'projects.get',
+		method: 'GET',
+		path: '/projects/:id',
+		summary: 'One project.',
+		input: z.object({ id: zId }),
+		output: zProject,
 		access: 'signed-in',
 		mcp: true
 	}),
 	create: op({
-		name: 'project.create',
+		name: 'projects.create',
 		method: 'POST',
-		path: '/project/config',
-		summary: 'Configure the project of this instance. Once only; later changes use project.update.',
-		input: zProjectConfigInput,
-		output: zProjectConfig,
-		access: 'admin',
-		mcp: false
+		path: '/projects',
+		summary: 'Create a project. The code is unique, stored in upper case.',
+		input: z.object({
+			code: zProjectCode,
+			name: z.string().trim().min(1, 'must not be blank'),
+			description: z.string().nullable().optional()
+		}),
+		output: zProject,
+		access: 'signed-in',
+		mcp: true
 	}),
 	update: op({
-		name: 'project.update',
-		method: 'PUT',
-		path: '/project/config',
-		summary: 'Update the project configuration. A tier that parts still use cannot be removed.',
-		input: zProjectConfigInput,
-		output: zProjectConfig,
-		access: 'admin',
-		mcp: false
-	}),
-	previewPartNumber: op({
-		name: 'project.previewPartNumber',
-		method: 'POST',
-		path: '/project/preview-part-number',
-		summary: 'Show the part number the scheme gives for a tier and a sequence.',
-		input: z.object({ tierLevel: z.number().int(), sequence: z.number().int().min(0).default(1) }),
-		output: z.object({ partNumber: z.string(), tierName: z.string() }),
+		name: 'projects.update',
+		method: 'PATCH',
+		path: '/projects/:id',
+		summary: 'Change the code, name or description of an active project.',
+		input: z.object({
+			id: zId,
+			code: zProjectCode.optional(),
+			name: z.string().trim().min(1, 'must not be blank').optional(),
+			description: z.string().nullable().optional()
+		}),
+		output: zProject,
 		access: 'signed-in',
-		mcp: false
+		mcp: true
 	}),
-	nextPartNumber: op({
-		name: 'project.nextPartNumber',
-		method: 'GET',
-		path: '/project/next-part-number',
-		summary: 'The next part number of a tier. Does not use it up.',
-		input: z.object({ tier: z.coerce.number().int() }),
-		output: z.object({ partNumber: z.string(), sequence: z.number().int() }),
+	archive: op({
+		name: 'projects.archive',
+		method: 'POST',
+		path: '/projects/:id/archive',
+		summary: 'Archive a project. Terminal: it takes no new records and cannot be reopened.',
+		input: z.object({ id: zId }),
+		output: zProject,
 		access: 'signed-in',
 		mcp: true
 	})
 };
 
-// ---------------------------------------------------------------- settings
+// ---------------------------------------------------------------- organization settings
 
 export const zSystemInfo = z.object({
 	opalVersion: z.string(),
@@ -637,6 +674,56 @@ export const zAgentActivation = z.object({
 export type AgentActivation = z.infer<typeof zAgentActivation>;
 
 const settings = {
+	get: op({
+		name: 'settings.get',
+		method: 'GET',
+		path: '/settings/organization',
+		summary: 'The organization settings: tiers, part numbering scheme, categories. 404 before setup.',
+		input: zEmpty,
+		output: zOrgSettings,
+		access: 'signed-in',
+		mcp: true
+	}),
+	create: op({
+		name: 'settings.create',
+		method: 'POST',
+		path: '/settings/organization',
+		summary: 'Set up the organization of this instance. Once only; later changes use settings.update.',
+		input: zOrgSettingsInput,
+		output: zOrgSettings,
+		access: 'admin',
+		mcp: false
+	}),
+	update: op({
+		name: 'settings.update',
+		method: 'PUT',
+		path: '/settings/organization',
+		summary: 'Update the organization settings. A tier that parts still use cannot be removed.',
+		input: zOrgSettingsInput,
+		output: zOrgSettings,
+		access: 'admin',
+		mcp: false
+	}),
+	previewPartNumber: op({
+		name: 'settings.previewPartNumber',
+		method: 'POST',
+		path: '/settings/preview-part-number',
+		summary: 'Show the part number the scheme gives for a tier and a sequence.',
+		input: z.object({ tierLevel: z.number().int(), sequence: z.number().int().min(0).default(1) }),
+		output: z.object({ partNumber: z.string(), tierName: z.string() }),
+		access: 'signed-in',
+		mcp: false
+	}),
+	nextPartNumber: op({
+		name: 'settings.nextPartNumber',
+		method: 'GET',
+		path: '/settings/next-part-number',
+		summary: 'The next part number of a tier. Does not use it up.',
+		input: z.object({ tier: z.coerce.number().int() }),
+		output: z.object({ partNumber: z.string(), sequence: z.number().int() }),
+		access: 'signed-in',
+		mcp: true
+	}),
 	system: op({
 		name: 'settings.system',
 		method: 'GET',
@@ -677,7 +764,7 @@ const welcome = {
 		name: 'welcome.state',
 		method: 'GET',
 		path: '/welcome',
-		summary: 'Which onboarding applies: project setup for the first admin on an empty catalog, else the tutorial.',
+		summary: 'Which onboarding applies: organization setup for the first admin on an empty catalog, else the tutorial.',
 		input: zEmpty,
 		output: z.object({ mode: z.enum(['setup', 'tutorial']) }),
 		access: 'signed-in',
@@ -695,4 +782,4 @@ const welcome = {
 	})
 };
 
-export const org = { users, roles, gates, workcenters, project, settings, welcome };
+export const org = { users, roles, gates, workcenters, projects, settings, welcome };

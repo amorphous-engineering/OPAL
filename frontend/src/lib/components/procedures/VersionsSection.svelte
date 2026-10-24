@@ -13,11 +13,11 @@
 	}: { procedureId: number; versions: VersionRow[]; currentVersionId: number | null } = $props();
 
 	const columns: Column<VersionRow>[] = [
-		{ key: 'version_number', label: 'Version', width: '10rem', mono: true },
-		{ key: 'created_at', label: 'Published', width: '10rem' },
-		{ key: 'created_by_name', label: 'By', width: '9rem' },
-		{ key: 'step_count', label: 'Steps', align: 'right', width: '5rem', mono: true },
-		{ key: 'change_note', label: 'Change note' },
+		{ key: 'versionNumber', label: 'Version', width: '10rem', mono: true },
+		{ key: 'createdAt', label: 'Published', width: '10rem' },
+		{ key: 'createdByName', label: 'By', width: '9rem' },
+		{ key: 'stepCount', label: 'Steps', align: 'right', width: '5rem', mono: true },
+		{ key: 'changeNote', label: 'Change note' },
 		{ key: 'actions', label: '', width: '9rem', align: 'right' }
 	];
 
@@ -32,7 +32,7 @@
 	});
 
 	function previous(v: VersionRow): VersionRow | undefined {
-		return versions.find((x) => x.version_number === v.version_number - 1);
+		return versions.find((x) => x.versionNumber === v.versionNumber - 1);
 	}
 </script>
 
@@ -49,15 +49,20 @@
 			href={(v) => `/procedures/versions/${v.id}`}
 		>
 			{#snippet cell(v, col)}
-				{#if col.key === 'version_number'}
-					<span class="text-info">v{v.version_number}</span>
-					{#if v.id === currentVersionId}<State value="active" label="CURRENT" class="ml-2" />{/if}
-				{:else if col.key === 'created_at'}
-					<Timestamp value={v.created_at} />
-				{:else if col.key === 'created_by_name'}
-					{v.created_by_name ?? '—'}
-				{:else if col.key === 'change_note'}
-					{#if v.change_note}<span class="line-clamp-2">{v.change_note}</span>{:else}<span
+				{#if col.key === 'versionNumber'}
+					<span class="text-info">v{v.versionNumber}</span>
+					{#if v.id === currentVersionId}<State
+							value="released"
+							tone="ok"
+							label="CURRENT"
+							class="ml-2"
+						/>{/if}
+				{:else if col.key === 'createdAt'}
+					<Timestamp value={v.createdAt} />
+				{:else if col.key === 'createdByName'}
+					{v.createdByName ?? '—'}
+				{:else if col.key === 'changeNote'}
+					{#if v.changeNote}<span class="line-clamp-2">{v.changeNote}</span>{:else}<span
 							class="text-muted-foreground">—</span
 						>{/if}
 				{:else if col.key === 'actions'}
@@ -74,8 +79,8 @@
 							href={`/procedures/${procedureId}/versions/${v.id}/print`}>PRINT</a
 						>
 					</span>
-				{:else}
-					{(v as unknown as Record<string, unknown>)[col.key]}
+				{:else if col.key === 'stepCount'}
+					{v.stepCount}
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -90,13 +95,13 @@
 				<span class="label">Compare</span>
 				<NativeSelect bind:value={a} size="sm" aria-label="From version" class="w-24">
 					{#each versions as v (v.id)}
-						<NativeSelectOption value={String(v.id)}>v{v.version_number}</NativeSelectOption>
+						<NativeSelectOption value={String(v.id)}>v{v.versionNumber}</NativeSelectOption>
 					{/each}
 				</NativeSelect>
 				<span class="font-mono text-xs text-muted-foreground">→</span>
 				<NativeSelect bind:value={b} size="sm" aria-label="To version" class="w-24">
 					{#each versions as v (v.id)}
-						<NativeSelectOption value={String(v.id)}>v{v.version_number}</NativeSelectOption>
+						<NativeSelectOption value={String(v.id)}>v{v.versionNumber}</NativeSelectOption>
 					{/each}
 				</NativeSelect>
 				<Button type="submit" size="xs" variant="outline" disabled={!a || !b || a === b}

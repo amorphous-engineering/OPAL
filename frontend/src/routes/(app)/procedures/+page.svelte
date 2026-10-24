@@ -6,50 +6,46 @@
 		FilterSelect,
 		ListFrame,
 		PageHeader,
-		Pagination,
 		SearchInput,
 		State,
 		Timestamp,
 		hasParams,
+		setQuery,
 		urlSort,
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import type { ProcedureRow } from '#lib/components/procedures/types.js';
+	import { PROCEDURE_STATUS_OPTIONS } from '#lib/components/procedures/types.js';
+	import type { Procedure } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	const sort = urlSort({ key: 'updated_at', dir: 'desc' });
-	const FILTERS = ['q', 'status', 'type'];
+	const sort = urlSort({ key: 'updatedAt', dir: 'desc' });
+	const FILTERS = ['q', 'status', 'type', 'project'];
 	const filtered = $derived.by(() => {
 		void page.url.search;
 		return hasParams(FILTERS);
 	});
 
-	const columns: Column<ProcedureRow>[] = [
+	// Column keys are the URL sort keys of the list contract.
+	const columns: Column<Procedure>[] = [
 		{ key: 'number', label: 'Number', sortable: true, width: '7rem', mono: true },
 		{ key: 'name', label: 'Name', sortable: true },
-		{ key: 'procedure_type', label: 'Type', sortable: true, width: '6rem', mono: true },
+		{ key: 'project', label: 'Project', width: '8rem', mono: true },
+		{ key: 'type', label: 'Type', sortable: true, width: '6rem', mono: true },
 		{ key: 'status', label: 'Status', sortable: true, width: '8rem' },
-		{ key: 'current_version_number', label: 'Version', sortable: true, width: '6rem', mono: true },
+		{ key: 'version', label: 'Version', sortable: true, width: '6rem', mono: true },
+		{ key: 'steps', label: 'Steps', sortable: true, align: 'right', width: '5rem', mono: true },
 		{
-			key: 'step_count',
-			label: 'Steps',
-			sortable: true,
-			align: 'right',
-			width: '5rem',
-			mono: true
-		},
-		{
-			key: 'execution_count',
+			key: 'executions',
 			label: 'Executions',
 			sortable: true,
 			align: 'right',
 			width: '7rem',
 			mono: true
 		},
-		{ key: 'updated_at', label: 'Updated', sortable: true, width: '10rem' }
+		{ key: 'updatedAt', label: 'Updated', sortable: true, width: '10rem' }
 	];
 </script>
 
@@ -68,6 +64,12 @@
 	<FilterBar clear={FILTERS}>
 		<SearchInput label="Search templates" placeholder="Search number, name or description" />
 		<FilterSelect
+			param="project"
+			label="Project"
+			allLabel="All projects"
+			options={data.projects.map((p) => ({ value: String(p.id), label: p.code }))}
+		/>
+		<FilterSelect
 			param="type"
 			label="Type"
 			allLabel="All types"
@@ -80,11 +82,7 @@
 			param="status"
 			label="Status"
 			allLabel="All statuses"
-			options={[
-				{ value: 'draft', label: 'DRAFT' },
-				{ value: 'active', label: 'ACTIVE' },
-				{ value: 'deprecated', label: 'DEPRECATED' }
-			]}
+			options={[...PROCEDURE_STATUS_OPTIONS]}
 		/>
 	</FilterBar>
 
@@ -106,23 +104,53 @@
 		{/snippet}
 		{#snippet cell(r, col)}
 			{#if col.key === 'number'}
-				<a href={`/procedures/${r.id}`} class="text-info hover:underline">{r.template_number}</a>
+				<a href={`/procedures/${r.id}`} class="text-info hover:underline">{r.templateNumber}</a>
 			{:else if col.key === 'name'}
 				<a href={`/procedures/${r.id}`} class="font-medium text-info hover:underline">{r.name}</a>
-			{:else if col.key === 'procedure_type'}
-				{r.procedure_type.toUpperCase()}
+			{:else if col.key === 'project'}
+				{r.projectCode}
+			{:else if col.key === 'type'}
+				{r.procedureType.toUpperCase()}
 			{:else if col.key === 'status'}
-				<State value={r.status} />
-			{:else if col.key === 'current_version_number'}
-				{#if r.current_version_number}v{r.current_version_number}{:else}<span
+				{#if r.status === 'released'}
+					<span class="font-mono text-xs text-muted-foreground">RELEASED</span>
+				{:else}
+					<State value={r.status} tone={r.status === 'draft' ? 'warn' : 'error'} badge />
+				{/if}
+			{:else if col.key === 'version'}
+				{#if r.currentVersionNumber}v{r.currentVersionNumber}{:else}<span
 						class="text-muted-foreground">—</span
 					>{/if}
-			{:else if col.key === 'updated_at'}
-				<Timestamp value={r.updated_at} />
-			{:else}
-				{(r as unknown as Record<string, unknown>)[col.key]}
+			{:else if col.key === 'steps'}
+				{r.stepCount}
+			{:else if col.key === 'executions'}
+				{r.executionCount}
+			{:else if col.key === 'updatedAt'}
+				<Timestamp value={r.updatedAt} />
 			{/if}
 		{/snippet}
 	</DataTable>
-	<Pagination total={data.result.total} pageSize={data.result.page_size ?? 50} />
+
+	{#if data.page > 1 || data.result.next}
+		<nav
+			aria-label="Pages"
+			class="flex items-center gap-3 border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground"
+		>
+			<span class="tabular-nums">PAGE {data.page}</span>
+			<div class="ml-auto flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="xs"
+					disabled={data.page <= 1}
+					onclick={() => setQuery({ page: null, cursor: null })}>← FIRST</Button
+				>
+				<Button
+					variant="outline"
+					size="xs"
+					disabled={!data.result.next}
+					onclick={() => setQuery({ page: data.page + 1, cursor: data.result.next })}>NEXT →</Button
+				>
+			</div>
+		</nav>
+	{/if}
 </ListFrame>

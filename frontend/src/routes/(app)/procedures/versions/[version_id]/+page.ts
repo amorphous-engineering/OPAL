@@ -1,19 +1,11 @@
-import { error } from '@sveltejs/kit';
-import { api, ApiError } from '#lib/api.js';
-import type { VersionDetail, VersionRow } from '#lib/components/procedures/types.js';
+import { opal, orHttpError } from '#lib/api.js';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params, fetch }) => {
-	const c = api.using(fetch);
-	try {
-		const version = await c.get<VersionDetail>(`/procedures/versions/${params.version_id}`);
-		const [versions, procedure] = await Promise.all([
-			c.get<VersionRow[]>(`/procedures/${version.procedure_id}/versions`),
-			c.get<{ status: string }>(`/procedures/${version.procedure_id}`)
-		]);
-		return { version, versions, procedureStatus: procedure.status };
-	} catch (e) {
-		if (e instanceof ApiError) error(e.status, e.message);
-		throw e;
-	}
+	const c = opal.using(fetch);
+	const version = await orHttpError(
+		c.procedures.versions.get({ versionId: Number(params.version_id) })
+	);
+	const versions = await orHttpError(c.procedures.versions.list({ id: version.procedureId }));
+	return { version, versions };
 };

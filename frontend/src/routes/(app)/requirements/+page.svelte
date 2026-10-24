@@ -17,10 +17,12 @@
 		Timestamp,
 		type Column
 	} from '#lib/components/opal/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import { session } from '#lib/session.svelte.js';
 	import { stateLabel } from '#lib/format.js';
 	import LintedText from '#lib/components/requirements/LintedText.svelte';
 	import QuickCreate, { type QuickParent } from '#lib/components/requirements/QuickCreate.svelte';
+	import ImportCatalogDialog from '#lib/components/requirements/ImportCatalogDialog.svelte'; // added by projects
 	import StatusPanel from '#lib/components/requirements/StatusPanel.svelte';
 	import {
 		LEVELS,
@@ -53,15 +55,15 @@
 		goto(next, { replace: true, reset: false });
 	}
 
-	const filtering = $derived(!!(q || stFilter || level || verif || staleOnly));
+	const filtering = $derived(!!(q || stFilter || level || verif || staleOnly || data.projectId));
 
 	function matches(i: TreeItem): boolean {
-		if (stFilter && i.lifecycle_state !== stFilter) return false;
+		if (stFilter && i.lifecycleState !== stFilter) return false;
 		if (level !== '' && String(i.level) !== level) return false;
 		if (verif && i.verification !== verif) return false;
 		if (staleOnly && !i.stale) return false;
 		if (q) {
-			const hay = `${i.req_number} ${i.title} ${i.statement}`.toLowerCase();
+			const hay = `${i.reqNumber} ${i.title} ${i.statement}`.toLowerCase();
 			if (!hay.includes(q.toLowerCase().trim())) return false;
 		}
 		return true;
@@ -71,23 +73,11 @@
 	let superseded = $state<TreeItem[]>([]);
 	$effect(() => {
 		if (stFilter !== 'superseded') return;
-		api
-			.get<{ items: Record<string, unknown>[] }>('/requirements', {
-				state: 'superseded',
-				include_superseded: true,
-				page_size: 500
-			})
+		opal.requirements
+			.list({ state: 'superseded', includeSuperseded: 'true', limit: 500, projectId: data.projectId }) // added by projects
 			.then((r) => {
 				superseded = r.items.map(
-					(x) =>
-						({
-							...x,
-							parent_id: null,
-							orphan: false,
-							lint: [],
-							parts: [],
-							verification: 'unallocated'
-						}) as unknown as TreeItem
+					(x) => ({ ...x, parentId: null, orphan: false, lint: [], parts: [], verification: 'unallocated' }) satisfies TreeItem
 				);
 			})
 			.catch(() => (superseded = []));
@@ -95,10 +85,14 @@
 
 	const items = $derived(stFilter === 'superseded' ? superseded : data.tree.items);
 
+	// ---- catalog import (admin) ----
+	const unimported = $derived(data.catalog);
+	let importOpen = $state(false); // added by projects
+
 	// ---- tree ----
 	const kids = $derived.by(() => {
 		const m: Record<string, TreeItem[]> = {};
-		for (const i of items) (m[String(i.parent_id)] ??= []).push(i);
+		for (const i of items) (m[String(i.parentId)] ??= []).push(i);
 		return m;
 	});
 
@@ -169,7 +163,7 @@
 
 	function flowDown(i: TreeItem | null) {
 		qcParent = i
-			? { id: i.id, req_number: i.req_number, level: i.level, category: i.category }
+			? { id: i.id, reqNumber: i.reqNumber, level: i.level, category: i.category, projectId: i.projectId } // added by projects
 			: null;
 		qcOpen = true;
 	}
@@ -179,7 +173,7 @@
 		const t = e.target as HTMLElement;
 		if (t.closest('input, textarea, select, [role="dialog"], [contenteditable]')) return;
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
-		if (e.key === 'b' && data.tree.queue_count) {
+		if (e.key === 'b' && data.tree.queueCount) {
 			e.preventDefault();
 			goto('/requirements/queue');
 			return;
@@ -206,7 +200,7 @@
 				if (cur) {
 					e.preventDefault();
 					if (cur.hasKids && !cur.folded) toggleFold(cur.item.id, true);
-					else if (cur.item.parent_id) focusedId = cur.item.parent_id;
+					else if (cur.item.parentId) focusedId = cur.item.parentId;
 				}
 				break;
 			case 'ArrowRight':
@@ -232,15 +226,16 @@
 
 	// ---- list columns ----
 	const columns: Column<TreeItem>[] = [
-		{ key: 'req_number', label: 'Number', mono: true, sortable: true, width: '7rem' },
+		{ key: 'reqNumber', label: 'Number', mono: true, sortable: true, width: '7rem' },
+		{ key: 'projectCode', label: 'Project', mono: true, sortable: true, width: '7rem' }, // added by projects
 		{ key: 'revision', label: 'Rev', mono: true, sortable: true, width: '3.5rem', align: 'right' },
 		{ key: 'title', label: 'Title', sortable: true },
-		{ key: 'lifecycle_state', label: 'State', sortable: true, width: '7rem' },
+		{ key: 'lifecycleState', label: 'State', sortable: true, width: '7rem' },
 		{ key: 'level', label: 'L', mono: true, sortable: true, width: '3rem', align: 'right' },
 		{ key: 'category', label: 'Category', sortable: true, width: '8rem' },
 		{ key: 'verification', label: 'Verification', sortable: true, width: '10rem' },
 		{ key: 'flags', label: 'Flags', width: '8rem' },
-		{ key: 'updated_at', label: 'Updated', sortable: true, width: '6rem', align: 'right' }
+		{ key: 'updatedAt', label: 'Updated', sortable: true, width: '6rem', align: 'right' }
 	];
 	const sort = urlSort(null);
 </script>
@@ -261,13 +256,31 @@
 				onclick={() => setParam('view', 'list')}>LIST</Button
 			>
 		</div>
-		<Button size="sm" variant="outline" href="/requirements/baselines">BASELINES</Button>
-		{#if data.tree.queue_count}
-			<Button size="sm" variant="outline" href="/requirements/queue" class="text-ok"
-				>BASELINE QUEUE · {data.tree.queue_count}</Button
+		<Button
+			size="sm"
+			variant="outline"
+			href={data.projectId ? `/requirements/baselines?project=${data.projectId}` : '/requirements/baselines'}
+			>BASELINES</Button
+		>
+		{#if data.tree.queueCount}
+			<Button
+				size="sm"
+				variant="outline"
+				href={data.projectId ? `/requirements/queue?project=${data.projectId}` : '/requirements/queue'}
+				class="text-ok"
+				>BASELINE QUEUE · {data.tree.queueCount}</Button
 			>
 		{/if}
-		<Button size="sm" href="/requirements/new">+ NEW</Button>
+		{#if session.user?.is_admin && unimported.length}
+			<Button size="sm" variant="outline" onclick={() => (importOpen = true)}
+				>IMPORT CATALOG · {unimported.length}</Button
+			>
+		{/if}
+		<Button
+			size="sm"
+			href={data.projectId ? `/requirements/new?projectId=${data.projectId}` : '/requirements/new'}
+			>+ NEW</Button
+		>
 	{/snippet}
 </PageHeader>
 
@@ -278,8 +291,15 @@
 		title="REQUIREMENTS"
 		count={filtering ? `${rows.length || listRows.length} of ${data.tree.total}` : data.tree.total}
 	>
-		<FilterBar clear={['q', 'state', 'level', 'verif', 'stale']}>
+		<FilterBar clear={['q', 'project', 'state', 'level', 'verif', 'stale']}>
 			<SearchInput label="Filter requirements" placeholder="Filter number, title, statement" />
+			<!-- added by projects -->
+			<FilterSelect
+				param="project"
+				label="Project"
+				allLabel="All projects"
+				options={data.projects.map((p) => ({ value: String(p.id), label: p.code }))}
+			/>
 			<FilterSelect
 				param="state"
 				label="State"
@@ -322,14 +342,14 @@
 				dense
 			>
 				{#snippet cell(r, col)}
-					{#if col.key === 'req_number'}
-						<span class="text-info">{r.req_number}</span>
-					{:else if col.key === 'lifecycle_state'}
-						<State value={r.lifecycle_state} tone={lifecycleTone(r.lifecycle_state)} />
+					{#if col.key === 'reqNumber'}
+						<span class="text-info">{r.reqNumber}</span>
+					{:else if col.key === 'lifecycleState'}
+						<State value={r.lifecycleState} tone={lifecycleTone(r.lifecycleState)} />
 					{:else if col.key === 'verification'}
 						<span class="font-mono text-xs"
-							>{methodInitial(r.verification_method)}
-							{#if r.lifecycle_state !== 'superseded' && r.lifecycle_state !== 'cancelled'}
+							>{methodInitial(r.verificationMethod)}
+							{#if r.lifecycleState !== 'superseded' && r.lifecycleState !== 'cancelled'}
 								<State
 									value={r.verification}
 									label={verificationLabel[r.verification]}
@@ -345,8 +365,8 @@
 									title="Parent was revised after this row last got a fresh look">STALE</span
 								>{/if}
 						</span>
-					{:else if col.key === 'updated_at'}
-						<Timestamp value={r.updated_at} relative />
+					{:else if col.key === 'updatedAt'}
+						<Timestamp value={r.updatedAt} relative />
 					{:else if col.key === 'category'}
 						{r.category ?? '—'}
 					{:else}
@@ -365,7 +385,7 @@
 				<table class="w-full border-collapse text-sm">
 					<thead>
 						<tr class="border-b border-border bg-muted/60">
-							{#each [['Number', 'w-44'], ['Title', 'w-64'], ['Statement', ''], ['State', 'w-28'], ['L', 'w-10'], ['Verification', 'w-44'], ['Parts', 'w-44'], ['Flags', 'w-24'], ['Age', 'w-14']] as [label, w] (label)}
+							{#each [['Number', 'w-44'], ['Project', 'w-20'], ['Title', 'w-64'], ['Statement', ''], ['State', 'w-28'], ['L', 'w-10'], ['Verification', 'w-44'], ['Parts', 'w-44'], ['Flags', 'w-24'], ['Age', 'w-14']] as [label, w] (label)}
 								<th
 									scope="col"
 									class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase {w}"
@@ -401,12 +421,13 @@
 										>
 									{:else}<span class="mr-1 inline-block w-3"></span>{/if}
 									<a href={`/requirements/${r.id}`} class="mono text-info hover:underline"
-										>{r.req_number}</a
+										>{r.reqNumber}</a
 									>
 									{#if r.revision > 1}<span class="mono text-xs text-muted-foreground"
 											>r{r.revision}</span
 										>{/if}
 								</td>
+								<td class="px-3 py-1 font-mono text-xs">{r.projectCode}</td> <!-- added by projects -->
 								<td class="px-3 py-1"
 									><span class="line-clamp-1" title={r.title}>{r.title}</span></td
 								>
@@ -431,14 +452,14 @@
 									{/if}
 								</td>
 								<td class="px-3 py-1"
-									><State value={r.lifecycle_state} tone={lifecycleTone(r.lifecycle_state)} /></td
+									><State value={r.lifecycleState} tone={lifecycleTone(r.lifecycleState)} /></td
 								>
 								<td class="mono px-3 py-1 text-xs">{r.level}</td>
 								<td class="px-3 py-1 font-mono text-xs whitespace-nowrap">
-									<span title={`Verification method: ${r.verification_method ?? 'not set'}`}
-										>{methodInitial(r.verification_method)}</span
+									<span title={`Verification method: ${r.verificationMethod ?? 'not set'}`}
+										>{methodInitial(r.verificationMethod)}</span
 									>
-									{#if r.lifecycle_state !== 'cancelled'}
+									{#if r.lifecycleState !== 'cancelled'}
 										<State
 											value={r.verification}
 											label={verificationLabel[r.verification]}
@@ -468,7 +489,7 @@
 											>{/if}
 									</span>
 								</td>
-								<td class="px-3 py-1 text-right"><Timestamp value={r.updated_at} relative /></td>
+								<td class="px-3 py-1 text-right"><Timestamp value={r.updatedAt} relative /></td>
 							</tr>
 						{/each}
 						{#if !filtering}
@@ -489,4 +510,10 @@
 	</Section>
 </div>
 
-<QuickCreate bind:open={qcOpen} parent={qcParent} oncreated={() => invalidateAll()} />
+<QuickCreate
+	bind:open={qcOpen}
+	parent={qcParent}
+	projectId={data.projectId ?? 0}
+	oncreated={() => invalidateAll()}
+/>
+<ImportCatalogDialog bind:open={importOpen} projectId={data.projectId ?? 0} count={unimported.length} />

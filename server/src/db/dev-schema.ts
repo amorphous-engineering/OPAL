@@ -27,5 +27,9 @@ export async function openSchemaDb(path: string): Promise<Db> {
 	sqlite.run('PRAGMA busy_timeout = 5000');
 	const fresh = !sqlite.query("SELECT 1 FROM sqlite_master WHERE type = 'table'").get();
 	if (fresh) for (const stmt of await schemaSql()) sqlite.run(stmt);
-	return drizzle(sqlite, { schema });
+	const db = drizzle(sqlite, { schema });
+	// drizzle-kit push cannot update these tables reliably (it re-creates indexes twice), so an
+	// older dev database is used as it is. Start a fresh OPAL_DATA_DIR after schema changes.
+	if (!fresh) console.warn('dev schema: existing database used as is; use a fresh OPAL_DATA_DIR after schema changes');
+	return db;
 }

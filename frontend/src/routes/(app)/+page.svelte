@@ -11,6 +11,7 @@
 		type Column,
 		type Tone
 	} from '#lib/components/opal/index.js';
+	import { FilterSelect } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { changeSummary, type AuditEntry } from '#lib/components/audit/audit.js';
@@ -56,15 +57,15 @@
 	const stats = $derived<Stat[]>([
 		{
 			label: 'Open issues',
-			value: o.issue_counts.open,
-			sub: `${o.issue_counts.critical} critical · ${o.issue_counts.high} high`,
-			tone: o.issue_counts.critical > 0 ? 'error' : 'default',
+			value: o.issues.counts.open,
+			sub: `${o.issues.counts.critical} critical · ${o.issues.counts.high} high`,
+			tone: o.issues.counts.critical > 0 ? 'error' : 'default',
 			href: '/issues?status=open'
 		},
 		{
 			label: 'Assigned to you',
-			value: o.issue_counts.mine,
-			sub: `${o.issue_counts.unassigned} unassigned`,
+			value: o.issues.counts.mine,
+			sub: `${o.issues.counts.unassigned} unassigned`,
 			tone: 'default',
 			href: '/issues?status=open&assignee=me'
 		},
@@ -77,10 +78,10 @@
 		},
 		{
 			label: 'Low stock',
-			value: o.low_stock.total,
+			value: o.lowStock.total,
 			sub: 'below reorder point',
-			tone: o.low_stock.total > 0 ? 'warn' : 'default',
-			href: '/parts?low=1'
+			tone: o.lowStock.total > 0 ? 'warn' : 'default',
+			href: '/inventory?flag=low'
 		},
 		{
 			label: 'POs awaiting receipt',
@@ -91,9 +92,9 @@
 		},
 		{
 			label: 'Calibration / expiry',
-			value: o.stock_attention.total,
-			sub: `${o.stock_attention.flagged} overdue or expired`,
-			tone: o.stock_attention.flagged > 0 ? 'error' : o.stock_attention.total ? 'warn' : 'default',
+			value: o.stockAttention.total,
+			sub: `${o.stockAttention.flagged} overdue or expired`,
+			tone: o.stockAttention.flagged > 0 ? 'error' : o.stockAttention.total ? 'warn' : 'default',
 			href: '/inventory?flag=attention'
 		},
 		{
@@ -118,7 +119,7 @@
 		p === 'critical' ? 'error' : p === 'high' ? 'warn' : 'muted';
 
 	const issueCols: Column<IssueRow>[] = [
-		{ key: 'issue_number', label: 'Issue', width: '6rem' },
+		{ key: 'issueNumber', label: 'Issue', width: '6rem' },
 		{ key: 'title', label: 'Title' },
 		{ key: 'priority', label: 'Priority', width: '5.5rem' },
 		{ key: 'assignee', label: 'Assignee', width: '9rem' },
@@ -129,29 +130,29 @@
 		{ key: 'procedure', label: 'Template' },
 		{ key: 'progress', label: 'Steps', align: 'right', width: '5rem', mono: true },
 		{ key: 'flag', label: 'Flag', width: '7rem' },
-		{ key: 'target_completion_at', label: 'Due', width: '6.5rem' }
+		{ key: 'targetCompletionAt', label: 'Due', width: '6.5rem' }
 	];
 	const stockCols: Column<LowStockRow>[] = [
-		{ key: 'part_number', label: 'Part', width: '8rem' },
+		{ key: 'partNumber', label: 'Part', width: '8rem' },
 		{ key: 'name', label: 'Name' },
-		{ key: 'on_hand', label: 'On hand', align: 'right', mono: true, width: '6rem' },
-		{ key: 'reorder_point', label: 'Reorder at', align: 'right', mono: true, width: '6rem' }
+		{ key: 'onHand', label: 'On hand', align: 'right', mono: true, width: '6rem' },
+		{ key: 'reorderPoint', label: 'Reorder at', align: 'right', mono: true, width: '6rem' }
 	];
 	const poCols: Column<PurchaseRow>[] = [
 		{ key: 'reference', label: 'PO', width: '7rem' },
 		{ key: 'supplier', label: 'Supplier' },
 		{ key: 'status', label: 'Status', width: '5.5rem' },
-		{ key: 'target_date', label: 'Due', width: '6.5rem' },
-		{ key: 'lines_open', label: 'Open lines', align: 'right', mono: true, width: '5.5rem' }
+		{ key: 'targetDate', label: 'Due', width: '6.5rem' },
+		{ key: 'linesOpen', label: 'Open lines', align: 'right', mono: true, width: '5.5rem' }
 	];
 	const attentionCols: Column<StockAttentionRow>[] = [
-		{ key: 'opal_number', label: 'OPAL', width: '8rem' },
-		{ key: 'part_name', label: 'Part' },
+		{ key: 'opalNumber', label: 'OPAL', width: '8rem' },
+		{ key: 'partName', label: 'Part' },
 		{ key: 'kind', label: 'Condition', width: '7.5rem' },
 		{ key: 'due', label: 'Date', width: '6.5rem' }
 	];
 	const riskCols: Column<RiskRow>[] = [
-		{ key: 'risk_number', label: 'Risk', width: '6rem' },
+		{ key: 'riskNumber', label: 'Risk', width: '6rem' },
 		{ key: 'title', label: 'Title' },
 		{ key: 'score', label: 'Score', align: 'right', mono: true, width: '4rem' },
 		{ key: 'disposition', label: 'Disposition', width: '6.5rem' }
@@ -168,10 +169,10 @@
 			const summary = changeSummary(e);
 			if (
 				prev &&
-				prev.user_id === e.user_id &&
+				prev.userId === e.userId &&
 				prev.action === e.action &&
-				prev.entity_type === e.entity_type &&
-				prev.record_label === e.record_label &&
+				prev.entity === e.entity &&
+				prev.recordLabel === e.recordLabel &&
 				prev.href === e.href
 			) {
 				prev.times += 1;
@@ -185,11 +186,11 @@
 	});
 
 	const activityCols: Column<ActivityRow>[] = [
-		{ key: 'timestamp', label: 'When', width: '9rem' },
-		{ key: 'user_name', label: 'User', width: '9rem' },
+		{ key: 'at', label: 'When', width: '9rem' },
+		{ key: 'userName', label: 'User', width: '9rem' },
 		{ key: 'action', label: 'Action', width: '5rem' },
-		{ key: 'entity_label', label: 'Entity', width: '9rem' },
-		{ key: 'record_label', label: 'Record', width: '16rem' },
+		{ key: 'entityLabel', label: 'Entity', width: '9rem' },
+		{ key: 'recordLabel', label: 'Record', width: '16rem' },
 		{ key: 'change', label: 'Change' }
 	];
 
@@ -212,6 +213,12 @@
 
 <PageHeader title="Overview">
 	{#snippet actions()}
+		<FilterSelect
+			param="project"
+			label="Project"
+			allLabel="All projects"
+			options={data.projects.map((p) => ({ value: String(p.id), label: p.code }))}
+		/>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
@@ -275,13 +282,13 @@
 					rows={o.issues.items}
 					columns={issueCols}
 					href={(r) => r.href}
-					key={(r) => r.issue_number}
+					key={(r) => r.issueNumber}
 					emptyLabel="OPEN ISSUES"
 					dense
 				>
 					{#snippet cell(r, col)}
-						{#if col.key === 'issue_number'}
-							<span class="font-mono whitespace-nowrap text-info">{r.issue_number}</span>
+						{#if col.key === 'issueNumber'}
+							<span class="font-mono whitespace-nowrap text-info">{r.issueNumber}</span>
 						{:else if col.key === 'title'}
 							<span class="block truncate {r.mine ? 'font-medium' : ''}" title={r.title}
 								>{r.title}</span
@@ -328,7 +335,7 @@
 								>{r.procedure ?? dash}</span
 							>
 						{:else if col.key === 'progress'}
-							{r.steps_done}/{r.steps_total}
+							{r.stepsDone}/{r.stepsTotal}
 						{:else if col.key === 'flag'}
 							{#if r.blocked}<State value="blocked" tone="error" label="BLOCKED" />
 							{:else if r.overdue}<State value="overdue" tone="warn" label="OVERDUE" />
@@ -338,22 +345,22 @@
 								>
 							{:else}<span class="text-muted-foreground">{dash}</span>{/if}
 						{:else}
-							<Timestamp value={r.target_completion_at} dateOnly />
+							<Timestamp value={r.targetCompletionAt} dateOnly />
 						{/if}
 					{/snippet}
 				</DataTable>
 			</Section>
 		{/if}
 
-		{#if o.low_stock.items.length}
-			<Section title="Low stock" count={shown(o.low_stock)}>
+		{#if o.lowStock.items.length}
+			<Section title="Low stock" count={shown(o.lowStock)}>
 				{#snippet actions()}
-					<a href="/parts?low=1" class="font-mono text-xs text-info uppercase hover:underline"
+					<a href="/inventory?flag=low" class="font-mono text-xs text-info uppercase hover:underline"
 						>All</a
 					>
 				{/snippet}
 				<DataTable
-					rows={o.low_stock.items}
+					rows={o.lowStock.items}
 					columns={stockCols}
 					href={(r) => r.href}
 					key={(r) => r.href}
@@ -361,16 +368,16 @@
 					dense
 				>
 					{#snippet cell(r, col)}
-						{#if col.key === 'part_number'}
-							<span class="font-mono whitespace-nowrap text-info">{r.part_number ?? dash}</span>
+						{#if col.key === 'partNumber'}
+							<span class="font-mono whitespace-nowrap text-info">{r.partNumber ?? dash}</span>
 						{:else if col.key === 'name'}
 							{r.name}
-						{:else if col.key === 'on_hand'}
-							<span class={r.on_hand === 0 ? 'text-error' : 'text-warn'}
-								>{qty(r.on_hand, r.uom)}</span
+						{:else if col.key === 'onHand'}
+							<span class={Number(r.onHand) === 0 ? 'text-error' : 'text-warn'}
+								>{qty(r.onHand, r.uom)}</span
 							>
 						{:else}
-							{qty(r.reorder_point, r.uom)}
+							{qty(r.reorderPoint, r.uom)}
 						{/if}
 					{/snippet}
 				</DataTable>
@@ -400,21 +407,21 @@
 							{r.supplier}
 						{:else if col.key === 'status'}
 							<State value={r.status} tone={r.status === 'partial' ? 'warn' : 'muted'} />
-						{:else if col.key === 'target_date'}
+						{:else if col.key === 'targetDate'}
 							{#if r.overdue}<span class="text-error"
-									><Timestamp value={r.target_date} dateOnly /></span
+									><Timestamp value={r.targetDate} dateOnly /></span
 								>
-							{:else}<Timestamp value={r.target_date} dateOnly />{/if}
+							{:else}<Timestamp value={r.targetDate} dateOnly />{/if}
 						{:else}
-							{r.lines_open}
+							{r.linesOpen}
 						{/if}
 					{/snippet}
 				</DataTable>
 			</Section>
 		{/if}
 
-		{#if o.stock_attention.items.length}
-			<Section title="Calibration and expiry" count={shown(o.stock_attention)}>
+		{#if o.stockAttention.items.length}
+			<Section title="Calibration and expiry" count={shown(o.stockAttention)}>
 				{#snippet actions()}
 					<a
 						href="/inventory?flag=attention"
@@ -422,20 +429,20 @@
 					>
 				{/snippet}
 				<DataTable
-					rows={o.stock_attention.items}
+					rows={o.stockAttention.items}
 					columns={attentionCols}
 					href={(r) => r.href}
-					key={(r) => `${r.opal_number}-${r.kind}`}
+					key={(r) => `${r.opalNumber}-${r.kind}`}
 					emptyLabel="CALIBRATION AND EXPIRY"
 					dense
 				>
 					{#snippet cell(r, col)}
-						{#if col.key === 'opal_number'}
-							<span class="font-mono whitespace-nowrap text-info">{r.opal_number ?? dash}</span>
-						{:else if col.key === 'part_name'}
-							{#if r.part_number}<span class="mr-1 font-mono text-xs text-muted-foreground"
-									>{r.part_number}</span
-								>{/if}{r.part_name}
+						{#if col.key === 'opalNumber'}
+							<span class="font-mono whitespace-nowrap text-info">{r.opalNumber ?? dash}</span>
+						{:else if col.key === 'partName'}
+							{#if r.partNumber}<span class="mr-1 font-mono text-xs text-muted-foreground"
+									>{r.partNumber}</span
+								>{/if}{r.partName}
 						{:else if col.key === 'kind'}
 							<State value={r.kind} tone={conditionTone[r.kind]} label={conditionLabel[r.kind]} />
 						{:else}
@@ -458,13 +465,13 @@
 					rows={o.risks.items}
 					columns={riskCols}
 					href={(r) => r.href}
-					key={(r) => r.risk_number}
+					key={(r) => r.riskNumber}
 					emptyLabel="HIGH RISKS"
 					dense
 				>
 					{#snippet cell(r, col)}
-						{#if col.key === 'risk_number'}
-							<span class="font-mono whitespace-nowrap text-info">{r.risk_number}</span>
+						{#if col.key === 'riskNumber'}
+							<span class="font-mono whitespace-nowrap text-info">{r.riskNumber}</span>
 						{:else if col.key === 'title'}
 							{r.title}
 						{:else if col.key === 'score'}
@@ -492,24 +499,24 @@
 				dense
 			>
 				{#snippet cell(r, col)}
-					{#if col.key === 'timestamp'}
-						<Timestamp value={r.timestamp} />
-					{:else if col.key === 'user_name'}
-						{r.user_name ?? dash}
+					{#if col.key === 'at'}
+						<Timestamp value={r.at} />
+					{:else if col.key === 'userName'}
+						{r.userName ?? dash}
 					{:else if col.key === 'action'}
 						<span
 							class="font-mono text-xs uppercase {r.action === 'delete'
 								? 'text-error'
 								: 'text-muted-foreground'}">{r.action}</span
 						>
-					{:else if col.key === 'entity_label'}
-						{r.entity_label}{#if r.times > 1}<span
+					{:else if col.key === 'entityLabel'}
+						{r.entityLabel}{#if r.times > 1}<span
 								class="ml-1.5 font-mono text-xs text-muted-foreground">×{r.times}</span
 							>{/if}
-					{:else if col.key === 'record_label'}
-						{#if r.record_label}<span
+					{:else if col.key === 'recordLabel'}
+						{#if r.recordLabel}<span
 								class="block truncate {r.href ? 'text-info' : ''}"
-								title={r.record_label}>{r.record_label}</span
+								title={r.recordLabel}>{r.recordLabel}</span
 							>{:else}<span class="text-muted-foreground">{dash}</span>{/if}
 					{:else}
 						<span class="font-mono text-xs text-muted-foreground">{r.summary}</span>

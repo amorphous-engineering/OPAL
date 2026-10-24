@@ -6,7 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { opal } from '#lib/api.js';
 	import type { SearchHit } from '@opal/shared';
-	import { NAV } from '#lib/nav.js';
+	import { NAV, PROJECTS_NAV } from '#lib/nav.js';
 
 	type SearchResult = SearchHit;
 
@@ -51,6 +51,7 @@
 
 	const pages = [
 		{ href: '/', label: 'Overview' },
+		PROJECTS_NAV, // added by projects
 		...NAV.flatMap((g) => g.items),
 		{ href: '/notifications', label: 'Notifications' }
 	];

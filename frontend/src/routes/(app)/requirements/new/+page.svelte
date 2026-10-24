@@ -7,13 +7,17 @@
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { PageHeader, Section, toastError, ErrorBanner } from '#lib/components/opal/index.js';
-	import { api, ApiError } from '#lib/api.js';
+	import { opal, ApiError } from '#lib/api.js';
+	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte'; // added by projects
 	import LintEditor from '#lib/components/requirements/LintEditor.svelte';
 	import { VERIFICATION_METHODS } from '#lib/components/requirements/lifecycle.js';
+	import type { RequirementVerificationMethod as VerificationMethod } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
+	// svelte-ignore state_referenced_locally
+	let projectId = $state(data.projectId); // added by projects
 	let title = $state('');
 	let statement = $state('');
 	let rationale = $state('');
@@ -28,8 +32,13 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
-	const parent = $derived(data.parents.find((p) => String(p.id) === parentId) ?? null);
-	const categories = $derived([...new Set(data.parents.map((p) => p.category).filter(Boolean))]);
+	// added by projects: flow-down stays inside one project
+	const candidates = $derived(data.parents.filter((p) => p.projectId === projectId));
+	const parent = $derived(candidates.find((p) => String(p.id) === parentId) ?? null);
+	const categories = $derived([...new Set(candidates.map((p) => p.category).filter(Boolean))]);
+	$effect(() => {
+		if (parentId && !parent) parentId = '';
+	});
 
 	// A child inherits its parent's category until one is typed.
 	let categoryTouched = false;
@@ -42,17 +51,18 @@
 		busy = true;
 		error = null;
 		try {
-			const created = await api.post<{ id: number }>('/requirements', {
+			const created = await opal.requirements.create({
+				projectId, // added by projects
 				title,
 				statement,
 				rationale: rationale || null,
 				category: category || null,
-				verification_method: method || null,
-				parent_id: parentId ? Number(parentId) : null,
+				verificationMethod: (method || null) as VerificationMethod | null,
+				parentId: parentId ? Number(parentId) : null,
 				tbd,
 				tbr,
-				tbr_owner_id: tbr && owner ? Number(owner) : null,
-				tbr_due: tbr && due ? `${due}T00:00:00Z` : null
+				tbrOwnerId: tbr && owner ? Number(owner) : null,
+				tbrDue: tbr && due ? `${due}T00:00:00Z` : null
 			});
 			await goto(`/requirements/${created.id}`);
 		} catch (err) {
@@ -73,6 +83,10 @@
 	<Section title="DRAFT">
 		<div class="grid grid-cols-1 gap-4 p-4">
 			<ErrorBanner message={error} />
+			<div class="grid grid-cols-1 gap-1.5">
+				<Label for="project">Project</Label>
+				<ProjectSelect id="project" bind:value={projectId} />
+			</div>
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="title">Title</Label>
 				<Input
@@ -106,9 +120,9 @@
 					<Label for="parent">Parent</Label>
 					<NativeSelect id="parent" bind:value={parentId} class="w-full">
 						<NativeSelectOption value="">None (level 0)</NativeSelectOption>
-						{#each data.parents as p (p.id)}
+						{#each candidates as p (p.id)}
 							<NativeSelectOption value={String(p.id)}
-								>{p.req_number} L{p.level} {p.title}</NativeSelectOption
+								>{p.reqNumber} L{p.level} {p.title}</NativeSelectOption
 							>
 						{/each}
 					</NativeSelect>
@@ -170,7 +184,7 @@
 		</div>
 		<div class="flex justify-end gap-2 border-t border-border px-4 py-3">
 			<Button variant="outline" href="/requirements">CANCEL</Button>
-			<Button type="submit" disabled={busy || !title.trim() || !statement.trim()}
+			<Button type="submit" disabled={busy || !title.trim() || !statement.trim() || !projectId}
 				>CREATE DRAFT</Button
 			>
 		</div>

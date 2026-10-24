@@ -9,6 +9,7 @@
 		Timestamp,
 		type Column
 	} from '#lib/components/opal/index.js';
+	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
 	import { datetime } from '#lib/format.js';
 	import Redline from '#lib/components/requirements/Redline.svelte';
 	import { lifecycleTone } from '#lib/components/requirements/lifecycle.js';
@@ -19,30 +20,31 @@
 	const ev = $derived(data.event);
 
 	const columns: Column<EventItem>[] = [
-		{ key: 'req_number', label: 'Number', mono: true, width: '7rem' },
+		{ key: 'reqNumber', label: 'Number', mono: true, width: '7rem' },
 		{ key: 'revision', label: 'Rev', mono: true, width: '6rem' },
 		{ key: 'title', label: 'Title', width: '16rem' },
 		{ key: 'statement', label: 'Statement / change' },
-		{ key: 'lifecycle_state', label: 'State now', width: '8rem' }
+		{ key: 'lifecycleState', label: 'State now', width: '8rem' }
 	];
 </script>
 
 <PageHeader
-	title={ev.label ?? `Baseline ${datetime(ev.created_at)}`}
+	title={ev.label ?? `Baseline ${datetime(ev.createdAt)}`}
 	identifier={null}
 	crumbs={[
 		{ label: 'Requirements', href: '/requirements' },
 		{ label: 'Baselines', href: '/requirements/baselines' },
-		{ label: ev.label ?? datetime(ev.created_at) }
+		{ label: ev.label ?? datetime(ev.createdAt) }
 	]}
 />
 
 <div class="grid grid-cols-1 gap-4 p-4">
 	<Section title="EVENT">
 		<DetailTable>
+			<ProjectRow id={ev.projectId} code={ev.projectCode} name={ev.projectName} /> <!-- added by projects -->
 			<DetailRow label="Label" value={ev.label} mono />
-			<DetailRow label="Signed by" value={ev.signed_by} />
-			<DetailRow label="When"><Timestamp value={ev.created_at} /></DetailRow>
+			<DetailRow label="Signed by" value={ev.signedBy} />
+			<DetailRow label="When"><Timestamp value={ev.createdAt} /></DetailRow>
 			<DetailRow label="Note" value={ev.note} />
 			<DetailRow label="Locked" value={ev.locked} mono />
 			<DetailRow label="Revised" value={ev.revised} mono />
@@ -59,11 +61,11 @@
 			dense
 		>
 			{#snippet cell(i, col)}
-				{#if col.key === 'req_number'}<span class="text-info">{i.req_number}</span>
+				{#if col.key === 'reqNumber'}<span class="text-info">{i.reqNumber}</span>
 				{:else if col.key === 'revision'}
 					<span class="mr-1">{i.revision}</span>
 					<span class="text-muted-foreground"
-						>{i.previous_revision ? `(was ${i.previous_revision})` : '(new)'}</span
+						>{i.previousRevision ? `(was ${i.previousRevision})` : '(new)'}</span
 					>
 				{:else if col.key === 'title'}{i.title}
 				{:else if col.key === 'statement'}
@@ -88,7 +90,7 @@
 						<span class="font-mono text-xs">{i.statement}</span>
 					{/if}
 				{:else}
-					<State value={i.lifecycle_state} tone={lifecycleTone(i.lifecycle_state)} />
+					<State value={i.lifecycleState} tone={lifecycleTone(i.lifecycleState)} />
 				{/if}
 			{/snippet}
 		</DataTable>

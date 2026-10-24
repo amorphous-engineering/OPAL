@@ -6,13 +6,13 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { api, ApiError } from '#lib/api.js';
+	import { opal, ApiError } from '#lib/api.js';
 	import { toast, toastError } from '#lib/components/opal/index.js';
 
+	/** One draft part named by the refusal: the id and the server's sentence about it. */
 	interface DraftPart {
 		id: number;
-		internal_pn: string | null;
-		name: string;
+		text: string;
 	}
 
 	let {
@@ -45,20 +45,24 @@
 	async function publish() {
 		busy = true;
 		try {
-			const v = await api.post<{ version_number: number }>(`/procedures/${procedureId}/publish`, {
-				change_note: note.trim() || null
+			const v = await opal.procedures.versions.publish({
+				id: procedureId,
+				changeNote: note.trim() || null
 			});
 			open = false;
-			toast.success(`Published v${v.version_number}`);
+			toast.success(`Published v${v.versionNumber}`);
 			await onpublished();
 		} catch (e) {
 			if (
 				e instanceof ApiError &&
-				e.detail &&
-				typeof e.detail === 'object' &&
-				(e.detail as { error?: string }).error === 'draft_parts_blocked'
+				(e.detail as { error?: string } | null)?.error === 'draft_parts_blocked' &&
+				e.fields
 			) {
-				drafts = (e.detail as { draft_parts: DraftPart[] }).draft_parts;
+				// The refusal's fields are `part.<id>` -> "<number> <name> is a draft".
+				drafts = Object.entries(e.fields).map(([k, text]) => ({
+					id: Number(k.split('.')[1]),
+					text
+				}));
 			} else toastError(e);
 		} finally {
 			busy = false;
@@ -68,7 +72,8 @@
 	async function activate(p: DraftPart) {
 		activating = p.id;
 		try {
-			await api.post(`/parts/${p.id}/activate`, {
+			await opal.parts.activate({
+				id: p.id,
 				cause: `activated for publish of procedure ${procedureId}`
 			});
 			drafts = drafts.filter((d) => d.id !== p.id);
@@ -108,8 +113,7 @@
 					<ul class="grid grid-cols-1 gap-1">
 						{#each drafts as p (p.id)}
 							<li class="flex items-center gap-2">
-								<span class="font-mono">{p.internal_pn ?? '—'}</span>
-								<span class="truncate">{p.name}</span>
+								<span class="truncate font-mono">{p.text}</span>
 								<Button
 									type="button"
 									size="xs"

@@ -4,7 +4,7 @@
 	// 900px the groups fold into a single MENU dropdown. NAV (lib/nav.ts) is the one list.
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { page } from '$app/state';
-	import { ACCOUNT_GROUP, NAV, isActive } from '#lib/nav.js';
+	import { ACCOUNT_GROUP, NAV, PROJECTS_NAV, isActive } from '#lib/nav.js';
 	import { cn } from '#lib/utils.js';
 
 	const groups = NAV.filter((g) => g.label !== ACCOUNT_GROUP);
@@ -22,6 +22,12 @@
 			href="/"
 			class={cn(trigger, path === '/' && 'border-border bg-accent text-info')}
 			aria-current={path === '/' ? 'page' : undefined}>Overview</a
+		>
+		<!-- added by projects -->
+		<a
+			href={PROJECTS_NAV.href}
+			class={cn(trigger, isActive(path, PROJECTS_NAV.href) && 'border-border bg-accent text-info')}
+			aria-current={isActive(path, PROJECTS_NAV.href) ? 'page' : undefined}>{PROJECTS_NAV.label}</a
 		>
 		{#each groups as g (g.label)}
 			<DropdownMenu.Root>
@@ -56,6 +62,17 @@
 				<DropdownMenu.Item>
 					{#snippet child({ props })}
 						<a href="/" {...props} aria-current={path === '/' ? 'page' : undefined}>Overview</a>
+					{/snippet}
+				</DropdownMenu.Item>
+				<!-- added by projects -->
+				<DropdownMenu.Item>
+					{#snippet child({ props })}
+						<a
+							href={PROJECTS_NAV.href}
+							{...props}
+							aria-current={isActive(path, PROJECTS_NAV.href) ? 'page' : undefined}
+							>{PROJECTS_NAV.label}</a
+						>
 					{/snippet}
 				</DropdownMenu.Item>
 				{#each groups as g (g.label)}

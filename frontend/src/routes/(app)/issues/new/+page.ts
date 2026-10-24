@@ -1,4 +1,5 @@
 import { opal } from '#lib/api.js';
+import { formProjectId } from '#lib/components/projects/projects.js'; // added by projects
 import type { PageLoad } from './$types';
 
 /** A record the invoking page already knows about (voice rule 6). */
@@ -41,6 +42,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	return {
 		ctx,
 		assignees,
+		projectId: formProjectId(url), // added by projects
 		defaults: {
 			title: q.get('title') ?? '',
 			type: q.get('type') ?? (ctx.step ? 'non_conformance' : 'task'),

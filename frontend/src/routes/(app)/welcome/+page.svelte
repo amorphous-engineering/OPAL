@@ -33,13 +33,13 @@
 	}
 
 	async function configure() {
-		// Project setup is its own page; the flag clears first so the wizard is not re-offered.
-		await finish('/project/new');
+		// Organization setup is its own page; the flag clears first so the wizard is not re-offered.
+		await finish('/setup/organization');
 	}
 
 	async function loadDemo() {
 		const ok = await confirm({
-			title: 'Load the demo project',
+			title: 'Load the demo data',
 			body: 'Switches to a separate throwaway database seeded with the Mojave Sphinx dataset. Your real database is untouched; exiting the demo deletes the demo file.',
 			action: 'LOAD DEMO'
 		});
@@ -67,9 +67,9 @@
 		</DetailTable>
 
 		<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-			<Section title="Set up project">
+			<Section title="Set up organization">
 				<div class="space-y-3 p-3 text-sm">
-					<p>Project name, inventory tiers, part numbering, categories and requirements.</p>
+					<p>Organization name, first project, inventory tiers, part numbering and categories.</p>
 					<Button size="sm" disabled={busy !== null} onclick={configure}>CONFIGURE</Button>
 				</div>
 			</Section>
@@ -119,7 +119,7 @@
 		<Section title="Parts and stock">
 			<DetailTable>
 				<DetailRow label="Parts"
-					>What you build with. Each has a system-unique id and a part number from the project's
+					>What you build with. Each has a system-unique id and a part number from the organization's
 					numbering scheme.</DetailRow
 				>
 				<DetailRow label="OPAL numbers"
@@ -127,7 +127,7 @@
 				>
 				<DetailRow label="Tiers"
 					>Classify parts by criticality, for example Flight, Ground, Dev. Tiers are configured per
-					project.</DetailRow
+					organization.</DetailRow
 				>
 				<DetailRow label="Stock"
 					>Quantity, location, lot, expiration and calibration per OPAL number.</DetailRow

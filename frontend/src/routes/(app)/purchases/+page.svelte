@@ -38,10 +38,10 @@
 		{ key: 'reference', label: 'Reference', sortable: true, mono: true },
 		{ key: 'supplier', label: 'Supplier', sortable: true },
 		{ key: 'status', label: 'Status', sortable: true },
-		{ key: 'target_date', label: 'Target', sortable: true, mono: true },
+		{ key: 'targetDate', label: 'Target', sortable: true, mono: true },
 		{ key: 'lines', label: 'Lines received', align: 'right', mono: true },
-		{ key: 'total_cost', label: 'Total', align: 'right', mono: true },
-		{ key: 'ordered_at', label: 'Ordered', sortable: true }
+		{ key: 'totalCost', label: 'Total', align: 'right', mono: true },
+		{ key: 'orderedAt', label: 'Ordered', sortable: true }
 	];
 </script>
 
@@ -106,21 +106,21 @@
 			{#if col.key === 'reference'}
 				<span class="text-info">{r.reference ?? '—'}</span>
 			{:else if col.key === 'supplier'}
-				{r.supplier_name ?? r.supplier}
+				{r.supplierName}
 			{:else if col.key === 'status'}
 				<State value={r.status} />
-				{#if r.is_overdue}<State value="overdue" tone="error" badge class="ml-2" />{/if}
-			{:else if col.key === 'target_date'}
-				{#if r.target_date}
-					<span class={r.is_overdue ? 'text-error' : ''}>{r.target_date}</span>
+				{#if r.isOverdue}<State value="overdue" tone="error" badge class="ml-2" />{/if}
+			{:else if col.key === 'targetDate'}
+				{#if r.targetDate}
+					<span class={r.isOverdue ? 'text-error' : ''}>{r.targetDate}</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'lines'}
-				{#if r.total_lines === 0}<span class="text-muted-foreground">—</span
-					>{:else}{r.lines_complete}/{r.total_lines}{/if}
-			{:else if col.key === 'total_cost'}
-				{money(r.total_cost)}
-			{:else if col.key === 'ordered_at'}
-				<Timestamp value={r.ordered_at} dateOnly />
+				{#if r.totalLines === 0}<span class="text-muted-foreground">—</span
+					>{:else}{r.linesComplete}/{r.totalLines}{/if}
+			{:else if col.key === 'totalCost'}
+				{money(r.totalCost)}
+			{:else if col.key === 'orderedAt'}
+				<Timestamp value={r.orderedAt} dateOnly />
 			{/if}
 		{/snippet}
 	</DataTable>

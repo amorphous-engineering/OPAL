@@ -2,7 +2,7 @@
 	// Kit (parts consumed) and outputs (parts produced) are the same grammar:
 	// a headed table of part lines with an in-place quantity, add and remove.
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import {
 		DataTable,
 		EmptyLine,
@@ -17,7 +17,7 @@
 	import QtyCell from './QtyCell.svelte';
 	import type { KitLine, OutputLine } from './types.js';
 
-	type Line = (KitLine | OutputLine) & { qty: number };
+	type Line = (KitLine | OutputLine) & { onHand?: string };
 
 	let {
 		kind,
@@ -36,67 +36,52 @@
 	const qtyHead = $derived(isKit ? 'Required' : 'Produced');
 	let adding = $state(false);
 
-	const rows = $derived<Line[]>(
-		lines.map((l) => ({
-			...l,
-			qty: isKit ? (l as KitLine).quantity_required : (l as OutputLine).quantity_produced
-		}))
-	);
+	const rows = $derived<Line[]>(lines);
 
 	const columns = $derived<Column<Line>[]>([
-		{ key: 'part_internal_pn', label: 'Part', width: '9rem', mono: true },
-		{ key: 'part_name', label: 'Name' },
-		{ key: 'part_external_pn', label: 'Ext PN', width: '9rem', mono: true },
-		{ key: 'qty', label: qtyHead, align: 'right', width: '8rem' },
-		...(isKit
-			? [{ key: 'on_hand', label: 'On hand', align: 'right' as const, width: '7rem' }]
-			: []),
+		{ key: 'partNumber', label: 'Part', width: '9rem', mono: true },
+		{ key: 'partName', label: 'Name' },
+		{ key: 'partExternalPn', label: 'Ext PN', width: '9rem', mono: true },
+		{ key: 'quantity', label: qtyHead, align: 'right', width: '8rem' },
+		...(isKit ? [{ key: 'onHand', label: 'On hand', align: 'right' as const, width: '7rem' }] : []),
 		{ key: 'actions', label: '', width: '4rem', align: 'right' }
 	]);
 
 	// Short = stock below what the kit needs. Consequence renders where it lands.
 	const short = $derived(
-		isKit ? rows.filter((r) => ((r as KitLine).part_on_hand ?? 0) < r.qty).length : 0
+		isKit ? rows.filter((r) => Number((r as KitLine).onHand ?? 0) < Number(r.quantity)).length : 0
 	);
 
-	async function save(row: Line, next: number) {
+	async function save(row: Line, next: string) {
 		try {
 			if (isKit)
-				await api.patch(`/procedures/${procedureId}/kit/${row.id}`, { quantity_required: next });
+				await opal.procedures.kit.update({ id: procedureId, kitId: row.id, quantity: next });
 			else
-				await api.patch(`/procedures/${procedureId}/outputs/${row.part_id}`, {
-					quantity_produced: next
-				});
+				await opal.procedures.outputs.update({ id: procedureId, outputId: row.id, quantity: next });
 			await onchange();
 		} catch (e) {
 			toastError(e);
 		}
 	}
 
-	async function add(partId: number, quantity: number) {
+	async function add(partId: number, quantity: string) {
 		if (isKit)
-			await api.post(`/procedures/${procedureId}/kit`, {
-				part_id: partId,
-				quantity_required: quantity
-			});
-		else
-			await api.post(`/procedures/${procedureId}/outputs`, {
-				part_id: partId,
-				quantity_produced: quantity
-			});
+			await opal.procedures.kit.add({ id: procedureId, partId, quantity, usage: 'consume' });
+		else await opal.procedures.outputs.add({ id: procedureId, partId, quantity });
 		await onchange();
 	}
 
 	async function remove(row: Line) {
 		const ok = await confirm({
-			title: `Remove ${row.part_internal_pn ?? row.part_name} from ${isKit ? 'kit' : 'outputs'}?`,
+			title: `Remove ${row.partNumber} from ${isKit ? 'kit' : 'outputs'}?`,
 			body: 'Published versions keep their own copy.',
 			action: 'REMOVE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/procedures/${procedureId}/${isKit ? 'kit' : 'outputs'}/${row.part_id}`);
+			if (isKit) await opal.procedures.kit.remove({ id: procedureId, kitId: row.id });
+			else await opal.procedures.outputs.remove({ id: procedureId, outputId: row.id });
 			await onchange();
 		} catch (e) {
 			toastError(e);
@@ -113,31 +98,31 @@
 		{/snippet}
 		<DataTable {rows} {columns} emptyLabel={title} dense key={(r) => r.id}>
 			{#snippet cell(row, col)}
-				{#if col.key === 'part_internal_pn'}
-					<a href={`/parts/${row.part_id}`} class="text-info hover:underline"
-						>{row.part_internal_pn ?? '—'}</a
-					>
-				{:else if col.key === 'part_name'}
-					{row.part_name}
-					{#if row.part_lifecycle_state === 'draft'}<State value="draft" class="ml-2" />{/if}
-				{:else if col.key === 'part_external_pn'}
-					{#if row.part_external_pn}{row.part_external_pn}{:else}<span class="text-muted-foreground"
+				{#if col.key === 'partNumber'}
+					<a href={`/parts/${row.partId}`} class="text-info hover:underline">{row.partNumber}</a>
+				{:else if col.key === 'partName'}
+					{row.partName}
+					{#if row.partState === 'draft'}<State value="draft" class="ml-2" />{/if}
+				{:else if col.key === 'partExternalPn'}
+					{#if row.partExternalPn}{row.partExternalPn}{:else}<span class="text-muted-foreground"
 							>—</span
 						>{/if}
-				{:else if col.key === 'qty'}
+				{:else if col.key === 'quantity'}
 					<QtyCell
-						value={row.qty}
-						label={`${row.part_name} quantity`}
+						value={row.quantity}
+						label={`${row.partName} quantity`}
 						onsave={(n) => save(row, n)}
 					/>
-				{:else if col.key === 'on_hand'}
-					{@const have = (row as KitLine).part_on_hand ?? 0}
-					<span class={have < row.qty ? 'font-mono text-warn' : 'font-mono'}>{qty(have)}</span>
+				{:else if col.key === 'onHand'}
+					{@const have = (row as KitLine).onHand ?? '0'}
+					<span class={Number(have) < Number(row.quantity) ? 'font-mono text-warn' : 'font-mono'}
+						>{qty(have)}</span
+					>
 				{:else if col.key === 'actions'}
 					<button
 						type="button"
 						class="font-mono text-xs text-muted-foreground hover:text-error"
-						aria-label={`Remove ${row.part_name}`}
+						aria-label={`Remove ${row.partName}`}
 						onclick={() => remove(row)}>REMOVE</button
 					>
 				{/if}
@@ -162,6 +147,6 @@
 	bind:open={adding}
 	title={isKit ? 'Add part to kit' : 'Add output'}
 	qtyLabel={isKit ? 'Quantity required' : 'Quantity produced'}
-	exclude={lines.map((l) => l.part_id)}
+	exclude={lines.map((l) => l.partId)}
 	onsubmit={add}
 />

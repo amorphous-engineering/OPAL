@@ -6,29 +6,34 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { toast, toastError } from '#lib/components/opal/index.js';
+	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte'; // added by projects
 	import LintEditor from './LintEditor.svelte';
 
 	export interface QuickParent {
 		id: number;
-		req_number: string;
+		reqNumber: string;
 		level: number;
 		category: string | null;
+		projectId: number; // added by projects
 	}
 
 	let {
 		open = $bindable(false),
 		parent = null,
+		projectId = 0, // added by projects: the project the page is filtered to
 		oncreated
 	}: {
 		open?: boolean;
 		parent?: QuickParent | null;
-		oncreated?: (created: { id: number; req_number: string }) => void;
+		projectId?: number;
+		oncreated?: (created: { id: number; reqNumber: string }) => void;
 	} = $props();
 
 	let title = $state('');
 	let statement = $state('');
+	let chosen = $state(0); // added by projects
 	let busy = $state(false);
 	let titleEl = $state<HTMLInputElement | null>(null);
 
@@ -36,22 +41,25 @@
 		if (open) {
 			title = '';
 			statement = '';
+			chosen = projectId;
 			queueMicrotask(() => titleEl?.focus());
 		}
 	});
 
 	async function submit(e?: SubmitEvent) {
 		e?.preventDefault();
-		if (!title.trim() || !statement.trim() || busy) return;
+		const project = parent?.projectId ?? chosen; // added by projects
+		if (!title.trim() || !statement.trim() || !project || busy) return;
 		busy = true;
 		try {
-			const created = await api.post<{ id: number; req_number: string }>('/requirements', {
+			const created = await opal.requirements.create({
+				projectId: project, // added by projects
 				title: title.trim(),
 				statement: statement.trim(),
-				parent_id: parent?.id ?? null,
+				parentId: parent?.id ?? null,
 				category: parent?.category ?? null
 			});
-			toast.success(`${created.req_number} created`);
+			toast.success(`${created.reqNumber} created`);
 			title = '';
 			statement = '';
 			titleEl?.focus();
@@ -74,10 +82,16 @@
 	<Dialog.Content class="sm:max-w-xl">
 		<Dialog.Header>
 			<Dialog.Title>
-				{parent ? `Flow down from ${parent.req_number}` : 'New level-0 requirement'}
+				{parent ? `Flow down from ${parent.reqNumber}` : 'New level-0 requirement'}
 			</Dialog.Title>
 		</Dialog.Header>
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			{#if !parent}
+				<div class="grid grid-cols-1 gap-1.5">
+					<Label for="qc-project">Project</Label>
+					<ProjectSelect id="qc-project" bind:value={chosen} class="w-full" />
+				</div>
+			{/if}
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="qc-title">Title</Label>
 				<Input id="qc-title" bind:ref={titleEl} bind:value={title} maxlength={255} required />
@@ -96,7 +110,7 @@
 				<Dialog.Close>
 					{#snippet child({ props })}<Button variant="outline" {...props}>DONE</Button>{/snippet}
 				</Dialog.Close>
-				<Button type="submit" disabled={busy || !title.trim() || !statement.trim()}>CREATE</Button>
+				<Button type="submit" disabled={busy || !title.trim() || !statement.trim() || !(parent?.projectId ?? chosen)}>CREATE</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

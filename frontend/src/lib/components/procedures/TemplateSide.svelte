@@ -45,9 +45,9 @@
 						>
 							<a
 								class="font-mono font-medium text-info hover:underline"
-								href={`/executions/${r.id}`}>{r.work_order_number ?? '—'}</a
+								href={`/executions/${r.id}`}>{r.workOrderNumber ?? '—'}</a
 							>
-							<span class="font-mono text-muted-foreground">v{r.version_number}</span>
+							<span class="font-mono text-muted-foreground">v{r.versionNumber}</span>
 							<span class="ml-auto"><State value={r.status} /></span>
 						</li>
 					{/each}
@@ -77,13 +77,13 @@
 						<li class="border-b border-border px-3 py-1.5 text-xs last:border-b-0">
 							<div class="flex items-center gap-2">
 								<a class="font-mono font-medium text-info hover:underline" href={`/issues/${i.id}`}
-									>{i.issue_number ?? '—'}</a
+									>{i.issueNumber}</a
 								>
 								<span class="ml-auto"
 									><State
-										value={i.ticket_state}
-										tone={ticketTone(i.ticket_state)}
-										label={ticketLabel(i.ticket_state)}
+										value={i.ticketState}
+										tone={ticketTone(i.ticketState)}
+										label={ticketLabel(i.ticketState)}
 										badge
 									/></span
 								>

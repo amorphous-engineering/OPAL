@@ -1,0 +1,49 @@
+# Risk scenario lint rules — NASA/SP-2011-3422 §4.2.1.1 discipline.
+# EXECUTABLE TRUTH — loaded by opal.risks.lint as data; check logic lives in
+# Python keyed by `name`. severity: warn (advisory at save) | block_accept
+# (must clear before the risk can be accepted). Nothing ever blocks save.
+
+rules:
+  - id: RL-01
+    name: condition_is_fact
+    description: >
+      Condition contains no speculation words — conditions are present,
+      fact-based, independently checkable. The uncertainty lives in the
+      departure, which probability scores.
+    severity: block_accept
+    source: "SP-2011-3422 §4.2.1.1 (CONDITION is a present, fact-based situation)"
+    terms:
+      - "may"
+      - "might"
+      - "could"
+      - "possibly"
+
+  - id: RL-02
+    name: no_response_language
+    description: >
+      Departure and consequence presume no response — no baked-in
+      mitigation. Responses live in the disposition, not the scenario.
+    severity: warn
+    source: "SP-2011-3422 §4.2.1.1 (scenario stated without presuming any response)"
+    terms:
+      - "unless"
+      - "mitigated by"
+      - "if we"
+      - "will be fixed"
+
+  - id: RL-03
+    name: measurable_consequence
+    description: >
+      Consequence names something measurable — heuristic: a noun from the
+      list below (with suffixes) or a number. Impact scores the consequence;
+      an unmeasurable one cannot be scored honestly.
+    severity: warn
+    source: "SP-2011-3422 §4.2.1.1 (CONSEQUENCE is failure to meet something measurable)"
+    terms:
+      - "loss"
+      - "delay"
+      - "overrun"
+      - "failure"
+      - "damage"
+      - "injury"
+      - "scrub"

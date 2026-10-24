@@ -16,7 +16,7 @@
  *    editor holds; when someone else changed it, a banner offers a refresh.
  */
 /* eslint-disable svelte/prefer-svelte-reactivity -- the maps and sets here are bookkeeping, never rendered */
-import { api } from '#lib/api.js';
+import { api, opal } from '#lib/api.js';
 import { confirm, toastError } from '#lib/components/opal/index.js';
 import type {
 	AuthorActions,
@@ -31,7 +31,20 @@ import type {
 	StepEdit,
 	WorkcenterOption
 } from '#lib/components/procedure-doc/index.js';
-import type { DraftResponse, DraftStep } from './types.js';
+import type { DraftStep } from './types.js';
+import {
+	formatQty,
+	parseQty,
+	type ProcedureDataField,
+	type ProcedureStepImage,
+	type Qty
+} from '@opal/shared';
+
+/** A quantity the editor shows as a number, from the wire decimal. */
+const toNum = (q: string) => Number(q);
+/** The wire decimal for a number typed in the editor (at most 4 places). */
+const toQty = (n: number) => formatQty(Math.round(n * 10000) as Qty);
+void parseQty;
 
 const TEXT_DELAY = 700;
 const POLL_MS = 20000;
@@ -178,7 +191,7 @@ export class AuthorStore implements DocController {
 
 	private async loadWorkcenters() {
 		try {
-			this.workcenters = await api.get<WorkcenterOption[]>('/workcenters');
+			this.workcenters = await opal.org.workcenters.list({});
 		} catch {
 			/* optional picker: the editor works without it */
 		}
@@ -187,7 +200,7 @@ export class AuthorStore implements DocController {
 	// ---------- loading ----------
 
 	private async fetchDraft(): Promise<DraftStep[]> {
-		return (await api.get<DraftResponse>(this.url('/draft'))).steps;
+		return (await opal.procedures.draft({ id: this.procedureId })).steps;
 	}
 
 	async reload(initial = false) {
@@ -215,13 +228,12 @@ export class AuthorStore implements DocController {
 				this.pending.delete(id);
 			}
 		}
-		const numberOf = new Map(draft.map((d) => [d.id, d.step_number]));
+		const numberOf = new Map(draft.map((d) => [d.id, d.number]));
 		const kidsOf = new Map<number, number>();
 		for (const d of draft)
-			if (d.parent_step_id !== null)
-				kidsOf.set(d.parent_step_id, (kidsOf.get(d.parent_step_id) ?? 0) + 1);
+			if (d.parentId !== null) kidsOf.set(d.parentId, (kidsOf.get(d.parentId) ?? 0) + 1);
 		this.leafIds = new Set(
-			draft.filter((d) => d.parent_step_id === null && !kidsOf.has(d.id)).map((d) => d.id)
+			draft.filter((d) => d.parentId === null && !kidsOf.has(d.id)).map((d) => d.id)
 		);
 		this.smallDoc = draft.length <= SMALL_DOC;
 
@@ -232,10 +244,10 @@ export class AuthorStore implements DocController {
 				st = fresh;
 				this.byId.set(d.id, st);
 			}
-			st.number = d.step_number;
+			st.number = d.number;
 			st.level = d.level;
-			st.is_op = d.parent_step_id === null;
-			st.parent_order = d.parent_step_id;
+			st.is_op = d.parentId === null;
+			st.parent_order = d.parentId;
 			const set = <K extends keyof StepEdit>(k: K, field: keyof DocStep, v: unknown) => {
 				if (dirty(d.id, k)) return;
 				const cur = (st as unknown as Record<string, unknown>)[field as string];
@@ -253,8 +265,8 @@ export class AuthorStore implements DocController {
 			)
 				st.callouts = (d.callouts ?? []).map((c) => ({ ...c }));
 			if (!dirty(d.id, 'signoffs')) {
-				set('role', 'role', d.required_role);
-				set('requires_signoff', 'requires_signoff', d.requires_signoff);
+				set('role', 'role', d.requiredRole);
+				set('requires_signoff', 'requires_signoff', d.requiresSignoff);
 				const defs = (d.signoffs ?? []).map((x) => ({ label: x.label, role: x.role ?? null }));
 				if (JSON.stringify(st.signoff_defs ?? []) !== JSON.stringify(defs)) {
 					st.signoff_defs = defs;
@@ -262,27 +274,28 @@ export class AuthorStore implements DocController {
 					st.signoffs = previewSlots(defs);
 				}
 			}
-			set('estimated_duration_minutes', 'estimated_duration_minutes', d.estimated_duration_minutes);
-			set('is_contingency', 'is_contingency', d.is_contingency);
-			set('workcenter_id', 'workcenter_id', d.workcenter_id);
+			set('estimated_duration_minutes', 'estimated_duration_minutes', d.estimatedDurationMinutes);
+			set('is_contingency', 'is_contingency', d.isContingency);
+			set('workcenter_id', 'workcenter_id', d.workcenterId);
 			if (
 				!dirty(d.id, 'data_schema') &&
-				JSON.stringify(st.data_schema) !== JSON.stringify(d.required_data_schema)
+				JSON.stringify(st.data_schema) !== JSON.stringify(d.dataSchema)
 			)
-				st.data_schema = d.required_data_schema;
+				st.data_schema = d.dataSchema;
 			const images = d.images.map((i) => ({
 				id: i.id,
-				attachment_id: i.attachment_id,
+				attachment_id: i.attachmentId,
+				sha256: i.sha256,
 				caption: i.caption
 			}));
 			if (JSON.stringify(st.images) !== JSON.stringify(images)) st.images = images;
-			const kit = d.step_kit.map((k) => ({
+			const kit = d.kit.map((k) => ({
 				id: k.id,
-				part_id: k.part_id,
-				part_name: k.part_name,
-				part_number: k.part_internal_pn,
-				quantity_required: k.quantity_required,
-				usage_type: k.usage_type,
+				part_id: k.partId,
+				part_name: k.partName,
+				part_number: k.partNumber,
+				quantity_required: toNum(k.quantity),
+				usage_type: k.usage,
 				notes: k.notes
 			}));
 			if (JSON.stringify(st.step_kit) !== JSON.stringify(kit)) st.step_kit = kit;
@@ -291,16 +304,14 @@ export class AuthorStore implements DocController {
 		const build = (group: DraftStep[]): DocOp[] =>
 			group.map((d) => {
 				const st = this.byId.get(d.id)!;
-				const subs = draft
-					.filter((x) => x.parent_step_id === d.id)
-					.map((x) => this.byId.get(x.id)!);
+				const subs = draft.filter((x) => x.parentId === d.id).map((x) => this.byId.get(x.id)!);
 				let op = this.opById.get(d.id);
 				if (!op) {
 					const fresh: DocOp = $state(this.blankOp(st));
 					op = fresh;
 					this.opById.set(d.id, op);
 				}
-				op.number = d.step_number;
+				op.number = d.number;
 				op.title = st.title;
 				op.instructions = st.instructions;
 				op.callouts = st.callouts;
@@ -310,18 +321,18 @@ export class AuthorStore implements DocController {
 					!(this.pending.get(d.id) && 'strict_sequence' in this.pending.get(d.id)!) &&
 					!(this.inflight.get(d.id) && 'strict_sequence' in this.inflight.get(d.id)!)
 				)
-					op.strict_sequence = d.strict_sequence;
-				op.depends_on = d.depends_on;
-				op.waiting_on_ops = d.depends_on.map((x) => numberOf.get(x) ?? '?');
+					op.strict_sequence = d.strictSequence;
+				op.depends_on = d.dependsOn;
+				op.waiting_on_ops = d.dependsOn.map((x) => numberOf.get(x) ?? '?');
 				op.progress = { done: 0, total: subs.length };
 				op.step = st;
 				const same = op.steps.length === subs.length && op.steps.every((s, i) => s === subs[i]);
 				if (!same) op.steps = subs;
 				return op;
 			});
-		const tops = draft.filter((d) => d.parent_step_id === null);
-		const ops = build(tops.filter((d) => !d.is_contingency));
-		const contingency = build(tops.filter((d) => d.is_contingency));
+		const tops = draft.filter((d) => d.parentId === null);
+		const ops = build(tops.filter((d) => !d.isContingency));
+		const contingency = build(tops.filter((d) => d.isContingency));
 		const sameList = (a: DocOp[], b: DocOp[]) =>
 			a.length === b.length && a.every((x, i) => x === b[i]);
 		if (!sameList(this.doc.ops, ops)) this.doc.ops = ops;
@@ -334,22 +345,22 @@ export class AuthorStore implements DocController {
 		return {
 			order: d.id,
 			id: d.id,
-			number: d.step_number,
+			number: d.number,
 			title: d.title,
 			level: d.level,
-			is_op: d.parent_step_id === null,
-			parent_order: d.parent_step_id,
+			is_op: d.parentId === null,
+			parent_order: d.parentId,
 			status: 'pending',
 			instructions: d.instructions,
 			callouts: (d.callouts ?? []).map((c) => ({ ...c })),
-			role: d.required_role,
-			requires_signoff: d.requires_signoff,
-			is_contingency: d.is_contingency,
-			estimated_duration_minutes: d.estimated_duration_minutes,
-			workcenter_id: d.workcenter_id,
+			role: d.requiredRole,
+			requires_signoff: d.requiresSignoff,
+			is_contingency: d.isContingency,
+			estimated_duration_minutes: d.estimatedDurationMinutes,
+			workcenter_id: d.workcenterId,
 			images: [],
 			step_kit: [],
-			data_schema: d.required_data_schema,
+			data_schema: d.dataSchema,
 			data_captured: null,
 			skip_reason: null,
 			completed: null,
@@ -521,25 +532,24 @@ export class AuthorStore implements DocController {
 
 	// ---------- editing ----------
 
-	private apiBody(patch: StepEdit): Record<string, unknown> {
-		const body: Record<string, unknown> = {};
+	private apiBody(patch: StepEdit) {
+		const body: Omit<Parameters<typeof opal.procedures.steps.update>[0], 'id' | 'stepId'> = {};
 		if ('title' in patch) body.title = patch.title;
 		if ('instructions' in patch) body.instructions = norm(patch.instructions);
 		if ('callouts' in patch) body.callouts = keptCallouts(patch.callouts);
-		if ('role' in patch) body.required_role = norm(patch.role);
-		if ('requires_signoff' in patch) body.requires_signoff = patch.requires_signoff;
+		if ('role' in patch && !('signoffs' in patch)) body.requiredRole = norm(patch.role);
+		if ('requires_signoff' in patch && !('signoffs' in patch))
+			body.requiresSignoff = patch.requires_signoff;
 		if ('signoffs' in patch)
-			body.signoffs = patch.signoffs
-				? patch.signoffs.map((x) => ({ label: x.label.trim(), role: norm(x.role) }))
-				: null;
+			body.signoffs = patch.signoffs ? patch.signoffs.map((x) => ({ role: norm(x.role) })) : null;
 		if ('estimated_duration_minutes' in patch)
-			body.estimated_duration_minutes = patch.estimated_duration_minutes ?? null;
-		if ('is_contingency' in patch) body.is_contingency = patch.is_contingency;
-		if ('strict_sequence' in patch) body.strict_sequence = patch.strict_sequence;
-		if ('workcenter_id' in patch) body.workcenter_id = patch.workcenter_id ?? null;
+			body.estimatedDurationMinutes = patch.estimated_duration_minutes ?? null;
+		if ('is_contingency' in patch) body.isContingency = patch.is_contingency;
+		if ('strict_sequence' in patch) body.strictSequence = patch.strict_sequence;
+		if ('workcenter_id' in patch) body.workcenterId = patch.workcenter_id ?? null;
 		if ('data_schema' in patch) {
 			const fields = patch.data_schema?.fields ?? [];
-			body.required_data_schema = fields.length ? patch.data_schema : null;
+			body.dataSchema = fields.length ? { fields: fields as ProcedureDataField[] } : null;
 		}
 		return body;
 	}
@@ -602,13 +612,14 @@ export class AuthorStore implements DocController {
 		this.pending.delete(id);
 		this.inflight.set(id, patch);
 		try {
-			const r = await api.patch<{ step_number: string }>(
-				this.url(`/steps/${id}`),
-				this.apiBody(patch)
-			);
+			const r = await opal.procedures.steps.update({
+				id: this.procedureId,
+				stepId: id,
+				...this.apiBody(patch)
+			});
 			this.inflight.delete(id);
 			const st = this.byId.get(id);
-			if (st && r.step_number) st.number = r.step_number;
+			if (st && r.number) st.number = r.number;
 			if ('is_contingency' in patch) await this.reload();
 		} catch (e) {
 			this.inflight.delete(id);
@@ -650,10 +661,11 @@ export class AuthorStore implements DocController {
 
 	addOp = async (opts: { after?: DocOp; contingency?: boolean } = {}) => {
 		const made = await this.structure(() =>
-			api.post<{ id: number }>(this.url('/steps'), {
+			opal.procedures.steps.add({
+				id: this.procedureId,
 				title: 'New operation',
-				after_step_id: opts.after?.order,
-				is_contingency: opts.after ? opts.after.is_contingency : !!opts.contingency
+				afterStepId: opts.after?.order,
+				isContingency: opts.after ? opts.after.is_contingency : !!opts.contingency
 			})
 		);
 		if (made) this.focusTitle(made.id);
@@ -661,10 +673,11 @@ export class AuthorStore implements DocController {
 
 	addStep = async (op: DocOp, after: DocStep) => {
 		const made = await this.structure(() =>
-			api.post<{ id: number }>(this.url('/steps'), {
+			opal.procedures.steps.add({
+				id: this.procedureId,
 				title: 'New step',
-				parent_step_id: op.order,
-				after_step_id: after.order
+				parentId: op.order,
+				afterStepId: after.order
 			})
 		);
 		if (made) {
@@ -697,7 +710,7 @@ export class AuthorStore implements DocController {
 			this.refreshSummary(step.order);
 		}
 		const done = await this.structure(async () => {
-			await api.del(this.url(`/steps/${step.order}`));
+			await opal.procedures.steps.remove({ id: this.procedureId, stepId: step.order });
 			return true;
 		});
 		if (done) this.focusedOrder = neighbour;
@@ -705,7 +718,7 @@ export class AuthorStore implements DocController {
 
 	duplicate = async (step: DocStep) => {
 		const made = await this.structure(() =>
-			api.post<{ id: number }>(this.url(`/steps/${step.order}/duplicate`))
+			opal.procedures.steps.duplicate({ id: this.procedureId, stepId: step.order })
 		);
 		if (made) this.focusTitle(made.id);
 	};
@@ -735,10 +748,12 @@ export class AuthorStore implements DocController {
 
 	moveTo = async (step: DocStep, parent: DocOp | null, index: number) => {
 		const moved = await this.structure(() =>
-			api.post(this.url(`/steps/${step.order}/move`), {
-				parent_step_id: parent ? parent.order : null,
+			opal.procedures.steps.move({
+				id: this.procedureId,
+				stepId: step.order,
+				parentId: parent ? parent.order : null,
 				index,
-				...(parent === null ? { is_contingency: step.is_contingency } : {})
+				...(parent === null ? { isContingency: step.is_contingency } : {})
 			})
 		);
 		if (moved !== undefined) {
@@ -769,10 +784,12 @@ export class AuthorStore implements DocController {
 			);
 			const at = group.indexOf(targetOp) + (target.pos === 'before' ? 0 : 1);
 			const moved = await this.structure(() =>
-				api.post(this.url(`/steps/${srcId}/move`), {
-					parent_step_id: null,
+				opal.procedures.steps.move({
+					id: this.procedureId,
+					stepId: srcId,
+					parentId: null,
 					index: at,
-					is_contingency: targetOp.is_contingency
+					isContingency: targetOp.is_contingency
 				})
 			);
 			if (moved !== undefined) this.focusedOrder = srcId;
@@ -799,7 +816,11 @@ export class AuthorStore implements DocController {
 		op.depends_on = onIds;
 		op.waiting_on_ops = onIds.map((id) => this.opById.get(id)?.number ?? '?');
 		try {
-			await api.put(this.url(`/steps/${op.order}/dependencies`), { depends_on: onIds });
+			await opal.procedures.steps.setDependencies({
+				id: this.procedureId,
+				stepId: op.order,
+				dependsOn: onIds
+			});
 			this.noteChanged();
 		} catch (e) {
 			op.depends_on = before;
@@ -846,13 +867,10 @@ export class AuthorStore implements DocController {
 			for (const file of images) {
 				const fd = new FormData();
 				fd.append('file', file);
-				const r = await api.post<{ id: number; attachment_id: number; caption: string | null }>(
-					this.url(`/steps/${step.order}/images`),
-					fd
-				);
+				const r = await api.post<ProcedureStepImage>(this.url(`/steps/${step.order}/images`), fd);
 				step.images = [
 					...step.images,
-					{ id: r.id, attachment_id: r.attachment_id, caption: r.caption }
+					{ id: r.id, attachment_id: r.attachmentId, sha256: r.sha256, caption: r.caption }
 				];
 			}
 		});
@@ -863,7 +881,10 @@ export class AuthorStore implements DocController {
 		if (!img) return;
 		img.caption = caption;
 		this.schedule(`cap:${imageId}`, step.order, TEXT_DELAY, async () => {
-			await api.patch(this.url(`/steps/${step.order}/images/${imageId}`), {
+			await opal.procedures.steps.images.update({
+				id: this.procedureId,
+				stepId: step.order,
+				imageId,
 				caption: caption.trim() || null
 			});
 		});
@@ -871,7 +892,11 @@ export class AuthorStore implements DocController {
 
 	removeImage = async (step: DocStep, imageId: number) => {
 		await this.track(step.order, 'imgdel', async () => {
-			await api.del(this.url(`/steps/${step.order}/images/${imageId}`));
+			await opal.procedures.steps.images.remove({
+				id: this.procedureId,
+				stepId: step.order,
+				imageId
+			});
 			step.images = step.images.filter((i) => i.id !== imageId);
 		});
 	};
@@ -886,8 +911,10 @@ export class AuthorStore implements DocController {
 		step.images = list;
 		await this.track(step.order, 'imgorder', async () => {
 			try {
-				await api.post(this.url(`/steps/${step.order}/images/reorder`), {
-					image_ids: list.map((x) => x.id)
+				await opal.procedures.steps.images.reorder({
+					id: this.procedureId,
+					stepId: step.order,
+					imageIds: list.map((x) => x.id!)
 				});
 			} catch (e) {
 				step.images = before;
@@ -906,10 +933,12 @@ export class AuthorStore implements DocController {
 		notes: string | null
 	) => {
 		await this.track(step.order, 'kit', async () => {
-			const r = await api.post<{ id: number }>(this.url(`/steps/${step.order}/kit`), {
-				part_id: part.id,
-				quantity_required: quantity,
-				usage_type: usage,
+			const r = await opal.procedures.steps.kit.add({
+				id: this.procedureId,
+				stepId: step.order,
+				partId: part.id,
+				quantity: toQty(quantity),
+				usage: usage as 'consume' | 'tooling',
 				notes
 			});
 			step.step_kit = [
@@ -937,10 +966,13 @@ export class AuthorStore implements DocController {
 		Object.assign(line, patch);
 		this.schedule(`kit:${step.order}:${kitId}`, step.order, TEXT_DELAY, async () => {
 			if (!(line.quantity_required > 0)) throw new Error('Quantity must be above zero');
-			await api.patch(this.url(`/steps/${step.order}/kit/${kitId}`), {
-				quantity_required: line.quantity_required,
-				usage_type: line.usage_type,
-				notes: line.notes ?? ''
+			await opal.procedures.steps.kit.update({
+				id: this.procedureId,
+				stepId: step.order,
+				kitId,
+				quantity: toQty(line.quantity_required),
+				usage: line.usage_type as 'consume' | 'tooling',
+				notes: line.notes ?? null
 			});
 		});
 	};
@@ -949,7 +981,11 @@ export class AuthorStore implements DocController {
 		const line = step.step_kit.find((k) => k.id === kitId);
 		if (!line) return;
 		await this.track(step.order, 'kitdel', async () => {
-			await api.del(this.url(`/steps/${step.order}/kit/${line.part_id}`));
+			await opal.procedures.steps.kit.remove({
+				id: this.procedureId,
+				stepId: step.order,
+				kitId
+			});
 			step.step_kit = step.step_kit.filter((k) => k.id !== kitId);
 		});
 	};
@@ -957,9 +993,10 @@ export class AuthorStore implements DocController {
 	uploadInline = async (file: File): Promise<string> => {
 		const fd = new FormData();
 		fd.append('file', file);
-		fd.append('procedure_id', String(this.procedureId));
+		fd.append('ownerType', 'procedure');
+		fd.append('ownerId', String(this.procedureId));
 		fd.append('kind', 'inline');
-		const r = await api.post<{ id: number }>('/attachments/upload', fd);
+		const r = await api.post<{ id: number }>('/attachments', fd);
 		const alt = file.name.replace(/\.[^.]+$/, '').replace(/[[\]]/g, '');
 		return `![${alt}](/api/attachments/${r.id}/download)`;
 	};
@@ -979,23 +1016,23 @@ export class AuthorStore implements DocController {
 	}
 
 	private canon(d: DraftStep): unknown[] {
-		const fields = d.required_data_schema?.fields ?? [];
+		const fields = d.dataSchema?.fields ?? [];
 		return [
 			d.id,
-			d.step_number,
-			d.parent_step_id,
+			d.number,
+			d.parentId,
 			d.title,
 			norm(d.instructions),
 			keptCallouts(d.callouts),
 			(d.signoffs ?? []).map((x) => [x.label, norm(x.role)]),
-			d.estimated_duration_minutes ?? null,
-			d.is_contingency,
-			d.strict_sequence,
-			d.workcenter_id ?? null,
-			fields.length ? JSON.stringify(d.required_data_schema) : null,
-			[...d.depends_on].sort(),
+			d.estimatedDurationMinutes ?? null,
+			d.isContingency,
+			d.strictSequence,
+			d.workcenterId ?? null,
+			fields.length ? JSON.stringify(d.dataSchema) : null,
+			[...d.dependsOn].sort(),
 			d.images.map((i) => [i.id, norm(i.caption)]),
-			d.step_kit.map((k) => [k.id, k.quantity_required, k.usage_type, norm(k.notes)])
+			d.kit.map((k) => [k.id, toNum(k.quantity), k.usage, norm(k.notes)])
 		];
 	}
 
@@ -1003,54 +1040,35 @@ export class AuthorStore implements DocController {
 		return JSON.stringify(draft.map((d) => this.canon(d)));
 	}
 
-	/** What this editor holds, projected to the server's shape and order. */
+	/** What this editor holds, in the canonical form of the server's steps and in its order. */
 	private localFingerprint(server: DraftStep[]): string {
-		const local: DraftStep[] = [];
-		for (const s of server) {
-			const st = this.byId.get(s.id);
-			if (!st) {
-				local.push({ ...s, id: -1 });
-				continue;
-			}
-			const op = this.opById.get(s.id);
-			local.push({
-				id: st.order,
-				order: s.order,
-				step_number: st.number,
-				level: st.level,
-				parent_step_id: st.parent_order,
-				title: st.title,
-				instructions: st.instructions,
-				required_data_schema: st.data_schema,
-				is_contingency: st.is_contingency,
-				requires_signoff: st.requires_signoff,
-				signoffs: (st.signoff_defs ?? []).map((x) => ({ label: x.label, role: x.role })),
-				estimated_duration_minutes: st.estimated_duration_minutes ?? null,
-				required_role: st.role,
-				callouts: st.callouts,
-				strict_sequence: op ? op.strict_sequence : s.strict_sequence,
-				workcenter_id: st.workcenter_id ?? null,
-				depends_on: op?.depends_on ?? [],
-				images: st.images.map((i) => ({
-					id: i.id!,
-					attachment_id: i.attachment_id,
-					caption: i.caption,
-					position: 0
-				})),
-				step_kit: st.step_kit.map((k) => ({
-					id: k.id!,
-					part_id: k.part_id,
-					part_name: k.part_name,
-					part_internal_pn: k.part_number,
-					quantity_required: k.quantity_required,
-					usage_type: k.usage_type,
-					notes: k.notes
-				}))
-			});
-		}
 		// A step the server lacks (deleted elsewhere) or one we lack: lengths differ.
 		if (this.byId.size !== server.length) return 'length-differs';
-		return JSON.stringify(local.map((d) => this.canon(d)));
+		const local: unknown[][] = [];
+		for (const s of server) {
+			const st = this.byId.get(s.id);
+			if (!st) return 'length-differs';
+			const op = this.opById.get(s.id);
+			const fields = st.data_schema?.fields ?? [];
+			local.push([
+				st.order,
+				st.number,
+				st.parent_order,
+				st.title,
+				norm(st.instructions),
+				keptCallouts(st.callouts),
+				(st.signoff_defs ?? []).map((x) => [x.label, norm(x.role)]),
+				st.estimated_duration_minutes ?? null,
+				st.is_contingency,
+				op ? op.strict_sequence : s.strictSequence,
+				st.workcenter_id ?? null,
+				fields.length ? JSON.stringify(st.data_schema) : null,
+				[...(op?.depends_on ?? [])].sort(),
+				st.images.map((i) => [i.id, norm(i.caption)]),
+				st.step_kit.map((k) => [k.id, k.quantity_required, k.usage_type, norm(k.notes)])
+			]);
+		}
+		return JSON.stringify(local);
 	}
 
 	/** Take the other editor's version (nothing local is unsent when this is offered). */

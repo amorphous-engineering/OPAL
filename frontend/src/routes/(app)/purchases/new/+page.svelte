@@ -6,10 +6,10 @@
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import { api, ApiError } from '#lib/api.js';
+	import { ApiError, opal } from '#lib/api.js';
 	import { money } from '#lib/format.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
-	import type { PickedPart } from '#lib/components/purchasing/types.js';
+	import type { PickedPart } from '#lib/components/parts/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -65,9 +65,9 @@
 		const lines = rows
 			.filter((r) => r.part)
 			.map((r) => ({
-				part_id: r.part!.id,
-				qty_ordered: Number(r.qty),
-				unit_cost: r.cost === '' ? null : Number(r.cost),
+				partId: r.part!.id,
+				qtyOrdered: r.qty.trim(),
+				unitCost: r.cost.trim() === '' ? null : r.cost.trim(),
 				destination: r.destination.trim() || null
 			}));
 		if (rows.some((r) => r.part && !(Number(r.qty) > 0))) {
@@ -76,12 +76,12 @@
 		}
 		busy = true;
 		try {
-			const po = await api.post<{ id: number }>('/purchases', {
-				supplier_id: supplierId ? Number(supplierId) : null,
-				supplier: supplierId ? null : otherName.trim(),
-				supplier_reference: supplierRef.trim() || null,
+			const po = await opal.purchasing.orders.create({
+				supplierId: supplierId ? Number(supplierId) : null,
+				supplierName: supplierId ? null : otherName.trim(),
+				supplierReference: supplierRef.trim() || null,
 				reference: reference.trim() || null,
-				target_date: targetDate || null,
+				targetDate: targetDate || null,
 				destination: destination.trim() || null,
 				notes: notes.trim() || null,
 				lines

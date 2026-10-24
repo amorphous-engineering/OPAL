@@ -10,9 +10,9 @@
 		toastError
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { session } from '#lib/session.svelte.js';
-	import type { LifecycleState } from './types.js';
+	import { FACTORY_RESET_WORD, type LifecycleState } from '@opal/shared';
 
 	let { lifecycle }: { lifecycle: LifecycleState } = $props();
 
@@ -26,14 +26,14 @@
 
 	async function enter() {
 		const ok = await confirm({
-			title: current.demo_file_exists ? 'Resume the demo?' : 'Enter the demo?',
+			title: current.demoFileExists ? 'Resume the demo?' : 'Enter the demo?',
 			body: 'The whole instance switches to a separate demo database for every user until you exit. Your real data is not touched.',
-			action: current.demo_file_exists ? 'RESUME DEMO' : 'ENTER DEMO'
+			action: current.demoFileExists ? 'RESUME DEMO' : 'ENTER DEMO'
 		});
 		if (!ok) return;
 		busy = true;
 		try {
-			await api.post('/settings/demo/enter');
+			await opal.reports.lifecycle.enterDemo({});
 			reload('/');
 		} catch (err) {
 			toastError(err);
@@ -51,7 +51,7 @@
 		if (!ok) return;
 		busy = true;
 		try {
-			await api.post('/settings/demo/exit');
+			await opal.reports.lifecycle.exitDemo({});
 			reload('/login');
 		} catch (err) {
 			toastError(err);
@@ -68,7 +68,7 @@
 		});
 		if (!ok) return;
 		try {
-			current = await api.del<LifecycleState>('/settings/demo');
+			current = await opal.reports.lifecycle.deleteDemo({});
 		} catch (err) {
 			toastError(err);
 		}
@@ -80,12 +80,12 @@
 			body: 'Parts, inventory, procedures, executions, users, settings, attachments and any demo database are erased. There is no undo. The instance returns to first-run setup.',
 			action: 'FACTORY RESET',
 			destructive: true,
-			typeToConfirm: 'RESET'
+			typeToConfirm: FACTORY_RESET_WORD
 		});
 		if (!ok) return;
 		busy = true;
 		try {
-			await api.post('/settings/factory-reset', { confirm: 'RESET' });
+			await opal.reports.lifecycle.factoryReset({ confirm: FACTORY_RESET_WORD });
 			reload('/setup');
 		} catch (err) {
 			toastError(err);
@@ -97,22 +97,22 @@
 <Section title="Demo data">
 	<DetailTable>
 		<DetailRow label="State">
-			{#if current.demo_active}<State value="demo" tone="warn" label="ACTIVE" />
-			{:else if current.demo_file_exists}<State value="present" tone="info" label="FILE PRESENT" />
+			{#if current.demoActive}<State value="demo" tone="warn" label="ACTIVE" />
+			{:else if current.demoFileExists}<State value="present" tone="info" label="FILE PRESENT" />
 			{:else}<span class="font-mono text-xs">NONE</span>{/if}
 		</DetailRow>
 		<DetailRow label="Database"
-			><span class="font-mono break-all">{current.demo_db_path}</span></DetailRow
+			><span class="font-mono break-all">{current.demoDbPath}</span></DetailRow
 		>
 	</DetailTable>
 	<div class="flex gap-2 border-t border-border p-3">
-		{#if current.demo_active}
+		{#if current.demoActive}
 			<Button size="sm" disabled={busy} onclick={exit}>EXIT DEMO</Button>
 		{:else}
 			<Button size="sm" disabled={busy} onclick={enter}
-				>{current.demo_file_exists ? 'RESUME DEMO' : 'ENTER DEMO'}</Button
+				>{current.demoFileExists ? 'RESUME DEMO' : 'ENTER DEMO'}</Button
 			>
-			{#if current.demo_file_exists}
+			{#if current.demoFileExists}
 				<Button variant="outline" size="sm" disabled={busy} onclick={removeFile}
 					>DELETE DEMO FILE</Button
 				>

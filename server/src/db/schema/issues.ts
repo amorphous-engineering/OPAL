@@ -10,6 +10,7 @@ import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { user } from './core.ts';
 import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
+import { project } from './org.ts'; // added by projects
 import { part } from './parts.ts';
 import { risk } from './risks.ts'; // added by risks
 
@@ -29,6 +30,9 @@ export const issue = sqliteTable(
 	{
 		id: id(),
 		issueNumber: text('issue_number').notNull().unique(),
+		projectId: integer('project_id') // added by projects
+			.notNull()
+			.references(() => project.id),
 		title: text('title').notNull(),
 		description: text('description'),
 		issueType: text('issue_type', { enum: ISSUE_TYPES }).notNull().default('task'),
@@ -71,6 +75,7 @@ export const issue = sqliteTable(
 	},
 	(t) => [
 		index('issue_status_idx').on(t.status),
+		index('issue_project_idx').on(t.projectId), // added by projects
 		index('issue_assignee_idx').on(t.assignedToId),
 		index('issue_execution_idx').on(t.executionId),
 		oneOf('issue_type_check', 'issue_type', ISSUE_TYPES),

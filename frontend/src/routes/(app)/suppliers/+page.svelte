@@ -31,9 +31,9 @@
 		{ key: 'code', label: 'Code', sortable: true, mono: true },
 		{ key: 'email', label: 'Email' },
 		{ key: 'phone', label: 'Phone', mono: true },
-		{ key: 'part_count', label: 'Parts', align: 'right', mono: true },
-		{ key: 'purchase_count', label: 'Purchases', align: 'right', mono: true },
-		{ key: 'is_active', label: 'Status' }
+		{ key: 'partCount', label: 'Parts', align: 'right', mono: true },
+		{ key: 'purchaseCount', label: 'Purchases', align: 'right', mono: true },
+		{ key: 'isActive', label: 'Status' }
 	];
 </script>
 
@@ -73,8 +73,8 @@
 		{#snippet cell(s, col)}
 			{#if col.key === 'name'}
 				<span class="text-info">{s.name}</span>
-			{:else if col.key === 'is_active'}
-				{#if !s.is_active}<State value="inactive" tone="muted" badge />{/if}
+			{:else if col.key === 'isActive'}
+				{#if !s.isActive}<State value="inactive" tone="muted" badge />{/if}
 			{:else}
 				{@const v = (s as unknown as Record<string, unknown>)[col.key]}
 				{#if v === null || v === undefined || v === ''}<span class="text-muted-foreground">—</span

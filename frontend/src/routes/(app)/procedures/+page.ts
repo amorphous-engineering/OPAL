@@ -1,29 +1,32 @@
-import { api, type Page } from '#lib/api.js';
-import type { ProcedureRow } from '#lib/components/procedures/types.js';
+import { opal, orHttpError } from '#lib/api.js';
+import { PROCEDURE_SORT_KEYS, PROCEDURE_STATUSES, PROCEDURE_TYPES } from '@opal/shared';
 import type { PageLoad } from './$types';
 
-// URL sort keys are column keys; the API names a few of them differently.
-const API_SORT: Record<string, string> = {
-	name: 'name',
-	procedure_type: 'type',
-	status: 'status',
-	current_version_number: 'version',
-	step_count: 'steps',
-	execution_count: 'executions',
-	updated_at: 'updated_at',
-	created_at: 'created_at'
-};
+const PAGE_SIZE = 50;
+
+const oneOf = <T extends string>(all: readonly T[], v: string | null): T | undefined =>
+	all.find((x) => x === v);
 
 export const load: PageLoad = async ({ url, fetch }) => {
 	const q = url.searchParams;
-	const result = await api.using(fetch).get<Page<ProcedureRow>>('/procedures', {
-		search: q.get('q'),
-		status: q.get('status'),
-		procedure_type: q.get('type'),
-		sort: API_SORT[q.get('sort') ?? ''] ?? 'updated_at',
-		dir: q.get('dir') === 'asc' ? 'asc' : 'desc',
-		page: q.get('page') ?? 1,
-		page_size: 50
-	});
-	return { result };
+	const client = opal.using(fetch);
+	const page = Math.max(1, Number(q.get('page') ?? 1) || 1);
+	const cursor = page > 1 ? (q.get('cursor') ?? undefined) : undefined;
+	const projectId = Number(q.get('project')) || undefined;
+	const [result, projects] = await orHttpError(
+		Promise.all([
+			client.procedures.list({
+				q: q.get('q') || undefined,
+				status: oneOf(PROCEDURE_STATUSES, q.get('status')),
+				procedureType: oneOf(PROCEDURE_TYPES, q.get('type')),
+				projectId,
+				sort: oneOf(PROCEDURE_SORT_KEYS, q.get('sort')) ?? 'updatedAt',
+				dir: q.get('dir') === 'asc' ? 'asc' : 'desc',
+				cursor,
+				limit: PAGE_SIZE
+			}),
+			client.org.projects.list({ limit: 200 })
+		])
+	);
+	return { result, projects: projects.items, page: cursor ? page : 1 };
 };

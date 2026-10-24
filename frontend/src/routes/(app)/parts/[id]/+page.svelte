@@ -9,6 +9,9 @@
 	import HistorySection from '#lib/components/parts/HistorySection.svelte';
 	import IdentitySection from '#lib/components/parts/IdentitySection.svelte';
 	import WhereUsedSection from '#lib/components/parts/WhereUsedSection.svelte';
+	import PartRequirementsSection from '#lib/components/requirements/PartRequirementsSection.svelte'; // added by requirements
+	import SuppliersSection from '#lib/components/parts/SuppliersSection.svelte'; // added by purchasing
+	import PoLinesSection from '#lib/components/parts/PoLinesSection.svelte'; // added by purchasing
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -121,7 +124,11 @@
 	</div>
 	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<BomSection {detail} />
+		<SuppliersSection {detail} entries={data.suppliers} />
+		<PoLinesSection {detail} lines={data.poLines} />
 		<WhereUsedSection {detail} />
+		<!-- added by requirements -->
+		<PartRequirementsSection partId={part.id} partNumber={part.internalPn} version={part.updatedAt} />
 		<BomSection {detail} view="tree" />
 	</div>
 </div>

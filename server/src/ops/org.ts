@@ -1,7 +1,10 @@
 import { contracts } from '@opal/shared';
+import { project as projectTable } from '../db/schema/index.ts';
 import { type Impl, implement } from '../registry.ts';
+import { registerEntity, registerSearchable } from '../services/platform/index.ts';
 import * as numbering from '../services/org/numbering.ts';
 import * as project from '../services/org/project.ts';
+import * as projects from '../services/org/projects.ts';
 import * as roles from '../services/org/roles.ts';
 import * as system from '../services/org/system.ts';
 import * as users from '../services/org/users.ts';
@@ -9,6 +12,18 @@ import * as workcenters from '../services/org/workcenters.ts';
 import { notFound, OpalError } from '@opal/shared';
 
 const c = contracts.org;
+
+registerEntity(projectTable, {
+	label: 'Project',
+	ref: (r) => ({ label: `${r.code} ${r.name}`, href: `/projects/${r.id}` })
+});
+registerSearchable({
+	type: 'project',
+	table: projectTable,
+	columns: [projectTable.name, projectTable.description],
+	identifier: projectTable.code,
+	hit: (r) => ({ label: r.name, sublabel: r.code, href: `/projects/${r.id}`, status: r.state })
+});
 
 export const orgImpls = [
 	// users
@@ -40,23 +55,28 @@ export const orgImpls = [
 	implement(c.workcenters.create, (ctx, input) => workcenters.createWorkcenter(ctx, input)),
 	implement(c.workcenters.update, (ctx, input) => workcenters.updateWorkcenter(ctx, input)),
 	implement(c.workcenters.deactivate, (ctx, input) => (workcenters.deactivateWorkcenter(ctx, input.id), { ok: true as const })),
-	// project
-	implement(c.project.get, (ctx) => {
-		const config = project.getProjectConfig(ctx.db);
-		if (!config) throw notFound('Project configuration');
+	// projects
+	implement(c.projects.list, (ctx, input) => projects.listProjects(ctx, input)),
+	implement(c.projects.get, (ctx, input) => projects.getProject(ctx, input.id)),
+	implement(c.projects.create, (ctx, input) => projects.createProject(ctx, input)),
+	implement(c.projects.update, (ctx, input) => projects.updateProject(ctx, input)),
+	implement(c.projects.archive, (ctx, input) => projects.archiveProject(ctx, input.id)),
+	// organization settings
+	implement(c.settings.get, (ctx) => {
+		const config = project.getOrgSettings(ctx.db);
+		if (!config) throw notFound('Organization settings');
 		return config;
 	}),
-	implement(c.project.create, (ctx, input) => project.createProject(ctx, input)),
-	implement(c.project.update, (ctx, input) => project.updateProject(ctx, input)),
-	implement(c.project.previewPartNumber, (ctx, input) => {
-		const config = project.getProjectConfig(ctx.db);
-		if (!config) throw notFound('Project configuration');
+	implement(c.settings.create, (ctx, input) => project.createOrgSettings(ctx, input)),
+	implement(c.settings.update, (ctx, input) => project.updateOrgSettings(ctx, input)),
+	implement(c.settings.previewPartNumber, (ctx, input) => {
+		const config = project.getOrgSettings(ctx.db);
+		if (!config) throw notFound('Organization settings');
 		const tier = project.getTier(config, input.tierLevel);
 		if (!tier) throw new OpalError(400, 'unknown_tier', `Unknown tier level: ${input.tierLevel}`);
 		return { partNumber: project.renderPartNumber(config, tier, input.sequence), tierName: tier.name };
 	}),
-	implement(c.project.nextPartNumber, (ctx, input) => numbering.peekNextPartNumber(ctx.db, input.tier)),
-	// settings
+	implement(c.settings.nextPartNumber, (ctx, input) => numbering.peekNextPartNumber(ctx.db, input.tier)),
 	implement(c.settings.system, () => system.systemInfo()),
 	implement(c.settings.agentActivation, (ctx) => system.agentActivation(ctx)),
 	implement(c.settings.setAgentActivation, (ctx, input) => system.setAgentActivation(ctx, input.enabled)),

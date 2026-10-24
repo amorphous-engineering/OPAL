@@ -19,7 +19,7 @@
 		title: string;
 		qtyLabel: string;
 		exclude?: number[];
-		onsubmit: (partId: number, quantity: number) => Promise<void>;
+		onsubmit: (partId: number, quantity: string) => Promise<void>;
 	} = $props();
 
 	let chosen = $state<PartRef | null>(null);
@@ -38,7 +38,7 @@
 		if (!chosen) return;
 		busy = true;
 		try {
-			await onsubmit(chosen.id, Number(quantity));
+			await onsubmit(chosen.id, quantity.trim());
 			open = false;
 		} catch (err) {
 			toastError(err);
@@ -61,7 +61,7 @@
 				<Input
 					id="part-qty"
 					type="number"
-					step="any"
+					step="0.0001"
 					min="0"
 					bind:value={quantity}
 					required

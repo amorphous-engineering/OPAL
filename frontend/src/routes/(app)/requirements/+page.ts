@@ -1,12 +1,13 @@
-import { api } from '#lib/api.js';
-import type { Summary, TreeResponse } from '#lib/components/requirements/types.js';
+import { opal, orHttpError } from '#lib/api.js';
+import { filterProjectId, projectOptions } from '#lib/components/projects/projects.js'; // added by projects
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ fetch }) => {
-	const a = api.using(fetch);
-	const [tree, summary] = await Promise.all([
-		a.get<TreeResponse>('/requirements/tree'),
-		a.get<Summary>('/requirements/summary')
-	]);
-	return { tree, summary };
+export const load: PageLoad = async ({ fetch, url }) => {
+	const client = opal.using(fetch);
+	const c = client.requirements;
+	const projectId = filterProjectId(url); // added by projects
+	const [tree, summary, catalog, projects] = await orHttpError(
+		Promise.all([c.tree({ projectId }), c.summary({ projectId }), c.catalog({}), projectOptions(client)])
+	);
+	return { tree, summary, catalog, projects, projectId };
 };

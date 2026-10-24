@@ -34,6 +34,7 @@
 	const sort = urlSort(null);
 	const FILTERS = [
 		'q',
+		'project', // added by projects
 		'type',
 		'status',
 		'state',
@@ -56,6 +57,7 @@
 			sortable: true,
 			sortValue: (i) => i.issueNumber
 		},
+		{ key: 'project', label: 'Project', mono: true, width: '7rem' }, // added by projects
 		{ key: 'title', label: 'Title', sortable: true, sortValue: (i) => i.title },
 		{ key: 'type', label: 'Type', width: '5rem', sortable: true, sortValue: (i) => i.issueType },
 		{
@@ -84,13 +86,25 @@
 		<span class="mono">{data.issues.total} {data.issues.total === 1 ? 'issue' : 'issues'}</span>
 	{/snippet}
 	{#snippet actions()}
-		<Button href="/issues/new" size="sm">+ NEW ISSUE</Button>
+		<Button
+			href={page.url.searchParams.get('project')
+				? `/issues/new?projectId=${page.url.searchParams.get('project')}`
+				: '/issues/new'}
+			size="sm">+ NEW ISSUE</Button
+		>
 	{/snippet}
 </PageHeader>
 
 <ListFrame>
 	<FilterBar clear={FILTERS}>
 		<SearchInput label="Search issues" placeholder="Search number or title" />
+		<!-- added by projects -->
+		<FilterSelect
+			param="project"
+			label="Project"
+			allLabel="All projects"
+			options={data.projects.map((p) => ({ value: String(p.id), label: p.code }))}
+		/>
 		<FilterSelect
 			param="type"
 			label="Type"
@@ -139,6 +153,8 @@
 		{#snippet cell(i, col)}
 			{#if col.key === 'number'}
 				<span class="text-info">{i.issueNumber}</span>
+			{:else if col.key === 'project'}
+				{i.projectCode}
 			{:else if col.key === 'title'}
 				{i.title}
 			{:else if col.key === 'type'}

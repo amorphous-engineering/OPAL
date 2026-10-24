@@ -19,7 +19,7 @@
 	} = $props();
 
 	const p = $derived(data.procedure);
-	const current = $derived(data.versions.find((v) => v.id === p.current_version_id));
+	const current = $derived(data.versions.find((v) => v.id === p.currentVersionId));
 	const ops = $derived(store.allOps);
 	const selected = $derived(
 		store.focusMode
@@ -66,12 +66,22 @@
 	{/if}
 	<Section class="lg:flex-none" title="Details">
 		<DetailTable>
-			<DetailRow label="Type" value={p.procedure_type.toUpperCase()} mono />
-			<DetailRow label="Status"><State value={p.status} /></DetailRow>
+			<DetailRow label="Type" value={p.procedureType.toUpperCase()} mono />
+			<DetailRow label="Project">
+				<a href={`/projects/${p.projectId}`} class="font-mono text-info hover:underline"
+					>{p.projectCode}</a
+				>
+			</DetailRow>
+			<DetailRow label="Status"
+				><State
+					value={p.status}
+					tone={p.status === 'draft' ? 'warn' : p.status === 'obsolete' ? 'error' : 'ok'}
+				/></DetailRow
+			>
 			<DetailRow label="Version">
 				{#if current}
 					<a href={`/procedures/versions/${current.id}`} class="font-mono text-info hover:underline"
-						>v{current.version_number}</a
+						>v{current.versionNumber}</a
 					>
 				{:else}—{/if}
 			</DetailRow>

@@ -100,7 +100,13 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 			if (c.method === 'GET' || c.method === 'DELETE') {
 				input = Object.fromEntries(new URL(hc.req.url).searchParams);
 			} else if (hc.req.header('content-type')?.includes('application/json')) {
-				input = (await hc.req.json()) as Record<string, unknown>;
+				// An empty JSON body means no input fields, not a malformed request.
+				const text = await hc.req.text();
+				try {
+					input = text.trim() ? (JSON.parse(text) as Record<string, unknown>) : {};
+				} catch {
+					throw new OpalError(400, 'invalid_json', 'Request body is not valid JSON');
+				}
 			}
 			Object.assign(input, hc.req.param());
 			const out = await runOp(impl, db, await resolveActor(hc), input as OpInput<typeof c>, {

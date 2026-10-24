@@ -46,6 +46,8 @@ export interface DocImage {
 	/** StepImage id; present when authoring. */
 	id?: number;
 	attachment_id: number;
+	/** Blob hash. When present the image is served from `/api/blobs/<sha256>`. */
+	sha256?: string;
 	caption: string | null;
 }
 

@@ -21,7 +21,7 @@
 		type Column,
 		ErrorBanner
 	} from '#lib/components/opal/index.js';
-	import { api, ApiError, formatDetail } from '#lib/api.js';
+	import { opal, ApiError } from '#lib/api.js';
 	import { iso } from '#lib/format.js';
 	import { session } from '#lib/session.svelte.js';
 	import Redline from '#lib/components/requirements/Redline.svelte';
@@ -124,7 +124,7 @@
 		busy = true;
 		error = null;
 		try {
-			const r = await api.post<{ event_id: number }>('/requirements/baseline-batch', {
+			const r = await opal.requirements.baselineBatch({
 				ids: stagedItems.map((i) => i.id),
 				label: label.trim() || null,
 				note: note.trim() || null
@@ -135,13 +135,10 @@
 				/* nothing stored */
 			}
 			toast.success(`${stagedItems.length} baselined`);
-			await goto(`/requirements/baselines/${r.event_id}`);
+			await goto(`/requirements/baselines/${r.eventId}`);
 		} catch (e) {
-			if (e instanceof ApiError && typeof e.detail === 'object' && e.detail) {
-				const d = e.detail as { offenders?: { req_number: string }[] };
-				error = d.offenders
-					? `Batch aborted, no longer ready: ${d.offenders.map((o) => o.req_number).join(', ')}`
-					: formatDetail(e.detail);
+			if (e instanceof ApiError && e.fields) {
+				error = `Batch aborted, no longer ready: ${Object.keys(e.fields).join(', ')}`;
 			} else error = e instanceof Error ? e.message : 'Batch failed';
 		} finally {
 			busy = false;
@@ -179,7 +176,7 @@
 	}
 
 	const columns: Column<QueueItem>[] = [
-		{ key: 'req_number', label: 'Number', mono: true, width: '7rem' },
+		{ key: 'reqNumber', label: 'Number', mono: true, width: '7rem' },
 		{ key: 'title', label: 'Title' },
 		{ key: 'level', label: 'L', mono: true, width: '3rem', align: 'right' },
 		{ key: 'disposition', label: 'Review', width: '6rem' }
@@ -204,7 +201,7 @@
 		<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
 			{#if current}
 				<Section
-					title={`${current.req_number} REV ${current.revision}`}
+					title={`${current.reqNumber} REV ${current.revision}`}
 					count={`${cursor + 1} of ${items.length}`}
 				>
 					{#snippet actions()}
@@ -225,13 +222,13 @@
 										<a
 											href={`/requirements/${p.id}`}
 											class="text-info hover:underline"
-											title={p.title}>{p.req_number}</a
+											title={p.title}>{p.reqNumber}</a
 										>
-										{#if p.lifecycle_state !== 'baselined'}<span class="text-warn"
-												>{p.lifecycle_state}</span
+										{#if p.lifecycleState !== 'baselined'}<span class="text-warn"
+												>{p.lifecycleState}</span
 											>{/if}
 									{/each}
-									<span class="text-muted-foreground">▸</span><span>{current.req_number}</span>
+									<span class="text-muted-foreground">▸</span><span>{current.reqNumber}</span>
 								</span>
 							{:else}<span class="text-muted-foreground">Level-0 root</span>{/if}
 						</DetailRow>
@@ -241,10 +238,10 @@
 						<DetailRow label="Rationale" value={current.rationale} />
 						<DetailRow
 							label="Verification"
-							value={current.verification_method?.toUpperCase()}
+							value={current.verificationMethod?.toUpperCase()}
 							mono
 						/>
-						<DetailRow label="Children" value={current.children_count} mono />
+						<DetailRow label="Children" value={current.childrenCount} mono />
 						<DetailRow label="Parts" value={current.parts.join(', ')} />
 						{#if current.warnings.length}
 							<DetailRow label="Warnings">
@@ -252,7 +249,7 @@
 							</DetailRow>
 						{/if}
 						{#if current.change}
-							<DetailRow label={`Change since rev ${current.change.rev_a}`}>
+							<DetailRow label={`Change since rev ${current.change.revA}`}>
 								<div class="grid grid-cols-1 gap-1">
 									<Redline segments={current.change.statement} />
 									<Redline segments={current.change.rationale} />
@@ -275,7 +272,7 @@
 						dense
 					>
 						{#snippet cell(r, col)}
-							{#if col.key === 'req_number'}<span class="text-info">{r.req_number}</span>
+							{#if col.key === 'reqNumber'}<span class="text-info">{r.reqNumber}</span>
 							{:else if col.key === 'disposition'}
 								{@const s = status(r)}
 								{#if s === 'staged'}<State value="staged" tone="ok" label="APPROVED" />

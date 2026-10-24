@@ -3,28 +3,31 @@
 	// callouts, data field, image and step kit exactly as frozen at publish.
 	import { EmptyLine, Section } from '#lib/components/opal/index.js';
 	import { duration, qty } from '#lib/format.js';
-	import { CalloutList, calloutsOf } from '#lib/components/procedure-doc/index.js';
+	import { CalloutList } from '#lib/components/procedure-doc/index.js';
 	import Prose from './Prose.svelte';
+	import type { VersionPart } from '@opal/shared';
 	import { groupOps, type OpGroup, type SnapshotStep } from './types.js';
 
-	let { steps }: { steps: SnapshotStep[] } = $props();
+	let { steps, parts }: { steps: SnapshotStep[]; parts: VersionPart[] } = $props();
+
+	const partById = $derived(new Map(parts.map((p) => [p.id, p])));
 
 	const grouped = $derived(groupOps(steps));
 </script>
 
 {#snippet detail(s: SnapshotStep)}
-	{#if calloutsOf(s).length}
-		<div class="my-1"><CalloutList callouts={calloutsOf(s)} /></div>
+	{#if s.callouts.length}
+		<div class="my-1"><CalloutList callouts={s.callouts} /></div>
 	{/if}
 	{#if s.instructions}
 		<Prose source={s.instructions} class="my-1" />
 	{/if}
-	{#if s.images?.length}
+	{#if s.images.length}
 		<div class="my-1 flex flex-wrap gap-2">
-			{#each s.images as img (img.attachment_id)}
+			{#each s.images as img, i (i)}
 				<figure class="m-0">
 					<img
-						src={`/api/attachments/${img.attachment_id}/download`}
+						src={`/api/blobs/${img.sha256}`}
 						alt={img.caption ?? ''}
 						loading="lazy"
 						class="max-h-40 rounded-md border border-border"
@@ -36,7 +39,7 @@
 			{/each}
 		</div>
 	{/if}
-	{#if s.required_data_schema?.fields?.length}
+	{#if s.dataSchema?.fields?.length}
 		<table class="my-1 w-full max-w-xl border-collapse text-xs">
 			<thead>
 				<tr class="border-b border-border bg-muted/60">
@@ -47,7 +50,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each s.required_data_schema.fields as f (f.name)}
+				{#each s.dataSchema.fields as f (f.name)}
 					<tr class="border-b border-border">
 						<td class="px-2 py-0.5">{f.label ?? f.name}{f.unit ? ` (${f.unit})` : ''}</td>
 						<td class="px-2 py-0.5 font-mono uppercase">{f.type ?? 'text'}</td>
@@ -61,17 +64,17 @@
 			</tbody>
 		</table>
 	{/if}
-	{#if s.step_kit?.length}
+	{#if s.kit.length}
 		<p class="my-1 font-mono text-xs">
 			<span class="label">Step kit</span>
-			{s.step_kit.map((k) => `${k.part_name} × ${qty(k.quantity_required)}`).join(' · ')}
+			{s.kit.map((k) => `${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}`).join(' · ')}
 		</p>
 	{/if}
 	{@render signoffs(s)}
 {/snippet}
 
 {#snippet signoffs(s: SnapshotStep)}
-	{#if s.signoffs?.length}
+	{#if s.signoffs.length}
 		<div class="my-1 max-w-xl overflow-hidden rounded-lg border border-border">
 			<table class="w-full font-mono text-xs" aria-label="Sign-offs">
 				<tbody>
@@ -90,11 +93,11 @@
 {#snippet group(g: OpGroup)}
 	<div class="border-b border-border last:border-b-0">
 		<div class="flex items-baseline gap-3 bg-muted/40 px-3 py-1.5">
-			<span class="font-mono font-medium">OP {g.op.step_number}</span>
+			<span class="font-mono font-medium">OP {g.op.number}</span>
 			<span class="font-medium">{g.op.title}</span>
 			<span class="ml-auto flex gap-3 font-mono text-xs text-muted-foreground">
 				<span>{g.subs.length} {g.subs.length === 1 ? 'step' : 'steps'}</span>
-				{#if g.op.estimated_duration_minutes}<span>{duration(g.op.estimated_duration_minutes)}</span
+				{#if g.op.estimatedDurationMinutes}<span>{duration(g.op.estimatedDurationMinutes)}</span
 					>{/if}
 			</span>
 		</div>
@@ -102,12 +105,11 @@
 		{#each g.subs as s (s.id)}
 			<div class="border-t border-border px-3 py-1.5 pl-8">
 				<div class="flex items-baseline gap-3">
-					<span class="font-mono text-xs text-muted-foreground">{s.step_number}</span>
+					<span class="font-mono text-xs text-muted-foreground">{s.number}</span>
 					<span>{s.title}</span>
 					<span class="ml-auto flex gap-3 font-mono text-xs text-muted-foreground uppercase">
-						{#if s.required_data_schema?.fields?.length}<span>data</span>{/if}
-						{#if s.estimated_duration_minutes}<span>{duration(s.estimated_duration_minutes)}</span
-							>{/if}
+						{#if s.dataSchema?.fields?.length}<span>data</span>{/if}
+						{#if s.estimatedDurationMinutes}<span>{duration(s.estimatedDurationMinutes)}</span>{/if}
 					</span>
 				</div>
 				{@render detail(s)}

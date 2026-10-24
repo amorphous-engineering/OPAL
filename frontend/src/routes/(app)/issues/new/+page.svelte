@@ -14,6 +14,7 @@
 		toastError,
 		ErrorBanner
 	} from '#lib/components/opal/index.js';
+	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte'; // added by projects
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import { CONTAINMENT_OPTION } from '#lib/components/issues/issues.js';
 	import {
@@ -31,6 +32,7 @@
 	let { data }: PageProps = $props();
 
 	// Reset when the invoking context (the query string) changes.
+	let projectId = $state(0); // added by projects
 	let part = $state<Ctx | null>(null);
 	let execution = $state<Ctx | null>(null);
 	let step = $state<Ctx | null>(null);
@@ -56,15 +58,17 @@
 		title = data.defaults.title;
 		type = data.defaults.type as IssueType;
 		containment = data.defaults.containment as Containment;
+		if (data.projectId) projectId = data.projectId; // added by projects
 	});
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		if (!title.trim()) return;
+		if (!title.trim() || !projectId) return;
 		busy = true;
 		error = null;
 		const text = (v: string) => v.trim() || null;
 		const body = {
+			projectId, // added by projects
 			title: title.trim(),
 			description: text(description),
 			issueType: type,
@@ -111,6 +115,11 @@
 	onsubmit={submit}
 >
 	<div class="grid grid-cols-1 content-start gap-3">
+		<div class="grid grid-cols-1 gap-1.5">
+			<Label for="project">Project</Label>
+			<ProjectSelect id="project" bind:value={projectId} />
+		</div>
+
 		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="title">Title</Label>
 			<Input id="title" bind:value={title} required maxlength={255} autofocus />
@@ -189,7 +198,7 @@
 
 		<ErrorBanner message={error} />
 		<div class="flex gap-2">
-			<Button type="submit" disabled={busy || !title.trim()}>CREATE</Button>
+			<Button type="submit" disabled={busy || !title.trim() || !projectId}>CREATE</Button>
 			<Button variant="outline" href="/issues">CANCEL</Button>
 		</div>
 	</div>

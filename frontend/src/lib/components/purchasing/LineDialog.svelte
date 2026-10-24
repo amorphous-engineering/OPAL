@@ -5,10 +5,10 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api } from '#lib/api.js';
-	import { ApiError } from '#lib/api.js';
+	import { ApiError, opal } from '#lib/api.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
-	import { num, type PickedPart, type PurchaseLine } from './types.js';
+	import type { PickedPart } from '#lib/components/parts/types.js';
+	import { num, type PurchaseLine } from './types.js';
 
 	let {
 		open = $bindable(false),
@@ -36,13 +36,13 @@
 		if (!open) return;
 		error = null;
 		part = null;
-		qty = line ? String(num(line.qty_ordered)) : '';
-		cost = line?.unit_cost != null ? String(num(line.unit_cost)) : '';
+		qty = line ? line.qtyOrdered : '';
+		cost = line?.unitCost ?? '';
 		destination = line?.destination ?? '';
 		notes = line?.notes ?? '';
 	});
 
-	const received = $derived(line ? num(line.qty_received) : 0);
+	const received = $derived(line ? num(line.qtyReceived) : 0);
 	const costLocked = $derived(received > 0);
 
 	async function submit(e: SubmitEvent) {
@@ -55,16 +55,21 @@
 		busy = true;
 		try {
 			const body = {
-				qty_ordered: Number(qty),
-				unit_cost: cost === '' ? null : Number(cost),
+				qtyOrdered: qty.trim(),
+				unitCost: cost.trim() === '' ? null : cost.trim(),
 				destination: destination.trim() || null,
 				notes: notes.trim() || null
 			};
 			if (line) {
-				if (costLocked) delete (body as { unit_cost?: number | null }).unit_cost;
-				await api.patch(`/purchases/${purchaseId}/lines/${line.id}`, body);
+				const { unitCost, ...rest } = body;
+				await opal.purchasing.orders.updateLine({
+					id: purchaseId,
+					lineId: line.id,
+					...(costLocked ? rest : body)
+				});
+				void unitCost;
 			} else {
-				await api.post(`/purchases/${purchaseId}/lines`, { ...body, part_id: part!.id });
+				await opal.purchasing.orders.addLine({ id: purchaseId, ...body, partId: part!.id });
 			}
 			open = false;
 			await onsaved();
@@ -86,8 +91,8 @@
 				<Label for="line-part">Part</Label>
 				{#if line}
 					<div class="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-xs">
-						<span class="font-mono text-info">{line.part_internal_pn ?? '—'}</span>
-						<span class="truncate">{line.part_name}</span>
+						<span class="font-mono text-info">{line.partInternalPn}</span>
+						<span class="truncate">{line.partName}</span>
 					</div>
 				{:else}
 					<PartPicker id="line-part" bind:value={part} activeOnly meta="procurement" />
@@ -96,8 +101,8 @@
 			<div class="grid grid-cols-2 gap-3">
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="line-qty"
-						>Quantity{line?.unit_of_measure && line.unit_of_measure !== 'ea'
-							? ` (${line.unit_of_measure})`
+						>Quantity{line?.unitOfMeasure && line.unitOfMeasure !== 'ea'
+							? ` (${line.unitOfMeasure})`
 							: ''}</Label
 					>
 					<Input

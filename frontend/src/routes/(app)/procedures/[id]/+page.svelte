@@ -2,21 +2,20 @@
 	import { goto, refreshAll } from '$app/navigation';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { PageHeader, State, confirm, toast, toastError } from '#lib/components/opal/index.js';
 	import CloneDialog from '#lib/components/procedures/CloneDialog.svelte';
 	import DetailsDialog from '#lib/components/procedures/DetailsDialog.svelte';
 	import PublishDialog from '#lib/components/procedures/PublishDialog.svelte';
 	import TemplateView from '#lib/components/procedures/TemplateView.svelte';
-	import type { ProcedureDetail } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	const p = $derived(data.procedure);
-	const currentVersion = $derived(data.versions.find((v) => v.id === p.current_version_id));
-	const nextVersion = $derived((data.versions[0]?.version_number ?? 0) + 1);
-	const startable = $derived(p.status === 'active' && !!p.current_version_id);
+	const currentVersion = $derived(data.versions.find((v) => v.id === p.currentVersionId));
+	const nextVersion = $derived((data.versions[0]?.versionNumber ?? 0) + 1);
+	const startable = $derived(p.status === 'released' && !!p.currentVersionId);
 	// The editor changes the draft under the loaded page: it reports sizes, and the
 	// draft-vs-published state is re-read from the API after edits settle.
 	let live = $state<{ unpublished: boolean | null; ops: number; steps: number } | null>(null);
@@ -26,11 +25,8 @@
 		void data.procedure;
 		live = null;
 	});
-	const unpublished = $derived(live ? live.unpublished : p.unpublished_changes);
-	// Until the API carries it, the identifier falls back to a fixed word.
-	const templateNumber = $derived(
-		(p as ProcedureDetail & { template_number?: string }).template_number ?? 'TEMPLATE'
-	);
+	const unpublished = $derived(live ? live.unpublished : p.unpublishedChanges);
+	const templateNumber = $derived(p.templateNumber);
 
 	let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 	function draftChanged(counts: { ops: number; steps: number }) {
@@ -38,9 +34,9 @@
 		const ticket = ++liveFor;
 		refreshTimer = setTimeout(async () => {
 			try {
-				const fresh = await api.get<ProcedureDetail>(`/procedures/${p.id}`);
+				const fresh = await opal.procedures.get({ id: p.id });
 				if (ticket === liveFor)
-					live = { unpublished: fresh.unpublished_changes, ops: counts.ops, steps: counts.steps };
+					live = { unpublished: fresh.unpublishedChanges, ops: counts.ops, steps: counts.steps };
 			} catch {
 				/* the next change re-reads it */
 			}
@@ -53,17 +49,17 @@
 
 	const reload = () => refreshAll();
 
-	async function setStatus(status: 'active' | 'deprecated') {
-		if (status === 'deprecated') {
+	async function setStatus(status: 'released' | 'obsolete') {
+		if (status === 'obsolete') {
 			const ok = await confirm({
-				title: 'Deprecate this template?',
+				title: 'Mark this template obsolete?',
 				body: 'No new work orders can be cut from it. Existing work orders continue.',
-				action: 'DEPRECATE'
+				action: 'OBSOLETE'
 			});
 			if (!ok) return;
 		}
 		try {
-			await api.patch(`/procedures/${p.id}`, { status });
+			await opal.procedures.update({ id: p.id, status });
 			await reload();
 		} catch (e) {
 			toastError(e);
@@ -73,13 +69,13 @@
 	async function remove() {
 		const ok = await confirm({
 			title: `Delete ${p.name}?`,
-			body: 'The template and its draft are removed. Work orders already cut keep their published version.',
+			body: 'The template and its draft are removed.',
 			action: 'DELETE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/procedures/${p.id}`);
+			await opal.procedures.delete({ id: p.id });
 			toast.success('Template deleted');
 			await goto('/procedures');
 		} catch (e) {
@@ -100,10 +96,14 @@
 			{#snippet state()}
 				{#if currentVersion}
 					<span class="font-mono text-xs text-muted-foreground"
-						>v{currentVersion.version_number}</span
+						>v{currentVersion.versionNumber}</span
 					>
 				{/if}
-				<State value={p.status} badge={p.status !== 'active'} />
+				<State
+					value={p.status}
+					tone={p.status === 'draft' ? 'warn' : p.status === 'obsolete' ? 'error' : 'ok'}
+					badge={p.status !== 'released'}
+				/>
 			{/snippet}
 			{#snippet actions()}
 				{#if startable}
@@ -112,10 +112,10 @@
 				{#if unpublished !== false}
 					<Button onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button>
 				{/if}
-				{#if p.status === 'active'}
-					<Button variant="outline" onclick={() => setStatus('deprecated')}>DEPRECATE</Button>
-				{:else if p.status === 'deprecated'}
-					<Button variant="outline" onclick={() => setStatus('active')}>ACTIVATE</Button>
+				{#if p.status === 'released'}
+					<Button variant="outline" onclick={() => setStatus('obsolete')}>OBSOLETE</Button>
+				{:else if p.status === 'obsolete'}
+					<Button variant="outline" onclick={() => setStatus('released')}>RELEASE</Button>
 				{/if}
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
@@ -133,7 +133,7 @@
 			{/snippet}
 		</PageHeader>
 	</div>
-	{#key `${p.id}:${p.updated_at}`}
+	{#key `${p.id}:${p.updatedAt}`}
 		<TemplateView {data} {unpublished} {startable} onchange={draftChanged} onreload={reload} />
 	{/key}
 </div>
@@ -150,7 +150,8 @@
 	procedureId={p.id}
 	name={p.name}
 	description={p.description}
-	type={p.procedure_type}
+	type={p.procedureType}
+	projectId={p.projectId}
 	onsaved={reload}
 />
 <CloneDialog bind:open={cloning} procedureId={p.id} name={p.name} />

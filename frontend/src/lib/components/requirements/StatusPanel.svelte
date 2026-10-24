@@ -14,7 +14,7 @@
 	<span class="flex flex-wrap gap-x-3 gap-y-0.5">
 		{#each list as r (r.id)}
 			<a href={`/requirements/${r.id}`} class="mono text-info hover:underline" title={r.title}
-				>{r.req_number}{#if extra}<span class="text-muted-foreground"> {extra(r)}</span>{/if}</a
+				>{r.reqNumber}{#if extra}<span class="text-muted-foreground"> {extra(r)}</span>{/if}</a
 			>
 		{/each}
 	</span>
@@ -25,18 +25,18 @@
 		<DetailTable>
 			<DetailRow label="States" mono>
 				{#each ['draft', 'preliminary', 'baselined'] as s (s)}
-					<span class="mr-3">{s.toUpperCase()} {summary.by_state[s] ?? 0}</span>
+					<span class="mr-3">{s.toUpperCase()} {summary.byState[s] ?? 0}</span>
 				{/each}
 			</DetailRow>
 			<DetailRow label="Parts coverage" mono>
-				<span class={cov.leaves_allocated < cov.leaves ? 'text-warn' : 'text-ok'}
-					>{cov.leaves_allocated} / {cov.leaves}</span
+				<span class={cov.leavesAllocated < cov.leaves ? 'text-warn' : 'text-ok'}
+					>{cov.leavesAllocated} / {cov.leaves}</span
 				>
 				<span class="text-muted-foreground">leaf requirements have parts</span>
 			</DetailRow>
 			<DetailRow label="Verification set" mono>
-				<span class={cov.with_verification_method < summary.total ? 'text-warn' : 'text-ok'}
-					>{cov.with_verification_method} / {summary.total}</span
+				<span class={cov.withVerificationMethod < summary.total ? 'text-warn' : 'text-ok'}
+					>{cov.withVerificationMethod} / {summary.total}</span
 				>
 				<span class="text-muted-foreground">have a method</span>
 			</DetailRow>
@@ -49,9 +49,9 @@
 		</DetailTable>
 		<DetailTable>
 			<DetailRow label="Ready to baseline" mono>
-				{#if summary.ready_to_baseline}
+				{#if summary.readyToBaseline}
 					<a href="/requirements/queue" class="text-info hover:underline"
-						>{summary.ready_to_baseline} in queue</a
+						>{summary.readyToBaseline} in queue</a
 					>
 				{:else}
 					<span class="text-muted-foreground">—</span>
@@ -63,20 +63,20 @@
 					>{/if}
 			</DetailRow>
 			<DetailRow label="Overdue TBR">
-				{#if summary.overdue_tbrs.length}
+				{#if summary.overdueTbrs.length}
 					<span class="flex flex-wrap gap-x-3 gap-y-0.5 text-error">
-						{#each summary.overdue_tbrs as t (t.id)}
+						{#each summary.overdueTbrs as t (t.id)}
 							<a
 								href={`/requirements/${t.id}`}
 								class="mono hover:underline"
-								title={`${t.title}; owner ${t.owner}`}>{t.req_number} +{t.days_over}d</a
+								title={`${t.title}; owner ${t.owner}`}>{t.reqNumber} +{t.daysOver}d</a
 							>
 						{/each}
 					</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			</DetailRow>
 			<DetailRow label="Stuck drafts">
-				{#if summary.stuck_drafts.length}{@render refs(summary.stuck_drafts)}{:else}<span
+				{#if summary.stuckDrafts.length}{@render refs(summary.stuckDrafts)}{:else}<span
 						class="text-muted-foreground">—</span
 					>{/if}
 			</DetailRow>

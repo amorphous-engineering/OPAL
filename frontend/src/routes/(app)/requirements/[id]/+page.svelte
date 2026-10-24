@@ -19,12 +19,13 @@
 		toastError,
 		type Column
 	} from '#lib/components/opal/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { iso } from '#lib/format.js';
 	import { session } from '#lib/session.svelte.js';
 	import LintEditor from '#lib/components/requirements/LintEditor.svelte';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import QuickCreate from '#lib/components/requirements/QuickCreate.svelte';
+	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
 	import Redline from '#lib/components/requirements/Redline.svelte';
 	import {
 		LEVELS,
@@ -39,10 +40,10 @@
 	let { data }: PageProps = $props();
 	const req = $derived(data.req);
 	const mutable = $derived(
-		req.lifecycle_state === 'draft' || req.lifecycle_state === 'preliminary'
+		req.lifecycleState === 'draft' || req.lifecycleState === 'preliminary'
 	);
 	const terminal = $derived(
-		req.lifecycle_state === 'superseded' || req.lifecycle_state === 'cancelled'
+		req.lifecycleState === 'superseded' || req.lifecycleState === 'cancelled'
 	);
 
 	// Local copies of the text fields; reset whenever the server row changes.
@@ -57,9 +58,11 @@
 		category = req.category ?? '';
 	});
 
-	async function save(patch: Record<string, unknown>) {
+	type Patch = Omit<Parameters<typeof opal.requirements.update>[0], 'id'>;
+
+	async function save(patch: Patch) {
 		try {
-			await api.patch(`/requirements/${req.id}`, patch);
+			await opal.requirements.update({ id: req.id, ...patch });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -75,7 +78,7 @@
 			invalidateAll();
 			return;
 		}
-		save({ [field]: value.trim() === '' ? null : value });
+		save({ [field]: value.trim() === '' ? null : value } as Patch);
 	}
 
 	const nowIso = () => iso(new Date()).slice(0, 19) + 'Z';
@@ -84,14 +87,14 @@
 	// ---- lifecycle actions ----
 	async function baselineIt() {
 		const ok = await confirm({
-			title: `Baseline ${req.req_number} rev ${req.revision}`,
+			title: `Baseline ${req.reqNumber} rev ${req.revision}`,
 			body: `This locks the revision; later changes need a new revision. Signed ${who()} · ${nowIso()}.`,
 			action: 'BASELINE'
 		});
 		if (!ok) return;
 		try {
-			await api.post(`/requirements/${req.id}/baseline`);
-			toast.success(`${req.req_number} baselined`);
+			await opal.requirements.baseline({ id: req.id });
+			toast.success(`${req.reqNumber} baselined`);
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -101,7 +104,7 @@
 
 	async function revise() {
 		try {
-			const next = await api.post<{ id: number }>(`/requirements/${req.id}/revise`);
+			const next = await opal.requirements.revise({ id: req.id });
 			await goto(`/requirements/${next.id}`);
 		} catch (e) {
 			toastError(e);
@@ -110,14 +113,14 @@
 
 	async function cancelIt() {
 		const ok = await confirm({
-			title: `Cancel ${req.req_number}?`,
+			title: `Cancel ${req.reqNumber}?`,
 			body: 'Cancelled is terminal. The requirement stays in the record and cannot be revised or baselined again.',
 			action: 'CANCEL REQUIREMENT',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.post(`/requirements/${req.id}/cancel`);
+			await opal.requirements.cancel({ id: req.id });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -126,14 +129,14 @@
 
 	async function deleteIt() {
 		const ok = await confirm({
-			title: `Delete ${req.req_number}?`,
+			title: `Delete ${req.reqNumber}?`,
 			body: 'The draft is removed. Its number is not reused.',
 			action: 'DELETE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/requirements/${req.id}`);
+			await opal.requirements.delete({ id: req.id });
 			await goto('/requirements');
 		} catch (e) {
 			toastError(e);
@@ -142,13 +145,13 @@
 
 	async function reaffirm() {
 		const ok = await confirm({
-			title: `Re-affirm ${req.req_number}`,
+			title: `Re-affirm ${req.reqNumber}`,
 			body: `The parent's change does not invalidate this requirement. Signed ${who()} · ${nowIso()}.`,
 			action: 'RE-AFFIRM'
 		});
 		if (!ok) return;
 		try {
-			await api.post(`/requirements/${req.id}/reaffirm`);
+			await opal.requirements.reaffirm({ id: req.id });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -158,7 +161,7 @@
 	// ---- parts (allocations) ----
 	async function assign(part: { id: number; name: string }) {
 		try {
-			await api.post(`/requirements/parts/${part.id}`, { requirement_id: req.req_number });
+			await opal.requirements.assign({ partId: part.id, reqNumber: req.reqNumber });
 			toast.success(`${part.name} assigned`);
 			await invalidateAll();
 		} catch (e) {
@@ -168,8 +171,8 @@
 
 	async function setStatus(a: Allocation, status: string) {
 		try {
-			if (status === 'verified') await api.post(`/requirements/allocations/${a.id}/verify`, {});
-			else await api.patch(`/requirements/allocations/${a.id}`, { status });
+			if (status === 'verified') await opal.requirements.verifyLink({ id: a.id });
+			else await opal.requirements.updateLink({ id: a.id, status: status as Allocation['status'] });
 		} catch (e) {
 			toastError(e);
 		}
@@ -179,7 +182,7 @@
 	async function setNotes(a: Allocation, notes: string) {
 		if (notes === (a.notes ?? '')) return;
 		try {
-			await api.patch(`/requirements/allocations/${a.id}`, { notes });
+			await opal.requirements.updateLink({ id: a.id, notes });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -188,14 +191,14 @@
 
 	async function unassign(a: Allocation) {
 		const ok = await confirm({
-			title: `Unassign ${a.part_name} from ${req.req_number}?`,
+			title: `Unassign ${a.partName} from ${req.reqNumber}?`,
 			body: 'The part stops carrying this requirement and its verification record is removed.',
 			action: 'UNASSIGN',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/requirements/allocations/${a.id}`);
+			await opal.requirements.unassign({ id: a.id });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -203,11 +206,11 @@
 	}
 
 	const allocColumns: Column<Allocation>[] = [
-		{ key: 'part_name', label: 'Part' },
-		{ key: 'internal_pn', label: 'Part number', mono: true, width: '9rem' },
+		{ key: 'partName', label: 'Part' },
+		{ key: 'internalPn', label: 'Part number', mono: true, width: '9rem' },
 		{ key: 'status', label: 'Verification', width: '10rem' },
 		{ key: 'verified', label: 'Verified', width: '13rem' },
-		{ key: 'against_revision', label: 'Rev', mono: true, width: '4rem', align: 'right' },
+		{ key: 'againstRevision', label: 'Rev', mono: true, width: '4rem', align: 'right' },
 		{ key: 'notes', label: 'Notes', width: '18rem' },
 		{ key: 'actions', label: '', width: '6rem', align: 'right' }
 	];
@@ -215,9 +218,9 @@
 	// ---- flow-down ----
 	let qcOpen = $state(false);
 	const childColumns: Column<Dossier['children'][number]>[] = [
-		{ key: 'req_number', label: 'Number', mono: true, width: '7rem' },
+		{ key: 'reqNumber', label: 'Number', mono: true, width: '7rem' },
 		{ key: 'title', label: 'Title' },
-		{ key: 'lifecycle_state', label: 'State', width: '8rem' },
+		{ key: 'lifecycleState', label: 'State', width: '8rem' },
 		{ key: 'level', label: 'L', mono: true, width: '3rem', align: 'right' },
 		{ key: 'stale', label: 'Flags', width: '6rem' }
 	];
@@ -225,15 +228,15 @@
 	// ---- revisions and redline ----
 	const revColumns: Column<Dossier['revisions'][number]>[] = [
 		{ key: 'revision', label: 'Rev', mono: true, width: '4rem' },
-		{ key: 'lifecycle_state', label: 'State', width: '8rem' },
+		{ key: 'lifecycleState', label: 'State', width: '8rem' },
 		{ key: 'statement', label: 'Statement' },
-		{ key: 'baselined_at', label: 'Baselined', width: '10rem' }
+		{ key: 'baselinedAt', label: 'Baselined', width: '10rem' }
 	];
 	let revA = $state(0);
 	let revB = $state(0);
 	let redline = $state<RedlineData | null>(null);
 	$effect(() => {
-		revA = req.predecessor_revision ?? req.revision;
+		revA = req.predecessorRevision ?? req.revision;
 		revB = req.revision;
 	});
 	$effect(() => {
@@ -242,14 +245,14 @@
 			redline = null;
 			return;
 		}
-		api
-			.get<RedlineData>(`/requirements/${id}/redline`, { rev_a: a, rev_b: b })
+		opal.requirements
+			.redline({ id, revA: a, revB: b })
 			.then((r) => (redline = r))
 			.catch(() => (redline = null));
 	});
 
-	const eventColumns: Column<Dossier['baseline_events'][number]>[] = [
-		{ key: 'created_at', label: 'When', width: '10rem' },
+	const eventColumns: Column<Dossier['baselineEvents'][number]>[] = [
+		{ key: 'createdAt', label: 'When', width: '10rem' },
 		{ key: 'revision', label: 'Rev', mono: true, width: '4rem' },
 		{ key: 'label', label: 'Label' }
 	];
@@ -261,11 +264,11 @@
 
 <PageHeader
 	title={req.title}
-	identifier={req.req_number}
+	identifier={req.reqNumber}
 	crumbs={[
 		{ label: 'Requirements', href: '/requirements' },
-		...req.parent_chain.map((p) => ({ label: p.req_number, href: `/requirements/${p.id}` })),
-		{ label: req.req_number }
+		...req.parentChain.map((p) => ({ label: p.reqNumber, href: `/requirements/${p.id}` })),
+		{ label: req.reqNumber }
 	]}
 >
 	{#snippet heading()}
@@ -282,7 +285,7 @@
 		</h1>
 	{/snippet}
 	{#snippet state()}
-		<State value={req.lifecycle_state} tone={lifecycleTone(req.lifecycle_state)} badge />
+		<State value={req.lifecycleState} tone={lifecycleTone(req.lifecycleState)} badge />
 		<span class="mono text-xs text-muted-foreground">REV {req.revision}</span>
 		{#if req.stale}
 			<span
@@ -296,10 +299,10 @@
 		<Button size="sm" variant="ghost" href={`/audit?entity=requirement&record=${req.id}`}
 			>AUDIT</Button
 		>
-		{#if req.lifecycle_state === 'baselined'}
+		{#if req.lifecycleState === 'baselined'}
 			<Button size="sm" onclick={revise}>REVISE</Button>
 		{/if}
-		{#if req.can_delete}
+		{#if req.canDelete}
 			<Button size="sm" variant="destructive" onclick={deleteIt}>DELETE</Button>
 		{/if}
 		{#if !terminal}
@@ -313,6 +316,7 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<Section title="REQUIREMENT">
 		<DetailTable>
+			<ProjectRow id={req.projectId} code={req.projectCode} name={req.projectName} /> <!-- added by projects -->
 			<DetailRow label="Statement">
 				{#if mutable}
 					<LintEditor
@@ -359,22 +363,22 @@
 						<NativeSelect
 							size="sm"
 							class="w-full"
-							value={String(req.parent_id ?? '')}
+							value={String(req.parentId ?? '')}
 							onchange={(e) =>
-								save({ parent_id: e.currentTarget.value ? Number(e.currentTarget.value) : null })}
+								save({ parentId: e.currentTarget.value ? Number(e.currentTarget.value) : null })}
 							aria-label="Parent"
 						>
 							<NativeSelectOption value="">None (root)</NativeSelectOption>
 							{#each data.parents as p (p.id)}
 								<NativeSelectOption value={String(p.id)}
-									>{p.req_number} {p.title}</NativeSelectOption
+									>{p.reqNumber} {p.title}</NativeSelectOption
 								>
 							{/each}
 						</NativeSelect>
-					{:else if req.parent_chain.length}
-						{@const p = req.parent_chain[req.parent_chain.length - 1]}
+					{:else if req.parentChain.length}
+						{@const p = req.parentChain[req.parentChain.length - 1]}
 						<a href={`/requirements/${p.id}`} class="hover:underline"
-							><span class="mono text-info">{p.req_number}</span> {p.title}</a
+							><span class="mono text-info">{p.reqNumber}</span> {p.title}</a
 						>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
@@ -399,8 +403,8 @@
 					{#if mutable}
 						<NativeSelect
 							size="sm"
-							value={req.verification_method ?? ''}
-							onchange={(e) => save({ verification_method: e.currentTarget.value || null })}
+							value={req.verificationMethod ?? ''}
+							onchange={(e) => save({ verificationMethod: (e.currentTarget.value || null) as Patch['verificationMethod'] })}
 							aria-label="Verification method"
 						>
 							<NativeSelectOption value="">Not set</NativeSelectOption>
@@ -408,7 +412,7 @@
 								<NativeSelectOption value={m}>{m.toUpperCase()}</NativeSelectOption>
 							{/each}
 						</NativeSelect>
-					{:else}<span class="mono">{req.verification_method?.toUpperCase() ?? '—'}</span>{/if}
+					{:else}<span class="mono">{req.verificationMethod?.toUpperCase() ?? '—'}</span>{/if}
 				</DetailRow>
 				<DetailRow label="Verification">
 					<State
@@ -445,10 +449,10 @@
 					{#if mutable}
 						<NativeSelect
 							size="sm"
-							value={String(req.tbr_owner_id ?? '')}
+							value={String(req.tbrOwnerId ?? '')}
 							onchange={(e) =>
 								save({
-									tbr_owner_id: e.currentTarget.value ? Number(e.currentTarget.value) : null
+									tbrOwnerId: e.currentTarget.value ? Number(e.currentTarget.value) : null
 								})}
 							aria-label="TBR owner"
 						>
@@ -457,31 +461,31 @@
 								<NativeSelectOption value={String(u.id)}>{u.name}</NativeSelectOption>
 							{/each}
 						</NativeSelect>
-					{:else}{req.tbr_owner ?? '—'}{/if}
+					{:else}{req.tbrOwner ?? '—'}{/if}
 				</DetailRow>
 				<DetailRow label="TBR due">
 					{#if mutable}
 						<Input
 							type="date"
 							class="h-7 w-40 font-mono"
-							value={req.tbr_due?.slice(0, 10) ?? ''}
+							value={req.tbrDue?.slice(0, 10) ?? ''}
 							onchange={(e) =>
 								save({
-									tbr_due: e.currentTarget.value ? `${e.currentTarget.value}T00:00:00Z` : null
+									tbrDue: e.currentTarget.value ? `${e.currentTarget.value}T00:00:00Z` : null
 								})}
 							aria-label="TBR due"
 						/>
-					{:else}<Timestamp value={req.tbr_due} dateOnly />{/if}
+					{:else}<Timestamp value={req.tbrDue} dateOnly />{/if}
 				</DetailRow>
 				<DetailRow label="Baselined">
-					{#if req.baselined_at}
-						<Timestamp value={req.baselined_at} />{req.baselined_by
-							? ` by ${req.baselined_by}`
+					{#if req.baselinedAt}
+						<Timestamp value={req.baselinedAt} />{req.baselinedBy
+							? ` by ${req.baselinedBy}`
 							: ''}
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
-				<DetailRow label="Created"><Timestamp value={req.created_at} /></DetailRow>
-				<DetailRow label="Updated"><Timestamp value={req.updated_at} /></DetailRow>
+				<DetailRow label="Created"><Timestamp value={req.createdAt} /></DetailRow>
+				<DetailRow label="Updated"><Timestamp value={req.updatedAt} /></DetailRow>
 			</DetailTable>
 		</div>
 	</Section>
@@ -490,7 +494,7 @@
 		<Section title="BASELINE READINESS" count={failingHard ? `${failingHard} blocking` : 'clear'}>
 			{#snippet actions()}
 				<Button size="xs" disabled={!req.readiness?.ready} onclick={baselineIt}
-					>BASELINE {req.req_number}</Button
+					>BASELINE {req.reqNumber}</Button
 				>
 			{/snippet}
 			<DataTable
@@ -537,9 +541,9 @@
 				dense
 			>
 				{#snippet cell(c, col)}
-					{#if col.key === 'req_number'}<span class="text-info">{c.req_number}</span>
-					{:else if col.key === 'lifecycle_state'}
-						<State value={c.lifecycle_state} tone={lifecycleTone(c.lifecycle_state)} />
+					{#if col.key === 'reqNumber'}<span class="text-info">{c.reqNumber}</span>
+					{:else if col.key === 'lifecycleState'}
+						<State value={c.lifecycleState} tone={lifecycleTone(c.lifecycleState)} />
 					{:else if col.key === 'stale'}
 						{#if c.stale}<State value="stale" tone="warn" label="STALE" />{:else}<span
 								class="text-muted-foreground">—</span
@@ -560,7 +564,7 @@
 						align="end"
 						trigger={assignPart}
 						onselect={(p) => p && assign(p)}
-						exclude={req.allocations.map((a) => a.part_id)}
+						exclude={req.allocations.map((a) => a.partId)}
 					/>{/if}
 			{/snippet}
 			<DataTable
@@ -571,18 +575,18 @@
 				dense
 			>
 				{#snippet cell(a, col)}
-					{#if col.key === 'part_name'}
-						<a href={`/parts/${a.part_id}`} class="hover:underline">{a.part_name}</a>
-					{:else if col.key === 'internal_pn'}
-						<a href={`/parts/${a.part_id}`} class="text-info hover:underline"
-							>{a.internal_pn ?? '—'}</a
+					{#if col.key === 'partName'}
+						<a href={`/parts/${a.partId}`} class="hover:underline">{a.partName}</a>
+					{:else if col.key === 'internalPn'}
+						<a href={`/parts/${a.partId}`} class="text-info hover:underline"
+							>{a.internalPn ?? '—'}</a
 						>
 					{:else if col.key === 'status'}
 						<NativeSelect
 							size="sm"
 							value={a.status}
 							onchange={(e) => setStatus(a, e.currentTarget.value)}
-							aria-label={`Verification of ${a.part_name}`}
+							aria-label={`Verification of ${a.partName}`}
 						>
 							<NativeSelectOption value="open">OPEN</NativeSelectOption>
 							<NativeSelectOption value="verified">VERIFIED</NativeSelectOption>
@@ -590,29 +594,29 @@
 							<NativeSelectOption value="not_applicable">NOT APPLICABLE</NativeSelectOption>
 						</NativeSelect>
 					{:else if col.key === 'verified'}
-						{#if a.verified_at}
+						{#if a.verifiedAt}
 							<span class="text-xs"
-								><Timestamp value={a.verified_at} />{a.verified_by ? ` ${a.verified_by}` : ''}</span
+								><Timestamp value={a.verifiedAt} />{a.verifiedBy ? ` ${a.verifiedBy}` : ''}</span
 							>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
 						{#if a.outdated}<span
 								class="ml-2 font-mono text-xs font-medium text-warn"
-								title={`Closed against rev ${a.against_revision}; rev ${req.revision} is not verified`}
+								title={`Closed against rev ${a.againstRevision}; rev ${req.revision} is not verified`}
 								>OUTDATED</span
 							>{/if}
-					{:else if col.key === 'against_revision'}
+					{:else if col.key === 'againstRevision'}
 						<span
-							class={a.against_revision !== req.revision ? 'text-warn' : ''}
-							title={a.against_revision !== req.revision
-								? `Assigned against rev ${a.against_revision}`
-								: undefined}>{a.against_revision}</span
+							class={a.againstRevision !== req.revision ? 'text-warn' : ''}
+							title={a.againstRevision !== req.revision
+								? `Assigned against rev ${a.againstRevision}`
+								: undefined}>{a.againstRevision}</span
 						>
 					{:else if col.key === 'notes'}
 						<Input
 							class="h-7"
 							value={a.notes ?? ''}
 							onblur={(e) => setNotes(a, e.currentTarget.value)}
-							aria-label={`Notes for ${a.part_name}`}
+							aria-label={`Notes for ${a.partName}`}
 						/>
 					{:else}
 						<Button size="xs" variant="ghost" class="text-error" onclick={() => unassign(a)}
@@ -644,15 +648,15 @@
 		>
 			{#snippet cell(r, col)}
 				{#if col.key === 'revision'}{r.revision}{r.id === req.id ? ' ◀' : ''}
-				{:else if col.key === 'lifecycle_state'}
-					<State value={r.lifecycle_state} tone={lifecycleTone(r.lifecycle_state)} />
+				{:else if col.key === 'lifecycleState'}
+					<State value={r.lifecycleState} tone={lifecycleTone(r.lifecycleState)} />
 				{:else if col.key === 'statement'}
 					<span
-						class="line-clamp-2 font-mono text-xs {r.lifecycle_state === 'superseded'
+						class="line-clamp-2 font-mono text-xs {r.lifecycleState === 'superseded'
 							? 'text-muted-foreground line-through'
 							: ''}">{r.statement}</span
 					>
-				{:else}<Timestamp value={r.baselined_at} />{/if}
+				{:else}<Timestamp value={r.baselinedAt} />{/if}
 			{/snippet}
 		</DataTable>
 		{#if req.revisions.length > 1}
@@ -682,13 +686,13 @@
 		{/if}
 	</Section>
 
-	{#if req.baseline_events.length}
-		<Section title="BASELINES" count={req.baseline_events.length}>
+	{#if req.baselineEvents.length}
+		<Section title="BASELINES" count={req.baselineEvents.length}>
 			<DataTable
-				rows={req.baseline_events}
+				rows={req.baselineEvents}
 				columns={eventColumns}
-				href={(e) => `/requirements/baselines/${e.event_id}`}
-				key={(e) => e.event_id}
+				href={(e) => `/requirements/baselines/${e.eventId}`}
+				key={(e) => e.eventId}
 				emptyLabel="Baselines"
 				dense
 			>
@@ -696,7 +700,7 @@
 					{#if col.key === 'label'}
 						<span class="mono">{e.label ?? '—'}</span>
 					{:else if col.key === 'revision'}{e.revision}
-					{:else}<Timestamp value={e.created_at} />{/if}
+					{:else}<Timestamp value={e.createdAt} />{/if}
 				{/snippet}
 			</DataTable>
 		</Section>
@@ -705,7 +709,13 @@
 
 <QuickCreate
 	bind:open={qcOpen}
-	parent={{ id: req.id, req_number: req.req_number, level: req.level, category: req.category }}
+	parent={{
+		id: req.id,
+		reqNumber: req.reqNumber,
+		level: req.level,
+		category: req.category,
+		projectId: req.projectId // added by projects
+	}}
 	oncreated={() => invalidateAll()}
 />
 

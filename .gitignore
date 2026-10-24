@@ -91,3 +91,6 @@ server/src/generated/
 
 # Bun compile temp files
 *.bun-build
+
+# sed -i -E backups
+*-E

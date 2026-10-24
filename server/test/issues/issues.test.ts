@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { auditLog, issueLink } from '../../src/db/schema/index.ts';
 import { holdingIssues } from '../../src/services/issues/holds.ts';
 import { issueHooks, type IssueNotification } from '../../src/services/issues/hooks.ts';
+import { createTestProject } from '../helpers/project.ts'; // added by projects
 import { setup } from './helpers.ts';
 
 describe('raising', () => {
@@ -866,5 +867,37 @@ describe('notifications', () => {
 		await call('POST', `/issues/${i.id}/review/return`, { comment: 'redo' });
 		expect(sent.map((n) => n.kind)).toEqual(['issue_commented']);
 		as(other);
+	});
+});
+
+describe('projects', () => {
+	test('an issue needs an active project and shows its code and name', async () => {
+		const { call, db, project, app } = await setup();
+		const res = await app.request('/api/issues', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ title: 't' })
+		});
+		expect(res.status).toBe(422);
+		expect((await call('POST', '/issues', { title: 't', projectId: 999 })).status).toBe(404);
+		const dead = createTestProject(db, 'DEAD');
+		await call('POST', `/projects/${dead.id}/archive`);
+		expect((await call('POST', '/issues', { title: 't', projectId: dead.id })).status).toBe(409);
+		const r = await call('POST', '/issues', { title: 't', projectId: project.id });
+		expect(r.body).toMatchObject({ projectId: project.id, projectCode: 'TP', projectName: 'Project TP' });
+	});
+
+	test('the list filters by project and an issue moves to another active project', async () => {
+		const { call, db, project } = await setup();
+		const b = createTestProject(db, 'B');
+		const a1 = (await call('POST', '/issues', { title: 'a' })).body;
+		const b1 = (await call('POST', '/issues', { title: 'b', projectId: b.id })).body;
+		const ids = async (q: string) => (await call('GET', `/issues${q}`)).body.items.map((x: any) => x.id);
+		expect(await ids(`?projectId=${project.id}`)).toEqual([a1.id]);
+		expect(await ids(`?projectId=${b.id}`)).toEqual([b1.id]);
+		expect(await ids('')).toHaveLength(2);
+		const moved = await call('PATCH', `/issues/${a1.id}`, { projectId: b.id });
+		expect(moved.body).toMatchObject({ projectId: b.id, projectCode: 'B' });
+		expect(await ids(`?projectId=${b.id}`)).toHaveLength(2);
 	});
 });

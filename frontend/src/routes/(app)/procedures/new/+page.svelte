@@ -5,12 +5,15 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import ProjectSelect from '#lib/components/procedures/ProjectSelect.svelte';
+	import type { ProcedureType } from '@opal/shared';
 	import { PageHeader, toastError, ErrorBanner } from '#lib/components/opal/index.js';
 
 	let name = $state('');
 	let description = $state('');
-	let type = $state('op');
+	let type = $state<ProcedureType>('op');
+	let projectId = $state(0);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
@@ -19,10 +22,11 @@
 		busy = true;
 		error = null;
 		try {
-			const p = await api.post<{ id: number }>('/procedures', {
+			const p = await opal.procedures.create({
+				projectId,
 				name: name.trim(),
 				description: description.trim() || null,
-				procedure_type: type
+				procedureType: type
 			});
 			await goto(`/procedures/${p.id}`);
 		} catch (err) {
@@ -46,6 +50,10 @@
 		<Input id="name" bind:value={name} required maxlength={255} autofocus />
 	</div>
 	<div class="grid grid-cols-1 gap-1.5">
+		<Label for="project">Project</Label>
+		<ProjectSelect id="project" bind:value={projectId} />
+	</div>
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="type">Type</Label>
 		<NativeSelect id="type" bind:value={type} class="max-w-xs">
 			<NativeSelectOption value="op">OP — work order, no output</NativeSelectOption>
@@ -57,7 +65,7 @@
 		<MarkdownField id="description" bind:value={description} minRows={6} />
 	</div>
 	<div class="flex gap-2">
-		<Button type="submit" disabled={busy || !name.trim()}>CREATE</Button>
+		<Button type="submit" disabled={busy || !name.trim() || !projectId}>CREATE</Button>
 		<Button type="button" variant="outline" href="/procedures">CANCEL</Button>
 	</div>
 </form>

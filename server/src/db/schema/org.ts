@@ -1,9 +1,10 @@
 /** Tables for the org area: profiles, roles, gates, workcenters, app settings. */
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { createdAt, id, updatedAt } from './helpers.ts';
+import { PROJECT_STATES } from '@opal/shared';
+import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { user } from './core.ts';
 
-/** Runtime-mutable key/value settings. `project_config` holds the project config as JSON. */
+/** Runtime-mutable key/value settings. `project_config` holds the organization settings as JSON. */
 export const appSetting = sqliteTable('app_setting', {
 	id: id(),
 	key: text('key').notNull().unique(),
@@ -83,4 +84,23 @@ export const roleGate = sqliteTable(
 		gate: text('gate').notNull()
 	},
 	(t) => [uniqueIndex('role_gate_unique').on(t.roleId, t.gate)]
+);
+
+/**
+ * A project: the scope of requirements, risks, issues, procedures, executions and datasets.
+ * Archived is terminal; a referenced project is never deleted.
+ */
+export const project = sqliteTable(
+	'project',
+	{
+		id: id(),
+		code: text('code').notNull().unique(),
+		name: text('name').notNull(),
+		description: text('description'),
+		state: text('state', { enum: PROJECT_STATES }).notNull().default('active'),
+		archivedAt: text('archived_at'),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [oneOf('project_state_check', 'state', PROJECT_STATES)]
 );

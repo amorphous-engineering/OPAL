@@ -5,7 +5,7 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { toastError } from '#lib/components/opal/index.js';
 
 	let {
@@ -31,10 +31,11 @@
 		e.preventDefault();
 		busy = true;
 		try {
-			const clone = await api.post<{ id: number }>(`/procedures/${procedureId}/clone`, {
-				new_name: newName.trim() || null,
-				copy_kit: copyKit,
-				copy_outputs: copyOutputs
+			const clone = await opal.procedures.clone({
+				id: procedureId,
+				newName: newName.trim() || undefined,
+				copyKit,
+				copyOutputs
 			});
 			open = false;
 			await goto(`/procedures/${clone.id}`);

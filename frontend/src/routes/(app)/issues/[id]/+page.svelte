@@ -24,6 +24,7 @@
 	} from '#lib/components/opal/index.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import InlineText from '#lib/components/issues/InlineText.svelte';
+	import IssueRisks from '#lib/components/risks/IssueRisks.svelte'; // added by risks
 	import { CONTAINMENT_OPTION, kb, ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import {
 		CONTAINMENTS,
@@ -38,6 +39,7 @@
 		type IssueType
 	} from '@opal/shared';
 	import { session } from '#lib/session.svelte.js';
+	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
 	import { markdown } from '#lib/markdown.js';
 	import { stateLabel } from '#lib/format.js';
 	import type { PageProps } from './$types';
@@ -319,7 +321,7 @@
 		{ key: 'actions', label: '', width: '5rem', align: 'right' }
 	];
 
-	const riskRoleLabel = (r: string) => stateLabel(r);
+	const partLinks = $derived(issue.links.filter((l) => l.kind === 'part')); // added by risks
 	const typeFields = $derived({
 		nc: type === 'non_conformance',
 		bug: type === 'bug',
@@ -631,6 +633,7 @@
 	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="Issue">
 			<DetailTable>
+				<ProjectRow id={issue.projectId} code={issue.projectCode} name={issue.projectName} /> <!-- added by projects -->
 				<DetailRow label="Type">
 					<NativeSelect
 						size="sm"
@@ -729,9 +732,9 @@
 			{/snippet}
 			<DetailTable>
 				<DetailRow label="Parts">
-					{#if issue.links.length}
+					{#if partLinks.length}
 						<ul class="grid grid-cols-1 gap-0.5">
-							{#each issue.links as l (l.id)}
+							{#each partLinks as l (l.id)}
 								<li class="flex min-w-0 items-baseline gap-2">
 									<a href={l.href} class="font-mono whitespace-nowrap text-info hover:underline"
 										>{l.label}</a
@@ -822,25 +825,8 @@
 			</DetailTable>
 		</Section>
 
-		{#if issue.risks.length}
-			<Section title="Risks" count={issue.risks.length}>
-				<ul class="divide-y divide-border">
-					{#each issue.risks as r (r.riskId + r.relation)}
-						<li class="flex items-baseline gap-2 px-3 py-1.5 text-sm">
-							<a href={`/risks/${r.riskId}`} class="font-mono text-info hover:underline"
-								>{r.riskNumber}</a
-							>
-							<span class="truncate">{r.title}</span>
-							<span class="ml-auto font-mono text-xs tracking-wider text-muted-foreground uppercase"
-								>{riskRoleLabel(r.relation)}</span
-							>
-						</li>
-					{/each}
-				</ul>
-			</Section>
-		{:else}
-			<EmptyLine label="Risks" />
-		{/if}
+		<!-- added by risks -->
+		<IssueRisks {issue} {refresh} readonly={voided} />
 	</div>
 </div>
 

@@ -13,6 +13,9 @@ export interface NavGroup {
 /** The group shown in the account menu rather than the toolbar. */
 export const ACCOUNT_GROUP = 'System';
 
+/** The projects list sits beside Overview in the toolbar, outside the groups. */ // added by projects
+export const PROJECTS_NAV: NavItem = { href: '/projects', label: 'Projects' }; // added by projects
+
 export const NAV: NavGroup[] = [
 	{
 		label: 'Inventory',

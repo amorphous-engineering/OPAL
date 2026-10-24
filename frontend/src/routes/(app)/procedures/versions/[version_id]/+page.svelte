@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import {
 		DataTable,
 		DetailRow,
@@ -29,36 +29,32 @@
 	const v = $derived(data.version);
 	const partById = $derived(new Map(v.parts.map((p) => [p.id, p])));
 	const others = $derived(data.versions.filter((x) => x.id !== v.id));
-	const showOutputs = $derived(v.procedure_type === 'build' || v.content.output_items.length > 0);
-	const startable = $derived(v.is_current && data.procedureStatus === 'active');
+	const showOutputs = $derived(v.procedureType === 'build' || v.snapshot.outputs.length > 0);
+	const startable = $derived(v.isCurrent && v.procedureStatus === 'released');
 
-	const topOps = $derived(groupOps(v.content.steps));
+	const topOps = $derived(groupOps(v.snapshot.steps));
 	const graphNodes = $derived<GraphNode[]>(
 		[...topOps.ops, ...topOps.contingency].map((g) => ({
-			id: g.op.order,
-			number: g.op.step_number,
+			id: g.op.id,
+			number: g.op.number,
 			title: g.op.title,
-			kind: g.op.is_contingency ? 'contingency' : 'op'
+			kind: g.op.isContingency ? 'contingency' : 'op'
 		}))
 	);
 	const graphEdges = $derived<GraphEdge[]>(
 		[...topOps.ops, ...topOps.contingency].flatMap((g) =>
-			(g.op.depends_on ?? [])
+			g.op.dependsOn
 				.filter((d) => graphNodes.some((n) => n.id === d))
-				.map((d) => ({ from: d, to: g.op.order, kind: 'dependency' as const }))
+				.map((d) => ({ from: d, to: g.op.id, kind: 'dependency' as const }))
 		)
 	);
 
 	interface PartRow {
-		part_id: number;
-		quantity: number;
+		partId: number;
+		quantity: string;
 	}
-	const kitRows = $derived<PartRow[]>(
-		v.content.kit_items.map((k) => ({ part_id: k.part_id, quantity: k.quantity_required }))
-	);
-	const outRows = $derived<PartRow[]>(
-		v.content.output_items.map((k) => ({ part_id: k.part_id, quantity: k.quantity_produced }))
-	);
+	const kitRows = $derived<PartRow[]>(v.snapshot.kit);
+	const outRows = $derived<PartRow[]>(v.snapshot.outputs);
 	const partColumns = (qtyLabel: string): Column<PartRow>[] => [
 		{ key: 'pn', label: 'Part', width: '9rem', mono: true },
 		{ key: 'name', label: 'Name' },
@@ -67,16 +63,16 @@
 
 	async function restore() {
 		const ok = await confirm({
-			title: `Restore v${v.version_number} to draft?`,
+			title: `Restore v${v.versionNumber} to draft?`,
 			body: 'All current draft steps, kit items and outputs are replaced by this version’s snapshot. This cannot be undone.',
 			action: 'RESTORE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.post(`/procedures/${v.procedure_id}/versions/${v.id}/restore`);
-			toast.success(`Draft restored from v${v.version_number}`);
-			await goto(`/procedures/${v.procedure_id}`);
+			await opal.procedures.versions.restore({ id: v.procedureId, versionId: v.id });
+			toast.success(`Draft restored from v${v.versionNumber}`);
+			await goto(`/procedures/${v.procedureId}`);
 		} catch (e) {
 			toastError(e);
 		}
@@ -93,15 +89,15 @@
 				columns={partColumns(qtyLabel)}
 				emptyLabel={title}
 				dense
-				key={(r) => r.part_id}
+				key={(r) => r.partId}
 			>
 				{#snippet cell(r, col)}
 					{#if col.key === 'pn'}
-						<a href={`/parts/${r.part_id}`} class="text-info hover:underline"
-							>{partById.get(r.part_id)?.internal_pn ?? '—'}</a
+						<a href={`/parts/${r.partId}`} class="text-info hover:underline"
+							>{partById.get(r.partId)?.internalPn ?? '—'}</a
 						>
 					{:else if col.key === 'name'}
-						{partById.get(r.part_id)?.name ?? '—'}
+						{partById.get(r.partId)?.name ?? '—'}
 					{:else}
 						{qty(r.quantity)}
 					{/if}
@@ -112,27 +108,28 @@
 {/snippet}
 
 <PageHeader
-	title={v.procedure_name}
-	identifier={`v${v.version_number}`}
+	title={v.procedureName}
+	identifier={`v${v.versionNumber}`}
 	crumbs={[
 		{ label: 'Templates', href: '/procedures' },
-		{ label: v.procedure_name, href: `/procedures/${v.procedure_id}` },
-		{ label: `v${v.version_number}` }
+		{ label: v.procedureName, href: `/procedures/${v.procedureId}` },
+		{ label: `v${v.versionNumber}` }
 	]}
 >
 	{#snippet state()}
-		{#if v.is_current}<State value="active" label="CURRENT" />{:else}<State
-				value="deprecated"
+		{#if v.isCurrent}<State value="released" tone="ok" label="CURRENT" />{:else}<State
+				value="obsolete"
+				tone="muted"
 				label="SUPERSEDED"
 			/>{/if}
 	{/snippet}
 	{#snippet actions()}
 		{#if startable}
-			<Button href={`/executions/new?procedure_id=${v.procedure_id}&version_id=${v.id}`}
+			<Button href={`/executions/new?procedure_id=${v.procedureId}&version_id=${v.id}`}
 				>START EXECUTION</Button
 			>
 		{/if}
-		<Button variant="outline" href={`/procedures/${v.procedure_id}/versions/${v.id}/print`}
+		<Button variant="outline" href={`/procedures/${v.procedureId}/versions/${v.id}/print`}
 			>PRINT TRAVELER</Button
 		>
 		<Button variant="outline" onclick={restore}>RESTORE TO DRAFT</Button>
@@ -141,7 +138,7 @@
 
 <div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 	<div class="grid min-w-0 grid-cols-1 gap-4">
-		<SnapshotSteps steps={v.content.steps} />
+		<SnapshotSteps steps={v.snapshot.steps} parts={v.parts} />
 		{#if graphNodes.length > 1}
 			<Section title="Dependencies" count={graphEdges.length}>
 				<OpGraph nodes={graphNodes} edges={graphEdges} class="h-[360px] w-full" />
@@ -152,17 +149,23 @@
 		<Section title="Details">
 			<DetailTable>
 				<DetailRow label="Template">
-					<a href={`/procedures/${v.procedure_id}`} class="text-info hover:underline"
-						>{v.procedure_name}</a
+					<a href={`/procedures/${v.procedureId}`} class="text-info hover:underline"
+						>{v.procedureName}</a
 					>
 				</DetailRow>
-				<DetailRow label="Version" value={`v${v.version_number}`} mono />
-				<DetailRow label="Published"><Timestamp value={v.created_at} /></DetailRow>
-				<DetailRow label="Published by" value={v.created_by_name} />
-				<DetailRow label="Change note" value={v.change_note} />
+				<DetailRow label="Project">
+					<a
+						href={`/projects/${v.snapshot.procedure.projectId}`}
+						class="font-mono text-info hover:underline">{v.projectCode}</a
+					>
+				</DetailRow>
+				<DetailRow label="Version" value={`v${v.versionNumber}`} mono />
+				<DetailRow label="Published"><Timestamp value={v.createdAt} /></DetailRow>
+				<DetailRow label="Published by" value={v.createdByName} />
+				<DetailRow label="Change note" value={v.changeNote} />
 				<DetailRow label="Description">
-					{#if v.content.procedure_description}
-						<Prose source={v.content.procedure_description} />
+					{#if v.snapshot.procedure.description}
+						<Prose source={v.snapshot.procedure.description} />
 					{:else}—{/if}
 				</DetailRow>
 				<DetailRow label="Compare">
@@ -171,8 +174,8 @@
 							{#each others as o (o.id)}
 								<a
 									class="text-info hover:underline"
-									href={`/procedures/${v.procedure_id}/versions/${o.id}/diff/${v.id}`}
-									>v{o.version_number}</a
+									href={`/procedures/${v.procedureId}/versions/${o.id}/diff/${v.id}`}
+									>v{o.versionNumber}</a
 								>
 							{/each}
 						</span>

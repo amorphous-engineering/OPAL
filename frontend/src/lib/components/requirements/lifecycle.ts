@@ -1,15 +1,9 @@
+import { REQUIREMENT_LIFECYCLE_STATES, REQUIREMENT_VERIFICATION_METHODS } from '@opal/shared';
 import type { Tone } from '#lib/components/opal/index.js';
 import type { Verification } from './types.js';
 
-export const LIFECYCLE_STATES = [
-	'draft',
-	'preliminary',
-	'baselined',
-	'superseded',
-	'cancelled'
-] as const;
-
-export const VERIFICATION_METHODS = ['analysis', 'inspection', 'demonstration', 'test'] as const;
+export const LIFECYCLE_STATES = REQUIREMENT_LIFECYCLE_STATES;
+export const VERIFICATION_METHODS = REQUIREMENT_VERIFICATION_METHODS;
 
 export const LEVELS: { value: number; label: string }[] = [
 	{ value: 0, label: 'L0 mission' },

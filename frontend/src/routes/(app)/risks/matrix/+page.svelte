@@ -3,8 +3,7 @@
 		DetailRow,
 		DetailTable,
 		PageHeader,
-		Section,
-		ErrorBanner
+		Section
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
@@ -28,9 +27,8 @@
 
 	const bySeverity = $derived.by(() => {
 		const counts: Record<Severity, number> = { low: 0, medium: 0, high: 0 };
-		if (m)
-			for (let p = 1; p <= 5; p++)
-				for (let i = 1; i <= 5; i++) counts[severityOf(p * i)] += m.matrix[p - 1][i - 1];
+		for (let p = 1; p <= 5; p++)
+				for (let i = 1; i <= 5; i++) counts[severityOf(p * i)] += m.matrix[p - 1]![i - 1]!;
 		return counts;
 	});
 
@@ -45,10 +43,8 @@
 </PageHeader>
 
 <div class="grid grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[minmax(0,48rem)_20rem]">
-	{#if data.error}
-		<ErrorBanner message={data.error} />
-	{:else if m}
-		<Section title="Live risks by probability and impact" count={m.total_risks}>
+	{#if m}
+		<Section title="Live risks by probability and impact" count={m.totalRisks}>
 			<div class="overflow-x-auto p-3">
 				<table class="w-full border-collapse text-xs">
 					<thead>
@@ -67,8 +63,8 @@
 								>
 								{#each [1, 2, 3, 4, 5] as i (i)}
 									{@const sev = severityOf(p * i)}
-									{@const cur = m.matrix[p - 1][i - 1]}
-									{@const res = m.residual_matrix[p - 1][i - 1]}
+									{@const cur = m.matrix[p - 1]![i - 1]!}
+									{@const res = m.residualMatrix[p - 1]![i - 1]!}
 									<td class="p-0.5">
 										<div
 											class={cn(
@@ -121,7 +117,7 @@
 
 		<Section title="Summary">
 			<DetailTable>
-				<DetailRow label="Live risks" value={m.total_risks} mono />
+				<DetailRow label="Live risks" value={m.totalRisks} mono />
 				{#each [...SEVERITIES].reverse() as s (s.value)}
 					<DetailRow label={s.value}>
 						{#if bySeverity[s.value]}

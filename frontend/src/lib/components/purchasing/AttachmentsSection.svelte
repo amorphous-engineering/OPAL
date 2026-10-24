@@ -9,7 +9,7 @@
 		toastError
 	} from '#lib/components/opal/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import { api } from '#lib/api.js';
+	import { api, opal } from '#lib/api.js';
 	import type { Attachment } from './types.js';
 
 	let {
@@ -45,9 +45,10 @@
 		try {
 			const body = new FormData();
 			body.set('file', file);
-			body.set('purchase_id', String(purchaseId));
+			body.set('ownerType', 'purchase');
+			body.set('ownerId', String(purchaseId));
 			body.set('kind', kind);
-			await api.post('/attachments/upload', body);
+			await api.post('/attachments', body);
 			await onchanged();
 		} catch (err) {
 			toastError(err);
@@ -59,14 +60,14 @@
 
 	async function remove(a: Attachment) {
 		const ok = await confirm({
-			title: `Delete ${a.original_filename}`,
+			title: `Delete ${a.filename}`,
 			body: 'The file is removed from the order and from disk.',
 			action: 'DELETE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/attachments/${a.id}`);
+			await opal.platform.attachments.delete({ id: a.id });
 			await onchanged();
 		} catch (err) {
 			toastError(err);
@@ -115,19 +116,19 @@
 					<tr class="border-b border-border">
 						<td class="px-3 py-1.5"
 							><a
-								href={`/api/attachments/${a.id}/download`}
+								href={a.href}
 								class="text-info hover:underline"
-								download>{a.original_filename}</a
+								download>{a.filename}</a
 							></td
 						>
 						<td class="px-3 py-1.5 font-mono text-xs uppercase"
 							>{(a.kind ?? '').replace(/_/g, ' ') || '—'}</td
 						>
-						<td class="px-3 py-1.5 font-mono text-xs tabular-nums">{size(a.size_bytes)}</td>
+						<td class="px-3 py-1.5 font-mono text-xs tabular-nums">{size(a.sizeBytes)}</td>
 						<td class="px-3 py-1.5"
-							><Timestamp value={a.created_at} />
-							{#if a.uploaded_by_name}<span class="ml-2 text-muted-foreground"
-									>{a.uploaded_by_name}</span
+							><Timestamp value={a.createdAt} />
+							{#if a.uploadedByName}<span class="ml-2 text-muted-foreground"
+									>{a.uploadedByName}</span
 								>{/if}</td
 						>
 						<td class="px-3 py-1.5 text-right"

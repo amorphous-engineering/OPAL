@@ -65,7 +65,7 @@
 				? `Make ${profile.name} an administrator?`
 				: `Remove ${profile.name} as administrator?`,
 			body: grant
-				? 'Administrators manage users, project configuration and instance settings.'
+				? 'Administrators manage users, organization settings and instance settings.'
 				: 'They lose access to user management, project configuration and instance settings.',
 			action: grant ? 'MAKE ADMIN' : 'REMOVE ADMIN',
 			destructive: !grant

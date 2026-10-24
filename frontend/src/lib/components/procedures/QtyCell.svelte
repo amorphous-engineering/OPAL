@@ -7,7 +7,7 @@
 		value,
 		label,
 		onsave
-	}: { value: number; label: string; onsave: (next: number) => Promise<void> } = $props();
+	}: { value: string; label: string; onsave: (next: string) => Promise<void> } = $props();
 
 	let editing = $state(false);
 	let draft = $state('');
@@ -20,8 +20,8 @@
 
 	async function commit() {
 		if (!editing || busy) return;
-		const next = Number(draft);
-		if (!Number.isFinite(next) || next <= 0 || next === value) {
+		const next = draft.trim();
+		if (!/^\d+(\.\d{1,4})?$/.test(next) || Number(next) <= 0 || Number(next) === Number(value)) {
 			editing = false;
 			return;
 		}
@@ -43,7 +43,7 @@
 {#if editing}
 	<Input
 		type="number"
-		step="any"
+		step="0.0001"
 		min="0"
 		class="h-6 w-24 px-1.5 text-right font-mono text-xs"
 		aria-label={label}

@@ -1,6 +1,7 @@
 import { contracts, forbidden } from '@opal/shared';
 import { actorUserId, type Ctx } from '../context.ts';
 import { type Impl, implement } from '../registry.ts';
+import { dbPath } from '../paths.ts';
 import { VERSION } from '../version.ts';
 import * as attachments from '../services/platform/attachments.ts';
 import * as audit from '../services/platform/audit.ts';
@@ -27,6 +28,7 @@ export const platformImpls = [
 		return {
 			version: VERSION,
 			isDev: VERSION.includes('-dev'),
+			dbPath: dbPath(),
 			operations: impls.map((i) => ({ name: i.contract.name, method: i.contract.method, path: i.contract.path }))
 		};
 	}),

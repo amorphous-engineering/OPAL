@@ -12,4 +12,5 @@ export function dataDir(): string {
 	return join(process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'opal');
 }
 
-export const dbPath = () => join(dataDir(), 'opal.db');
+/** The live database file. The demo switch points OPAL_DB_FILE at the demo file. */
+export const dbPath = () => process.env.OPAL_DB_FILE ?? join(dataDir(), 'opal.db');

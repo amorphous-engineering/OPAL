@@ -20,26 +20,26 @@
 	let { data }: PageProps = $props();
 
 	const d = $derived(data.diff);
-	const a = $derived(d.version_a);
-	const b = $derived(d.version_b);
+	const a = $derived(d.versionA);
+	const b = $derived(d.versionB);
 	let showUnchanged = $state(false);
 
 	const FIELD_LABELS: Record<string, string> = {
 		title: 'title',
 		instructions: 'instructions',
-		is_contingency: 'contingency',
-		estimated_duration_minutes: 'duration (min)',
-		required_role: 'role',
+		isContingency: 'contingency',
+		estimatedDurationMinutes: 'duration (min)',
+		workcenterId: 'workcenter',
 		callouts: 'callouts',
-		required_data_schema: 'data fields',
-		requires_signoff: 'signoff',
+		dataSchema: 'data fields',
 		signoffs: 'sign-offs',
-		strict_sequence: 'strict sequence',
-		depends_on: 'dependencies',
-		step_kit: 'step kit',
+		strictSequence: 'strict sequence',
+		dependsOn: 'dependencies',
+		kit: 'step kit',
 		images: 'images',
-		procedure_name: 'name',
-		procedure_description: 'description'
+		name: 'name',
+		description: 'description',
+		procedureType: 'type'
 	};
 
 	const TONES: Record<string, Tone> = {
@@ -72,12 +72,6 @@
 			.join(' | ');
 	}
 
-	/** The sign-off list is the one home of sign-off and role; those derived fields stay quiet. */
-	function shownFields(r: StepDiff): string[] {
-		if (!r.changed_fields.includes('signoffs')) return r.changed_fields;
-		return r.changed_fields.filter((f) => f !== 'requires_signoff' && f !== 'required_role');
-	}
-
 	function describe(field: string, ch: { a: unknown; b: unknown }): string {
 		const label = FIELD_LABELS[field] ?? field;
 		if (field === 'signoffs') return `${label}: ${signoffList(ch.a)} → ${signoffList(ch.b)}`;
@@ -95,23 +89,23 @@
 	);
 
 	const stepColumns: Column<StepDiff>[] = [
-		{ key: 'step_number', label: '#', width: '5rem', mono: true },
+		{ key: 'number', label: '#', width: '5rem', mono: true },
 		{ key: 'status', label: 'Change', width: '7rem' },
-		{ key: 'title_a', label: 'From' },
-		{ key: 'title_b', label: 'To' },
-		{ key: 'changed_fields', label: 'Changed' }
+		{ key: 'titleA', label: 'From' },
+		{ key: 'titleB', label: 'To' },
+		{ key: 'changedFields', label: 'Changed' }
 	];
 	const partColumns = $derived<Column<PartDiff>[]>([
-		{ key: 'internal_pn', label: 'Part', width: '9rem', mono: true },
+		{ key: 'internalPn', label: 'Part', width: '9rem', mono: true },
 		{ key: 'name', label: 'Name' },
 		{ key: 'status', label: 'Change', width: '7rem' },
-		{ key: 'quantity_a', label: `v${a.version_number}`, align: 'right', width: '7rem', mono: true },
-		{ key: 'quantity_b', label: `v${b.version_number}`, align: 'right', width: '7rem', mono: true }
+		{ key: 'quantityA', label: `v${a.versionNumber}`, align: 'right', width: '7rem', mono: true },
+		{ key: 'quantityB', label: `v${b.versionNumber}`, align: 'right', width: '7rem', mono: true }
 	]);
-	const procColumns = $derived<Column<(typeof d.procedure_changes)[number]>[]>([
+	const procColumns = $derived<Column<(typeof d.procedureChanges)[number]>[]>([
 		{ key: 'field', label: 'Field', width: '10rem' },
-		{ key: 'a', label: `v${a.version_number}` },
-		{ key: 'b', label: `v${b.version_number}` }
+		{ key: 'a', label: `v${a.versionNumber}` },
+		{ key: 'b', label: `v${b.versionNumber}` }
 	]);
 </script>
 
@@ -120,20 +114,20 @@
 		<EmptyLine label={`${title} changes`} />
 	{:else}
 		<Section {title} count={rows.length}>
-			<DataTable {rows} columns={partColumns} emptyLabel={title} dense key={(r) => r.part_id}>
+			<DataTable {rows} columns={partColumns} emptyLabel={title} dense key={(r) => r.partId}>
 				{#snippet cell(r, col)}
-					{#if col.key === 'internal_pn'}
-						<a href={`/parts/${r.part_id}`} class="text-info hover:underline"
-							>{r.internal_pn ?? '—'}</a
+					{#if col.key === 'internalPn'}
+						<a href={`/parts/${r.partId}`} class="text-info hover:underline"
+							>{r.internalPn ?? '—'}</a
 						>
 					{:else if col.key === 'name'}
 						{r.name ?? '—'}
 					{:else if col.key === 'status'}
 						<State value={r.status} tone={TONES[r.status]} />
-					{:else if col.key === 'quantity_a'}
-						{qty(r.quantity_a)}
-					{:else if col.key === 'quantity_b'}
-						{qty(r.quantity_b)}
+					{:else if col.key === 'quantityA'}
+						{qty(r.quantityA)}
+					{:else if col.key === 'quantityB'}
+						{qty(r.quantityB)}
 					{/if}
 				{/snippet}
 			</DataTable>
@@ -142,19 +136,19 @@
 {/snippet}
 
 <PageHeader
-	title={d.procedure_name}
-	identifier={`v${a.version_number} → v${b.version_number}`}
+	title={d.procedureName}
+	identifier={`v${a.versionNumber} → v${b.versionNumber}`}
 	crumbs={[
 		{ label: 'Templates', href: '/procedures' },
-		{ label: d.procedure_name, href: `/procedures/${d.procedure_id}` },
+		{ label: d.procedureName, href: `/procedures/${d.procedureId}` },
 		{ label: 'Diff' }
 	]}
 >
 	{#snippet actions()}
-		<Button variant="outline" href={`/procedures/${d.procedure_id}/versions/${b.id}/diff/${a.id}`}
+		<Button variant="outline" href={`/procedures/${d.procedureId}/versions/${b.id}/diff/${a.id}`}
 			>SWAP</Button
 		>
-		<Button variant="outline" href={`/procedures/${d.procedure_id}`}>TEMPLATE</Button>
+		<Button variant="outline" href={`/procedures/${d.procedureId}`}>TEMPLATE</Button>
 	{/snippet}
 </PageHeader>
 
@@ -177,23 +171,23 @@
 				columns={stepColumns}
 				emptyLabel="Step changes"
 				dense
-				key={(r) => r.step_number}
+				key={(r) => r.number}
 			>
 				{#snippet cell(r, col)}
 					{#if col.key === 'status'}
 						<State value={r.status} tone={TONES[r.status]} />
-					{:else if col.key === 'title_a'}
-						<span class={r.status === 'removed' ? 'text-error' : ''}>{r.title_a ?? '—'}</span>
-					{:else if col.key === 'title_b'}
-						<span class={r.status === 'added' ? 'text-ok' : ''}>{r.title_b ?? '—'}</span>
-					{:else if col.key === 'changed_fields'}
-						{#if shownFields(r).length}
+					{:else if col.key === 'titleA'}
+						<span class={r.status === 'removed' ? 'text-error' : ''}>{r.titleA ?? '—'}</span>
+					{:else if col.key === 'titleB'}
+						<span class={r.status === 'added' ? 'text-ok' : ''}>{r.titleB ?? '—'}</span>
+					{:else if col.key === 'changedFields'}
+						{#if r.changedFields.length}
 							<ul class="grid grid-cols-1 gap-0.5 font-mono text-xs">
-								{#each shownFields(r) as f (f)}<li>{describe(f, r.changes[f])}</li>{/each}
+								{#each r.changedFields as f (f)}<li>{describe(f, r.changes[f])}</li>{/each}
 							</ul>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else}
-						{r.step_number}
+						{r.number}
 					{/if}
 				{/snippet}
 			</DataTable>
@@ -205,23 +199,23 @@
 	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Versions">
 			<DetailTable>
-				<DetailRow label={`v${a.version_number}`}>
+				<DetailRow label={`v${a.versionNumber}`}>
 					<a href={`/procedures/versions/${a.id}`} class="text-info hover:underline">View</a>
-					· <Timestamp value={a.created_at} />
+					· <Timestamp value={a.createdAt} />
 				</DetailRow>
-				<DetailRow label={`v${b.version_number}`}>
+				<DetailRow label={`v${b.versionNumber}`}>
 					<a href={`/procedures/versions/${b.id}`} class="text-info hover:underline">View</a>
-					· <Timestamp value={b.created_at} />
+					· <Timestamp value={b.createdAt} />
 				</DetailRow>
-				<DetailRow label={`v${b.version_number} note`} value={b.change_note} />
+				<DetailRow label={`v${b.versionNumber} note`} value={b.changeNote} />
 			</DetailTable>
 		</Section>
-		{#if d.procedure_changes.length === 0}
+		{#if d.procedureChanges.length === 0}
 			<EmptyLine label="Template changes" />
 		{:else}
-			<Section title="Template" count={d.procedure_changes.length}>
+			<Section title="Template" count={d.procedureChanges.length}>
 				<DataTable
-					rows={d.procedure_changes}
+					rows={d.procedureChanges}
 					columns={procColumns}
 					emptyLabel="Template changes"
 					dense

@@ -1,12 +1,12 @@
 /**
- * The project configuration: tiers, part numbering scheme, categories. One instance is one
- * project, so the config is one JSON value in app_setting under `project_config`.
+ * The organization settings: tiers, part numbering scheme, categories. One instance is one
+ * organization, so the settings are one JSON value in app_setting under `project_config`.
  *
  * The stored blob may come from the legacy import (snake_case keys). Reads accept both
  * spellings; writes store camelCase. Keys this module does not know (the Onshape block)
  * stay in the blob untouched.
  */
-import { OpalError, type PartNumbering, type ProjectConfig, type Tier, type zProjectConfigInput, notFound } from '@opal/shared';
+import { OpalError, type PartNumbering, type OrgSettings, type Tier, type zOrgSettingsInput, notFound } from '@opal/shared';
 import { inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { Ctx } from '../../context.ts';
@@ -75,8 +75,8 @@ export function readProjectBlob(db: Db): Raw | null {
 	return parseBlob(getSetting(db, PROJECT_CONFIG_KEY));
 }
 
-/** The project configuration, or null before the project is set up. */
-export function getProjectConfig(db: Db): ProjectConfig | null {
+/** The organization settings, or null before the organization is set up. */
+export function getOrgSettings(db: Db): OrgSettings | null {
 	const b = readProjectBlob(db);
 	if (!b) return null;
 	return {
@@ -95,7 +95,7 @@ export function getProjectConfig(db: Db): ProjectConfig | null {
 	};
 }
 
-export function getTier(config: ProjectConfig | null, level: number): Tier | undefined {
+export function getTier(config: OrgSettings | null, level: number): Tier | undefined {
 	return config?.tiers.find((t) => t.level === level);
 }
 
@@ -103,7 +103,7 @@ export function getTier(config: ProjectConfig | null, level: number): Tier | und
  * Render a part number from the scheme. Placeholders: {prefix} {sep} {tier_code}
  * {tier_name} {tier_level} {sequence}; the sequence is zero-padded, never cut.
  */
-export function renderPartNumber(config: ProjectConfig, tier: Tier, sequence: number): string {
+export function renderPartNumber(config: OrgSettings, tier: Tier, sequence: number): string {
 	const n = config.partNumbering;
 	const values: Record<string, string> = {
 		prefix: n.prefix,
@@ -123,9 +123,9 @@ export function fallbackPartNumber(tierLevel: number, sequence: number): string 
 
 // ---------------------------------------------------------------- write side
 
-type ConfigInput = z.output<typeof zProjectConfigInput>;
+type ConfigInput = z.output<typeof zOrgSettingsInput>;
 
-function buildConfig(input: ConfigInput, existing: ProjectConfig | null): ProjectConfig {
+function buildConfig(input: ConfigInput, existing: OrgSettings | null): OrgSettings {
 	const prev = new Map((existing?.tiers ?? []).map((t) => [t.level, t]));
 	return {
 		name: input.name,
@@ -150,25 +150,25 @@ function buildConfig(input: ConfigInput, existing: ProjectConfig | null): Projec
 	};
 }
 
-function save(ctx: Ctx, config: ProjectConfig): void {
+function save(ctx: Ctx, config: OrgSettings): void {
 	// Keep keys this module does not own (the Onshape block) exactly as stored.
 	const blob = { ...(readProjectBlob(ctx.db) ?? {}) };
 	for (const k of ['part_numbering', 'custom_fields']) delete blob[k];
 	setSetting(ctx, PROJECT_CONFIG_KEY, JSON.stringify({ ...blob, ...config }));
 }
 
-export function createProject(ctx: Ctx, input: ConfigInput): ProjectConfig {
-	if (getProjectConfig(ctx.db)) {
-		throw new OpalError(400, 'already_configured', 'This instance already has a project configuration; edit it instead');
+export function createOrgSettings(ctx: Ctx, input: ConfigInput): OrgSettings {
+	if (getOrgSettings(ctx.db)) {
+		throw new OpalError(400, 'already_configured', 'This organization is already set up; edit its settings instead');
 	}
 	const config = buildConfig(input, null);
 	save(ctx, config);
 	return config;
 }
 
-export function updateProject(ctx: Ctx, input: ConfigInput): ProjectConfig {
-	const existing = getProjectConfig(ctx.db);
-	if (!existing) throw notFound('Project configuration');
+export function updateOrgSettings(ctx: Ctx, input: ConfigInput): OrgSettings {
+	const existing = getOrgSettings(ctx.db);
+	if (!existing) throw notFound('Organization settings');
 	// A tier that parts still use cannot go: they would be left with a level the project lacks.
 	const keep = new Set(input.tiers.map((t) => t.level));
 	const dropped = existing.tiers.filter((t) => !keep.has(t.level));
@@ -190,3 +190,6 @@ export function updateProject(ctx: Ctx, input: ConfigInput): ProjectConfig {
 	save(ctx, config);
 	return config;
 }
+
+/** Old name, kept for the areas that still import it. */
+export const getProjectConfig = getOrgSettings;

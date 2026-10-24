@@ -1,32 +1,24 @@
-import { error } from '@sveltejs/kit';
-import { api, ApiError, type Page } from '#lib/api.js';
-import type {
-	ExecutionRow,
-	IssueRow,
-	KitLine,
-	OutputLine,
-	ProcedureDetail,
-	RefDoc,
-	VersionRow
-} from '#lib/components/procedures/types.js';
+import { opal, orHttpError } from '#lib/api.js';
+import type { TemplateData } from '#lib/components/procedures/template-data.js';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params, fetch }) => {
-	const c = api.using(fetch);
-	const id = params.id;
-	try {
-		const [procedure, versions, kit, outputs, executions, issues, docs] = await Promise.all([
-			c.get<ProcedureDetail>(`/procedures/${id}`),
-			c.get<VersionRow[]>(`/procedures/${id}/versions`),
-			c.get<KitLine[]>(`/procedures/${id}/kit`),
-			c.get<OutputLine[]>(`/procedures/${id}/outputs`),
-			c.get<Page<ExecutionRow>>('/procedure-instances', { procedure_id: id, page_size: 10 }),
-			c.get<Page<IssueRow>>('/issues', { procedure_id: id, status: 'open', page_size: 10 }),
-			c.get<RefDoc[]>('/attachments', { procedure_id: id, kind: 'reference' })
-		]);
-		return { procedure, versions, kit, outputs, executions, issues, docs };
-	} catch (e) {
-		if (e instanceof ApiError) error(e.status, e.message);
-		throw e;
-	}
+	const c = opal.using(fetch);
+	const id = Number(params.id);
+	const [procedure, versions, kit, outputs, docs] = await orHttpError(
+		Promise.all([
+			c.procedures.get({ id }),
+			c.procedures.versions.list({ id }),
+			c.procedures.kit.list({ id }),
+			c.procedures.outputs.list({ id }),
+			c.platform.attachments.list({ ownerType: 'procedure', ownerId: id, kind: 'reference' })
+		])
+	);
+	// The execution list belongs to the execution area. Its list operation does not exist yet,
+	// so the column is empty; the execution agent loads `opal.execution.list` here.
+	const executions: TemplateData['executions'] = { items: [], total: 0 };
+	// Issues have no procedure filter yet (issues area); the panel stays empty.
+	const issues: TemplateData['issues'] = { items: [], total: 0 };
+	const data: TemplateData = { procedure, versions, kit, outputs, executions, issues, docs };
+	return data;
 };

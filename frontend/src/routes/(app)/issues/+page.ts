@@ -2,6 +2,7 @@ import { opal } from '#lib/api.js';
 import { ACTIVE_STATES, STATE_FILTER_DEFAULT } from '#lib/components/issues/issues.js';
 import { session } from '#lib/session.svelte.js';
 import { ISSUE_PRIORITIES, ISSUE_SORTS, ISSUE_STATUSES, ISSUE_TYPES } from '@opal/shared';
+import { filterProjectId, projectOptions } from '#lib/components/projects/projects.js'; // added by projects
 import type { PageLoad } from './$types';
 
 const PAGE_SIZE = 50;
@@ -18,9 +19,10 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	// Default view: everything not done. `all` lifts it; a `status` link keeps its meaning.
 	const state = q.get('state') ?? (q.get('status') ? 'all' : STATE_FILTER_DEFAULT);
 	const page = Math.max(1, Number(q.get('page') ?? 1) || 1);
-	const [issues, assignees] = await Promise.all([
+	const [issues, assignees, projects] = await Promise.all([
 		client.issues.list({
 			q: q.get('q') || undefined,
+			projectId: filterProjectId(url), // added by projects
 			issueType: ISSUE_TYPES.find((t) => t === q.get('type')),
 			status: ISSUE_STATUSES.find((s) => s === q.get('status')),
 			state: state === 'all' ? undefined : state === STATE_FILTER_DEFAULT ? ACTIVE_STATES : state,
@@ -34,7 +36,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			cursor: page > 1 ? String((page - 1) * PAGE_SIZE) : undefined,
 			limit: PAGE_SIZE
 		}),
-		client.issues.assignees({})
+		client.issues.assignees({}),
+		projectOptions(client) // added by projects
 	]);
-	return { issues, assignees };
+	return { issues, assignees, projects };
 };

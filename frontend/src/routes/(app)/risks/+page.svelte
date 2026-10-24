@@ -8,35 +8,30 @@
 		FilterToggle,
 		ListFrame,
 		PageHeader,
-		Pagination,
 		SearchInput,
 		State,
 		Timestamp,
 		confirm,
 		toast,
 		toastError,
+		setQuery,
 		urlSort,
-		type Column,
-		ErrorBanner
+		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import Score from '#lib/components/risks/Score.svelte';
-	import {
-		DISPOSITIONS,
-		SEVERITIES,
-		dispositionTone,
-		type Risk
-	} from '#lib/components/risks/types.js';
-	import { api } from '#lib/api.js';
+	import { SEVERITIES, dispositionTone } from '#lib/components/risks/types.js';
+	import { RISK_DISPOSITIONS, type Risk } from '@opal/shared';
+	import { opal } from '#lib/api.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	const PAGE_SIZE = 50;
 	const q = $derived(data.query);
 	const sort = urlSort({ key: 'score', dir: 'desc' });
 	const FILTERS = [
 		'q',
+		'project', // added by projects
 		'disposition',
 		'severity',
 		'owner_id',
@@ -48,21 +43,24 @@
 	];
 	const filtered = $derived(
 		!!(
-			q.search ||
+			q.q ||
+			q.projectId || // added by projects
 			q.disposition ||
 			q.severity ||
-			q.owner_id ||
+			q.ownerId ||
 			q.probability ||
 			q.impact ||
-			q.residual_probability ||
-			q.residual_impact ||
+			q.residualProbability ||
+			q.residualImpact ||
 			q.active
 		)
 	);
 	const total = $derived(data.list.total);
+	const shown = $derived(data.list.items.length);
 
 	const columns: Column<Risk>[] = [
-		{ key: 'risk_number', label: 'Risk', mono: true, sortable: true, width: '7.5rem' },
+		{ key: 'riskNumber', label: 'Risk', mono: true, sortable: true, width: '7.5rem' },
+		{ key: 'project', label: 'Project', mono: true, width: '7rem' }, // added by projects
 		{ key: 'title', label: 'Title', sortable: true },
 		{ key: 'asset', label: 'Asset' },
 		{ key: 'disposition', label: 'Disposition', sortable: true, width: '8rem' },
@@ -76,8 +74,8 @@
 		const parts: string[] = [];
 		if (q.probability) parts.push(`P${q.probability}`);
 		if (q.impact) parts.push(`I${q.impact}`);
-		if (q.residual_probability) parts.push(`RESIDUAL P${q.residual_probability}`);
-		if (q.residual_impact) parts.push(`RESIDUAL I${q.residual_impact}`);
+		if (q.residualProbability) parts.push(`RESIDUAL P${q.residualProbability}`);
+		if (q.residualImpact) parts.push(`RESIDUAL I${q.residualImpact}`);
 		return parts.join(' × ');
 	});
 
@@ -90,18 +88,8 @@
 		});
 		if (!ok) return;
 		try {
-			const body: Record<string, unknown> = {
-				search: q.search,
-				disposition: q.disposition,
-				severity: q.severity,
-				owner_id: q.owner_id ? Number(q.owner_id) : null,
-				probability: q.probability ? Number(q.probability) : null,
-				impact: q.impact ? Number(q.impact) : null,
-				residual_probability: q.residual_probability ? Number(q.residual_probability) : null,
-				residual_impact: q.residual_impact ? Number(q.residual_impact) : null,
-				active: q.active === '1' || q.active === 'true'
-			};
-			const r = await api.post<{ stamped: number }>('/risks/review-stamp', body);
+			const { page: _p, ...filters } = q;
+			const r = await opal.risks.reviewStamp({ ...filters, q: filters.q || undefined });
 			toast.success(`${r.stamped} marked reviewed`);
 			await invalidateAll();
 		} catch (e) {
@@ -117,18 +105,27 @@
 	{#snippet actions()}
 		<Button variant="outline" size="sm" onclick={stamp} disabled={!total}>MARK REVIEWED</Button>
 		<Button variant="outline" size="sm" href="/risks/matrix">MATRIX</Button>
-		<Button size="sm" href="/risks/new">+ NEW RISK</Button>
+		<Button size="sm" href={q.projectId ? `/risks/new?projectId=${q.projectId}` : '/risks/new'}
+			>+ NEW RISK</Button
+		>
 	{/snippet}
 </PageHeader>
 
 <ListFrame>
 	<FilterBar clear={FILTERS}>
 		<SearchInput label="Search risks" placeholder="Search number or title" />
+		<!-- added by projects -->
+		<FilterSelect
+			param="project"
+			label="Project"
+			allLabel="All projects"
+			options={data.projects.map((p) => ({ value: String(p.id), label: p.code }))}
+		/>
 		<FilterSelect
 			param="disposition"
 			label="Disposition"
 			allLabel="All dispositions"
-			options={DISPOSITIONS.map((d) => ({ value: d, label: d.toUpperCase() }))}
+			options={RISK_DISPOSITIONS.map((d) => ({ value: d, label: d.toUpperCase() }))}
 		/>
 		<FilterSelect
 			param="severity"
@@ -152,8 +149,6 @@
 		</p>
 	{/if}
 
-	<ErrorBanner message={data.error} class="m-2" />
-
 	<DataTable
 		rows={data.list.items}
 		{columns}
@@ -171,14 +166,16 @@
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
-			{#if col.key === 'risk_number'}
-				<span class="font-mono text-info">{r.risk_number}</span>
+			{#if col.key === 'riskNumber'}
+				<span class="font-mono text-info">{r.riskNumber}</span>
+			{:else if col.key === 'project'}
+				{r.projectCode}
 			{:else if col.key === 'title'}
 				{r.title}
 			{:else if col.key === 'asset'}
-				{#if r.asset_display}<span
+				{#if r.assetDisplay}<span
 						class="block max-w-[32rem] truncate text-muted-foreground"
-						title={r.asset_display}>{r.asset_display}</span
+						title={r.assetDisplay}>{r.assetDisplay}</span
 					>{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'disposition'}
 				<State value={r.disposition} tone={dispositionTone(r.disposition)} />
@@ -186,15 +183,36 @@
 				<Score
 					score={r.score}
 					severity={r.severity}
-					residual={r.residual_score}
-					residualSeverity={r.residual_severity}
+					residual={r.residualScore}
+					residualSeverity={r.residualSeverity}
 				/>
 			{:else if col.key === 'owner'}
-				{#if r.owner_name}{r.owner_name}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if r.ownerName}{r.ownerName}{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'reviewed'}
-				<Timestamp value={r.last_reviewed_at} />
+				<Timestamp value={r.lastReviewedAt} />
 			{/if}
 		{/snippet}
 	</DataTable>
-	<Pagination {total} pageSize={PAGE_SIZE} />
+	{#if q.page > 1 || data.list.next}
+		<nav
+			aria-label="Pages"
+			class="flex items-center gap-3 border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground"
+		>
+			<span class="tabular-nums">PAGE {q.page} · {shown} OF {total}</span>
+			<div class="ml-auto flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="xs"
+					disabled={q.page <= 1}
+					onclick={() => setQuery({ page: null, cursor: null })}>← FIRST</Button
+				>
+				<Button
+					variant="outline"
+					size="xs"
+					disabled={!data.list.next}
+					onclick={() => setQuery({ page: q.page + 1, cursor: data.list.next })}>NEXT →</Button
+				>
+			</div>
+		</nav>
+	{/if}
 </ListFrame>

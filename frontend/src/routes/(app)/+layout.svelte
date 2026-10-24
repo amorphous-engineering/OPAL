@@ -5,6 +5,7 @@
 	import NotificationBell from '#lib/components/shell/NotificationBell.svelte';
 	import UserMenu from '#lib/components/shell/UserMenu.svelte';
 	import VersionBadge from '#lib/components/shell/VersionBadge.svelte';
+	import StatusBar from '#lib/components/shell/StatusBar.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import { opal } from '#lib/api.js';
@@ -13,6 +14,8 @@
 
 	let { children, data }: LayoutProps = $props();
 	let paletteOpen = $state(false);
+	// False after a failed heartbeat; the status bar shows OFFLINE until the next one succeeds.
+	let online = $state(true);
 
 	// Presence: the Users pages show who is online and what they are doing. The pulse runs
 	// while a tab is visible; the activity is the page the person is on.
@@ -20,7 +23,10 @@
 		const activity = page.url.pathname;
 		const beat = () => {
 			if (document.visibilityState === 'visible')
-				opal.platform.presence.heartbeat({ activity }).catch(() => {});
+				opal.platform.presence
+					.heartbeat({ activity })
+					.then(() => (online = true))
+					.catch(() => (online = false));
 		};
 		beat();
 		const timer = setInterval(beat, 15_000);
@@ -56,7 +62,9 @@
 	<header
 		class="sticky top-0 z-30 flex h-11 items-center gap-2 border-b border-border bg-background px-3"
 	>
-		<div class="mr-1 max-w-56 min-w-0 shrink max-[560px]:hidden"><VersionBadge about={data.about} /></div>
+		<div class="mr-1 max-w-56 min-w-0 shrink max-[560px]:hidden">
+			<VersionBadge about={data.about} />
+		</div>
 		<TopNav />
 		<Button
 			variant="ghost"
@@ -76,6 +84,7 @@
 	<main id="main" tabindex="-1" class="min-w-0 flex-1 outline-none">
 		{@render children()}
 	</main>
+	<StatusBar dbPath={data.about?.dbPath ?? '-'} {online} />
 </div>
 
 <CommandPalette bind:open={paletteOpen} />

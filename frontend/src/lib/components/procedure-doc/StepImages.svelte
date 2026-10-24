@@ -12,6 +12,9 @@
 	import { attachmentUrl, gallery } from './viewer.js';
 	import type { DocImage, DocStep } from './types.js';
 
+	const imageUrl = (img: { attachment_id: number; sha256?: string }) =>
+		img.sha256 ? `/api/blobs/${img.sha256}` : attachmentUrl(img.attachment_id);
+
 	let { images, step }: { images: DocImage[]; step?: DocStep } = $props();
 	const ctl = useDoc();
 	const au = $derived(ctl.mode === 'author' && step ? ctl.author : undefined);
@@ -120,7 +123,7 @@
 							<figure class="m-0 grid grid-cols-1 gap-1" data-image-id={img.id}>
 								<a
 									data-pswp
-									href={attachmentUrl(img.attachment_id)}
+									href={imageUrl(img)}
 									data-pswp-caption={img.caption ?? ''}
 									class="block aspect-[4/3] w-full overflow-hidden rounded-md border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
 									aria-label={img.caption ? `Enlarge: ${img.caption}` : 'Enlarge reference image'}
@@ -128,7 +131,7 @@
 									<img
 										loading="lazy"
 										decoding="async"
-										src={attachmentUrl(img.attachment_id)}
+										src={imageUrl(img)}
 										alt={img.caption ?? 'Reference image'}
 										class="size-full object-cover"
 									/>

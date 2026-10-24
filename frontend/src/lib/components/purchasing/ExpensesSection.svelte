@@ -14,9 +14,9 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { api, ApiError } from '#lib/api.js';
+	import { ApiError, opal } from '#lib/api.js';
 	import { money, qty as fmtQty } from '#lib/format.js';
-	import { num, type Expense } from './types.js';
+	import { PURCHASE_CHARGE_KINDS, num, type PurchaseExpense } from './types.js';
 
 	let {
 		purchaseId,
@@ -25,17 +25,17 @@
 		onchanged
 	}: {
 		purchaseId: number;
-		expenses: Expense[];
+		expenses: PurchaseExpense[];
 		canAdd: boolean;
 		onchanged: () => void | Promise<void>;
 	} = $props();
 
-	const KINDS = ['shipping', 'tax', 'duty', 'fee', 'other'];
-	const total = $derived(expenses.reduce((sum, e) => sum + num(e.total_cost), 0));
-	const hasCost = $derived(expenses.some((e) => e.total_cost != null));
+	const KINDS = PURCHASE_CHARGE_KINDS;
+	const total = $derived(expenses.reduce((sum, e) => sum + num(e.totalCost), 0));
+	const hasCost = $derived(expenses.some((e) => e.totalCost != null));
 
 	let open = $state(false);
-	let kind = $state('shipping');
+	let kind = $state<(typeof PURCHASE_CHARGE_KINDS)[number]>('shipping');
 	let amount = $state('');
 	let note = $state('');
 	let busy = $state(false);
@@ -49,19 +49,15 @@
 		open = true;
 	}
 
-	function chargeNote(e: Expense): string {
-		const i = (e.notes ?? '').indexOf(':');
-		return i >= 0 ? (e.notes ?? '').slice(i + 1).trim() : '';
-	}
-
 	async function add(e: SubmitEvent) {
 		e.preventDefault();
 		busy = true;
 		error = null;
 		try {
-			await api.post(`/purchases/${purchaseId}/expenses`, {
+			await opal.purchasing.orders.addCharge({
+				id: purchaseId,
 				kind,
-				amount: Number(amount),
+				amount: amount.trim(),
 				note: note.trim() || null
 			});
 			open = false;
@@ -74,16 +70,16 @@
 		}
 	}
 
-	async function remove(e: Expense) {
+	async function remove(e: PurchaseExpense) {
 		const ok = await confirm({
-			title: `Remove ${e.charge_kind} charge`,
-			body: `The ${money(e.total_cost)} charge is deleted from this order's expenses.`,
+			title: `Remove ${e.kind} charge`,
+			body: `The ${money(e.totalCost)} charge is deleted from this order's expenses.`,
 			action: 'REMOVE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/purchases/${purchaseId}/expenses/${e.id}`);
+			await opal.purchasing.orders.removeCharge({ id: purchaseId, expenseId: e.id });
 			await onchanged();
 		} catch (err) {
 			toastError(err);
@@ -112,7 +108,7 @@
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-muted/60">
-						{#each [['ITEM', 'left'], ['QTY', 'right'], ['UNIT COST', 'right'], ['TOTAL', 'right'], ['TIER', 'left'], ['RECORDED', 'left'], ['', 'left']] as [h, a] (h)}
+						{#each [['ITEM', 'left'], ['QTY', 'right'], ['UNIT COST', 'right'], ['TOTAL', 'right'], ['RECORDED', 'left'], ['', 'left']] as [h, a] (h)}
 							<th
 								scope="col"
 								class="h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
@@ -126,31 +122,26 @@
 					{#each expenses as e (e.id)}
 						<tr class="border-b border-border align-top">
 							<td class="px-3 py-1.5">
-								{#if e.charge_kind}
-									<span class="font-mono text-xs tracking-wide uppercase">{e.charge_kind}</span>
-									{#if chargeNote(e)}<span class="ml-2 text-muted-foreground">{chargeNote(e)}</span
-										>{/if}
+								{#if e.kind !== 'receipt'}
+									<span class="font-mono text-xs tracking-wide uppercase">{e.kind}</span>
+									{#if e.notes}<span class="ml-2 text-muted-foreground">{e.notes}</span>{/if}
 								{:else}
-									<a href={`/parts/${e.part_id}`} class="font-mono text-info hover:underline"
-										>{e.part_internal_pn ?? '—'}</a
+									<a href={`/parts/${e.partId}`} class="font-mono text-info hover:underline"
+										>{e.partInternalPn}</a
 									>
-									<span class="ml-2">{e.part_name ?? ''}</span>
+									<span class="ml-2">{e.partName ?? ''}</span>
 								{/if}
 							</td>
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
-								>{e.charge_kind ? '' : fmtQty(e.quantity)}</td
+								>{e.kind !== 'receipt' ? '' : fmtQty(e.quantity)}</td
 							>
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
-								>{e.charge_kind ? '' : money(e.unit_cost)}</td
+								>{e.kind !== 'receipt' ? '' : money(e.unitCost)}</td
 							>
-							<td class="px-3 py-1.5 text-right font-mono tabular-nums">{money(e.total_cost)}</td>
-							<td class="px-3 py-1.5 font-mono"
-								>{#if e.tier != null}T{e.tier}{:else}<span class="text-muted-foreground">—</span
-									>{/if}</td
-							>
-							<td class="px-3 py-1.5"><Timestamp value={e.received_at} /></td>
+							<td class="px-3 py-1.5 text-right font-mono tabular-nums">{money(e.totalCost)}</td>
+							<td class="px-3 py-1.5"><Timestamp value={e.at} /></td>
 							<td class="px-3 py-1.5 text-right">
-								{#if e.charge_kind}
+								{#if e.kind !== 'receipt'}
 									<ActionLink danger onclick={() => remove(e)}>REMOVE</ActionLink>
 								{/if}
 							</td>
@@ -168,7 +159,7 @@
 						<td class="px-3 py-1.5 text-right font-mono font-medium tabular-nums"
 							>{hasCost ? money(total) : '—'}</td
 						>
-						<td colspan="3"></td>
+						<td colspan="2"></td>
 					</tr>
 				</tfoot>
 			</table>

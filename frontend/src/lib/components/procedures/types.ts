@@ -1,142 +1,21 @@
-/** Shapes returned by /api/procedures/*. */
-import type { Callout } from '#lib/components/procedure-doc/types.js';
+/** Types of the procedures screens: the contract types, plus the groupings the screens draw. */
+import type { SnapshotStep } from '@opal/shared';
 
-export type ProcedureStatus = 'draft' | 'active' | 'deprecated';
-export type ProcedureType = 'op' | 'build';
-
-export interface StepNode {
-	id: number;
-	order: number;
-	step_number: string;
-	level: number;
-	parent_step_id: number | null;
-	title: string;
-	instructions: string | null;
-	is_contingency: boolean;
-	requires_signoff: boolean;
-	signoffs?: { label: string; role: string | null }[];
-	estimated_duration_minutes: number | null;
-	required_role: string | null;
-	callouts: Callout[];
-	required_data_schema: { fields?: DataField[] } | null;
-	sub_steps: StepNode[];
-}
-
-export interface DataField {
-	name: string;
-	label?: string;
-	type?: string;
-	unit?: string;
-	required?: boolean;
-	min?: number;
-	max?: number;
-}
-
-export interface ProcedureDetail {
-	id: number;
-	template_number: string;
-	name: string;
-	description: string | null;
-	status: ProcedureStatus;
-	procedure_type: ProcedureType;
-	current_version_id: number | null;
-	created_at: string;
-	updated_at: string;
-	unpublished_changes: boolean | null;
-	steps: StepNode[];
-}
-
-export interface ProcedureRow {
-	id: number;
-	template_number: string;
-	name: string;
-	description: string | null;
-	status: ProcedureStatus;
-	procedure_type: ProcedureType;
-	current_version_id: number | null;
-	current_version_number: number | null;
-	step_count: number;
-	execution_count: number;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface VersionRow {
-	id: number;
-	version_number: number;
-	created_at: string;
-	created_by_name: string | null;
-	change_note: string | null;
-	step_count: number;
-}
-
-export interface PartLine {
-	id: number;
-	part_id: number;
-	part_name: string;
-	part_internal_pn: string | null;
-	part_external_pn: string | null;
-	part_lifecycle_state: string | null;
-}
-
-export interface KitLine extends PartLine {
-	part_on_hand: number | null;
-	quantity_required: number;
-}
-
-export interface OutputLine extends PartLine {
-	quantity_produced: number;
-}
-
-export interface SnapshotStep {
-	id: number;
-	order: number;
-	step_number: string;
-	level: number;
-	parent_step_id: number | null;
-	title: string;
-	instructions: string | null;
-	required_data_schema: { fields?: DataField[] } | null;
-	is_contingency: boolean;
-	requires_signoff: boolean;
-	signoffs?: { label: string; role: string | null }[];
-	estimated_duration_minutes: number | null;
-	required_role: string | null;
-	/** Legacy snapshots carry `caution` instead of `callouts`; read through calloutsOf. */
-	callouts?: Callout[];
-	caution?: string | null;
-	strict_sequence: boolean;
-	depends_on?: number[];
-	images?: { attachment_id: number; caption: string | null }[];
-	step_kit?: {
-		part_id: number;
-		part_name: string;
-		quantity_required: number;
-		usage_type: string;
-		notes: string | null;
-	}[];
-}
-
-export interface VersionDetail {
-	id: number;
-	version_number: number;
-	created_at: string;
-	created_by_name: string | null;
-	change_note: string | null;
-	procedure_id: number;
-	procedure_template_number: string;
-	procedure_name: string;
-	procedure_type: ProcedureType;
-	is_current: boolean;
-	parts: { id: number; internal_pn: string | null; name: string }[];
-	content: {
-		procedure_name: string;
-		procedure_description: string | null;
-		steps: SnapshotStep[];
-		kit_items: { part_id: number; quantity_required: number }[];
-		output_items: { part_id: number; quantity_produced: number }[];
-	};
-}
+export type {
+	PartDiff,
+	Procedure,
+	ProcedureDataField as DataField,
+	ProcedureKitItem as KitLine,
+	ProcedureOutput as OutputLine,
+	ProcedureStatus,
+	ProcedureStep,
+	ProcedureType,
+	ProcedureVersion as VersionRow,
+	ProcedureVersionDetail as VersionDetail,
+	SnapshotStep,
+	StepDiff,
+	VersionDiff
+} from '@opal/shared';
 
 export interface OpGroup {
 	op: SnapshotStep;
@@ -148,80 +27,36 @@ export function groupOps(steps: SnapshotStep[]): { ops: OpGroup[]; contingency: 
 	const byOrder = (a: SnapshotStep, b: SnapshotStep) => a.order - b.order;
 	const children = new Map<number, SnapshotStep[]>();
 	for (const s of steps) {
-		if (s.parent_step_id != null) {
-			const list = children.get(s.parent_step_id) ?? [];
+		if (s.parentId != null) {
+			const list = children.get(s.parentId) ?? [];
 			list.push(s);
-			children.set(s.parent_step_id, list);
+			children.set(s.parentId, list);
 		}
 	}
 	const groups = steps
-		.filter((s) => s.parent_step_id == null)
+		.filter((s) => s.parentId == null)
 		.sort(byOrder)
 		.map((op) => ({ op, subs: (children.get(op.id) ?? []).sort(byOrder) }));
 	return {
-		ops: groups.filter((g) => !g.op.is_contingency),
-		contingency: groups.filter((g) => g.op.is_contingency)
+		ops: groups.filter((g) => !g.op.isContingency),
+		contingency: groups.filter((g) => g.op.isContingency)
 	};
 }
 
-export function pn(part: { internal_pn?: string | null } | undefined): string {
-	return part?.internal_pn ?? '—';
-}
+/** The procedure status as the screens name it. */
+export const PROCEDURE_STATUS_OPTIONS = [
+	{ value: 'draft', label: 'DRAFT' },
+	{ value: 'released', label: 'RELEASED' },
+	{ value: 'obsolete', label: 'OBSOLETE' }
+] as const;
 
-export interface RefDoc {
-	id: number;
-	original_filename: string;
-	mime_type: string;
-	size_bytes: number;
-	created_at: string;
-	uploaded_by_name: string | null;
-}
-
+/**
+ * A row of the executions list. The execution area owns this shape; the template page
+ * shows the few fields below and tolerates an absent list.
+ */
 export interface ExecutionRow {
 	id: number;
-	work_order_number: string | null;
-	version_number: number;
+	workOrderNumber: string | null;
+	versionNumber: number;
 	status: string;
-	created_at: string;
-}
-
-export interface IssueRow {
-	id: number;
-	issue_number: string | null;
-	title: string;
-	priority: string;
-	ticket_state: string;
-}
-
-export interface StepDiff {
-	status: 'added' | 'removed' | 'modified' | 'unchanged';
-	step_number: string;
-	title_a: string | null;
-	title_b: string | null;
-	changed_fields: string[];
-	changes: Record<string, { a: unknown; b: unknown }>;
-}
-
-export interface PartDiff {
-	part_id: number;
-	internal_pn: string | null;
-	name: string | null;
-	status: 'added' | 'removed' | 'modified';
-	quantity_a: number | null;
-	quantity_b: number | null;
-}
-
-export interface VersionDiff {
-	procedure_id: number;
-	procedure_name: string;
-	version_a: VersionRow;
-	version_b: VersionRow;
-	procedure_changes: { field: string; a: string | null; b: string | null }[];
-	steps: StepDiff[];
-	kit: PartDiff[];
-	outputs: PartDiff[];
-	added: number;
-	removed: number;
-	modified: number;
-	unchanged: number;
 }

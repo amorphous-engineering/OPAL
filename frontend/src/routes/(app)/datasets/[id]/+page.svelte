@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import {
 		PageHeader,
 		Section,
@@ -12,36 +12,41 @@
 		confirm,
 		toast,
 		toastError,
+		setQuery,
+		State,
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
 	import DatasetChart from '#lib/components/datasets/DatasetChart.svelte';
+	import ImportPointsDialog from '#lib/components/datasets/ImportPointsDialog.svelte';
 	import AddPointDialog from '#lib/components/datasets/AddPointDialog.svelte';
 	import EditDatasetDialog from '#lib/components/datasets/EditDatasetDialog.svelte';
-	import type { DataPoint, SchemaField } from '#lib/components/datasets/types.js';
+	import type { DataPoint } from '#lib/components/datasets/types.js';
+	import { opUrl, contracts } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const ds = $derived(data.dataset);
-	const fields = $derived(ds.schema.fields ?? []);
+	const fields = $derived(ds.schema.fields);
 	const numeric = $derived(fields.filter((f) => f.type === 'number'));
 
 	let addOpen = $state(false);
 	let editOpen = $state(false);
-	let chosen = $state<string | null>(null);
-	const chartField = $derived<SchemaField | undefined>(
-		numeric.find((f) => f.name === chosen) ?? numeric.find((f) => f.chart) ?? numeric[0]
+	let importOpen = $state(false);
+	const archived = $derived(ds.state === 'archived');
+	const procedureName = $derived(
+		data.procedures.find((p) => p.id === ds.procedureId)?.name ?? `Procedure ${ds.procedureId}`
 	);
 
-	// Newest first in the table; the chart sorts itself by time.
-	const points = $derived(
-		[...ds.data_points].sort((a, b) => b.recorded_at.localeCompare(a.recorded_at))
-	);
-	const truncated = $derived(ds.point_count > ds.data_points.length);
+	// Newest first, as the server returns them.
+	const points = $derived(data.points.items);
+	const truncated = $derived(ds.pointCount > points.length);
+	const exportHref = $derived(opUrl(contracts.datasets.exportCsv, { id: ds.id }));
 
 	const columns = $derived<Column<DataPoint>[]>([
-		{ key: 'recorded_at', label: 'Recorded', width: '10rem' },
+		{ key: 'recordedAt', label: 'Recorded', width: '10rem' },
 		...fields.map((f) => ({
 			key: `v:${f.name}`,
 			label: f.unit ? `${f.name} (${f.unit})` : f.name,
@@ -69,7 +74,7 @@
 		)
 			return;
 		try {
-			await api.del(`/datasets/${ds.id}/points/${p.id}`);
+			await opal.datasets.points.remove({ id: ds.id, pointId: p.id });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -77,19 +82,28 @@
 	}
 
 	async function removeDataset() {
+		const archive = ds.pointCount > 0;
 		if (
 			!(await confirm({
-				title: `Delete ${ds.name}`,
-				body: 'This deletes the dataset and all of its data points.',
-				action: 'DELETE',
+				title: `${archive ? 'Archive' : 'Delete'} ${ds.name}`,
+				body: archive
+					? 'An archived dataset keeps its points and takes no new ones. This cannot be undone.'
+					: 'This deletes the dataset.',
+				action: archive ? 'ARCHIVE' : 'DELETE',
 				destructive: true
 			}))
 		)
 			return;
 		try {
-			await api.del(`/datasets/${ds.id}`);
-			toast.success('Dataset deleted');
-			await goto('/datasets');
+			if (archive) {
+				await opal.datasets.archive({ id: ds.id });
+				toast.success('Dataset archived');
+				await invalidateAll();
+			} else {
+				await opal.datasets.delete({ id: ds.id });
+				toast.success('Dataset deleted');
+				await goto('/datasets');
+			}
 		} catch (e) {
 			toastError(e);
 		}
@@ -99,12 +113,19 @@
 <PageHeader title={ds.name} crumbs={[{ label: 'Datasets', href: '/datasets' }, { label: ds.name }]}>
 	{#snippet actions()}
 		<Button size="sm" variant="ghost" href={`/audit?entity=dataset&record=${ds.id}`}>AUDIT</Button>
-		<Button size="sm" onclick={() => (addOpen = true)}>+ ADD POINT</Button>
-		<Button variant="outline" size="sm" onclick={() => (editOpen = true)}>EDIT</Button>
-		<Button variant="outline" size="sm" href={`/api/datasets/${ds.id}/export`} download
+		{#if !archived}
+			<Button size="sm" onclick={() => (addOpen = true)}>+ ADD POINT</Button>
+			<Button variant="outline" size="sm" onclick={() => (importOpen = true)}>IMPORT CSV</Button>
+			<Button variant="outline" size="sm" onclick={() => (editOpen = true)}>EDIT</Button>
+		{/if}
+		<Button variant="outline" size="sm" href={exportHref} download={`dataset-${ds.id}.csv`}
 			>EXPORT CSV</Button
 		>
-		<Button variant="destructive" size="sm" onclick={removeDataset}>DELETE</Button>
+		{#if !archived}
+			<Button variant="destructive" size="sm" onclick={removeDataset}
+				>{ds.pointCount > 0 ? 'ARCHIVE' : 'DELETE'}</Button
+			>
+		{/if}
 	{/snippet}
 </PageHeader>
 
@@ -112,10 +133,16 @@
 	<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
 		<Section title="Dataset">
 			<DetailTable>
+				<ProjectRow id={ds.projectId} code={ds.projectCode} name={ds.projectName} /> <!-- added by projects -->
+				<DetailRow label="State"
+					>{#if archived}<State value="archived" tone="warn" badge />{:else}<span
+							class="font-mono text-xs text-muted-foreground">ACTIVE</span
+						>{/if}</DetailRow
+				>
 				<DetailRow label="Procedure">
-					{#if ds.procedure_id}
-						<a href={`/procedures/${ds.procedure_id}`} class="text-info hover:underline"
-							>{ds.procedure_name}</a
+					{#if ds.procedureId}
+						<a href={`/procedures/${ds.procedureId}`} class="text-info hover:underline"
+							>{procedureName}</a
 						>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
@@ -124,8 +151,11 @@
 						<span class="whitespace-pre-wrap">{ds.description}</span>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
-				<DetailRow label="Created"><Timestamp value={ds.created_at} /></DetailRow>
-				<DetailRow label="Updated"><Timestamp value={ds.updated_at} /></DetailRow>
+				<DetailRow label="Created"><Timestamp value={ds.createdAt} /></DetailRow>
+				<DetailRow label="Updated"><Timestamp value={ds.updatedAt} /></DetailRow>
+				{#if archived && ds.archivedAt}
+					<DetailRow label="Archived"><Timestamp value={ds.archivedAt} /></DetailRow>
+				{/if}
 			</DetailTable>
 		</Section>
 
@@ -136,6 +166,7 @@
 					{ key: 'name', label: 'Name' },
 					{ key: 'type', label: 'Type', mono: true },
 					{ key: 'unit', label: 'Unit', mono: true },
+					{ key: 'range', label: 'Range', mono: true },
 					{ key: 'chart', label: 'Charted', align: 'center' }
 				]}
 				emptyLabel="Fields"
@@ -144,6 +175,10 @@
 				{#snippet cell(row, col)}
 					{#if col.key === 'chart'}
 						{row.type === 'number' ? (row.chart ? 'YES' : 'NO') : '—'}
+					{:else if col.key === 'range'}
+						{#if row.min !== undefined || row.max !== undefined}{row.min ?? ''} … {row.max ?? ''}{:else}<span
+								class="text-muted-foreground">—</span
+							>{/if}
 					{:else}
 						{@const v = (row as unknown as Record<string, string | undefined>)[col.key]}
 						{#if v}{v}{:else}<span class="text-muted-foreground">—</span>{/if}
@@ -153,15 +188,15 @@
 		</Section>
 	</div>
 
-	{#if numeric.length && chartField && points.length}
+	{#if data.chart && data.field}
 		<Section title="Chart">
 			{#snippet actions()}
 				{#if numeric.length > 1}
 					<NativeSelect
 						size="sm"
 						aria-label="Chart field"
-						value={chartField.name}
-						onchange={(e) => (chosen = e.currentTarget.value)}
+						value={data.field}
+						onchange={(e) => setQuery({ field: e.currentTarget.value })}
 					>
 						{#each numeric as f (f.name)}
 							<NativeSelectOption value={f.name}
@@ -170,34 +205,29 @@
 						{/each}
 					</NativeSelect>
 				{:else}
-					<span class="font-mono text-xs text-muted-foreground">{chartField.name}</span>
+					<span class="font-mono text-xs text-muted-foreground">{data.field}</span>
 				{/if}
 			{/snippet}
-			<DatasetChart points={ds.data_points} field={chartField} />
+			<DatasetChart chart={data.chart} />
 		</Section>
 	{/if}
 
 	{#if points.length === 0}
-		<EmptyLine label="Data points" onadd={() => (addOpen = true)} />
+		<EmptyLine label="Data points" onadd={archived ? undefined : () => (addOpen = true)} />
 	{:else}
-		<Section title="Data points" count={ds.point_count}>
+		<Section title="Data points" count={ds.pointCount}>
 			<DataTable rows={points} {columns} emptyLabel="Data points" key={(p) => p.id} dense>
 				{#snippet cell(row, col)}
-					{#if col.key === 'recorded_at'}
-						<Timestamp value={row.recorded_at} />
+					{#if col.key === 'recordedAt'}
+						<Timestamp value={row.recordedAt} />
 					{:else if col.key === 'source'}
-						{#if row.source}
-							<a
-								href={`/executions/${row.source.instance_id}`}
-								class="font-mono text-xs text-info hover:underline"
-								>{row.source.work_order_number ?? 'Execution'} · {row.source.step_number_str}</a
-							>
-							{#if row.source.step_title}
-								<span class="text-muted-foreground"> {row.source.step_title}</span>
-							{/if}
+						{#if row.stepExecutionId !== null}
+							<span class="font-mono text-xs">Execution step</span>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else if col.key === 'actions'}
-						<Button variant="ghost" size="xs" onclick={() => removePoint(row)}>DELETE</Button>
+						{#if !archived}<Button variant="ghost" size="xs" onclick={() => removePoint(row)}
+								>DELETE</Button
+							>{/if}
 					{:else}
 						{@const v = show(row.values[col.key.slice(2)])}
 						{#if v}{v}{:else}<span class="text-muted-foreground">—</span>{/if}
@@ -206,7 +236,7 @@
 			</DataTable>
 			{#if truncated}
 				<p class="border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
-					Latest {ds.data_points.length} of {ds.point_count}. The CSV export has all points.
+					Latest {points.length} of {ds.pointCount}. The CSV export has all points.
 				</p>
 			{/if}
 		</Section>
@@ -214,6 +244,7 @@
 </div>
 
 <AddPointDialog bind:open={addOpen} datasetId={ds.id} {fields} onadded={invalidateAll} />
+<ImportPointsDialog bind:open={importOpen} datasetId={ds.id} onimported={invalidateAll} />
 <EditDatasetDialog
 	bind:open={editOpen}
 	dataset={ds}

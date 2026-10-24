@@ -7,28 +7,24 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { toast, toastError } from '#lib/components/opal/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import type { Risk, RiskDisposition } from '@opal/shared';
 	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
 	import { searchIssues } from './pickers.js';
-	import type { Risk } from './types.js';
 
-	interface Check {
-		blockers: string[];
-		open_mitigations: number;
-		open_research: number;
-		needs_note: boolean;
-	}
+	type Check = Awaited<ReturnType<typeof opal.risks.dispositionCheck>>;
 
-	let { risk, target, ondone }: { risk: Risk; target: string; ondone: () => void } = $props();
+	let { risk, target, ondone }: { risk: Risk; target: RiskDisposition; ondone: () => void } =
+		$props();
 
 	let check = $state<Check | null>(null);
 	let note = $state('');
 	// svelte-ignore state_referenced_locally
-	let observable = $state(risk.watch_observable ?? '');
+	let observable = $state(risk.watchObservable ?? '');
 	// svelte-ignore state_referenced_locally
-	let threshold = $state(risk.watch_threshold ?? '');
+	let threshold = $state(risk.watchThreshold ?? '');
 	// svelte-ignore state_referenced_locally
-	let contingency = $state(risk.watch_contingency ?? '');
+	let contingency = $state(risk.watchContingency ?? '');
 	let spawnTitle = $state('');
 	let picked = $state<{ id: number; label: string } | null>(null);
 	let busy = $state(false);
@@ -37,17 +33,17 @@
 	const fingerprint = $derived(
 		JSON.stringify([
 			target,
-			risk.updated_at,
-			risk.linked_issues,
-			risk.realized_issue_id,
-			risk.residual_probability,
-			risk.residual_impact
+			risk.updatedAt,
+			risk.linkedIssues,
+			risk.realizedIssueId,
+			risk.residualProbability,
+			risk.residualImpact
 		])
 	);
 	$effect(() => {
 		void fingerprint;
-		api
-			.get<Check>(`/risks/${risk.id}/disposition-check`, { target })
+		opal.risks
+			.dispositionCheck({ id: risk.id, target })
 			.then((c) => (check = c))
 			.catch(toastError);
 	});
@@ -68,7 +64,7 @@
 			if (!observable.trim()) m.push('observable');
 			if (!threshold.trim()) m.push('threshold');
 		}
-		if (check?.needs_note && !note.trim()) m.push('note');
+		if (check?.needsNote && !note.trim()) m.push('note');
 		return m;
 	});
 
@@ -77,7 +73,7 @@
 		if (!title) return;
 		busy = true;
 		try {
-			await api.post(`/risks/${risk.id}/issues/spawn`, { role: 'realized', title });
+			await opal.risks.spawnIssue({ id: risk.id, role: 'realized', title });
 			spawnTitle = '';
 			await invalidateAll();
 		} catch (e) {
@@ -91,18 +87,20 @@
 		busy = true;
 		try {
 			if (target === 'watch') {
-				await api.patch(`/risks/${risk.id}`, {
-					watch_observable: observable.trim() || null,
-					watch_threshold: threshold.trim() || null,
-					watch_contingency: contingency.trim() || null
+				await opal.risks.update({
+					id: risk.id,
+					watchObservable: observable.trim() || null,
+					watchThreshold: threshold.trim() || null,
+					watchContingency: contingency.trim() || null
 				});
 			}
-			await api.post(`/risks/${risk.id}/disposition`, {
+			await opal.risks.setDisposition({
+				id: risk.id,
 				disposition: target,
 				note: note.trim() || null,
-				realized_issue_id: picked?.id ?? null
+				realizedIssueId: picked?.id ?? null
 			});
-			toast.success(`${risk.risk_number} is now ${target.toUpperCase()}`);
+			toast.success(`${risk.riskNumber} is now ${target.toUpperCase()}`);
 			await invalidateAll();
 			ondone();
 		} catch (e) {
@@ -119,18 +117,18 @@
 	{#if target === 'mitigate'}
 		<p class="font-mono text-xs">
 			Open mitigation issues
-			<span class={check && check.open_mitigations ? 'text-ok' : 'text-error'}
-				>{check?.open_mitigations ?? '—'}</span
+			<span class={check && check.openMitigations ? 'text-ok' : 'text-error'}
+				>{check?.openMitigations ?? '—'}</span
 			>
 			· Residual score
-			{#if risk.residual_score !== null}<span class="text-ok">{risk.residual_score}</span
+			{#if risk.residualScore !== null}<span class="text-ok">{risk.residualScore}</span
 				>{:else}<span class="text-error">not set</span>{/if}
 		</p>
 	{:else if target === 'research'}
 		<p class="font-mono text-xs">
 			Open research issues
-			<span class={check && check.open_research ? 'text-ok' : 'text-muted-foreground'}
-				>{check?.open_research ?? '—'}</span
+			<span class={check && check.openResearch ? 'text-ok' : 'text-muted-foreground'}
+				>{check?.openResearch ?? '—'}</span
 			>
 			· Narrative
 			<span class={risk.description ? 'text-ok' : 'text-muted-foreground'}
@@ -153,10 +151,10 @@
 			</div>
 		</div>
 	{:else if target === 'realized'}
-		{#if risk.realized_issue_number}
+		{#if risk.realizedIssueNumber}
 			<p class="font-mono text-xs">
-				Realized issue <a class="text-ok hover:underline" href={`/issues/${risk.realized_issue_id}`}
-					>{risk.realized_issue_number}</a
+				Realized issue <a class="text-ok hover:underline" href={`/issues/${risk.realizedIssueId}`}
+					>{risk.realizedIssueNumber}</a
 				>
 			</p>
 		{:else if picked}
@@ -196,7 +194,7 @@
 		{/if}
 	{/if}
 
-	{#if check?.needs_note}
+	{#if check?.needsNote}
 		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="disposition-note"
 				>{risk.disposition === 'accepted' && target !== 'closed'

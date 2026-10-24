@@ -14,7 +14,7 @@
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { money } from '#lib/format.js';
 	import EditableRow from '#lib/components/purchasing/EditableRow.svelte';
 	import SupplierCatalog from '#lib/components/purchasing/SupplierCatalog.svelte';
@@ -25,7 +25,7 @@
 	const s = $derived(data.supplier);
 
 	async function patch(body: Record<string, unknown>) {
-		await api.patch(`/suppliers/${s.id}`, body);
+		await opal.purchasing.suppliers.update({ id: s.id, ...body });
 		await invalidateAll();
 	}
 
@@ -38,7 +38,7 @@
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/suppliers/${s.id}`);
+			await opal.purchasing.suppliers.delete({ id: s.id });
 			await goto('/suppliers');
 		} catch (e) {
 			toastError(e);
@@ -48,10 +48,10 @@
 	const poColumns: Column<PurchaseListItem>[] = [
 		{ key: 'reference', label: 'Reference', mono: true },
 		{ key: 'status', label: 'Status' },
-		{ key: 'ordered_at', label: 'Ordered' },
-		{ key: 'target_date', label: 'Target', mono: true },
+		{ key: 'orderedAt', label: 'Ordered' },
+		{ key: 'targetDate', label: 'Target', mono: true },
 		{ key: 'lines', label: 'Lines received', align: 'right', mono: true },
-		{ key: 'total_cost', label: 'Total', align: 'right', mono: true }
+		{ key: 'totalCost', label: 'Total', align: 'right', mono: true }
 	];
 </script>
 
@@ -61,11 +61,11 @@
 	crumbs={[{ label: 'Suppliers', href: '/suppliers' }, { label: s.name }]}
 >
 	{#snippet state()}
-		{#if !s.is_active}<State value="inactive" tone="muted" badge />{/if}
+		{#if !s.isActive}<State value="inactive" tone="muted" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
 		<Button href={`/purchases/new?supplier_id=${s.id}`}>+ NEW PURCHASE</Button>
-		{#if s.purchase_count === 0}
+		{#if s.deletable}
 			<Button variant="destructive" onclick={remove}>DELETE</Button>
 		{/if}
 	{/snippet}
@@ -91,17 +91,17 @@
 			<EditableRow
 				label="Status"
 				type="select"
-				value={s.is_active ? 'true' : 'false'}
+				value={s.isActive ? 'true' : 'false'}
 				options={[
 					{ value: 'true', label: 'ACTIVE' },
 					{ value: 'false', label: 'INACTIVE' }
 				]}
-				onsave={(v) => patch({ is_active: v === 'true' })}
+				onsave={(v) => patch({ isActive: v === 'true' })}
 			>
 				{#snippet display()}
 					<State
-						value={s.is_active ? 'active' : 'inactive'}
-						tone={s.is_active ? 'default' : 'muted'}
+						value={s.isActive ? 'active' : 'inactive'}
+						tone={s.isActive ? 'default' : 'muted'}
 					/>
 				{/snippet}
 			</EditableRow>
@@ -160,8 +160,8 @@
 				value={s.notes}
 				onsave={(v) => patch({ notes: v })}
 			/>
-			<DetailRow label="Created"><Timestamp value={s.created_at} /></DetailRow>
-			<DetailRow label="Updated"><Timestamp value={s.updated_at} /></DetailRow>
+			<DetailRow label="Created"><Timestamp value={s.createdAt} /></DetailRow>
+			<DetailRow label="Updated"><Timestamp value={s.updatedAt} /></DetailRow>
 		</DetailTable>
 	</Section>
 
@@ -182,18 +182,18 @@
 							<span class="text-info">{r.reference ?? '—'}</span>
 						{:else if col.key === 'status'}
 							<State value={r.status} />
-							{#if r.is_overdue}<State value="overdue" tone="error" badge class="ml-2" />{/if}
-						{:else if col.key === 'ordered_at'}
-							<Timestamp value={r.ordered_at} dateOnly />
-						{:else if col.key === 'target_date'}
-							{#if r.target_date}<span class={r.is_overdue ? 'text-error' : ''}
-									>{r.target_date}</span
+							{#if r.isOverdue}<State value="overdue" tone="error" badge class="ml-2" />{/if}
+						{:else if col.key === 'orderedAt'}
+							<Timestamp value={r.orderedAt} dateOnly />
+						{:else if col.key === 'targetDate'}
+							{#if r.targetDate}<span class={r.isOverdue ? 'text-error' : ''}
+									>{r.targetDate}</span
 								>{:else}<span class="text-muted-foreground">—</span>{/if}
 						{:else if col.key === 'lines'}
-							{#if r.total_lines === 0}<span class="text-muted-foreground">—</span
-								>{:else}{r.lines_complete}/{r.total_lines}{/if}
-						{:else if col.key === 'total_cost'}
-							{money(r.total_cost)}
+							{#if r.totalLines === 0}<span class="text-muted-foreground">—</span
+								>{:else}{r.linesComplete}/{r.totalLines}{/if}
+						{:else if col.key === 'totalCost'}
+							{money(r.totalCost)}
 						{/if}
 					{/snippet}
 				</DataTable>

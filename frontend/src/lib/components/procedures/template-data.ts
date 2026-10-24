@@ -1,21 +1,20 @@
 import type {
-	ExecutionRow,
-	IssueRow,
-	KitLine,
-	OutputLine,
-	ProcedureDetail,
-	RefDoc,
-	VersionRow
-} from './types.js';
-import type { Page } from '#lib/api.js';
+	Attachment,
+	Issue,
+	Procedure,
+	ProcedureKitItem,
+	ProcedureOutput,
+	ProcedureVersion
+} from '@opal/shared';
+import type { ExecutionRow } from './types.js';
 
 /** What the template page loads, as the template components receive it. */
 export interface TemplateData {
-	procedure: ProcedureDetail;
-	versions: VersionRow[];
-	kit: KitLine[];
-	outputs: OutputLine[];
-	executions: Page<ExecutionRow>;
-	issues: Page<IssueRow>;
-	docs: RefDoc[];
+	procedure: Procedure;
+	versions: ProcedureVersion[];
+	kit: ProcedureKitItem[];
+	outputs: ProcedureOutput[];
+	executions: { items: ExecutionRow[]; total: number };
+	issues: { items: Issue[]; total: number };
+	docs: Attachment[];
 }

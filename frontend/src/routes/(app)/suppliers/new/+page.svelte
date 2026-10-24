@@ -5,7 +5,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api, ApiError } from '#lib/api.js';
+	import { ApiError, opal } from '#lib/api.js';
 
 	let name = $state('');
 	let code = $state('');
@@ -25,7 +25,7 @@
 		busy = true;
 		error = null;
 		try {
-			const s = await api.post<{ id: number }>('/suppliers', {
+			const s = await opal.purchasing.suppliers.create({
 				name: name.trim(),
 				code: orNull(code),
 				email: orNull(email),

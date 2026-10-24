@@ -1,16 +1,17 @@
-import { api } from '#lib/api.js';
-import type { TreeResponse } from '#lib/components/requirements/types.js';
+import { opal, orHttpError } from '#lib/api.js';
+import { formProjectId } from '#lib/components/projects/projects.js'; // added by projects
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch, url }) => {
-	const a = api.using(fetch);
-	const [tree, assignees] = await Promise.all([
-		a.get<TreeResponse>('/requirements/tree'),
-		a.get<{ id: number; name: string }[]>('/users/directory')
-	]);
+	const client = opal.using(fetch);
+	const [tree, assignees] = await orHttpError(
+		Promise.all([client.requirements.tree({}), client.org.users.directory({})])
+	);
 	const parent = url.searchParams.get('parent');
+	const parentItem = tree.items.find((i) => String(i.id) === parent); // added by projects
 	return {
-		parents: tree.items.filter((i) => i.lifecycle_state !== 'cancelled'),
+		projectId: parentItem?.projectId ?? formProjectId(url), // added by projects
+		parents: tree.items.filter((i) => i.lifecycleState !== 'cancelled'),
 		assignees,
 		parentId: parent ? Number(parent) : null
 	};

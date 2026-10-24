@@ -1,27 +1,16 @@
-import { error } from '@sveltejs/kit';
-import { api, ApiError } from '#lib/api.js';
-import type { HistoryRow, Owner, Risk } from '#lib/components/risks/types.js';
+import { opal, orHttpError } from '#lib/api.js';
 import type { PageLoad } from './$types';
 
-export interface Readiness {
-	ready: boolean;
-	checks: { key: string; label: string; passed: boolean; detail: string | null }[];
-}
-
 export const load: PageLoad = async ({ fetch, params }) => {
-	const http = api.using(fetch);
-	const id = encodeURIComponent(params.id);
-	try {
-		const [risk, readiness, history, options] = await Promise.all([
-			http.get<Risk>(`/risks/${id}`),
-			http.get<Readiness>(`/risks/${id}/readiness`),
-			http.get<HistoryRow[]>(`/risks/${id}/history`),
-			http.get<Owner[]>('/users/directory')
-		]);
-		return { risk, readiness, history, owners: options };
-	} catch (e) {
-		if (e instanceof ApiError && (e.status === 404 || e.status === 422))
-			error(404, 'Risk not found');
-		throw e;
-	}
+	const client = opal.using(fetch);
+	const id = Number(params.id);
+	const [risk, readiness, history, owners] = await orHttpError(
+		Promise.all([
+			client.risks.get({ id }),
+			client.risks.readiness({ id }),
+			client.risks.history({ id }),
+			client.org.users.directory({})
+		])
+	);
+	return { risk, readiness, history, owners };
 };

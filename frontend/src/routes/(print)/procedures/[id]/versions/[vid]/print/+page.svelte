@@ -2,7 +2,6 @@
 	// Printable traveler: the published snapshot with write-in lines for the floor.
 	import { page } from '$app/state';
 	import { datetime, qty } from '#lib/format.js';
-	import { calloutsOf } from '#lib/components/procedure-doc/index.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import { groupOps, type DataField, type SnapshotStep } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
@@ -10,19 +9,19 @@
 	let { data }: PageProps = $props();
 
 	const v = $derived(data.version);
-	const grouped = $derived(groupOps(v.content.steps));
+	const grouped = $derived(groupOps(v.snapshot.steps));
 	const partById = $derived(new Map(v.parts.map((p) => [p.id, p])));
 	const target = $derived(`${page.url.origin}/procedures/versions/${v.id}`);
 	const qr = $derived(`/api/procedures/versions/${v.id}/qr?url=${encodeURIComponent(target)}`);
 	const hasOps = $derived(grouped.ops.length > 0);
 </script>
 
-<svelte:head><title>Traveler — {v.procedure_name} v{v.version_number} · OPAL</title></svelte:head>
+<svelte:head><title>Traveler — {v.procedureName} v{v.versionNumber} · OPAL</title></svelte:head>
 
 {#snippet fieldLine(f: DataField)}
 	<div class="flex items-baseline gap-2 text-[10pt]">
 		<span class="min-w-32 font-bold uppercase">{f.label ?? f.name}{f.required ? ' *' : ''}</span>
-		{#if f.type === 'boolean'}
+		{#if f.type === 'checkbox'}
 			<span class="inline-block size-4 border-2 border-black"></span>
 			<span class="text-[9pt]">YES / NO</span>
 		{:else}
@@ -36,7 +35,7 @@
 {/snippet}
 
 {#snippet signLines(s: SnapshotStep)}
-	{#if s.signoffs?.length}
+	{#if s.signoffs.length}
 		<div class="mt-2 border-t border-neutral-400 pt-1.5 text-[9pt]">
 			{#each s.signoffs as so, i (i)}
 				<div class="flex items-baseline gap-4 py-1" data-signoff={i}>
@@ -56,7 +55,7 @@
 {/snippet}
 
 {#snippet body(s: SnapshotStep)}
-	{#each calloutsOf(s) as c, i (i)}
+	{#each s.callouts as c, i (i)}
 		<p
 			class={[
 				'my-1 border-black px-2 py-1 text-[10pt]',
@@ -70,24 +69,24 @@
 	{#if s.instructions}
 		<Prose source={s.instructions} class="my-1 text-[10pt]" />
 	{/if}
-	{#each s.images ?? [] as img (img.attachment_id)}
+	{#each s.images as img, i (i)}
 		<figure class="my-1">
 			<img
-				src={`/api/attachments/${img.attachment_id}/download`}
+				src={`/api/blobs/${img.sha256}`}
 				alt={img.caption ?? ''}
 				class="max-h-48 border border-black"
 			/>
 			{#if img.caption}<figcaption class="text-[9pt]">{img.caption}</figcaption>{/if}
 		</figure>
 	{/each}
-	{#if s.step_kit?.length}
+	{#if s.kit.length}
 		<p class="my-1 text-[9pt]">
 			<b>PARTS</b>
-			{s.step_kit.map((k) => `${k.part_name} × ${qty(k.quantity_required)}`).join(' · ')}
+			{s.kit.map((k) => `${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}`).join(' · ')}
 		</p>
 	{/if}
 	<div class="grid gap-1.5">
-		{#each s.required_data_schema?.fields ?? [] as f (f.name)}{@render fieldLine(f)}{/each}
+		{#each s.dataSchema?.fields ?? [] as f (f.name)}{@render fieldLine(f)}{/each}
 	</div>
 {/snippet}
 
@@ -97,11 +96,10 @@
 			class="flex items-center gap-2 border-b border-black bg-neutral-200 px-2.5 py-1.5 font-bold"
 		>
 			{#if contingency}<span class="border-2 border-black bg-white px-1.5 text-[9pt]">C</span>{/if}
-			<span class="text-[13pt]">OP {g.op.step_number}</span>
+			<span class="text-[13pt]">OP {g.op.number}</span>
 			<span>{g.op.title}</span>
-			{#if g.op.estimated_duration_minutes}
-				<span class="ml-auto text-[9pt] font-normal">EST {g.op.estimated_duration_minutes} min</span
-				>
+			{#if g.op.estimatedDurationMinutes}
+				<span class="ml-auto text-[9pt] font-normal">EST {g.op.estimatedDurationMinutes} min</span>
 			{/if}
 		</div>
 		<div class="px-2.5 py-2">
@@ -111,12 +109,10 @@
 		{#each g.subs as s (s.id)}
 			<div class="break-inside-avoid border-t border-black px-2.5 py-2 pl-6">
 				<div class="flex items-baseline gap-2 font-bold">
-					<span>{s.step_number}</span>
+					<span>{s.number}</span>
 					<span>{s.title}</span>
-					{#if s.estimated_duration_minutes}
-						<span class="ml-auto text-[9pt] font-normal"
-							>EST {s.estimated_duration_minutes} min</span
-						>
+					{#if s.estimatedDurationMinutes}
+						<span class="ml-auto text-[9pt] font-normal">EST {s.estimatedDurationMinutes} min</span>
 					{/if}
 				</div>
 				{@render body(s)}
@@ -132,7 +128,7 @@
 <div
 	class="flex items-center gap-3 border-b border-neutral-300 bg-neutral-100 px-4 py-2 text-xs print:hidden"
 >
-	<a href={`/procedures/versions/${v.id}`} class="text-blue-700 underline">← v{v.version_number}</a>
+	<a href={`/procedures/versions/${v.id}`} class="text-blue-700 underline">← v{v.versionNumber}</a>
 	<button
 		type="button"
 		class="ml-auto border border-black bg-black px-3 py-1 font-mono text-xs font-medium text-white"
@@ -145,14 +141,14 @@
 >
 	<header class="mb-4 flex items-start justify-between border-b-[3px] border-black pb-3">
 		<div>
-			<h1 class="mb-1 text-[16pt] font-bold">{v.procedure_name}</h1>
+			<h1 class="mb-1 text-[16pt] font-bold">{v.procedureName}</h1>
 			<table class="text-[9pt]">
 				<tbody>
 					<tr>
 						<td class="pr-2 font-bold uppercase">Version</td>
-						<td class="pr-6">v{v.version_number}</td>
+						<td class="pr-6">v{v.versionNumber}</td>
 						<td class="pr-2 font-bold uppercase">Published</td>
-						<td>{datetime(v.created_at)}</td>
+						<td>{datetime(v.createdAt)}</td>
 					</tr>
 					<tr>
 						<td class="pt-1.5 pr-2 font-bold uppercase">Work order</td>
@@ -173,11 +169,11 @@
 		</div>
 	</header>
 
-	{#if v.content.procedure_description}
-		<Prose source={v.content.procedure_description} class="mb-3 text-[10pt]" />
+	{#if v.snapshot.procedure.description}
+		<Prose source={v.snapshot.procedure.description} class="mb-3 text-[10pt]" />
 	{/if}
 
-	{#if v.content.kit_items.length}
+	{#if v.snapshot.kit.length}
 		<h2 class="mt-5 mb-2 border-b-2 border-black pb-1 text-[12pt] font-bold uppercase">
 			Kit / bill of materials
 		</h2>
@@ -191,14 +187,14 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each v.content.kit_items as k (k.part_id)}
+				{#each v.snapshot.kit as k (k.partId)}
 					<tr>
 						<td class="border border-black p-1 text-center"
 							><span class="inline-block size-4 border-2 border-black align-middle"></span></td
 						>
-						<td class="border border-black p-1">{partById.get(k.part_id)?.name ?? '—'}</td>
-						<td class="border border-black p-1">{partById.get(k.part_id)?.internal_pn ?? '—'}</td>
-						<td class="border border-black p-1 text-right">{qty(k.quantity_required)}</td>
+						<td class="border border-black p-1">{partById.get(k.partId)?.name ?? '—'}</td>
+						<td class="border border-black p-1">{partById.get(k.partId)?.internalPn ?? '—'}</td>
+						<td class="border border-black p-1 text-right">{qty(k.quantity)}</td>
 					</tr>
 				{/each}
 			</tbody>

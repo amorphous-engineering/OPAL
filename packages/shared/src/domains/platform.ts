@@ -193,6 +193,8 @@ export const zAbout = z.object({
 	version: z.string(),
 	/** A development build (not a release). */
 	isDev: z.boolean(),
+	/** The live database file (the demo file while the demo is active). Shown in the status bar. */
+	dbPath: z.string(),
 	/**
 	 * Every operation this server implements. The shell reads it to call
 	 * another area's endpoint only when that area exists.

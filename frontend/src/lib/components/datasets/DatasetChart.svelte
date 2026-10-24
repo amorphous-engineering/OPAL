@@ -4,18 +4,17 @@
 	import { LineChart } from 'layerchart';
 	import * as Chart from '#lib/components/ui/chart/index.js';
 	import { datetime, toDate } from '#lib/format.js';
-	import type { DataPoint, SchemaField } from './types.js';
+	import type { Chart as ChartData } from './types.js';
 
-	let { points, field }: { points: DataPoint[]; field: SchemaField } = $props();
+	let { chart }: { chart: ChartData } = $props();
 
 	const rows = $derived(
-		points
-			.map((p) => ({ at: toDate(p.recorded_at) ?? new Date(NaN), value: p.values[field.name] }))
-			.filter((r): r is { at: Date; value: number } => typeof r.value === 'number')
-			.sort((a, b) => a.at.getTime() - b.at.getTime())
+		chart.series
+			.map((p) => ({ at: toDate(p.recordedAt) ?? new Date(NaN), value: p.value }))
+			.filter((r): r is { at: Date; value: number } => r.value !== null)
 	);
 
-	const label = $derived(field.unit ? `${field.name} (${field.unit})` : field.name);
+	const label = $derived(chart.unit ? `${chart.field} (${chart.unit})` : chart.field);
 	const config = $derived({
 		value: { label, color: 'var(--chart-1)' }
 	}) satisfies Chart.ChartConfig;
@@ -23,7 +22,7 @@
 
 {#if rows.length === 0}
 	<p class="px-3 py-6 font-mono text-xs text-muted-foreground">
-		{field.name} — no numeric values recorded
+		{chart.field} — no numeric values recorded
 	</p>
 {:else}
 	<Chart.Container {config} class="aspect-auto h-72 w-full justify-start pt-3 pr-8 pb-1 pl-3">
