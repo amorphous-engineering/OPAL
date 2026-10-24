@@ -18,8 +18,7 @@
 		<DetailRow label="Data directory"
 			><span class="font-mono break-all">{system.dataDir}</span></DetailRow
 		>
-		<DetailRow label="Database"><span class="font-mono break-all">{system.dbPath}</span></DetailRow
-		>
+		<DetailRow label="Database"><span class="font-mono break-all">{system.dbPath}</span></DetailRow>
 		<DetailRow label="Database size" mono value={bytes(system.dbSizeBytes)} />
 	</DetailTable>
 </Section>

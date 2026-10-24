@@ -110,7 +110,11 @@
 				<Dialog.Close>
 					{#snippet child({ props })}<Button variant="outline" {...props}>DONE</Button>{/snippet}
 				</Dialog.Close>
-				<Button type="submit" disabled={busy || !title.trim() || !statement.trim() || !(parent?.projectId ?? chosen)}>CREATE</Button>
+				<Button
+					type="submit"
+					disabled={busy || !title.trim() || !statement.trim() || !(parent?.projectId ?? chosen)}
+					>CREATE</Button
+				>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

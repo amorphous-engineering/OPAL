@@ -128,7 +128,11 @@
 		<PoLinesSection {detail} lines={data.poLines} />
 		<WhereUsedSection {detail} />
 		<!-- added by requirements -->
-		<PartRequirementsSection partId={part.id} partNumber={part.internalPn} version={part.updatedAt} />
+		<PartRequirementsSection
+			partId={part.id}
+			partNumber={part.internalPn}
+			version={part.updatedAt}
+		/>
 		<BomSection {detail} view="tree" />
 	</div>
 </div>

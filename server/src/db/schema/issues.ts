@@ -7,8 +7,9 @@ import {
 	RISK_ISSUE_ROLES // added by risks
 } from '@opal/shared';
 import { sql } from 'drizzle-orm';
-import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { type AnySQLiteColumn, check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { user } from './core.ts';
+import { execution, stepExecution } from './execution.ts'; // added by execution
 import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { project } from './org.ts'; // added by projects
 import { part } from './parts.ts';
@@ -41,11 +42,11 @@ export const issue = sqliteTable(
 
 		containment: text('containment', { enum: CONTAINMENTS }).notNull().default('advisory'),
 		/** The step that cannot complete until disposition ("resolve by 3.7"). No FK yet. */
-		containmentStepId: integer('containment_step_id'),
+		containmentStepId: integer('containment_step_id').references((): AnySQLiteColumn => stepExecution.id, { onDelete: 'set null' }), // added by execution
 		/** The execution (work order) this issue holds. No FK yet. */
-		executionId: integer('execution_id'),
+		executionId: integer('execution_id').references((): AnySQLiteColumn => execution.id, { onDelete: 'set null' }), // added by execution
 		/** The step the issue was raised from. No FK yet. */
-		raisedStepId: integer('raised_step_id'),
+		raisedStepId: integer('raised_step_id').references((): AnySQLiteColumn => stepExecution.id, { onDelete: 'set null' }), // added by execution
 
 		shouldBe: text('should_be'),
 		actual: text('actual'),

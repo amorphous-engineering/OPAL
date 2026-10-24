@@ -29,12 +29,12 @@
 		error = null;
 		try {
 			await store.createRedline({
-				issue_id: Number(issueId),
+				issueId: Number(issueId),
 				title: title.trim(),
 				steps: steps.map((s) => ({
 					title: s.title.trim(),
 					instructions: s.instructions.trim() || null,
-					requires_signoff: s.requires_signoff
+					requiresSignoff: s.requires_signoff
 				}))
 			});
 			store.closeDialog();

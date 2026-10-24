@@ -18,6 +18,7 @@ import { dataPoint, dataset } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
 import { parseCsv } from '../parts/csv.ts';
+import { stepExists, stepSources, type StepSource } from '../execution/sources.ts'; // added by execution
 import { checkPoint, pointProblems } from './validate.ts';
 
 type DatasetRow = typeof dataset.$inferSelect;
@@ -45,12 +46,13 @@ function present(ctx: Ctx, r: DatasetRow): Dataset {
 	};
 }
 
-const presentPoint = (r: PointRow): DataPoint => ({
+const presentPoint = (r: PointRow, source: StepSource | null = null): DataPoint => ({
 	id: r.id,
 	datasetId: r.datasetId,
 	recordedAt: r.recordedAt,
 	values: r.values,
 	stepExecutionId: r.stepExecutionId,
+	source, // added by execution
 	createdAt: r.createdAt
 });
 
@@ -154,14 +156,17 @@ export function addPoint(
 ): DataPoint {
 	const ds = openRow(ctx, i.id);
 	checkPoint(ds.schema, i.values);
-	// No existence check on stepExecutionId: the execution tables arrive in wave 3.
+	// added by execution: the step execution must exist
+	if (i.stepExecutionId != null && !stepExists(ctx.db, i.stepExecutionId)) {
+		throw new OpalError(422, 'invalid_input', `Step execution ${i.stepExecutionId} not found`, { stepExecutionId: 'Not found' });
+	}
 	const r = insert(ctx, dataPoint, {
 		datasetId: i.id,
 		recordedAt: i.recordedAt ? iso(i.recordedAt) : now(),
 		values: i.values,
 		stepExecutionId: i.stepExecutionId ?? null
 	});
-	return presentPoint(r);
+	return presentPoint(r, r.stepExecutionId === null ? null : (stepSources(ctx.db, [r.stepExecutionId]).get(r.stepExecutionId) ?? null)); // added by execution
 }
 
 export function listPoints(
@@ -185,7 +190,12 @@ export function listPoints(
 		.offset(offset)
 		.all();
 	return {
-		items: rows.slice(0, i.limit).map(presentPoint),
+		items: (() => {
+			// added by execution: where each point came from
+			const page = rows.slice(0, i.limit);
+			const src = stepSources(ctx.db, page.map((p) => p.stepExecutionId).filter((x): x is number => x !== null));
+			return page.map((p) => presentPoint(p, p.stepExecutionId === null ? null : (src.get(p.stepExecutionId) ?? null)));
+		})(),
 		next: rows.length > i.limit ? String(offset + i.limit) : null
 	};
 }

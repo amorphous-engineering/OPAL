@@ -41,7 +41,8 @@
 		'priority',
 		'assignee',
 		'part',
-		'execution'
+		'execution',
+		'procedure' // added by execution
 	];
 	const filtered = $derived.by(() => {
 		void page.url.search;
@@ -172,8 +173,7 @@
 			{:else if col.key === 'priority'}
 				<State value={i.priority} tone={priorityTone(i.priority)} />
 			{:else if col.key === 'assignee'}
-				{#if i.assignedTo}{i.assignedTo.name}{:else}<span class="text-muted-foreground"
-						>—</span
+				{#if i.assignedTo}{i.assignedTo.name}{:else}<span class="text-muted-foreground">—</span
 					>{/if}
 			{:else if col.key === 'links'}
 				{#if i.links.length || i.execution}

@@ -141,11 +141,12 @@
 					>
 					<span class="font-mono text-xs text-muted-foreground">v{inst.version.number}</span>
 					<State value={inst.status} badge={inst.status === 'aborted'} />
-					{#if inst.priority > 0}
+					<span class="font-mono text-xs text-muted-foreground">{inst.project.code}</span>
+					{#if inst.priority !== 'normal'}
 						<State
 							value="priority"
-							tone={inst.priority > 1 ? 'error' : 'warn'}
-							label={inst.priority > 1 ? 'URGENT' : 'HIGH'}
+							tone={inst.priority === 'urgent' ? 'error' : 'warn'}
+							label={inst.priority.toUpperCase()}
 							badge
 						/>
 					{/if}

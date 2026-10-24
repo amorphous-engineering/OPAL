@@ -23,7 +23,8 @@
 	// The API lists newest first and has no sort; headers sort the rows shown.
 	const sort = urlSort(null);
 	const FILTERS = ['q', 'project', 'procedure', 'state']; // project added by projects
-	const procedureName = (id: number | null) => data.procedures.find((p) => p.id === id)?.name ?? `Procedure ${id}`;
+	const procedureName = (id: number | null) =>
+		data.procedures.find((p) => p.id === id)?.name ?? `Procedure ${id}`;
 	const filtered = $derived.by(() => {
 		void page.url.search;
 		return hasParams(FILTERS);
@@ -32,7 +33,12 @@
 	const columns: Column<Dataset>[] = [
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'project', label: 'Project', mono: true, width: '7rem' }, // added by projects
-		{ key: 'procedure', label: 'Procedure', sortValue: (r) => (r.procedureId ? procedureName(r.procedureId) : '') , sortable: true },
+		{
+			key: 'procedure',
+			label: 'Procedure',
+			sortValue: (r) => (r.procedureId ? procedureName(r.procedureId) : ''),
+			sortable: true
+		},
 		{
 			key: 'fields',
 			label: 'Fields',
@@ -49,7 +55,9 @@
 <PageHeader title="Datasets">
 	{#snippet meta()}
 		{@const shown = data.list.items.length}
-		<span class="mono">{shown}{data.list.next ? '+' : ''} {shown === 1 ? 'dataset' : 'datasets'}</span>
+		<span class="mono"
+			>{shown}{data.list.next ? '+' : ''} {shown === 1 ? 'dataset' : 'datasets'}</span
+		>
 	{/snippet}
 	{#snippet actions()}
 		<Button

@@ -88,7 +88,8 @@
 		});
 		if (!ok) return;
 		try {
-			const { page: _p, ...filters } = q;
+			// Every page, not only the one on screen.
+			const filters = { ...q, page: undefined };
 			const r = await opal.risks.reviewStamp({ ...filters, q: filters.q || undefined });
 			toast.success(`${r.stamped} marked reviewed`);
 			await invalidateAll();

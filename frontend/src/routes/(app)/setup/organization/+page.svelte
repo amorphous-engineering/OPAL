@@ -5,7 +5,11 @@
 
 <PageHeader
 	title="Set up organization"
-	crumbs={[{ label: 'System' }, { label: 'Settings', href: '/settings' }, { label: 'Organization' }]}
+	crumbs={[
+		{ label: 'System' },
+		{ label: 'Settings', href: '/settings' },
+		{ label: 'Organization' }
+	]}
 />
 <div class="mx-auto w-full max-w-5xl p-4">
 	<OrganizationForm existing={null} />

@@ -1,111 +1,58 @@
 /**
  * One-time, forward-only import from a Python-era OPAL database (Alembic head
- * b8d2f1a5c3e0) into the new schema. Phase 0 covers user, api_token and part.
+ * b8d2f1a5c3e0) into the new schema. Every legacy table is moved or listed as skipped.
+ *
+ * The import writes rows directly in one transaction: it is a migration, not a user action.
+ * It records one audit row per table. The source file is never opened; a private copy is read.
  */
 import { Database } from 'bun:sqlite';
-import { PART_STATES, PROCUREMENT, QTY_SCALE, TRACKING_TYPES, now } from '@opal/shared';
+import { now } from '@opal/shared';
 import { copyFileSync, existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { openDb } from '../db/client.ts';
-import { apiToken, auditLog, part, user } from '../db/schema/index.ts';
+import type { Db } from '../db/client.ts';
+import { auditLog } from '../db/schema/index.ts';
+import { importAttachments } from './attachments.ts';
+import {
+	type ImportCtx,
+	type ImportOptions,
+	type ImportReport,
+	type ResolvedOptions,
+	type Row,
+	emptyReport,
+	fail,
+	tableExists
+} from './context.ts';
+import { importExecutions } from './execution.ts';
+import { importAudit, importDesignators, setSequences } from './finish.ts';
+import { importInventory } from './inventory.ts';
+import { openImportDb } from './open.ts';
+import { importPeople, importProject, importRoles, importSettings } from './org.ts';
+import { importParts, importPurchasing, importSuppliers } from './parts.ts';
+import { importProcedures } from './procedures.ts';
+import { importDatasets, importIssues, importNotifications, importRequirements, importRisks } from './tracking.ts';
+
+export { legacyQty, legacyTimestamp } from './context.ts';
+export type { ImportCtx, ImportOptions, ImportReport, TableReport } from './context.ts';
+export { openSchemaImportDb } from './open.ts';
 
 export const LEGACY_HEAD = 'b8d2f1a5c3e0';
 export const OLD_VERSION_MESSAGE =
 	'This database is from an older OPAL version. Install the last 1.x release, start it once to upgrade the database, then start this version again.';
 
-type Row = Record<string, unknown>;
-
-export interface TableReport {
-	read: number;
-	imported: number;
-	/** Legacy columns that have no home in the new schema. */
-	droppedColumns: string[];
-}
-
-export interface ImportReport {
-	source: string;
-	dest: string;
-	alembicVersion: string;
-	at: string;
-	tables: Record<'user' | 'api_token' | 'part', TableReport>;
-	notImported: { table: string; rows: number; note: string }[];
-	/** Parts with deleted_at set, imported as obsolete. */
-	obsoleteParts: { id: number; internalPn: string }[];
-	/** Parts without a part number, given LEGACY-<id>. */
-	placeholderPns: { id: number; internalPn: string }[];
-	/** Rows with values outside the new enums, and what they became. */
-	warnings: string[];
-	failedRows: { table: string; id: number; reason: string }[];
-}
-
-/** Columns the importer reads, per table. Everything else is dropped. */
-const MAPPED = {
-	user: [
-		'id', 'username', 'name', 'email', 'password_hash', 'oidc_issuer', 'oidc_subject',
-		'is_active', 'is_admin', 'created_at', 'updated_at'
-	],
-	api_token: [
-		'id', 'user_id', 'name', 'token_hash', 'last_used_at', 'expires_at', 'revoked_at',
-		'created_at'
-	],
-	part: [
-		'id', 'internal_pn', 'external_pn', 'name', 'description', 'category', 'unit_of_measure',
-		'tracking_type', 'procurement', 'tier', 'reorder_point', 'is_tooling',
-		'calibration_interval_days', 'lifecycle_state', 'deleted_at', 'activated_at',
-		'activated_by_id', 'created_at', 'updated_at'
-	]
-} as const;
-
-/** '2026-10-24 09:16:24.601408' (naive UTC) to '2026-10-24T09:16:24.601Z'. */
-export function legacyTimestamp(v: unknown): string | null {
-	if (v === null || v === undefined || v === '') return null;
-	const s = String(v).trim();
-	const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d+))?\s*(Z|[+-]\d{2}:?\d{2})?$/.exec(s);
-	if (!m) throw new RangeError(`Unreadable timestamp: ${s}`);
-	const ms = (m[3] ?? '').slice(0, 3).padEnd(3, '0');
-	const tz = m[4] && m[4] !== 'Z' ? (m[4].includes(':') ? m[4] : `${m[4].slice(0, 3)}:${m[4].slice(3)}`) : 'Z';
-	const d = new Date(`${m[1]}T${m[2]}.${ms}${tz}`);
-	if (Number.isNaN(d.getTime())) throw new RangeError(`Unreadable timestamp: ${s}`);
-	return d.toISOString();
-}
-
-function ts(v: unknown): string | null {
-	return legacyTimestamp(v);
-}
-
-function tsReq(v: unknown): string {
-	const t = legacyTimestamp(v);
-	if (t === null) throw new RangeError('Missing timestamp');
-	return t;
-}
-
-export function legacyQty(v: unknown): number | null {
-	if (v === null || v === undefined) return null;
-	return Math.round(Number(v) * QTY_SCALE);
-}
-
-const bool = (v: unknown) => Number(v) !== 0;
-const str = (v: unknown) => (v === null || v === undefined ? null : String(v));
-const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+/** Tables that are not imported, with the reason. Row counts are read from the source. */
+const SKIPPED: Record<string, string> = {
+	extension: 'extensions are postponed (decision O3)',
+	onshape_link: 'Onshape is postponed (decision O3)',
+	onshape_sync_log: 'Onshape is postponed (decision O3)',
+	webauthn_challenge: 'short-lived sign-in state (rows live 5 minutes)',
+	auth_session: 'sessions end at the import; people sign in again'
+};
 
 function tableNames(src: Database): string[] {
-	return (
-		src
-			.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-			.all() as Row[]
-	)
+	return (src.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as Row[])
 		.map((r) => String(r.name))
-		.filter((n) => !n.startsWith('sqlite_') && n !== 'alembic_version' && !/_fts(_|$)/.test(n));
-}
-
-function columns(src: Database, table: string): string[] {
-	return (src.query(`PRAGMA table_info("${table}")`).all() as Row[]).map((r) => String(r.name));
-}
-
-function dropped(src: Database, table: keyof typeof MAPPED): string[] {
-	const mapped: readonly string[] = MAPPED[table];
-	return columns(src, table).filter((c) => !mapped.includes(c));
+		.filter((n) => !n.startsWith('sqlite_') && n !== 'alembic_version');
 }
 
 /**
@@ -113,7 +60,7 @@ function dropped(src: Database, table: keyof typeof MAPPED): string[] {
  * byte-identical. Read-only opens are not portable: a WAL file with no -wal sidecar
  * needs an immutable URI, and Bun's bundled SQLite on Linux rejects URI filenames.
  */
-function openSource(path: string): { db: Database; close(): void } {
+export function openSource(path: string): { db: Database; close(): void } {
 	const dir = mkdtempSync(join(tmpdir(), 'opal-import-src-'));
 	const copy = join(dir, 'source.db');
 	copyFileSync(path, copy);
@@ -131,182 +78,108 @@ function openSource(path: string): { db: Database; close(): void } {
 export function hasAlembicVersion(path: string): boolean {
 	const source = openSource(path);
 	try {
-		return !!source.db
-			.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'alembic_version'")
-			.get();
+		return !!source.db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'alembic_version'").get();
 	} finally {
 		source.close();
 	}
 }
 
-function oneOf<T extends string>(
-	value: unknown,
-	allowed: readonly T[],
-	fallback: T,
-	what: string,
-	warnings: string[]
-): T {
-	const v = String(value ?? '').toLowerCase();
-	if ((allowed as readonly string[]).includes(v)) return v as T;
-	warnings.push(`${what}: "${String(value)}" is not valid, used "${fallback}"`);
-	return fallback;
+/** Checks the source and returns its Alembic version. */
+export function checkSource(src: Database, label: string): string {
+	if (!tableExists(src, 'alembic_version')) throw new Error(`Not an OPAL database: ${label}`);
+	const version = (src.query('SELECT version_num FROM alembic_version').get() as Row | null)?.version_num;
+	if (version !== LEGACY_HEAD) throw new Error(OLD_VERSION_MESSAGE);
+	return String(version);
 }
 
-function chunks<T>(rows: T[], size: number): T[][] {
-	const out: T[][] = [];
-	for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
-	return out;
-}
-
-export function importLegacy(srcPath: string, destPath: string): ImportReport {
-	if (existsSync(destPath)) throw new Error(`Destination already exists: ${destPath}`);
-	const source = openSource(srcPath);
-	const src = source.db;
-	let db: ReturnType<typeof openDb> | undefined;
+/**
+ * Copies every legacy table into `d`, in one transaction. `d` has the current schema and no
+ * rows. Also used for the demo database.
+ */
+export function importInto(src: Database, d: Db, report: ImportReport, opts: ResolvedOptions): void {
+	const sqlite = d.$client;
+	const c: ImportCtx = { legacyTables: opts.legacyTables, src, d, report, attachmentsDir: opts.attachmentsDir, blobsDir: opts.blobsDir, avatarsDir: opts.avatarsDir, ids: {}, projectId: 0 };
+	// Foreign keys are checked once at the end, so cycles (a risk and its realized issue) and
+	// order do not matter. A violation is reported as a failed row.
+	sqlite.run('PRAGMA foreign_keys = OFF');
+	sqlite.run('BEGIN');
 	try {
-		const hasVersion = src
-			.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'alembic_version'")
-			.get();
-		if (!hasVersion) throw new Error(`Not an OPAL database: ${srcPath}`);
-		const version = (src.query('SELECT version_num FROM alembic_version').get() as Row | null)
-			?.version_num;
-		if (version !== LEGACY_HEAD) throw new Error(OLD_VERSION_MESSAGE);
-
-		const report: ImportReport = {
-			source: srcPath,
-			dest: destPath,
-			alembicVersion: String(version),
-			at: now(),
-			tables: {
-				user: { read: 0, imported: 0, droppedColumns: dropped(src, 'user') },
-				api_token: { read: 0, imported: 0, droppedColumns: dropped(src, 'api_token') },
-				part: { read: 0, imported: 0, droppedColumns: dropped(src, 'part') }
-			},
-			notImported: [],
-			obsoleteParts: [],
-			placeholderPns: [],
-			warnings: [],
-			failedRows: []
-		};
-
-		const users = src.query('SELECT * FROM user ORDER BY id').all() as Row[];
-		const tokens = src.query('SELECT * FROM api_token ORDER BY id').all() as Row[];
-		const parts = src.query('SELECT * FROM part ORDER BY id').all() as Row[];
-		report.tables.user.read = users.length;
-		report.tables.api_token.read = tokens.length;
-		report.tables.part.read = parts.length;
-
-		const userRows = users.map((r) => ({
-			id: Number(r.id),
-			username: String(r.username),
-			name: String(r.name),
-			email: str(r.email),
-			passwordHash: str(r.password_hash),
-			oidcIssuer: str(r.oidc_issuer),
-			oidcSubject: str(r.oidc_subject),
-			isActive: bool(r.is_active),
-			isAdmin: bool(r.is_admin),
-			createdAt: tsReq(r.created_at),
-			updatedAt: tsReq(r.updated_at)
-		}));
-		const tokenRows = tokens.map((r) => ({
-			id: Number(r.id),
-			userId: Number(r.user_id),
-			name: String(r.name),
-			tokenHash: String(r.token_hash),
-			lastUsedAt: ts(r.last_used_at),
-			expiresAt: ts(r.expires_at),
-			revokedAt: ts(r.revoked_at),
-			createdAt: tsReq(r.created_at)
-		}));
-		const partRows = parts.map((r) => {
-			const id = Number(r.id);
-			let internalPn = str(r.internal_pn);
-			if (!internalPn) {
-				internalPn = `LEGACY-${id}`;
-				report.placeholderPns.push({ id, internalPn });
-			}
-			let state = oneOf(r.lifecycle_state, PART_STATES, 'draft', `part ${id} lifecycle_state`, report.warnings);
-			if (r.deleted_at) {
-				state = 'obsolete';
-				report.obsoleteParts.push({ id, internalPn });
-			}
-			return {
-				id,
-				internalPn,
-				externalPn: str(r.external_pn),
-				name: String(r.name),
-				description: str(r.description),
-				category: str(r.category),
-				unitOfMeasure: String(r.unit_of_measure),
-				trackingType: oneOf(r.tracking_type, TRACKING_TYPES, 'bulk', `part ${id} tracking_type`, report.warnings),
-				procurement: oneOf(r.procurement, PROCUREMENT, 'make', `part ${id} procurement`, report.warnings),
-				tier: Number(r.tier),
-				reorderPoint: legacyQty(r.reorder_point),
-				isTooling: bool(r.is_tooling),
-				calibrationIntervalDays: num(r.calibration_interval_days),
-				state,
-				activatedAt: ts(r.activated_at),
-				activatedById: num(r.activated_by_id),
-				createdAt: tsReq(r.created_at),
-				updatedAt: tsReq(r.updated_at)
-			};
-		});
-
-		// Parts reference users; a dangling activator would fail the FK. Clear it and say so.
-		const userIds = new Set(userRows.map((u) => u.id));
-		for (const p of partRows) {
-			if (p.activatedById !== null && !userIds.has(p.activatedById)) {
-				report.warnings.push(`part ${p.id}: activated_by_id ${p.activatedById} has no user, cleared`);
-				p.activatedById = null;
-			}
-		}
+		importPeople(c);
+		importRoles(c);
+		importSettings(c);
+		c.projectId = importProject(c);
+		importParts(c);
+		importSuppliers(c);
+		importPurchasing(c);
+		const blobs = importAttachments(c);
+		importProcedures(c, blobs);
+		const links = importInventory(c);
+		importIssues(c);
+		importRisks(c);
+		importRequirements(c);
+		importDatasets(c);
+		importNotifications(c);
+		importExecutions(c, links);
+		importAudit(c);
+		importDesignators(c);
+		setSequences(c);
 
 		for (const t of tableNames(src)) {
-			if (t in MAPPED) continue;
+			if (t in c.report.tables || t in SKIPPED || /_fts(_|$)/.test(t)) continue;
 			const rows = (src.query(`SELECT COUNT(*) AS n FROM "${t}"`).get() as Row).n as number;
-			report.notImported.push({ table: t, rows, note: 'not imported (Phase 1)' });
+			c.report.notImported.push({ table: t, rows, note: 'no importer' });
+			if (rows > 0) fail(c, t, 0, `${rows} rows have no importer`);
+		}
+		for (const [t, note] of Object.entries(SKIPPED)) {
+			if (!tableExists(src, t)) continue;
+			c.report.notImported.push({ table: t, rows: (src.query(`SELECT COUNT(*) AS n FROM "${t}"`).get() as Row).n as number, note });
+		}
+		for (const t of tableNames(src).filter((n) => n.endsWith('_fts'))) {
+			let rows = 0;
+			try {
+				rows = (src.query(`SELECT COUNT(*) AS n FROM "${t}"`).get() as Row).n as number;
+			} catch {
+				rows = 0;
+			}
+			c.report.notImported.push({ table: t, rows, note: 'search index, rebuilt by the server' });
 		}
 
-		db = openDb(destPath);
-		const d = db;
-		// The import is a migration, not a user action: it writes no per-row audit rows,
-		// only the one summary row per table below.
-		d.transaction((tx) => {
-			for (const c of chunks(userRows, 50)) tx.insert(user).values(c).run();
-			for (const c of chunks(tokenRows, 50)) tx.insert(apiToken).values(c).run();
-			for (const c of chunks(partRows, 50)) tx.insert(part).values(c).run();
-			report.tables.user.imported = userRows.length;
-			report.tables.api_token.imported = tokenRows.length;
-			report.tables.part.imported = partRows.length;
+		for (const v of sqlite.query('PRAGMA foreign_key_check').all() as { table: string; rowid: number; parent: string }[]) {
+			fail(c, v.table, v.rowid, `foreign key to ${v.parent} has no target`);
+		}
 
-			// Ids are never reused: counters sit at or above the highest imported id.
-			for (const [name, ids] of [
-				['user', userRows],
-				['api_token', tokenRows],
-				['part', partRows]
-			] as const) {
-				const max = ids.reduce((m, r) => Math.max(m, r.id), 0);
-				if (max === 0) continue;
-				const seq = d.$client.query('UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = ?');
-				if (seq.run(max, name).changes === 0) {
-					d.$client.query('INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)').run(name, max);
-				}
-			}
+		const at = now();
+		const entries = [
+			...Object.entries(report.tables).map(([name, t]) => ({ table: name, rows: t.imported, read: t.read })),
+			...Object.entries(report.derived).map(([name, rows]) => ({ table: name, rows, read: rows }))
+		];
+		for (const e of entries) {
+			d.insert(auditLog)
+				.values({ at, entity: 'import', entityId: 0, action: 'create', op: 'legacy.import', after: e })
+				.run();
+		}
+		sqlite.run('COMMIT');
+	} catch (e) {
+		sqlite.run('ROLLBACK');
+		throw e;
+	} finally {
+		sqlite.run('PRAGMA foreign_keys = ON');
+	}
+}
 
-			const at = now();
-			for (const [name, t] of Object.entries(report.tables)) {
-				tx.insert(auditLog)
-					.values({
-						at,
-						entity: 'import',
-						entityId: 0,
-						action: 'create',
-						op: 'legacy.import',
-						after: { table: name, rows: t.imported, read: t.read }
-					})
-					.run();
-			}
+export async function importLegacy(srcPath: string, destPath: string, options: ImportOptions & { open?: (path: string) => Promise<Db> } = {}): Promise<ImportReport> {
+	if (existsSync(destPath)) throw new Error(`Destination already exists: ${destPath}`);
+	const source = openSource(srcPath);
+	let db: Db | undefined;
+	try {
+		const version = checkSource(source.db, srcPath);
+		const report = emptyReport(srcPath, destPath, version, now());
+		db = await (options.open ?? openImportDb)(destPath);
+		importInto(source.db, db, report, {
+			attachmentsDir: options.attachmentsDir ?? join(dirname(srcPath), 'attachments'),
+			blobsDir: options.blobsDir ?? join(dirname(destPath), 'blobs'),
+			avatarsDir: options.avatarsDir ?? join(dirname(destPath), 'avatars'),
+			legacyTables: true
 		});
 		return report;
 	} finally {
@@ -324,14 +197,19 @@ export function importLegacy(srcPath: string, destPath: string): ImportReport {
 export function renderReport(r: ImportReport): string {
 	const L: string[] = [];
 	L.push(`OPAL legacy import, ${r.at}`, `Source: ${r.source}`, `Result: ${r.dest}`, `Alembic: ${r.alembicVersion}`, '');
-	L.push('Imported');
+	L.push('Imported (legacy table: rows written of rows read)');
 	for (const [name, t] of Object.entries(r.tables)) {
-		L.push(`  ${name.padEnd(12)} ${String(t.imported).padStart(6)} of ${t.read}`);
-		L.push(`    dropped columns: ${t.droppedColumns.join(', ') || '-'}`);
+		L.push(`  ${name.padEnd(24)} ${String(t.imported).padStart(6)} of ${String(t.read).padStart(6)}   dropped columns: ${t.droppedColumns.join(', ') || '-'}`);
 	}
-	L.push('', 'Not imported (Phase 1)');
-	for (const t of r.notImported) L.push(`  ${t.table.padEnd(32)} ${String(t.rows).padStart(6)} rows`);
+	L.push('', 'Written to tables without a legacy twin');
+	for (const [name, n] of Object.entries(r.derived)) L.push(`  ${name.padEnd(34)} ${String(n).padStart(6)}`);
+	L.push('', 'Not imported');
+	for (const t of r.notImported) L.push(`  ${t.table.padEnd(24)} ${String(t.rows).padStart(6)} rows   ${t.note}`);
 	if (!r.notImported.length) L.push('  -');
+	L.push('', `Stock differences closed by an import adjustment: ${r.stockDifferences.length}`);
+	for (const s of r.stockDifferences) {
+		L.push(`  ${s.opalNumber} (record ${s.stockId}, part ${s.partId}): old quantity ${s.legacyQuantity / 10000}, movements ${s.ledgerSum / 10000}, adjusted by ${s.difference / 10000}`);
+	}
 	L.push('', `Obsolete parts (had deleted_at): ${r.obsoleteParts.length}`);
 	for (const p of r.obsoleteParts) L.push(`  ${p.id}  ${p.internalPn}`);
 	L.push('', `Parts given a placeholder number: ${r.placeholderPns.length}`);
@@ -348,7 +226,7 @@ export function renderReport(r: ImportReport): string {
  * old file to opal.legacy.db and the new one to opal.db. The old file is never changed.
  * Returns null when the file is already in the new format.
  */
-export function importInPlace(dbPath: string): ImportReport | null {
+export async function importInPlace(dbPath: string, options: Parameters<typeof importLegacy>[2] = {}): Promise<ImportReport | null> {
 	if (!existsSync(dbPath) || !hasAlembicVersion(dbPath)) return null;
 	const dir = dirname(dbPath);
 	const legacyPath = join(dir, 'opal.legacy.db');
@@ -358,7 +236,7 @@ export function importInPlace(dbPath: string): ImportReport | null {
 	}
 	for (const suffix of ['', '-wal', '-shm']) rmSync(newPath + suffix, { force: true });
 
-	const report = importLegacy(dbPath, newPath);
+	const report = await importLegacy(dbPath, newPath, { blobsDir: join(dir, 'blobs'), avatarsDir: join(dir, 'avatars'), ...options });
 	if (existsSync(`${newPath}-wal`)) throw new Error(`Import left ${newPath}-wal behind; not renaming.`);
 
 	renameSync(dbPath, legacyPath);

@@ -143,7 +143,8 @@
 					variant="outline"
 					class="w-full"
 					href={`/oidc/login?next=${encodeURIComponent(next ?? '/')}`}
-					data-sveltekit-reload>SIGN IN WITH {(config.oidcProviderName ?? 'SSO').toUpperCase()}</Button
+					data-sveltekit-reload
+					>SIGN IN WITH {(config.oidcProviderName ?? 'SSO').toUpperCase()}</Button
 				>
 			{/if}
 		</div>

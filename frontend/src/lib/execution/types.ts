@@ -1,4 +1,8 @@
-/** API shapes for executions (work orders). Mirrors src/opal/api/routes/execution.py. */
+/**
+ * View model of an execution document, the shape the procedure-doc components render.
+ * `adapt.ts` builds it from the `execution.document` contract output. Lists, the cut preview
+ * and the report use the contract types directly.
+ */
 import type {
 	DocAttachment,
 	DocConsumption,
@@ -98,7 +102,8 @@ export interface InstanceFacts {
 	work_order: string | null;
 	status: InstanceStatus;
 	active: boolean;
-	priority: number;
+	priority: string;
+	project: { id: number; code: string; name: string };
 	procedure: { id: number; template_number: string; name: string; type: string };
 	version: {
 		id: number;
@@ -152,143 +157,9 @@ export interface ExecutionState {
 		holds: { issue_id: number; issue_number: string; disposition_state: string; kind: string }[];
 		attachments: number;
 		consumed: number;
-		notes: { id: number }[];
+		notes: number;
 	}[];
 	roster: RosterEntry[];
 	holds: HoldEntry[];
 	generated_at: string;
-}
-
-export interface OverviewRow {
-	id: number;
-	work_order_number: string | null;
-	procedure_id: number;
-	procedure_template_number: string;
-	procedure_name: string;
-	version_number: number;
-	status: InstanceStatus;
-	priority: number;
-	created_at: string;
-	started_at: string | null;
-	completed_at: string | null;
-	target_completion_at: string | null;
-	cut_by: string | null;
-	progress_done: number;
-	progress_total: number;
-	held_by: string[];
-	working: {
-		user_id: number;
-		name: string | null;
-		avatar_url?: string | null;
-		step_number: string | null;
-	}[];
-}
-
-export interface Overview {
-	items: OverviewRow[];
-	total: number;
-	page: number;
-	page_size: number;
-	counts: Record<InstanceStatus, number>;
-}
-
-export interface PreviewPart {
-	part_id: number;
-	part_number: string | null;
-	part_name: string;
-	uom: string | null;
-	per_work_order: number;
-	required: number;
-	available: number;
-	is_available: boolean;
-	usage_type: string | null;
-}
-
-export interface CutPreview {
-	procedure_id: number;
-	procedure_template_number: string;
-	procedure_name: string;
-	procedure_type: string;
-	versions: { id: number; number: number; created_at: string; is_current: boolean }[];
-	version_id: number;
-	version_number: number;
-	step_count: number;
-	op_count: number;
-	quantity: number;
-	outputs: {
-		part_id: number;
-		part_number: string | null;
-		part_name: string;
-		quantity_each: number;
-		serials: string[];
-	}[];
-	kit: PreviewPart[];
-	step_kit: PreviewPart[];
-	all_available: boolean;
-}
-
-export interface Report {
-	instance: {
-		id: number;
-		work_order: string | null;
-		status: string;
-		procedure_id: number;
-		procedure_name: string | null;
-		version_number: number | null;
-		operator: string | null;
-		started_at: string | null;
-		completed_at: string | null;
-	};
-	generated_at: string;
-	end_items: {
-		part_id: number;
-		part_name: string;
-		part_number: string | null;
-		opal_number: string | null;
-		serial_number: string | null;
-		quantity: number;
-		status: string;
-	}[];
-	operations: {
-		step_number: string;
-		level: number;
-		title: string;
-		status: string;
-		started_at: string | null;
-		completed_at: string | null;
-		operator: string | null;
-		signoff: string | null;
-		signoff_at: string | null;
-		signoffs: {
-			slot: number;
-			label: string;
-			role: string | null;
-			signed_by: string | null;
-			signed_at: string | null;
-		}[];
-	}[];
-	data_collects: {
-		step_number: string;
-		step_title: string;
-		rows: { label: string; value: string; unit: string | null }[];
-	}[];
-	chart_datasets: {
-		dataset_id: number;
-		name: string;
-		chart_fields: { name: string; label?: string; unit?: string }[];
-		fields: { name: string; label?: string; unit?: string }[];
-		points: { recorded_at: string; values: Record<string, unknown> }[];
-	}[];
-	issues: {
-		id: number;
-		issue_number: string;
-		issue_type: string;
-		priority: string;
-		status: string;
-		title: string;
-		root_cause: string | null;
-		disposition_type: string | null;
-		created_at: string;
-	}[];
-	closeout_attachments: { id: number; filename: string; created_at: string }[];
 }

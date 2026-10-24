@@ -123,13 +123,13 @@
 		<DataTable rows={entries} {columns} emptyLabel="Parts supplied" key={(r) => r.id}>
 			{#snippet cell(r, col)}
 				{#if col.key === 'partInternalPn'}
-					<a href={`/parts/${r.partId}`} class="text-info hover:underline"
-						>{r.partInternalPn}</a
-					>
+					<a href={`/parts/${r.partId}`} class="text-info hover:underline">{r.partInternalPn}</a>
 				{:else if col.key === 'isPreferred'}
 					{#if r.isPreferred}<State value="preferred" tone="ok" />{/if}
 				{:else if col.key === 'leadTimeDays'}
-					{#if r.leadTimeDays != null}{r.leadTimeDays}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r.leadTimeDays != null}{r.leadTimeDays}{:else}<span class="text-muted-foreground"
+							>—</span
+						>{/if}
 				{:else if col.key === 'lastUnitCost'}
 					{money(r.lastUnitCost)}
 				{:else if col.key === 'lastOrderedAt'}
@@ -174,7 +174,14 @@
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="cat-lead">Lead time (days)</Label>
-				<Input id="cat-lead" type="number" min="0" step="1" bind:value={leadTime} class="font-mono" />
+				<Input
+					id="cat-lead"
+					type="number"
+					min="0"
+					step="1"
+					bind:value={leadTime}
+					class="font-mono"
+				/>
 			</div>
 			<div class="flex items-center gap-2">
 				<Checkbox id="cat-pref" bind:checked={preferred} />

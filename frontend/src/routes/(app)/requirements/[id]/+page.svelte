@@ -39,9 +39,7 @@
 
 	let { data }: PageProps = $props();
 	const req = $derived(data.req);
-	const mutable = $derived(
-		req.lifecycleState === 'draft' || req.lifecycleState === 'preliminary'
-	);
+	const mutable = $derived(req.lifecycleState === 'draft' || req.lifecycleState === 'preliminary');
 	const terminal = $derived(
 		req.lifecycleState === 'superseded' || req.lifecycleState === 'cancelled'
 	);
@@ -316,7 +314,8 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<Section title="REQUIREMENT">
 		<DetailTable>
-			<ProjectRow id={req.projectId} code={req.projectCode} name={req.projectName} /> <!-- added by projects -->
+			<ProjectRow id={req.projectId} code={req.projectCode} name={req.projectName} />
+			<!-- added by projects -->
 			<DetailRow label="Statement">
 				{#if mutable}
 					<LintEditor
@@ -370,8 +369,7 @@
 						>
 							<NativeSelectOption value="">None (root)</NativeSelectOption>
 							{#each data.parents as p (p.id)}
-								<NativeSelectOption value={String(p.id)}
-									>{p.reqNumber} {p.title}</NativeSelectOption
+								<NativeSelectOption value={String(p.id)}>{p.reqNumber} {p.title}</NativeSelectOption
 								>
 							{/each}
 						</NativeSelect>
@@ -404,7 +402,10 @@
 						<NativeSelect
 							size="sm"
 							value={req.verificationMethod ?? ''}
-							onchange={(e) => save({ verificationMethod: (e.currentTarget.value || null) as Patch['verificationMethod'] })}
+							onchange={(e) =>
+								save({
+									verificationMethod: (e.currentTarget.value || null) as Patch['verificationMethod']
+								})}
 							aria-label="Verification method"
 						>
 							<NativeSelectOption value="">Not set</NativeSelectOption>
@@ -479,9 +480,7 @@
 				</DetailRow>
 				<DetailRow label="Baselined">
 					{#if req.baselinedAt}
-						<Timestamp value={req.baselinedAt} />{req.baselinedBy
-							? ` by ${req.baselinedBy}`
-							: ''}
+						<Timestamp value={req.baselinedAt} />{req.baselinedBy ? ` by ${req.baselinedBy}` : ''}
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Created"><Timestamp value={req.createdAt} /></DetailRow>

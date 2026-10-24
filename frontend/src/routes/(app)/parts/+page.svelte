@@ -144,7 +144,10 @@
 			{:else if col.key === 'category'}
 				{#if row.category}{row.category}{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'tier'}
-				<span class="font-mono text-xs">T{row.tier}{#if row.tierName} {row.tierName.toUpperCase()}{/if}</span>
+				<span class="font-mono text-xs"
+					>T{row.tier}{#if row.tierName}
+						{row.tierName.toUpperCase()}{/if}</span
+				>
 			{:else if col.key === 'procurement'}
 				<span class="font-mono text-xs text-muted-foreground">{stateLabel(row.procurement)}</span>
 			{:else if col.key === 'state'}

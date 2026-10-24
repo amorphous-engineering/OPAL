@@ -495,7 +495,10 @@
 		{/if}
 
 		<div class="flex gap-2">
-			<Button type="submit" class="flex-1" disabled={busy || !name.trim() || (!existing && !projectCode.trim())}
+			<Button
+				type="submit"
+				class="flex-1"
+				disabled={busy || !name.trim() || (!existing && !projectCode.trim())}
 				>{existing ? 'SAVE ORGANIZATION' : 'CREATE ORGANIZATION'}</Button
 			>
 			{#if !existing}<Button variant="outline" href="/">CANCEL</Button>{/if}

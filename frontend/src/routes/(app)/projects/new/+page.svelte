@@ -33,7 +33,10 @@
 	}
 </script>
 
-<PageHeader title="New project" crumbs={[{ label: 'Projects', href: '/projects' }, { label: 'New' }]} />
+<PageHeader
+	title="New project"
+	crumbs={[{ label: 'Projects', href: '/projects' }, { label: 'New' }]}
+/>
 
 <form class="grid max-w-3xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
 	<ErrorBanner message={error} />

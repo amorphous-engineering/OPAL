@@ -3,7 +3,7 @@ import { importLegacy as runImport, renderReport } from '../import/index.ts';
 import { dbPath } from '../paths.ts';
 import { flag } from './args.ts';
 
-export function importLegacy(args: string[]): void {
+export async function importLegacy(args: string[]): Promise<void> {
 	const out = flag(args, 'out');
 	const src = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--out');
 	if (!src) {
@@ -11,7 +11,7 @@ export function importLegacy(args: string[]): void {
 		process.exit(2);
 	}
 	try {
-		console.log(renderReport(runImport(src, out ?? dbPath())));
+		console.log(renderReport(await runImport(src, out ?? dbPath())));
 	} catch (e) {
 		console.error(e instanceof Error ? e.message : String(e));
 		process.exit(1);

@@ -74,10 +74,23 @@
 	$effect(() => {
 		if (stFilter !== 'superseded') return;
 		opal.requirements
-			.list({ state: 'superseded', includeSuperseded: 'true', limit: 500, projectId: data.projectId }) // added by projects
+			.list({
+				state: 'superseded',
+				includeSuperseded: 'true',
+				limit: 500,
+				projectId: data.projectId
+			}) // added by projects
 			.then((r) => {
 				superseded = r.items.map(
-					(x) => ({ ...x, parentId: null, orphan: false, lint: [], parts: [], verification: 'unallocated' }) satisfies TreeItem
+					(x) =>
+						({
+							...x,
+							parentId: null,
+							orphan: false,
+							lint: [],
+							parts: [],
+							verification: 'unallocated'
+						}) satisfies TreeItem
 				);
 			})
 			.catch(() => (superseded = []));
@@ -163,7 +176,13 @@
 
 	function flowDown(i: TreeItem | null) {
 		qcParent = i
-			? { id: i.id, reqNumber: i.reqNumber, level: i.level, category: i.category, projectId: i.projectId } // added by projects
+			? {
+					id: i.id,
+					reqNumber: i.reqNumber,
+					level: i.level,
+					category: i.category,
+					projectId: i.projectId
+				} // added by projects
 			: null;
 		qcOpen = true;
 	}
@@ -259,16 +278,18 @@
 		<Button
 			size="sm"
 			variant="outline"
-			href={data.projectId ? `/requirements/baselines?project=${data.projectId}` : '/requirements/baselines'}
-			>BASELINES</Button
+			href={data.projectId
+				? `/requirements/baselines?project=${data.projectId}`
+				: '/requirements/baselines'}>BASELINES</Button
 		>
 		{#if data.tree.queueCount}
 			<Button
 				size="sm"
 				variant="outline"
-				href={data.projectId ? `/requirements/queue?project=${data.projectId}` : '/requirements/queue'}
-				class="text-ok"
-				>BASELINE QUEUE · {data.tree.queueCount}</Button
+				href={data.projectId
+					? `/requirements/queue?project=${data.projectId}`
+					: '/requirements/queue'}
+				class="text-ok">BASELINE QUEUE · {data.tree.queueCount}</Button
 			>
 		{/if}
 		{#if session.user?.is_admin && unimported.length}
@@ -427,7 +448,8 @@
 											>r{r.revision}</span
 										>{/if}
 								</td>
-								<td class="px-3 py-1 font-mono text-xs">{r.projectCode}</td> <!-- added by projects -->
+								<td class="px-3 py-1 font-mono text-xs">{r.projectCode}</td>
+								<!-- added by projects -->
 								<td class="px-3 py-1"
 									><span class="line-clamp-1" title={r.title}>{r.title}</span></td
 								>
@@ -516,4 +538,8 @@
 	projectId={data.projectId ?? 0}
 	oncreated={() => invalidateAll()}
 />
-<ImportCatalogDialog bind:open={importOpen} projectId={data.projectId ?? 0} count={unimported.length} />
+<ImportCatalogDialog
+	bind:open={importOpen}
+	projectId={data.projectId ?? 0}
+	count={unimported.length}
+/>

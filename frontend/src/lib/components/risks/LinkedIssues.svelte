@@ -14,7 +14,12 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { opal } from '#lib/api.js';
-	import { RISK_ISSUE_ROLES, type Risk, type RiskIssueRole, type RiskLinkedIssue } from '@opal/shared';
+	import {
+		RISK_ISSUE_ROLES,
+		type Risk,
+		type RiskIssueRole,
+		type RiskLinkedIssue
+	} from '@opal/shared';
 	import EntityPicker from '#lib/components/opal/EntityPicker.svelte';
 	import { searchIssues } from './pickers.js';
 
@@ -54,10 +59,7 @@
 	}
 
 	const link = (issueId: number, number: string) =>
-		run(
-			() => opal.risks.linkIssue({ id: risk.id, issueId, role }),
-			`${number} linked as ${role}`
-		);
+		run(() => opal.risks.linkIssue({ id: risk.id, issueId, role }), `${number} linked as ${role}`);
 
 	async function spawn() {
 		const t = title.trim();
@@ -70,7 +72,10 @@
 	}
 
 	const unlink = (l: RiskLinkedIssue) =>
-		run(() => opal.risks.unlinkIssue({ id: risk.id, issueId: l.issueId }), `${l.issueNumber} unlinked`);
+		run(
+			() => opal.risks.unlinkIssue({ id: risk.id, issueId: l.issueId }),
+			`${l.issueNumber} unlinked`
+		);
 </script>
 
 {#snippet form()}

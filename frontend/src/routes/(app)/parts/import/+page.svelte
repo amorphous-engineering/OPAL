@@ -56,19 +56,17 @@
 				skipDuplicates,
 				rows: preview.rows
 					.filter((r) => r.valid)
-					.map(
-						(r): PartCreate => ({
-							name: r.name!,
-							externalPn: r.externalPn,
-							tier: r.tier ?? 1,
-							category: r.category,
-							unitOfMeasure: r.unitOfMeasure ?? undefined,
-							trackingType: (r.trackingType as PartCreate['trackingType']) ?? undefined,
-							procurement: (r.procurement as PartCreate['procurement']) ?? undefined,
-							description: r.description,
-							reorderPoint: r.reorderPoint
-						})
-					)
+					.map((r): PartCreate => ({
+						name: r.name!,
+						externalPn: r.externalPn,
+						tier: r.tier ?? 1,
+						category: r.category,
+						unitOfMeasure: r.unitOfMeasure ?? undefined,
+						trackingType: (r.trackingType as PartCreate['trackingType']) ?? undefined,
+						procurement: (r.procurement as PartCreate['procurement']) ?? undefined,
+						description: r.description,
+						reorderPoint: r.reorderPoint
+					}))
 			});
 			preview = null;
 			files = undefined;

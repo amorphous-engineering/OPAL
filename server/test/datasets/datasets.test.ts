@@ -151,10 +151,12 @@ describe('data points', () => {
 		expect((await api('GET', `/datasets/${ds.id}/points`)).json.items[0].values.note).toBe('<script>alert(1)</script>');
 	});
 
-	test('a point may name a step execution; the link is stored as given', async () => {
+	// changed by execution: the step execution must exist (the link itself is tested in test/execution)
+	test('a point that names an unknown step execution is refused', async () => {
 		const { pts } = await make();
 		const r = await pts({ values: { value: 1 }, stepExecutionId: 42 });
-		expect(r.json.stepExecutionId).toBe(42);
+		expect(r.status).toBe(422);
+		expect((await pts({ values: { value: 1 } })).json.source).toBeNull();
 	});
 
 	test('point and dataset changes are audited', async () => {

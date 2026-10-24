@@ -121,8 +121,9 @@
 				>{check?.openMitigations ?? '—'}</span
 			>
 			· Residual score
-			{#if risk.residualScore !== null}<span class="text-ok">{risk.residualScore}</span
-				>{:else}<span class="text-error">not set</span>{/if}
+			{#if risk.residualScore !== null}<span class="text-ok">{risk.residualScore}</span>{:else}<span
+					class="text-error">not set</span
+				>{/if}
 		</p>
 	{:else if target === 'research'}
 		<p class="font-mono text-xs">

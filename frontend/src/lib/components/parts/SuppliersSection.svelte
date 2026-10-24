@@ -94,7 +94,10 @@
 			destructive: true
 		});
 		if (ok)
-			await act(() => opal.purchasing.catalog.remove({ id: s.supplierId, entryId: s.id }), 'Supplier unlinked');
+			await act(
+				() => opal.purchasing.catalog.remove({ id: s.supplierId, entryId: s.id }),
+				'Supplier unlinked'
+			);
 	}
 </script>
 
@@ -157,7 +160,9 @@
 					{#if s.isPreferred}<span class="font-mono text-xs font-medium text-ok">PREFERRED</span
 						>{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else if col.key === 'leadTime'}
-					{#if s.leadTimeDays != null}{s.leadTimeDays}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if s.leadTimeDays != null}{s.leadTimeDays}{:else}<span class="text-muted-foreground"
+							>—</span
+						>{/if}
 				{:else if col.key === 'notes'}
 					{#if s.notes}{s.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else}

@@ -242,15 +242,13 @@
 				/>
 				<DetailRow label="Created">
 					<Timestamp value={po.createdAt} />
-					{#if po.createdByName}<span class="ml-2 text-muted-foreground"
-							>{po.createdByName}</span
+					{#if po.createdByName}<span class="ml-2 text-muted-foreground">{po.createdByName}</span
 						>{/if}
 				</DetailRow>
 				<DetailRow label="Ordered"><Timestamp value={po.orderedAt} /></DetailRow>
 				<DetailRow label="Received">
 					<Timestamp value={po.receivedAt} />
-					{#if po.receivedByName}<span class="ml-2 text-muted-foreground"
-							>{po.receivedByName}</span
+					{#if po.receivedByName}<span class="ml-2 text-muted-foreground">{po.receivedByName}</span
 						>{/if}
 				</DetailRow>
 			</DetailTable>
@@ -351,7 +349,9 @@
 					{:else if col.key === 'quantity'}
 						{fmtQty(r.quantity)}
 					{:else if col.key === 'lotNumber'}
-						{#if r.lotNumber || r.serialNumber}{r.serialNumber ?? r.lotNumber}{:else}<span class="text-muted-foreground">—</span>{/if}
+						{#if r.lotNumber || r.serialNumber}{r.serialNumber ?? r.lotNumber}{:else}<span
+								class="text-muted-foreground">—</span
+							>{/if}
 					{:else if col.key === 'receivedAt'}
 						<Timestamp value={r.receivedAt} />
 					{:else}

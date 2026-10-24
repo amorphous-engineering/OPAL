@@ -12,7 +12,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-		import AvatarEditor from './AvatarEditor.svelte';
+	import AvatarEditor from './AvatarEditor.svelte';
 	import { opal } from '#lib/api.js';
 	import type { Workcenter } from '#lib/components/workcenters/types.js';
 	import { session } from '#lib/session.svelte.js';

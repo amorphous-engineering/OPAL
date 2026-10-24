@@ -2,7 +2,7 @@
 	// Raise an issue (non-conformance) at the moment of discovery. The step,
 	// work order and operator are known; the form asks only what was observed.
 	import { onMount } from 'svelte';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { toast, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -19,8 +19,8 @@
 	let shouldBe = $state('');
 	let actual = $state('');
 	let description = $state('');
-	let priority = $state('medium');
-	let containment = $state('step');
+	let priority = $state<'low' | 'medium' | 'high' | 'critical'>('medium');
+	let containment = $state<'advisory' | 'step' | 'op' | 'wo'>('step');
 	let boundary = $state('');
 	let assignee = $state('');
 	let files = $state<FileList | undefined>();
@@ -30,7 +30,7 @@
 
 	onMount(async () => {
 		try {
-			people = await api.get('/users/directory');
+			people = await opal.issues.assignees({});
 		} catch {
 			/* assignment is optional */
 		}
@@ -56,16 +56,16 @@
 					title: title.trim(),
 					description: description.trim() || null,
 					priority,
-					should_be: shouldBe.trim() || null,
+					shouldBe: shouldBe.trim() || null,
 					actual: actual.trim() || null,
 					containment,
-					containment_step_number: boundary ? Number(boundary) : null,
-					assigned_to_id: assignee ? Number(assignee) : null
+					containmentStepId: boundary ? Number(boundary) : null,
+					assignedToId: assignee ? Number(assignee) : null
 				},
 				Array.from(files ?? [])
 			);
 			store.closeDialog();
-			toast.success(`${issue.issue_number} raised at ${step.number}`, {
+			toast.success(`${issue.issueNumber} raised at ${step.number}`, {
 				action: { label: 'OPEN', onClick: () => (window.location.href = `/issues/${issue.id}`) }
 			});
 		} catch (err) {

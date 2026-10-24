@@ -232,6 +232,7 @@ export const issues = {
 			assignedToId: zId.optional(),
 			partId: zId.optional(),
 			executionId: zId.optional(),
+			procedureId: zId.optional(), // added by execution: issues raised on executions of this procedure
 			sort: z.enum(ISSUE_SORTS).optional(),
 			dir: z.enum(['asc', 'desc']).default('desc')
 		}),

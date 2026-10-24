@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "516843ba-7158-44f1-ba0c-945e716070a9",
+  "id": "a5ed695f-7246-44fa-8a56-e263916a16c2",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "api_token": {
@@ -2191,6 +2191,20 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "execution_id": {
+          "name": "execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "step_execution_id": {
+          "name": "step_execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -2220,6 +2234,13 @@
           "name": "stock_move_purchase_line_idx",
           "columns": [
             "purchase_line_id"
+          ],
+          "isUnique": false
+        },
+        "stock_move_execution_idx": {
+          "name": "stock_move_execution_idx",
+          "columns": [
+            "execution_id"
           ],
           "isUnique": false
         }
@@ -2283,6 +2304,32 @@
           "tableTo": "purchase_line",
           "columnsFrom": [
             "purchase_line_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "stock_move_execution_id_execution_id_fk": {
+          "name": "stock_move_execution_id_execution_id_fk",
+          "tableFrom": "stock_move",
+          "tableTo": "execution",
+          "columnsFrom": [
+            "execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "stock_move_step_execution_id_step_execution_id_fk": {
+          "name": "stock_move_step_execution_id_step_execution_id_fk",
+          "tableFrom": "stock_move",
+          "tableTo": "step_execution",
+          "columnsFrom": [
+            "step_execution_id"
           ],
           "columnsTo": [
             "id"
@@ -4271,6 +4318,961 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "adhoc_step": {
+      "name": "adhoc_step",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "execution_id": {
+          "name": "execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "issue_id": {
+          "name": "issue_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "host_step_id": {
+          "name": "host_step_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "instructions": {
+          "name": "instructions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "data_schema": {
+          "name": "data_schema",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "signoffs": {
+          "name": "signoffs",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_by_id": {
+          "name": "created_by_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "adhoc_step_execution_idx": {
+          "name": "adhoc_step_execution_idx",
+          "columns": [
+            "execution_id"
+          ],
+          "isUnique": false
+        },
+        "adhoc_step_issue_idx": {
+          "name": "adhoc_step_issue_idx",
+          "columns": [
+            "issue_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "adhoc_step_execution_id_execution_id_fk": {
+          "name": "adhoc_step_execution_id_execution_id_fk",
+          "tableFrom": "adhoc_step",
+          "tableTo": "execution",
+          "columnsFrom": [
+            "execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "adhoc_step_issue_id_issue_id_fk": {
+          "name": "adhoc_step_issue_id_issue_id_fk",
+          "tableFrom": "adhoc_step",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "adhoc_step_parent_id_adhoc_step_id_fk": {
+          "name": "adhoc_step_parent_id_adhoc_step_id_fk",
+          "tableFrom": "adhoc_step",
+          "tableTo": "adhoc_step",
+          "columnsFrom": [
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "adhoc_step_created_by_id_user_id_fk": {
+          "name": "adhoc_step_created_by_id_user_id_fk",
+          "tableFrom": "adhoc_step",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "execution": {
+      "name": "execution",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "wo_number": {
+          "name": "wo_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "procedure_id": {
+          "name": "procedure_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'cut'"
+        },
+        "priority": {
+          "name": "priority",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'normal'"
+        },
+        "scheduled_start_at": {
+          "name": "scheduled_start_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "target_completion_at": {
+          "name": "target_completion_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "abort_reason": {
+          "name": "abort_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_by_id": {
+          "name": "created_by_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "execution_wo_number_unique": {
+          "name": "execution_wo_number_unique",
+          "columns": [
+            "wo_number"
+          ],
+          "isUnique": true
+        },
+        "execution_project_idx": {
+          "name": "execution_project_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
+        },
+        "execution_procedure_idx": {
+          "name": "execution_procedure_idx",
+          "columns": [
+            "procedure_id"
+          ],
+          "isUnique": false
+        },
+        "execution_status_idx": {
+          "name": "execution_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "execution_project_id_project_id_fk": {
+          "name": "execution_project_id_project_id_fk",
+          "tableFrom": "execution",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "execution_procedure_id_procedure_id_fk": {
+          "name": "execution_procedure_id_procedure_id_fk",
+          "tableFrom": "execution",
+          "tableTo": "procedure",
+          "columnsFrom": [
+            "procedure_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "execution_version_id_procedure_version_id_fk": {
+          "name": "execution_version_id_procedure_version_id_fk",
+          "tableFrom": "execution",
+          "tableTo": "procedure_version",
+          "columnsFrom": [
+            "version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "execution_created_by_id_user_id_fk": {
+          "name": "execution_created_by_id_user_id_fk",
+          "tableFrom": "execution",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "execution_status_check": {
+          "name": "execution_status_check",
+          "value": "\"status\" IN ('cut', 'in_work', 'completed', 'aborted')"
+        },
+        "execution_priority_check": {
+          "name": "execution_priority_check",
+          "value": "\"priority\" IN ('normal', 'high', 'urgent')"
+        }
+      }
+    },
+    "execution_output": {
+      "name": "execution_output",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "execution_id": {
+          "name": "execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stock_id": {
+          "name": "stock_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "execution_output_stock_id_unique": {
+          "name": "execution_output_stock_id_unique",
+          "columns": [
+            "stock_id"
+          ],
+          "isUnique": true
+        },
+        "execution_output_execution_idx": {
+          "name": "execution_output_execution_idx",
+          "columns": [
+            "execution_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "execution_output_execution_id_execution_id_fk": {
+          "name": "execution_output_execution_id_execution_id_fk",
+          "tableFrom": "execution_output",
+          "tableTo": "execution",
+          "columnsFrom": [
+            "execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "execution_output_stock_id_stock_record_id_fk": {
+          "name": "execution_output_stock_id_stock_record_id_fk",
+          "tableFrom": "execution_output",
+          "tableTo": "stock_record",
+          "columnsFrom": [
+            "stock_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "execution_output_qty": {
+          "name": "execution_output_qty",
+          "value": "\"quantity\" > 0"
+        }
+      }
+    },
+    "execution_participant": {
+      "name": "execution_participant",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "execution_id": {
+          "name": "execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "joined_at": {
+          "name": "joined_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "focus_step_id": {
+          "name": "focus_step_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "focused_at": {
+          "name": "focused_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_active_at": {
+          "name": "last_active_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "execution_participant_uq": {
+          "name": "execution_participant_uq",
+          "columns": [
+            "execution_id",
+            "user_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "execution_participant_execution_id_execution_id_fk": {
+          "name": "execution_participant_execution_id_execution_id_fk",
+          "tableFrom": "execution_participant",
+          "tableTo": "execution",
+          "columnsFrom": [
+            "execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "execution_participant_user_id_user_id_fk": {
+          "name": "execution_participant_user_id_user_id_fk",
+          "tableFrom": "execution_participant",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "execution_participant_focus_step_id_step_execution_id_fk": {
+          "name": "execution_participant_focus_step_id_step_execution_id_fk",
+          "tableFrom": "execution_participant",
+          "tableTo": "step_execution",
+          "columnsFrom": [
+            "focus_step_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "signoff": {
+      "name": "signoff",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "step_execution_id": {
+          "name": "step_execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slot": {
+          "name": "slot",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "signed_by_id": {
+          "name": "signed_by_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "signed_at": {
+          "name": "signed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "signoff_slot_uq": {
+          "name": "signoff_slot_uq",
+          "columns": [
+            "step_execution_id",
+            "slot"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "signoff_step_execution_id_step_execution_id_fk": {
+          "name": "signoff_step_execution_id_step_execution_id_fk",
+          "tableFrom": "signoff",
+          "tableTo": "step_execution",
+          "columnsFrom": [
+            "step_execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "signoff_signed_by_id_user_id_fk": {
+          "name": "signoff_signed_by_id_user_id_fk",
+          "tableFrom": "signoff",
+          "tableTo": "user",
+          "columnsFrom": [
+            "signed_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "step_execution": {
+      "name": "step_execution",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "execution_id": {
+          "name": "execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "step_id": {
+          "name": "step_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "adhoc_step_id": {
+          "name": "adhoc_step_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "data_captured": {
+          "name": "data_captured",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "skip_reason": {
+          "name": "skip_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_by_id": {
+          "name": "completed_by_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "workcenter_id": {
+          "name": "workcenter_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_focused_at": {
+          "name": "first_focused_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "step_execution_adhoc_step_id_unique": {
+          "name": "step_execution_adhoc_step_id_unique",
+          "columns": [
+            "adhoc_step_id"
+          ],
+          "isUnique": true
+        },
+        "step_execution_execution_idx": {
+          "name": "step_execution_execution_idx",
+          "columns": [
+            "execution_id"
+          ],
+          "isUnique": false
+        },
+        "step_execution_snapshot_uq": {
+          "name": "step_execution_snapshot_uq",
+          "columns": [
+            "execution_id",
+            "step_id"
+          ],
+          "isUnique": true,
+          "where": "\"step_id\" IS NOT NULL"
+        }
+      },
+      "foreignKeys": {
+        "step_execution_execution_id_execution_id_fk": {
+          "name": "step_execution_execution_id_execution_id_fk",
+          "tableFrom": "step_execution",
+          "tableTo": "execution",
+          "columnsFrom": [
+            "execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "step_execution_adhoc_step_id_adhoc_step_id_fk": {
+          "name": "step_execution_adhoc_step_id_adhoc_step_id_fk",
+          "tableFrom": "step_execution",
+          "tableTo": "adhoc_step",
+          "columnsFrom": [
+            "adhoc_step_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "step_execution_completed_by_id_user_id_fk": {
+          "name": "step_execution_completed_by_id_user_id_fk",
+          "tableFrom": "step_execution",
+          "tableTo": "user",
+          "columnsFrom": [
+            "completed_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "step_execution_workcenter_id_workcenter_id_fk": {
+          "name": "step_execution_workcenter_id_workcenter_id_fk",
+          "tableFrom": "step_execution",
+          "tableTo": "workcenter",
+          "columnsFrom": [
+            "workcenter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "step_execution_one_source": {
+          "name": "step_execution_one_source",
+          "value": "(\"step_id\" IS NULL) <> (\"adhoc_step_id\" IS NULL)"
+        },
+        "step_execution_status_check": {
+          "name": "step_execution_status_check",
+          "value": "\"status\" IN ('pending', 'awaiting_signoff', 'completed', 'skipped')"
+        }
+      }
+    },
+    "step_note": {
+      "name": "step_note",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "step_execution_id": {
+          "name": "step_execution_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "author_id": {
+          "name": "author_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "step_note_step_idx": {
+          "name": "step_note_step_idx",
+          "columns": [
+            "step_execution_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "step_note_step_execution_id_step_execution_id_fk": {
+          "name": "step_note_step_execution_id_step_execution_id_fk",
+          "tableFrom": "step_note",
+          "tableTo": "step_execution",
+          "columnsFrom": [
+            "step_execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "step_note_author_id_user_id_fk": {
+          "name": "step_note_author_id_user_id_fk",
+          "tableFrom": "step_note",
+          "tableTo": "user",
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "issue": {
       "name": "issue",
       "columns": {
@@ -4566,6 +5568,45 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_containment_step_id_step_execution_id_fk": {
+          "name": "issue_containment_step_id_step_execution_id_fk",
+          "tableFrom": "issue",
+          "tableTo": "step_execution",
+          "columnsFrom": [
+            "containment_step_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "issue_execution_id_execution_id_fk": {
+          "name": "issue_execution_id_execution_id_fk",
+          "tableFrom": "issue",
+          "tableTo": "execution",
+          "columnsFrom": [
+            "execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "issue_raised_step_id_step_execution_id_fk": {
+          "name": "issue_raised_step_id_step_execution_id_fk",
+          "tableFrom": "issue",
+          "tableTo": "step_execution",
+          "columnsFrom": [
+            "raised_step_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "issue_dispositioned_by_id_user_id_fk": {
@@ -5974,6 +7015,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "data_point_step_execution_id_step_execution_id_fk": {
+          "name": "data_point_step_execution_id_step_execution_id_fk",
+          "tableFrom": "data_point",
+          "tableTo": "step_execution",
+          "columnsFrom": [
+            "step_execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6121,6 +7175,117 @@
           "value": "\"state\" IN ('active', 'archived')"
         }
       }
+    },
+    "legacy_audit": {
+      "name": "legacy_audit",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "table_name": {
+          "name": "table_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "record_id": {
+          "name": "record_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "old_values": {
+          "name": "old_values",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "new_values": {
+          "name": "new_values",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "legacy_row": {
+      "name": "legacy_row",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "table_name": {
+          "name": "table_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "row_id": {
+          "name": "row_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "data": {
+          "name": "data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     }
   },
   "views": {},

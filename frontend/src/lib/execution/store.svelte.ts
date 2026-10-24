@@ -13,7 +13,7 @@
  *    remotely; otherwise the operator's choice is kept (persisted per execution).
  *  - Presence is the explicit claim. Focus (keyboard cursor) is local only.
  */
-import { api } from '#lib/api.js';
+import { api, opal } from '#lib/api.js';
 import { confirm, toast, toastError } from '#lib/components/opal/index.js';
 import {
 	isActionable,
@@ -26,6 +26,7 @@ import {
 	type DocStep,
 	type StockRecord
 } from '#lib/components/procedure-doc/index.js';
+import { adaptDocument, adaptState } from './adapt.js';
 import type { ExecutionDocument, ExecutionState } from './types.js';
 
 const POLL_MS = 5000;
@@ -92,9 +93,6 @@ export class ExecutionStore implements DocController {
 	private key(kind: string) {
 		return `opal.exec.${this.id}.${kind}`;
 	}
-	private url(path = '') {
-		return `/procedure-instances/${this.id}${path}`;
-	}
 
 	// ---------- derived ----------
 
@@ -122,7 +120,7 @@ export class ExecutionStore implements DocController {
 		await this.refresh();
 		this.loading = false;
 		if (this.error) return;
-		api.post(this.url('/join')).catch(() => {});
+		opal.execution.join({ id: this.id }).catch(() => {});
 		this.pollTimer = setInterval(() => {
 			if (document.visibilityState === 'visible') this.pollNow();
 		}, POLL_MS);
@@ -146,7 +144,7 @@ export class ExecutionStore implements DocController {
 
 	private leave = () => {
 		try {
-			navigator.sendBeacon(`/api${this.url('/leave')}`);
+			navigator.sendBeacon(`/api/executions/${this.id}/leave`);
 		} catch {
 			/* presence is best-effort */
 		}
@@ -158,8 +156,8 @@ export class ExecutionStore implements DocController {
 		const es = new EventSource('/api/events/stream');
 		es.onmessage = (m) => {
 			try {
-				const ev = JSON.parse(m.data) as { type: string; data?: { instance_id?: number } };
-				if (ev.data?.instance_id === this.id) this.pollNow();
+				const ev = JSON.parse(m.data) as { type: string; data?: { executionId?: number } };
+				if (ev.data?.executionId === this.id) this.pollNow();
 			} catch {
 				/* heartbeat or malformed frame */
 			}
@@ -171,7 +169,7 @@ export class ExecutionStore implements DocController {
 
 	async refresh() {
 		try {
-			const next = await api.get<ExecutionDocument>(this.url('/document'));
+			const next = adaptDocument(await opal.execution.document({ id: this.id }));
 			this.applyDocument(next);
 			this.error = null;
 		} catch (e) {
@@ -295,7 +293,7 @@ export class ExecutionStore implements DocController {
 		}
 		this.polling = true;
 		try {
-			const state = await api.get<ExecutionState>(this.url('/state'));
+			const state = adaptState(await opal.execution.state({ id: this.id }));
 			this.applyState(state);
 		} catch {
 			/* transient: the next tick retries */
@@ -318,8 +316,7 @@ export class ExecutionStore implements DocController {
 				x.holds.map((h) => `${h.issue_number}:${h.disposition_state}:${h.kind}`),
 				x.attachments,
 				x.consumed,
-				x.notes.length,
-				x.notes.at(-1)?.id ?? null
+				x.notes
 			]),
 			s.holds.map((h) => `${h.issue_number}:${h.disposition_state}`)
 		]);
@@ -497,10 +494,8 @@ export class ExecutionStore implements DocController {
 	actions: DocActions = {
 		claim: async (step) => {
 			try {
-				const r = await api.post<{ step_number: number }>(this.url('/focus'), {
-					step_number: step.order
-				});
-				this.claimedOrder = r.step_number; // the OP the claim covers
+				const r = await opal.execution.focus({ id: this.id, stepId: step.order });
+				this.claimedOrder = r.stepId; // the OP the claim covers
 				await this.pollNow();
 			} catch (e) {
 				toastError(e, 'Could not claim operation');
@@ -508,7 +503,7 @@ export class ExecutionStore implements DocController {
 		},
 		release: async () => {
 			try {
-				await api.del(this.url('/focus'));
+				await opal.execution.release({ id: this.id });
 				this.claimedOrder = null;
 				await this.pollNow();
 			} catch (e) {
@@ -543,8 +538,11 @@ export class ExecutionStore implements DocController {
 			});
 			if (!ok) return;
 			try {
-				await api.post(this.url(`/steps/${step.order}/signoffs/${slot}`), {
-					data_captured: data ?? null
+				await opal.execution.sign({
+					id: this.id,
+					stepId: step.order,
+					slot,
+					dataCaptured: data ?? null
 				});
 				if (slot === 0) {
 					delete this.drafts[step.order];
@@ -553,7 +551,8 @@ export class ExecutionStore implements DocController {
 				await this.changed();
 				const now = this.findStep(step.order)?.step;
 				if (now && isTerminal(now.status)) {
-					if (this.claimedOrder === step.order) await api.del(this.url('/focus')).catch(() => {});
+					if (this.claimedOrder === step.order)
+						await opal.execution.release({ id: this.id }).catch(() => {});
 					this.advanceFrom(step.order);
 				}
 			} catch (e) {
@@ -575,7 +574,7 @@ export class ExecutionStore implements DocController {
 			)
 				return;
 			try {
-				await api.del(this.url(`/ad-hoc-ops/${op.step.execution_id}`));
+				await opal.execution.deleteRedline({ id: this.id, redlineId: op.step.execution_id! });
 				await this.changed();
 			} catch (e) {
 				toastError(e, 'Failed to delete redline');
@@ -583,14 +582,13 @@ export class ExecutionStore implements DocController {
 		},
 		addNote: async (step, body, files = []) => {
 			try {
-				const note = await api.post<{ id: number }>(this.url(`/steps/${step.order}/notes`), {
-					body
-				});
+				const note = await opal.execution.addNote({ id: this.id, stepId: step.order, body });
 				for (const file of files) {
 					const fd = new FormData();
 					fd.append('file', file);
-					fd.append('step_note_id', String(note.id));
-					await api.post('/attachments/upload', fd);
+					fd.append('ownerType', 'step_note');
+					fd.append('ownerId', String(note.id));
+					await api.post('/attachments', fd);
 				}
 				await this.changed();
 				return true;
@@ -603,7 +601,15 @@ export class ExecutionStore implements DocController {
 		},
 		consume: async (step, items: ConsumeItem[]) => {
 			try {
-				await api.post(this.url(`/steps/${step.order}/consume`), { items });
+				await opal.execution.consumeAtStep({
+					id: this.id,
+					stepId: step.order,
+					items: items.map((i) => ({
+						stockId: i.inventory_record_id,
+						quantity: String(i.quantity),
+						usage: i.usage_type === 'tooling' ? ('tooling' as const) : ('consume' as const)
+					}))
+				});
 				this.stock = {};
 				await this.changed();
 				return true;
@@ -614,20 +620,27 @@ export class ExecutionStore implements DocController {
 		},
 		loadStock: async (partId) => {
 			if (this.stock[partId]) return this.stock[partId];
-			const r = await api.get<{ items: StockRecord[] }>('/inventory', {
-				part_id: partId,
-				limit: 200
-			});
-			return (this.stock[partId] = r.items);
+			const r = await opal.inventory.list({ partId, limit: 200 });
+			return (this.stock[partId] = r.items.map((x) => ({
+				id: x.id,
+				part_id: x.partId,
+				part_name: x.partName,
+				part_uom: x.partUom,
+				quantity: x.balance,
+				location: x.location,
+				lot_number: x.lotNumber,
+				opal_number: x.opalNumber
+			})));
 		},
 		uploadPhotos: async (step, files) => {
 			const ids: number[] = [];
 			for (const file of files) {
 				const fd = new FormData();
 				fd.append('file', file);
-				fd.append('step_execution_id', String(step.execution_id));
+				fd.append('ownerType', 'step_execution');
+				fd.append('ownerId', String(step.execution_id));
 				fd.append('kind', 'capture');
-				const att = await api.post<{ id: number }>('/attachments/upload', fd);
+				const att = await api.post<{ id: number }>('/attachments', fd);
 				ids.push(att.id);
 			}
 			return ids;
@@ -657,8 +670,9 @@ export class ExecutionStore implements DocController {
 	}
 
 	async skipStep(step: DocStep, reason: string) {
-		await api.post(this.url(`/steps/${step.order}/skip`), { reason: reason.trim() || null });
-		if (this.claimedOrder === step.order) await api.del(this.url('/focus')).catch(() => {});
+		await opal.execution.skip({ id: this.id, stepId: step.order, reason: reason.trim() || null });
+		if (this.claimedOrder === step.order)
+			await opal.execution.release({ id: this.id }).catch(() => {});
 		await this.changed();
 	}
 
@@ -667,53 +681,57 @@ export class ExecutionStore implements DocController {
 		body: {
 			title: string;
 			description: string | null;
-			priority: string;
-			should_be: string | null;
+			priority: 'low' | 'medium' | 'high' | 'critical';
+			shouldBe: string | null;
 			actual: string | null;
-			containment: string;
-			containment_step_number: number | null;
-			assigned_to_id: number | null;
+			containment: 'advisory' | 'step' | 'op' | 'wo';
+			containmentStepId: number | null;
+			assignedToId: number | null;
 		},
 		files: File[]
 	) {
-		const issue = await api.post<{ id: number; issue_number: string }>(
-			this.url(`/steps/${step.order}/nc`),
-			body
-		);
-		// Evidence at discovery links to the issue and the step.
+		const issue = await opal.execution.raiseNc({ id: this.id, stepId: step.order, ...body });
+		// Evidence at discovery links to the issue.
 		for (const file of files) {
 			const fd = new FormData();
 			fd.append('file', file);
-			fd.append('issue_id', String(issue.id));
-			fd.append('step_execution_id', String(step.execution_id));
+			fd.append('ownerType', 'issue');
+			fd.append('ownerId', String(issue.id));
 			fd.append('kind', 'capture');
-			await api.post('/attachments/upload', fd);
+			await api.post('/attachments', fd);
 		}
 		await this.changed();
 		return issue;
 	}
 
 	async createRedline(body: {
-		issue_id: number;
+		issueId: number;
 		title: string;
-		steps: { title: string; instructions: string | null; requires_signoff: boolean }[];
+		steps: { title: string; instructions: string | null; requiresSignoff: boolean }[];
 	}) {
-		await api.post(this.url('/ad-hoc-ops'), body);
+		await opal.execution.createRedline({ id: this.id, ...body });
 		await this.changed();
 	}
 
 	async abort() {
-		await api.patch(this.url(), { status: 'aborted' });
+		await opal.execution.cancel({ id: this.id });
 		await this.changed();
 	}
 
-	async update(body: Record<string, unknown>) {
-		await api.patch(this.url(), body);
+	async update(body: Omit<Parameters<typeof opal.execution.update>[0], 'id'>) {
+		await opal.execution.update({ id: this.id, ...body });
 		await this.changed();
 	}
 
 	async consumeKit(items: { inventory_record_id: number; quantity: number }[]) {
-		await api.post(this.url('/consume'), { items });
+		await opal.execution.consume({
+			id: this.id,
+			items: items.map((i) => ({
+				stockId: i.inventory_record_id,
+				quantity: String(i.quantity),
+				usage: 'consume' as const
+			}))
+		});
 		this.stock = {};
 		await this.changed();
 	}
@@ -727,12 +745,21 @@ export class ExecutionStore implements DocController {
 			serial_number: string | null;
 		}[]
 	) {
-		await api.post(this.url('/produce'), { items });
+		await opal.execution.produce({
+			id: this.id,
+			items: items.map((i) => ({
+				partId: i.part_id,
+				quantity: String(i.quantity),
+				location: i.location,
+				lotNumber: i.lot_number,
+				serialNumber: i.serial_number
+			}))
+		});
 		await this.changed();
 	}
 
 	async finalize(location: string) {
-		await api.post(this.url('/finalize'), { location });
+		await opal.execution.finalize({ id: this.id, location });
 		await this.changed();
 	}
 }

@@ -46,10 +46,7 @@
 			`${o.label} linked as ${role}`
 		);
 	const unlink = (riskId: number, riskNumber: string) =>
-		run(
-			() => opal.risks.unlinkIssue({ id: riskId, issueId: issue.id }),
-			`${riskNumber} unlinked`
-		);
+		run(() => opal.risks.unlinkIssue({ id: riskId, issueId: issue.id }), `${riskNumber} unlinked`);
 </script>
 
 {#snippet form()}

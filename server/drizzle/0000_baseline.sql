@@ -324,11 +324,15 @@ CREATE TABLE `stock_move` (
 	`counterpart_id` integer,
 	`into_stock_id` integer,
 	`purchase_line_id` integer,
+	`execution_id` integer,
+	`step_execution_id` integer,
 	FOREIGN KEY (`stock_id`) REFERENCES `stock_record`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`actor_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`counterpart_id`) REFERENCES `stock_move`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`into_stock_id`) REFERENCES `stock_record`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`purchase_line_id`) REFERENCES `purchase_line`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`step_execution_id`) REFERENCES `step_execution`(`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "stock_move_kind_check" CHECK("kind" IN ('receive', 'consume', 'produce', 'adjust', 'count', 'transfer')),
 	CONSTRAINT "stock_move_sign_check" CHECK(("stock_move"."kind" IN ('receive', 'produce') AND "stock_move"."qty" > 0)
 				OR ("stock_move"."kind" = 'consume' AND "stock_move"."qty" <= 0)
@@ -340,6 +344,7 @@ CREATE INDEX `stock_move_stock_idx` ON `stock_move` (`stock_id`,`at`);--> statem
 CREATE INDEX `stock_move_kind_idx` ON `stock_move` (`kind`);--> statement-breakpoint
 CREATE INDEX `stock_move_into_idx` ON `stock_move` (`into_stock_id`);--> statement-breakpoint
 CREATE INDEX `stock_move_purchase_line_idx` ON `stock_move` (`purchase_line_id`);--> statement-breakpoint
+CREATE INDEX `stock_move_execution_idx` ON `stock_move` (`execution_id`);--> statement-breakpoint
 CREATE TABLE `stock_record` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`part_id` integer NOT NULL,
@@ -616,6 +621,134 @@ CREATE TABLE `step_image` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `step_image_attachment_id_unique` ON `step_image` (`attachment_id`);--> statement-breakpoint
 CREATE INDEX `step_image_step_idx` ON `step_image` (`step_id`);--> statement-breakpoint
+CREATE TABLE `adhoc_step` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`execution_id` integer NOT NULL,
+	`issue_id` integer NOT NULL,
+	`parent_id` integer,
+	`host_step_id` integer,
+	`position` integer DEFAULT 0 NOT NULL,
+	`number` text NOT NULL,
+	`title` text NOT NULL,
+	`instructions` text,
+	`data_schema` text,
+	`signoffs` text,
+	`created_by_id` integer,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`issue_id`) REFERENCES `issue`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`parent_id`) REFERENCES `adhoc_step`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`created_by_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE INDEX `adhoc_step_execution_idx` ON `adhoc_step` (`execution_id`);--> statement-breakpoint
+CREATE INDEX `adhoc_step_issue_idx` ON `adhoc_step` (`issue_id`);--> statement-breakpoint
+CREATE TABLE `execution` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`wo_number` text NOT NULL,
+	`project_id` integer NOT NULL,
+	`procedure_id` integer NOT NULL,
+	`version_id` integer NOT NULL,
+	`status` text DEFAULT 'cut' NOT NULL,
+	`priority` text DEFAULT 'normal' NOT NULL,
+	`scheduled_start_at` text,
+	`target_completion_at` text,
+	`started_at` text,
+	`completed_at` text,
+	`abort_reason` text,
+	`created_by_id` integer,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`procedure_id`) REFERENCES `procedure`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`version_id`) REFERENCES `procedure_version`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	CONSTRAINT "execution_status_check" CHECK("status" IN ('cut', 'in_work', 'completed', 'aborted')),
+	CONSTRAINT "execution_priority_check" CHECK("priority" IN ('normal', 'high', 'urgent'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `execution_wo_number_unique` ON `execution` (`wo_number`);--> statement-breakpoint
+CREATE INDEX `execution_project_idx` ON `execution` (`project_id`);--> statement-breakpoint
+CREATE INDEX `execution_procedure_idx` ON `execution` (`procedure_id`);--> statement-breakpoint
+CREATE INDEX `execution_status_idx` ON `execution` (`status`);--> statement-breakpoint
+CREATE TABLE `execution_output` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`execution_id` integer NOT NULL,
+	`stock_id` integer NOT NULL,
+	`quantity` integer NOT NULL,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`stock_id`) REFERENCES `stock_record`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "execution_output_qty" CHECK("quantity" > 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `execution_output_stock_id_unique` ON `execution_output` (`stock_id`);--> statement-breakpoint
+CREATE INDEX `execution_output_execution_idx` ON `execution_output` (`execution_id`);--> statement-breakpoint
+CREATE TABLE `execution_participant` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`execution_id` integer NOT NULL,
+	`user_id` integer NOT NULL,
+	`joined_at` text,
+	`focus_step_id` integer,
+	`focused_at` text,
+	`last_active_at` text NOT NULL,
+	FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`focus_step_id`) REFERENCES `step_execution`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `execution_participant_uq` ON `execution_participant` (`execution_id`,`user_id`);--> statement-breakpoint
+CREATE TABLE `signoff` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`step_execution_id` integer NOT NULL,
+	`slot` integer NOT NULL,
+	`label` text NOT NULL,
+	`role` text,
+	`signed_by_id` integer,
+	`signed_at` text NOT NULL,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`step_execution_id`) REFERENCES `step_execution`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`signed_by_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `signoff_slot_uq` ON `signoff` (`step_execution_id`,`slot`);--> statement-breakpoint
+CREATE TABLE `step_execution` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`execution_id` integer NOT NULL,
+	`step_id` integer,
+	`adhoc_step_id` integer,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`data_captured` text,
+	`skip_reason` text,
+	`started_at` text,
+	`completed_at` text,
+	`completed_by_id` integer,
+	`workcenter_id` integer,
+	`first_focused_at` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`adhoc_step_id`) REFERENCES `adhoc_step`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`completed_by_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`workcenter_id`) REFERENCES `workcenter`(`id`) ON UPDATE no action ON DELETE set null,
+	CONSTRAINT "step_execution_one_source" CHECK(("step_id" IS NULL) <> ("adhoc_step_id" IS NULL)),
+	CONSTRAINT "step_execution_status_check" CHECK("status" IN ('pending', 'awaiting_signoff', 'completed', 'skipped'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `step_execution_adhoc_step_id_unique` ON `step_execution` (`adhoc_step_id`);--> statement-breakpoint
+CREATE INDEX `step_execution_execution_idx` ON `step_execution` (`execution_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `step_execution_snapshot_uq` ON `step_execution` (`execution_id`,`step_id`) WHERE "step_id" IS NOT NULL;--> statement-breakpoint
+CREATE TABLE `step_note` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`step_execution_id` integer NOT NULL,
+	`author_id` integer,
+	`body` text NOT NULL,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`step_execution_id`) REFERENCES `step_execution`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`author_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE INDEX `step_note_step_idx` ON `step_note` (`step_execution_id`);--> statement-breakpoint
 CREATE TABLE `issue` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`issue_number` text NOT NULL,
@@ -652,6 +785,9 @@ CREATE TABLE `issue` (
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
 	FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`containment_step_id`) REFERENCES `step_execution`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`raised_step_id`) REFERENCES `step_execution`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`dispositioned_by_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`work_started_by_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`review_requested_by_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
@@ -844,7 +980,8 @@ CREATE TABLE `data_point` (
 	`values` text NOT NULL,
 	`step_execution_id` integer,
 	`created_at` text NOT NULL,
-	FOREIGN KEY (`dataset_id`) REFERENCES `dataset`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`dataset_id`) REFERENCES `dataset`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`step_execution_id`) REFERENCES `step_execution`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `data_point_dataset_time_idx` ON `data_point` (`dataset_id`,`recorded_at`);--> statement-breakpoint
@@ -868,4 +1005,22 @@ CREATE TABLE `dataset` (
 --> statement-breakpoint
 CREATE INDEX `dataset_name_idx` ON `dataset` (`name`);--> statement-breakpoint
 CREATE INDEX `dataset_project_idx` ON `dataset` (`project_id`);--> statement-breakpoint
-CREATE INDEX `dataset_procedure_idx` ON `dataset` (`procedure_id`);
+CREATE INDEX `dataset_procedure_idx` ON `dataset` (`procedure_id`);--> statement-breakpoint
+CREATE TABLE `legacy_audit` (
+	`id` integer PRIMARY KEY NOT NULL,
+	`timestamp` text NOT NULL,
+	`table_name` text NOT NULL,
+	`record_id` integer NOT NULL,
+	`action` text NOT NULL,
+	`user_id` integer,
+	`old_values` text,
+	`new_values` text
+);
+--> statement-breakpoint
+CREATE TABLE `legacy_row` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`table_name` text NOT NULL,
+	`row_id` integer,
+	`reason` text NOT NULL,
+	`data` text NOT NULL
+);

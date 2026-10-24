@@ -82,6 +82,16 @@ export const zDataPoint = z.object({
 	values: zPointValues,
 	/** The step execution that produced the point. Resolved by the execution area. */
 	stepExecutionId: z.number().int().nullable(),
+	/** added by execution: the execution and step behind stepExecutionId. */
+	source: z
+		.object({
+			executionId: z.number().int(),
+			woNumber: z.string(),
+			stepId: z.number().int(),
+			stepNumber: z.string(),
+			stepTitle: z.string()
+		})
+		.nullable(),
 	createdAt: zTimestamp
 });
 export type DataPoint = z.infer<typeof zDataPoint>;

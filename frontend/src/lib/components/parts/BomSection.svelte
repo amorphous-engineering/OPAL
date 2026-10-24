@@ -14,7 +14,14 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { opal } from '#lib/api.js';
-	import { formatQty, parseQty, QTY_SCALE, type BomLine, type BomTreeNode, type PartDetail } from '@opal/shared';
+	import {
+		formatQty,
+		parseQty,
+		QTY_SCALE,
+		type BomLine,
+		type BomTreeNode,
+		type PartDetail
+	} from '@opal/shared';
 	import { qty } from '#lib/format.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
 	import FormField from './FormField.svelte';
@@ -187,8 +194,7 @@
 			>
 				{#snippet cell(l, col)}
 					{#if col.key === 'pn'}
-						<a href={`/parts/${l.componentId}`} class="text-info hover:underline"
-							>{l.componentPn}</a
+						<a href={`/parts/${l.componentId}`} class="text-info hover:underline">{l.componentPn}</a
 						>
 					{:else if col.key === 'name'}
 						{l.componentName}
@@ -273,7 +279,9 @@
 								>
 							</td>
 							<td class="px-3 py-1"
-								>{f.node.name}{#if f.node.circular}<span class="label ml-2 text-error">Circular</span>{/if}</td
+								>{f.node.name}{#if f.node.circular}<span class="label ml-2 text-error"
+										>Circular</span
+									>{/if}</td
 							>
 							<td class="mono px-3 py-1 text-right">{qty(f.node.quantity)}</td>
 							<td class="mono px-3 py-1 text-right">{qty(f.ext)}</td>

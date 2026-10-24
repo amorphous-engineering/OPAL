@@ -20,7 +20,6 @@ export const IMPACT = [
 	{ value: 5, label: '5 · Severe' }
 ];
 
-
 export const SEVERITIES: { value: RiskSeverity; label: string }[] = [
 	{ value: 'low', label: 'LOW (1–5)' },
 	{ value: 'medium', label: 'MEDIUM (6–12)' },

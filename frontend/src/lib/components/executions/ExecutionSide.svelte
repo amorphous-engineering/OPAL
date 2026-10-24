@@ -12,6 +12,10 @@
 
 	const doc = $derived(store.doc!);
 	const inst = $derived(doc.instance);
+	// Context pre-fill: the issue form takes the project and the work order from here.
+	const newIssue = $derived(
+		`/issues/new?execution=${inst.id}&executionLabel=${encodeURIComponent(inst.work_order ?? '')}&projectId=${inst.project.id}`
+	);
 	const size = (n: number) =>
 		n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 </script>
@@ -66,7 +70,7 @@
 			count={doc.issues.length || undefined}
 		>
 			{#snippet actions()}
-				<Button size="xs" variant="ghost" href={`/issues/new?execution=${inst.id}`}>+ NEW</Button>
+				<Button size="xs" variant="ghost" href={newIssue}>+ NEW</Button>
 			{/snippet}
 			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
 				<ul class="m-0 list-none p-0">
@@ -97,7 +101,7 @@
 			</div>
 		</Section>
 	{:else}
-		<EmptyLine label="Issues" addHref={`/issues/new?execution=${inst.id}`} />
+		<EmptyLine label="Issues" addHref={newIssue} />
 	{/if}
 
 	{#if doc.reference_attachments.length}

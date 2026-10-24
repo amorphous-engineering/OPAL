@@ -17,8 +17,10 @@ export const load: PageLoad = async ({ url, fetch }) => {
 	const q = p.get('q') ?? '';
 	const tier = Number(p.get('tier')) || undefined;
 	const category = p.get('category') ?? '';
-	const tooling = p.get('tooling') === 'true' ? true : p.get('tooling') === 'false' ? false : undefined;
-	const structure = p.get('structure') === 'top' || p.get('structure') === 'components' ? p.get('structure') : '';
+	const tooling =
+		p.get('tooling') === 'true' ? true : p.get('tooling') === 'false' ? false : undefined;
+	const structure =
+		p.get('structure') === 'top' || p.get('structure') === 'components' ? p.get('structure') : '';
 	// The cursor is only valid for the filters it was issued under. A filter change drops
 	// `page` from the URL (list helpers do that), which voids a cursor left behind.
 	const page = Math.max(1, Number(p.get('page') ?? 1) || 1);

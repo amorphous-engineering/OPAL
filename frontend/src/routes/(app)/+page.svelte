@@ -355,8 +355,9 @@
 		{#if o.lowStock.items.length}
 			<Section title="Low stock" count={shown(o.lowStock)}>
 				{#snippet actions()}
-					<a href="/inventory?flag=low" class="font-mono text-xs text-info uppercase hover:underline"
-						>All</a
+					<a
+						href="/inventory?flag=low"
+						class="font-mono text-xs text-info uppercase hover:underline">All</a
 					>
 				{/snippet}
 				<DataTable

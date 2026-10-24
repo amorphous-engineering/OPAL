@@ -133,7 +133,8 @@
 	<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
 		<Section title="Dataset">
 			<DetailTable>
-				<ProjectRow id={ds.projectId} code={ds.projectCode} name={ds.projectName} /> <!-- added by projects -->
+				<ProjectRow id={ds.projectId} code={ds.projectCode} name={ds.projectName} />
+				<!-- added by projects -->
 				<DetailRow label="State"
 					>{#if archived}<State value="archived" tone="warn" badge />{:else}<span
 							class="font-mono text-xs text-muted-foreground">ACTIVE</span
@@ -176,9 +177,8 @@
 					{#if col.key === 'chart'}
 						{row.type === 'number' ? (row.chart ? 'YES' : 'NO') : '—'}
 					{:else if col.key === 'range'}
-						{#if row.min !== undefined || row.max !== undefined}{row.min ?? ''} … {row.max ?? ''}{:else}<span
-								class="text-muted-foreground">—</span
-							>{/if}
+						{#if row.min !== undefined || row.max !== undefined}{row.min ?? ''} … {row.max ??
+								''}{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else}
 						{@const v = (row as unknown as Record<string, string | undefined>)[col.key]}
 						{#if v}{v}{:else}<span class="text-muted-foreground">—</span>{/if}

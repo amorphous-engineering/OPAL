@@ -2,7 +2,7 @@
 	// Material in and out of the work order: kit against consumption, the
 	// consumption ledger with provenance, and the productions it yields.
 	import { onMount } from 'svelte';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import {
 		confirm,
 		DataTable,
@@ -48,7 +48,21 @@
 	async function loadAvailability() {
 		if (!doc.kit.items.length) return;
 		try {
-			avail = await api.get<Availability>(`/procedure-instances/${store.id}/kit-availability`);
+			const k = await opal.execution.kit({ id: store.id });
+			avail = {
+				items: k.items.map((i) => ({
+					part_id: i.partId,
+					quantity_available: Number(i.quantityAvailable),
+					uom: i.uom,
+					available_locations: i.locations.map((l) => ({
+						inventory_record_id: l.stockId,
+						opal_number: l.opalNumber,
+						location: l.location,
+						lot_number: l.lotNumber,
+						quantity: Number(l.quantity)
+					}))
+				}))
+			};
 			for (const k of doc.kit.items) {
 				const it = avail.items.find((x) => x.part_id === k.part_id);
 				const need = remaining(k);

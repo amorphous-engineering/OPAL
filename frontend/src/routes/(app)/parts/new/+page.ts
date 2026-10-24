@@ -15,5 +15,9 @@ export const load: PageLoad = async ({ url, fetch }) => {
 	const ref: PartRef | null = assembly
 		? { id: assembly.id, internal_pn: assembly.internalPn, name: assembly.name }
 		: null;
-	return { schema, tier: tier && schema.tiers.some((t) => t.level === tier) ? tier : null, assembly: ref };
+	return {
+		schema,
+		tier: tier && schema.tiers.some((t) => t.level === tier) ? tier : null,
+		assembly: ref
+	};
 };

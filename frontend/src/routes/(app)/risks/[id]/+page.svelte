@@ -47,7 +47,9 @@
 	let assetText = $state('');
 
 	/** PATCH fields. Editing the signed scenario or score withdraws an acceptance, so ask first. */
-	async function patch(fields: Omit<Parameters<typeof opal.risks.update>[0], 'id'>): Promise<boolean> {
+	async function patch(
+		fields: Omit<Parameters<typeof opal.risks.update>[0], 'id'>
+	): Promise<boolean> {
 		if (
 			accepted &&
 			Object.keys(fields).some((k) => (RISK_SIGNATURE_FIELDS as readonly string[]).includes(k))
@@ -135,7 +137,9 @@
 		}
 	}
 
-	const targets = $derived(RISK_DISPOSITIONS.filter((d) => d !== risk.disposition && d !== 'accepted'));
+	const targets = $derived(
+		RISK_DISPOSITIONS.filter((d) => d !== risk.disposition && d !== 'accepted')
+	);
 
 	const unmet = $derived(data.readiness.checks.filter((c) => !c.passed));
 	const scenarioCheck = $derived(data.readiness.checks.find((c) => c.key === 'scenario_complete'));
@@ -318,7 +322,8 @@
 		<div class="grid grid-cols-1 gap-4">
 			<Section title="Scoring">
 				<DetailTable>
-					<ProjectRow id={risk.projectId} code={risk.projectCode} name={risk.projectName} /> <!-- added by projects -->
+					<ProjectRow id={risk.projectId} code={risk.projectCode} name={risk.projectName} />
+					<!-- added by projects -->
 					<DetailRow label="Owner">
 						<NativeSelect
 							aria-label="Owner"
@@ -358,8 +363,7 @@
 							<NativeSelect
 								aria-label="Residual probability"
 								value={risk.residualProbability === null ? '' : String(risk.residualProbability)}
-								onchange={(e) =>
-									onSelect(e, 'residualProbability', num, risk.residualProbability)}
+								onchange={(e) => onSelect(e, 'residualProbability', num, risk.residualProbability)}
 							>
 								<NativeSelectOption value="">—</NativeSelectOption>
 								{#each [1, 2, 3, 4, 5] as v (v)}<NativeSelectOption value={String(v)}
@@ -467,7 +471,11 @@
 					{/if}
 				</DetailTable>
 				{#if target && !terminal}
-					<DispositionPanel {risk} target={target as RiskDisposition} ondone={() => (target = '')} />
+					<DispositionPanel
+						{risk}
+						target={target as RiskDisposition}
+						ondone={() => (target = '')}
+					/>
 				{/if}
 				{#if !accepted && !terminal}
 					<div class="flex flex-wrap items-center gap-3 border-t border-border px-3 py-2">

@@ -41,7 +41,8 @@
 <div class="grid grid-cols-1 gap-4 p-4">
 	<Section title="EVENT">
 		<DetailTable>
-			<ProjectRow id={ev.projectId} code={ev.projectCode} name={ev.projectName} /> <!-- added by projects -->
+			<ProjectRow id={ev.projectId} code={ev.projectCode} name={ev.projectName} />
+			<!-- added by projects -->
 			<DetailRow label="Label" value={ev.label} mono />
 			<DetailRow label="Signed by" value={ev.signedBy} />
 			<DetailRow label="When"><Timestamp value={ev.createdAt} /></DetailRow>

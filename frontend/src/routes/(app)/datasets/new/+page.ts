@@ -4,5 +4,9 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	// Context pre-fill: a link from a procedure passes ?procedure=<id>.
-	return { procedures: await procedureOptions(fetch), procedure: url.searchParams.get('procedure') ?? '', projectId: formProjectId(url) };
+	return {
+		procedures: await procedureOptions(fetch),
+		procedure: url.searchParams.get('procedure') ?? '',
+		projectId: formProjectId(url)
+	};
 };

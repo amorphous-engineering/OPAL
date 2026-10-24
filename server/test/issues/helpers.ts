@@ -1,4 +1,5 @@
 import { now } from '@opal/shared';
+import { sql } from 'drizzle-orm';
 import { createApp } from '../../src/app.ts';
 import type { Actor } from '../../src/context.ts';
 import { part, user } from '../../src/db/schema/index.ts';
@@ -8,6 +9,8 @@ import { createTestProject } from '../helpers/project.ts'; // added by projects
 
 export async function setup() {
 	const db = await openTestDb();
+	// added by execution: the seam tests use made-up execution and step ids, so foreign keys are off here
+	db.run(sql`PRAGMA foreign_keys = OFF`);
 	const ts = now();
 	const mkUser = (username: string, isAdmin: boolean) =>
 		db

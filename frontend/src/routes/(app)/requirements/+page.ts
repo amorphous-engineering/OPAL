@@ -7,7 +7,12 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	const c = client.requirements;
 	const projectId = filterProjectId(url); // added by projects
 	const [tree, summary, catalog, projects] = await orHttpError(
-		Promise.all([c.tree({ projectId }), c.summary({ projectId }), c.catalog({}), projectOptions(client)])
+		Promise.all([
+			c.tree({ projectId }),
+			c.summary({ projectId }),
+			c.catalog({}),
+			projectOptions(client)
+		])
 	);
 	return { tree, summary, catalog, projects, projectId };
 };

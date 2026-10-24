@@ -9,7 +9,9 @@ export function claimUrl(token: string): string {
 }
 
 /** Sign-in methods an account has, as facts. */
-export function signInMethods(u: Pick<UserRecord, 'hasPassword' | 'hasPasskey' | 'ssoLinked'>): string[] {
+export function signInMethods(
+	u: Pick<UserRecord, 'hasPassword' | 'hasPasskey' | 'ssoLinked'>
+): string[] {
 	const methods: string[] = [];
 	if (u.hasPassword) methods.push('PASSWORD');
 	if (u.hasPasskey) methods.push('PASSKEY');

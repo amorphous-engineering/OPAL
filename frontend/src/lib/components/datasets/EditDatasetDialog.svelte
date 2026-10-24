@@ -68,7 +68,12 @@
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ed-project">Project</Label>
-				<ProjectSelect id="ed-project" bind:value={projectId} keep={dataset.projectId} class="w-full" />
+				<ProjectSelect
+					id="ed-project"
+					bind:value={projectId}
+					keep={dataset.projectId}
+					class="w-full"
+				/>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="ed-name">Name</Label>

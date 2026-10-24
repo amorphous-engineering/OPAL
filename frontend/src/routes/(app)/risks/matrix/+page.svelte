@@ -1,10 +1,5 @@
 <script lang="ts">
-	import {
-		DetailRow,
-		DetailTable,
-		PageHeader,
-		Section
-	} from '#lib/components/opal/index.js';
+	import { DetailRow, DetailTable, PageHeader, Section } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { SEVERITIES, severityOf, type Severity } from '#lib/components/risks/types.js';
@@ -28,7 +23,7 @@
 	const bySeverity = $derived.by(() => {
 		const counts: Record<Severity, number> = { low: 0, medium: 0, high: 0 };
 		for (let p = 1; p <= 5; p++)
-				for (let i = 1; i <= 5; i++) counts[severityOf(p * i)] += m.matrix[p - 1]![i - 1]!;
+			for (let i = 1; i <= 5; i++) counts[severityOf(p * i)] += m.matrix[p - 1]![i - 1]!;
 		return counts;
 	});
 

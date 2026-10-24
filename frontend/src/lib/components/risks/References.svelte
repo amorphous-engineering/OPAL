@@ -81,12 +81,7 @@
 				>{adding ? 'DONE' : '+ ADD'}</Button
 			>
 		{/snippet}
-		<DataTable
-			rows={risk.references}
-			{columns}
-			key={(r) => r.id}
-			emptyLabel="References"
-		>
+		<DataTable rows={risk.references} {columns} key={(r) => r.id} emptyLabel="References">
 			{#snippet cell(r, col)}
 				{#if col.key === 'type'}
 					<span class="font-mono text-xs">{r.type === 'opal' ? 'OPAL' : 'WORK ORDER'}</span>

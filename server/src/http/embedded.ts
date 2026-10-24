@@ -5,6 +5,8 @@ export interface Embedded {
 	migrations: MigrationMeta[];
 	/** URL path without a leading slash, to an embedded file path for `Bun.file()`. */
 	web: Record<string, string>;
+	/** Embedded path of the demo seed database (server/assets/demo-seed.db). */
+	demoSeed?: string;
 }
 
 declare global {

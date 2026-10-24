@@ -14,3 +14,4 @@ export * from './requirements.ts';
 export * from './datasets.ts';
 export * from './extensions.ts';
 export * from './reports.ts';
+export * from './legacy.ts';

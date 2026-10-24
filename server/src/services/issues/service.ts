@@ -22,7 +22,7 @@ import {
 import { type AnyColumn, and, asc, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 import { actorUserId, type Ctx } from '../../context.ts';
-import { issue, issueComment, issueLink, part, risk, user } from '../../db/schema/index.ts';
+import { execution, issue, issueComment, issueLink, part, risk, user } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { nextDesignator } from '../designators.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
@@ -242,6 +242,7 @@ export function list(
 		assignedToId?: number;
 		partId?: number;
 		executionId?: number;
+		procedureId?: number; // added by execution
 		sort?: 'number' | 'title' | 'type' | 'state' | 'priority' | 'created' | 'updated';
 		dir: 'asc' | 'desc';
 	}
@@ -264,6 +265,13 @@ export function list(
 		states ? or(...states.map(ticketStateSql)) : undefined,
 		input.priority ? eq(issue.priority, input.priority) : undefined,
 		input.executionId ? eq(issue.executionId, input.executionId) : undefined,
+		// added by execution: issues on executions of one procedure
+		input.procedureId
+			? inArray(
+					issue.executionId,
+					ctx.db.select({ id: execution.id }).from(execution).where(eq(execution.procedureId, input.procedureId))
+				)
+			: undefined,
 		input.partId
 			? inArray(
 					issue.id,

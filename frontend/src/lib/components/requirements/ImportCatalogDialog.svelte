@@ -27,7 +27,9 @@
 		busy = true;
 		try {
 			const r = await opal.requirements.importCatalog({ projectId: chosen });
-			toast.success(`Imported ${r.created.length} requirement(s), ${r.skipped.length} already present`);
+			toast.success(
+				`Imported ${r.created.length} requirement(s), ${r.skipped.length} already present`
+			);
 			open = false;
 			await invalidateAll();
 		} catch (err) {

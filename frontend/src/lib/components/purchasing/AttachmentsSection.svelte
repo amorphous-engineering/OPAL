@@ -115,11 +115,7 @@
 				{#each attachments as a (a.id)}
 					<tr class="border-b border-border">
 						<td class="px-3 py-1.5"
-							><a
-								href={a.href}
-								class="text-info hover:underline"
-								download>{a.filename}</a
-							></td
+							><a href={a.href} class="text-info hover:underline" download>{a.filename}</a></td
 						>
 						<td class="px-3 py-1.5 font-mono text-xs uppercase"
 							>{(a.kind ?? '').replace(/_/g, ' ') || '—'}</td

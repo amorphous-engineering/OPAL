@@ -9,7 +9,7 @@ import { flag } from './args.ts';
 export async function serve(args: string[]): Promise<void> {
 	mkdirSync(dataDir(), { recursive: true });
 	// A Python-era database is imported once; the old file is kept as opal.legacy.db.
-	const report = importInPlace(dbPath());
+	const report = await importInPlace(dbPath());
 	if (report) console.log('Imported the legacy database. See import-report.txt next to it.');
 	// OPAL_DEV_SCHEMA=1: build a fresh dev database from schema.ts instead of migrations.
 	const db = process.env.OPAL_DEV_SCHEMA === '1' ? await openSchemaDb(dbPath()) : openDb(dbPath());

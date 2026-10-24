@@ -86,7 +86,9 @@
 		{#if archived}<State value="archived" tone="warn" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
-		<Button size="sm" variant="ghost" href={`/audit?entity=project&record=${project.id}`}>AUDIT</Button>
+		<Button size="sm" variant="ghost" href={`/audit?entity=project&record=${project.id}`}
+			>AUDIT</Button
+		>
 		{#if !archived}
 			<Button variant="outline" size="sm" onclick={() => (editOpen = true)}>EDIT</Button>
 			<Button variant="destructive" size="sm" onclick={archive}>ARCHIVE</Button>
@@ -115,11 +117,16 @@
 	<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
 		<Section
 			title="Requirements"
-			count={countOf(data.requirements.items.length, data.requirements.next, data.requirements.total)}
+			count={countOf(
+				data.requirements.items.length,
+				data.requirements.next,
+				data.requirements.total
+			)}
 		>
 			{#snippet actions()}
 				<Button variant="ghost" size="xs" href={`/requirements?project=${project.id}`}>ALL</Button>
-				{#if !archived}<Button variant="ghost" size="xs" href={`/requirements/new?${q}`}>+ NEW</Button
+				{#if !archived}<Button variant="ghost" size="xs" href={`/requirements/new?${q}`}
+						>+ NEW</Button
 					>{/if}
 			{/snippet}
 			<DataTable
@@ -173,7 +180,9 @@
 			count={countOf(data.issues.items.length, data.issues.next, data.issues.total)}
 		>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" href={`/issues?project=${project.id}&state=all`}>ALL</Button>
+				<Button variant="ghost" size="xs" href={`/issues?project=${project.id}&state=all`}
+					>ALL</Button
+				>
 				{#if !archived}<Button variant="ghost" size="xs" href={`/issues/new?${q}`}>+ NEW</Button
 					>{/if}
 			{/snippet}
@@ -189,7 +198,11 @@
 					{#if col.key === 'issueNumber'}
 						<span class="text-info">{r.issueNumber}</span>
 					{:else if col.key === 'ticketState'}
-						<State value={r.ticketState} label={ticketLabel(r.ticketState)} tone={ticketTone(r.ticketState)} />
+						<State
+							value={r.ticketState}
+							label={ticketLabel(r.ticketState)}
+							tone={ticketTone(r.ticketState)}
+						/>
 					{:else}{r.title}{/if}
 				{/snippet}
 			</DataTable>
@@ -233,8 +246,8 @@
 				<DataTable
 					rows={data.executions.items}
 					columns={[
-						{ key: 'number', label: 'Execution', mono: true, width: '8rem' },
-						{ key: 'name', label: 'Name' },
+						{ key: 'woNumber', label: 'Execution', mono: true, width: '8rem' }, // added by execution
+						{ key: 'procedureName', label: 'Procedure' },
 						{ key: 'status', label: 'Status', width: '8rem' }
 					]}
 					href={(r) => `/executions/${r.id}`}
@@ -243,20 +256,17 @@
 					dense
 				>
 					{#snippet cell(r, col)}
-						{#if col.key === 'number'}
-							<span class="text-info">{r.woNumber ?? r.number ?? `#${r.id}`}</span>
+						{#if col.key === 'woNumber'}
+							<span class="text-info">{r.woNumber}</span>
 						{:else if col.key === 'status'}
-							<span class="font-mono text-xs">{stateLabel(String(r.status ?? ''))}</span>
-						{:else}{r.name ?? r.procedureName ?? '—'}{/if}
+							<span class="font-mono text-xs">{stateLabel(r.status)}</span>
+						{:else}{r.procedureName}{/if}
 					{/snippet}
 				</DataTable>
 			</Section>
 		{/if}
 
-		<Section
-			title="Datasets"
-			count={countOf(data.datasets.items.length, data.datasets.next)}
-		>
+		<Section title="Datasets" count={countOf(data.datasets.items.length, data.datasets.next)}>
 			{#snippet actions()}
 				<Button variant="ghost" size="xs" href={`/datasets?project=${project.id}`}>ALL</Button>
 				{#if !archived}<Button variant="ghost" size="xs" href={`/datasets/new?${q}`}>+ NEW</Button

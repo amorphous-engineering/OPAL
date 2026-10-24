@@ -35,9 +35,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		execution: executionId
 			? ({ id: executionId, label: q.get('executionLabel') || 'Work order' } as Ctx)
 			: null,
-		step: stepId && executionId
-			? ({ id: stepId, label: q.get('stepLabel') || 'Step' } as Ctx)
-			: null
+		step:
+			stepId && executionId ? ({ id: stepId, label: q.get('stepLabel') || 'Step' } as Ctx) : null
 	};
 	return {
 		ctx,

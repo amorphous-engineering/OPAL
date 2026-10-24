@@ -30,6 +30,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			assignedToId: assignee === 'me' ? session.user?.id : Number(assignee) || undefined,
 			partId: num('part'),
 			executionId: num('execution'),
+			procedureId: num('procedure'), // added by execution
 			sort: ISSUE_SORTS.find((s) => s === q.get('sort')),
 			dir: q.get('dir') === 'asc' ? 'asc' : 'desc',
 			// The cursor is the row offset, so page numbers map straight onto it.

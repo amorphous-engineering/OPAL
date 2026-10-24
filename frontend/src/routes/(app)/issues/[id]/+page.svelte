@@ -25,7 +25,12 @@
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import InlineText from '#lib/components/issues/InlineText.svelte';
 	import IssueRisks from '#lib/components/risks/IssueRisks.svelte'; // added by risks
-	import { CONTAINMENT_OPTION, kb, ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
+	import {
+		CONTAINMENT_OPTION,
+		kb,
+		ticketLabel,
+		ticketTone
+	} from '#lib/components/issues/issues.js';
 	import {
 		CONTAINMENTS,
 		CONTAINMENT_RANK,
@@ -633,7 +638,8 @@
 	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="Issue">
 			<DetailTable>
-				<ProjectRow id={issue.projectId} code={issue.projectCode} name={issue.projectName} /> <!-- added by projects -->
+				<ProjectRow id={issue.projectId} code={issue.projectCode} name={issue.projectName} />
+				<!-- added by projects -->
 				<DetailRow label="Type">
 					<NativeSelect
 						size="sm"
@@ -754,9 +760,8 @@
 				</DetailRow>
 				<DetailRow label="Procedure">
 					{#if issue.execution?.procedureId}
-						<a
-							href={`/procedures/${issue.execution.procedureId}`}
-							class="text-info hover:underline">{issue.execution.procedureName}</a
+						<a href={`/procedures/${issue.execution.procedureId}`} class="text-info hover:underline"
+							>{issue.execution.procedureName}</a
 						>
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
@@ -765,7 +770,8 @@
 						{#if issue.execution}
 							<a
 								href={`/executions/${issue.execution.id}`}
-								class="font-mono text-info hover:underline">{issue.execution.label ?? 'Work order'}</a
+								class="font-mono text-info hover:underline"
+								>{issue.execution.label ?? 'Work order'}</a
 							>
 							{#if !voided}
 								<button
@@ -859,8 +865,8 @@
 			<Dialog.Title>Void {issue.issueNumber}</Dialog.Title>
 			<Dialog.Description>
 				{#if bearing && !issue.dispositioned}
-					Voiding releases {holdNames(data.holding) || 'every hold'} held by {issue.issueNumber}. The
-					issue stays on record as void.
+					Voiding releases {holdNames(data.holding) || 'every hold'} held by {issue.issueNumber}.
+					The issue stays on record as void.
 				{:else}
 					The issue stays on record as void and cannot be edited.
 				{/if}

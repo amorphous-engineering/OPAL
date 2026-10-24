@@ -101,7 +101,13 @@
 		onsubmit={assign}
 	>
 		<FormField label="Requirement" for="req-number" class="w-44">
-			<Input id="req-number" class="font-mono" placeholder="REQ-0007" bind:value={reqNumber} required />
+			<Input
+				id="req-number"
+				class="font-mono"
+				placeholder="REQ-0007"
+				bind:value={reqNumber}
+				required
+			/>
 		</FormField>
 		<Button type="submit" size="sm" disabled={busy}>ALLOCATE</Button>
 	</form>
@@ -143,7 +149,8 @@
 					{#if r.tbr}<State value="tbr" tone="warn" label="TBR" class="ml-2" />{/if}
 					{#if r.stale}<State value="stale" tone="warn" label="STALE" class="ml-2" />{/if}
 				{:else if col.key === 'state'}
-					<span class="font-mono text-xs text-muted-foreground">{stateLabel(r.lifecycleState)}</span>
+					<span class="font-mono text-xs text-muted-foreground">{stateLabel(r.lifecycleState)}</span
+					>
 				{:else if col.key === 'status'}
 					<State
 						value={r.status}
@@ -151,7 +158,8 @@
 					/>
 				{:else}
 					<span class="flex justify-end gap-3">
-						{#if r.status !== 'verified'}<ActionLink onclick={() => verify(r)}>VERIFY</ActionLink>{/if}
+						{#if r.status !== 'verified'}<ActionLink onclick={() => verify(r)}>VERIFY</ActionLink
+							>{/if}
 						<ActionLink danger onclick={() => unassign(r)}>REMOVE</ActionLink>
 					</span>
 				{/if}

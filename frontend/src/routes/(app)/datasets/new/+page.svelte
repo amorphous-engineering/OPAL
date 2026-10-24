@@ -142,10 +142,18 @@
 				{#each rows as row, i (i)}
 					<tr class="border-b border-border last:border-b-0">
 						<td class="px-3 py-1.5"
-							><Input bind:value={row.name} aria-label={`Field ${i + 1} name`} class="min-w-40" /></td
+							><Input
+								bind:value={row.name}
+								aria-label={`Field ${i + 1} name`}
+								class="min-w-40"
+							/></td
 						>
 						<td class="px-3 py-1.5">
-							<NativeSelect bind:value={row.type} aria-label={`Field ${i + 1} type`} class="min-w-28">
+							<NativeSelect
+								bind:value={row.type}
+								aria-label={`Field ${i + 1} type`}
+								class="min-w-28"
+							>
 								<NativeSelectOption value="number">Number</NativeSelectOption>
 								<NativeSelectOption value="text">Text</NativeSelectOption>
 								<NativeSelectOption value="boolean">Boolean</NativeSelectOption>
@@ -157,12 +165,24 @@
 						>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
-								<Input bind:value={row.min} type="number" step="any" aria-label={`Field ${i + 1} minimum`} class="w-24" />
+								<Input
+									bind:value={row.min}
+									type="number"
+									step="any"
+									aria-label={`Field ${i + 1} minimum`}
+									class="w-24"
+								/>
 							{:else}<span class="text-muted-foreground">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
-								<Input bind:value={row.max} type="number" step="any" aria-label={`Field ${i + 1} maximum`} class="w-24" />
+								<Input
+									bind:value={row.max}
+									type="number"
+									step="any"
+									aria-label={`Field ${i + 1} maximum`}
+									class="w-24"
+								/>
 							{:else}<span class="text-muted-foreground">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">

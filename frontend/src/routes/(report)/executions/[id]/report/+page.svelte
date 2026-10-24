@@ -2,6 +2,7 @@
 	import { stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import ReportChart from '#lib/components/executions/ReportChart.svelte';
+	import { contracts, opUrl } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -17,7 +18,7 @@
 </script>
 
 <svelte:head>
-	<title>Build report {r?.instance.work_order ?? `#${data.id}`} · OPAL</title>
+	<title>Build report {r?.execution.woNumber ?? `#${data.id}`} · OPAL</title>
 </svelte:head>
 
 <div class="report min-h-svh bg-white p-8 font-mono text-[11pt] leading-snug text-black">
@@ -27,7 +28,7 @@
 		<p class="mt-2"><a class="underline" href={`/executions/${data.id}`}>Back to execution</a></p>
 	{:else}
 		<div class="mb-4 flex justify-end gap-2 print:hidden">
-			<Button size="sm" variant="outline" href={`/executions/${r.instance.id}`}
+			<Button size="sm" variant="outline" href={`/executions/${r.execution.id}`}
 				>BACK TO EXECUTION</Button
 			>
 			<Button size="sm" onclick={() => window.print()}>PRINT</Button>
@@ -40,32 +41,32 @@
 					<tbody>
 						<tr>
 							<th class="pr-2 text-left font-bold uppercase">Work order</th>
-							<td class="pr-6">{r.instance.work_order ?? `#${r.instance.id}`}</td>
+							<td class="pr-6">{r.execution.woNumber}</td>
 							<th class="pr-2 text-left font-bold uppercase">Status</th>
-							<td>{stateLabel(r.instance.status)}</td>
+							<td>{stateLabel(r.execution.status)}</td>
 						</tr>
 						<tr>
 							<th class="pr-2 text-left font-bold uppercase">Procedure</th>
-							<td class="pr-6">{r.instance.procedure_name ?? '—'} v{r.instance.version_number}</td>
+							<td class="pr-6">{r.execution.procedureName} v{r.execution.versionNumber}</td>
 							<th class="pr-2 text-left font-bold uppercase">Started</th>
-							<td>{ts(r.instance.started_at)}</td>
+							<td>{ts(r.execution.startedAt)}</td>
 						</tr>
 						<tr>
 							<th class="pr-2 text-left font-bold uppercase">Operator</th>
-							<td class="pr-6">{dash(r.instance.operator)}</td>
+							<td class="pr-6">{dash(r.execution.operator)}</td>
 							<th class="pr-2 text-left font-bold uppercase">Completed</th>
-							<td>{ts(r.instance.completed_at)}</td>
+							<td>{ts(r.execution.completedAt)}</td>
 						</tr>
 						<tr>
 							<th class="pr-2 text-left font-bold uppercase">Generated</th>
-							<td colspan="3">{ts(r.generated_at)}</td>
+							<td colspan="3">{ts(r.generatedAt)}</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
 			<div class="text-right">
 				<img
-					src={`/api/procedure-instances/${r.instance.id}/qr.svg?origin=${encodeURIComponent(origin)}`}
+					src={opUrl(contracts.execution.qr, { id: r.execution.id, origin })}
 					alt="QR code to the execution"
 					class="size-20"
 				/>
@@ -81,7 +82,7 @@
 		{/snippet}
 
 		{@render h2('End item')}
-		{#if r.end_items.length}
+		{#if r.endItems.length}
 			<table class="dense">
 				<thead
 					><tr
@@ -91,10 +92,10 @@
 					></thead
 				>
 				<tbody>
-					{#each r.end_items as e, i (i)}
+					{#each r.endItems as e, i (i)}
 						<tr>
-							<td>{e.part_name}</td><td>{dash(e.part_number)}</td><td>{dash(e.opal_number)}</td><td
-								>{dash(e.serial_number)}</td
+							<td>{e.partName}</td><td>{dash(e.partNumber)}</td><td>{dash(e.opalNumber)}</td><td
+								>{dash(e.serialNumber)}</td
 							>
 							<td class="text-right">{e.quantity}</td><td>{stateLabel(e.status)}</td>
 						</tr>
@@ -116,16 +117,16 @@
 				<tbody>
 					{#each r.operations as o, i (i)}
 						<tr>
-							<td>{o.step_number}</td>
+							<td>{o.stepNumber}</td>
 							<td style:padding-left={`${0.5 + o.level * 0.75}rem`}>{o.title}</td>
 							<td>{stateLabel(o.status)}</td>
-							<td>{ts(o.started_at)}</td><td>{ts(o.completed_at)}</td>
+							<td>{ts(o.startedAt)}</td><td>{ts(o.completedAt)}</td>
 							<td>{dash(o.operator)}</td>
 							<td>
 								{#each o.signoffs as so (so.slot)}
 									<div data-signoff={so.slot}>
-										<b>{so.label}</b>{so.role ? ` (${so.role})` : ''}: {dash(so.signed_by)}
-										<span class="whitespace-nowrap">{ts(so.signed_at)}</span>
+										<b>{so.label}</b>{so.role ? ` (${so.role})` : ''}: {dash(so.signedBy)}
+										<span class="whitespace-nowrap">{ts(so.signedAt)}</span>
 									</div>
 								{:else}—{/each}
 							</td>
@@ -136,11 +137,11 @@
 		{:else}{@render none('Operations')}{/if}
 
 		{@render h2('Data collects')}
-		{#if r.data_collects.length}
-			{#each r.data_collects as dc (dc.step_number)}
+		{#if r.dataCollects.length}
+			{#each r.dataCollects as dc (dc.stepNumber)}
 				<div class="mb-3 [break-inside:avoid] border border-black">
 					<div class="flex gap-2 border-b border-black bg-neutral-200 px-2 py-1 font-bold">
-						<span>{dc.step_number}</span><span>{dc.step_title}</span>
+						<span>{dc.stepNumber}</span><span>{dc.stepTitle}</span>
 					</div>
 					<table class="dense inner">
 						<thead
@@ -157,9 +158,9 @@
 		{:else}{@render none('Data collects')}{/if}
 
 		{@render h2('Dataset charts')}
-		{#if r.chart_datasets.length}
-			{#each r.chart_datasets as ds (ds.dataset_id)}
-				{#each ds.chart_fields as f (f.name)}
+		{#if r.chartDatasets.length}
+			{#each r.chartDatasets as ds (ds.datasetId)}
+				{#each ds.chartFields as f (f.name)}
 					<div class="mb-4 [break-inside:avoid] border border-black p-2">
 						<h3 class="mb-1 text-[10pt] font-bold uppercase">
 							{ds.name} - {f.label ?? f.name}{f.unit ? ` (${f.unit})` : ''}
@@ -181,7 +182,7 @@
 							<tbody>
 								{#each ds.points as p, i (i)}
 									<tr>
-										<td>{ts(p.recorded_at)}</td>
+										<td>{ts(p.recordedAt)}</td>
 										{#each ds.fields as c (c.name)}<td>{dash(p.values[c.name])}</td>{/each}
 									</tr>
 								{/each}
@@ -205,18 +206,18 @@
 				<tbody>
 					{#each r.issues as i (i.id)}
 						<tr>
-							<td>{i.issue_number}</td><td>{stateLabel(i.issue_type)}</td><td
+							<td>{i.issueNumber}</td><td>{stateLabel(i.issueType)}</td><td
 								>{stateLabel(i.priority)}</td
 							><td>{stateLabel(i.status)}</td>
 							<td>{i.title}</td>
 							<td
-								>{i.root_cause
-									? i.root_cause.length > 200
-										? `${i.root_cause.slice(0, 200)}...`
-										: i.root_cause
+								>{i.rootCause
+									? i.rootCause.length > 200
+										? `${i.rootCause.slice(0, 200)}...`
+										: i.rootCause
 									: '—'}</td
 							>
-							<td>{stateLabel(i.disposition_type)}</td><td>{ts(i.created_at)}</td>
+							<td>{stateLabel(i.dispositionType)}</td><td>{ts(i.createdAt)}</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -224,9 +225,9 @@
 		{:else}{@render none('Issue tickets')}{/if}
 
 		{@render h2('Closeout photos')}
-		{#if r.closeout_attachments.length}
+		{#if r.closeoutAttachments.length}
 			<div class="grid grid-cols-2 gap-3">
-				{#each r.closeout_attachments as a (a.id)}
+				{#each r.closeoutAttachments as a (a.id)}
 					<figure class="m-0 [break-inside:avoid] border border-black p-1.5">
 						<img
 							src={`/api/attachments/${a.id}/download`}
@@ -234,7 +235,7 @@
 							class="mx-auto block max-h-90 max-w-full"
 						/>
 						<figcaption class="mt-1 text-center text-[9pt] break-all">
-							{a.filename}<br />{ts(a.created_at)}
+							{a.filename}<br />{ts(a.createdAt)}
 						</figcaption>
 					</figure>
 				{/each}

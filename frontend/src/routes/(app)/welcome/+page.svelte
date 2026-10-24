@@ -119,8 +119,8 @@
 		<Section title="Parts and stock">
 			<DetailTable>
 				<DetailRow label="Parts"
-					>What you build with. Each has a system-unique id and a part number from the organization's
-					numbering scheme.</DetailRow
+					>What you build with. Each has a system-unique id and a part number from the
+					organization's numbering scheme.</DetailRow
 				>
 				<DetailRow label="OPAL numbers"
 					>One per serialized unit; one per batch for bulk parts.</DetailRow

@@ -5,7 +5,7 @@
 		field,
 		label
 	}: {
-		points: { recorded_at: string; values: Record<string, unknown> }[];
+		points: { recordedAt: string; values: Record<string, unknown> }[];
 		field: string;
 		label: string;
 	} = $props();
@@ -16,7 +16,7 @@
 
 	const data = $derived(
 		points
-			.map((p) => ({ t: new Date(p.recorded_at).getTime(), v: Number(p.values[field]) }))
+			.map((p) => ({ t: new Date(p.recordedAt).getTime(), v: Number(p.values[field]) }))
 			.filter((p) => Number.isFinite(p.v) && Number.isFinite(p.t))
 			.sort((a, b) => a.t - b.t)
 	);

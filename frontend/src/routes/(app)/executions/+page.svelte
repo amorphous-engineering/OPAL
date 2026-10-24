@@ -19,16 +19,17 @@
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
-	import type { OverviewRow } from '#lib/execution/types.js';
+	import type { ExecutionRow } from '@opal/shared';
 	import type { PageProps } from './$types';
 
+	const PAGE_SIZE = 50;
 	let { data }: PageProps = $props();
-	const overview = $derived(data.overview);
+	const overview = $derived(data.executions);
 
 	const sort = urlSort({ key: 'created', dir: 'desc' });
 	const status = $derived(page.url.searchParams.get('status') ?? 'active');
-	const counts = $derived(overview.counts);
-	const FILTERS = ['q', 'procedure', 'mine', 'held'];
+	const counts = $derived({ cut: 0, in_work: 0, completed: 0, aborted: 0, ...overview.counts });
+	const FILTERS = ['q', 'procedure', 'project', 'mine', 'held'];
 	const filtered = $derived.by(() => {
 		void page.url.search;
 		return hasParams(FILTERS) || status !== 'active';
@@ -43,13 +44,14 @@
 		{ id: 'all', label: 'All', n: counts.cut + counts.in_work + counts.completed + counts.aborted }
 	]);
 
-	const columns: Column<OverviewRow>[] = [
-		{ key: 'work_order', label: 'Work order', sortable: true, width: '9rem' },
+	const columns: Column<ExecutionRow>[] = [
+		{ key: 'workOrder', label: 'Work order', sortable: true, width: '9rem' },
+		{ key: 'project', label: 'Project', width: '9rem' },
 		{ key: 'procedure', label: 'Procedure', sortable: true },
 		{ key: 'status', label: 'Status', sortable: true, width: '7rem' },
 		{ key: 'progress', label: 'Progress', width: '10rem' },
 		{ key: 'working', label: 'Working' },
-		{ key: 'held_by', label: 'Held by', width: '10rem' },
+		{ key: 'heldBy', label: 'Held by', width: '10rem' },
 		{ key: 'created', label: 'Cut', sortable: true, width: '5rem', align: 'right' },
 		{ key: 'target', label: 'Target', sortable: true, width: '8rem' }
 	];
@@ -88,8 +90,14 @@
 			allLabel="All procedures"
 			options={data.procedures.map((p) => ({
 				value: String(p.id),
-				label: `${p.template_number} ${p.name}`
+				label: `${p.templateNumber} ${p.name}`
 			}))}
+		/>
+		<FilterSelect
+			param="project"
+			label="Project"
+			allLabel="All projects"
+			options={data.projects.map((p) => ({ value: String(p.id), label: p.code }))}
 		/>
 		<FilterToggle param="mine" label="Mine" />
 		<FilterToggle param="held" label="Held" />
@@ -112,20 +120,22 @@
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
-			{#if col.key === 'work_order'}
-				<span class="font-mono font-medium text-info">{r.work_order_number ?? '—'}</span>
-				{#if r.priority > 0}
+			{#if col.key === 'workOrder'}
+				<span class="font-mono font-medium text-info">{r.woNumber}</span>
+				{#if r.priority !== 'normal'}
 					<State
 						value="priority"
-						tone={r.priority > 1 ? 'error' : 'warn'}
-						label={r.priority > 1 ? 'URGENT' : 'HIGH'}
+						tone={r.priority === 'urgent' ? 'error' : 'warn'}
+						label={r.priority.toUpperCase()}
 						class="ml-1.5"
 					/>
 				{/if}
+			{:else if col.key === 'project'}
+				<span class="font-mono text-xs">{r.projectCode}</span>
 			{:else if col.key === 'procedure'}
-				<span class="font-mono text-muted-foreground">{r.procedure_template_number}</span>
-				{r.procedure_name}
-				<span class="font-mono text-muted-foreground">v{r.version_number}</span>
+				<span class="font-mono text-muted-foreground">{r.procedureNumber}</span>
+				{r.procedureName}
+				<span class="font-mono text-muted-foreground">v{r.versionNumber}</span>
 			{:else if col.key === 'status'}
 				<State value={r.status} />
 			{:else if col.key === 'progress'}
@@ -133,37 +143,34 @@
 					<span class="h-1.5 w-16 bg-border" aria-hidden="true"
 						><span
 							class="block h-full bg-ok"
-							style:width={`${r.progress_total ? (r.progress_done / r.progress_total) * 100 : 0}%`}
+							style:width={`${r.progressTotal ? (r.progressDone / r.progressTotal) * 100 : 0}%`}
 						></span></span
 					>
-					<span class="font-mono text-xs tabular-nums">{r.progress_done}/{r.progress_total}</span>
+					<span class="font-mono text-xs tabular-nums">{r.progressDone}/{r.progressTotal}</span>
 				</span>
 			{:else if col.key === 'working'}
 				{#if r.working.length}
 					<span class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs">
-						{#each r.working as w (w.user_id)}
+						{#each r.working as w (w.userId)}
 							<span class="inline-flex items-center gap-1.5">
-								<Avatar
-									user={{ id: w.user_id, name: w.name, avatar_url: w.avatar_url }}
-									size="xs"
-								/>
-								{w.name ?? '?'}{#if w.step_number}<span class="text-muted-foreground">
-										OP {w.step_number}</span
+								<Avatar user={{ id: w.userId, name: w.name, avatar_url: null }} size="xs" />
+								{w.name ?? '?'}{#if w.stepNumber}<span class="text-muted-foreground">
+										OP {w.stepNumber}</span
 									>{/if}
 							</span>
 						{/each}
 					</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
-			{:else if col.key === 'held_by'}
-				{#if r.held_by.length}
-					<span class="font-mono text-xs text-warn">{r.held_by.join(', ')}</span>
+			{:else if col.key === 'heldBy'}
+				{#if r.heldBy.length}
+					<span class="font-mono text-xs text-warn">{r.heldBy.join(', ')}</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'created'}
-				<Timestamp value={r.created_at} relative />
+				<Timestamp value={r.createdAt} relative />
 			{:else if col.key === 'target'}
-				<Timestamp value={r.target_completion_at} dateOnly />
+				<Timestamp value={r.targetCompletionAt} dateOnly />
 			{/if}
 		{/snippet}
 	</DataTable>
-	<Pagination total={overview.total} pageSize={overview.page_size} />
+	<Pagination total={overview.total} pageSize={PAGE_SIZE} />
 </ListFrame>

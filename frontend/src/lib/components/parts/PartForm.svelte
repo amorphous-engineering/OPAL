@@ -378,12 +378,7 @@
 			<div class="grid grid-cols-1 gap-4 p-3 sm:grid-cols-2">
 				{#if !editing}
 					<FormField label="Add to assembly" for="pf-assembly">
-						<PartPicker
-							id="pf-assembly"
-							bind:value={assembly}
-							placeholder="None"
-							clearable
-						/>
+						<PartPicker id="pf-assembly" bind:value={assembly} placeholder="None" clearable />
 					</FormField>
 					{#if assembly}
 						<FormField label="Quantity in assembly" for="pf-asm-qty">

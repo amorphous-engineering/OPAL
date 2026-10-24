@@ -48,7 +48,13 @@
 		</Dialog.Header>
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			<FormField label="Cause" for="cause-input">
-				<Input id="cause-input" bind:value={cause} {placeholder} maxlength={255} autocomplete="off" />
+				<Input
+					id="cause-input"
+					bind:value={cause}
+					{placeholder}
+					maxlength={255}
+					autocomplete="off"
+				/>
 			</FormField>
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (open = false)}>CANCEL</Button>

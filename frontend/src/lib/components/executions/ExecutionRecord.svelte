@@ -26,7 +26,6 @@
 	const rows = $derived(
 		ops.flatMap((op) => [op.step, ...op.steps]).filter((s) => s.attachments.length > 0)
 	);
-	const priorityLabel = ['NORMAL', 'HIGH', 'URGENT'];
 </script>
 
 <div
@@ -87,7 +86,13 @@
 					>{/if}
 			</DetailRow>
 			<DetailRow label="Version author" value={inst.version.created_by} />
-			<DetailRow label="Priority" value={priorityLabel[inst.priority] ?? String(inst.priority)} />
+			<DetailRow label="Project"
+				><a class="text-info hover:underline" href={`/projects/${inst.project.id}`}
+					>{inst.project.code}</a
+				>
+				{inst.project.name}</DetailRow
+			>
+			<DetailRow label="Priority" value={inst.priority.toUpperCase()} />
 			<DetailRow label="Cut by" value={inst.created_by} />
 			<DetailRow label="Created"><Timestamp value={inst.created_at} /></DetailRow>
 			<DetailRow label="Scheduled"><Timestamp value={inst.scheduled_start_at} /></DetailRow>

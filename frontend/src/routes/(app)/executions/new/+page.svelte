@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
+	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte';
 	import {
 		PageHeader,
 		Section,
@@ -15,7 +16,8 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { qty } from '#lib/format.js';
-	import type { CutPreview, PreviewPart } from '#lib/execution/types.js';
+	import { EXECUTION_PRIORITIES, type CutPreview, type ExecutionPriority } from '@opal/shared';
+	type PreviewPart = CutPreview['kit'][number];
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -28,7 +30,12 @@
 	let workOrder = $state('');
 	let scheduled = $state('');
 	let target = $state('');
-	let priority = $state('0');
+	let priority = $state<ExecutionPriority>('normal');
+	// svelte-ignore state_referenced_locally
+	let projectId = $state(
+		data.projectId || (data.procedures.find((p) => p.id === data.preselect)?.projectId ?? 0)
+	);
+	let projectTouched = $state(false);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let preview = $state<CutPreview | null>(null);
@@ -48,15 +55,15 @@
 		let cancelled = false;
 		const timer = setTimeout(async () => {
 			try {
-				const p = await api.get<CutPreview>('/procedure-instances/preview', {
-					procedure_id: proc,
-					version_id: ver || undefined,
+				const p = await opal.execution.preview({
+					procedureId: Number(proc),
+					versionId: ver ? Number(ver) : undefined,
 					quantity: count
 				});
 				if (cancelled) return;
 				preview = p;
 				previewError = null;
-				if (!ver) versionId = String(p.version_id);
+				if (!ver) versionId = String(p.versionId);
 			} catch (e) {
 				if (cancelled) return;
 				preview = null;
@@ -71,6 +78,9 @@
 
 	function pickProcedure(value: string) {
 		procedureId = value;
+		const proc = data.procedures.find((p) => String(p.id) === value);
+		// Context pre-fill: the project of the procedure, unless the person chose one.
+		if (proc && !projectTouched) projectId = proc.projectId;
 		versionId = '';
 		preview = null;
 	}
@@ -80,14 +90,15 @@
 		busy = true;
 		error = null;
 		try {
-			const created = await api.post<{ id: number }>('/procedure-instances', {
-				procedure_id: Number(procedureId),
-				version_id: versionId ? Number(versionId) : undefined,
-				work_order_number: n === 1 && workOrder.trim() ? workOrder.trim() : undefined,
+			const created = await opal.execution.create({
+				procedureId: Number(procedureId),
+				versionId: versionId ? Number(versionId) : undefined,
+				projectId: projectId || undefined,
+				woNumber: n === 1 && workOrder.trim() ? workOrder.trim() : undefined,
 				quantity: n,
-				scheduled_start_at: scheduled ? new Date(scheduled).toISOString() : undefined,
-				target_completion_at: target ? new Date(target).toISOString() : undefined,
-				priority: Number(priority)
+				scheduledStartAt: scheduled ? new Date(scheduled).toISOString() : undefined,
+				targetCompletionAt: target ? new Date(target).toISOString() : undefined,
+				priority
 			});
 			// One work order opens; a batch lands on the list of what was cut.
 			await goto(n === 1 ? `/executions/${created.id}` : '/executions?status=cut');
@@ -101,10 +112,10 @@
 
 	const partCols: Column<PreviewPart>[] = [
 		{ key: 'part', label: 'Part' },
-		{ key: 'per_work_order', label: 'Per WO', align: 'right', mono: true, width: '6rem' },
+		{ key: 'perWorkOrder', label: 'Per WO', align: 'right', mono: true, width: '6rem' },
 		{ key: 'required', label: 'Required', align: 'right', mono: true, width: '6rem' },
 		{ key: 'available', label: 'On hand', align: 'right', mono: true, width: '6rem' },
-		{ key: 'is_available', label: 'Check', width: '6rem' }
+		{ key: 'isAvailable', label: 'Check', width: '6rem' }
 	];
 </script>
 
@@ -126,13 +137,18 @@
 				>
 					<option value="">Select procedure</option>
 					{#each data.procedures as p (p.id)}<option value={String(p.id)}
-							>{p.template_number} {p.name}</option
+							>{p.templateNumber} {p.name}</option
 						>{/each}
 				</NativeSelect>
 			</FormRow>
 			{#if !data.procedures.length}
 				<p class="text-xs text-warn">No procedure has a published version.</p>
 			{/if}
+			<FormRow label="Project" for="cut-project" required>
+				<div role="presentation" onchangecapture={() => (projectTouched = true)}>
+					<ProjectSelect id="cut-project" bind:value={projectId} class="w-full" />
+				</div>
+			</FormRow>
 			<div class="grid grid-cols-2 gap-3">
 				<FormRow label="Version" for="cut-version">
 					<NativeSelect
@@ -144,7 +160,7 @@
 					>
 						{#if preview}
 							{#each preview.versions as v (v.id)}
-								<option value={String(v.id)}>v{v.number}{v.is_current ? ' (current)' : ''}</option>
+								<option value={String(v.id)}>v{v.number}{v.isCurrent ? ' (current)' : ''}</option>
 							{/each}
 						{:else}<option value="">—</option>{/if}
 					</NativeSelect>
@@ -185,14 +201,12 @@
 			</div>
 			<FormRow label="Priority" for="cut-priority">
 				<NativeSelect id="cut-priority" class="w-48" bind:value={priority}>
-					<option value="0">NORMAL</option>
-					<option value="1">HIGH</option>
-					<option value="2">URGENT</option>
+					{#each EXECUTION_PRIORITIES as p (p)}<option value={p}>{p.toUpperCase()}</option>{/each}
 				</NativeSelect>
 			</FormRow>
 			{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
 			<div class="flex gap-2">
-				<Button type="submit" disabled={busy || !procedureId || !preview}
+				<Button type="submit" disabled={busy || !procedureId || !preview || !projectId}
 					>{n === 1 ? 'CUT WORK ORDER' : `CUT ${n} WORK ORDERS`}</Button
 				>
 				<Button variant="outline" href="/executions">CANCEL</Button>
@@ -208,21 +222,21 @@
 		{:else}
 			<Section title="Procedure">
 				<div class="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-xs">
-					<span class="font-mono text-muted-foreground">{preview.procedure_template_number}</span>
-					<span class="text-sm font-medium">{preview.procedure_name}</span>
-					<span class="font-mono">v{preview.version_number}</span>
+					<span class="font-mono text-muted-foreground">{preview.procedureNumber}</span>
+					<span class="text-sm font-medium">{preview.procedureName}</span>
+					<span class="font-mono">v{preview.versionNumber}</span>
 					<span class="font-mono text-muted-foreground"
-						>{preview.step_count} STEPS ({preview.op_count} OP{preview.op_count === 1
+						>{preview.stepCount} STEPS ({preview.opCount} OP{preview.opCount === 1
 							? ''
 							: 'S'})</span
 					>
-					<State value={preview.procedure_type} tone="muted" />
-					{#if preview.kit.length || preview.step_kit.length}
+					<State value={preview.procedureType} tone="muted" />
+					{#if preview.kit.length || preview.stepKit.length}
 						<State
 							value="kit"
-							tone={preview.all_available ? 'ok' : 'error'}
-							label={preview.all_available ? 'KIT AVAILABLE' : 'KIT SHORT'}
-							badge={!preview.all_available}
+							tone={preview.allAvailable ? 'ok' : 'error'}
+							label={preview.allAvailable ? 'KIT AVAILABLE' : 'KIT SHORT'}
+							badge={!preview.allAvailable}
 						/>
 					{/if}
 				</div>
@@ -242,12 +256,12 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each preview.outputs as o (o.part_id)}
+							{#each preview.outputs as o (o.partId)}
 								<tr class="border-b border-border align-top">
 									<td class="px-3 py-1.5"
-										><span class="font-mono">{o.part_number}</span> {o.part_name}</td
+										><span class="font-mono">{o.partNumber}</span> {o.partName}</td
 									>
-									<td class="px-3 py-1.5 font-mono">{qty(o.quantity_each)}</td>
+									<td class="px-3 py-1.5 font-mono">{qty(o.quantityEach)}</td>
 									<td class="px-3 py-1.5 font-mono">{o.serials.join(', ')}</td>
 								</tr>
 							{/each}
@@ -256,34 +270,34 @@
 				</Section>
 			{/if}
 
-			{#each [{ title: 'Kit', rows: preview.kit }, { title: 'Step parts', rows: preview.step_kit }] as group (group.title)}
+			{#each [{ title: 'Kit', rows: preview.kit }, { title: 'Step parts', rows: preview.stepKit }] as group (group.title)}
 				{#if group.rows.length}
 					<Section title={group.title} count={group.rows.length}>
 						<DataTable
 							rows={group.rows}
 							columns={partCols}
 							emptyLabel={group.title}
-							key={(r) => `${r.part_id}-${r.usage_type}`}
+							key={(r) => `${r.partId}-${r.usage}`}
 						>
 							{#snippet cell(r, col)}
 								{#if col.key === 'part'}
-									<a class="font-mono text-info hover:underline" href={`/parts/${r.part_id}`}
-										>{r.part_number ?? '—'}</a
+									<a class="font-mono text-info hover:underline" href={`/parts/${r.partId}`}
+										>{r.partNumber}</a
 									>
-									{r.part_name}{#if r.usage_type === 'tooling'}
+									{r.partName}{#if r.usage === 'tooling'}
 										<State value="tooling" tone="info" class="ml-1.5" />{/if}
-								{:else if col.key === 'is_available'}
-									{#if r.is_available}
+								{:else if col.key === 'isAvailable'}
+									{#if r.isAvailable}
 										<State value="ok" tone="ok" label="OK" />
 									{:else}
 										<State
 											value="short"
 											tone="error"
-											label={`SHORT ${qty(r.required - r.available)}`}
+											label={`SHORT ${qty(Number(r.required) - Number(r.available))}`}
 										/>
 									{/if}
 								{:else}
-									{qty((r as unknown as Record<string, number>)[col.key])}
+									{qty((r as unknown as Record<string, string>)[col.key])}
 								{/if}
 							{/snippet}
 						</DataTable>

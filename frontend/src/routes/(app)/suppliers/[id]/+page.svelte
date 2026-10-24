@@ -186,8 +186,7 @@
 						{:else if col.key === 'orderedAt'}
 							<Timestamp value={r.orderedAt} dateOnly />
 						{:else if col.key === 'targetDate'}
-							{#if r.targetDate}<span class={r.isOverdue ? 'text-error' : ''}
-									>{r.targetDate}</span
+							{#if r.targetDate}<span class={r.isOverdue ? 'text-error' : ''}>{r.targetDate}</span
 								>{:else}<span class="text-muted-foreground">—</span>{/if}
 						{:else if col.key === 'lines'}
 							{#if r.totalLines === 0}<span class="text-muted-foreground">—</span

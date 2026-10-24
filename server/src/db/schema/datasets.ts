@@ -1,9 +1,10 @@
 /** Tables for the datasets area. */
 import { DATASET_STATES, type DatasetSchema, type PointValues } from '@opal/shared';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { user } from './core.ts';
 import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { project } from './org.ts'; // added by projects
+import { stepExecution } from './execution.ts'; // added by execution
 
 export const dataset = sqliteTable(
 	'dataset',
@@ -43,7 +44,7 @@ export const dataPoint = sqliteTable(
 		values: text('values', { mode: 'json' }).$type<PointValues>().notNull(),
 		// The step execution that produced the point (wave 3). Plain integer, no foreign key:
 		// the execution tables do not exist yet. The execution area resolves it and adds the link.
-		stepExecutionId: integer('step_execution_id'),
+		stepExecutionId: integer('step_execution_id').references((): AnySQLiteColumn => stepExecution.id, { onDelete: 'set null' }), // added by execution
 		createdAt: createdAt()
 	},
 	(t) => [

@@ -23,6 +23,7 @@ import { user } from './core.ts';
 import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { part } from './parts.ts';
 import { purchaseLine } from './purchasing.ts'; // added by purchasing
+import { execution, stepExecution } from './execution.ts'; // added by execution
 
 export const stockRecord = sqliteTable(
 	'stock_record',
@@ -97,12 +98,16 @@ export const stockMove = sqliteTable(
 		intoStockId: integer('into_stock_id').references(() => stockRecord.id),
 		// added by purchasing: the purchase line a receive move came from
 		purchaseLineId: integer('purchase_line_id').references(() => purchaseLine.id),
+		// added by execution: the execution and the step a consume or produce belongs to
+		executionId: integer('execution_id').references((): AnySQLiteColumn => execution.id),
+		stepExecutionId: integer('step_execution_id').references((): AnySQLiteColumn => stepExecution.id),
 	},
 	(t) => [
 		index('stock_move_stock_idx').on(t.stockId, t.at),
 		index('stock_move_kind_idx').on(t.kind),
 		index('stock_move_into_idx').on(t.intoStockId),
 		index('stock_move_purchase_line_idx').on(t.purchaseLineId), // added by purchasing
+		index('stock_move_execution_idx').on(t.executionId), // added by execution
 		oneOf('stock_move_kind_check', 'kind', MOVE_KINDS),
 		check(
 			'stock_move_sign_check',

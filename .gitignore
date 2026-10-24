@@ -9,6 +9,8 @@ docs/
 
 # Database files
 *.db
+# The demo content: the seeded legacy database, imported on demand.
+!server/assets/demo-seed.db
 *.db-journal
 *.db-shm
 *.db-wal
