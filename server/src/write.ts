@@ -6,7 +6,7 @@ import { now } from '@opal/shared';
 import { eq, getTableName } from 'drizzle-orm';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { Ctx } from './context.ts';
-import { auditLog } from './db/schema.ts';
+import { auditLog } from './db/schema/index.ts';
 
 // Drizzle's generic table types do not narrow to "a table with an id column",
 // so the helpers take any table and read `id` through a cast.

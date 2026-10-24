@@ -4,7 +4,7 @@ import type { Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import type { Actor } from '../context.ts';
 import type { Db } from '../db/client.ts';
-import { apiToken, session, user } from '../db/schema.ts';
+import { apiToken, session, user } from '../db/schema/index.ts';
 import { type ResolveActor, serialized } from '../registry.ts';
 import {
 	addMs,

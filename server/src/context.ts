@@ -1,5 +1,4 @@
 /** The actor behind a request, and the context every handler receives. */
-import type { Gate } from '@opal/shared';
 import type { Db } from './db/client.ts';
 
 export type Actor =
@@ -38,14 +37,6 @@ export interface Ctx {
 	op: string;
 	cookies?: CookieJar;
 	request?: RequestInfo;
-}
-
-export function holdsGate(actor: Actor, _gate: Gate): boolean {
-	if (actor.kind === 'system') return true;
-	if (actor.kind === 'anonymous') return false;
-	// Phase 0: admins hold every gate and other users hold every gate too.
-	// Role-granted gates arrive with the roles port.
-	return true;
 }
 
 export function actorUserId(actor: Actor): number | null {

@@ -1,6 +1,6 @@
 /**
- * Gates: named permissions that roles grant. Admins hold every gate.
- * Extend this list as areas are ported.
+ * Gates: privileged actions that roles grant. Admins hold every gate. `admin`
+ * is held by admins only. Everything else needs only a signed-in actor.
  */
-export const GATES = ['parts.read', 'parts.write', 'users.admin'] as const;
+export const GATES = ['admin', 'issue.disposition', 'issue.approve'] as const;
 export type Gate = (typeof GATES)[number];

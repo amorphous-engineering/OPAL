@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createApp } from '../src/app.ts';
 import type { Actor } from '../src/context.ts';
 import { openDb } from '../src/db/client.ts';
-import { auditLog } from '../src/db/schema.ts';
+import { auditLog } from '../src/db/schema/index.ts';
 
 function setup(actor: Actor = { kind: 'system' }) {
 	const db = openDb(':memory:');

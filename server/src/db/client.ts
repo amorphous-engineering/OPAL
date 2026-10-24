@@ -5,7 +5,7 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import type { MigrationMeta } from 'drizzle-orm/migrator';
 import { join } from 'node:path';
 import { embedded } from '../http/embedded.ts';
-import * as schema from './schema.ts';
+import * as schema from './schema/index.ts';
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 

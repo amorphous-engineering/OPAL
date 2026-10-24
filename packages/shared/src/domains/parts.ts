@@ -55,7 +55,7 @@ export const parts = {
 			state: z.enum(PART_STATES).optional()
 		}),
 		output: zPage(zPart),
-		access: 'parts.read',
+		access: 'signed-in',
 		mcp: true
 	}),
 	get: op({
@@ -65,7 +65,7 @@ export const parts = {
 		summary: 'Get one part.',
 		input: z.object({ id: zId }),
 		output: zPart,
-		access: 'parts.read',
+		access: 'signed-in',
 		mcp: true
 	}),
 	create: op({
@@ -75,7 +75,7 @@ export const parts = {
 		summary: 'Create a draft part. A part number is assigned if none is given.',
 		input: zPartCreate,
 		output: zPart,
-		access: 'parts.write',
+		access: 'signed-in',
 		mcp: true
 	})
 };

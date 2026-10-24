@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createApp } from '../src/app.ts';
 import { verifyPassword } from '../src/auth/tokens.ts';
 import { openDb } from '../src/db/client.ts';
-import { apiToken, auditLog, session } from '../src/db/schema.ts';
+import { apiToken, auditLog, session } from '../src/db/schema/index.ts';
 
 // Made by legacy argon2-cffi: PasswordHasher().hash('kestrel-demo')
 const LEGACY_HASH =

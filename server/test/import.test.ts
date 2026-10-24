@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { importInPlace, importLegacy, LEGACY_HEAD, OLD_VERSION_MESSAGE } from '../src/import/index.ts';
 import { openDb } from '../src/db/client.ts';
-import { part } from '../src/db/schema.ts';
+import { part } from '../src/db/schema/index.ts';
 
 const SCHEMA = join(import.meta.dir, 'fixtures/legacy-schema.sql');
 const SEED = join(import.meta.dir, '../../notes/fixtures/legacy-seed.db');

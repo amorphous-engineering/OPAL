@@ -2,7 +2,7 @@ import { type Part, type PartState, formatQty, notFound, parseQty, type Qty, typ
 import { and, desc, eq, like, lt, or } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { Ctx } from '../context.ts';
-import { part } from '../db/schema.ts';
+import { part } from '../db/schema/index.ts';
 import { insert, update } from '../write.ts';
 
 type Row = typeof part.$inferSelect;

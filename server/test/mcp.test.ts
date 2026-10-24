@@ -7,7 +7,7 @@ import { Hono } from 'hono';
 import { createApp } from '../src/app.ts';
 import type { Actor } from '../src/context.ts';
 import { openDb } from '../src/db/client.ts';
-import { apiToken, auditLog, user } from '../src/db/schema.ts';
+import { apiToken, auditLog, user } from '../src/db/schema/index.ts';
 import { implement } from '../src/registry.ts';
 import { mountMcp } from '../src/mcp/index.ts';
 

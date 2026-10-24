@@ -15,7 +15,8 @@ import { sql } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
-import { type Actor, type CookieJar, type Ctx, holdsGate, type RequestInfo } from './context.ts';
+import { type Actor, type CookieJar, type Ctx, type RequestInfo } from './context.ts';
+import { holdsGate } from './services/org/gates.ts';
 import type { Db } from './db/client.ts';
 
 export interface Impl<C extends OpContract = OpContract> {
@@ -38,13 +39,13 @@ export function serialized<T>(fn: () => Promise<T>): Promise<T> {
 	return run;
 }
 
-export function checkAccess(contract: OpContract, actor: Actor): void {
+export function checkAccess(db: Db, contract: OpContract, actor: Actor): void {
 	if (contract.access === 'public') return;
 	if (actor.kind === 'anonymous') throw unauthenticated();
 	if (contract.humanOnly && actor.kind === 'token') {
 		throw forbidden('This action needs a signed-in person, not an API token');
 	}
-	if (contract.access !== 'signed-in' && !holdsGate(actor, contract.access)) throw forbidden();
+	if (contract.access !== 'signed-in' && !holdsGate(db, actor, contract.access)) throw forbidden();
 }
 
 function zodFields(err: z.ZodError): Record<string, string> {
@@ -65,7 +66,7 @@ export async function runOp<C extends OpContract>(
 	http?: { cookies: CookieJar; request: RequestInfo }
 ): Promise<OpOutput<C>> {
 	const { contract } = impl;
-	checkAccess(contract, actor);
+	checkAccess(db, contract, actor);
 	const parsed = contract.input.safeParse(rawInput);
 	if (!parsed.success) {
 		throw new OpalError(422, 'invalid_input', 'Invalid input', zodFields(parsed.error));

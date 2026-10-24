@@ -8,7 +8,7 @@ import { copyFileSync, existsSync, mkdtempSync, renameSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { openDb } from '../db/client.ts';
-import { apiToken, auditLog, part, user } from '../db/schema.ts';
+import { apiToken, auditLog, part, user } from '../db/schema/index.ts';
 
 export const LEGACY_HEAD = 'b8d2f1a5c3e0';
 export const OLD_VERSION_MESSAGE =

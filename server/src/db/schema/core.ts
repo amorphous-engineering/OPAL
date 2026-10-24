@@ -1,23 +1,7 @@
-/**
- * The database schema: the one source for tables. Migrations in drizzle/
- * are generated from this file (`pnpm db:generate`) and reviewed.
- *
- * Conventions: INTEGER PRIMARY KEY AUTOINCREMENT, so ids are never reused.
- * Timestamps are ISO 8601 UTC text. Quantities are integers in Qty units.
- * Every enum column has a CHECK generated from the shared enum.
- */
-import { PART_STATES, PROCUREMENT, TRACKING_TYPES } from '@opal/shared';
-import { sql } from 'drizzle-orm';
-import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+/** Identity, sessions, tokens and the audit log. */
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-const id = () => integer('id').primaryKey({ autoIncrement: true });
-const createdAt = () => text('created_at').notNull();
-const updatedAt = () => text('updated_at').notNull();
-
-/** CHECK (col IN (...)) from a shared enum. */
-function oneOf(name: string, col: string, values: readonly string[]) {
-	return check(name, sql.raw(`"${col}" IN (${values.map((v) => `'${v}'`).join(', ')})`));
-}
+import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 
 export const user = sqliteTable('user', {
 	id: id(),
@@ -93,34 +77,8 @@ export const auditLog = sqliteTable(
 	]
 );
 
-export const part = sqliteTable(
-	'part',
-	{
-		id: id(),
-		internalPn: text('internal_pn').notNull().unique(),
-		externalPn: text('external_pn'),
-		name: text('name').notNull(),
-		description: text('description'),
-		category: text('category'),
-		unitOfMeasure: text('unit_of_measure').notNull(),
-		trackingType: text('tracking_type', { enum: TRACKING_TYPES }).notNull(),
-		procurement: text('procurement', { enum: PROCUREMENT }).notNull(),
-		tier: integer('tier').notNull(),
-		reorderPoint: integer('reorder_point'),
-		isTooling: integer('is_tooling', { mode: 'boolean' }).notNull().default(false),
-		calibrationIntervalDays: integer('calibration_interval_days'),
-		state: text('state', { enum: PART_STATES }).notNull().default('draft'),
-		activatedAt: text('activated_at'),
-		activatedById: integer('activated_by_id').references(() => user.id, {
-			onDelete: 'set null'
-		}),
-		createdAt: createdAt(),
-		updatedAt: updatedAt()
-	},
-	(t) => [
-		index('part_state_idx').on(t.state),
-		oneOf('part_tracking_check', 'tracking_type', TRACKING_TYPES),
-		oneOf('part_procurement_check', 'procurement', PROCUREMENT),
-		oneOf('part_state_check', 'state', PART_STATES)
-	]
-);
+/** Counters behind human identifiers: OPAL-00001, WO-00001, IT-00001, ... One row per prefix. */
+export const designatorSequence = sqliteTable('designator_sequence', {
+	prefix: text('prefix').primaryKey(),
+	lastValue: integer('last_value').notNull().default(0)
+});

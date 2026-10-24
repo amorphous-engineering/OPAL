@@ -15,7 +15,7 @@ import {
 	verifyPassword
 } from '../auth/tokens.ts';
 import type { Ctx } from '../context.ts';
-import { apiToken, session, user } from '../db/schema.ts';
+import { apiToken, session, user } from '../db/schema/index.ts';
 import { type Impl, implement } from '../registry.ts';
 import { insert, update } from '../write.ts';
 
