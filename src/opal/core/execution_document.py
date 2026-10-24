@@ -8,7 +8,7 @@ a control is inert exactly when the step's ``complete_blockers`` /
 ``skip_blockers`` are non-empty, because those lists are the same fold the
 commitment endpoints refuse on.
 
-Authoring-shaped fields (title, instructions, caution, role, images, data
+Authoring-shaped fields (title, instructions, callouts, role, images, data
 schema, step kit) sit beside execution-shaped ones (status, captured data,
 notes) in each step so one component can render both modes.
 """
@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from opal.core import execution_flow as exec_flow
 from opal.core.avatars import avatar_url
+from opal.core.callouts import step_callouts
 from opal.core.holds import enum_value, get_hold_state
 from opal.core.people import person_ref
 from opal.core.roles import role_names_of
@@ -363,7 +364,7 @@ def build_execution_document(
             "parent_order": se.parent_step_order,
             "status": status,
             "instructions": se.instructions if se.ad_hoc_issue_id else vs.get("instructions"),
-            "caution": vs.get("caution"),
+            "callouts": step_callouts(vs),
             "role": first_role if signoffs else vs.get("required_role"),
             "requires_signoff": requires_signoff,
             "signoffs": signoffs,
@@ -493,7 +494,7 @@ def build_execution_document(
             "title": op_step["title"],
             "status": op_step["status"],
             "instructions": op_step["instructions"],
-            "caution": vs.get("caution"),
+            "callouts": step_callouts(vs),
             "role": op_step["role"],
             "signoffs": op_step["signoffs"],
             "strict_sequence": strict,
@@ -501,6 +502,7 @@ def build_execution_document(
             "is_ad_hoc": is_redline,
             "redline": redline,
             "waiting_on_ops": waiting_ops,
+            "depends_on": [d for d in (vs.get("depends_on") or []) if d in se_by_order],
             "holds": holds,
             "open_ncs": open_ncs,
             "progress": {"done": done, "total": len(leaf)},
@@ -645,6 +647,7 @@ def build_execution_document(
             "priority": instance.priority,
             "procedure": {
                 "id": instance.procedure_id,
+                "template_number": instance.procedure.template_number,
                 "name": instance.procedure.name,
                 "type": enum_value(instance.procedure.procedure_type),
             },

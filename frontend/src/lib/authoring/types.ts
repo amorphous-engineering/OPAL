@@ -1,5 +1,5 @@
 /** Shapes returned by GET /api/procedures/{id}/draft. */
-import type { DocSchema } from '#lib/components/procedure-doc/index.js';
+import type { Callout, DocSchema } from '#lib/components/procedure-doc/index.js';
 
 export interface DraftKitLine {
 	id: number;
@@ -33,7 +33,7 @@ export interface DraftStep {
 	required_role: string | null;
 	/** The effective sign-off definitions, slot order. */
 	signoffs: { label: string; role: string | null }[];
-	caution: string | null;
+	callouts: Callout[];
 	strict_sequence: boolean;
 	workcenter_id: number | null;
 	depends_on: number[];

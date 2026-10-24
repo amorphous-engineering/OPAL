@@ -201,6 +201,7 @@ class InstanceResponse(BaseModel):
 
     id: int
     procedure_id: int
+    procedure_template_number: str
     procedure_name: str
     version_id: int
     version_number: int
@@ -358,6 +359,7 @@ def list_instances(
             InstanceResponse(
                 id=inst.id,
                 procedure_id=inst.procedure_id,
+                procedure_template_number=inst.procedure.template_number,
                 procedure_name=inst.procedure.name,
                 version_id=inst.version_id,
                 version_number=version.version_number if version else 0,
@@ -392,6 +394,7 @@ class OverviewRow(BaseModel):
     id: int
     work_order_number: str | None = None
     procedure_id: int
+    procedure_template_number: str
     procedure_name: str
     version_number: int
     status: str
@@ -466,6 +469,7 @@ def executions_overview(
             query = query.filter(
                 or_(
                     ProcedureInstance.work_order_number.ilike(term),
+                    MasterProcedure.template_number.ilike(term),
                     MasterProcedure.name.ilike(term),
                 )
             )
@@ -572,6 +576,7 @@ def executions_overview(
                 id=inst.id,
                 work_order_number=inst.work_order_number,
                 procedure_id=inst.procedure_id,
+                procedure_template_number=inst.procedure.template_number,
                 procedure_name=inst.procedure.name,
                 version_number=version.version_number if version else 0,
                 status=enum_value(inst.status),
@@ -622,6 +627,7 @@ class CutPreview(BaseModel):
     """What cutting N work orders from a procedure version will allocate and consume."""
 
     procedure_id: int
+    procedure_template_number: str
     procedure_name: str
     procedure_type: str
     versions: list[PreviewVersion]
@@ -737,6 +743,7 @@ def preview_cut(
 
     return CutPreview(
         procedure_id=procedure.id,
+        procedure_template_number=procedure.template_number,
         procedure_name=procedure.name,
         procedure_type=proc_type,
         versions=[
@@ -958,6 +965,7 @@ def create_instance(
     return InstanceResponse(
         id=instance.id,
         procedure_id=instance.procedure_id,
+        procedure_template_number=procedure.template_number,
         procedure_name=procedure.name,
         version_id=instance.version_id,
         version_number=version.version_number,
@@ -990,6 +998,7 @@ def get_instance(
     return InstanceResponse(
         id=instance.id,
         procedure_id=instance.procedure_id,
+        procedure_template_number=instance.procedure.template_number,
         procedure_name=instance.procedure.name,
         version_id=instance.version_id,
         version_number=version.version_number if version else 0,
@@ -1063,6 +1072,7 @@ def update_instance(
     return InstanceResponse(
         id=instance.id,
         procedure_id=instance.procedure_id,
+        procedure_template_number=instance.procedure.template_number,
         procedure_name=instance.procedure.name,
         version_id=instance.version_id,
         version_number=version.version_number if version else 0,

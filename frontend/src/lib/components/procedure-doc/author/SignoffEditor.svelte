@@ -1,11 +1,11 @@
 <script lang="ts">
 	// The sign-off table in authoring: the same shape as the execution table
-	// (label | role | signature | action), with label and role as inputs, a remove
-	// X per row, and + SIGN-OFF. A leaf step keeps at least one row; an OP with
-	// sub-steps may have none. Saves go through the authoring store.
+	// (label | role | signature | action). The label is the row's position (Primary
+	// buyoff, then Secondary buyoff) and the role (the gate) is the only input. Primary stays while
+	// any other row exists; a leaf step always keeps it, an OP with sub-steps may
+	// drop it once it is alone. Saves go through the authoring store.
 	import { EmptyLine, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { roleNames } from '#lib/components/users/roles.js';
 	import { useDoc } from '../controller.js';
@@ -27,21 +27,14 @@
 		role && !known.some((n) => n.toLowerCase() === role.toLowerCase()) ? [role] : [];
 
 	const save = (next: SignoffDef[]) => au.edit(step, { signoffs: next });
-	const patch = (i: number, p: Partial<SignoffDef>) =>
-		save(rows.map((r, n) => (n === i ? { ...r, ...p } : r)));
-	const remove = (i: number) => save(rows.filter((_, n) => n !== i));
-	function add() {
-		const n = rows.length;
-		const label = mayBeEmpty
-			? n
-				? `Sign-off ${n + 1}`
-				: 'Sign-off'
-			: n === 1
-				? 'Secondary buyoff'
-				: `Sign-off ${n + 1}`;
-		save([...rows, { label, role: null }]);
-	}
-	const locked = $derived(!mayBeEmpty && rows.length <= 1);
+	/** The server sets labels by position too; this keeps the local copy in step. */
+	const slotLabel = (i: number) => (i === 0 ? 'Primary buyoff' : 'Secondary buyoff');
+	const relabel = (list: SignoffDef[]) => list.map((r, i) => ({ ...r, label: slotLabel(i) }));
+	const setRole = (i: number, role: string | null) =>
+		save(relabel(rows.map((r, n) => (n === i ? { ...r, role } : r))));
+	const remove = (i: number) => save(relabel(rows.filter((_, n) => n !== i)));
+	const add = () => save(relabel([...rows, { label: '', role: null }]));
+	const removable = (i: number) => i > 0 || (mayBeEmpty && rows.length === 1);
 </script>
 
 <div data-signoff-editor={step.order} data-op={op.order}>
@@ -53,26 +46,17 @@
 				<tbody>
 					{#each rows as s, i (i)}
 						<tr class="border-b border-border last:border-b-0" data-slot={i}>
-							<td class="w-44 px-2 py-1">
-								<Input
-									aria-label={`Sign-off ${i + 1} label`}
-									maxlength={100}
-									class="h-7 font-sans text-sm font-medium"
-									value={s.label}
-									onkeydown={(e) => e.stopPropagation()}
-									oninput={(e) => patch(i, { label: e.currentTarget.value })}
-								/>
-							</td>
+							<td class="w-28 px-3 py-1 font-sans text-sm font-medium">{slotLabel(i)}</td>
 							<td class="w-36 px-2 py-1">
 								<NativeSelect
-									aria-label={`Sign-off ${i + 1} role`}
+									aria-label={`${slotLabel(i)} sign-off role`}
 									size="sm"
 									class="w-full"
 									value={known.find((n) => n.toLowerCase() === s.role?.toLowerCase()) ??
 										s.role ??
 										''}
 									onkeydown={(e) => e.stopPropagation()}
-									onchange={(e) => patch(i, { role: e.currentTarget.value || null })}
+									onchange={(e) => setRole(i, e.currentTarget.value || null)}
 								>
 									<NativeSelectOption value="">—</NativeSelectOption>
 									{#each known as n (n)}
@@ -89,9 +73,8 @@
 									type="button"
 									size="xs"
 									variant="outline"
-									aria-label={`Remove sign-off ${i + 1}`}
-									title={locked ? 'A step keeps at least one sign-off' : 'Remove sign-off'}
-									disabled={locked}
+									aria-label={`Remove ${slotLabel(i)} sign-off`}
+									disabled={!removable(i)}
 									onclick={() => remove(i)}>X</Button
 								>
 							</td>

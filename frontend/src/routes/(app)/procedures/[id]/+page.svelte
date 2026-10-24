@@ -3,34 +3,12 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { api } from '#lib/api.js';
-	import {
-		DataTable,
-		DetailRow,
-		DetailTable,
-		EmptyLine,
-		PageHeader,
-		Section,
-		State,
-		Timestamp,
-		confirm,
-		toast,
-		toastError
-	} from '#lib/components/opal/index.js';
-	import type { Column } from '#lib/components/opal/index.js';
-	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
-	import Prose from '#lib/components/procedures/Prose.svelte';
+	import { PageHeader, State, confirm, toast, toastError } from '#lib/components/opal/index.js';
 	import CloneDialog from '#lib/components/procedures/CloneDialog.svelte';
 	import DetailsDialog from '#lib/components/procedures/DetailsDialog.svelte';
-	import PartLines from '#lib/components/procedures/PartLines.svelte';
 	import PublishDialog from '#lib/components/procedures/PublishDialog.svelte';
-	import ReferenceDocs from '#lib/components/procedures/ReferenceDocs.svelte';
-	import ProcedureEditor from '#lib/components/procedures/ProcedureEditor.svelte';
-	import VersionsSection from '#lib/components/procedures/VersionsSection.svelte';
-	import type {
-		ExecutionRow,
-		IssueRow,
-		ProcedureDetail
-	} from '#lib/components/procedures/types.js';
+	import TemplateView from '#lib/components/procedures/TemplateView.svelte';
+	import type { ProcedureDetail } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -49,8 +27,10 @@
 		live = null;
 	});
 	const unpublished = $derived(live ? live.unpublished : p.unpublished_changes);
-	const opCount = $derived(live?.ops ?? p.steps.length);
-	const subCount = $derived(live?.steps ?? p.steps.reduce((n, s) => n + s.sub_steps.length, 0));
+	// Until the API carries it, the identifier falls back to a fixed word.
+	const templateNumber = $derived(
+		(p as ProcedureDetail & { template_number?: string }).template_number ?? 'TEMPLATE'
+	);
 
 	let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 	function draftChanged(counts: { ops: number; steps: number }) {
@@ -66,7 +46,6 @@
 			}
 		}, 300);
 	}
-	const showOutputs = $derived(p.procedure_type === 'build' || data.outputs.length > 0);
 
 	let publishing = $state(false);
 	let editing = $state(false);
@@ -107,203 +86,56 @@
 			toastError(e);
 		}
 	}
-
-	const execColumns: Column<ExecutionRow>[] = [
-		{ key: 'work_order_number', label: 'Work order', mono: true },
-		{ key: 'version_number', label: 'Version', width: '6rem', mono: true },
-		{ key: 'status', label: 'Status', width: '7rem' },
-		{ key: 'created_at', label: 'Cut', width: '10rem' }
-	];
-	const issueColumns: Column<IssueRow>[] = [
-		{ key: 'issue_number', label: 'Issue', width: '8rem', mono: true },
-		{ key: 'title', label: 'Title' },
-		{ key: 'priority', label: 'Priority', width: '6rem' },
-		{ key: 'ticket_state', label: 'State', width: '9rem' }
-	];
 </script>
 
-<PageHeader
-	title={p.name}
-	identifier={currentVersion ? `v${currentVersion.version_number}` : null}
-	crumbs={[{ label: 'Templates', href: '/procedures' }, { label: p.name }]}
->
-	{#snippet state()}<State value={p.status} badge={p.status !== 'active'} />{/snippet}
-	{#snippet actions()}
-		{#if startable}
-			<Button href={`/executions/new?procedure_id=${p.id}`}>START EXECUTION</Button>
-		{/if}
-		{#if unpublished !== false}
-			<Button onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button>
-		{/if}
-		{#if p.status === 'active'}
-			<Button variant="outline" onclick={() => setStatus('deprecated')}>DEPRECATE</Button>
-		{:else if p.status === 'deprecated'}
-			<Button variant="outline" onclick={() => setStatus('active')}>ACTIVATE</Button>
-		{/if}
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				{#snippet child({ props })}
-					<Button variant="outline" {...props} aria-label="More actions">MORE</Button>
-				{/snippet}
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="end" class="w-44">
-				<DropdownMenu.Item onSelect={() => (editing = true)}>Edit details</DropdownMenu.Item>
-				<DropdownMenu.Item onSelect={() => (cloning = true)}>Clone</DropdownMenu.Item>
-				<DropdownMenu.Separator />
-				<DropdownMenu.Item class="text-destructive" onSelect={remove}>Delete</DropdownMenu.Item>
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
-	{/snippet}
-</PageHeader>
-
-<div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-2">
-	<div class="grid min-w-0 grid-cols-1 gap-4">
-		<Section title="Details">
-			<DetailTable>
-				<DetailRow label="Type" value={p.procedure_type.toUpperCase()} mono />
-				<DetailRow label="Current version">
-					{#if currentVersion}
-						<a
-							href={`/procedures/versions/${currentVersion.id}`}
-							class="font-mono text-info hover:underline">v{currentVersion.version_number}</a
-						>
-					{:else}—{/if}
-				</DetailRow>
-				<DetailRow label="Draft">
-					{#if unpublished === null}
-						<span class="font-mono text-xs text-muted-foreground">NEVER PUBLISHED</span>
-					{:else if unpublished}
-						<span class="font-mono text-xs text-warn"
-							>CHANGED SINCE v{currentVersion?.version_number}</span
-						>
-					{:else}
-						<span class="font-mono text-xs text-muted-foreground"
-							>MATCHES v{currentVersion?.version_number}</span
-						>
-					{/if}
-				</DetailRow>
-				<DetailRow
-					label="Steps"
-					value={`${opCount + subCount} (${opCount} OP${opCount === 1 ? '' : 'S'})`}
-					mono
-				/>
-				<DetailRow label="Created"><Timestamp value={p.created_at} /></DetailRow>
-				<DetailRow label="Updated"><Timestamp value={p.updated_at} /></DetailRow>
-				<DetailRow label="Description">
-					{#if p.description}
-						<Prose source={p.description} />
-					{:else}—{/if}
-				</DetailRow>
-			</DetailTable>
-		</Section>
-	</div>
-
-	<div class="grid min-w-0 grid-cols-1 gap-4">
-		{#if data.executions.total === 0}
-			{#if startable}
-				<EmptyLine label="Executions">
-					{#snippet action()}
-						<a
-							href={`/executions/new?procedure_id=${p.id}`}
-							class="font-medium text-info hover:underline">+ START</a
-						>
-					{/snippet}
-				</EmptyLine>
-			{:else}
-				<EmptyLine label="Executions" />
-			{/if}
-		{:else}
-			<Section title="Executions" count={data.executions.total}>
-				{#snippet actions()}
-					{#if data.executions.total > data.executions.items.length}
-						<Button variant="ghost" size="xs" href={`/executions?procedure=${p.id}&status=all`}
-							>ALL →</Button
-						>
-					{/if}
-				{/snippet}
-				<DataTable
-					rows={data.executions.items}
-					columns={execColumns}
-					emptyLabel="Executions"
-					dense
-					key={(r) => r.id}
-					href={(r) => `/executions/${r.id}`}
-				>
-					{#snippet cell(r, col)}
-						{#if col.key === 'work_order_number'}
-							<a href={`/executions/${r.id}`} class="text-info hover:underline"
-								>{r.work_order_number ?? '—'}</a
-							>
-						{:else if col.key === 'version_number'}
-							v{r.version_number}
-						{:else if col.key === 'status'}
-							<State value={r.status} />
-						{:else if col.key === 'created_at'}
-							<Timestamp value={r.created_at} />
-						{/if}
-					{/snippet}
-				</DataTable>
-			</Section>
-		{/if}
-
-		<VersionsSection
-			procedureId={p.id}
-			versions={data.versions}
-			currentVersionId={p.current_version_id}
-		/>
-		<ReferenceDocs procedureId={p.id} docs={data.docs} onchange={reload} />
-	</div>
-</div>
-
-<div class="px-4 pb-4">
-	{#key `${p.id}:${p.updated_at}`}
-		<ProcedureEditor procedureId={p.id} onchange={draftChanged} />
-	{/key}
-</div>
-
-<div class="grid grid-cols-1 gap-4 px-4 pb-4">
-	<PartLines kind="kit" procedureId={p.id} lines={data.kit} onchange={reload} />
-	{#if showOutputs}
-		<PartLines kind="outputs" procedureId={p.id} lines={data.outputs} onchange={reload} />
-	{/if}
-	{#if data.issues.total === 0}
-		<EmptyLine label="Open issues" />
-	{:else}
-		<Section title="Open issues" count={data.issues.total}>
-			{#snippet actions()}
-				{#if data.issues.total > data.issues.items.length}
-					<Button variant="ghost" size="xs" href={`/issues?procedure=${p.id}&status=open`}
-						>ALL →</Button
+<!-- On wide screens the page is locked to the viewport: the header stays put; only the
+     document (or DETAILS) scrolls, between two fixed-height sidebars. -->
+<div class="flex min-w-0 flex-col lg:h-[calc(100svh-var(--shell-h))]">
+	<div class="shrink-0">
+		<PageHeader
+			title={p.name}
+			identifier={templateNumber}
+			crumbs={[{ label: 'Templates', href: '/procedures' }, { label: templateNumber }]}
+		>
+			{#snippet state()}
+				{#if currentVersion}
+					<span class="font-mono text-xs text-muted-foreground"
+						>v{currentVersion.version_number}</span
 					>
 				{/if}
+				<State value={p.status} badge={p.status !== 'active'} />
 			{/snippet}
-			<DataTable
-				rows={data.issues.items}
-				columns={issueColumns}
-				emptyLabel="Open issues"
-				dense
-				key={(r) => r.id}
-				href={(r) => `/issues/${r.id}`}
-			>
-				{#snippet cell(r, col)}
-					{#if col.key === 'issue_number'}
-						<a href={`/issues/${r.id}`} class="text-info hover:underline">{r.issue_number ?? '—'}</a
-						>
-					{:else if col.key === 'priority'}
-						<State value={r.priority} />
-					{:else if col.key === 'ticket_state'}
-						<State
-							value={r.ticket_state}
-							label={ticketLabel(r.ticket_state)}
-							tone={ticketTone(r.ticket_state)}
-						/>
-					{:else}
-						{(r as unknown as Record<string, unknown>)[col.key]}
-					{/if}
-				{/snippet}
-			</DataTable>
-		</Section>
-	{/if}
+			{#snippet actions()}
+				{#if startable}
+					<Button href={`/executions/new?procedure_id=${p.id}`}>START EXECUTION</Button>
+				{/if}
+				{#if unpublished !== false}
+					<Button onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button>
+				{/if}
+				{#if p.status === 'active'}
+					<Button variant="outline" onclick={() => setStatus('deprecated')}>DEPRECATE</Button>
+				{:else if p.status === 'deprecated'}
+					<Button variant="outline" onclick={() => setStatus('active')}>ACTIVATE</Button>
+				{/if}
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button variant="outline" {...props} aria-label="More actions">MORE</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end" class="w-44">
+						<DropdownMenu.Item onSelect={() => (editing = true)}>Edit details</DropdownMenu.Item>
+						<DropdownMenu.Item onSelect={() => (cloning = true)}>Clone</DropdownMenu.Item>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item class="text-destructive" onSelect={remove}>Delete</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			{/snippet}
+		</PageHeader>
+	</div>
+	{#key `${p.id}:${p.updated_at}`}
+		<TemplateView {data} {unpublished} {startable} onchange={draftChanged} onreload={reload} />
+	{/key}
 </div>
 
 <PublishDialog

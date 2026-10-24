@@ -3,7 +3,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { api } from '#lib/api.js';
 	import { PageHeader, toastError, ErrorBanner } from '#lib/components/opal/index.js';
@@ -54,7 +54,7 @@
 	</div>
 	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="description">Description (markdown)</Label>
-		<Textarea id="description" rows={6} bind:value={description} />
+		<MarkdownField id="description" bind:value={description} minRows={6} />
 	</div>
 	<div class="flex gap-2">
 		<Button type="submit" disabled={busy || !name.trim()}>CREATE</Button>

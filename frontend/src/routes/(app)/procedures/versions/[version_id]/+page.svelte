@@ -19,6 +19,9 @@
 	import { qty } from '#lib/format.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import SnapshotSteps from '#lib/components/procedures/SnapshotSteps.svelte';
+	import { OpGraph } from '#lib/components/op-graph/index.js';
+	import type { GraphEdge, GraphNode } from '#lib/components/op-graph/index.js';
+	import { groupOps } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -28,6 +31,23 @@
 	const others = $derived(data.versions.filter((x) => x.id !== v.id));
 	const showOutputs = $derived(v.procedure_type === 'build' || v.content.output_items.length > 0);
 	const startable = $derived(v.is_current && data.procedureStatus === 'active');
+
+	const topOps = $derived(groupOps(v.content.steps));
+	const graphNodes = $derived<GraphNode[]>(
+		[...topOps.ops, ...topOps.contingency].map((g) => ({
+			id: g.op.order,
+			number: g.op.step_number,
+			title: g.op.title,
+			kind: g.op.is_contingency ? 'contingency' : 'op'
+		}))
+	);
+	const graphEdges = $derived<GraphEdge[]>(
+		[...topOps.ops, ...topOps.contingency].flatMap((g) =>
+			(g.op.depends_on ?? [])
+				.filter((d) => graphNodes.some((n) => n.id === d))
+				.map((d) => ({ from: d, to: g.op.order, kind: 'dependency' as const }))
+		)
+	);
 
 	interface PartRow {
 		part_id: number;
@@ -122,6 +142,11 @@
 <div class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<SnapshotSteps steps={v.content.steps} />
+		{#if graphNodes.length > 1}
+			<Section title="Dependencies" count={graphEdges.length}>
+				<OpGraph nodes={graphNodes} edges={graphEdges} class="h-[360px] w-full" />
+			</Section>
+		{/if}
 	</div>
 	<div class="grid min-w-0 grid-cols-1 gap-4">
 		<Section title="Details">

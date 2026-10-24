@@ -16,11 +16,13 @@ from sqlalchemy import func
 from opal.config import get_active_project, get_active_settings
 from opal.core import issue_flow
 from opal.core.audit import get_model_dict, log_create, log_delete, log_update
+from opal.core.callouts import normalize_callouts
 from opal.core.designators import (
     generate_designator,
     generate_issue_number,
     generate_requirement_number,
     generate_risk_number,
+    generate_template_number,
 )
 from opal.core.execution_flow import (
     FlowError,
@@ -89,6 +91,20 @@ logger = logging.getLogger(__name__)
 
 # Create MCP server
 server = Server("opal")
+
+
+CALLOUTS_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "description": "Ordered CAUTION and INFO boxes on the step. On update, replaces the whole list.",
+    "items": {
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "enum": ["caution", "info"]},
+            "text": {"type": "string"},
+        },
+        "required": ["kind", "text"],
+    },
+}
 
 
 def get_db():
@@ -377,10 +393,7 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Role required for this step, e.g. QE (optional, informational badge)",
                     },
-                    "caution": {
-                        "type": "string",
-                        "description": "Safety warning text displayed in red during execution (optional)",
-                    },
+                    "callouts": CALLOUTS_SCHEMA,
                     "strict_sequence": {
                         "type": "boolean",
                         "default": False,
@@ -447,7 +460,7 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Update a step's title, instructions, is_contingency, "
                 "requires_signoff, signoffs, estimated_duration_minutes, required_role, "
-                "caution, or required_data_schema. Step_number, level, parent, "
+                "callouts, or required_data_schema. Step_number, level, parent, "
                 "and order are not editable here — use reorder_steps for ordering."
             ),
             inputSchema={
@@ -477,7 +490,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "estimated_duration_minutes": {"type": "integer", "minimum": 1},
                     "required_role": {"type": "string"},
-                    "caution": {"type": "string"},
+                    "callouts": CALLOUTS_SCHEMA,
                     "strict_sequence": {"type": "boolean"},
                     "required_data_schema": {"type": "object"},
                 },
@@ -1966,7 +1979,7 @@ async def list_tools() -> list[Tool]:
                                 "title": {"type": "string"},
                                 "instructions": {"type": "string"},
                                 "required_role": {"type": "string"},
-                                "caution": {"type": "string"},
+                                "callouts": CALLOUTS_SCHEMA,
                                 "requires_signoff": {"type": "boolean", "default": False},
                                 "signoffs": {
                                     "type": "array",
@@ -2809,6 +2822,7 @@ async def _create_procedure(db, args: dict) -> list[TextContent]:
         )
 
     procedure = MasterProcedure(
+        template_number=generate_template_number(db),
         name=args["name"],
         description=args.get("description"),
         procedure_type=procedure_type.value,
@@ -2922,7 +2936,7 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
         requires_signoff=bool(args.get("requires_signoff", False)),
         estimated_duration_minutes=args.get("estimated_duration_minutes"),
         required_role=args.get("required_role"),
-        caution=args.get("caution"),
+        callouts=normalize_callouts(args.get("callouts")),
         strict_sequence=args.get("strict_sequence", False),
     )
     if args.get("signoffs") is not None:
@@ -2958,7 +2972,7 @@ async def _add_procedure_step(db, args: dict) -> list[TextContent]:
                 "signoffs": effective_for(step, False),
                 "estimated_duration_minutes": step.estimated_duration_minutes,
                 "required_role": step.required_role,
-                "caution": step.caution,
+                "callouts": normalize_callouts(step.callouts),
                 "required_data_schema": step.required_data_schema,
             },
         }
@@ -4693,7 +4707,7 @@ def _serialize_step(step: ProcedureStep) -> dict:
         "signoffs": effective_for(step, bool(step.sub_steps)),
         "estimated_duration_minutes": step.estimated_duration_minutes,
         "required_role": step.required_role,
-        "caution": step.caution,
+        "callouts": normalize_callouts(step.callouts),
         "workcenter_id": step.workcenter_id,
     }
 
@@ -4903,8 +4917,8 @@ async def _update_step(db, args: dict) -> list[TextContent]:
         )
     except SignoffError as err:
         return json_response({"error": str(err)})
-    if "caution" in args:
-        step.caution = args["caution"]
+    if "callouts" in args:
+        step.callouts = normalize_callouts(args["callouts"])
     if "strict_sequence" in args:
         step.strict_sequence = bool(args["strict_sequence"])
     if "required_data_schema" in args:
@@ -5661,7 +5675,7 @@ async def _publish_version(db, args: dict) -> list[TextContent]:
             "signoffs": effective_for(step, step.id in snapshot_parent_ids),
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "required_role": step.required_role,
-            "caution": step.caution,
+            "callouts": normalize_callouts(step.callouts),
             "strict_sequence": step.strict_sequence,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
@@ -5771,6 +5785,7 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
 
     clone_name = args.get("new_name") or f"Copy of {source.name}"
     new_procedure = MasterProcedure(
+        template_number=generate_template_number(db),
         name=clone_name,
         description=source.description,
         procedure_type=source.procedure_type.value
@@ -5805,7 +5820,7 @@ async def _clone_procedure(db, args: dict) -> list[TextContent]:
             signoffs=copy.deepcopy(s.signoffs),
             estimated_duration_minutes=s.estimated_duration_minutes,
             required_role=s.required_role,
-            caution=s.caution,
+            callouts=copy.deepcopy(s.callouts),
             workcenter_id=s.workcenter_id,
         )
         db.add(new_step)
@@ -6226,6 +6241,7 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
             return json_response({"error": f"Output part {o['part_id']} not found"})
 
     procedure = MasterProcedure(
+        template_number=generate_template_number(db),
         name=args["name"],
         description=args.get("description"),
         procedure_type=procedure_type.value,
@@ -6247,7 +6263,7 @@ async def _build_procedure(db, args: dict) -> list[TextContent]:
             title=step["title"],
             instructions=step.get("instructions"),
             required_role=step.get("required_role"),
-            caution=step.get("caution"),
+            callouts=normalize_callouts(step.get("callouts")),
             strict_sequence=step.get("strict_sequence", False),
             requires_signoff=bool(step.get("requires_signoff", False)),
             estimated_duration_minutes=step.get("estimated_duration_minutes"),

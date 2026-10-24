@@ -4,6 +4,7 @@
 	import { markdown } from '#lib/markdown.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
 
@@ -65,7 +66,16 @@
 
 {#if editing}
 	<div class="grid grid-cols-1 gap-1.5 py-0.5">
-		{#if multiline}
+		{#if multiline && rich}
+			<div
+				role="presentation"
+				onkeydown={(e) => {
+					if (e.key === 'Escape') editing = false;
+				}}
+			>
+				<MarkdownField bind:value={draft} minRows={4} autofocus onsubmit={save} />
+			</div>
+		{:else if multiline}
 			<Textarea
 				bind:value={draft}
 				rows={4}

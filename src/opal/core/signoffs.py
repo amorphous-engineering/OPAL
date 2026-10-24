@@ -1,7 +1,9 @@
 """Sign-off definitions: the one definition of a step's effective sign-offs.
 
 A step (or OP) carries an ordered list of sign-off slots ``[{label, role}]``.
-It is complete when every slot is signed. Templates may store the list
+It is complete when every slot is signed. A slot's label is its position, never
+authored: the first slot is Primary buyoff, every later one Secondary buyoff (``slot_label``).
+The role (the gate) is the only authored part of a slot. Templates may store the list
 explicitly (``signoffs``) or leave it null, in which case it is derived from the
 legacy ``requires_signoff`` / ``required_role`` fields. Once a list is written,
 the legacy fields become derived from it (``derive_legacy``) so there is one
@@ -17,9 +19,7 @@ from opal.core.roles import UnknownRoleError, canonical_role_name
 
 PRIMARY_LABEL = "Primary buyoff"
 SECONDARY_LABEL = "Secondary buyoff"
-OP_LABEL = "Sign-off"
 
-MAX_LABEL = 100
 MAX_ROLE = 50
 
 
@@ -31,8 +31,18 @@ class UnknownSignoffRole(SignoffError, UnknownRoleError):
     """A sign-off slot names a role that does not exist (a 400, not a 422)."""
 
 
+def slot_label(index: int) -> str:
+    """The label of the slot at ``index``: Primary buyoff first, Secondary buyoff after."""
+    return PRIMARY_LABEL if index == 0 else SECONDARY_LABEL
+
+
 def _slot(label: str, role: str | None) -> dict[str, Any]:
     return {"label": label, "role": role}
+
+
+def relabel_signoffs(slots: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Slots with labels set by position (for reads and comparisons)."""
+    return [_slot(slot_label(i), s.get("role") or None) for i, s in enumerate(slots)]
 
 
 def default_signoffs(
@@ -40,7 +50,7 @@ def default_signoffs(
 ) -> list[dict[str, Any]]:
     """The list a step has when none is stored."""
     if has_children:
-        return [_slot(OP_LABEL, required_role)] if requires_signoff else []
+        return [_slot(PRIMARY_LABEL, required_role)] if requires_signoff else []
     slots = [_slot(PRIMARY_LABEL, required_role)]
     if requires_signoff:
         slots.append(_slot(SECONDARY_LABEL, None))
@@ -56,7 +66,7 @@ def effective_signoffs(step: Mapping[str, Any], has_children: bool) -> list[dict
       default primary slot);
     - null, leaf: Primary buyoff (role = required_role) plus Secondary buyoff
       when requires_signoff;
-    - null, OP with sub-steps: one Sign-off slot when requires_signoff, else none.
+    - null, OP with sub-steps: one Primary buyoff slot when requires_signoff, else none.
 
     A leaf step always has at least one slot; an OP with sub-steps may have none.
     """
@@ -72,14 +82,11 @@ def effective_signoffs(step: Mapping[str, Any], has_children: bool) -> list[dict
 
 
 def normalize_signoffs(raw: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Validate and clean a posted list: trimmed non-empty labels, roles or null."""
+    """Validate and clean a posted list: roles trimmed or null, labels by position.
+    A posted label is ignored."""
     out: list[dict[str, Any]] = []
-    for item in raw:
-        label = str(item.get("label") or "").strip()
-        if not label:
-            raise SignoffError("Sign-off label is required")
-        if len(label) > MAX_LABEL:
-            raise SignoffError(f"Sign-off label is longer than {MAX_LABEL} characters")
+    for i, item in enumerate(raw):
+        label = slot_label(i)
         role_raw = item.get("role")
         role = str(role_raw).strip() if role_raw is not None else ""
         if len(role) > MAX_ROLE:
@@ -107,7 +114,7 @@ def apply_legacy_to_explicit(
 ) -> list[dict[str, Any]]:
     """Carry a legacy write (requires_signoff / required_role) into an explicit list.
 
-    Keeps custom labels: turning requires_signoff on appends the default
+    Turning requires_signoff on appends the default
     trailing slot, turning it off drops every slot after the first (all of them
     for an OP); a role write lands on slot 0.
     """
@@ -115,7 +122,7 @@ def apply_legacy_to_explicit(
     if requires_signoff is not None:
         if has_children:
             if requires_signoff and not slots:
-                slots = [_slot(OP_LABEL, None)]
+                slots = [_slot(PRIMARY_LABEL, None)]
             elif not requires_signoff:
                 slots = []
         elif requires_signoff and len(slots) < 2:
@@ -129,14 +136,17 @@ def apply_legacy_to_explicit(
 
 def effective_for(step: Any, has_children: bool) -> list[dict[str, Any]]:
     """effective_signoffs for an object with the three template attributes
-    (a ProcedureStep row)."""
-    return effective_signoffs(
-        {
-            "signoffs": step.signoffs,
-            "requires_signoff": step.requires_signoff,
-            "required_role": step.required_role,
-        },
-        has_children,
+    (a ProcedureStep row). Labels come from position, so a master step stored
+    before labels were fixed reads as Primary buyoff / Secondary buyoff too."""
+    return relabel_signoffs(
+        effective_signoffs(
+            {
+                "signoffs": step.signoffs,
+                "requires_signoff": step.requires_signoff,
+                "required_role": step.required_role,
+            },
+            has_children,
+        )
     )
 
 

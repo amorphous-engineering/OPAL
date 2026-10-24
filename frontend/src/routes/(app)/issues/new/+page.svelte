@@ -4,7 +4,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
 		DetailRow,
@@ -99,16 +99,17 @@
 		}
 	}
 
-	function ctrlEnter(e: KeyboardEvent) {
-		if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-			(e.currentTarget as HTMLElement).closest('form')?.requestSubmit();
-		}
+	let formEl = $state<HTMLFormElement | null>(null);
+
+	function submitForm() {
+		formEl?.requestSubmit();
 	}
 </script>
 
 <PageHeader title="New issue" crumbs={[{ label: 'Issues', href: '/issues' }, { label: 'New' }]} />
 
 <form
+	bind:this={formEl}
 	class="grid max-w-5xl grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
 	onsubmit={submit}
 >
@@ -148,44 +149,44 @@
 
 		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="description">Description</Label>
-			<Textarea id="description" bind:value={description} rows={4} onkeydown={ctrlEnter} />
+			<MarkdownField id="description" bind:value={description} minRows={4} onsubmit={submitForm} />
 		</div>
 
 		{#if type === 'non_conformance'}
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="should-be">Should be</Label>
-					<Textarea id="should-be" bind:value={shouldBe} rows={3} onkeydown={ctrlEnter} />
+					<MarkdownField id="should-be" bind:value={shouldBe} minRows={3} onsubmit={submitForm} />
 				</div>
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="actual">Is</Label>
-					<Textarea id="actual" bind:value={actual} rows={3} onkeydown={ctrlEnter} />
+					<MarkdownField id="actual" bind:value={actual} minRows={3} onsubmit={submitForm} />
 				</div>
 			</div>
 		{:else if type === 'bug'}
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="steps">Steps to reproduce</Label>
-				<Textarea id="steps" bind:value={steps} rows={3} onkeydown={ctrlEnter} />
+				<MarkdownField id="steps" bind:value={steps} minRows={3} onsubmit={submitForm} />
 			</div>
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="expected">Expected behavior</Label>
-					<Textarea id="expected" bind:value={expected} rows={2} onkeydown={ctrlEnter} />
+					<MarkdownField id="expected" bind:value={expected} minRows={2} onsubmit={submitForm} />
 				</div>
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="actual-behavior">Actual behavior</Label>
-					<Textarea
+					<MarkdownField
 						id="actual-behavior"
 						bind:value={actualBehavior}
-						rows={2}
-						onkeydown={ctrlEnter}
+						minRows={2}
+						onsubmit={submitForm}
 					/>
 				</div>
 			</div>
 		{:else if type === 'improvement'}
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="benefit">Expected benefit</Label>
-				<Textarea id="benefit" bind:value={benefit} rows={2} onkeydown={ctrlEnter} />
+				<MarkdownField id="benefit" bind:value={benefit} minRows={2} onsubmit={submitForm} />
 			</div>
 		{/if}
 

@@ -15,6 +15,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { api, ApiError } from '#lib/api.js';
 	import { stateLabel } from '#lib/format.js';
@@ -383,12 +384,12 @@
 
 		<Section title="Description">
 			<div class="p-3">
-				<Textarea
+				<MarkdownField
 					id="pf-description"
-					aria-label="Description"
+					ariaLabel="Description"
 					bind:value={description}
 					placeholder="Markdown"
-					rows={4}
+					minRows={4}
 				/>
 			</div>
 		</Section>

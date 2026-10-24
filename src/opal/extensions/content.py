@@ -19,9 +19,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
+from opal.core.callouts import Callout, normalize_callouts
 from opal.extensions.registry import DiscoveredExtension
 
 logger = logging.getLogger("opal.extensions")
@@ -35,14 +36,29 @@ class ContentError(ValueError):
     """A content file is missing, unparseable, or does not match its schema."""
 
 
+def _legacy_caution(data: Any) -> Any:
+    """Convert a legacy ``caution`` string into a leading caution callout."""
+    if isinstance(data, dict) and "caution" in data:
+        data = dict(data)
+        caution = data.pop("caution")
+        if caution and "callouts" not in data:
+            data["callouts"] = [{"kind": "caution", "text": caution}]
+    return data
+
+
 class SubStepTemplate(BaseModel):
     """A sub-step — same fields as a step, without further nesting."""
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_caution(cls, data: Any) -> Any:
+        return _legacy_caution(data)
+
     title: str = Field(max_length=255)
     instructions: str | None = None
-    caution: str | None = None
+    callouts: list[Callout] = Field(default_factory=list)
     required_role: str | None = Field(default=None, max_length=50)
     requires_signoff: bool = False
     is_contingency: bool = False
@@ -54,9 +70,14 @@ class StepTemplate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_caution(cls, data: Any) -> Any:
+        return _legacy_caution(data)
+
     title: str = Field(max_length=255)
     instructions: str | None = None
-    caution: str | None = None
+    callouts: list[Callout] = Field(default_factory=list)
     required_role: str | None = Field(default=None, max_length=50)
     requires_signoff: bool = False
     is_contingency: bool = False
@@ -222,6 +243,7 @@ def import_procedure(
     the operator's decision, made through the normal procedure UI.
     """
     from opal.core.audit import log_create
+    from opal.core.designators import generate_template_number
     from opal.db.models.procedure import (
         MasterProcedure,
         ProcedureStatus,
@@ -232,6 +254,7 @@ def import_procedure(
     template = _pick(load_content(ext).procedures, key, "procedure")
 
     procedure = MasterProcedure(
+        template_number=generate_template_number(db),
         name=template.name,
         description=template.description,
         procedure_type=ProcedureType(template.type),
@@ -249,7 +272,7 @@ def import_procedure(
             level=0,
             title=step.title,
             instructions=step.instructions,
-            caution=step.caution,
+            callouts=normalize_callouts(step.callouts),
             required_role=step.required_role,
             requires_signoff=step.requires_signoff,
             is_contingency=step.is_contingency,
@@ -270,7 +293,7 @@ def import_procedure(
                     level=1,
                     title=sub.title,
                     instructions=sub.instructions,
-                    caution=sub.caution,
+                    callouts=normalize_callouts(sub.callouts),
                     required_role=sub.required_role,
                     requires_signoff=sub.requires_signoff,
                     is_contingency=sub.is_contingency,

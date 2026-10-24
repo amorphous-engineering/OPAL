@@ -16,8 +16,15 @@
 	let {
 		procedureId,
 		docs,
-		onchange
-	}: { procedureId: number; docs: RefDoc[]; onchange: () => void | Promise<void> } = $props();
+		onchange,
+		compact = false
+	}: {
+		procedureId: number;
+		docs: RefDoc[];
+		onchange: () => void | Promise<void>;
+		/** A narrow column: one line per file instead of a table. */
+		compact?: boolean;
+	} = $props();
 
 	let input: HTMLInputElement | undefined = $state();
 	let busy = $state(false);
@@ -90,29 +97,54 @@
 				>+ UPLOAD</Button
 			>
 		{/snippet}
-		<DataTable rows={docs} {columns} emptyLabel="Reference documents" dense key={(d) => d.id}>
-			{#snippet cell(d, col)}
-				{#if col.key === 'original_filename'}
-					<a
-						href={`/api/attachments/${d.id}/download`}
-						target="_blank"
-						rel="noreferrer"
-						class="text-info hover:underline">{d.original_filename}</a
+		{#if compact}
+			<ul class="m-0 list-none p-0">
+				{#each docs as d (d.id)}
+					<li
+						class="flex items-center gap-2 border-b border-border px-3 py-1 text-xs last:border-b-0"
 					>
-				{:else if col.key === 'size_bytes'}
-					{size(d.size_bytes)}
-				{:else if col.key === 'created_at'}
-					<Timestamp value={d.created_at} />
-				{:else if col.key === 'actions'}
-					<button
-						type="button"
-						class="font-mono text-xs text-muted-foreground hover:text-error"
-						onclick={() => remove(d)}>DELETE</button
-					>
-				{:else}
-					{(d as unknown as Record<string, unknown>)[col.key]}
-				{/if}
-			{/snippet}
-		</DataTable>
+						<a
+							href={`/api/attachments/${d.id}/download`}
+							target="_blank"
+							rel="noreferrer"
+							class="min-w-0 flex-1 truncate font-mono text-info hover:underline"
+							title={d.original_filename}>{d.original_filename}</a
+						>
+						<span class="font-mono text-muted-foreground">{size(d.size_bytes)}</span>
+						<button
+							type="button"
+							class="font-mono text-muted-foreground hover:text-error"
+							aria-label={`Delete ${d.original_filename}`}
+							onclick={() => remove(d)}>×</button
+						>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<DataTable rows={docs} {columns} emptyLabel="Reference documents" dense key={(d) => d.id}>
+				{#snippet cell(d, col)}
+					{#if col.key === 'original_filename'}
+						<a
+							href={`/api/attachments/${d.id}/download`}
+							target="_blank"
+							rel="noreferrer"
+							class="text-info hover:underline">{d.original_filename}</a
+						>
+					{:else if col.key === 'size_bytes'}
+						{size(d.size_bytes)}
+					{:else if col.key === 'created_at'}
+						<Timestamp value={d.created_at} />
+					{:else if col.key === 'actions'}
+						<button
+							type="button"
+							class="font-mono text-xs text-muted-foreground hover:text-error"
+							onclick={() => remove(d)}>DELETE</button
+						>
+					{:else}
+						{(d as unknown as Record<string, unknown>)[col.key]}
+					{/if}
+				{/snippet}
+			</DataTable>
+		{/if}
 	</Section>
 {/if}

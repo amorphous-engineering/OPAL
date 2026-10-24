@@ -28,6 +28,13 @@ class ProcedureType(str, Enum):
 class MasterProcedure(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     """Master procedure template."""
 
+    template_number: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="Human-readable number, e.g. T-0042. System-unique, never reused.",
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     procedure_type: Mapped[ProcedureType] = mapped_column(
@@ -119,10 +126,10 @@ class ProcedureStep(Base, IdMixin, TimestampMixin):
         nullable=True,
         comment="Role required for this step (informational badge, does not gate execution)",
     )
-    caution: Mapped[str | None] = mapped_column(
-        Text,
+    callouts: Mapped[list[dict[str, str]] | None] = mapped_column(
+        JSON,
         nullable=True,
-        comment="Safety warning displayed prominently during editing and execution",
+        comment="[{kind: caution|info, text}] boxes shown with the step; NULL = none",
     )
     strict_sequence: Mapped[bool] = mapped_column(
         default=False,

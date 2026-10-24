@@ -30,7 +30,7 @@
 		is_contingency: 'contingency',
 		estimated_duration_minutes: 'duration (min)',
 		required_role: 'role',
-		caution: 'caution',
+		callouts: 'callouts',
 		required_data_schema: 'data fields',
 		requires_signoff: 'signoff',
 		signoffs: 'sign-offs',
@@ -65,6 +65,13 @@
 			.join(', ');
 	}
 
+	function calloutList(v: unknown): string {
+		if (!Array.isArray(v) || v.length === 0) return 'none';
+		return v
+			.map((x: { kind: string; text: string }) => `${x.kind.toUpperCase()}: ${x.text}`)
+			.join(' | ');
+	}
+
 	/** The sign-off list is the one home of sign-off and role; those derived fields stay quiet. */
 	function shownFields(r: StepDiff): string[] {
 		if (!r.changed_fields.includes('signoffs')) return r.changed_fields;
@@ -74,6 +81,7 @@
 	function describe(field: string, ch: { a: unknown; b: unknown }): string {
 		const label = FIELD_LABELS[field] ?? field;
 		if (field === 'signoffs') return `${label}: ${signoffList(ch.a)} → ${signoffList(ch.b)}`;
+		if (field === 'callouts') return `${label}: ${calloutList(ch.a)} → ${calloutList(ch.b)}`;
 		const simple = (v: unknown) =>
 			v === null ||
 			v === undefined ||

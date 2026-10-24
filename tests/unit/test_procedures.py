@@ -672,7 +672,7 @@ def test_photo_field_round_trips_through_publish(client):
 
 
 def test_step_safety_fields_round_trip(client):
-    """required_role and caution persist through create, update, and detail."""
+    """required_role and callouts persist through create, update, and detail."""
     proc_id = client.post("/api/procedures", json={"name": "Safety Fields"}).json()["id"]
 
     step = client.post(
@@ -680,42 +680,46 @@ def test_step_safety_fields_round_trip(client):
         json={
             "title": "Pressurize",
             "required_role": "QE",
-            "caution": "High voltage present",
+            "callouts": [{"kind": "caution", "text": "High voltage present"}],
         },
     ).json()
     assert step["required_role"] == "QE"
-    assert step["caution"] == "High voltage present"
+    assert step["callouts"] == [{"kind": "caution", "text": "High voltage present"}]
 
     # Update both fields
     r = client.patch(
         f"/api/procedures/{proc_id}/steps/{step['id']}",
-        json={"required_role": "MFG-LEAD", "caution": "Pinch hazard"},
+        json={"required_role": "MFG-LEAD", "callouts": [{"kind": "info", "text": "Pinch hazard"}]},
     )
     assert r.status_code == 200
     assert r.json()["required_role"] == "MFG-LEAD"
-    assert r.json()["caution"] == "Pinch hazard"
+    assert r.json()["callouts"] == [{"kind": "info", "text": "Pinch hazard"}]
 
     # Round-trip via the procedure detail
     top = client.get(f"/api/procedures/{proc_id}").json()["steps"]
     assert top[0]["required_role"] == "MFG-LEAD"
-    assert top[0]["caution"] == "Pinch hazard"
+    assert top[0]["callouts"] == [{"kind": "info", "text": "Pinch hazard"}]
 
     # Explicit null clears; omitted field is untouched
     r = client.patch(
         f"/api/procedures/{proc_id}/steps/{step['id']}",
-        json={"caution": None},
+        json={"callouts": []},
     )
     assert r.status_code == 200
-    assert r.json()["caution"] is None
+    assert r.json()["callouts"] == []
     assert r.json()["required_role"] == "MFG-LEAD"
 
 
 def test_publish_snapshots_safety_fields(client):
-    """Published version content includes required_role and caution per step."""
+    """Published version content includes required_role and callouts per step."""
     proc_id = client.post("/api/procedures", json={"name": "Safety Snapshot"}).json()["id"]
     client.post(
         f"/api/procedures/{proc_id}/steps",
-        json={"title": "Hot work", "required_role": "QE", "caution": "Hot surfaces"},
+        json={
+            "title": "Hot work",
+            "required_role": "QE",
+            "callouts": [{"kind": "caution", "text": "Hot surfaces"}],
+        },
     )
     client.post(f"/api/procedures/{proc_id}/steps", json={"title": "No safety fields"})
 
@@ -723,9 +727,9 @@ def test_publish_snapshots_safety_fields(client):
     version = client.get(f"/api/procedures/versions/{publish['id']}").json()
     steps = version["content"]["steps"]
     assert steps[0]["required_role"] == "QE"
-    assert steps[0]["caution"] == "Hot surfaces"
+    assert steps[0]["callouts"] == [{"kind": "caution", "text": "Hot surfaces"}]
     assert steps[1]["required_role"] is None
-    assert steps[1]["caution"] is None
+    assert steps[1]["callouts"] == []
 
 
 def test_add_step_image_upload(client):
@@ -991,11 +995,16 @@ def test_version_detail_carries_effective_signoffs(client):
     step = client.post(f"/api/procedures/{pid}/steps", json={"title": "Run"}).json()
     client.patch(
         f"/api/procedures/{pid}/steps/{step['id']}",
-        json={"signoffs": [{"label": "Primary", "role": "QE"}, {"label": "Second", "role": None}]},
+        json={
+            "signoffs": [
+                {"label": "Primary buyoff", "role": "QE"},
+                {"label": "Second", "role": None},
+            ]
+        },
     )
     v = client.post(f"/api/procedures/{pid}/publish").json()
     steps = client.get(f"/api/procedures/versions/{v['id']}").json()["content"]["steps"]
     assert steps[0]["signoffs"] == [
-        {"label": "Primary", "role": "QE"},
-        {"label": "Second", "role": None},
+        {"label": "Primary buyoff", "role": "QE"},
+        {"label": "Secondary buyoff", "role": None},
     ]

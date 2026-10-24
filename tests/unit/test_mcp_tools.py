@@ -316,7 +316,10 @@ def test_build_procedure_full(db_session):
                     "title": "Prep",
                     "instructions": "Get parts",
                     "required_role": "QE",
-                    "caution": "High voltage",
+                    "callouts": [
+                        {"kind": "caution", "text": "High voltage"},
+                        {"kind": "info", "text": "Use the grounded bench"},
+                    ],
                     "requires_signoff": True,
                     "workcenter_id": wc.id,
                     "step_kits": [
@@ -347,7 +350,10 @@ def test_build_procedure_full(db_session):
     assert [s.step_number for s in steps] == ["1", "2"]
     assert all(s.level == 0 for s in steps)
     assert steps[0].required_role == "QE"
-    assert steps[0].caution == "High voltage"
+    assert steps[0].callouts == [
+        {"kind": "caution", "text": "High voltage"},
+        {"kind": "info", "text": "Use the grounded bench"},
+    ]
     assert steps[0].workcenter_id == wc.id
 
     sks = db_session.query(StepKit).filter(StepKit.step_id == steps[0].id).all()

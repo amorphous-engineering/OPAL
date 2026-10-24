@@ -24,13 +24,6 @@
 		['photo', 'PHOTO']
 	] as const;
 
-	const slug = (s: string) =>
-		s
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, '_')
-			.replace(/^_+|_+$/g, '');
-	const taken = (name: string) => fields.some((x, i) => i !== index && x.name === name);
-
 	function save(next: DocField[]) {
 		au.edit(step, { data_schema: { ...(step.data_schema ?? {}), fields: next } });
 	}
@@ -47,25 +40,8 @@
 		save(next);
 	}
 
-	function setLabel(label: string) {
-		// The name follows the label until the author sets it by hand.
-		const linked = !f.name || f.name === slug(f.label ?? '') || /^field_\d+$/.test(f.name);
-		let name = f.name;
-		if (linked) {
-			let base = slug(label) || f.name;
-			let n = 2;
-			let candidate = base;
-			while (taken(candidate)) candidate = `${base}_${n++}`;
-			name = candidate;
-		}
-		patch({ label, name });
-	}
-
-	function setName(raw: string) {
-		const name = slug(raw);
-		if (!name || taken(name)) return;
-		patch({ name });
-	}
+	// The key (f.name) is fixed when the field is added; the label is free text.
+	const setLabel = (label: string) => patch({ label });
 
 	function setNumber(key: 'min' | 'max', raw: string) {
 		if (raw === '') patch({}, [key]);
@@ -94,7 +70,6 @@
 	}
 
 	const stop = (e: KeyboardEvent) => e.stopPropagation();
-	const dup = $derived(f ? taken(f.name) : false);
 </script>
 
 {#if f}
@@ -122,18 +97,10 @@
 			</NativeSelect>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
-			<Input
-				class="h-7 w-32 font-mono"
-				aria-label="Name"
-				aria-invalid={dup}
-				title="Key under which the value is recorded"
-				value={f.name}
-				onkeydown={stop}
-				onchange={(e) => {
-					setName(e.currentTarget.value);
-					e.currentTarget.value = f.name;
-				}}
-			/>
+			<span
+				class="w-32 truncate font-mono text-xs text-muted-foreground"
+				title="Key under which the value is recorded">{f.name}</span
+			>
 			{#if f.type === 'number' || f.type === 'text'}
 				<Input
 					class="h-7 w-16 font-mono"
@@ -211,6 +178,5 @@
 					})}
 			/>
 		{/if}
-		{#if dup}<p class="text-xs text-error">Name already used by another field</p>{/if}
 	</div>
 {/if}

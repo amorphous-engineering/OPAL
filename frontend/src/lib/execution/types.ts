@@ -99,7 +99,7 @@ export interface InstanceFacts {
 	status: InstanceStatus;
 	active: boolean;
 	priority: number;
-	procedure: { id: number; name: string; type: string };
+	procedure: { id: number; template_number: string; name: string; type: string };
 	version: {
 		id: number;
 		number: number | null;
@@ -163,6 +163,7 @@ export interface OverviewRow {
 	id: number;
 	work_order_number: string | null;
 	procedure_id: number;
+	procedure_template_number: string;
 	procedure_name: string;
 	version_number: number;
 	status: InstanceStatus;
@@ -205,6 +206,7 @@ export interface PreviewPart {
 
 export interface CutPreview {
 	procedure_id: number;
+	procedure_template_number: string;
 	procedure_name: string;
 	procedure_type: string;
 	versions: { id: number; number: number; created_at: string; is_current: boolean }[];

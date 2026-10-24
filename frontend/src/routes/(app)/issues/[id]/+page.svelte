@@ -4,6 +4,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
@@ -491,12 +492,14 @@
 							</NativeSelect>
 						</DetailRow>
 						<DetailRow label="Rationale">
-							<Textarea
-								bind:value={dispRationale}
-								rows={3}
-								aria-label="Disposition rationale"
-								onblur={saveDraft}
-							/>
+							<div
+								role="presentation"
+								onfocusout={(e) => {
+									if (!e.currentTarget.contains(e.relatedTarget as Node | null)) saveDraft();
+								}}
+							>
+								<MarkdownField bind:value={dispRationale} ariaLabel="Rationale" minRows={3} />
+							</div>
 						</DetailRow>
 						<DetailRow label="Signature">
 							<Button
@@ -549,17 +552,7 @@
 				}}
 			>
 				<Label for="comment">Comment</Label>
-				<Textarea
-					id="comment"
-					bind:value={comment}
-					rows={3}
-					onkeydown={(e) => {
-						if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-							e.preventDefault();
-							postComment();
-						}
-					}}
-				/>
+				<MarkdownField id="comment" bind:value={comment} minRows={3} onsubmit={postComment} />
 				<div>
 					<Button type="submit" size="sm" disabled={commentBusy || !comment.trim()}>POST</Button>
 				</div>

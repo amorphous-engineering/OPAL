@@ -2,6 +2,7 @@
 	// Printable traveler: the published snapshot with write-in lines for the floor.
 	import { page } from '$app/state';
 	import { datetime, qty } from '#lib/format.js';
+	import { calloutsOf } from '#lib/components/procedure-doc/index.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import { groupOps, type DataField, type SnapshotStep } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
@@ -55,9 +56,17 @@
 {/snippet}
 
 {#snippet body(s: SnapshotStep)}
-	{#if s.caution}
-		<p class="my-1 border-2 border-black px-2 py-1 text-[10pt]"><b>CAUTION</b> {s.caution}</p>
-	{/if}
+	{#each calloutsOf(s) as c, i (i)}
+		<p
+			class={[
+				'my-1 border-black px-2 py-1 text-[10pt]',
+				c.kind === 'caution' ? 'border-2' : 'border'
+			]}
+		>
+			<b>{c.kind === 'caution' ? 'CAUTION' : 'INFO'}</b>
+			{c.text}
+		</p>
+	{/each}
 	{#if s.instructions}
 		<Prose source={s.instructions} class="my-1 text-[10pt]" />
 	{/if}

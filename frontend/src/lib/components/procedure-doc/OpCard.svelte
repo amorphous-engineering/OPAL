@@ -6,7 +6,7 @@
 	import { markdown } from '#lib/markdown.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
-	import CautionBlock from './CautionBlock.svelte';
+	import CalloutList from './CalloutList.svelte';
 	import CursorChips from './CursorChips.svelte';
 	import OpClaim from './OpClaim.svelte';
 	import StepBody from './StepBody.svelte';
@@ -16,7 +16,8 @@
 	import SignoffTable from './SignoffTable.svelte';
 	import SignoffEditor from './author/SignoffEditor.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
-	import CautionEditor from './author/CautionEditor.svelte';
+	import CalloutAdd from './author/CalloutAdd.svelte';
+	import CalloutsEditor from './author/CalloutsEditor.svelte';
 	import MarkdownEditor from './author/MarkdownEditor.svelte';
 	import RowTools from './author/RowTools.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
@@ -215,20 +216,22 @@
 		{:else}
 			{#if au}
 				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
-					<div class="-mb-1 flex min-h-4 justify-end"><SaveBadge step={op.step} /></div>
-					<CautionEditor step={op.step} />
 					<MarkdownEditor
 						id={`instr-${op.order}`}
 						label="Instructions"
 						value={op.instructions}
 						onchange={(v) => au.edit(op.step, { instructions: v })}
-					/>
+					>
+						{#snippet actions()}<CalloutAdd step={op.step} />{/snippet}
+						{#snippet badge()}<SaveBadge step={op.step} />{/snippet}
+						{#snippet between()}<CalloutsEditor step={op.step} />{/snippet}
+					</MarkdownEditor>
 					<SignoffEditor step={op.step} {op} />
 					<StepProps step={op.step} {op} isOp={true} />
 				</div>
-			{:else if op.caution || op.instructions}
+			{:else if op.callouts?.length || op.instructions}
 				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
-					<CautionBlock text={op.caution} />
+					<CalloutList callouts={op.callouts ?? []} />
 					{#if op.instructions}
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
 						<div class="prose-opal max-w-3xl">{@html markdown(op.instructions)}</div>

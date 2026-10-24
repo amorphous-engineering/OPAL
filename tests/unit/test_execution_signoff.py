@@ -35,7 +35,7 @@ def test_effective_signoffs_defaults():
     # OP with sub-steps: one slot only when flagged.
     assert effective_signoffs({"required_role": "QE"}, True) == []
     assert effective_signoffs({"requires_signoff": True, "required_role": "QE"}, True) == [
-        {"label": "Sign-off", "role": "QE"}
+        {"label": "Primary buyoff", "role": "QE"}
     ]
 
 
@@ -127,7 +127,7 @@ THREE = {
 def test_signoffs_write_derives_legacy_fields(client):
     proc_id = client.post("/api/procedures", json={"name": "T"}).json()["id"]
     step = client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Leaf", **THREE}).json()
-    assert [s["label"] for s in step["signoffs"]] == ["Technician", "Engineer", "Quality"]
+    assert [s["label"] for s in step["signoffs"]] == ["Primary buyoff", "Secondary buyoff", "Secondary buyoff"]
     assert step["requires_signoff"] is True  # more than one slot
     assert step["required_role"] == "Technician"  # slot 0 role
 
@@ -165,21 +165,26 @@ def test_legacy_writes_still_work_and_carry_into_explicit_list(client):
     after = client.patch(
         f"/api/procedures/{proc_id}/steps/{step['id']}", json={"required_role": "Lead"}
     ).json()
-    assert after["signoffs"][0] == {"label": "A", "role": "Lead"}
-    assert after["signoffs"][1]["label"] == "B"
+    assert after["signoffs"][0] == {"label": "Primary buyoff", "role": "Lead"}
+    assert after["signoffs"][1]["label"] == "Secondary buyoff"
     off = client.patch(
         f"/api/procedures/{proc_id}/steps/{step['id']}", json={"requires_signoff": False}
     ).json()
-    assert [s["label"] for s in off["signoffs"]] == ["A"]
+    assert [s["label"] for s in off["signoffs"]] == ["Primary buyoff"]
 
 
-def test_blank_signoff_label_is_rejected(client):
+def test_posted_signoff_labels_are_ignored(client):
+    """Labels come from position: the first slot is Primary, later ones Secondary."""
     proc_id = client.post("/api/procedures", json={"name": "T"}).json()["id"]
     r = client.post(
         f"/api/procedures/{proc_id}/steps",
-        json={"title": "Leaf", "signoffs": [{"label": "   ", "role": None}]},
+        json={
+            "title": "Leaf",
+            "signoffs": [{"label": "   ", "role": None}, {"label": "Custom", "role": None}],
+        },
     )
-    assert r.status_code == 422
+    assert r.status_code == 201
+    assert [s["label"] for s in r.json()["signoffs"]] == ["Primary buyoff", "Secondary buyoff"]
 
 
 def test_draft_publish_clone_and_diff_carry_signoffs(client):
@@ -187,20 +192,20 @@ def test_draft_publish_clone_and_diff_carry_signoffs(client):
     client.post(f"/api/procedures/{proc_id}/steps", json={"title": "Leaf", **THREE})
     draft = client.get(f"/api/procedures/{proc_id}/draft").json()
     assert [s["label"] for s in draft["steps"][0]["signoffs"]] == [
-        "Technician",
-        "Engineer",
-        "Quality",
+        "Primary buyoff",
+        "Secondary buyoff",
+        "Secondary buyoff",
     ]
 
     v1 = client.post(f"/api/procedures/{proc_id}/publish").json()
     version = client.get(f"/api/procedures/versions/{v1['id']}").json()
     snap = version["content"]["steps"][0]
-    assert [s["label"] for s in snap["signoffs"]] == ["Technician", "Engineer", "Quality"]
+    assert [s["label"] for s in snap["signoffs"]] == ["Primary buyoff", "Secondary buyoff", "Secondary buyoff"]
 
     # Clone keeps the list.
     step_id = draft["steps"][0]["id"]
     dup = client.post(f"/api/procedures/{proc_id}/steps/{step_id}/duplicate").json()
-    assert [s["label"] for s in dup["signoffs"]] == ["Technician", "Engineer", "Quality"]
+    assert [s["label"] for s in dup["signoffs"]] == ["Primary buyoff", "Secondary buyoff", "Secondary buyoff"]
 
     # Editing the list is a change between versions.
     client.patch(

@@ -1,10 +1,10 @@
 <script lang="ts">
-	// Everything about one step, in reading order: holds and context, caution,
+	// Everything about one step, in reading order: holds and context, callouts,
 	// instructions, reference images, parts, data capture, execution notes, sign-offs.
 	import { markdown } from '#lib/markdown.js';
 	import { stateLabel } from '#lib/format.js';
 	import { useDoc } from './controller.js';
-	import CautionBlock from './CautionBlock.svelte';
+	import CalloutList from './CalloutList.svelte';
 	import StepImages from './StepImages.svelte';
 	import StepKit from './StepKit.svelte';
 	import CaptureFields from './CaptureFields.svelte';
@@ -12,7 +12,8 @@
 	import ExecutionNotes from './ExecutionNotes.svelte';
 	import SignoffTable from './SignoffTable.svelte';
 	import SignoffEditor from './author/SignoffEditor.svelte';
-	import CautionEditor from './author/CautionEditor.svelte';
+	import CalloutAdd from './author/CalloutAdd.svelte';
+	import CalloutsEditor from './author/CalloutsEditor.svelte';
 	import MarkdownEditor from './author/MarkdownEditor.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
 	import StepProps from './author/StepProps.svelte';
@@ -44,16 +45,18 @@
 	{/if}
 
 	{#if authoring}
-		<div class="-mb-1 flex min-h-4 justify-end"><SaveBadge {step} /></div>
-		<CautionEditor {step} />
 		<MarkdownEditor
 			id={`instr-${step.order}`}
 			label="Instructions"
 			value={step.instructions}
 			onchange={(v) => ctl.author?.edit(step, { instructions: v })}
-		/>
+		>
+			{#snippet actions()}<CalloutAdd {step} />{/snippet}
+			{#snippet badge()}<SaveBadge {step} />{/snippet}
+			{#snippet between()}<CalloutsEditor {step} />{/snippet}
+		</MarkdownEditor>
 	{:else}
-		<CautionBlock text={step.caution} />
+		<CalloutList callouts={step.callouts ?? []} />
 
 		{#if step.instructions}
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->

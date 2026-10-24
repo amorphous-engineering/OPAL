@@ -217,7 +217,7 @@ def test_duplicate_substep(client, proc):
         f"/api/procedures/{proc}/steps/{a['id']}",
         json={
             "required_data_schema": {"fields": [{"name": "t", "type": "number"}]},
-            "caution": "hot",
+            "callouts": [{"kind": "caution", "text": "hot"}],
         },
     )
     r = client.post(f"/api/procedures/{proc}/steps/{a['id']}/duplicate")
@@ -225,7 +225,11 @@ def test_duplicate_substep(client, proc):
     steps = draft(client, proc)
     assert [s["step_number"] for s in steps] == ["1", "1.1", "1.2", "1.3", "2", "2.1"]
     copy = steps[2]
-    assert copy["id"] != a["id"] and copy["title"] == "a" and copy["caution"] == "hot"
+    assert (
+        copy["id"] != a["id"]
+        and copy["title"] == "a"
+        and copy["callouts"] == [{"kind": "caution", "text": "hot"}]
+    )
     assert copy["step_kit"][0]["usage_type"] == "tooling"
     assert copy["required_data_schema"]["fields"][0]["name"] == "t"
 
@@ -319,3 +323,105 @@ def test_edits_make_unpublished_changes(client, proc):
     s = draft(client, proc)[1]
     client.patch(f"/api/procedures/{proc}/steps/{s['id']}", json={"title": "changed"})
     assert client.get(f"/api/procedures/{proc}").json()["unpublished_changes"] is True
+
+
+# ============ callouts ============
+
+MIXED = [
+    {"kind": "info", "text": "Torque in N.m."},
+    {"kind": "caution", "text": "Wear gloves."},
+    {"kind": "info", "text": "Second note."},
+]
+
+
+def callouts_of(client, pid, title):
+    return next(s["callouts"] for s in draft(client, pid) if s["title"] == title)
+
+
+def test_callouts_default_to_empty_list(client, proc):
+    add(client, proc, "plain")
+    assert callouts_of(client, proc, "plain") == []
+
+
+def test_multiple_callouts_round_trip_in_author_order(client, proc):
+    step = add(client, proc, "mixed", callouts=MIXED)
+    assert step["callouts"] == MIXED
+    assert callouts_of(client, proc, "mixed") == MIXED
+
+
+def test_patch_callouts_replaces_the_list(client, proc):
+    step = add(client, proc, "s", callouts=MIXED)
+    r = client.patch(
+        f"/api/procedures/{proc}/steps/{step['id']}",
+        json={"callouts": [{"kind": "info", "text": "only"}]},
+    )
+    assert r.status_code == 200, r.text
+    assert callouts_of(client, proc, "s") == [{"kind": "info", "text": "only"}]
+    # Absent key leaves the list alone.
+    client.patch(f"/api/procedures/{proc}/steps/{step['id']}", json={"title": "s"})
+    assert callouts_of(client, proc, "s") == [{"kind": "info", "text": "only"}]
+    client.patch(f"/api/procedures/{proc}/steps/{step['id']}", json={"callouts": []})
+    assert callouts_of(client, proc, "s") == []
+
+
+def test_empty_callout_text_is_dropped_and_text_stripped(client, proc):
+    step = add(
+        client,
+        proc,
+        "s",
+        callouts=[
+            {"kind": "caution", "text": "  "},
+            {"kind": "info", "text": "  keep  "},
+        ],
+    )
+    assert step["callouts"] == [{"kind": "info", "text": "keep"}]
+
+
+def test_unknown_callout_kind_is_refused(client, proc):
+    r = client.post(
+        f"/api/procedures/{proc}/steps",
+        json={"title": "s", "callouts": [{"kind": "danger", "text": "x"}]},
+    )
+    assert r.status_code == 422
+
+
+def test_snapshot_writes_callouts_and_restore_keeps_them(client, proc):
+    add(client, proc, "s", callouts=MIXED)
+    assert client.post(f"/api/procedures/{proc}/publish").status_code in (200, 201)
+    versions = client.get(f"/api/procedures/{proc}/versions").json()
+    detail = client.get(f"/api/procedures/versions/{versions[0]['id']}").json()
+    step = detail["content"]["steps"][0]
+    assert step["callouts"] == MIXED
+    assert "caution" not in step
+
+
+def test_diff_reads_legacy_caution_as_callout(client, proc, db_session):
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from opal.db.models.procedure import ProcedureVersion
+
+    step = add(client, proc, "s", callouts=[{"kind": "caution", "text": "HOT"}])
+    client.post(f"/api/procedures/{proc}/publish")
+    client.patch(
+        f"/api/procedures/{proc}/steps/{step['id']}",
+        json={"callouts": [{"kind": "caution", "text": "HOT"}, {"kind": "info", "text": "n"}]},
+    )
+    client.post(f"/api/procedures/{proc}/publish")
+    v1, v2 = db_session.query(ProcedureVersion).order_by(ProcedureVersion.version_number).all()
+    v1.content = {
+        **v1.content,
+        "steps": [
+            {**{k: v for k, v in s.items() if k != "callouts"}, "caution": "HOT"}
+            for s in v1.content["steps"]
+        ],
+    }
+    flag_modified(v1, "content")
+    db_session.flush()
+    r = client.get(f"/api/procedures/{proc}/versions/{v1.id}/diff/{v2.id}")
+    assert r.status_code == 200, r.text
+    (sd,) = [s for s in r.json()["steps"] if s["status"] != "unchanged"]
+    assert sd["changed_fields"] == ["callouts"]
+    assert sd["changes"]["callouts"]["a"] == [{"kind": "caution", "text": "HOT"}]
+    # Identical content in legacy shape compares unchanged.
+    r = client.get(f"/api/procedures/{proc}/versions/{v1.id}/diff/{v1.id}")
+    assert r.json()["modified"] == 0

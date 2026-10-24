@@ -4,7 +4,7 @@
 	import { toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -91,11 +91,11 @@
 						onclick={() => (steps = steps.filter((_, j) => j !== i))}>REMOVE</Button
 					>
 				</div>
-				<Textarea
-					rows={2}
+				<MarkdownField
 					bind:value={s.instructions}
+					ariaLabel={`Step ${i + 1} instructions`}
 					placeholder="Instructions (markdown)"
-					aria-label={`Sub-step ${i + 1} instructions`}
+					minRows={2}
 				/>
 			</div>
 		{/each}

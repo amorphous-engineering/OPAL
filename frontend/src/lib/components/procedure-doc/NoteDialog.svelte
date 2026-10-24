@@ -1,12 +1,11 @@
 <script lang="ts">
-	// New execution note: markdown textarea with the markdown-toolbar element (inserts
-	// syntax only, not WYSIWYG) and files that upload with the note.
-	import { onMount } from 'svelte';
+	// New execution note: the shared markdown editor and files that upload with the note.
 	import XIcon from 'phosphor-svelte/lib/X';
 	import { confirm } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import * as Toolbar from '#lib/components/ui/toolbar/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { useDoc } from './controller.js';
 	import { fileSize } from './files.js';
 	import type { DocStep } from './types.js';
@@ -19,15 +18,9 @@
 	let body = $state('');
 	let files = $state<File[]>([]);
 	let busy = $state(false);
-	let area = $state<HTMLTextAreaElement | null>(null);
 	let picker = $state<HTMLInputElement | null>(null);
 
 	const empty = $derived(!body.trim() && files.length === 0);
-
-	onMount(() => {
-		// Custom elements: register client-side only.
-		void import('@github/markdown-toolbar-element');
-	});
 
 	function reset() {
 		body = '';
@@ -63,22 +56,9 @@
 		}
 	}
 
-	function underline() {
-		if (!area) return;
-		const { selectionStart: a, selectionEnd: b } = area;
-		const picked = area.value.slice(a, b);
-		area.setRangeText(`<u>${picked}</u>`, a, b, 'end');
-		if (!picked) area.setSelectionRange(a + 3, a + 3);
-		area.dispatchEvent(new Event('input', { bubbles: true }));
-		area.focus();
-	}
-
 	function addFiles(list: FileList | null) {
 		if (list) files = [...files, ...Array.from(list)];
 	}
-
-	const tool =
-		'inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border border-border bg-background px-1.5 font-mono text-xs select-none hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring';
 </script>
 
 <Dialog.Root
@@ -95,62 +75,32 @@
 		</div>
 		<Dialog.Description class="sr-only">Markdown note with optional files</Dialog.Description>
 		<div class="grid grid-cols-1 gap-2">
-			<markdown-toolbar for={bodyId} class="flex flex-wrap items-center gap-1">
-				<md-bold class={tool} title="Bold" aria-label="Bold"><b>B</b></md-bold>
-				<md-italic class={tool} title="Italic" aria-label="Italic"><i>I</i></md-italic>
-				<button
-					type="button"
-					class={tool}
-					title="Underline"
-					aria-label="Underline"
-					onclick={underline}><u>U</u></button
-				>
-				<md-strikethrough class={tool} title="Strikethrough" aria-label="Strikethrough"
-					><s>S</s></md-strikethrough
-				>
-				<md-header level="1" class={tool} title="Heading 1" aria-label="Heading 1">H1</md-header>
-				<md-header level="2" class={tool} title="Heading 2" aria-label="Heading 2">H2</md-header>
-				<span class="mx-0.5 h-4 w-px bg-border"></span>
-				<md-quote class={tool} title="Quote" aria-label="Quote">&gt;</md-quote>
-				<span class="mx-0.5 h-4 w-px bg-border"></span>
-				<md-unordered-list class={tool} title="Bulleted list" aria-label="Bulleted list"
-					>- list</md-unordered-list
-				>
-				<md-ordered-list class={tool} title="Numbered list" aria-label="Numbered list"
-					>1. list</md-ordered-list
-				>
-				<span class="mx-0.5 h-4 w-px bg-border"></span>
-				<md-link class={tool} title="Link" aria-label="Link">link</md-link>
-				<md-code class={tool} title="Code" aria-label="Code">&lt;/&gt;</md-code>
-				<Button size="xs" variant="outline" class="ml-auto" onclick={() => picker?.click()}
-					>+ ADD FILES</Button
-				>
-				<input
-					bind:this={picker}
-					type="file"
-					multiple
-					hidden
-					data-note-files
-					onchange={(e) => {
-						addFiles(e.currentTarget.files);
-						e.currentTarget.value = '';
-					}}
-				/>
-			</markdown-toolbar>
-			<Textarea
+			<MarkdownField
 				id={bodyId}
-				bind:ref={area}
 				bind:value={body}
-				rows={8}
-				class="max-h-[50vh] font-mono"
-				aria-label="Note"
-				onkeydown={(e) => {
-					if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-						e.preventDefault();
-						void save();
-					}
-				}}
-			/>
+				minRows={8}
+				maxHeight="50vh"
+				autofocus
+				onsubmit={() => void save()}
+				onfiles={(list) => (files = [...files, ...list])}
+			>
+				{#snippet toolbarEnd()}
+					<Toolbar.Button size="sm" class="font-mono" onclick={() => picker?.click()}
+						>+ ADD FILES</Toolbar.Button
+					>
+					<input
+						bind:this={picker}
+						type="file"
+						multiple
+						hidden
+						data-note-files
+						onchange={(e) => {
+							addFiles(e.currentTarget.files);
+							e.currentTarget.value = '';
+						}}
+					/>
+				{/snippet}
+			</MarkdownField>
 			{#if files.length}
 				<ul
 					class="grid grid-cols-1 overflow-hidden rounded-lg border border-border font-mono text-xs"

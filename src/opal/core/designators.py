@@ -5,6 +5,7 @@ Provides atomic generation of sequential designators for various entity types:
 - WO-XXXXX: Work orders (procedure instances)
 - IT-XXXXX: Issues
 - RISK-XXXXX: Risks
+- T-XXXX: Procedure templates
 - Serial numbers: Plain 3-digit numbers (001, 002, ...) per part
 """
 
@@ -22,9 +23,10 @@ ISSUE = "IT"
 RISK = "RISK"
 SERIAL = "SN"
 REQUIREMENT = "REQ"
+TEMPLATE = "T"
 
 # Known simple prefixes (serial numbers use compound prefix SN-{PN})
-_SIMPLE_PREFIXES = (OPAL, WORK_ORDER, ISSUE, RISK, REQUIREMENT)
+_SIMPLE_PREFIXES = (OPAL, WORK_ORDER, ISSUE, RISK, REQUIREMENT, TEMPLATE)
 
 
 def _next_sequence_value(db: Session, designator_type: str) -> int:
@@ -124,6 +126,15 @@ def generate_requirement_number(db: Session) -> str:
         The next available requirement number.
     """
     return generate_designator(db, REQUIREMENT, digits=4)
+
+
+def generate_template_number(db: Session) -> str:
+    """Generate the next procedure template number.
+
+    Format: T-XXXX (4 digits, zero-padded)
+    Example: T-0001, T-0042
+    """
+    return generate_designator(db, TEMPLATE, digits=4)
 
 
 def generate_risk_number(db: Session) -> str:

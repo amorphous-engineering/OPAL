@@ -151,7 +151,11 @@ def test_role_caution_and_images_fields(client: TestClient):
     proc_id = client.post("/api/procedures", json={"name": "Role Caution Proc"}).json()["id"]
     client.post(
         f"/api/procedures/{proc_id}/steps",
-        json={"title": "Crimp leads", "required_role": "TC", "caution": "HOT SURFACE"},
+        json={
+            "title": "Crimp leads",
+            "required_role": "TC",
+            "callouts": [{"kind": "caution", "text": "HOT SURFACE"}],
+        },
     )
     client.post(f"/api/procedures/{proc_id}/publish")
     instance_id = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()[
@@ -159,7 +163,8 @@ def test_role_caution_and_images_fields(client: TestClient):
     ]
     row = _doc(client, instance_id)["ops"][0]["step"]
     assert row["role"] == "TC"
-    assert row["caution"] == "HOT SURFACE"
+    assert row["callouts"] == [{"kind": "caution", "text": "HOT SURFACE"}]
+    assert "caution" not in row
     assert row["images"] == []
 
 
@@ -167,14 +172,18 @@ def test_safety_fields_on_op_and_sub_step(client: TestClient):
     proc_id = client.post("/api/procedures", json={"name": "Hazardous Proc"}).json()["id"]
     op = client.post(
         f"/api/procedures/{proc_id}/steps",
-        json={"title": "Pressurize system", "caution": "HIGH PRESSURE GAS", "required_role": "QE"},
+        json={
+            "title": "Pressurize system",
+            "callouts": [{"kind": "caution", "text": "HIGH PRESSURE GAS"}],
+            "required_role": "QE",
+        },
     ).json()
     client.post(
         f"/api/procedures/{proc_id}/steps",
         json={
             "title": "Open valve",
             "parent_step_id": op["id"],
-            "caution": "Stand clear of vent",
+            "callouts": [{"kind": "info", "text": "Stand clear of vent"}],
             "required_role": "MFG-LEAD",
         },
     )
@@ -182,10 +191,10 @@ def test_safety_fields_on_op_and_sub_step(client: TestClient):
     inst = client.post("/api/procedure-instances", json={"procedure_id": proc_id}).json()
 
     op_doc = _doc(client, inst["id"])["ops"][0]
-    assert op_doc["caution"] == "HIGH PRESSURE GAS"
+    assert op_doc["callouts"] == [{"kind": "caution", "text": "HIGH PRESSURE GAS"}]
     assert op_doc["role"] == "QE"
     sub = op_doc["steps"][0]
-    assert sub["caution"] == "Stand clear of vent"
+    assert sub["callouts"] == [{"kind": "info", "text": "Stand clear of vent"}]
     assert sub["role"] == "MFG-LEAD"
 
 
@@ -256,6 +265,8 @@ def test_strict_sequence_and_op_dependency_waits(client: TestClient):
     doc = _doc(client, instance_id)
     op2_doc = doc["ops"][1]
     assert op2_doc["waiting_on_ops"] == ["1"]
+    assert op2_doc["depends_on"] == [doc["ops"][0]["order"]]
+    assert doc["ops"][0]["depends_on"] == []
     assert op2_doc["steps"][0]["waiting"] == "WAITING ON OP 1"
     assert any(b["kind"] == "dependency" for b in op2_doc["steps"][0]["complete_blockers"])
 
@@ -605,3 +616,23 @@ def test_step_consumption_attaches_to_its_step(client: TestClient):
     # Unplanned: none; the kit part is consumed short of its requirement.
     assert doc["kit"]["unplanned"] == []
     assert doc["kit"]["items"][0]["variance"] == -3
+
+
+def test_legacy_snapshot_caution_renders_as_one_callout(client: TestClient, db_session: Session):
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from opal.db.models.procedure import ProcedureVersion
+
+    instance_id = _create_instance(client)
+    version = db_session.query(ProcedureVersion).one()
+    content = dict(version.content)
+    steps = []
+    for st in content["steps"]:
+        st = {k: v for k, v in st.items() if k != "callouts"}
+        st["caution"] = "OLD WARNING"
+        steps.append(st)
+    version.content = {**content, "steps": steps}
+    flag_modified(version, "content")
+    db_session.flush()
+    row = _doc(client, instance_id)["ops"][0]["step"]
+    assert row["callouts"] == [{"kind": "caution", "text": "OLD WARNING"}]

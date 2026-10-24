@@ -193,7 +193,14 @@ _SEARCHABLES: tuple[_Searchable, ...] = (
         (Issue.title, Issue.description),
         identifier=Issue.issue_number,
     ),
-    _Searchable("procedure", MasterProcedure, _procedure_result, True, (MasterProcedure.name,)),
+    _Searchable(
+        "procedure",
+        MasterProcedure,
+        _procedure_result,
+        True,
+        (MasterProcedure.name,),
+        identifier=MasterProcedure.template_number,
+    ),
     _Searchable(
         "execution",
         ProcedureInstance,

@@ -6,6 +6,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import LintField from './LintField.svelte';
 
 	let {
@@ -67,6 +68,10 @@
 		}
 	}
 
+	function onEscape(e: KeyboardEvent) {
+		if (e.key === 'Escape') editing = false;
+	}
+
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !multiline)) {
 			e.preventDefault();
@@ -78,9 +83,22 @@
 </script>
 
 {#if editing}
-	<div class="grid grid-cols-1 gap-1.5">
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="grid grid-cols-1 gap-1.5"
+		onkeydown={display && multiline && !lint ? onEscape : undefined}
+	>
 		{#if lint}
 			<LintField field={lint} bind:value={draft} {onkeydown} />
+		{:else if multiline && display}
+			<MarkdownField
+				bind:value={draft}
+				ariaLabel={label}
+				{placeholder}
+				minRows={3}
+				autofocus
+				onsubmit={save}
+			/>
 		{:else if multiline}
 			<Textarea
 				aria-label={label}

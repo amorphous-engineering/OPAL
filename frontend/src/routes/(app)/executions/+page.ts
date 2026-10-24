@@ -18,7 +18,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			page: q.get('page') ?? 1,
 			page_size: 50
 		}),
-		client.get<Page<{ id: number; name: string }>>('/procedures', { page_size: 100 })
+		client.get<Page<{ id: number; template_number: string; name: string }>>('/procedures', {
+			page_size: 100
+		})
 	]);
 	return { overview, procedures: procedures.items };
 };

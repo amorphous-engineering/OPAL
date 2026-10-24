@@ -28,6 +28,7 @@
 	});
 
 	const columns: Column<ProcedureRow>[] = [
+		{ key: 'number', label: 'Number', sortable: true, width: '7rem', mono: true },
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'procedure_type', label: 'Type', sortable: true, width: '6rem', mono: true },
 		{ key: 'status', label: 'Status', sortable: true, width: '8rem' },
@@ -65,7 +66,7 @@
 
 <ListFrame>
 	<FilterBar clear={FILTERS}>
-		<SearchInput label="Search templates" placeholder="Search name or description" />
+		<SearchInput label="Search templates" placeholder="Search number, name or description" />
 		<FilterSelect
 			param="type"
 			label="Type"
@@ -104,7 +105,9 @@
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
-			{#if col.key === 'name'}
+			{#if col.key === 'number'}
+				<a href={`/procedures/${r.id}`} class="text-info hover:underline">{r.template_number}</a>
+			{:else if col.key === 'name'}
 				<a href={`/procedures/${r.id}`} class="font-medium text-info hover:underline">{r.name}</a>
 			{:else if col.key === 'procedure_type'}
 				{r.procedure_type.toUpperCase()}

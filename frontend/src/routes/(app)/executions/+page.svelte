@@ -66,7 +66,7 @@
 
 <ListFrame>
 	<FilterBar clear={[...FILTERS, 'status']}>
-		<SearchInput label="Search executions" placeholder="Work order or procedure" />
+		<SearchInput label="Search executions" placeholder="Work order, template number or name" />
 		<div class="flex" role="group" aria-label="Status">
 			{#each chips as c (c.id)}
 				<button
@@ -86,7 +86,10 @@
 			param="procedure"
 			label="Procedure"
 			allLabel="All procedures"
-			options={data.procedures.map((p) => ({ value: String(p.id), label: p.name }))}
+			options={data.procedures.map((p) => ({
+				value: String(p.id),
+				label: `${p.template_number} ${p.name}`
+			}))}
 		/>
 		<FilterToggle param="mine" label="Mine" />
 		<FilterToggle param="held" label="Held" />
@@ -120,6 +123,7 @@
 					/>
 				{/if}
 			{:else if col.key === 'procedure'}
+				<span class="font-mono text-muted-foreground">{r.procedure_template_number}</span>
 				{r.procedure_name}
 				<span class="font-mono text-muted-foreground">v{r.version_number}</span>
 			{:else if col.key === 'status'}

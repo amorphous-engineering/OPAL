@@ -49,6 +49,8 @@ export interface DocImage {
 	caption: string | null;
 }
 
+export type Callout = { kind: 'caution' | 'info'; text: string };
+
 export interface DocStepKitItem {
 	/** StepKit id; present when authoring. */
 	id?: number;
@@ -157,7 +159,7 @@ export interface DocStep {
 	parent_order: number | null;
 	status: StepStatus | string;
 	instructions: string | null;
-	caution: string | null;
+	callouts: Callout[];
 	role: string | null;
 	requires_signoff: boolean;
 	is_contingency: boolean;
@@ -203,7 +205,7 @@ export interface DocOp {
 	title: string;
 	status: StepStatus | string;
 	instructions: string | null;
-	caution: string | null;
+	callouts: Callout[];
 	role: string | null;
 	strict_sequence: boolean;
 	is_contingency: boolean;

@@ -9,7 +9,7 @@
  * will be a different set of actions on the same components.
  */
 import { getContext, setContext } from 'svelte';
-import type { DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
+import type { Callout, DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
 
 export interface StockRecord {
 	id: number;
@@ -59,7 +59,7 @@ export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 export interface StepEdit {
 	title?: string;
 	instructions?: string | null;
-	caution?: string | null;
+	callouts?: Callout[];
 	role?: string | null;
 	requires_signoff?: boolean;
 	signoffs?: SignoffDef[] | null;

@@ -19,6 +19,7 @@
 	import { session } from '#lib/session.svelte.js';
 	import { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import DataPanel from './DataPanel.svelte';
+	import ExecutionGraph from './ExecutionGraph.svelte';
 	import ExecutionDialogs from './ExecutionDialogs.svelte';
 	import ExecutionNav from './ExecutionNav.svelte';
 	import ExecutionSide from './ExecutionSide.svelte';
@@ -63,6 +64,7 @@
 	);
 	const tabs = $derived([
 		{ id: 'document', label: 'Document' },
+		{ id: 'graph', label: 'Graph' },
 		...(hasData ? [{ id: 'data', label: 'Data' }] : []),
 		...(doc?.material_relevant ? [{ id: 'material', label: 'Material' }] : []),
 		{ id: 'details', label: 'Details' }
@@ -132,6 +134,11 @@
 				]}
 			>
 				{#snippet state()}
+					<a
+						href={`/procedures/${inst.procedure.id}`}
+						class="font-mono text-xs text-muted-foreground hover:underline"
+						>{inst.procedure.template_number}</a
+					>
 					<span class="font-mono text-xs text-muted-foreground">v{inst.version.number}</span>
 					<State value={inst.status} badge={inst.status === 'aborted'} />
 					{#if inst.priority > 0}
@@ -216,6 +223,8 @@
 							ops={doc.ops.filter((o) => store.shownOps.includes(o))}
 							contingency={doc.contingency_ops.filter((o) => store.shownOps.includes(o))}
 						/>
+					{:else if tab === 'graph'}
+						<ExecutionGraph {store} onopen={jump} />
 					{:else if tab === 'data'}
 						<DataPanel {store} />
 					{:else if tab === 'material'}

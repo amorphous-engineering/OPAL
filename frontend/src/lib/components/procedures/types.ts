@@ -1,4 +1,5 @@
 /** Shapes returned by /api/procedures/*. */
+import type { Callout } from '#lib/components/procedure-doc/types.js';
 
 export type ProcedureStatus = 'draft' | 'active' | 'deprecated';
 export type ProcedureType = 'op' | 'build';
@@ -16,7 +17,7 @@ export interface StepNode {
 	signoffs?: { label: string; role: string | null }[];
 	estimated_duration_minutes: number | null;
 	required_role: string | null;
-	caution: string | null;
+	callouts: Callout[];
 	required_data_schema: { fields?: DataField[] } | null;
 	sub_steps: StepNode[];
 }
@@ -33,6 +34,7 @@ export interface DataField {
 
 export interface ProcedureDetail {
 	id: number;
+	template_number: string;
 	name: string;
 	description: string | null;
 	status: ProcedureStatus;
@@ -46,6 +48,7 @@ export interface ProcedureDetail {
 
 export interface ProcedureRow {
 	id: number;
+	template_number: string;
 	name: string;
 	description: string | null;
 	status: ProcedureStatus;
@@ -99,7 +102,9 @@ export interface SnapshotStep {
 	signoffs?: { label: string; role: string | null }[];
 	estimated_duration_minutes: number | null;
 	required_role: string | null;
-	caution: string | null;
+	/** Legacy snapshots carry `caution` instead of `callouts`; read through calloutsOf. */
+	callouts?: Callout[];
+	caution?: string | null;
 	strict_sequence: boolean;
 	depends_on?: number[];
 	images?: { attachment_id: number; caption: string | null }[];
@@ -119,6 +124,7 @@ export interface VersionDetail {
 	created_by_name: string | null;
 	change_note: string | null;
 	procedure_id: number;
+	procedure_template_number: string;
 	procedure_name: string;
 	procedure_type: ProcedureType;
 	is_current: boolean;

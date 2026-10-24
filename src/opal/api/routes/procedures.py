@@ -3,15 +3,17 @@
 import copy
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, Response, UploadFile
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from sqlalchemy import func
 
 from opal.api.deps import CurrentUserId, DbSession
 from opal.core import procedure_tree as tree
 from opal.core.audit import AuditContext, get_model_dict, log_create, log_delete, log_update
+from opal.core.callouts import Callout, normalize_callouts, step_callouts
+from opal.core.designators import generate_template_number
 from opal.core.diff import diff_part_lists, diff_procedure_versions, snapshots_equivalent
 from opal.core.part_lifecycle import DraftPartsBlocked, draft_parts_in
 from opal.core.roles import UnknownRoleError, canonical_role_name
@@ -66,7 +68,7 @@ class StepSchema(BaseModel):
     signoffs: list[SignoffDef] = []  # the effective list (see core/signoffs)
     estimated_duration_minutes: int | None = None
     required_role: str | None = None
-    caution: str | None = None
+    callouts: Annotated[list[Callout], BeforeValidator(lambda v: [] if v is None else v)] = []
     strict_sequence: bool = False
     workcenter_id: int | None = None
     sub_steps: list["StepSchema"] = []
@@ -92,6 +94,7 @@ class ProcedureResponse(BaseModel):
     """Procedure response."""
 
     id: int
+    template_number: str
     name: str
     description: str | None = None
     status: str
@@ -111,6 +114,7 @@ class ProcedureListItem(BaseModel):
     """One row of the procedure list: no step tree, with version and counts."""
 
     id: int
+    template_number: str
     name: str
     description: str | None = None
     status: str
@@ -164,7 +168,7 @@ class StepCreate(BaseModel):
     )
     estimated_duration_minutes: int | None = Field(None, ge=1)
     required_role: str | None = Field(None, max_length=50)
-    caution: str | None = None
+    callouts: list[Callout] | None = None
     strict_sequence: bool = False
     workcenter_id: int | None = None
     parent_step_id: int | None = Field(None, description="Parent op ID for sub-steps")
@@ -188,7 +192,7 @@ class StepUpdate(BaseModel):
     )
     estimated_duration_minutes: int | None = Field(None, ge=1)
     required_role: str | None = Field(None, max_length=50)
-    caution: str | None = None
+    callouts: list[Callout] | None = None
     strict_sequence: bool | None = None
     workcenter_id: int | None = None
 
@@ -248,6 +252,7 @@ class VersionDetailResponse(BaseModel):
     created_by_name: str | None = None
     change_note: str | None = None
     procedure_id: int
+    procedure_template_number: str
     procedure_name: str
     procedure_type: str = "op"
     is_current: bool = False
@@ -314,7 +319,7 @@ def _build_step_hierarchy(steps: list[ProcedureStep]) -> list[StepSchema]:
             signoffs=effective_for(step, bool(sub_steps)),
             estimated_duration_minutes=step.estimated_duration_minutes,
             required_role=step.required_role,
-            caution=step.caution,
+            callouts=step_callouts({"callouts": step.callouts}),
             strict_sequence=step.strict_sequence,
             workcenter_id=step.workcenter_id,
             sub_steps=[build_schema(s) for s in sorted(sub_steps, key=lambda x: x.order)],
@@ -380,6 +385,7 @@ def _output_response(o: ProcedureOutput) -> "OutputResponse":
 
 
 _LIST_SORTS = (
+    "number",
     "name",
     "status",
     "type",
@@ -432,7 +438,9 @@ def list_procedures(
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            MasterProcedure.name.ilike(search_term) | MasterProcedure.description.ilike(search_term)
+            MasterProcedure.template_number.ilike(search_term)
+            | MasterProcedure.name.ilike(search_term)
+            | MasterProcedure.description.ilike(search_term)
         )
     if status:
         query = query.filter(MasterProcedure.status == status)
@@ -442,6 +450,7 @@ def list_procedures(
     total = query.count()
 
     sort_cols = {
+        "number": MasterProcedure.template_number,
         "name": func.lower(MasterProcedure.name),
         "status": MasterProcedure.status,
         "type": MasterProcedure.procedure_type,
@@ -464,6 +473,7 @@ def list_procedures(
         items=[
             ProcedureListItem(
                 id=p.id,
+                template_number=p.template_number,
                 name=p.name,
                 description=p.description,
                 status=_enum_value(p.status),
@@ -491,6 +501,7 @@ def create_procedure(
 ) -> ProcedureResponse:
     """Create a new procedure."""
     procedure = MasterProcedure(
+        template_number=generate_template_number(db),
         name=data.name,
         description=data.description,
         procedure_type=ProcedureType(data.procedure_type).value,
@@ -533,6 +544,7 @@ def get_procedure(
     return ProcedureResponse(
         unpublished_changes=unpublished,
         id=procedure.id,
+        template_number=procedure.template_number,
         name=procedure.name,
         description=procedure.description,
         status=procedure.status.value
@@ -802,7 +814,7 @@ def add_step(
         requires_signoff=data.requires_signoff,
         estimated_duration_minutes=data.estimated_duration_minutes,
         required_role=required_role,
-        caution=data.caution,
+        callouts=normalize_callouts(data.callouts),
         strict_sequence=data.strict_sequence,
         workcenter_id=data.workcenter_id,
     )
@@ -896,8 +908,8 @@ def update_step(
         raise HTTPException(status_code=400, detail=str(err)) from err
     except SignoffError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
-    if "caution" in data.model_fields_set:
-        step.caution = data.caution
+    if "callouts" in data.model_fields_set:
+        step.callouts = normalize_callouts(data.callouts)
     if data.strict_sequence is not None:
         step.strict_sequence = data.strict_sequence
 
@@ -971,7 +983,7 @@ def duplicate_step(
             signoffs=copy.deepcopy(src.signoffs),
             estimated_duration_minutes=src.estimated_duration_minutes,
             required_role=src.required_role,
-            caution=src.caution,
+            callouts=copy.deepcopy(src.callouts),
             strict_sequence=src.strict_sequence,
             workcenter_id=src.workcenter_id,
         )
@@ -1108,7 +1120,7 @@ class DraftStep(BaseModel):
     signoffs: list[SignoffDef] = []  # the effective list
     estimated_duration_minutes: int | None = None
     required_role: str | None = None
-    caution: str | None = None
+    callouts: Annotated[list[Callout], BeforeValidator(lambda v: [] if v is None else v)] = []
     strict_sequence: bool = False
     workcenter_id: int | None = None
     depends_on: list[int] = []
@@ -1165,7 +1177,7 @@ def get_draft(procedure_id: int, db: DbSession) -> DraftResponse:
                 signoffs=effective_for(s, s.id in parent_ids),
                 estimated_duration_minutes=s.estimated_duration_minutes,
                 required_role=s.required_role,
-                caution=s.caution,
+                callouts=step_callouts({"callouts": s.callouts}),
                 strict_sequence=s.strict_sequence,
                 workcenter_id=s.workcenter_id,
                 depends_on=sorted(deps.get(s.id, [])),
@@ -1642,7 +1654,7 @@ def _build_snapshot(
             "signoffs": effective_for(step, step.id in parent_ids),
             "estimated_duration_minutes": step.estimated_duration_minutes,
             "required_role": step.required_role,
-            "caution": step.caution,
+            "callouts": normalize_callouts(step.callouts),
             "strict_sequence": step.strict_sequence,
             "workcenter_id": step.workcenter_id,
             "depends_on": sorted(depends_on_map.get(step.id, [])),
@@ -1846,6 +1858,7 @@ def get_version(
         created_by_name=base.created_by_name,
         change_note=base.change_note,
         procedure_id=procedure.id,
+        procedure_template_number=procedure.template_number,
         procedure_name=procedure.name,
         procedure_type=_enum_value(procedure.procedure_type),
         is_current=procedure.current_version_id == version.id,
@@ -2040,7 +2053,7 @@ def restore_from_version(
                 signoffs=copy.deepcopy(step_data.get("signoffs")),
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
                 required_role=step_data.get("required_role"),
-                caution=step_data.get("caution"),
+                callouts=step_callouts(step_data) or None,
                 strict_sequence=step_data.get("strict_sequence", False),
                 workcenter_id=step_data.get("workcenter_id"),
             )
@@ -2066,7 +2079,7 @@ def restore_from_version(
                 signoffs=copy.deepcopy(step_data.get("signoffs")),
                 estimated_duration_minutes=step_data.get("estimated_duration_minutes"),
                 required_role=step_data.get("required_role"),
-                caution=step_data.get("caution"),
+                callouts=step_callouts(step_data) or None,
                 strict_sequence=step_data.get("strict_sequence", False),
                 workcenter_id=step_data.get("workcenter_id"),
             )
@@ -2632,6 +2645,7 @@ def clone_procedure(
     # Create new procedure
     clone_name = data.new_name or f"Copy of {source.name}"
     new_procedure = MasterProcedure(
+        template_number=generate_template_number(db),
         name=clone_name,
         description=source.description,
         procedure_type=source.procedure_type,
@@ -2668,7 +2682,7 @@ def clone_procedure(
             signoffs=copy.deepcopy(source_step.signoffs),
             estimated_duration_minutes=source_step.estimated_duration_minutes,
             required_role=source_step.required_role,
-            caution=source_step.caution,
+            callouts=copy.deepcopy(source_step.callouts),
             strict_sequence=source_step.strict_sequence,
             workcenter_id=source_step.workcenter_id,
         )

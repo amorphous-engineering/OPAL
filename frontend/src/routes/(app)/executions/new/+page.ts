@@ -3,6 +3,7 @@ import type { PageLoad } from './$types';
 
 interface ProcedureOption {
 	id: number;
+	template_number: string;
 	name: string;
 	procedure_type: string;
 	current_version_id: number | null;

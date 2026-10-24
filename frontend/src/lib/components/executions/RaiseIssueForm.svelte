@@ -6,7 +6,7 @@
 	import { toast, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import type { DocStep } from '#lib/components/procedure-doc/index.js';
@@ -95,7 +95,7 @@
 		<FormRow label="Is" for="ri-is"><Input id="ri-is" bind:value={actual} /></FormRow>
 	</div>
 	<FormRow label="Description" for="ri-desc">
-		<Textarea id="ri-desc" rows={2} bind:value={description} />
+		<MarkdownField id="ri-desc" minRows={2} bind:value={description} />
 	</FormRow>
 	<div class="grid grid-cols-2 gap-3">
 		<FormRow label="Priority" for="ri-priority">

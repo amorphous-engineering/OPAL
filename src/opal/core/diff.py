@@ -3,7 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from opal.core.signoffs import effective_signoffs
+from opal.core.callouts import step_callouts
+from opal.core.signoffs import effective_signoffs, relabel_signoffs
 
 
 @dataclass
@@ -22,7 +23,7 @@ _STEP_COMPARE_FIELDS = [
     "is_contingency",
     "estimated_duration_minutes",
     "required_role",
-    "caution",
+    "callouts",
     "required_data_schema",
     "requires_signoff",
     "signoffs",
@@ -88,10 +89,18 @@ def diff_procedure_versions(
 
 
 def _with_effective_signoffs(content: dict[str, Any]) -> list[dict[str, Any]]:
-    """Snapshot steps with ``signoffs`` replaced by the effective list."""
+    """Snapshot steps with ``signoffs`` replaced by the effective list. Labels are
+    set by position, so a version published before labels were fixed compares by
+    its roles only."""
     steps = content.get("steps", [])
     parents = {s.get("parent_step_id") for s in steps if s.get("parent_step_id") is not None}
-    return [{**s, "signoffs": effective_signoffs(s, s.get("id") in parents)} for s in steps]
+    out = []
+    for s in steps:
+        n = {k: v for k, v in s.items() if k != "caution"}
+        n["signoffs"] = relabel_signoffs(effective_signoffs(s, s.get("id") in parents))
+        n["callouts"] = step_callouts(s)
+        out.append(n)
+    return out
 
 
 def _step_sort_key(sn: str) -> tuple:

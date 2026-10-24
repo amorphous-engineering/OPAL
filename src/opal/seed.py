@@ -19,12 +19,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from opal.core.callouts import normalize_callouts
 from opal.core.designators import (
     generate_issue_number,
     generate_opal_number,
     generate_requirement_number,
     generate_risk_number,
     generate_serial_number,
+    generate_template_number,
     generate_work_order_number,
 )
 from opal.core.roles import ensure_system_roles
@@ -405,6 +407,7 @@ def _seed_procedures(
 
     for pdata in data["procedures"]:
         proc = MasterProcedure(
+            template_number=generate_template_number(db),
             name=pdata["name"],
             description=pdata["description"],
             procedure_type=(ProcedureType.BUILD if pdata["type"] == "build" else ProcedureType.OP),
@@ -453,7 +456,7 @@ def _seed_procedures(
                 level=0,
                 title=op["title"],
                 instructions=op.get("instructions"),
-                caution=op.get("caution"),
+                callouts=normalize_callouts(op.get("callouts")),
                 is_contingency=is_contingency,
                 strict_sequence=bool(op.get("strict_sequence")),
                 workcenter_id=wc[op["workcenter"]].id if op.get("workcenter") else None,
@@ -482,7 +485,7 @@ def _seed_procedures(
                         level=1,
                         title=sub["title"],
                         instructions=sub.get("instructions"),
-                        caution=sub.get("caution"),
+                        callouts=normalize_callouts(sub.get("callouts")),
                         is_contingency=is_contingency,
                         requires_signoff=bool(sub.get("requires_signoff")),
                         required_role=sub.get("required_role"),
@@ -546,7 +549,7 @@ def _publish(db: Session, proc: MasterProcedure) -> ProcedureVersion:
                 "signoffs": effective_for(s, s.id in parent_ids),
                 "estimated_duration_minutes": s.estimated_duration_minutes,
                 "required_role": s.required_role,
-                "caution": s.caution,
+                "callouts": normalize_callouts(s.callouts),
                 "strict_sequence": s.strict_sequence,
                 "workcenter_id": s.workcenter_id,
                 "depends_on": sorted(depends_on_map.get(s.id, [])),

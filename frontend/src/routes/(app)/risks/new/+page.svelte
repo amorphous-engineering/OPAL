@@ -5,7 +5,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import { partLabel } from '#lib/components/parts/types.js';
@@ -213,7 +213,13 @@
 	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="description">Narrative <span class="label">context, evidence, markdown</span></Label
 		>
-		<Textarea id="description" bind:value={description} rows={4} onkeydown={submitOnCtrlEnter} />
+		<MarkdownField
+			id="description"
+			bind:value={description}
+			minRows={4}
+			onsubmit={() =>
+				document.querySelector<HTMLFormElement>('form:has(#description)')?.requestSubmit()}
+		/>
 	</div>
 
 	<div class="flex gap-2">

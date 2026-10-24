@@ -20,6 +20,7 @@ import { api } from '#lib/api.js';
 import { confirm, toastError } from '#lib/components/opal/index.js';
 import type {
 	AuthorActions,
+	Callout,
 	DocActions,
 	DocController,
 	DocOp,
@@ -56,6 +57,10 @@ function write(key: string, value: unknown) {
 
 const norm = (v: string | null | undefined) => (v ? v : null);
 
+/** The callouts the server keeps: trimmed text, empty boxes dropped. */
+const keptCallouts = (v: Callout[] | null | undefined): Callout[] =>
+	(v ?? []).map((c) => ({ kind: c.kind, text: c.text.trim() })).filter((c) => c.text);
+
 /** The definitions as unsigned slots, for the preview's sign-off table. */
 const previewSlots = (defs: { label: string; role: string | null }[]): DocSignoff[] =>
 	defs.map((d, slot) => ({
@@ -80,7 +85,7 @@ interface Job {
 }
 
 /** Document fields of a step that mirror onto its OP. */
-const OP_MIRROR = ['title', 'instructions', 'caution', 'is_contingency'] as const;
+const OP_MIRROR = ['title', 'instructions', 'callouts', 'is_contingency'] as const;
 
 export class AuthorStore implements DocController {
 	readonly mode = 'author' as const;
@@ -242,7 +247,11 @@ export class AuthorStore implements DocController {
 			};
 			set('title', 'title', d.title);
 			set('instructions', 'instructions', d.instructions);
-			set('caution', 'caution', d.caution);
+			if (
+				!dirty(d.id, 'callouts') &&
+				JSON.stringify(keptCallouts(st.callouts)) !== JSON.stringify(keptCallouts(d.callouts))
+			)
+				st.callouts = (d.callouts ?? []).map((c) => ({ ...c }));
 			if (!dirty(d.id, 'signoffs')) {
 				set('role', 'role', d.required_role);
 				set('requires_signoff', 'requires_signoff', d.requires_signoff);
@@ -294,7 +303,7 @@ export class AuthorStore implements DocController {
 				op.number = d.step_number;
 				op.title = st.title;
 				op.instructions = st.instructions;
-				op.caution = st.caution;
+				op.callouts = st.callouts;
 				op.role = st.role;
 				op.is_contingency = st.is_contingency;
 				if (
@@ -332,7 +341,7 @@ export class AuthorStore implements DocController {
 			parent_order: d.parent_step_id,
 			status: 'pending',
 			instructions: d.instructions,
-			caution: d.caution,
+			callouts: (d.callouts ?? []).map((c) => ({ ...c })),
 			role: d.required_role,
 			requires_signoff: d.requires_signoff,
 			is_contingency: d.is_contingency,
@@ -366,7 +375,7 @@ export class AuthorStore implements DocController {
 			title: step.title,
 			status: 'pending',
 			instructions: step.instructions,
-			caution: step.caution,
+			callouts: step.callouts,
 			role: step.role,
 			strict_sequence: false,
 			is_contingency: step.is_contingency,
@@ -516,7 +525,7 @@ export class AuthorStore implements DocController {
 		const body: Record<string, unknown> = {};
 		if ('title' in patch) body.title = patch.title;
 		if ('instructions' in patch) body.instructions = norm(patch.instructions);
-		if ('caution' in patch) body.caution = norm(patch.caution);
+		if ('callouts' in patch) body.callouts = keptCallouts(patch.callouts);
 		if ('role' in patch) body.required_role = norm(patch.role);
 		if ('requires_signoff' in patch) body.requires_signoff = patch.requires_signoff;
 		if ('signoffs' in patch)
@@ -546,6 +555,11 @@ export class AuthorStore implements DocController {
 			delete apply.title;
 			this.stepSave[st.order] = { state: 'error', error: 'A title is required' };
 		}
+		// Typing inside a callout debounces; add, remove and kind changes save at once.
+		const sameShape =
+			'callouts' in apply &&
+			(apply.callouts ?? []).length === st.callouts.length &&
+			(apply.callouts ?? []).every((c, i) => c.kind === st.callouts[i].kind);
 		const s = st as unknown as Record<string, unknown>;
 		const keys = Object.keys(apply) as (keyof StepEdit)[];
 		if (!keys.length) return;
@@ -572,16 +586,11 @@ export class AuthorStore implements DocController {
 		}
 		const merged = { ...(this.pending.get(st.order) ?? {}), ...apply };
 		this.pending.set(st.order, merged);
-		const textual = keys.some((k) =>
-			[
-				'title',
-				'instructions',
-				'caution',
-				'role',
-				'signoffs',
-				'estimated_duration_minutes'
-			].includes(k)
-		);
+		const textual =
+			sameShape ||
+			keys.some((k) =>
+				['title', 'instructions', 'role', 'signoffs', 'estimated_duration_minutes'].includes(k)
+			);
 		this.schedule(`step:${st.order}`, st.order, textual ? TEXT_DELAY : 0, () =>
 			this.saveStep(st.order)
 		);
@@ -977,7 +986,7 @@ export class AuthorStore implements DocController {
 			d.parent_step_id,
 			d.title,
 			norm(d.instructions),
-			norm(d.caution),
+			keptCallouts(d.callouts),
 			(d.signoffs ?? []).map((x) => [x.label, norm(x.role)]),
 			d.estimated_duration_minutes ?? null,
 			d.is_contingency,
@@ -1018,7 +1027,7 @@ export class AuthorStore implements DocController {
 				signoffs: (st.signoff_defs ?? []).map((x) => ({ label: x.label, role: x.role })),
 				estimated_duration_minutes: st.estimated_duration_minutes ?? null,
 				required_role: st.role,
-				caution: st.caution,
+				callouts: st.callouts,
 				strict_sequence: op ? op.strict_sequence : s.strict_sequence,
 				workcenter_id: st.workcenter_id ?? null,
 				depends_on: op?.depends_on ?? [],
@@ -1086,9 +1095,43 @@ export class AuthorStore implements DocController {
 		this.focusedOrder = order;
 	}
 
+	// ---------- focus mode (one OP at a time) ----------
+
+	focusMode = $state(read<boolean>('opal.author.focusMode', false));
+	private focusOverride = $state<number | null>(null);
+
+	/** The OP focus mode shows: selected in the sidebar, else the OP of the focused row, else the first. */
+	get focusOp(): number | null {
+		const pick = this.focusOverride;
+		if (pick !== null && this.allOps.some((o) => o.order === pick)) return pick;
+		if (this.focusedOrder !== null) {
+			const hit = this.findStep(this.focusedOrder);
+			if (hit) return hit.op.order;
+		}
+		return this.allOps[0]?.order ?? null;
+	}
+	set focusOp(order: number | null) {
+		this.focusOverride = order;
+	}
+
+	/** The OPs the document renders: all of them, or only the focused one in focus mode. */
+	get shownOps(): DocOp[] {
+		const all = this.allOps;
+		if (!this.focusMode) return all;
+		const only = all.filter((o) => o.order === this.focusOp);
+		return only.length ? only : all;
+	}
+
+	setFocusMode(on: boolean) {
+		this.focusMode = on;
+		this.focusOverride = null;
+		write('opal.author.focusMode', on);
+	}
+
 	jumpTo(order: number) {
 		const hit = this.findStep(order);
 		if (!hit) return;
+		if (this.focusMode) this.focusOp = hit.op.order;
 		this.overrides[`op:${hit.op.order}`] = true;
 		this.focusedOrder = order;
 		this.pulse = order;

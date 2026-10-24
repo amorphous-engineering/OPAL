@@ -2,6 +2,7 @@
 	// Data capture for a step, from its schema. Values live in the controller
 	// (drafts), never in this component, so a document refresh cannot clobber
 	// what the operator is typing. Saved with the first sign-off.
+	import { newFieldKey } from './author/field-key.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -22,12 +23,11 @@
 	const authoring = $derived(ctl.mode === 'author');
 
 	function addField() {
-		let n = fields.length + 1;
-		while (fields.some((f) => f.name === `field_${n}`)) n++;
+		const name = newFieldKey(fields.map((f) => f.name));
 		ctl.author?.edit(step, {
 			data_schema: {
 				...(step.data_schema ?? {}),
-				fields: [...fields, { name: `field_${n}`, label: 'Field', type: 'text' }]
+				fields: [...fields, { name, label: 'Field', type: 'text' }]
 			}
 		});
 	}

@@ -86,7 +86,9 @@ class StepFormModal(FormModal):
             ),
         )
         required_role_val = self.step.get("required_role") or "" if self.step else ""
-        caution_val = self.step.get("caution") or "" if self.step else ""
+        callouts = (self.step.get("callouts") or []) if self.step else []
+        caution_val = next((c["text"] for c in callouts if c["kind"] == "caution"), "")
+        info_val = next((c["text"] for c in callouts if c["kind"] == "info"), "")
         yield FormGroup(
             "Required Role",
             Input(value=required_role_val, id="field-required-role", placeholder="e.g. QE"),
@@ -94,6 +96,10 @@ class StepFormModal(FormModal):
         yield FormGroup(
             "Caution",
             Input(value=caution_val, id="field-caution", placeholder="Safety warning text"),
+        )
+        yield FormGroup(
+            "Info",
+            Input(value=info_val, id="field-info", placeholder="Informational note"),
         )
 
     def get_form_data(self) -> dict[str, Any] | None:
@@ -105,13 +111,35 @@ class StepFormModal(FormModal):
         contingency = self.query_one("#field-contingency", Select).value
         required_role = self.query_one("#field-required-role", Input).value.strip()
         caution = self.query_one("#field-caution", Input).value.strip()
+        info = self.query_one("#field-info", Input).value.strip()
+        callouts = self._merge_callouts(caution, info)
         return {
             "title": title,
             "description": description,
             "is_contingency": contingency == "true",
             "required_role": required_role or None,
-            "caution": caution or None,
+            "callouts": callouts,
         }
+
+    def _merge_callouts(self, caution: str, info: str) -> list[dict[str, str]]:
+        """Set the first caution and first info; keep every other existing callout."""
+        existing = (self.step.get("callouts") or []) if self.step else []
+        merged: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for c in existing:
+            kind = c["kind"]
+            if kind not in seen:
+                seen.add(kind)
+                text = caution if kind == "caution" else info
+                if text:
+                    merged.append({"kind": kind, "text": text})
+            else:
+                merged.append(dict(c))
+        if "caution" not in seen and caution:
+            merged.append({"kind": "caution", "text": caution})
+        if "info" not in seen and info:
+            merged.append({"kind": "info", "text": info})
+        return merged
 
 
 class StepsList(Static):
