@@ -2,6 +2,8 @@
 	import {
 		ActionLink,
 		DataTable,
+		DetailRow,
+		DetailTable,
 		PageHeader,
 		Section,
 		State,
@@ -134,29 +136,26 @@
 		</div>
 		{#if preview}
 			<p class="border-t border-border px-3 py-2 font-mono text-xs text-muted-foreground">
-				{filename} · {preview.totalRows} rows · {preview.validRows} valid · {preview.errorRows} errors
-				·
-				{preview.warningRows} duplicates · columns {preview.headersFound.join(', ')}
+				{filename} · {preview.totalRows}
+				{preview.totalRows === 1 ? 'row' : 'rows'} · {preview.validRows}
+				valid · {preview.errorRows}
+				{preview.errorRows === 1 ? 'error' : 'errors'} · {preview.warningRows}
+				{preview.warningRows === 1 ? 'duplicate' : 'duplicates'}
 			</p>
 		{/if}
 	</Section>
 
 	{#if result}
 		<Section title="Imported" class="max-w-3xl">
-			<dl
-				class="grid [grid-template-columns:max-content_1fr] grid-cols-1 gap-1 gap-x-4 p-3 text-sm"
-			>
-				<dt class="label">Created</dt>
-				<dd class="mono">{result.created}</dd>
-				<dt class="label">Skipped</dt>
-				<dd class="mono">{result.skipped}</dd>
+			<DetailTable>
+				<DetailRow label="Created" value={result.created} mono />
+				<DetailRow label="Skipped" value={result.skipped} mono />
 				{#if result.errors.length}
-					<dt class="label">Errors</dt>
-					<dd class="text-error">
-						{#each result.errors as e (e)}<div>{e}</div>{/each}
-					</dd>
+					<DetailRow label="Errors">
+						{#each result.errors as e (e)}<div class="text-error">{e}</div>{/each}
+					</DetailRow>
 				{/if}
-			</dl>
+			</DetailTable>
 			<div class="border-t border-border px-3 py-2">
 				<ActionLink href="/parts?state=draft">DRAFT PARTS →</ActionLink>
 			</div>
@@ -183,7 +182,7 @@
 								>{skipDuplicates ? 'skipped' : 'imported'}</span
 							>
 						{:else}
-							<State value="ok" tone="ok" label="OK" />
+							<span class="text-muted-foreground">—</span>
 						{/if}
 					{:else if col.key === 'reorderPoint'}
 						{r.reorderPoint === null ? '—' : qty(r.reorderPoint)}

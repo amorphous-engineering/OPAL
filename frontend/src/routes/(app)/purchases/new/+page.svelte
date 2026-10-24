@@ -66,8 +66,8 @@
 			.filter((r) => r.part)
 			.map((r) => ({
 				partId: r.part!.id,
-				qtyOrdered: r.qty.trim(),
-				unitCost: r.cost.trim() === '' ? null : r.cost.trim(),
+				qtyOrdered: String(r.qty).trim(),
+				unitCost: String(r.cost).trim() === '' ? null : String(r.cost).trim(),
 				destination: r.destination.trim() || null
 			}));
 		if (rows.some((r) => r.part && !(Number(r.qty) > 0))) {
@@ -104,7 +104,7 @@
 	<Section title="ORDER">
 		<div class="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="po-supplier">Supplier</Label>
+				<Label class="label" for="po-supplier">Supplier</Label>
 				<NativeSelect id="po-supplier" bind:value={supplierId} class="w-full">
 					<option value="">Other (enter name)</option>
 					{#each data.suppliers as s (s.id)}
@@ -114,12 +114,12 @@
 			</div>
 			{#if !supplierId}
 				<div class="grid grid-cols-1 gap-1.5">
-					<Label for="po-supplier-name">Supplier name</Label>
+					<Label class="label" for="po-supplier-name">Supplier name</Label>
 					<Input id="po-supplier-name" bind:value={otherName} maxlength={255} />
 				</div>
 			{/if}
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="po-ref">Reference</Label>
+				<Label class="label" for="po-ref">Reference</Label>
 				<Input
 					id="po-ref"
 					bind:value={reference}
@@ -129,22 +129,22 @@
 				/>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="po-supplier-ref">Supplier reference</Label>
+				<Label class="label" for="po-supplier-ref">Supplier reference</Label>
 				<Input id="po-supplier-ref" bind:value={supplierRef} maxlength={100} class="font-mono" />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="po-target">Target date</Label>
+				<Label class="label" for="po-target">Target date</Label>
 				<Input id="po-target" type="date" bind:value={targetDate} class="font-mono" />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="po-dest">Destination</Label>
+				<Label class="label" for="po-dest">Destination</Label>
 				<Input id="po-dest" bind:value={destination} list="po-locations" maxlength={255} />
 				<datalist id="po-locations">
 					{#each data.locations as l (l)}<option value={l}></option>{/each}
 				</datalist>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5 md:col-span-2">
-				<Label for="po-notes">Notes</Label>
+				<Label class="label" for="po-notes">Notes</Label>
 				<Textarea id="po-notes" bind:value={notes} rows={2} class="text-xs" />
 			</div>
 		</div>

@@ -15,7 +15,7 @@
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { ApiError, opal } from '#lib/api.js';
-	import { money, qty as fmtQty } from '#lib/format.js';
+	import { money, qty as fmtQty, unitMoney } from '#lib/format.js';
 	import { PURCHASE_CHARGE_KINDS, num, type PurchaseExpense } from './types.js';
 
 	let {
@@ -57,7 +57,7 @@
 			await opal.purchasing.orders.addCharge({
 				id: purchaseId,
 				kind,
-				amount: amount.trim(),
+				amount: String(amount).trim(),
 				note: note.trim() || null
 			});
 			open = false;
@@ -136,7 +136,7 @@
 								>{e.kind !== 'receipt' ? '' : fmtQty(e.quantity)}</td
 							>
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
-								>{e.kind !== 'receipt' ? '' : money(e.unitCost)}</td
+								>{e.kind !== 'receipt' ? '' : unitMoney(e.unitCost)}</td
 							>
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums">{money(e.totalCost)}</td>
 							<td class="px-3 py-1.5"><Timestamp value={e.at} /></td>
@@ -172,13 +172,13 @@
 		<Dialog.Header><Dialog.Title>Add charge</Dialog.Title></Dialog.Header>
 		<form class="grid grid-cols-1 gap-3" onsubmit={add}>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="charge-kind">Kind</Label>
+				<Label class="label" for="charge-kind">Kind</Label>
 				<NativeSelect id="charge-kind" bind:value={kind} class="w-full">
 					{#each KINDS as k (k)}<option value={k}>{k.toUpperCase()}</option>{/each}
 				</NativeSelect>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="charge-amount">Amount</Label>
+				<Label class="label" for="charge-amount">Amount</Label>
 				<Input
 					id="charge-amount"
 					type="number"
@@ -190,7 +190,7 @@
 				/>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="charge-note">Note</Label>
+				<Label class="label" for="charge-note">Note</Label>
 				<Input id="charge-note" bind:value={note} maxlength={500} />
 			</div>
 			<ErrorBanner message={error} />

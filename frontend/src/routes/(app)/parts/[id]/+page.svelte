@@ -10,6 +10,8 @@
 	import IdentitySection from '#lib/components/parts/IdentitySection.svelte';
 	import WhereUsedSection from '#lib/components/parts/WhereUsedSection.svelte';
 	import PartRequirementsSection from '#lib/components/requirements/PartRequirementsSection.svelte'; // added by requirements
+	import StockSection from '#lib/components/parts/StockSection.svelte'; // added by inventory
+	import TestsSection from '#lib/components/parts/TestsSection.svelte'; // added by inventory
 	import SuppliersSection from '#lib/components/parts/SuppliersSection.svelte'; // added by purchasing
 	import PoLinesSection from '#lib/components/parts/PoLinesSection.svelte'; // added by purchasing
 	import type { PageProps } from './$types';
@@ -99,7 +101,7 @@
 	>
 		<State value="draft" tone="warn" badge />
 		<dl
-			class="grid min-w-0 flex-1 [grid-template-columns:max-content_1fr] grid-cols-1 gap-x-3 gap-y-0.5 text-xs"
+			class="grid min-w-0 flex-1 [grid-template-columns:max-content_1fr] gap-x-3 gap-y-0.5 text-xs"
 		>
 			<dt class="label">Blocks</dt>
 			<dd>PO lines · stock receipts · executions · consumption · production output</dd>
@@ -124,6 +126,8 @@
 	</div>
 	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<BomSection {detail} />
+		<StockSection {detail} records={data.stock} />
+		<TestsSection partId={part.id} templates={data.tests} />
 		<SuppliersSection {detail} entries={data.suppliers} />
 		<PoLinesSection {detail} lines={data.poLines} />
 		<WhereUsedSection {detail} />

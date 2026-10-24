@@ -43,7 +43,9 @@ for (const p of paths) {
 	// A failed console line for a failed request repeats the request line; keep one.
 	const problems = current.filter((e) => !e.startsWith('console: Failed to load resource'));
 	if (problems.length) failed++;
-	console.log(`${problems.length ? 'FAIL' : 'ok  '} ${p}${problems.map((e) => `\n       ${e}`).join('')}`);
+	console.log(
+		`${problems.length ? 'FAIL' : 'ok  '} ${p}${problems.map((e) => `\n       ${e}`).join('')}`
+	);
 }
 console.log(`\n${paths.length - failed} of ${paths.length} screens clean`);
 await browser.close();

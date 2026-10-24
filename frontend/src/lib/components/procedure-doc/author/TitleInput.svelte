@@ -5,7 +5,8 @@
 	import type { DocStep } from '../types.js';
 
 	let { step, class: className }: { step: DocStep; class?: string } = $props();
-	const au = useDoc().author!;
+	const ctl = useDoc();
+	const au = ctl.author!;
 </script>
 
 <input
@@ -22,9 +23,10 @@
 	aria-label={`Title of ${step.number}`}
 	aria-invalid={!step.title.trim()}
 	onclick={(e) => e.stopPropagation()}
+	onfocus={() => ctl.setFocus(step.order)}
 	onkeydown={(e) => {
 		e.stopPropagation();
-		if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+		if (e.key === 'Enter' || e.key === 'Escape') (e.currentTarget as HTMLInputElement).blur();
 	}}
 	oninput={(e) => au.edit(step, { title: e.currentTarget.value })}
 />

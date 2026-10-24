@@ -68,7 +68,7 @@
 		try {
 			const r = await opal.inventory.create({
 				partId: part.id,
-				quantity: quantity.trim(),
+				quantity: String(quantity).trim(),
 				location: location.trim(),
 				lotNumber: lot.trim() || null,
 				serialNumber: serial.trim() || null,

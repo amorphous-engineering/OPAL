@@ -210,6 +210,8 @@ export function renderReport(r: ImportReport): string {
 	for (const s of r.stockDifferences) {
 		L.push(`  ${s.opalNumber} (record ${s.stockId}, part ${s.partId}): old quantity ${s.legacyQuantity / 10000}, movements ${s.ledgerSum / 10000}, adjusted by ${s.difference / 10000}`);
 	}
+	L.push('', `Receipts with no stock record, held at "Legacy receipt (no stock record)" and adjusted out: ${r.receiptGaps.length}`);
+	for (const g of r.receiptGaps) L.push(`  ${g.reference} line ${g.purchaseLineId}  ${g.partNumber}  received ${g.quantity / 10000}  (${g.opalNumber})`);
 	L.push('', `Obsolete parts (had deleted_at): ${r.obsoleteParts.length}`);
 	for (const p of r.obsoleteParts) L.push(`  ${p.id}  ${p.internalPn}`);
 	L.push('', `Parts given a placeholder number: ${r.placeholderPns.length}`);

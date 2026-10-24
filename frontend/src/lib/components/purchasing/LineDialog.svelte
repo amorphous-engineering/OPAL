@@ -55,8 +55,8 @@
 		busy = true;
 		try {
 			const body = {
-				qtyOrdered: qty.trim(),
-				unitCost: cost.trim() === '' ? null : cost.trim(),
+				qtyOrdered: String(qty).trim(),
+				unitCost: String(cost).trim() === '' ? null : String(cost).trim(),
 				destination: destination.trim() || null,
 				notes: notes.trim() || null
 			};
@@ -88,7 +88,7 @@
 		</Dialog.Header>
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="line-part">Part</Label>
+				<Label class="label" for="line-part">Part</Label>
 				{#if line}
 					<div class="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-xs">
 						<span class="font-mono text-info">{line.partInternalPn}</span>
@@ -100,7 +100,7 @@
 			</div>
 			<div class="grid grid-cols-2 gap-3">
 				<div class="grid grid-cols-1 gap-1.5">
-					<Label for="line-qty"
+					<Label class="label" for="line-qty"
 						>Quantity{line?.unitOfMeasure && line.unitOfMeasure !== 'ea'
 							? ` (${line.unitOfMeasure})`
 							: ''}</Label
@@ -116,7 +116,7 @@
 					/>
 				</div>
 				<div class="grid grid-cols-1 gap-1.5">
-					<Label for="line-cost">Unit cost</Label>
+					<Label class="label" for="line-cost">Unit cost</Label>
 					<Input
 						id="line-cost"
 						type="number"
@@ -129,7 +129,7 @@
 				</div>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="line-dest">Destination</Label>
+				<Label class="label" for="line-dest">Destination</Label>
 				<Input
 					id="line-dest"
 					bind:value={destination}
@@ -141,7 +141,7 @@
 				</datalist>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="line-notes">Notes</Label>
+				<Label class="label" for="line-notes">Notes</Label>
 				<Input id="line-notes" bind:value={notes} />
 			</div>
 			<ErrorBanner message={error} />

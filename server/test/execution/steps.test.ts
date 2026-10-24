@@ -32,6 +32,33 @@ describe('data capture', () => {
 		expect(d.dataRows[0]).toMatchObject({ field: 'Torque', unit: 'Nm', value: '5' });
 	});
 
+	test('a photo that a capture replaced or removed loses its attachment link', async () => {
+		const t = await setup();
+		const p = await t.proc('Photos');
+		await t.step(p.id, 'Shoot', { dataSchema: { fields: [{ name: 'shot', type: 'photo', required: true }, { name: 'extra', type: 'photo', multiple: true }] } });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const e = await t.cut(p.id);
+		const sid = await t.stepOf(e.id, '1');
+		const upload = async () => {
+			const form = new FormData();
+			form.set('file', t.png());
+			form.set('ownerType', 'step_execution');
+			form.set('ownerId', String(sid));
+			form.set('kind', 'capture');
+			const r = await t.app.request('/api/attachments', { method: 'POST', body: form });
+			expect(r.status).toBeLessThan(300);
+			return ((await r.json()) as { id: number }).id;
+		};
+		const first = await upload();
+		const second = await upload();
+		const dropped = await upload();
+		const done = await t.complete(e.id, '1', { dataCaptured: { shot: [second], extra: [dropped] } });
+		expect(done.status).toBe(200);
+		const kept = (await t.doc(e.id)).ops[0].step.attachments.map((a: any) => a.id);
+		expect(kept.sort()).toEqual([second, dropped].sort());
+		expect(kept).not.toContain(first);
+	});
+
 	test('a step cannot be completed twice', async () => {
 		const t = await setup();
 		const pid = await t.published(['A', 'B']);

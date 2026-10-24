@@ -24,6 +24,15 @@
 		{#if f.type === 'checkbox'}
 			<span class="inline-block size-4 border-2 border-black"></span>
 			<span class="text-[9pt]">YES / NO</span>
+		{:else if f.type === 'select' && f.options?.length}
+			<span class="flex flex-1 flex-wrap gap-x-4 gap-y-1">
+				{#each f.options as o (o)}
+					<span class="inline-flex items-center gap-1.5">
+						<span class="inline-block size-4 border-2 border-black"></span>
+						<span>{o}</span>
+					</span>
+				{/each}
+			</span>
 		{:else}
 			<span class="min-h-[18px] flex-1 border-b border-black">&nbsp;</span>
 			{#if f.unit}<span class="text-[9pt]">{f.unit}</span>{/if}

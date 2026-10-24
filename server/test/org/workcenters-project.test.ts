@@ -14,6 +14,41 @@ describe('workcenters', () => {
 		expect(upd.json).toMatchObject({ name: 'Cleanroom', code: 'CR2', location: 'B2' });
 	});
 
+	test('the audit log names a workcenter and a role by their own page, never an id', async () => {
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob', { admin: true });
+		const wc = (await call(bob, 'POST', '/workcenters', { name: 'Clean room', code: 'cr1' })).json;
+		const rl = (await call(bob, 'POST', '/roles', { name: 'Reviewer' })).json;
+		const log = (await call(bob, 'GET', '/audit?limit=50')).json.items as { entity: string; recordLabel: string | null; href: string | null }[];
+		expect(log.find((e) => e.entity === 'workcenter')).toMatchObject({ recordLabel: 'CR1 Clean room', href: `/workcenters/${wc.id}` });
+		expect(log.find((e) => e.entity === 'role')).toMatchObject({ recordLabel: 'Reviewer', href: `/settings?role=${rl.id}#roles` });
+	});
+
+	test('the command palette finds a workcenter by name or code', async () => {
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		const wc = (await call(bob, 'POST', '/workcenters', { name: 'Clean room', code: 'cr1' })).json;
+		for (const q of ['clean', 'CR1']) {
+			const hits = (await call(bob, 'GET', `/search?q=${q}`)).json as { entityType: string; label: string; sublabel: string; href: string }[];
+			expect(hits.find((h) => h.entityType === 'workcenter')).toMatchObject({ label: 'Clean room', sublabel: 'CR1', href: `/workcenters/${wc.id}` });
+		}
+	});
+
+	test('undo reverses a workcenter edit and a workcenter creation', async () => {
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob', { admin: true });
+		const wc = (await call(bob, 'POST', '/workcenters', { name: 'Clean room', code: 'cr1' })).json;
+		await call(bob, 'PATCH', `/workcenters/${wc.id}`, { name: 'Cleanroom' });
+		const preview = await call(bob, 'GET', '/undo/last');
+		expect(preview.json).toMatchObject({ canUndo: true });
+		expect((await call(bob, 'POST', '/undo/last')).status).toBe(200);
+		expect((await call(bob, 'GET', `/workcenters/${wc.id}`)).json.name).toBe('Clean room');
+		const second = await call(bob, 'POST', '/undo/last');
+		
+		expect(second.status).toBe(200);
+		expect((await call(bob, 'GET', `/workcenters/${wc.id}`)).status).toBe(404);
+	});
+
 	test('a blank name is refused and a duplicate code is refused ignoring case', async () => {
 		const { call, makeUser } = await setup();
 		const bob = makeUser('bob');

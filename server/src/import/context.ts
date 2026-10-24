@@ -42,6 +42,8 @@ export interface ImportReport {
 	placeholderPns: { id: number; internalPn: string }[];
 	/** Stock records whose old quantity differs from the sum of the built moves. */
 	stockDifferences: StockDifference[];
+	/** Purchase lines whose legacy received quantity had no receive moves; a holding stock record took the gap. */
+	receiptGaps: { purchaseLineId: number; reference: string; partNumber: string; quantity: number; opalNumber: string }[];
 	/** Rows with values outside the new enums, and what they became. */
 	warnings: string[];
 	failedRows: { table: string; id: number; reason: string }[];
@@ -89,6 +91,7 @@ export function emptyReport(source: string, dest: string, version: string, at: s
 		obsoleteParts: [],
 		placeholderPns: [],
 		stockDifferences: [],
+		receiptGaps: [],
 		warnings: [],
 		failedRows: []
 	};

@@ -40,6 +40,7 @@
 	const risk = $derived(data.risk);
 	const accepted = $derived(risk.disposition === 'accepted');
 	const terminal = $derived(risk.disposition === 'realized');
+	const reviewedBy = $derived(` · ${risk.lastReviewedByName}`);
 
 	let target = $state('');
 	let editingAsset = $state(false);
@@ -500,8 +501,9 @@
 					<DetailRow label="Last reviewed">
 						{#if risk.lastReviewedAt}
 							<span class="font-mono text-xs"
-								><Timestamp value={risk.lastReviewedAt} />{#if risk.lastReviewedByName}
-									· {risk.lastReviewedByName}{/if}</span
+								><Timestamp
+									value={risk.lastReviewedAt}
+								/>{#if risk.lastReviewedByName}{reviewedBy}{/if}</span
 							>
 						{:else}
 							<span class="text-muted-foreground">—</span>

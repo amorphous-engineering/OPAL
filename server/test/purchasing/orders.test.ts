@@ -160,6 +160,17 @@ describe('lines', () => {
 });
 
 describe('receiving', () => {
+	test('the ledger of a received record names the order behind the receipt', async () => {
+		const s = await setup();
+		const p = makePart(s.db);
+		const po = await mkPo(s, { destination: 'Dock', lines: [{ partId: p.id, qtyOrdered: '3' }] });
+		await setStatus(s, po.id, 'ordered');
+		await recv(s, po.id, [{ lineId: po.lines[0].id, quantity: '3', lotNumber: 'L1' }]);
+		const rec = (await s.call('GET', `/purchases/${po.id}/inventory`)).body[0];
+		const ledger = (await s.call('GET', `/inventory/opal/${rec.opalNumber}/history`)).body;
+		expect(ledger[0].links).toMatchObject({ purchaseLineId: po.lines[0].id, purchaseId: po.id });
+	});
+
 	test('the location falls back to the order destination, the full receipt closes the order and links the stock move to the line', async () => {
 		const s = await setup();
 		const p = makePart(s.db);

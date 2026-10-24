@@ -127,7 +127,10 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 				cookies: cookieJar(hc),
 				request: {
 					userAgent: hc.req.header('user-agent') ?? null,
-					ip: hc.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null
+					ip:
+						hc.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
+						(hc.env as { ip?: string | null } | undefined)?.ip ??
+						null
 				}
 			});
 			if (c.produces) {

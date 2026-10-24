@@ -374,9 +374,9 @@ export function setDependencies(ctx: Ctx, procedureId: number, stepId: number, d
 	const byId = new Map(rows.map((r) => [r.id, r]));
 	for (const pid of requested) {
 		const p = byId.get(pid);
-		if (!p) throw invalid('dependency_foreign', `Step ${pid} is not in this procedure`);
+		if (!p) throw invalid('dependency_foreign', 'A prerequisite is not in this procedure');
 		if (p.parentStepId !== null) {
-			throw invalid('not_an_op', `Step ${pid} is a sub-step; only operations can be prerequisites`);
+			throw invalid('not_an_op', `"${p.title}" is a sub-step; only operations can be prerequisites`);
 		}
 	}
 	// Cycle check on the edge set after the change. An edge prerequisite -> dependent is walked
@@ -400,7 +400,7 @@ export function setDependencies(ctx: Ctx, procedureId: number, stepId: number, d
 	if (cyc.length) {
 		throw invalid(
 			'dependency_cycle',
-			`Cycle: step ${stepId} already gates ${cyc.sort((a, b) => a - b).join(', ')}; it cannot depend on them`
+			`Cycle: "${target.title}" already gates ${cyc.map((c) => `"${byId.get(c)!.title}"`).join(', ')}; it cannot depend on them`
 		);
 	}
 	const current = edges.filter((d) => d.stepId === stepId);

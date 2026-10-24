@@ -185,7 +185,7 @@ export function importPurchasing(c: ImportCtx): void {
 	});
 	track(c, 'purchase', insertRows(c, 'purchase', purchase, rows));
 
-	const lines = readTable(c, 'purchase_line', ['id', 'purchase_id', 'part_id', 'qty_ordered', 'unit_cost', 'destination', 'notes', 'created_at', 'updated_at']);
+	const lines = readTable(c, 'purchase_line', ['id', 'purchase_id', 'part_id', 'qty_ordered', 'qty_received', 'unit_cost', 'destination', 'notes', 'created_at', 'updated_at']);
 	const lineRows = lines.flatMap((r) => {
 		const id = Number(r.id);
 		if (!c.ids.purchase!.has(Number(r.purchase_id)) || !c.ids.part!.has(Number(r.part_id))) {

@@ -406,7 +406,7 @@
 				<table class="w-full border-collapse text-sm">
 					<thead>
 						<tr class="border-b border-border bg-muted/60">
-							{#each [['Number', 'w-44'], ['Project', 'w-20'], ['Title', 'w-64'], ['Statement', ''], ['State', 'w-28'], ['L', 'w-10'], ['Verification', 'w-44'], ['Parts', 'w-44'], ['Flags', 'w-24'], ['Age', 'w-14']] as [label, w] (label)}
+							{#each [['Number', 'w-44'], ['Project', 'w-36'], ['Title', 'w-64'], ['Statement', ''], ['State', 'w-28'], ['L', 'w-10'], ['Verification', 'w-44'], ['Parts', 'w-44'], ['Flags', 'w-24'], ['Age', 'w-14']] as [label, w] (label)}
 								<th
 									scope="col"
 									class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase {w}"
@@ -448,7 +448,7 @@
 											>r{r.revision}</span
 										>{/if}
 								</td>
-								<td class="px-3 py-1 font-mono text-xs">{r.projectCode}</td>
+								<td class="px-3 py-1 font-mono text-xs whitespace-nowrap">{r.projectCode}</td>
 								<!-- added by projects -->
 								<td class="px-3 py-1"
 									><span class="line-clamp-1" title={r.title}>{r.title}</span></td

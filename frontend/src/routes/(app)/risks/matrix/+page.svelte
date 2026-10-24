@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { DetailRow, DetailTable, PageHeader, Section } from '#lib/components/opal/index.js';
+	import {
+		DetailRow,
+		DetailTable,
+		FilterBar,
+		FilterSelect,
+		PageHeader,
+		Section
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { SEVERITIES, severityOf, type Severity } from '#lib/components/risks/types.js';
@@ -27,15 +34,29 @@
 		return counts;
 	});
 
-	const live = (extra: string) => `/risks?active=1&${extra}`;
+	const live = (extra: string) =>
+		`/risks?active=1&${data.projectId ? `project=${data.projectId}&` : ''}${extra}`;
 </script>
 
 <PageHeader title="Risk matrix" crumbs={[{ label: 'Risks', href: '/risks' }, { label: 'Matrix' }]}>
 	{#snippet actions()}
 		<Button size="sm" variant="outline" href="/risks">REGISTER</Button>
-		<Button size="sm" href="/risks/new">+ NEW RISK</Button>
+		<Button
+			size="sm"
+			href={data.projectId ? `/risks/new?projectId=${data.projectId}` : '/risks/new'}
+			>+ NEW RISK</Button
+		>
 	{/snippet}
 </PageHeader>
+
+<FilterBar clear={['project']}>
+	<FilterSelect
+		param="project"
+		label="Project"
+		allLabel="All projects"
+		options={data.projects.map((p) => ({ value: String(p.id), label: p.code }))}
+	/>
+</FilterBar>
 
 <div class="grid grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[minmax(0,48rem)_20rem]">
 	{#if m}

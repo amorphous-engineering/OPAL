@@ -4,6 +4,8 @@
  * ids, field changes instead of two JSON blobs.
  */
 import {
+	formatQty,
+	type Qty,
 	type AuditEntry,
 	type FieldChange,
 	OpalError,
@@ -29,6 +31,11 @@ const NOISE = new Set(['updatedAt']);
 const isUserField = (f: string) =>
 	f === 'userId' || f === 'assignedToId' || f === 'ownerId' || f === 'actorId' || f.endsWith('ById');
 
+/** Columns stored as integers scaled by QTY_SCALE; the log shows them as decimals. */ // added by QA
+const SCALED = new Set(['reorderPoint', 'quantity', 'qty', 'qtyOrdered', 'unitCost', 'amount']);
+const scaled = (k: string, v: unknown) =>
+	SCALED.has(k) && typeof v === 'number' ? formatQty(v as Qty) : v;
+
 function obj(v: unknown): Record<string, unknown> {
 	return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 }
@@ -40,16 +47,16 @@ function rawChanges(r: Row): [string, unknown, unknown][] {
 	if (r.action === 'update') {
 		return Object.keys(after)
 			.filter((k) => !NOISE.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]))
-			.map((k) => [k, before[k] ?? null, after[k] ?? null]);
+			.map((k) => [k, scaled(k, before[k] ?? null), scaled(k, after[k] ?? null)]);
 	}
 	if (r.action === 'create') {
 		return Object.entries(after)
 			.filter(([k, v]) => v !== null && k !== 'id')
-			.map(([k, v]) => [k, null, v]);
+			.map(([k, v]) => [k, null, scaled(k, v)]);
 	}
 	return Object.entries(before)
 		.filter(([k, v]) => v !== null && k !== 'id')
-		.map(([k, v]) => [k, v, null]);
+		.map(([k, v]) => [k, scaled(k, v), null]);
 }
 
 /** Resolve audit rows to readable entries (also used by the overview activity feed). */

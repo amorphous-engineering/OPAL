@@ -25,7 +25,7 @@
 		{:else}
 			{@const v = (r as unknown as Record<string, unknown>)[col.key]}
 			{#if v === null || v === undefined || v === ''}<span class="text-muted-foreground">—</span
-				>{:else}{v}{/if}
+				>{:else}<span class="whitespace-pre-wrap">{v}</span>{/if}
 		{/if}
 	{/snippet}
 </DataTable>

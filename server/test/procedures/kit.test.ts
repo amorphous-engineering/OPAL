@@ -186,6 +186,7 @@ describe('op dependencies', () => {
 		await s.ok('PUT', `/procedures/${s.pid}/steps/${s.ids[2]}/dependencies`, { dependsOn: [s.ids[1]] });
 		const direct = await s.call('PUT', `/procedures/${s.pid}/steps/${s.ids[0]}/dependencies`, { dependsOn: [s.ids[1]] });
 		expect(direct.json.error).toBe('dependency_cycle');
+		expect(direct.json.message).toContain('"OP 1" already gates "OP 2"'); // titles, never database ids
 		const loop = await s.call('PUT', `/procedures/${s.pid}/steps/${s.ids[0]}/dependencies`, { dependsOn: [s.ids[2]] });
 		expect(loop.json.error).toBe('dependency_cycle');
 		expect(await s.ok('GET', `/procedures/${s.pid}/dependencies`)).toHaveLength(2);

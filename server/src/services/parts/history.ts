@@ -1,4 +1,5 @@
 /** A part's audit trail, from the audit log. */
+import { formatQty, type Qty } from '@opal/shared';
 import { desc, and, eq, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import { auditLog, user } from '../../db/schema/index.ts';
@@ -6,6 +7,10 @@ import { getRow } from './index.ts';
 
 /** Bookkeeping columns that change on every write and say nothing. */
 const SKIP = new Set(['updatedAt', 'createdAt', 'id']);
+
+/** The log holds the stored integer; the page shows the decimal. */
+const shown = (field: string, v: unknown) =>
+	field === 'reorderPoint' && typeof v === 'number' ? formatQty(v as Qty) : (v ?? null);
 
 export function history(ctx: Ctx, id: number, limit: number) {
 	getRow(ctx, id);
@@ -28,7 +33,7 @@ export function history(ctx: Ctx, id: number, limit: number) {
 				entry.action === 'update'
 					? Object.keys(after)
 							.filter((k) => !SKIP.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]))
-							.map((field) => ({ field, old: before[field] ?? null, new: after[field] ?? null }))
+							.map((field) => ({ field, old: shown(field, before[field]), new: shown(field, after[field]) }))
 					: [];
 			return { at: entry.at, action: entry.action as 'create' | 'update' | 'delete', op: entry.op, userName, changes };
 		})

@@ -43,11 +43,13 @@ export function ledgerKind(row: Pick<StockLedgerRow, 'kind' | 'qty' | 'reason'>)
 /** Link columns that other areas add to a move, as something a person can read or follow. */
 const LINKS: Record<string, { label: string; href?: (id: number) => string }> = {
 	executionId: { label: 'EXECUTION', href: (id) => `/executions/${id}` },
-	purchaseLineId: { label: 'PURCHASE' }
+	purchaseLineId: { label: 'PURCHASE' },
+	purchaseId: { label: 'PURCHASE', href: (id) => `/purchases/${id}` }
 };
 
 export function moveLinks(links: Record<string, number>): { label: string; href: string | null }[] {
 	return Object.entries(links).flatMap(([k, id]) => {
+		if (k === 'purchaseLineId' && 'purchaseId' in links) return [];
 		const l = LINKS[k];
 		return l ? [{ label: l.label, href: l.href ? l.href(id) : null }] : [];
 	});

@@ -1,4 +1,4 @@
-import { api, opal } from '#lib/api.js';
+import { opal } from '#lib/api.js';
 import { hasOperation } from '#lib/components/shell/capabilities.js';
 import { requireSession } from '#lib/session-guard.js';
 import type { LayoutLoad } from './$types';
@@ -16,15 +16,15 @@ export const load: LayoutLoad = async ({ url, fetch }) => {
 	// Demo state shows as a banner on every page. Asked only when this server has the
 	// endpoint (an area not built yet must not log a failed request).
 	const lifecycle = hasOperation(about, 'GET', '/settings/lifecycle')
-		? await api
+		? await opal
 				.using(fetch)
-				.get<{ demo_active: boolean }>('/settings/lifecycle')
+				.reports.lifecycle.get({})
 				.catch(() => null)
 		: null;
 	return {
 		user,
 		about,
 		unreadCount: unread?.unreadCount ?? 0,
-		demoActive: lifecycle?.demo_active ?? false
+		demoActive: lifecycle?.demoActive ?? false
 	};
 };

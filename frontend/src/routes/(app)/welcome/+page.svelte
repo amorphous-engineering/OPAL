@@ -9,7 +9,7 @@
 		toastError
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { api, opal } from '#lib/api.js';
+	import { opal } from '#lib/api.js';
 	import { session } from '#lib/session.svelte.js';
 	import { ACTION_SHORTCUTS, NAV_SHORTCUTS } from '#lib/shortcuts.js';
 	import type { PageProps } from './$types';
@@ -46,7 +46,7 @@
 		if (!ok) return;
 		busy = 'demo';
 		try {
-			await api.post('/welcome/load-demo');
+			await opal.reports.lifecycle.enterDemo({});
 			// The session now belongs to the demo database: reload everything.
 			window.location.assign('/');
 		} catch (e) {

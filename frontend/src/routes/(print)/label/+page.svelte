@@ -63,7 +63,7 @@
 </svelte:head>
 
 <div
-	class="flex flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2 print:hidden"
+	class="flex flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2 text-foreground print:hidden"
 >
 	<span class="font-mono text-sm font-bold tracking-[0.2em]">LABELS</span>
 	<span class="mono text-xs text-muted-foreground">{sheets.length}</span>

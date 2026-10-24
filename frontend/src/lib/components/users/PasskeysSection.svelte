@@ -103,7 +103,7 @@
 		{ key: 'name', label: 'Name' },
 		{ key: 'createdAt', label: 'Created', class: 'whitespace-nowrap' },
 		{ key: 'lastUsedAt', label: 'Last used', class: 'whitespace-nowrap' },
-		{ key: 'actions', label: '', width: '11rem', align: 'right' }
+		{ key: 'actions', label: '', width: '11rem', align: 'right', class: 'whitespace-nowrap' }
 	];
 </script>
 

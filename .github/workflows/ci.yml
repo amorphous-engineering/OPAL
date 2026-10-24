@@ -35,6 +35,19 @@ jobs:
       - name: Lint
         run: pnpm --filter frontend lint
 
+      - name: Operation coverage (every operation has a test)
+        run: pnpm --filter @opal/server test:ops
+
+      - name: Compiled binary starts and serves
+        run: |
+          pnpm --filter frontend build
+          (cd server && bun scripts/build.ts --target bun-linux-x64 --version 0.0.0-ci)
+          export OPAL_DATA_DIR=$(mktemp -d)
+          server/dist/opal-linux-x86_64 serve --port 8080 &
+          for i in $(seq 1 30); do curl -sf localhost:8080/api/health && break; sleep 1; done
+          curl -sf localhost:8080/api/health
+          curl -sf localhost:8080/ | grep -q '<html'
+
   legacy-python:
     runs-on: ubuntu-latest
     defaults:

@@ -86,7 +86,7 @@
 					{:else if f.type === 'checkbox'}
 						{raw ? 'TRUE' : 'FALSE'}
 					{:else}
-						<span class="break-words">{raw}</span>
+						<span class="break-words whitespace-pre-wrap">{raw}</span>
 					{/if}
 				</div>
 			</div>

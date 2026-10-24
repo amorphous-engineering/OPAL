@@ -94,7 +94,11 @@
 {:else}
 	<Section {title} count={rows.length}>
 		{#snippet actions()}
-			<Button variant="ghost" size="xs" onclick={() => (adding = true)}>+ ADD</Button>
+			<Button
+				variant="link"
+				class="h-auto border-0 p-0 font-mono text-xs tracking-wider text-info uppercase"
+				onclick={() => (adding = true)}>+ ADD</Button
+			>
 		{/snippet}
 		<DataTable {rows} {columns} emptyLabel={title} dense key={(r) => r.id}>
 			{#snippet cell(row, col)}

@@ -5,7 +5,7 @@
  *
  * See each module's header for the contract.
  */
-export { attach, detachAll, listFor as attachmentsFor, storeBlob, getBlob, blobPath, purgeOrphanBlobs, type FileInput, type Owner } from './attachments.ts';
+export { attach, detach, detachAll, listFor as attachmentsFor, storeBlob, getBlob, blobPath, purgeOrphanBlobs, type FileInput, type Owner } from './attachments.ts';
 export { publish, subscribe, flushEvents, type PublishInput } from './events.ts';
 export { notify, priorityFromIssue, type NotifyInput } from './notifications.ts';
 export { registerEntity, registerEntityLabel, resolveRef, entityLabel, type EntityRef } from './entities.ts';

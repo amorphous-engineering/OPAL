@@ -149,7 +149,11 @@
 						>
 						<tbody>
 							{#each dc.rows as row, i (i)}
-								<tr><td>{row.label}</td><td>{row.value}</td><td>{dash(row.unit)}</td></tr>
+								<tr
+									><td>{row.label}</td><td style="white-space: pre-wrap">{row.value}</td><td
+										>{dash(row.unit)}</td
+									></tr
+								>
 							{/each}
 						</tbody>
 					</table>

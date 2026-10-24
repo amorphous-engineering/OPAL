@@ -53,11 +53,11 @@
 	<Section title="SUPPLIER">
 		<div class="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="s-name">Name</Label>
+				<Label class="label" for="s-name">Name</Label>
 				<Input id="s-name" bind:value={name} required maxlength={255} />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="s-code">Code</Label>
+				<Label class="label" for="s-code">Code</Label>
 				<Input
 					id="s-code"
 					bind:value={code}
@@ -67,27 +67,27 @@
 				/>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="s-email">Email</Label>
+				<Label class="label" for="s-email">Email</Label>
 				<Input id="s-email" type="email" bind:value={email} maxlength={255} />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="s-phone">Phone</Label>
+				<Label class="label" for="s-phone">Phone</Label>
 				<Input id="s-phone" type="tel" bind:value={phone} maxlength={50} class="font-mono" />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5 md:col-span-2">
-				<Label for="s-web">Website</Label>
+				<Label class="label" for="s-web">Website</Label>
 				<Input id="s-web" type="url" bind:value={website} maxlength={255} placeholder="https://" />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5 md:col-span-2">
-				<Label for="s-address">Address</Label>
+				<Label class="label" for="s-address">Address</Label>
 				<Textarea id="s-address" bind:value={address} rows={3} class="text-xs" />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5 md:col-span-2">
-				<Label for="s-desc">Description</Label>
+				<Label class="label" for="s-desc">Description</Label>
 				<Textarea id="s-desc" bind:value={description} rows={2} class="text-xs" />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5 md:col-span-2">
-				<Label for="s-notes">Notes</Label>
+				<Label class="label" for="s-notes">Notes</Label>
 				<Textarea id="s-notes" bind:value={notes} rows={2} class="text-xs" />
 			</div>
 		</div>

@@ -6,8 +6,9 @@
  * rows built from the old movement rows. Where the old quantity and the ledger sum differ, one
  * more move closes the gap (see the rules below).
  */
-import { ADJUST_REASONS, STOCK_SOURCES, STOCK_TEST_RESULTS, STOCK_TEST_TYPES } from '@opal/shared';
-import { stockMove, stockRecord, stockTestResult, testTemplate } from '../db/schema/index.ts';
+import { ADJUST_REASONS, QTY_SCALE, STOCK_SOURCES, STOCK_TEST_RESULTS, STOCK_TEST_TYPES } from '@opal/shared';
+import { eq, sql } from 'drizzle-orm';
+import { part, purchase, purchaseLine, stockMove, stockRecord, stockTestResult, testTemplate } from '../db/schema/index.ts';
 import {
 	type ImportCtx,
 	type Row,
@@ -311,6 +312,8 @@ export function importInventory(c: ImportCtx): InventoryLinks {
 	c.report.tables.stock_transfer!.imported = transfers.filter((t) => String(t.status) === 'completed').length - failedIn('stock_transfer');
 	derived(c, 'stock_move', written.size);
 	track(c, 'stock_move', written);
+	closeReceiptGaps(c, () => ++opalMax);
+	settlePurchaseStatus(c);
 
 	// ---- tests
 	const templates = readTable(c, 'test_template', ['id', 'part_id', 'name', 'description', 'required', 'test_type', 'min_value', 'max_value', 'unit', 'sort_order', 'created_at', 'updated_at']);
@@ -345,4 +348,90 @@ export function importInventory(c: ImportCtx): InventoryLinks {
 			updatedAt: tsReq(r.updated_at)
 		})));
 	return links;
+}
+
+export const RECEIPT_GAP_LOCATION = 'Legacy receipt (no stock record)';
+
+/**
+ * The old purchase line stored the quantity received. The new one derives it from the receive
+ * moves that point at the line. Where the old number is higher than those moves, one stock
+ * record at a holding location takes a receive move for the gap, and an adjust move takes it
+ * out again: the received quantity matches, no stock is invented. Where the moves add up to
+ * more than the old number, the line is listed as a warning and nothing is written.
+ */
+function closeReceiptGaps(c: ImportCtx, nextOpal: () => number): void {
+	if (!c.ids.purchase_line?.size) return;
+	const legacy = new Map((c.src.query('SELECT id, qty_received FROM purchase_line').all() as Row[]).map((r) => [Number(r.id), legacyQty(r.qty_received) ?? 0]));
+	const got = new Map(
+		c.d.select({ id: stockMove.purchaseLineId, total: sql<number>`COALESCE(SUM(${stockMove.qty}), 0)` })
+			.from(stockMove)
+			.where(sql`${stockMove.kind} = 'receive' AND ${stockMove.purchaseLineId} IS NOT NULL`)
+			.groupBy(stockMove.purchaseLineId)
+			.all()
+			.map((r) => [r.id as number, r.total])
+	);
+	const lines = c.d
+		.select({ id: purchaseLine.id, partId: purchaseLine.partId, updatedAt: purchaseLine.updatedAt, reference: purchase.reference, receivedAt: purchase.receivedAt, pn: part.internalPn })
+		.from(purchaseLine)
+		.innerJoin(purchase, eq(purchase.id, purchaseLine.purchaseId))
+		.innerJoin(part, eq(part.id, purchaseLine.partId))
+		.orderBy(purchaseLine.id)
+		.all();
+	let stockId = c.d.select({ m: sql<number>`COALESCE(MAX(${stockRecord.id}), 0)` }).from(stockRecord).get()!.m;
+	let moveId = c.d.select({ m: sql<number>`COALESCE(MAX(${stockMove.id}), 0)` }).from(stockMove).get()!.m;
+	for (const l of lines) {
+		const have = got.get(l.id) ?? 0;
+		const gap = (legacy.get(l.id) ?? 0) - have;
+		if (gap === 0) continue;
+		if (gap < 0) {
+			warn(c, `purchase_line ${l.id} (${l.reference}, ${l.pn}): receive moves add up to ${have / QTY_SCALE}, more than the legacy received quantity ${(legacy.get(l.id) ?? 0) / QTY_SCALE}; nothing written`);
+			continue;
+		}
+		const at = l.receivedAt ?? l.updatedAt;
+		const opalNumber = `OPAL-${String(nextOpal()).padStart(5, '0')}`;
+		const note = 'Legacy record had no stock for this receipt';
+		try {
+			c.d.insert(stockRecord).values({ id: ++stockId, partId: l.partId, opalNumber, location: RECEIPT_GAP_LOCATION, sourceType: 'purchase', createdAt: at, updatedAt: at }).run();
+			c.d.insert(stockMove).values([
+				{ id: ++moveId, stockId, kind: 'receive', qty: gap, at, purchaseLineId: l.id },
+				{ id: ++moveId, stockId, kind: 'adjust', qty: -gap, reason: 'import', notes: note, at }
+			]).run();
+		} catch (e) {
+			stockId--;
+			moveId -= 2;
+			fail(c, 'purchase_line', l.id, `receipt gap of ${gap / QTY_SCALE}: ${e instanceof Error ? e.message : String(e)}`);
+			continue;
+		}
+		track(c, 'stock_record', [stockId]);
+		track(c, 'stock_move', [moveId - 1, moveId]);
+		derived(c, 'stock_record', 1);
+		derived(c, 'stock_move', 2);
+		c.report.receiptGaps.push({ purchaseLineId: l.id, reference: l.reference, partNumber: l.pn, quantity: gap, opalNumber });
+	}
+}
+
+/**
+ * An open order's status follows its received quantities, as the purchasing service derives
+ * it (`settleStatus`): received when every line is in, partial when any is, else ordered.
+ */
+function settlePurchaseStatus(c: ImportCtx): void {
+	const received = new Map(
+		c.d.select({ id: stockMove.purchaseLineId, total: sql<number>`SUM(${stockMove.qty})` })
+			.from(stockMove)
+			.where(sql`${stockMove.kind} = 'receive' AND ${stockMove.purchaseLineId} IS NOT NULL`)
+			.groupBy(stockMove.purchaseLineId)
+			.all()
+			.map((r) => [r.id as number, r.total])
+	);
+	const orders = c.d.select().from(purchase).where(sql`${purchase.status} IN ('ordered', 'partial')`).all();
+	for (const o of orders) {
+		const lines = c.d.select({ id: purchaseLine.id, ordered: purchaseLine.qtyOrdered }).from(purchaseLine).where(eq(purchaseLine.purchaseId, o.id)).all()
+			.map((l) => ({ ordered: l.ordered, got: received.get(l.id) ?? 0 }));
+		let next: 'ordered' | 'partial' | 'received' = 'ordered';
+		if (lines.length && lines.every((l) => l.got >= l.ordered)) next = 'received';
+		else if (lines.some((l) => l.got > 0)) next = 'partial';
+		if (next === o.status) continue;
+		c.d.update(purchase).set({ status: next, ...(next === 'received' && !o.receivedAt ? { receivedAt: o.updatedAt } : {}) }).where(eq(purchase.id, o.id)).run();
+		warn(c, `purchase ${o.reference}: status ${o.status} became ${next} to match the received quantities`);
+	}
 }

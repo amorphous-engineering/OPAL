@@ -1,7 +1,7 @@
 import { contracts } from '@opal/shared';
-import { project as projectTable } from '../db/schema/index.ts';
+import { project as projectTable, role as roleTable, user as userTable, workcenter as workcenterTable } from '../db/schema/index.ts';
 import { type Impl, implement } from '../registry.ts';
-import { registerEntity, registerSearchable } from '../services/platform/index.ts';
+import { registerEntity, registerReversible, registerSearchable, revertRows } from '../services/platform/index.ts';
 import * as numbering from '../services/org/numbering.ts';
 import * as project from '../services/org/project.ts';
 import * as projects from '../services/org/projects.ts';
@@ -17,6 +17,29 @@ registerEntity(projectTable, {
 	label: 'Project',
 	ref: (r) => ({ label: `${r.code} ${r.name}`, href: `/projects/${r.id}` })
 });
+registerEntity(workcenterTable, {
+	label: 'Workcenter',
+	ref: (r) => ({ label: `${r.code} ${r.name}`, href: `/workcenters/${r.id}` })
+});
+registerSearchable({
+	type: 'workcenter',
+	table: workcenterTable,
+	columns: [workcenterTable.name, workcenterTable.code, workcenterTable.description],
+	identifier: workcenterTable.code,
+	hit: (r) => ({ label: r.name, sublabel: r.code, href: `/workcenters/${r.id}`, status: r.isActive ? 'active' : 'inactive' })
+});
+registerEntity(roleTable, {
+	label: 'Role',
+	ref: (r) => ({ label: r.name, href: `/settings?role=${r.id}#roles` })
+});
+// Undo: single-table edits revert from their audit rows. Role deletion and role assignment
+// touch the user_role links too, so they stay out.
+for (const op of ['workcenters.create', 'workcenters.update', 'workcenters.deactivate'])
+	registerReversible(op, { revert: (ctx, rows) => revertRows(ctx, rows, { workcenter: workcenterTable }) });
+for (const op of ['roles.create', 'roles.update'])
+	registerReversible(op, { revert: (ctx, rows) => revertRows(ctx, rows, { role: roleTable }) });
+registerReversible('projects.update', { revert: (ctx, rows) => revertRows(ctx, rows, { project: projectTable }) });
+registerReversible('users.update', { revert: (ctx, rows) => revertRows(ctx, rows, { user: userTable }) });
 registerSearchable({
 	type: 'project',
 	table: projectTable,

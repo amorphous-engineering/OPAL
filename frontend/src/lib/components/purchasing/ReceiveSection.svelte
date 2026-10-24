@@ -75,7 +75,7 @@
 			}
 			lines.push({
 				lineId: l.id,
-				quantity: row.qty.trim(),
+				quantity: String(row.qty).trim(),
 				location: row.location.trim() || null,
 				lotNumber: row.lot.trim() || null,
 				allowOverReceipt: over(l) > 0

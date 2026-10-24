@@ -68,7 +68,7 @@ const attOut = ({ ownerId: _o, ...a }: Att) => a;
 export function captureDisplay(v: unknown): string {
 	if (typeof v === 'boolean') return v ? 'YES' : 'NO';
 	if (v === null || v === undefined || v === '') return '—';
-	if (Array.isArray(v)) return v.length ? `${v.length} image(s) (${v.map((x) => `#${x}`).join(', ')})` : '—';
+	if (Array.isArray(v)) return v.length ? `${v.length} ${v.length === 1 ? 'image' : 'images'}` : '—';
 	return String(v);
 }
 

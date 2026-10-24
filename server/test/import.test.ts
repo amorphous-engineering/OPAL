@@ -114,7 +114,9 @@ describe('legacy import of a database with rows in every table', async () => {
 	test('purchases: registered supplier clears the name, free text keeps it, a missing reference is made', () => {
 		expect(q('SELECT id, reference, supplier_id, supplier_name, target_date FROM purchase ORDER BY id')).toEqual([
 			{ id: 1, reference: 'PO-0001', supplier_id: 2, supplier_name: null, target_date: '2026-04-01' },
-			{ id: 2, reference: 'PO-0002', supplier_id: null, supplier_name: 'Walk-in shop', target_date: null }
+			{ id: 2, reference: 'PO-0005', supplier_id: null, supplier_name: 'Walk-in shop', target_date: null },
+			{ id: 3, reference: 'PO-0003', supplier_id: 2, supplier_name: null, target_date: null },
+			{ id: 4, reference: 'PO-0004', supplier_id: 2, supplier_name: null, target_date: null }
 		]);
 	});
 
@@ -125,8 +127,44 @@ describe('legacy import of a database with rows in every table', async () => {
 		]);
 	});
 
+	test('received quantity without a stock record: a holding record takes a receive and an adjust, the balance stays zero', () => {
+		expect(report.receiptGaps).toEqual([
+			{ purchaseLineId: 3, reference: 'PO-0003', partNumber: 'LEGACY-12', quantity: 80000, opalNumber: 'OPAL-00013' },
+			{ purchaseLineId: 5, reference: 'PO-0004', partNumber: 'LEGACY-12', quantity: 50000, opalNumber: 'OPAL-00014' }
+		]);
+		expect(q("SELECT id, part_id, opal_number, source_type FROM stock_record WHERE location = 'Legacy receipt (no stock record)' ORDER BY id")).toEqual([
+			{ id: 12, part_id: 12, opal_number: 'OPAL-00013', source_type: 'purchase' },
+			{ id: 13, part_id: 12, opal_number: 'OPAL-00014', source_type: 'purchase' }
+		]);
+		expect(q('SELECT stock_id, kind, qty, reason, purchase_line_id, at, notes FROM stock_move WHERE stock_id IN (12, 13) ORDER BY id')).toEqual([
+			{ stock_id: 12, kind: 'receive', qty: 80000, reason: null, purchase_line_id: 3, at: '2026-03-02T11:30:00.500Z', notes: null },
+			{ stock_id: 12, kind: 'adjust', qty: -80000, reason: 'import', purchase_line_id: null, at: '2026-03-02T11:30:00.500Z', notes: 'Legacy record had no stock for this receipt' },
+			{ stock_id: 13, kind: 'receive', qty: 50000, reason: null, purchase_line_id: 5, at: '2026-03-05T08:00:00.000Z', notes: null },
+			{ stock_id: 13, kind: 'adjust', qty: -50000, reason: 'import', purchase_line_id: null, at: '2026-03-05T08:00:00.000Z', notes: 'Legacy record had no stock for this receipt' }
+		]);
+		expect(q('SELECT COALESCE(SUM(qty), 0) AS s FROM stock_move WHERE stock_id IN (12, 13)')[0]!.s).toBe(0);
+	});
+
+	test('received quantity per line is the sum of its receive moves and matches the legacy qty_received', () => {
+		const got = Object.fromEntries(q("SELECT purchase_line_id AS id, SUM(qty) AS s FROM stock_move WHERE kind = 'receive' AND purchase_line_id IS NOT NULL GROUP BY purchase_line_id").map((r) => [r.id, r.s]));
+		expect(got).toEqual({ 1: 130000, 3: 80000, 5: 50000 });
+	});
+
+	test('a line with more receive moves than the legacy quantity is a warning and writes nothing', () => {
+		expect(report.warnings.some((w) => w.startsWith('purchase_line 1 (PO-0001'))).toBe(true);
+		expect(report.receiptGaps.map((g) => g.purchaseLineId)).not.toContain(1);
+	});
+
+	test('the status of an open order follows its received quantities, as the purchasing service derives it', () => {
+		expect(q('SELECT id, status, received_at FROM purchase WHERE id IN (1, 3, 4) ORDER BY id')).toEqual([
+			{ id: 1, status: 'received', received_at: '2026-03-02T11:30:00.500Z' },
+			{ id: 3, status: 'partial', received_at: null },
+			{ id: 4, status: 'received', received_at: '2026-03-05T08:00:00.000Z' }
+		]);
+	});
+
 	test('a purchase line with no quantity is a failed row', () => {
-		expect(q('SELECT id FROM purchase_line').map((r) => r.id)).toEqual([1]);
+		expect(q('SELECT id FROM purchase_line ORDER BY id').map((r) => r.id)).toEqual([1, 3, 4, 5]);
 		expect(report.failedRows.map((f) => `${f.table} ${f.id}`)).toContain('purchase_line 2');
 	});
 
@@ -362,7 +400,7 @@ describe('legacy import of a database with rows in every table', async () => {
 
 	test('designator counters sit at or above the highest number in use', () => {
 		const seq = Object.fromEntries(q('SELECT prefix, last_value FROM designator_sequence').map((r) => [r.prefix, r.last_value]));
-		expect(seq).toMatchObject({ OPAL: 12, WO: 9, IT: 3, RISK: 2, REQ: 3, T: 2, 'SN-KT-F-0001': 2, 'PN-1': 1, 'PN-2': 4 });
+		expect(seq).toMatchObject({ OPAL: 14, WO: 9, IT: 3, RISK: 2, REQ: 3, T: 2, 'SN-KT-F-0001': 2, 'PN-1': 1, 'PN-2': 4 });
 	});
 
 	test('autoincrement counters sit above the highest id of each table', () => {
@@ -405,7 +443,7 @@ describe('legacy import of a database with rows in every table', async () => {
 	test('the row counts of the report match the tables', () => {
 		const count = (t: string) => q(`SELECT COUNT(*) AS n FROM ${t}`)[0]!.n as number;
 		expect(report.tables.part!.imported).toBe(count('part'));
-		expect(report.tables.inventory_record!.imported).toBe(count('stock_record'));
+		expect(report.tables.inventory_record!.imported).toBe(count('stock_record') - report.derived.stock_record!);
 		expect(report.tables.step_execution!.imported).toBe(count('step_execution'));
 		expect(report.derived.stock_move).toBe(count('stock_move'));
 	});
@@ -469,6 +507,13 @@ describe('seeded demo database', () => {
 		}
 		expect(report.stockDifferences).toEqual([]);
 		const out = new Database(join(d, 'out.db'), { readonly: true });
+		const received = (ref: string) => (out.query("SELECT COALESCE(SUM(m.qty), 0) AS s FROM stock_move m JOIN purchase_line l ON l.id = m.purchase_line_id JOIN purchase p ON p.id = l.purchase_id WHERE m.kind = 'receive' AND p.reference = ?").get(ref) as { s: number }).s;
+		// PO-0002 had 102 received on its lines and no stock record for any of it.
+		expect(received('PO-0002')).toBe(1020000);
+		expect(report.receiptGaps.filter((g) => g.reference === 'PO-0002').map((g) => g.quantity)).toEqual([20000, 1000000]);
+		expect(out.query("SELECT COALESCE(SUM(qty), 0) AS s FROM stock_move WHERE stock_id IN (SELECT id FROM stock_record WHERE location = 'Legacy receipt (no stock record)')").get()).toEqual({ s: 0 });
+		expect(out.query("SELECT status FROM purchase WHERE reference = 'PO-0002'").get()).toEqual({ status: 'partial' });
+		expect(out.query("SELECT status FROM purchase WHERE reference = 'PO-0001'").get()).toEqual({ status: 'received' });
 		expect(out.query('PRAGMA foreign_key_check').all()).toEqual([]);
 		out.close();
 	});

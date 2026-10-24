@@ -720,7 +720,16 @@ export class AuthorStore implements DocController {
 		const made = await this.structure(() =>
 			opal.procedures.steps.duplicate({ id: this.procedureId, stepId: step.order })
 		);
-		if (made) this.focusTitle(made.id);
+		// Focus the copy's row, not its title: a bare key after D (X deletes) must not edit the text.
+		if (made) {
+			this.focusedOrder = made.id;
+			setTimeout(() => {
+				const id = made.id;
+				(
+					document.getElementById(`step-${id}`) ?? document.getElementById(`op-${id}`)
+				)?.scrollIntoView({ block: 'nearest' });
+			}, 40);
+		}
 	};
 
 	move = async (step: DocStep, direction: -1 | 1) => {

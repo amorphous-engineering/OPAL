@@ -29,7 +29,7 @@ import { basename, dirname, join } from 'node:path';
 import { SESSION_COOKIE } from '../../auth/tokens.ts';
 import { type Ctx, actorUserId } from '../../context.ts';
 import { type Db, openDb } from '../../db/client.ts';
-import { openSchemaDb } from '../../db/dev-schema.ts';
+import { loadDevSchema } from '../../db/dev.ts';
 import { authSetting, notification, part, user } from '../../db/schema/index.ts';
 import { serialized } from '../../registry.ts';
 import { insert, update } from '../../write.ts';
@@ -84,7 +84,7 @@ function unlinkSqlite(path: string): void {
 
 /** Open a database file with the schema applied. Dev-schema mode builds it from schema.ts. */
 async function openFile(path: string): Promise<Db> {
-	const db = process.env.OPAL_DEV_SCHEMA === '1' ? await openSchemaDb(path) : openDb(path);
+	const db = process.env.OPAL_DEV_SCHEMA === '1' ? await (await loadDevSchema()).openSchemaDb(path) : openDb(path);
 	ensureFts(db);
 	return db;
 }

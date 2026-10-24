@@ -86,7 +86,7 @@
 				<Timestamp value={s.lastSeenAt} />
 			{:else if col.key === 'userAgent'}
 				<span
-					class="block max-w-xs truncate text-xs text-muted-foreground"
+					class="block max-w-40 truncate text-xs text-muted-foreground"
 					title={s.userAgent ?? ''}>{s.userAgent ?? '—'}</span
 				>
 			{:else if col.key === 'ipAddress'}

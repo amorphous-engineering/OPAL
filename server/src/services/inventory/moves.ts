@@ -13,7 +13,7 @@ import {
 import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { Ctx } from '../../context.ts';
-import { part, stockMove, stockRecord, user } from '../../db/schema/index.ts';
+import { part, purchaseLine, stockMove, stockRecord, user } from '../../db/schema/index.ts';
 import { update } from '../../write.ts';
 import { balanceOf, invalid, writeMove } from './ledger.ts';
 import {
@@ -303,6 +303,18 @@ export function ledgerFor(ctx: Pick<Ctx, 'db'>, stockId: number): StockLedgerRow
 		.where(eq(stockMove.stockId, stockId))
 		.orderBy(asc(stockMove.at), asc(stockMove.id))
 		.all();
+	// The order behind a receipt, so the ledger can link to it. // added by QA
+	const lineIds = [...new Set(rows.flatMap(({ m }) => (m.purchaseLineId ? [m.purchaseLineId] : [])))];
+	const orderOf = new Map(
+		lineIds.length
+			? ctx.db
+					.select({ id: purchaseLine.id, purchaseId: purchaseLine.purchaseId })
+					.from(purchaseLine)
+					.where(inArray(purchaseLine.id, lineIds))
+					.all()
+					.map((l) => [l.id, l.purchaseId] as const)
+			: []
+	);
 	let balance = 0;
 	return rows.map(({ m, actor, counterpartOpal }) => {
 		balance += m.qty;
@@ -320,7 +332,12 @@ export function ledgerFor(ctx: Pick<Ctx, 'db'>, stockId: number): StockLedgerRow
 			fromLot: m.fromLot,
 			toLot: m.toLot,
 			counterpartOpal,
-			links: moveLinks(m)
+			links: {
+				...moveLinks(m),
+				...(m.purchaseLineId && orderOf.has(m.purchaseLineId)
+					? { purchaseId: orderOf.get(m.purchaseLineId)! }
+					: {})
+			}
 		};
 	});
 }

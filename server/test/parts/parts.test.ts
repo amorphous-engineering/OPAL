@@ -277,6 +277,17 @@ describe('part update', () => {
 	});
 });
 
+describe('part history values', () => {
+	test('a reorder point shows as a decimal, not as the stored integer', async () => {
+		const { api, create } = await setup();
+		const p = await create({ name: 'A', reorderPoint: '5' });
+		await api('PATCH', `/parts/${p.id}`, { reorderPoint: '7.5' });
+		const h = (await api('GET', `/parts/${p.id}/history`)).json;
+		const change = h.items[0].changes.find((c: any) => c.field === 'reorderPoint');
+		expect(change).toMatchObject({ old: '5', new: '7.5' });
+	});
+});
+
 describe('part qr code', () => {
 	test('the QR code is an SVG that encodes the page URL', async () => {
 		const { api, create } = await setup();

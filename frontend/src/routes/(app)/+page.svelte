@@ -120,7 +120,7 @@
 
 	const issueCols: Column<IssueRow>[] = [
 		{ key: 'issueNumber', label: 'Issue', width: '6rem' },
-		{ key: 'title', label: 'Title' },
+		{ key: 'title', label: 'Title', class: 'max-w-0' },
 		{ key: 'priority', label: 'Priority', width: '5.5rem' },
 		{ key: 'assignee', label: 'Assignee', width: '9rem' },
 		{ key: 'holding', label: 'Hold', width: '3.5rem' }

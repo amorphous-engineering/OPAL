@@ -671,6 +671,22 @@ describe('projects', () => {
 		expect((await call('PATCH', `/risks/${a1.id}`, { projectId: 999 })).status).toBe(404);
 	});
 
+	test('the matrix counts only the risks of the project asked for', async () => {
+		const { call, mk, db, project } = await setup();
+		const b = createTestProject(db, 'B');
+		await mk({ probability: 2, impact: 3 });
+		await mk({ probability: 2, impact: 3, projectId: b.id });
+		await mk({ probability: 4, impact: 4, projectId: b.id });
+		const m = async (q: string) => (await call('GET', `/risks/matrix${q}`)).body;
+		expect((await m('')).totalRisks).toBe(3);
+		const a = await m(`?projectId=${project.id}`);
+		expect(a.totalRisks).toBe(1);
+		expect(a.matrix[1][2]).toBe(1);
+		const bb = await m(`?projectId=${b.id}`);
+		expect(bb.totalRisks).toBe(2);
+		expect(bb.matrix[3][3]).toBe(1);
+	});
+
 	test('an issue spawned from a risk joins the project of the risk', async () => {
 		const { call, mk, db } = await setup();
 		const b = createTestProject(db, 'B');

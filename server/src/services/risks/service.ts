@@ -374,11 +374,16 @@ export function list(
 
 // ---- matrix ----
 
-export function matrix(ctx: Ctx): RiskMatrix {
+export function matrix(ctx: Ctx, projectId?: number): RiskMatrix {
 	const rows = ctx.db
 		.select()
 		.from(risk)
-		.where(inArray(risk.disposition, [...RISK_LIVE_DISPOSITIONS]))
+		.where(
+			and(
+				inArray(risk.disposition, [...RISK_LIVE_DISPOSITIONS]),
+				projectId !== undefined ? eq(risk.projectId, projectId) : undefined
+			)
+		)
 		.all();
 	const grid = () => Array.from({ length: 5 }, () => Array<number>(5).fill(0));
 	const current = grid();

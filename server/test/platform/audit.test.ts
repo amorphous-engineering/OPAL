@@ -33,6 +33,14 @@ describe('audit log', () => {
 		expect(e.changes[0]).toMatchObject({ old: 'Bolt', new: 'Nut' });
 	});
 
+	test('scaled quantity columns read as decimals, not as stored integers', async () => {
+		const s = await setup();
+		const p = insert(ctx(s, 0), part, { ...newPart, reorderPoint: 50000 });
+		update(ctx(s, 0), part, p.id, { reorderPoint: 75000 });
+		const [e] = (await (await s.call('GET', '/audit?action=update')).json()).items;
+		expect(e.changes[0]).toMatchObject({ field: 'reorderPoint', old: '5', new: '7.5' });
+	});
+
 	test('user foreign keys carry the person name as a label', async () => {
 		const s = await setup();
 		const p = insert(ctx(s, 0), part, newPart);

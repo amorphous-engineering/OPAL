@@ -65,6 +65,19 @@ export function money(value: number | string | null | undefined, currency = 'USD
 	return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
 }
 
+/** A unit price: two decimals, up to four when the price has them ($0.0425, never $0.04). */ // added by QA
+export function unitMoney(value: number | string | null | undefined, currency = 'USD'): string {
+	if (value === null || value === undefined || value === '') return '—';
+	const n = Number(value);
+	if (Number.isNaN(n)) return String(value);
+	return new Intl.NumberFormat(undefined, {
+		style: 'currency',
+		currency,
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 4
+	}).format(n);
+}
+
 /** snake_case / enum values → UPPER WORDS for state text. */
 export function stateLabel(value: string | null | undefined): string {
 	return value ? value.replace(/_/g, ' ').toUpperCase() : '—';

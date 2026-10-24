@@ -274,7 +274,7 @@ export const risks = {
 		method: 'GET',
 		path: '/risks/matrix',
 		summary: 'Matrix counts of live risks: current and residual, by probability and impact.',
-		input: z.object({}),
+		input: z.object({ projectId: zId.optional() }),
 		output: zRiskMatrix,
 		access: 'signed-in',
 		mcp: true

@@ -34,7 +34,7 @@ issueHooks.linkedRisks = links.risksOfIssue;
 
 // Static paths come before `/risks/:id` so they are never read as an id.
 export const risksImpls = [
-	implement(c.matrix, (ctx) => risks.matrix(ctx)),
+	implement(c.matrix, (ctx, input) => risks.matrix(ctx, input.projectId)),
 	implement(c.lint, (_ctx, input) => {
 		const findings = lintScenario(input);
 		const empty = () => ({ condition: [], departure: [], consequence: [] });

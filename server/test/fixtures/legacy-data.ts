@@ -109,6 +109,13 @@ export function buildLegacyFixture(dir: string, opts: { version?: string } = {})
 	ins(db, 'purchase_expense', { id: 1, purchase_id: 1, purchase_line_id: 1, part_id: 10, quantity: 10, unit_cost: 1.5, total_cost: 15, tier: 2, received_at: T1 });
 	ins(db, 'purchase_expense', { id: 2, purchase_id: 1, quantity: 1, total_cost: 12.5, received_at: T1, notes: 'shipping: freight' });
 
+	// Receipts the old database counted on the line with no stock record behind them.
+	ins(db, 'purchase', { id: 3, reference: 'PO-0003', supplier: 'Bolt Co', supplier_id: 2, status: 'ordered', ordered_at: T1 }); // line 3 has 8 of 20: becomes partial
+	ins(db, 'purchase', { id: 4, reference: 'PO-0004', supplier: 'Bolt Co', supplier_id: 2, status: 'partial', ordered_at: T1, received_at: '2026-03-05 08:00:00' }); // line 5 is complete: becomes received
+	ins(db, 'purchase_line', { id: 3, purchase_id: 3, part_id: 12, qty_ordered: 20, qty_received: 8 });
+	ins(db, 'purchase_line', { id: 4, purchase_id: 3, part_id: 14, qty_ordered: 5, qty_received: 0 });
+	ins(db, 'purchase_line', { id: 5, purchase_id: 4, part_id: 12, qty_ordered: 5, qty_received: 5 });
+
 	// ---- procedures
 	ins(db, 'master_procedure', { id: 1, template_number: 'T-0001', name: 'Valve build', description: 'd', procedure_type: 'build', status: 'active', current_version_id: 1 });
 	ins(db, 'master_procedure', { id: 2, template_number: 'T-0002', name: 'Old', procedure_type: 'op', status: 'draft', deleted_at: T1 });

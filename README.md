@@ -4,7 +4,7 @@
 
 A local-first system for hardware teams: parts, stock, purchasing, procedures and their execution, issues, risks and requirements. One binary and one SQLite file. It runs on one computer and serves the local network.
 
-> The backend is being rewritten in TypeScript on this branch. The released 1.x versions are the Python backend, now in `legacy/`.
+> This branch holds the TypeScript rebuild (2.0). The released 1.x versions are the Python backend, kept in `legacy/` until cutover.
 
 ## Install
 

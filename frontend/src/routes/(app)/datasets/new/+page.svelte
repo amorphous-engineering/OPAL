@@ -48,6 +48,9 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
+	// A number input binds a number (or null when empty), not the string the row is typed with.
+	const given = (v: unknown) => v !== null && v !== undefined && String(v).trim() !== '';
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		error = null;
@@ -59,8 +62,8 @@
 				...(r.unit.trim() ? { unit: r.unit.trim() } : {}),
 				...(r.type === 'number' && r.chart ? { chart: true } : {}),
 				...(r.required ? { required: true } : {}),
-				...(r.type === 'number' && r.min.trim() !== '' ? { min: Number(r.min) } : {}),
-				...(r.type === 'number' && r.max.trim() !== '' ? { max: Number(r.max) } : {})
+				...(r.type === 'number' && given(r.min) ? { min: Number(r.min) } : {}),
+				...(r.type === 'number' && given(r.max) ? { max: Number(r.max) } : {})
 			}));
 		if (fields.length === 0) return (error = 'At least one field is required');
 		const names = fields.map((f) => f.name);

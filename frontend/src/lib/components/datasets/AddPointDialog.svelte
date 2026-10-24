@@ -38,10 +38,11 @@
 		e.preventDefault();
 		const values: PointValues = {};
 		for (const f of fields) {
-			const raw = inputs[f.name];
-			if (raw === undefined || raw === '') continue;
+			// A number input binds a number, or null once it is cleared.
+			const raw: string | number | null | undefined = inputs[f.name];
+			if (raw === undefined || raw === null || raw === '') continue;
 			values[f.name] =
-				f.type === 'number' ? Number(raw) : f.type === 'boolean' ? raw === 'true' : raw;
+				f.type === 'number' ? Number(raw) : f.type === 'boolean' ? raw === 'true' : String(raw);
 		}
 		if (Object.keys(values).length === 0) return (error = 'Enter at least one value');
 		busy = true;

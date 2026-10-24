@@ -188,7 +188,7 @@
 					class="font-mono"
 					bind:value={workOrder}
 					disabled={n > 1}
-					placeholder="WO-00001"
+					placeholder="WO-#####"
 				/>
 			</FormRow>
 			<div class="grid grid-cols-2 gap-3">

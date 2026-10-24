@@ -22,6 +22,9 @@ export const load: PageLoad = async ({ fetch, params }) => {
 			}
 		}
 	}
-	const parents = tree.items.filter((i) => !below.has(i.id) && i.lifecycleState !== 'cancelled');
+	// Flow-down stays inside one project.
+	const parents = tree.items.filter(
+		(i) => !below.has(i.id) && i.lifecycleState !== 'cancelled' && i.projectId === req.projectId
+	);
 	return { req, assignees, parents };
 };

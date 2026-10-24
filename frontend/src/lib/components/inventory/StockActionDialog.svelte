@@ -114,13 +114,13 @@
 				});
 				toast.success(`${record.opalNumber} on hand ${qty(newOnHand, uom)}`);
 			} else if (action === 'count') {
-				await opal.inventory.count({ id: record.id, countedQuantity: counted });
+				await opal.inventory.count({ id: record.id, countedQuantity: String(counted) });
 				toast.success(`${record.opalNumber} counted ${qty(counted, uom)}`);
 			} else {
 				const moved = await opal.inventory.transfer({
 					sourceId: record.id,
 					targetLocation: toLocation.trim(),
-					quantity: moveQty,
+					quantity: String(moveQty),
 					targetLotNumber: toLot.trim() || null,
 					notes: notes.trim() || null
 				});

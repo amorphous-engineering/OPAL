@@ -61,6 +61,8 @@
 			nodes.find((n) => n.id === to)?.kind === 'redline';
 		if (refused) {
 			flash(to);
+			// SvelteFlow adds the dropped connection to the bound edges itself; the props are the truth.
+			setTimeout(() => (rfEdges = flowEdges), 0);
 			return;
 		}
 		void onconnect?.(from, to);

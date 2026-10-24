@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { captureDisplay } from '../../src/services/execution/document.ts';
 import { setup } from './helpers.ts';
 
 async function dataset(t: Awaited<ReturnType<typeof setup>>, fields: unknown[]) {
@@ -132,6 +133,27 @@ describe('other areas', () => {
 		expect(o.flagged).toBe(1);
 		expect(o.items[0]).toMatchObject({ label: held.woNumber, blocked: true, overdue: true, href: `/executions/${held.id}` });
 		expect(o.items[1]).toMatchObject({ label: quiet.woNumber, stepsDone: 1, stepsTotal: 2, blocked: false });
+	});
+
+	test('the overview and the execution CSV count progress like the list: leaf steps, contingency excluded', async () => {
+		const t = await setup();
+		const p = await t.proc('Counted');
+		await t.step(p.id, 'Main');
+		await t.step(p.id, 'Next');
+		await t.step(p.id, 'Spare', { isContingency: true });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const e = await t.cut(p.id);
+		await t.complete(e.id, '1');
+		const row = (await t.ok('GET', '/overview')).executions.items[0];
+		expect([row.stepsDone, row.stepsTotal]).toEqual([1, 2]);
+		const list = (await t.ok('GET', '/executions')).items[0];
+		expect([list.progressDone, list.progressTotal]).toEqual([row.stepsDone, row.stepsTotal]);
+	});
+
+	test('a captured photo shows its count, never attachment ids', () => {
+		expect(captureDisplay([7])).toBe('1 image');
+		expect(captureDisplay([7, 9])).toBe('2 images');
+		expect(captureDisplay([])).toBe('—');
 	});
 
 	test('the executions CSV and the metrics come from the execution rows', async () => {

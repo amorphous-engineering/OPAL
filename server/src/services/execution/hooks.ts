@@ -29,7 +29,7 @@ import { registerOverviewSection } from '../reports/overview.ts';
 import { registerExecutionReport } from '../reports/exports.ts';
 import { checkCompletion } from './steps.ts';
 import { PRIORITY_RANK } from './executions.ts';
-import { loadModel, opRowOf } from './model.ts';
+import { loadModel, opRowOf, progress } from './model.ts';
 
 // ---------------------------------------------------------------- parts, entities, search, undo
 
@@ -57,7 +57,8 @@ registerSearchable({
 	table: execution,
 	columns: [execution.woNumber],
 	identifier: execution.woNumber,
-	hit: (r) => ({ label: r.woNumber, sublabel: r.status.replace('_', ' '), href: `/executions/${r.id}`, status: r.status })
+	// The status renders once, as the hit's state; a sublabel would repeat it.
+	hit: (r) => ({ label: r.woNumber, sublabel: null, href: `/executions/${r.id}`, status: r.status })
 });
 
 registerReversible('execution.update', { revert: (ctx, rows) => revertRows(ctx, rows, { execution }) });
@@ -151,8 +152,7 @@ registerOverviewSection('executions', (ctx, { projectId }) => {
 	const nowIso = new Date().toISOString();
 	const rows = active.map((e) => {
 		const m = loadModel(ctx.db, e.id);
-		const total = m.rows.length;
-		const done = m.rows.filter((r) => r.se.status === 'completed' || r.se.status === 'skipped').length;
+		const { done, total } = progress(m);
 		const joined =
 			me !== null &&
 			ctx.db
@@ -199,7 +199,7 @@ registerExecutionReport((ctx, f) => {
 	const names = new Map(ctx.db.select({ id: procedure.id, name: procedure.name }).from(procedure).all().map((p) => [p.id, p.name]));
 	return rows.map((e) => {
 		const m = loadModel(ctx.db, e.id);
-		const done = m.rows.filter((r) => r.se.status === 'completed' || r.se.status === 'skipped').length;
+		const { done, total } = progress(m);
 		return {
 			id: e.id,
 			projectId: e.projectId,
@@ -212,7 +212,7 @@ registerExecutionReport((ctx, f) => {
 			startedAt: e.startedAt,
 			completedAt: e.completedAt,
 			stepsCompleted: done,
-			stepsTotal: m.rows.length
+			stepsTotal: total
 		};
 	});
 });

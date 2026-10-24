@@ -81,17 +81,22 @@ export function revertRows(ctx: Ctx, rows: AuditRow[], tables: Record<string, An
 	}
 }
 
-/** Refuse when any record in `rows` changed after the newest of them. */
+/**
+ * Refuse when any record in `rows` changed after the newest of them. Undo's own rows and the
+ * changes already undone do not count: an edit undone first leaves the record as it was, so the
+ * create below it can still go.
+ */
 export function assertUntouchedSince(ctx: Ctx, rows: AuditRow[]): void {
 	const last = Math.max(...rows.map((r) => r.id));
+	const undone = new Set(ctx.db.select({ id: undoMark.auditId }).from(undoMark).all().map((m) => m.id));
 	for (const r of rows) {
 		const later = ctx.db
 			.select({ id: auditLog.id })
 			.from(auditLog)
-			.where(and(eq(auditLog.entity, r.entity), eq(auditLog.entityId, r.entityId)))
+			.where(and(eq(auditLog.entity, r.entity), eq(auditLog.entityId, r.entityId), ne(auditLog.op, 'undo.last')))
 			.orderBy(desc(auditLog.id))
-			.limit(1)
-			.get();
+			.all()
+			.find((a) => !undone.has(a.id));
 		if (later && later.id > last) {
 			throw conflict('changed_since', 'The record changed after this action, so it cannot be undone');
 		}

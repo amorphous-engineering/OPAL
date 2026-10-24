@@ -18,7 +18,7 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { ApiError, opal } from '#lib/api.js';
-	import { money } from '#lib/format.js';
+	import { unitMoney } from '#lib/format.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
 	import type { PickedPart } from '#lib/components/parts/types.js';
 	import type { SupplierPartRow } from './types.js';
@@ -63,7 +63,7 @@
 			const body = {
 				vendorPn: vendorPn.trim(),
 				isPreferred: preferred,
-				leadTimeDays: leadTime.trim() === '' ? null : Number(leadTime),
+				leadTimeDays: String(leadTime).trim() === '' ? null : Number(leadTime),
 				notes: notes.trim() || null
 			};
 			if (editing)
@@ -131,7 +131,7 @@
 							>—</span
 						>{/if}
 				{:else if col.key === 'lastUnitCost'}
-					{money(r.lastUnitCost)}
+					{unitMoney(r.lastUnitCost)}
 				{:else if col.key === 'lastOrderedAt'}
 					<Timestamp value={r.lastOrderedAt} dateOnly />
 				{:else if col.key === 'notes'}
@@ -158,7 +158,7 @@
 		>
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="cat-part">Part</Label>
+				<Label class="label" for="cat-part">Part</Label>
 				{#if editing}
 					<div class="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-xs">
 						<span class="font-mono text-info">{editing.partInternalPn}</span>
@@ -169,11 +169,11 @@
 				{/if}
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="cat-pn">Supplier part number</Label>
+				<Label class="label" for="cat-pn">Supplier part number</Label>
 				<Input id="cat-pn" bind:value={vendorPn} required maxlength={255} class="font-mono" />
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="cat-lead">Lead time (days)</Label>
+				<Label class="label" for="cat-lead">Lead time (days)</Label>
 				<Input
 					id="cat-lead"
 					type="number"
@@ -188,7 +188,7 @@
 				<Label for="cat-pref" class="text-xs">Preferred supplier for this part</Label>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="cat-notes">Notes</Label>
+				<Label class="label" for="cat-notes">Notes</Label>
 				<Input id="cat-notes" bind:value={notes} />
 			</div>
 			<ErrorBanner message={error} />

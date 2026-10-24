@@ -7,7 +7,7 @@ import { actorUserId, type Ctx } from '../../context.ts';
 import { execution, signoff, stepNote, stepExecution } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
 import { holdsSlotRole, roleNamesOf } from '../org/roles.ts';
-import { publish } from '../platform/index.ts';
+import { attachmentsFor, detach, publish } from '../platform/index.ts';
 import { type Blocker, completeBlockers, describeBlockers, skipBlockers, slotGate } from './gates.ts';
 import { holdState, rowHeld } from './holds.ts';
 import { type Model, type Row, getRow, isActive, isTerminal, loadModel } from './model.ts';
@@ -154,12 +154,24 @@ export function signStep(
 		if (input.dataCaptured && Object.keys(input.dataCaptured).length) patch.dataCaptured = input.dataCaptured;
 	}
 	update(ctx, stepExecution, row.id, patch);
+	if (input.slot === 0) dropUnusedCaptures(ctx, row.id, input.dataCaptured);
 	if (input.slot === 0 && input.notes?.trim()) addNote(ctx, { id: input.id, stepId: row.id, body: input.notes });
 
 	const completed = checkCompletion(ctx, input.id);
 	m = loadModel(ctx.db, input.id);
 	publish({ type: 'step_completed', data: { executionId: input.id, stepId: row.id } });
 	return signResult(ctx, m, row.id, input.slot, last, started, completed);
+}
+
+/** A photo that a capture replaced or removed keeps no link; the blob stays in the store. */
+function dropUnusedCaptures(ctx: Ctx, stepId: number, data: Record<string, unknown> | null | undefined): void {
+	const used = new Set<number>();
+	for (const v of Object.values(data ?? {})) {
+		for (const x of Array.isArray(v) ? v : [v]) if (typeof x === 'number') used.add(x);
+	}
+	for (const a of attachmentsFor(ctx, { type: 'step_execution', id: stepId }, 'capture')) {
+		if (!used.has(a.id)) detach(ctx, a.id);
+	}
 }
 
 function signResult(ctx: Ctx, m: Model, stepId: number, slot: number, stepCompleted: boolean, started: boolean, completed: boolean): SignResult {

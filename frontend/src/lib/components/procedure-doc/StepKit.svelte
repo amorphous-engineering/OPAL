@@ -153,9 +153,9 @@
 		{/if}
 		{#each step.consumptions as c (c.id)}
 			<div class="font-mono text-xs text-muted-foreground">
-				<span class="text-ok">CONSUMED</span>
+				<span class="text-ok">{c.usage_type === 'tooling' ? 'USED' : 'CONSUMED'}</span>
 				{c.part_number ?? ''}
-				{c.part_name} × {qty(c.quantity)} from
+				{c.part_name}{c.usage_type === 'tooling' ? '' : ` × ${qty(c.quantity)}`} from
 				{#if c.opal_number}<a class="text-info" href={`/inventory/opal/${c.opal_number}`}
 						>{c.opal_number}</a
 					>{/if}

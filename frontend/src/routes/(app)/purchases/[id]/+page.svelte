@@ -16,7 +16,7 @@
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { opal } from '#lib/api.js';
-	import { money, qty as fmtQty } from '#lib/format.js';
+	import { money, qty as fmtQty, unitMoney } from '#lib/format.js';
 	import EditableRow from '#lib/components/purchasing/EditableRow.svelte';
 	import LineDialog from '#lib/components/purchasing/LineDialog.svelte';
 	import ReceiveSection from '#lib/components/purchasing/ReceiveSection.svelte';
@@ -292,7 +292,7 @@
 										: 'text-muted-foreground'}>{fmtQty(l.qtyReceived)}</span
 							>
 						{:else if col.key === 'unitCost'}
-							{money(l.unitCost)}
+							{unitMoney(l.unitCost)}
 						{:else if col.key === 'total'}
 							{money(lineTotal(l))}
 						{:else if col.key === 'destination'}

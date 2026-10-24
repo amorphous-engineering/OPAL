@@ -74,7 +74,11 @@
 			{#if col.key === 'name'}
 				<span class="text-info">{s.name}</span>
 			{:else if col.key === 'isActive'}
-				{#if !s.isActive}<State value="inactive" tone="muted" badge />{/if}
+				{#if s.isActive}<State value="active" tone="muted" />{:else}<State
+						value="inactive"
+						tone="warn"
+						badge
+					/>{/if}
 			{:else}
 				{@const v = (s as unknown as Record<string, unknown>)[col.key]}
 				{#if v === null || v === undefined || v === ''}<span class="text-muted-foreground">—</span

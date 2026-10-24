@@ -221,8 +221,14 @@
 								class="ml-1 font-mono text-info hover:underline">{d.source.transferredFromOpal}</a
 							>
 						{:else}
-							<span class="font-mono text-xs">{sourceLabel(d.source.type)}</span>
-							{#each links as l (l.label)}
+							{@const lbl = sourceLabel(d.source.type)}
+							{@const same = links.find((l) => l.label === lbl && l.href)}
+							{#if same}
+								<a href={same.href} class="font-mono text-xs text-info hover:underline">{lbl}</a>
+							{:else}
+								<span class="font-mono text-xs">{lbl}</span>
+							{/if}
+							{#each links.filter((l) => l.label !== lbl) as l (l.label)}
 								{#if l.href}
 									<a href={l.href} class="ml-2 font-mono text-info hover:underline">{l.label}</a>
 								{:else}
