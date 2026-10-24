@@ -96,3 +96,6 @@ server/src/generated/
 
 # sed -i -E backups
 *-E
+
+# Operation coverage scratch file
+server/.op-coverage.txt

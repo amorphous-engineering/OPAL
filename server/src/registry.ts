@@ -11,6 +11,7 @@ import {
 	forbidden,
 	unauthenticated
 } from '@opal/shared';
+import { appendFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -58,6 +59,18 @@ function zodFields(err: z.ZodError): Record<string, string> {
  * Run one operation: validate input, check access, run the handler (in a
  * transaction for writes), validate output. Used by HTTP and MCP alike.
  */
+/**
+ * OPAL_OP_COVERAGE=<file>: append the name of every operation a test run calls (once per
+ * process). scripts/op-coverage.ts compares the file with the full operation list.
+ */
+const coverageFile = process.env.OPAL_OP_COVERAGE;
+const called = new Set<string>();
+function recordCall(name: string): void {
+	if (!coverageFile || called.has(name)) return;
+	called.add(name);
+	appendFileSync(coverageFile, `${name}\n`);
+}
+
 export async function runOp<C extends OpContract>(
 	impl: Impl<C>,
 	db: Db,
@@ -66,6 +79,7 @@ export async function runOp<C extends OpContract>(
 	http?: { cookies: CookieJar; request: RequestInfo }
 ): Promise<OpOutput<C>> {
 	const { contract } = impl;
+	recordCall(contract.name);
 	checkAccess(db, contract, actor);
 	const parsed = contract.input.safeParse(rawInput);
 	if (!parsed.success) {

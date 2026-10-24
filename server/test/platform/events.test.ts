@@ -145,3 +145,10 @@ describe('about', () => {
 		expect(about.operations.some((o: { name: string }) => o.name === 'notifications.list')).toBe(true);
 	});
 });
+
+test('events.stats counts connected stream clients, starting at zero', async () => {
+	const { call } = await setup(1);
+	const res = await call('GET', '/events/stats');
+	expect(res.status).toBe(200);
+	expect(await res.json()).toEqual({ connectedClients: 0 });
+});
