@@ -5,19 +5,24 @@
 import { error } from '@sveltejs/kit';
 import { goto } from '$app/navigation';
 import { navigating, page } from '$app/state';
+import { contracts, createClient } from '@opal/shared';
 
 export class ApiError extends Error {
 	status: number;
 	detail: unknown;
+	/** Per-field problems from a 422 (`fields` in the server's error body). */
+	fields?: Record<string, string>;
 
 	constructor(status: number, detail: unknown) {
 		super(formatDetail(detail, status));
 		this.status = status;
 		this.detail = detail;
+		const f = (detail as { fields?: unknown } | null)?.fields;
+		if (f && typeof f === 'object') this.fields = f as Record<string, string>;
 	}
 }
 
-/** FastAPI error detail → one readable line. */
+/** Error body (FastAPI detail, or the server's `{ error, message, fields? }`) → one readable line. */
 export function formatDetail(detail: unknown, status?: number): string {
 	// A proxy answering for a dead API says only "Bad Gateway".
 	if (status === 502 || status === 503 || status === 504) return 'Cannot reach the OPAL server';
@@ -35,6 +40,13 @@ export function formatDetail(detail: unknown, status?: number): string {
 	}
 	if (detail && typeof detail === 'object') {
 		const d = detail as Record<string, unknown>;
+		// 422 from the server: name each field that failed
+		if (d.fields && typeof d.fields === 'object') {
+			const lines = Object.entries(d.fields as Record<string, unknown>).map(
+				([k, v]) => `${k}: ${v}`
+			);
+			if (lines.length) return lines.join('; ');
+		}
 		// 409 draft_parts_blocked and similar structured refusals
 		if (typeof d.message === 'string') return d.message;
 		if (typeof d.remedy === 'string') return `${d.error ?? 'Refused'}: ${d.remedy}`;
@@ -92,6 +104,7 @@ async function request<T>(
 		let detail: unknown = res.statusText;
 		try {
 			const data = await res.json();
+			// Old API wraps in `detail`; the new server's body is the detail itself.
 			detail = data?.detail ?? data;
 		} catch {
 			/* non-JSON error body */
@@ -119,6 +132,18 @@ function client(fetchFn: Fetch = (...a) => fetch(...a)) {
 
 /** The API client. In `load` functions use `api.using(fetch)`. */
 export const api = client();
+
+/** The typed client, built from the shared contracts. In `load` use `opal.using(fetch)`. */
+function typedClient(fetchFn?: Fetch) {
+	return createClient(contracts, (req) =>
+		request(fetchFn ?? ((...a) => fetch(...a)), req.method, req.url, req.body)
+	);
+}
+
+export const opal = Object.assign(typedClient(), {
+	/** Bind to the `fetch` a SvelteKit `load` receives: `opal.using(fetch).parts.list({})`. */
+	using: (f: Fetch) => typedClient(f)
+});
 
 /** Paginated list envelope used by most list endpoints. */
 export interface Page<T> {

@@ -1,0 +1,13 @@
+{
+	"name": "opal",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@11.24.0",
+	"scripts": {
+		"dev": "pnpm --filter @opal/server dev",
+		"test": "pnpm -r --if-present test",
+		"check": "pnpm -r --if-present check",
+		"lint": "pnpm -r --if-present lint",
+		"build": "pnpm --filter frontend build && pnpm --filter @opal/server build"
+	}
+}

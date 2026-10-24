@@ -66,7 +66,44 @@ function Find-DownloadUrl {
         Write-Err "No release asset found matching '$AssetPattern'"
     }
 
+    $Sums = $Release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
+    if (-not $Sums) {
+        Write-Err "The release has no SHA256SUMS file"
+    }
+    $script:SumsUrl = $Sums.browser_download_url
+
     return $Asset.browser_download_url
+}
+
+# --- Checksum ---
+
+function Test-Checksum {
+    param([string]$File, [string]$AssetName)
+
+    Write-Info "Verifying SHA-256..."
+    try {
+        $SumsText = (Invoke-WebRequest -Uri $SumsUrl -UseBasicParsing).Content
+        if ($SumsText -is [byte[]]) { $SumsText = [System.Text.Encoding]::UTF8.GetString($SumsText) }
+    } catch {
+        Remove-Item $File -Force
+        Write-Err "Could not download SHA256SUMS: $_"
+    }
+
+    $Expected = $null
+    foreach ($Line in $SumsText -split "`r?`n") {
+        $Parts = $Line.Trim() -split "\s+"
+        if ($Parts.Count -ge 2 -and $Parts[1] -eq $AssetName) { $Expected = $Parts[0]; break }
+    }
+    if (-not $Expected) {
+        Remove-Item $File -Force
+        Write-Err "SHA256SUMS has no entry for $AssetName"
+    }
+
+    $Actual = (Get-FileHash -Path $File -Algorithm SHA256).Hash
+    if ($Actual -ne $Expected.ToUpper()) {
+        Remove-Item $File -Force
+        Write-Err "Checksum mismatch for ${AssetName}: expected $Expected, got $Actual"
+    }
 }
 
 # --- Install ---
@@ -95,6 +132,8 @@ function Install-Binary {
         Remove-Item $TmpFile -Force
         Write-Err "Downloaded file is too small ($Size bytes) -- something went wrong"
     }
+
+    Test-Checksum -File $TmpFile -AssetName $AssetName
 
     Move-Item -Path $TmpFile -Destination $InstallPath -Force
 

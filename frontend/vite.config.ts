@@ -3,9 +3,9 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
-// The FastAPI server serves the built client from src/opal/web_client and
-// falls back to index.html for every non-API path (single-page app).
-const api = `http://127.0.0.1:${process.env.OPAL_API_PORT ?? '8000'}`;
+// The server embeds the built client from build/ and falls back to
+// index.html for every non-API path (single-page app).
+const api = `http://127.0.0.1:${process.env.OPAL_API_PORT ?? '8080'}`;
 
 export default defineConfig({
 	plugins: [
@@ -17,8 +17,8 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 			adapter: adapter({
-				pages: '../src/opal/web_client',
-				assets: '../src/opal/web_client',
+				pages: 'build',
+				assets: 'build',
 				fallback: 'index.html',
 				strict: false
 			})
@@ -30,7 +30,8 @@ export default defineConfig({
 		// Keep the browser's Host so the API's same-origin (CSRF) check passes.
 		proxy: {
 			'/api': { target: api, changeOrigin: false },
-			'/oidc': { target: api, changeOrigin: false }
+			'/oidc': { target: api, changeOrigin: false },
+			'/mcp': { target: api, changeOrigin: false }
 		}
 	}
 });

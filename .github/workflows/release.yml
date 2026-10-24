@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build (e.g. v0.4.6). Defaults to latest tag on branch."
+        description: "Tag to build (e.g. v2.0.0). Defaults to latest tag on branch."
         required: false
         type: string
 
@@ -15,133 +15,66 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            asset_name: opal-macos-arm64
-            python_arch: arm64
-          # No macos-x86_64 target. macos-latest is Apple Silicon, and
-          # setup-python's x64 architecture does not make PyInstaller emit an
-          # x86_64 binary — it froze a native arm64 one and shipped it under an
-          # x86_64 name through v1.4.0-beta.3. An Intel Mac cannot run that, so
-          # the target is gone rather than wrong. Restoring it needs a real
-          # cross-build, not an architecture input.
-          - os: ubuntu-latest
-            asset_name: opal-linux-x86_64
-            python_arch: x64
-          - os: windows-latest
-            asset_name: opal-windows-x86_64.exe
-            python_arch: x64
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          architecture: ${{ matrix.python_arch }}
-
-      - uses: astral-sh/setup-uv@v4
-
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: python
-        run: |
-          import re, pathlib
-          version = "${{ github.ref_name }}"[1:]  # strip leading 'v'
-          p = pathlib.Path("pyproject.toml")
-          p.write_text(re.sub(r'^version = .*', f'version = "{version}"', p.read_text(), count=1, flags=re.MULTILINE))
-          print(f"Set version to {version}")
-
-      - name: Install dependencies
-        run: uv sync --extra app
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Build web client
-        working-directory: frontend
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm build
-
-      - name: Build binary
-        run: uv run pyinstaller opal.spec
-
-      - name: Rename binary (Unix)
-        if: runner.os != 'Windows'
-        run: mv dist/opal ${{ matrix.asset_name }}
-
-      - name: Rename binary (Windows)
-        if: runner.os == 'Windows'
-        run: Move-Item dist/opal.exe ${{ matrix.asset_name }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}
-          if-no-files-found: error
-
   release:
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
         with:
-          path: artifacts
-
-      - name: Collect assets
-        run: |
-          mkdir release-assets
-          find artifacts -type f -exec mv {} release-assets/ \;
-          ls -la release-assets/
+          fetch-depth: 0
 
       - name: Determine tag
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            tag="${{ github.ref_name }}"
           elif [ -n "${{ inputs.tag }}" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            tag="${{ inputs.tag }}"
           else
-            echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')" >> "$GITHUB_OUTPUT"
+            tag="$(git describe --tags --abbrev=0)"
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web client
+        run: pnpm --filter frontend build
+
+      # One Linux job cross-compiles every target, one after another.
+      - name: Build binaries
+        run: pnpm --filter @opal/server build --version "${{ steps.tag.outputs.tag }}"
+
+      - name: Collect assets
+        run: |
+          mkdir release-assets
+          cp server/dist/opal-* server/dist/SHA256SUMS release-assets/
+          rm -f release-assets/*.map
+          ls -la release-assets/
 
       # Either order works: push the tag and let this create the release, or
-      # create the release in the UI (which pushes the tag) and let this attach
-      # the binaries. v1.4.0-beta.3 took the second path and the bare `create`
-      # failed with "a release with the same tag name already exists", leaving a
-      # published release with no assets on it.
-      #
-      # When the release already exists its notes belong to whoever wrote them,
-      # so only the assets are uploaded. --clobber makes a re-run replace them
-      # instead of failing on duplicates.
+      # create the release in the UI and let this attach the binaries. When the
+      # release exists its notes belong to whoever wrote them, so only assets
+      # are uploaded. --clobber makes a re-run replace them.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ steps.tag.outputs.tag }}"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag exists — uploading assets to it."
+            echo "Release $tag exists. Uploading assets to it."
             gh release upload "$tag" release-assets/* --clobber
           else
-            echo "Release $tag does not exist — creating it."
-            gh release create "$tag" \
-              release-assets/* \
-              --generate-notes \
-              --latest
+            echo "Release $tag does not exist. Creating it."
+            gh release create "$tag" release-assets/* --generate-notes --latest
           fi

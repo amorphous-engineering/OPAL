@@ -1,0 +1,27 @@
+{
+	"name": "@opal/server",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "OPAL_DATA_DIR=${OPAL_DATA_DIR:-../notes/dev-data-ts} bun --watch src/cli.ts serve",
+		"check": "tsc -p .",
+		"test": "bun test",
+		"build": "bun scripts/build.ts",
+		"db:generate": "drizzle-kit generate"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.4",
+		"drizzle-kit": "^0.31.11",
+		"typescript": "^6.0.3"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.32.1",
+		"@opal/shared": "workspace:*",
+		"@simplewebauthn/server": "^14.0.3",
+		"drizzle-orm": "^0.45.4",
+		"hono": "^4.13.13",
+		"jose": "^6.2.13",
+		"openid-client": "^6.8.8",
+		"zod": "^4.6.7"
+	}
+}

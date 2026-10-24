@@ -8,17 +8,17 @@
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api, ApiError } from '#lib/api.js';
+	import { ApiError, opal } from '#lib/api.js';
 	import {
 		session,
 		getSignInConfig,
 		landingFor,
+		toCurrentUser,
 		type CurrentUser,
-		type SignInConfig
+		type AuthConfig
 	} from '#lib/session.svelte.js';
-	import { getAssertion, passkeysSupported } from '#lib/webauthn.js';
 
-	let config = $state<SignInConfig | null>(null);
+	let config = $state<AuthConfig | null>(null);
 	let username = $state('');
 	let password = $state('');
 	let error = $state<string | null>(page.url.searchParams.get('error'));
@@ -34,7 +34,7 @@
 			loadFailed = true;
 			return;
 		}
-		if (config.needs_setup) return goto('/setup', { replace: true });
+		if (config.needsSetup) return goto('/setup', { replace: true });
 		const user = await session.load().catch(() => null);
 		if (user) goto(landingFor(user, next), { replace: true });
 	});
@@ -49,30 +49,11 @@
 		busy = true;
 		error = null;
 		try {
-			const r = await api.post<{ user: CurrentUser }>('/auth/login', { username, password });
-			await done(r.user);
+			const r = await opal.auth.login({ username, password });
+			await done(toCurrentUser(r.user));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Sign-in failed';
 			password = '';
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function passkey() {
-		busy = true;
-		error = null;
-		try {
-			const options = await api.post<{ publicKey: Record<string, unknown> }>(
-				'/auth/passkey/login/begin'
-			);
-			const assertion = await getAssertion(options);
-			await api.post('/auth/passkey/login/complete', assertion);
-			const user = await session.load();
-			if (user) await done(user);
-		} catch (err) {
-			if (err instanceof DOMException && err.name === 'NotAllowedError') error = null;
-			else error = err instanceof Error ? err.message : 'Passkey sign-in failed';
 		} finally {
 			busy = false;
 		}
@@ -92,7 +73,7 @@
 		<Skeleton class="h-40" />
 	{/if}
 {:else}
-	{#if config.password_login_enabled}
+	{#if config.passwordLoginEnabled}
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="username">Username</Label>
@@ -117,22 +98,17 @@
 			<Button type="submit" disabled={busy}>SIGN IN</Button>
 		</form>
 	{/if}
-	{#if (config.passkeys_enabled && passkeysSupported()) || config.oidc_enabled}
-		<div class="my-4 flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
-			<Separator class="flex-1" />or<Separator class="flex-1" />
-		</div>
-		<div class="grid grid-cols-1 gap-2">
-			{#if config.passkeys_enabled && passkeysSupported()}
-				<Button variant="outline" disabled={busy} onclick={passkey}>SIGN IN WITH PASSKEY</Button>
-			{/if}
-			{#if config.oidc_enabled}
-				<Button
-					variant="outline"
-					href={`/oidc/login?next=${encodeURIComponent(next ?? '/')}`}
-					data-sveltekit-reload
-					>SIGN IN WITH {(config.oidc_provider_name ?? 'SSO').toUpperCase()}</Button
-				>
-			{/if}
-		</div>
+	{#if config.oidcEnabled}
+		{#if config.passwordLoginEnabled}
+			<div class="my-4 flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
+				<Separator class="flex-1" />or<Separator class="flex-1" />
+			</div>
+		{/if}
+		<Button
+			variant="outline"
+			class="w-full"
+			href={`/oidc/login?next=${encodeURIComponent(next ?? '/')}`}
+			data-sveltekit-reload>SIGN IN WITH SSO</Button
+		>
 	{/if}
 {/if}

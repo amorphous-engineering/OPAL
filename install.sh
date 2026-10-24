@@ -127,6 +127,31 @@ find_download_url() {
     resolve_latest_tag
     info "Latest release: ${TAG}"
     DOWNLOAD_URL="${RELEASES_URL}/download/${TAG}/${ASSET_NAME}"
+    SUMS_URL="${RELEASES_URL}/download/${TAG}/SHA256SUMS"
+}
+
+# --- Checksum ---
+
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d ' ' -f 1
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | cut -d ' ' -f 1
+    else
+        err "sha256sum or shasum is required to verify the download"
+    fi
+}
+
+verify_checksum() {
+    # verify_checksum FILE: compare with the SHA256SUMS line for ASSET_NAME.
+    info "Verifying SHA-256..."
+    SUMS="$(download_text "$SUMS_URL")" || err "Could not download SHA256SUMS"
+    EXPECTED="$(printf '%s\n' "$SUMS" | awk -v n="$ASSET_NAME" '$2 == n { print $1 }')"
+    [ -n "$EXPECTED" ] || err "SHA256SUMS has no entry for ${ASSET_NAME}"
+    ACTUAL="$(sha256_of "$1")"
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+        err "Checksum mismatch for ${ASSET_NAME}: expected ${EXPECTED}, got ${ACTUAL}"
+    fi
 }
 
 # --- Install ---
@@ -146,6 +171,8 @@ install_binary() {
     if [ "$FILE_SIZE" -lt 1024 ]; then
         err "Downloaded file is too small (${FILE_SIZE} bytes) — something went wrong"
     fi
+
+    verify_checksum "$TMP_FILE"
 
     mv -f "$TMP_FILE" "$INSTALL_PATH"
     chmod +x "$INSTALL_PATH"

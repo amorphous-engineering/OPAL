@@ -1,0 +1,34 @@
+/**
+ * CSRF guard, as in legacy middleware: an unsafe request that carries an
+ * Origin must come from the Host it asks. Without Origin (curl, scripts) it
+ * passes unless a Referer says otherwise. Bearer requests are immune.
+ */
+import type { MiddlewareHandler } from 'hono';
+
+const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function hostOf(url: string): string {
+	try {
+		return new URL(url).host;
+	} catch {
+		return '';
+	}
+}
+
+export const csrfGuard: MiddlewareHandler = async (c, next) => {
+	if (!UNSAFE.has(c.req.method)) return next();
+	if (/^Bearer\s/i.test(c.req.header('authorization') ?? '')) return next();
+	const host = c.req.header('host') ?? new URL(c.req.url).host;
+	const origin = c.req.header('origin');
+	let bad = false;
+	if (origin !== undefined) {
+		bad = origin === 'null' || hostOf(origin) !== host;
+	} else {
+		const referer = c.req.header('referer');
+		bad = !!referer && hostOf(referer) !== '' && hostOf(referer) !== host;
+	}
+	if (bad) {
+		return c.json({ error: 'forbidden', message: 'Cross-origin request rejected' }, 403);
+	}
+	return next();
+};

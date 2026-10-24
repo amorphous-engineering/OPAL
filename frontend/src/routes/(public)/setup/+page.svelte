@@ -5,8 +5,8 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { api, ApiError } from '#lib/api.js';
-	import { session, getSignInConfig, landingFor, type CurrentUser } from '#lib/session.svelte.js';
+	import { ApiError, opal } from '#lib/api.js';
+	import { session, getSignInConfig, landingFor, toCurrentUser } from '#lib/session.svelte.js';
 
 	let name = $state('');
 	let email = $state('');
@@ -18,7 +18,7 @@
 
 	onMount(async () => {
 		const config = await getSignInConfig().catch(() => null);
-		if (config && !config.needs_setup) goto('/login', { replace: true });
+		if (config && !config.needsSetup) goto('/login', { replace: true });
 	});
 
 	async function submit(e: SubmitEvent) {
@@ -30,14 +30,10 @@
 		}
 		busy = true;
 		try {
-			const r = await api.post<{ user: CurrentUser }>('/auth/setup', {
-				name,
-				email,
-				username,
-				password
-			});
-			session.set(r.user);
-			await goto(landingFor(r.user, null), { replace: true });
+			const r = await opal.auth.setup({ name, email: email || null, username, password });
+			const user = toCurrentUser(r.user);
+			session.set(user);
+			await goto(landingFor(user, null), { replace: true });
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Setup failed';
 		} finally {

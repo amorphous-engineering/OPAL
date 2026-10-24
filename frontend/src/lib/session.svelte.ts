@@ -1,5 +1,6 @@
 /** Signed-in identity and the instance's sign-in configuration. */
-import { api, ApiError } from '#lib/api.js';
+import { ApiError, opal } from '#lib/api.js';
+import type { AuthUser } from '@opal/shared';
 
 export interface CurrentUser {
 	id: number;
@@ -13,12 +14,32 @@ export interface CurrentUser {
 	needs_profile_setup: boolean;
 }
 
+/** `GET /auth/config` from the old API; the settings page still reads it. */
 export interface SignInConfig {
 	needs_setup: boolean;
 	password_login_enabled: boolean;
 	passkeys_enabled: boolean;
 	oidc_enabled: boolean;
 	oidc_provider_name: string | null;
+}
+
+/** `auth.config` from the new server. */
+export type AuthConfig = Awaited<ReturnType<typeof opal.auth.config>>;
+
+/**
+ * The new server's user, in the shape pages not yet ported still read (snake_case flags).
+ * The new server has no onboarding or profile-setup state, so both are false.
+ */
+export function toCurrentUser(u: AuthUser): CurrentUser {
+	return {
+		id: u.id,
+		username: u.username,
+		name: u.name,
+		email: u.email,
+		is_admin: u.isAdmin,
+		needs_onboarding: false,
+		needs_profile_setup: false
+	};
 }
 
 class Session {
@@ -28,7 +49,7 @@ class Session {
 	/** Resolve the cookie to a user; null when signed out. */
 	async load(fetchFn?: typeof fetch): Promise<CurrentUser | null> {
 		try {
-			this.user = await (fetchFn ? api.using(fetchFn) : api).get<CurrentUser>('/auth/me');
+			this.user = toCurrentUser(await (fetchFn ? opal.using(fetchFn) : opal).auth.me({}));
 		} catch (e) {
 			if (!(e instanceof ApiError) || e.status !== 401) throw e;
 			this.user = null;
@@ -43,7 +64,7 @@ class Session {
 	}
 
 	async logout() {
-		await api.post('/auth/logout');
+		await opal.auth.logout({});
 		this.user = null;
 	}
 }
@@ -51,7 +72,7 @@ class Session {
 export const session = new Session();
 
 export function getSignInConfig() {
-	return api.get<SignInConfig>('/auth/config');
+	return opal.auth.config({});
 }
 
 /** Where a freshly signed-in user lands. */

@@ -5,51 +5,42 @@
 		DataTable,
 		FilterBar,
 		FilterSelect,
-		FilterToggle,
 		ListFrame,
 		PageHeader,
-		Pagination,
 		SearchInput,
 		State,
-		urlSort,
+		setQuery,
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { qty, stateLabel } from '#lib/format.js';
-	import { PARTS_PAGE_SIZE, type Part } from '#lib/components/parts/types.js';
-	import ReserveDialog from '#lib/components/parts/ReserveDialog.svelte';
+	import { stateLabel } from '#lib/format.js';
+	import type { Part } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const q = $derived(data.query);
 
-	const sort = urlSort({ key: 'internal_pn', dir: 'asc' });
-	let reserving = $state(false);
 	let picked = $state<(string | number)[]>([]);
 
-	const FILTERS = ['q', 'tier', 'category', 'procurement', 'state', 'parent', 'low', 'tooling'];
-	const filtered = $derived(
-		!!(q.q || q.tier || q.category || q.procurement || q.state || q.parent || q.low || q.tooling)
-	);
-	const total = $derived(data.list.total);
+	const FILTERS = ['q', 'state'];
+	const filtered = $derived(!!(q.q || q.state));
+	const shown = $derived(data.list.items.length);
 
 	const columns: Column<Part>[] = [
-		{ key: 'internal_pn', label: 'PN', sortable: true, mono: true, width: '9rem' },
-		{ key: 'name', label: 'Name', sortable: true },
-		{ key: 'external_pn', label: 'External PN', sortable: true, mono: true, width: '16rem' },
-		{ key: 'category', label: 'Category', sortable: true, width: '9rem' },
-		{ key: 'procurement', label: 'Proc', sortable: true, width: '4.5rem' },
-		{ key: 'state', label: 'State', sortable: true, width: '5.5rem' },
-		{ key: 'stock', label: 'Stock', sortable: true, align: 'right', mono: true, width: '8rem' }
+		{ key: 'internalPn', label: 'PN', mono: true, width: '9rem' },
+		{ key: 'name', label: 'Name' },
+		{ key: 'externalPn', label: 'External PN', mono: true, width: '16rem' },
+		{ key: 'category', label: 'Category', width: '9rem' },
+		{ key: 'procurement', label: 'Proc', width: '4.5rem' },
+		{ key: 'state', label: 'State', width: '5.5rem' }
 	];
 </script>
 
 <PageHeader title="Parts">
 	{#snippet meta()}
-		<span class="mono">{total} {total === 1 ? 'part' : 'parts'}</span>
+		<span class="mono">{shown}{data.list.next ? '+' : ''} {shown === 1 ? 'part' : 'parts'}</span>
 	{/snippet}
 	{#snippet actions()}
-		<Button variant="outline" size="sm" onclick={() => (reserving = true)}>RESERVE PNs</Button>
 		<Button variant="outline" size="sm" href="/parts/import">IMPORT CSV</Button>
 		<Button size="sm" href="/parts/new">+ NEW PART</Button>
 	{/snippet}
@@ -59,58 +50,15 @@
 	<FilterBar clear={FILTERS}>
 		<SearchInput label="Search parts" placeholder="Search name, PN, description" />
 		<FilterSelect
-			param="tier"
-			label="Tier"
-			allLabel="All tiers"
-			options={data.schema.tiers.map((t) => ({
-				value: String(t.level),
-				label: `T${t.level} ${t.name.toUpperCase()}`
-			}))}
-		/>
-		<FilterSelect
-			param="category"
-			label="Category"
-			allLabel="All categories"
-			options={data.schema.categories.map((c) => ({ value: c, label: c }))}
-		/>
-		<FilterSelect
-			param="procurement"
-			label="Procurement"
-			allLabel="Make / buy"
-			options={[
-				{ value: 'make', label: 'MAKE' },
-				{ value: 'buy', label: 'BUY' },
-				{ value: 'both', label: 'BOTH' }
-			]}
-		/>
-		<FilterSelect
 			param="state"
 			label="Lifecycle state"
 			allLabel="All states"
 			options={[
 				{ value: 'draft', label: 'DRAFT' },
-				{ value: 'active', label: 'ACTIVE' }
+				{ value: 'active', label: 'ACTIVE' },
+				{ value: 'obsolete', label: 'OBSOLETE' }
 			]}
 		/>
-		<FilterSelect
-			param="parent"
-			label="Assembly level"
-			allLabel="All levels"
-			options={[
-				{ value: 'top', label: 'Top-level' },
-				{ value: 'sub', label: 'Sub-components' }
-			]}
-		/>
-		<FilterSelect
-			param="tooling"
-			label="Tooling"
-			allLabel="Tooling"
-			options={[
-				{ value: 'yes', label: 'TOOLING ONLY' },
-				{ value: 'no', label: 'NO TOOLING' }
-			]}
-		/>
-		<FilterToggle param="low" label="Low stock" />
 		{#if picked.length}
 			<ActionLink href={`/label?part=${picked.join(',')}`} class="ml-2"
 				>PRINT {picked.length === 1 ? 'LABEL' : `${picked.length} LABELS`}</ActionLink
@@ -122,9 +70,7 @@
 	<DataTable
 		rows={data.list.items}
 		{columns}
-		bind:sort={() => sort.value, sort.set}
 		bind:selected={picked}
-		serverSort
 		key={(r) => r.id}
 		href={(r) => `/parts/${r.id}`}
 		emptyLabel="PARTS"
@@ -137,37 +83,48 @@
 			{/if}
 		{/snippet}
 		{#snippet cell(row, col)}
-			{#if col.key === 'internal_pn'}
-				<a href={`/parts/${row.id}`} class="text-info hover:underline">{row.internal_pn ?? '—'}</a>
+			{#if col.key === 'internalPn'}
+				<a href={`/parts/${row.id}`} class="text-info hover:underline">{row.internalPn}</a>
 			{:else if col.key === 'name'}
-				{row.name}{#if row.is_tooling}<span class="label ml-2">Tool</span>{/if}
-			{:else if col.key === 'external_pn'}
-				{#if row.external_pn}{row.external_pn}{:else}<span class="text-muted-foreground">—</span
-					>{/if}
+				{row.name}{#if row.isTooling}<span class="label ml-2">Tool</span>{/if}
+			{:else if col.key === 'externalPn'}
+				{#if row.externalPn}{row.externalPn}{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'category'}
 				{#if row.category}{row.category}{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'procurement'}
 				<span class="font-mono text-xs text-muted-foreground">{stateLabel(row.procurement)}</span>
 			{:else if col.key === 'state'}
-				{#if row.lifecycle_state === 'draft'}
+				{#if row.state === 'draft'}
 					<State value="draft" tone="warn" badge />
+				{:else if row.state === 'obsolete'}
+					<State value="obsolete" tone="error" badge />
 				{:else}
 					<span class="font-mono text-xs text-muted-foreground">ACTIVE</span>
 				{/if}
-			{:else if col.key === 'stock'}
-				<span class="inline-flex items-center justify-end gap-2">
-					{#if row.is_low_stock}<span title={`Reorder point ${qty(row.reorder_point)}`}
-							><State value="low" tone="warn" badge label="LOW" /></span
-						>{/if}
-					<span class={Number(row.total_quantity) === 0 ? 'text-muted-foreground' : ''}
-						>{qty(row.total_quantity, row.unit_of_measure)}</span
-					>
-				</span>
 			{/if}
 		{/snippet}
 	</DataTable>
 
-	<Pagination {total} pageSize={PARTS_PAGE_SIZE} />
+	{#if q.page > 1 || data.list.next}
+		<nav
+			aria-label="Pages"
+			class="flex items-center gap-3 border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground"
+		>
+			<span class="tabular-nums">PAGE {q.page}</span>
+			<div class="ml-auto flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="xs"
+					disabled={q.page <= 1}
+					onclick={() => setQuery({ page: null, cursor: null })}>← FIRST</Button
+				>
+				<Button
+					variant="outline"
+					size="xs"
+					disabled={!data.list.next}
+					onclick={() => setQuery({ page: q.page + 1, cursor: data.list.next })}>NEXT →</Button
+				>
+			</div>
+		</nav>
+	{/if}
 </ListFrame>
-
-<ReserveDialog tiers={data.schema.tiers} bind:open={reserving} />
