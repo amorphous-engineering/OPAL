@@ -4,7 +4,8 @@
  */
 import { Database } from 'bun:sqlite';
 import { PART_STATES, PROCUREMENT, QTY_SCALE, TRACKING_TYPES, now } from '@opal/shared';
-import { existsSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { openDb } from '../db/client.ts';
 import { apiToken, auditLog, part, user } from '../db/schema.ts';
@@ -108,23 +109,33 @@ function dropped(src: Database, table: keyof typeof MAPPED): string[] {
 }
 
 /**
- * Read-only open. A WAL-mode file with no -wal sidecar cannot be opened plain read-only
- * (SQLite cannot create the -shm), and holds nothing outside the main file, so open it immutable.
+ * Opens a private copy of the source. The old file is never opened, so it stays
+ * byte-identical. Read-only opens are not portable: a WAL file with no -wal sidecar
+ * needs an immutable URI, and Bun's bundled SQLite on Linux rejects URI filenames.
  */
-function openSource(path: string): Database {
-	const wal = `${path}-wal`;
-	if (existsSync(wal) && statSync(wal).size > 0) return new Database(path, { readonly: true });
-	return new Database(`file:${encodeURI(path)}?mode=ro&immutable=1`, { readonly: true });
+function openSource(path: string): { db: Database; close(): void } {
+	const dir = mkdtempSync(join(tmpdir(), 'opal-import-src-'));
+	const copy = join(dir, 'source.db');
+	copyFileSync(path, copy);
+	if (existsSync(`${path}-wal`)) copyFileSync(`${path}-wal`, `${copy}-wal`);
+	const db = new Database(copy);
+	return {
+		db,
+		close() {
+			db.close();
+			rmSync(dir, { recursive: true, force: true });
+		}
+	};
 }
 
 export function hasAlembicVersion(path: string): boolean {
-	const src = openSource(path);
+	const source = openSource(path);
 	try {
-		return !!src
+		return !!source.db
 			.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'alembic_version'")
 			.get();
 	} finally {
-		src.close();
+		source.close();
 	}
 }
 
@@ -149,7 +160,8 @@ function chunks<T>(rows: T[], size: number): T[][] {
 
 export function importLegacy(srcPath: string, destPath: string): ImportReport {
 	if (existsSync(destPath)) throw new Error(`Destination already exists: ${destPath}`);
-	const src = openSource(srcPath);
+	const source = openSource(srcPath);
+	const src = source.db;
 	let db: ReturnType<typeof openDb> | undefined;
 	try {
 		const hasVersion = src
@@ -298,7 +310,7 @@ export function importLegacy(srcPath: string, destPath: string): ImportReport {
 		});
 		return report;
 	} finally {
-		src.close();
+		source.close();
 		if (db) {
 			// Fold the WAL into the main file before close, so the file is complete on its own
 			// when importInPlace renames it. A rename leaves the -wal sidecar behind.
