@@ -48,7 +48,7 @@ describe('raising', () => {
 	test('the raiser is the signed-in user and the title is required', async () => {
 		const { raise, call, admin } = await setup();
 		const i = await raise();
-		expect(i.raisedBy).toEqual({ id: admin.id, name: 'ABBY' });
+		expect(i.raisedBy).toEqual({ id: admin.id, name: 'ABBY', avatarUrl: null });
 		expect((await call('POST', '/issues', { title: '  ' })).status).toBe(422);
 	});
 

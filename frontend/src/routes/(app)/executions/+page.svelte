@@ -153,7 +153,7 @@
 					<span class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs">
 						{#each r.working as w (w.userId)}
 							<span class="inline-flex items-center gap-1.5">
-								<Avatar user={{ id: w.userId, name: w.name, avatar_url: null }} size="xs" />
+								<Avatar user={{ id: w.userId, name: w.name, avatarUrl: w.avatarUrl }} size="xs" />
 								{w.name ?? '?'}{#if w.stepNumber}<span class="text-muted-foreground">
 										OP {w.stepNumber}</span
 									>{/if}

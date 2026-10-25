@@ -1,6 +1,6 @@
 <script lang="ts">
 	// A person: their avatar photo (uploaded or from the sign-in provider), else their
-	// initials in a box with the theme radius. One component wherever
+	// initials, both in a squircle (.squircle in layout.css). One component wherever
 	// a person appears (signatures, notes, presence, comments, menus, lists, profile).
 	import { cn } from '#lib/utils.js';
 
@@ -51,17 +51,13 @@
 		alt={user?.name ?? ''}
 		title={user?.name ?? undefined}
 		loading="lazy"
-		class={cn(
-			'shrink-0 rounded-md border border-border bg-muted object-cover',
-			box[size],
-			className
-		)}
+		class={cn('squircle shrink-0 border border-border bg-muted object-cover', box[size], className)}
 		onerror={() => (failed = true)}
 	/>
 {:else}
 	<span
 		class={cn(
-			'inline-flex shrink-0 items-center justify-center border border-border bg-muted font-mono font-medium text-foreground',
+			'squircle inline-flex shrink-0 items-center justify-center border border-border bg-muted font-mono font-medium text-foreground',
 			box[size],
 			className
 		)}

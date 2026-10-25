@@ -40,7 +40,8 @@ export function toCurrentUser(u: AuthUser): CurrentUser {
 		is_admin: u.isAdmin,
 		needs_onboarding: u.needsOnboarding,
 		needs_profile_setup: u.needsProfileSetup,
-		time_display: u.timeDisplay
+		time_display: u.timeDisplay,
+		avatar_url: u.avatarUrl
 	};
 }
 

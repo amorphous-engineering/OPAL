@@ -20,6 +20,7 @@ import {
 	type zIssueUpdate
 } from '@opal/shared';
 import { type AnyColumn, and, asc, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm';
+import { personRefs } from '../org/people.ts';
 import type { z } from 'zod';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { execution, issue, issueComment, issueLink, part, risk, user } from '../../db/schema/index.ts';
@@ -120,15 +121,7 @@ function hydrate(ctx: Ctx, rows: IssueRow[]): Issue[] {
 		])
 			if (u !== null) userIds.add(u);
 	}
-	const names = new Map<number, UserRef>();
-	if (userIds.size) {
-		for (const u of ctx.db
-			.select({ id: user.id, name: user.name })
-			.from(user)
-			.where(inArray(user.id, [...userIds]))
-			.all())
-			names.set(u.id, u);
-	}
+	const names: Map<number, UserRef> = personRefs(ctx.db, userIds);
 	const ref = (id: number | null) => (id === null ? null : (names.get(id) ?? null));
 	const links = linksFor(ctx, rows.map((r) => r.id));
 	const described = issueHooks.describe?.(ctx, {
@@ -317,12 +310,15 @@ export function list(
 }
 
 export function assignees(ctx: Ctx): UserRef[] {
-	return ctx.db
-		.select({ id: user.id, name: user.name })
+	const ids = ctx.db
+		.select({ id: user.id })
 		.from(user)
 		.where(eq(user.isActive, true))
 		.orderBy(asc(user.name))
-		.all();
+		.all()
+		.map((u) => u.id);
+	const people = personRefs(ctx.db, ids);
+	return ids.flatMap((id) => people.get(id) ?? []);
 }
 
 // ---- checks shared by the writes ----
@@ -766,20 +762,23 @@ function notifyComment(ctx: Ctx, r: IssueRow, body: string) {
 
 function commentOut(ctx: Ctx, ids: number[]): IssueComment[] {
 	if (!ids.length) return [];
-	return ctx.db
-		.select({ c: issueComment, name: user.name })
+	const rows = ctx.db
+		.select()
 		.from(issueComment)
-		.leftJoin(user, eq(user.id, issueComment.userId))
 		.where(inArray(issueComment.id, ids))
 		.orderBy(asc(issueComment.createdAt), asc(issueComment.id))
-		.all()
-		.map(({ c, name }) => ({
-			id: c.id,
-			issueId: c.issueId,
-			user: c.userId === null || name === null ? null : { id: c.userId, name },
-			body: c.body,
-			createdAt: c.createdAt
-		}));
+		.all();
+	const people = personRefs(
+		ctx.db,
+		rows.flatMap((c) => (c.userId === null ? [] : [c.userId]))
+	);
+	return rows.map((c) => ({
+		id: c.id,
+		issueId: c.issueId,
+		user: c.userId === null ? null : (people.get(c.userId) ?? null),
+		body: c.body,
+		createdAt: c.createdAt
+	}));
 }
 
 export function listComments(ctx: Ctx, id: number): IssueComment[] {

@@ -44,7 +44,8 @@ export type TicketState = (typeof TICKET_STATES)[number];
 export type DispState = (typeof DISP_STATES)[number];
 export type IssueLinkKind = (typeof ISSUE_LINK_KINDS)[number];
 
-export const zUserRef = z.object({ id: z.number().int(), name: z.string() });
+// A person on an issue, with the same avatar as everywhere else.
+export const zUserRef = z.object({ id: z.number().int(), name: z.string(), avatarUrl: z.string().nullable() });
 export type UserRef = z.infer<typeof zUserRef>;
 
 export const zIssueLink = z.object({

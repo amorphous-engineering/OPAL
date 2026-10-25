@@ -14,7 +14,9 @@ export const zAuthUser = z.object({
 	isAdmin: z.boolean(),
 	needsProfileSetup: z.boolean(),
 	needsOnboarding: z.boolean(),
-	timeDisplay: zTimeDisplay
+	timeDisplay: zTimeDisplay,
+	/** The profile photo, as everywhere a person appears. */
+	avatarUrl: z.string().nullable()
 });
 export type AuthUser = z.infer<typeof zAuthUser>;
 

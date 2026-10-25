@@ -16,6 +16,7 @@ import {
 import { signPayload, verifyPayload } from '../auth/signing.ts';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
+import { personRefs } from '../services/org/people.ts';
 import { profileState, timeDisplayOf } from '../services/org/profiles.ts';
 import { apiToken, session, user } from '../db/schema/index.ts';
 import { passkeyCredential, webauthnChallenge } from '../db/schema/auth.ts';
@@ -45,7 +46,8 @@ const present = (db: Db, u: UserRow) => ({
 	email: u.email,
 	isAdmin: u.isAdmin,
 	...profileState(db, u.id),
-	timeDisplay: timeDisplayOf(db, u.id)
+	timeDisplay: timeDisplayOf(db, u.id),
+	avatarUrl: personRefs(db, [u.id]).get(u.id)?.avatarUrl ?? null
 });
 
 const needsSetup = (ctx: Ctx) => ctx.db.select({ n: count() }).from(user).get()!.n === 0;

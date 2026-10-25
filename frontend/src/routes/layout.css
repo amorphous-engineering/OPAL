@@ -192,6 +192,14 @@
 	.label {
 		@apply font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase;
 	}
+	/* Profile photos and initials. A browser without corner-shape draws a rounded square. */
+	.squircle {
+		border-radius: 30%;
+		@supports (corner-shape: squircle) {
+			border-radius: 50%;
+			corner-shape: squircle;
+		}
+	}
 }
 
 /* Rendered markdown (authored content). */

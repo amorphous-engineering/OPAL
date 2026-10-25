@@ -102,7 +102,14 @@ export const zExecutionRow = z.object({
 	progressDone: z.number().int(),
 	progressTotal: z.number().int(),
 	heldBy: z.array(z.string()),
-	working: z.array(z.object({ userId: z.number().int(), name: z.string().nullable(), stepNumber: z.string().nullable() }))
+	working: z.array(
+		z.object({
+			userId: z.number().int(),
+			name: z.string().nullable(),
+			avatarUrl: z.string().nullable(),
+			stepNumber: z.string().nullable()
+		})
+	)
 });
 export type ExecutionRow = z.infer<typeof zExecutionRow>;
 

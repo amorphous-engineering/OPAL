@@ -543,7 +543,7 @@
 					{#each data.comments as c (c.id)}
 						<li class="px-3 py-2">
 							<div class="mb-0.5 flex items-baseline gap-2 text-xs">
-								{#if c.user}<Avatar user={{ id: c.user.id, name: c.user.name }} size="xs" />{/if}
+								{#if c.user}<Avatar user={c.user} size="xs" />{/if}
 								<span class="font-medium">{c.user?.name ?? 'System'}</span>
 								<Timestamp value={c.createdAt} />
 							</div>

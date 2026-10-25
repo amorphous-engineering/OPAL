@@ -12,6 +12,7 @@ import {
 	parseQty
 } from '@opal/shared';
 import { and, asc, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm';
+import { personRefs } from '../org/people.ts';
 import { actorUserId, type Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import {
@@ -70,7 +71,7 @@ function presentRows(db: Db, rows: ExecutionRow[]): ExecutionRowOut[] {
 		const m = loadModel(db, e.id);
 		const prog = progress(m);
 		const held = isActive(e) ? holdState(db, m).all.map((i) => i.issueNumber) : [];
-		const claimNames = userNames(db, claimsFor(db, m).map((c) => c.userId));
+		const claimNames = personRefs(db, claimsFor(db, m).map((c) => c.userId));
 		return {
 			id: e.id,
 			woNumber: e.woNumber,
@@ -94,7 +95,8 @@ function presentRows(db: Db, rows: ExecutionRow[]): ExecutionRowOut[] {
 			heldBy: held,
 			working: claimsFor(db, m).map((c) => ({
 				userId: c.userId,
-				name: claimNames.get(c.userId) ?? null,
+				name: claimNames.get(c.userId)?.name ?? null,
+				avatarUrl: claimNames.get(c.userId)?.avatarUrl ?? null,
 				stepNumber: m.byId.get(c.stepId)?.number ?? null
 			}))
 		};
