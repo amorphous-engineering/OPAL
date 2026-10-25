@@ -118,22 +118,6 @@
 }
 
 @theme inline {
-	/* The one spacing step every p-/m-/gap-/h-/w- class multiplies (Tailwind's default is
-	   0.25rem). ~15% more air than the default keeps dense tables readable. */
-	--spacing: 0.2875rem;
-	/* Type ramp: four sizes, nothing else (root is 14px, so rem = 14px).
-	   xs 12px labels, timestamps, chips, mono metadata
-	   sm 13px body, tables, forms (the default)
-	   lg 16px page and dialog titles
-	   2xl 22px stat figures */
-	--text-xs: calc(12rem / 14);
-	--text-xs--line-height: 1.333;
-	--text-sm: calc(13rem / 14);
-	--text-sm--line-height: 1.538;
-	--text-lg: calc(16rem / 14);
-	--text-lg--line-height: 1.5;
-	--text-2xl: calc(22rem / 14);
-	--text-2xl--line-height: 1.273;
 	--font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 	--radius-xs: calc(var(--radius) - 6px);
@@ -188,9 +172,6 @@
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
-	}
-	html {
-		font-size: 14px;
 	}
 	/* Keyboard focus is always visible on plain links and focusable rows; the vendored
 	   controls draw their own ring. Zero specificity so any component ring wins. */
@@ -251,17 +232,4 @@
 	.prose-opal :where(img) {
 		@apply max-h-80 border border-border;
 	}
-}
-
-/*
- * Vendored shadcn (Mira) components hard-code a few font sizes that assume a 16px root
- * (`text-[0.625rem]` = 10px there, 8.75px here). Map each onto the type ramp so the
- * vendored files stay pristine (re-vendor safe) and type still follows the tokens.
- * Unlayered, so it wins over the generated utility. Every arbitrary size the vendored
- * components use must appear here (enforced by tests/unit/test_web_client_safety.py).
- */
-.text-\[0\.625rem\],
-.text-\[0\.8rem\] {
-	font-size: var(--text-xs);
-	line-height: var(--text-xs--line-height);
 }

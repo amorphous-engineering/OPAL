@@ -291,7 +291,7 @@
 		border: 1px solid var(--opg-line);
 		border-left: 3px solid var(--opg-line);
 		border-radius: 4px;
-		font-size: 12px;
+		font-size: var(--text-xs);
 		line-height: 1.2;
 		--opg-tone: var(--foreground);
 	}
@@ -355,7 +355,7 @@
 		display: flex;
 		gap: 6px;
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--muted-foreground);
 	}
 	.op-graph :global(.opg-flag) {
