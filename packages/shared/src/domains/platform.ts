@@ -203,9 +203,36 @@ export const zAbout = z.object({
 });
 export type About = z.infer<typeof zAbout>;
 
+export const HEALTH_STATES = ['ok', 'degraded', 'down'] as const;
+export const zHealth = z.object({
+	/** ok: every check passed. degraded: the server answers but a check failed. down: the database failed. */
+	status: z.enum(HEALTH_STATES),
+	version: z.string(),
+	checks: z.array(
+		z.object({
+			name: z.enum(['database', 'storage', 'disk']),
+			ok: z.boolean(),
+			/** Why the check failed, or a reading (free space). Never a file path: the route is public. */
+			detail: z.string().nullable()
+		})
+	)
+});
+export type Health = z.infer<typeof zHealth>;
+
 // ----------------------------------------------------------------- contracts
 
 export const platform = {
+	health: op({
+		name: 'platform.health',
+		method: 'GET',
+		path: '/health',
+		summary:
+			'Server health: database readable and writable, file storage writable, free disk space. Always 200; `status` carries the state.',
+		input: zEmpty,
+		output: zHealth,
+		access: 'public',
+		mcp: false
+	}),
 	about: op({
 		name: 'platform.about',
 		method: 'GET',

@@ -26,7 +26,6 @@ export function createApp({ db, resolveActor = actorResolver(db), web = false }:
 		const { status, body } = errorResponse(err);
 		return c.json(body, status as 400);
 	});
-	app.get('/api/health', (c) => c.json({ ok: true }));
 	app.use('*', csrfGuard);
 	mountRawRoutes(app, db, resolveActor);
 	mountOps(app, impls, db, resolveActor);

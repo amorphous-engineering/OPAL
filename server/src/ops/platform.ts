@@ -5,6 +5,7 @@ import { dbPath } from '../paths.ts';
 import { VERSION } from '../version.ts';
 import * as attachments from '../services/platform/attachments.ts';
 import * as audit from '../services/platform/audit.ts';
+import { health } from '../services/platform/health.ts';
 import { subscriberCount } from '../services/platform/events.ts';
 import * as notifications from '../services/platform/notifications.ts';
 import * as presence from '../services/platform/presence.ts';
@@ -22,6 +23,7 @@ function me(ctx: Ctx): number {
 }
 
 export const platformImpls = [
+	implement(c.health, (ctx) => health(ctx.db)),
 	implement(c.about, async () => {
 		// Imported here: ops/index.ts imports this file.
 		const { impls } = await import('./index.ts');

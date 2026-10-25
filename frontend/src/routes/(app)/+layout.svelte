@@ -14,8 +14,6 @@
 
 	let { children, data }: LayoutProps = $props();
 	let paletteOpen = $state(false);
-	// False after a failed heartbeat; the status bar shows OFFLINE until the next one succeeds.
-	let online = $state(true);
 
 	// Presence: the Users pages show who is online and what they are doing. The pulse runs
 	// while a tab is visible; the activity is the page the person is on.
@@ -23,10 +21,7 @@
 		const activity = page.url.pathname;
 		const beat = () => {
 			if (document.visibilityState === 'visible')
-				opal.platform.presence
-					.heartbeat({ activity })
-					.then(() => (online = true))
-					.catch(() => (online = false));
+				opal.platform.presence.heartbeat({ activity }).catch(() => undefined);
 		};
 		beat();
 		const timer = setInterval(beat, 15_000);
@@ -84,7 +79,7 @@
 	<main id="main" tabindex="-1" class="min-w-0 flex-1 outline-none">
 		{@render children()}
 	</main>
-	<StatusBar dbPath={data.about?.dbPath ?? '-'} {online} />
+	<StatusBar dbPath={data.about?.dbPath ?? '-'} />
 </div>
 
 <CommandPalette bind:open={paletteOpen} />
