@@ -31,7 +31,8 @@
 
 	const recordColumns: Column<StockRecord>[] = [
 		{ key: 'opalNumber', label: 'OPAL', sortable: true, mono: true, width: '9rem' },
-		{ key: 'part', label: 'Part', sortable: true },
+		{ key: 'part', label: 'PN', sortable: true, mono: true, width: '9rem' },
+		{ key: 'partName', label: 'Name' },
 		{ key: 'location', label: 'Location', sortable: true, mono: true, class: 'whitespace-nowrap' },
 		{
 			key: 'quantity',
@@ -55,7 +56,8 @@
 	];
 
 	const partColumns: Column<StockByPart>[] = [
-		{ key: 'part', label: 'Part', sortable: true },
+		{ key: 'part', label: 'PN', sortable: true, mono: true, width: '9rem' },
+		{ key: 'name', label: 'Name' },
 		{ key: 'quantity', label: 'On hand', sortable: true, align: 'right', mono: true },
 		{ key: 'reorderPoint', label: 'Reorder at', align: 'right', mono: true },
 		{ key: 'recordCount', label: 'Records', sortable: true, align: 'right', mono: true },
@@ -182,10 +184,9 @@
 				{#if col.key === 'opalNumber'}
 					<span class="font-semibold text-info">{r.opalNumber}</span>
 				{:else if col.key === 'part'}
-					<a href="/parts/{r.partId}" class="hover:underline">
-						<span class="font-mono text-info">{r.partInternalPn}</span>
-						<span class="ml-1.5">{r.partName}</span>
-					</a>
+					<a href="/parts/{r.partId}" class="text-info hover:underline">{r.partInternalPn}</a>
+				{:else if col.key === 'partName'}
+					{r.partName}
 				{:else if col.key === 'location'}
 					{#if r.location}{r.location}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else if col.key === 'quantity'}
@@ -241,10 +242,9 @@
 		>
 			{#snippet cell(r, col)}
 				{#if col.key === 'part'}
-					<a href="/parts/{r.partId}" class="hover:underline">
-						<span class="font-mono text-info">{r.internalPn}</span>
-						<span class="ml-1.5">{r.name}</span>
-					</a>
+					<a href="/parts/{r.partId}" class="text-info hover:underline">{r.internalPn}</a>
+				{:else if col.key === 'name'}
+					{r.name}
 				{:else if col.key === 'quantity'}
 					{qty(r.balance, r.unitOfMeasure)}
 					{#if r.isLowStock}<State value="low" tone="warn" label="LOW" class="ml-1" />{/if}

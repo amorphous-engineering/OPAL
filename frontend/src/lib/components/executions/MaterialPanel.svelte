@@ -109,7 +109,7 @@
 	}
 
 	const consumedCols: Column<DocConsumption>[] = [
-		{ key: 'part_number', label: 'Part', mono: true },
+		{ key: 'part_number', label: 'PN', mono: true },
 		{ key: 'part_name', label: 'Name' },
 		{ key: 'opal_number', label: 'OPAL #', mono: true },
 		{ key: 'quantity', label: 'Qty', align: 'right', mono: true },
@@ -120,7 +120,8 @@
 	];
 
 	const prodCols: Column<ProductionRow>[] = [
-		{ key: 'part', label: 'Part' },
+		{ key: 'part', label: 'PN', mono: true },
+		{ key: 'part_name', label: 'Name' },
 		{ key: 'serial_number', label: 'Serial', mono: true },
 		{ key: 'opal_number', label: 'OPAL #', mono: true },
 		{ key: 'quantity', label: 'Qty', align: 'right', mono: true },
@@ -192,7 +193,7 @@
 					<table class="w-full border-collapse text-sm">
 						<thead>
 							<tr class="border-b border-border bg-muted/60 text-left">
-								{#each [['PART', ''], ['REQUIRED', 'text-right'], ['AVAILABLE', 'text-right'], ['CONSUMED', 'text-right'], ['VARIANCE', 'text-right'], ['SOURCE', ''], ['QTY', '']] as [h, c] (h)}
+								{#each [['PN', ''], ['NAME', ''], ['REQUIRED', 'text-right'], ['AVAILABLE', 'text-right'], ['CONSUMED', 'text-right'], ['VARIANCE', 'text-right'], ['SOURCE', ''], ['QTY', '']] as [h, c] (h)}
 									<th
 										class={`h-8 px-3 font-mono text-xs font-medium tracking-wider text-muted-foreground ${c}`}
 										>{h}</th
@@ -204,12 +205,12 @@
 							{#each doc.kit.items as k (k.part_id)}
 								{@const it = avail?.items.find((x) => x.part_id === k.part_id)}
 								<tr class="border-b border-border align-top">
-									<td class="px-3 py-1.5"
+									<td class="px-3 py-1.5 whitespace-nowrap"
 										><a class="font-mono text-info hover:underline" href={`/parts/${k.part_id}`}
 											>{k.part_number}</a
-										>
-										{k.part_name}</td
+										></td
 									>
+									<td class="px-3 py-1.5">{k.part_name}</td>
 									<td class="px-3 py-1.5 text-right font-mono">{qty(k.qty_required)}</td>
 									<td
 										class="px-3 py-1.5 text-right font-mono {it &&
@@ -275,12 +276,12 @@
 						<tbody>
 							{#each doc.kit.unplanned as u (u.part_id)}
 								<tr class="border-t border-border">
-									<td class="px-3 py-1"
+									<td class="px-3 py-1 whitespace-nowrap"
 										><a class="font-mono text-info hover:underline" href={`/parts/${u.part_id}`}
 											>{u.part_number ?? '—'}</a
-										>
-										{u.part_name}</td
+										></td
 									>
+									<td class="px-3 py-1">{u.part_name}</td>
 									<td class="px-3 py-1 text-right font-mono">{qty(u.qty_consumed)}</td>
 								</tr>
 							{/each}
@@ -332,9 +333,8 @@
 			>
 				{#snippet cell(r, col)}
 					{#if col.key === 'part'}
-						<a class="font-mono text-info hover:underline" href={`/parts/${r.part_id}`}
-							>{r.part_number}</a
-						>
+						<a class="text-info hover:underline" href={`/parts/${r.part_id}`}>{r.part_number}</a>
+					{:else if col.key === 'part_name'}
 						{r.part_name}
 					{:else if col.key === 'opal_number'}
 						{#if r.opal_number}<a
@@ -377,7 +377,7 @@
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-muted/60 text-left">
-						{#each ['PART', 'EXPECTED', 'QTY', 'LOCATION', 'LOT', 'SERIAL'] as h (h)}
+						{#each ['PN', 'NAME', 'EXPECTED', 'QTY', 'LOCATION', 'LOT', 'SERIAL'] as h (h)}
 							<th
 								class="h-8 px-3 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 								>{h}</th
@@ -389,12 +389,12 @@
 					{#each doc.outputs as x (x.part_id)}
 						{@const v = o(x.part_id, x.quantity)}
 						<tr class="border-b border-border">
-							<td class="px-3 py-1.5"
+							<td class="px-3 py-1.5 whitespace-nowrap"
 								><a class="font-mono text-info hover:underline" href={`/parts/${x.part_id}`}
 									>{x.part_number}</a
-								>
-								{x.part_name}</td
+								></td
 							>
+							<td class="px-3 py-1.5">{x.part_name}</td>
 							<td class="px-3 py-1.5 font-mono">{qty(x.quantity)}</td>
 							<td class="px-3 py-1.5"
 								><Input

@@ -56,7 +56,7 @@
 	const kitRows = $derived<PartRow[]>(v.snapshot.kit);
 	const outRows = $derived<PartRow[]>(v.snapshot.outputs);
 	const partColumns = (qtyLabel: string): Column<PartRow>[] => [
-		{ key: 'pn', label: 'Part', width: '9rem', mono: true },
+		{ key: 'pn', label: 'PN', width: '9rem', mono: true },
 		{ key: 'name', label: 'Name' },
 		{ key: 'quantity', label: qtyLabel, align: 'right', width: '8rem', mono: true }
 	];

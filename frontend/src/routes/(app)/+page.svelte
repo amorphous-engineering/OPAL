@@ -133,7 +133,7 @@
 		{ key: 'targetCompletionAt', label: 'Due', width: '6.5rem' }
 	];
 	const stockCols: Column<LowStockRow>[] = [
-		{ key: 'partNumber', label: 'Part', width: '8rem' },
+		{ key: 'partNumber', label: 'PN', width: '8rem' },
 		{ key: 'name', label: 'Name' },
 		{ key: 'onHand', label: 'On hand', align: 'right', mono: true, width: '6rem' },
 		{ key: 'reorderPoint', label: 'Reorder at', align: 'right', mono: true, width: '6rem' }
@@ -147,7 +147,8 @@
 	];
 	const attentionCols: Column<StockAttentionRow>[] = [
 		{ key: 'opalNumber', label: 'OPAL', width: '8rem' },
-		{ key: 'partName', label: 'Part' },
+		{ key: 'partNumber', label: 'PN', width: '8rem' },
+		{ key: 'partName', label: 'Name' },
 		{ key: 'kind', label: 'Condition', width: '7.5rem' },
 		{ key: 'due', label: 'Date', width: '6.5rem' }
 	];
@@ -440,10 +441,10 @@
 					{#snippet cell(r, col)}
 						{#if col.key === 'opalNumber'}
 							<span class="font-mono whitespace-nowrap text-info">{r.opalNumber ?? dash}</span>
+						{:else if col.key === 'partNumber'}
+							<span class="font-mono whitespace-nowrap">{r.partNumber ?? dash}</span>
 						{:else if col.key === 'partName'}
-							{#if r.partNumber}<span class="mr-1 font-mono text-xs text-muted-foreground"
-									>{r.partNumber}</span
-								>{/if}{r.partName}
+							{r.partName}
 						{:else if col.key === 'kind'}
 							<State value={r.kind} tone={conditionTone[r.kind]} label={conditionLabel[r.kind]} />
 						{:else}

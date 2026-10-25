@@ -52,7 +52,7 @@
 		<table class="w-full border-collapse text-xs">
 			<thead>
 				<tr class="border-b border-border bg-muted/60 text-left">
-					{#each ['PART', 'REQ', 'TYPE', 'NOTES', ''] as h (h)}
+					{#each ['PN', 'NAME', 'REQ', 'TYPE', 'NOTES', ''] as h (h)}
 						<th class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 							>{h}</th
 						>
@@ -62,12 +62,12 @@
 			<tbody>
 				{#each step.step_kit as k (k.id)}
 					<tr class="border-b border-border">
-						<td class="px-2 py-1"
+						<td class="px-2 py-1 whitespace-nowrap"
 							><a class="font-mono text-info hover:underline" href={`/parts/${k.part_id}`}
 								>{k.part_number ?? '—'}</a
-							>
-							{k.part_name}</td
+							></td
 						>
+						<td class="px-2 py-1">{k.part_name}</td>
 						<td class="px-2 py-1">
 							<Input
 								type="number"

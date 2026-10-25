@@ -96,7 +96,7 @@
 		{ key: 'changedFields', label: 'Changed' }
 	];
 	const partColumns = $derived<Column<PartDiff>[]>([
-		{ key: 'internalPn', label: 'Part', width: '9rem', mono: true },
+		{ key: 'internalPn', label: 'PN', width: '9rem', mono: true },
 		{ key: 'name', label: 'Name' },
 		{ key: 'status', label: 'Change', width: '7rem' },
 		{ key: 'quantityA', label: `v${a.versionNumber}`, align: 'right', width: '7rem', mono: true },

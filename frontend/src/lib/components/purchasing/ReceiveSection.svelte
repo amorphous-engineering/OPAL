@@ -117,7 +117,7 @@
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-muted/60">
-						{#each [['PART', 'left'], ['NAME', 'left'], ['OUTSTANDING', 'right'], ['RECEIVE QTY', 'left'], ['LOCATION', 'left'], ['LOT / SERIAL', 'left']] as [h, a] (h)}
+						{#each [['PN', 'left'], ['NAME', 'left'], ['OUTSTANDING', 'right'], ['RECEIVE QTY', 'left'], ['LOCATION', 'left'], ['LOT / SERIAL', 'left']] as [h, a] (h)}
 							<th
 								scope="col"
 								class="h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"

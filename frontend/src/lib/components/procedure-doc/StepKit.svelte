@@ -77,7 +77,7 @@
 			<table class="w-full border-collapse text-xs">
 				<thead>
 					<tr class="border-b border-border bg-muted/60 text-left">
-						{#each ['PART', 'REQ', 'TYPE', 'SOURCE', 'QTY'] as h (h)}
+						{#each ['PN', 'NAME', 'REQ', 'TYPE', 'SOURCE', 'QTY'] as h (h)}
 							<th
 								class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 								>{h}</th
@@ -88,9 +88,9 @@
 				<tbody>
 					{#each open as k (k.part_id)}
 						<tr class="border-b border-border">
+							<td class="px-2 py-1 font-mono whitespace-nowrap">{k.part_number ?? ''}</td>
 							<td class="px-2 py-1"
-								><span class="font-mono">{k.part_number ?? ''}</span>
-								{k.part_name}{#if k.notes}<span class="text-muted-foreground">
+								>{k.part_name}{#if k.notes}<span class="text-muted-foreground">
 										({k.notes})</span
 									>{/if}</td
 							>

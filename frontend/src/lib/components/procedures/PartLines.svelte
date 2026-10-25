@@ -39,7 +39,7 @@
 	const rows = $derived<Line[]>(lines);
 
 	const columns = $derived<Column<Line>[]>([
-		{ key: 'partNumber', label: 'Part', width: '9rem', mono: true },
+		{ key: 'partNumber', label: 'PN', width: '9rem', mono: true },
 		{ key: 'partName', label: 'Name' },
 		{ key: 'partExternalPn', label: 'Ext PN', width: '9rem', mono: true },
 		{ key: 'quantity', label: qtyHead, align: 'right', width: '8rem' },

@@ -111,7 +111,8 @@
 	}
 
 	const partCols: Column<PreviewPart>[] = [
-		{ key: 'part', label: 'Part' },
+		{ key: 'part', label: 'PN', mono: true, width: '9rem' },
+		{ key: 'partName', label: 'Name' },
 		{ key: 'perWorkOrder', label: 'Per WO', align: 'right', mono: true, width: '6rem' },
 		{ key: 'required', label: 'Required', align: 'right', mono: true, width: '6rem' },
 		{ key: 'available', label: 'On hand', align: 'right', mono: true, width: '6rem' },
@@ -247,7 +248,7 @@
 					<table class="w-full border-collapse text-sm">
 						<thead>
 							<tr class="border-b border-border bg-muted/60 text-left">
-								{#each ['PART', 'QTY EACH', 'SERIALS'] as h (h)}
+								{#each ['PN', 'NAME', 'QTY EACH', 'SERIALS'] as h (h)}
 									<th
 										class="h-8 px-3 font-mono text-xs font-medium tracking-wider text-muted-foreground"
 										>{h}</th
@@ -258,9 +259,8 @@
 						<tbody>
 							{#each preview.outputs as o (o.partId)}
 								<tr class="border-b border-border align-top">
-									<td class="px-3 py-1.5"
-										><span class="font-mono">{o.partNumber}</span> {o.partName}</td
-									>
+									<td class="px-3 py-1.5 font-mono whitespace-nowrap">{o.partNumber}</td>
+									<td class="px-3 py-1.5">{o.partName}</td>
 									<td class="px-3 py-1.5 font-mono">{qty(o.quantityEach)}</td>
 									<td class="px-3 py-1.5 font-mono">{o.serials.join(', ')}</td>
 								</tr>
@@ -281,9 +281,9 @@
 						>
 							{#snippet cell(r, col)}
 								{#if col.key === 'part'}
-									<a class="font-mono text-info hover:underline" href={`/parts/${r.partId}`}
-										>{r.partNumber}</a
+									<a class="text-info hover:underline" href={`/parts/${r.partId}`}>{r.partNumber}</a
 									>
+								{:else if col.key === 'partName'}
 									{r.partName}{#if r.usage === 'tooling'}
 										<State value="tooling" tone="info" class="ml-1.5" />{/if}
 								{:else if col.key === 'isAvailable'}

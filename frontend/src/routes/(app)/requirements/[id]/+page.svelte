@@ -204,8 +204,8 @@
 	}
 
 	const allocColumns: Column<Allocation>[] = [
-		{ key: 'partName', label: 'Part' },
-		{ key: 'internalPn', label: 'Part number', mono: true, width: '9rem' },
+		{ key: 'internalPn', label: 'PN', mono: true, width: '9rem' },
+		{ key: 'partName', label: 'Name' },
 		{ key: 'status', label: 'Verification', width: '10rem' },
 		{ key: 'verified', label: 'Verified', width: '13rem' },
 		{ key: 'againstRevision', label: 'Rev', mono: true, width: '4rem', align: 'right' },

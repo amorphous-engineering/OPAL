@@ -84,7 +84,7 @@
 	}
 
 	const lineColumns: Column<PurchaseLine>[] = [
-		{ key: 'partInternalPn', label: 'Part', mono: true, class: 'whitespace-nowrap' },
+		{ key: 'partInternalPn', label: 'PN', mono: true, class: 'whitespace-nowrap' },
 		{ key: 'partName', label: 'Name' },
 		{
 			key: 'qtyOrdered',
@@ -103,7 +103,8 @@
 	type Received = (typeof data.received)[number];
 	const receivedColumns: Column<Received>[] = [
 		{ key: 'opalNumber', label: 'OPAL', mono: true },
-		{ key: 'partName', label: 'Part' },
+		{ key: 'partInternalPn', label: 'PN', mono: true, class: 'whitespace-nowrap' },
+		{ key: 'partName', label: 'Name' },
 		{ key: 'quantity', label: 'Qty', align: 'right', mono: true },
 		{ key: 'location', label: 'Location' },
 		{ key: 'lotNumber', label: 'Lot / serial', mono: true },
@@ -341,11 +342,10 @@
 								>{r.opalNumber}</a
 							>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else if col.key === 'partInternalPn'}
+						<a href={`/parts/${r.partId}`} class="text-info hover:underline">{r.partInternalPn}</a>
 					{:else if col.key === 'partName'}
-						<a href={`/parts/${r.partId}`} class="font-mono text-info hover:underline"
-							>{r.partInternalPn}</a
-						>
-						<span class="ml-2">{r.partName}</span>
+						{r.partName}
 					{:else if col.key === 'quantity'}
 						{fmtQty(r.quantity)}
 					{:else if col.key === 'lotNumber'}

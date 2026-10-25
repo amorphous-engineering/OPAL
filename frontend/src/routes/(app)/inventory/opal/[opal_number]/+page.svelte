@@ -468,7 +468,8 @@
 		{rows}
 		columns={[
 			{ key: 'opalNumber', label: 'OPAL', mono: true },
-			{ key: 'part', label: 'Part' },
+			{ key: 'part', label: 'PN', mono: true },
+			{ key: 'partName', label: 'Name' },
 			{ key: 'qtyUsed', label: 'Qty used', align: 'right' as const, mono: true }
 		]}
 		href={(r) => `/inventory/opal/${r.opalNumber}`}
@@ -479,10 +480,9 @@
 			{#if col.key === 'opalNumber'}
 				<span class="font-semibold text-info">{r.opalNumber}</span>
 			{:else if col.key === 'part'}
-				<a href="/parts/{r.partId}" class="hover:underline">
-					<span class="font-mono text-info">{r.partInternalPn}</span>
-					<span class="ml-1.5">{r.partName}</span>
-				</a>
+				<a href="/parts/{r.partId}" class="text-info hover:underline">{r.partInternalPn}</a>
+			{:else if col.key === 'partName'}
+				{r.partName}
 			{:else}
 				{qty(r.qtyUsed)}
 			{/if}

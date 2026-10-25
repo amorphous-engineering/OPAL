@@ -108,7 +108,7 @@
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-muted/60">
-						{#each [['ITEM', 'left'], ['QTY', 'right'], ['UNIT COST', 'right'], ['TOTAL', 'right'], ['RECORDED', 'left'], ['', 'left']] as [h, a] (h)}
+						{#each [['ITEM', 'left'], ['DESCRIPTION', 'left'], ['QTY', 'right'], ['UNIT COST', 'right'], ['TOTAL', 'right'], ['RECORDED', 'left'], ['', 'left']] as [h, a] (h)}
 							<th
 								scope="col"
 								class="h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
@@ -121,15 +121,21 @@
 				<tbody>
 					{#each expenses as e (e.id)}
 						<tr class="border-b border-border align-top">
-							<td class="px-3 py-1.5">
+							<!-- A part receipt: PN and name. A charge: its kind and notes. -->
+							<td class="px-3 py-1.5 whitespace-nowrap">
 								{#if e.kind !== 'receipt'}
 									<span class="font-mono text-xs tracking-wide uppercase">{e.kind}</span>
-									{#if e.notes}<span class="ml-2 text-muted-foreground">{e.notes}</span>{/if}
 								{:else}
 									<a href={`/parts/${e.partId}`} class="font-mono text-info hover:underline"
 										>{e.partInternalPn}</a
 									>
-									<span class="ml-2">{e.partName ?? ''}</span>
+								{/if}
+							</td>
+							<td class="px-3 py-1.5">
+								{#if e.kind !== 'receipt'}
+									<span class="text-muted-foreground">{e.notes ?? ''}</span>
+								{:else}
+									{e.partName ?? ''}
 								{/if}
 							</td>
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
@@ -152,7 +158,7 @@
 					<tr class="bg-muted/40">
 						<th
 							scope="row"
-							colspan="3"
+							colspan="4"
 							class="px-3 py-1.5 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase"
 							>TOTAL</th
 						>

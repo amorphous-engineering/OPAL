@@ -97,7 +97,7 @@
 	const columns: Column<SupplierPartRow>[] = [
 		{
 			key: 'partInternalPn',
-			label: 'Part',
+			label: 'PN',
 			mono: true,
 			sortable: true,
 			class: 'whitespace-nowrap'
