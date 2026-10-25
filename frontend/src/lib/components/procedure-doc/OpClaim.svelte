@@ -1,5 +1,5 @@
 <script lang="ts">
-	// CLAIM / CLAIMED on an OP header: claims are per OP (one operator works an
+	// CLOCK IN / CLOCK OUT on an OP header (a claim): claims are per OP (one operator works an
 	// OP). Absent while the OP is gated by a dependency or a redline (the header
 	// says what it waits on); unfinished sub-steps never gate it. Off the OP being
 	// worked it shows only on hover or keyboard focus, so headers stay quiet.
@@ -39,14 +39,13 @@
 {#if show && (!gates.length || claimed)}
 	<Button
 		size="xs"
-		variant="outline"
+		variant={claimed ? 'outline' : 'default'}
 		class={cn(
-			claimed ? 'border-foreground/60 text-foreground' : 'text-muted-foreground',
 			!prominent && !claimed && 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100'
 		)}
 		aria-pressed={claimed}
-		title={claimed ? `Release OP ${op.number}` : `Claim OP ${op.number}: mark it as yours to work`}
+		title={claimed ? `Clock out of OP ${op.number}` : `Clock in to OP ${op.number}`}
 		disabled={busy}
-		onclick={toggle}>{claimed ? 'CLAIMED' : 'CLAIM'}</Button
+		onclick={toggle}>{claimed ? 'CLOCK OUT' : 'CLOCK IN'}</Button
 	>
 {/if}
