@@ -18,6 +18,7 @@
 		"@internationalized/date": "^3.12.4",
 		"@opal/shared": "workspace:*",
 		"@playwright/test": "^1.64.1",
+		"@shadcn-svelte/primitives": "^0.0.1",
 		"@sveltejs/adapter-static": "^4.0.0",
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",

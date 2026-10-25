@@ -1,6 +1,7 @@
 import { contracts } from '@opal/shared';
 import { type Impl, implement } from '../registry.ts';
 import '../services/execution/hooks.ts';
+import * as comments from '../services/execution/comments.ts';
 import { buildDocument, buildState } from '../services/execution/document.ts';
 import * as executions from '../services/execution/executions.ts';
 import * as material from '../services/execution/material.ts';
@@ -39,6 +40,8 @@ export const executionImpls: Impl[] = [
 	implement(e.signoff, (ctx, i) => steps.signNext(ctx, i)),
 	implement(e.skip, (ctx, i) => steps.skipStep(ctx, i)),
 	implement(e.addNote, (ctx, i) => steps.addNote(ctx, i)),
+	implement(e.listComments, (ctx, i) => comments.listComments(ctx, i.id)),
+	implement(e.addComment, (ctx, i) => comments.addComment(ctx, i.id, i.body)),
 	implement(e.raiseNc, (ctx, i) => raiseNc(ctx, i)),
 
 	implement(e.consumptions, (ctx, i) => material.listConsumptions(ctx, i.id)),

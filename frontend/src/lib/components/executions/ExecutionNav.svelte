@@ -1,24 +1,45 @@
 <script lang="ts">
-	// Left sidebar: the OP index. Each entry jumps to its OP in the document
-	// (onjump switches to the document tab first).
+	// Left sidebar: progress, the OP index and the reference documents. Each OP entry
+	// jumps to its OP in the document (onjump switches to the document tab first).
 	import { cn } from '#lib/utils.js';
+	import { datetime, iso } from '#lib/format.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { EmptyLine, Section } from '#lib/components/opal/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
-	import { isTerminal } from '#lib/components/procedure-doc/index.js';
+	import { CursorChips, isTerminal, type DocOp } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
+	import ExecutionReferences from './ExecutionReferences.svelte';
+	import { fillColumn } from './fill-column.js';
 
 	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
 
 	const doc = $derived(store.doc!);
 	const ops = $derived([...doc.ops, ...doc.contingency_ops]);
 	const pct = $derived(doc.progress.total ? (doc.progress.done / doc.progress.total) * 100 : 0);
+
+	// Where an OP stands: a badge label and its state colours.
+	function opState(op: DocOp): { label: string; tone: string } {
+		const st = op.step.status;
+		if (st === 'completed' || st === 'signed_off')
+			return { label: 'DONE', tone: 'border-ok/50 bg-ok-muted text-ok' };
+		if (st === 'skipped') return { label: 'SKIPPED', tone: 'text-muted-foreground' };
+		if (op.holds.length || st === 'on_hold')
+			return { label: 'HELD', tone: 'border-warn/50 bg-warn-muted text-warn' };
+		if (st === 'awaiting_signoff')
+			return { label: 'SIGN-OFF', tone: 'border-warn/50 bg-warn-muted text-warn' };
+		if (st === 'in_progress' || op.progress.done > 0)
+			return { label: 'IN WORK', tone: 'border-info/50 bg-info-muted text-info' };
+		if (op.waiting_on_ops.length)
+			return { label: `AFTER OP ${op.waiting_on_ops.join(', ')}`, tone: 'text-muted-foreground' };
+		return { label: 'NOT STARTED', tone: 'text-muted-foreground' };
+	}
 </script>
 
 <!-- Never scrolls sideways: every row fits the sidebar width (truncate or wrap). -->
 <!-- On wide screens the sidebar is one viewport tall and never scrolls as a whole;
-     the operations card is only as tall as its content, scrolling inside when the
-     column runs out. -->
-<div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full">
+     cards are only as tall as their content, and fillColumn caps the tallest ones
+     when the column runs out (each scrolls inside). -->
+<div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full" use:fillColumn>
 	<Section
 		class="lg:flex-none"
 		title="Progress"
@@ -34,7 +55,7 @@
 	</Section>
 	{#if ops.length}
 		<Section
-			class="lg:flex lg:min-h-0 lg:flex-[0_1_auto] lg:flex-col"
+			class="lg:flex lg:min-h-0 lg:flex-none lg:flex-col"
 			title="Operations"
 			count={ops.length || undefined}
 		>
@@ -43,26 +64,38 @@
 					{#each ops as op (op.order)}
 						{@const done = isTerminal(op.status)}
 						{@const selected = store.focusMode && store.focusOp === op.order}
+						{@const s = opState(op)}
+						{@const stamp = op.step.completed?.at}
 						<li class="border-b border-border last:border-b-0">
 							<button
 								type="button"
 								class={cn(
-									'flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-accent/60',
+									'grid w-full grid-cols-1 gap-0.5 px-3 py-2 text-left hover:bg-accent/60',
 									selected && 'bg-accent shadow-[inset_2px_0_0_var(--info)]'
 								)}
 								aria-current={selected ? 'true' : undefined}
 								onclick={() => onjump(op.order)}
 							>
-								<span class="w-8 shrink-0 font-mono font-medium">{op.number}</span>
-								<span class={cn('min-w-0 flex-1 truncate', done && 'text-muted-foreground')}
-									>{op.title}</span
-								>
-								{#if op.steps.length}
+								<span class="flex min-w-0 items-baseline gap-2">
+									<span class="shrink-0 font-mono text-xs font-semibold">OP {op.number}</span>
 									<span
-										class={cn('font-mono tabular-nums', done ? 'text-ok' : 'text-muted-foreground')}
-										>{op.progress.done}/{op.progress.total}</span
+										class={cn('min-w-0 flex-1 truncate text-sm', done && 'text-muted-foreground')}
+										title={op.title}>{op.title}</span
 									>
-								{/if}
+								</span>
+								<span class="flex min-w-0 items-center gap-2 font-mono text-xs">
+									<Badge variant="outline" class={cn('font-mono tracking-wider', s.tone)}
+										>{s.label}</Badge
+									>
+									{#if done && stamp}
+										<time class="text-muted-foreground" datetime={iso(stamp)} title={iso(stamp)}
+											>{datetime(stamp)}</time
+										>
+									{/if}
+									<span class="ml-auto"
+										><CursorChips cursors={op.step.cursors} viewerId={store.viewerId} /></span
+									>
+								</span>
 							</button>
 						</li>
 					{/each}
@@ -72,4 +105,6 @@
 	{:else}
 		<EmptyLine label="Operations" />
 	{/if}
+
+	<ExecutionReferences {store} />
 </div>

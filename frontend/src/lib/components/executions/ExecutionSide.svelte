@@ -1,12 +1,13 @@
 <script lang="ts">
-	// Right column: who is working where, the work order's issues, and the
-	// procedure's reference documents. Roster entries jump into the document.
+	// Right column: who is working where, the work order's issues, and its comment
+	// thread. Roster entries jump into the document.
 	import { cn } from '#lib/utils.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Avatar, EmptyLine, Section, State } from '#lib/components/opal/index.js';
-	import { attachmentUrl } from '#lib/components/procedure-doc/index.js';
 	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
+	import ExecutionComments from './ExecutionComments.svelte';
+	import { fillColumn } from './fill-column.js';
 
 	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
 
@@ -16,18 +17,15 @@
 	const newIssue = $derived(
 		`/issues/new?execution=${inst.id}&executionLabel=${encodeURIComponent(inst.work_order ?? '')}&projectId=${inst.project.id}`
 	);
-	const size = (n: number) =>
-		n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 </script>
 
 <!-- One viewport tall on wide screens and never scrolls as a whole, nor sideways.
-     Cards are only as tall as their content and never stretch to fill the column;
-     when the column runs out, Issues gives up height first (scrolling inside) while
-     Online and Reference documents are capped at 30% each. -->
-<div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full">
+     Cards are only as tall as their content and never stretch to fill the column.
+     When they do not fit, fillColumn caps the tallest ones (each scrolls inside). -->
+<div class="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere] lg:h-full" use:fillColumn>
 	{#if doc.roster.length}
 		<Section
-			class="lg:flex lg:max-h-[30%] lg:min-h-0 lg:flex-none lg:flex-col"
+			class="lg:flex lg:min-h-0 lg:flex-none lg:flex-col"
 			title="Online"
 			count={doc.roster.length || undefined}
 		>
@@ -65,7 +63,7 @@
 
 	{#if doc.issues.length}
 		<Section
-			class="lg:flex lg:min-h-0 lg:flex-[0_1_auto] lg:flex-col"
+			class="lg:flex lg:min-h-0 lg:flex-none lg:flex-col"
 			title="Issues"
 			count={doc.issues.length || undefined}
 		>
@@ -104,31 +102,5 @@
 		<EmptyLine label="Issues" addHref={newIssue} />
 	{/if}
 
-	{#if doc.reference_attachments.length}
-		<Section
-			class="lg:flex lg:max-h-[30%] lg:min-h-0 lg:flex-none lg:flex-col"
-			title="Reference documents"
-			count={doc.reference_attachments.length || undefined}
-		>
-			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
-				<ul class="m-0 list-none p-0">
-					{#each doc.reference_attachments as a (a.id)}
-						<li
-							class="flex items-center gap-2 border-b border-border px-3 py-1 text-xs last:border-b-0"
-						>
-							<a
-								class="min-w-0 flex-1 truncate font-mono text-info hover:underline"
-								href={attachmentUrl(a.id)}
-								target="_blank"
-								rel="noopener">{a.filename}</a
-							>
-							<span class="font-mono text-muted-foreground">{size(a.size_bytes)}</span>
-						</li>
-					{/each}
-				</ul>
-			</div>
-		</Section>
-	{:else}
-		<EmptyLine label="Reference documents" />
-	{/if}
+	<ExecutionComments {store} />
 </div>

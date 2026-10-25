@@ -161,6 +161,21 @@ export const stepNote = sqliteTable(
 	(t) => [index('step_note_step_idx').on(t.stepExecutionId)]
 );
 
+/** The work order's comment thread: people talking about the run, not about one step. */
+export const executionComment = sqliteTable(
+	'execution_comment',
+	{
+		id: id(),
+		executionId: integer('execution_id')
+			.notNull()
+			.references(() => execution.id, { onDelete: 'cascade' }),
+		authorId: integer('author_id').references(() => user.id, { onDelete: 'set null' }),
+		body: text('body').notNull(),
+		createdAt: createdAt()
+	},
+	(t) => [index('execution_comment_execution_idx').on(t.executionId)]
+);
+
 /**
  * Who joined an execution and where each person works. One row per person per execution.
  * `joined_at` null: left (the claim stays). `focus_step_id` null: no claim.

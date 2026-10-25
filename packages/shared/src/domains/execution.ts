@@ -520,6 +520,15 @@ export const zStepNote = z.object({
 	body: z.string()
 });
 
+export const zExecutionComment = z.object({
+	id: z.number().int(),
+	executionId: z.number().int(),
+	author: zPersonRef.nullable(),
+	createdAt: zTimestamp,
+	body: z.string()
+});
+export type ExecutionComment = z.infer<typeof zExecutionComment>;
+
 export const zConsumeLine = z.object({
 	stockId: zId,
 	quantity: zQty,
@@ -934,6 +943,26 @@ export const execution = {
 			'Append a timestamped, authored note to a step. Any step state, any execution state. Attach files with POST /api/attachments (ownerType step_note).',
 		input: z.object({ ...zStepPath, body: z.string() }),
 		output: zStepNote,
+		access: 'signed-in',
+		mcp: true
+	}),
+	listComments: op({
+		name: 'execution.listComments',
+		method: 'GET',
+		path: '/executions/:id/comments',
+		summary: 'The comment thread of a work order, oldest first. Step notes are separate (on each step).',
+		input: z.object({ id: zId }),
+		output: z.array(zExecutionComment),
+		access: 'signed-in',
+		mcp: true
+	}),
+	addComment: op({
+		name: 'execution.addComment',
+		method: 'POST',
+		path: '/executions/:id/comments',
+		summary: 'Add a comment to the thread of a work order. Any execution state. Markdown.',
+		input: z.object({ id: zId, body: z.string().trim().min(1).max(4000) }),
+		output: zExecutionComment,
 		access: 'signed-in',
 		mcp: true
 	}),

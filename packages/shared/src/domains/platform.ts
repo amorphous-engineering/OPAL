@@ -54,6 +54,7 @@ export const EVENT_TYPES = [
 	'heartbeat',
 	'cursor_moved',
 	'step_completed',
+	'execution_comment',
 	'instance_started',
 	'instance_completed',
 	'issue_dispositioned',

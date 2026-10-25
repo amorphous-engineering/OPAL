@@ -13,6 +13,7 @@
  *    remotely; otherwise the operator's choice is kept (persisted per execution).
  *  - Presence is the explicit claim. Focus (keyboard cursor) is local only.
  */
+import type { ExecutionComment } from '@opal/shared';
 import { api, opal } from '#lib/api.js';
 import { confirm, toast, toastError } from '#lib/components/opal/index.js';
 import {
@@ -70,6 +71,8 @@ export class ExecutionStore implements DocController {
 	claimedOrder = $state<number | null>(null);
 	/** Brief highlight after a jump (rail click, ?op= link). */
 	pulse = $state<number | null>(null);
+	/** The work order's comment thread, oldest first. Null until loaded. */
+	comments = $state<ExecutionComment[] | null>(null);
 
 	private overrides = $state<Record<string, boolean>>({});
 	private drafts = $state<Record<number, Record<string, unknown>>>({});
@@ -120,6 +123,7 @@ export class ExecutionStore implements DocController {
 		await this.refresh();
 		this.loading = false;
 		if (this.error) return;
+		void this.loadComments();
 		opal.execution.join({ id: this.id }).catch(() => {});
 		this.pollTimer = setInterval(() => {
 			if (document.visibilityState === 'visible') this.pollNow();
@@ -157,12 +161,38 @@ export class ExecutionStore implements DocController {
 		es.onmessage = (m) => {
 			try {
 				const ev = JSON.parse(m.data) as { type: string; data?: { executionId?: number } };
-				if (ev.data?.executionId === this.id) this.pollNow();
+				if (ev.data?.executionId !== this.id) return;
+				if (ev.type === 'execution_comment') void this.loadComments();
+				else this.pollNow();
 			} catch {
 				/* heartbeat or malformed frame */
 			}
 		};
 		this.events = es;
+	}
+
+	// ---------- comments ----------
+
+	async loadComments() {
+		try {
+			this.comments = await opal.execution.listComments({ id: this.id });
+		} catch (e) {
+			if (!this.stopped) toastError(e);
+		}
+	}
+
+	/** True when the comment was saved (the caller then clears its input). */
+	async addComment(body: string): Promise<boolean> {
+		try {
+			const c = await opal.execution.addComment({ id: this.id, body });
+			// The event reloads the thread too; adding here shows it without waiting.
+			if (this.comments && !this.comments.some((x) => x.id === c.id))
+				this.comments = [...this.comments, c];
+			return true;
+		} catch (e) {
+			toastError(e, 'Comment not saved');
+			return false;
+		}
 	}
 
 	// ---------- loading ----------

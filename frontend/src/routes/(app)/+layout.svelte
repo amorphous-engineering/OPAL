@@ -39,12 +39,9 @@
 	>Skip to content</a
 >
 
-<!-- --shell-h: height of the chrome above <main> (demo banner + header bar), for pages that
-     lock themselves to the viewport (the execution document). -->
-<div
-	class="flex min-h-svh min-w-0 flex-col"
-	style:--shell-h={data.demoActive ? '4.5rem' : '2.75rem'}
->
+<!-- --shell-h: height of the chrome around <main> (demo banner + header bar above, status bar
+     below, 1.5rem), for pages that lock themselves to the viewport (the execution document). -->
+<div class="flex min-h-svh min-w-0 flex-col" style:--shell-h={data.demoActive ? '6rem' : '4.25rem'}>
 	{#if data.demoActive}
 		<div
 			role="status"
