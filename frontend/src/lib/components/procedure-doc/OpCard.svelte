@@ -1,5 +1,5 @@
 <script lang="ts">
-	// One OP: a card with a header bar (number, title, flags, step count, holds)
+	// One OP: a card with a header bar (number, title, state badges, claim, completion stamp)
 	// over its steps. An OP without sub-steps is its own single step and shows
 	// that step's body directly. Expanded until complete.
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -11,7 +11,9 @@
 	import OpClaim from './OpClaim.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepRow from './StepRow.svelte';
+	import StepBadges from './StepBadges.svelte';
 	import StepState from './StepState.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import StepTitleActions from './StepTitleActions.svelte';
 	import SignoffTable from './SignoffTable.svelte';
 	import SignoffEditor from './author/SignoffEditor.svelte';
@@ -74,6 +76,9 @@
 		!leaf && ctl.mode !== 'author' && (op.step.signoffs ?? []).length > 0
 	);
 	const footer = $derived(opSignoffs || (ctl.mode === 'execute' && deletable));
+
+	const warnBadge = 'border-warn/50 bg-warn-muted font-mono tracking-wider text-warn';
+	const mutedBadge = 'font-mono tracking-wider text-muted-foreground';
 </script>
 
 {#if op.is_ad_hoc && op.redline}
@@ -137,24 +142,40 @@
 		{:else}
 			<span
 				class={cn(
-					'min-w-0 flex-1 truncate text-sm font-medium',
+					'min-w-0 truncate text-sm font-medium',
 					terminal && 'text-muted-foreground',
 					op.status === 'skipped' && 'line-through'
 				)}>{op.title}</span
 			>
 		{/if}
 		{#if op.is_contingency}
-			<span
-				class="inline-flex h-5 items-center rounded-md border border-warn/50 px-1.5 font-mono text-xs font-medium text-warn"
-				>CONTINGENCY</span
-			>
+			<Badge variant="outline" class={warnBadge}>CONTINGENCY</Badge>
 		{/if}
 		{#if op.strict_sequence}
-			<span
-				class="inline-flex h-5 items-center rounded-md border border-border px-1.5 font-mono text-xs font-medium text-muted-foreground"
-				title="Sub-steps complete in order">SEQ</span
-			>
+			<Badge variant="outline" class={mutedBadge} title="Sub-steps complete in order">SEQ</Badge>
 		{/if}
+		{#if !au}
+			{#if leaf}
+				<StepBadges step={op.step} />
+			{:else if !terminal}
+				{#if ctl.active && op.holds.length}
+					<!-- The hold's issue number lives on the row it blocks; here, only that the OP is held. -->
+					<Badge
+						variant="outline"
+						class={warnBadge}
+						title={`OP COMPLETE is held until disposition: ${op.holds.map((h) => h.issue_number).join(', ')}`}
+						>HELD{op.holds.length > 1 ? ` ×${op.holds.length}` : ''}</Badge
+					>
+				{/if}
+				{#if op.step.status === 'awaiting_signoff'}
+					<Badge variant="outline" class={warnBadge}>AWAITING SIGN-OFF</Badge>
+				{:else if ctl.active && op.waiting_on_ops.length}
+					<Badge variant="outline" class={mutedBadge}>AFTER OP {op.waiting_on_ops.join(', ')}</Badge
+					>
+				{/if}
+			{/if}
+		{/if}
+		<span class="flex-1"></span>
 		{#if au && op.waiting_on_ops.length}
 			<span
 				class="hidden font-mono text-xs whitespace-nowrap text-muted-foreground md:inline"
@@ -168,11 +189,6 @@
 			<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
 				>{op.steps.length} {op.steps.length === 1 ? 'STEP' : 'STEPS'}</span
 			>
-		{:else if !leaf}
-			<span
-				class={cn('font-mono text-xs tabular-nums', terminal ? 'text-ok' : 'text-muted-foreground')}
-				title="Steps complete">{op.progress.done}/{op.progress.total}</span
-			>
 		{/if}
 		<span class="shrink-0 text-right">
 			{#if au}
@@ -180,18 +196,7 @@
 					<SaveBadge step={op.step} quiet />
 					<RowTools step={op.step} {op} isOp={true} />
 				</span>
-			{:else if ctl.active && op.holds.length}
-				<!-- The hold's issue number lives on the row it blocks; here, only that the OP is held. -->
-				<span
-					class="font-mono text-xs font-medium whitespace-nowrap text-warn"
-					title={`OP COMPLETE is held until disposition: ${op.holds.map((h) => h.issue_number).join(', ')}`}
-					>HELD{op.holds.length > 1 ? ` ×${op.holds.length}` : ''}</span
-				>
-			{:else if ctl.active && op.waiting_on_ops.length}
-				<span class="font-mono text-xs font-medium whitespace-nowrap text-muted-foreground"
-					>AFTER OP {op.waiting_on_ops.join(', ')}</span
-				>
-			{:else if leaf || terminal || op.step.status === 'awaiting_signoff'}
+			{:else if leaf || terminal}
 				<StepState step={op.step} />
 			{/if}
 		</span>

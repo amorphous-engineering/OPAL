@@ -1,6 +1,6 @@
 <script lang="ts">
-	// The state cell of a step row: words in state colours, exactly one of
-	// complete · skipped · held · awaiting sign-off · waiting · nothing.
+	// The completion stamp of a step: when and who, for a completed or skipped step.
+	// What stops an open step shows as badges beside its title (StepBadges).
 	import { datetime, iso } from '#lib/format.js';
 	import type { DocStep } from './types.js';
 
@@ -18,8 +18,6 @@
 	const who = $derived(
 		last?.signed_by?.name ?? step.completed?.by ?? step.completed?.initials ?? ''
 	);
-	const raised = $derived(step.holds.filter((h) => h.kind === 'raised'));
-	const bound = $derived(step.holds.filter((h) => h.kind === 'bound'));
 </script>
 
 <span class="font-mono text-xs font-medium whitespace-nowrap">
@@ -37,31 +35,5 @@
 				class="max-w-[9rem] truncate">{who}</span
 			></span
 		>
-	{:else if raised.length}
-		<span class="text-warn"
-			>HELD BY
-			{#each raised as h, i (h.issue_id)}
-				{#if i > 0},
-				{/if}<a
-					class="underline"
-					href={`/issues/${h.issue_id}`}
-					onclick={(e) => e.stopPropagation()}>{h.issue_number}</a
-				>{/each}</span
-		>
-	{:else if bound.length}
-		<span class="text-warn"
-			>HOLD
-			{#each bound as h, i (h.issue_id)}
-				{#if i > 0},
-				{/if}<a
-					class="underline"
-					href={`/issues/${h.issue_id}`}
-					onclick={(e) => e.stopPropagation()}>{h.issue_number}</a
-				>{/each}</span
-		>
-	{:else if step.status === 'awaiting_signoff'}
-		<span class="text-warn">AWAITING SIGN-OFF</span>
-	{:else if step.waiting}
-		<span class="text-muted-foreground">{step.waiting.replace(/^WAITING ON /, 'AFTER ')}</span>
 	{/if}
 </span>

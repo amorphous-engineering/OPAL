@@ -6,6 +6,8 @@
 	import { useDoc } from './controller.js';
 	import CursorChips from './CursorChips.svelte';
 	import StepBody from './StepBody.svelte';
+	import StepBadges from './StepBadges.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import StepState from './StepState.svelte';
 	import StepTitleActions from './StepTitleActions.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
@@ -38,6 +40,7 @@
 	const current = $derived(ctl.mode === 'execute' && ctl.currentOrder === step.order);
 	const nAtt = $derived(step.attachments.length);
 	const nNote = $derived(step.notes.length);
+	const countBadge = 'font-mono tracking-wider text-muted-foreground';
 </script>
 
 <div
@@ -83,32 +86,34 @@
 		{#if au}
 			<TitleInput {step} />
 		{:else}
-			<span
-				class={cn('min-w-0 flex-1 truncate text-sm', step.status === 'skipped' && 'line-through')}
+			<span class={cn('min-w-0 truncate text-sm', step.status === 'skipped' && 'line-through')}
 				>{step.title}</span
 			>
+			<StepBadges {step} />
 		{/if}
+		{#if nNote}
+			<Badge variant="outline" class={countBadge} title="Operator notes">NOTES · {nNote}</Badge>
+		{/if}
+		{#if nAtt}
+			{#if ctl.actions.showEvidence}
+				<Badge
+					variant="outline"
+					class={cn(countBadge, 'cursor-pointer hover:text-foreground')}
+					href="#evidence"
+					title="Attachments"
+					onclick={(e: MouseEvent) => {
+						e.preventDefault();
+						e.stopPropagation();
+						ctl.actions.showEvidence?.(step);
+					}}>FILES · {nAtt}</Badge
+				>
+			{:else}
+				<Badge variant="outline" class={countBadge} title="Attachments">FILES · {nAtt}</Badge>
+			{/if}
+		{/if}
+		{#if !au}<span class="flex-1"></span>{/if}
 		{#if au}<AuthorChips {step} />{/if}
 		<CursorChips cursors={step.cursors} viewerId={ctl.viewerId} />
-		{#if nAtt || nNote}
-			<span class="font-mono text-xs whitespace-nowrap text-muted-foreground">
-				{#if nAtt}
-					{#if ctl.actions.showEvidence}
-						<button
-							type="button"
-							class="hover:text-foreground hover:underline"
-							title={`${nAtt} attachment(s)`}
-							onclick={(e) => {
-								e.stopPropagation();
-								ctl.actions.showEvidence?.(step);
-							}}>{nAtt} ATT</button
-						>
-					{:else}{nAtt} ATT{/if}
-				{/if}
-				{#if nAtt && nNote}<span> · </span>{/if}
-				{#if nNote}<span title="Operator notes">{nNote} NOTE{nNote > 1 ? 'S' : ''}</span>{/if}
-			</span>
-		{/if}
 		{#if au}
 			<SaveBadge {step} quiet />
 			<RowTools {step} {op} isOp={false} />
