@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { attachment, auditLog, blob, part } from '../../src/db/schema/index.ts';
 import { insert } from '../../src/write.ts';
 import { blobPath, purgeOrphanBlobs } from '../../src/services/platform/attachments.ts';
@@ -75,6 +75,15 @@ describe('attachments', () => {
 		expect(await res.text()).toBe('by hash');
 		expect((await s.app.request(`/api/blobs/${'0'.repeat(64)}`)).status).toBe(404);
 		expect((await s.app.request('/api/blobs/..%2F..%2Fetc')).status).toBe(404);
+	});
+
+	test('a file missing from disk is a 404, not a server error', async () => {
+		const s = await setup();
+		const id = await partId(s);
+		const a = await (await upload(s, { file: text('gone'), ownerType: 'part', ownerId: String(id) })).json();
+		rmSync(blobPath(a.sha256));
+		expect((await s.app.request(`/api/blobs/${a.sha256}`)).status).toBe(404);
+		expect((await s.app.request(`/api/attachments/${a.id}/download`)).status).toBe(404);
 	});
 
 	test('a file type off the allowed list is refused', async () => {

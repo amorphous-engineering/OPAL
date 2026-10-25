@@ -8,6 +8,7 @@
  *   GET  /api/blobs/:sha256              the file by content hash (inline images in snapshots)
  *   GET  /api/events/stream              server-sent events
  */
+import { existsSync } from 'node:fs';
 import { op, OpalError, unauthenticated, ATTACHMENT_KINDS, zAttachment, zId } from '@opal/shared';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -56,6 +57,8 @@ const uploadImpl: Impl = implement(uploadContract, async (ctx, input) =>
 const INLINE = /^(image\/(png|jpe?g|gif|webp)|application\/pdf|text\/plain)$/;
 
 function fileResponse(path: string, mime: string, filename: string | null, forceDownload: boolean): Response {
+	// A row whose file is gone from disk is a missing file, not a server fault.
+	if (!existsSync(path)) throw new OpalError(404, 'not_found', 'File not found');
 	const inline = INLINE.test(mime) && !forceDownload;
 	const headers: Record<string, string> = {
 		'Content-Type': mime,

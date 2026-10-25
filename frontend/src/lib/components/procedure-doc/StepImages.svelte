@@ -118,7 +118,8 @@
 				setApi={(a) => (api = a)}
 			>
 				<Carousel.Content class="-ms-2">
-					{#each images as img (img.id ?? img.attachment_id)}
+					<!-- Published images have no row id, and one blob can appear twice: key by position. -->
+					{#each images as img, i (img.id ?? i)}
 						<Carousel.Item class="basis-1/3 ps-2">
 							<figure class="m-0 grid grid-cols-1 gap-1" data-image-id={img.id}>
 								<a
