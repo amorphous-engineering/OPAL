@@ -101,15 +101,15 @@
 		<div class="flex" role="group" aria-label="View">
 			<Button
 				size="xs"
-				variant={data.view === 'records' ? 'default' : 'outline'}
-				aria-pressed={data.view === 'records'}
-				onclick={() => setQuery({ view: null, sort: null, dir: null })}>RECORDS</Button
-			>
-			<Button
-				size="xs"
 				variant={data.view === 'parts' ? 'default' : 'outline'}
 				aria-pressed={data.view === 'parts'}
 				onclick={() => setQuery({ view: 'parts', sort: null, dir: null })}>BY PART</Button
+			>
+			<Button
+				size="xs"
+				variant={data.view === 'records' ? 'default' : 'outline'}
+				aria-pressed={data.view === 'records'}
+				onclick={() => setQuery({ view: 'records', sort: null, dir: null })}>RECORDS</Button
 			>
 		</div>
 

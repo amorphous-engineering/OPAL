@@ -15,7 +15,6 @@ type Flag = (typeof FLAGS)[number];
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	const p = url.searchParams;
-	const view: 'records' | 'parts' = p.get('view') === 'parts' ? 'parts' : 'records';
 	const q = p.get('q')?.trim() ?? '';
 	const location = p.get('location') ?? '';
 	const partId = Number(p.get('part_id')) || undefined;
@@ -24,6 +23,12 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		? (p.get('flag') as Flag)
 		: '';
 	const depleted = p.get('depleted') === '1';
+	// By part is the default. A link to one part, or a filter only records have, means records.
+	const wantsRecords = !!partId || !!source || depleted || (flag !== '' && flag !== 'low');
+	const view: 'records' | 'parts' =
+		p.get('view') === 'records' || (p.get('view') !== 'parts' && wantsRecords)
+			? 'records'
+			: 'parts';
 	const sortParam = p.get('sort') ?? '';
 	const dir = p.get('dir');
 	const page = Math.max(1, Number(p.get('page')) || 1);
