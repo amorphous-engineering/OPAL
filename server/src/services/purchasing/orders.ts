@@ -1,5 +1,6 @@
 /** Purchase orders: header, lines, status workflow, receiving and the expense ledger. */
 import {
+	storeDesignator,
 	PURCHASE_OPEN_STATUSES,
 	PURCHASE_TRANSITIONS,
 	type Purchase,
@@ -255,14 +256,14 @@ export function listPurchases(
 
 // ---------------------------------------------------------------- create and edit
 
-/** PO-NNNN: one past the highest numeric suffix in use. */
+/** PO-<sequence>: one past the highest numeric suffix in use, stored at full width. */
 export function nextReference(ctx: DbCtx): string {
 	let max = 0;
 	for (const r of ctx.db.select({ r: purchase.reference }).from(purchase).where(like(purchase.reference, 'PO-%')).all()) {
 		const m = /^PO-(\d+)$/.exec(r.r);
 		if (m) max = Math.max(max, Number(m[1]));
 	}
-	return `PO-${String(max + 1).padStart(4, '0')}`;
+	return storeDesignator('PO', max + 1);
 }
 
 function resolveSupplier(ctx: DbCtx, id: number) {

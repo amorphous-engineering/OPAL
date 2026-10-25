@@ -25,7 +25,7 @@ import {
 } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { nextDesignator } from '../designators.ts';
-import { getOrgSettings } from '../org/project.ts';
+import { getOrgSettings, numbersFor } from '../org/project.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
 import {
 	baselineRow,
@@ -150,7 +150,7 @@ export function currentByNumber(ctx: Pick<Ctx, 'db'>, reqNumber: string): Requir
 }
 
 export function byNumber(ctx: Ctx, reqNumber: string): Requirement {
-	const r = currentByNumber(ctx, reqNumber.trim().toUpperCase());
+	const r = currentByNumber(ctx, numbersFor(ctx.db).canonical(reqNumber.trim().toUpperCase()));
 	if (!r) throw notFound('Requirement');
 	return one(ctx, r);
 }
@@ -397,9 +397,11 @@ export function baselineBatch(
 		}))
 		.filter((o) => o.failing.length || !isMutable(o.r));
 	if (offenders.length) {
+		// Field keys are not output strings, so runOp does not show them at the display width.
+		const codec = numbersFor(ctx.db);
 		const fields = Object.fromEntries(
 			offenders.map((o) => [
-				o.r.reqNumber,
+				codec.display(o.r.reqNumber),
 				o.failing.length ? o.failing.join(', ') : `is ${o.r.lifecycleState}`
 			])
 		);
@@ -443,25 +445,28 @@ export function importCatalog(ctx: Ctx, projectId: number): RequirementCatalogRe
 	const catalog = getOrgSettings(ctx.db)?.requirements ?? [];
 	if (!catalog.length) throw notFound('Requirement catalog');
 	const result: RequirementCatalogResult = { created: [], skipped: [] };
+	const codec = numbersFor(ctx.db);
 	for (const entry of catalog) {
+		// The catalog is typed by hand at any width; rows hold the stored form.
+		const reqNumber = codec.canonical(entry.id.trim().toUpperCase());
 		const exists = ctx.db
 			.select({ id: requirement.id })
 			.from(requirement)
-			.where(eq(requirement.reqNumber, entry.id))
+			.where(eq(requirement.reqNumber, reqNumber))
 			.get();
 		if (exists) {
-			result.skipped.push(entry.id);
+			result.skipped.push(reqNumber);
 			continue;
 		}
 		insert(ctx, requirement, {
-			reqNumber: entry.id,
+			reqNumber,
 			projectId, // added by projects
 			title: entry.title,
 			statement: entry.description || entry.title,
 			category: entry.category || null,
 			level: 0
 		});
-		result.created.push(entry.id);
+		result.created.push(reqNumber);
 	}
 	return result;
 }
@@ -469,10 +474,14 @@ export function importCatalog(ctx: Ctx, projectId: number): RequirementCatalogRe
 /** Catalog entries (number and title) that no requirement row holds yet. */
 export function catalogPending(ctx: Ctx) {
 	const catalog = getOrgSettings(ctx.db)?.requirements ?? [];
+	const codec = numbersFor(ctx.db);
 	const held = new Set(
 		ctx.db.select({ n: requirement.reqNumber }).from(requirement).all().map((x) => x.n)
 	);
-	return catalog.filter((e) => !held.has(e.id)).map((e) => ({ id: 0, reqNumber: e.id, title: e.title }));
+	return catalog
+		.map((e) => ({ ...e, id: codec.canonical(e.id.trim().toUpperCase()) }))
+		.filter((e) => !held.has(e.id))
+		.map((e) => ({ id: 0, reqNumber: e.id, title: e.title }));
 }
 
 // ---- part links ----

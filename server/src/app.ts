@@ -9,6 +9,7 @@ import { mountMcp } from './mcp/index.ts';
 import { impls } from './ops/index.ts';
 import { errorResponse, mountOps, type ResolveActor } from './registry.ts';
 import { ensureFts } from './services/platform/search.ts';
+import { storeNumbersAtFullWidth } from './db/full-width-numbers.ts';
 
 export interface AppOptions {
 	db: Db;
@@ -21,6 +22,8 @@ export interface AppOptions {
 export function createApp({ db, resolveActor = actorResolver(db), web = false }: AppOptions): Hono {
 	// Search indexes are FTS5 virtual tables, outside Drizzle: create any that are missing.
 	ensureFts(db);
+	// After the FTS triggers exist, so the search index follows the rewrite.
+	storeNumbersAtFullWidth(db);
 	const app = new Hono();
 	app.onError((err, c) => {
 		const { status, body } = errorResponse(err);

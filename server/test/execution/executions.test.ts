@@ -6,7 +6,7 @@ describe('cutting an execution', () => {
 		const t = await setup();
 		const pid = await t.published(['Prep', 'Fire']);
 		const e = await t.cut(pid);
-		expect(e.woNumber).toMatch(/^WO-\d{5}$/);
+		expect(e.woNumber).toMatch(/^WO-\d{4}$/);
 		expect(e.status).toBe('cut');
 		expect(e.steps.map((s: any) => [s.number, s.status])).toEqual([['1', 'pending'], ['2', 'pending']]);
 		expect(e.versionNumber).toBe(1);

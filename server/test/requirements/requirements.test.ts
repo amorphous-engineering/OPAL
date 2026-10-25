@@ -45,7 +45,7 @@ describe('creating and editing', () => {
 		const { req, db, project } = await setup();
 		const ts = new Date().toISOString();
 		db.insert(requirement)
-			.values({ reqNumber: 'REQ-0001', projectId: project.id, title: 'imported', statement: 's', createdAt: ts, updatedAt: ts })
+			.values({ reqNumber: 'REQ-0000000001', projectId: project.id, title: 'imported', statement: 's', createdAt: ts, updatedAt: ts })
 			.run();
 		expect((await req()).reqNumber).toBe('REQ-0002');
 	});
@@ -709,6 +709,22 @@ describe('catalog import', () => {
 		expect((await call('POST', '/requirements/import', {})).status).toBe(422);
 		await call('POST', '/requirements/import', { projectId: project.id });
 		expect((await call('GET', '/requirements/number/REQ-0007')).body).toMatchObject({ projectId: project.id, projectCode: 'TP' });
+	});
+
+	test('a catalog number typed at any width is stored once and found at any width', async () => {
+		const { call, db, project } = await setup();
+		setSetting(
+			{ db, actor: { kind: 'system' }, op: 'test' },
+			PROJECT_CONFIG_KEY,
+			JSON.stringify({ name: 'P', requirements: [{ id: 'REQ-001', title: 'A' }, { id: 'req-00000002', title: 'B' }] })
+		);
+		expect((await call('GET', '/requirements/catalog')).body.map((x: any) => x.reqNumber)).toEqual(['REQ-0001', 'REQ-0002']);
+		const first = await call('POST', '/requirements/import', { projectId: project.id });
+		expect(first.body).toEqual({ created: ['REQ-0001', 'REQ-0002'], skipped: [] });
+		expect(db.select().from(requirement).all().map((r) => r.reqNumber)).toEqual(['REQ-0000000001', 'REQ-0000000002']);
+		expect((await call('POST', '/requirements/import', { projectId: project.id })).body.skipped).toEqual(['REQ-0001', 'REQ-0002']);
+		for (const n of ['REQ-1', 'REQ-0001', 'REQ-00001', 'REQ-0000000001'])
+			expect((await call('GET', `/requirements/number/${n}`)).body).toMatchObject({ reqNumber: 'REQ-0001', title: 'A' });
 	});
 
 	test('import needs the admin gate and a catalog', async () => {

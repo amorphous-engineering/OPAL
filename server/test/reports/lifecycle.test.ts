@@ -98,6 +98,23 @@ describe('demo database', () => {
 		expect(parts(t.db)).toContain('Demo Scratch');
 	});
 
+	test('the demo database stores numbers at full width and the API shows the display width', async () => {
+		const t = await boot();
+		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		const stored = t.db.$client.query('SELECT opal_number AS n FROM stock_record').all() as { n: string }[];
+		expect(stored.length).toBeGreaterThan(0);
+		for (const r of stored) expect(r.n).toMatch(/^OPAL-\d{10}$/);
+		const pns = t.db.$client.query('SELECT internal_pn AS n FROM part').all() as { n: string }[];
+		expect(pns.some((p) => /\d{10}$/.test(p.n))).toBe(true);
+		const list = await t.call('GET', '/inventory');
+		expect(list.status).toBe(200);
+		const shown = JSON.stringify(list.body);
+		expect(shown).toMatch(/OPAL-\d{4}\b/);
+		expect(shown).not.toMatch(/OPAL-\d{10}/);
+		expect(shown).not.toMatch(/\d{10}/);
+	});
+
 	test('a demo file that exists but is empty is built on entry', async () => {
 		const t = await boot();
 		writeFileSync(join(dir, 'demo.opal.db'), '');

@@ -15,6 +15,8 @@ import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { actorUserId } from '../../context.ts';
+import { displayOutput } from '../../numbers.ts';
+import { numbersFor } from '../org/project.ts';
 import { actorResolver } from '../../auth/index.ts';
 import type { Db } from '../../db/client.ts';
 import { type Impl, implement, type ResolveActor, runOp } from '../../registry.ts';
@@ -130,7 +132,9 @@ export function mountFiles(app: Hono, db: Db, { resolveActor = actorResolver(db)
 		const actor = await actorOf(c);
 		return streamSSE(c, async (stream) => {
 			const unsubscribe = subscribe(actorUserId(actor), (event) => {
-				void stream.writeSSE({ data: JSON.stringify(event) }).catch(() => undefined);
+				// Events leave outside runOp: show numbers at the display width here.
+				const shown = displayOutput(event, numbersFor(db));
+				void stream.writeSSE({ data: JSON.stringify(shown) }).catch(() => undefined);
 			});
 			stream.onAbort(unsubscribe);
 			// First frame lets EventSource.onopen fire and proxies flush headers.

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
+import { canonicalDesignator } from '@opal/shared';
 import { notification } from '../../src/db/schema/index.ts';
 import { setup } from './helpers.ts';
 
@@ -195,7 +196,7 @@ describe('notifications', () => {
 		const mine = () => t.db.select().from(notification).where(eq(notification.userId, t.ben.id)).all();
 		expect(mine().map((n) => n.kind)).toEqual(['execution_blocked']);
 		expect(mine()[0]).toMatchObject({ href: `/executions/${e.id}`, subjectType: 'execution', priority: 'high' });
-		expect(mine()[0]!.title).toContain(e.woNumber);
+		expect(mine()[0]!.title).toContain(canonicalDesignator(e.woNumber)); // the table holds the stored form
 		// A second blocker on a blocked run is silent.
 		const nc2 = await t.nc(e.id, '3');
 		expect(mine()).toHaveLength(1);

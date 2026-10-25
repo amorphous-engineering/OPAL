@@ -6,7 +6,7 @@
  * spellings; writes store camelCase. Keys this module does not know (the Onshape block)
  * stay in the blob untouched.
  */
-import { OpalError, type PartNumbering, type OrgSettings, type Tier, type zOrgSettingsInput, notFound } from '@opal/shared';
+import { FALLBACK_SCHEME, numberCodec, type NumberCodec, OpalError, STORED_DIGITS, type PartNumbering, type OrgSettings, type Tier, type zOrgSettingsInput, notFound } from '@opal/shared';
 import { inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { Ctx } from '../../context.ts';
@@ -111,14 +111,35 @@ export function renderPartNumber(config: OrgSettings, tier: Tier, sequence: numb
 		tier_code: tier.code,
 		tier_name: tier.name,
 		tier_level: String(tier.level),
-		sequence: String(sequence).padStart(n.sequenceDigits, '0')
+		// Stored at full width; the API shows it at `sequenceDigits`.
+		sequence: String(sequence).padStart(STORED_DIGITS, '0')
 	};
 	return n.format.replace(/\{(\w+)\}/g, (m, k: string) => values[k] ?? m);
 }
 
-/** Part number when no project is set up: PN-{tier}-{seq:04d}. */
+/** Part number when no organization is set up: PN-{tier}-{sequence}. */
 export function fallbackPartNumber(tierLevel: number, sequence: number): string {
-	return `PN-${tierLevel}-${String(sequence).padStart(4, '0')}`;
+	return `PN-${tierLevel}-${String(sequence).padStart(STORED_DIGITS, '0')}`;
+}
+
+const codecs = new WeakMap<Db, { raw: string | null; codec: NumberCodec }>();
+
+/** The number codec for the current settings. Cached until the settings change. */
+export function numbersFor(db: Db): NumberCodec {
+	const raw = getSetting(db, PROJECT_CONFIG_KEY);
+	const hit = codecs.get(db);
+	if (hit && hit.raw === raw) return hit.codec;
+	const config = getOrgSettings(db);
+	const codec = config
+		? numberCodec(config.partNumbering.sequenceDigits, {
+				prefix: config.partNumbering.prefix,
+				separator: config.partNumbering.separator,
+				format: config.partNumbering.format,
+				tiers: config.tiers
+			})
+		: numberCodec(DEFAULT_NUMBERING.sequenceDigits, FALLBACK_SCHEME);
+	codecs.set(db, { raw, codec });
+	return codec;
 }
 
 // ---------------------------------------------------------------- write side

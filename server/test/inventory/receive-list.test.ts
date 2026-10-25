@@ -10,7 +10,7 @@ describe('receiving stock', () => {
 		const r = await s.call('POST', '/inventory', { partId: p.id, quantity: '12.5', location: 'A1' });
 		expect(r.status).toBe(201);
 		expect(r.body.items).toHaveLength(1);
-		expect(r.body.items[0].opalNumber).toBe('OPAL-00001');
+		expect(r.body.items[0].opalNumber).toBe('OPAL-0001');
 		expect(r.body.items[0].balance).toBe('12.5');
 		expect(r.body.items[0].sourceType).toBe('manual');
 		const moves = s.db.select().from(stockMove).all();
@@ -23,9 +23,9 @@ describe('receiving stock', () => {
 		const p = makePart(s.db, { tracking: 'serialized' });
 		const r = await s.call('POST', '/inventory', { partId: p.id, quantity: '3', location: 'A1' });
 		expect(r.body.items.map((i: { opalNumber: string }) => i.opalNumber)).toEqual([
-			'OPAL-00001',
-			'OPAL-00002',
-			'OPAL-00003'
+			'OPAL-0001',
+			'OPAL-0002',
+			'OPAL-0003'
 		]);
 		expect(r.body.items.every((i: { balance: string }) => i.balance === '1')).toBe(true);
 	});
@@ -159,7 +159,7 @@ describe('stock lists', () => {
 		const s = await setup();
 		const p = makePart(s.db, { name: 'Widget Prime' });
 		await receive(s, p.id, '2', 'ZONE-9', { lotNumber: 'LOT-777' });
-		for (const q of ['OPAL-00001', 'Widget', 'LOT-777', 'ZONE-9']) {
+		for (const q of ['OPAL-0001', 'Widget', 'LOT-777', 'ZONE-9']) {
 			expect((await s.call('GET', `/inventory?q=${q}`)).body.total).toBe(1);
 		}
 		expect((await s.call('GET', '/inventory?q=nothing')).body.total).toBe(0);
@@ -285,7 +285,7 @@ describe('stock lists', () => {
 		const s = await setup();
 		const p = makePart(s.db);
 		await receive(s, p.id, '4');
-		expect((await s.call('GET', '/inventory/opal/OPAL-00001')).body.partId).toBe(p.id);
+		expect((await s.call('GET', '/inventory/opal/OPAL-0001')).body.partId).toBe(p.id);
 		expect((await s.call('GET', '/inventory/opal/OPAL-99999')).status).toBe(404);
 		expect((await s.call('GET', '/inventory/9999')).status).toBe(404);
 	});

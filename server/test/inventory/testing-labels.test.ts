@@ -138,7 +138,7 @@ describe('labels', () => {
 
 	test('a label that cannot be made is reported, and the others still print', async () => {
 		const { s, rec } = await withRecord();
-		const r = await s.call('GET', `/inventory/labels?inventory=${rec.opalNumber},OPAL-99999&part=abc`);
+		const r = await s.call('GET', `/inventory/labels?inventory=${rec.opalNumber},OPAL-9999&part=abc`);
 		expect(r.body.labels).toHaveLength(1);
 		expect(r.body.failures).toHaveLength(2);
 	});

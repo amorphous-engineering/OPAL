@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { risk } from '../../src/db/schema/index.ts';
+import { risk, riskReference } from '../../src/db/schema/index.ts';
 import { createTestProject } from '../helpers/project.ts'; // added by projects
 import { setup } from './helpers.ts';
 
@@ -13,14 +13,14 @@ async function ready(t: Awaited<ReturnType<typeof setup>>, body: Record<string, 
 }
 
 describe('creating and reading risks', () => {
-	test('a new risk gets RISK-00001, disposition open, and the default score 3 x 3', async () => {
+	test('a new risk gets the first RISK number, disposition open, and the default score 3 x 3', async () => {
 		const t = await setup();
 		const r = await t.mk();
-		expect(r.riskNumber).toBe('RISK-00001');
+		expect(r.riskNumber).toBe('RISK-0001');
 		expect(r.disposition).toBe('open');
 		expect(r.score).toBe(9);
 		expect(r.severity).toBe('medium');
-		expect((await t.mk()).riskNumber).toBe('RISK-00002');
+		expect((await t.mk()).riskNumber).toBe('RISK-0002');
 	});
 
 	test('an incomplete scenario has no statement', async () => {
@@ -600,8 +600,8 @@ describe('issues linked to risks', () => {
 		await t.call('POST', `/risks/${b.id}/disposition`, { disposition: 'realized', realizedIssueId: i.id });
 		const d = (await t.call('GET', `/issues/${i.id}`)).body;
 		const rel = d.risks.map((x: any) => `${x.riskNumber}:${x.relation}`).sort();
-		expect(rel).toEqual(['RISK-00001:research', 'RISK-00002:mitigation', 'RISK-00002:realized']);
-		const link = d.links.find((l: any) => l.kind === 'risk' && l.label === 'RISK-00002');
+		expect(rel).toEqual(['RISK-0001:research', 'RISK-0002:mitigation', 'RISK-0002:realized']);
+		const link = d.links.find((l: any) => l.kind === 'risk' && l.label === 'RISK-0002');
 		expect(link.href).toBe(`/risks/${b.id}`);
 		const dup = await t.call('POST', `/issues/${i.id}/links`, { kind: 'risk', targetId: b.id });
 		expect(dup.status).toBe(409);
@@ -623,7 +623,7 @@ describe('references', () => {
 		const t = await setup();
 		const r = await t.mk();
 		const a = await t.call('POST', `/risks/${r.id}/references`, { type: 'opal', value: 'opal-00042', notes: 'the seat' });
-		expect(a.body.references[0]).toMatchObject({ type: 'opal', value: 'OPAL-00042', notes: 'the seat' });
+		expect(a.body.references[0]).toMatchObject({ type: 'opal', value: 'OPAL-0042', notes: 'the seat' });
 		const b = await t.call('POST', `/risks/${r.id}/references`, { type: 'work_order', value: 'WO-00015' });
 		expect(b.body.references).toHaveLength(2);
 		const gone = await t.call('DELETE', `/risks/${r.id}/references/${a.body.references[0].id}`);
@@ -636,6 +636,18 @@ describe('references', () => {
 		expect((await t.call('POST', `/risks/${r.id}/references`, { type: 'opal', value: 'WO-1' })).status).toBe(422);
 		await t.call('POST', `/risks/${r.id}/references`, { type: 'opal', value: 'OPAL-00001' });
 		expect((await t.call('POST', `/risks/${r.id}/references`, { type: 'opal', value: 'OPAL-00001' })).status).toBe(409);
+	});
+
+	test('a reference typed at another width is the same reference and resolves', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		const a = await t.call('POST', `/risks/${r.id}/references`, { type: 'opal', value: 'OPAL-186' });
+		expect(a.body.references[0].value).toBe('OPAL-0186');
+		expect((await t.call('POST', `/risks/${r.id}/references`, { type: 'opal', value: 'opal-00000186' })).status).toBe(409);
+		const w = await t.call('POST', `/risks/${r.id}/references`, { type: 'work_order', value: 'WO-4' });
+		expect(w.body.references.map((x: any) => x.value)).toEqual(['OPAL-0186', 'WO-0004']);
+		const stored = t.db.select().from(riskReference).all().map((x) => x.referenceValue);
+		expect(stored).toEqual(['OPAL-0000000186', 'WO-0000000004']);
 	});
 });
 

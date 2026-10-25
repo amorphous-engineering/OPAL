@@ -1,3 +1,4 @@
+import { numbersFor } from '../../src/services/org/project.ts';
 import { describe, expect, test } from 'bun:test';
 import { parseQty } from '@opal/shared';
 import { stockMove } from '../../src/db/schema/index.ts';
@@ -96,20 +97,22 @@ describe('genealogy', () => {
 
 	test('the components of an assembly are the consume moves linked to it, summed per record', async () => {
 		const { s, sub, screws } = await build();
+		const d = numbersFor(s.db).display;
 		const r = await s.call('GET', `/inventory/opal/${sub.opalNumber}/genealogy`);
 		expect(r.body.components.map((c: { opalNumber: string; qtyUsed: string; partName: string }) => [c.opalNumber, c.partName, c.qtyUsed])).toEqual([
-			[screws.opalNumber, 'Screw', '4'],
+			[d(screws.opalNumber), 'Screw', '4'],
 			[expect.any(String), 'Plate', '1']
 		]);
-		expect(r.body.components.every((c: { viaOpal: string; depth: number }) => c.viaOpal === sub.opalNumber && c.depth === 1)).toBe(true);
+		expect(r.body.components.every((c: { viaOpal: string; depth: number }) => c.viaOpal === d(sub.opalNumber) && c.depth === 1)).toBe(true);
 	});
 
 	test('where used lists the assemblies an item went into, and depth follows the tree', async () => {
 		const { s, screws, top, sub } = await build();
+		const d = numbersFor(s.db).display;
 		const direct = await s.call('GET', `/inventory/opal/${screws.opalNumber}/genealogy`);
 		expect(direct.body.usedIn.map((a: { opalNumber: string; qtyUsed: string }) => [a.opalNumber, a.qtyUsed])).toEqual([
-			[sub.opalNumber, '4'],
-			[top.opalNumber, '2']
+			[d(sub.opalNumber), '4'],
+			[d(top.opalNumber), '2']
 		]);
 		const deep = await s.call('GET', `/inventory/opal/${top.opalNumber}/genealogy?depth=3`);
 		const byDepth = deep.body.components.map((c: { depth: number; partName: string }) => [c.depth, c.partName]);

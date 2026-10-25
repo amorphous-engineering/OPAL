@@ -3,6 +3,7 @@ export * from './qty.ts';
 export * from './time.ts';
 export * from './errors.ts';
 export * from './gates.ts';
+export * from './designators.ts';
 export * from './client.ts';
 export * from './contracts.ts';
 export * from './domains/parts.ts';

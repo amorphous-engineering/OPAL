@@ -18,6 +18,8 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
 import { type Actor, type CookieJar, type Ctx, type RequestInfo } from './context.ts';
 import { holdsGate } from './services/org/gates.ts';
+import { canonicalInput, displayOutput } from './numbers.ts';
+import { numbersFor } from './services/org/project.ts';
 import type { Db } from './db/client.ts';
 
 export interface Impl<C extends OpContract = OpContract> {
@@ -81,6 +83,29 @@ export async function runOp<C extends OpContract>(
 	const { contract } = impl;
 	recordCall(contract.name);
 	checkAccess(db, contract, actor);
+	const codec = numbersFor(db);
+	try {
+		return displayOutput(await execute(impl, db, actor, canonicalInput(rawInput, codec), http), codec);
+	} catch (e) {
+		// An error message may name a record by its stored number.
+		if (e instanceof OpalError) {
+			const fields =
+				e.fields &&
+				Object.fromEntries(Object.entries(e.fields).map(([k, v]) => [codec.display(k), codec.display(v)]));
+			throw new OpalError(e.status, e.code, codec.display(e.message), fields);
+		}
+		throw e;
+	}
+}
+
+async function execute<C extends OpContract>(
+	impl: Impl<C>,
+	db: Db,
+	actor: Actor,
+	rawInput: unknown,
+	http?: { cookies: CookieJar; request: RequestInfo }
+): Promise<OpOutput<C>> {
+	const { contract } = impl;
 	const parsed = contract.input.safeParse(rawInput);
 	if (!parsed.success) {
 		throw new OpalError(422, 'invalid_input', 'Invalid input', zodFields(parsed.error));

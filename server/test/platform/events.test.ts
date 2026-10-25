@@ -70,6 +70,23 @@ describe('events', () => {
 		await reader.cancel();
 	});
 
+	test('the stream shows numbers in an event at the display width', async () => {
+		const s = await setup();
+		const res = await s.app.request('/api/events/stream');
+		const reader = res.body!.getReader();
+		const dec = new TextDecoder();
+		let buf = '';
+		const readUntil = async (needle: string) => {
+			while (!buf.includes(needle)) buf += dec.decode((await reader.read()).value);
+		};
+		await readUntil('heartbeat');
+		publish({ type: 'notice', data: { text: 'WO-0000000004 is blocked' } });
+		await readUntil('notice');
+		expect(buf).toContain('WO-0004 is blocked');
+		expect(buf).not.toContain('WO-0000000004');
+		await reader.cancel();
+	});
+
 	test('the stream needs a signed-in caller', async () => {
 		const s = await setup();
 		s.setActor({ kind: 'anonymous' });

@@ -57,6 +57,30 @@ Handlers are thin. Business rules live in `server/src/services`.
 11. No SQL built from strings. Use Drizzle or its `sql` template.
 12. No request header gives identity. Identity comes from the session cookie or a bearer API token. Token actors cannot do `humanOnly` operations.
 13. Working docs, audits and scratch notes go in `notes/` (gitignored). The repo is public.
+14. Sequence numbers (part numbers, OPAL-, PO-, T-, WO-, IT-, RISK-, REQ-) follow the rules in the next section. Serials (`001`) do not.
+
+## Sequence numbers
+
+The database stores every sequence number with a fixed 10-digit sequence: `WO-0000000004`,
+`SPX-F-0000000132`. People see the width the organization sets in `partNumbering.sequenceDigits`
+(default 4): `WO-0004`. The width is display only. A change to the setting changes every number on
+screen, in links, in exports and in MCP, and moves no stored row.
+
+- Generate numbers with `nextDesignator` (`server/src/services/designators.ts`), `nextReference`
+  (PO) or `nextPartNumber`. Never pad a number yourself.
+- Services, SQL and stored JSON see only the 10-digit form.
+- `runOp` converts at the API boundary (`server/src/numbers.ts`). Output: every string, error
+  message and error field goes through `codec.display`. Input: the fields in `NUMBER_KEYS` go
+  through `codec.canonical`, so `WO-4`, `WO-0004` and `WO-00004` name the same record. `q` goes
+  through `codec.search`, which also finds a partial number.
+- Text that leaves the server outside `runOp` (raw routes, SSE, files) must call
+  `numbersFor(db).display()`. A number from a person in a field outside `NUMBER_KEYS` must go through
+  `numbersFor(db).canonical()` in the service.
+- The UI shows numbers as the API sends them and builds links from those values. It never pads,
+  strips or parses a number.
+- Tests through the API expect the display width. Tests that call a service or read the database
+  expect the 10-digit form.
+- Older databases and 1.x imports are converted once at startup (`server/src/db/full-width-numbers.ts`).
 
 ## Tests
 

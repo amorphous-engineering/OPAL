@@ -36,6 +36,7 @@ import { insert, update } from '../../write.ts';
 import { startSession } from '../auth/sessions.ts';
 import { upsertProfile } from '../org/profiles.ts';
 import { ensureFts } from '../platform/search.ts';
+import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
 import { buildDemoContent } from './demo.ts';
 
 export const DEMO_PREFIX = 'demo.';
@@ -86,6 +87,8 @@ function unlinkSqlite(path: string): void {
 async function openFile(path: string): Promise<Db> {
 	const db = process.env.OPAL_DEV_SCHEMA === '1' ? await (await loadDevSchema()).openSchemaDb(path) : openDb(path);
 	ensureFts(db);
+	// A database opened here goes live without createApp (exit demo, factory reset).
+	storeNumbersAtFullWidth(db);
 	return db;
 }
 

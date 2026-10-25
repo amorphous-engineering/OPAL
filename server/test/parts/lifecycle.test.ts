@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { OpalError } from '@opal/shared';
 import { auditLog } from '../../src/db/schema/index.ts';
+import { numbersFor } from '../../src/services/org/project.ts';
 import { AGENT_ACTIVATION_SETTING, ensurePartsActive } from '../../src/services/parts/lifecycle.ts';
 import { registerPartReference } from '../../src/services/parts/references.ts';
 import { setup } from './helpers.ts';
@@ -150,9 +151,11 @@ describe('draft parts are blocked from commitments', () => {
 		expect(err).toBeInstanceOf(OpalError);
 		expect(err!.status).toBe(409);
 		expect(err!.code).toBe('draft_parts_blocked');
-		expect(err!.message).toContain(draft1.internalPn);
-		expect(err!.message).toContain(draft2.internalPn);
-		expect(err!.message).not.toContain(live.internalPn);
+		// The service sees the stored form; the API shows it at the display width.
+		const stored = (pn: string) => numbersFor(db).canonical(pn);
+		expect(err!.message).toContain(stored(draft1.internalPn));
+		expect(err!.message).toContain(stored(draft2.internalPn));
+		expect(err!.message).not.toContain(stored(live.internalPn));
 		expect(Object.keys(err!.fields!)).toEqual([`part.${draft1.id}`, `part.${draft2.id}`]);
 		expect(() => ensurePartsActive({ db }, [live.id], 'x')).not.toThrow();
 		expect(() => ensurePartsActive({ db }, [], 'x')).not.toThrow();

@@ -52,7 +52,7 @@ export function peekNextPartNumber(db: Db, tier: number): { partNumber: string; 
 /** Build the regex that matches valid part numbers of a tier; `sequence` is a named group. */
 export function partNumberPattern(db: Db, tier: number): RegExp {
 	const config = getProjectConfig(db);
-	if (!config) return new RegExp(`^PN-${tier}-(?<sequence>\\d{4,})$`);
+	if (!config) return new RegExp(`^PN-${tier}-(?<sequence>\\d+)$`);
 	const t = getTier(config, tier);
 	if (!t) throw new OpalError(422, 'unknown_tier', `Unknown tier level: ${tier}`);
 	const n = config.partNumbering;
@@ -69,7 +69,7 @@ export function partNumberPattern(db: Db, tier: number): RegExp {
 	for (const m of n.format.matchAll(/\{(\w+)\}/g)) {
 		out += esc(n.format.slice(pos, m.index));
 		const token = m[1]!;
-		if (token === 'sequence') out += `(?<sequence>\\d{${n.sequenceDigits},})`;
+		if (token === 'sequence') out += '(?<sequence>\\d+)';
 		else if (token in values) out += esc(values[token]!);
 		else throw new OpalError(422, 'invalid_format', `Unknown placeholder {${token}} in part numbering format`);
 		pos = m.index + m[0].length;

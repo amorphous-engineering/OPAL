@@ -11,6 +11,7 @@ import type { Ctx } from '../../context.ts';
 import { issue, issueLink, risk, riskReference } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { create as createIssue } from '../issues/service.ts';
+import { numbersFor } from '../org/project.ts';
 import { load, one } from './service.ts';
 
 function loadIssue(ctx: Ctx, id: number) {
@@ -85,9 +86,10 @@ export function addReference(
 	input: { type: 'opal' | 'work_order'; value: string; notes?: string | null }
 ): Risk {
 	load(ctx, riskId);
-	const value = input.value.trim().toUpperCase();
+	// Typed at any width: stored at one, so a duplicate at another width is caught.
+	const value = numbersFor(ctx.db).canonical(input.value.trim().toUpperCase());
 	if (!FORMAT[input.type].test(value)) {
-		const msg = input.type === 'opal' ? 'Expected OPAL-00042' : 'Expected WO-00015';
+		const msg = input.type === 'opal' ? 'Expected OPAL-0000000042' : 'Expected WO-0000000015';
 		throw new OpalError(422, 'invalid_input', msg, { value: msg });
 	}
 	const dup = ctx.db

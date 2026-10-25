@@ -2,6 +2,7 @@
  * Human identifiers from per-prefix counters. A number is handed out once and never
  * reused, also when its record is later removed.
  */
+import { type DesignatorPrefix, storeDesignator } from '@opal/shared';
 import { sql } from 'drizzle-orm';
 import type { Ctx } from '../context.ts';
 import { designatorSequence } from '../db/schema/index.ts';
@@ -14,8 +15,6 @@ export const PREFIX = {
 	requirement: 'REQ',
 	template: 'T'
 } as const;
-
-const DIGITS: Record<string, number> = { REQ: 4, T: 4 };
 
 /** Next value for a prefix. One upsert statement, so two writers never get the same number. */
 export function nextValue(ctx: Pick<Ctx, 'db'>, prefix: string): number {
@@ -31,9 +30,9 @@ export function nextValue(ctx: Pick<Ctx, 'db'>, prefix: string): number {
 	return row.value;
 }
 
-/** `OPAL-00042`. Digits default to 5 (4 for REQ and T), as in legacy. */
-export function nextDesignator(ctx: Pick<Ctx, 'db'>, prefix: string, digits = DIGITS[prefix] ?? 5): string {
-	return `${prefix}-${String(nextValue(ctx, prefix)).padStart(digits, '0')}`;
+/** The stored form, `OPAL-0000000042`. The API shows it at the organization's width. */
+export function nextDesignator(ctx: Pick<Ctx, 'db'>, prefix: DesignatorPrefix): string {
+	return storeDesignator(prefix, nextValue(ctx, prefix));
 }
 
 /** Serial numbers per part: `001`, `002`, ... (legacy SN-{PN} sequence, 3 digits). */

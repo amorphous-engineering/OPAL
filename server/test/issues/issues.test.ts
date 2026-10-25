@@ -16,7 +16,7 @@ describe('raising', () => {
 		});
 		expect(r.status).toBe(201);
 		expect(r.body).toMatchObject({
-			issueNumber: 'IT-00001',
+			issueNumber: 'IT-0001',
 			issueType: 'bug',
 			priority: 'high',
 			status: 'open',
@@ -26,7 +26,7 @@ describe('raising', () => {
 			isBlocking: false
 		});
 		const second = await call('POST', '/issues', { title: 'B' });
-		expect(second.body.issueNumber).toBe('IT-00002');
+		expect(second.body.issueNumber).toBe('IT-0002');
 		const audit = db.select().from(auditLog).all();
 		expect(audit.some((a) => a.entity === 'issue' && a.action === 'create')).toBe(true);
 	});
@@ -694,7 +694,7 @@ describe('void', () => {
 		const i = await raise();
 		await call('POST', `/issues/${i.id}/void`, { reason: 'x' });
 		expect((await call('GET', '/issues?status=void')).body.items).toHaveLength(1);
-		expect((await raise()).issueNumber).toBe('IT-00002');
+		expect((await raise()).issueNumber).toBe('IT-0002');
 	});
 });
 
@@ -844,7 +844,7 @@ describe('notifications', () => {
 		as(other);
 		await call('POST', `/issues/${i.id}/comments`, { body: 'looking now' });
 		expect(sent).toHaveLength(1);
-		expect(sent[0]).toMatchObject({ kind: 'issue_commented', recipients: [admin.id], title: 'BEN commented on IT-00001', body: 'looking now' });
+		expect(sent[0]).toMatchObject({ kind: 'issue_commented', recipients: [admin.id], title: 'BEN commented on IT-0000000001', body: 'looking now' });
 	});
 
 	test('a disposition tells the audience and a close tells them too', async () => {
@@ -852,7 +852,7 @@ describe('notifications', () => {
 		const i = await raise({ containment: 'wo', assignedToId: other.id });
 		const sent = capture();
 		await sign(i.id, 'scrap');
-		expect(sent[0]).toMatchObject({ kind: 'issue_dispositioned', recipients: [other.id], title: 'IT-00001 dispositioned scrap' });
+		expect(sent[0]).toMatchObject({ kind: 'issue_dispositioned', recipients: [other.id], title: 'IT-0000000001 dispositioned scrap' });
 		as(other);
 		await call('PATCH', `/issues/${i.id}`, { status: 'closed' });
 		expect(sent[1]).toMatchObject({ kind: 'issue_closed', recipients: [admin.id], priority: 'normal' });

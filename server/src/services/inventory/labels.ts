@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import QRCode from 'qrcode';
 import type { Ctx } from '../../context.ts';
 import { part } from '../../db/schema/index.ts';
-import { getProjectConfig, getTier } from '../org/project.ts';
+import { getProjectConfig, getTier, numbersFor } from '../org/project.ts';
 import { getStockByOpal } from './records.ts';
 
 type DbCtx = Pick<Ctx, 'db'>;
@@ -26,7 +26,8 @@ export function stockUrl(opalNumber: string, origin = ''): string {
 
 export async function stockLabel(ctx: DbCtx, opalNumber: string, origin = ''): Promise<StockLabel> {
 	const r = getStockByOpal(ctx, opalNumber);
-	const url = stockUrl(opalNumber, origin);
+	// The record's own number: the QR address shows the same width as the label text.
+	const url = stockUrl(r.opalNumber, origin);
 	return {
 		key: `i-${r.id}`,
 		kind: 'stock',
@@ -80,11 +81,14 @@ export async function buildLabels(
 ): Promise<{ labels: StockLabel[]; failures: string[] }> {
 	const labels: StockLabel[] = [];
 	const failures: string[] = [];
+	const codec = numbersFor(ctx.db);
 	for (const opal of csv(input.inventory)) {
+		const stored = codec.canonical(opal);
 		try {
-			labels.push(await stockLabel(ctx, opal, input.origin));
+			// The list is one string, so the boundary cannot canonicalize its entries.
+			labels.push(await stockLabel(ctx, stored, input.origin));
 		} catch {
-			failures.push(`${opal}: Stock record not found`);
+			failures.push(`${stored}: Stock record not found`);
 		}
 	}
 	for (const raw of csv(input.part)) {

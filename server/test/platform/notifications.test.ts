@@ -37,6 +37,14 @@ describe('notifications', () => {
 		expect(rows.map((r) => r.userId)).toEqual([s.users[1]!.id]);
 	});
 
+	test('the inbox shows numbers in the title and body at the display width', async () => {
+		const s = await setup();
+		notify(ctxFor(s, 0), { ...base, title: 'WO-0000000012 is blocked', body: 'see IT-0000000003', recipients: [s.users[1]!.id] });
+		s.as(1);
+		const list = await (await s.call('GET', '/notifications')).json();
+		expect(list.items[0]).toMatchObject({ title: 'WO-0012 is blocked', body: 'see IT-0003' });
+	});
+
 	test('category is derived from kind and filters before the limit', async () => {
 		const s = await setup();
 		const c = ctxFor(s, 0);
