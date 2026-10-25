@@ -12,6 +12,7 @@
  *     the same ids back, so one id names one step across all versions of a procedure.
  */
 import { z } from 'zod';
+import { zSpec } from '../specs.ts';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
@@ -57,7 +58,11 @@ export const zProcedureDataField = z.object({
 	label: z.string().optional(),
 	type: z.enum(DATA_FIELD_TYPES),
 	required: z.boolean().optional(),
+	/** A unit code from `UNITS` (units.ts). Older versions may hold free text: show it as is. */
 	unit: z.string().optional(),
+	/** Numbers only: what a good value is. Out-of-spec values are recorded and flagged. */
+	spec: zSpec.optional(),
+	/** Older versions only: hard limits that refuse a value. New fields use `spec`. */
 	min: z.number().optional(),
 	max: z.number().optional(),
 	step: z.union([z.number(), z.string()]).optional(),
@@ -418,7 +423,7 @@ const steps = {
 		method: 'POST',
 		path: '/procedures/:id/steps',
 		summary:
-			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C1, C2; sub-steps 1.1, 1.2.',
+			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C1, C2; sub-steps 1.1, 1.2. A number data field takes a unit code (such as in, mm, in_lbf, psi) and an optional spec.',
 		input: zStepAdd,
 		output: zProcedureStep,
 		access: 'signed-in',
@@ -440,7 +445,7 @@ const steps = {
 		method: 'PATCH',
 		path: '/procedures/:id/steps/:stepId',
 		summary:
-			'Change a step. Absent fields stay; null clears instructions, data schema, duration, workcenter, callouts or sign-offs.',
+			'Change a step. Absent fields stay; null clears instructions, data schema, duration, workcenter, callouts or sign-offs. A number data field takes a unit code (UNITS, such as in, mm, in_lbf, psi) and an optional spec (range, nominal, min, max, reference) as decimal strings; a spec is not combined with min or max. An out-of-spec value is recorded and needs a note or an NC before the step completes.',
 		input: zStepUpdate,
 		output: zProcedureStep,
 		access: 'signed-in',

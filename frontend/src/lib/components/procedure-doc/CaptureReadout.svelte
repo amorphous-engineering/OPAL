@@ -3,6 +3,8 @@
 	// operator filled in (header count, one field per row, label and spec on the left),
 	// with the recorded value where the input was. A dash for absence.
 	import { cn } from '#lib/utils.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { limitsText, outOfSpec, unitOf } from './spec.js';
 	import { attachmentUrl, gallery } from './viewer.js';
 	import type { DocStep } from './types.js';
 
@@ -48,13 +50,8 @@
 								*</span
 							>{/if}
 					</span>
-					{#if f.unit || f.min != null || f.max != null}
-						<span class="font-mono text-xs text-muted-foreground"
-							>{#if f.min != null || f.max != null}{f.min ?? '…'} – {f.max ??
-									'…'}{/if}{#if f.unit}{f.min != null || f.max != null
-									? ' '
-									: ''}{f.unit}{/if}</span
-						>
+					{#if limitsText(f)}
+						<span class="font-mono text-xs text-muted-foreground">{limitsText(f)}</span>
 					{/if}
 				</div>
 				<div class="flex min-h-8 min-w-0 items-center font-mono text-sm tabular-nums">
@@ -87,6 +84,14 @@
 						{raw ? 'TRUE' : 'FALSE'}
 					{:else}
 						<span class="break-words whitespace-pre-wrap">{raw}</span>
+						{#if unitOf(f)}<span class="ml-1 text-muted-foreground">{unitOf(f)}</span>{/if}
+						{#if outOfSpec(f, raw)}
+							<Badge
+								variant="outline"
+								class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+								>OUT OF SPEC</Badge
+							>
+						{/if}
 					{/if}
 				</div>
 			</div>

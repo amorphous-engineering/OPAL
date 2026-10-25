@@ -93,6 +93,8 @@ export interface DataRow {
 	field: string;
 	unit: string | null;
 	value: string;
+	spec: string | null;
+	out_of_spec: boolean;
 	by: string | null;
 	at: string | null;
 }

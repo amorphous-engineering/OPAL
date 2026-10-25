@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Printable traveler: the published snapshot with write-in lines for the floor.
 	import { page } from '$app/state';
+	import { specText, unitSymbol } from '@opal/shared';
 	import { datetime, qty } from '#lib/format.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import { groupOps, type DataField, type SnapshotStep } from '#lib/components/procedures/types.js';
@@ -35,8 +36,10 @@
 			</span>
 		{:else}
 			<span class="min-h-[18px] flex-1 border-b border-black">&nbsp;</span>
-			{#if f.unit}<span class="text-[9pt]">{f.unit}</span>{/if}
-			{#if f.min !== undefined || f.max !== undefined}
+			{#if f.unit}<span class="text-[9pt]">{unitSymbol(f.unit)}</span>{/if}
+			{#if f.spec}
+				<span class="text-[9pt]">({specText(f.spec)})</span>
+			{:else if f.min !== undefined || f.max !== undefined}
 				<span class="text-[9pt]">({f.min ?? ''} – {f.max ?? ''})</span>
 			{/if}
 		{/if}

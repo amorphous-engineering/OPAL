@@ -1,11 +1,11 @@
 /** The completed-execution report, the holds payload and the QR code. */
-import { type ExecutionReport, OpalError, now } from '@opal/shared';
+import { type ExecutionReport, OpalError, now, unitSymbol } from '@opal/shared';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import QRCode from 'qrcode';
 import type { Ctx } from '../../context.ts';
 import { attachment, dataPoint, dataset, issue, part, project } from '../../db/schema/index.ts';
 import { holdingIssues } from '../issues/holds.ts';
-import { captureDisplay } from './document.ts';
+import { captureDisplay, readingOf } from './document.ts';
 import { productionRows } from './material.ts';
 import { loadModel, opRowOf } from './model.ts';
 import { signoffRecords, userNames } from './present.ts';
@@ -52,7 +52,7 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 		const rows = Object.entries(r.se.dataCaptured).map(([name, value]) => ({
 			label: defs.get(name)?.label || name,
 			value: captureDisplay(value),
-			unit: defs.get(name)?.unit ?? null
+			...readingOf(defs.get(name), value)
 		}));
 		return rows.length ? [{ stepNumber: r.number, stepTitle: r.title || '(untitled)', rows }] : [];
 	});
@@ -68,7 +68,7 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 				const fields = ds.schema.fields ?? [];
 				const chartFields = fields.filter((f) => f.chart === true && f.type === 'number');
 				if (!chartFields.length) continue;
-				const pick = (f: (typeof fields)[number]) => ({ name: f.name, ...(f.unit ? { unit: f.unit } : {}) });
+				const pick = (f: (typeof fields)[number]) => ({ name: f.name, ...(f.unit ? { unit: unitSymbol(f.unit) } : {}) });
 				chartDatasets.push({
 					datasetId: ds.id,
 					name: ds.name,

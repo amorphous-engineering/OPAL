@@ -11,7 +11,10 @@ import {
 	type ExecutionDocument,
 	type ExecutionState,
 	type ExecHold,
-	now
+	now,
+	specResult,
+	specText,
+	unitSymbol
 } from '@opal/shared';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
@@ -70,6 +73,17 @@ export function captureDisplay(v: unknown): string {
 	if (v === null || v === undefined || v === '') return '—';
 	if (Array.isArray(v)) return v.length ? `${v.length} ${v.length === 1 ? 'image' : 'images'}` : '—';
 	return String(v);
+}
+
+type FieldDef = NonNullable<Row['dataSchema']>['fields'][number];
+
+/** Unit symbol, spec text and out-of-spec flag of one captured value (document and report). */
+export function readingOf(f: FieldDef | undefined, value: unknown) {
+	return {
+		unit: f?.unit ? unitSymbol(f.unit) : null,
+		spec: f?.spec ? specText(f.spec, f.unit) : null,
+		outOfSpec: !!f?.spec && specResult(f.spec, value) === 'out_of_spec'
+	};
 }
 
 const holdEntry = (i: HoldingIssue, kind: 'raised' | 'bound'): ExecHold => ({
@@ -160,7 +174,11 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 	for (const c of consumptions) if (c.stepId !== null) consBy.set(c.stepId, [...(consBy.get(c.stepId) ?? []), c]);
 
 	const buildStep = (row: Row, isOp: boolean): DocStepOut => {
-		const complete = completeBlockers(m, st, row);
+		const complete = completeBlockers(m, st, row, {
+			data: row.se.dataCaptured,
+			hasNote: notes.some((n) => n.stepExecutionId === row.id),
+			hasNc: issues.some((i) => i.raisedStepId === row.id && i.issueType === 'non_conformance')
+		});
 		const skip = skipBlockers(m, st, row);
 		const mine = new Map((recs.get(row.id) ?? []).map((r) => [r.slot, r]));
 		const signedSet = new Set(mine.keys());
@@ -330,7 +348,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			stepNumber: r.number,
 			stepId: r.id,
 			field: fields.get(name)?.label || name,
-			unit: fields.get(name)?.unit ?? null,
+			...readingOf(fields.get(name), value),
 			value: captureDisplay(value),
 			by: nameOf(r.se.completedById),
 			at: r.se.completedAt ?? r.se.updatedAt

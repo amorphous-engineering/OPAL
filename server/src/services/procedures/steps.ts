@@ -3,6 +3,7 @@ import {
 	type ProcedureStep,
 	type zStepAdd,
 	type zStepUpdate,
+	isUnitCode,
 	notFound,
 	OpalError
 } from '@opal/shared';
@@ -52,6 +53,25 @@ export function normalizeCallouts(value: { kind: 'caution' | 'info'; text: strin
 	return (value ?? [])
 		.map((c) => ({ kind: c.kind, text: c.text.trim() }))
 		.filter((c) => c.text);
+}
+
+type DataFields = { fields: { name: string; type: string; unit?: string; spec?: unknown; min?: number; max?: number }[] };
+
+/**
+ * Authoring rules for new or changed data fields: a unit is a known code, a spec belongs to a
+ * number field and does not come with min or max. A field kept as it was is not re-checked, so
+ * older drafts still save.
+ */
+export function checkDataFields(next: DataFields | null | undefined, prev: DataFields | null | undefined): void {
+	const before = new Map((prev?.fields ?? []).map((f) => [f.name, JSON.stringify(f)]));
+	for (const f of next?.fields ?? []) {
+		if (before.get(f.name) === JSON.stringify(f)) continue;
+		if (f.unit && !isUnitCode(f.unit)) throw invalid('invalid_input', `${f.name}: unknown unit '${f.unit}'`, { [`${f.name}.unit`]: 'Unknown unit' });
+		if (f.spec && f.type !== 'number') throw invalid('invalid_input', `${f.name}: only a number field takes a spec`, { [`${f.name}.spec`]: 'Only a number field takes a spec' });
+		if (f.spec && (f.min !== undefined || f.max !== undefined)) {
+			throw invalid('invalid_input', `${f.name}: a spec replaces min and max; set one or the other`, { [`${f.name}.spec`]: 'Use a spec or min/max, not both' });
+		}
+	}
 }
 
 /** A data schema with no fields is no schema. */
@@ -140,6 +160,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 	);
 	const mine = patches.find((p) => p.id === NEW)!;
 	const signoffs = writeSignoffs(ctx.db, null, false, input) ?? null;
+	checkDataFields(input.dataSchema, null);
 	const row = insert(ctx, procedureStep, {
 		procedureId: input.id,
 		parentStepId: mine.parentStepId,
@@ -169,6 +190,7 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 
 	if (input.title !== undefined) patch.title = input.title;
 	if (input.instructions !== undefined) patch.instructions = input.instructions;
+	if (input.dataSchema) checkDataFields(input.dataSchema, step.dataSchema);
 	if (input.dataSchema !== undefined) patch.dataSchema = normalizeSchema(input.dataSchema);
 	if (input.estimatedDurationMinutes !== undefined) patch.estimatedDurationMinutes = input.estimatedDurationMinutes;
 	if (input.workcenterId !== undefined) {

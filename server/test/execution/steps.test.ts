@@ -14,7 +14,7 @@ describe('data capture', () => {
 		const t = await setup();
 		const p = await t.proc('Capture');
 		await t.step(p.id, 'Measure', {
-			dataSchema: { fields: [{ name: 'torque', label: 'Torque', type: 'number', required: true, min: 1, max: 10, unit: 'Nm' }, { name: 'note', type: 'text' }] }
+			dataSchema: { fields: [{ name: 'torque', label: 'Torque', type: 'number', required: true, min: 1, max: 10, unit: 'n_m' }, { name: 'note', type: 'text' }] }
 		});
 		await t.ok('POST', `/procedures/${p.id}/publish`, {});
 		const e = await t.cut(p.id);
@@ -29,7 +29,7 @@ describe('data capture', () => {
 		expect(ok.status).toBe(200);
 		expect(ok.json.step.dataCaptured).toEqual({ torque: 5 });
 		const d = await t.doc(e.id);
-		expect(d.dataRows[0]).toMatchObject({ field: 'Torque', unit: 'Nm', value: '5' });
+		expect(d.dataRows[0]).toMatchObject({ field: 'Torque', unit: 'N·m', value: '5' });
 	});
 
 	test('a photo that a capture replaced or removed loses its attachment link', async () => {

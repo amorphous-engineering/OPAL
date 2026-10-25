@@ -4,6 +4,7 @@
 	import { EmptyLine, Section } from '#lib/components/opal/index.js';
 	import { duration, qty } from '#lib/format.js';
 	import { CalloutList } from '#lib/components/procedure-doc/index.js';
+	import { specText, unitSymbol } from '@opal/shared';
 	import Prose from './Prose.svelte';
 	import type { VersionPart } from '@opal/shared';
 	import { groupOps, type OpGroup, type SnapshotStep } from './types.js';
@@ -52,10 +53,15 @@
 			<tbody>
 				{#each s.dataSchema.fields as f (f.name)}
 					<tr class="border-b border-border">
-						<td class="px-2 py-0.5">{f.label ?? f.name}{f.unit ? ` (${f.unit})` : ''}</td>
+						<td class="px-2 py-0.5"
+							>{f.label ?? f.name}{f.unit ? ` (${unitSymbol(f.unit)})` : ''}</td
+						>
 						<td class="px-2 py-0.5 font-mono uppercase">{f.type ?? 'text'}</td>
 						<td class="px-2 py-0.5 font-mono">
-							{#if f.min !== undefined || f.max !== undefined}{f.min ?? ''} – {f.max ??
+							{#if f.spec}{specText(
+									f.spec,
+									f.unit
+								)}{:else if f.min !== undefined || f.max !== undefined}{f.min ?? ''} – {f.max ??
 									''}{:else}—{/if}
 						</td>
 						<td class="px-2 py-0.5 font-mono">{f.required ? 'YES' : '—'}</td>

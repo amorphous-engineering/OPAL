@@ -12,6 +12,7 @@ import { insert, remove } from '../../write.ts';
 import { detachAll } from '../platform/index.ts';
 import { type Model, type Row, isActive, isTerminal, loadModel, opRowOf } from './model.ts';
 import { stepState } from './present.ts';
+import { checkDataFields } from '../procedures/steps.ts';
 
 function present(db: Db, m: Model, op: Row): Redline {
 	const issueRow = db.select().from(issue).where(eq(issue.id, op.adhoc!.issueId)).get();
@@ -70,6 +71,7 @@ export function createRedline(
 	});
 	insert(ctx, stepExecution, { executionId: m.exec.id, adhocStepId: op.id, status: 'pending' });
 	input.steps.forEach((s, n) => {
+		checkDataFields(s.dataSchema, null);
 		const sub = insert(ctx, adhocStep, {
 			executionId: m.exec.id,
 			issueId: nc.id,

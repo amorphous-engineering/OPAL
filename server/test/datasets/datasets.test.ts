@@ -29,7 +29,7 @@ async function make(fields: unknown[] = [num()], extra: Record<string, unknown> 
 
 describe('datasets', () => {
 	test('a dataset is created with its schema and no points', async () => {
-		const { ds } = await make([num({ name: 'temperature', unit: 'C' })]);
+		const { ds } = await make([num({ name: 'temperature', unit: 'degc' })]);
 		expect(ds.name).toBe('Probe');
 		expect(ds.schema.fields[0].name).toBe('temperature');
 		expect(ds.pointCount).toBe(0);
@@ -171,13 +171,13 @@ describe('data points', () => {
 
 describe('chart', () => {
 	test('the series holds one field, oldest first, with null where a point has no number', async () => {
-		const { api, ds, pts } = await make([num({ name: 'temperature', unit: 'C' }), { name: 'note', type: 'text' }]);
+		const { api, ds, pts } = await make([num({ name: 'temperature', unit: 'degc' }), { name: 'note', type: 'text' }]);
 		await pts({ values: { temperature: 22 }, recordedAt: '2026-01-02T00:00:00Z' });
 		await pts({ values: { temperature: 20 }, recordedAt: '2026-01-01T00:00:00Z' });
 		await pts({ values: { note: 'x' }, recordedAt: '2026-01-03T00:00:00Z' });
 		const r = await api('GET', `/datasets/${ds.id}/chart?field=temperature`);
 		expect(r.json.field).toBe('temperature');
-		expect(r.json.unit).toBe('C');
+		expect(r.json.unit).toBe('degc');
 		expect(r.json.series.map((s: any) => s.value)).toEqual([20, 22, null]);
 		expect((await api('GET', `/datasets/${ds.id}/chart?field=nope`)).status).toBe(422);
 		const limited = await api('GET', `/datasets/${ds.id}/chart?field=temperature&limit=2`);
@@ -257,5 +257,42 @@ describe('projects', () => {
 		const moved = await api('PATCH', `/datasets/${a1.id}`, { projectId: b.id });
 		expect(moved.json).toMatchObject({ projectId: b.id, projectCode: 'B' });
 		expect(await ids(`?projectId=${b.id}`)).toHaveLength(2);
+	});
+});
+
+describe('units and specs', () => {
+	const spec = { kind: 'range', lower: '12.125', upper: '12.25' };
+
+	test('a point outside the spec is stored, and the CSV flags it and carries the unit in the header', async () => {
+		const { api, ds, pts } = await make([num({ name: 'depth', unit: 'in', spec }), { name: 'note', type: 'text' }]);
+		expect((await pts({ values: { depth: 12.3, note: 'a' } })).status).toBe(200);
+		expect((await pts({ values: { depth: 12.2, note: 'b' } })).status).toBe(200);
+		const lines = (await api('GET', `/datasets/${ds.id}/export`)).text.trim().split(/\r?\n/);
+		expect(lines[0]).toBe('recorded_at,depth [in],note,out_of_spec');
+		expect(lines[1]).toMatch(/,12\.3,a,depth$/);
+		expect(lines[2]).toMatch(/,12\.2,b,$/);
+	});
+
+	test('legacy min and max still refuse a point on a field without a spec', async () => {
+		const { pts } = await make([num({ min: 1, max: 5 })]);
+		expect((await pts({ values: { value: 9 } })).status).toBe(422);
+	});
+
+	test('an exported CSV with unit headers imports back', async () => {
+		const { api, ds } = await make([num({ name: 'depth', unit: 'in', spec })]);
+		const r = await api('POST', `/datasets/${ds.id}/points/import`, { csv: 'recorded_at,depth [in],out_of_spec\r\n2026-01-01T00:00:00Z,12.3,depth\r\n' });
+		expect(r.status).toBeLessThan(300);
+	});
+
+	test('an unknown unit code is refused when a schema is created or changed', async () => {
+		const { api, ds } = await make([num()]);
+		const bad = { fields: [num({ unit: 'furlong' })] };
+		expect((await api('POST', '/datasets', { name: 'Bad', schema: bad })).status).toBe(422);
+		expect((await api('PATCH', `/datasets/${ds.id}`, { schema: bad })).status).toBe(422);
+	});
+
+	test('a spec together with min or max is refused on a dataset field', async () => {
+		const { api } = await setup();
+		expect((await api('POST', '/datasets', { name: 'Both', schema: { fields: [num({ spec, max: 3 })] } })).status).toBe(422);
 	});
 });

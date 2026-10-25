@@ -45,8 +45,8 @@ describe('report', () => {
 		expect(r.execution).toMatchObject({ woNumber: e.woNumber, versionNumber: 1, projectCode: t.proj.code });
 		expect(r.operations[0].signoffs.map((s: any) => [s.label, s.signedBy])).toEqual([['Primary buyoff', 'Author'], ['Secondary buyoff', 'BEN']]);
 		expect(r.dataCollects[0].rows).toEqual([
-			{ label: 'Chamber pressure', value: '12.5', unit: 'bar' },
-			{ label: 'ok', value: 'YES', unit: null }
+			{ label: 'Chamber pressure', value: '12.5', unit: 'bar', spec: null, outOfSpec: false },
+			{ label: 'ok', value: 'YES', unit: null, spec: null, outOfSpec: false }
 		]);
 		expect(r.closeoutAttachments).toHaveLength(1);
 	});

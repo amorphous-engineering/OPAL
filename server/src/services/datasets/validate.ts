@@ -1,5 +1,5 @@
 /** Check point values against a dataset schema. */
-import { OpalError, type DatasetSchema, type PointValues, type SchemaField } from '@opal/shared';
+import { OpalError, type DatasetSchema, type PointValues, type SchemaField, isUnitCode, specResult } from '@opal/shared';
 
 const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}([T ].*)?$/.test(v) && !Number.isNaN(Date.parse(v));
 
@@ -7,6 +7,7 @@ function checkValue(f: SchemaField, v: string | number | boolean): string | null
 	switch (f.type) {
 		case 'number':
 			if (typeof v !== 'number' || !Number.isFinite(v)) return `Field '${f.name}' must be a number`;
+			if (f.spec) return null; // out of spec is stored and flagged, never refused
 			if (f.min !== undefined && v < f.min) return `Field '${f.name}' is below the minimum ${f.min}`;
 			if (f.max !== undefined && v > f.max) return `Field '${f.name}' is above the maximum ${f.max}`;
 			return null;
@@ -16,6 +17,22 @@ function checkValue(f: SchemaField, v: string | number | boolean): string | null
 			return typeof v === 'string' && isIsoDate(v) ? null : `Field '${f.name}' must be an ISO 8601 date`;
 		case 'text':
 			return typeof v === 'string' ? null : `Field '${f.name}' must be text`;
+	}
+}
+
+/** The spec fields a point misses, by name. */
+export function outOfSpecFields(schema: DatasetSchema, values: PointValues): string[] {
+	return schema.fields.filter((f) => f.spec && specResult(f.spec, values[f.name]) === 'out_of_spec').map((f) => f.name);
+}
+
+/** A schema being saved: units are known codes, a spec does not come with min or max. */
+export function checkSchema(schema: DatasetSchema): void {
+	for (const f of schema.fields) {
+		const bad = (msg: string, key: string) => {
+			throw new OpalError(422, 'invalid_input', `${f.name}: ${msg}`, { [`${f.name}.${key}`]: msg });
+		};
+		if (f.unit && !isUnitCode(f.unit)) bad(`unknown unit '${f.unit}'`, 'unit');
+		if (f.spec && (f.min !== undefined || f.max !== undefined)) bad('a spec replaces min and max; set one or the other', 'spec');
 	}
 }
 

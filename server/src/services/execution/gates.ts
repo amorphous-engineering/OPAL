@@ -3,7 +3,7 @@
  * the write operations give and the `canSign` / `blockers` the document shows, so a control is
  * inert exactly when the server would refuse.
  */
-import type { ExecBlocker } from '@opal/shared';
+import { type ExecBlocker, specResult, specText, unitSymbol } from '@opal/shared';
 import type { Db } from '../../db/client.ts';
 import { type HoldState, blockersForBound, blockersForComplete } from './holds.ts';
 import { type Model, type Row, isActive, isTerminal } from './model.ts';
@@ -55,9 +55,40 @@ export function heldScopeBlockers(st: HoldState, row: Row): Blocker[] {
 	return out;
 }
 
-export const completeBlockers = (m: Model, st: HoldState, row: Row): Blocker[] => [
+/** What explains an out-of-spec value: the values to judge and whether the step has a note or an NC. */
+export interface CaptureCheck {
+	data: Record<string, unknown> | null | undefined;
+	hasNote: boolean;
+	hasNc: boolean;
+}
+
+/**
+ * A captured value outside its spec stops the step until someone explains it with a note on
+ * the step or an NC raised from it. Notes carry no link to a value and a value has no capture
+ * time of its own (it is saved with the signature), so any note on the step counts.
+ */
+export function outOfSpecBlockers(row: Row, cap: CaptureCheck | undefined): Blocker[] {
+	if (!cap || cap.hasNote || cap.hasNc) return [];
+	const out: Blocker[] = [];
+	for (const f of row.dataSchema?.fields ?? []) {
+		if (f.type !== 'number' || !f.spec) continue;
+		const v = cap.data?.[f.name];
+		if (specResult(f.spec, v) !== 'out_of_spec') continue;
+		const sym = unitSymbol(f.unit);
+		out.push(
+			blocker(
+				'out_of_spec',
+				`${f.label ?? f.name} ${String(v).trim()}${sym ? ` ${sym}` : ''} is out of spec (${specText(f.spec, f.unit)}): add a note or raise an NC`
+			)
+		);
+	}
+	return out;
+}
+
+export const completeBlockers = (m: Model, st: HoldState, row: Row, cap?: CaptureCheck): Blocker[] => [
 	...heldScopeBlockers(st, row),
-	...sequenceBlockers(m, row)
+	...sequenceBlockers(m, row),
+	...outOfSpecBlockers(row, cap)
 ];
 
 /**

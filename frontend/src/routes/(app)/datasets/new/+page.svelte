@@ -9,6 +9,14 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte'; // added by projects
+	import UnitPicker from '#lib/components/opal/UnitPicker.svelte';
+	import SpecEditor from '#lib/components/datasets/SpecEditor.svelte';
+	import {
+		blankSpec,
+		badBoxes,
+		specFromDraft,
+		type SpecDraft
+	} from '#lib/components/datasets/spec-draft.js';
 	import type { SchemaField } from '#lib/components/datasets/types.js';
 	import type { PageProps } from './$types';
 
@@ -20,8 +28,7 @@
 		unit: string;
 		chart: boolean;
 		required: boolean;
-		min: string;
-		max: string;
+		spec: SpecDraft;
 	};
 	const blank = (): Row => ({
 		name: '',
@@ -29,8 +36,7 @@
 		unit: '',
 		chart: true,
 		required: false,
-		min: '',
-		max: ''
+		spec: blankSpec()
 	});
 
 	let name = $state('');
@@ -48,23 +54,25 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
-	// A number input binds a number (or null when empty), not the string the row is typed with.
-	const given = (v: unknown) => v !== null && v !== undefined && String(v).trim() !== '';
-
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		error = null;
-		const fields: SchemaField[] = rows
-			.filter((r) => r.name.trim())
-			.map((r) => ({
-				name: r.name.trim(),
-				type: r.type,
-				...(r.unit.trim() ? { unit: r.unit.trim() } : {}),
-				...(r.type === 'number' && r.chart ? { chart: true } : {}),
-				...(r.required ? { required: true } : {}),
-				...(r.type === 'number' && given(r.min) ? { min: Number(r.min) } : {}),
-				...(r.type === 'number' && given(r.max) ? { max: Number(r.max) } : {})
-			}));
+		const named = rows.filter((r) => r.name.trim());
+		for (const r of named) {
+			if (r.type !== 'number') continue;
+			const bad = badBoxes(r.spec).some(Boolean) || specFromDraft(r.spec).error;
+			if (bad) return (error = `Spec of '${r.name.trim()}' is not valid`);
+		}
+		const fields: SchemaField[] = named.map((r) => ({
+			name: r.name.trim(),
+			type: r.type,
+			...(r.type === 'number' && r.unit ? { unit: r.unit } : {}),
+			...(r.type === 'number' && r.chart ? { chart: true } : {}),
+			...(r.required ? { required: true } : {}),
+			...(r.type === 'number' && specFromDraft(r.spec).spec
+				? { spec: specFromDraft(r.spec).spec }
+				: {})
+		}));
 		if (fields.length === 0) return (error = 'At least one field is required');
 		const names = fields.map((f) => f.name);
 		const dup = names.find((n, i) => names.indexOf(n) !== i);
@@ -93,7 +101,7 @@
 	crumbs={[{ label: 'Datasets', href: '/datasets' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-4xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
+<form class="grid max-w-6xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
 	<Section title="Dataset">
 		<div class="grid grid-cols-1 gap-3 p-3">
 			<div class="grid grid-cols-1 gap-1.5">
@@ -133,7 +141,7 @@
 		<table class="w-full border-collapse text-sm">
 			<thead>
 				<tr class="border-b border-border bg-muted/60">
-					{#each ['Name', 'Type', 'Unit', 'Min', 'Max', 'Required', 'Chart', ''] as h (h)}
+					{#each ['Name', 'Type', 'Unit', 'Spec', 'Required', 'Chart', ''] as h (h)}
 						<th
 							class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase"
 							>{h}</th
@@ -163,29 +171,14 @@
 								<NativeSelectOption value="date">Date</NativeSelectOption>
 							</NativeSelect>
 						</td>
-						<td class="px-3 py-1.5"
-							><Input bind:value={row.unit} aria-label={`Field ${i + 1} unit`} class="w-28" /></td
-						>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
-								<Input
-									bind:value={row.min}
-									type="number"
-									step="any"
-									aria-label={`Field ${i + 1} minimum`}
-									class="w-24"
-								/>
+								<UnitPicker bind:value={row.unit} label={`Field ${i + 1} unit`} />
 							{:else}<span class="text-muted-foreground">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
-								<Input
-									bind:value={row.max}
-									type="number"
-									step="any"
-									aria-label={`Field ${i + 1} maximum`}
-									class="w-24"
-								/>
+								<SpecEditor bind:draft={row.spec} unit={row.unit} label={`Field ${i + 1} spec`} />
 							{:else}<span class="text-muted-foreground">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">

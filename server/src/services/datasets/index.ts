@@ -10,7 +10,8 @@ import {
 	type DatasetSchema,
 	type DatasetState,
 	type PointValues,
-	type SchemaField
+	type SchemaField,
+	unitSymbol
 } from '@opal/shared';
 import { and, asc, count, desc, eq, gte, like, lte } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
@@ -19,7 +20,7 @@ import { insert, remove, update } from '../../write.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
 import { parseCsv } from '../parts/csv.ts';
 import { stepExists, stepSources, type StepSource } from '../execution/sources.ts'; // added by execution
-import { checkPoint, pointProblems } from './validate.ts';
+import { checkPoint, checkSchema, outOfSpecFields, pointProblems } from './validate.ts';
 
 type DatasetRow = typeof dataset.$inferSelect;
 type PointRow = typeof dataPoint.$inferSelect;
@@ -104,6 +105,7 @@ export function create(
 	i: { projectId: number; name: string; description?: string | null; schema: DatasetSchema; procedureId?: number | null }
 ): Dataset {
 	requireActiveProject(ctx.db, i.projectId); // added by projects
+	checkSchema(i.schema);
 	const r = insert(ctx, dataset, {
 		projectId: i.projectId, // added by projects
 		name: i.name,
@@ -126,7 +128,10 @@ export function updateDataset(
 	}
 	if (i.name !== undefined) patch.name = i.name;
 	if (i.description !== undefined) patch.description = i.description || null;
-	if (i.schema !== undefined) patch.schema = i.schema;
+	if (i.schema !== undefined) {
+		checkSchema(i.schema);
+		patch.schema = i.schema;
+	}
 	if (i.procedureId !== undefined) patch.procedureId = i.procedureId;
 	return present(ctx, update(ctx, dataset, i.id, patch));
 }
@@ -266,18 +271,20 @@ const csvTime = (t: string) => t.replace(/\.000Z$/, 'Z');
 
 export function exportCsv(ctx: Ctx, id: number): string {
 	const ds = row(ctx, id);
-	const names = ds.schema.fields.map((f) => f.name);
+	// The unit symbol rides in the header; one flag column names the spec fields a point misses.
+	const heads = ds.schema.fields.map((f) => (f.unit ? `${f.name} [${unitSymbol(f.unit)}]` : f.name));
+	const flagged = ds.schema.fields.some((f) => f.spec);
 	const points = ctx.db
 		.select()
 		.from(dataPoint)
 		.where(eq(dataPoint.datasetId, id))
 		.orderBy(asc(dataPoint.recordedAt), asc(dataPoint.id))
 		.all();
-	const lines = [['recorded_at', ...names].map((c) => cell(c, true)).join(',')];
+	const lines = [['recorded_at', ...heads, ...(flagged ? ['out_of_spec'] : [])].map((c) => cell(c, true)).join(',')];
 	for (const p of points) {
 		lines.push(
-			[csvTime(p.recordedAt), ...ds.schema.fields.map((f) => p.values[f.name])]
-				.map((v, i) => cell(v, i === 0 || ds.schema.fields[i - 1]!.type !== 'number'))
+			[csvTime(p.recordedAt), ...ds.schema.fields.map((f) => p.values[f.name]), ...(flagged ? [outOfSpecFields(ds.schema, p.values).join('; ')] : [])]
+				.map((v, i) => cell(v, i === 0 || i > ds.schema.fields.length || ds.schema.fields[i - 1]!.type !== 'number'))
 				.join(',')
 		);
 	}
@@ -311,8 +318,10 @@ export function importPoints(ctx: Ctx, id: number, text: string) {
 	const cols: (SchemaField | null)[] = [];
 	const problems: Record<string, string> = {};
 	header.forEach((h, c) => {
-		const key = h.toLowerCase();
-		if (key === 'recorded_at' || key === 'recordedat') {
+		// Undo the export: "depth [in]" names the field depth; the out_of_spec column is output only.
+		const key = h.replace(/\s*\[[^\]]*\]$/, '').toLowerCase();
+		if (key === 'out_of_spec') cols.push(null);
+		else if (key === 'recorded_at' || key === 'recordedat') {
 			timeCol = c;
 			cols.push(null);
 		} else if (byName.has(key)) cols.push(byName.get(key)!);

@@ -39,7 +39,8 @@ export const EXEC_BLOCKER_KINDS = [
 	'children',
 	'hold',
 	'signoff',
-	'role'
+	'role',
+	'out_of_spec'
 ] as const;
 export const PRODUCTION_STATUSES = ['planned', 'wip', 'completed'] as const;
 export const EXEC_USAGES = ['consume', 'tooling'] as const;
@@ -397,8 +398,13 @@ export const zDataRow = z.object({
 	stepNumber: z.string(),
 	stepId: z.number().int(),
 	field: z.string(),
+	/** The unit symbol ("in·lbf"), not the stored code. */
 	unit: z.string().nullable(),
 	value: z.string(),
+	/** The field's spec as text ("12.125 – 12.25 in"), or null. */
+	spec: z.string().nullable().optional(),
+	/** The value is outside the spec. */
+	outOfSpec: z.boolean().optional(),
 	by: z.string().nullable(),
 	at: zTimestamp.nullable()
 });
@@ -663,7 +669,15 @@ export const zExecutionReport = z.object({
 		z.object({
 			stepNumber: z.string(),
 			stepTitle: z.string(),
-			rows: z.array(z.object({ label: z.string(), value: z.string(), unit: z.string().nullable() }))
+			rows: z.array(
+				z.object({
+					label: z.string(),
+					value: z.string(),
+					unit: z.string().nullable(),
+					spec: z.string().nullable().optional(),
+					outOfSpec: z.boolean().optional()
+				})
+			)
 		})
 	),
 	chartDatasets: z.array(

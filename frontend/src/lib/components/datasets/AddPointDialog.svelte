@@ -7,7 +7,8 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-	import type { PointValues } from '@opal/shared';
+	import { specResult, specText, unitSymbol, type PointValues } from '@opal/shared';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import type { SchemaField } from './types.js';
 
 	let {
@@ -76,7 +77,7 @@
 			</div>
 			{#each fields as f (f.name)}
 				<div class="grid grid-cols-1 gap-1.5">
-					<Label for={`pt-${f.name}`}>{f.name}{f.unit ? ` (${f.unit})` : ''}</Label>
+					<Label for={`pt-${f.name}`}>{f.name}{f.unit ? ` (${unitSymbol(f.unit)})` : ''}</Label>
 					{#if f.type === 'boolean'}
 						<NativeSelect id={`pt-${f.name}`} bind:value={inputs[f.name]}>
 							<NativeSelectOption value="">—</NativeSelectOption>
@@ -85,6 +86,18 @@
 						</NativeSelect>
 					{:else if f.type === 'number'}
 						<Input id={`pt-${f.name}`} type="number" step="any" bind:value={inputs[f.name]} />
+						{#if f.spec}
+							<p class="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+								Spec {specText(f.spec, f.unit)}
+								{#if specResult(f.spec, inputs[f.name]) === 'out_of_spec'}
+									<Badge
+										variant="outline"
+										class="border-error/50 bg-error-muted font-mono tracking-wider text-error"
+										>OUT OF SPEC</Badge
+									>
+								{/if}
+							</p>
+						{/if}
 					{:else if f.type === 'date'}
 						<Input id={`pt-${f.name}`} type="datetime-local" bind:value={inputs[f.name]} />
 					{:else}

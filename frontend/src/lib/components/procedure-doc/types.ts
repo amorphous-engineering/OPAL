@@ -4,6 +4,7 @@
  * gates), the template editor will fill only the authoring fields and leave the
  * rest at their empty defaults.
  */
+import type { Spec } from '@opal/shared';
 
 /**
  * execute: operator controls. readonly: facts only. author: the template editor; every
@@ -28,7 +29,9 @@ export interface DocField {
 	label?: string;
 	type: 'text' | 'number' | 'checkbox' | 'select' | 'textarea' | 'photo' | string;
 	required?: boolean;
+	/** A registry unit code; older templates hold free text. */
 	unit?: string;
+	spec?: Spec;
 	min?: number;
 	max?: number;
 	step?: number | string;

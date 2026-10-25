@@ -63,7 +63,7 @@ describe('publishing', () => {
 		const asm = await s.part('Asm');
 		await s.ok('PATCH', `/procedures/${p.id}/steps/${a.id}`, {
 			instructions: 'Torque it',
-			dataSchema: { fields: [{ name: 'torque', type: 'number', unit: 'Nm' }] },
+			dataSchema: { fields: [{ name: 'torque', type: 'number', unit: 'n_m' }] },
 			callouts: [{ kind: 'caution', text: 'hot' }],
 			estimatedDurationMinutes: 10,
 			workcenterId: wc.id,
@@ -84,7 +84,7 @@ describe('publishing', () => {
 		const sa = snap.steps[1]!;
 		expect(sa).toMatchObject({
 			instructions: 'Torque it',
-			dataSchema: { fields: [{ name: 'torque', type: 'number', unit: 'Nm' }] },
+			dataSchema: { fields: [{ name: 'torque', type: 'number', unit: 'n_m' }] },
 			callouts: [{ kind: 'caution', text: 'hot' }],
 			estimatedDurationMinutes: 10,
 			workcenterId: wc.id,

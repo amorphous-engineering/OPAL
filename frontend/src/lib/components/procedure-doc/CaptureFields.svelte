@@ -9,11 +9,14 @@
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
 	import FieldEditor from './author/FieldEditor.svelte';
 	import { attachmentUrl, gallery } from './viewer.js';
+	import { limitsText, outOfSpec, unitOf } from './spec.js';
 	import type { DocStep } from './types.js';
 
 	let { step }: { step: DocStep } = $props();
@@ -110,31 +113,43 @@
 								*</span
 							>{/if}
 					</Label>
-					{#if f.unit || f.min != null || f.max != null}
-						<span class="font-mono text-xs text-muted-foreground"
-							>{#if f.min != null || f.max != null}{f.min ?? '…'} – {f.max ??
-									'…'}{/if}{#if f.unit}{f.min != null || f.max != null
-									? ' '
-									: ''}{f.unit}{/if}</span
-						>
+					{#if limitsText(f)}
+						<span class="font-mono text-xs text-muted-foreground">{limitsText(f)}</span>
 					{/if}
 				</div>
 				<div class="grid min-w-0 grid-cols-1 gap-1 sm:max-w-[26rem]">
 					{#if f.type === 'number'}
-						<Input
-							{id}
-							type="number"
-							min={f.min}
-							max={f.max}
-							step={f.step ?? 'any'}
-							class="font-mono"
-							aria-invalid={!!err}
-							value={text(ctl.fieldValue(step, f.name))}
-							oninput={(e) => {
-								const v = (e.currentTarget as HTMLInputElement).value;
-								ctl.setField(step, f.name, v === '' ? null : Number(v));
-							}}
-						/>
+						{@const bad = outOfSpec(f, ctl.fieldValue(step, f.name))}
+						<div class="flex items-center gap-2">
+							<InputGroup.Root class="min-w-0 flex-1">
+								<InputGroup.Input
+									{id}
+									type="number"
+									min={f.min}
+									max={f.max}
+									step={f.step ?? 'any'}
+									class="font-mono"
+									aria-invalid={!!err || bad}
+									value={text(ctl.fieldValue(step, f.name))}
+									oninput={(e) => {
+										const v = (e.currentTarget as HTMLInputElement).value;
+										ctl.setField(step, f.name, v === '' ? null : Number(v));
+									}}
+								/>
+								{#if unitOf(f)}
+									<InputGroup.Addon align="inline-end">
+										<InputGroup.Text class="font-mono">{unitOf(f)}</InputGroup.Text>
+									</InputGroup.Addon>
+								{/if}
+							</InputGroup.Root>
+							{#if bad}
+								<Badge
+									variant="outline"
+									class="shrink-0 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+									>OUT OF SPEC</Badge
+								>
+							{/if}
+						</div>
 					{:else if f.type === 'checkbox'}
 						{@const b = ctl.fieldValue(step, f.name)}
 						<!-- An explicit choice: unset until the operator picks TRUE or FALSE. -->

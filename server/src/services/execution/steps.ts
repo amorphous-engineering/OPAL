@@ -3,8 +3,9 @@
  * commitment. All gating is in gates.ts and holds.ts.
  */
 import { OpalError, type SignResult, forbidden, now } from '@opal/shared';
+import { and, eq } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
-import { execution, signoff, stepNote, stepExecution } from '../../db/schema/index.ts';
+import { execution, issue, signoff, stepNote, stepExecution } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
 import { holdsSlotRole, roleNamesOf } from '../org/roles.ts';
 import { attachmentsFor, detach, publish } from '../platform/index.ts';
@@ -17,7 +18,10 @@ const refuse = (message: string, status = 409) => new OpalError(status, 'step_bl
 
 // ---------------------------------------------------------------- data capture
 
-/** Problems with captured values, by field name: required, number range. */
+/**
+ * Problems with captured values, by field name: required, invalid number, legacy min/max.
+ * A field with a spec is never refused for its value; the completion blocker `out_of_spec` handles it.
+ */
 export function captureProblems(row: Row, data: Record<string, unknown> | null | undefined): Record<string, string> {
 	const out: Record<string, string> = {};
 	const values = data ?? {};
@@ -31,11 +35,24 @@ export function captureProblems(row: Row, data: Record<string, unknown> | null |
 		if (f.type === 'number' && v !== undefined && v !== null && v !== '') {
 			const n = typeof v === 'number' ? v : Number(v);
 			if (!Number.isFinite(n)) out[f.name] = `${label}: invalid number`;
+			else if (f.spec) continue;
 			else if (f.min !== undefined && n < f.min) out[f.name] = `${label}: ${n} below minimum ${f.min}`;
 			else if (f.max !== undefined && n > f.max) out[f.name] = `${label}: ${n} above maximum ${f.max}`;
 		}
 	}
 	return out;
+}
+
+/** Does the step have a note, or an NC raised from it? Feeds the `out_of_spec` blocker. */
+export function explanationOf(ctx: Ctx, row: Row, pendingNote?: string | null): { hasNote: boolean; hasNc: boolean } {
+	const hasNote =
+		!!pendingNote?.trim() || !!ctx.db.select({ id: stepNote.id }).from(stepNote).where(eq(stepNote.stepExecutionId, row.id)).get();
+	const hasNc = !!ctx.db
+		.select({ id: issue.id })
+		.from(issue)
+		.where(and(eq(issue.raisedStepId, row.id), eq(issue.issueType, 'non_conformance')))
+		.get();
+	return { hasNote, hasNc };
 }
 
 // ---------------------------------------------------------------- execution lifecycle
@@ -121,7 +138,11 @@ export function signStep(
 	const holder = userId === null ? new Set<string>(['admin']) : roleNamesOf(ctx.db, userId);
 	if (role && !holdsSlotRole(holder, role)) throw forbidden(`Requires role ${role}`);
 
-	const gate = slotGate(m, st, row, input.slot, new Set(signed.keys()), undefined, true);
+	const complete =
+		input.slot === 0 && status === 'pending'
+			? completeBlockers(m, st, row, { data: input.dataCaptured ?? row.se.dataCaptured, ...explanationOf(ctx, row, input.notes) })
+			: undefined;
+	const gate = slotGate(m, st, row, input.slot, new Set(signed.keys()), complete, true);
 	if (!gate.canSign) {
 		throw refuse(describeBlockers(input.slot === 0 ? 'complete' : 'sign off', gate.blockers));
 	}

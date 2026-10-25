@@ -277,6 +277,8 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			step_order: r.stepId,
 			field: r.field,
 			unit: r.unit,
+			spec: r.spec ?? null,
+			out_of_spec: r.outOfSpec ?? false,
 			value: r.value,
 			by: r.by,
 			at: r.at

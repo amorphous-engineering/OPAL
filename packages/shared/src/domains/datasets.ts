@@ -4,6 +4,7 @@
  * captures points automatically (decision O1).
  */
 import { z } from 'zod';
+import { zSpec } from '../specs.ts';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
 
@@ -26,11 +27,13 @@ export const zSchemaField = z
 		chart: z.boolean().optional(),
 		/** A point must carry a value for this field. */
 		required: z.boolean().optional(),
-		/** Numbers only: inclusive bounds on a value. */
+		/** Numbers only: inclusive bounds on a value. Older datasets; new fields use `spec`. */
 		min: z.number().optional(),
-		max: z.number().optional()
+		max: z.number().optional(),
+		/** Numbers only: what a good value is. Out-of-spec points are stored and flagged. */
+		spec: zSpec.optional()
 	})
-	.refine((f) => f.type === 'number' || (f.min === undefined && f.max === undefined && !f.chart), {
+	.refine((f) => f.type === 'number' || (f.min === undefined && f.max === undefined && !f.chart && !f.spec), {
 		message: 'Only number fields take min, max or chart',
 		path: ['type']
 	})
@@ -132,7 +135,8 @@ export const datasets = {
 		name: 'datasets.create',
 		method: 'POST',
 		path: '/datasets',
-		summary: 'Create a dataset with a field schema.',
+		summary:
+			'Create a dataset with a field schema. A number field takes a unit code (such as in, mm, in_lbf, psi) and a spec (range, nominal, min, max or reference) as decimal strings; out-of-spec points are stored and flagged, never refused. Legacy min and max still refuse.',
 		input: z.object({
 			projectId: zId, // added by projects
 			name: zName,
@@ -195,7 +199,7 @@ export const datasets = {
 		name: 'datasets.exportCsv',
 		method: 'GET',
 		path: '/datasets/:id/export',
-		summary: 'Every point of a dataset as CSV text (recorded_at, then one column per field).',
+		summary: 'Every point of a dataset as CSV text (recorded_at, then one column per field, headed "name [unit symbol]", then an out_of_spec column naming the spec fields a point misses).',
 		input: idOnly,
 		output: z.string(),
 		produces: 'text/csv',

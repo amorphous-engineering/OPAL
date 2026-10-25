@@ -142,14 +142,19 @@
 					</div>
 					<table class="dense inner">
 						<thead
-							><tr><th class="w-2/5">Field</th><th>Value</th><th class="w-20">Unit</th></tr></thead
+							><tr
+								><th class="w-2/5">Field</th><th>Value</th><th class="w-20">Unit</th><th
+									class="w-1/5">Spec</th
+								></tr
+							></thead
 						>
 						<tbody>
 							{#each dc.rows as row, i (i)}
 								<tr
-									><td>{row.label}</td><td style="white-space: pre-wrap">{row.value}</td><td
-										>{dash(row.unit)}</td
-									></tr
+									><td>{row.label}</td><td style="white-space: pre-wrap"
+										>{row.value}{#if row.outOfSpec}
+											<strong> OUT OF SPEC</strong>{/if}</td
+									><td>{dash(row.unit)}</td><td>{dash(row.spec)}</td></tr
 								>
 							{/each}
 						</tbody>

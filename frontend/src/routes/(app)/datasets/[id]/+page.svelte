@@ -17,6 +17,7 @@
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
 	import DatasetChart from '#lib/components/datasets/DatasetChart.svelte';
@@ -24,7 +25,7 @@
 	import AddPointDialog from '#lib/components/datasets/AddPointDialog.svelte';
 	import EditDatasetDialog from '#lib/components/datasets/EditDatasetDialog.svelte';
 	import type { DataPoint } from '#lib/components/datasets/types.js';
-	import { opUrl, contracts } from '@opal/shared';
+	import { opUrl, contracts, specResult, specText, unitSymbol } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -49,13 +50,16 @@
 		{ key: 'recordedAt', label: 'Recorded', width: '10rem' },
 		...fields.map((f) => ({
 			key: `v:${f.name}`,
-			label: f.unit ? `${f.name} (${f.unit})` : f.name,
+			label: f.unit ? `${f.name} (${unitSymbol(f.unit)})` : f.name,
 			align: f.type === 'number' ? ('right' as const) : ('left' as const),
 			mono: f.type === 'number'
 		})),
 		{ key: 'source', label: 'Source' },
 		{ key: 'actions', label: '', width: '5rem', align: 'right' }
 	]);
+
+	const byName = $derived(new Map(fields.map((f) => [f.name, f])));
+	const chartSpec = $derived(fields.find((f) => f.name === data.field)?.spec);
 
 	function show(v: unknown): string {
 		if (v === null || v === undefined || v === '') return '';
@@ -167,7 +171,7 @@
 					{ key: 'name', label: 'Name' },
 					{ key: 'type', label: 'Type', mono: true },
 					{ key: 'unit', label: 'Unit', mono: true },
-					{ key: 'range', label: 'Range', mono: true },
+					{ key: 'spec', label: 'Spec', mono: true },
 					{ key: 'chart', label: 'Charted', align: 'center' }
 				]}
 				emptyLabel="Fields"
@@ -176,8 +180,12 @@
 				{#snippet cell(row, col)}
 					{#if col.key === 'chart'}
 						{row.type === 'number' ? (row.chart ? 'YES' : 'NO') : '—'}
-					{:else if col.key === 'range'}
-						{#if row.min !== undefined || row.max !== undefined}{row.min ?? ''} … {row.max ??
+					{:else if col.key === 'unit'}
+						{#if row.unit}{unitSymbol(row.unit)}{:else}<span class="text-muted-foreground">—</span
+							>{/if}
+					{:else if col.key === 'spec'}
+						{#if row.spec}{specText(row.spec, row.unit)}
+						{:else if row.min !== undefined || row.max !== undefined}{row.min ?? ''} … {row.max ??
 								''}{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else}
 						{@const v = (row as unknown as Record<string, string | undefined>)[col.key]}
@@ -200,7 +208,7 @@
 					>
 						{#each numeric as f (f.name)}
 							<NativeSelectOption value={f.name}
-								>{f.unit ? `${f.name} (${f.unit})` : f.name}</NativeSelectOption
+								>{f.unit ? `${f.name} (${unitSymbol(f.unit)})` : f.name}</NativeSelectOption
 							>
 						{/each}
 					</NativeSelect>
@@ -208,7 +216,7 @@
 					<span class="font-mono text-xs text-muted-foreground">{data.field}</span>
 				{/if}
 			{/snippet}
-			<DatasetChart chart={data.chart} />
+			<DatasetChart chart={data.chart} spec={chartSpec} />
 		</Section>
 	{/if}
 
@@ -229,8 +237,21 @@
 								>DELETE</Button
 							>{/if}
 					{:else}
-						{@const v = show(row.values[col.key.slice(2)])}
-						{#if v}{v}{:else}<span class="text-muted-foreground">—</span>{/if}
+						{@const name = col.key.slice(2)}
+						{@const f = byName.get(name)}
+						{@const v = show(row.values[name])}
+						{#if v}
+							{v}{#if f?.type === 'number' && f.unit}<span class="ml-1 text-muted-foreground"
+									>{unitSymbol(f.unit)}</span
+								>{/if}
+							{#if f?.spec && specResult(f.spec, row.values[name]) === 'out_of_spec'}
+								<Badge
+									variant="outline"
+									class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+									>OUT OF SPEC</Badge
+								>
+							{/if}
+						{:else}<span class="text-muted-foreground">—</span>{/if}
 					{/if}
 				{/snippet}
 			</DataTable>
