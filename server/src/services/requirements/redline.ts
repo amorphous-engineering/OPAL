@@ -46,10 +46,20 @@ function matchingBlocks(a: string[], b: string[]): Block[] {
 	return out.sort((x, y) => x[0] - y[0]);
 }
 
+/** Token-pair budget for the diff; stored text can be longer than the input caps allow. */
+export const REDLINE_BUDGET = 4_000_000;
+
 /** Ordered segments: equal, delete or insert text. */
 export function redlineSegments(oldText: string, newText: string): Segment[] {
+	if (oldText === newText) return oldText ? [{ op: 'equal', text: oldText }] : [];
 	const a = tokens(oldText);
 	const b = tokens(newText);
+	if (a.length * b.length > REDLINE_BUDGET) {
+		const whole: Segment[] = [];
+		if (oldText) whole.push({ op: 'delete', text: oldText });
+		if (newText) whole.push({ op: 'insert', text: newText });
+		return whole;
+	}
 	const segments: Segment[] = [];
 	const push = (op: Segment['op'], text: string) => {
 		if (!text) return;

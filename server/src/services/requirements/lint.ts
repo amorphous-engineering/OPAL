@@ -32,11 +32,13 @@ const SHALL_NOT = /\bshall\s+not\b/i;
 const IMPLEMENTATION = /\bby using\b|\bvia\b|\bimplemented as\b|\bby means of\b/i;
 const OPERATIONS_SUBJECT = /^\s*the\s+(operator|user|crew)\b/i;
 /** Designator tokens (REQ-0042, ICD-0007, PO/1-001) are references, not quantities. */
-const DESIGNATOR = /\b[A-Z]{2,}[-/][\dA-Z/-]*\d\b/g;
+// Bounded length so a long dash chain is not rescanned from every start.
+const DESIGNATOR = /\b[A-Z]{2,}[-/][\dA-Z/-]{0,40}\d\b/g;
 const NUMBER = /\d+(?:\.\d+)?/g;
 /** Structural bound patterns. The word vocabulary is data (bound_phrases). */
 const BOUND_SYMBOLS = '±|\\+/-|<=|>=|≤|≥|<|>';
-const BOUND_RANGE = '\\d[\\d,.]*\\s+to\\s+\\d';
+// Anchored to the start of a number token so a long digit run is not rescanned from every digit.
+const BOUND_RANGE = '(?<![\\d,.])\\d[\\d,.]*\\s+to\\s+\\d';
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
 
@@ -57,7 +59,9 @@ function lintBannedTerms(statement: string): Finding[] {
 	const blockTerms = rule.terms ?? [];
 	const warnTerms = rule.warnTerms ?? [];
 	const findings: Finding[] = [];
-	const covered: Span[] = [];
+	// Disjoint-or-nested spans only: a span is covered when one earlier span contains it. Marking
+	// each covered character gives a linear check.
+	const covered = new Uint8Array(statement.length);
 	for (const term of [...blockTerms, ...warnTerms].sort((a, b) => b.length - a.length)) {
 		// \b only works against word characters: "etc." and "and/or" end without one.
 		const head = isWord(term[0]!) ? '\\b' : '';
@@ -65,10 +69,10 @@ function lintBannedTerms(statement: string): Finding[] {
 		const spans: Span[] = [];
 		for (const m of statement.matchAll(new RegExp(head + escape(term) + tail, 'gi'))) {
 			const span: Span = [m.index, m.index + m[0].length];
-			if (!covered.some(([s, e]) => span[0] >= s && span[1] <= e)) spans.push(span);
+			if (!covered.subarray(span[0], span[1]).every(Boolean)) spans.push(span);
 		}
 		if (!spans.length) continue;
-		covered.push(...spans);
+		for (const [s, e] of spans) covered.fill(1, s, e);
 		const severity = warnTerms.includes(term) ? 'warn' : undefined;
 		for (const span of spans) {
 			findings.push(
@@ -85,10 +89,14 @@ function lintBannedTerms(statement: string): Finding[] {
 /** Span of the first number outside a designator, or null. */
 function unboundedNumberSpan(statement: string): Span | null {
 	const designators = [...statement.matchAll(DESIGNATOR)].map((m): Span => [m.index, m.index + m[0].length]);
+	// Both lists are in text order, so one pass with a moving pointer is enough.
+	let d = 0;
 	for (const m of statement.matchAll(NUMBER)) {
 		const start = m.index;
 		const end = start + m[0].length;
-		if (!designators.some(([s, e]) => s <= start && end <= e)) return [start, end];
+		while (d < designators.length && designators[d]![1] < end) d++;
+		const hit = designators[d];
+		if (!(hit && hit[0] <= start && end <= hit[1])) return [start, end];
 	}
 	return null;
 }

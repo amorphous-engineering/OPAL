@@ -834,3 +834,23 @@ describe('projects', () => {
 		expect(rev.body).toMatchObject({ revision: 2, projectId: b.id });
 	});
 });
+
+describe('statement and rationale length caps', () => {
+	const long = 'x'.repeat(4001);
+
+	test('a statement over the cap is refused on lint, create and update', async () => {
+		const { call } = await setup();
+		expect((await call('POST', '/requirements/lint', { statement: long })).status).toBe(422);
+		expect((await call('POST', '/requirements', { title: 't', statement: long })).status).toBe(422);
+		const made = await call('POST', '/requirements', { title: 't', statement: 'The x shall y.' });
+		expect(made.status).toBe(201);
+		expect((await call('PATCH', `/requirements/${made.body.id}`, { statement: long })).status).toBe(422);
+	});
+
+	test('a rationale over the cap is refused', async () => {
+		const { call } = await setup();
+		const r = 'x'.repeat(10_001);
+		expect((await call('POST', '/requirements', { title: 't', statement: 's', rationale: r })).status).toBe(422);
+		expect((await call('POST', '/requirements/lint', { statement: 's', rationale: r })).status).toBe(422);
+	});
+});

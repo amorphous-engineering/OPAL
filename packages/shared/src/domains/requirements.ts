@@ -70,13 +70,16 @@ export const zRequirement = z.object({
 });
 export type Requirement = z.infer<typeof zRequirement>;
 
-const text = z.string().nullable().optional();
+/** Input caps. Stored rows may be longer (1.x imports), so lint and redline stay safe on any length. */
+export const REQUIREMENT_STATEMENT_MAX = 4000;
+export const REQUIREMENT_RATIONALE_MAX = 10000;
+const text = z.string().max(REQUIREMENT_RATIONALE_MAX).nullable().optional();
 const zNullableId = z.number().int().positive().nullable().optional();
 
 export const zRequirementCreate = z.object({
 	projectId: zId, // added by projects
 	title: z.string().trim().min(1).max(255),
-	statement: z.string().trim().min(1),
+	statement: z.string().trim().min(1).max(REQUIREMENT_STATEMENT_MAX),
 	rationale: text,
 	category: z.string().max(50).nullable().optional(),
 	parentId: zNullableId,
@@ -94,7 +97,7 @@ export const zRequirementUpdate = z.object({
 	id: zId,
 	projectId: zId.optional(), // added by projects
 	title: z.string().trim().min(1).max(255).optional(),
-	statement: z.string().trim().min(1).optional(),
+	statement: z.string().trim().min(1).max(REQUIREMENT_STATEMENT_MAX).optional(),
 	rationale: text,
 	category: z.string().max(50).nullable().optional(),
 	parentId: zNullableId,
@@ -109,7 +112,7 @@ export const zRequirementUpdate = z.object({
 });
 
 export const zRequirementLintInput = z.object({
-	statement: z.string(),
+	statement: z.string().max(REQUIREMENT_STATEMENT_MAX),
 	rationale: text,
 	verificationMethod: z.enum(REQUIREMENT_VERIFICATION_METHODS).nullable().optional(),
 	tbd: z.boolean().default(false),

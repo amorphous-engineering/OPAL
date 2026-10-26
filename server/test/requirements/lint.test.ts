@@ -198,3 +198,44 @@ describe('redline', () => {
 		expect(seg.filter((s) => s.op !== 'delete').map((s) => s.text).join('')).toBe('one three four');
 	});
 });
+
+describe('lint and redline stay bounded on long text', () => {
+	const ms = (fn: () => void) => {
+		const t = performance.now();
+		fn();
+		return performance.now() - t;
+	};
+
+	test('a long digit run lints in linear time', () => {
+		const long = '1'.repeat(200_000);
+		expect(ms(() => lintStatement(long))).toBeLessThan(500);
+	});
+
+	test('many repeated banned terms lint in linear time', () => {
+		const long = 'etc. and/or '.repeat(20_000);
+		expect(ms(() => lintStatement(long))).toBeLessThan(500);
+	});
+
+	test('a long chain of designator-like tokens lints in linear time', () => {
+		expect(ms(() => lintStatement('AA-'.repeat(40_000)))).toBeLessThan(500);
+	});
+
+	test('a range of numbers still counts as a bound', () => {
+		expect(names(lintStatement('The engine shall run from 10 to 20 bar.')).has('quantitative_has_bounds')).toBe(false);
+	});
+
+	test('redline of identical text is one equal segment', () => {
+		expect(redlineSegments('same words', 'same words')).toEqual([{ op: 'equal', text: 'same words' }]);
+	});
+
+	test('redline above the work budget returns a whole-field delete and insert', () => {
+		const a = Array.from({ length: 5000 }, (_, i) => `a${i}`).join(' ');
+		const b = Array.from({ length: 5000 }, (_, i) => `b${i}`).join(' ');
+		let segs: ReturnType<typeof redlineSegments> = [];
+		expect(ms(() => (segs = redlineSegments(a, b)))).toBeLessThan(500);
+		expect(segs).toEqual([
+			{ op: 'delete', text: a },
+			{ op: 'insert', text: b }
+		]);
+	});
+});
