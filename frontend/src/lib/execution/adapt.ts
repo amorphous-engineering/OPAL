@@ -38,6 +38,14 @@ const cursor = (c: DocStepOut['cursors'][number]) => ({
 	focused_at: c.focusedAt,
 	stale: c.stale
 });
+const labor = (l: ApiDocument['labor'][number]) => ({
+	op_order: l.opId,
+	user_id: l.userId,
+	name: l.name,
+	avatar_url: l.avatarUrl,
+	seconds: l.seconds,
+	since: l.since
+});
 const consumption = (c: ApiDocument['consumptions'][number]) => ({
 	id: c.id,
 	part_id: c.partId,
@@ -283,6 +291,7 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			by: r.by,
 			at: r.at
 		})),
+		labor: d.labor.map(labor),
 		generated_at: d.generatedAt
 	};
 }
@@ -306,6 +315,7 @@ export function adaptState(s: ApiState): ExecutionState {
 		})),
 		roster: s.roster.map(rosterEntry),
 		holds: s.holds.map(holdSummary),
+		labor: s.labor.map(labor),
 		generated_at: s.generatedAt
 	};
 }

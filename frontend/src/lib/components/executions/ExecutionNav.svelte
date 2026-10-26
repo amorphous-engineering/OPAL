@@ -66,7 +66,7 @@
 						{@const selected = store.focusMode && store.focusOp === op.order}
 						{@const s = opState(op)}
 						{@const stamp = op.step.completed?.at}
-						<li class="border-b border-border last:border-b-0">
+						<li class="relative border-b border-border last:border-b-0">
 							<button
 								type="button"
 								class={cn(
@@ -92,11 +92,17 @@
 											>{datetime(stamp)}</time
 										>
 									{/if}
-									<span class="ml-auto"
-										><CursorChips cursors={op.step.cursors} viewerId={store.viewerId} /></span
-									>
 								</span>
 							</button>
+							<!-- Outside the row button: the chips are a button of their own. -->
+							<span class="absolute right-3 bottom-2">
+								<CursorChips
+									cursors={op.step.cursors}
+									viewerId={store.viewerId}
+									labor={store.laborFor(op.order)}
+									title={`OP ${op.number}`}
+								/>
+							</span>
 						</li>
 					{/each}
 				</ul>

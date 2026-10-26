@@ -1,7 +1,7 @@
 /**
  * Presence: who joined an execution and which OP each person works on. A claim is per OP (one
  * operator works an OP) and is presence, not history: moving it writes no audit row. The claim
- * outlives leaving the page; releasing it clears it.
+ * outlives leaving the page; releasing it clears it. Claims also clock time (labor.ts).
  */
 import { type ExecCursor, type ExecRosterEntry, OpalError, now } from '@opal/shared';
 import { and, eq, isNotNull } from 'drizzle-orm';
@@ -11,11 +11,12 @@ import { executionParticipant, stepExecution, user } from '../../db/schema/index
 import { publish } from '../platform/index.ts';
 import { personRefs } from '../org/people.ts';
 import { claimBlockers } from './gates.ts';
+import { clockIn, clockOut } from './labor.ts';
 import { type Model, getRow, isTerminal, loadModel, opRowOf } from './model.ts';
 import { initials } from './present.ts';
 
 /** Roster chips go gray when a heartbeat is older than this. */
-export const PRESENCE_STALE_MS = 60_000;
+export const PRESENCE_STALE_MS = 4 * 60 * 60_000;
 const TOUCH_MS = 30_000;
 
 function me(ctx: Ctx): number {
@@ -111,6 +112,7 @@ export function focus(ctx: Ctx, input: { id: number; stepId: number }) {
 	if (gates.length) throw new OpalError(409, 'op_gated', gates.map((b) => b.message).join('; '));
 	const at = now();
 	save(ctx.db, input.id, userId, { focusStepId: op.id, focusedAt: at, lastActiveAt: at });
+	clockIn(ctx, m, userId, op.id, at);
 	if (op.se.firstFocusedAt === null) {
 		ctx.db.update(stepExecution).set({ firstFocusedAt: at }).where(eq(stepExecution.id, op.id)).run();
 	}
@@ -120,8 +122,9 @@ export function focus(ctx: Ctx, input: { id: number; stepId: number }) {
 
 export function release(ctx: Ctx, executionId: number): { ok: true } {
 	const userId = me(ctx);
-	loadModel(ctx.db, executionId);
+	const m = loadModel(ctx.db, executionId);
 	save(ctx.db, executionId, userId, { focusStepId: null, focusedAt: null });
+	clockOut(ctx, m, userId, now());
 	publish({ type: 'cursor_moved', data: { executionId, stepId: null, userId } });
 	return { ok: true };
 }

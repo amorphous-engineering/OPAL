@@ -18,6 +18,7 @@ import {
 } from '@opal/shared';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
+import { laborRows } from './labor.ts';
 import type { Db } from '../../db/client.ts';
 import { attachment, blob, issue, part, project, stepNote, user } from '../../db/schema/index.ts';
 import { dispState, isBlocking, ticketState } from '../issues/state.ts';
@@ -421,6 +422,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 		referenceAttachments: refAtts.map(attOut),
 		attachments: woAtts.map(attOut),
 		dataRows,
+		labor: laborRows(db, m),
 		generatedAt: now()
 	};
 }
@@ -459,6 +461,7 @@ export function buildState(ctx: Ctx, executionId: number): ExecutionState {
 		})),
 		roster: roster(db, m),
 		holds: summarizeHolds(m, st),
+		labor: laborRows(db, m),
 		generatedAt: now()
 	};
 }

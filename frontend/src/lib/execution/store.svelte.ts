@@ -23,6 +23,7 @@ import {
 	type ConsumeItem,
 	type DocActions,
 	type DocController,
+	type DocLabor,
 	type DocOp,
 	type DocStep,
 	type StockRecord
@@ -105,6 +106,10 @@ export class ExecutionStore implements DocController {
 
 	get allOps(): DocOp[] {
 		return this.doc ? [...this.doc.ops, ...this.doc.contingency_ops] : [];
+	}
+
+	laborFor(opOrder: number): DocLabor[] {
+		return this.doc?.labor.filter((l) => l.op_order === opOrder) ?? [];
 	}
 
 	findStep(order: number): { op: DocOp; step: DocStep } | undefined {
@@ -362,6 +367,7 @@ export class ExecutionStore implements DocController {
 		}
 		// Presence updates in place; they never rebuild a row.
 		if (!same(this.doc.roster, state.roster)) this.doc.roster = state.roster;
+		if (!same(this.doc.labor, state.labor)) this.doc.labor = state.labor;
 		if (!same(this.doc.progress, state.instance.progress))
 			this.doc.progress = state.instance.progress;
 		for (const s of state.steps) {

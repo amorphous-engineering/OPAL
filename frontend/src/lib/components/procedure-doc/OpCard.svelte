@@ -147,6 +147,7 @@
 					op.status === 'skipped' && 'line-through'
 				)}>{op.title}</span
 			>
+			<StepState step={op.step} />
 		{/if}
 		{#if op.is_contingency}
 			<Badge variant="outline" class={warnBadge}>CONTINGENCY</Badge>
@@ -183,7 +184,12 @@
 			>
 		{/if}
 		{#if au}<AuthorChips step={op.step} />{/if}
-		<CursorChips cursors={op.step.cursors} viewerId={ctl.viewerId} />
+		<CursorChips
+			cursors={op.step.cursors}
+			viewerId={ctl.viewerId}
+			labor={ctl.laborFor?.(op.order)}
+			title={`OP ${op.number}`}
+		/>
 		<OpClaim {op} prominent={claimHere} />
 		{#if au && !leaf}
 			<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
@@ -196,8 +202,6 @@
 					<SaveBadge step={op.step} quiet />
 					<RowTools step={op.step} {op} isOp={true} />
 				</span>
-			{:else if leaf || terminal}
-				<StepState step={op.step} />
 			{/if}
 		</span>
 		{#if !au}

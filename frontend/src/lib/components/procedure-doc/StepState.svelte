@@ -1,12 +1,12 @@
 <script lang="ts">
-	// The completion stamp of a step: when and who, for a completed or skipped step.
-	// What stops an open step shows as badges beside its title (StepBadges).
-	import { datetime, iso } from '#lib/format.js';
+	// A finished step: DONE (or SKIPPED) as the first badge right of its title. When and who
+	// sit in the tooltip. What stops an open step shows as badges after it (StepBadges).
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { iso } from '#lib/format.js';
 	import type { DocStep } from './types.js';
 
 	let { step }: { step: DocStep } = $props();
 
-	// Completion stamp: local ISO date and minute, then who (name, initials as fallback).
 	// The last signature is the completion when sign-offs exist.
 	const last = $derived(
 		[...(step.signoffs ?? [])]
@@ -18,22 +18,17 @@
 	const who = $derived(
 		last?.signed_by?.name ?? step.completed?.by ?? step.completed?.initials ?? ''
 	);
+	const tip = $derived([iso(stamp), who].filter(Boolean).join(' · ') || undefined);
 </script>
 
-<span class="font-mono text-xs font-medium whitespace-nowrap">
-	{#if step.status === 'completed' || step.status === 'signed_off'}
-		<span
-			class="inline-flex items-baseline gap-1.5 font-normal text-muted-foreground"
-			title={iso(stamp)}
-			><time datetime={iso(stamp)}>{datetime(stamp)}</time><span class="max-w-[9rem] truncate"
-				>{who}</span
-			></span
-		>
-	{:else if step.status === 'skipped'}
-		<span class="inline-flex items-baseline gap-1.5 text-muted-foreground" title={iso(stamp)}
-			>SKIPPED <time datetime={iso(stamp)}>{datetime(stamp)}</time><span
-				class="max-w-[9rem] truncate">{who}</span
-			></span
-		>
-	{/if}
-</span>
+{#if step.status === 'completed' || step.status === 'signed_off'}
+	<Badge
+		variant="outline"
+		class="border-ok/50 bg-ok-muted font-mono tracking-wider text-ok"
+		title={tip}>DONE</Badge
+	>
+{:else if step.status === 'skipped'}
+	<Badge variant="outline" class="font-mono tracking-wider text-muted-foreground" title={tip}
+		>SKIPPED</Badge
+	>
+{/if}

@@ -15,6 +15,13 @@
       "when": 1792964477670,
       "tag": "0001_execution_comment",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792980773056,
+      "tag": "0002_work_interval",
+      "breakpoints": true
     }
   ]
 }

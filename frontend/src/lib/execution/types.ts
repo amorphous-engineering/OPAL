@@ -7,6 +7,7 @@ import type {
 	DocAttachment,
 	DocConsumption,
 	DocCursor,
+	DocLabor,
 	DocOp
 } from '#lib/components/procedure-doc/index.js';
 
@@ -142,6 +143,7 @@ export interface ExecutionDocument {
 	reference_attachments: DocAttachment[];
 	attachments: DocAttachment[];
 	data_rows: DataRow[];
+	labor: DocLabor[];
 	generated_at: string;
 }
 
@@ -163,5 +165,6 @@ export interface ExecutionState {
 	}[];
 	roster: RosterEntry[];
 	holds: HoldEntry[];
+	labor: DocLabor[];
 	generated_at: string;
 }

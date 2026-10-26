@@ -200,6 +200,30 @@ export const executionParticipant = sqliteTable(
 );
 
 /**
+ * Time worked: one row per clock-in, from claiming an OP to clocking out, moving to another
+ * OP, or the OP finishing. `ended_at` null: still clocked in (a finished OP or execution ends
+ * it at its own finish time; see services/execution/labor.ts).
+ */
+export const workInterval = sqliteTable(
+	'work_interval',
+	{
+		id: id(),
+		executionId: integer('execution_id')
+			.notNull()
+			.references(() => execution.id, { onDelete: 'cascade' }),
+		opStepId: integer('op_step_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stepExecution.id, { onDelete: 'cascade' }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		startedAt: text('started_at').notNull(),
+		endedAt: text('ended_at')
+	},
+	(t) => [index('work_interval_execution_idx').on(t.executionId, t.userId)]
+);
+
+/**
  * An output planned at cut time: a stock record with its OPAL number and serial, balance zero
  * until finalize books it. Produced stock with no plan has no row here (it is a produce move
  * linked to the execution).

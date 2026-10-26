@@ -82,6 +82,16 @@ export interface DocHold {
 	disposition_state: string;
 }
 
+/** Time one person worked on one OP (`op_order`). `since`: open clock-in start, else null. */
+export interface DocLabor {
+	op_order: number;
+	user_id: number;
+	name: string | null;
+	avatar_url: string | null;
+	seconds: number;
+	since: string | null;
+}
+
 export interface DocCursor {
 	user_id: number;
 	name: string | null;

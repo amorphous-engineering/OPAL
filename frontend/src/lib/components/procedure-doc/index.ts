@@ -40,3 +40,4 @@ export type {
 } from './controller.js';
 export { isActionable, isBlocked, isTerminal, visibleRows, TERMINAL_STATUSES } from './types.js';
 export type * from './types.js';
+export { byPerson, clock, liveSeconds } from './labor.svelte.js';

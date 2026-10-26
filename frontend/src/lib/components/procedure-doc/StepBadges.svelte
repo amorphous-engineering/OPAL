@@ -1,6 +1,6 @@
 <script lang="ts">
 	// What stops a step, as badges beside its title: held by a raised issue, a bound hold,
-	// awaiting sign-off, waiting on another step. A finished step shows none (StepState stamps it).
+	// awaiting sign-off, waiting on another step. A finished step shows none (StepState marks it DONE).
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { outOfSpecFields } from './spec.js';
 	import type { DocStep } from './types.js';

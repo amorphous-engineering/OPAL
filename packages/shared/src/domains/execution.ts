@@ -81,6 +81,20 @@ export const zExecRosterEntry = zExecCursor.extend({
 });
 export type ExecRosterEntry = z.infer<typeof zExecRosterEntry>;
 
+/**
+ * Time one person worked on one OP. `seconds` counts finished clock-ins. `since`: the start of
+ * the clock-in that is still open (the client adds the time from then to now), else null.
+ */
+export const zLaborRow = z.object({
+	opId: z.number().int(),
+	userId: z.number().int(),
+	name: z.string().nullable(),
+	avatarUrl: z.string().nullable(),
+	seconds: z.number().int(),
+	since: zTimestamp.nullable()
+});
+export type LaborRow = z.infer<typeof zLaborRow>;
+
 /** One execution in a list. */
 export const zExecutionRow = z.object({
 	id: z.number().int(),
@@ -457,6 +471,7 @@ export const zExecutionDocument = z.object({
 	referenceAttachments: z.array(zDocAttachment),
 	attachments: z.array(zDocAttachment),
 	dataRows: z.array(zDataRow),
+	labor: z.array(zLaborRow),
 	generatedAt: zTimestamp
 });
 export type ExecutionDocument = z.infer<typeof zExecutionDocument>;
@@ -483,6 +498,7 @@ export const zExecutionState = z.object({
 	),
 	roster: z.array(zExecRosterEntry),
 	holds: z.array(zDocHoldSummary),
+	labor: z.array(zLaborRow),
 	generatedAt: zTimestamp
 });
 export type ExecutionState = z.infer<typeof zExecutionState>;

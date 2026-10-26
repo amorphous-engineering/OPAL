@@ -89,6 +89,7 @@
 			<span class={cn('min-w-0 truncate text-sm', step.status === 'skipped' && 'line-through')}
 				>{step.title}</span
 			>
+			<StepState {step} />
 			<StepBadges {step} />
 		{/if}
 		{#if nNote}
@@ -118,7 +119,6 @@
 			<SaveBadge {step} quiet />
 			<RowTools {step} {op} isOp={false} />
 		{:else}
-			<span class="min-w-24 shrink-0 text-right"><StepState {step} /></span>
 			<StepTitleActions {step} />
 		{/if}
 	</div>

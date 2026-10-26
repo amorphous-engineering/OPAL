@@ -9,7 +9,7 @@
  * will be a different set of actions on the same components.
  */
 import { getContext, setContext } from 'svelte';
-import type { Callout, DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
+import type { Callout, DocLabor, DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
 
 export interface StockRecord {
 	id: number;
@@ -139,6 +139,8 @@ export interface DocController {
 	focusedOrder: number | null;
 	/** The viewer's claimed step (presence), or null. */
 	claimedOrder: number | null;
+	/** Time worked on an OP, per person. Absent where no work is clocked (authoring). */
+	laborFor?(opOrder: number): DocLabor[];
 	/** Is the OP card (key `op:3`) or step body (`step:5`) expanded? Defaults: open
 	 *  unless finished — or `blocked` (nothing to act on yet). */
 	isOpen(key: string, terminal: boolean, blocked?: boolean): boolean;
