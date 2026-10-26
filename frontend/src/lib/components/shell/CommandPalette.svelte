@@ -3,6 +3,8 @@
 	// or a "new" form. Arrow keys move, Enter opens, Escape closes. Empty query shows
 	// the last records opened from here.
 	import * as Command from '#lib/components/ui/command/index.js';
+	import { Command as CommandPrimitive } from 'bits-ui';
+	import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlass';
 	import { goto } from '$app/navigation';
 	import { opal } from '#lib/api.js';
 	import type { SearchHit } from '@opal/shared';
@@ -149,11 +151,21 @@
 <Command.Dialog
 	bind:open
 	shouldFilter={false}
+	class="spotlight top-[18%] sm:max-w-2xl"
 	title="Search"
 	description="Search records and pages"
 >
-	<Command.Input placeholder="Search parts, issues, work orders, pages…" bind:value={query} />
-	<Command.List>
+	<!-- Spotlight search line: own markup on the bits-ui input, because the vendored
+	     Command.Input fixes its height. -->
+	<div class="flex h-14 items-center gap-3 border-b border-border px-4">
+		<MagnifyingGlassIcon class="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
+		<CommandPrimitive.Input
+			bind:value={query}
+			placeholder="Search parts, issues, work orders, pages…"
+			class="h-full w-full min-w-0 bg-transparent text-2xl outline-none placeholder:text-muted-foreground"
+		/>
+	</div>
+	<Command.List class="max-h-[min(60vh,32rem)]">
 		{#if nothing}<Command.Empty>No match</Command.Empty>{/if}
 		{#if searching && grouped.length === 0}
 			<div class="px-3 py-2 font-mono text-xs text-muted-foreground" role="status">SEARCHING</div>
@@ -162,10 +174,13 @@
 			<Command.Group heading={g.heading}>
 				{#each g.rows as r (r.entityType + r.id)}
 					<Command.Item value={`${r.entityType}-${r.id}`} onSelect={() => go(r.href, r)}>
-						<span class="truncate">{r.label}</span>
-						{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
-								>{r.sublabel}</span
-							>{/if}
+						<!-- Grows to the row end: the vendored item's hidden check icon also takes ml-auto. -->
+						<span class="flex min-w-0 flex-1 items-baseline">
+							<span class="truncate">{r.label}</span>
+							{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
+									>{r.sublabel}</span
+								>{/if}
+						</span>
 						{#if r.status}<span class="ml-auto font-mono text-xs text-muted-foreground uppercase"
 								>{r.status.replace(/_/g, ' ')}</span
 							>{/if}
@@ -177,10 +192,13 @@
 			<Command.Group heading="RECENT">
 				{#each recent as r (r.href)}
 					<Command.Item value={`recent-${r.href}`} onSelect={() => go(r.href, r)}>
-						<span class="truncate">{r.label}</span>
-						{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
-								>{r.sublabel}</span
-							>{/if}
+						<!-- Grows to the row end: the vendored item's hidden check icon also takes ml-auto. -->
+						<span class="flex min-w-0 flex-1 items-baseline">
+							<span class="truncate">{r.label}</span>
+							{#if r.sublabel}<span class="ml-2 truncate font-mono text-xs text-muted-foreground"
+									>{r.sublabel}</span
+								>{/if}
+						</span>
 						<span class="ml-auto font-mono text-xs text-muted-foreground uppercase"
 							>{label(r.entityType)}</span
 						>
@@ -207,3 +225,16 @@
 		{/if}
 	</Command.List>
 </Command.Dialog>
+
+<style>
+	/* Spotlight proportions: roomy rows. The vendored command parts fix their own sizes,
+	   so the palette sets them here by data-slot. */
+	:global(.spotlight [data-slot='command-item']) {
+		padding: 0.5rem 0.75rem;
+		font-size: var(--text-sm);
+		border-radius: 0.5rem;
+	}
+	:global(.spotlight [cmdk-group-heading]) {
+		padding-top: 0.5rem;
+	}
+</style>
