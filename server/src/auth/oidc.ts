@@ -26,6 +26,7 @@ import {
 import { mintSession } from '../services/auth/sessions.ts';
 import { oidcActive, readSettings } from '../services/auth/settings.ts';
 import { inTransaction } from '../services/auth/tx.ts';
+import { clientIp, trustProxy } from './client-ip.ts';
 import { signPayload, verifyPayload } from './signing.ts';
 import { SESSION_COOKIE, SESSION_LIFETIME_MS } from './tokens.ts';
 
@@ -34,8 +35,6 @@ export function safeNext(value: string | undefined | null): string {
 	if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/';
 	return value;
 }
-
-const trustProxy = () => /^(1|true|yes|on)$/i.test(process.env.OPAL_TRUST_PROXY ?? '');
 
 /** Scheme and host the browser used, seeing through a trusted reverse proxy. */
 function requestBase(c: Context): { base: string; secure: boolean } {
@@ -127,7 +126,7 @@ export function mountOidc(app: Hono, db: Db): void {
 				op: 'auth.oidc.callback',
 				request: {
 					userAgent: c.req.header('user-agent') ?? null,
-					ip: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null
+					ip: clientIp(c)
 				}
 			};
 			const raw = await inTransaction(db, () => mintSession(ctx, resolveIdentity(ctx, settings, claims), 'oidc'));

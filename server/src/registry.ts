@@ -17,6 +17,7 @@ import { sql } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
+import { clientIp } from './auth/client-ip.ts';
 import { type Actor, type CookieJar, type Ctx, type RequestInfo } from './context.ts';
 import { holdsGate } from './services/org/gates.ts';
 import { canonicalInput, displayOutput } from './numbers.ts';
@@ -26,10 +27,23 @@ import type { Db } from './db/client.ts';
 export interface Impl<C extends OpContract = OpContract> {
 	contract: C;
 	handler: (ctx: Ctx, input: z.output<C['input']>) => OpOutput<C> | Promise<OpOutput<C>>;
+	/**
+	 * The handler runs outside the write queue and enters it through `ctx.write`. For public
+	 * operations that hash passwords: a hash takes hundreds of milliseconds and must not hold
+	 * the queue, or anonymous requests would stall every other write.
+	 */
+	verifyFirst?: boolean;
 }
 
-export function implement<C extends OpContract>(contract: C, handler: Impl<C>['handler']): Impl<C> {
-	return { contract, handler };
+export function implement<C extends OpContract>(
+	contract: C,
+	handler: Impl<C>['handler'],
+	opts?: { verifyFirst?: boolean }
+): Impl<C> {
+	if (opts?.verifyFirst && contract.access !== 'public') {
+		throw new Error(`${contract.name}: verifyFirst is for public operations`);
+	}
+	return { contract, handler, verifyFirst: opts?.verifyFirst };
 }
 
 /**
@@ -115,19 +129,26 @@ async function execute<C extends OpContract>(
 		throw new OpalError(422, 'invalid_input', 'Invalid input', zodFields(parsed.error));
 	}
 	const ctx: Ctx = { db, actor, op: contract.name, invocation: crypto.randomUUID(), ...http };
+	const transaction = <T>(fn: () => Promise<T>): Promise<T> =>
+		serialized(async () => {
+			db.run(sql`BEGIN IMMEDIATE`);
+			try {
+				const out = await fn();
+				db.run(sql`COMMIT`);
+				return out;
+			} catch (e) {
+				db.run(sql`ROLLBACK`);
+				throw e;
+			}
+		});
+	if (impl.verifyFirst && contract.method !== 'GET') {
+		ctx.write = (fn) => transaction(async () => fn());
+	} else {
+		ctx.write = async (fn) => fn();
+	}
 	const exec = async () => contract.output.parse(await impl.handler(ctx, parsed.data as z.output<C['input']>)) as OpOutput<C>;
-	if (contract.method === 'GET') return exec();
-	return serialized(async () => {
-		db.run(sql`BEGIN IMMEDIATE`);
-		try {
-			const out = await exec();
-			db.run(sql`COMMIT`);
-			return out;
-		} catch (e) {
-			db.run(sql`ROLLBACK`);
-			throw e;
-		}
-	});
+	if (contract.method === 'GET' || impl.verifyFirst) return exec();
+	return transaction(exec);
 }
 
 export type ResolveActor = (c: Context) => Actor | Promise<Actor>;
@@ -156,10 +177,7 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 				cookies: cookieJar(hc),
 				request: {
 					userAgent: hc.req.header('user-agent') ?? null,
-					ip:
-						hc.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-						(hc.env as { ip?: string | null } | undefined)?.ip ??
-						null
+					ip: clientIp(hc)
 				}
 			});
 			if (c.produces) {

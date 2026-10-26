@@ -100,5 +100,34 @@ export class LoginThrottle {
 	reset(key: string): void {
 		this.failures.delete(key);
 	}
+	/** Take back the newest failure: an attempt counted before its check ended well. */
+	release(key: string): void {
+		const kept = this.prune(key);
+		if (kept.length) this.failures.set(key, kept.slice(0, -1));
+	}
 }
 export const loginThrottle = new LoginThrottle();
+/**
+ * Failures per username from any address. Generous, so a stranger who guesses a name cannot
+ * lock a person out for long, yet it caps guessing from many addresses.
+ */
+export const usernameThrottle = new LoginThrottle(50, 900_000);
+
+/**
+ * Caps the argon2id work that anonymous requests start at the same time. Each hash takes
+ * memory and a thread; a flood of logins must not starve the rest of the server.
+ */
+const HASH_SLOTS = 4;
+let hashActive = 0;
+const hashWaiting: Array<() => void> = [];
+export async function withHashSlot<T>(fn: () => Promise<T>): Promise<T> {
+	if (hashActive >= HASH_SLOTS) await new Promise<void>((resolve) => hashWaiting.push(resolve));
+	else hashActive++;
+	try {
+		return await fn();
+	} finally {
+		const next = hashWaiting.shift();
+		if (next) next(); // the slot passes to the next waiter
+		else hashActive--;
+	}
+}

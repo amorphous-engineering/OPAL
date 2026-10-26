@@ -7,6 +7,8 @@ import {
 	hashPassword,
 	hashToken,
 	loginThrottle,
+	usernameThrottle,
+	withHashSlot,
 	newToken,
 	isPluginUsername,
 	normalizeUsername,
@@ -136,17 +138,22 @@ export const authImpls = [
 		if (weak) throw invalid('password', weak);
 		// Always credentialed: an admin who lives only in an identity provider has no way back in
 		// when the provider is down.
-		const u = insert(ctx, user, {
-			username,
-			name: input.name,
-			email: input.email?.trim() || null,
-			passwordHash: await hashPassword(input.password),
-			isAdmin: true,
-			isActive: true
+		const passwordHash = await withHashSlot(() => hashPassword(input.password));
+		return ctx.write!(() => {
+			// Another setup request may have finished while this one hashed.
+			if (!needsSetup(ctx)) throw conflict('setup_complete', 'Setup is already complete');
+			const u = insert(ctx, user, {
+				username,
+				name: input.name,
+				email: input.email?.trim() || null,
+				passwordHash,
+				isAdmin: true,
+				isActive: true
+			});
+			startSession(ctx, u, 'password');
+			return { user: present(ctx.db, u) };
 		});
-		startSession(ctx, u, 'password');
-		return { user: present(ctx.db, u) };
-	}),
+	}, { verifyFirst: true }),
 
 	implement(contracts.auth.login, async (ctx, input) => {
 		if (!readSettings(ctx.db).passwordLoginEnabled) {
@@ -154,21 +161,30 @@ export const authImpls = [
 		}
 		const username = input.username.trim().toLowerCase();
 		const key = `${ctx.request?.ip ?? 'unknown'}:${username}`;
-		if (loginThrottle.blocked(key)) {
+		const nameKey = `name:${username}`;
+		if (loginThrottle.blocked(key) || usernameThrottle.blocked(nameKey)) {
 			throw new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
 		}
+		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
+		loginThrottle.fail(key);
+		usernameThrottle.fail(nameKey);
 		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
-		const ok = u?.isActive ? await verifyPassword(u.passwordHash, input.password) : false;
-		if (!u || !ok) {
+		const ok = await withHashSlot(async () => {
+			const good = u?.isActive ? await verifyPassword(u.passwordHash, input.password) : false;
 			if (!u || !u.isActive || !u.passwordHash) await burnVerify(input.password);
-			loginThrottle.fail(key);
+			return good;
+		});
+		if (!u || !ok) {
 			// One message for unknown user, wrong password, inactive and passwordless accounts.
 			throw new OpalError(401, 'invalid_credentials', 'Invalid username or password');
 		}
 		loginThrottle.reset(key);
-		startSession(ctx, u, 'password');
-		return { user: present(ctx.db, u) };
-	}),
+		usernameThrottle.release(nameKey);
+		return ctx.write!(() => {
+			startSession(ctx, u, 'password');
+			return { user: present(ctx.db, u) };
+		});
+	}, { verifyFirst: true }),
 
 	implement(contracts.auth.logout, (ctx) => {
 		if (ctx.actor.kind === 'user') {
@@ -352,10 +368,16 @@ export const authImpls = [
 		if (!u) throw new OpalError(404, 'not_found', 'This link is invalid or has expired');
 		const weak = validatePasswordStrength(input.password);
 		if (weak) throw invalid('password', weak);
-		const claimed = update(ctx, user, u.id, { passwordHash: await hashPassword(input.password) });
-		startSession(ctx, claimed, 'password');
-		return { user: present(ctx.db, claimed) };
-	}),
+		const passwordHash = await withHashSlot(() => hashPassword(input.password));
+		return ctx.write!(() => {
+			// The link works once: look again now that the queue is held.
+			const again = claimable(ctx, input.token);
+			if (!again) throw new OpalError(404, 'not_found', 'This link is invalid or has expired');
+			const claimed = update(ctx, user, again.id, { passwordHash });
+			startSession(ctx, claimed, 'password');
+			return { user: present(ctx.db, claimed) };
+		});
+	}, { verifyFirst: true }),
 
 	implement(contracts.auth.claimLinks.create, (ctx, input) => {
 		const u = ctx.db.select().from(user).where(eq(user.id, input.userId)).get();

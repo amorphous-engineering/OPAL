@@ -46,6 +46,12 @@ export interface Ctx {
 	invocation?: string;
 	cookies?: CookieJar;
 	request?: RequestInfo;
+	/**
+	 * Run fn as the write of this operation. Handlers of operations bound with `verifyFirst`
+	 * check credentials first and call this to enter the write queue; for every other
+	 * operation the registry already holds the transaction and fn simply runs.
+	 */
+	write?: <T>(fn: () => T) => Promise<T>;
 }
 
 export function actorUserId(actor: Actor): number | null {
