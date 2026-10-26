@@ -212,7 +212,7 @@ describe('organization settings', () => {
 			createdAt: ts, updatedAt: ts
 		}).run();
 		const got = (await call(admin, 'GET', '/settings/organization')).json;
-		expect(got.partNumbering).toEqual({ prefix: 'X', separator: '_', sequenceDigits: 3, format: '{prefix}{sep}{sequence}' });
+		expect(got.partNumbering).toEqual({ prefix: 'X', separator: '_', sequenceDigits: 3, format: '{prefix}{sep}{sequence}', variants: false });
 		expect(got.tiers[0]).toMatchObject({ defaultTracking: 'bulk', requireLot: false, autoSerial: false });
 		expect(got.customFields).toEqual({ a: 1 });
 		await call(admin, 'PUT', '/settings/organization', config({ tiers: [{ level: 3, name: 'Loose', code: 'L' }] }));

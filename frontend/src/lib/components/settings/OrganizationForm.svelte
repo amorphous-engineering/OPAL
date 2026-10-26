@@ -16,6 +16,7 @@
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { ApiError, opal } from '#lib/api.js';
+	import { DEFAULT_PART_NUMBER_FORMAT, PART_NUMBER_VARIABLES, variantFormat } from '@opal/shared';
 	import type { OrgSettings } from './types.js';
 
 	let { existing }: { existing: OrgSettings | null } = $props();
@@ -79,7 +80,9 @@
 	let prefix = $state(seed?.partNumbering.prefix ?? '');
 	let separator = $state(seed?.partNumbering.separator ?? '-');
 	let digits = $state(String(seed?.partNumbering.sequenceDigits ?? 4));
-	let format = $state(seed?.partNumbering.format ?? '{prefix}{sep}{tier_code}{sep}{sequence}');
+	let format = $state(seed?.partNumbering.format ?? DEFAULT_PART_NUMBER_FORMAT);
+	// A new organization numbers variants. An existing one keeps what it has.
+	let variants = $state(seed ? seed.partNumbering.variants : true);
 	let categories = $state<string[]>(seed ? [...seed.categories] : []);
 	let categoryDraft = $state('');
 	let fields = $state<FieldRow[]>(
@@ -121,26 +124,44 @@
 		fields.push({ id: nextId++, key: '', value: '' });
 	}
 
+	// The switch owns the suffix: on adds {sep}{variant}, off takes the suffix away.
+	function setVariants(on: boolean) {
+		variants = on;
+		if (on && !format.includes('{variant}')) format = `${format}{sep}{variant}`;
+		if (!on) {
+			const v = variantFormat(format);
+			format = (v.variants ? v.base : format).replaceAll('{variant}', '');
+		}
+	}
+
 	// Live preview: what the format renders for each tier, as the server would.
-	function render(t: TierRow, sequence: number): string {
+	function render(t: TierRow, sequence: number, variant = 1): string {
 		const vars: Record<string, string> = {
 			prefix,
 			sep: separator,
 			tier_code: t.code || '?',
 			tier_name: t.name || '?',
 			tier_level: String(t.level),
-			sequence: String(sequence).padStart(parseInt(digits, 10) || 4, '0')
+			sequence: String(sequence).padStart(parseInt(digits, 10) || 4, '0'),
+			variant: String(variant).padStart(3, '0')
 		};
 		return format.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? vars[k] : m));
 	}
+	const VARIABLES: readonly string[] = PART_NUMBER_VARIABLES;
 	const formatProblem = $derived.by(() => {
 		const unknown = [...format.matchAll(/\{(\w*)\}/g)]
 			.map((m) => m[1])
-			.filter(
-				(k) => !['prefix', 'sep', 'tier_code', 'tier_name', 'tier_level', 'sequence'].includes(k)
-			);
+			.filter((k) => !VARIABLES.includes(k));
 		if (unknown.length) return `Unknown variable {${unknown[0]}}`;
 		if (!format.includes('{sequence')) return 'The format needs {sequence}';
+		const v = variantFormat(format);
+		if (
+			variants &&
+			(!v.variants || !v.base.includes('{sequence}') || !v.joiner.replaceAll('{sep}', separator))
+		)
+			return 'With variants on, the format ends with a separator and {variant}, after {sequence}';
+		if (!variants && format.includes('{variant}'))
+			return 'With variants off, the format has no {variant}';
 		return null;
 	});
 
@@ -176,7 +197,8 @@
 				prefix,
 				separator,
 				sequenceDigits: parseInt(digits, 10),
-				format
+				format,
+				variants
 			},
 			categories,
 			customFields: custom
@@ -220,11 +242,12 @@
 		tiers = tiers.filter((x) => x.id !== t.id);
 	}
 
-	const previewColumns: Column<TierRow>[] = [
+	const previewColumns: Column<TierRow>[] = $derived([
 		{ key: 'level', label: 'Tier' },
 		{ key: 'first', label: 'First', mono: true },
+		...(variants ? [{ key: 'variant', label: 'Variant 002', mono: true }] : []),
 		{ key: 'tenth', label: 'Tenth', mono: true }
-	];
+	]);
 	const catalog = $derived(existing?.requirements ?? []);
 </script>
 
@@ -428,7 +451,7 @@
 		</Section>
 		<Section title="Part numbering">
 			<div class="grid grid-cols-1 gap-3 p-3">
-				<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
 					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="pn-prefix">Prefix</Label>
 						<Input id="pn-prefix" class="font-mono" bind:value={prefix} placeholder="e.g. RV1" />
@@ -450,6 +473,13 @@
 							{/each}
 						</NativeSelect.Root>
 					</div>
+					<div class="grid grid-cols-1 content-start gap-1.5">
+						<Label for="pn-variants">Variants</Label>
+						<div class="flex h-9 items-center gap-2">
+							<Switch id="pn-variants" checked={variants} onCheckedChange={setVariants} />
+							<span class="font-mono text-xs text-muted-foreground">{variants ? 'ON' : 'OFF'}</span>
+						</div>
+					</div>
 				</div>
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="pn-format">Format</Label>
@@ -460,7 +490,7 @@
 						aria-invalid={formatProblem ? true : undefined}
 					/>
 					<span class="font-mono text-xs text-muted-foreground"
-						>{'{prefix} {sep} {tier_code} {tier_name} {tier_level} {sequence}'}</span
+						>{PART_NUMBER_VARIABLES.map((v) => `{${v}}`).join(' ')}</span
 					>
 					{#if formatProblem}<span class="text-xs text-error">{formatProblem}</span>{/if}
 				</div>
@@ -472,7 +502,9 @@
 					{:else if formatProblem}
 						<span class="text-muted-foreground">—</span>
 					{:else}
-						<span class="text-info">{render(t, col.key === 'first' ? 1 : 10)}</span>
+						<span class="text-info"
+							>{render(t, col.key === 'tenth' ? 10 : 1, col.key === 'variant' ? 2 : 1)}</span
+						>
 					{/if}
 				{/snippet}
 			</DataTable>

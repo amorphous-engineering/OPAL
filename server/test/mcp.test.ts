@@ -55,6 +55,17 @@ describe('mcp', () => {
 		await client.close();
 	});
 
+	test('the variant operation is an MCP tool', async () => {
+		const app = createApp({ db: await openTestDb(), resolveActor: () => token });
+		const { client, connected } = connect(app);
+		await connected;
+		const { tools } = await client.listTools();
+		const tool = tools.find((t) => t.name === 'parts_variants_create');
+		expect(tool).toBeDefined();
+		expect(Object.keys(tool!.inputSchema.properties ?? {})).toEqual(expect.arrayContaining(['id', 'name', 'bom']));
+		await client.close();
+	});
+
 	test('invalid input is an error result naming the field', async () => {
 		const app = createApp({ db: (await openTestDb()), resolveActor: () => token });
 		const { client, connected } = connect(app);

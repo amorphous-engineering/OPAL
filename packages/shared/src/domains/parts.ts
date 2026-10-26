@@ -96,6 +96,47 @@ export const zPartUpdate = z.object({
 	...partFields
 });
 
+// ---------------------------------------------------------------- variants
+
+/** Where a new variant's BOM comes from: the source part as its one line, a copy, or nothing. */
+export const VARIANT_BOM = ['source', 'copy', 'empty'] as const;
+export type VariantBom = (typeof VARIANT_BOM)[number];
+
+/** Omit a field to copy it from the source; send null to clear a nullable field. */
+export const zVariantCreate = z.object({
+	id: zId,
+	name: z.string().trim().min(1).max(255).optional(),
+	unitOfMeasure: z.string().trim().min(1).max(20).optional(),
+	trackingType: z.enum(TRACKING_TYPES).optional(),
+	procurement: z.enum(PROCUREMENT).optional(),
+	...partFields,
+	bom: z.enum(VARIANT_BOM).default('source')
+});
+export type VariantCreate = z.input<typeof zVariantCreate>;
+
+export const zFamilyMember = z.object({
+	id: z.number().int(),
+	internalPn: z.string(),
+	/** Three digits. A number without a suffix counts as 001. */
+	variant: z.string(),
+	name: z.string(),
+	state: z.enum(PART_STATES),
+	trackingType: z.enum(TRACKING_TYPES)
+});
+
+/** The parts that share a base number. The base has no row: the numbers are the family. */
+export const zPartFamily = z.object({
+	/** Everything up to and including the sequence: `F-1337` of `F-1337-002`. */
+	baseNumber: z.string(),
+	/** True when the organization numbers variants. */
+	variants: z.boolean(),
+	/** The number the next variant takes. Null when variants are off or the codes are used up. */
+	nextNumber: z.string().nullable(),
+	/** In code order. */
+	members: z.array(zFamilyMember)
+});
+export type PartFamily = z.infer<typeof zPartFamily>;
+
 // ---------------------------------------------------------------- BOM
 
 export const zBomLine = z.object({
@@ -159,7 +200,8 @@ export const zPartDetail = z.object({
 	references: z.record(z.string(), z.number().int()),
 	deletable: z.boolean(),
 	bom: z.array(zBomLine),
-	whereUsed: z.array(zBomLine)
+	whereUsed: z.array(zBomLine),
+	family: zPartFamily
 });
 export type PartDetail = z.infer<typeof zPartDetail>;
 
@@ -372,7 +414,7 @@ const parts_ = {
 		name: 'parts.create',
 		method: 'POST',
 		path: '/parts',
-		summary: 'Create a draft part. A part number is assigned unless one is given.',
+		summary: 'Create a draft part. It takes the next number of its tier; with variants on, as variant 001.',
 		input: zPartCreate,
 		output: zPart,
 		access: 'signed-in',
@@ -392,7 +434,7 @@ const parts_ = {
 		name: 'parts.detail',
 		method: 'GET',
 		path: '/parts/:id/detail',
-		summary: 'The part page: the part, its lifecycle facts, BOM and where-used.',
+		summary: 'The part page: the part, its lifecycle facts, BOM, where-used and its variant family.',
 		input: z.object({ id: zId }),
 		output: zPartDetail,
 		access: 'signed-in',
@@ -535,4 +577,18 @@ const bom = {
 	})
 };
 
-export const parts = { ...parts_, bom };
+const variants = {
+	create: op({
+		name: 'parts.variants.create',
+		method: 'POST',
+		path: '/parts/:id/variants',
+		summary:
+			'Create a draft variant of a part: the next variant code of its family, same tier, attributes copied unless given. `bom` is source (one line: the source part), copy (its BOM lines) or empty. Refused while variants are off.',
+		input: zVariantCreate,
+		output: zPart,
+		access: 'signed-in',
+		mcp: true
+	})
+};
+
+export const parts = { ...parts_, bom, variants };

@@ -6,7 +6,7 @@
  * spellings; writes store camelCase. Keys this module does not know (the Onshape block)
  * stay in the blob untouched.
  */
-import { FALLBACK_SCHEME, numberCodec, type NumberCodec, OpalError, STORED_DIGITS, type PartNumbering, type OrgSettings, type Tier, type zOrgSettingsInput, notFound } from '@opal/shared';
+import { FALLBACK_SCHEME, numberCodec, showVariant, variantFormat, type NumberCodec, OpalError, STORED_DIGITS, type PartNumbering, type OrgSettings, type Tier, type zOrgSettingsInput, notFound } from '@opal/shared';
 import { inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { Ctx } from '../../context.ts';
@@ -20,7 +20,8 @@ const DEFAULT_NUMBERING: PartNumbering = {
 	prefix: '',
 	separator: '-',
 	sequenceDigits: 4,
-	format: '{prefix}{sep}{tier_code}{sep}{sequence}'
+	format: '{prefix}{sep}{tier_code}{sep}{sequence}',
+	variants: false
 };
 
 /** Semantics a tier gets when its blob predates the fields: the historical level rules. */
@@ -52,11 +53,15 @@ function readTier(t: Raw): Tier {
 
 function readNumbering(n: Raw | undefined): PartNumbering {
 	if (!n) return DEFAULT_NUMBERING;
+	const format = (n.format as string | undefined) ?? DEFAULT_NUMBERING.format;
 	return {
 		prefix: (n.prefix as string | undefined) ?? DEFAULT_NUMBERING.prefix,
 		separator: (n.separator as string | undefined) ?? DEFAULT_NUMBERING.separator,
 		sequenceDigits: pick<number>(n, 'sequenceDigits', 'sequence_digits') ?? DEFAULT_NUMBERING.sequenceDigits,
-		format: (n.format as string | undefined) ?? DEFAULT_NUMBERING.format
+		format,
+		// The format renders the numbers, so it decides. A blob from before the field has no
+		// {variant} and reads as off.
+		variants: variantFormat(format).variants
 	};
 }
 
@@ -101,9 +106,10 @@ export function getTier(config: OrgSettings | null, level: number): Tier | undef
 
 /**
  * Render a part number from the scheme. Placeholders: {prefix} {sep} {tier_code}
- * {tier_name} {tier_level} {sequence}; the sequence is zero-padded, never cut.
+ * {tier_name} {tier_level} {sequence} {variant}; the sequence is zero-padded, never cut. A
+ * new part is variant 001.
  */
-export function renderPartNumber(config: OrgSettings, tier: Tier, sequence: number): string {
+export function renderPartNumber(config: OrgSettings, tier: Tier, sequence: number, variant = 1): string {
 	const n = config.partNumbering;
 	const values: Record<string, string> = {
 		prefix: n.prefix,
@@ -112,7 +118,8 @@ export function renderPartNumber(config: OrgSettings, tier: Tier, sequence: numb
 		tier_name: tier.name,
 		tier_level: String(tier.level),
 		// Stored at full width; the API shows it at `sequenceDigits`.
-		sequence: String(sequence).padStart(STORED_DIGITS, '0')
+		sequence: String(sequence).padStart(STORED_DIGITS, '0'),
+		variant: showVariant(variant)
 	};
 	return n.format.replace(/\{(\w+)\}/g, (m, k: string) => values[k] ?? m);
 }
@@ -120,6 +127,12 @@ export function renderPartNumber(config: OrgSettings, tier: Tier, sequence: numb
 /** Part number when no organization is set up: PN-{tier}-{sequence}. */
 export function fallbackPartNumber(tierLevel: number, sequence: number): string {
 	return `PN-${tierLevel}-${String(sequence).padStart(STORED_DIGITS, '0')}`;
+}
+
+/** The joiner before a variant code (`-` of `F-1337-002`), rendered. */
+export function variantJoiner(config: OrgSettings | null): string {
+	const n = config?.partNumbering ?? FALLBACK_SCHEME;
+	return variantFormat(n.format).joiner.replaceAll('{sep}', n.separator);
 }
 
 const codecs = new WeakMap<Db, { raw: string | null; codec: NumberCodec }>();

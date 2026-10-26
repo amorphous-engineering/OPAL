@@ -7,6 +7,7 @@ import {
 	type Qty,
 	type zPartCreate,
 	type zPartUpdate,
+	type zVariantCreate,
 	conflict,
 	formatQty,
 	notFound,
@@ -19,7 +20,7 @@ import type { Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import { bomLine, part, user } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
-import { getProjectConfig, getTier, levelDefaults } from '../org/project.ts';
+import { getProjectConfig, getTier, levelDefaults, numbersFor } from '../org/project.ts';
 import { addLine, listLines, whereUsedLines } from './bom.ts';
 import { projectFieldDefs, validateMetadata } from './fields.ts';
 import {
@@ -29,6 +30,7 @@ import {
 	retirePartNumber
 } from './numbering.ts';
 import { hasTrackingLock, referenceCounts } from './references.ts';
+import { family, familyOf, nextVariantNumber } from './variants.ts';
 
 type Row = typeof part.$inferSelect;
 export type PartCreateInput = z.output<typeof zPartCreate>;
@@ -169,7 +171,8 @@ export function detail(ctx: Ctx, id: number): PartDetail {
 		references: refs,
 		deletable: row.state === 'draft' && Object.keys(refs).length === 0,
 		bom: listLines(ctx, id),
-		whereUsed: whereUsedLines(ctx, id)
+		whereUsed: whereUsedLines(ctx, id),
+		family: family(ctx.db, row)
 	};
 }
 
@@ -333,7 +336,8 @@ export function reserve(ctx: Ctx, input: { tier: number; count: number; namePref
 	const parts: Part[] = [];
 	for (let i = 0; i < input.count; i++) {
 		const pn = allocatePartNumber(ctx, input.tier);
-		const digits = /(\d+)$/.exec(pn)?.[1] ?? pn;
+		// The sequence names the reservation, not the variant code.
+		const digits = /(\d+)$/.exec(numbersFor(ctx.db).split(pn)?.base ?? pn)?.[1] ?? pn;
 		const row = insert(ctx, part, {
 			internalPn: pn,
 			name: `${prefix}-${digits}`,
@@ -347,4 +351,52 @@ export function reserve(ctx: Ctx, input: { tier: number; count: number; namePref
 		parts.push(toPart(row, names));
 	}
 	return { parts, firstPn: parts[0]!.internalPn, lastPn: parts.at(-1)!.internalPn };
+}
+
+/**
+ * A draft variant of a part: the next code of its family, in the same tier. Attributes come
+ * from the source unless given. Stock, history, attachments and links stay with the source.
+ */
+export function createVariant(ctx: Ctx, input: z.output<typeof zVariantCreate>): Part {
+	const src = getRow(ctx, input.id);
+	const config = getProjectConfig(ctx.db);
+	if (!config?.partNumbering.variants) {
+		throw conflict('variants_off', 'Part number variants are off; an admin turns them on in the numbering settings');
+	}
+	const keep = <T>(given: T | undefined, old: T): T => (given === undefined ? old : given);
+	const row = insert(ctx, part, {
+		internalPn: nextVariantNumber(ctx, familyOf(ctx.db, src.internalPn)),
+		externalPn: keep(blank(input.externalPn), src.externalPn),
+		name: input.name ?? src.name,
+		description: keep(blank(input.description), src.description),
+		category: keep(blank(input.category), src.category),
+		unitOfMeasure: input.unitOfMeasure ?? src.unitOfMeasure,
+		trackingType: input.trackingType ?? src.trackingType,
+		procurement: input.procurement ?? src.procurement,
+		tier: src.tier,
+		reorderPoint: keep(reorderQty(input.reorderPoint), src.reorderPoint),
+		isTooling: input.isTooling ?? src.isTooling,
+		calibrationIntervalDays: keep(input.calibrationIntervalDays, src.calibrationIntervalDays),
+		metadata:
+			input.metadata === undefined
+				? (src.metadata ?? null)
+				: input.metadata === null
+					? null
+					: validateMetadata(ctx.db, input.metadata, { requireAll: true }),
+		state: 'draft'
+	});
+	if (input.bom === 'source') {
+		addLine(ctx, { assemblyId: row.id, componentId: src.id, quantity: '1' });
+	} else if (input.bom === 'copy') {
+		for (const l of listLines(ctx, src.id)) {
+			addLine(ctx, {
+				assemblyId: row.id,
+				componentId: l.componentId,
+				quantity: l.quantity,
+				referenceDesignator: l.referenceDesignator,
+				notes: l.notes
+			});
+		}
+	}
+	return present(ctx, row);
 }

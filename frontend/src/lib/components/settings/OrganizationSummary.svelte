@@ -40,6 +40,7 @@
 					: organization.partNumbering.separator}
 			/>
 			<DetailRow label="Sequence digits" mono value={organization.partNumbering.sequenceDigits} />
+			<DetailRow label="Variants" value={organization.partNumbering.variants ? 'ON' : 'OFF'} />
 			<DetailRow label="Categories">
 				{#if organization.categories.length}
 					<span class="font-mono text-xs">{organization.categories.join(' · ')}</span>

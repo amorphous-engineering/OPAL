@@ -1,6 +1,7 @@
 /** Contracts for the org area: users, roles, gates, workcenters, projects, organization settings, onboarding. */
 import { z } from 'zod';
 import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
+import { variantFormat } from '../designators.ts';
 import { zTimestamp } from '../time.ts';
 import { zTimeDisplay } from './auth.ts';
 
@@ -508,31 +509,53 @@ export const PART_NUMBER_VARIABLES = [
 	'tier_code',
 	'tier_name',
 	'tier_level',
-	'sequence'
+	'sequence',
+	'variant'
 ] as const;
 
-export const zPartNumbering = z.object({
-	prefix: z.string().default(''),
-	separator: z.string().default('-'),
-	sequenceDigits: z.number().int().min(1).max(10).default(4),
-	format: z
-		.string()
-		.default('{prefix}{sep}{tier_code}{sep}{sequence}')
-		.superRefine((value, ctx) => {
-			const allowed = PART_NUMBER_VARIABLES.map((v) => `{${v}}`).join(', ');
-			const unknown = [...value.matchAll(/\{(\w*)\}/g)]
-				.map((m) => m[1]!)
-				.filter((v) => !(PART_NUMBER_VARIABLES as readonly string[]).includes(v));
-			if (unknown.length || /\{[^}]*$|^[^{]*\}/.test(value.replace(/\{\w+\}/g, ''))) {
-				ctx.addIssue({ code: 'custom', message: `unusable format; the variables are ${allowed}` });
-			} else if (!value.includes('{sequence}')) {
-				ctx.addIssue({
-					code: 'custom',
-					message: 'the format must contain {sequence}, or part numbers repeat'
-				});
-			}
-		})
-});
+/** The format a new organization starts with: every part gets variant 001. */
+export const DEFAULT_PART_NUMBER_FORMAT = '{prefix}{sep}{tier_code}{sep}{sequence}{sep}{variant}';
+
+export const zPartNumbering = z
+	.object({
+		prefix: z.string().default(''),
+		separator: z.string().default('-'),
+		sequenceDigits: z.number().int().min(1).max(10).default(4),
+		format: z
+			.string()
+			.default('{prefix}{sep}{tier_code}{sep}{sequence}')
+			.superRefine((value, ctx) => {
+				const allowed = PART_NUMBER_VARIABLES.map((v) => `{${v}}`).join(', ');
+				const unknown = [...value.matchAll(/\{(\w*)\}/g)]
+					.map((m) => m[1]!)
+					.filter((v) => !(PART_NUMBER_VARIABLES as readonly string[]).includes(v));
+				if (unknown.length || /\{[^}]*$|^[^{]*\}/.test(value.replace(/\{\w+\}/g, ''))) {
+					ctx.addIssue({ code: 'custom', message: `unusable format; the variables are ${allowed}` });
+				} else if (!value.includes('{sequence}')) {
+					ctx.addIssue({
+						code: 'custom',
+						message: 'the format must contain {sequence}, or part numbers repeat'
+					});
+				}
+			}),
+		/** Every part number ends in a 3-digit variant code: `F-0132-001`. */
+		variants: z.boolean().default(false)
+	})
+	.superRefine((n, ctx) => {
+		const count = n.format.split('{variant}').length - 1;
+		if (!n.variants) {
+			if (count) ctx.addIssue({ code: 'custom', path: ['format'], message: 'with variants off, the format must not contain {variant}' });
+			return;
+		}
+		const v = variantFormat(n.format);
+		if (count !== 1 || !v.variants || !v.base.includes('{sequence}') || !v.joiner.replaceAll('{sep}', n.separator)) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['format'],
+				message: 'with variants on, the format must end with a separator and {variant}, after {sequence}'
+			});
+		}
+	});
 export type PartNumbering = z.infer<typeof zPartNumbering>;
 
 export const zRequirementCatalogEntry = z.object({

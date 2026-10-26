@@ -8,6 +8,7 @@
 	import CauseDialog from '#lib/components/parts/CauseDialog.svelte';
 	import HistorySection from '#lib/components/parts/HistorySection.svelte';
 	import IdentitySection from '#lib/components/parts/IdentitySection.svelte';
+	import VariantsSection from '#lib/components/parts/VariantsSection.svelte';
 	import WhereUsedSection from '#lib/components/parts/WhereUsedSection.svelte';
 	import PartRequirementsSection from '#lib/components/requirements/PartRequirementsSection.svelte'; // added by requirements
 	import StockSection from '#lib/components/parts/StockSection.svelte'; // added by inventory
@@ -87,6 +88,9 @@
 			disabled={part.state !== 'active'}>RECEIVE STOCK</Button
 		>
 		<Button variant="outline" size="sm" href={`/parts/${part.id}/edit`}>EDIT</Button>
+		{#if detail.family.nextNumber}
+			<Button variant="outline" size="sm" href={`/parts/${part.id}/variant`}>VARIANT</Button>
+		{/if}
 		{#if part.state === 'active'}
 			<Button variant="outline" size="sm" onclick={() => (retiring = true)}>OBSOLETE</Button>
 		{/if}
@@ -125,6 +129,7 @@
 >
 	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<IdentitySection {detail} fields={data.fields} />
+		<VariantsSection {detail} />
 		<PluginPanels slot="part.side" recordId={part.id} number={part.internalPn} />
 		<ExternalLinks entityType="part" entityId={part.id} />
 	</div>

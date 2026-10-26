@@ -1,6 +1,7 @@
 <script lang="ts">
-	// The one part form: create and edit share it. Identity (tier, PN) is
-	// mutable only while the part is a draft; once active it renders as facts.
+	// The one part form: create, edit and variant share it. Identity (tier, PN) is
+	// mutable only while the part is a draft; once active it renders as facts. A variant
+	// keeps the source's tier and takes the family's next number, so both render as facts.
 	import { goto } from '$app/navigation';
 	import {
 		Section,
@@ -25,7 +26,8 @@
 		PartSchema,
 		Procurement,
 		SchemaTier,
-		TrackingType
+		TrackingType,
+		VariantBom
 	} from '@opal/shared';
 	import FormField from './FormField.svelte';
 	import PartPicker from './PartPicker.svelte';
@@ -38,15 +40,26 @@
 		schema,
 		part = null,
 		assembly: initialAssembly = null,
-		tier: initialTier = null
+		tier: initialTier = null,
+		variantOf = null,
+		nextNumber = null
 	}: {
 		schema: PartSchema;
 		part?: Part | null;
 		assembly?: PartRef | null;
 		tier?: number | null;
+		/** Variant mode: the new part copies this one. */
+		variantOf?: Part | null;
+		/** The number the variant takes, from the server. */
+		nextNumber?: string | null;
 	} = $props();
 	// The form is mounted once per page (keyed by part), so props seed local state on purpose.
 	const p0 = untrack(() => part);
+	const src = untrack(() => variantOf);
+	const variantPn = untrack(() => nextNumber);
+	const variantMode = src !== null;
+	// Every field starts from the part being edited, or from the variant's source.
+	const s0 = p0 ?? src;
 	const schema0 = untrack(() => schema);
 	const iAssembly = untrack(() => initialAssembly);
 	const iTier = untrack(() => initialTier);
@@ -54,23 +67,29 @@
 	const editing = p0 !== null;
 	const draft = !p0 || p0.state === 'draft';
 	const knownKeys = new Set(schema0.customFields.map((f) => f.key));
-	const existingMeta = p0?.metadata ?? {};
+	const existingMeta = s0?.metadata ?? {};
 
-	let tier = $state<number | null>(p0?.tier ?? iTier);
-	let name = $state(p0?.name ?? '');
-	let externalPn = $state(p0?.externalPn ?? '');
-	let procurement = $state<Procurement>(p0?.procurement ?? 'make');
-	let procurementTouched = $state(editing);
-	let tracking = $state<TrackingType>(p0?.trackingType ?? 'bulk');
-	let trackingTouched = $state(editing);
-	let category = $state(p0?.category ?? '');
-	let uom = $state(p0?.unitOfMeasure ?? 'ea');
-	let reorder = $state(p0?.reorderPoint ?? '');
-	let tooling = $state(p0?.isTooling ?? false);
-	let calibration = $state(p0?.calibrationIntervalDays?.toString() ?? '');
+	let tier = $state<number | null>(s0?.tier ?? iTier);
+	let name = $state(s0?.name ?? '');
+	let externalPn = $state(s0?.externalPn ?? '');
+	let procurement = $state<Procurement>(s0?.procurement ?? 'make');
+	let procurementTouched = $state(editing || variantMode);
+	let tracking = $state<TrackingType>(s0?.trackingType ?? 'bulk');
+	let trackingTouched = $state(editing || variantMode);
+	let category = $state(s0?.category ?? '');
+	let uom = $state(s0?.unitOfMeasure ?? 'ea');
+	let reorder = $state(s0?.reorderPoint ?? '');
+	let tooling = $state(s0?.isTooling ?? false);
+	let calibration = $state(s0?.calibrationIntervalDays?.toString() ?? '');
+	let bom = $state<VariantBom>('source');
+	const BOM_CHOICES: [VariantBom, string][] = [
+		['source', 'SOURCE PART'],
+		['copy', 'COPY BOM'],
+		['empty', 'EMPTY']
+	];
 	let assembly = $state<PartRef | null>(iAssembly);
 	let assemblyQty = $state('1');
-	let description = $state(p0?.description ?? '');
+	let description = $state(s0?.description ?? '');
 	const seed = (key: string, fallback: unknown) => existingMeta[key] ?? fallback ?? '';
 	let customText = $state<Record<string, string>>(
 		Object.fromEntries(
@@ -108,7 +127,7 @@
 	// Tier drives the numbering preview and the tracking default.
 	$effect(() => {
 		const t = tier;
-		if (t === null || !draft) return;
+		if (t === null || !draft || variantMode) return;
 		const mine = ++seq;
 		opal.parts
 			.nextPn({ tier: t })
@@ -125,9 +144,11 @@
 	if (p0) partQr(p0.id).then((u) => (qr = u));
 
 	const shownPn = $derived(
-		editing && !tierChanged
-			? (p0?.internalPn ?? '')
-			: (preview?.partNumber ?? '')
+		variantMode
+			? (variantPn ?? '')
+			: editing && !tierChanged
+				? (p0?.internalPn ?? '')
+				: (preview?.partNumber ?? '')
 	);
 
 	function onExternalInput() {
@@ -179,6 +200,17 @@
 				calibrationIntervalDays: tooling && calibration.trim() ? Number(calibration) : null,
 				metadata: buildMetadata()
 			};
+			if (variantMode) {
+				const created = await opal.parts.variants.create({
+					...fields,
+					id: src!.id,
+					name: name.trim(),
+					bom
+				});
+				toast.success(`${created.internalPn} created as draft`);
+				await goto(`/parts/${created.id}`);
+				return;
+			}
 			if (!editing) {
 				const body: PartCreate = { ...fields, name: name.trim(), tier };
 				if (assembly) {
@@ -218,7 +250,7 @@
 
 	function cancel() {
 		if (history.length > 1) history.back();
-		else goto(editing ? `/parts/${p0!.id}` : '/parts');
+		else goto(editing ? `/parts/${p0!.id}` : variantMode ? `/parts/${src!.id}` : '/parts');
 	}
 
 	function onkeydown(e: KeyboardEvent) {
@@ -239,7 +271,19 @@
 
 		<Section title="Identity">
 			<div class="grid grid-cols-1 gap-4 p-3">
-				{#if draft}
+				{#if variantMode}
+					<DetailTable>
+						<DetailRow label="Internal PN" value={variantPn} mono />
+						<DetailRow
+							label="Tier"
+							value={`T${src?.tier}${src?.tierName ? ` ${src.tierName.toUpperCase()}` : ''}`}
+						/>
+						<DetailRow label="Source" value={src?.internalPn} mono />
+					</DetailTable>
+					<FormField label="Name" for="pf-name" required>
+						<Input id="pf-name" bind:value={name} required />
+					</FormField>
+				{:else if draft}
 					<FormField label="Tier" required>
 						{#if schema.tiers.length > 5}
 							<NativeSelect.Root
@@ -361,7 +405,21 @@
 
 		<Section title="Structure and tooling">
 			<div class="grid grid-cols-1 gap-4 p-3 sm:grid-cols-2">
-				{#if !editing}
+				{#if variantMode}
+					<FormField label="BOM" class="sm:col-span-2">
+						<div class="flex flex-wrap gap-1.5" role="group" aria-label="BOM">
+							{#each BOM_CHOICES as [value, label] (value)}
+								<Button
+									type="button"
+									size="sm"
+									variant={bom === value ? 'default' : 'outline'}
+									aria-pressed={bom === value}
+									onclick={() => (bom = value)}>{label}</Button
+								>
+							{/each}
+						</div>
+					</FormField>
+				{:else if !editing}
 					<FormField label="Add to assembly" for="pf-assembly">
 						<PartPicker id="pf-assembly" bind:value={assembly} placeholder="None" clearable />
 					</FormField>
@@ -449,7 +507,13 @@
 		>
 			<Button type="button" variant="outline" onclick={cancel} disabled={busy}>CANCEL</Button>
 			<Button type="submit" disabled={busy}
-				>{busy ? 'SAVING' : editing ? 'SAVE' : 'CREATE DRAFT'}</Button
+				>{busy
+					? 'SAVING'
+					: editing
+						? 'SAVE'
+						: variantMode
+							? 'CREATE VARIANT'
+							: 'CREATE DRAFT'}</Button
 			>
 		</div>
 	</div>
