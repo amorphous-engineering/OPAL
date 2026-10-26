@@ -37,6 +37,7 @@ import { startSession } from '../auth/sessions.ts';
 import { upsertProfile } from '../org/profiles.ts';
 import { ensureFts } from '../platform/search.ts';
 import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
+import { renameCheckboxFields } from '../../db/boolean-fields.ts';
 import { buildDemoContent } from './demo.ts';
 
 export const DEMO_PREFIX = 'demo.';
@@ -89,6 +90,7 @@ async function openFile(path: string): Promise<Db> {
 	ensureFts(db);
 	// A database opened here goes live without createApp (exit demo, factory reset).
 	storeNumbersAtFullWidth(db);
+	renameCheckboxFields(db);
 	return db;
 }
 

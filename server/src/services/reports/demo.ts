@@ -20,6 +20,7 @@ import type { Db } from '../../db/client.ts';
 import { checkSource, importInto } from '../../import/legacy.ts';
 import { emptyReport } from '../../import/context.ts';
 import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
+import { renameCheckboxFields } from '../../db/boolean-fields.ts';
 import { dataDir } from '../../paths.ts';
 
 /** Where the seed file is. */
@@ -43,6 +44,7 @@ export function buildDemoContent(db: Db): void {
 		if (report.failedRows.length) console.warn(`Demo content: ${report.failedRows.length} rows failed`, report.failedRows.slice(0, 5));
 		// The imported numbers are at their 1.x width. The demo is switched in without createApp.
 		storeNumbersAtFullWidth(db, true);
+		renameCheckboxFields(db, true);
 	} finally {
 		seed.close();
 	}

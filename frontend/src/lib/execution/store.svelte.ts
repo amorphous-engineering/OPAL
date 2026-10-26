@@ -512,7 +512,7 @@ export class ExecutionStore implements DocController {
 		const data: Record<string, unknown> = {};
 		for (const f of fields) {
 			const v = this.fieldValue(step, f.name);
-			if (f.type === 'checkbox') data[f.name] = typeof v === 'boolean' ? v : null;
+			if (f.type === 'boolean') data[f.name] = typeof v === 'boolean' ? v : null;
 			else if (v === undefined || v === '' || (Array.isArray(v) && !v.length)) data[f.name] = null;
 			else data[f.name] = v;
 		}

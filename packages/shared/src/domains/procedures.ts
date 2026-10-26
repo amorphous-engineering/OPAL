@@ -26,7 +26,8 @@ export type ProcedureType = (typeof PROCEDURE_TYPES)[number];
 export const KIT_USAGES = ['consume', 'tooling'] as const;
 export type KitUsage = (typeof KIT_USAGES)[number];
 export const CALLOUT_KINDS = ['caution', 'info'] as const;
-export const DATA_FIELD_TYPES = ['text', 'number', 'checkbox', 'select', 'textarea', 'photo'] as const;
+/** `boolean` is answered TRUE or FALSE (shown as a choice). Older data says `checkbox`. */
+export const DATA_FIELD_TYPES = ['text', 'number', 'boolean', 'select', 'textarea', 'photo'] as const;
 export const PROCEDURE_SORT_KEYS = [
 	'number',
 	'name',
@@ -56,7 +57,8 @@ export type ProcedureCallout = z.infer<typeof zProcedureCallout>;
 export const zProcedureDataField = z.object({
 	name: z.string().trim().min(1).max(100),
 	label: z.string().optional(),
-	type: z.enum(DATA_FIELD_TYPES),
+	// `checkbox` is the old name of `boolean`: accepted on input, never sent.
+	type: z.preprocess((t) => (t === 'checkbox' ? 'boolean' : t), z.enum(DATA_FIELD_TYPES)),
 	required: z.boolean().optional(),
 	/** A unit code from `UNITS` (units.ts). Older versions may hold free text: show it as is. */
 	unit: z.string().optional(),

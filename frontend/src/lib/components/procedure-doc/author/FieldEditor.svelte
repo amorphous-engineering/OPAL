@@ -21,7 +21,7 @@
 	const FIELD_TYPES = [
 		['text', 'TEXT'],
 		['number', 'NUMBER'],
-		['checkbox', 'CHECKBOX'],
+		['boolean', 'BOOLEAN'],
 		['select', 'SELECT'],
 		['textarea', 'NOTES'],
 		['photo', 'PHOTO']
@@ -217,15 +217,12 @@
 						patch({ unit: e.currentTarget.value }, e.currentTarget.value ? [] : ['unit'])}
 				/>
 			{/if}
-			{#if f.type !== 'checkbox'}
-				<label class="flex items-center gap-1.5 text-xs">
-					<Checkbox
-						checked={!!f.required}
-						onCheckedChange={(c) =>
-							patch({ required: c ? true : undefined }, c ? [] : ['required'])}
-					/>Required
-				</label>
-			{/if}
+			<label class="flex items-center gap-1.5 text-xs">
+				<Checkbox
+					checked={!!f.required}
+					onCheckedChange={(c) => patch({ required: c ? true : undefined }, c ? [] : ['required'])}
+				/>Required
+			</label>
 			{#if f.type === 'photo'}
 				<label class="flex items-center gap-1.5 text-xs">
 					<Checkbox

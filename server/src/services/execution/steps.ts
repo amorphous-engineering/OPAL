@@ -19,7 +19,8 @@ const refuse = (message: string, status = 409) => new OpalError(status, 'step_bl
 // ---------------------------------------------------------------- data capture
 
 /**
- * Problems with captured values, by field name: required, invalid number, legacy min/max.
+ * Problems with captured values, by field name: required, invalid number, not true/false,
+ * legacy min/max.
  * A field with a spec is never refused for its value; the completion blocker `out_of_spec` handles it.
  */
 export function captureProblems(row: Row, data: Record<string, unknown> | null | undefined): Record<string, string> {
@@ -30,6 +31,11 @@ export function captureProblems(row: Row, data: Record<string, unknown> | null |
 		const v = values[f.name];
 		if (f.required && (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0))) {
 			out[f.name] = `${label} is required`;
+			continue;
+		}
+		// A boolean is answered true or false; false is an answer, not a missing value.
+		if (f.type === 'boolean' && v !== undefined && v !== null && typeof v !== 'boolean') {
+			out[f.name] = `${label}: answer TRUE or FALSE`;
 			continue;
 		}
 		if (f.type === 'number' && v !== undefined && v !== null && v !== '') {

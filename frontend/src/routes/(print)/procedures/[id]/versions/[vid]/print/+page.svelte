@@ -22,7 +22,7 @@
 {#snippet fieldLine(f: DataField)}
 	<div class="flex items-baseline gap-2 text-[10pt]">
 		<span class="min-w-32 font-bold uppercase">{f.label ?? f.name}{f.required ? ' *' : ''}</span>
-		{#if f.type === 'checkbox'}
+		{#if f.type === 'boolean'}
 			<span class="inline-block size-4 border-2 border-black"></span>
 			<span class="text-[9pt]">YES / NO</span>
 		{:else if f.type === 'select' && f.options?.length}

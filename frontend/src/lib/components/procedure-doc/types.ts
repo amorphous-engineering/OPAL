@@ -27,7 +27,7 @@ export const TERMINAL_STATUSES: readonly string[] = ['completed', 'signed_off', 
 export interface DocField {
 	name: string;
 	label?: string;
-	type: 'text' | 'number' | 'checkbox' | 'select' | 'textarea' | 'photo' | string;
+	type: 'text' | 'number' | 'boolean' | 'select' | 'textarea' | 'photo' | string;
 	required?: boolean;
 	/** A registry unit code; older templates hold free text. */
 	unit?: string;

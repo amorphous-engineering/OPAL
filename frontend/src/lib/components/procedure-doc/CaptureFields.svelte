@@ -150,7 +150,7 @@
 								>
 							{/if}
 						</div>
-					{:else if f.type === 'checkbox'}
+					{:else if f.type === 'boolean'}
 						{@const b = ctl.fieldValue(step, f.name)}
 						<!-- An explicit choice: unset until the operator picks TRUE or FALSE. -->
 						<ToggleGroup.Root

@@ -80,7 +80,7 @@
 						{/if}
 					{:else if !present(raw)}
 						<span class="text-muted-foreground">—</span>
-					{:else if f.type === 'checkbox'}
+					{:else if f.type === 'boolean'}
 						{raw ? 'TRUE' : 'FALSE'}
 					{:else}
 						<span class="break-words whitespace-pre-wrap">{raw}</span>

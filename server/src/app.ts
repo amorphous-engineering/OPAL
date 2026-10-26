@@ -10,6 +10,7 @@ import { impls } from './ops/index.ts';
 import { errorResponse, mountOps, type ResolveActor } from './registry.ts';
 import { ensureFts } from './services/platform/search.ts';
 import { storeNumbersAtFullWidth } from './db/full-width-numbers.ts';
+import { renameCheckboxFields } from './db/boolean-fields.ts';
 
 export interface AppOptions {
 	db: Db;
@@ -24,6 +25,7 @@ export function createApp({ db, resolveActor = actorResolver(db), web = false }:
 	ensureFts(db);
 	// After the FTS triggers exist, so the search index follows the rewrite.
 	storeNumbersAtFullWidth(db);
+	renameCheckboxFields(db);
 	const app = new Hono();
 	app.onError((err, c) => {
 		const { status, body } = errorResponse(err);
