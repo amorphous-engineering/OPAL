@@ -19,6 +19,11 @@ export const GATE_INFO: Record<string, { label: string; description: string; def
 		label: 'Approve resolutions',
 		description: 'Sign off an issue in review to Done, or close an issue.',
 		defaultRoles: ['quality']
+	},
+	'execution.skipRequired': {
+		label: 'Skip steps with required data',
+		description: 'Mark a step not applicable when it has required data fields or a sign-off slot that names a role.',
+		defaultRoles: ['engineer', 'quality']
 	}
 };
 

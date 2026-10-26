@@ -29,6 +29,13 @@
       "when": 1793001735768,
       "tag": "0003_plugins",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793035214216,
+      "tag": "0004_skip_required_gate",
+      "breakpoints": true
     }
   ]
 }

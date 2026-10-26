@@ -7,6 +7,7 @@ import { and, eq } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { execution, issue, signoff, stepNote, stepExecution } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
+import { gateRefusal, holdsGate } from '../org/gates.ts';
 import { holdsSlotRole, roleNamesOf } from '../org/roles.ts';
 import { attachmentsFor, detach, publish } from '../platform/index.ts';
 import { type Blocker, completeBlockers, describeBlockers, skipBlockers, slotGate } from './gates.ts';
@@ -255,6 +256,17 @@ export function skipStep(ctx: Ctx, input: { id: number; stepId: number; reason?:
 	requireActive(m);
 	const row = getRow(m, input.stepId);
 	if (isTerminal(row.se.status)) throw refuse(row.se.status === 'skipped' ? 'Step already skipped' : 'Cannot skip completed step');
+	// Skip is terminal, so it must not route around a commitment the step asks of a qualified person.
+	const roleSlots = row.signoffs.filter((x) => (x.role ?? '').trim());
+	const needsGate = !!row.dataSchema?.fields.some((f) => f.required) || roleSlots.length > 0;
+	if (needsGate && !holdsGate(ctx.db, ctx.actor, 'execution.skipRequired')) {
+		// A holder of every role the slots name may skip without the gate: they could sign each slot.
+		const holder = userId === null ? new Set<string>(['admin']) : roleNamesOf(ctx.db, userId);
+		const slotsOk = roleSlots.every((x) => holdsSlotRole(holder, x.role));
+		if (!(roleSlots.length > 0 && slotsOk && !row.dataSchema?.fields.some((f) => f.required))) {
+			throw forbidden(gateRefusal(ctx.db, 'execution.skipRequired'));
+		}
+	}
 	const st = holdState(ctx.db, m);
 	const holds: Blocker[] = skipBlockers(m, st, row);
 	if (holds.length) throw refuse(describeBlockers('skip', holds));

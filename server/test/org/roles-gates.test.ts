@@ -159,15 +159,16 @@ describe('assigning roles to a user', () => {
 });
 
 describe('gates', () => {
-	test('every signed-in user lists the gates; defaults map Engineer to disposition and Quality to approve', async () => {
+	test('every signed-in user lists the gates; defaults map Engineer to disposition and skip, Quality to approve and skip', async () => {
 		const { call, makeUser } = await setup();
 		const bob = makeUser('bob');
 		const gates = (await call(bob, 'GET', '/gates')).json;
-		expect(gates.map((g: any) => g.key)).toEqual(['issue.disposition', 'issue.approve']);
+		expect(gates.map((g: any) => g.key)).toEqual(['issue.disposition', 'issue.approve', 'execution.skipRequired']);
 		const roles = (await call(bob, 'GET', '/roles')).json;
 		const id = (key: string) => roles.find((r: any) => r.key === key).id;
 		expect(gates[0].roleIds).toEqual([id('engineer')]);
 		expect(gates[1].roleIds).toEqual([id('quality')]);
+		expect(gates[2].roleIds).toEqual([id('engineer'), id('quality')].sort((a, b) => a - b));
 	});
 
 	test('a role holder passes the gate its role is mapped to and nobody else but admins does', async () => {
