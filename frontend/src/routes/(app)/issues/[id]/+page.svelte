@@ -412,7 +412,7 @@
 		{#if voided}
 			<!-- a void issue is terminal -->
 		{:else if ticket === 'done'}
-			<Button size="sm" variant="outline" onclick={reopen}>REOPEN</Button>
+			<Button size="sm" variant="outline" disabled={cannotApprove} onclick={reopen}>REOPEN</Button>
 		{:else if ticket === 'pending' && !bearing}
 			<Button size="sm" onclick={() => transition('start')}>START WORK</Button>
 		{:else if ticket === 'in_work'}

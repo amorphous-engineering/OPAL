@@ -368,6 +368,31 @@ describe('closing', () => {
 		expect((await call('PATCH', `/issues/${i.id}`, { status: 'closed' })).status).toBe(403);
 	});
 
+	test('a closed issue refuses edits to closure fields until it is reopened', async () => {
+		const { raise, sign, call } = await setup();
+		const i = await raise({ issueType: 'non_conformance', containment: 'wo' });
+		await sign(i.id);
+		expect((await call('PATCH', `/issues/${i.id}`, { status: 'closed', correctiveAction: 'rework' })).status).toBe(200);
+		for (const body of [{ correctiveAction: '' }, { rootCause: 'x' }, { title: 'y' }, { priority: 'low' }]) {
+			const r = await call('PATCH', `/issues/${i.id}`, body);
+			expect(r.status).toBe(409);
+		}
+		const same = await call('PATCH', `/issues/${i.id}`, { status: 'closed' });
+		expect(same.body.correctiveAction).toBe('rework');
+	});
+
+	test('reopening a closed issue needs the approve gate and a person', async () => {
+		const { raise, call, as, admin, plain } = await setup();
+		const i = await raise();
+		await call('PATCH', `/issues/${i.id}`, { status: 'closed' });
+		as({ kind: 'token', userId: admin.id, isAdmin: true, tokenId: 1 });
+		expect((await call('PATCH', `/issues/${i.id}`, { status: 'open' })).status).toBe(403);
+		as(plain);
+		expect((await call('PATCH', `/issues/${i.id}`, { status: 'open' })).status).toBe(403);
+		as(admin);
+		expect((await call('PATCH', `/issues/${i.id}`, { status: 'open' })).status).toBe(200);
+	});
+
 	test('reopening clears the close and review stamps and derives the state again', async () => {
 		const { raise, call } = await setup();
 		const i = await raise();
@@ -601,6 +626,15 @@ describe('containment', () => {
 });
 
 describe('execution anchors and holds', () => {
+	test('a blocking issue cannot move to another work order before it is dispositioned', async () => {
+		const { raise, sign, call } = await setup();
+		const i = await raise({ containment: 'wo', executionId: 3 });
+		const r = await call('PATCH', `/issues/${i.id}`, { executionId: 4 });
+		expect(r.status).toBe(409);
+		await sign(i.id);
+		expect((await call('PATCH', `/issues/${i.id}`, { executionId: 4 })).status).toBe(200);
+	});
+
 	test('the execution cannot be detached while the issue blocks it', async () => {
 		const { raise, call, sign } = await setup();
 		const i = await raise({ containment: 'wo', executionId: 3 });

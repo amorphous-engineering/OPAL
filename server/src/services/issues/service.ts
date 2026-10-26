@@ -466,6 +466,14 @@ const assertNotVoid = (r: IssueRow) => {
 export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Issue {
 	const before = load(ctx, input.id);
 	assertNotVoid(before);
+	// A closed issue is a signed record: only the reopen changes it, and the reopen needs the
+	// gate the closure needed.
+	if (before.status === 'closed') {
+		const edits = Object.entries(input).filter(([k, v]) => k !== 'id' && k !== 'status' && v !== undefined);
+		if (input.status === 'open') requireApprove(ctx);
+		else if (edits.length)
+			throw refuse(`${before.issueNumber} is closed; reopen it before editing`);
+	}
 	const patch: Partial<typeof issue.$inferInsert> = {};
 
 	if (input.title !== undefined) patch.title = input.title;
@@ -498,6 +506,11 @@ export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Iss
 					`${before.issueNumber} is undispositioned; sign a disposition before detaching its work order`
 				);
 		} else {
+			// Moving the issue would release the hold on the first work order with no disposition.
+			if (isBlocking(before))
+				throw refuse(
+					`${before.issueNumber} is undispositioned; sign a disposition before moving it to another work order`
+				);
 			checkExecution(ctx, input.executionId);
 		}
 		// A step anchor must not stay behind in the old work order.
