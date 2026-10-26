@@ -263,6 +263,18 @@ describe('part update', () => {
 		void db;
 	});
 
+	test('tracking cannot change once the part has a stock record', async () => {
+		const { api, create, activate } = await setup();
+		const p = await create({ name: 'A', trackingType: 'bulk' });
+		await activate(p.id);
+		const rec = await api('POST', '/inventory', { partId: p.id, quantity: '100', location: 'A1', enforceTierRules: false });
+		expect(rec.json).toBeDefined();
+		expect(rec.status).toBe(201);
+		const res = await api('PATCH', `/parts/${p.id}`, { trackingType: 'serialized' });
+		expect(res.status).toBe(409);
+		expect(res.json.error).toBe('has_stock');
+	});
+
 	test('history lists changes newest first and skips bookkeeping columns', async () => {
 		const { api, create, activate } = await setup();
 		const p = await create({ name: 'A' });
