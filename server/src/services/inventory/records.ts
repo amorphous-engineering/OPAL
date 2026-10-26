@@ -35,6 +35,13 @@ export type StockRow = typeof stockRecord.$inferSelect;
 
 const DAY_MS = 86_400_000;
 
+/**
+ * One serialized receive writes a record, a move and audit rows per unit inside a single
+ * synchronous write transaction. 500 covers a large reel or lot of serialized units; larger
+ * intakes are split into several receives so one request cannot block every other write.
+ */
+export const MAX_SERIAL_UNITS_PER_RECEIVE = 500;
+
 /** Today's calendar date, YYYY-MM-DD, in the server's time zone (a calendar date has no zone). */
 export function today(offsetDays = 0): string {
 	const d = new Date(Date.now() + offsetDays * DAY_MS);
@@ -434,6 +441,12 @@ export function receiveStock(ctx: Ctx, input: ReceiveInput): StockRecord[] {
 			throw invalid('quantity', 'Serialized parts are received in whole units, at least 1');
 		}
 		const units = input.quantity / QTY_SCALE;
+		if (units > MAX_SERIAL_UNITS_PER_RECEIVE) {
+			throw invalid(
+				'quantity',
+				`A serialized receive creates at most ${MAX_SERIAL_UNITS_PER_RECEIVE} units; split it into smaller receives`
+			);
+		}
 		if (serial && units > 1) {
 			throw invalid('serialNumber', 'One serial number identifies one unit');
 		}

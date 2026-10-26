@@ -223,6 +223,18 @@ describe('receiving', () => {
 		expect((await s.call('GET', `/purchases/${po.id}/inventory`)).body).toHaveLength(2);
 	});
 
+	test('an over-receipt cannot create more serialized records than one receive allows', async () => {
+		const s = await setup();
+		const p = makePart(s.db, { tracking: 'serialized' });
+		const po = await orderedPo(s, p.id, '3');
+		const lineId = po.lines[0].id;
+		const r = await recv(s, po.id, [{ lineId, quantity: '501', location: 'A', allowOverReceipt: true }]);
+		expect(r.status).toBe(422);
+		expect(r.body.fields.quantity).toBeDefined();
+		expect(s.db.select().from(stockMove).all()).toHaveLength(0);
+		expect((await s.call('GET', `/purchases/${po.id}`)).body.status).toBe('ordered');
+	});
+
 	test('a tier that requires a lot refuses a bulk receipt without one, and the line says so', async () => {
 		const s = await setup();
 		setProject(s.db, [{ level: 2, name: 'Lot', code: 'L', requireLot: true, autoSerial: false }]);

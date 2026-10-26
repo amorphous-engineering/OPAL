@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { auditLog, stockMove, stockRecord } from '../../src/db/schema/index.ts';
+import { MAX_SERIAL_UNITS_PER_RECEIVE } from '../../src/services/inventory/records.ts';
 import { today } from '../../src/services/inventory/index.ts';
 import { makePart, receive, setProject, setup } from './helpers.ts';
 
@@ -36,6 +37,27 @@ describe('receiving stock', () => {
 		const r = await s.call('POST', '/inventory', { partId: p.id, quantity: '1.5', location: 'A1' });
 		expect(r.status).toBe(422);
 		expect(r.body.fields.quantity).toBeDefined();
+	});
+
+	test('one receive creates a bounded number of serialized records', async () => {
+		const s = await setup();
+		const p = makePart(s.db, { tracking: 'serialized' });
+		const over = String(MAX_SERIAL_UNITS_PER_RECEIVE + 1);
+		const huge = await s.call('POST', '/inventory', { partId: p.id, quantity: '900000000000', location: 'A1' });
+		expect(huge.status).toBe(422);
+		const r = await s.call('POST', '/inventory', { partId: p.id, quantity: over, location: 'A1' });
+		expect(r.status).toBe(422);
+		expect(r.body.error).toBe('invalid_input');
+		expect(r.body.fields.quantity).toBeDefined();
+		expect(s.db.select().from(stockRecord).all()).toHaveLength(0);
+		expect(s.db.select().from(stockMove).all()).toHaveLength(0);
+		const ok = await s.call('POST', '/inventory', {
+			partId: p.id,
+			quantity: String(MAX_SERIAL_UNITS_PER_RECEIVE),
+			location: 'A1'
+		});
+		expect(ok.status).toBe(201);
+		expect(ok.body.items).toHaveLength(MAX_SERIAL_UNITS_PER_RECEIVE);
 	});
 
 	test('an unknown part is not found', async () => {
