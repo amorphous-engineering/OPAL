@@ -22,8 +22,14 @@
 	import { opal } from '#lib/api.js';
 	import PermissionList from '#lib/components/plugins/PermissionList.svelte';
 	import PreviewDialog from '#lib/components/plugins/PreviewDialog.svelte';
-	import { PROCESS_TONES, pluginError, sourceLabel } from '#lib/components/plugins/state.js';
-	import type { PluginDetail, PluginPreview, PluginSettingDef } from '@opal/shared';
+	import ProjectMapField from '#lib/components/plugins/ProjectMapField.svelte';
+	import {
+		PROCESS_TONES,
+		pluginError,
+		pluginOptions,
+		sourceLabel
+	} from '#lib/components/plugins/state.js';
+	import type { PluginDetail, PluginOptions, PluginPreview, PluginSettingDef } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -63,12 +69,17 @@
 	}
 
 	// ---- settings form
-	type Draft = string | boolean;
+	type Draft = string | boolean | Record<string, string>;
 	function seed(p: PluginDetail): Record<string, Draft> {
 		const out: Record<string, Draft> = {};
 		for (const d of p.manifest.settings) {
 			const cur = p.settings.find((s) => s.key === d.key);
 			const v = cur?.value ?? d.default ?? null;
+			if (d.type === 'project-map') {
+				const obj = typeof v === 'string' ? safeJson(v) : v;
+				out[d.key] = obj && typeof obj === 'object' ? { ...(obj as Record<string, string>) } : {};
+				continue;
+			}
 			out[d.key] =
 				d.type === 'secret'
 					? ''
@@ -86,7 +97,27 @@
 		}
 		return out;
 	}
+	function safeJson(t: string): unknown {
+		try {
+			return JSON.parse(t);
+		} catch {
+			return null;
+		}
+	}
 	let draft = $state<Record<string, Draft>>(untrack(() => seed(data.plugin)));
+
+	// Values the running plugin offers (`optionsFrom`). Loaded again when it starts.
+	let options = $state<Record<string, PluginOptions['items'] | null>>({});
+	const running = $derived(proc.state === 'running');
+	$effect(() => {
+		const on = running;
+		const id = plugin.id;
+		for (const d of untrack(() => m.settings)) {
+			if (!d.optionsFrom) continue;
+			if (!on) options[d.key] = null;
+			else void pluginOptions(id, d.optionsFrom).then((o) => (options[d.key] = o));
+		}
+	});
 	let formError = $state<string | null>(null);
 	let saving = $state(false);
 	const isSet = (key: string) => plugin.settings.find((s) => s.key === key)?.set ?? false;
@@ -100,6 +131,7 @@
 			if (d.type === 'secret') {
 				if (v !== '') values[d.key] = v;
 			} else if (d.type === 'boolean') values[d.key] = v;
+			else if (d.type === 'project-map') values[d.key] = v;
 			else if (d.type === 'number') values[d.key] = v === '' ? null : Number(v);
 			else if (d.type === 'json') {
 				if (v === '') values[d.key] = null;
@@ -259,11 +291,27 @@
 										label={isSet(d.key) ? 'SET' : 'NOT SET'}
 									/>{/if}
 							</Label>
-							{#if d.type === 'select'}
+							{#if d.type === 'project-map'}
+								<ProjectMapField
+									id="s-{d.key}"
+									bind:value={draft[d.key] as Record<string, string>}
+									options={options[d.key] ?? null}
+								/>
+							{:else if d.type === 'select' && d.optionsFrom && !options[d.key]}
+								<Input
+									id="s-{d.key}"
+									class="font-mono"
+									autocomplete="off"
+									bind:value={draft[d.key] as string}
+								/>
+							{:else if d.type === 'select'}
+								{@const opts = d.optionsFrom
+									? (options[d.key] ?? [])
+									: (d.options ?? []).map((o) => ({ value: o, label: o }))}
 								<NativeSelect id="s-{d.key}" bind:value={draft[d.key] as string}>
 									{#if !d.required}<NativeSelectOption value="">—</NativeSelectOption>{/if}
-									{#each d.options ?? [] as o (o)}
-										<NativeSelectOption value={o}>{o}</NativeSelectOption>
+									{#each opts as o (o.value)}
+										<NativeSelectOption value={o.value}>{o.label}</NativeSelectOption>
 									{/each}
 								</NativeSelect>
 							{:else if d.type === 'json'}

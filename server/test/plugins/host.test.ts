@@ -238,6 +238,18 @@ describe('plugin operations', () => {
 		expect(stored('retries')).toBeUndefined();
 	});
 
+	test('plugins.settings stores a project map without empty rows, and any value of a plugin-filled select', async () => {
+		const res = await call('PUT', '/plugins/echo/settings', {
+			values: { board: 'b-42', projects: { 'MOJAVE-SPHINX': 'b-1', OTHER: '' } }
+		});
+		expect(res.status).toBe(200);
+		expect(stored('board')?.value).toBe('b-42');
+		expect(stored('projects')?.value).toEqual({ 'MOJAVE-SPHINX': 'b-1' });
+		const bad = await call('PUT', '/plugins/echo/settings', { values: { projects: ['b-1'] } });
+		expect(bad.status).toBe(422);
+		expect(Object.keys((await bad.json()).fields)).toEqual(['projects']);
+	});
+
 	test('plugins.settings keeps a secret that is left out and clears it with an empty string', async () => {
 		await call('PUT', '/plugins/echo/settings', { values: { apiKey: 'one', retries: 3, verbose: true, mode: 'fast', extra: { a: 1 } } });
 		expect(stored('apiKey')?.value).toBe('one');

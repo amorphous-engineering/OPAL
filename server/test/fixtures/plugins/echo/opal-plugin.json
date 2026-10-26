@@ -12,6 +12,8 @@
 		{ "key": "retries", "label": "Retries", "type": "number" },
 		{ "key": "verbose", "label": "Verbose", "type": "boolean" },
 		{ "key": "mode", "label": "Mode", "type": "select", "options": ["fast", "slow"] },
-		{ "key": "extra", "label": "Extra", "type": "json" }
+		{ "key": "extra", "label": "Extra", "type": "json" },
+		{ "key": "board", "label": "Board", "type": "select", "optionsFrom": "/options/boards" },
+		{ "key": "projects", "label": "Projects", "type": "project-map", "optionsFrom": "/options/boards" }
 	]
 }

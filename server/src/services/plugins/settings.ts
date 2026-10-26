@@ -28,11 +28,19 @@ function check(def: PluginSettingDef, v: unknown): { value: unknown } | { error:
 		case 'boolean':
 			return typeof v === 'boolean' ? { value: v } : { error: 'Must be true or false' };
 		case 'select':
+			// The plugin decides which values it offers: it checks them itself.
+			if (def.optionsFrom) return typeof v === 'string' ? { value: v } : { error: 'Must be text' };
 			return typeof v === 'string' && (def.options ?? []).includes(v)
 				? { value: v }
 				: { error: `Must be one of: ${(def.options ?? []).join(', ')}` };
 		case 'json':
 			return { value: v };
+		case 'project-map': {
+			if (!v || typeof v !== 'object' || Array.isArray(v)) return { error: 'Must map project codes to values' };
+			const entries = Object.entries(v).filter(([, x]) => x !== '' && x != null);
+			if (entries.some(([, x]) => typeof x !== 'string')) return { error: 'Each value must be text' };
+			return { value: Object.fromEntries(entries) };
+		}
 	}
 }
 

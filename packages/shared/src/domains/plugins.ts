@@ -28,7 +28,8 @@ export const PANEL_SLOT_RECORD: Record<PanelSlot, string> = {
 	'project.side': 'project'
 };
 
-export const PLUGIN_SETTING_TYPES = ['text', 'url', 'secret', 'number', 'boolean', 'select', 'json'] as const;
+/** `project-map`: an object of OPAL project code → value, one row per project in the form. */
+export const PLUGIN_SETTING_TYPES = ['text', 'url', 'secret', 'number', 'boolean', 'select', 'json', 'project-map'] as const;
 export type PluginSettingType = (typeof PLUGIN_SETTING_TYPES)[number];
 
 /** A relative path inside the plugin, without `..`. */
@@ -50,9 +51,20 @@ export const zPluginSettingDef = z.strictObject({
 	required: z.boolean().optional(),
 	/** For `select`. */
 	options: z.array(z.string().min(1).max(80)).max(50).optional(),
+	/**
+	 * For `select` and `project-map`: a path the running plugin serves (GET) with
+	 * `{ items: [{ value, label }] }`. The form offers these values.
+	 */
+	optionsFrom: z.string().regex(/^\/[^\s?#]*$/).max(200).optional(),
 	default: z.union([z.string(), z.number(), z.boolean()]).optional()
 });
 export type PluginSettingDef = z.infer<typeof zPluginSettingDef>;
+
+/** What a plugin's `optionsFrom` path returns. */
+export const zPluginOptions = z.object({
+	items: z.array(z.object({ value: z.string(), label: z.string() }))
+});
+export type PluginOptions = z.infer<typeof zPluginOptions>;
 
 export const zPluginPanelDef = z.strictObject({
 	slot: z.enum(PANEL_SLOTS),
