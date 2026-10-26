@@ -16,6 +16,18 @@ curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/i
 irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
 ```
 
+The installers take the release marked Latest. To install a prerelease or one exact release:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh -s -- --prerelease
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh -s -- --version v2.0.0-rc.21
+```
+
+```powershell
+$env:OPAL_PRERELEASE = "1"            # or: $env:OPAL_VERSION = "v2.0.0-rc.21"
+irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
+```
+
 Or download a binary from [GitHub Releases](https://github.com/amorphous-engineering/OPAL/releases/latest) and check it against `SHA256SUMS`.
 
 | Platform | File |

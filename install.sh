@@ -1,12 +1,21 @@
 #!/bin/sh
-# OPAL installer — downloads the latest release binary for macOS/Linux.
+# OPAL installer — downloads a release binary for macOS/Linux.
 # Usage: curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh
+#
+# Options (after `sh -s --` when piped):
+#   --prerelease       install the newest release, prereleases included
+#   --version <tag>    install one release, for example v2.0.0-rc.21
+# The same as environment variables: OPAL_PRERELEASE=1, OPAL_VERSION=<tag>.
+# With no option the installer takes the release GitHub marks as Latest.
 set -eu
 
 REPO="amorphous-engineering/OPAL"
 RELEASES_URL="https://github.com/${REPO}/releases"
 INSTALL_DIR="${HOME}/.local/bin"
 INSTALL_PATH="${INSTALL_DIR}/opal"
+
+WANT_VERSION="${OPAL_VERSION:-}"
+WANT_PRERELEASE="${OPAL_PRERELEASE:-}"
 
 # --- Output helpers ---
 
@@ -122,10 +131,32 @@ resolve_latest_tag() {
     fi
 }
 
+resolve_newest_tag() {
+    # The releases Atom feed lists prereleases too, newest first, and has no
+    # API rate limit. Drafts never appear in it.
+    FEED="$(download_text "https://github.com/${REPO}/releases.atom")" \
+        || err "Failed to read ${RELEASES_URL}.atom"
+    TAG="$(printf '%s\n' "$FEED" \
+        | sed -n 's|.*/releases/tag/\([^"]*\)".*|\1|p' | head -n 1)"
+    [ -n "$TAG" ] || err "Could not find a release in ${RELEASES_URL}.atom"
+}
+
 find_download_url() {
-    info "Resolving latest release..."
-    resolve_latest_tag
-    info "Latest release: ${TAG}"
+    if [ -n "$WANT_VERSION" ]; then
+        case "$WANT_VERSION" in
+            v*) TAG="$WANT_VERSION" ;;
+            *)  TAG="v${WANT_VERSION}" ;;
+        esac
+        info "Requested release: ${TAG}"
+    elif [ -n "$WANT_PRERELEASE" ] && [ "$WANT_PRERELEASE" != "0" ]; then
+        info "Resolving newest release, prereleases included..."
+        resolve_newest_tag
+        info "Newest release: ${TAG}"
+    else
+        info "Resolving latest release..."
+        resolve_latest_tag
+        info "Latest release: ${TAG}"
+    fi
     DOWNLOAD_URL="${RELEASES_URL}/download/${TAG}/${ASSET_NAME}"
     SUMS_URL="${RELEASES_URL}/download/${TAG}/SHA256SUMS"
 }
@@ -164,7 +195,8 @@ install_binary() {
     TMP_FILE="$(mktemp)"
     trap 'rm -f "$TMP_FILE"' EXIT
 
-    download "$DOWNLOAD_URL" "$TMP_FILE" || err "Download failed"
+    download "$DOWNLOAD_URL" "$TMP_FILE" \
+        || err "Download failed: release ${TAG} has no asset ${ASSET_NAME}, or the tag does not exist"
 
     # Sanity check: file should be at least 1 KB
     FILE_SIZE="$(wc -c < "$TMP_FILE" | tr -d ' ')"
@@ -203,9 +235,33 @@ check_path() {
     esac
 }
 
+# --- Arguments ---
+
+usage() {
+    printf "Usage: install.sh [--prerelease] [--version <tag>]\n"
+}
+
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --prerelease) WANT_PRERELEASE=1 ;;
+            --version)
+                [ $# -ge 2 ] || err "--version needs a tag, for example v2.0.0-rc.21"
+                WANT_VERSION="$2"
+                shift
+                ;;
+            --version=*) WANT_VERSION="${1#--version=}" ;;
+            -h|--help) usage; exit 0 ;;
+            *) usage >&2; err "Unknown option: $1" ;;
+        esac
+        shift
+    done
+}
+
 # --- Main ---
 
 main() {
+    parse_args "$@"
     printf "\n${BOLD}OPAL Installer${RESET}\n\n"
 
     detect_downloader
@@ -218,4 +274,4 @@ main() {
     printf "  Run ${GREEN}opal${RESET} to start.\n\n"
 }
 
-main
+main "$@"

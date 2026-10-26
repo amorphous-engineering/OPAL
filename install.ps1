@@ -1,9 +1,21 @@
-# OPAL installer for Windows — downloads the latest release binary.
+# OPAL installer for Windows — downloads a release binary.
 # Usage: irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
+#
+# Options, as environment variables (piping to iex takes no arguments):
+#   $env:OPAL_PRERELEASE = "1"         install the newest release, prereleases included
+#   $env:OPAL_VERSION = "v2.0.0-rc.21" install one release
+# Or as parameters: & ([scriptblock]::Create((irm <url>))) -Prerelease
+# With no option the installer takes the release GitHub marks as Latest.
+param(
+    [switch]$Prerelease,
+    [string]$Version
+)
 $ErrorActionPreference = "Stop"
 
 $Repo = "amorphous-engineering/OPAL"
-$ApiUrl = "https://api.github.com/repos/$Repo/releases/latest"
+$ApiBase = "https://api.github.com/repos/$Repo/releases"
+if (-not $Version -and $env:OPAL_VERSION) { $Version = $env:OPAL_VERSION }
+if (-not $Prerelease -and $env:OPAL_PRERELEASE -and $env:OPAL_PRERELEASE -ne "0") { $Prerelease = $true }
 $InstallDir = Join-Path $env:LOCALAPPDATA "OPAL"
 $InstallPath = Join-Path $InstallDir "opal.exe"
 
@@ -45,21 +57,33 @@ function Get-Platform {
 function Find-DownloadUrl {
     param([string]$AssetPattern)
 
-    Write-Info "Fetching latest release from GitHub..."
-
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $Headers = @{ Accept = "application/vnd.github.v3+json" }
 
     try {
-        $Release = Invoke-RestMethod -Uri $ApiUrl -Headers @{ Accept = "application/vnd.github.v3+json" }
+        if ($Version) {
+            $Wanted = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
+            Write-Info "Fetching release $Wanted from GitHub..."
+            $Release = Invoke-RestMethod -Uri "$ApiBase/tags/$Wanted" -Headers $Headers
+        } elseif ($Prerelease) {
+            Write-Info "Fetching newest release from GitHub, prereleases included..."
+            # The list is newest first and holds no drafts for anonymous callers.
+            # Windows PowerShell 5.1 sends a JSON array down a pipe as one object, so assign first.
+            $List = Invoke-RestMethod -Uri "${ApiBase}?per_page=10" -Headers $Headers
+            $Release = @($List) | Where-Object { -not $_.draft } | Select-Object -First 1
+        } else {
+            Write-Info "Fetching latest release from GitHub..."
+            $Release = Invoke-RestMethod -Uri "$ApiBase/latest" -Headers $Headers
+        }
     } catch {
         Write-Err "Failed to fetch release info from GitHub: $_"
     }
 
     $script:Tag = $Release.tag_name
     if (-not $Tag) {
-        Write-Err "Could not determine latest release tag"
+        Write-Err "Could not determine the release tag"
     }
-    Write-Info "Latest release: $Tag"
+    Write-Info "Release: $Tag"
 
     $Asset = $Release.assets | Where-Object { $_.name -like "*$AssetPattern*" } | Select-Object -First 1
     if (-not $Asset) {

@@ -85,5 +85,10 @@ jobs:
             gh release upload "$tag" release-assets/* --clobber
           else
             echo "Release $tag does not exist. Creating it."
-            gh release create "$tag" release-assets/* --generate-notes --latest
+            # A semver tag with a suffix (v2.0.0-rc.1) is a prerelease. It must not take the
+            # Latest mark, which is what the installers give by default.
+            case "$tag" in
+              *-*) gh release create "$tag" release-assets/* --generate-notes --prerelease --latest=false ;;
+              *)   gh release create "$tag" release-assets/* --generate-notes --latest ;;
+            esac
           fi
