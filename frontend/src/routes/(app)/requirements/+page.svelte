@@ -2,6 +2,8 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
+	import CaretRight from 'phosphor-svelte/lib/CaretRight';
+	import { cn } from '#lib/utils.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import {
 		DataTable,
@@ -432,13 +434,20 @@
 									{#if hasKids}
 										<button
 											type="button"
-											class="mr-1 inline-block w-3 font-mono text-muted-foreground hover:text-foreground"
+											class="mr-1 inline-flex w-3 align-middle text-muted-foreground hover:text-foreground"
 											aria-label={folded ? 'Expand' : 'Collapse'}
 											aria-expanded={!folded}
 											onclick={(e) => {
 												e.stopPropagation();
 												toggleFold(r.id);
-											}}>{folded ? '▸' : '▾'}</button
+											}}
+											><CaretRight
+												weight="bold"
+												class={cn(
+													'size-3 transition-transform duration-150',
+													!folded && 'rotate-90'
+												)}
+											/></button
 										>
 									{:else}<span class="mr-1 inline-block w-3"></span>{/if}
 									<a href={`/requirements/${r.id}`} class="mono text-info hover:underline"

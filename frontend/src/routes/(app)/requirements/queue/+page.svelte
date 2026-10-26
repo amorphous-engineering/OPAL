@@ -4,6 +4,7 @@
 	// COMMIT; leaving the page abandons the session.
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -218,7 +219,11 @@
 							{#if current.chain.length}
 								<span class="flex flex-wrap items-center gap-x-1 font-mono text-xs">
 									{#each current.chain as p, i (p.id)}
-										{#if i > 0}<span class="text-muted-foreground">▸</span>{/if}
+										{#if i > 0}<CaretRight
+												weight="bold"
+												class="size-3 text-muted-foreground"
+												aria-hidden="true"
+											/>{/if}
 										<a
 											href={`/requirements/${p.id}`}
 											class="text-info hover:underline"
@@ -228,7 +233,11 @@
 												>{p.lifecycleState}</span
 											>{/if}
 									{/each}
-									<span class="text-muted-foreground">▸</span><span>{current.reqNumber}</span>
+									<CaretRight
+										weight="bold"
+										class="size-3 text-muted-foreground"
+										aria-hidden="true"
+									/><span>{current.reqNumber}</span>
 								</span>
 							{:else}<span class="text-muted-foreground">Level-0 root</span>{/if}
 						</DetailRow>

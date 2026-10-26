@@ -2,6 +2,7 @@
 	// One step: a single dense line (number, title, who, evidence, state) that
 	// expands into its body. Expanded until complete; the host decides `open`.
 	// In author mode the title is a field and the line carries structure tools.
+	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
 	import CursorChips from './CursorChips.svelte';
@@ -78,10 +79,14 @@
 			}
 		}}
 	>
-		<span
-			class="w-3 shrink-0 text-center font-mono text-xs text-muted-foreground"
-			aria-hidden="true">{open ? '▾' : '▸'}</span
-		>
+		<CaretRight
+			weight="bold"
+			class={cn(
+				'size-3 shrink-0 text-muted-foreground transition-transform duration-150',
+				open && 'rotate-90'
+			)}
+			aria-hidden="true"
+		/>
 		<span class="w-10 shrink-0 font-mono text-xs font-medium tabular-nums">{step.number}</span>
 		{#if au}
 			<TitleInput {step} />

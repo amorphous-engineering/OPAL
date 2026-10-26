@@ -2,6 +2,7 @@
 	// One OP: a card with a header bar (number, title, state badges, claim, completion stamp)
 	// over its steps. An OP without sub-steps is its own single step and shows
 	// that step's body directly. Expanded until complete.
+	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { markdown } from '#lib/markdown.js';
 	import { cn } from '#lib/utils.js';
@@ -132,10 +133,14 @@
 			}
 		}}
 	>
-		<span
-			class="w-3 shrink-0 text-center font-mono text-xs text-muted-foreground"
-			aria-hidden="true">{open ? '▾' : '▸'}</span
-		>
+		<CaretRight
+			weight="bold"
+			class={cn(
+				'size-3 shrink-0 text-muted-foreground transition-transform duration-150',
+				open && 'rotate-90'
+			)}
+			aria-hidden="true"
+		/>
 		<span class="shrink-0 font-mono text-xs font-semibold">OP {op.number}</span>
 		{#if au}
 			<TitleInput step={op.step} class="font-medium" />

@@ -2,6 +2,7 @@
 	// Primary navigation in the header bar: Overview plus one dropdown per NAV group.
 	// A group button shows the active state when the current page is inside it. Below
 	// 900px the groups fold into a single MENU dropdown. NAV (lib/nav.ts) is the one list.
+	import CaretDown from 'phosphor-svelte/lib/CaretDown';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { page } from '$app/state';
 	import { ACCOUNT_GROUP, NAV, PROJECTS_NAV, isActive } from '#lib/nav.js';
@@ -32,7 +33,7 @@
 		{#each groups as g (g.label)}
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger class={cn(trigger, groupActive(g) && 'border-border text-info')}>
-					{g.label}<span aria-hidden="true" class="text-xs">▾</span>
+					{g.label}<CaretDown weight="bold" class="size-3" aria-hidden="true" />
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="start" class="min-w-40">
 					{#each g.items as item (item.href)}
@@ -56,7 +57,7 @@
 	<div class="min-[900px]:hidden">
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger class={cn(trigger, 'border-border')}>
-				Menu<span aria-hidden="true" class="text-xs">▾</span>
+				Menu<CaretDown weight="bold" class="size-3" aria-hidden="true" />
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="start" class="max-h-[80svh] min-w-48 overflow-y-auto">
 				<DropdownMenu.Item>

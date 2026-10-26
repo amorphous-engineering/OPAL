@@ -3,6 +3,7 @@
 	// dimension, found by symbol or name, shows the symbol. An old free-text unit shows as it
 	// was written until a registry unit is picked. Bind `value`, or pass `onchange`, or both.
 	import { UNITS, UNIT_DIMENSIONS, unitByCode } from '@opal/shared';
+	import CaretDown from 'phosphor-svelte/lib/CaretDown';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Command from '#lib/components/ui/command/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
@@ -53,7 +54,7 @@
 			>
 				{#if value}{known?.symbol ?? value}{:else}<span class="text-muted-foreground">UNIT</span
 					>{/if}
-				<span class="text-muted-foreground" aria-hidden="true">▾</span>
+				<CaretDown weight="bold" class="size-3 text-muted-foreground" aria-hidden="true" />
 			</Button>
 		{/snippet}
 	</Popover.Trigger>
