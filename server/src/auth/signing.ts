@@ -6,7 +6,7 @@
  * The secret is OPAL_AUTH_SECRET, else a file next to the database (`.opal_auth_secret`).
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dataDir } from '../paths.ts';
 
@@ -33,6 +33,12 @@ export function authSecret(): string {
 	}
 	cached = { dir, secret };
 	return secret;
+}
+
+/** Drop the file-based secret so the next use makes a new one; every signed payload issued before stops verifying. */
+export function rotateAuthSecret(): void {
+	cached = undefined;
+	rmSync(join(dataDir(), '.opal_auth_secret'), { force: true });
 }
 
 const mac = (raw: Buffer | string) => createHmac('sha256', authSecret()).update(raw).digest('hex');

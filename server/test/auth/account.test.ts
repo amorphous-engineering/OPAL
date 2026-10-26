@@ -93,6 +93,30 @@ describe('claim links', () => {
 		expect((await h.call('GET', `/auth/claim?token=${encodeURIComponent(token)}`)).status).toBe(404);
 	});
 
+	test('a claim link names one account instance, not a reusable user id', async () => {
+		const h = await harness();
+		const { u } = await passwordless(h);
+		const url = (t: string) => `/auth/claim?token=${encodeURIComponent(t)}`;
+		const other = signPayload({ kind: 'account-claim', uid: u.id, born: '2001-01-01T00:00:00.000Z', rev: u.updatedAt }, 60_000);
+		expect((await h.call('GET', url(other))).status).toBe(404);
+		const bare = signPayload({ kind: 'account-claim', uid: u.id }, 60_000);
+		expect((await h.call('GET', url(bare))).status).toBe(404);
+	});
+
+	test('a claim link dies when the password is reset', async () => {
+		const h = await harness();
+		const { admin, u } = await passwordless(h);
+		const { token } = await (await h.call('POST', '/auth/claim-links', { userId: u.id }, { cookie: admin })).json();
+		await Bun.sleep(5);
+		// Give the account a password, then reset it: it is passwordless again, with a new state.
+		h.db.update(user).set({ passwordHash: await hashPassword('some-password-1') }).where(eq(user.id, u.id)).run();
+		expect((await h.call('POST', `/users/${u.id}/reset-password`, {}, { cookie: admin })).status).toBe(200);
+		expect(h.db.select().from(user).where(eq(user.id, u.id)).get()!.passwordHash).toBeNull();
+		expect((await h.call('GET', `/auth/claim?token=${encodeURIComponent(token)}`)).status).toBe(404);
+		const fresh = await (await h.call('POST', '/auth/claim-links', { userId: u.id }, { cookie: admin })).json();
+		expect((await h.call('GET', `/auth/claim?token=${encodeURIComponent(fresh.token)}`)).status).toBe(200);
+	});
+
 	test('a link for a deactivated account is refused', async () => {
 		const h = await harness();
 		const { admin, u } = await passwordless(h);

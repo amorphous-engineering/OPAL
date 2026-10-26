@@ -228,4 +228,22 @@ describe('factory reset', () => {
 		t.db.insert(part).values({ internalPn: 'P-1', name: 'Phoenix', unitOfMeasure: 'ea', trackingType: 'bulk', procurement: 'buy', tier: 3, createdAt: ts, updatedAt: ts }).run();
 		expect(parts(t.db)).toEqual(['Phoenix']);
 	});
+
+	test('a factory reset invalidates signed links from before it', async () => {
+		const t = await boot();
+		const { signPayload, verifyPayload } = await import('../../src/auth/signing.ts');
+		// Other test files pin OPAL_AUTH_SECRET; the file-based secret is the one a reset rotates.
+		const pinned = process.env.OPAL_AUTH_SECRET;
+		delete process.env.OPAL_AUTH_SECRET;
+		try {
+			const token = signPayload({ kind: 'account-claim', uid: 1 }, 60_000);
+			expect(verifyPayload(token)).not.toBeNull();
+			expect((await t.call('POST', '/settings/factory-reset', { confirm: 'RESET' })).status).toBe(200);
+			await t.settled();
+			expect(verifyPayload(token)).toBeNull();
+			expect(verifyPayload(signPayload({ kind: 'x' }))).not.toBeNull();
+		} finally {
+			if (pinned) process.env.OPAL_AUTH_SECRET = pinned;
+		}
+	});
 });

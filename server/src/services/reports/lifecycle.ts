@@ -26,6 +26,7 @@ import { type LifecycleState, FACTORY_RESET_WORD, OpalError, conflict, now } fro
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { rotateAuthSecret } from '../../auth/signing.ts';
 import { SESSION_COOKIE } from '../../auth/tokens.ts';
 import { type Ctx, actorUserId } from '../../context.ts';
 import { type Db, openDb } from '../../db/client.ts';
@@ -286,6 +287,8 @@ export function factoryReset(ctx: Ctx, confirm: string): void {
 		unlinkSqlite(h.dbPath);
 		// Attachments: the content-addressed blobs and the avatars.
 		for (const sub of ['blobs', 'avatars']) rmSync(join(dataRoot, sub), { recursive: true, force: true });
+		// Signed links from the erased organization must not verify in the new one.
+		rotateAuthSecret();
 		swap(live, await openFile(h.dbPath));
 	});
 }

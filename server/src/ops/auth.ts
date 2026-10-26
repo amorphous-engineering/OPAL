@@ -362,7 +362,7 @@ export const authImpls = [
 			throw new OpalError(400, 'not_claimable', 'This account already has a password; no claim link is needed');
 		}
 		return {
-			token: signPayload({ kind: 'account-claim', uid: u.id }, CLAIM_LINK_TTL_MS),
+			token: signPayload({ kind: 'account-claim', uid: u.id, born: u.createdAt, rev: u.updatedAt }, CLAIM_LINK_TTL_MS),
 			expiresAt: addMs(CLAIM_LINK_TTL_MS)
 		};
 	}),
@@ -461,5 +461,9 @@ function claimable(ctx: Ctx, token: string): UserRow | undefined {
 	const payload = verifyPayload(token);
 	if (!payload || payload.kind !== 'account-claim' || typeof payload.uid !== 'number') return undefined;
 	const u = ctx.db.select().from(user).where(eq(user.id, payload.uid)).get();
-	return u && u.isActive && !u.passwordHash ? u : undefined;
+	if (!u || !u.isActive || u.passwordHash) return undefined;
+	// A user id is reused after a factory reset, and a password reset puts an account back in the
+	// passwordless state. createdAt names the account instance; updatedAt moves on every reset,
+	// so a link only works for the account state it was issued against.
+	return payload.born === u.createdAt && payload.rev === u.updatedAt ? u : undefined;
 }
