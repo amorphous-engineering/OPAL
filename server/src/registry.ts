@@ -9,6 +9,7 @@ import {
 	type OpInput,
 	type OpOutput,
 	forbidden,
+	matchesPattern,
 	unauthenticated
 } from '@opal/shared';
 import { appendFileSync } from 'node:fs';
@@ -47,6 +48,9 @@ export function checkAccess(db: Db, contract: OpContract, actor: Actor): void {
 	if (actor.kind === 'anonymous') throw unauthenticated();
 	if (contract.humanOnly && actor.kind === 'token') {
 		throw forbidden('This action needs a signed-in person, not an API token');
+	}
+	if (actor.kind === 'token' && actor.scopes && !matchesPattern(actor.scopes.ops, contract.name)) {
+		throw new OpalError(403, 'out_of_scope', `This token may not call ${contract.name}`);
 	}
 	if (contract.access !== 'signed-in' && !holdsGate(db, actor, contract.access)) throw forbidden();
 }

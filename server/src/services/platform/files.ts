@@ -9,7 +9,7 @@
  *   GET  /api/events/stream              server-sent events
  */
 import { existsSync } from 'node:fs';
-import { op, OpalError, unauthenticated, ATTACHMENT_KINDS, zAttachment, zId } from '@opal/shared';
+import { matchesPattern, op, OpalError, unauthenticated, ATTACHMENT_KINDS, zAttachment, zId } from '@opal/shared';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
@@ -131,11 +131,18 @@ export function mountFiles(app: Hono, db: Db, { resolveActor = actorResolver(db)
 	app.get('/api/events/stream', async (c) => {
 		const actor = await actorOf(c);
 		return streamSSE(c, async (stream) => {
-			const unsubscribe = subscribe(actorUserId(actor), (event) => {
-				// Events leave outside runOp: show numbers at the display width here.
-				const shown = displayOutput(event, numbersFor(db));
-				void stream.writeSSE({ data: JSON.stringify(shown) }).catch(() => undefined);
-			});
+			// A scoped token is a plugin: it gets only the event types its manifest lists.
+			const scopes = actor.kind === 'token' ? actor.scopes : undefined;
+			const unsubscribe = subscribe(
+				actorUserId(actor),
+				(event) => {
+					if (scopes && !matchesPattern(scopes.events, event.type)) return;
+					// Events leave outside runOp: show numbers at the display width here.
+					const shown = displayOutput(event, numbersFor(db));
+					void stream.writeSSE({ data: JSON.stringify(shown) }).catch(() => undefined);
+				},
+				{ plugin: !!scopes }
+			);
 			stream.onAbort(unsubscribe);
 			// First frame lets EventSource.onopen fire and proxies flush headers.
 			await stream.writeSSE({ data: JSON.stringify({ type: 'heartbeat', data: { status: 'alive' }, timestamp: new Date().toISOString() }) });

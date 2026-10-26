@@ -15,23 +15,28 @@ export interface PublishInput {
 	data?: Record<string, unknown>;
 	/** Deliver only to these users' streams. Omit to broadcast. */
 	userIds?: number[];
+	/** `plugins`: plugin streams only. Browsers never see it (record_changed carries every audited write). */
+	audience?: 'plugins';
 }
 
 type Listener = (event: OpalEvent) => void;
 interface Subscriber {
 	userId: number | null;
 	listener: Listener;
+	/** A plugin's stream: gets `audience: 'plugins'` events too. */
+	plugin: boolean;
 }
 
 const subscribers = new Set<Subscriber>();
-let queue: { event: OpalEvent; userIds?: number[] }[] = [];
+let queue: { event: OpalEvent; userIds?: number[]; audience?: 'plugins' }[] = [];
 let scheduled = false;
 
 /** Queue an event for every connected client (or the listed users). */
 export function publish(input: PublishInput): void {
 	queue.push({
 		event: { type: input.type, data: input.data ?? {}, timestamp: now() },
-		userIds: input.userIds
+		userIds: input.userIds,
+		audience: input.audience
 	});
 	if (scheduled) return;
 	scheduled = true;
@@ -42,8 +47,9 @@ function drain(): void {
 	scheduled = false;
 	const batch = queue;
 	queue = [];
-	for (const { event, userIds } of batch) {
+	for (const { event, userIds, audience } of batch) {
 		for (const sub of [...subscribers]) {
+			if (audience === 'plugins' && !sub.plugin) continue;
 			if (userIds && (sub.userId === null || !userIds.includes(sub.userId))) continue;
 			try {
 				sub.listener(event);
@@ -55,8 +61,8 @@ function drain(): void {
 }
 
 /** Add a listener. Returns the function that removes it. */
-export function subscribe(userId: number | null, listener: Listener): () => void {
-	const sub = { userId, listener };
+export function subscribe(userId: number | null, listener: Listener, opts: { plugin?: boolean } = {}): () => void {
+	const sub = { userId, listener, plugin: opts.plugin === true };
 	subscribers.add(sub);
 	return () => void subscribers.delete(sub);
 }

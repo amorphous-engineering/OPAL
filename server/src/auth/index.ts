@@ -49,7 +49,13 @@ function fromToken(db: Db, raw: string): Actor {
 				.run()
 		);
 	}
-	return { kind: 'token', userId: row.u.id, isAdmin: row.u.isAdmin, tokenId: row.t.id };
+	return {
+		kind: 'token',
+		userId: row.u.id,
+		isAdmin: row.u.isAdmin,
+		tokenId: row.t.id,
+		...(row.t.scopes ? { scopes: row.t.scopes } : {})
+	};
 }
 
 function fromCookie(db: Db, c: Context, raw: string | undefined): Actor {

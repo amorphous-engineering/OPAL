@@ -7,6 +7,7 @@ import { eq, getTableName } from 'drizzle-orm';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { Ctx } from './context.ts';
 import { auditLog } from './db/schema/index.ts';
+import { publish } from './services/platform/events.ts';
 
 // Drizzle's generic table types do not narrow to "a table with an id column",
 // so the helpers take any table and read `id` through a cast.
@@ -16,8 +17,13 @@ type AnyTable = SQLiteTable & { id: any; $inferInsert: any; $inferSelect: any };
 const REDACTED = new Set(['passwordHash', 'tokenHash', 'clientSecret']);
 function redact(row: unknown): unknown {
 	if (!row || typeof row !== 'object') return row ?? null;
+	// A row that marks itself secret (plugin_setting) hides its value.
+	const secret = (row as { secret?: unknown }).secret === true;
 	return Object.fromEntries(
-		Object.entries(row).map(([k, v]) => [k, REDACTED.has(k) && v != null ? '[redacted]' : v])
+		Object.entries(row).map(([k, v]) => [
+			k,
+			(REDACTED.has(k) || (secret && k === 'value')) && v != null ? '[redacted]' : v
+		])
 	);
 }
 
@@ -48,6 +54,22 @@ function audit(
 			after: redact(after)
 		})
 		.run();
+	publish({
+		type: 'record_changed',
+		data: { entity: getTableName(table), id: entityId, action, op: ctx.op, refs: refsOf(after ?? before) },
+		audience: 'plugins'
+	});
+}
+
+/**
+ * The ids a row points to (`issueId: 4`), so a plugin can tell which record a
+ * comment belongs to. Ids only: the row content stays behind the plugin's scope.
+ */
+function refsOf(row: unknown): Record<string, number> {
+	if (!row || typeof row !== 'object') return {};
+	const out: Record<string, number> = {};
+	for (const [k, v] of Object.entries(row)) if (/.Id$/.test(k) && typeof v === 'number') out[k] = v;
+	return out;
 }
 
 /** Insert values: everything except the timestamps, which the helper sets. */

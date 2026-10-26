@@ -7,6 +7,8 @@
 	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import ExecutionComments from './ExecutionComments.svelte';
+	import PluginPanels from '#lib/components/plugins/PluginPanels.svelte';
+	import ExternalLinks from '#lib/components/plugins/ExternalLinks.svelte';
 	import { fillColumn } from './fill-column.js';
 
 	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
@@ -103,4 +105,7 @@
 	{/if}
 
 	<ExecutionComments {store} />
+
+	<PluginPanels slot="execution.side" recordId={inst.id} number={inst.work_order ?? ''} />
+	<ExternalLinks entityType="execution" entityId={inst.id} />
 </div>

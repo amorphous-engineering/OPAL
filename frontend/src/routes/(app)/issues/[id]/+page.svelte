@@ -47,6 +47,8 @@
 	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
 	import { markdown } from '#lib/markdown.js';
 	import { stateLabel } from '#lib/format.js';
+	import PluginPanels from '#lib/components/plugins/PluginPanels.svelte';
+	import ExternalLinks from '#lib/components/plugins/ExternalLinks.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -833,6 +835,9 @@
 
 		<!-- added by risks -->
 		<IssueRisks {issue} {refresh} readonly={voided} />
+
+		<PluginPanels slot="issue.side" recordId={issue.id} number={issue.issueNumber} />
+		<ExternalLinks entityType="issue" entityId={issue.id} />
 	</div>
 </div>
 

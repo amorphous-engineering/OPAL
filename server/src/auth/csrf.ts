@@ -18,6 +18,11 @@ function hostOf(url: string): string {
 export const csrfGuard: MiddlewareHandler = async (c, next) => {
 	if (!UNSAFE.has(c.req.method)) return next();
 	if (/^Bearer\s/i.test(c.req.header('authorization') ?? '')) return next();
+	// Plugin proxy: webhooks carry no cookies, and a panel (sandboxed iframe, Origin: null)
+	// proves itself with its signed panel token. The proxy checks the token.
+	const path = c.req.path;
+	if (path.startsWith('/hooks/')) return next();
+	if (path.startsWith('/plugins/') && c.req.header('x-opal-panel')) return next();
 	const host = c.req.header('host') ?? new URL(c.req.url).host;
 	const origin = c.req.header('origin');
 	let bad = false;

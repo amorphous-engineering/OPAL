@@ -4,7 +4,14 @@ import type { Db } from './db/client.ts';
 export type Actor =
 	| { kind: 'anonymous' }
 	| { kind: 'user'; userId: number; isAdmin: boolean; sessionId: number }
-	| { kind: 'token'; userId: number; isAdmin: boolean; tokenId: number }
+	| {
+			kind: 'token';
+			userId: number;
+			isAdmin: boolean;
+			tokenId: number;
+			/** Limits of a scoped token (a plugin token). Absent: everything its user may do. */
+			scopes?: { ops: string[]; events: string[] };
+		}
 	| { kind: 'system' };
 
 export interface CookieOptions {

@@ -22,10 +22,11 @@ export const load: PageLoad = async ({ parent, fetch }) => {
 	]);
 
 	// --- other areas: sign-in (auth), lifecycle (reports) ---
-	const [signIn, auth, lifecycle] = await Promise.all([
+	const [signIn, auth, lifecycle, plugins] = await Promise.all([
 		optional(http.get<SignInConfig>('/auth/config')),
 		user.is_admin ? optional(http.get<AuthSettings>('/settings/auth')) : Promise.resolve(null),
-		optional(opal.using(fetch).reports.lifecycle.get({})) // added by reports
+		optional(opal.using(fetch).reports.lifecycle.get({})), // added by reports
+		user.is_admin ? optional(opal.using(fetch).plugins.list({})) : Promise.resolve(null)
 	]);
 
 	return {
@@ -36,6 +37,7 @@ export const load: PageLoad = async ({ parent, fetch }) => {
 		people: people ?? [],
 		signIn,
 		auth,
-		lifecycle
+		lifecycle,
+		plugins: plugins?.items ?? null
 	};
 };

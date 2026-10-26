@@ -12,6 +12,6 @@ export * from './issues.ts';
 export * from './risks.ts';
 export * from './requirements.ts';
 export * from './datasets.ts';
-export * from './extensions.ts';
+export * from './plugins.ts';
 export * from './reports.ts';
 export * from './legacy.ts';

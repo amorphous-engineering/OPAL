@@ -21,5 +21,5 @@ export * from './domains/issues.ts';
 export * from './domains/risks.ts';
 export * from './domains/requirements.ts';
 export * from './domains/datasets.ts';
-export * from './domains/extensions.ts';
+export * from './domains/plugins.ts';
 export * from './domains/reports.ts';

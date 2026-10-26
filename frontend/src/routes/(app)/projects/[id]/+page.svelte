@@ -20,6 +20,8 @@
 	import { lifecycleTone } from '#lib/components/requirements/lifecycle.js';
 	import { dispositionTone } from '#lib/components/risks/types.js';
 	import { stateLabel } from '#lib/format.js';
+	import PluginPanels from '#lib/components/plugins/PluginPanels.svelte';
+	import ExternalLinks from '#lib/components/plugins/ExternalLinks.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -291,6 +293,9 @@
 			</DataTable>
 		</Section>
 	</div>
+
+	<PluginPanels slot="project.side" recordId={project.id} number={project.code} />
+	<ExternalLinks entityType="project" entityId={project.id} />
 </div>
 
 <EditProjectDialog bind:open={editOpen} {project} onsaved={() => invalidateAll()} />

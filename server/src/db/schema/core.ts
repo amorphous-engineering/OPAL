@@ -48,6 +48,8 @@ export const apiToken = sqliteTable(
 		lastUsedAt: text('last_used_at'),
 		expiresAt: text('expires_at'),
 		revokedAt: text('revoked_at'),
+		/** Operation and event patterns the token may use. Null: everything its user may do. */
+		scopes: text('scopes', { mode: 'json' }).$type<{ ops: string[]; events: string[] }>(),
 		createdAt: createdAt()
 	},
 	(t) => [index('api_token_user_idx').on(t.userId)]

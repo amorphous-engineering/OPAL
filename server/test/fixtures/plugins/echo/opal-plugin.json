@@ -1,0 +1,17 @@
+{
+	"id": "echo",
+	"name": "Echo",
+	"version": "0.1.0",
+	"opal": ">=0.0.0",
+	"main": "main.js",
+	"permissions": { "ops": ["platform.health"], "events": ["issue_*"], "hooks": false },
+	"settings": [
+		{ "key": "greeting", "label": "Greeting", "type": "text", "default": "hi" },
+		{ "key": "apiKey", "label": "API key", "type": "secret", "required": true },
+		{ "key": "url", "label": "URL", "type": "url" },
+		{ "key": "retries", "label": "Retries", "type": "number" },
+		{ "key": "verbose", "label": "Verbose", "type": "boolean" },
+		{ "key": "mode", "label": "Mode", "type": "select", "options": ["fast", "slow"] },
+		{ "key": "extra", "label": "Extra", "type": "json" }
+	]
+}

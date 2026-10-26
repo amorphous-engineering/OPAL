@@ -2,7 +2,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { OpalError } from '@opal/shared';
+import { matchesPattern, OpalError } from '@opal/shared';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 import type { Actor } from '../context.ts';
@@ -21,7 +21,13 @@ function errorText(e: unknown): string {
 
 function buildServer(impls: Impl[], db: Db, actor: Actor): Server {
 	const tools = new Map<string, Impl>();
-	for (const impl of impls) if (impl.contract.mcp) tools.set(toolName(impl.contract.name), impl);
+	// A scoped token (a plugin) sees only the tools it may call; runOp refuses the rest anyway.
+	const scopes = actor.kind === 'token' ? actor.scopes : undefined;
+	for (const impl of impls) {
+		if (impl.contract.mcp && (!scopes || matchesPattern(scopes.ops, impl.contract.name))) {
+			tools.set(toolName(impl.contract.name), impl);
+		}
+	}
 
 	const server = new Server({ name: 'opal', version: '1.0.0' }, { capabilities: { tools: {} } });
 	server.setRequestHandler(ListToolsRequestSchema, () => ({

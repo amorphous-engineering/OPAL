@@ -14,6 +14,8 @@
 	import TestsSection from '#lib/components/parts/TestsSection.svelte'; // added by inventory
 	import SuppliersSection from '#lib/components/parts/SuppliersSection.svelte'; // added by purchasing
 	import PoLinesSection from '#lib/components/parts/PoLinesSection.svelte'; // added by purchasing
+	import PluginPanels from '#lib/components/plugins/PluginPanels.svelte';
+	import ExternalLinks from '#lib/components/plugins/ExternalLinks.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -123,6 +125,8 @@
 >
 	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<IdentitySection {detail} fields={data.fields} />
+		<PluginPanels slot="part.side" recordId={part.id} number={part.internalPn} />
+		<ExternalLinks entityType="part" entityId={part.id} />
 	</div>
 	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<BomSection {detail} />

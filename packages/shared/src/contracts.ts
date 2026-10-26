@@ -2,7 +2,7 @@
 import { auth } from './domains/auth.ts';
 import { datasets } from './domains/datasets.ts';
 import { execution } from './domains/execution.ts';
-import { extensions } from './domains/extensions.ts';
+import { plugins } from './domains/plugins.ts';
 import { inventory } from './domains/inventory.ts';
 import { issues } from './domains/issues.ts';
 import { org } from './domains/org.ts';
@@ -14,5 +14,5 @@ import { reports } from './domains/reports.ts';
 import { requirements } from './domains/requirements.ts';
 import { risks } from './domains/risks.ts';
 
-export const contracts = { auth, datasets, execution, extensions, inventory, issues, org, parts, platform, procedures, purchasing, reports, requirements, risks };
+export const contracts = { auth, datasets, execution, inventory, issues, org, parts, platform, plugins, procedures, purchasing, reports, requirements, risks };
 export type Contracts = typeof contracts;

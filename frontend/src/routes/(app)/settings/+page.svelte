@@ -6,6 +6,7 @@
 	import AuthSummary from '#lib/components/settings/AuthSummary.svelte';
 	import LifecycleSections from '#lib/components/settings/LifecycleSections.svelte';
 	import OrganizationSettings from '#lib/components/settings/OrganizationSettings.svelte';
+	import PluginsSection from '#lib/components/plugins/PluginsSection.svelte';
 	import RolesSettings from '#lib/components/settings/RolesSettings.svelte';
 	import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
 	import SystemSection from '#lib/components/settings/SystemSection.svelte';
@@ -43,6 +44,12 @@
 	{#if isAdmin && data.lifecycle}
 		<SettingsGroup id="lifecycle" title="Lifecycle">
 			<LifecycleSections lifecycle={data.lifecycle} />
+		</SettingsGroup>
+	{/if}
+
+	{#if isAdmin && data.plugins}
+		<SettingsGroup id="plugins" title="Plugins">
+			<PluginsSection plugins={data.plugins} />
 		</SettingsGroup>
 	{/if}
 
