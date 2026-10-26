@@ -20,7 +20,7 @@ import { numbersFor } from '../org/project.ts';
 import { actorResolver } from '../../auth/index.ts';
 import type { Db } from '../../db/client.ts';
 import { type Impl, implement, type ResolveActor, runOp } from '../../registry.ts';
-import { attach, blobPath, getBlob, maxUploadBytes, row } from './attachments.ts';
+import { attach, blobPath, guardAttach, getBlob, maxUploadBytes, row } from './attachments.ts';
 import { subscribe } from './events.ts';
 
 /** Not in the shared contract tree: the body is a file, so no JSON client call exists for it. */
@@ -41,19 +41,17 @@ const uploadContract = op({
 	mcp: false
 });
 
-const uploadImpl: Impl = implement(uploadContract, async (ctx, input) =>
-	attach(
-		ctx,
-		{ type: input.ownerType, id: input.ownerId },
-		{
-			name: input.file.name,
-			type: input.file.type,
-			bytes: new Uint8Array(await input.file.arrayBuffer()),
-			kind: input.kind,
-			note: input.note
-		}
-	)
-);
+const uploadImpl: Impl = implement(uploadContract, async (ctx, input) => {
+	const owner = { type: input.ownerType, id: input.ownerId };
+	guardAttach(ctx, owner);
+	return attach(ctx, owner, {
+		name: input.file.name,
+		type: input.file.type,
+		bytes: new Uint8Array(await input.file.arrayBuffer()),
+		kind: input.kind,
+		note: input.note
+	});
+});
 
 /** Types a browser may render in place. Everything else downloads (SVG and HTML can carry script). */
 const INLINE = /^(image\/(png|jpe?g|gif|webp)|application\/pdf|text\/plain)$/;

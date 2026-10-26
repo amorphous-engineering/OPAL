@@ -37,8 +37,12 @@ export const platformImpls = [
 	implement(c.attachments.list, (ctx, i) =>
 		attachments.listFor(ctx, { type: i.ownerType, id: i.ownerId }, i.kind)
 	),
-	implement(c.attachments.update, (ctx, i) => attachments.patch(ctx, i.id, i)),
+	implement(c.attachments.update, (ctx, i) => {
+		attachments.guardChange(ctx, i.id, 'patch');
+		return attachments.patch(ctx, i.id, i);
+	}),
 	implement(c.attachments.delete, (ctx, i) => {
+		attachments.guardChange(ctx, i.id, 'detach');
 		attachments.detach(ctx, i.id);
 		return { ok: true as const };
 	}),

@@ -134,6 +134,35 @@ function assertOwner(db: Db, owner: Owner): void {
 	}
 }
 
+// -------------------------------------------------------------------- guards
+
+export type OwnerChange =
+	| { action: 'attach' }
+	| { action: 'patch' | 'detach'; attachment: { id: number; kind: AttachmentKind | null } };
+
+type OwnerGuard = (ctx: Ctx, ownerId: number, change: OwnerChange) => void;
+const guards = new Map<string, OwnerGuard>();
+
+/**
+ * An area that freezes its records registers a veto per owner type. Only the operation path
+ * (`guardAttach`, `guardChange`) asks it. Internal callers of `attach` and `detach` do not.
+ */
+export function registerOwnerGuard(ownerType: string, guard: OwnerGuard): void {
+	guards.set(ownerType, guard);
+}
+
+export function guardAttach(ctx: Ctx, owner: Owner): void {
+	assertOwner(ctx.db, owner);
+	guards.get(owner.type)?.(ctx, owner.id, { action: 'attach' });
+}
+
+/** For the patch and detach operations: runs the guard of the attachment's owner type. */
+export function guardChange(ctx: Ctx, id: number, action: 'patch' | 'detach'): void {
+	const a = ctx.db.select().from(attachment).where(eq(attachment.id, id)).get();
+	if (!a) throw notFound('Attachment');
+	guards.get(a.ownerType)?.(ctx, a.ownerId, { action, attachment: { id: a.id, kind: a.kind } });
+}
+
 // ------------------------------------------------------------------- service
 
 type Row = typeof attachment.$inferSelect;

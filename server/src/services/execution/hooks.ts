@@ -3,7 +3,7 @@
  * entity names, search, workcenter work, the overview section, report rows, the execution
  * counter of procedures, undo, and the issue seams (`issueHooks`).
  */
-import type { ExecutionRef, RedlineOp, StepOption } from '@opal/shared';
+import { OpalError, type ExecutionRef, type RedlineOp, type StepOption } from '@opal/shared';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import { actorUserId } from '../../context.ts';
@@ -29,7 +29,8 @@ import { registerOverviewSection } from '../reports/overview.ts';
 import { registerExecutionReport } from '../reports/exports.ts';
 import { checkCompletion } from './steps.ts';
 import { PRIORITY_RANK } from './executions.ts';
-import { loadModel, opRowOf, progress } from './model.ts';
+import { isActive, loadModel, opRowOf, progress } from './model.ts';
+import { registerOwnerGuard } from '../platform/attachments.ts';
 
 // ---------------------------------------------------------------- parts, entities, search, undo
 
@@ -78,6 +79,48 @@ setExecutionCounter((db, ids) => {
 			.all()
 			.map((r) => [r.id, r.n])
 	);
+});
+
+// ---------------------------------------------------------------- attachment evidence
+
+/** Captures, step-note files and closeout files are evidence: frozen once the step is signed or the execution ends. */
+const frozen = (message: string) => new OpalError(409, 'evidence_frozen', message);
+
+function requireActiveExecution(db: Db, executionId: number): void {
+	const e = db.select({ status: execution.status }).from(execution).where(eq(execution.id, executionId)).get();
+	if (!e || !isActive(e)) throw frozen('Execution is not active; its attachments cannot change');
+}
+
+function referencedBySignedCapture(db: Db, stepId: number, attachmentId: number): boolean {
+	const se = db.select({ data: stepExecution.dataCaptured }).from(stepExecution).where(eq(stepExecution.id, stepId)).get();
+	const signed = db.select({ id: signoff.id }).from(signoff).where(eq(signoff.stepExecutionId, stepId)).get();
+	if (!se?.data || !signed) return false;
+	return Object.values(se.data).some((v) => (Array.isArray(v) ? v : [v]).includes(attachmentId));
+}
+
+registerOwnerGuard('step_execution', (ctx, stepId, change) => {
+	const se = ctx.db.select().from(stepExecution).where(eq(stepExecution.id, stepId)).get();
+	if (!se) return;
+	requireActiveExecution(ctx.db, se.executionId);
+	if (se.status === 'completed' || se.status === 'awaiting_signoff') {
+		throw frozen(`Step is ${se.status === 'completed' ? 'completed' : 'awaiting sign-off'}; its attachments cannot change`);
+	}
+	if (change.action === 'detach' && referencedBySignedCapture(ctx.db, stepId, change.attachment.id)) {
+		throw frozen('Attachment is part of the signed data of this step');
+	}
+});
+
+// Notes and closeout files are appended after the execution ends (a post mortem), so adding stays open.
+// Re-kinding or removing one is refused once the execution is not active.
+registerOwnerGuard('step_note', (ctx, noteId, change) => {
+	if (change.action === 'attach') return;
+	const n = ctx.db.select({ stepId: stepNote.stepExecutionId }).from(stepNote).where(eq(stepNote.id, noteId)).get();
+	const se = n && ctx.db.select({ executionId: stepExecution.executionId }).from(stepExecution).where(eq(stepExecution.id, n.stepId)).get();
+	if (se) requireActiveExecution(ctx.db, se.executionId);
+});
+
+registerOwnerGuard('execution', (ctx, executionId, change) => {
+	if (change.action !== 'attach') requireActiveExecution(ctx.db, executionId);
 });
 
 // ---------------------------------------------------------------- workcenters
