@@ -116,6 +116,8 @@ export function signStep(
 	ctx: Ctx,
 	input: { id: number; stepId: number; slot: number; dataCaptured?: Record<string, unknown> | null; notes?: string | null }
 ): SignResult {
+	// Every signoff row is a human signature; the contracts are humanOnly, and this keeps any other caller honest.
+	if (ctx.actor.kind === 'token') throw forbidden('This action needs a signed-in person, not an API token');
 	const userId = actorUserId(ctx.actor);
 	let m = loadModel(ctx.db, input.id);
 	requireActive(m);

@@ -386,3 +386,26 @@ describe('the document', () => {
 		expect(d.ops[0].steps[0].completed.initials).toBe('AU');
 	});
 });
+
+describe('step signatures', () => {
+	test('a token actor cannot sign a step', async () => {
+		const t = await setup();
+		const pid = await t.published(['A']);
+		const e = await t.cut(pid);
+		const sid = await t.stepOf(e.id, '1');
+		const path = `/executions/${e.id}/steps/${sid}`;
+		for (const [url, body] of [
+			[`${path}/complete`, {}],
+			[`${path}/signoffs/0`, {}],
+			[`${path}/signoff`, {}]
+		] as const) {
+			const r = await t.call('POST', url, body, t.token);
+			expect(r.status).toBe(403);
+		}
+		// The service refuses too, so a caller that skips the contract still cannot write a signoff row.
+		const { signStep } = await import('../../src/services/execution/steps.ts');
+		expect(() => signStep({ db: t.db, actor: t.token } as any, { id: e.id, stepId: sid, slot: 0 })).toThrow('signed-in person');
+		expect((await t.get(e.id)).status).toBe('cut');
+		expect((await t.complete(e.id, '1')).status).toBe(200);
+	});
+});

@@ -935,7 +935,8 @@ export const execution = {
 		}),
 		output: zSignResult,
 		access: 'signed-in',
-		mcp: true
+		mcp: true,
+		humanOnly: true
 	}),
 	sign: op({
 		name: 'execution.sign',
@@ -950,7 +951,8 @@ export const execution = {
 		}),
 		output: zSignResult,
 		access: 'signed-in',
-		mcp: true
+		mcp: true,
+		humanOnly: true
 	}),
 	signoff: op({
 		name: 'execution.signoff',
@@ -960,7 +962,8 @@ export const execution = {
 		input: z.object(zStepPath),
 		output: zSignResult,
 		access: 'signed-in',
-		mcp: true
+		mcp: true,
+		humanOnly: true
 	}),
 	skip: op({
 		name: 'execution.skip',
