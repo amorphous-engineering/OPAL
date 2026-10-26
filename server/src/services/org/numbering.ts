@@ -13,6 +13,15 @@ import { fallbackPartNumber, getProjectConfig, getTier, renderPartNumber } from 
 
 const sequenceKey = (tier: number) => `PN-${tier}`;
 
+/** The stored form has 10 digits, so a tier counter stays in 1..MAX_SEQUENCE. */
+const MAX_SEQUENCE = 9_999_999_999;
+/** Skips past taken numbers per allocation. A bound keeps a bad counter from looping for ever. */
+const MAX_SKIPS = 10_000;
+
+function exhausted(tier: number): OpalError {
+	return new OpalError(409, 'numbers_exhausted', `No free part number found for tier ${tier}`);
+}
+
 function format(db: Db, tier: number, sequence: number): string {
 	const config = getProjectConfig(db);
 	if (!config) return fallbackPartNumber(tier, sequence);
@@ -31,10 +40,13 @@ export function pnExists(db: Db, pn: string): boolean {
  * override, an import); each skip uses up its number too.
  */
 export function nextPartNumber(ctx: Pick<Ctx, 'db'>, tier: number): string {
-	for (;;) {
-		const pn = format(ctx.db, tier, nextValue(ctx, sequenceKey(tier)));
+	for (let i = 0; i < MAX_SKIPS; i++) {
+		const sequence = nextValue(ctx, sequenceKey(tier));
+		if (!Number.isSafeInteger(sequence) || sequence > MAX_SEQUENCE) throw exhausted(tier);
+		const pn = format(ctx.db, tier, sequence);
 		if (!pnExists(ctx.db, pn)) return pn;
 	}
+	throw exhausted(tier);
 }
 
 /** The next part number of a tier without using it up. */
@@ -45,14 +57,18 @@ export function peekNextPartNumber(db: Db, tier: number): { partNumber: string; 
 		.where(eq(designatorSequence.prefix, sequenceKey(tier)))
 		.get();
 	let candidate = (seq?.lastValue ?? 0) + 1;
-	while (pnExists(db, format(db, tier, candidate))) candidate += 1;
+	for (let i = 0; ; i++) {
+		if (!Number.isSafeInteger(candidate) || candidate > MAX_SEQUENCE || i >= MAX_SKIPS) throw exhausted(tier);
+		if (!pnExists(db, format(db, tier, candidate))) break;
+		candidate += 1;
+	}
 	return { partNumber: format(db, tier, candidate), sequence: candidate };
 }
 
 /** Build the regex that matches valid part numbers of a tier; `sequence` is a named group. */
 export function partNumberPattern(db: Db, tier: number): RegExp {
 	const config = getProjectConfig(db);
-	if (!config) return new RegExp(`^PN-${tier}-(?<sequence>\\d+)$`);
+	if (!config) return new RegExp(`^PN-${tier}-(?<sequence>\\d{1,10})$`);
 	const t = getTier(config, tier);
 	if (!t) throw new OpalError(422, 'unknown_tier', `Unknown tier level: ${tier}`);
 	const n = config.partNumbering;
@@ -69,7 +85,7 @@ export function partNumberPattern(db: Db, tier: number): RegExp {
 	for (const m of n.format.matchAll(/\{(\w+)\}/g)) {
 		out += esc(n.format.slice(pos, m.index));
 		const token = m[1]!;
-		if (token === 'sequence') out += '(?<sequence>\\d+)';
+		if (token === 'sequence') out += '(?<sequence>\\d{1,10})';
 		else if (token in values) out += esc(values[token]!);
 		else throw new OpalError(422, 'invalid_format', `Unknown placeholder {${token}} in part numbering format`);
 		pos = m.index + m[0].length;
@@ -87,15 +103,26 @@ export function validatePartNumber(db: Db, tier: number, pn: string): number {
 			`'${pn}' does not match the tier-${tier} part number format (e.g. ${format(db, tier, 1)})`
 		);
 	}
-	return Number(match.groups!.sequence);
+	const sequence = Number(match.groups!.sequence);
+	if (sequence < 1 || sequence > MAX_SEQUENCE) {
+		throw new OpalError(422, 'invalid_part_number', `'${pn}' has a sequence outside 1 to ${MAX_SEQUENCE}`);
+	}
+	return sequence;
+}
+
+/** A valid manual part number in the stored form (10-digit sequence), with its sequence. */
+export function canonicalPartNumber(db: Db, tier: number, pn: string): { pn: string; sequence: number } {
+	const sequence = validatePartNumber(db, tier, pn);
+	return { pn: format(db, tier, sequence), sequence };
 }
 
 /**
  * Check a manual part number and move the tier counter past it, so an automatic number never
  * reuses it. Throws 409 when a part holds the number. Returns the sequence.
  */
-export function registerPartNumber(ctx: Pick<Ctx, 'db'>, tier: number, pn: string): number {
-	const sequence = validatePartNumber(ctx.db, tier, pn);
+export function registerPartNumber(ctx: Pick<Ctx, 'db'>, tier: number, input: string): number {
+	// The check runs on the stored form, so an alias of a used sequence at another width is a duplicate.
+	const { pn, sequence } = canonicalPartNumber(ctx.db, tier, input);
 	if (pnExists(ctx.db, pn)) throw new OpalError(409, 'duplicate', `Part number ${pn} is already taken`);
 	const key = sequenceKey(tier);
 	const row = ctx.db.select().from(designatorSequence).where(eq(designatorSequence.prefix, key)).get();

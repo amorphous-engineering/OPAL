@@ -10,11 +10,11 @@ import type { Db } from '../../db/client.ts';
 import { retiredPartNumber } from '../../db/schema/index.ts';
 import { insert } from '../../write.ts';
 import {
+	canonicalPartNumber,
 	nextPartNumber,
 	peekNextPartNumber,
 	pnExists,
-	registerPartNumber,
-	validatePartNumber
+	registerPartNumber
 } from '../org/numbering.ts';
 import { getProjectConfig, getTier, levelDefaults } from '../org/project.ts';
 
@@ -60,16 +60,16 @@ export function defaultTracking(db: Db, level: number): 'serialized' | 'bulk' {
 export function assignPartNumber(ctx: Ctx, tier: number, override: string | undefined): string {
 	requireConfiguredTier(ctx.db, tier);
 	if (!override) return allocatePartNumber(ctx, tier);
-	validatePartNumber(ctx.db, tier, override);
-	if (isRetired(ctx.db, override)) {
+	const { pn } = canonicalPartNumber(ctx.db, tier, override);
+	if (isRetired(ctx.db, pn)) {
 		throw new OpalError(
 			409,
 			'duplicate',
-			`Part number ${override} is already taken (numbers are never reused, including by deleted parts)`
+			`Part number ${pn} is already taken (numbers are never reused, including by deleted parts)`
 		);
 	}
-	registerPartNumber(ctx, tier, override);
-	return override;
+	registerPartNumber(ctx, tier, pn);
+	return pn;
 }
 
 export function previewNext(db: Db, tier: number) {
