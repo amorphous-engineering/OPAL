@@ -245,7 +245,7 @@ export const datasets = {
 			path: '/datasets/:id/points/import',
 			summary:
 				'Import points from CSV text. The header names the fields; an optional recorded_at column sets the time. All rows are checked first: one bad row imports nothing.',
-			input: z.object({ id: zId, csv: z.string().min(1) }),
+			input: z.object({ id: zId, csv: z.string().min(1).max(2_000_000) }),
 			output: zDatasetImportResult,
 			access: 'signed-in',
 			mcp: true

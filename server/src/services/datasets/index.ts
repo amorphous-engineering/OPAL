@@ -313,15 +313,30 @@ export function importPoints(ctx: Ctx, id: number, text: string) {
 			csv: `At most ${MAX_IMPORT_POINTS} rows per import`
 		});
 	}
+	// One column per field, plus recorded_at and out_of_spec. Checked before any per-column work so a
+	// wide header cannot hold the write transaction.
+	const maxCols = ds.schema.fields.length + 2;
+	if (header.length > maxCols) {
+		const m = `At most ${maxCols} columns: one per field, recorded_at and out_of_spec`;
+		throw new OpalError(422, 'invalid_input', m, { csv: m });
+	}
 	const byName = new Map(ds.schema.fields.map((f) => [f.name.toLowerCase(), f]));
+	const seen = new Set<string>();
 	let timeCol = -1;
 	const cols: (SchemaField | null)[] = [];
 	const problems: Record<string, string> = {};
 	header.forEach((h, c) => {
 		// Undo the export: "depth [in]" names the field depth; the out_of_spec column is output only.
-		const key = h.replace(/\s*\[[^\]]*\]$/, '').toLowerCase();
+		let key = h.replace(/\s*\[[^\]]*\]$/, '').toLowerCase();
+		if (key === 'recordedat') key = 'recorded_at';
+		if (seen.has(key)) {
+			cols.push(null);
+			problems[`column ${c + 1}`] = `Column '${h}' is used twice`;
+			return;
+		}
+		seen.add(key);
 		if (key === 'out_of_spec') cols.push(null);
-		else if (key === 'recorded_at' || key === 'recordedat') {
+		else if (key === 'recorded_at') {
 			timeCol = c;
 			cols.push(null);
 		} else if (byName.has(key)) cols.push(byName.get(key)!);
@@ -334,14 +349,15 @@ export function importPoints(ctx: Ctx, id: number, text: string) {
 		throw new OpalError(422, 'invalid_input', Object.values(problems)[0]!, problems);
 	}
 
+	const mapped = cols.flatMap((f, c) => (f ? [[c, f] as const] : []));
 	const parsed: { recordedAt: string; values: PointValues }[] = [];
 	rows.slice(1).forEach((r, n) => {
 		const line = n + 2;
 		const values: PointValues = {};
-		cols.forEach((f, c) => {
+		for (const [c, f] of mapped) {
 			const raw = r[c] ?? '';
-			if (f && raw.trim() !== '') values[f.name] = parseCell(f, raw);
-		});
+			if (raw.trim() !== '') values[f.name] = parseCell(f, raw);
+		}
 		let recordedAt = now();
 		const rawTime = timeCol >= 0 ? (r[timeCol] ?? '').trim() : '';
 		if (rawTime) {

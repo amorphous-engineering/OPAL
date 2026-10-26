@@ -221,6 +221,31 @@ describe('csv', () => {
 		expect(unknown.status).toBe(422);
 	});
 
+	test('import refuses a header that repeats a column', async () => {
+		const { api, ds } = await make([num({ name: 'p' })]);
+		const r = await api('POST', `/datasets/${ds.id}/points/import`, { csv: 'p,P [in]\n1,2\n' });
+		expect(r.status).toBe(422);
+		expect(Object.keys(r.json.fields)).toEqual(['column 2']);
+		const t = await api('POST', `/datasets/${ds.id}/points/import`, { csv: 'recorded_at,recordedAt,p\n,,1\n' });
+		expect(t.status).toBe(422);
+		expect((await api('GET', `/datasets/${ds.id}`)).json.pointCount).toBe(0);
+	});
+
+	test('import refuses a header wider than the fields plus recorded_at and out_of_spec', async () => {
+		const { api, ds } = await make([num({ name: 'p' })]);
+		const wide = await api('POST', `/datasets/${ds.id}/points/import`, { csv: `${Array(5000).fill('p').join(',')}\n1\n` });
+		expect(wide.status).toBe(422);
+		expect(wide.json.fields.csv).toMatch(/At most 3 columns/);
+		const ok = await api('POST', `/datasets/${ds.id}/points/import`, { csv: 'recorded_at,p,out_of_spec\n,1,\n' });
+		expect(ok.status).toBe(200);
+	});
+
+	test('import refuses a CSV over the size cap', async () => {
+		const { api, ds } = await make([num({ name: 'p' })]);
+		const r = await api('POST', `/datasets/${ds.id}/points/import`, { csv: 'p\n' + '1\n'.repeat(1_000_000) });
+		expect(r.status).toBe(422);
+	});
+
 	test('export then import restores the points', async () => {
 		const a = await make([num({ name: 'p' })]);
 		await a.pts({ values: { p: 3 }, recordedAt: '2026-01-01T00:00:00Z' });
