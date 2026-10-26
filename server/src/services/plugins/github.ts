@@ -32,7 +32,8 @@ function repoParts(owner: string, repo: string): { owner: string; repo: string }
 }
 
 export function parseSource(input: string): ParsedSource {
-	const text = input.trim();
+	// `github:owner/repo` is the stored form that previews return: it must parse too.
+	const text = input.trim().replace(/^github:/, '');
 	if (text.startsWith('local:')) {
 		if (!localPluginsAllowed()) throw bad('Local plugins are off on this server');
 		const path = text.slice('local:'.length);

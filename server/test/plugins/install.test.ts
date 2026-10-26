@@ -217,6 +217,15 @@ async function installSha(sha: string, ref: string, files: Record<string, string
 }
 
 describe('plugins.install', () => {
+	test('install accepts the source as preview returns it, with its ref', async () => {
+		serve({ v1: SHA1 }, { v1: repoTarball(goodFiles()) });
+		const p = (await (await call('POST', '/plugins/preview', { source: 'owner/repo@v1' })).json()) as any;
+		expect(p).toMatchObject({ source: 'github:owner/repo', ref: 'v1', sha: SHA1 });
+		const res = await call('POST', '/plugins/install', { source: `${p.source}@${p.ref}`, sha: p.sha });
+		expect(res.status).toBe(200);
+		expect(db.select().from(plugin).get()).toMatchObject({ source: 'github:owner/repo', ref: 'v1', sha: SHA1 });
+	});
+
 	test('install creates the plugin user and a disabled row', async () => {
 		const res = await installSha(SHA1, 'HEAD', goodFiles());
 		expect(res.status).toBe(200);

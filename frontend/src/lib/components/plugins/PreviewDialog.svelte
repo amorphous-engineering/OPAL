@@ -35,7 +35,7 @@
 		busy = true;
 		error = null;
 		try {
-			const p = await opal.plugins.install({ source: preview.source, sha: preview.sha });
+			const p = await opal.plugins.install({ source: sourceLabel(preview), sha: preview.sha });
 			toast.success(`${p.name} ${p.version} installed`);
 			open = false;
 			oninstalled?.();
