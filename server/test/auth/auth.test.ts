@@ -26,6 +26,12 @@ async function signedIn() {
 }
 
 describe('auth', () => {
+	test('setup refuses the reserved plugin. username prefix', async () => {
+		const { call } = await setup();
+		const res = await call('POST', '/auth/setup', { ...ADMIN, username: 'plugin.demo' });
+		expect(res.status).toBe(422);
+	});
+
 	test('setup only works once', async () => {
 		const { call } = await setup();
 		expect((await (await call('GET', '/auth/config')).json()).needsSetup).toBe(true);

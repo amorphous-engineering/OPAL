@@ -16,6 +16,7 @@ import {
 	userRole,
 	workcenter
 } from '../db/schema/index.ts';
+import { humanUsernameBase, isPluginUsername } from '../auth/tokens.ts';
 import { AUTH_SETTING_KEYS } from '../db/schema/auth.ts';
 import {
 	type ImportCtx,
@@ -32,6 +33,9 @@ import {
 	tsReq,
 	warn
 } from './context.ts';
+
+/** The plugin. prefix belongs to plugin identities; a 1.x person who holds it gets another name. */
+const legacyUsername = (name: string) => isPluginUsername(name.trim().toLowerCase()) ? humanUsernameBase(name) : name;
 
 const USER_COLS = [
 	'id', 'username', 'name', 'email', 'password_hash', 'oidc_issuer', 'oidc_subject', 'is_active',
@@ -67,7 +71,7 @@ export function importPeople(c: ImportCtx): void {
 	const users = readTable(c, 'user', USER_COLS);
 	track(c, 'user', insertRows(c, 'user', user, users.map((r) => ({
 		id: Number(r.id),
-		username: String(r.username),
+		username: legacyUsername(String(r.username)),
 		name: String(r.name),
 		email: str(r.email),
 		passwordHash: str(r.password_hash),

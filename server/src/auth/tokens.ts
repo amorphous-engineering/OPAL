@@ -67,6 +67,16 @@ export function normalizeUsername(raw: string): string {
 		.slice(0, 64);
 }
 
+/** Plugin identities are named `plugin.<id>`. Humans never get this prefix, so a person cannot hold a plugin's name. */
+export const PLUGIN_USERNAME_PREFIX = 'plugin.';
+export const isPluginUsername = (username: string): boolean => username.startsWith(PLUGIN_USERNAME_PREFIX);
+
+/** A derived username seed that does not start with the reserved plugin prefix. */
+export function humanUsernameBase(raw: string): string {
+	const base = normalizeUsername(raw) || 'user';
+	return isPluginUsername(base) ? normalizeUsername(`user.${base}`) : base;
+}
+
 /** In-process failure counter keyed by ip:username. OPAL runs as one process. */
 export class LoginThrottle {
 	private failures = new Map<string, number[]>();

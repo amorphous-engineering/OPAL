@@ -10,9 +10,10 @@ import {
 } from '@opal/shared';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
+import { PLUGIN_USERNAME_PREFIX } from '../../auth/tokens.ts';
 import type { Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
-import { apiToken, externalLink, plugin, pluginSetting, user } from '../../db/schema/index.ts';
+import { apiToken, externalLink, passkeyCredential, plugin, pluginSetting, user } from '../../db/schema/index.ts';
 import { VERSION } from '../../version.ts';
 import { insert, remove as removeRow, update } from '../../write.ts';
 import { downloadTarball, parseSource, resolveSha, type ParsedSource } from './github.ts';
@@ -111,9 +112,14 @@ export async function preview(db: Db, input: string): Promise<PluginPreview> {
 }
 
 function ensureUser(ctx: Ctx, manifest: PluginManifest): number {
-	const username = `plugin.${manifest.id}`;
+	const username = `${PLUGIN_USERNAME_PREFIX}${manifest.id}`;
 	const existing = ctx.db.select().from(user).where(eq(user.username, username)).get();
 	if (existing) {
+		// The name alone proves nothing: a person may hold it. Only a row without credentials is a plugin identity.
+		const passkey = ctx.db.select({ id: passkeyCredential.id }).from(passkeyCredential).where(eq(passkeyCredential.userId, existing.id)).get();
+		if (existing.passwordHash || existing.oidcIssuer || existing.oidcSubject || existing.email || existing.isAdmin || passkey) {
+			throw conflict('plugin_user_taken', `User ${username} belongs to a person. Rename or remove that account before installing plugin ${manifest.id}.`);
+		}
 		if (!existing.isActive || existing.name !== manifest.name) {
 			update(ctx, user, existing.id, { isActive: true, name: manifest.name });
 		}

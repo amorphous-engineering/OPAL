@@ -8,6 +8,7 @@ import {
 	hashToken,
 	loginThrottle,
 	newToken,
+	isPluginUsername,
 	normalizeUsername,
 	SESSION_COOKIE,
 	validatePasswordStrength,
@@ -130,6 +131,7 @@ export const authImpls = [
 		if (!needsSetup(ctx)) throw conflict('setup_complete', 'Setup is already complete');
 		const username = normalizeUsername(input.username);
 		if (!username) throw invalid('username', 'Username is required');
+		if (isPluginUsername(username)) throw invalid('username', 'The plugin. prefix is reserved for plugins');
 		const weak = validatePasswordStrength(input.password);
 		if (weak) throw invalid('password', weak);
 		// Always credentialed: an admin who lives only in an identity provider has no way back in

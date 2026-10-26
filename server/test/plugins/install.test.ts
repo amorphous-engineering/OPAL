@@ -236,6 +236,15 @@ describe('plugins.install', () => {
 		expect(existsSync(join(pluginDir('demo', SHA1), 'dist/plugin.js'))).toBe(true);
 	});
 
+	test('a pre-existing human named plugin.<id> is not reused or reactivated', async () => {
+		const human = insert(sys(), user, { username: 'plugin.demo', name: 'Pat', email: 'pat@x.local', isActive: false });
+		const res = await installSha(SHA1, 'HEAD', goodFiles());
+		expect(res.status).toBe(409);
+		expect(((await res.json()) as any).error).toBe('plugin_user_taken');
+		expect(db.select().from(plugin).all()).toHaveLength(0);
+		expect(db.select().from(user).where(eq(user.id, human.id)).get()).toMatchObject({ name: 'Pat', isActive: false });
+	});
+
 	test('install refuses a token actor', async () => {
 		actor = { kind: 'token', userId: 1, isAdmin: true, tokenId: 1 };
 		const res = await installSha(SHA1, 'HEAD', goodFiles());

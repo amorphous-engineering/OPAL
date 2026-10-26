@@ -15,7 +15,7 @@ import type { Actor, Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import * as schema from '../../db/schema/index.ts';
 import { auditLog, role, session, user, userRole, workcenter } from '../../db/schema/index.ts';
-import { hashPassword, normalizeUsername, validatePasswordStrength } from '../../auth/tokens.ts';
+import { hashPassword, humanUsernameBase, isPluginUsername, normalizeUsername, validatePasswordStrength } from '../../auth/tokens.ts';
 import { insert, remove, update } from '../../write.ts';
 import { removeAvatar, setAvatar, decodeBase64 } from './avatars.ts';
 import { orgUser, orgUsers, rolesByUser } from './people.ts';
@@ -78,7 +78,7 @@ export function directory(ctx: Ctx): DirectoryEntry[] {
 }
 
 function uniqueUsername(db: Db, raw: string): string {
-	const base = normalizeUsername(raw) || 'user';
+	const base = humanUsernameBase(raw);
 	let candidate = base;
 	for (let n = 2; db.select({ id: user.id }).from(user).where(eq(user.username, candidate)).get(); n++) {
 		candidate = `${base.slice(0, 64 - String(n).length)}${n}`;
@@ -99,6 +99,9 @@ export async function createUser(ctx: Ctx, input: z.output<typeof zUserCreate>):
 		passwordHash = await hashPassword(input.password);
 	}
 	if (input.email) checkEmailFree(ctx.db, input.email);
+	if (input.username && isPluginUsername(normalizeUsername(input.username))) {
+		throw new OpalError(422, 'invalid_input', 'Invalid input', { username: 'The plugin. prefix is reserved for plugins' });
+	}
 	const source = input.username || (input.email ?? '').split('@')[0] || input.name;
 	const created = insert(ctx, user, {
 		name: input.name,

@@ -15,6 +15,16 @@ describe('creating users', () => {
 		expect(b.json.username).toBe('ada2');
 	});
 
+	test('a human cannot be created with the plugin. prefix, and a derived name avoids it', async () => {
+		const { call, makeUser } = await setup();
+		const admin = makeUser('root', { admin: true });
+		const r = await call(admin, 'POST', '/users', { name: 'X', username: 'Plugin.demo' });
+		expect(r.status).toBe(422);
+		const d = await call(admin, 'POST', '/users', { name: 'Y', email: 'plugin.demo@lab.local' });
+		expect(d.status).toBe(201);
+		expect(d.json.username.startsWith('plugin.')).toBe(false);
+	});
+
 	test('a user created with a password has one; a short password is refused', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });

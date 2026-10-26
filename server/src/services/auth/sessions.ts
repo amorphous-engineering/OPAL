@@ -4,7 +4,7 @@ import {
 	addMs,
 	hashToken,
 	newToken,
-	normalizeUsername,
+	humanUsernameBase,
 	SESSION_COOKIE,
 	SESSION_LIFETIME_MS
 } from '../../auth/tokens.ts';
@@ -60,7 +60,7 @@ export function revokeSessions(ctx: Ctx, userId: number, exceptSessionId?: numbe
 
 /** A free username derived from `raw`: digits are appended until it is unique. */
 export function uniqueUsername(ctx: Ctx, raw: string): string {
-	const base = normalizeUsername(raw) || 'user';
+	const base = humanUsernameBase(raw);
 	let candidate = base;
 	for (let n = 2; ctx.db.select({ id: user.id }).from(user).where(eq(user.username, candidate)).get(); n++) {
 		candidate = `${base.slice(0, 64 - String(n).length)}${n}`;
