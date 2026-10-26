@@ -107,6 +107,33 @@ describe('redlines', () => {
 		expect((await t.call('DELETE', `/executions/${e.id}/redlines/9999`)).status).toBe(404);
 	});
 
+	test('a redline with a claim or a step note is refused and keeps its rows', async () => {
+		const t = await setup();
+		const { e, nc } = await withNc(t, ['A', 'B']);
+		const r = (await redline(t, e, nc.id)).json;
+		const ids = (await t.get(e.id)).steps.filter((s: any) => /^2R1/.test(s.number)).map((s: any) => s.id);
+		await t.ok('POST', `/executions/${e.id}/focus`, { stepId: ids[0] });
+		expect((await t.call('DELETE', `/executions/${e.id}/redlines/${r.id}`)).status).toBe(409);
+		expect(await t.ok('GET', `/executions/${e.id}/redlines`)).toHaveLength(1);
+		await t.ok('DELETE', `/executions/${e.id}/focus`);
+		// The clock-in and first-focus mark stay after the claim ends.
+		expect((await t.call('DELETE', `/executions/${e.id}/redlines/${r.id}`)).status).toBe(409);
+		const r2 = (await redline(t, e, nc.id)).json;
+		const ids2 = (await t.get(e.id)).steps.filter((s: any) => /^2R2/.test(s.number)).map((s: any) => s.id);
+		await t.ok('POST', `/executions/${e.id}/steps/${ids2[0]}/notes`, { body: 'Found crack at weld 3' });
+		expect((await t.call('DELETE', `/executions/${e.id}/redlines/${r2.id}`)).status).toBe(409);
+		expect(await t.ok('GET', `/executions/${e.id}/redlines`)).toHaveLength(2);
+	});
+
+	test('deleting an unworked redline writes an audit delete row for each step execution', async () => {
+		const t = await setup();
+		const { e, nc } = await withNc(t, ['A', 'B']);
+		const r = (await redline(t, e, nc.id, [{ title: 'one' }, { title: 'two' }])).json;
+		await t.ok('DELETE', `/executions/${e.id}/redlines/${r.id}`);
+		const audit = await t.ok('GET', '/audit?entity=step_execution');
+		expect(audit.items.filter((i: any) => i.action === 'delete')).toHaveLength(3);
+	});
+
 	test('the issue detail lists the redline ops of its execution', async () => {
 		const t = await setup();
 		const { e, nc } = await withNc(t, ['A', 'B']);

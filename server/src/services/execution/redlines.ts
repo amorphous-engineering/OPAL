@@ -4,10 +4,20 @@
  * snapshot entry. R-numbers count per host OP: `4R1`, `4R1.1`.
  */
 import { OpalError, type ProcedureDataSchema, type Redline, conflict, notFound } from '@opal/shared';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
-import { adhocStep, issue, stepExecution } from '../../db/schema/index.ts';
+import {
+	adhocStep,
+	dataPoint,
+	executionParticipant,
+	issue,
+	signoff,
+	stepExecution,
+	stepNote,
+	stockMove,
+	workInterval
+} from '../../db/schema/index.ts';
 import { insert, remove } from '../../write.ts';
 import { detachAll } from '../platform/index.ts';
 import { type Model, type Row, isActive, isTerminal, loadModel, opRowOf } from './model.ts';
@@ -109,10 +119,27 @@ export function deleteRedline(ctx: Ctx, input: { id: number; redlineId: number }
 		throw new OpalError(409, 'redline_started', 'Cannot delete redline op: op is no longer pending');
 	}
 	const stepIds = [op.id, ...kids.map((k) => k.id)];
+	// Notes, labor, signatures, data and claims hang off a step that is still `pending`, and the
+	// FK cascades would erase them with no audit row. Rule 7: a record that holds work is kept.
+	const db = ctx.db;
+	const worked =
+		[op, ...kids].some((r) => r.se.firstFocusedAt !== null || r.se.dataCaptured != null || r.se.startedAt !== null || r.se.skipReason !== null) ||
+		db.select({ id: stepNote.id }).from(stepNote).where(inArray(stepNote.stepExecutionId, stepIds)).get() ||
+		db.select({ id: workInterval.id }).from(workInterval).where(inArray(workInterval.opStepId, stepIds)).get() ||
+		db.select({ id: signoff.id }).from(signoff).where(inArray(signoff.stepExecutionId, stepIds)).get() ||
+		db.select({ id: dataPoint.id }).from(dataPoint).where(inArray(dataPoint.stepExecutionId, stepIds)).get() ||
+		db.select({ id: executionParticipant.id }).from(executionParticipant).where(inArray(executionParticipant.focusStepId, stepIds)).get() ||
+		db.select({ id: stockMove.id }).from(stockMove).where(inArray(stockMove.stepExecutionId, stepIds)).get() ||
+		db
+			.select({ id: issue.id })
+			.from(issue)
+			.where(or(inArray(issue.raisedStepId, stepIds), inArray(issue.containmentStepId, stepIds)))
+			.get();
+	if (worked) throw new OpalError(409, 'redline_started', 'Cannot delete redline op: work is recorded on it');
+	// Nothing records work now, so the rows below are empty drafts. Each goes through remove().
 	for (const id of stepIds) detachAll(ctx, { type: 'step_execution', id });
+	for (const id of stepIds) remove(ctx, stepExecution, id);
 	for (const k of kids) remove(ctx, adhocStep, k.adhoc!.id);
 	remove(ctx, adhocStep, op.adhoc!.id);
-	// Rows left behind by a failed cascade would be a bug: the FK cascades step_execution.
-	ctx.db.delete(stepExecution).where(and(eq(stepExecution.executionId, input.id), inArray(stepExecution.id, stepIds))).run();
 	return { ok: true };
 }
