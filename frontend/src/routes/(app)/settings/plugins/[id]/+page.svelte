@@ -29,7 +29,13 @@
 		pluginOptions,
 		sourceLabel
 	} from '#lib/components/plugins/state.js';
-	import type { PluginDetail, PluginOptions, PluginPreview, PluginSettingDef } from '@opal/shared';
+	import type {
+		PluginActionDef,
+		PluginDetail,
+		PluginOptions,
+		PluginPreview,
+		PluginSettingDef
+	} from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -176,6 +182,25 @@
 		}
 	}
 
+	// ---- plugin actions: a POST to the running plugin, which may answer `{ message }`
+	async function runAction(a: PluginActionDef) {
+		busy = true;
+		error = null;
+		try {
+			const res = await fetch(`/plugins/${encodeURIComponent(plugin.id)}${a.path}`, {
+				method: 'POST',
+				headers: { accept: 'application/json' }
+			});
+			const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+			if (!res.ok) error = body.message ?? body.error ?? `${a.label}: ${res.status}`;
+			else toast.success(body.message ?? a.label);
+		} catch (e) {
+			error = pluginError(e, `${a.label} failed`);
+		} finally {
+			busy = false;
+		}
+	}
+
 	// ---- update and remove
 	let preview = $state<PluginPreview | null>(null);
 	let previewOpen = $state(false);
@@ -247,6 +272,13 @@
 		</span>
 	{/snippet}
 	{#snippet actions()}
+		{#if running}
+			{#each m.actions ?? [] as a (a.path)}
+				<Button variant="outline" size="sm" onclick={() => runAction(a)} disabled={busy}
+					>{a.label.toUpperCase()}</Button
+				>
+			{/each}
+		{/if}
 		<Button variant="outline" size="sm" onclick={update} disabled={busy}>UPDATE</Button>
 		<Button variant="outline" size="sm" onclick={remove} disabled={busy}>REMOVE</Button>
 	{/snippet}

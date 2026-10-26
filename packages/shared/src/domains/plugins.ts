@@ -74,6 +74,16 @@ export const zPluginPanelDef = z.strictObject({
 });
 export type PluginPanelDef = z.infer<typeof zPluginPanelDef>;
 
+/**
+ * A button on the plugin page. OPAL POSTs to `path` on the running plugin, which
+ * answers `{ message? }`. The page shows the message.
+ */
+export const zPluginActionDef = z.strictObject({
+	label: z.string().min(1).max(30),
+	path: z.string().regex(/^\/[^\s?#]*$/).max(200)
+});
+export type PluginActionDef = z.infer<typeof zPluginActionDef>;
+
 export const zPluginManifest = z.strictObject({
 	id: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, digits and hyphens').max(40),
 	name: z.string().min(1).max(60),
@@ -91,7 +101,8 @@ export const zPluginManifest = z.strictObject({
 		})
 		.default({ ops: [], events: [], hooks: false }),
 	settings: z.array(zPluginSettingDef).max(50).default([]),
-	panels: z.array(zPluginPanelDef).max(10).default([])
+	panels: z.array(zPluginPanelDef).max(10).default([]),
+	actions: z.array(zPluginActionDef).max(10).default([])
 });
 export type PluginManifest = z.infer<typeof zPluginManifest>;
 
