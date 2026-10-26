@@ -171,7 +171,7 @@ export function preview(ctx: Ctx) {
 	const c = lastGroup(ctx);
 	if (!c) throw notFound('Recent action');
 	const newest = c.rows.at(-1)!;
-	const [entry] = auditEntries(ctx.db, [c.rows[0]!]);
+	const [entry] = auditEntries(ctx, [c.rows[0]!]);
 	let summary = `${entry!.action.toUpperCase()} ${entry!.entityLabel}${entry!.recordLabel ? ` ${entry!.recordLabel}` : ''}`;
 	if (entry!.action === 'update' && entry!.changes.length) {
 		summary += ` (changed: ${entry!.changes

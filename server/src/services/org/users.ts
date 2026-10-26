@@ -114,9 +114,16 @@ export async function createUser(ctx: Ctx, input: z.output<typeof zUserCreate>):
 	return orgUser(ctx.db, created);
 }
 
+/** The `user` columns anyone signed in may read about another person; every other column is admin-or-self. */
+export const PUBLIC_USER_FIELDS: ReadonlySet<string> = new Set(['id', 'username', 'name', 'createdAt']);
+
 /** Admins read anyone; others only themselves. */
+export function canReadUserPrivate(actor: Actor, id: number): boolean {
+	return isAdmin(actor) || selfId(actor) === id;
+}
+
 function visibleUser(ctx: Ctx, id: number) {
-	if (!isAdmin(ctx.actor) && selfId(ctx.actor) !== id) throw forbidden('Admin access required');
+	if (!canReadUserPrivate(ctx.actor, id)) throw forbidden('Admin access required');
 	return row(ctx.db, id);
 }
 

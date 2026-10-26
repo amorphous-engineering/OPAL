@@ -13,6 +13,7 @@ import {
 } from '@opal/shared';
 import { and, count, desc, eq, gte, inArray, isNotNull, lt, type SQL } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
+import { PUBLIC_USER_FIELDS, canReadUserPrivate } from '../org/users.ts';
 import type { Db } from '../../db/client.ts';
 import { auditLog, part, user } from '../../db/schema/index.ts';
 import { entityLabel, registerEntity, resolveRef } from './entities.ts';
@@ -59,9 +60,33 @@ function rawChanges(r: Row): [string, unknown, unknown][] {
 		.map(([k, v]) => [k, scaled(k, v), null]);
 }
 
+/** Tables only an admin may read through their own operations (api tokens: also the token's owner). */
+const ADMIN_ONLY = new Set(['auth_setting', 'plugin', 'plugin_setting']);
+const OWNED = new Set(['api_token', 'passkey_credential', 'webauthn_challenge']);
+
+/**
+ * What the viewer may see of one row's changes. The audit log must not widen what the entity's own
+ * reads allow: another person's `user` row shows only the directory fields; sign-in records show to
+ * admins and their owner.
+ */
+function allowedChanges(ctx: Ctx, r: Row, changes: [string, unknown, unknown][]) {
+	const actor = ctx.actor;
+	if (actor.kind === 'user' || actor.kind === 'token' ? actor.isAdmin : false) return changes;
+	if (ADMIN_ONLY.has(r.entity)) return [];
+	if (r.entity === 'user') {
+		return canReadUserPrivate(actor, r.entityId) ? changes : changes.filter(([f]) => PUBLIC_USER_FIELDS.has(f));
+	}
+	if (OWNED.has(r.entity)) {
+		const owner = obj(r.after).userId ?? obj(r.before).userId;
+		return typeof owner === 'number' && canReadUserPrivate(actor, owner) ? changes : [];
+	}
+	return changes;
+}
+
 /** Resolve audit rows to readable entries (also used by the overview activity feed). */
-export function auditEntries(db: Db, rows: Row[]): AuditEntry[] {
-	const raw = new Map(rows.map((r) => [r.id, rawChanges(r)]));
+export function auditEntries(ctx: Ctx, rows: Row[]): AuditEntry[] {
+	const db = ctx.db;
+	const raw = new Map(rows.map((r) => [r.id, allowedChanges(ctx, r, rawChanges(r))]));
 	const userIds = new Set(rows.map((r) => r.actorUserId).filter((x): x is number => x != null));
 	const partIds = new Set<number>();
 	for (const triples of raw.values()) {
@@ -179,7 +204,7 @@ export function list(ctx: Ctx, input: AuditFilter & { cursor?: string; limit: nu
 		.all();
 	const page = rows.slice(0, input.limit);
 	return {
-		items: auditEntries(ctx.db, page),
+		items: auditEntries(ctx, page),
 		next: rows.length > input.limit ? String(page.at(-1)!.id) : null,
 		total
 	};

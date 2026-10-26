@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Ctx } from '../../src/context.ts';
-import { auditLog, part } from '../../src/db/schema/index.ts';
+import { apiToken, auditLog, part, user } from '../../src/db/schema/index.ts';
 import { insert, remove, update } from '../../src/write.ts';
 import { registerEntity } from '../../src/services/platform/entities.ts';
 import { setup } from './helpers.ts';
@@ -126,5 +126,67 @@ describe('audit log', () => {
 		const s = await setup();
 		s.setActor({ kind: 'anonymous' });
 		expect((await s.call('GET', '/audit')).status).toBe(401);
+	});
+
+	describe('private user fields', () => {
+		const made9 = (s: S) => s.users.at(-1)!.id;
+		const fields = (e: { changes: { field: string }[] }) => e.changes.map((c) => c.field);
+		const userRows = async (s: S, q = 'entity=user') => (await (await s.call('GET', `/audit?${q}`)).json()).items;
+
+		async function withPrivateData() {
+			const s = await setup();
+			const admin = { kind: 'user', userId: s.users[0]!.id, isAdmin: true, sessionId: 1 } as const;
+			const actx: Ctx = { db: s.db, op: 'test.write', actor: admin };
+			// The fixture users bypass the audit helpers; this audited create gives the log a user row.
+			const made = insert(actx, user, { username: 'u9', name: 'User 9' });
+			s.users.push(made);
+			update(actx, user, made.id, { email: 'u2@x.test', isAdmin: true, oidcIssuer: 'https://idp', oidcSubject: 'sub-2' });
+			insert(actx, apiToken, { userId: made.id, name: 'ci-token', tokenHash: 'h', scopes: { ops: ['*'], events: [] } });
+			return s;
+		}
+
+		test('a non-admin does not read another user admin-only fields in the audit log', async () => {
+			const s = await withPrivateData();
+			s.as(0);
+			const text = JSON.stringify(await userRows(s));
+			for (const secret of ['u2@x.test', 'https://idp', 'sub-2', 'isAdmin', 'oidcSubject', 'isActive', 'email']) {
+				expect(text).not.toContain(secret);
+			}
+			const created = (await userRows(s, `entity=user&entityId=${made9(s)}&action=create`))[0];
+			expect(fields(created).sort()).toEqual(['createdAt', 'name', 'username']);
+		});
+
+		test('the same rows are filtered through the record history route', async () => {
+			const s = await withPrivateData();
+			s.as(0);
+			const res = await (await s.call('GET', `/audit/history/user/${made9(s)}`)).json();
+			expect(JSON.stringify(res)).not.toContain('u2@x.test');
+		});
+
+		test('a non-admin reads their own user row in full', async () => {
+			const s = await withPrivateData();
+			s.as(s.users.length - 1);
+			const update = (await userRows(s, `entity=user&entityId=${made9(s)}&action=update`))[0];
+			expect(fields(update)).toContain('email');
+			expect(JSON.stringify(update)).toContain('u2@x.test');
+		});
+
+		test('an admin reads every user field', async () => {
+			const s = await withPrivateData();
+			s.setActor({ kind: 'user', userId: s.users[0]!.id, isAdmin: true, sessionId: 1 });
+			const update = (await userRows(s, `entity=user&entityId=${made9(s)}&action=update`))[0];
+			expect(fields(update)).toEqual(expect.arrayContaining(['email', 'isAdmin', 'oidcIssuer', 'oidcSubject']));
+		});
+
+		test('api token rows show to an admin and the token owner only', async () => {
+			const s = await withPrivateData();
+			const names = async () => JSON.stringify(await userRows(s, 'entity=api_token'));
+			s.as(0);
+			expect(await names()).not.toContain('ci-token');
+			s.as(s.users.length - 1);
+			expect(await names()).toContain('ci-token');
+			s.setActor({ kind: 'user', userId: s.users[0]!.id, isAdmin: true, sessionId: 1 });
+			expect(await names()).toContain('ci-token');
+		});
 	});
 });

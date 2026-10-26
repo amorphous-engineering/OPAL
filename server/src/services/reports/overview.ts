@@ -229,5 +229,5 @@ registerOverviewSection('risks', (ctx, { projectId }) => {
 // ---------------------------------------------------------------- activity
 
 registerOverviewSection('activity', (ctx) =>
-	auditEntries(ctx.db, ctx.db.select().from(auditLog).orderBy(desc(auditLog.at), desc(auditLog.id)).limit(15).all())
+	auditEntries(ctx, ctx.db.select().from(auditLog).orderBy(desc(auditLog.at), desc(auditLog.id)).limit(15).all())
 );

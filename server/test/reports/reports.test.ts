@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { parseQty } from '@opal/shared';
-import { project } from '../../src/db/schema/index.ts';
+import { project, user } from '../../src/db/schema/index.ts';
+import { createApp } from '../../src/app.ts';
+import { update } from '../../src/write.ts';
 import { makePart, setup as baseSetup } from '../inventory/helpers.ts';
 import { orderedPo } from '../purchasing/helpers.ts';
 import { receiveStock } from '../../src/services/inventory/index.ts';
@@ -32,6 +34,15 @@ describe('csv text', () => {
 });
 
 describe('overview', () => {
+	test('the activity feed hides another user admin-only fields from a non-admin', async () => {
+		const s = await baseSetup();
+		update(s.ctx, user, s.admin.id, { email: 'private@x.test' });
+		expect(JSON.stringify((await s.call('GET', '/overview')).body.activity)).toContain('private@x.test');
+		const app = createApp({ db: s.db, resolveActor: () => ({ kind: 'user', userId: 9999, isAdmin: false, sessionId: 1 }) });
+		const res = await app.request('/api/overview');
+		expect(JSON.stringify(await res.json())).not.toContain('private@x.test');
+	});
+
 	test('issue counts, mine first, and holding issues', async () => {
 		const s = await setup();
 		await s.call('POST', '/issues', { title: 'Low one', priority: 'low' });
