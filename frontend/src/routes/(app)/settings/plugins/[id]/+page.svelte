@@ -107,16 +107,36 @@
 	let draft = $state<Record<string, Draft>>(untrack(() => seed(data.plugin)));
 
 	// Values the running plugin offers (`optionsFrom`). Loaded again when it starts.
+	// One request per path, tried again while it fails: a plugin that just started
+	// can be slow, or rate-limited by the service it calls.
 	let options = $state<Record<string, PluginOptions['items'] | null>>({});
 	const running = $derived(proc.state === 'running');
 	$effect(() => {
 		const on = running;
 		const id = plugin.id;
-		for (const d of untrack(() => m.settings)) {
-			if (!d.optionsFrom) continue;
-			if (!on) options[d.key] = null;
-			else void pluginOptions(id, d.optionsFrom).then((o) => (options[d.key] = o));
+		const byPath: Record<string, string[]> = {};
+		for (const d of untrack(() => m.settings))
+			if (d.optionsFrom) (byPath[d.optionsFrom] ??= []).push(d.key);
+		if (!on) {
+			for (const keys of Object.values(byPath)) for (const k of keys) options[k] = null;
+			return;
 		}
+		let stopped = false;
+		const timers: ReturnType<typeof setTimeout>[] = [];
+		for (const [path, keys] of Object.entries(byPath)) {
+			const load = async (attempt: number) => {
+				const o = await pluginOptions(id, path);
+				if (stopped) return;
+				for (const k of keys) options[k] = o;
+				if (!o && attempt < 6)
+					timers.push(setTimeout(() => load(attempt + 1), 2000 * 2 ** attempt));
+			};
+			void load(0);
+		}
+		return () => {
+			stopped = true;
+			timers.forEach(clearTimeout);
+		};
 	});
 	let formError = $state<string | null>(null);
 	let saving = $state(false);
