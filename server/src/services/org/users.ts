@@ -128,7 +128,9 @@ export function updateUser(ctx: Ctx, input: z.output<typeof zUserUpdate> & { id:
 
 	if (!isAdmin(ctx.actor)) {
 		if (selfId(ctx.actor) !== id) throw forbidden('Cannot edit other users');
-		const allowed = new Set(['name', 'email', 'jobTitle', 'phone', 'workcenterId']);
+		// Not email: an OIDC identity links to the account holding its email, so an email a user could
+		// set themselves would let them claim a colleague's sign-in.
+		const allowed = new Set(['name', 'jobTitle', 'phone', 'workcenterId']);
 		const bad = given.filter((k) => !allowed.has(k));
 		if (bad.length) throw forbidden(`Cannot change fields: ${bad.join(', ')}`);
 	}

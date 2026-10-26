@@ -18,6 +18,7 @@ import {
 } from '../../src/services/auth/oidc.ts';
 import { readSettings, type SignInSettings } from '../../src/services/auth/settings.ts';
 import {
+	adminSession,
 	beginOidc,
 	CLIENT_ID,
 	configureOidc,
@@ -26,7 +27,8 @@ import {
 	type FakeProvider,
 	harness,
 	type Harness,
-	makeUser
+	makeUser,
+	signIn
 } from './helpers.ts';
 
 let p: FakeProvider;
@@ -359,6 +361,42 @@ describe('oidc routes', () => {
 		configureOidc(h, p, { oidc_client_id: '' });
 		expect((await h.raw('/oidc/login')).headers.get('location')).toBe('/login');
 		expect((await (await h.call('GET', '/auth/config')).json()).oidcEnabled).toBe(false);
+	});
+
+	const callbackAs = async (h: Harness, claims: Record<string, unknown>) => {
+		const { query, cookie } = await beginOidc(h);
+		p.userinfo = null;
+		p.tokens = { id_token: await p.idToken(claims, { nonce: query.get('nonce')! }) };
+		return h.raw(`/oidc/callback?code=c&state=${query.get('state')}`, { cookie });
+	};
+	const whoAmI = async (h: Harness, res: Response) =>
+		(await h.call('GET', '/auth/me', undefined, { cookie: cookieOf(res, 'opal_session') })).json();
+
+	test('a user cannot pre-claim a colleague sign-in identity by setting their own email', async () => {
+		const h = await harness();
+		const admin = await adminSession(h);
+		await h.call('POST', '/users', { name: 'Eve', username: 'eve', password: 'eve-long-password-77', isAdmin: false }, { cookie: admin, origin: 'http://opal.test' });
+		const eve = await signIn(h, 'eve', 'eve-long-password-77');
+		const eveRow = h.db.select().from(user).where(eq(user.username, 'eve')).get()!;
+		const patch = await h.call('PATCH', `/users/${eveRow.id}`, { email: 'Carol@Example.test' }, { cookie: eve, origin: 'http://opal.test' });
+		expect(patch.status).toBe(403);
+		configureOidc(h, p);
+		const res = await callbackAs(h, { sub: 'carol-sub', email: 'carol@example.test', email_verified: true, groups: ['opal-admins'] });
+		const me = await whoAmI(h, res);
+		expect(me.username).not.toBe('eve');
+		const after = h.db.select().from(user).where(eq(user.id, eveRow.id)).get()!;
+		expect(after.oidcSubject).toBeNull();
+		expect(after.isAdmin).toBe(false);
+	});
+
+	test('an email an admin set links the account on first sign-in', async () => {
+		const h = await harness();
+		const admin = await adminSession(h);
+		const created = await h.call('POST', '/users', { name: 'Carol', username: 'carol', email: 'carol@example.test' }, { cookie: admin, origin: 'http://opal.test' });
+		expect(created.status).toBe(201);
+		configureOidc(h, p);
+		const res = await callbackAs(h, { sub: 'carol-sub', email: 'Carol@Example.test', email_verified: true });
+		expect((await whoAmI(h, res)).username).toBe('carol');
 	});
 
 	test('the full round trip signs the user in and honours next', async () => {

@@ -111,7 +111,7 @@ describe('reading users', () => {
 });
 
 describe('updating users', () => {
-	test('a user edits own name, email, job title, phone and workcenter but not admin or active state', async () => {
+	test('a user edits own name, job title, phone and workcenter but not admin or active state', async () => {
 		const { call, makeUser } = await setup();
 		const admin = makeUser('root', { admin: true });
 		const bob = makeUser('bob');
@@ -125,6 +125,18 @@ describe('updating users', () => {
 		expect(bad.status).toBe(403);
 		expect(bad.json.message).toContain('isAdmin');
 		expect((await call(bob, 'PATCH', `/users/${admin.id}`, { name: 'x' })).status).toBe(403);
+	});
+
+	test('a user cannot change own email; an admin can', async () => {
+		const { call, makeUser } = await setup();
+		const admin = makeUser('root', { admin: true });
+		const bob = makeUser('bob');
+		const refused = await call(bob, 'PATCH', `/users/${bob.id}`, { email: 'carol@lab.local' });
+		expect(refused.status).toBe(403);
+		expect(refused.json.message).toContain('email');
+		const set = await call(admin, 'PATCH', `/users/${bob.id}`, { email: 'bob@lab.local' });
+		expect(set.status).toBe(200);
+		expect(set.json.email).toBe('bob@lab.local');
 	});
 
 	test('a blank job title or phone is stored as nothing', async () => {

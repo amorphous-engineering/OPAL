@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Facts about one account. Name and email edit in place.
+	// Facts about one account. Name edits in place; only an admin edits email.
 	import {
 		DetailRow,
 		DetailTable,
@@ -59,7 +59,7 @@
 			const updated = await opal.org.users.update({
 				id: profile.id,
 				name: name.trim(),
-				email: email.trim() || null,
+				...(session.user?.is_admin ? { email: email.trim() || null } : {}),
 				jobTitle: jobTitle.trim() || null,
 				phone: phone.trim() || null,
 				workcenterId: workcenterId ? Number(workcenterId) : null
@@ -105,7 +105,7 @@
 			</DetailRow>
 			<DetailRow label="Username" value={profile.username} mono />
 			<DetailRow label="Email">
-				{#if editing}
+				{#if editing && session.user?.is_admin}
 					<Input
 						type="email"
 						bind:value={email}
