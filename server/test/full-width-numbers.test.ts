@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
+import { numberCodec } from '@opal/shared';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +8,7 @@ import { createApp } from '../src/app.ts';
 import { importLegacy, openSchemaImportDb } from '../src/import/index.ts';
 import { openSchemaDb } from '../src/db/dev-schema.ts';
 import { storeNumbersAtFullWidth } from '../src/db/full-width-numbers.ts';
+import { canonicalInput } from '../src/numbers.ts';
 import { GOOD } from './requirements/helpers.ts';
 import { setup as riskSetup } from './risks/helpers.ts';
 
@@ -217,5 +219,16 @@ describe('numbers leaving the server', () => {
 		expect(sql(w.db, 'SELECT opal_number AS v FROM stock_record')[0].v).toBe('OPAL-0000000001');
 		// A number typed without padding finds the record at the new width.
 		expect(JSON.stringify((await w.call('GET', '/executions?q=WO-1')).body)).toContain('WO-000001');
+	});
+});
+
+describe('numbers entering the server', () => {
+	test('a __proto__ key in the input stays a field and does not set the prototype', () => {
+		const input = JSON.parse('{"__proto__": {"admin": true}, "a": {"__proto__": {"x": 1}}}');
+		const out = canonicalInput(input, numberCodec(4)) as Record<string, Record<string, unknown>>;
+		expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+		expect(Object.getPrototypeOf(out.a)).toBe(Object.prototype);
+		expect(Object.hasOwn(out, '__proto__')).toBe(true);
+		expect(out.admin).toBeUndefined();
 	});
 });

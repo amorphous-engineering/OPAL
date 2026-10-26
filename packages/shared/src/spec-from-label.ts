@@ -22,6 +22,16 @@ const UNIT = String.raw`\s*([^\d()±]{0,24}?)`;
 const SEP = String.raw`\s*(?:-|–|—|to)\s*`;
 const clean = (n: string) => n.replace(/^\+/, "");
 
+/**
+ * s without its trailing run of characters that match `ch`. A loop, because /[...]+$/
+ * retries from each start of a long run that is not at the end, which is quadratic.
+ */
+function stripEnd(s: string, ch: RegExp): string {
+  let end = s.length;
+  while (end > 0 && ch.test(s[end - 1]!)) end--;
+  return s.slice(0, end);
+}
+
 interface Body {
   spec: Spec;
   unitText: string;
@@ -36,7 +46,7 @@ function parseBody(raw: string): Body | null {
   t = t.replace(/^spec(?:ification)?\b\.?:?\s*/i, "");
   const approx = /^(?:approx\b\.?|approximately|about|~)\s*/i.test(t);
   t = t.replace(/^(?:approx\b\.?|approximately|about|~)\s*/i, "");
-  t = t.replace(/[\s.]+$/, "");
+  t = stripEnd(t, /[\s.]/);
 
   let m: RegExpExecArray | null;
   if (
@@ -88,10 +98,10 @@ function result(
   const unitText = body.unitText.trim();
   const unit = unitText ? unitFromText(unitText) : undefined;
   if (unitText && !unit) return null;
-  const rest = (label.slice(0, from) + " " + label.slice(to))
-    .replace(/\s+/g, " ")
-    .replace(/[\s,;:\-–—]+$/, "")
-    .trim();
+  const rest = stripEnd(
+    (label.slice(0, from) + " " + label.slice(to)).replace(/\s+/g, " "),
+    /[\s,;:\-–—]/,
+  ).trim();
   return { ...(unit ? { unit } : {}), spec: spec.data, label: rest };
 }
 

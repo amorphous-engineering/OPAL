@@ -24,13 +24,15 @@ export function canonicalInput(value: unknown, codec: NumberCodec): unknown {
 	if (Array.isArray(value)) return value.map((v) => canonicalInput(v, codec));
 	// Only plain objects: an uploaded File and the like pass through as they are.
 	if (!value || typeof value !== 'object' || value.constructor !== Object) return value;
-	const out: Record<string, unknown> = {};
-	for (const [k, v] of Object.entries(value)) {
-		if (typeof v === 'string' && NUMBER_KEYS.has(k)) out[k] = codec.canonical(v);
-		else if (typeof v === 'string' && SEARCH_KEYS.has(k)) out[k] = codec.search(v);
-		else out[k] = canonicalInput(v, codec);
-	}
-	return out;
+	// fromEntries, not out[k] = v: a "__proto__" key from JSON stays a plain field and does
+	// not become the prototype of the result.
+	return Object.fromEntries(
+		Object.entries(value).map(([k, v]) => {
+			if (typeof v === 'string' && NUMBER_KEYS.has(k)) return [k, codec.canonical(v)];
+			if (typeof v === 'string' && SEARCH_KEYS.has(k)) return [k, codec.search(v)];
+			return [k, canonicalInput(v, codec)];
+		})
+	);
 }
 
 export function displayOutput<T>(value: T, codec: NumberCodec): T {
