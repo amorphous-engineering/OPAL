@@ -19,7 +19,7 @@ import { executionOutput, part, stockMove, stockRecord } from '../../db/schema/i
 import { update } from '../../write.ts';
 import { balancesForPart, consumeStock, produceStock } from '../inventory/index.ts';
 import { ensurePartsActive } from '../parts/lifecycle.ts';
-import { getRow, loadModel, type Model } from './model.ts';
+import { getRow, isActive, loadModel, type Model } from './model.ts';
 
 // ---------------------------------------------------------------- consumption rows
 
@@ -93,6 +93,13 @@ export function kitAvailability(ctx: Pick<Ctx, 'db'>, executionId: number) {
 
 // ---------------------------------------------------------------- consume
 
+/** Material moves belong to the work done; a closed work order's record stays as signed. */
+function requireOpen(m: Model) {
+	if (!isActive(m.exec)) {
+		throw new OpalError(409, 'execution_closed', `Material does not move on a work order that is ${m.exec.status.replace('_', ' ')}`);
+	}
+}
+
 interface Line {
 	stockId: number;
 	quantity: string;
@@ -101,6 +108,7 @@ interface Line {
 
 export function consume(ctx: Ctx, input: { id: number; stepId?: number; items: Line[]; notes?: string | null }) {
 	const m = loadModel(ctx.db, input.id);
+	requireOpen(m);
 	const row = input.stepId === undefined ? null : getRow(m, input.stepId);
 	const stocks = ctx.db
 		.select({ id: stockRecord.id, partId: stockRecord.partId })
@@ -220,6 +228,7 @@ export function produce(
 	}
 ) {
 	const m = loadModel(ctx.db, input.id);
+	requireOpen(m);
 	// A produced as-built item is a physical reference: draft parts block it.
 	ensurePartsActive(ctx, input.items.map((i) => i.partId), 'production output (as-built)');
 	const stockIds: number[] = [];

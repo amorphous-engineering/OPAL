@@ -162,3 +162,28 @@ describe('production and finalize', () => {
 		expect(again.status).toBe(409);
 	});
 });
+
+describe('material on closed work orders', () => {
+	test('a completed or aborted work order refuses consumption and production with 409', async () => {
+		const t = await setup();
+		const screw = await t.bulk('Screw');
+		const pid = await t.published(['A']);
+		const done = await t.cut(pid);
+		const sid = await t.stepOf(done.id, '1');
+		const stock = await t.stock(screw.id, '10');
+		await t.complete(done.id, '1');
+		expect((await t.get(done.id)).status).toBe('completed');
+		const item = { stockId: stock.id, quantity: '1' };
+		for (const r of [
+			await t.call('POST', `/executions/${done.id}/consume`, { items: [item] }),
+			await t.call('POST', `/executions/${done.id}/steps/${sid}/consume`, { items: [item] }),
+			await t.call('POST', `/executions/${done.id}/produce`, { items: [{ partId: screw.id, quantity: '1', location: 'A1' }] })
+		]) {
+			expect(r.status).toBe(409);
+		}
+		const aborted = await t.cut(pid);
+		await t.ok('POST', `/executions/${aborted.id}/cancel`, { reason: 'scrap' });
+		expect((await t.call('POST', `/executions/${aborted.id}/consume`, { items: [item] })).status).toBe(409);
+		expect((await t.ok('GET', `/inventory/${stock.id}`)).balance).toBe('10');
+	});
+});
