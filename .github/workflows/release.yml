@@ -18,32 +18,38 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
+      # Tag names and inputs arrive through env, not ${{ }} in the script, so
+      # shell syntax in a tag name stays data and does not run.
       - name: Determine tag
         id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            tag="${{ github.ref_name }}"
-          elif [ -n "${{ inputs.tag }}" ]; then
-            tag="${{ inputs.tag }}"
+          if [ "$EVENT_NAME" = "push" ]; then
+            tag="$REF_NAME"
+          elif [ -n "$INPUT_TAG" ]; then
+            tag="$INPUT_TAG"
           else
             tag="$(git describe --tags --abbrev=0)"
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -53,7 +59,9 @@ jobs:
 
       # One Linux job cross-compiles every target, one after another.
       - name: Build binaries
-        run: pnpm --filter @opal/server build --version "${{ steps.tag.outputs.tag }}"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: pnpm --filter @opal/server build --version "$TAG"
 
       - name: Collect assets
         run: |
@@ -69,8 +77,9 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          tag="${{ steps.tag.outputs.tag }}"
+          tag="$TAG"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag exists. Uploading assets to it."
             gh release upload "$tag" release-assets/* --clobber
