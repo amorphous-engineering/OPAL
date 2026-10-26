@@ -106,7 +106,9 @@ export function definePlugin(def: PluginDefinition, opts: PluginOptions = {}): P
 		log(`route error ${c.req.method} ${c.req.path}:`, err);
 		return c.json({ error: 'internal', message: 'Plugin error' }, 500);
 	});
-	const server = Bun.serve({ hostname: '127.0.0.1', port, fetch: app.fetch });
+	// Bun closes a request after 10 s idle by default. A plugin route can wait on a slow or
+	// rate-limited service, so allow 2 minutes.
+	const server = Bun.serve({ hostname: '127.0.0.1', port, idleTimeout: 120, fetch: app.fetch });
 
 	const abort = new AbortController();
 	let reconciling = false;
