@@ -136,6 +136,51 @@ describe('labels', () => {
 		expect(part).toMatchObject({ kind: 'part', primary: p.internalPn, url: `http://opal.test/parts/${p.id}` });
 	});
 
+	test('a label request is refused before any QR work when it asks for more labels than a sheet holds', async () => {
+		const { s } = await withRecord();
+		const many = Array.from({ length: 301 }, (_, i) => i + 1).join(',');
+		const r = await s.call('GET', `/inventory/labels?part=${many}`);
+		expect(r.status).toBe(422);
+		const ok = await s.call('GET', `/inventory/labels?part=${many.split(',').slice(0, 300).join(',')}`);
+		expect(ok.status).toBe(200);
+		expect(ok.body.labels.length + ok.body.failures.length).toBe(300);
+	});
+
+	test('a label request counts inventory and part entries together', async () => {
+		const { s } = await withRecord();
+		const inv = Array.from({ length: 150 }, (_, i) => `OPAL-${i + 1}`).join(',');
+		const parts = Array.from({ length: 151 }, (_, i) => i + 1).join(',');
+		expect((await s.call('GET', `/inventory/labels?inventory=${inv}&part=${parts}`)).status).toBe(422);
+	});
+
+	test('a label request is refused when one entry is longer than any record number', async () => {
+		const { s } = await withRecord();
+		const r = await s.call('GET', `/inventory/labels?inventory=${'A'.repeat(41)}`);
+		expect(r.status).toBe(422);
+	});
+
+	test('a label request is refused when the origin is longer than the QR origin limit', async () => {
+		const { s, p } = await withRecord();
+		expect((await s.call('GET', `/inventory/labels?part=${p.id}&origin=http://${'a'.repeat(300)}`)).status).toBe(422);
+		expect((await s.call('GET', `/inventory/labels?part=${p.id}&origin=http://${'a'.repeat(150)}`)).status).toBe(200);
+	});
+
+	test('a part or stock record named twice prints one label', async () => {
+		const { s, p, rec } = await withRecord();
+		const r = await s.call(
+			'GET',
+			`/inventory/labels?part=${p.id},${p.id},0${p.id}&inventory=${rec.opalNumber},${rec.opalNumber}`
+		);
+		expect(r.status).toBe(200);
+		expect(r.body.labels).toHaveLength(2);
+		expect(r.body.failures).toEqual([]);
+	});
+
+	test('parts.qrcode refuses an origin longer than 200 characters', async () => {
+		const { s, p } = await withRecord();
+		expect((await s.call('GET', `/parts/${p.id}/qrcode?origin=http://${'a'.repeat(300)}`)).status).toBe(422);
+	});
+
 	test('a label that cannot be made is reported, and the others still print', async () => {
 		const { s, rec } = await withRecord();
 		const r = await s.call('GET', `/inventory/labels?inventory=${rec.opalNumber},OPAL-9999&part=abc`);

@@ -9,11 +9,14 @@ import { getStockByOpal } from './records.ts';
 
 type DbCtx = Pick<Ctx, 'db'>;
 
-const csv = (v: string | undefined) =>
-	(v ?? '')
-		.split(',')
-		.map((s) => s.trim())
-		.filter(Boolean);
+const csv = (v: string | undefined) => [
+	...new Set(
+		(v ?? '')
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean)
+	)
+];
 
 export function qrSvg(text: string): Promise<string> {
 	return QRCode.toString(text, { type: 'svg', margin: 1 });
@@ -82,8 +85,9 @@ export async function buildLabels(
 	const labels: StockLabel[] = [];
 	const failures: string[] = [];
 	const codec = numbersFor(ctx.db);
-	for (const opal of csv(input.inventory)) {
-		const stored = codec.canonical(opal);
+	// Entries that name the same record (OPAL-1, OPAL-0001) print once.
+	const opals = [...new Set(csv(input.inventory).map((o) => codec.canonical(o)))];
+	for (const stored of opals) {
 		try {
 			// The list is one string, so the boundary cannot canonicalize its entries.
 			labels.push(await stockLabel(ctx, stored, input.origin));
@@ -91,8 +95,13 @@ export async function buildLabels(
 			failures.push(`${stored}: Stock record not found`);
 		}
 	}
+	const partIds = new Set<number>();
 	for (const raw of csv(input.part)) {
 		const id = Number(raw);
+		if (Number.isInteger(id)) {
+			if (partIds.has(id)) continue;
+			partIds.add(id);
+		}
 		try {
 			if (!Number.isInteger(id)) throw new Error();
 			labels.push(await partLabel(ctx, id, input.origin));

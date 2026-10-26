@@ -146,7 +146,8 @@ describe('numbers leaving the server', () => {
 	test('a label shows the display width in its text and its QR address, and the address opens the page', async () => {
 		const w = await world();
 		const r = await w.call('GET', '/inventory/labels?inventory=OPAL-1,OPAL-0001,OPAL-0000000001,OPAL-77&origin=http://opal.test/');
-		expect(r.body.labels).toHaveLength(3);
+		// OPAL-1, OPAL-0001 and OPAL-0000000001 name one record: one label.
+		expect(r.body.labels).toHaveLength(1);
 		for (const l of r.body.labels) {
 			expect(l.primary).toBe('OPAL-0001');
 			expect(l.secondary).toBe('SPX-F-0001');

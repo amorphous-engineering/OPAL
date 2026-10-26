@@ -76,6 +76,11 @@ export const zStockRecord = z.object({
 });
 export type StockRecord = z.infer<typeof zStockRecord>;
 
+/** One label sheet: a few hundred labels. Each label costs a synchronous QR draw. */
+export const LABEL_MAX_ENTRIES = 300;
+export const LABEL_ENTRY_MAX_CHARS = 40;
+const LABEL_LIST_MAX_CHARS = LABEL_MAX_ENTRIES * (LABEL_ENTRY_MAX_CHARS + 1);
+
 const zStockPage = zPage(zStockRecord).extend({ total: z.number().int() });
 
 export const zStockByPart = z.object({
@@ -389,11 +394,20 @@ export const inventory = {
 		path: '/inventory/labels',
 		summary:
 			'StockLabel data with QR codes. `inventory` and `part` are comma lists of OPAL numbers and part ids. `origin` is the web address the QR codes point at.',
-		input: z.object({
-			inventory: z.string().optional(),
-			part: z.string().optional(),
-			origin: z.string().optional()
-		}),
+		input: z
+			.object({
+				inventory: z.string().max(LABEL_LIST_MAX_CHARS).optional(),
+				part: z.string().max(LABEL_LIST_MAX_CHARS).optional(),
+				// Same bound as parts.qrcode: the origin goes into every QR code.
+				origin: z.string().max(200).optional()
+			})
+			.superRefine((v, ctx) => {
+				const entries = [...(v.inventory ?? '').split(','), ...(v.part ?? '').split(',')].map((s) => s.trim()).filter(Boolean);
+				if (entries.length > LABEL_MAX_ENTRIES)
+					ctx.addIssue({ code: 'custom', message: `At most ${LABEL_MAX_ENTRIES} labels per request` });
+				if (entries.some((e) => e.length > LABEL_ENTRY_MAX_CHARS))
+					ctx.addIssue({ code: 'custom', message: `A label entry is at most ${LABEL_ENTRY_MAX_CHARS} characters` });
+			}),
 		output: z.object({ labels: z.array(zStockLabel), failures: z.array(z.string()) }),
 		access: 'signed-in',
 		mcp: false
