@@ -109,26 +109,3 @@ export function validatePartNumber(db: Db, tier: number, pn: string): number {
 	}
 	return sequence;
 }
-
-/** A valid manual part number in the stored form (10-digit sequence), with its sequence. */
-export function canonicalPartNumber(db: Db, tier: number, pn: string): { pn: string; sequence: number } {
-	const sequence = validatePartNumber(db, tier, pn);
-	return { pn: format(db, tier, sequence), sequence };
-}
-
-/**
- * Check a manual part number and move the tier counter past it, so an automatic number never
- * reuses it. Throws 409 when a part holds the number. Returns the sequence.
- */
-export function registerPartNumber(ctx: Pick<Ctx, 'db'>, tier: number, input: string): number {
-	// The check runs on the stored form, so an alias of a used sequence at another width is a duplicate.
-	const { pn, sequence } = canonicalPartNumber(ctx.db, tier, input);
-	if (pnExists(ctx.db, pn)) throw new OpalError(409, 'duplicate', `Part number ${pn} is already taken`);
-	const key = sequenceKey(tier);
-	const row = ctx.db.select().from(designatorSequence).where(eq(designatorSequence.prefix, key)).get();
-	if (!row) ctx.db.insert(designatorSequence).values({ prefix: key, lastValue: sequence }).run();
-	else if (row.lastValue < sequence) {
-		ctx.db.update(designatorSequence).set({ lastValue: sequence }).where(eq(designatorSequence.prefix, key)).run();
-	}
-	return sequence;
-}

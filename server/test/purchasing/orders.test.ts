@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { auditLog, stockMove, stockRecord } from '../../src/db/schema/index.ts';
 import { makePart, mkPo, mkSupplier, orderedPo, recv, setProject, setStatus, setup } from './helpers.ts';
 
@@ -22,15 +22,6 @@ describe('creating a purchase order', () => {
 	test('an order needs a supplier or a supplier name', async () => {
 		const s = await setup();
 		expect((await s.call('POST', '/purchases', {})).status).toBe(422);
-	});
-
-	test('a duplicate reference is refused on create and on update', async () => {
-		const s = await setup();
-		await mkPo(s, { reference: 'PO-X' });
-		const dup = await s.call('POST', '/purchases', { supplierName: 'A', reference: 'PO-X' });
-		expect(dup.status).toBe(409);
-		const other = await mkPo(s);
-		expect((await s.call('PATCH', `/purchases/${other.id}`, { reference: 'PO-X' })).status).toBe(409);
 	});
 
 	test('a draft part cannot be put on an order, on create or by adding a line', async () => {
@@ -452,5 +443,33 @@ describe('part references', () => {
 		const rows = (await s.call('GET', `/parts/${p.id}/po-lines`)).body;
 		expect(rows.map((r: { purchaseId: number }) => r.purchaseId)).toEqual([b.id, a.id]);
 		expect(rows[1]).toMatchObject({ reference: a.reference, supplierName: 'Acme', qtyOrdered: '2', qtyReceived: '0', unitCost: '3', targetDate: '2030-05-01' });
+	});
+});
+
+describe('PO numbering', () => {
+	test('a renamed purchase order does not free its number for a new one', async () => {
+		const s = await setup();
+		const first = await mkPo(s);
+		expect(first.reference).toBe('PO-0001');
+		expect((await s.call('PATCH', `/purchases/${first.id}`, { notes: 'x' })).status).toBe(200);
+		expect((await mkPo(s)).reference).toBe('PO-0002');
+	});
+
+	test('a PO number cannot be set or changed', async () => {
+		const s = await setup();
+		const first = await mkPo(s, { reference: 'PO-7' });
+		expect(first.reference).toBe('PO-0001');
+		const patched = await s.call('PATCH', `/purchases/${first.id}`, { reference: 'PO-RENAMED' });
+		expect(patched.status).toBe(200);
+		expect(patched.body.reference).toBe('PO-0001');
+		expect((await mkPo(s)).reference).toBe('PO-0002');
+	});
+
+	test('a database without the PO counter starts it at the highest reference in use', async () => {
+		const s = await setup();
+		await mkPo(s);
+		s.db.run(sql`UPDATE purchase SET reference = 'PO-0000000041'`);
+		s.db.run(sql`DELETE FROM designator_sequence WHERE prefix = 'PO'`);
+		expect((await mkPo(s)).reference).toBe('PO-0042');
 	});
 });

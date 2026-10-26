@@ -58,8 +58,6 @@
 
 	let tier = $state<number | null>(p0?.tier ?? iTier);
 	let name = $state(p0?.name ?? '');
-	let pn = $state(p0?.internalPn ?? '');
-	let pnEdited = $state(false);
 	let externalPn = $state(p0?.externalPn ?? '');
 	let procurement = $state<Procurement>(p0?.procurement ?? 'make');
 	let procurementTouched = $state(editing);
@@ -124,18 +122,12 @@
 			});
 	});
 
-	$effect(() => {
-		if (editing && draft && !pnEdited) pn = tierChanged ? '' : (p0?.internalPn ?? '');
-	});
-
 	if (p0) partQr(p0.id).then((u) => (qr = u));
 
 	const shownPn = $derived(
 		editing && !tierChanged
 			? (p0?.internalPn ?? '')
-			: pnEdited && pn.trim()
-				? pn.trim()
-				: (preview?.partNumber ?? '')
+			: (preview?.partNumber ?? '')
 	);
 
 	function onExternalInput() {
@@ -189,7 +181,6 @@
 			};
 			if (!editing) {
 				const body: PartCreate = { ...fields, name: name.trim(), tier };
-				if (pnEdited && pn.trim()) body.internalPn = pn.trim();
 				if (assembly) {
 					body.assemblyId = assembly.id;
 					body.assemblyQuantity = assemblyQty.trim() || '1';
@@ -203,8 +194,7 @@
 			if (name.trim() !== p0!.name) body.name = name.trim();
 			if (draft) {
 				if (tierChanged) {
-					const next =
-						pnEdited && pn.trim() ? pn.trim() : (preview?.partNumber ?? 'the next number');
+					const next = preview?.partNumber ?? 'the next number';
 					const ok = await confirm({
 						title: `Change tier to T${tier}`,
 						body: `${p0!.internalPn} is abandoned permanently and never reissued. New number: ${next}.`,
@@ -214,7 +204,6 @@
 					if (!ok) return;
 					body.tier = tier;
 				}
-				if (pnEdited && pn.trim() && pn.trim() !== p0!.internalPn) body.internalPn = pn.trim();
 			}
 			await opal.parts.update(body);
 			toast.success('Saved');
@@ -293,13 +282,9 @@
 							<Input
 								id="pf-pn"
 								class="font-mono"
-								bind:value={pn}
-								oninput={() => (pnEdited = true)}
-								placeholder={preview && !(editing && !tierChanged)
-									? preview.partNumber
-									: (p0?.internalPn ?? 'Select a tier')}
-								autocomplete="off"
-								spellcheck="false"
+								value={shownPn}
+								readonly
+								placeholder="Select a tier"
 							/>
 						</FormField>
 						<FormField label="Name" for="pf-name" required>

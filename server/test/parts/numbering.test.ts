@@ -25,35 +25,6 @@ describe('part numbering', () => {
 		expect(after.sequence).toBe(first.sequence + 1);
 	});
 
-	test('a manual number is accepted and moves the counter past it', async () => {
-		const { create } = await setup();
-		const manual = await create({ name: 'Manual', internalPn: 'PN-1-0500' });
-		expect(manual.internalPn).toBe('PN-1-0500');
-		expect((await create({ name: 'Auto' })).internalPn).toBe('PN-1-0501');
-	});
-
-	test('a malformed manual number is refused with an example of the format', async () => {
-		const { api } = await setup();
-		const res = await api('POST', '/parts', { name: 'Bad', tier: 1, internalPn: 'WIDGET-XYZ' });
-		expect(res.status).toBe(422);
-		expect(res.json.message).toContain('WIDGET-XYZ');
-		expect(res.json.message).toContain('PN-1-');
-	});
-
-	test('a manual number held by a deleted part is a conflict', async () => {
-		const { api, create } = await setup();
-		const victim = await create({ name: 'Victim' });
-		await api('DELETE', `/parts/${victim.id}`);
-		const res = await api('POST', '/parts', { name: 'Squatter', tier: 1, internalPn: victim.internalPn });
-		expect(res.status).toBe(409);
-	});
-
-	test('a manual number held by a live part is a conflict', async () => {
-		const { api, create } = await setup();
-		const p = await create({ name: 'Holder' });
-		expect((await api('POST', '/parts', { name: 'Twin', tier: 1, internalPn: p.internalPn })).status).toBe(409);
-	});
-
 	test('reserve creates contiguous draft parts and the next number follows the block', async () => {
 		const { api, create } = await setup();
 		const res = await api('POST', '/parts/reserve', { tier: 2, count: 5 });
@@ -78,20 +49,11 @@ describe('part numbering', () => {
 		expect(moved.tier).toBe(2);
 		expect(moved.internalPn).toBe('PN-2-0001');
 		expect((await create({ name: 'Next tier 1' })).internalPn).toBe('PN-1-0002');
-		const reuse = await api('POST', '/parts', { name: 'Reuse', tier: 1, internalPn: 'PN-1-0001' });
-		expect(reuse.status).toBe(409);
-	});
-
-	test('a draft can take a new manual number', async () => {
-		const { api, create } = await setup();
-		const d = await create({ name: 'D' });
-		const res = await api('PATCH', `/parts/${d.id}`, { internalPn: 'PN-1-0042' });
-		expect(res.json.internalPn).toBe('PN-1-0042');
-		expect((await create({ name: 'E' })).internalPn).toBe('PN-1-0043');
+		expect((await api('GET', '/parts/next-pn?tier=1')).json.partNumber).toBe('PN-1-0003');
 	});
 
 	test('numbers follow the project scheme per tier', async () => {
-		const { api, configureProject } = await setup();
+		const { api, create, configureProject } = await setup();
 		configureProject({
 			tiers: [
 				{ level: 1, name: 'Flight', code: 'F' },
@@ -101,49 +63,25 @@ describe('part numbering', () => {
 		});
 		expect((await api('GET', '/parts/next-pn?tier=2')).json).toMatchObject({ partNumber: 'OP/G/001', tierName: 'Ground' });
 		expect((await api('GET', '/parts/next-pn?tier=9')).status).toBe(422);
-		const bad = await api('POST', '/parts', { name: 'X', tier: 1, internalPn: 'OP/G/005' });
-		expect(bad.status).toBe(422);
-		expect(bad.json.message).toContain('OP/F/001');
+		expect((await create({ name: 'X', tier: 1 })).internalPn).toBe('OP/F/001');
 	});
 
-	test('a manual number with more than 10 sequence digits is refused', async () => {
-		const { api } = await setup();
-		for (const pn of ['PN-1-00000000001', 'PN-1-99999999999', `PN-1-${'9'.repeat(25)}`]) {
-			const res = await api('POST', '/parts', { name: 'Wide', tier: 1, internalPn: pn });
-			expect(res.status).toBe(422);
-			expect(res.json.error).toBe('invalid_part_number');
-		}
-	});
-
-	test('a manual number with sequence zero is refused', async () => {
-		const { api } = await setup();
-		expect((await api('POST', '/parts', { name: 'Zero', tier: 1, internalPn: 'PN-1-0000' })).status).toBe(422);
-	});
-
-	test('a zero-padded alias of a used sequence is a conflict', async () => {
-		const { api, create } = await setup();
-		await create({ name: 'Holder' });
-		for (const pn of ['PN-1-1', 'PN-1-00001', 'PN-1-0000000001']) {
-			expect((await api('POST', '/parts', { name: 'Twin', tier: 1, internalPn: pn })).status).toBe(409);
-		}
-	});
-
-	test('a huge manual number cannot stop automatic numbering', async () => {
-		const { api, create } = await setup();
-		await create({ name: 'First' });
-		const bad = await api('POST', '/parts', { name: 'Huge', tier: 1, internalPn: `PN-1-${'9'.repeat(25)}` });
-		expect(bad.status).toBe(422);
-		expect((await create({ name: 'Second' })).internalPn).toBe('PN-1-0002');
+	test('a part number cannot be chosen at create', async () => {
+		const { api, create, db } = await setup();
+		const a = await create({ name: 'A', internalPn: 'PN-1-0500' });
+		expect(a.internalPn).toBe('PN-1-0001');
+		const res = await api('POST', '/parts/bulk', { parts: [{ name: 'B', internalPn: 'PN-1-0050' }] });
+		expect(res.json.parts[0].internalPn).toBe('PN-1-0002');
+		const stored = db.$client.query('select internal_pn from part where id = ?').get(a.id) as any;
+		expect(stored.internal_pn).toBe('PN-1-0000000001');
 		expect((await api('GET', '/parts/next-pn?tier=1')).json.partNumber).toBe('PN-1-0003');
 	});
 
-	test('a manual number is stored at the full width and the counter moves past it', async () => {
-		const { api, create, db } = await setup();
-		const manual = await create({ name: 'Short', internalPn: 'PN-1-5' });
-		expect(manual.internalPn).toBe('PN-1-0005');
-		const stored = db.$client.query('select internal_pn from part where id = ?').get(manual.id) as any;
-		expect(stored.internal_pn).toBe('PN-1-0000000005');
-		expect((await create({ name: 'Auto' })).internalPn).toBe('PN-1-0006');
-		expect((await api('POST', '/parts', { name: 'Again', tier: 1, internalPn: 'PN-1-0005' })).status).toBe(409);
+	test('a part number cannot be changed by an update', async () => {
+		const { api, create } = await setup();
+		const d = await create({ name: 'D' });
+		const res = await api('PATCH', `/parts/${d.id}`, { internalPn: 'PN-1-0042', name: 'D2' });
+		expect(res.json).toMatchObject({ internalPn: 'PN-1-0001', name: 'D2' });
+		expect((await create({ name: 'E' })).internalPn).toBe('PN-1-0002');
 	});
 });

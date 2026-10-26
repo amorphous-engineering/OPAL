@@ -91,10 +91,10 @@ describe('part create', () => {
 
 	test('a failed write rolls back, audit rows included', async () => {
 		const { db, api } = await setup();
-		await api('POST', '/parts', { name: 'A', tier: 1, internalPn: 'PN-1-0100' });
+		await api('POST', '/parts', { name: 'A', tier: 1 });
 		const before = db.select().from(auditLog).all().length;
-		const res = await api('POST', '/parts', { name: 'B', tier: 1, internalPn: 'PN-1-0100' });
-		expect(res.status).toBe(409);
+		const res = await api('POST', '/parts', { name: 'B', tier: 1, assemblyId: 999 });
+		expect(res.status).toBe(404);
 		expect(db.select().from(auditLog).all()).toHaveLength(before);
 	});
 

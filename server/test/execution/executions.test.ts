@@ -33,14 +33,6 @@ describe('cutting an execution', () => {
 		expect(new Set(list.items.map((r: any) => r.woNumber)).size).toBe(3);
 	});
 
-	test('an explicit work order number only applies to a single cut and must be free', async () => {
-		const t = await setup();
-		const pid = await t.published();
-		expect((await t.call('POST', '/executions', { procedureId: pid, woNumber: 'X-1', quantity: 2 })).status).toBe(422);
-		expect((await t.cut(pid, { woNumber: 'X-1' })).woNumber).toBe('X-1');
-		expect((await t.call('POST', '/executions', { procedureId: pid, woNumber: 'X-1' })).status).toBe(409);
-	});
-
 	test('an unpublished procedure cannot be cut, and a version can be pinned', async () => {
 		const t = await setup();
 		const p = await t.proc('Draft only');
@@ -111,15 +103,13 @@ describe('reading and editing', () => {
 		expect((await t.call('GET', '/executions/999/document')).status).toBe(404);
 	});
 
-	test('priority, dates and number can change; the number stays unique', async () => {
+	test('priority and dates can change', async () => {
 		const t = await setup();
 		const pid = await t.published();
 		const e = await t.cut(pid);
-		const u = await t.ok('PATCH', `/executions/${e.id}`, { priority: 'urgent', targetCompletionAt: '2030-01-01T00:00:00Z', woNumber: 'WO-X' });
-		expect(u).toMatchObject({ priority: 'urgent', woNumber: 'WO-X' });
+		const u = await t.ok('PATCH', `/executions/${e.id}`, { priority: 'urgent', targetCompletionAt: '2030-01-01T00:00:00Z' });
+		expect(u).toMatchObject({ priority: 'urgent', woNumber: e.woNumber });
 		expect(u.targetCompletionAt).toBe('2030-01-01T00:00:00.000Z');
-		const e2 = await t.cut(pid);
-		expect((await t.call('PATCH', `/executions/${e2.id}`, { woNumber: 'WO-X' })).status).toBe(409);
 	});
 
 	test('only an active execution can be aborted, and the abort ends it', async () => {
@@ -211,5 +201,19 @@ describe('derived status', () => {
 		const e = await t.cut(p.id);
 		await t.complete(e.id, '1');
 		expect((await t.get(e.id)).status).toBe('completed');
+	});
+});
+
+describe('work order numbers', () => {
+	test('a work order number cannot be set or changed', async () => {
+		const t = await setup();
+		const pid = await t.published(['A']);
+		const a = await t.cut(pid, { woNumber: 'WO-5' });
+		expect(a.woNumber).toBe('WO-0001');
+		const b = await t.cut(pid, { woNumber: 'X-1' });
+		expect(b.woNumber).toBe('WO-0002');
+		const patched = await t.ok('PATCH', `/executions/${b.id}`, { woNumber: 'WO-20', priority: 'high' });
+		expect(patched).toMatchObject({ woNumber: 'WO-0002', priority: 'high' });
+		expect((await t.cut(pid)).woNumber).toBe('WO-0003');
 	});
 });

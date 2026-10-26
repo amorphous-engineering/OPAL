@@ -38,7 +38,6 @@
 			: ''
 	);
 	let otherName = $state('');
-	let reference = $state('');
 	let supplierRef = $state('');
 	let targetDate = $state('');
 	let destination = $state('');
@@ -80,7 +79,6 @@
 				supplierId: supplierId ? Number(supplierId) : null,
 				supplierName: supplierId ? null : otherName.trim(),
 				supplierReference: supplierRef.trim() || null,
-				reference: reference.trim() || null,
 				targetDate: targetDate || null,
 				destination: destination.trim() || null,
 				notes: notes.trim() || null,
@@ -118,16 +116,6 @@
 					<Input id="po-supplier-name" bind:value={otherName} maxlength={255} />
 				</div>
 			{/if}
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label class="label" for="po-ref">Reference</Label>
-				<Input
-					id="po-ref"
-					bind:value={reference}
-					maxlength={64}
-					placeholder="Assigned on save"
-					class="font-mono"
-				/>
-			</div>
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label class="label" for="po-supplier-ref">Supplier reference</Label>
 				<Input id="po-supplier-ref" bind:value={supplierRef} maxlength={100} class="font-mono" />

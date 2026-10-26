@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fromInput, toInput } from '#lib/format.js';
-	// Work order facts that can change after the cut: number, schedule, priority.
+	// Work order facts that can change after the cut: project, schedule, priority.
 	import { toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -23,8 +23,6 @@
 
 	// The form edits a snapshot of the facts taken when the dialog opens.
 	// svelte-ignore state_referenced_locally
-	let workOrder = $state(facts.work_order ?? '');
-	// svelte-ignore state_referenced_locally
 	let scheduled = $state(local(facts.scheduled_start_at));
 	// svelte-ignore state_referenced_locally
 	let target = $state(local(facts.target_completion_at));
@@ -41,7 +39,6 @@
 		error = null;
 		try {
 			await store.update({
-				woNumber: workOrder.trim() || undefined,
 				projectId: projectId !== facts.project.id ? projectId : undefined,
 				scheduledStartAt: scheduled ? (fromInput(scheduled) ?? null) : null,
 				targetCompletionAt: target ? (fromInput(target) ?? null) : null,
@@ -59,9 +56,6 @@
 
 <form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 	<Dialog.Header><Dialog.Title>Edit work order</Dialog.Title></Dialog.Header>
-	<FormRow label="Work order" for="wo-number">
-		<Input id="wo-number" bind:value={workOrder} class="font-mono" maxlength={100} />
-	</FormRow>
 	<FormRow label="Project" for="wo-project" required>
 		<ProjectSelect id="wo-project" bind:value={projectId} keep={facts.project.id} class="w-full" />
 	</FormRow>

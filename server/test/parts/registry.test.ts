@@ -19,11 +19,11 @@ describe('parts operations', () => {
 
 	test('bulk create makes every part, or none when one fails', async () => {
 		const { api } = await setup();
-		const ok = await api('POST', '/parts/bulk', { parts: [{ name: 'A' }, { name: 'B', internalPn: 'PN-1-0050' }] });
+		const ok = await api('POST', '/parts/bulk', { parts: [{ name: 'A' }, { name: 'B' }] });
 		expect(ok.status).toBe(200);
-		expect(ok.json.parts.map((p: any) => p.internalPn)).toEqual(['PN-1-0001', 'PN-1-0050']);
-		const bad = await api('POST', '/parts/bulk', { parts: [{ name: 'C' }, { name: 'D', internalPn: 'PN-1-0050' }] });
-		expect(bad.status).toBe(409);
+		expect(ok.json.parts.map((p: any) => p.internalPn)).toEqual(['PN-1-0001', 'PN-1-0002']);
+		const bad = await api('POST', '/parts/bulk', { parts: [{ name: 'C' }, { name: '' }] });
+		expect(bad.status).toBe(422);
 		expect((await api('GET', '/parts')).json.items).toHaveLength(2);
 	});
 });

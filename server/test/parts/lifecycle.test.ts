@@ -46,22 +46,21 @@ describe('part lifecycle', () => {
 		expect(res.status).toBe(409);
 	});
 
-	test('an active part keeps its number and tier but other fields stay editable', async () => {
+	test('an active part keeps its tier but other fields stay editable', async () => {
 		const { api, create, activate } = await setup();
 		const p = await create({ name: 'Locked' });
 		await activate(p.id);
-		expect((await api('PATCH', `/parts/${p.id}`, { internalPn: 'PN-NEW-001' })).status).toBe(409);
 		expect((await api('PATCH', `/parts/${p.id}`, { tier: 2 })).status).toBe(409);
 		const renamed = await api('PATCH', `/parts/${p.id}`, { name: 'Renamed' });
 		expect(renamed.status).toBe(200);
 		expect(renamed.json.name).toBe('Renamed');
 	});
 
-	test('sending the current number or tier on an active part is not a change', async () => {
+	test('sending the current tier on an active part is not a change', async () => {
 		const { api, create, activate } = await setup();
 		const p = await create({ name: 'A' });
 		await activate(p.id);
-		const res = await api('PATCH', `/parts/${p.id}`, { internalPn: p.internalPn, tier: p.tier, name: 'B' });
+		const res = await api('PATCH', `/parts/${p.id}`, { tier: p.tier, name: 'B' });
 		expect(res.status).toBe(200);
 	});
 

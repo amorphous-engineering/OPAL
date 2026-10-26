@@ -27,7 +27,6 @@
 	// svelte-ignore state_referenced_locally
 	let versionId = $state(data.preselectVersion ? String(data.preselectVersion) : '');
 	let quantity = $state('1');
-	let workOrder = $state('');
 	let scheduled = $state('');
 	let target = $state('');
 	let priority = $state<ExecutionPriority>('normal');
@@ -94,7 +93,6 @@
 				procedureId: Number(procedureId),
 				versionId: versionId ? Number(versionId) : undefined,
 				projectId: projectId || undefined,
-				woNumber: n === 1 && workOrder.trim() ? workOrder.trim() : undefined,
 				quantity: n,
 				scheduledStartAt: scheduled ? fromInput(scheduled) : undefined,
 				targetCompletionAt: target ? fromInput(target) : undefined,
@@ -179,19 +177,6 @@
 					/>
 				</FormRow>
 			</div>
-			<FormRow
-				label="Work order"
-				for="cut-wo"
-				hint={n > 1 ? 'Numbers are generated for a batch.' : undefined}
-			>
-				<Input
-					id="cut-wo"
-					class="font-mono"
-					bind:value={workOrder}
-					disabled={n > 1}
-					placeholder="WO-#####"
-				/>
-			</FormRow>
 			<div class="grid grid-cols-2 gap-3">
 				<FormRow label="Scheduled start" for="cut-sched">
 					<Input id="cut-sched" type="datetime-local" class="font-mono" bind:value={scheduled} />

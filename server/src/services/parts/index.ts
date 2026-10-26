@@ -23,7 +23,6 @@ import { getProjectConfig, getTier, levelDefaults } from '../org/project.ts';
 import { addLine, listLines, whereUsedLines } from './bom.ts';
 import { projectFieldDefs, validateMetadata } from './fields.ts';
 import {
-	assignPartNumber,
 	allocatePartNumber,
 	defaultTracking,
 	requireConfiguredTier,
@@ -227,7 +226,7 @@ export function createRow(ctx: Ctx, input: PartCreateInput): Row {
 	if (input.assemblyId !== undefined) getRow(ctx, input.assemblyId);
 	const externalPn = blank(input.externalPn) ?? null;
 	const row = insert(ctx, part, {
-		internalPn: assignPartNumber(ctx, input.tier, input.internalPn),
+		internalPn: allocateFor(ctx, input.tier),
 		externalPn,
 		name: input.name,
 		description: blank(input.description) ?? null,
@@ -263,11 +262,10 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 
 	// Identity (number, tier) changes only while draft.
 	const tierChange = input.tier !== undefined && input.tier !== row.tier;
-	const pnChange = input.internalPn !== undefined && input.internalPn !== row.internalPn;
-	if ((tierChange || pnChange) && row.state !== 'draft') {
+	if (tierChange && row.state !== 'draft') {
 		throw conflict(
 			'identity_locked',
-			`${row.internalPn} is ${row.state}: its part number and tier cannot change`
+			`${row.internalPn} is ${row.state}: its tier cannot change`
 		);
 	}
 	// Tracking decides how stock is stored (one record per unit or one lump).
@@ -277,10 +275,10 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 		}
 		patch.trackingType = input.trackingType;
 	}
-	if (tierChange || pnChange) {
-		const tier = input.tier ?? row.tier;
-		// A tier change alone takes a fresh number from the new tier's counter.
-		const next = pnChange ? assignPartNumber(ctx, tier, input.internalPn) : allocateFor(ctx, tier);
+	if (tierChange) {
+		const tier = input.tier!;
+		// A tier change takes a fresh number from the new tier's counter.
+		const next = allocateFor(ctx, tier);
 		retirePartNumber(ctx, row.internalPn, 'replaced');
 		patch.internalPn = next;
 		patch.tier = tier;

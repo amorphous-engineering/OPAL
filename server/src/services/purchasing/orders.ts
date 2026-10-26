@@ -19,6 +19,7 @@ import {
 import { type SQL, and, asc, desc, eq, inArray, like, lt, notInArray, or, sql } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import {
+	designatorSequence,
 	part,
 	purchase,
 	purchaseExpense,
@@ -28,6 +29,7 @@ import {
 	supplier,
 	user
 } from '../../db/schema/index.ts';
+import { nextValue } from '../designators.ts';
 import { insert, remove, update } from '../../write.ts';
 import { receiveStock, receivingRulesFor, today } from '../inventory/index.ts';
 import { invalid } from '../inventory/ledger.ts';
@@ -256,25 +258,34 @@ export function listPurchases(
 
 // ---------------------------------------------------------------- create and edit
 
-/** PO-<sequence>: one past the highest numeric suffix in use, stored at full width. */
+const PO_PREFIX = 'PO';
+/** The stored form has 10 digits, so a PO sequence stays in 1..MAX_PO_SEQUENCE. */
+const MAX_PO_SEQUENCE = 9_999_999_999;
+
+/**
+ * PO-<sequence> from a counter that only goes up, stored at full width. A database from
+ * before the counter has no row: the first use starts it at the highest PO-<digits> reference
+ * in use, so no number in use is handed out again.
+ */
 export function nextReference(ctx: DbCtx): string {
-	let max = 0;
-	for (const r of ctx.db.select({ r: purchase.reference }).from(purchase).where(like(purchase.reference, 'PO-%')).all()) {
-		const m = /^PO-(\d+)$/.exec(r.r);
-		if (m) max = Math.max(max, Number(m[1]));
+	const row = ctx.db.select().from(designatorSequence).where(eq(designatorSequence.prefix, PO_PREFIX)).get();
+	if (!row) {
+		let max = 0;
+		for (const r of ctx.db.select({ r: purchase.reference }).from(purchase).where(like(purchase.reference, 'PO-%')).all()) {
+			const m = /^PO-(\d{1,10})$/.exec(r.r);
+			if (m) max = Math.max(max, Number(m[1]));
+		}
+		ctx.db.insert(designatorSequence).values({ prefix: PO_PREFIX, lastValue: max }).run();
 	}
-	return storeDesignator('PO', max + 1);
+	const sequence = nextValue(ctx, PO_PREFIX);
+	if (sequence > MAX_PO_SEQUENCE) throw conflict('numbers_exhausted', 'No free PO number found');
+	return storeDesignator('PO', sequence);
 }
 
 function resolveSupplier(ctx: DbCtx, id: number) {
 	const s = ctx.db.select().from(supplier).where(eq(supplier.id, id)).get();
 	if (!s) throw notFound(`Supplier ${id}`);
 	return s;
-}
-
-function assertReferenceFree(ctx: DbCtx, ref: string, exceptId?: number) {
-	const clash = ctx.db.select({ id: purchase.id }).from(purchase).where(eq(purchase.reference, ref)).get();
-	if (clash && clash.id !== exceptId) throw conflict('duplicate_reference', `PO with reference '${ref}' already exists`);
 }
 
 interface LineInput {
@@ -310,9 +321,7 @@ export function createPurchase(
 	const name = (i.supplierName ?? '').trim();
 	if (!i.supplierId && !name) throw invalid('supplierId', 'Choose a supplier or enter a supplier name');
 	if (i.supplierId) resolveSupplier(ctx, i.supplierId);
-	const wanted = (i.reference ?? '').trim();
-	if (wanted) assertReferenceFree(ctx, wanted);
-	const reference = wanted || nextReference(ctx);
+	const reference = nextReference(ctx);
 	const checked = i.lines.map((l) => checkedLine(ctx, l));
 	// A line is a financial commitment: a draft part blocks it.
 	ensurePartsActive(ctx, i.lines.map((l) => l.partId), `PO ${reference} line add`);
@@ -380,11 +389,6 @@ export function updatePurchase(
 	} else if (i.supplierName && i.supplierName.trim()) {
 		patch.supplierId = null;
 		patch.supplierName = i.supplierName.trim();
-	}
-	const ref = (i.reference ?? '').trim();
-	if (ref && ref !== p.reference) {
-		assertReferenceFree(ctx, ref, p.id);
-		patch.reference = ref;
 	}
 	if (i.supplierReference !== undefined) patch.supplierReference = i.supplierReference?.trim() || null;
 	if (i.targetDate !== undefined) patch.targetDate = i.targetDate;

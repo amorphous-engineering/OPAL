@@ -176,15 +176,7 @@
 	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="ORDER">
 			<DetailTable>
-				<EditableRow
-					label="Reference"
-					mono
-					value={po.reference}
-					{editable}
-					maxlength={64}
-					required
-					onsave={(v) => patch({ reference: v })}
-				/>
+				<DetailRow label="Reference" value={po.reference} mono />
 				<EditableRow
 					label="Supplier"
 					type="select"

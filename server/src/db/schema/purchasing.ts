@@ -59,7 +59,7 @@ export const purchase = sqliteTable(
 	'purchase',
 	{
 		id: id(),
-		/** PO-0001. Generated one past the highest PO-number in use, or typed by a person. */
+		/** PO-0001. Generated from the PO counter in designator_sequence, or typed by a person. */
 		reference: text('reference').notNull().unique(),
 		/** A registered supplier. The name then comes from the supplier row. */
 		supplierId: integer('supplier_id').references(() => supplier.id),

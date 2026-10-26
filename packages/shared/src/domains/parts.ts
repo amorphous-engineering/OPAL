@@ -72,8 +72,6 @@ const partFields = {
 export const zPartCreate = z.object({
 	name: z.string().trim().min(1).max(255),
 	tier: z.number().int().min(1).default(1),
-	/** Override the generated number. Must match the tier's numbering format. */
-	internalPn: z.string().trim().min(1).max(50).optional(),
 	unitOfMeasure: z.string().trim().min(1).max(20).default('ea'),
 	/** Default: the tier's default tracking. */
 	trackingType: z.enum(TRACKING_TYPES).optional(),
@@ -91,7 +89,6 @@ export type PartCreate = z.input<typeof zPartCreate>;
 export const zPartUpdate = z.object({
 	id: zId,
 	name: z.string().trim().min(1).max(255).optional(),
-	internalPn: z.string().trim().min(1).max(50).optional(),
 	tier: z.number().int().min(1).optional(),
 	unitOfMeasure: z.string().trim().min(1).max(20).optional(),
 	trackingType: z.enum(TRACKING_TYPES).optional(),

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { nextPartNumber, peekNextPartNumber, pnExists, registerPartNumber, validatePartNumber } from '../../src/services/org/numbering.ts';
+import { eq } from 'drizzle-orm';
+import { nextPartNumber, peekNextPartNumber, pnExists, validatePartNumber } from '../../src/services/org/numbering.ts';
 import { designatorSequence } from '../../src/db/schema/index.ts';
 import { nextSerial } from '../../src/services/designators.ts';
 import { numbersFor } from '../../src/services/org/project.ts';
@@ -270,69 +271,22 @@ describe('part numbers', () => {
 		expect(nextPartNumber(ctxOf(db), 1)).toBe('PN-1-0000000004');
 	});
 
-	test('a manual number is accepted and the counter moves past it', async () => {
-		const { db } = await setup();
-		expect(registerPartNumber(ctxOf(db), 1, 'PN-1-0000000500')).toBe(500);
-		expect(nextPartNumber(ctxOf(db), 1)).toBe('PN-1-0000000501');
-		// a lower manual number never moves the counter back
-		expect(registerPartNumber(ctxOf(db), 1, 'PN-1-0000000010')).toBe(10);
-		expect(nextPartNumber(ctxOf(db), 1)).toBe('PN-1-0000000502');
-	});
-
 	test('a malformed manual number is refused with the expected format by example', async () => {
 		const { db } = await setup();
 		// The service example is the stored form; the API message shows the display width.
 		expect(() => validatePartNumber(db, 1, 'WIDGET-XYZ')).toThrow(/WIDGET-XYZ.*PN-1-0000000001/);
 	});
 
-	test('the format example in a refusal shows the display width through the API', async () => {
-		const { call, makeUser } = await setup();
-		const root = makeUser('root', { admin: true });
-		const res = await call(root, 'POST', '/parts', { name: 'Bad', tier: 1, internalPn: 'WIDGET-XYZ' });
-		expect(res.status).toBe(422);
-		expect(res.json.message).toMatch(/WIDGET-XYZ.*PN-1-0001\)/);
-		expect(res.json.message).not.toContain('0000000001');
-		await call(root, 'POST', '/settings/organization', config({ partNumbering: { prefix: 'P', separator: '-', sequenceDigits: 6, format: '{prefix}{sep}{sequence}' } }));
-		const wide = await call(root, 'POST', '/parts', { name: 'Bad', tier: 1, internalPn: 'WIDGET-XYZ' });
-		expect(wide.json.message).toContain('e.g. P-000001)');
-	});
-
-	test('a manual number that a part holds is a conflict', async () => {
-		const { db } = await setup();
-		const ts = new Date().toISOString();
-		db.insert(part).values({ internalPn: 'PN-1-0000000007', name: 'X', unitOfMeasure: 'ea', trackingType: 'bulk', procurement: 'make', tier: 1, state: 'draft', createdAt: ts, updatedAt: ts } as never).run();
-		expect(() => registerPartNumber(ctxOf(db), 1, 'PN-1-0000000007')).toThrow('already taken');
-	});
-
 	test('the sequence is stored at full width, shown padded to the digits of the scheme but never cut', async () => {
 		const { db, call, makeUser } = await setup();
 		const root = makeUser('root', { admin: true });
 		await call(root, 'POST', '/settings/organization', config({ partNumbering: { prefix: 'P', separator: '-', sequenceDigits: 2, format: '{prefix}{sep}{sequence}' } }));
-		expect(registerPartNumber(ctxOf(db), 1, 'P-0000000123')).toBe(123);
-		expect(nextPartNumber(ctxOf(db), 1)).toBe('P-0000000124');
-		const made = await call(root, 'POST', '/parts', { name: 'Shown', tier: 1, internalPn: 'P-5' });
+		const made = await call(root, 'POST', '/parts', { name: 'Shown', tier: 1 });
 		expect(made.status).toBe(201);
-		expect(made.json.internalPn).toBe('P-05');
-		const big = await call(root, 'POST', '/parts', { name: 'Long', tier: 1, internalPn: 'P-12345' });
-		expect(big.json.internalPn).toBe('P-12345');
-	});
-
-	test('a manual number typed at any width is the same number, and a duplicate at another width is refused', async () => {
-		const { db, call, makeUser } = await setup();
-		const root = makeUser('root', { admin: true });
-		await call(root, 'POST', '/settings/organization', config());
-		const first = await call(root, 'POST', '/parts', { name: 'A', tier: 1, internalPn: 'BP-F-0132' });
-		expect(first.status).toBe(201);
-		expect(first.json.internalPn).toBe('BP-F-0132');
-		expect(db.select().from(part).all().map((p: any) => p.internalPn)).toEqual(['BP-F-0000000132']);
-		for (const typed of ['BP-F-132', 'BP-F-00132', 'BP-F-0000000132']) {
-			const dup = await call(root, 'POST', '/parts', { name: 'B', tier: 1, internalPn: typed });
-			expect(dup.status).toBe(409);
-			expect(dup.json.message).toContain('BP-F-0132');
-		}
-		expect(db.select().from(part).all()).toHaveLength(1);
-		// the counter moved past the manual number
-		expect((await call(root, 'POST', '/parts', { name: 'C', tier: 1 })).json.internalPn).toBe('BP-F-0133');
+		expect(made.json.internalPn).toBe('P-01');
+		db.update(designatorSequence).set({ lastValue: 122 }).where(eq(designatorSequence.prefix, 'PN-1')).run();
+		const big = await call(root, 'POST', '/parts', { name: 'Long', tier: 1 });
+		expect(big.json.internalPn).toBe('P-123');
 	});
 
 	test('changing sequenceDigits changes the displayed part number and moves no stored row', async () => {

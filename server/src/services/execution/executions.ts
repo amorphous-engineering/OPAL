@@ -315,7 +315,6 @@ export function createExecutions(
 		procedureId: number;
 		versionId?: number;
 		projectId?: number;
-		woNumber?: string;
 		quantity: number;
 		priority: 'normal' | 'high' | 'urgent';
 		scheduledStartAt?: string | null;
@@ -325,20 +324,14 @@ export function createExecutions(
 	const proc = procedureRow(ctx.db, input.procedureId);
 	const version = versionForExecution(ctx, input.procedureId, input.versionId);
 	const snap = version.content;
-	if (input.woNumber && input.quantity > 1) {
-		throw new OpalError(422, 'invalid_input', 'Explicit work order number only applies to a single cut', {
-			woNumber: 'Only for a single cut'
-		});
-	}
 	const project = requireActiveProject(ctx.db, input.projectId ?? proc.projectId);
-	if (input.woNumber) checkWoFree(ctx.db, input.woNumber);
 	// An as-built allocation is a physical reference: draft output parts block the whole cut.
 	const outputs = snap.procedure.procedureType === 'build' ? snap.outputs : [];
 	ensurePartsActive(ctx, outputs.map((o) => o.partId), `${proc.name} as-built allocation`);
 
 	const ids: number[] = [];
 	for (let n = 0; n < input.quantity; n++) {
-		const woNumber = input.woNumber ?? nextDesignator(ctx, 'WO');
+		const woNumber = nextDesignator(ctx, 'WO');
 		const e = insert(ctx, execution, {
 			woNumber,
 			projectId: project.id,
@@ -371,20 +364,12 @@ export function createExecutions(
 	return { ...getExecution(ctx, ids[0]!), cutIds: ids };
 }
 
-function checkWoFree(db: Db, woNumber: string, exceptId?: number) {
-	const clash = db.select({ id: execution.id }).from(execution).where(eq(execution.woNumber, woNumber)).get();
-	if (clash && clash.id !== exceptId) {
-		throw new OpalError(409, 'duplicate', `Work order number '${woNumber}' is in use`, { woNumber: 'In use' });
-	}
-}
-
 // ---------------------------------------------------------------- edit, abort
 
 export function updateExecution(
 	ctx: Ctx,
 	input: {
 		id: number;
-		woNumber?: string;
 		projectId?: number;
 		priority?: 'normal' | 'high' | 'urgent';
 		scheduledStartAt?: string | null;
@@ -393,10 +378,6 @@ export function updateExecution(
 ): Execution {
 	const cur = executionRow(ctx.db, input.id);
 	const patch: Partial<typeof execution.$inferInsert> = {};
-	if (input.woNumber !== undefined && input.woNumber !== cur.woNumber) {
-		checkWoFree(ctx.db, input.woNumber, cur.id);
-		patch.woNumber = input.woNumber;
-	}
 	if (input.projectId !== undefined && input.projectId !== cur.projectId) {
 		if (!isActive(cur)) throw conflict('execution_closed', 'The project of a finished work order does not change');
 		const linked = ctx.db.select({ id: issue.id }).from(issue).where(eq(issue.executionId, cur.id)).get();
