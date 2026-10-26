@@ -26,9 +26,10 @@
 :root {
 	/* Light: shadcn-svelte's official "neutral" theme, verbatim
 	   (shadcn-svelte.com/registry/colors/neutral.json, the base colour in components.json),
-	   except nothing: radius is shadcn's standard 0.625rem (Mira style). OPAL's own tokens, which shadcn does not define,
-	   use Tailwind's palette: ok green-700, warn amber-700, info/dev blue-600, brand
-	   orange-700; error is shadcn's destructive. */
+	   except: radius is shadcn's standard 0.625rem (Mira style), and muted-foreground is darker
+	   (0.45, not 0.556) because OPAL sets much of its gray text at 12px. OPAL's own tokens, which
+	   shadcn does not define, use Tailwind's palette one step darker than usual for small text:
+	   ok green-800, warn amber-800, error red-700, info blue-700, dev blue-600, brand orange-700. */
 	--radius: 0.625rem;
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
@@ -36,22 +37,22 @@
 	--card-foreground: oklch(0.145 0 0);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
+	--primary: oklch(0.546 0.245 262.881);
 	--primary-foreground: oklch(0.985 0 0);
 	--secondary: oklch(0.97 0 0);
 	--secondary-foreground: oklch(0.205 0 0);
 	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
+	--muted-foreground: oklch(0.45 0 0);
 	--accent: oklch(0.97 0 0);
 	--accent-foreground: oklch(0.205 0 0);
 	--destructive: oklch(0.577 0.245 27.325);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
 	--ring: oklch(0.708 0 0);
-	--ok: oklch(0.527 0.154 150.069);
-	--warn: oklch(0.555 0.163 48.998);
-	--error: oklch(0.577 0.245 27.325);
-	--info: oklch(0.546 0.245 262.881);
+	--ok: oklch(0.448 0.119 151.328);
+	--warn: oklch(0.473 0.137 46.201);
+	--error: oklch(0.505 0.213 27.518);
+	--info: oklch(0.488 0.243 264.376);
 	--brand: oklch(0.553 0.195 38.402);
 	--dev: oklch(0.546 0.245 262.881);
 	--chart-1: oklch(0.546 0.245 262.881);
@@ -61,7 +62,7 @@
 	--chart-5: oklch(0.553 0.195 38.402);
 	--sidebar: oklch(0.985 0 0);
 	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
+	--sidebar-primary: oklch(0.546 0.245 262.881);
 	--sidebar-primary-foreground: oklch(0.985 0 0);
 	--sidebar-accent: oklch(0.97 0 0);
 	--sidebar-accent-foreground: oklch(0.205 0 0);
@@ -81,7 +82,7 @@
 	--secondary: #1e1e1e;
 	--secondary-foreground: #e0e0e0;
 	--muted: #1e1e1e;
-	--muted-foreground: #888888;
+	--muted-foreground: #a3a3a3;
 	--accent: #1e1e1e;
 	--accent-foreground: #e0e0e0;
 	--destructive: #f87171;
@@ -180,7 +181,8 @@
 		outline-offset: -1px;
 	}
 	body {
-		@apply bg-background font-sans text-sm text-foreground antialiased;
+		/* Grayscale smoothing thins dark text on white; only dark mode uses it. */
+		@apply bg-background font-sans text-sm text-foreground dark:antialiased;
 	}
 }
 
