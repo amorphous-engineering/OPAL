@@ -22,18 +22,20 @@
  * always starts on the real database, so a crash in demo mode ends in the real one.
  */
 import { Database } from 'bun:sqlite';
-import { type LifecycleState, FACTORY_RESET_WORD, OpalError, conflict } from '@opal/shared';
-import { eq } from 'drizzle-orm';
+import { type LifecycleState, FACTORY_RESET_WORD, OpalError, conflict, now } from '@opal/shared';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { SESSION_COOKIE } from '../../auth/tokens.ts';
 import { type Ctx, actorUserId } from '../../context.ts';
 import { type Db, openDb } from '../../db/client.ts';
+import type { AuthSettingKey } from '../../db/schema/auth.ts';
 import { loadDevSchema } from '../../db/dev.ts';
-import { authSetting, notification, part, user } from '../../db/schema/index.ts';
+import { apiToken, authSetting, notification, part, passkeyCredential, user } from '../../db/schema/index.ts';
 import { serialized } from '../../registry.ts';
-import { insert, update } from '../../write.ts';
+import { insert, remove, update } from '../../write.ts';
 import { startSession } from '../auth/sessions.ts';
+import { writeSetting } from '../auth/settings.ts';
 import { upsertProfile } from '../org/profiles.ts';
 import { ensureFts } from '../platform/search.ts';
 import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
@@ -68,6 +70,14 @@ function home(db: Db): Home {
 		homes.set(db, h);
 	}
 	return h;
+}
+
+/** True while the server runs on the demo database. Never creates state, so it works on any Db. */
+export const demoActive = (db: Db): boolean => homes.get(db)?.demo ?? false;
+
+/** Refuse an action whose effect would leave the demo sandbox (code execution, real files). */
+export function refuseInDemo(db: Db, action: string): void {
+	if (demoActive(db)) throw conflict('demo_active', `Exit the demo before ${action}.`);
 }
 
 export const demoPath = (h: Home) => join(dirname(h.dbPath), `${DEMO_PREFIX}${basename(h.dbPath)}`);
@@ -121,7 +131,25 @@ function copyAuthSettings(from: Db, to: Db): void {
 	const ctx = { db: to, actor: { kind: 'system' }, op: 'reports.lifecycle.enterDemo' } as Ctx;
 	for (const row of from.select().from(authSetting).all()) {
 		if (row.value === null || to.select().from(authSetting).where(eq(authSetting.key, row.key)).get()) continue;
-		insert(ctx, authSetting, { key: row.key, value: row.value });
+		// writeSetting keeps the OIDC client secret out of the demo audit log.
+		writeSetting(ctx, row.key as AuthSettingKey, row.value);
+	}
+}
+
+/**
+ * The seed is a public 1.x database with a known admin password. Only the operator signs in to
+ * the demo, so every other seeded person loses the password, admin rights, tokens and passkeys.
+ */
+function lockSeededUsers(demo: Ctx, operatorId: number | null): void {
+	const others = demo.db.select().from(user).all().filter((u) => u.id !== operatorId);
+	for (const u of others) {
+		if (u.passwordHash !== null || u.isAdmin) update(demo, user, u.id, { passwordHash: null, isAdmin: false });
+		for (const t of demo.db.select().from(apiToken).where(and(eq(apiToken.userId, u.id), isNull(apiToken.revokedAt))).all()) {
+			update(demo, apiToken, t.id, { revokedAt: now() });
+		}
+		for (const k of demo.db.select().from(passkeyCredential).where(eq(passkeyCredential.userId, u.id)).all()) {
+			remove(demo, passkeyCredential, k.id);
+		}
 	}
 }
 
@@ -145,7 +173,8 @@ function upsertOperator(demo: Ctx, operator: typeof user.$inferSelect) {
 			isAdmin: true
 		});
 	} else {
-		row = update(demo, user, match.id, { isActive: true, isAdmin: true });
+		// A seeded user matched by name keeps no seeded password: the operator's credential replaces it.
+		row = update(demo, user, match.id, { passwordHash: operator.passwordHash, isActive: true, isAdmin: true });
 	}
 	upsertProfile(demo, row.id, { needsOnboarding: false, needsProfileSetup: false });
 	return row;
@@ -185,8 +214,11 @@ export async function enterDemo(ctx: Ctx): Promise<LifecycleState> {
 		buildDemoContent(demoDb);
 		copyAuthSettings(ctx.db, demoDb);
 	}
-	if (operator) {
-		const row = upsertOperator(demoCtx, operator);
+	const operatorRow = operator ? upsertOperator(demoCtx, operator) : null;
+	// Every entry, not only the first build: a kept demo file may predate the lock.
+	lockSeededUsers(demoCtx, operatorRow?.id ?? null);
+	if (operatorRow) {
+		const row = operatorRow;
 		mirrorNotifications(demoCtx, row);
 		// Sessions live per database: mint one in the demo so the operator stays signed in.
 		startSession({ ...demoCtx, cookies: ctx.cookies, request: ctx.request }, row, 'demo');
@@ -238,6 +270,8 @@ export function factoryReset(ctx: Ctx, confirm: string): void {
 		throw new OpalError(422, 'invalid_input', 'Invalid input', { confirm: `Type ${FACTORY_RESET_WORD} to confirm` });
 	}
 	const h = home(ctx.db);
+	// In the demo the live Db serves the demo file, but this acts on the real one.
+	if (h.demo) throw conflict('demo_active', 'Exit the demo before a factory reset.');
 	console.warn('FACTORY RESET initiated');
 	ctx.cookies?.delete(SESSION_COOKIE);
 	void serialized(async () => {

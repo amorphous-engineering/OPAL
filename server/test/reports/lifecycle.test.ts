@@ -6,8 +6,9 @@ import { join } from 'node:path';
 import { createApp } from '../../src/app.ts';
 import type { Actor } from '../../src/context.ts';
 import { openSchemaDb } from '../../src/db/dev-schema.ts';
-import { part, user } from '../../src/db/schema/index.ts';
+import { auditLog, part, user } from '../../src/db/schema/index.ts';
 import { serialized } from '../../src/registry.ts';
+import { writeSetting } from '../../src/services/auth/settings.ts';
 import { forgetLifecycle } from '../../src/services/reports/lifecycle.ts';
 
 let dir: string;
@@ -141,7 +142,65 @@ describe('demo database', () => {
 	});
 });
 
+describe('demo sign-in', () => {
+	test('the public seed credentials do not sign in while the demo is active', async () => {
+		const t = await boot();
+		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		const r = await t.call('POST', '/auth/login', { username: 'build', password: 'kestrel-demo' });
+		expect(r.status).toBe(401);
+		expect(r.res.headers.get('set-cookie')).toBeNull();
+		const others = t.db.select().from(user).all().filter((u) => u.email !== 'ada@x.test');
+		expect(others.length).toBeGreaterThan(0);
+		for (const u of others) {
+			expect(u.passwordHash).toBeNull();
+			expect(u.isAdmin).toBe(false);
+		}
+	});
+
+	test('the operator is the only admin of the demo', async () => {
+		const t = await boot();
+		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		const admins = t.db.select().from(user).all().filter((u) => u.isAdmin);
+		expect(admins.map((u) => u.email)).toEqual(['ada@x.test']);
+		expect(admins[0]!.passwordHash).toBe('h');
+	});
+
+	test('the demo audit log never holds the real OIDC client secret', async () => {
+		const t = await boot();
+		writeSetting({ db: t.db, actor: { kind: 'system' }, op: 't' } as any, 'oidc_client_secret', 'real-oidc-secret-value');
+		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		expect(JSON.stringify(t.db.select().from(auditLog).all())).not.toContain('real-oidc-secret-value');
+	});
+
+	test('plugins cannot be installed or enabled while the demo is active', async () => {
+		const t = await boot();
+		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		const r = await t.call('POST', '/plugins/install', { source: 'owner/repo', sha: 'local' });
+		expect(r.status).toBe(409);
+		expect(r.body.message).toBe('Exit the demo before installing a plugin.');
+	});
+});
+
 describe('factory reset', () => {
+	test('it is refused while the demo is active and the real database survives', async () => {
+		const t = await boot();
+		mkdirSync(join(dir, 'blobs'));
+		writeFileSync(join(dir, 'blobs', 'abc'), 'x');
+		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		const r = await t.call('POST', '/settings/factory-reset', { confirm: 'RESET' });
+		expect(r.status).toBe(409);
+		expect(r.body.message).toBe('Exit the demo before a factory reset.');
+		await t.settled();
+		expect(existsSync(join(dir, 'opal.db'))).toBe(true);
+		expect(existsSync(join(dir, 'blobs', 'abc'))).toBe(true);
+		expect(existsSync(join(dir, 'demo.opal.db'))).toBe(true);
+	});
+
 	test('it needs the word RESET', async () => {
 		const t = await boot();
 		expect((await t.call('POST', '/settings/factory-reset', { confirm: 'nope' })).status).toBe(422);
@@ -153,6 +212,9 @@ describe('factory reset', () => {
 		mkdirSync(join(dir, 'blobs'));
 		writeFileSync(join(dir, 'blobs', 'abc'), 'x');
 		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		const { exitDemo } = await import('../../src/services/reports/lifecycle.ts');
+		await exitDemo({ db: t.db, actor: { kind: 'system' }, op: 't' }, false);
 		await t.settled();
 		const r = await t.call('POST', '/settings/factory-reset', { confirm: ' RESET ' });
 		expect(r.status).toBe(200);
