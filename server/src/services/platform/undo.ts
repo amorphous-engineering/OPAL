@@ -13,15 +13,17 @@
  * undo's own rows and groups already undone. If that group's operation is not
  * reversible, undo refuses: it never reaches past it.
  */
-import { conflict, notFound, now } from '@opal/shared';
+import { conflict, contracts, forbidden, notFound, now, type OpContract } from '@opal/shared';
 import { and, desc, eq, gte, ne } from 'drizzle-orm';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { auditLog, undoMark } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
+import { holdsGate } from '../org/gates.ts';
 import { auditEntries } from './audit.ts';
 import { entityLabel } from './entities.ts';
 
+const REDACTED_MARK = '[redacted]';
 export const UNDO_WINDOW_MS = 60 * 60 * 1000;
 
 export type AuditRow = typeof auditLog.$inferSelect;
@@ -35,6 +37,11 @@ export interface Reversible {
 	 * last call. Default: up to and including the first `create`, else 1.
 	 */
 	group?(rows: AuditRow[]): number;
+	/**
+	 * Extra check for rules the contract's access gate does not cover (for example "others edit only
+	 * themselves"). Throw `forbidden()` to refuse. Runs against the actor at undo time.
+	 */
+	authorize?(ctx: Ctx, rows: AuditRow[]): void;
 	/** Text for the confirmation. Default: the audit entry's action, entity and record. */
 	describe?(ctx: Ctx, rows: AuditRow[]): string;
 }
@@ -50,6 +57,27 @@ export function isReversible(opName: string): boolean {
 	return reversible.has(opName);
 }
 
+let byName: Map<string, OpContract> | undefined;
+function contractOf(name: string): OpContract | undefined {
+	byName ??= new Map(
+		Object.values(contracts).flatMap((area) => Object.values(area as Record<string, Record<string, OpContract>>).flatMap((g) => Object.values(g)))
+			.map((c) => [c.name, c])
+	);
+	return byName.get(name);
+}
+
+/** An undo needs the authority of the operation it reverses, held by the actor now. */
+function assertMayUndo(ctx: Ctx, c: Candidate & { spec: Reversible }): void {
+	const op = c.rows[0]!.op;
+	const contract = contractOf(op);
+	// Only test operations lack a contract. Every real reversible operation is bound to one.
+	if (contract && contract.access !== 'public' && contract.access !== 'signed-in' && !holdsGate(ctx.db, ctx.actor, contract.access)) {
+		throw forbidden(`Undoing ${op} needs the access that ${op} needs`);
+	}
+	if (contract?.humanOnly && ctx.actor.kind === 'token') throw forbidden('This action needs a signed-in person, not an API token');
+	c.spec.authorize?.(ctx, c.rows);
+}
+
 const defaultGroup = (rows: AuditRow[]): number => {
 	const i = rows.findIndex((r) => r.action === 'create');
 	return i === -1 ? 1 : i + 1;
@@ -63,8 +91,9 @@ const defaultGroup = (rows: AuditRow[]): number => {
 export function revertRows(ctx: Ctx, rows: AuditRow[], tables: Record<string, AnyTable>): void {
 	assertUntouchedSince(ctx, rows);
 	const skip = new Set(['id', 'createdAt', 'updatedAt']);
+	// The audit row holds '[redacted]' for secrets. Writing it back would destroy the real value.
 	const strip = (v: unknown) =>
-		Object.fromEntries(Object.entries(v as object).filter(([k]) => !skip.has(k)));
+		Object.fromEntries(Object.entries(v as object).filter(([k, x]) => !skip.has(k) && x !== REDACTED_MARK));
 	try {
 		for (const r of [...rows].reverse()) {
 			const table = tables[r.entity];
@@ -165,6 +194,7 @@ export function undoLast(ctx: Ctx): { summary: string } {
 	const c = lastGroup(ctx);
 	if (!c) throw notFound('Recent action');
 	if (!c.spec) throw conflict('not_reversible', `The last action (${c.rows[0]!.op}) cannot be undone`);
+	assertMayUndo(ctx, { rows: c.rows, spec: c.spec });
 	const described = preview(ctx).summary;
 	const out = c.spec.revert(ctx, c.rows);
 	const at = now();

@@ -9,7 +9,7 @@ import * as roles from '../services/org/roles.ts';
 import * as system from '../services/org/system.ts';
 import * as users from '../services/org/users.ts';
 import * as workcenters from '../services/org/workcenters.ts';
-import { notFound, OpalError } from '@opal/shared';
+import { forbidden, notFound, OpalError } from '@opal/shared';
 
 const c = contracts.org;
 
@@ -39,7 +39,22 @@ for (const op of ['workcenters.create', 'workcenters.update', 'workcenters.deact
 for (const op of ['roles.create', 'roles.update'])
 	registerReversible(op, { revert: (ctx, rows) => revertRows(ctx, rows, { role: roleTable }) });
 registerReversible('projects.update', { revert: (ctx, rows) => revertRows(ctx, rows, { project: projectTable }) });
-registerReversible('users.update', { revert: (ctx, rows) => revertRows(ctx, rows, { user: userTable }) });
+registerReversible('users.update', {
+	// Same rule as updateUser: a non-admin changes only their own profile fields.
+	authorize: (ctx, rows) => {
+		if (ctx.actor.kind !== 'user' && ctx.actor.kind !== 'token') return;
+		if (ctx.actor.isAdmin) return;
+		const own = new Set(['name', 'jobTitle', 'phone', 'workcenterId']);
+		for (const r of rows) {
+			if (r.entityId !== ctx.actor.userId) throw forbidden('Cannot edit other users');
+			const b = (r.before ?? {}) as Record<string, unknown>;
+			const a = (r.after ?? {}) as Record<string, unknown>;
+			const bad = Object.keys({ ...b, ...a }).filter((k) => !['id', 'updatedAt'].includes(k) && b[k] !== a[k] && !own.has(k));
+			if (bad.length) throw forbidden(`Cannot change fields: ${bad.join(', ')}`);
+		}
+	},
+	revert: (ctx, rows) => revertRows(ctx, rows, { user: userTable })
+});
 registerSearchable({
 	type: 'project',
 	table: projectTable,
