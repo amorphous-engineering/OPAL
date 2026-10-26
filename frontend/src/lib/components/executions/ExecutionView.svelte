@@ -8,11 +8,13 @@
 	import {
 		confirm,
 		PageHeader,
-		State,
 		TabStrip,
 		toastError,
 		ErrorBanner
 	} from '#lib/components/opal/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { toneBox, toneFor } from '#lib/components/opal/tone.js';
+	import { stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
@@ -55,6 +57,7 @@
 
 	const doc = $derived(store.doc);
 	const inst = $derived(doc?.instance);
+	const metaBadge = 'font-mono tracking-wider text-muted-foreground';
 	const hasData = $derived(
 		!!doc &&
 			(doc.data_rows.length > 0 ||
@@ -134,21 +137,32 @@
 				]}
 			>
 				{#snippet state()}
-					<a
+					<Badge
+						variant="outline"
+						class={metaBadge}
 						href={`/procedures/${inst.procedure.id}`}
-						class="font-mono text-xs text-muted-foreground hover:underline"
-						>{inst.procedure.template_number}</a
+						title={inst.procedure.name}>{inst.procedure.template_number}</Badge
 					>
-					<span class="font-mono text-xs text-muted-foreground">v{inst.version.number}</span>
-					<State value={inst.status} badge={inst.status === 'aborted'} />
-					<span class="font-mono text-xs text-muted-foreground">{inst.project.code}</span>
+					<Badge variant="outline" class={metaBadge}>v{inst.version.number}</Badge>
+					<Badge
+						variant="outline"
+						class={cn('font-mono tracking-wider', toneBox[toneFor(inst.status)])}
+						>{stateLabel(inst.status)}</Badge
+					>
+					<Badge
+						variant="outline"
+						class={metaBadge}
+						href={`/projects/${inst.project.id}`}
+						title={inst.project.name}>{inst.project.code}</Badge
+					>
 					{#if inst.priority !== 'normal'}
-						<State
-							value="priority"
-							tone={inst.priority === 'urgent' ? 'error' : 'warn'}
-							label={inst.priority.toUpperCase()}
-							badge
-						/>
+						<Badge
+							variant="outline"
+							class={cn(
+								'font-mono tracking-wider',
+								toneBox[inst.priority === 'urgent' ? 'error' : 'warn']
+							)}>{inst.priority.toUpperCase()}</Badge
+						>
 					{/if}
 				{/snippet}
 				{#snippet actions()}
@@ -180,7 +194,7 @@
 			{/if}
 		</div>
 		<div
-			class="grid min-h-0 flex-1 grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[18rem_minmax(0,1fr)_minmax(16rem,20%)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
+			class="grid min-h-0 flex-1 grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[20%_minmax(0,1fr)_20%] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
 		>
 			<aside
 				class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
