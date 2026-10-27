@@ -38,6 +38,14 @@ import {
 	storeChallenge,
 	touchCredential
 } from '../services/auth/passkeys.ts';
+import {
+	checkAuthorizeRequest,
+	errorRedirect,
+	issueCode,
+	OAuthError,
+	requestProblem,
+	type AuthorizeRequest
+} from '../services/auth/oauth.ts';
 import { resetDiscoveryCache, testDiscovery } from '../services/auth/oidc.ts';
 import { revokeSessions, startSession, type UserRow } from '../services/auth/sessions.ts';
 import { insert, remove, update } from '../write.ts';
@@ -61,6 +69,16 @@ const invalid = (field: string, message: string) =>
 function userId(ctx: Ctx): number {
 	if (ctx.actor.kind !== 'user' && ctx.actor.kind !== 'token') throw forbidden();
 	return ctx.actor.userId;
+}
+
+/** A bad client or redirect URI is shown on the page, never sent to the redirect URI. */
+function oauthClient(input: AuthorizeRequest) {
+	try {
+		return checkAuthorizeRequest(input);
+	} catch (e) {
+		if (e instanceof OAuthError) throw new OpalError(400, e.code, e.message);
+		throw e;
+	}
 }
 
 const currentSessionId = (ctx: Ctx) => (ctx.actor.kind === 'user' ? ctx.actor.sessionId : undefined);
@@ -437,6 +455,26 @@ export const authImpls = [
 	}),
 
 	implement(contracts.auth.settings.testDiscovery, (ctx) => testDiscovery(readSettings(ctx.db))),
+
+	// ------------------------------------------------------------ OAuth approval (MCP clients)
+
+	implement(contracts.auth.oauth.describe, (ctx, input) => {
+		const client = oauthClient(input);
+		const problem = requestProblem(input);
+		return {
+			clientName: client.name,
+			redirectHost: new URL(input.redirectUri).host,
+			denyUrl: errorRedirect(input, 'access_denied', 'The user denied the request.'),
+			errorUrl: problem ? errorRedirect(input, problem, 'The authorization request is not valid.') : null
+		};
+	}),
+
+	implement(contracts.auth.oauth.approve, (ctx, input) => {
+		oauthClient(input);
+		const problem = requestProblem(input);
+		if (problem) return { redirectTo: errorRedirect(input, problem, 'The authorization request is not valid.') };
+		return { redirectTo: issueCode(userId(ctx), input) };
+	}),
 
 	// ------------------------------------------------------------ API tokens
 

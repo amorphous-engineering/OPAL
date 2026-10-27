@@ -267,6 +267,48 @@ const passkeys = {
 	})
 };
 
+/** The query of an OAuth authorization request, as an MCP client sends it to /oauth/authorize. */
+export const zOAuthRequest = z.object({
+	responseType: z.string().max(40),
+	clientId: z.string().min(1).max(4000),
+	redirectUri: z.string().min(1).max(500),
+	codeChallenge: z.string().max(200),
+	codeChallengeMethod: z.string().max(20),
+	state: z.string().max(1000).optional()
+});
+
+const oauth = {
+	describe: op({
+		name: 'auth.oauth.describe',
+		method: 'POST',
+		path: '/auth/oauth/describe',
+		summary: 'Check an OAuth authorization request from an MCP client and name the client.',
+		input: zOAuthRequest,
+		output: z.object({
+			clientName: z.string(),
+			redirectHost: z.string(),
+			/** Where Deny sends the browser. */
+			denyUrl: z.string(),
+			/** Set when the request is bad in a way the client must hear about: go there at once. */
+			errorUrl: z.string().nullable()
+		}),
+		access: 'signed-in',
+		humanOnly: true,
+		mcp: false
+	}),
+	approve: op({
+		name: 'auth.oauth.approve',
+		method: 'POST',
+		path: '/auth/oauth/approve',
+		summary: 'Approve an MCP client: it gets a token that acts as the signed-in user.',
+		input: zOAuthRequest,
+		output: z.object({ redirectTo: z.string() }),
+		access: 'signed-in',
+		humanOnly: true,
+		mcp: false
+	})
+};
+
 const claim = {
 	status: op({
 		name: 'auth.claim.status',
@@ -412,6 +454,7 @@ export const auth = {
 		mcp: true
 	}),
 	tokens,
+	oauth,
 	sessions,
 	passkeys,
 	claim,

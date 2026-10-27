@@ -22,6 +22,8 @@ export const csrfGuard: MiddlewareHandler = async (c, next) => {
 	// proves itself with its signed panel token. The proxy checks the token.
 	const path = c.req.path;
 	if (path.startsWith('/hooks/')) return next();
+	// OAuth registration and token calls carry no cookies, so a cross-site request gains nothing.
+	if (path === '/oauth/register' || path === '/oauth/token') return next();
 	if (path.startsWith('/plugins/') && c.req.header('x-opal-panel')) return next();
 	const host = c.req.header('host') ?? new URL(c.req.url).host;
 	const origin = c.req.header('origin');

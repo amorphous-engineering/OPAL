@@ -27,7 +27,8 @@ import { mintSession } from '../services/auth/sessions.ts';
 import { refreshFromOidc } from '../services/org/avatars.ts';
 import { oidcActive, readSettings } from '../services/auth/settings.ts';
 import { inTransaction } from '../services/auth/tx.ts';
-import { clientIp, trustProxy } from './client-ip.ts';
+import { requestBase } from './base-url.ts';
+import { clientIp } from './client-ip.ts';
 import { signPayload, verifyPayload } from './signing.ts';
 import { SESSION_COOKIE, SESSION_LIFETIME_MS } from './tokens.ts';
 
@@ -35,18 +36,6 @@ import { SESSION_COOKIE, SESSION_LIFETIME_MS } from './tokens.ts';
 export function safeNext(value: string | undefined | null): string {
 	if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/';
 	return value;
-}
-
-/** Scheme and host the browser used, seeing through a trusted reverse proxy. */
-function requestBase(c: Context): { base: string; secure: boolean } {
-	const url = new URL(c.req.url);
-	let proto = url.protocol.replace(':', '');
-	let host = c.req.header('host') ?? url.host;
-	if (trustProxy()) {
-		proto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() || proto;
-		host = c.req.header('x-forwarded-host')?.split(',')[0]?.trim() || host;
-	}
-	return { base: `${proto}://${host}`, secure: proto === 'https' };
 }
 
 function loginError(c: Context, message: string): Response {

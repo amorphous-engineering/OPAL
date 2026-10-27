@@ -5,6 +5,7 @@
 import type { Hono } from 'hono';
 import type { Db } from '../db/client.ts';
 import type { ResolveActor } from '../registry.ts';
+import { mountOauth } from '../auth/oauth.ts';
 import { mountOidc } from '../auth/oidc.ts'; // added by auth
 import { mountAvatarRoute } from '../services/org/avatars.ts';
 import { mountFiles } from '../services/platform/files.ts';
@@ -15,6 +16,7 @@ export function mountRawRoutes(app: Hono, db: Db, resolveActor: ResolveActor): v
 	mountAvatarRoute(app, db, resolveActor);
 	mountFiles(app, db, { resolveActor });
 	mountOidc(app, db); // added by auth
+	mountOauth(app, db);
 	mountProcedureRoutes(app, db, resolveActor); // added by procedures
 	mountPluginProxy(app, db, resolveActor);
 }

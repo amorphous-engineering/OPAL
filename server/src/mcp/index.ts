@@ -5,6 +5,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { matchesPattern, OpalError } from '@opal/shared';
 import type { Hono } from 'hono';
 import { z } from 'zod';
+import { requestBase } from '../auth/base-url.ts';
+import { MCP_RESOURCE_METADATA } from '../auth/oauth.ts';
 import type { Actor } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { errorResponse, type Impl, type ResolveActor, runOp } from '../registry.ts';
@@ -66,7 +68,8 @@ export function mountMcp(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 		const actor = await resolveActor(c);
 		if (actor.kind === 'anonymous') {
 			return c.json({ error: 'unauthenticated', message: 'Sign in required' }, 401, {
-				'WWW-Authenticate': 'Bearer realm="opal"'
+				// Tells an MCP client where to sign in (RFC 9728).
+				'WWW-Authenticate': `Bearer realm="opal", resource_metadata="${requestBase(c).base}${MCP_RESOURCE_METADATA}"`
 			});
 		}
 		// Stateless: a fresh server and transport per request.

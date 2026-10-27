@@ -58,11 +58,13 @@ On the first start, OPAL imports the old database into a new file. It keeps the 
 
 ## Connect Claude Code (MCP)
 
-Create an API token in OPAL, then run:
-
 ```bash
-claude mcp add --transport http opal http://<host>:8080/mcp --header "Authorization: Bearer opal_<token>"
+claude mcp add --transport http opal https://<host>/mcp
 ```
+
+Run `/mcp` in Claude Code and select `opal`. Sign in to OPAL in the browser and approve the client. For claude.ai, add a custom connector with the same URL. Behind a reverse proxy that terminates TLS, set `OPAL_TRUST_PROXY=1`.
+
+Scripts can use an API token instead: add `--header "Authorization: Bearer opal_<token>"`.
 
 ## Develop
 
