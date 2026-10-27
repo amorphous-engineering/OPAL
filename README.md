@@ -62,7 +62,7 @@ On the first start, OPAL imports the old database into a new file. It keeps the 
 claude mcp add --transport http opal https://<host>/mcp
 ```
 
-Run `/mcp` in Claude Code and select `opal`. Sign in to OPAL in the browser and approve the client. For claude.ai, add a custom connector with the same URL. Behind a reverse proxy that terminates TLS, set `OPAL_TRUST_PROXY=1`.
+Run `/mcp` in Claude Code and select `opal`. Sign in to OPAL in the browser and approve the client. For claude.ai, add a custom connector with the same URL. Behind a reverse proxy that terminates TLS, set `OPAL_PUBLIC_URL` to the URL people use, for example `https://opal.example.com`.
 
 Scripts can use an API token instead: add `--header "Authorization: Bearer opal_<token>"`.
 

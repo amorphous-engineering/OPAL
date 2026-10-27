@@ -86,6 +86,21 @@ describe('oauth for mcp clients', () => {
 		});
 	});
 
+	test('OPAL_PUBLIC_URL names the server in the metadata, whatever the request says', async () => {
+		const h = await harness();
+		process.env.OPAL_PUBLIC_URL = 'https://opal.example.com/';
+		try {
+			const res = await h.app.request('http://opal.test/mcp', { method: 'POST', headers: { 'x-forwarded-proto': 'http' } });
+			expect(res.headers.get('www-authenticate')).toContain(
+				'resource_metadata="https://opal.example.com/.well-known/oauth-protected-resource/mcp"'
+			);
+			const pr = await (await h.raw('/.well-known/oauth-protected-resource/mcp')).json();
+			expect(pr).toMatchObject({ resource: 'https://opal.example.com/mcp', authorization_servers: ['https://opal.example.com'] });
+		} finally {
+			delete process.env.OPAL_PUBLIC_URL;
+		}
+	});
+
 	test('registration accepts https and loopback redirects and refuses others', async () => {
 		const h = await harness();
 		const ok = await register(h, { redirect_uris: ['https://claude.ai/api/mcp/auth_callback', 'http://localhost:9/cb'] });
