@@ -1,6 +1,6 @@
 <script lang="ts">
-	// The DETAILS tab: time worked, evidence and work-order facts — the record around
-	// the work rather than the work itself.
+	// The DETAILS tab: time worked, evidence, work-order facts and plugin panels — the
+	// record around the work rather than the work itself.
 	import { cn } from '#lib/utils.js';
 	import {
 		Avatar,
@@ -22,6 +22,8 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { workTime } from '#lib/format.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
+	import PluginPanels from '#lib/components/plugins/PluginPanels.svelte';
+	import ExternalLinks from '#lib/components/plugins/ExternalLinks.svelte';
 
 	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
 
@@ -182,6 +184,10 @@
 			>
 		</DetailTable>
 	</Section>
+
+	<!-- The slot keeps its 'execution.side' name: plugins register panels against it. -->
+	<PluginPanels slot="execution.side" recordId={inst.id} number={inst.work_order ?? ''} />
+	<ExternalLinks entityType="execution" entityId={inst.id} />
 </div>
 
 {#snippet files(list: typeof doc.attachments)}
