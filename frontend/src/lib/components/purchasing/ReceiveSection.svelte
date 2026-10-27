@@ -1,5 +1,6 @@
 <script lang="ts">
-	// Receive against open lines: quantity, location, lot. Blank quantity leaves a line outstanding.
+	// Receive against open lines: quantity, location, serial. The order number is the lot.
+	// Blank quantity leaves a line outstanding.
 	// Stock already received shows as rows above the line's input row, with its OPAL number.
 	import { Section, confirm, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -33,14 +34,14 @@
 	interface Draft {
 		qty: string;
 		location: string;
-		lot: string;
+		serial: string;
 	}
 	let drafts = $state<Record<number, Draft>>({});
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
 	function d(id: number): Draft {
-		return (drafts[id] ??= { qty: '', location: '', lot: '' });
+		return (drafts[id] ??= { qty: '', location: '', serial: '' });
 	}
 
 	// Rows exist before the template reads them (the template must not create state).
@@ -80,15 +81,11 @@
 				error = `${l.partName}: a location is required to receive this line`;
 				return;
 			}
-			if (l.lotRequired && !row.lot.trim()) {
-				error = `${l.partName}: a lot number is required`;
-				return;
-			}
 			lines.push({
 				lineId: l.id,
 				quantity: String(row.qty).trim(),
 				location: row.location.trim() || null,
-				lotNumber: row.lot.trim() || null,
+				serialNumber: row.serial.trim() || null,
 				allowOverReceipt: over(l) > 0
 			});
 		}
@@ -207,18 +204,12 @@
 									/></td
 								>
 								<td class="px-3 py-1"
-									><Input
-										bind:value={row.lot}
-										placeholder={l.lotRequired
-											? 'Required'
-											: l.trackingType === 'serialized'
-												? l.autoSerial
-													? 'Auto serial'
-													: 'Serial'
-												: 'Lot'}
-										aria-label={`Lot for ${l.partName}`}
-										class="h-7 w-32 font-mono text-xs"
-									/></td
+									>{#if l.trackingType === 'serialized'}<Input
+											bind:value={row.serial}
+											placeholder={l.autoSerial ? 'Auto serial' : 'Serial'}
+											aria-label={`Serial for ${l.partName}`}
+											class="h-7 w-32 font-mono text-xs"
+										/>{:else}<span class="font-mono text-xs">{purchase.reference}</span>{/if}</td
 								>
 								<td></td>
 							</tr>

@@ -153,7 +153,7 @@ describe('receiving', () => {
 		const p = makePart(s.db);
 		const po = await mkPo(s, { destination: 'Dock', lines: [{ partId: p.id, qtyOrdered: '3' }] });
 		await setStatus(s, po.id, 'ordered');
-		await recv(s, po.id, [{ lineId: po.lines[0].id, quantity: '3', lotNumber: 'L1' }]);
+		await recv(s, po.id, [{ lineId: po.lines[0].id, quantity: '3' }]);
 		const rec = (await s.call('GET', `/purchases/${po.id}/inventory`)).body[0];
 		const ledger = (await s.call('GET', `/inventory/opal/${rec.opalNumber}/history`)).body;
 		expect(ledger[0].links).toMatchObject({ purchaseLineId: po.lines[0].id, purchaseId: po.id });
@@ -165,7 +165,7 @@ describe('receiving', () => {
 		const po = await mkPo(s, { destination: 'Dock', lines: [{ partId: p.id, qtyOrdered: '3', unitCost: '1.50' }] });
 		await setStatus(s, po.id, 'ordered');
 		const lineId = po.lines[0].id;
-		const r = await recv(s, po.id, [{ lineId, quantity: '3', lotNumber: 'L1' }]);
+		const r = await recv(s, po.id, [{ lineId, quantity: '3' }]);
 		expect(r.status).toBe(200);
 		expect(r.body.status).toBe('received');
 		expect(r.body.receivedById).toBe(s.admin.id);
@@ -173,7 +173,7 @@ describe('receiving', () => {
 		expect(r.body.lines[0].qtyReceived).toBe('3');
 		const recs = (await s.call('GET', `/purchases/${po.id}/inventory`)).body;
 		expect(recs).toHaveLength(1);
-		expect(recs[0]).toMatchObject({ location: 'Dock', lotNumber: 'L1', purchaseLineId: lineId, quantity: '3' });
+		expect(recs[0]).toMatchObject({ location: 'Dock', lotNumber: po.reference, purchaseLineId: lineId, quantity: '3' });
 		expect(recs[0].opalNumber).toMatch(/^OPAL-/);
 		const move = s.db.select().from(stockMove).where(eq(stockMove.purchaseLineId, lineId)).get();
 		expect(move?.kind).toBe('receive');
@@ -223,17 +223,29 @@ describe('receiving', () => {
 		expect((await s.call('GET', `/purchases/${po.id}`)).body.status).toBe('ordered');
 	});
 
-	test('a tier that requires a lot refuses a bulk receipt without one, and the line says so', async () => {
+	test('every receipt takes the order number as its lot, also where the tier requires a lot', async () => {
 		const s = await setup();
 		setProject(s.db, [{ level: 2, name: 'Lot', code: 'L', requireLot: true, autoSerial: false }]);
 		const p = makePart(s.db, { tier: 2 });
 		const po = await orderedPo(s, p.id, '2');
-		expect(po.lines[0].lotRequired).toBe(true);
 		const lineId = po.lines[0].id;
-		const refused = await recv(s, po.id, [{ lineId, quantity: '1', location: 'A' }]);
-		expect(refused.status).toBe(422);
-		expect(refused.body.fields.lotNumber).toContain('lot number');
-		expect((await recv(s, po.id, [{ lineId, quantity: '1', location: 'A', lotNumber: 'L9' }])).status).toBe(200);
+		expect((await recv(s, po.id, [{ lineId, quantity: '1', location: 'A' }])).status).toBe(200);
+		expect((await recv(s, po.id, [{ lineId, quantity: '1', location: 'B' }])).status).toBe(200);
+		const lots = (await s.call('GET', `/purchases/${po.id}/inventory`)).body.map((r: { lotNumber: string }) => r.lotNumber);
+		expect(po.reference).toMatch(/^PO-\d{4}$/);
+		expect(lots).toEqual([po.reference, po.reference]);
+	});
+
+	test('a serial number is refused for bulk stock and for more than one unit', async () => {
+		const s = await setup();
+		const bulk = await orderedPo(s, makePart(s.db).id, '2');
+		const b = await recv(s, bulk.id, [{ lineId: bulk.lines[0].id, quantity: '1', location: 'A', serialNumber: 'SN1' }]);
+		expect(b.status).toBe(422);
+		expect(b.body.fields.serialNumber).toContain('one serialized unit');
+		const ser = await orderedPo(s, makePart(s.db, { tracking: 'serialized' }).id, '2');
+		const m = await recv(s, ser.id, [{ lineId: ser.lines[0].id, quantity: '2', location: 'A', serialNumber: 'SN1' }]);
+		expect(m.status).toBe(422);
+		expect(s.db.select().from(stockMove).all()).toHaveLength(0);
 	});
 
 	test('a tier with auto serial issues unique serials per unit, and a typed number is kept for one unit', async () => {
@@ -243,7 +255,7 @@ describe('receiving', () => {
 		const po = await orderedPo(s, p.id, '4');
 		const lineId = po.lines[0].id;
 		await recv(s, po.id, [{ lineId, quantity: '3', location: 'A' }]);
-		await recv(s, po.id, [{ lineId, quantity: '1', location: 'A', lotNumber: 'SN-MINE' }]);
+		await recv(s, po.id, [{ lineId, quantity: '1', location: 'A', serialNumber: 'SN-MINE' }]);
 		const serials = (await s.call('GET', `/purchases/${po.id}/inventory`)).body.map((r: { serialNumber: string }) => r.serialNumber);
 		expect(serials).toEqual(['001', '002', '003', 'SN-MINE']);
 	});

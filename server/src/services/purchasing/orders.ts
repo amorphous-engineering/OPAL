@@ -92,7 +92,6 @@ function presentLine(ctx: DbCtx, l: LineRow, p: PartRow, received: number): Purc
 		partExternalPn: p.externalPn,
 		unitOfMeasure: p.unitOfMeasure,
 		trackingType: p.trackingType,
-		lotRequired: rules.requireLot,
 		autoSerial: rules.autoSerial,
 		qtyOrdered: formatQty(l.qtyOrdered as Qty),
 		qtyCancelled: formatQty(l.qtyCancelled as Qty),
@@ -745,7 +744,7 @@ export function receive(
 	ctx: Ctx,
 	i: {
 		id: number;
-		lines: { lineId: number; quantity: string; location?: string | null; lotNumber?: string | null; allowOverReceipt: boolean }[];
+		lines: { lineId: number; quantity: string; location?: string | null; serialNumber?: string | null; allowOverReceipt: boolean }[];
 	}
 ): Purchase {
 	const p = getRow(ctx, i.id);
@@ -771,15 +770,16 @@ export function receive(
 		const location = r.location?.trim() || l.destination || p.destination;
 		if (!location) throw invalid('location', `${pt.name}: a location is required to receive this line`);
 		ensurePartsActive(ctx, [pt.id], `receive against PO ${p.reference}`);
-		let lot = r.lotNumber?.trim() || null;
-		let serial: string | null = null;
-		// A serialized part with one unit takes the typed number as its serial.
-		if (pt.trackingType === 'serialized' && lot && qty === QTY_SCALE) [lot, serial] = [null, lot];
+		const serial = r.serialNumber?.trim() || null;
+		if (serial && (pt.trackingType !== 'serialized' || qty !== QTY_SCALE)) {
+			throw invalid('serialNumber', `${pt.name}: a serial number applies to one serialized unit`);
+		}
+		// The order is the lot: everything received against it traces back to one purchase.
 		receiveStock(ctx, {
 			partId: pt.id,
 			quantity: qty as Qty,
 			location,
-			lotNumber: lot,
+			lotNumber: p.reference,
 			serialNumber: serial,
 			sourceType: 'purchase',
 			links: { purchaseLineId: l.id }

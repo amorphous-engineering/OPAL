@@ -184,8 +184,7 @@ export const zPurchaseLine = z.object({
 	partExternalPn: z.string().nullable(),
 	unitOfMeasure: z.string(),
 	trackingType: z.enum(['serialized', 'bulk']),
-	/** What the part's tier asks of a receipt. Drives the receive form. */
-	lotRequired: z.boolean(),
+	/** The part's tier issues serials on receipt. Drives the receive form. */
 	autoSerial: z.boolean(),
 	qtyOrdered: zQty,
 	/** Struck by CANCEL LINE: the outstanding quantity at that moment. Never received stock. */
@@ -334,7 +333,8 @@ export const zPurchaseReceive = z.object({
 				lineId: zId,
 				quantity: zQty,
 				location: zText(255).nullable().optional(),
-				lotNumber: zText(100).nullable().optional(),
+				/** The serial of one serialized unit. The lot is always the order number. */
+				serialNumber: zText(100).nullable().optional(),
 				/** Receive more than is outstanding; the form asks the person to confirm. */
 				allowOverReceipt: z.boolean().default(false)
 			})
@@ -691,7 +691,7 @@ const orders = {
 		method: 'POST',
 		path: '/purchases/:id/receive',
 		summary:
-			'Receive goods against lines, in full or in part. Creates stock records, writes the expense ledger and settles the status.',
+			'Receive goods against lines, in full or in part. Creates stock records with the order number as their lot, writes the expense ledger and settles the status.',
 		input: zPurchaseReceive,
 		output: zPurchase,
 		access: 'signed-in',
