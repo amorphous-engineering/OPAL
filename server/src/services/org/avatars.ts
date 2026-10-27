@@ -1,7 +1,8 @@
 /**
  * User avatars. A file is stored under `<data dir>/avatars/<sha256>` and the profile row names
  * it by hash, so equal images share one file. `avatarSource`: upload | oidc | removed
- * (removed: the identity provider must not refill it) | null.
+ * (removed: the identity provider must not refill it) | null. An OIDC sign-in copies the
+ * provider's `picture` while the source is null or oidc.
  *
  * To move to the platform blob store: replace `writeAvatarFile`, `readAvatarFile` and
  * `deleteAvatarFile` with blob put/get/release calls. The profile column `avatar_hash`
@@ -18,6 +19,8 @@ import type { Ctx } from '../../context.ts';
 import { userProfile } from '../../db/schema/index.ts';
 import { dataDir } from '../../paths.ts';
 import type { ResolveActor } from '../../registry.ts';
+import { isLoopback } from '../auth/oidc.ts';
+import { inTransaction } from '../auth/tx.ts';
 import { upsertProfile } from './profiles.ts';
 
 const avatarDir = () => join(dataDir(), 'avatars');
@@ -67,6 +70,61 @@ export async function removeAvatar(ctx: Ctx, userId: number): Promise<void> {
 async function releaseIfUnused(ctx: Ctx, hash: string): Promise<void> {
 	if (!ctx.db.select({ id: userProfile.id }).from(userProfile).where(eq(userProfile.avatarHash, hash)).get()) {
 		await deleteAvatarFile(hash);
+	}
+}
+
+const PICTURE_TIMEOUT_MS = 5000;
+
+/** Download an avatar image: https (or loopback http), image content, at most MAX_AVATAR_BYTES. */
+export async function fetchPicture(url: string): Promise<Uint8Array> {
+	const allowed = (u: string) => u.startsWith('https://') || isLoopback(u);
+	if (!allowed(url)) throw new Error('unsupported scheme');
+	const res = await fetch(url, { signal: AbortSignal.timeout(PICTURE_TIMEOUT_MS), redirect: 'follow' });
+	if (!allowed(res.url || url)) throw new Error('redirected to an unsupported scheme');
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+	if (!type.startsWith('image/')) throw new Error(`content type ${type || 'missing'}`);
+	if (Number(res.headers.get('content-length') ?? 0) > MAX_AVATAR_BYTES) throw new Error('too large');
+	// Read in chunks so a lying or absent content-length cannot make us buffer an unbounded body.
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	for await (const chunk of res.body ?? []) {
+		size += chunk.length;
+		if (size > MAX_AVATAR_BYTES) throw new Error('too large');
+		chunks.push(chunk);
+	}
+	return new Uint8Array(Buffer.concat(chunks));
+}
+
+const followsProvider = (source: string | null | undefined) => source == null || source === 'oidc';
+
+/**
+ * On OIDC sign-in, take the provider's `picture` unless the user uploaded or removed a photo.
+ * Never throws: a missing, slow or invalid picture must not block sign-in.
+ */
+export async function refreshFromOidc(ctx: Ctx, userId: number, claims: Record<string, unknown>): Promise<void> {
+	const url = typeof claims.picture === 'string' ? claims.picture.trim() : '';
+	if (!url) return;
+	const before = ctx.db.select().from(userProfile).where(eq(userProfile.userId, userId)).get();
+	if (!followsProvider(before?.avatarSource)) return;
+	try {
+		const bytes = await fetchPicture(url);
+		const mime = sniffImage(bytes);
+		if (!mime) throw new Error('not a PNG, JPEG, WebP or GIF');
+		const hash = createHash('sha256').update(bytes).digest('hex');
+		if (before?.avatarHash === hash) return;
+		await writeAvatarFile(hash, bytes);
+		const stored = await inTransaction(ctx.db, () => {
+			// The user may have uploaded or removed a photo while the download ran.
+			const current = ctx.db.select().from(userProfile).where(eq(userProfile.userId, userId)).get();
+			if (!followsProvider(current?.avatarSource)) return { saved: false, old: null };
+			upsertProfile(ctx, userId, { avatarHash: hash, avatarMime: mime, avatarSource: 'oidc', avatarUpdatedAt: now() });
+			return { saved: true, old: current?.avatarHash ?? null };
+		});
+		if (!stored.saved) await releaseIfUnused(ctx, hash);
+		else if (stored.old && stored.old !== hash) await releaseIfUnused(ctx, stored.old);
+	} catch (e) {
+		console.warn(`OIDC picture not used: ${(e as Error).message}`);
 	}
 }
 

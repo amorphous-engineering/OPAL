@@ -94,6 +94,8 @@ export interface FakeProvider {
 	/** What the token endpoint answers next. */
 	tokens: Record<string, unknown> | { status: number; body: Record<string, unknown> } | null;
 	userinfo: Record<string, unknown> | null;
+	/** What `/picture` answers: the `picture` claim can point there. */
+	picture: { type: string; body: Uint8Array } | null;
 	lastTokenRequest: { body: URLSearchParams; authorization: string | null } | null;
 	hits: { discovery: number };
 	/** Overrides for the discovery document. */
@@ -132,6 +134,10 @@ export async function fakeProvider(): Promise<FakeProvider> {
 			if (url.pathname === '/userinfo') {
 				return provider.userinfo ? Response.json(provider.userinfo) : new Response('no', { status: 404 });
 			}
+			if (url.pathname === '/picture') {
+				const pic = provider.picture;
+				return pic ? new Response(new Uint8Array(pic.body), { headers: { 'content-type': pic.type } }) : new Response('no', { status: 404 });
+			}
 			if (url.pathname === '/token' && req.method === 'POST') {
 				provider.lastTokenRequest = {
 					body: new URLSearchParams(await req.text()),
@@ -148,6 +154,7 @@ export async function fakeProvider(): Promise<FakeProvider> {
 		issuer: `http://localhost:${server.port}`,
 		tokens: null,
 		userinfo: null,
+		picture: null,
 		lastTokenRequest: null,
 		hits: { discovery: 0 },
 		discovery: {},

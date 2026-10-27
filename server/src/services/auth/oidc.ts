@@ -28,7 +28,7 @@ const HTTP_TIMEOUT_MS = 10_000;
 /** A sign-in attempt failed. The message is safe to show the user. */
 export class OidcError extends Error {}
 
-const isLoopback = (url: string) => /^http:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(url);
+export const isLoopback = (url: string) => /^http:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(url);
 
 // ---------------------------------------------------------------- discovery
 

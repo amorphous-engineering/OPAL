@@ -24,6 +24,7 @@ import {
 	verifyIdToken
 } from '../services/auth/oidc.ts';
 import { mintSession } from '../services/auth/sessions.ts';
+import { refreshFromOidc } from '../services/org/avatars.ts';
 import { oidcActive, readSettings } from '../services/auth/settings.ts';
 import { inTransaction } from '../services/auth/tx.ts';
 import { clientIp, trustProxy } from './client-ip.ts';
@@ -129,7 +130,11 @@ export function mountOidc(app: Hono, db: Db): void {
 					ip: clientIp(c)
 				}
 			};
-			const raw = await inTransaction(db, () => mintSession(ctx, resolveIdentity(ctx, settings, claims), 'oidc'));
+			const { raw, userId } = await inTransaction(db, () => {
+				const u = resolveIdentity(ctx, settings, claims);
+				return { raw: mintSession(ctx, u, 'oidc'), userId: u.id };
+			});
+			await refreshFromOidc(ctx, userId, claims);
 			setCookie(c, SESSION_COOKIE, raw, {
 				path: '/',
 				httpOnly: true,
