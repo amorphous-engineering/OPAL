@@ -100,17 +100,6 @@
 		{ key: 'actions', label: '', align: 'right' }
 	];
 
-	type Received = (typeof data.received)[number];
-	const receivedColumns: Column<Received>[] = [
-		{ key: 'opalNumber', label: 'OPAL', mono: true },
-		{ key: 'partInternalPn', label: 'PN', mono: true, class: 'whitespace-nowrap' },
-		{ key: 'partName', label: 'Name' },
-		{ key: 'quantity', label: 'Qty', align: 'right', mono: true },
-		{ key: 'location', label: 'Location' },
-		{ key: 'lotNumber', label: 'Lot / serial', mono: true },
-		{ key: 'receivedAt', label: 'Received' }
-	];
-
 	const supplierOptions = $derived([
 		...(po.supplierId == null ? [{ value: '', label: po.supplierName }] : []),
 		...data.suppliers.map((s) => ({ value: String(s.id), label: s.name })),
@@ -250,42 +239,6 @@
 			</datalist>
 		</Section>
 
-		{#if data.received.length > 0}
-			<Section title="RECEIVED STOCK" count={data.received.length}>
-				<DataTable
-					rows={data.received}
-					columns={receivedColumns}
-					emptyLabel="Received stock"
-					key={(r) => r.stockId}
-				>
-					{#snippet cell(r, col)}
-						{#if col.key === 'opalNumber'}
-							{#if r.opalNumber}
-								<a href={`/inventory/opal/${r.opalNumber}`} class="text-info hover:underline"
-									>{r.opalNumber}</a
-								>
-							{:else}<span class="text-muted-foreground">—</span>{/if}
-						{:else if col.key === 'partInternalPn'}
-							<a href={`/parts/${r.partId}`} class="text-info hover:underline">{r.partInternalPn}</a
-							>
-						{:else if col.key === 'partName'}
-							{r.partName}
-						{:else if col.key === 'quantity'}
-							{fmtQty(r.quantity)}
-						{:else if col.key === 'lotNumber'}
-							{#if r.lotNumber || r.serialNumber}{r.serialNumber ?? r.lotNumber}{:else}<span
-									class="text-muted-foreground">—</span
-								>{/if}
-						{:else if col.key === 'receivedAt'}
-							<Timestamp value={r.receivedAt} />
-						{:else}
-							{r.location}
-						{/if}
-					{/snippet}
-				</DataTable>
-			</Section>
-		{/if}
-
 		<AttachmentsSection purchaseId={po.id} attachments={data.attachments} onchanged={refresh} />
 	</div>
 
@@ -357,8 +310,14 @@
 			onchanged={refresh}
 		/>
 
-		{#if canReceive}
-			<ReceiveSection purchase={po} locations={data.locations} onreceived={refresh} />
+		{#if canReceive || data.received.length > 0}
+			<ReceiveSection
+				purchase={po}
+				received={data.received}
+				receiving={canReceive}
+				locations={data.locations}
+				onreceived={refresh}
+			/>
 		{/if}
 	</div>
 </div>

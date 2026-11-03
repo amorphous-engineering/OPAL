@@ -1,24 +1,32 @@
 <script lang="ts">
 	// Receive against open lines: quantity, location, lot. Blank quantity leaves a line outstanding.
+	// Stock already received shows as rows above the line's input row, with its OPAL number.
 	import { Section, confirm, ErrorBanner } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { ApiError, opal } from '#lib/api.js';
-	import { qty as fmtQty } from '#lib/format.js';
+	import { qty as fmtQty, tip } from '#lib/format.js';
 	import { toast } from '#lib/components/opal/index.js';
-	import { num, type Purchase } from './types.js';
+	import { num, type Purchase, type PurchaseReceivedRecord } from './types.js';
 
 	let {
 		purchase,
+		received,
+		receiving,
 		locations = [],
 		onreceived
 	}: {
 		purchase: Purchase;
+		received: PurchaseReceivedRecord[];
+		/** The order accepts receipts now. */
+		receiving: boolean;
 		locations?: string[];
 		onreceived: () => void | Promise<void>;
 	} = $props();
 
-	const open = $derived(purchase.lines.filter((l) => num(l.qtyOutstanding) > 0));
+	const open = $derived(receiving ? purchase.lines.filter((l) => num(l.qtyOutstanding) > 0) : []);
+	const byLine = $derived(Map.groupBy(received, (r) => r.purchaseLineId));
+	const shown = $derived(purchase.lines.filter((l) => open.includes(l) || byLine.has(l.id)));
 
 	interface Draft {
 		qty: string;
@@ -111,13 +119,13 @@
 	}
 </script>
 
-<Section title="RECEIVE" count={open.length}>
+<Section title="RECEIVE" count={received.length + open.length}>
 	<form onsubmit={submit}>
 		<div class="overflow-x-auto">
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-muted/60">
-						{#each [['PN', 'left'], ['NAME', 'left'], ['OUTSTANDING', 'right'], ['RECEIVE QTY', 'left'], ['LOCATION', 'left'], ['LOT / SERIAL', 'left']] as [h, a] (h)}
+						{#each [['PN', 'left'], ['NAME', 'left'], ['OUTSTANDING', 'right'], ['QTY', 'left'], ['LOCATION', 'left'], ['LOT / SERIAL', 'left'], ['OPAL', 'left']] as [h, a] (h)}
 							<th
 								scope="col"
 								class="h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
@@ -128,54 +136,84 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each open as l (l.id)}
-						{@const row = drafts[l.id]}
-						<tr class="border-b border-border align-top">
-							<td class="px-3 py-1.5 font-mono"
-								><a href={`/parts/${l.partId}`} class="text-info hover:underline"
-									>{l.partInternalPn}</a
-								></td
-							>
-							<td class="px-3 py-1.5">{l.partName}</td>
-							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
-								>{fmtQty(l.qtyOutstanding, l.unitOfMeasure)}</td
-							>
-							<td class="px-3 py-1"
-								><Input
-									type="number"
-									step="any"
-									min="0"
-									bind:value={row.qty}
-									aria-label={`Receive quantity for ${l.partName}`}
-									class="h-7 w-28 font-mono text-xs"
-								/>{#if over(l) > 0}<span class="mt-0.5 block font-mono text-xs text-warn"
-										>+{fmtQty(over(l), l.unitOfMeasure)} OVER</span
-									>{/if}</td
-							>
-							<td class="px-3 py-1"
-								><Input
-									bind:value={row.location}
-									list="receive-locations"
-									placeholder={fallback(l) ?? 'Location'}
-									aria-label={`Location for ${l.partName}`}
-									class="h-7 w-44 text-xs"
-								/></td
-							>
-							<td class="px-3 py-1"
-								><Input
-									bind:value={row.lot}
-									placeholder={l.lotRequired
-										? 'Required'
-										: l.trackingType === 'serialized'
-											? l.autoSerial
-												? 'Auto serial'
-												: 'Serial'
-											: 'Lot'}
-									aria-label={`Lot for ${l.partName}`}
-									class="h-7 w-36 font-mono text-xs"
-								/></td
-							>
-						</tr>
+					{#each shown as l (l.id)}
+						{#each byLine.get(l.id) ?? [] as r (r.stockId)}
+							<tr class="border-b border-border align-top">
+								<td class="px-3 py-1.5 font-mono whitespace-nowrap"
+									><a href={`/parts/${l.partId}`} class="text-info hover:underline"
+										>{l.partInternalPn}</a
+									></td
+								>
+								<td class="min-w-40 px-3 py-1.5">{l.partName}</td>
+								<td></td>
+								<td class="px-3 py-1.5 font-mono whitespace-nowrap text-ok tabular-nums"
+									>{fmtQty(r.quantity, l.unitOfMeasure)}</td
+								>
+								<td class="px-3 py-1.5">{r.location}</td>
+								<td class="px-3 py-1.5 font-mono"
+									>{#if r.serialNumber || r.lotNumber}{r.serialNumber ?? r.lotNumber}{:else}<span
+											class="text-muted-foreground">—</span
+										>{/if}</td
+								>
+								<td class="px-3 py-1.5 font-mono whitespace-nowrap"
+									><a
+										href={`/inventory/opal/${r.opalNumber}`}
+										title={`Received ${tip(r.receivedAt)}`}
+										class="text-info hover:underline">{r.opalNumber}</a
+									></td
+								>
+							</tr>
+						{/each}
+						{@const row = open.includes(l) ? drafts[l.id] : undefined}
+						{#if row}
+							<tr class="border-b border-border align-top">
+								<td class="px-3 py-1.5 font-mono"
+									><a href={`/parts/${l.partId}`} class="text-info hover:underline"
+										>{l.partInternalPn}</a
+									></td
+								>
+								<td class="min-w-40 px-3 py-1.5">{l.partName}</td>
+								<td class="px-3 py-1.5 text-right font-mono tabular-nums"
+									>{fmtQty(l.qtyOutstanding, l.unitOfMeasure)}</td
+								>
+								<td class="px-3 py-1"
+									><Input
+										type="number"
+										step="any"
+										min="0"
+										bind:value={row.qty}
+										aria-label={`Receive quantity for ${l.partName}`}
+										class="h-7 w-24 font-mono text-xs"
+									/>{#if over(l) > 0}<span class="mt-0.5 block font-mono text-xs text-warn"
+											>+{fmtQty(over(l), l.unitOfMeasure)} OVER</span
+										>{/if}</td
+								>
+								<td class="px-3 py-1"
+									><Input
+										bind:value={row.location}
+										list="receive-locations"
+										placeholder={fallback(l) ?? 'Location'}
+										aria-label={`Location for ${l.partName}`}
+										class="h-7 w-32 text-xs"
+									/></td
+								>
+								<td class="px-3 py-1"
+									><Input
+										bind:value={row.lot}
+										placeholder={l.lotRequired
+											? 'Required'
+											: l.trackingType === 'serialized'
+												? l.autoSerial
+													? 'Auto serial'
+													: 'Serial'
+												: 'Lot'}
+										aria-label={`Lot for ${l.partName}`}
+										class="h-7 w-32 font-mono text-xs"
+									/></td
+								>
+								<td></td>
+							</tr>
+						{/if}
 					{/each}
 				</tbody>
 			</table>
@@ -183,10 +221,12 @@
 		<datalist id="receive-locations">
 			{#each locations as loc (loc)}<option value={loc}></option>{/each}
 		</datalist>
-		<ErrorBanner message={error} class="mx-3 mt-3" />
-		<div class="flex justify-end gap-2 p-3">
-			<Button type="button" variant="outline" onclick={fillAll}>FILL ALL</Button>
-			<Button type="submit" disabled={busy}>RECEIVE</Button>
-		</div>
+		{#if open.length > 0}
+			<ErrorBanner message={error} class="mx-3 mt-3" />
+			<div class="flex justify-end gap-2 p-3">
+				<Button type="button" variant="outline" onclick={fillAll}>FILL ALL</Button>
+				<Button type="submit" disabled={busy}>RECEIVE</Button>
+			</div>
+		{/if}
 	</form>
 </Section>

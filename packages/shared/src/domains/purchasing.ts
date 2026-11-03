@@ -297,6 +297,7 @@ export const zPurchaseReceivedRecord = z.object({
 	purchaseLineId: z.number().int(),
 	receivedAt: zTimestamp
 });
+export type PurchaseReceivedRecord = z.infer<typeof zPurchaseReceivedRecord>;
 
 export const zPurchaseExpense = z.object({
 	id: z.number().int(),

@@ -7,6 +7,7 @@ export type {
 	PurchaseExpense,
 	PurchaseLine,
 	PurchaseListItem,
+	PurchaseReceivedRecord,
 	PurchaseStatus,
 	Supplier,
 	SupplierPartRow
