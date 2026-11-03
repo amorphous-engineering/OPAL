@@ -173,7 +173,7 @@
 </PageHeader>
 
 <div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
-	<div class="grid grid-cols-1 content-start gap-4">
+	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		<Section title="ORDER">
 			<DetailTable>
 				<DetailRow label="Reference" value={po.reference} mono />
@@ -249,6 +249,44 @@
 				{#each data.locations as l (l)}<option value={l}></option>{/each}
 			</datalist>
 		</Section>
+
+		{#if data.received.length > 0}
+			<Section title="RECEIVED STOCK" count={data.received.length}>
+				<DataTable
+					rows={data.received}
+					columns={receivedColumns}
+					emptyLabel="Received stock"
+					key={(r) => r.stockId}
+				>
+					{#snippet cell(r, col)}
+						{#if col.key === 'opalNumber'}
+							{#if r.opalNumber}
+								<a href={`/inventory/opal/${r.opalNumber}`} class="text-info hover:underline"
+									>{r.opalNumber}</a
+								>
+							{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else if col.key === 'partInternalPn'}
+							<a href={`/parts/${r.partId}`} class="text-info hover:underline">{r.partInternalPn}</a
+							>
+						{:else if col.key === 'partName'}
+							{r.partName}
+						{:else if col.key === 'quantity'}
+							{fmtQty(r.quantity)}
+						{:else if col.key === 'lotNumber'}
+							{#if r.lotNumber || r.serialNumber}{r.serialNumber ?? r.lotNumber}{:else}<span
+									class="text-muted-foreground">—</span
+								>{/if}
+						{:else if col.key === 'receivedAt'}
+							<Timestamp value={r.receivedAt} />
+						{:else}
+							{r.location}
+						{/if}
+					{/snippet}
+				</DataTable>
+			</Section>
+		{/if}
+
+		<AttachmentsSection purchaseId={po.id} attachments={data.attachments} onchanged={refresh} />
 	</div>
 
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
@@ -311,57 +349,18 @@
 				</div>
 			</Section>
 		{/if}
+
+		<ExpensesSection
+			purchaseId={po.id}
+			expenses={data.expenses}
+			canAdd={po.status !== 'cancelled'}
+			onchanged={refresh}
+		/>
+
+		{#if canReceive}
+			<ReceiveSection purchase={po} locations={data.locations} onreceived={refresh} />
+		{/if}
 	</div>
-</div>
-
-<div class="grid grid-cols-1 gap-4 px-4 pb-4">
-	{#if canReceive}
-		<ReceiveSection purchase={po} locations={data.locations} onreceived={refresh} />
-	{/if}
-
-	{#if data.received.length > 0}
-		<Section title="RECEIVED STOCK" count={data.received.length}>
-			<DataTable
-				rows={data.received}
-				columns={receivedColumns}
-				emptyLabel="Received stock"
-				key={(r) => r.stockId}
-			>
-				{#snippet cell(r, col)}
-					{#if col.key === 'opalNumber'}
-						{#if r.opalNumber}
-							<a href={`/inventory/opal/${r.opalNumber}`} class="text-info hover:underline"
-								>{r.opalNumber}</a
-							>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
-					{:else if col.key === 'partInternalPn'}
-						<a href={`/parts/${r.partId}`} class="text-info hover:underline">{r.partInternalPn}</a>
-					{:else if col.key === 'partName'}
-						{r.partName}
-					{:else if col.key === 'quantity'}
-						{fmtQty(r.quantity)}
-					{:else if col.key === 'lotNumber'}
-						{#if r.lotNumber || r.serialNumber}{r.serialNumber ?? r.lotNumber}{:else}<span
-								class="text-muted-foreground">—</span
-							>{/if}
-					{:else if col.key === 'receivedAt'}
-						<Timestamp value={r.receivedAt} />
-					{:else}
-						{r.location}
-					{/if}
-				{/snippet}
-			</DataTable>
-		</Section>
-	{/if}
-
-	<ExpensesSection
-		purchaseId={po.id}
-		expenses={data.expenses}
-		canAdd={po.status !== 'cancelled'}
-		onchanged={refresh}
-	/>
-
-	<AttachmentsSection purchaseId={po.id} attachments={data.attachments} onchanged={refresh} />
 </div>
 
 <LineDialog

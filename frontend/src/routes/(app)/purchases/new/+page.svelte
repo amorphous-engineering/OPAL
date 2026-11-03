@@ -98,115 +98,128 @@
 	crumbs={[{ label: 'Purchases', href: '/purchases' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-5xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
-	<Section title="ORDER">
-		<div class="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label class="label" for="po-supplier">Supplier</Label>
-				<NativeSelect id="po-supplier" bind:value={supplierId} class="w-full">
-					<option value="">Other (enter name)</option>
-					{#each data.suppliers as s (s.id)}
-						<option value={String(s.id)}>{s.name}{s.code ? ` (${s.code})` : ''}</option>
-					{/each}
-				</NativeSelect>
-			</div>
-			{#if !supplierId}
-				<div class="grid grid-cols-1 gap-1.5">
-					<Label class="label" for="po-supplier-name">Supplier name</Label>
-					<Input id="po-supplier-name" bind:value={otherName} maxlength={255} />
+<form class="grid grid-cols-1 gap-4 p-4" onsubmit={submit}>
+	<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
+		<div class="grid min-w-0 grid-cols-1 content-start gap-4">
+			<Section title="ORDER">
+				<div class="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 xl:grid-cols-1">
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label class="label" for="po-supplier">Supplier</Label>
+						<NativeSelect id="po-supplier" bind:value={supplierId} class="w-full">
+							<option value="">Other (enter name)</option>
+							{#each data.suppliers as s (s.id)}
+								<option value={String(s.id)}>{s.name}{s.code ? ` (${s.code})` : ''}</option>
+							{/each}
+						</NativeSelect>
+					</div>
+					{#if !supplierId}
+						<div class="grid grid-cols-1 gap-1.5">
+							<Label class="label" for="po-supplier-name">Supplier name</Label>
+							<Input id="po-supplier-name" bind:value={otherName} maxlength={255} />
+						</div>
+					{/if}
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label class="label" for="po-supplier-ref">Supplier reference</Label>
+						<Input
+							id="po-supplier-ref"
+							bind:value={supplierRef}
+							maxlength={100}
+							class="font-mono"
+						/>
+					</div>
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label class="label" for="po-target">Target date</Label>
+						<Input id="po-target" type="date" bind:value={targetDate} class="font-mono" />
+					</div>
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label class="label" for="po-dest">Destination</Label>
+						<Input id="po-dest" bind:value={destination} list="po-locations" maxlength={255} />
+						<datalist id="po-locations">
+							{#each data.locations as l (l)}<option value={l}></option>{/each}
+						</datalist>
+					</div>
+					<div class="grid grid-cols-1 gap-1.5 md:col-span-2 xl:col-span-1">
+						<Label class="label" for="po-notes">Notes</Label>
+						<Textarea id="po-notes" bind:value={notes} rows={2} class="text-xs" />
+					</div>
 				</div>
-			{/if}
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label class="label" for="po-supplier-ref">Supplier reference</Label>
-				<Input id="po-supplier-ref" bind:value={supplierRef} maxlength={100} class="font-mono" />
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label class="label" for="po-target">Target date</Label>
-				<Input id="po-target" type="date" bind:value={targetDate} class="font-mono" />
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label class="label" for="po-dest">Destination</Label>
-				<Input id="po-dest" bind:value={destination} list="po-locations" maxlength={255} />
-				<datalist id="po-locations">
-					{#each data.locations as l (l)}<option value={l}></option>{/each}
-				</datalist>
-			</div>
-			<div class="grid grid-cols-1 gap-1.5 md:col-span-2">
-				<Label class="label" for="po-notes">Notes</Label>
-				<Textarea id="po-notes" bind:value={notes} rows={2} class="text-xs" />
-			</div>
+			</Section>
 		</div>
-	</Section>
 
-	<Section title="LINES" count={rows.filter((r) => r.part).length}>
-		{#snippet actions()}
-			<ActionLink onclick={() => rows.push(blank())}>+ ADD LINE</ActionLink>
-		{/snippet}
-		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
-				<thead>
-					<tr class="border-b border-border bg-muted/60">
-						{#each ['PART', 'QUANTITY', 'UNIT COST', 'DESTINATION', ''] as h (h)}
-							<th
-								scope="col"
-								class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
-								>{h}</th
-							>
-						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					{#each rows as row, i (row.key)}
-						<tr class="border-b border-border align-top">
-							<td class="w-80 px-3 py-1"
-								><PartPicker bind:value={row.part} activeOnly meta="procurement" /></td
-							>
-							<td class="px-3 py-1"
-								><Input
-									type="number"
-									step="any"
-									min="0"
-									bind:value={row.qty}
-									aria-label={`Quantity, line ${i + 1}`}
-									class="w-28 font-mono"
-								/></td
-							>
-							<td class="px-3 py-1"
-								><Input
-									type="number"
-									step="any"
-									min="0"
-									bind:value={row.cost}
-									aria-label={`Unit cost, line ${i + 1}`}
-									class="w-28 font-mono"
-								/></td
-							>
-							<td class="px-3 py-1"
-								><Input
-									bind:value={row.destination}
-									list="po-locations"
-									placeholder="Order destination"
-									aria-label={`Destination, line ${i + 1}`}
-									class="w-48"
-								/></td
-							>
-							<td class="px-3 py-1 text-right"
-								><ActionLink danger title={`Remove line ${i + 1}`} onclick={() => rows.splice(i, 1)}
-									>REMOVE</ActionLink
-								></td
-							>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+		<div class="grid min-w-0 grid-cols-1 content-start gap-4">
+			<Section title="LINES" count={rows.filter((r) => r.part).length}>
+				{#snippet actions()}
+					<ActionLink onclick={() => rows.push(blank())}>+ ADD LINE</ActionLink>
+				{/snippet}
+				<div class="overflow-x-auto">
+					<table class="w-full border-collapse text-sm">
+						<thead>
+							<tr class="border-b border-border bg-muted/60">
+								{#each ['PART', 'QUANTITY', 'UNIT COST', 'DESTINATION', ''] as h (h)}
+									<th
+										scope="col"
+										class="h-8 px-3 text-left font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
+										>{h}</th
+									>
+								{/each}
+							</tr>
+						</thead>
+						<tbody>
+							{#each rows as row, i (row.key)}
+								<tr class="border-b border-border align-top">
+									<td class="w-80 px-3 py-1"
+										><PartPicker bind:value={row.part} activeOnly meta="procurement" /></td
+									>
+									<td class="px-3 py-1"
+										><Input
+											type="number"
+											step="any"
+											min="0"
+											bind:value={row.qty}
+											aria-label={`Quantity, line ${i + 1}`}
+											class="w-28 font-mono"
+										/></td
+									>
+									<td class="px-3 py-1"
+										><Input
+											type="number"
+											step="any"
+											min="0"
+											bind:value={row.cost}
+											aria-label={`Unit cost, line ${i + 1}`}
+											class="w-28 font-mono"
+										/></td
+									>
+									<td class="px-3 py-1"
+										><Input
+											bind:value={row.destination}
+											list="po-locations"
+											placeholder="Order destination"
+											aria-label={`Destination, line ${i + 1}`}
+											class="w-48"
+										/></td
+									>
+									<td class="px-3 py-1 text-right"
+										><ActionLink
+											danger
+											title={`Remove line ${i + 1}`}
+											onclick={() => rows.splice(i, 1)}>REMOVE</ActionLink
+										></td
+									>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				<div
+					class="flex items-center justify-end gap-4 border-t border-border bg-muted/40 px-3 py-1.5 font-mono text-xs"
+				>
+					<span class="tracking-wider text-muted-foreground uppercase">Total</span>
+					<span class="font-medium tabular-nums">{total > 0 ? money(total) : '—'}</span>
+				</div>
+			</Section>
 		</div>
-		<div
-			class="flex items-center justify-end gap-4 border-t border-border bg-muted/40 px-3 py-1.5 font-mono text-xs"
-		>
-			<span class="tracking-wider text-muted-foreground uppercase">Total</span>
-			<span class="font-medium tabular-nums">{total > 0 ? money(total) : '—'}</span>
-		</div>
-	</Section>
+	</div>
 
 	<ErrorBanner message={error} />
 	<div class="flex justify-end gap-2">
