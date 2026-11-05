@@ -184,11 +184,11 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 		});
 		const skip = skipBlockers(m, st, row);
 		const mine = new Map((recs.get(row.id) ?? []).map((r) => [r.slot, r]));
-		const signedSet = new Set(mine.keys());
+		const signedBy = new Map([...mine].map(([n, r]) => [n, r.signedById]));
 		const signoffs = row.signoffs.map((d, n) => {
 			const rec = mine.get(n);
 			const roleOk = viewerRoles === null ? true : holdsSlotRole(viewerRoles, d.role);
-			const gate = slotGate(m, st, row, n, signedSet, complete, roleOk);
+			const gate = slotGate(m, st, row, n, signedBy, complete, roleOk, viewer);
 			return {
 				slot: n,
 				label: rec?.label ?? d.label,

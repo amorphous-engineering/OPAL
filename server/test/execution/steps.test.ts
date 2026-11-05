@@ -93,8 +93,8 @@ describe('sign-off slots', () => {
 		expect(first.json.stepCompleted).toBe(false);
 		expect(first.json.step.status).toBe('awaiting_signoff');
 		expect((await t.get(e.id)).status).toBe('in_work');
-		await t.sign(e.id, '1', 2);
-		const last = await t.sign(e.id, '1', 1);
+		await t.sign(e.id, '1', 2, {}, t.benActor);
+		const last = await t.sign(e.id, '1', 1, {}, t.catActor);
 		expect(last.json.stepCompleted).toBe(true);
 		expect(last.json.step.status).toBe('completed');
 		expect((await t.get(e.id)).status).toBe('completed');
@@ -110,8 +110,8 @@ describe('sign-off slots', () => {
 		await t.complete(e.id, '1');
 		expect((await t.complete(e.id, '1')).json.message).toContain('awaiting sign-off');
 		expect((await t.sign(e.id, '1', 7)).status).toBe(404);
-		await t.sign(e.id, '1', 1);
-		expect((await t.sign(e.id, '1', 1)).status).toBe(409);
+		await t.sign(e.id, '1', 1, {}, t.benActor);
+		expect((await t.sign(e.id, '1', 1, {}, t.catActor)).status).toBe(409);
 	});
 
 	test('the signoff wrapper takes the next unsigned slot and refuses an unfinished step', async () => {
@@ -123,9 +123,9 @@ describe('sign-off slots', () => {
 		const sid = await t.stepOf(e.id, '1');
 		expect((await t.call('POST', `/executions/${e.id}/steps/${sid}/signoff`)).status).toBe(409);
 		await t.complete(e.id, '1');
-		const r = await t.call('POST', `/executions/${e.id}/steps/${sid}/signoff`);
+		const r = await t.call('POST', `/executions/${e.id}/steps/${sid}/signoff`, undefined, t.benActor);
 		expect(r.json.step.status).toBe('completed');
-		expect((await t.call('POST', `/executions/${e.id}/steps/${sid}/signoff`)).status).toBe(409);
+		expect((await t.call('POST', `/executions/${e.id}/steps/${sid}/signoff`, undefined, t.catActor)).status).toBe(409);
 	});
 
 	test('a slot that names a role needs a holder of the role; an admin holds every role', async () => {
@@ -151,7 +151,7 @@ describe('sign-off slots', () => {
 		expect(before[0].canSign).toBe(true);
 		expect(before[1].canSign).toBe(false);
 		expect(before[1].blockers[0].kind).toBe('signoff');
-		await t.complete(e.id, '1');
+		await t.complete(e.id, '1', {}, t.benActor);
 		const asBen = await t.call('GET', `/executions/${e.id}/document`, undefined, t.benActor);
 		const slot1 = asBen.json.ops[0].step.signoffs[1];
 		expect(slot1.canSign).toBe(false);

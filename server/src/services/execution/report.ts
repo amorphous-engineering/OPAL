@@ -8,7 +8,7 @@ import { holdingIssues } from '../issues/holds.ts';
 import { captureDisplay, readingOf } from './document.ts';
 import { closureOf } from './executions.ts';
 import { productionRows } from './material.ts';
-import { isActive, loadModel, opRowOf } from './model.ts';
+import { isActive, isRoutine, loadModel, opRowOf } from './model.ts';
 import { signoffRecords, userNames } from './present.ts';
 
 export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): ExecutionReport {
@@ -34,7 +34,8 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 		startedAt: r.se.startedAt,
 		completedAt: r.se.completedAt,
 		operator: nm(r.se.completedById),
-		signoffs: (recs.get(r.id) ?? []).map((s) => ({
+		// A routine step's slot is the stamp in `operator`, not a signature to list.
+		signoffs: (isRoutine(r) ? [] : (recs.get(r.id) ?? [])).map((s) => ({
 			slot: s.slot,
 			label: s.label,
 			role: s.role,

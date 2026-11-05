@@ -151,7 +151,7 @@ export function signStep(
 		input.slot === 0 && status === 'pending'
 			? completeBlockers(m, st, row, { data: input.dataCaptured ?? row.se.dataCaptured, ...explanationOf(ctx, row, input.notes) })
 			: undefined;
-	const gate = slotGate(m, st, row, input.slot, new Set(signed.keys()), complete, true);
+	const gate = slotGate(m, st, row, input.slot, new Map([...signed].map(([n, s]) => [n, s.signedById])), complete, true, userId);
 	if (!gate.canSign) {
 		throw refuse(describeBlockers(input.slot === 0 ? 'complete' : 'sign off', gate.blockers));
 	}

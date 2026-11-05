@@ -960,7 +960,7 @@ export const execution = {
 		method: 'POST',
 		path: '/executions/:id/steps/:stepId/complete',
 		summary:
-			'Sign slot 0 of a step, with the captured data validated against the step data schema. Refused while a hold, sequence, dependency, redline or open sub-step stands.',
+			'Complete a step: stamps who and when (slot 0), with the captured data validated against the step data schema. Refused while a hold, sequence, dependency, redline or open sub-step stands.',
 		input: z.object({
 			...zStepPath,
 			dataCaptured: z.record(z.string(), z.unknown()).nullish(),
@@ -976,7 +976,7 @@ export const execution = {
 		method: 'POST',
 		path: '/executions/:id/steps/:stepId/signoffs/:slot',
 		summary:
-			'Sign one slot of a step sign-off list. A step is complete when its last slot is signed. Data capture rides with slot 0.',
+			'Sign one slot of a step sign-off list. A step is complete when its last slot is signed. Two slots need two different people. Data capture rides with slot 0.',
 		input: z.object({
 			...zStepPath,
 			slot: z.coerce.number().int().min(0),

@@ -106,17 +106,19 @@ export const claimBlockers = (m: Model, row: Row): Blocker[] => sequenceBlockers
 /**
  * (canSign, blockers) for one slot. Slot 0 is the commitment: the step is open and every
  * sequence, hold and sub-step gate is clear. Later slots need slot 0 and a clear held scope,
- * and may be signed in any order. With `holderRoles`, a slot that names a role the person lacks
- * gets a `role` blocker.
+ * and may be signed in any order. A slot that names a role the person lacks gets a `role` blocker.
+ * Two slots mean two different people: whoever signed one slot of a step cannot sign another.
+ * `signed` maps each signed slot to who signed it; `viewer` is the person asking.
  */
 export function slotGate(
 	m: Model,
 	st: HoldState,
 	row: Row,
 	slot: number,
-	signed: ReadonlySet<number>,
+	signed: ReadonlyMap<number, number | null>,
 	complete: Blocker[] | undefined,
-	roleOk: boolean
+	roleOk: boolean,
+	viewer: number | null
 ): { canSign: boolean; blockers: Blocker[] } {
 	if (!isActive(m.exec)) return { canSign: false, blockers: [] };
 	const status = row.se.status;
@@ -133,6 +135,8 @@ export function slotGate(
 	}
 	const role = row.signoffs[slot]?.role;
 	if (role && !roleOk) blockers = [...blockers, blocker('role', `Requires ${role}`)];
+	const own = viewer === null ? undefined : [...signed].find(([, by]) => by === viewer);
+	if (own) blockers = [...blockers, blocker('same_person', `Needs a different person from ${row.signoffs[own[0]]!.label}`)];
 	return { canSign: blockers.length === 0, blockers };
 }
 
