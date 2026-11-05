@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import {
+		EditToggle,
+		MoreMenu,
 		PageHeader,
 		Section,
 		DataTable,
@@ -10,6 +13,7 @@
 		State,
 		Timestamp,
 		confirm,
+		isEditing,
 		toastError,
 		type Column
 	} from '#lib/components/opal/index.js';
@@ -23,6 +27,8 @@
 
 	let { data }: PageProps = $props();
 	const s = $derived(data.supplier);
+	// Directory data opens for reading; EDIT reveals the fields.
+	const editing = $derived(isEditing(page.url));
 
 	async function patch(body: Record<string, unknown>) {
 		await opal.purchasing.suppliers.update({ id: s.id, ...body });
@@ -65,9 +71,8 @@
 	{/snippet}
 	{#snippet actions()}
 		<Button href={`/purchases/new?supplier_id=${s.id}`}>+ NEW PURCHASE</Button>
-		{#if s.deletable}
-			<Button variant="destructive" onclick={remove}>DELETE</Button>
-		{/if}
+		<EditToggle />
+		<MoreMenu items={[{ label: 'DELETE', onselect: remove, strike: true, when: s.deletable }]} />
 	{/snippet}
 </PageHeader>
 
@@ -75,6 +80,7 @@
 	<Section title="SUPPLIER" class="content-start">
 		<DetailTable>
 			<EditableRow
+				editable={editing}
 				label="Name"
 				value={s.name}
 				required
@@ -82,6 +88,7 @@
 				onsave={(v) => patch({ name: v })}
 			/>
 			<EditableRow
+				editable={editing}
 				label="Code"
 				mono
 				value={s.code}
@@ -89,6 +96,7 @@
 				onsave={(v) => patch({ code: v })}
 			/>
 			<EditableRow
+				editable={editing}
 				label="Status"
 				type="select"
 				value={s.isActive ? 'true' : 'false'}
@@ -106,6 +114,7 @@
 				{/snippet}
 			</EditableRow>
 			<EditableRow
+				editable={editing}
 				label="Email"
 				type="email"
 				value={s.email}
@@ -118,6 +127,7 @@
 				{/snippet}
 			</EditableRow>
 			<EditableRow
+				editable={editing}
 				label="Phone"
 				type="tel"
 				mono
@@ -126,6 +136,7 @@
 				onsave={(v) => patch({ phone: v })}
 			/>
 			<EditableRow
+				editable={editing}
 				label="Website"
 				type="url"
 				value={s.website}
@@ -143,18 +154,21 @@
 				{/snippet}
 			</EditableRow>
 			<EditableRow
+				editable={editing}
 				label="Address"
 				type="textarea"
 				value={s.address}
 				onsave={(v) => patch({ address: v })}
 			/>
 			<EditableRow
+				editable={editing}
 				label="Description"
 				type="textarea"
 				value={s.description}
 				onsave={(v) => patch({ description: v })}
 			/>
 			<EditableRow
+				editable={editing}
 				label="Notes"
 				type="textarea"
 				value={s.notes}
@@ -202,5 +216,10 @@
 </div>
 
 <div class="px-4 pb-4">
-	<SupplierCatalog supplierId={s.id} entries={data.parts} onchanged={() => invalidateAll()} />
+	<SupplierCatalog
+		supplierId={s.id}
+		entries={data.parts}
+		{editing}
+		onchanged={() => invalidateAll()}
+	/>
 </div>

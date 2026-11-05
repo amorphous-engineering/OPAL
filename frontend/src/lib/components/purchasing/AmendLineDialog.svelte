@@ -52,7 +52,8 @@
 		if (!costLocked && String(cost).trim() !== (line.unitCost ?? '')) {
 			body.unitCost = String(cost).trim() === '' ? null : String(cost).trim();
 		}
-		if (destination.trim() !== (line.destination ?? '')) body.destination = destination.trim() || null;
+		if (destination.trim() !== (line.destination ?? ''))
+			body.destination = destination.trim() || null;
 		if (Object.keys(body).length === 0) {
 			error = 'Change a value';
 			return;

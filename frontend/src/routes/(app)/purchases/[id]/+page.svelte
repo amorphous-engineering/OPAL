@@ -128,7 +128,8 @@
 			action: 'CANCEL LINE',
 			destructive: true
 		});
-		if (reason) await run(() => opal.purchasing.orders.cancelLine({ id: po.id, lineId: l.id, reason }));
+		if (reason)
+			await run(() => opal.purchasing.orders.cancelLine({ id: po.id, lineId: l.id, reason }));
 	}
 
 	async function cancelOrder() {
@@ -178,9 +179,23 @@
 
 	const more = $derived<MoreItem[]>([
 		{ label: 'ADD LINE', onselect: addLine, when: live },
-		{ label: 'PUT ON HOLD', onselect: () => run(() => opal.purchasing.orders.hold({ id: po.id })), when: live },
-		{ label: 'CLOSE SHORT', onselect: closeShort, strike: true, when: (live || held) && anyReceived },
-		{ label: 'CANCEL ORDER', onselect: cancelOrder, strike: true, when: (live || held) && !anyReceived },
+		{
+			label: 'PUT ON HOLD',
+			onselect: () => run(() => opal.purchasing.orders.hold({ id: po.id })),
+			when: live
+		},
+		{
+			label: 'CLOSE SHORT',
+			onselect: closeShort,
+			strike: true,
+			when: (live || held) && anyReceived
+		},
+		{
+			label: 'CANCEL ORDER',
+			onselect: cancelOrder,
+			strike: true,
+			when: (live || held) && !anyReceived
+		},
 		{ label: 'DISCARD', onselect: discard, strike: true, when: draft },
 		{ label: 'COPY TO NEW DRAFT', onselect: copy, when: closed }
 	]);
@@ -200,7 +215,9 @@
 	crumbs={[{ label: 'Purchases', href: '/purchases' }, { label }]}
 >
 	{#snippet heading()}
-		<h1 class="text-lg font-semibold tracking-tight {po.status === 'cancelled' ? 'line-through' : ''}">
+		<h1
+			class="text-lg font-semibold tracking-tight {po.status === 'cancelled' ? 'line-through' : ''}"
+		>
 			{po.supplierName}
 		</h1>
 	{/snippet}
@@ -222,7 +239,8 @@
 		{:else if canReceive}
 			<Button type="submit" form="po-receive">RECEIVE</Button>
 		{:else if held}
-			<Button onclick={() => run(() => opal.purchasing.orders.resume({ id: po.id }))}>RESUME</Button>
+			<Button onclick={() => run(() => opal.purchasing.orders.resume({ id: po.id }))}>RESUME</Button
+			>
 		{/if}
 		<MoreMenu items={more} />
 	{/snippet}

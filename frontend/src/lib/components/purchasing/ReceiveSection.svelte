@@ -144,8 +144,10 @@
 						{#each byLine.get(l.id) ?? [] as r (r.stockId)}
 							<tr class="border-b border-border align-top">
 								<td class="px-3 py-1.5 font-mono whitespace-nowrap"
-									><a href={`/parts/${l.partId}`} title={l.partName} class="text-info hover:underline"
-										>{l.partInternalPn}</a
+									><a
+										href={`/parts/${l.partId}`}
+										title={l.partName}
+										class="text-info hover:underline">{l.partInternalPn}</a
 									></td
 								>
 								<td></td>
@@ -171,8 +173,10 @@
 						{#if row}
 							<tr class="border-b border-border align-top">
 								<td class="px-3 py-1.5 font-mono"
-									><a href={`/parts/${l.partId}`} title={l.partName} class="text-info hover:underline"
-										>{l.partInternalPn}</a
+									><a
+										href={`/parts/${l.partId}`}
+										title={l.partName}
+										class="text-info hover:underline">{l.partInternalPn}</a
 									></td
 								>
 								<td class="px-3 py-1.5 text-right font-mono tabular-nums"

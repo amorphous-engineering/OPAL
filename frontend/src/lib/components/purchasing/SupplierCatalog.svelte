@@ -26,9 +26,15 @@
 	let {
 		supplierId,
 		entries,
+		editing = false,
 		onchanged
-	}: { supplierId: number; entries: SupplierPartRow[]; onchanged: () => void | Promise<void> } =
-		$props();
+	}: {
+		supplierId: number;
+		entries: SupplierPartRow[];
+		/** Edit mode: add, edit and remove exist only here. */
+		editing?: boolean;
+		onchanged: () => void | Promise<void>;
+	} = $props();
 
 	let open = $state(false);
 	let editing = $state<SupplierPartRow | null>(null);
@@ -94,7 +100,7 @@
 		}
 	}
 
-	const columns: Column<SupplierPartRow>[] = [
+	const allColumns: Column<SupplierPartRow>[] = [
 		{
 			key: 'partInternalPn',
 			label: 'PN',
@@ -111,14 +117,19 @@
 		{ key: 'notes', label: 'Notes' },
 		{ key: 'actions', label: '', align: 'right' }
 	];
+	const columns = $derived(editing ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
 </script>
 
 {#if entries.length === 0}
-	<EmptyLine label="Parts supplied" onadd={() => openDialog(null)} addLabel="+ ADD PART" />
+	<EmptyLine
+		label="Parts supplied"
+		onadd={editing ? () => openDialog(null) : undefined}
+		addLabel="+ ADD PART"
+	/>
 {:else}
 	<Section title="PARTS SUPPLIED" count={entries.length}>
 		{#snippet actions()}
-			<ActionLink onclick={() => openDialog(null)}>+ ADD PART</ActionLink>
+			{#if editing}<ActionLink onclick={() => openDialog(null)}>+ ADD PART</ActionLink>{/if}
 		{/snippet}
 		<DataTable rows={entries} {columns} emptyLabel="Parts supplied" key={(r) => r.id}>
 			{#snippet cell(r, col)}
@@ -139,7 +150,7 @@
 				{:else if col.key === 'actions'}
 					<span class="inline-flex gap-3">
 						<ActionLink onclick={() => openDialog(r)}>EDIT</ActionLink>
-						<ActionLink danger onclick={() => remove(r)}>REMOVE</ActionLink>
+						<ActionLink onclick={() => remove(r)}>REMOVE</ActionLink>
 					</span>
 				{:else if col.key === 'vendorPn'}
 					{r.vendorPn}

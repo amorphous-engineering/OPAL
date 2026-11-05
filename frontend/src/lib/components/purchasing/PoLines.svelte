@@ -50,7 +50,8 @@
 	const lineTotal = (l: PurchaseLine) =>
 		l.unitCost == null ? null : num(l.unitCost) * (num(l.qtyOrdered) - num(l.qtyCancelled));
 	/** Everything on it was struck and nothing arrived. */
-	const struck = (l: PurchaseLine) => num(l.qtyCancelled) > 0 && num(l.qtyReceived) === 0 && l.isComplete;
+	const struck = (l: PurchaseLine) =>
+		num(l.qtyCancelled) > 0 && num(l.qtyReceived) === 0 && l.isComplete;
 	const showActions = $derived(editing && (draft || placedOpen));
 	const cols = $derived(7 + (anyCancelled ? 1 : 0) + (showActions ? 1 : 0));
 </script>
@@ -127,9 +128,10 @@
 							>
 							{#if anyCancelled}
 								<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums">
-									{#if num(l.qtyCancelled) > 0}{qtyUnit(l.qtyCancelled, l.unitOfMeasure)}{:else}<span
-											class="text-muted-foreground">—</span
-										>{/if}
+									{#if num(l.qtyCancelled) > 0}{qtyUnit(
+											l.qtyCancelled,
+											l.unitOfMeasure
+										)}{:else}<span class="text-muted-foreground">—</span>{/if}
 								</td>
 							{/if}
 							<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums">
@@ -162,10 +164,7 @@
 						{#each notes as c, i (c.at + c.field + i)}
 							<tr class={i === notes.length - 1 ? 'border-b border-border' : ''}>
 								<td></td>
-								<td
-									colspan={cols - 1}
-									class="px-3 pb-1 font-mono text-xs text-muted-foreground"
-								>
+								<td colspan={cols - 1} class="px-3 pb-1 font-mono text-xs text-muted-foreground">
 									{fieldLabel(c.field).toUpperCase()}
 									{#if c.field !== 'line'}
 										<s>{changeValue(c, c.old)}</s> → {changeValue(c, c.new)}

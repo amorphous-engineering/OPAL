@@ -31,7 +31,10 @@ const FIELD_LABELS: Record<string, string> = {
 export const fieldLabel = (field: string) => FIELD_LABELS[field] ?? field;
 
 /** An old or new value of a change as the page reads it: units on quantities, money as money. */
-export function changeValue(c: Pick<PurchaseChange, 'field' | 'unitOfMeasure'>, v: string | null): string {
+export function changeValue(
+	c: Pick<PurchaseChange, 'field' | 'unitOfMeasure'>,
+	v: string | null
+): string {
 	if (v === null || v === '') return '—';
 	if (c.field === 'qtyOrdered' || c.field === 'qtyCancelled' || c.field === 'line') {
 		return qtyUnit(v, c.unitOfMeasure);
