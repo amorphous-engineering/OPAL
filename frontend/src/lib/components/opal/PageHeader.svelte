@@ -52,7 +52,8 @@
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
 		<!-- Baseline row: the count reads as part of the title, not as a centered chip. -->
 		<div class="flex items-baseline gap-x-3">
-			{#if identifier}<span class="font-mono text-lg font-semibold text-info">{identifier}</span
+			{#if identifier}<span class="font-mono text-lg font-semibold whitespace-nowrap text-info"
+					>{identifier}</span
 				>{/if}
 			{#if heading}{@render heading()}{:else}<h1 class="text-lg font-semibold tracking-tight">
 					{title}

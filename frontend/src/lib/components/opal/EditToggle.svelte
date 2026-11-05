@@ -13,7 +13,7 @@
 <Button
 	size="sm"
 	variant="outline"
-	aria-pressed={editing}
+	aria-current={editing ? 'true' : undefined}
 	href={queryHref({ edit: editing ? null : '1' })}
 	data-sveltekit-noscroll
 	data-sveltekit-keepfocus>{editing ? 'DONE' : label}</Button

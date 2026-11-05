@@ -277,15 +277,15 @@
 		@apply shadow-key active:shadow-none;
 	}
 	[data-slot='button'].border-border {
-		@apply shadow-key2 active:shadow-none;
+		@apply shadow-key2 active:shadow-none dark:bg-transparent;
 	}
 	/* Inert: flat and readable. Half-lit blue goes first in glare and reads as maybe. */
 	[data-slot='button']:is(.bg-primary, .border-border):is(:disabled, [aria-disabled='true']) {
 		@apply border-transparent bg-muted text-foreground opacity-100 shadow-none;
 	}
 	/* Black fill: you are here. The active choice of a toggle is not the primary action. */
-	[data-slot='button'][aria-pressed='true'] {
-		@apply border-foreground bg-foreground text-background shadow-none hover:bg-foreground hover:text-background;
+	[data-slot='button']:is([aria-pressed='true'], [aria-current='true']) {
+		@apply border-foreground bg-foreground text-background shadow-none hover:bg-foreground hover:text-background dark:bg-foreground;
 	}
 
 	/* Dashed: not committed yet. Search and filters are not part of a record. */
@@ -318,9 +318,15 @@
 		@apply border border-foreground;
 	}
 
-	/* Vendored badges set 10px type. */
+	/* Vendored badges set 10px type, and in dark mode a tint over the fill a hold asks for. */
 	[data-slot='badge'] {
-		@apply text-xs;
+		@apply text-xs dark:bg-transparent;
+	}
+	[data-slot='badge'].bg-error-fill {
+		@apply dark:bg-error-fill;
+	}
+	[data-slot='badge'].bg-warn-fill {
+		@apply dark:bg-warn-fill;
 	}
 
 	/* Corners the radius tokens cannot reach: rounded-full and rounded-[4px]. */
