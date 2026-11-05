@@ -36,12 +36,12 @@ export const TYPE_ABBREV: Record<string, string> = {
 	improvement: 'IMPR'
 };
 
-/** Option text for the containment picker: scope, then what it holds. */
+/** Containment scope names. */
 export const CONTAINMENT_OPTION: Record<string, string> = {
-	advisory: 'ADVISORY — holds nothing',
-	step: 'STEP — holds the step',
-	op: 'OP — holds the operation',
-	wo: 'WO — holds the work order'
+	advisory: 'ADVISORY',
+	step: 'STEP',
+	op: 'OP',
+	wo: 'WO'
 };
 
 export function priorityTone(p: string): Tone {
