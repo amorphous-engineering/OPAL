@@ -363,6 +363,7 @@ export const zPurchaseExpense = z.object({
 	partId: z.number().int().nullable(),
 	partName: z.string().nullable(),
 	partInternalPn: z.string().nullable(),
+	unitOfMeasure: z.string().nullable(),
 	quantity: zQty.nullable(),
 	unitCost: zPurchaseMoney.nullable(),
 	totalCost: zPurchaseMoney.nullable(),

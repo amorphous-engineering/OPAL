@@ -822,7 +822,7 @@ export function receivedRecords(ctx: DbCtx, id: number) {
 
 type ExpenseRow = typeof purchaseExpense.$inferSelect;
 
-function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string } | null): PurchaseExpense {
+function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string; unitOfMeasure: string } | null): PurchaseExpense {
 	const total =
 		e.kind === 'receipt' ? (e.unitCost === null ? null : lineTotal(e.unitCost, e.quantity as number)) : e.amount;
 	return {
@@ -833,6 +833,7 @@ function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string } |
 		partId: e.partId,
 		partName: p?.name ?? null,
 		partInternalPn: p?.internalPn ?? null,
+		unitOfMeasure: p?.unitOfMeasure ?? null,
 		quantity: e.quantity === null ? null : formatQty(e.quantity as Qty),
 		unitCost: showMoney(e.kind === 'receipt' ? e.unitCost : e.amount),
 		totalCost: showMoney(total),
