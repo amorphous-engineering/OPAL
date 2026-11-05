@@ -68,8 +68,8 @@ describe('status workflow', () => {
 		const s = await setup();
 		const po = await orderedPo(s, makePart(s.db).id, '1');
 		const r = await s.call('PATCH', `/purchases/${po.id}`, { status: 'received' });
-		expect(r.status).toBe(200);
-		expect(r.body.status).toBe('ordered');
+		expect(r.status).toBe(422);
+		expect((await s.call('GET', `/purchases/${po.id}`)).body.status).toBe('ordered');
 	});
 
 	test('a cancelled order can only have its notes edited', async () => {

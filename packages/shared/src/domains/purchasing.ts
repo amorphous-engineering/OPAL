@@ -297,7 +297,9 @@ export const zPurchaseUpdate = z.object({
 	supplierReference: zText(100).nullable().optional(),
 	targetDate: zDate.nullable().optional(),
 	destination: zText(255).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().nullable().optional(),
+	/** A status moves only through place, hold, resume, cancel and close short. Refuse it here, so a stale caller is not told it worked. */
+	status: z.never().optional()
 });
 
 /** A strike or an amendment is a correction on the record: the reason is required. */
