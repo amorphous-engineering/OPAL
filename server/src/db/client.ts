@@ -1,7 +1,7 @@
 /** Opens the SQLite file and applies migrations. One connection per process. */
 import { Database } from 'bun:sqlite';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import type { MigrationMeta } from 'drizzle-orm/migrator';
 import { join } from 'node:path';
 import { embedded } from '../http/embedded.ts';
@@ -11,22 +11,48 @@ export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 export const MIGRATIONS_DIR = join(import.meta.dir, '../../drizzle');
 
+/** Newest applied migration, by the same `created_at` drizzle's migrator compares against. */
+function lastApplied(sqlite: Database): number {
+	const table = sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'").get();
+	if (!table) return 0;
+	const row = sqlite.query('SELECT max(created_at) AS at FROM __drizzle_migrations').get() as { at: number | null };
+	return Number(row.at ?? 0);
+}
+
+/**
+ * Applies what is pending with foreign keys off. Drizzle runs every migration inside one
+ * transaction, where `PRAGMA foreign_keys` does nothing, so the OFF a generated table rebuild
+ * opens with is ignored and its DROP TABLE cascades into every child row. The check afterwards
+ * counts only new violations: a database imported from 1.x may already hold some.
+ */
+function applyMigrations(sqlite: Database, pending: MigrationMeta[], apply: () => void): void {
+	if (!pending.length) return;
+	const violations = () => sqlite.query('PRAGMA foreign_key_check').all().length;
+	sqlite.run('PRAGMA foreign_keys = OFF');
+	try {
+		const before = violations();
+		apply();
+		const after = violations();
+		if (after > before) throw new Error(`Migrations left ${after - before} rows pointing at a missing parent`);
+	} finally {
+		sqlite.run('PRAGMA foreign_keys = ON');
+	}
+}
+
 export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR): Db {
 	const sqlite = new Database(path, { create: true, strict: true });
 	sqlite.run('PRAGMA journal_mode = WAL');
 	sqlite.run('PRAGMA foreign_keys = ON');
 	sqlite.run('PRAGMA busy_timeout = 5000');
 	const db = drizzle(sqlite, { schema });
-	const bundled = embedded()?.migrations;
-	if (bundled) {
-		// The binary has no drizzle/ folder on disk. Same steps as `migrate`, from memory.
-		const internals = db as unknown as {
-			dialect: { migrate(m: MigrationMeta[], session: unknown, config: object): void };
-			session: unknown;
-		};
-		internals.dialect.migrate(bundled, internals.session, { migrationsFolder });
-	} else {
-		migrate(db, { migrationsFolder });
-	}
+	// The binary has no drizzle/ folder on disk, so it reads the same files from memory.
+	const files = embedded()?.migrations ?? readMigrationFiles({ migrationsFolder });
+	const last = lastApplied(sqlite);
+	const pending = files.filter((m) => m.folderMillis > last);
+	const internals = db as unknown as {
+		dialect: { migrate(m: MigrationMeta[], session: unknown, config: object): void };
+		session: unknown;
+	};
+	applyMigrations(sqlite, pending, () => internals.dialect.migrate(files, internals.session, { migrationsFolder }));
 	return db;
 }
