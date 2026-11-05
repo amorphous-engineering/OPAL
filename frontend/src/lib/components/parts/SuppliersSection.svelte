@@ -20,7 +20,11 @@
 	import type { PartDetail } from '@opal/shared';
 	import type { SupplierPartRow } from '#lib/components/purchasing/types.js';
 
-	let { detail, entries }: { detail: PartDetail; entries: SupplierPartRow[] } = $props();
+	let {
+		detail,
+		entries,
+		editing = false
+	}: { detail: PartDetail; entries: SupplierPartRow[]; editing?: boolean } = $props();
 	const part = $derived(detail.part);
 
 	let adding = $state(false);
@@ -47,7 +51,7 @@
 	const linked = $derived(new Set(entries.map((s) => s.supplierId)));
 	const available = $derived(options.filter((o) => !linked.has(o.id)));
 
-	const columns: Column<SupplierPartRow>[] = [
+	const allColumns: Column<SupplierPartRow>[] = [
 		{ key: 'supplier', label: 'Supplier' },
 		{ key: 'vendorPn', label: 'Vendor PN', mono: true, width: '14rem' },
 		{ key: 'preferred', label: 'Preferred', width: '6rem' },
@@ -55,6 +59,9 @@
 		{ key: 'notes', label: 'Notes', width: '16rem' },
 		{ key: 'actions', label: '', width: '8rem', align: 'right' }
 	];
+
+	// Row tools exist only in edit mode.
+	const columns = $derived(editing ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
 
 	async function add(e: SubmitEvent) {
 		e.preventDefault();
@@ -140,7 +147,9 @@
 {#if entries.length}
 	<Section title="Suppliers" count={entries.length}>
 		{#snippet actions()}
-			<ActionLink onclick={() => (adding = !adding)}>{adding ? 'CANCEL' : '+ ADD'}</ActionLink>
+			{#if editing}
+				<ActionLink onclick={() => (adding = !adding)}>{adding ? 'CANCEL' : '+ ADD'}</ActionLink>
+			{/if}
 		{/snippet}
 		<DataTable
 			rows={entries}
@@ -168,16 +177,16 @@
 				{:else}
 					<span class="inline-flex gap-3">
 						{#if !s.isPreferred}<ActionLink onclick={() => prefer(s)}>PREFER</ActionLink>{/if}
-						<ActionLink danger onclick={() => unlink(s)}>UNLINK</ActionLink>
+						<ActionLink onclick={() => unlink(s)}>UNLINK</ActionLink>
 					</span>
 				{/if}
 			{/snippet}
 		</DataTable>
-		{#if adding}{@render addForm()}{/if}
+		{#if editing && adding}{@render addForm()}{/if}
 	</Section>
 {:else if detail.expects.suppliers}
 	<div>
-		<EmptyLine label="SUPPLIERS" onadd={() => (adding = true)} />
-		{#if adding}{@render addForm()}{/if}
+		<EmptyLine label="SUPPLIERS" onadd={editing ? () => (adding = true) : undefined} />
+		{#if editing && adding}{@render addForm()}{/if}
 	</div>
 {/if}

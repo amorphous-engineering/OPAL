@@ -1,11 +1,24 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { PageHeader, State, confirm, toastError } from '#lib/components/opal/index.js';
+	import { page } from '$app/state';
+	import {
+		EditToggle,
+		MoreMenu,
+		PageHeader,
+		State,
+		askReason,
+		confirm,
+		isEditing,
+		toastError
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { opal } from '#lib/api.js';
 	import { act } from '#lib/components/parts/actions.js';
 	import BomSection from '#lib/components/parts/BomSection.svelte';
 	import CauseDialog from '#lib/components/parts/CauseDialog.svelte';
+	import ConsumedSection from '#lib/components/parts/ConsumedSection.svelte';
+	import PartTag from '#lib/components/parts/PartTag.svelte';
+	import ProcedureUseSection from '#lib/components/parts/ProcedureUseSection.svelte';
 	import HistorySection from '#lib/components/parts/HistorySection.svelte';
 	import IdentitySection from '#lib/components/parts/IdentitySection.svelte';
 	import VariantsSection from '#lib/components/parts/VariantsSection.svelte';
@@ -45,12 +58,21 @@
 	);
 
 	let activating = $state(false);
-	let retiring = $state(false);
+	/** Draft and active parts have something still in pencil; an obsolete part is read-only. */
+	const editing = $derived(part.state !== 'obsolete' && isEditing(page.url));
 
 	const activate = (cause: string | undefined) =>
 		act(() => opal.parts.activate({ id: part.id, cause }), `${part.internalPn} activated`);
-	const retire = (cause: string | undefined) =>
-		act(() => opal.parts.obsolete({ id: part.id, cause }), `${part.internalPn} obsolete`);
+	async function retire() {
+		const cause = await askReason({
+			title: `Mark ${part.internalPn} obsolete`,
+			body: 'The part leaves service. Records that use it keep it.',
+			action: 'OBSOLETE',
+			destructive: true
+		});
+		if (cause)
+			await act(() => opal.parts.obsolete({ id: part.id, cause }), `${part.internalPn} obsolete`);
+	}
 
 	async function remove() {
 		const ok = await confirm({
@@ -87,16 +109,16 @@
 			href={`/inventory/new?part_id=${part.id}`}
 			disabled={part.state !== 'active'}>RECEIVE STOCK</Button
 		>
-		<Button variant="outline" size="sm" href={`/parts/${part.id}/edit`}>EDIT</Button>
 		{#if detail.family.nextNumber}
 			<Button variant="outline" size="sm" href={`/parts/${part.id}/variant`}>VARIANT</Button>
 		{/if}
-		{#if part.state === 'active'}
-			<Button variant="outline" size="sm" onclick={() => (retiring = true)}>OBSOLETE</Button>
-		{/if}
-		{#if detail.deletable}
-			<Button variant="destructive" size="sm" onclick={remove}>DELETE</Button>
-		{/if}
+		{#if part.state !== 'obsolete'}<EditToggle />{/if}
+		<MoreMenu
+			items={[
+				{ label: 'OBSOLETE', onselect: retire, strike: true, when: part.state === 'active' },
+				{ label: 'DELETE', onselect: remove, strike: true, when: detail.deletable }
+			]}
+		/>
 	{/snippet}
 </PageHeader>
 
@@ -128,18 +150,35 @@
 	class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(24rem,30rem)_minmax(0,1fr)]"
 >
 	<div class="grid min-w-0 grid-cols-1 gap-3">
-		<IdentitySection {detail} fields={data.fields} />
+		<PartTag
+			pn={part.internalPn}
+			name={part.name}
+			tierLevel={part.tier}
+			tierName={part.tierName}
+			tierCode={detail.tierCode}
+			uom={part.unitOfMeasure}
+			tracking={part.trackingType}
+			state={part.state}
+			qr={data.qr}
+		/>
+		<IdentitySection
+			{detail}
+			fields={data.fields}
+			editHref={editing ? `/parts/${part.id}/edit` : null}
+		/>
 		<VariantsSection {detail} />
 		<PluginPanels slot="part.side" recordId={part.id} number={part.internalPn} />
 		<ExternalLinks entityType="part" entityId={part.id} />
 	</div>
 	<div class="grid min-w-0 grid-cols-1 gap-3">
-		<BomSection {detail} />
+		<BomSection {detail} {editing} />
 		<StockSection {detail} records={data.stock} />
-		<TestsSection partId={part.id} templates={data.tests} />
-		<SuppliersSection {detail} entries={data.suppliers} />
+		<TestsSection partId={part.id} templates={data.tests} {editing} />
+		<SuppliersSection {detail} entries={data.suppliers} {editing} />
 		<PoLinesSection {detail} lines={data.poLines} />
 		<WhereUsedSection {detail} />
+		<ProcedureUseSection uses={data.procedureUse} />
+		<ConsumedSection items={data.consumed.items} total={data.consumed.total} />
 		<!-- added by requirements -->
 		<PartRequirementsSection
 			partId={part.id}
@@ -160,13 +199,4 @@
 	action="ACTIVATE"
 	placeholder="manual activation from part page"
 	onconfirm={activate}
-/>
-<CauseDialog
-	bind:open={retiring}
-	title={`Mark ${part.internalPn} obsolete`}
-	body="The part leaves service. Records that use it keep it."
-	action="OBSOLETE"
-	placeholder="marked obsolete from part page"
-	destructive
-	onconfirm={retire}
 />

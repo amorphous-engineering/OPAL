@@ -29,7 +29,11 @@
 	import { act } from './actions.js';
 	import type { PartRef } from './types.js';
 
-	let { detail, view = 'lines' }: { detail: PartDetail; view?: 'lines' | 'tree' } = $props();
+	let {
+		detail,
+		view = 'lines',
+		editing = false
+	}: { detail: PartDetail; view?: 'lines' | 'tree'; editing?: boolean } = $props();
 	const part = $derived(detail.part);
 	const lines = $derived(detail.bom);
 
@@ -45,7 +49,7 @@
 	let eRef = $state('');
 	let eNotes = $state('');
 
-	const columns: Column<BomLine>[] = [
+	const allColumns: Column<BomLine>[] = [
 		{ key: 'pn', label: 'PN', width: '9rem', mono: true },
 		{ key: 'name', label: 'Name' },
 		{ key: 'qty', label: 'Qty', width: '5rem', align: 'right', mono: true },
@@ -53,6 +57,9 @@
 		{ key: 'notes', label: 'Notes', width: '14rem' },
 		{ key: 'actions', label: '', width: '7rem', align: 'right' }
 	];
+
+	// Row tools exist only in edit mode.
+	const columns = $derived(editing ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
 
 	function startEdit(l: BomLine) {
 		editId = l.id;
@@ -184,7 +191,7 @@
 {#if view === 'lines'}
 	{#if lines.length}
 		<Section title="BOM" count={lines.length}>
-			{#snippet actions()}{@render addAction()}{/snippet}
+			{#snippet actions()}{#if editing}{@render addAction()}{/if}{/snippet}
 			<DataTable
 				rows={lines}
 				{columns}
@@ -238,17 +245,17 @@
 					{:else}
 						<span class="inline-flex gap-3">
 							<ActionLink onclick={() => startEdit(l)}>EDIT</ActionLink>
-							<ActionLink danger onclick={() => remove(l)}>REMOVE</ActionLink>
+							<ActionLink onclick={() => remove(l)}>REMOVE</ActionLink>
 						</span>
 					{/if}
 				{/snippet}
 			</DataTable>
-			{#if adding}{@render addForm()}{/if}
+			{#if editing && adding}{@render addForm()}{/if}
 		</Section>
 	{:else if detail.expects.bom}
 		<div>
-			<EmptyLine label="BOM" onadd={() => (adding = true)} />
-			{#if adding}{@render addForm()}{/if}
+			<EmptyLine label="BOM" onadd={editing ? () => (adding = true) : undefined} />
+			{#if editing && adding}{@render addForm()}{/if}
 		</div>
 	{/if}
 {:else if hasDepth}
