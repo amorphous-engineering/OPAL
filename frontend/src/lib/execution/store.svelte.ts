@@ -131,6 +131,9 @@ export class ExecutionStore implements DocController {
 		await this.refresh();
 		this.loading = false;
 		if (this.error) return;
+		// The first poll sets the baseline signature. Take it now, so a hold raised in the first
+		// seconds (from another tab, say) reads as a change and not as where the page started.
+		await this.pollNow();
 		void this.loadComments();
 		opal.execution.join({ id: this.id }).catch(() => {});
 		this.pollTimer = setInterval(() => {
