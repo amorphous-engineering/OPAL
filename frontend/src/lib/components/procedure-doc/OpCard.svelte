@@ -99,9 +99,8 @@
 	data-op-status={op.status}
 	style:--op-head={`${headHeight}px`}
 	class={cn(
-		// clip, not hidden: rounds the corners without becoming a scroll container,
-		// which would stop the title bars from sticking.
-		'overflow-clip rounded-lg border border-border bg-card',
+		// clip, not hidden: hidden makes a scroll container, which stops the title bars from sticking.
+		'overflow-clip border border-border bg-card',
 		op.is_ad_hoc && 'border-warn/50'
 	)}
 >

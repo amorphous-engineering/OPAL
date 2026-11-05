@@ -269,7 +269,8 @@
  * loses to states like focus and aria-invalid. Anything else belongs in a class at the call site.
  */
 @layer utilities {
-	/* Dotted: a row inside a section. */
+	/* Dotted: a row inside a section. A table whose rows are sections puts border-solid on the row,
+	   which wins on specificity. */
 	tbody > tr {
 		@apply border-dotted;
 	}
