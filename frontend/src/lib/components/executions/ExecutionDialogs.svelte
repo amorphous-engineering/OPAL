@@ -3,7 +3,6 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import EditForm from './EditForm.svelte';
-	import RaiseIssueForm from './RaiseIssueForm.svelte';
 	import RedlineForm from './RedlineForm.svelte';
 
 	let { store, editing = $bindable(false) }: { store: ExecutionStore; editing?: boolean } =
@@ -15,7 +14,7 @@
 	$effect(() => {
 		if (store.panel) d = store.panel;
 	});
-	const wide = $derived(d?.kind === 'issue' || d?.kind === 'redline');
+	const wide = $derived(d?.kind === 'redline');
 </script>
 
 <Dialog.Root
@@ -25,9 +24,7 @@
 	}}
 >
 	<Dialog.Content class={wide ? 'sm:max-w-xl' : 'sm:max-w-md'}>
-		{#if d?.kind === 'issue'}
-			<RaiseIssueForm {store} step={d.step} />
-		{:else if d?.kind === 'redline'}
+		{#if d?.kind === 'redline'}
 			<RedlineForm {store} op={d.op} preselect={d.issueId} />
 		{/if}
 	</Dialog.Content>

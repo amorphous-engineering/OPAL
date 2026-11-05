@@ -324,6 +324,7 @@ export function adaptState(s: ApiState): ExecutionState {
 		})),
 		roster: s.roster.map(rosterEntry),
 		holds: s.holds.map(holdSummary),
+		issue_count: s.issueCount,
 		labor: s.labor.map(labor),
 		generated_at: s.generatedAt
 	};

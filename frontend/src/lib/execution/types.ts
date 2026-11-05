@@ -177,6 +177,7 @@ export interface ExecutionState {
 	}[];
 	roster: RosterEntry[];
 	holds: HoldEntry[];
+	issue_count: number;
 	labor: DocLabor[];
 	generated_at: string;
 }

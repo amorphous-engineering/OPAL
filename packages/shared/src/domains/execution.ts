@@ -519,6 +519,8 @@ export const zExecutionState = z.object({
 	),
 	roster: z.array(zExecRosterEntry),
 	holds: z.array(zDocHoldSummary),
+	/** Issues on this work order. An advisory one holds nothing but still changes the page. */
+	issueCount: z.number().int(),
 	labor: z.array(zLaborRow),
 	generatedAt: zTimestamp
 });

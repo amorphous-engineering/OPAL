@@ -24,7 +24,7 @@ import { type HoldChange, issueHooks } from '../issues/hooks.ts';
 import { blockedExecutionIds } from './blocked.ts';
 import { registerWorkcenterWork } from '../org/workcenters.ts';
 import { registerPartReference } from '../parts/references.ts';
-import { notify, registerEntity, registerSearchable } from '../platform/index.ts';
+import { notify, publish, registerEntity, registerSearchable } from '../platform/index.ts';
 import { setExecutionCounter } from '../procedures/index.ts';
 import { registerOverviewSection } from '../reports/overview.ts';
 import { registerExecutionReport } from '../reports/exports.ts';
@@ -334,6 +334,8 @@ export function operators(db: Db, executionId: number): number[] {
 function onHoldChanged(ctx: Ctx, ch: HoldChange) {
 	const e = ctx.db.select().from(execution).where(eq(execution.id, ch.executionId)).get();
 	if (!e) return;
+	// Raising an issue from its own tab must reach the work order page left open in this one.
+	publish({ type: 'execution_issues_changed', data: { executionId: ch.executionId } });
 	if (!ch.isBlocking) checkCompletion(ctx, ch.executionId);
 	if (ch.wasBlocking === ch.isBlocking) return;
 	const recipients = operators(ctx.db, ch.executionId);

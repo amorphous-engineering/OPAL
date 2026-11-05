@@ -54,7 +54,6 @@ function write(key: string, value: unknown) {
 
 /** The one form open on the page. It sits inline: nothing here covers the document. */
 export type OpenPanel =
-	| { kind: 'issue'; step: DocStep }
 	| { kind: 'redline'; op: DocOp; issueId?: number }
 	| { kind: 'closeShort' }
 	| null;
@@ -372,7 +371,8 @@ export class ExecutionStore implements DocController {
 				x.consumed,
 				x.notes
 			]),
-			s.holds.map((h) => `${h.issue_number}:${h.disposition_state}`)
+			s.holds.map((h) => `${h.issue_number}:${h.disposition_state}`),
+			s.issue_count
 		]);
 	}
 
@@ -741,34 +741,6 @@ export class ExecutionStore implements DocController {
 			q.set('stepLabel', step.number);
 		}
 		return `/issues/new?${q}`;
-	}
-
-	async raiseIssue(
-		step: DocStep,
-		body: {
-			title: string;
-			description: string | null;
-			priority: 'low' | 'medium' | 'high' | 'critical';
-			shouldBe: string | null;
-			actual: string | null;
-			containment: 'advisory' | 'step' | 'op' | 'wo';
-			containmentStepId: number | null;
-			assignedToId: number | null;
-		},
-		files: File[]
-	) {
-		const issue = await opal.execution.raiseNc({ id: this.id, stepId: step.order, ...body });
-		// Evidence at discovery links to the issue.
-		for (const file of files) {
-			const fd = new FormData();
-			fd.append('file', file);
-			fd.append('ownerType', 'issue');
-			fd.append('ownerId', String(issue.id));
-			fd.append('kind', 'capture');
-			await api.post('/attachments', fd);
-		}
-		await this.changed();
-		return issue;
 	}
 
 	async createRedline(body: {

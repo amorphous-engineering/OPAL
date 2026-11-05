@@ -16,7 +16,7 @@ import {
 	specText,
 	unitSymbol
 } from '@opal/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { laborRows } from './labor.ts';
 import type { Db } from '../../db/client.ts';
@@ -471,6 +471,7 @@ export function buildState(ctx: Ctx, executionId: number): ExecutionState {
 		})),
 		roster: roster(db, m),
 		holds: summarizeHolds(m, st),
+		issueCount: db.select({ n: sql<number>`count(*)` }).from(issue).where(eq(issue.executionId, executionId)).get()!.n,
 		labor: laborRows(db, m),
 		generatedAt: now()
 	};
