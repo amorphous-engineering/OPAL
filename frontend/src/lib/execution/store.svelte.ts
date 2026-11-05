@@ -105,6 +105,10 @@ export class ExecutionStore implements DocController {
 		return this.doc?.instance.active ?? false;
 	}
 
+	get struck() {
+		return !!this.doc?.instance.closure;
+	}
+
 	get allOps(): DocOp[] {
 		return this.doc ? [...this.doc.ops, ...this.doc.contingency_ops] : [];
 	}

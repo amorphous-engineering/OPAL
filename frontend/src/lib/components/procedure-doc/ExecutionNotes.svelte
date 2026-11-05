@@ -13,7 +13,7 @@
 
 	let { step }: { step: DocStep } = $props();
 	const ctl = useDoc();
-	const canAdd = $derived(!!ctl.actions.addNote);
+	const canAdd = $derived(!!ctl.actions.addNote && !ctl.struck);
 	let open = $state(false);
 </script>
 

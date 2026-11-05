@@ -135,6 +135,8 @@ export interface DocController {
 	viewerId: number | null;
 	/** The document accepts work (a work order that is cut or in work). */
 	active: boolean;
+	/** The work order was voided or closed short: its steps take no more notes. */
+	struck?: boolean;
 	/** Keyboard cursor; local, broadcasts nothing. */
 	focusedOrder: number | null;
 	/** The viewer's claimed step (presence), or null. */
