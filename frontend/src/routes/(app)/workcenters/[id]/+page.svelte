@@ -18,7 +18,6 @@
 		toast,
 		toastError
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import WorkcenterForm from '#lib/components/workcenters/WorkcenterForm.svelte';
 	import type { WorkcenterInput } from '#lib/components/workcenters/types.js';
 	import type { PageProps } from './$types';
