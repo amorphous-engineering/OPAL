@@ -1,0 +1,1 @@
+ALTER TABLE `procedure` ADD `status_reason` text;

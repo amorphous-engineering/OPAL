@@ -32,29 +32,11 @@ registerEntity(roleTable, {
 	label: 'Role',
 	ref: (r) => ({ label: r.name, href: `/settings?role=${r.id}#roles` })
 });
-// Undo: single-table edits revert from their audit rows. Role deletion and role assignment
-// touch the user_role links too, so they stay out.
-for (const op of ['workcenters.create', 'workcenters.update', 'workcenters.deactivate'])
+// Undo is for pencil. A workcenter's name and code are directory data and still reverse; a
+// deactivation is a stamp, and roles, project edits and user edits are authority or identity
+// that other records already rely on, so none of those register.
+for (const op of ['workcenters.create', 'workcenters.update'])
 	registerReversible(op, { revert: (ctx, rows) => revertRows(ctx, rows, { workcenter: workcenterTable }) });
-for (const op of ['roles.create', 'roles.update'])
-	registerReversible(op, { revert: (ctx, rows) => revertRows(ctx, rows, { role: roleTable }) });
-registerReversible('projects.update', { revert: (ctx, rows) => revertRows(ctx, rows, { project: projectTable }) });
-registerReversible('users.update', {
-	// Same rule as updateUser: a non-admin changes only their own profile fields.
-	authorize: (ctx, rows) => {
-		if (ctx.actor.kind !== 'user' && ctx.actor.kind !== 'token') return;
-		if (ctx.actor.isAdmin) return;
-		const own = new Set(['name', 'jobTitle', 'phone', 'workcenterId']);
-		for (const r of rows) {
-			if (r.entityId !== ctx.actor.userId) throw forbidden('Cannot edit other users');
-			const b = (r.before ?? {}) as Record<string, unknown>;
-			const a = (r.after ?? {}) as Record<string, unknown>;
-			const bad = Object.keys({ ...b, ...a }).filter((k) => !['id', 'updatedAt'].includes(k) && b[k] !== a[k] && !own.has(k));
-			if (bad.length) throw forbidden(`Cannot change fields: ${bad.join(', ')}`);
-		}
-	},
-	revert: (ctx, rows) => revertRows(ctx, rows, { user: userTable })
-});
 registerSearchable({
 	type: 'project',
 	table: projectTable,

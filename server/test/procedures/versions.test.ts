@@ -172,9 +172,8 @@ describe('unpublished changes', () => {
 	test('restore keeps the status and current version', async () => {
 		const s = await setup();
 		const { id, version } = await s.published('Keep');
-		await s.ok('PATCH', `/procedures/${id}`, { status: 'obsolete' });
 		const r = (await s.call('POST', `/procedures/${id}/versions/${version.id}/restore`)).json;
-		expect(r).toMatchObject({ status: 'obsolete', currentVersionId: version.id });
+		expect(r).toMatchObject({ status: 'released', currentVersionId: version.id });
 	});
 
 	test('a version of another procedure cannot be restored', async () => {
@@ -301,9 +300,9 @@ describe('for the execution area', () => {
 	test('an obsolete or unpublished procedure cannot be run', async () => {
 		const s = await setup();
 		const { id } = await s.published('Retired');
-		await s.ok('PATCH', `/procedures/${id}`, { status: 'obsolete' });
+		await s.ok('POST', `/procedures/${id}/obsolete`, { reason: 'Retired' });
 		expect(() => versionForExecution({ db: s.db }, id)).toThrow(/obsolete/);
-		await s.ok('PATCH', `/procedures/${id}`, { status: 'released' });
+		await s.ok('POST', `/procedures/${id}/reinstate`, { reason: 'Needed again' });
 		expect(versionForExecution({ db: s.db }, id).versionNumber).toBe(1);
 		const draftOnly = await s.proc('Draft');
 		expect(() => versionForExecution({ db: s.db }, draftOnly.id)).toThrow(/no published version/);

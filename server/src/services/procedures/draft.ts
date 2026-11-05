@@ -9,6 +9,7 @@ import {
 	type ProcedureStepImage,
 	type Qty,
 	formatQty,
+	conflict,
 	notFound
 } from '@opal/shared';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
@@ -35,6 +36,18 @@ export type StepRow = typeof procedureStep.$inferSelect;
 export function procedureRow(db: Db, id: number): ProcedureRow {
 	const row = db.select().from(procedure).where(eq(procedure.id, id)).get();
 	if (!row) throw notFound('Procedure');
+	return row;
+}
+
+/**
+ * The procedure, for an edit of its draft. An obsolete template is read-only: it changes
+ * only by being reinstated, which is a separate act.
+ */
+export function draftRow(db: Db, id: number): ProcedureRow {
+	const row = procedureRow(db, id);
+	if (row.status === 'obsolete') {
+		throw conflict('procedure_obsolete', `${row.templateNumber} is obsolete. Reinstate it to change it`);
+	}
 	return row;
 }
 

@@ -55,7 +55,7 @@ describe('procedure records', () => {
 		const r = await s.call('DELETE', `/procedures/${id}`);
 		expect(r.status).toBe(409);
 		expect(r.json.error).toBe('has_versions');
-		const retired = await s.call('PATCH', `/procedures/${id}`, { status: 'obsolete' });
+		const retired = await s.call('POST', `/procedures/${id}/obsolete`, { reason: 'Superseded by T-9' });
 		expect(retired.json.status).toBe('obsolete');
 	});
 
@@ -76,20 +76,18 @@ describe('procedure records', () => {
 		expect(r).toMatchObject({ name: 'Updated', description: 'd', procedureType: 'build' });
 	});
 
-	test('release needs a published version', async () => {
+	test('update cannot change the status: retiring and reinstating are their own acts', async () => {
 		const s = await setup();
 		const p = await s.proc('Unpublished');
-		const r = await s.call('PATCH', `/procedures/${p.id}`, { status: 'released' });
-		expect(r.status).toBe(409);
+		const r = await s.call('PATCH', `/procedures/${p.id}`, { status: 'released', name: 'Renamed' });
+		expect(r.json).toMatchObject({ status: 'draft', name: 'Renamed' });
 		const { id } = await s.published('Cycle');
-		expect((await s.call('PATCH', `/procedures/${id}`, { status: 'obsolete' })).json.status).toBe('obsolete');
-		expect((await s.call('PATCH', `/procedures/${id}`, { status: 'released' })).json.status).toBe('released');
+		await s.call('PATCH', `/procedures/${id}`, { status: 'obsolete' });
+		expect((await s.ok('GET', `/procedures/${id}`)).status).toBe('released');
 	});
 
-	test('an invalid status or type is refused', async () => {
+	test('an invalid type or name is refused', async () => {
 		const s = await setup();
-		const p = await s.proc('X');
-		expect((await s.call('PATCH', `/procedures/${p.id}`, { status: 'active' })).status).toBe(422);
 		expect((await s.call('POST', '/procedures', { projectId: s.proj.id, name: 'X', procedureType: 'weird' })).status).toBe(422);
 		expect((await s.call('POST', '/procedures', { projectId: s.proj.id, name: '' })).status).toBe(422);
 	});

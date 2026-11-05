@@ -26,7 +26,7 @@ import {
 import { insert, remove, update } from '../../write.ts';
 import { nextDesignator } from '../designators.ts';
 import { detachAll } from '../platform/attachments.ts';
-import { type ProcedureRow, presentDraft, procedureRow, stepRows } from './draft.ts';
+import { type ProcedureRow, draftRow, presentDraft, procedureRow, stepRows } from './draft.ts';
 import { buildSnapshot, snapshotsEquivalent } from './snapshot.ts';
 import { checkWorkcenter, copyAttachment, copyStepContent, invalid, normalizeCallouts, removeStepDeep } from './steps.ts';
 import { writeSignoffs } from './signoffs.ts';
@@ -93,6 +93,7 @@ function toProcedure(r: ProcedureRow, c: Counts, unpublishedChanges: boolean | n
 		description: r.description,
 		procedureType: r.procedureType,
 		status: r.status,
+		statusReason: r.statusReason,
 		currentVersionId: r.currentVersionId,
 		currentVersionNumber: r.currentVersionId === null ? null : (c.versions.get(r.currentVersionId) ?? null),
 		opCount: c.ops.get(r.id) ?? 0,
@@ -215,11 +216,10 @@ export function updateProcedure(
 		projectId?: number;
 		name?: string;
 		description?: string | null;
-		status?: ProcedureRow['status'];
 		procedureType?: ProcedureType;
 	}
 ): Procedure {
-	const row = procedureRow(ctx.db, input.id);
+	const row = draftRow(ctx.db, input.id);
 	const patch: Partial<typeof procedure.$inferInsert> = {};
 	if (input.projectId !== undefined && input.projectId !== row.projectId) {
 		requireOpenProject(ctx.db, input.projectId);
@@ -228,13 +228,24 @@ export function updateProcedure(
 	if (input.name !== undefined) patch.name = input.name;
 	if (input.description !== undefined) patch.description = input.description;
 	if (input.procedureType !== undefined) patch.procedureType = input.procedureType;
-	if (input.status !== undefined) {
-		if (input.status === 'released' && row.currentVersionId === null) {
-			throw conflict('not_published', 'Publish a version before releasing this template');
-		}
-		patch.status = input.status;
-	}
 	return presentProcedure(ctx, Object.keys(patch).length ? update(ctx, procedure, row.id, patch) : row);
+}
+
+/** Strike a released template. Existing work orders run on; no new one can be cut. */
+export function obsoleteProcedure(ctx: Ctx, id: number, reason: string): Procedure {
+	const row = procedureRow(ctx.db, id);
+	if (row.status !== 'released') {
+		throw conflict('not_released', `${row.templateNumber} is ${row.status}. Only a released template can be made obsolete`);
+	}
+	return presentProcedure(ctx, update(ctx, procedure, id, { status: 'obsolete', statusReason: reason.trim() }));
+}
+
+/** The separate, deliberate way back from obsolete. Nothing else changes the status. */
+export function reinstateProcedure(ctx: Ctx, id: number, reason: string): Procedure {
+	const row = procedureRow(ctx.db, id);
+	if (row.status !== 'obsolete') throw conflict('not_obsolete', `${row.templateNumber} is not obsolete`);
+	const status = row.currentVersionId === null ? 'draft' : 'released';
+	return presentProcedure(ctx, update(ctx, procedure, id, { status, statusReason: reason.trim() }));
 }
 
 /** A procedure that was never published has nothing that references it: it goes. */

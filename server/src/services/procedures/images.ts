@@ -9,7 +9,7 @@ import type { Ctx } from '../../context.ts';
 import { attachment, stepImage } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
 import { attach, detach } from '../platform/attachments.ts';
-import { presentImages, procedureRow, stepRow } from './draft.ts';
+import { draftRow, presentImages, procedureRow, stepRow } from './draft.ts';
 import { invalid } from './steps.ts';
 
 function imageRow(ctx: Ctx, stepId: number, imageId: number) {
@@ -39,7 +39,7 @@ export async function addImage(
 	file: { name: string; type: string; bytes: Uint8Array },
 	caption?: string | null
 ): Promise<ProcedureStepImage> {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	stepRow(ctx.db, procedureId, stepId);
 	if (!file.type.toLowerCase().startsWith('image/')) {
 		throw invalid('invalid_input', 'Step images must be image files', { file: 'must be an image' });
@@ -62,7 +62,7 @@ export function updateImage(
 	imageId: number,
 	input: { caption?: string | null }
 ): ProcedureStepImage {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	stepRow(ctx.db, procedureId, stepId);
 	imageRow(ctx, stepId, imageId);
 	if (input.caption !== undefined) update(ctx, stepImage, imageId, { caption: input.caption?.trim() || null });
@@ -70,7 +70,7 @@ export function updateImage(
 }
 
 export function removeImage(ctx: Ctx, procedureId: number, stepId: number, imageId: number): void {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	stepRow(ctx.db, procedureId, stepId);
 	const row = imageRow(ctx, stepId, imageId);
 	remove(ctx, stepImage, row.id);
@@ -89,7 +89,7 @@ export function reorderImages(
 	stepId: number,
 	imageIds: number[]
 ): ProcedureStepImage[] {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	stepRow(ctx.db, procedureId, stepId);
 	const have = presentImages(ctx.db, stepId);
 	if (

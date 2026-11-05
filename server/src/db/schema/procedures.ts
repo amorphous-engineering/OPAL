@@ -43,6 +43,8 @@ export const procedure = sqliteTable(
 		description: text('description'),
 		procedureType: text('procedure_type', { enum: PROCEDURE_TYPES }).notNull().default('op'),
 		status: text('status', { enum: PROCEDURE_STATUSES }).notNull().default('draft'),
+		/** Why the template was last retired or reinstated. The audit rows keep the earlier ones. */
+		statusReason: text('status_reason'),
 		/** The latest published version. Null until the first publish. */
 		currentVersionId: integer('current_version_id').references((): AnySQLiteColumn => procedureVersion.id, {
 			onDelete: 'set null'

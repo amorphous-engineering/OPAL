@@ -180,14 +180,17 @@ export function preview(ctx: Ctx) {
 			.join(', ')})`;
 	}
 	if (c.spec?.describe) summary = c.spec.describe(ctx, c.rows);
-	return {
-		auditId: newest.id,
-		op: newest.op,
-		summary,
-		at: newest.at,
-		canUndo: c.spec !== undefined,
-		reason: c.spec ? null : `The last action (${newest.op}) cannot be undone`
-	};
+	// A rule the operation's own check enforces (the record is no longer pencil) shows here
+	// too, so the offer matches what the server will do.
+	let refusal: string | null = c.spec ? null : `The last action (${newest.op}) cannot be undone`;
+	if (c.spec?.authorize) {
+		try {
+			c.spec.authorize(ctx, c.rows);
+		} catch (e) {
+			refusal = e instanceof Error ? e.message : 'This action cannot be undone';
+		}
+	}
+	return { auditId: newest.id, op: newest.op, summary, at: newest.at, canUndo: refusal === null, reason: refusal };
 }
 
 export function undoLast(ctx: Ctx): { summary: string } {
