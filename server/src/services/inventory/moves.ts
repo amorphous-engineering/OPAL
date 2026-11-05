@@ -41,6 +41,8 @@ export function adjustStock(
 	if ((reason === 'damage' || reason === 'scrap') && adjustment >= 0) {
 		throw invalid('adjustment', `'${reason}' adjustments must be negative`);
 	}
+	// A scrap destroys stock: the why goes on the ledger.
+	if (reason === 'scrap' && !input.notes?.trim()) throw invalid('notes', 'Give a reason for the scrap');
 	writeMove(ctx, {
 		stockId: rec.id,
 		kind: reason === 'cycle_count' ? 'count' : 'adjust',

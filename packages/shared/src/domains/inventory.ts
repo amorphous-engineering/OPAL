@@ -218,6 +218,17 @@ export const zStockTestStatus = z.object({
 });
 export type StockTestStatus = z.infer<typeof zStockTestStatus>;
 
+/** A correction of lot, serial or expiry, read from the audit log. The ledger shows it in line. */
+export const zStockCorrection = z.object({
+	at: zTimestamp,
+	userName: z.string().nullable(),
+	field: z.enum(['lotNumber', 'serialNumber', 'expirationDate']),
+	old: z.string().nullable(),
+	new: z.string().nullable(),
+	reason: z.string().nullable()
+});
+export type StockCorrection = z.infer<typeof zStockCorrection>;
+
 export const zStockDetail = z.object({
 	record: zStockRecord,
 	part: z.object({
@@ -240,6 +251,8 @@ export const zStockDetail = z.object({
 	}),
 	/** Oldest first, with a running balance. */
 	ledger: z.array(zStockLedgerRow),
+	/** Oldest first. Shown in the ledger beside the moves; they hold no quantity. */
+	corrections: z.array(zStockCorrection),
 	components: z.array(zStockGenealogyRow),
 	usedIn: z.array(zStockGenealogyRow),
 	tests: z.array(zStockTestResult),
@@ -260,13 +273,21 @@ export const zStockCreate = z.object({
 	enforceTierRules: z.boolean().default(true)
 });
 
+/** Lot, serial and expiry are facts of the record: they change only through a correction. */
 export const zStockUpdate = z.object({
+	id: zId,
+	alias: z.string().trim().max(100).nullable().optional()
+});
+
+export const zStockCorrect = z.object({
 	id: zId,
 	lotNumber: z.string().trim().max(100).nullable().optional(),
 	serialNumber: z.string().trim().max(100).nullable().optional(),
-	alias: z.string().trim().max(100).nullable().optional(),
-	expirationDate: zStockDate.nullable().optional()
+	expirationDate: zStockDate.nullable().optional(),
+	reason: z.string().trim().min(1, 'Give a reason').max(500)
 });
+
+
 
 export const zStockTransferInput = z.object({
 	sourceId: zId,
@@ -576,19 +597,30 @@ export const inventory = {
 		name: 'inventory.update',
 		method: 'PATCH',
 		path: '/inventory/:id',
-		summary:
-			'Edit lot, serial, alias or expiration date. Quantity changes only through adjust, count and transfer.',
+		summary: 'Edit the alias. Lot, serial and expiry change through correct. Quantity changes only through adjust, count and transfer.',
 		input: zStockUpdate,
 		output: zStockRecord,
 		access: 'signed-in',
 		mcp: true
+	}),
+	correct: op({
+		name: 'inventory.correct',
+		method: 'POST',
+		path: '/inventory/:id/correct',
+		summary:
+			'Correct lot, serial or expiry. A reason is required and the old value stays in the ledger. Human only.',
+		input: zStockCorrect,
+		output: zStockRecord,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
 	}),
 	adjust: op({
 		name: 'inventory.adjust',
 		method: 'POST',
 		path: '/inventory/:id/adjust',
 		summary:
-			'Add or remove stock with a reason. `found` must add. `damage` and `scrap` must remove. The balance cannot go below zero.',
+			'Add or remove stock with a reason. `found` must add. `damage` and `scrap` must remove. Scrap needs a note that says why. The balance cannot go below zero.',
 		input: z.object({
 			id: zId,
 			adjustment: zQty,

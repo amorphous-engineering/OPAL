@@ -191,7 +191,7 @@ describe('stock lists', () => {
 		const s = await setup();
 		const p = makePart(s.db);
 		const rec = await receive(s, p.id, '2');
-		await s.call('POST', `/inventory/${rec.id}/adjust`, { adjustment: '-2', reason: 'scrap' });
+		await s.call('POST', `/inventory/${rec.id}/adjust`, { adjustment: '-2', reason: 'scrap', notes: 'dropped' });
 		await receive(s, p.id, '3', 'B2');
 		expect((await s.call('GET', '/inventory?hasStock=true')).body.total).toBe(1);
 		expect((await s.call('GET', '/inventory?hasStock=false')).body.total).toBe(1);
@@ -290,17 +290,17 @@ describe('stock lists', () => {
 		expect(expiredRow.daysUntilExpiration).toBe(-3);
 	});
 
-	test('editing a record changes lot and expiry but never the quantity', async () => {
+	test('updating a record changes the alias only, never lot, expiry or quantity', async () => {
 		const s = await setup();
 		const p = makePart(s.db);
-		const rec = await receive(s, p.id, '4');
+		const rec = await receive(s, p.id, '4', 'A1', { lotNumber: 'L1' });
 		const r = await s.call('PATCH', `/inventory/${rec.id}`, {
+			alias: 'Shelf box',
 			lotNumber: 'L9',
 			expirationDate: '2030-01-31',
-			balance: '999',
-			quantity: '999'
+			balance: '999'
 		});
-		expect(r.body).toMatchObject({ lotNumber: 'L9', expirationDate: '2030-01-31', balance: '4' });
+		expect(r.body).toMatchObject({ alias: 'Shelf box', lotNumber: 'L1', expirationDate: null, balance: '4' });
 	});
 
 	test('a record is found by its OPAL number', async () => {

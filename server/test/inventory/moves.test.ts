@@ -213,7 +213,7 @@ describe('transfer', () => {
 		const s = await setup();
 		const p = makePart(s.db);
 		const src = await receive(s, p.id, '10', 'A1');
-		await s.call('POST', `/inventory/${src.id}/adjust`, { adjustment: '-2', reason: 'scrap' });
+		await s.call('POST', `/inventory/${src.id}/adjust`, { adjustment: '-2', reason: 'scrap', notes: 'dropped' });
 		await s.call('POST', '/inventory/transfer', { sourceId: src.id, targetLocation: 'B', quantity: '3' });
 		const h = await s.call('GET', `/inventory/opal/${src.opalNumber}/history`);
 		expect(h.body.map((r: { kind: string; qty: string; balance: string }) => [r.kind, r.qty, r.balance])).toEqual([
