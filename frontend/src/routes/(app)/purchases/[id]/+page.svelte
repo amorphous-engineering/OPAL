@@ -48,6 +48,8 @@
 	/** Something is still pencil: a draft, or the header and lines of an order waiting for goods. */
 	const editable = $derived(draft || live);
 	const editing = $derived(editable && isEditing(page.url));
+	/** Notes are a pen move in every state: a finished order still takes one. */
+	const editingNotes = $derived(isEditing(page.url));
 	const canReceive = $derived(live);
 
 	/** Who placed it, from the first status change. */
@@ -229,7 +231,7 @@
 		{#if po.isOverdue}<State value="overdue" tone="error" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
-		{#if editable}<EditToggle />{/if}
+		<EditToggle />
 		{#if draft}
 			<Button
 				disabled={po.lines.length === 0}
@@ -305,7 +307,7 @@
 					label="Notes"
 					type="textarea"
 					value={po.notes}
-					editable={editing}
+					editable={editingNotes}
 					onsave={(v) => patch({ notes: v })}
 				/>
 				<DetailRow label="Created">
