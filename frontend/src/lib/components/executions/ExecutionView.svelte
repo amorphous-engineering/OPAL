@@ -214,12 +214,13 @@
 			{#if inst.active && store.panel?.kind === 'closeShort'}<CloseShortPanel {store} />{/if}
 
 			{#if inst.active && holds.length}
-				<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
+				<div
+					class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-error-fill px-4 py-1.5 text-error-on"
+				>
 					{#each holds as h (h.issue_id)}
-						<span class="font-mono text-xs text-warn">
+						<span class="font-mono text-xs font-bold">
 							HELD BY <a class="underline" href={`/issues/${h.issue_id}`}>{h.issue_number}</a>
-							{#if h.blocks.length}<span class="text-muted-foreground">({h.blocks.join(', ')})</span
-								>{/if}
+							{#if h.blocks.length}<span>({h.blocks.join(', ')})</span>{/if}
 						</span>
 					{/each}
 				</div>
@@ -250,7 +251,7 @@
 								class={cn(
 									'px-3 font-mono text-xs font-medium tracking-wider uppercase outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
 									store.focusMode
-										? 'bg-card text-info'
+										? 'bg-foreground text-background hover:bg-foreground'
 										: 'text-muted-foreground hover:text-foreground'
 								)}
 								aria-pressed={store.focusMode}

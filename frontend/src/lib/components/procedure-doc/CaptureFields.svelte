@@ -105,7 +105,7 @@
 			{@const id = `cap-${step.order}-${f.name}`}
 			{@const err = errors[f.name]}
 			<div
-				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-border px-3 py-2.5 sm:col-span-full sm:grid-cols-subgrid [header+&]:border-t-0"
+				class="grid grid-cols-1 items-start gap-x-6 gap-y-1.5 border-t border-dotted px-3 py-1.5 sm:col-span-full sm:grid-cols-subgrid [header+&]:border-t-0"
 			>
 				<div class="grid grid-cols-1 gap-0.5 sm:pt-1.5">
 					<Label for={id} class="block text-sm leading-normal font-medium text-foreground">

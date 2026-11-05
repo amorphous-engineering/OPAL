@@ -38,8 +38,8 @@
 
 {#if show && (!gates.length || claimed)}
 	<Button
-		size="xs"
-		variant={claimed ? 'outline' : 'default'}
+		size="sm"
+		variant="outline"
 		class={cn(
 			!prominent && !claimed && 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100'
 		)}

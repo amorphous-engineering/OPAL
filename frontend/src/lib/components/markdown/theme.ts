@@ -18,8 +18,8 @@ export const sourceHighlight = HighlightStyle.define([
 export const theme = EditorView.theme({
 	'&': {
 		color: 'var(--foreground)',
-		backgroundColor: 'color-mix(in oklab, var(--input) 20%, transparent)',
-		border: '1px solid var(--input)',
+		backgroundColor: 'transparent',
+		border: '1px dashed var(--foreground)',
 		borderRadius: 'var(--radius-md, 0.375rem)',
 		fontSize: 'var(--text-sm, 0.875rem)'
 	},

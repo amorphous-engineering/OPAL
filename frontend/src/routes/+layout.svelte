@@ -14,8 +14,8 @@
 	<title>OPAL</title>
 </svelte:head>
 
-<!-- Dark is OPAL's default (seeded in app.html); the user menu toggles and remembers a choice. -->
-<ModeWatcher defaultMode="dark" />
+<!-- Day is OPAL's default (seeded in app.html); the user menu toggles and remembers a choice. -->
+<ModeWatcher defaultMode="light" />
 <Toaster position="bottom-right" />
 <ConfirmHost />
 {@render children()}

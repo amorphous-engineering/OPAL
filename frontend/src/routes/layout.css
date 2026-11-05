@@ -12,102 +12,112 @@
 @custom-variant data-unchecked (&:is([data-state='unchecked']));
 
 /*
- * OPAL design tokens — OPAL's original palette (master, pre-Basecoat).
- * US Graphics register: dense, explicit, high contrast; one small radius scale (shadcn Mira), no shadows or
- * gradients. Colour is functional only:
- *   blue          identifier + action: primary buttons, links, focus, in-flight
- *                 state ("info"); never content
- *   OPAL orange   the wordmark only (--brand)
- *   ok / warn / error  green / yellow / red state words
- *   dev blue      the version string of a development build
- * Dark is the default and the original theme, value for value. Light is
- * shadcn-svelte's neutral theme (see its block below) — no Catppuccin.
+ * OPAL design tokens: the PAPER look. A record is a form, so day is black ink on white paper on a
+ * grey desk, and night is the same form reversed. Almost no grey: tone comes from the density of a
+ * line, as in print, because grey is the first thing glare takes away.
+ *
+ * Colour is functional only:
+ *   blue               identifier + action: primary keys, links, focus; never content
+ *   OPAL orange        the wordmark only (--brand)
+ *   ok / warn / error  state words. warn-fill and error-fill are the lit blocks: CAUTION, HOLD.
+ *   dev blue           the version string of a development build
+ * What each line and the shadow mean is under Marks, at the end of this file.
  */
 :root {
-	/* Light: shadcn-svelte's official "neutral" theme, verbatim
-	   (shadcn-svelte.com/registry/colors/neutral.json, the base colour in components.json),
-	   except: radius is zero, because OPAL has no rounded corners, and muted-foreground is darker
-	   (0.45, not 0.556) because OPAL sets much of its gray text at 12px. OPAL's own tokens, which
-	   shadcn does not define, use Tailwind's palette one step darker than usual for small text:
-	   ok green-800, warn amber-800, error red-700, info blue-700, dev blue-600, brand orange-700. */
 	--radius: 0px;
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.546 0.245 262.881);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.45 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-	--ok: oklch(0.448 0.119 151.328);
-	--warn: oklch(0.473 0.137 46.201);
-	--error: oklch(0.505 0.213 27.518);
-	--info: oklch(0.488 0.243 264.376);
+	--background: #ffffff;
+	--foreground: #000000;
+	--card: #ffffff;
+	--card-foreground: #000000;
+	--popover: #ffffff;
+	--popover-foreground: #000000;
+	--primary: #002dce;
+	--primary-foreground: #ffffff;
+	--secondary: #ffffff;
+	--secondary-foreground: #000000;
+	--muted: #f1f1ef;
+	--muted-foreground: #262626;
+	--accent: #e9e9e6;
+	--accent-foreground: #000000;
+	--destructive: #c8001e;
+	--border: #000000;
+	--input: #bbbbbb;
+	--ring: #002dce;
+	--ok: #00794c;
+	--warn: #8a4b00;
+	--warn-fill: #ffb700;
+	--warn-on: #000000;
+	--error: #c8001e;
+	--error-fill: #c8001e;
+	--error-on: #ffffff;
+	--info: #002dce;
 	--brand: oklch(0.553 0.195 38.402);
-	--dev: oklch(0.546 0.245 262.881);
-	--chart-1: oklch(0.546 0.245 262.881);
-	--chart-2: oklch(0.527 0.154 150.069);
-	--chart-3: oklch(0.555 0.163 48.998);
-	--chart-4: oklch(0.577 0.245 27.325);
+	--dev: #002dce;
+	--chart-1: #002dce;
+	--chart-2: #00794c;
+	--chart-3: #b86e00;
+	--chart-4: #c8001e;
 	--chart-5: oklch(0.553 0.195 38.402);
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.546 0.245 262.881);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
+	--sidebar: #ffffff;
+	--sidebar-foreground: #000000;
+	--sidebar-primary: #002dce;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #e9e9e6;
+	--sidebar-accent-foreground: #000000;
+	--sidebar-border: #000000;
+	--sidebar-ring: #002dce;
+	--desk: #e4e4e2;
+	--key-shadow: 2px 2px 0 #000000;
+	--k2-shadow: 2px 2px 0 #bbbbbb;
+	/* Instructions and callouts; a per-browser preference overrides it (lib/stepText). */
+	--step-text: 0.875rem;
 }
 
 .dark {
-	--background: #0a0a0a;
-	--foreground: #e0e0e0;
-	--card: #141414;
-	--card-foreground: #e0e0e0;
+	--background: #0c0c0c;
+	--foreground: #f4f4f4;
+	--card: #0c0c0c;
+	--card-foreground: #f4f4f4;
 	--popover: #141414;
-	--popover-foreground: #e0e0e0;
-	--primary: #4a9eff;
-	--primary-foreground: #0a0a0a;
-	--secondary: #1e1e1e;
-	--secondary-foreground: #e0e0e0;
-	--muted: #1e1e1e;
-	--muted-foreground: #a3a3a3;
-	--accent: #1e1e1e;
-	--accent-foreground: #e0e0e0;
-	--destructive: #f87171;
-	--border: #333333;
+	--popover-foreground: #f4f4f4;
+	--primary: #8ab4ff;
+	--primary-foreground: #000000;
+	--secondary: #0c0c0c;
+	--secondary-foreground: #f4f4f4;
+	--muted: #1a1a1a;
+	--muted-foreground: #d0d0d0;
+	--accent: #262626;
+	--accent-foreground: #f4f4f4;
+	--destructive: #ff5c5c;
+	--border: #f4f4f4;
 	--input: #444444;
-	--ring: #4a9eff;
+	--ring: #8ab4ff;
 	--ok: #4ade80;
-	--warn: #fbbf24;
-	--error: #f87171;
-	--info: #4a9eff;
+	--warn: #ffb700;
+	--warn-fill: #ffb700;
+	--warn-on: #000000;
+	--error: #ff5c5c;
+	--error-fill: #ff5c5c;
+	--error-on: #000000;
+	--info: #8ab4ff;
 	--brand: #fb923c;
-	--dev: #4a9eff;
-	--chart-1: #4a9eff;
+	--dev: #8ab4ff;
+	--chart-1: #8ab4ff;
 	--chart-2: #4ade80;
-	--chart-3: #fbbf24;
-	--chart-4: #f87171;
+	--chart-3: #ffb700;
+	--chart-4: #ff5c5c;
 	--chart-5: #fb923c;
-	--sidebar: #141414;
-	--sidebar-foreground: #e0e0e0;
-	--sidebar-primary: #4a9eff;
-	--sidebar-primary-foreground: #0a0a0a;
-	--sidebar-accent: #1e1e1e;
-	--sidebar-accent-foreground: #e0e0e0;
-	--sidebar-border: #333333;
-	--sidebar-ring: #4a9eff;
+	--sidebar: #0c0c0c;
+	--sidebar-foreground: #f4f4f4;
+	--sidebar-primary: #8ab4ff;
+	--sidebar-primary-foreground: #000000;
+	--sidebar-accent: #262626;
+	--sidebar-accent-foreground: #f4f4f4;
+	--sidebar-border: #f4f4f4;
+	--sidebar-ring: #8ab4ff;
+	--desk: #000000;
+	--key-shadow: 2px 2px 0 #f4f4f4;
+	--k2-shadow: 2px 2px 0 #666666;
 }
 
 /* State tints: the state colour at low opacity over whatever is beneath. */
@@ -155,6 +165,22 @@
 	--color-error-muted: var(--error-muted);
 	--color-info: var(--info);
 	--color-info-muted: var(--info-muted);
+	--color-warn-fill: var(--warn-fill);
+	--color-warn-on: var(--warn-on);
+	--color-error-fill: var(--error-fill);
+	--color-error-on: var(--error-on);
+	--color-desk: var(--desk);
+	/* A hard edge, never a blur: this is every shadow the vendored components ask for too. */
+	--shadow-key: var(--key-shadow);
+	--shadow-key2: var(--k2-shadow);
+	--shadow-xs: none;
+	--shadow-sm: none;
+	--shadow-md: var(--key-shadow);
+	--shadow-lg: var(--key-shadow);
+	--shadow-xl: var(--key-shadow);
+	--shadow-2xl: var(--key-shadow);
+	--text-step: var(--step-text);
+	--text-step--line-height: 1.45;
 	--color-chart-1: var(--chart-1);
 	--color-chart-2: var(--chart-2);
 	--color-chart-3: var(--chart-3);
@@ -192,15 +218,7 @@
 		@apply font-mono tabular-nums;
 	}
 	.label {
-		@apply font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase;
-	}
-	/* Profile photos and initials. A browser without corner-shape draws a rounded square. */
-	.squircle {
-		border-radius: 30%;
-		@supports (corner-shape: squircle) {
-			border-radius: 50%;
-			corner-shape: squircle;
-		}
+		@apply font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase;
 	}
 }
 
@@ -244,10 +262,64 @@
 	}
 }
 
-/* The vendored badge and avatar use rounded-full, which no token reaches. */
-[data-slot='badge'],
-[data-slot='avatar'],
-[data-slot='avatar-image'],
-[data-slot='avatar-fallback'] {
-	border-radius: 0 !important;
+/*
+ * Marks: each line and the shadow has one meaning (CLAUDE.md, UI). Tokens carry the look. This block
+ * is only for what a token cannot reach inside the vendored components, which stay as shipped. It
+ * comes after Tailwind's utilities in the same layer, so it wins a tie with their classes and still
+ * loses to states like focus and aria-invalid. Anything else belongs in a class at the call site.
+ */
+@layer utilities {
+	/* Dotted: a row inside a section. */
+	tbody > tr {
+		@apply border-dotted;
+	}
+
+	/* Hard shadow: a key you can press. */
+	[data-slot='button'].bg-primary {
+		@apply shadow-key active:shadow-none disabled:shadow-none aria-disabled:shadow-none;
+	}
+	[data-slot='button'].border-border {
+		@apply shadow-key2 active:shadow-none disabled:shadow-none aria-disabled:shadow-none;
+	}
+
+	/* Dashed: not committed yet. Search and filters are not part of a record. */
+	[data-slot='input'],
+	[data-slot='textarea'],
+	[data-slot='native-select'],
+	[data-slot='select-trigger'],
+	[data-slot='input-group'] {
+		@apply border-dashed border-foreground bg-transparent dark:bg-transparent;
+	}
+	[type='search'],
+	[role='search'] [data-slot] {
+		@apply border-solid;
+	}
+	/* The vendored fields drop to 12px at desktop width, smaller than the text around them. */
+	[data-slot='input'],
+	[data-slot='textarea'] {
+		@apply text-sm;
+	}
+
+	[data-slot='checkbox'],
+	[data-slot='toggle-group-item'] {
+		@apply border-foreground;
+	}
+	[data-slot='dropdown-menu-content'],
+	[data-slot='dropdown-menu-sub-content'],
+	[data-slot='select-content'],
+	[data-slot='popover-content'],
+	[data-slot='dialog-content'] {
+		@apply border border-foreground;
+	}
+
+	/* Corners the radius tokens cannot reach: rounded-full and rounded-[4px]. */
+	[data-slot='checkbox'],
+	[data-slot='switch'],
+	[data-slot='switch-thumb'],
+	[data-slot='badge'],
+	[data-slot='avatar'],
+	[data-slot='avatar-image'],
+	[data-slot='avatar-fallback'] {
+		@apply rounded-none;
+	}
 }

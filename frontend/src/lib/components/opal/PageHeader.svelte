@@ -27,7 +27,9 @@
 
 {#if crumbs.length}
 	<!-- Breadcrumbs: shadcn's Breadcrumb in a compact row above the title, ruled below. -->
-	<div class="flex h-8 items-center overflow-x-auto border-b border-border px-4 whitespace-nowrap">
+	<div
+		class="flex h-8 items-center overflow-x-auto border-b border-border bg-background px-4 whitespace-nowrap"
+	>
 		<Breadcrumb.Root>
 			<Breadcrumb.List class="flex-nowrap">
 				{#each crumbs as c, i (i)}

@@ -13,8 +13,8 @@
 
 	// A value that misses its spec stays flagged after the step is done.
 	const off = $derived(outOfSpecFields(step.data_schema?.fields, step.data_captured));
-	const error = 'border-error/50 bg-error-muted font-mono tracking-wider text-error';
-	const warn = 'border-warn/50 bg-warn-muted font-mono tracking-wider text-warn';
+	const error = 'border-error-fill bg-error-fill font-mono font-bold tracking-wider text-error-on';
+	const warn = 'border-warn-fill bg-warn-fill font-mono font-bold tracking-wider text-warn-on';
 </script>
 
 {#if off.length}
@@ -26,7 +26,7 @@
 	{#each raised as h (h.issue_id)}
 		<Badge
 			variant="outline"
-			class={warn}
+			class={error}
 			href={`/issues/${h.issue_id}`}
 			title="Held until the issue is dispositioned"
 			onclick={(e: MouseEvent) => e.stopPropagation()}>HELD · {h.issue_number}</Badge
@@ -35,7 +35,7 @@
 	{#each bound as h (h.issue_id)}
 		<Badge
 			variant="outline"
-			class={warn}
+			class={error}
 			href={`/issues/${h.issue_id}`}
 			title="Completion waits for the issue"
 			onclick={(e: MouseEvent) => e.stopPropagation()}>HOLD · {h.issue_number}</Badge

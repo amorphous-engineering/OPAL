@@ -79,8 +79,10 @@
 
 	let deleting = $state(false);
 
-	const warnBadge = 'border-warn/50 bg-warn-muted font-mono tracking-wider text-warn';
-	const mutedBadge = 'font-mono tracking-wider text-muted-foreground';
+	const holdBadge =
+		'border-error-fill bg-error-fill font-mono font-bold tracking-wider text-error-on';
+	const warnBadge = 'border-warn-fill bg-warn-fill font-mono font-bold tracking-wider text-warn-on';
+	const mutedBadge = 'border-dotted border-foreground font-mono tracking-wider text-foreground';
 </script>
 
 {#if op.is_ad_hoc && op.redline}
@@ -100,9 +102,7 @@
 		// clip, not hidden: rounds the corners without becoming a scroll container,
 		// which would stop the title bars from sticking.
 		'overflow-clip rounded-lg border border-border bg-card',
-		op.is_contingency && 'border-dashed',
-		op.is_ad_hoc && 'border-warn/50',
-		current && 'shadow-[inset_2px_0_0_var(--info)]'
+		op.is_ad_hoc && 'border-warn/50'
 	)}
 >
 	<div
@@ -142,7 +142,12 @@
 			)}
 			aria-hidden="true"
 		/>
-		<span class="shrink-0 font-mono text-xs font-semibold">OP {op.number}</span>
+		<span
+			class={cn(
+				'shrink-0 font-mono text-xs font-semibold',
+				current && 'bg-foreground px-1 py-px text-background'
+			)}>OP {op.number}</span
+		>
 		{#if au}
 			<TitleInput step={op.step} class="font-medium" />
 		{:else}
@@ -155,7 +160,7 @@
 			>
 		{/if}
 		{#if op.is_contingency}
-			<Badge variant="outline" class={warnBadge}>CONTINGENCY</Badge>
+			<Badge variant="outline" class={mutedBadge}>CONTINGENCY</Badge>
 		{/if}
 		{#if op.strict_sequence}
 			<Badge variant="outline" class={mutedBadge} title="Sub-steps complete in order">SEQ</Badge>
@@ -168,7 +173,7 @@
 					<!-- The hold's issue number lives on the row it blocks; here, only that the OP is held. -->
 					<Badge
 						variant="outline"
-						class={warnBadge}
+						class={holdBadge}
 						title={`OP COMPLETE is held until disposition: ${op.holds.map((h) => h.issue_number).join(', ')}`}
 						>HELD{op.holds.length > 1 ? ` ×${op.holds.length}` : ''}</Badge
 					>
@@ -258,8 +263,10 @@
 				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
 					<CalloutList callouts={op.callouts ?? []} />
 					{#if op.instructions}
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
-						<div class="prose-opal max-w-3xl">{@html markdown(op.instructions)}</div>
+						<div class="prose-opal max-w-3xl text-step leading-normal">
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
+							{@html markdown(op.instructions)}
+						</div>
 					{/if}
 				</div>
 			{/if}

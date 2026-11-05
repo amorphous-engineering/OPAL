@@ -73,7 +73,7 @@
 			<UserMenu />
 		</div>
 	</header>
-	<main id="main" tabindex="-1" class="min-w-0 flex-1 outline-none">
+	<main id="main" tabindex="-1" class="min-w-0 flex-1 bg-desk outline-none">
 		{@render children()}
 	</main>
 	<StatusBar dbPath={data.about?.dbPath ?? '-'} />

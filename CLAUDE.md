@@ -108,7 +108,7 @@ Routing is not the record. Assignee and priority may change while a record is op
 ### What a page presents
 
 1. Decide what question the page answers in this state, for the person holding it. Show what that takes and no more. A fact appears once.
-2. Pages open for reading. The only inputs on open are the blank this state is waiting on from this person: receive rows on a placed PO, capture fields on the current step.
+2. Pages open for reading. The only inputs on open are the blank this state is waiting on from this person: receive rows on a placed PO, capture fields and the notes box on the current step.
 3. EDIT reveals what is still pencil. DONE returns. A record with nothing left in pencil has no EDIT.
 4. One primary action: the move the record is waiting on. Everything else is quiet. Strikes go under MORE, never in red beside the title. Red marks errors and the consequence inside a confirmation.
 5. Offer only what will work. A control the server would refuse is absent. The exception is the expected next step when it is blocked: show it inert, looking disabled, with the reason.
@@ -119,7 +119,7 @@ Routing is not the record. Assignee and priority may change while a record is op
 7. Routine work is implicit. Completing a step needs no signature and no dialog. The system stamps who and when, and the step row shows them with the title struck through.
 8. A sign-off means something: a person attests to a stated act. Authors declare sign-offs on the steps that need them, and there are few. The default step has none. Two slots mean two different people.
 9. No modals during work. Confirm only what is hard to reverse, and inline where possible. Raising an issue opens the issue form in a new tab, carries the run, step and person with it, and asks only for a title. The rest can come later.
-10. Warnings stay short and sit with the step they govern, in the order warning, caution, note. They hold no action steps. Compact by default, because overuse trains people to skip them.
+10. Warnings stay short and sit with the step they govern, in the order warning, caution, note. They hold no action steps. Compact by default, because overuse trains people to skip them. Compact means no box, never smaller than the step's own text.
 11. Every quantity shows its unit. A picker that can outgrow a screen is searchable, with a sensible default (oldest stock first).
 12. Work does not abort. An operation exits through a contingency op or its own exit criteria. A work order nobody has started can be voided. A started one that truly cannot finish is closed short: gated, with a reason and a linked issue, and it stays legible.
 
@@ -133,7 +133,10 @@ Routing is not the record. Assignee and priority may change while a record is op
 ## UI
 
 - Dense and explicit. Data in tables: detail rows for facts, headed tables for collections. Mono for IDs, numbers and timestamps.
-- No rounded corners, shadows or gradients. State colours: ok, warn, error, info. No emoji.
+- No rounded corners or gradients. State colours: ok, warn, error, info. No emoji.
+- Marks have one meaning each. Solid line: section boundary. Dotted line: row in a section. Dashed box: not committed yet (a blank, a typed value). Hard 2px shadow, no blur: a key you can press and the menu it opens; never a panel. Black fill: you are here. Amber and red are for alerts only; nothing is lit when things are normal.
+- Almost no grey. Hierarchy comes from weight, size and position, because grey is the first thing glare removes.
+- The look is Tailwind tokens in `frontend/src/routes/layout.css`, plus one short Marks block for what a token cannot reach inside vendored components. Everything else is a utility class at the call site. No per-component CSS, no overrides outside the layers.
 - Labels are nouns. No copy that explains the interface. Consequence text only in confirmations and errors. A control or option says what it is once: `ADVISORY`, not `ADVISORY — holds nothing`.
 - State badges only where the state is exceptional or actionable. A badge on every row says nothing. Accent colour marks identifiers and actions, never content.
 - Absolute timestamps. Dense rows may show a relative age with the full time in the tooltip.

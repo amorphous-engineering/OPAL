@@ -48,7 +48,7 @@
 	{/each}
 	{#if hidden.length}
 		<span
-			class="squircle inline-flex h-5 min-w-5 shrink-0 items-center justify-center border border-border bg-muted px-1 font-mono text-xs font-medium text-muted-foreground"
+			class="inline-flex h-5 min-w-5 shrink-0 items-center justify-center border border-border bg-muted px-1 font-mono text-xs font-medium text-muted-foreground"
 			title={hidden.map((c) => c.name ?? c.initials).join(', ')}>+{hidden.length}</span
 		>
 	{/if}

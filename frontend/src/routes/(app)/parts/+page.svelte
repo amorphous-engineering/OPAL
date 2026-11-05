@@ -154,7 +154,7 @@
 				{#if row.state === 'draft'}
 					<State value="draft" tone="warn" badge />
 				{:else if row.state === 'obsolete'}
-					<State value="obsolete" tone="error" badge />
+					<State value="obsolete" tone="muted" badge />
 				{:else}
 					<span class="font-mono text-xs text-muted-foreground">ACTIVE</span>
 				{/if}

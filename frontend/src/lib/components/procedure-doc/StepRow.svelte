@@ -35,7 +35,7 @@
 	const blocked = $derived(ctl.mode === 'execute' && isBlocked(step));
 	const open = $derived(ctl.isOpen(key, terminal, blocked));
 	const focused = $derived(ctl.focusedOrder === step.order);
-	// The one accent on the page: the next thing to do.
+	// You are here: the next thing to do.
 	const current = $derived(ctl.mode === 'execute' && ctl.currentOrder === step.order);
 	const nAtt = $derived(step.attachments.length);
 	const nNote = $derived(step.notes.length);
@@ -49,8 +49,8 @@
 	data-status={step.status}
 	data-drop-row={au ? '' : undefined}
 	class={cn(
-		'group/row border-b border-border last:border-b-0',
-		current && 'shadow-[inset_2px_0_0_var(--info)]',
+		'group/row border-b border-dotted last:border-b-0',
+		current && 'border-y border-solid',
 		focused && 'bg-accent/40 outline outline-1 -outline-offset-1 outline-foreground/25',
 		au && dropMarker(au, step.order),
 		au?.drag.id === step.order && 'opacity-40'
@@ -85,11 +85,21 @@
 			)}
 			aria-hidden="true"
 		/>
-		<span class="w-10 shrink-0 font-mono text-xs font-medium tabular-nums">{step.number}</span>
+		<span class="w-10 shrink-0 font-mono text-xs font-medium tabular-nums"
+			><span class={cn(current && '-ml-1 bg-foreground px-1 py-px font-semibold text-background')}
+				>{step.number}</span
+			></span
+		>
 		{#if au}
 			<TitleInput {step} />
 		{:else}
-			<span class={cn('min-w-0 truncate text-sm', terminal && 'line-through')}>{step.title}</span>
+			<span
+				class={cn(
+					'min-w-0 truncate text-sm',
+					terminal && 'line-through',
+					current && 'font-semibold'
+				)}>{step.title}</span
+			>
 			<StepBadges {step} />
 		{/if}
 		{#if nNote}
@@ -122,6 +132,6 @@
 		{/if}
 	</div>
 	{#if open && !bodyless}
-		<div class="border-t border-border/60 bg-background pl-8"><StepBody {step} {op} /></div>
+		<div class="bg-background"><StepBody {step} {op} /></div>
 	{/if}
 </div>

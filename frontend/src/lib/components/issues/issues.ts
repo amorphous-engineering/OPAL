@@ -9,11 +9,11 @@ export const TICKET_LABEL: Record<TicketState, string> = {
 	done: 'DONE'
 };
 
-/** Colour is semantic: red = untouched, amber = in flight, green = done. */
+/** An open issue is not an alarm; what it holds is. So only a finished one gets a colour. */
 const TICKET_TONE: Record<TicketState, Tone> = {
-	pending: 'error',
-	in_work: 'warn',
-	in_review: 'warn',
+	pending: 'default',
+	in_work: 'default',
+	in_review: 'default',
 	done: 'ok'
 };
 

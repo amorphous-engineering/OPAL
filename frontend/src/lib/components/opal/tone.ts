@@ -5,18 +5,18 @@ export const toneText: Record<Tone, string> = {
 	ok: 'text-ok',
 	warn: 'text-warn',
 	error: 'text-error',
-	info: 'text-info',
+	info: 'text-foreground',
 	muted: 'text-muted-foreground',
 	default: 'text-foreground'
 };
 
 export const toneBox: Record<Tone, string> = {
-	ok: 'border-ok/40 bg-ok-muted text-ok',
-	warn: 'border-warn/50 bg-warn-muted text-warn',
-	error: 'border-error/40 bg-error-muted text-error',
-	info: 'border-info/40 bg-info-muted text-info',
-	muted: 'border-border bg-muted text-muted-foreground',
-	default: 'border-border bg-background text-foreground'
+	ok: 'border-dotted border-ok text-ok',
+	warn: 'border-warn-fill bg-warn-fill text-warn-on',
+	error: 'border-error-fill bg-error-fill text-error-on',
+	info: 'border-transparent px-0 text-foreground',
+	muted: 'border-dotted border-foreground text-foreground',
+	default: 'border-dotted border-foreground text-foreground'
 };
 
 /** Common domain states → tone. Unknown states stay neutral. */

@@ -11,7 +11,7 @@
 </script>
 
 {#if ordered.length}
-	<div class="grid grid-cols-1 gap-1">
+	<div class="grid grid-cols-1 gap-1.5">
 		{#each ordered as c, i (i)}<CalloutBlock callout={c} />{/each}
 	</div>
 {/if}

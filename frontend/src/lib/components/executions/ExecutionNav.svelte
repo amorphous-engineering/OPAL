@@ -40,7 +40,7 @@
 			<Progress
 				value={Math.round(pct)}
 				aria-label="Steps complete"
-				class="h-1.5 bg-border [&_[data-slot=progress-indicator]]:bg-ok"
+				class="h-1.5 bg-desk [&_[data-slot=progress-indicator]]:bg-foreground"
 			/>
 		</div>
 	</Section>
@@ -76,7 +76,11 @@
 								{#if word}<span
 										class={cn(
 											'shrink-0 font-mono text-xs',
-											word === 'SKIPPED' ? 'text-muted-foreground' : 'text-warn'
+											word === 'SKIPPED'
+												? 'text-muted-foreground'
+												: word === 'HELD'
+													? 'text-error'
+													: 'text-warn'
 										)}>{word}</span
 									>{/if}
 								<span

@@ -32,7 +32,7 @@
 	const hasFields = $derived((step.data_schema?.fields?.length ?? 0) > 0);
 </script>
 
-<div class="grid grid-cols-1 gap-3 px-3 py-3" data-step-body={step.order}>
+<div class="grid grid-cols-1 gap-2 px-3 py-2" data-step-body={step.order}>
 	{#if step.issue_history.length}
 		<div class="font-mono text-xs text-muted-foreground">
 			{#each step.issue_history as i, n (i.issue_id)}
@@ -60,8 +60,10 @@
 		<CalloutList callouts={step.callouts ?? []} />
 
 		{#if step.instructions}
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
-			<div class="prose-opal max-w-3xl">{@html markdown(step.instructions)}</div>
+			<div class="prose-opal max-w-3xl text-step leading-normal">
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -- markdown() sanitizes -->
+				{@html markdown(step.instructions)}
+			</div>
 		{/if}
 	{/if}
 	<StepImages images={step.images} {step} />

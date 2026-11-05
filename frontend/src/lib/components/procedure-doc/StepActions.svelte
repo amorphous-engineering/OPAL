@@ -2,7 +2,8 @@
 	// What the open step offers. Routine work has one primary action, COMPLETE: no dialog, no
 	// signature row. A held step points at the issue that holds it instead, and a declared sign-off
 	// acts from its own table (SignoffTable). SKIP and + ISSUE live here, so they exist only on a
-	// step someone has open. SKIP asks for its reason in place.
+	// step someone has open. SKIP asks for its reason in place. The row stays on screen when a step
+	// runs long, so nobody scrolls to reach the move the step is waiting on.
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { useDoc } from './controller.js';
@@ -51,28 +52,28 @@
 </script>
 
 {#if on && (held.length || completes || canSkip || issueHref)}
-	<div class="grid grid-cols-1 gap-2" data-step-actions={step.order}>
+	<div
+		class="sticky bottom-6 z-[5] -mx-3 -mb-2 grid grid-cols-1 gap-2 border-t border-dotted bg-background px-3 py-1.5 lg:-bottom-4"
+		data-step-actions={step.order}
+	>
 		<div class="flex flex-wrap items-center gap-2">
 			{#if held.length}
 				{#each held as h (h.issue_id)}
-					<Button size="xs" href={`/issues/${h.issue_id}`}>{h.issue_number}</Button>
+					<Button href={`/issues/${h.issue_id}`}>{h.issue_number}</Button>
 				{/each}
 			{:else if completes && slot}
 				<Button
-					size="xs"
 					disabled={!slot.can_sign || busy}
-					class={slot.can_sign ? '' : 'cursor-not-allowed'}
+					class={slot.can_sign ? 'px-3 font-bold' : 'cursor-not-allowed px-3 font-bold'}
 					onclick={complete}>COMPLETE</Button
 				>
 				{#if !slot.can_sign}<GateReason blockers={slot.blockers} />{/if}
 			{/if}
 			{#if canSkip && !skipping}
-				<Button size="xs" variant="outline" onclick={() => (skipping = true)}>SKIP</Button>
+				<Button variant="outline" onclick={() => (skipping = true)}>SKIP</Button>
 			{/if}
 			{#if issueHref}
-				<Button size="xs" variant="outline" href={issueHref} target="_blank" rel="noopener"
-					>+ ISSUE</Button
-				>
+				<Button variant="outline" href={issueHref} target="_blank" rel="noopener">+ ISSUE</Button>
 			{/if}
 		</div>
 		{#if skipping}
@@ -86,8 +87,8 @@
 					autofocus
 					bind:value={reason}
 				/>
-				<Button size="xs" type="submit" disabled={busy || !reason.trim()}>SKIP STEP</Button>
-				<Button size="xs" variant="ghost" onclick={() => (skipping = false)}>CANCEL</Button>
+				<Button type="submit" disabled={busy || !reason.trim()}>SKIP STEP</Button>
+				<Button variant="ghost" onclick={() => (skipping = false)}>CANCEL</Button>
 			</form>
 		{/if}
 	</div>

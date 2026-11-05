@@ -14,6 +14,9 @@
 
 	const trigger =
 		'inline-flex h-7 items-center gap-1 rounded-md border border-transparent px-2 font-mono text-xs font-medium tracking-wider uppercase hover:bg-accent data-[state=open]:bg-accent';
+	// You are here.
+	const here =
+		'border-foreground bg-foreground text-background hover:bg-foreground data-[state=open]:bg-foreground';
 </script>
 
 <nav aria-label="Primary" class="flex shrink-0 items-center gap-0.5">
@@ -21,18 +24,18 @@
 	<div class="hidden items-center gap-0.5 min-[900px]:flex">
 		<a
 			href="/"
-			class={cn(trigger, path === '/' && 'border-border bg-accent text-info')}
+			class={cn(trigger, path === '/' && here)}
 			aria-current={path === '/' ? 'page' : undefined}>Overview</a
 		>
 		<!-- added by projects -->
 		<a
 			href={PROJECTS_NAV.href}
-			class={cn(trigger, isActive(path, PROJECTS_NAV.href) && 'border-border bg-accent text-info')}
+			class={cn(trigger, isActive(path, PROJECTS_NAV.href) && here)}
 			aria-current={isActive(path, PROJECTS_NAV.href) ? 'page' : undefined}>{PROJECTS_NAV.label}</a
 		>
 		{#each groups as g (g.label)}
 			<DropdownMenu.Root>
-				<DropdownMenu.Trigger class={cn(trigger, groupActive(g) && 'border-border text-info')}>
+				<DropdownMenu.Trigger class={cn(trigger, groupActive(g) && here)}>
 					{g.label}<CaretDown weight="bold" class="size-3" aria-hidden="true" />
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="start" class="min-w-40">
