@@ -6,6 +6,7 @@ import {
 	type RequirementPartRequirement as PartLink,
 	type RequirementRedline,
 	conflict,
+	forbidden,
 	notFound,
 	now,
 	type zRequirementCreate,
@@ -72,8 +73,20 @@ function hydrate(ctx: Pick<Ctx, 'db'>, rows: RequirementRow[]): Requirement[] {
 			.map((x) => [x.id, x.n])
 	);
 	const projects = projectRefs(ctx.db, rows.map((r) => r.projectId)); // added by projects
-	return rows.map((r) => ({
+	const cancellers = rows.flatMap((r) => (r.cancelledById === null ? [] : [r.cancelledById]));
+	const cancellerNames = new Map(
+		cancellers.length
+			? ctx.db
+					.select({ id: user.id, name: user.name })
+					.from(user)
+					.where(inArray(user.id, cancellers))
+					.all()
+					.map((u) => [u.id, u.name] as const)
+			: []
+	);
+	return rows.map(({ cancelledById, ...r }) => ({
 		...r,
+		cancelledByName: cancelledById === null ? null : (cancellerNames.get(cancelledById) ?? null),
 		projectCode: projects.get(r.projectId)?.code ?? '', // added by projects
 		projectName: projects.get(r.projectId)?.name ?? '', // added by projects
 		childrenCount: kids.get(r.id) ?? 0,
@@ -418,7 +431,8 @@ export function baselineBatch(
 }
 
 export const revise = (ctx: Ctx, id: number) => one(ctx, reviseRow(ctx, load(ctx, id)));
-export const cancel = (ctx: Ctx, id: number) => one(ctx, cancelRow(ctx, load(ctx, id)));
+export const cancel = (ctx: Ctx, id: number, reason: string) =>
+	one(ctx, cancelRow(ctx, load(ctx, id), reason));
 
 /** Clear staleness without an edit. Works on baselined rows: staleness is metadata. */
 export function reaffirm(ctx: Ctx, id: number): Requirement {
@@ -562,11 +576,33 @@ export function assign(ctx: Ctx, input: { partId: number; reqNumber: string; not
 	return linkOut(ctx, [row.id])[0]!;
 }
 
+function requirePerson(ctx: Ctx) {
+	if (ctx.actor.kind === 'token')
+		throw forbidden('This action needs a signed-in person, not an API token');
+}
+
+/** Superseded and cancelled requirements are finished paper: their allocations no longer change. */
+function requireLive(ctx: Pick<Ctx, 'db'>, requirementId: number): RequirementRow {
+	const req = load(ctx, requirementId);
+	if (req.lifecycleState === 'superseded' || req.lifecycleState === 'cancelled')
+		throw conflict(
+			'requirement_state',
+			`${req.reqNumber} rev ${req.revision} is ${req.lifecycleState}; its allocations are read-only`
+		);
+	return req;
+}
+
 export function updateLink(
 	ctx: Ctx,
 	input: { id: number; status?: PartLink['status']; notes?: string | null }
 ): PartLink {
 	const row = loadLink(ctx, input.id);
+	const req = requireLive(ctx, row.requirementId);
+	if (input.status === 'verified' && row.status !== 'verified')
+		throw conflict('use_verify', 'Verification is recorded with who and when: use verify');
+	// On a baselined requirement a status is a verification decision: a person's, not a token's.
+	if (input.status !== undefined && input.status !== row.status && req.lifecycleState === 'baselined')
+		requirePerson(ctx);
 	const patch: Record<string, unknown> = {};
 	if (input.status !== undefined) patch.status = input.status;
 	if (input.notes !== undefined) patch.notes = input.notes;
@@ -576,6 +612,8 @@ export function updateLink(
 
 export function verifyLink(ctx: Ctx, input: { id: number; notes?: string | null }): PartLink {
 	const row = loadLink(ctx, input.id);
+	requireLive(ctx, row.requirementId);
+	requirePerson(ctx);
 	writeUpdate(ctx, partRequirement, row.id, {
 		status: 'verified',
 		verifiedAt: now(),
@@ -586,7 +624,7 @@ export function verifyLink(ctx: Ctx, input: { id: number; notes?: string | null 
 }
 
 export function unassign(ctx: Ctx, id: number): { ok: true } {
-	loadLink(ctx, id);
+	requireLive(ctx, loadLink(ctx, id).requirementId);
 	remove(ctx, partRequirement, id);
 	return { ok: true };
 }

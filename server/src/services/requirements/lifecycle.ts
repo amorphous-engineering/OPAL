@@ -104,10 +104,15 @@ export function reviseRow(ctx: Ctx, r: RequirementRow): RequirementRow {
 	});
 }
 
-/** Cancel from any state that is not terminal. */
-export function cancelRow(ctx: Ctx, r: RequirementRow): RequirementRow {
+/** Strike a requirement that is not terminal. The reason, who and when stay on the row. */
+export function cancelRow(ctx: Ctx, r: RequirementRow, reason: string): RequirementRow {
 	if (r.lifecycleState === 'superseded' || r.lifecycleState === 'cancelled') {
 		throw refuse(`cannot cancel from terminal state '${r.lifecycleState}'`);
 	}
-	return update(ctx, requirement, r.id, { lifecycleState: 'cancelled' });
+	return update(ctx, requirement, r.id, {
+		lifecycleState: 'cancelled',
+		cancelledAt: now(),
+		cancelledById: actorUserId(ctx.actor),
+		cancelReason: reason.trim()
+	});
 }

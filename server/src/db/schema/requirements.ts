@@ -59,6 +59,10 @@ export const requirement = sqliteTable(
 		stale: integer('stale', { mode: 'boolean' }).notNull().default(false),
 		baselinedAt: text('baselined_at'),
 		baselinedById: userRef('baselined_by_id'),
+		/** Set when the requirement is cancelled: when, by whom and why. */
+		cancelledAt: text('cancelled_at'),
+		cancelledById: userRef('cancelled_by_id'),
+		cancelReason: text('cancel_reason'),
 		supersedesId: integer('supersedes_id').references((): AnySQLiteColumn => requirement.id, {
 			onDelete: 'set null'
 		}),
