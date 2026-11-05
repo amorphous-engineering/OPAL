@@ -396,12 +396,10 @@ describe('acceptance', () => {
 		expect(x.body.acceptanceRationale).toBe('new words');
 	});
 
-	test('un-accepting needs a note and keeps the signature as history', async () => {
+	test('an accepted risk can be closed with a note and keeps its signature', async () => {
 		const t = await setup();
 		const r = await ready(t);
 		await t.call('POST', `/risks/${r.id}/accept`, {});
-		const noNote = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'watch' });
-		expect(noNote.body.message).toContain('un-accepting a signed risk requires a note');
 		const closeNoNote = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'closed' });
 		expect(closeNoNote.status).toBe(409);
 		const ok = await t.call('POST', `/risks/${r.id}/disposition`, {
@@ -413,25 +411,66 @@ describe('acceptance', () => {
 		expect(ok.body.acceptedAt).toBeTruthy();
 	});
 
-	test('changing the signed scenario or score withdraws the acceptance and keeps the signature', async () => {
+	test('an accepted risk keeps its acceptance: no other disposition without withdrawing it', async () => {
 		const t = await setup();
 		const r = await ready(t);
 		await t.call('POST', `/risks/${r.id}/accept`, {});
-		const x = await t.call('PATCH', `/risks/${r.id}`, { probability: 4 });
-		expect(x.body.disposition).toBe('open');
-		expect(x.body.acceptanceInvalidated).toBe(true);
-		expect(x.body.acceptedByName).toBe('ABBY');
-		const hist = (await t.call('GET', `/risks/${r.id}/history`)).body;
-		expect(hist[0].note).toContain('probability');
+		const x = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'watch', note: 'quietly' });
+		expect(x.status).toBe(409);
+		expect(x.body.message).toContain('withdrawn');
+		expect((await t.call('GET', `/risks/${r.id}`)).body.disposition).toBe('accepted');
+	});
+
+	test('a score change on an accepted risk is refused and never withdraws the acceptance', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		await t.call('POST', `/risks/${r.id}/accept`, {});
+		for (const body of [
+			{ probability: 4 },
+			{ impact: 1 },
+			{ residualProbability: 1 },
+			{ condition: 'a different condition' }
+		]) {
+			const x = await t.call('PATCH', `/risks/${r.id}`, body);
+			expect(x.status).toBe(409);
+			expect(x.body.message).toContain('withdrawn');
+		}
+		const now = (await t.call('GET', `/risks/${r.id}`)).body;
+		expect(now.disposition).toBe('accepted');
+		expect(now.probability).toBe(r.probability);
 	});
 
 	test('an edit outside the signature leaves the acceptance alone', async () => {
 		const t = await setup();
 		const r = await ready(t);
 		await t.call('POST', `/risks/${r.id}/accept`, {});
-		const x = await t.call('PATCH', `/risks/${r.id}`, { title: 'Renamed', description: 'more' });
+		const x = await t.call('PATCH', `/risks/${r.id}`, { title: 'Renamed', description: 'more', ownerId: t.other.id });
 		expect(x.body.disposition).toBe('accepted');
-		expect(x.body.acceptanceInvalidated).toBe(false);
+		// Sending the signed values again is not a change.
+		expect((await t.call('PATCH', `/risks/${r.id}`, { probability: r.probability })).status).toBe(200);
+	});
+
+	test('withdrawing an acceptance needs a reason, a person, and reopens the score for editing', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		await t.call('POST', `/risks/${r.id}/accept`, {});
+		expect((await t.call('POST', `/risks/${r.id}/withdraw-acceptance`, { reason: ' ' })).status).toBe(422);
+		t.as({ kind: 'token', userId: t.admin.id, isAdmin: true, tokenId: 1 });
+		expect((await t.call('POST', `/risks/${r.id}/withdraw-acceptance`, { reason: 'new data' })).status).toBe(403);
+		t.as(t.admin);
+		const w = await t.call('POST', `/risks/${r.id}/withdraw-acceptance`, { reason: 'test data changed' });
+		expect(w.body).toMatchObject({ disposition: 'open', acceptedByName: 'ABBY' });
+		expect((await t.call('PATCH', `/risks/${r.id}`, { probability: 4 })).body.probability).toBe(4);
+		const hist = (await t.call('GET', `/risks/${r.id}/history`)).body;
+		const withdrawn = hist.find((h: any) => h.changes.some((c: any) => c.to === 'open'));
+		expect(withdrawn.note).toBe('test data changed');
+		expect(withdrawn.changes).toContainEqual({ field: 'disposition', from: 'accepted', to: 'open' });
+	});
+
+	test('only an accepted risk has an acceptance to withdraw', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		expect((await t.call('POST', `/risks/${r.id}/withdraw-acceptance`, { reason: 'x' })).status).toBe(409);
 	});
 
 	test('blank asset text on an accepted risk is a no-op, not a scenario change', async () => {
@@ -708,5 +747,85 @@ describe('projects', () => {
 		expect(sp.body.linkedIssues[0]).toBeDefined();
 		const issue = (await call('GET', `/issues/${sp.body.linkedIssues[0].issueId}`)).body;
 		expect(issue).toMatchObject({ projectId: b.id, projectCode: 'B' });
+	});
+});
+
+describe('realized and closed risks are not edited by default', () => {
+	const realize = async (t: Awaited<ReturnType<typeof setup>>) => {
+		const r = await t.mk();
+		const i = await t.mkIssue('It happened');
+		await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'realized', realizedIssueId: i.id });
+		return r;
+	};
+
+	test('a realized risk refuses ordinary edits', async () => {
+		const t = await setup();
+		const r = await realize(t);
+		for (const body of [{ probability: 1 }, { title: 'x' }, { condition: 'y' }, { ownerId: t.other.id }]) {
+			const x = await t.call('PATCH', `/risks/${r.id}`, body);
+			expect(x.status).toBe(409);
+			expect(x.body.message).toContain('realized');
+		}
+	});
+
+	test('correcting a realized risk needs a reason and a person, and History keeps old, new, who and why', async () => {
+		const t = await setup();
+		const r = await realize(t);
+		expect((await t.call('POST', `/risks/${r.id}/correct`, { probability: 5, reason: ' ' })).status).toBe(422);
+		t.as({ kind: 'token', userId: t.admin.id, isAdmin: true, tokenId: 1 });
+		expect((await t.call('POST', `/risks/${r.id}/correct`, { probability: 5, reason: 'typo' })).status).toBe(403);
+		t.as(t.admin);
+		const x = await t.call('POST', `/risks/${r.id}/correct`, { probability: 5, reason: 'scored on the wrong scale' });
+		expect(x.body).toMatchObject({ probability: 5, disposition: 'realized' });
+		const h = (await t.call('GET', `/risks/${r.id}/history`)).body;
+		expect(h[0].changes).toContainEqual({ field: 'probability', from: 3, to: 5 });
+		expect(h[0].note).toBe('scored on the wrong scale');
+		expect(h[0].by).toBe('ABBY');
+	});
+
+	test('only a realized risk is corrected', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		expect((await t.call('POST', `/risks/${r.id}/correct`, { probability: 5, reason: 'x' })).status).toBe(409);
+	});
+
+	test('a closed risk is reopened with a reason before it is edited', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'closed', note: 'obsolete' });
+		expect((await t.call('PATCH', `/risks/${r.id}`, { probability: 2 })).status).toBe(409);
+		expect((await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'open' })).status).toBe(409);
+		const ok = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'open', note: 'back in scope' });
+		expect(ok.body.disposition).toBe('open');
+		expect((await t.call('PATCH', `/risks/${r.id}`, { probability: 2 })).body.probability).toBe(2);
+	});
+
+	test('an accepted risk can be realized without withdrawing the acceptance first', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		await t.call('POST', `/risks/${r.id}/accept`, {});
+		const i = await t.mkIssue('It happened');
+		const x = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'realized', realizedIssueId: i.id });
+		expect(x.body.disposition).toBe('realized');
+	});
+});
+
+describe('risk history is the trace of a changed posture', () => {
+	test('a change to the statement shows old text, new text, who and when', async () => {
+		const t = await setup();
+		const r = await t.mk({ condition: 'the valve is cold', departure: 'it sticks', consequence: 'the test aborts' });
+		await t.call('PATCH', `/risks/${r.id}`, { departure: 'it seizes' });
+		const h = (await t.call('GET', `/risks/${r.id}/history`)).body;
+		expect(h[0].changes).toEqual([{ field: 'departure', from: 'it sticks', to: 'it seizes' }]);
+		expect(h[0].by).toBe('ABBY');
+		expect(h[0].at).toMatch(/Z$/);
+	});
+
+	test('a residual score change is traced', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		await t.call('PATCH', `/risks/${r.id}`, { residualProbability: 2, residualImpact: 2 });
+		const h = (await t.call('GET', `/risks/${r.id}/history`)).body;
+		expect(h[0].changes).toContainEqual({ field: 'residualProbability', from: null, to: 2 });
 	});
 });

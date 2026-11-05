@@ -51,7 +51,7 @@ export function load(ctx: Ctx, id: number): RiskRow {
 }
 
 /** The API shape of risks, with names, links and references resolved in a few queries. */
-export function hydrate(ctx: Ctx, rows: RiskRow[], invalidated = new Set<number>()): Risk[] {
+export function hydrate(ctx: Ctx, rows: RiskRow[]): Risk[] {
 	if (!rows.length) return [];
 	const ids = rows.map((r) => r.id);
 	const userIds = new Set<number>();
@@ -172,15 +172,13 @@ export function hydrate(ctx: Ctx, rows: RiskRow[], invalidated = new Set<number>
 					value: x.referenceValue,
 					notes: x.notes
 				})),
-			acceptanceInvalidated: invalidated.has(r.id),
 			createdAt: r.createdAt,
 			updatedAt: r.updatedAt
 		};
 	});
 }
 
-export const one = (ctx: Ctx, id: number, invalidated = new Set<number>()): Risk =>
-	hydrate(ctx, [load(ctx, id)], invalidated)[0]!;
+export const one = (ctx: Ctx, id: number): Risk => hydrate(ctx, [load(ctx, id)])[0]!;
 
 export const get = (ctx: Ctx, id: number): Risk => one(ctx, id);
 
@@ -251,8 +249,42 @@ const PLAIN_FIELDS = [
 	'residualImpact'
 ] as const;
 
+/** Scores and scenario: what an acceptance stands on. Frozen while the risk is accepted. */
+const ACCEPTED_LOCKED = [
+	...RISK_SIGNATURE_FIELDS,
+	'residualProbability',
+	'residualImpact'
+] as const;
+
 export function updateRisk(ctx: Ctx, input: z.output<typeof zRiskUpdate>): Risk {
 	const row = load(ctx, input.id);
+	if (row.disposition === 'realized')
+		throw conflict(
+			'risk_realized',
+			`${row.riskNumber} is realized: it records what was forecast and what happened. Correct it with a reason, or open a new risk for the residual exposure`
+		);
+	if (row.disposition === 'closed')
+		throw conflict('risk_closed', `${row.riskNumber} is closed; reopen it before editing`);
+	return applyEdit(ctx, row, input);
+}
+
+/** Realized risks only. A deliberate, logged correction: the reason is kept with the change. */
+export function correctRisk(
+	ctx: Ctx,
+	input: z.output<typeof zRiskUpdate> & { reason: string }
+): Risk {
+	const row = load(ctx, input.id);
+	if (row.disposition !== 'realized')
+		throw conflict('risk_state', `${row.riskNumber} is ${row.disposition}; only a realized risk is corrected`);
+	return applyEdit(ctx, row, input, input.reason.trim());
+}
+
+function applyEdit(
+	ctx: Ctx,
+	row: RiskRow,
+	input: z.output<typeof zRiskUpdate>,
+	correction?: string
+): Risk {
 	const patch: Partial<typeof risk.$inferInsert> = {};
 	if (input.title !== undefined) patch.title = input.title;
 	if (input.projectId !== undefined && input.projectId !== row.projectId) { // added by projects
@@ -269,7 +301,7 @@ export function updateRisk(ctx: Ctx, input: z.output<typeof zRiskUpdate>): Risk 
 	) {
 		throw conflict(
 			'rationale_signed',
-			'The rationale is part of the signature. Un-accept the risk, with a note, to rewrite it'
+			'The rationale is part of the signature. Withdraw the acceptance, with a reason, to rewrite it'
 		);
 	}
 	checkRefs(ctx, patch);
@@ -279,18 +311,18 @@ export function updateRisk(ctx: Ctx, input: z.output<typeof zRiskUpdate>): Risk 
 	const merged = { ...row, ...patch };
 	if (merged.assetPartId !== null && merged.assetText !== null) throw invalid('assetText', EXCLUSIVE);
 
-	// The signature covers the risk as scored: a change to it withdraws the acceptance.
-	let invalidated = false;
+	// An acceptance stands on the risk as scored. Changing it is a new decision: withdraw first.
 	if (row.disposition === 'accepted') {
-		const changed = RISK_SIGNATURE_FIELDS.filter((f) => row[f] !== merged[f]);
-		if (changed.length) {
-			patch.disposition = 'open';
-			patch.dispositionNote = `Re-dispositioned: scenario changed after acceptance (${changed.join(', ')})`;
-			invalidated = true;
-		}
+		const changed = ACCEPTED_LOCKED.filter((f) => row[f] !== merged[f]);
+		if (changed.length)
+			throw conflict(
+				'risk_accepted',
+				`${row.riskNumber} is accepted; ${changed.join(', ')} cannot change until the acceptance is withdrawn`
+			);
 	}
+	if (correction !== undefined) patch.dispositionNote = correction;
 	if (Object.keys(patch).length) writeUpdate(ctx, risk, row.id, patch);
-	return one(ctx, row.id, new Set(invalidated ? [row.id] : []));
+	return one(ctx, row.id);
 }
 
 // ---- delete ----
@@ -403,16 +435,25 @@ export function matrix(ctx: Ctx, projectId?: number): RiskMatrix {
 
 // ---- history ----
 
+/** Fields History tracks: the score, the disposition, the statement and the owner. */
 const HISTORY_FIELDS = [
 	'probability',
 	'impact',
 	'residualProbability',
 	'residualImpact',
 	'disposition',
+	'condition',
+	'departure',
+	'assetPartId',
+	'assetText',
+	'consequence',
 	'ownerId'
 ] as const;
+const HISTORY_LABEL: Record<string, string> = { ownerId: 'owner', assetPartId: 'asset', assetText: 'asset' };
+/** Operations whose reason is kept in `dispositionNote`; History shows it beside the change. */
+const NOTED_OPS = new Set(['risks.setDisposition', 'risks.withdrawAcceptance', 'risks.correct']);
 
-/** Score, residual, disposition and owner changes from the audit log, newest first. */
+/** Every change to score, disposition, statement or owner from the audit log, newest first. */
 export function history(ctx: Ctx, id: number): RiskHistoryRow[] {
 	load(ctx, id);
 	const entries = ctx.db
@@ -423,10 +464,13 @@ export function history(ctx: Ctx, id: number): RiskHistoryRow[] {
 		.all();
 	const obj = (v: unknown) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 	const userIds = new Set<number>();
+	const partIds = new Set<number>();
 	for (const e of entries) {
 		if (e.actorUserId) userIds.add(e.actorUserId);
-		for (const b of [obj(e.before), obj(e.after)])
+		for (const b of [obj(e.before), obj(e.after)]) {
 			if (typeof b.ownerId === 'number') userIds.add(b.ownerId);
+			if (typeof b.assetPartId === 'number') partIds.add(b.assetPartId);
+		}
 	}
 	const names = new Map(
 		userIds.size
@@ -436,6 +480,16 @@ export function history(ctx: Ctx, id: number): RiskHistoryRow[] {
 					.where(inArray(user.id, [...userIds]))
 					.all()
 					.map((u) => [u.id, u.name] as const)
+			: []
+	);
+	const partNumbers = new Map(
+		partIds.size
+			? ctx.db
+					.select({ id: part.id, pn: part.internalPn })
+					.from(part)
+					.where(inArray(part.id, [...partIds]))
+					.all()
+					.map((p) => [p.id, p.pn] as const)
 			: []
 	);
 	const out: RiskHistoryRow[] = [];
@@ -448,9 +502,14 @@ export function history(ctx: Ctx, id: number): RiskHistoryRow[] {
 			const from = e.action === 'create' ? null : (before[f] ?? null);
 			const to = after[f] ?? null;
 			if (from === to) continue;
-			const named = (v: unknown) => (f === 'ownerId' ? (names.get(v as number) ?? null) : v);
+			const named = (v: unknown) =>
+				f === 'ownerId'
+					? (names.get(v as number) ?? null)
+					: f === 'assetPartId'
+						? (partNumbers.get(v as number) ?? null)
+						: v;
 			changes.push({
-				field: f === 'ownerId' ? 'owner' : f,
+				field: HISTORY_LABEL[f] ?? f,
 				from: (from === null ? null : named(from)) as string | number | null,
 				to: (to === null ? null : named(to)) as string | number | null
 			});
@@ -462,7 +521,7 @@ export function history(ctx: Ctx, id: number): RiskHistoryRow[] {
 			by: e.actorUserId ? (names.get(e.actorUserId) ?? null) : null,
 			action: e.action as 'create' | 'update',
 			changes,
-			note: moved ? ((after.dispositionNote as string | null) ?? null) : null
+			note: moved || NOTED_OPS.has(e.op) ? ((after.dispositionNote as string | null) ?? null) : null
 		});
 	}
 	return out;
