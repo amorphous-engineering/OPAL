@@ -85,9 +85,17 @@
 		action === 'adjust' ? 'Adjust quantity' : action === 'count' ? 'Record count' : 'Move stock'
 	);
 
+	// A scrap destroys stock, so its note is the reason and is required.
+	const scrapping = $derived(action === 'adjust' && reason === 'scrap');
+
 	const valid = $derived.by(() => {
 		if (action === 'adjust')
-			return Number(amount) > 0 && newOnHand >= 0 && (!serialized || newOnHand <= 1);
+			return (
+				Number(amount) > 0 &&
+				newOnHand >= 0 &&
+				(!serialized || newOnHand <= 1) &&
+				(!scrapping || notes.trim() !== '')
+			);
 		if (action === 'count')
 			return counted !== '' && Number(counted) >= 0 && (!serialized || Number(counted) <= 1);
 		return (
@@ -258,8 +266,8 @@
 
 			{#if action !== 'count'}
 				<div class="grid grid-cols-1 gap-1.5">
-					<Label class="label" for="act-notes">Notes</Label>
-					<Textarea id="act-notes" rows={2} bind:value={notes} />
+					<Label class="label" for="act-notes">{scrapping ? 'Reason' : 'Notes'}</Label>
+					<Textarea id="act-notes" rows={2} bind:value={notes} required={scrapping} />
 				</div>
 			{/if}
 

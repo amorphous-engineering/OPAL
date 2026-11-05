@@ -15,18 +15,21 @@
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { ApiError, opal } from '#lib/api.js';
-	import { money, qty as fmtQty, unitMoney } from '#lib/format.js';
+	import { money, qtyUnit, unitMoney } from '#lib/format.js';
 	import { PURCHASE_CHARGE_KINDS, num, type PurchaseExpense } from './types.js';
 
 	let {
 		purchaseId,
 		expenses,
 		canAdd,
+		canRemove = false,
 		onchanged
 	}: {
 		purchaseId: number;
 		expenses: PurchaseExpense[];
 		canAdd: boolean;
+		/** Edit mode: a charge is the one thing on an order that can be taken back. */
+		canRemove?: boolean;
 		onchanged: () => void | Promise<void>;
 	} = $props();
 
@@ -139,7 +142,7 @@
 								{/if}
 							</td>
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
-								>{e.kind !== 'receipt' ? '' : fmtQty(e.quantity)}</td
+								>{e.kind !== 'receipt' ? '' : qtyUnit(e.quantity, e.unitOfMeasure)}</td
 							>
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
 								>{e.kind !== 'receipt' ? '' : unitMoney(e.unitCost)}</td
@@ -147,8 +150,8 @@
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums">{money(e.totalCost)}</td>
 							<td class="px-3 py-1.5"><Timestamp value={e.at} /></td>
 							<td class="px-3 py-1.5 text-right">
-								{#if e.kind !== 'receipt'}
-									<ActionLink danger onclick={() => remove(e)}>REMOVE</ActionLink>
+								{#if e.kind !== 'receipt' && canRemove}
+									<ActionLink onclick={() => remove(e)}>REMOVE</ActionLink>
 								{/if}
 							</td>
 						</tr>

@@ -1,43 +1,77 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	// A purchase order is a form (RECORDS.md). Draft is pencil. Placing is the commit moment, and
+	// after it the page opens for reading: the one blank it waits on is the receive rows. EDIT
+	// reveals what is still pencil, MORE holds the exceptional acts, and a correction keeps the
+	// old value on the page.
+	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import {
-		ActionLink,
+		DetailRow,
+		DetailTable,
+		EditToggle,
+		MoreMenu,
 		PageHeader,
 		Section,
-		DataTable,
-		DetailTable,
-		DetailRow,
-		EmptyLine,
 		State,
 		Timestamp,
+		askReason,
 		confirm,
+		isEditing,
 		toastError,
-		type Column
+		type MoreItem
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { opal } from '#lib/api.js';
-	import { money, qty as fmtQty, unitMoney } from '#lib/format.js';
-	import EditableRow from '#lib/components/purchasing/EditableRow.svelte';
-	import LineDialog from '#lib/components/purchasing/LineDialog.svelte';
-	import ReceiveSection from '#lib/components/purchasing/ReceiveSection.svelte';
-	import ExpensesSection from '#lib/components/purchasing/ExpensesSection.svelte';
+	import { qtyUnit } from '#lib/format.js';
+	import AmendLineDialog from '#lib/components/purchasing/AmendLineDialog.svelte';
 	import AttachmentsSection from '#lib/components/purchasing/AttachmentsSection.svelte';
-	import { num, type PurchaseLine, type PurchaseStatus } from '#lib/components/purchasing/types.js';
+	import EditableRow from '#lib/components/purchasing/EditableRow.svelte';
+	import ExpensesSection from '#lib/components/purchasing/ExpensesSection.svelte';
+	import LineDialog from '#lib/components/purchasing/LineDialog.svelte';
+	import PoHistory from '#lib/components/purchasing/PoHistory.svelte';
+	import PoLines from '#lib/components/purchasing/PoLines.svelte';
+	import ReceiveSection from '#lib/components/purchasing/ReceiveSection.svelte';
+	import { num, type PurchaseLine } from '#lib/components/purchasing/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const po = $derived(data.purchase);
 	const label = $derived(po.reference ?? 'Purchase order');
 
-	const OPEN = ['draft', 'ordered', 'partial', 'on_hold'];
-	const editable = $derived(OPEN.includes(po.status));
-	const canReceive = $derived(po.status === 'ordered' || po.status === 'partial');
+	const draft = $derived(po.status === 'draft');
+	const live = $derived(po.status === 'ordered' || po.status === 'partial');
+	const held = $derived(po.status === 'on_hold');
+	const closed = $derived(
+		po.status === 'received' || po.status === 'cancelled' || po.status === 'closed_short'
+	);
 	const anyReceived = $derived(po.lines.some((l) => num(l.qtyReceived) > 0));
-	const lineTotal = (l: PurchaseLine) =>
-		l.unitCost == null ? null : num(l.unitCost) * num(l.qtyOrdered);
+	/** Something is still pencil: a draft, or the header and lines of an order waiting for goods. */
+	const editable = $derived(draft || live);
+	const editing = $derived(editable && isEditing(page.url));
+	const canReceive = $derived(live);
+
+	/** Who placed it, from the first status change. */
+	const placed = $derived(
+		po.changes.find((c) => c.scope === 'order' && c.field === 'status' && c.new === 'ordered')
+	);
+	/** Who closed it and why, for a cancelled or closed short order. */
+	const closing = $derived(
+		[...po.changes]
+			.reverse()
+			.find(
+				(c) =>
+					c.scope === 'order' &&
+					c.field === 'status' &&
+					(c.new === 'cancelled' || c.new === 'closed_short')
+			)
+	);
 
 	let lineOpen = $state(false);
 	let editLine = $state<PurchaseLine | null>(null);
+	let amendOpen = $state(false);
+	let amendTarget = $state<PurchaseLine | null>(null);
+
+	const refresh = () => invalidateAll();
 
 	function addLine() {
 		editLine = null;
@@ -47,58 +81,124 @@
 		editLine = l;
 		lineOpen = true;
 	}
-
-	const refresh = () => invalidateAll();
-
-	async function patch(body: Omit<Parameters<typeof opal.purchasing.orders.update>[0], 'id'>) {
-		await opal.purchasing.orders.update({ id: po.id, ...body });
-		await refresh();
+	function amend(l: PurchaseLine) {
+		amendTarget = l;
+		amendOpen = true;
 	}
 
-	async function setStatus(
-		status: PurchaseStatus,
-		ask?: { title: string; body: string; action: string; destructive?: boolean }
-	) {
-		if (ask && !(await confirm(ask))) return;
+	async function run(fn: () => Promise<unknown>) {
 		try {
-			await patch({ status });
-		} catch (e) {
-			toastError(e);
-		}
-	}
-
-	async function removeLine(l: PurchaseLine) {
-		const ok = await confirm({
-			title: `Remove ${l.partInternalPn ?? l.partName}`,
-			body: 'The line is deleted from this order.',
-			action: 'REMOVE',
-			destructive: true
-		});
-		if (!ok) return;
-		try {
-			await opal.purchasing.orders.removeLine({ id: po.id, lineId: l.id });
+			await fn();
 			await refresh();
 		} catch (e) {
 			toastError(e);
 		}
 	}
 
-	const lineColumns: Column<PurchaseLine>[] = [
-		{ key: 'partInternalPn', label: 'PN', mono: true, class: 'whitespace-nowrap' },
-		{ key: 'partName', label: 'Name' },
+	const patch = async (body: Omit<Parameters<typeof opal.purchasing.orders.update>[0], 'id'>) => {
+		await opal.purchasing.orders.update({ id: po.id, ...body });
+		await refresh();
+	};
+
+	async function place() {
+		const ok = await confirm({
+			title: `Place ${label}`,
+			body: 'Lines and supplier stop being editable.',
+			action: 'PLACE ORDER'
+		});
+		if (!ok) return;
+		await run(() => opal.purchasing.orders.place({ id: po.id }));
+		await goto(page.url.pathname, { replaceState: true, invalidateAll: true });
+	}
+
+	async function removeLine(l: PurchaseLine) {
+		const ok = await confirm({
+			title: `Remove ${l.partInternalPn}`,
+			body: 'The line is deleted from this draft.',
+			action: 'REMOVE',
+			destructive: true
+		});
+		if (ok) await run(() => opal.purchasing.orders.removeLine({ id: po.id, lineId: l.id }));
+	}
+
+	async function cancelLine(l: PurchaseLine) {
+		const reason = await askReason({
+			title: `Cancel ${l.partInternalPn}`,
+			body: `${qtyUnit(l.qtyOutstanding, l.unitOfMeasure)} outstanding is struck.${num(l.qtyReceived) > 0 ? ` ${qtyUnit(l.qtyReceived, l.unitOfMeasure)} received stays.` : ''} The line stays on the order.`,
+			action: 'CANCEL LINE',
+			destructive: true
+		});
+		if (reason)
+			await run(() => opal.purchasing.orders.cancelLine({ id: po.id, lineId: l.id, reason }));
+	}
+
+	async function cancelOrder() {
+		const reason = await askReason({
+			title: `Cancel ${label}`,
+			body: 'Every line is struck and the order closes. It can be copied to a new draft.',
+			action: 'CANCEL ORDER',
+			destructive: true
+		});
+		if (reason) await run(() => opal.purchasing.orders.cancel({ id: po.id, reason }));
+	}
+
+	async function closeShort() {
+		const reason = await askReason({
+			title: `Close ${label} short`,
+			body: 'The outstanding quantity of every line is struck. What arrived stays received.',
+			action: 'CLOSE SHORT',
+			destructive: true
+		});
+		if (reason) await run(() => opal.purchasing.orders.closeShort({ id: po.id, reason }));
+	}
+
+	async function discard() {
+		const ok = await confirm({
+			title: `Discard ${label}`,
+			body: 'The draft and its lines are deleted.',
+			action: 'DISCARD',
+			destructive: true
+		});
+		if (!ok) return;
+		try {
+			await opal.purchasing.orders.discard({ id: po.id });
+			await goto('/purchases');
+		} catch (e) {
+			toastError(e);
+		}
+	}
+
+	async function copy() {
+		try {
+			const next = await opal.purchasing.orders.copy({ id: po.id });
+			await goto(`/purchases/${next.id}`);
+		} catch (e) {
+			toastError(e);
+		}
+	}
+
+	const more = $derived<MoreItem[]>([
+		{ label: 'ADD LINE', onselect: addLine, when: live },
 		{
-			key: 'qtyOrdered',
-			label: 'Ordered',
-			align: 'right',
-			mono: true,
-			class: 'whitespace-nowrap'
+			label: 'PUT ON HOLD',
+			onselect: () => run(() => opal.purchasing.orders.hold({ id: po.id })),
+			when: live
 		},
-		{ key: 'qtyReceived', label: 'Received', align: 'right', mono: true },
-		{ key: 'unitCost', label: 'Unit cost', align: 'right', mono: true },
-		{ key: 'total', label: 'Total', align: 'right', mono: true },
-		{ key: 'destination', label: 'Destination' },
-		{ key: 'actions', label: '', align: 'right' }
-	];
+		{
+			label: 'CLOSE SHORT',
+			onselect: closeShort,
+			strike: true,
+			when: (live || held) && anyReceived
+		},
+		{
+			label: 'CANCEL ORDER',
+			onselect: cancelOrder,
+			strike: true,
+			when: (live || held) && !anyReceived
+		},
+		{ label: 'DISCARD', onselect: discard, strike: true, when: draft },
+		{ label: 'COPY TO NEW DRAFT', onselect: copy, when: closed }
+	]);
 
 	const supplierOptions = $derived([
 		...(po.supplierId == null ? [{ value: '', label: po.supplierName }] : []),
@@ -114,50 +214,35 @@
 	identifier={po.reference}
 	crumbs={[{ label: 'Purchases', href: '/purchases' }, { label }]}
 >
+	{#snippet heading()}
+		<h1
+			class="text-lg font-semibold tracking-tight {po.status === 'cancelled' ? 'line-through' : ''}"
+		>
+			{po.supplierName}
+		</h1>
+	{/snippet}
 	{#snippet state()}
-		<State value={po.status} badge={po.status !== 'received'} />
+		<State
+			value={po.status}
+			badge={held || po.status === 'cancelled' || po.status === 'closed_short'}
+		/>
 		{#if po.isOverdue}<State value="overdue" tone="error" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
-		{#if po.status === 'draft'}
+		{#if editable}<EditToggle />{/if}
+		{#if draft}
 			<Button
-				onclick={() =>
-					setStatus('ordered', {
-						title: `Place ${label}`,
-						body: 'The order is marked as placed with the supplier and receiving opens.',
-						action: 'PLACE ORDER'
-					})}>PLACE ORDER</Button
+				disabled={po.lines.length === 0}
+				title={po.lines.length === 0 ? 'No lines' : undefined}
+				onclick={place}>PLACE ORDER</Button
+			>
+		{:else if canReceive}
+			<Button type="submit" form="po-receive">RECEIVE</Button>
+		{:else if held}
+			<Button onclick={() => run(() => opal.purchasing.orders.resume({ id: po.id }))}>RESUME</Button
 			>
 		{/if}
-		{#if po.status === 'on_hold'}
-			<Button onclick={() => setStatus('ordered')}>RESUME</Button>
-		{/if}
-		{#if po.status === 'ordered' || po.status === 'partial'}
-			<Button variant="outline" onclick={() => setStatus('on_hold')}>PUT ON HOLD</Button>
-		{/if}
-		{#if po.status === 'ordered' && !anyReceived}
-			<Button
-				variant="outline"
-				onclick={() =>
-					setStatus('draft', {
-						title: `Revert ${label} to draft`,
-						body: 'The order is no longer marked as placed.',
-						action: 'REVERT'
-					})}>REVERT TO DRAFT</Button
-			>
-		{/if}
-		{#if editable}
-			<Button
-				variant="destructive"
-				onclick={() =>
-					setStatus('cancelled', {
-						title: `Cancel ${label}`,
-						body: 'The order is closed and cannot be reopened. Stock already received stays in inventory.',
-						action: 'CANCEL ORDER',
-						destructive: true
-					})}>CANCEL ORDER</Button
-			>
-		{/if}
+		<MoreMenu items={more} />
 	{/snippet}
 </PageHeader>
 
@@ -171,7 +256,7 @@
 					type="select"
 					value={po.supplierId != null ? String(po.supplierId) : ''}
 					options={supplierOptions}
-					{editable}
+					editable={editing && draft}
 					onsave={(v) => patch(v ? { supplierId: Number(v) } : {})}
 				>
 					{#snippet display()}
@@ -188,7 +273,7 @@
 					label="Supplier ref"
 					mono
 					value={po.supplierReference}
-					{editable}
+					editable={editing}
 					maxlength={100}
 					onsave={(v) => patch({ supplierReference: v })}
 				/>
@@ -197,7 +282,7 @@
 					type="date"
 					mono
 					value={po.targetDate}
-					{editable}
+					editable={editing}
 					onsave={(v) => patch({ targetDate: v })}
 				>
 					{#snippet display()}
@@ -211,7 +296,7 @@
 				<EditableRow
 					label="Destination"
 					value={po.destination}
-					{editable}
+					editable={editing}
 					list="po-destinations"
 					maxlength={255}
 					onsave={(v) => patch({ destination: v })}
@@ -220,6 +305,7 @@
 					label="Notes"
 					type="textarea"
 					value={po.notes}
+					editable={editing}
 					onsave={(v) => patch({ notes: v })}
 				/>
 				<DetailRow label="Created">
@@ -227,12 +313,29 @@
 					{#if po.createdByName}<span class="ml-2 text-muted-foreground">{po.createdByName}</span
 						>{/if}
 				</DetailRow>
-				<DetailRow label="Ordered"><Timestamp value={po.orderedAt} /></DetailRow>
-				<DetailRow label="Received">
-					<Timestamp value={po.receivedAt} />
-					{#if po.receivedByName}<span class="ml-2 text-muted-foreground">{po.receivedByName}</span
-						>{/if}
-				</DetailRow>
+				{#if po.orderedAt}
+					<DetailRow label="Placed">
+						<Timestamp value={po.orderedAt} />
+						{#if placed?.userName}<span class="ml-2 text-muted-foreground">{placed.userName}</span
+							>{/if}
+					</DetailRow>
+				{/if}
+				{#if po.receivedAt}
+					<DetailRow label="Received">
+						<Timestamp value={po.receivedAt} />
+						{#if po.receivedByName}<span class="ml-2 text-muted-foreground"
+								>{po.receivedByName}</span
+							>{/if}
+					</DetailRow>
+				{/if}
+				{#if closing}
+					<DetailRow label={po.status === 'cancelled' ? 'Cancelled' : 'Closed short'}>
+						<Timestamp value={closing.at} />
+						{#if closing.userName}<span class="ml-2 text-muted-foreground">{closing.userName}</span
+							>{/if}
+						{#if po.closedReason}<div>{po.closedReason}</div>{/if}
+					</DetailRow>
+				{/if}
 			</DetailTable>
 			<datalist id="po-destinations">
 				{#each data.locations as l (l)}<option value={l}></option>{/each}
@@ -243,71 +346,14 @@
 	</div>
 
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
-		{#if po.lines.length === 0}
-			<EmptyLine label="Lines">
-				{#snippet action()}
-					{#if editable}
-						<ActionLink onclick={addLine}>+ ADD LINE</ActionLink>
-					{/if}
-				{/snippet}
-			</EmptyLine>
-		{:else}
-			<Section title="LINES" count={po.lines.length}>
-				{#snippet actions()}
-					{#if editable}<ActionLink onclick={addLine}>+ ADD LINE</ActionLink>{/if}
-				{/snippet}
-				<DataTable rows={po.lines} columns={lineColumns} emptyLabel="Lines" key={(l) => l.id}>
-					{#snippet cell(l, col)}
-						{#if col.key === 'partInternalPn'}
-							<a href={`/parts/${l.partId}`} class="text-info hover:underline"
-								>{l.partInternalPn ?? '—'}</a
-							>
-						{:else if col.key === 'partName'}
-							{l.partName}
-							{#if l.notes}<div class="text-xs text-muted-foreground">{l.notes}</div>{/if}
-						{:else if col.key === 'qtyOrdered'}
-							{fmtQty(l.qtyOrdered, l.unitOfMeasure)}
-						{:else if col.key === 'qtyReceived'}
-							<span
-								class={l.isComplete
-									? 'text-ok'
-									: num(l.qtyReceived) > 0
-										? 'text-warn'
-										: 'text-muted-foreground'}>{fmtQty(l.qtyReceived)}</span
-							>
-						{:else if col.key === 'unitCost'}
-							{unitMoney(l.unitCost)}
-						{:else if col.key === 'total'}
-							{money(lineTotal(l))}
-						{:else if col.key === 'destination'}
-							{#if l.destination}{l.destination}{:else}<span class="text-muted-foreground">—</span
-								>{/if}
-						{:else if col.key === 'actions'}
-							{#if editable}
-								<span class="inline-flex gap-3">
-									<ActionLink onclick={() => changeLine(l)}>EDIT</ActionLink>
-									{#if num(l.qtyReceived) === 0}
-										<ActionLink danger onclick={() => removeLine(l)}>REMOVE</ActionLink>
-									{/if}
-								</span>
-							{/if}
-						{/if}
-					{/snippet}
-				</DataTable>
-				<div
-					class="flex items-center justify-end gap-4 border-t border-border bg-muted/40 px-3 py-1.5 font-mono text-xs"
-				>
-					<span class="tracking-wider text-muted-foreground uppercase">Total</span>
-					<span class="font-medium tabular-nums">{money(po.totalCost)}</span>
-				</div>
-			</Section>
-		{/if}
-
-		<ExpensesSection
-			purchaseId={po.id}
-			expenses={data.expenses}
-			canAdd={po.status !== 'cancelled'}
-			onchanged={refresh}
+		<PoLines
+			purchase={po}
+			{editing}
+			onadd={addLine}
+			onedit={changeLine}
+			onremove={removeLine}
+			onamend={amend}
+			oncancel={cancelLine}
 		/>
 
 		{#if canReceive || data.received.length > 0}
@@ -319,6 +365,16 @@
 				onreceived={refresh}
 			/>
 		{/if}
+
+		<ExpensesSection
+			purchaseId={po.id}
+			expenses={data.expenses}
+			canAdd={live || po.status === 'received' || (po.status === 'closed_short' && anyReceived)}
+			canRemove={editing}
+			onchanged={refresh}
+		/>
+
+		{#if po.orderedAt}<PoHistory changes={po.changes} />{/if}
 	</div>
 </div>
 
@@ -326,6 +382,13 @@
 	bind:open={lineOpen}
 	purchaseId={po.id}
 	line={editLine}
+	locations={data.locations}
+	onsaved={refresh}
+/>
+<AmendLineDialog
+	bind:open={amendOpen}
+	purchaseId={po.id}
+	line={amendTarget}
 	locations={data.locations}
 	onsaved={refresh}
 />

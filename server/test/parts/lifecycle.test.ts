@@ -116,13 +116,15 @@ describe('part lifecycle', () => {
 	test('an active part becomes obsolete with a cause; a draft cannot', async () => {
 		const { api, create, activate } = await setup();
 		const p = await create({ name: 'A' });
-		expect((await api('POST', `/parts/${p.id}/obsolete`, {})).status).toBe(409);
+		expect((await api('POST', `/parts/${p.id}/obsolete`, { cause: 'early' })).status).toBe(409);
 		await activate(p.id);
+		expect((await api('POST', `/parts/${p.id}/obsolete`, {})).status).toBe(422);
+		expect((await api('POST', `/parts/${p.id}/obsolete`, { cause: '  ' })).status).toBe(422);
 		const res = await api('POST', `/parts/${p.id}/obsolete`, { cause: 'superseded' });
 		expect(res.status).toBe(200);
 		expect(res.json).toMatchObject({ state: 'obsolete', obsoleteCause: 'superseded' });
 		expect(res.json.obsoletedAt).toBeTruthy();
-		expect((await api('POST', `/parts/${p.id}/obsolete`, {})).status).toBe(409);
+		expect((await api('POST', `/parts/${p.id}/obsolete`, { cause: 'again' })).status).toBe(409);
 		expect((await api('DELETE', `/parts/${p.id}`)).status).toBe(409);
 	});
 

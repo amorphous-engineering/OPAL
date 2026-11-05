@@ -148,6 +148,15 @@ export function qty(value: number | string | null | undefined, uom?: string | nu
 	return uom && uom !== 'ea' ? `${s} ${uom}` : s;
 }
 
+/** A quantity with its unit, always: `3 ea`. `qty` leaves `ea` off, which reads as unitless on a record. */
+export function qtyUnit(value: number | string | null | undefined, uom?: string | null): string {
+	if (value === null || value === undefined || value === '') return '—';
+	const n = typeof value === 'number' ? value : Number(value);
+	if (Number.isNaN(n)) return String(value);
+	const s = Number.isInteger(n) ? String(n) : String(Number(n.toFixed(4)));
+	return uom ? `${s} ${uom}` : s;
+}
+
 export function money(value: number | string | null | undefined, currency = 'USD'): string {
 	if (value === null || value === undefined || value === '') return '—';
 	const n = Number(value);

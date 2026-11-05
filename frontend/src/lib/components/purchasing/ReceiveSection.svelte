@@ -5,7 +5,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { ApiError, opal } from '#lib/api.js';
-	import { qty as fmtQty, tip } from '#lib/format.js';
+	import { qtyUnit, tip } from '#lib/format.js';
 	import { toast } from '#lib/components/opal/index.js';
 	import { num, type Purchase, type PurchaseReceivedRecord } from './types.js';
 
@@ -14,6 +14,7 @@
 		received,
 		receiving,
 		locations = [],
+		formId = 'po-receive',
 		onreceived
 	}: {
 		purchase: Purchase;
@@ -21,6 +22,8 @@
 		/** The order accepts receipts now. */
 		receiving: boolean;
 		locations?: string[];
+		/** The header's RECEIVE button submits this form (`form` attribute). */
+		formId?: string;
 		onreceived: () => void | Promise<void>;
 	} = $props();
 
@@ -69,6 +72,7 @@
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		error = null;
+		if (busy) return;
 		const lines = [];
 		for (const l of open) {
 			const row = d(l.id);
@@ -99,7 +103,7 @@
 				title: 'Receive more than ordered?',
 				body:
 					overLines
-						.map((l) => `${l.partName}: ${fmtQty(over(l), l.unitOfMeasure)} over`)
+						.map((l) => `${l.partName}: ${qtyUnit(over(l), l.unitOfMeasure)} over`)
 						.join('\n') + '\nThe excess is received into stock and costed on this order.',
 				action: 'RECEIVE'
 			});
@@ -120,12 +124,12 @@
 </script>
 
 <Section title="RECEIVE" count={received.length + open.length}>
-	<form onsubmit={submit}>
+	<form id={formId} onsubmit={submit}>
 		<div class="overflow-x-auto">
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-muted/60">
-						{#each [['PN', 'left'], ['NAME', 'left'], ['OUTSTANDING', 'right'], ['QTY', 'left'], ['LOCATION', 'left'], ['LOT / SERIAL', 'left'], ['OPAL', 'left']] as [h, a] (h)}
+						{#each [['PN', 'left'], ['OUTSTANDING', 'right'], ['QTY', 'left'], ['LOCATION', 'left'], ['LOT / SERIAL', 'left'], ['OPAL', 'left']] as [h, a] (h)}
 							<th
 								scope="col"
 								class="h-8 px-3 font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
@@ -140,14 +144,15 @@
 						{#each byLine.get(l.id) ?? [] as r (r.stockId)}
 							<tr class="border-b border-border align-top">
 								<td class="px-3 py-1.5 font-mono whitespace-nowrap"
-									><a href={`/parts/${l.partId}`} class="text-info hover:underline"
-										>{l.partInternalPn}</a
+									><a
+										href={`/parts/${l.partId}`}
+										title={l.partName}
+										class="text-info hover:underline">{l.partInternalPn}</a
 									></td
 								>
-								<td class="min-w-40 px-3 py-1.5">{l.partName}</td>
 								<td></td>
 								<td class="px-3 py-1.5 font-mono whitespace-nowrap text-ok tabular-nums"
-									>{fmtQty(r.quantity, l.unitOfMeasure)}</td
+									>{qtyUnit(r.quantity, l.unitOfMeasure)}</td
 								>
 								<td class="px-3 py-1.5">{r.location}</td>
 								<td class="px-3 py-1.5 font-mono"
@@ -168,26 +173,31 @@
 						{#if row}
 							<tr class="border-b border-border align-top">
 								<td class="px-3 py-1.5 font-mono"
-									><a href={`/parts/${l.partId}`} class="text-info hover:underline"
-										>{l.partInternalPn}</a
+									><a
+										href={`/parts/${l.partId}`}
+										title={l.partName}
+										class="text-info hover:underline">{l.partInternalPn}</a
 									></td
 								>
-								<td class="min-w-40 px-3 py-1.5">{l.partName}</td>
 								<td class="px-3 py-1.5 text-right font-mono tabular-nums"
-									>{fmtQty(l.qtyOutstanding, l.unitOfMeasure)}</td
+									>{qtyUnit(l.qtyOutstanding, l.unitOfMeasure)}</td
 								>
-								<td class="px-3 py-1"
-									><Input
-										type="number"
-										step="any"
-										min="0"
-										bind:value={row.qty}
-										aria-label={`Receive quantity for ${l.partName}`}
-										class="h-7 w-24 font-mono text-xs"
-									/>{#if over(l) > 0}<span class="mt-0.5 block font-mono text-xs text-warn"
-											>+{fmtQty(over(l), l.unitOfMeasure)} OVER</span
-										>{/if}</td
-								>
+								<td class="px-3 py-1">
+									<div class="flex items-center gap-1.5">
+										<Input
+											type="number"
+											step="any"
+											min="0"
+											bind:value={row.qty}
+											aria-label={`Receive quantity for ${l.partName}`}
+											class="h-7 w-24 font-mono text-xs"
+										/>
+										<span class="font-mono text-xs text-muted-foreground">{l.unitOfMeasure}</span>
+									</div>
+									{#if over(l) > 0}<span class="mt-0.5 block font-mono text-xs text-warn"
+											>+{qtyUnit(over(l), l.unitOfMeasure)} OVER</span
+										>{/if}
+								</td>
 								<td class="px-3 py-1"
 									><Input
 										bind:value={row.location}
@@ -225,7 +235,6 @@
 			<ErrorBanner message={error} class="mx-3 mt-3" />
 			<div class="flex justify-end gap-2 p-3">
 				<Button type="button" variant="outline" onclick={fillAll}>FILL ALL</Button>
-				<Button type="submit" disabled={busy}>RECEIVE</Button>
 			</div>
 		{/if}
 	</form>

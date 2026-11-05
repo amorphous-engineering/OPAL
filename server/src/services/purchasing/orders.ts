@@ -1,9 +1,12 @@
 /** Purchase orders: header, lines, status workflow, receiving and the expense ledger. */
 import {
 	storeDesignator,
+	PURCHASE_FINAL_STATUSES,
+	PURCHASE_LIVE_STATUSES,
 	PURCHASE_OPEN_STATUSES,
 	PURCHASE_TRANSITIONS,
 	type Purchase,
+	type PurchaseChange,
 	type PurchaseExpense,
 	type PurchaseLine,
 	type PurchaseListItem,
@@ -16,9 +19,11 @@ import {
 	parseQty,
 	QTY_SCALE
 } from '@opal/shared';
-import { type SQL, and, asc, desc, eq, inArray, like, lt, notInArray, or, sql } from 'drizzle-orm';
+import { type SQL, and, asc, desc, eq, gte, inArray, like, lt, notInArray, or, sql } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import {
+	attachment,
+	auditLog,
 	designatorSequence,
 	part,
 	purchase,
@@ -41,8 +46,12 @@ type PurchaseRow = typeof purchase.$inferSelect;
 type LineRow = typeof purchaseLine.$inferSelect;
 type PartRow = typeof part.$inferSelect;
 
-const OPEN = PURCHASE_OPEN_STATUSES as readonly string[];
-const DONE = ['received', 'cancelled'];
+const LIVE = PURCHASE_LIVE_STATUSES as readonly string[];
+const DONE = PURCHASE_FINAL_STATUSES as readonly string[];
+
+/** What a line still waits for: ordered, less what arrived and what was struck. */
+const outstandingOf = (l: Pick<LineRow, 'qtyOrdered' | 'qtyCancelled'>, got: number) =>
+	l.qtyOrdered - l.qtyCancelled - got;
 
 // ---------------------------------------------------------------- reading
 
@@ -64,8 +73,11 @@ function isOverdue(p: Pick<PurchaseRow, 'targetDate' | 'status'>): boolean {
 	return !!p.targetDate && !DONE.includes(p.status) && today() > p.targetDate;
 }
 
-function costOfLines(lines: { unitCost: number | null; qtyOrdered: number }[]): string | null {
-	const total = lines.reduce((s, l) => (l.unitCost ? s + lineTotal(l.unitCost, l.qtyOrdered) : s), 0);
+function costOfLines(lines: { unitCost: number | null; qtyOrdered: number; qtyCancelled: number }[]): string | null {
+	const total = lines.reduce(
+		(s, l) => (l.unitCost ? s + lineTotal(l.unitCost, l.qtyOrdered - l.qtyCancelled) : s),
+		0
+	);
 	return total > 0 ? showMoney(total) : null;
 }
 
@@ -83,12 +95,13 @@ function presentLine(ctx: DbCtx, l: LineRow, p: PartRow, received: number): Purc
 		lotRequired: rules.requireLot,
 		autoSerial: rules.autoSerial,
 		qtyOrdered: formatQty(l.qtyOrdered as Qty),
+		qtyCancelled: formatQty(l.qtyCancelled as Qty),
 		qtyReceived: formatQty(received as Qty),
-		qtyOutstanding: formatQty((l.qtyOrdered - received) as Qty),
+		qtyOutstanding: formatQty(outstandingOf(l, received) as Qty),
 		unitCost: showMoney(l.unitCost),
 		destination: l.destination,
 		notes: l.notes,
-		isComplete: received >= l.qtyOrdered
+		isComplete: outstandingOf(l, received) <= 0
 	};
 }
 
@@ -116,6 +129,10 @@ function userName(ctx: DbCtx, id: number | null): string | null {
 
 export function presentPurchase(ctx: DbCtx, p: PurchaseRow): Purchase {
 	const lines = linesOf(ctx, p.id);
+	const changes = changesOf(ctx, p);
+	const closing = [...changes]
+		.reverse()
+		.find((c) => c.scope === 'order' && c.field === 'status' && (c.new === 'cancelled' || c.new === 'closed_short'));
 	return {
 		id: p.id,
 		reference: p.reference,
@@ -130,6 +147,8 @@ export function presentPurchase(ctx: DbCtx, p: PurchaseRow): Purchase {
 		isOverdue: isOverdue(p),
 		notes: p.notes,
 		lines: lines.map((r) => presentLine(ctx, r.l, r.p, r.received)),
+		changes,
+		closedReason: closing?.reason ?? null,
 		totalLines: lines.length,
 		totalCost: costOfLines(lines.map((r) => r.l)),
 		createdAt: p.createdAt,
@@ -139,6 +158,83 @@ export function presentPurchase(ctx: DbCtx, p: PurchaseRow): Purchase {
 		receivedById: p.receivedById,
 		receivedByName: userName(ctx, p.receivedById)
 	};
+}
+
+// ---------------------------------------------------------------- history
+
+const HEADER_FIELDS = new Set(['status', 'supplierReference', 'targetDate', 'destination', 'notes']);
+const LINE_FIELDS = new Set(['qtyOrdered', 'qtyCancelled', 'unitCost', 'destination', 'notes']);
+
+/**
+ * Everything that changed on an order since it was placed, from the audit log. Pencil edits
+ * before placing are not history. A quantity or a cost in the log is the stored integer; the page
+ * gets the decimal.
+ */
+function changesOf(ctx: DbCtx, p: PurchaseRow): PurchaseChange[] {
+	if (!p.orderedAt) return [];
+	const lineRows = ctx.db
+		.select({ id: purchaseLine.id, pn: part.internalPn, uom: part.unitOfMeasure })
+		.from(purchaseLine)
+		.innerJoin(part, eq(part.id, purchaseLine.partId))
+		.where(eq(purchaseLine.purchaseId, p.id))
+		.all();
+	const byLine = new Map(lineRows.map((l) => [l.id, l]));
+	const lineScope = lineRows.length
+		? and(eq(auditLog.entity, 'purchase_line'), inArray(auditLog.entityId, lineRows.map((l) => l.id)))
+		: undefined;
+	const rows = ctx.db
+		.select({ e: auditLog, userName: user.name })
+		.from(auditLog)
+		.leftJoin(user, eq(user.id, auditLog.actorUserId))
+		.where(
+			and(
+				gte(auditLog.at, p.orderedAt),
+				or(and(eq(auditLog.entity, 'purchase'), eq(auditLog.entityId, p.id)), lineScope)
+			)
+		)
+		.orderBy(asc(auditLog.at), asc(auditLog.id))
+		.all();
+	const out: PurchaseChange[] = [];
+	for (const { e, userName } of rows) {
+		const before = (e.before ?? {}) as Record<string, unknown>;
+		const after = (e.after ?? {}) as Record<string, unknown>;
+		const base = { at: e.at, userName, reason: e.reason };
+		if (e.entity === 'purchase') {
+			if (e.action !== 'update') continue;
+			for (const f of HEADER_FIELDS) {
+				if (JSON.stringify(before[f] ?? null) === JSON.stringify(after[f] ?? null)) continue;
+				out.push({
+					...base,
+					scope: 'order',
+					lineId: null,
+					partInternalPn: null,
+					unitOfMeasure: null,
+					field: f,
+					old: (before[f] as string | null) ?? null,
+					new: (after[f] as string | null) ?? null
+				});
+			}
+			continue;
+		}
+		const line = byLine.get(e.entityId);
+		if (!line) continue;
+		const shown = (f: string, v: unknown): string | null => {
+			if (v == null) return null;
+			if (f === 'qtyOrdered' || f === 'qtyCancelled') return formatQty(v as Qty);
+			if (f === 'unitCost') return showMoney(v as number);
+			return String(v);
+		};
+		const lineBase = { ...base, scope: 'line' as const, lineId: line.id, partInternalPn: line.pn, unitOfMeasure: line.uom };
+		if (e.action === 'create') {
+			out.push({ ...lineBase, field: 'line', old: null, new: shown('qtyOrdered', after.qtyOrdered) });
+			continue;
+		}
+		for (const f of LINE_FIELDS) {
+			if (JSON.stringify(before[f] ?? null) === JSON.stringify(after[f] ?? null)) continue;
+			out.push({ ...lineBase, field: f, old: shown(f, before[f]), new: shown(f, after[f]) });
+		}
+	}
+	return out;
 }
 
 function getRow(ctx: DbCtx, id: number): PurchaseRow {
@@ -159,12 +255,6 @@ function getLineRow(ctx: DbCtx, purchaseId: number, lineId: number): LineRow {
 
 export function getPurchase(ctx: DbCtx, id: number): Purchase {
 	return presentPurchase(ctx, getRow(ctx, id));
-}
-
-function requireOpen(p: PurchaseRow, action: string): void {
-	if (!OPEN.includes(p.status)) {
-		throw conflict('wrong_state', `Cannot ${action} on a purchase in ${p.status} status`);
-	}
 }
 
 // ---------------------------------------------------------------- list
@@ -248,7 +338,7 @@ export function listPurchases(
 			orderedAt: p.orderedAt,
 			receivedAt: p.receivedAt,
 			totalLines: lines.length,
-			linesComplete: lines.filter((l) => (got.get(l.id) ?? 0) >= l.qtyOrdered).length,
+			linesComplete: lines.filter((l) => outstandingOf(l, got.get(l.id) ?? 0) <= 0).length,
 			totalCost: costOfLines(lines),
 			createdAt: p.createdAt
 		};
@@ -350,17 +440,35 @@ export function createPurchase(
 	return getPurchase(ctx, p.id);
 }
 
-/** ordered / partial / received follow from what arrived. Draft, held and closed orders stay. */
-function settleStatus(ctx: Ctx, id: number): PurchaseRow {
-	const p = getRow(ctx, id);
-	if (p.status !== 'ordered' && p.status !== 'partial') return p;
-	const lines = linesOf(ctx, id);
-	let next: PurchaseStatus = 'ordered';
-	if (lines.length && lines.every((r) => r.received >= r.l.qtyOrdered)) next = 'received';
-	else if (lines.some((r) => r.received > 0)) next = 'partial';
-	if (next === p.status) return p;
-	return update(ctx, purchase, id, next === 'received' ? { status: next, receivedAt: now() } : { status: next });
+type LineWithGot = { l: LineRow; received: number };
+
+/**
+ * What the lines say the status is: waiting, partly in, or finished. Finished is received when
+ * nothing was struck, closed short when something arrived and something was struck, and
+ * cancelled when everything was struck and nothing arrived.
+ */
+function statusFromLines(lines: LineWithGot[]): PurchaseStatus {
+	if (lines.length && lines.every((r) => outstandingOf(r.l, r.received) <= 0)) {
+		if (!lines.some((r) => r.l.qtyCancelled > 0)) return 'received';
+		return lines.some((r) => r.received > 0) ? 'closed_short' : 'cancelled';
+	}
+	return lines.some((r) => r.received > 0) ? 'partial' : 'ordered';
 }
+
+/** ordered / partial / received / closed short follow from the lines. Draft and held orders stay. */
+function settleStatus(ctx: Ctx, id: number, reason?: string): PurchaseRow {
+	const p = getRow(ctx, id);
+	if (!LIVE.includes(p.status)) return p;
+	const next = statusFromLines(linesOf(ctx, id));
+	if (next === p.status) return p;
+	return update(ctx, purchase, id, next === 'received' ? { status: next, receivedAt: now() } : { status: next }, reason);
+}
+
+const needReason = (reason: string) => {
+	const r = reason.trim();
+	if (!r) throw invalid('reason', 'Give a reason');
+	return r;
+};
 
 export function updatePurchase(
 	ctx: Ctx,
@@ -369,17 +477,22 @@ export function updatePurchase(
 		supplierId?: number | null;
 		supplierName?: string | null;
 		supplierReference?: string | null;
-		reference?: string | null;
 		targetDate?: string | null;
 		destination?: string | null;
 		notes?: string | null;
-		status?: PurchaseStatus;
 	}
 ): Purchase {
 	const p = getRow(ctx, i.id);
-	const touched = Object.keys(i).filter((k) => k !== 'id' && k !== 'notes' && k !== 'status' && (i as never)[k] !== undefined);
-	if (!OPEN.includes(p.status) && touched.length) {
-		throw conflict('wrong_state', `A ${p.status} purchase order can only have its notes edited`);
+	const touched = (k: keyof typeof i) => i[k] !== undefined;
+	const changesSupplier = touched('supplierId') || touched('supplierName');
+	if (p.status !== 'draft') {
+		if (changesSupplier) {
+			throw conflict('supplier_locked', 'The supplier does not change after placing. Cancel the order and copy it to a new draft');
+		}
+		const header = touched('supplierReference') || touched('targetDate') || touched('destination');
+		if (header && !LIVE.includes(p.status)) {
+			throw conflict('wrong_state', `A ${p.status} purchase order can only have its notes edited`);
+		}
 	}
 	const patch: Partial<typeof purchase.$inferInsert> = {};
 	if (i.supplierId) {
@@ -394,31 +507,129 @@ export function updatePurchase(
 	if (i.targetDate !== undefined) patch.targetDate = i.targetDate;
 	if (i.destination !== undefined) patch.destination = i.destination?.trim() || null;
 	if (i.notes !== undefined) patch.notes = i.notes;
-
-	if (i.status && i.status !== p.status) {
-		if (!PURCHASE_TRANSITIONS[p.status].includes(i.status)) {
-			throw conflict('bad_transition', `Cannot move a purchase from ${p.status} to ${i.status}`);
-		}
-		const lines = linesOf(ctx, p.id);
-		if (i.status === 'ordered' && p.status === 'draft') {
-			if (!lines.length) throw conflict('no_lines', 'Add at least one line before placing the order');
-			patch.orderedAt = now();
-		} else if (i.status === 'draft') {
-			patch.orderedAt = null;
-		}
-		patch.status = i.status;
-		// Resuming a held order that already took deliveries
-		if (i.status === 'ordered' && lines.some((r) => r.received > 0)) patch.status = 'partial';
-	}
 	if (Object.keys(patch).length) update(ctx, purchase, p.id, patch);
 	return getPurchase(ctx, p.id);
+}
+
+// ---------------------------------------------------------------- status acts
+
+/** Place a draft: the commit moment. */
+export function place(ctx: Ctx, id: number): Purchase {
+	const p = getRow(ctx, id);
+	if (p.status !== 'draft') throw conflict('wrong_state', `Cannot place a purchase order that is ${p.status}`);
+	const lines = linesOf(ctx, id);
+	if (!lines.length) throw conflict('no_lines', 'Add at least one line before placing the order');
+	ensurePartsActive(ctx, lines.map((r) => r.l.partId), `placing PO ${p.reference}`);
+	update(ctx, purchase, id, { status: 'ordered', orderedAt: now() });
+	return getPurchase(ctx, id);
+}
+
+function requireTransition(p: PurchaseRow, to: PurchaseStatus, act: string): void {
+	if (!PURCHASE_TRANSITIONS[p.status].includes(to)) {
+		throw conflict('bad_transition', `Cannot ${act} a purchase order that is ${p.status}`);
+	}
+}
+
+export function hold(ctx: Ctx, id: number, reason?: string): Purchase {
+	const p = getRow(ctx, id);
+	requireTransition(p, 'on_hold', 'put on hold');
+	update(ctx, purchase, id, { status: 'on_hold' }, reason?.trim() || undefined);
+	return getPurchase(ctx, id);
+}
+
+export function resume(ctx: Ctx, id: number): Purchase {
+	const p = getRow(ctx, id);
+	if (p.status !== 'on_hold') throw conflict('bad_transition', `Cannot resume a purchase order that is ${p.status}`);
+	const next = statusFromLines(linesOf(ctx, id));
+	update(ctx, purchase, id, { status: next, ...(next === 'received' ? { receivedAt: now() } : {}) });
+	return getPurchase(ctx, id);
+}
+
+/** Strike every outstanding quantity of the order, with the order's reason. */
+function strikeOutstanding(ctx: Ctx, id: number, reason: string): void {
+	for (const r of linesOf(ctx, id)) {
+		const open = outstandingOf(r.l, r.received);
+		if (open > 0) update(ctx, purchaseLine, r.l.id, { qtyCancelled: r.l.qtyCancelled + open }, reason);
+	}
+}
+
+/** Strike an order nothing arrived against. */
+export function cancel(ctx: Ctx, id: number, reason: string): Purchase {
+	const why = needReason(reason);
+	const p = getRow(ctx, id);
+	if (LIVE.includes(p.status) || p.status === 'on_hold') {
+		if (linesOf(ctx, id).some((r) => r.received > 0)) {
+			throw conflict('has_receipts', 'Stock arrived against this order. Close it short instead');
+		}
+	}
+	requireTransition(p, 'cancelled', 'cancel');
+	strikeOutstanding(ctx, id, why);
+	update(ctx, purchase, id, { status: 'cancelled' }, why);
+	return getPurchase(ctx, id);
+}
+
+/** Close an order that took part of its goods. The shortfall is struck, what arrived stays. */
+export function closeShort(ctx: Ctx, id: number, reason: string): Purchase {
+	const why = needReason(reason);
+	const p = getRow(ctx, id);
+	requireTransition(p, 'closed_short', 'close short');
+	if (!linesOf(ctx, id).some((r) => r.received > 0)) {
+		throw conflict('nothing_received', 'Nothing arrived against this order. Cancel it instead');
+	}
+	strikeOutstanding(ctx, id, why);
+	update(ctx, purchase, id, { status: 'closed_short' }, why);
+	return getPurchase(ctx, id);
+}
+
+/** Delete a draft. Nothing refers to it: no receipt, no stock, no signature. */
+export function discard(ctx: Ctx, id: number): void {
+	const p = getRow(ctx, id);
+	if (p.status !== 'draft') {
+		throw conflict('wrong_state', `A ${p.status} purchase order is cancelled, not deleted`);
+	}
+	for (const e of ctx.db.select().from(purchaseExpense).where(eq(purchaseExpense.purchaseId, id)).all()) {
+		remove(ctx, purchaseExpense, e.id);
+	}
+	for (const l of ctx.db.select().from(purchaseLine).where(eq(purchaseLine.purchaseId, id)).all()) {
+		remove(ctx, purchaseLine, l.id);
+	}
+	for (const a of ctx.db
+		.select()
+		.from(attachment)
+		.where(and(eq(attachment.ownerType, 'purchase'), eq(attachment.ownerId, id)))
+		.all()) {
+		remove(ctx, attachment, a.id);
+	}
+	remove(ctx, purchase, id);
+}
+
+/** File a new draft with the same supplier and lines. */
+export function copyToDraft(ctx: Ctx, id: number): Purchase {
+	const p = getRow(ctx, id);
+	if (!DONE.includes(p.status)) {
+		throw conflict('wrong_state', `A ${p.status} purchase order is still live. Copy it once it is received, closed short or cancelled`);
+	}
+	return createPurchase(ctx, {
+		supplierId: p.supplierId,
+		supplierName: p.supplierName,
+		destination: p.destination,
+		lines: linesOf(ctx, id).map((r) => ({
+			partId: r.l.partId,
+			qtyOrdered: formatQty(r.l.qtyOrdered as Qty),
+			unitCost: showMoney(r.l.unitCost),
+			destination: r.l.destination,
+			notes: r.l.notes
+		}))
+	});
 }
 
 // ---------------------------------------------------------------- lines
 
 export function addLine(ctx: Ctx, i: LineInput & { id: number }): PurchaseLine {
 	const p = getRow(ctx, i.id);
-	requireOpen(p, 'add lines');
+	if (p.status !== 'draft' && !LIVE.includes(p.status)) {
+		throw conflict('wrong_state', `Cannot add lines on a purchase in ${p.status} status`);
+	}
 	const c = checkedLine(ctx, i);
 	ensurePartsActive(ctx, [i.partId], `PO ${p.reference} line add`);
 	const l = insert(ctx, purchaseLine, {
@@ -433,47 +644,90 @@ export function addLine(ctx: Ctx, i: LineInput & { id: number }): PurchaseLine {
 	return presentLine(ctx, l, c.part, 0);
 }
 
+const penciled = (p: PurchaseRow) =>
+	conflict('line_locked', `Lines of a ${p.status} order are amended or cancelled, not edited or removed`);
+
+/** Draft only. A placed order amends (amendLine) or strikes (cancelLine). */
 export function updateLine(
 	ctx: Ctx,
 	i: { id: number; lineId: number; qtyOrdered?: string; unitCost?: string | null; destination?: string | null; notes?: string | null }
 ): PurchaseLine {
 	const p = getRow(ctx, i.id);
-	requireOpen(p, 'edit lines');
+	if (p.status !== 'draft') throw penciled(p);
+	const l = getLineRow(ctx, p.id, i.lineId);
+	const patch: Partial<typeof purchaseLine.$inferInsert> = {};
+	if (i.qtyOrdered !== undefined) {
+		const q = parseQty(i.qtyOrdered);
+		if (q <= 0) throw invalid('qtyOrdered', 'Quantity must be greater than zero');
+		patch.qtyOrdered = q;
+	}
+	if (i.unitCost !== undefined) patch.unitCost = i.unitCost === null ? null : parseMoney('unitCost', i.unitCost);
+	if (i.destination !== undefined) patch.destination = i.destination?.trim() || null;
+	if (i.notes !== undefined) patch.notes = i.notes;
+	const row = Object.keys(patch).length ? update(ctx, purchaseLine, l.id, patch) : l;
+	const pt = ctx.db.select().from(part).where(eq(part.id, row.partId)).get()!;
+	return presentLine(ctx, row, pt, 0);
+}
+
+export function removeLine(ctx: Ctx, id: number, lineId: number): void {
+	const p = getRow(ctx, id);
+	if (p.status !== 'draft') throw penciled(p);
+	remove(ctx, purchaseLine, getLineRow(ctx, p.id, lineId).id);
+}
+
+/** Correct a placed line. The old value stays in the audit row, the reason beside it. */
+export function amendLine(
+	ctx: Ctx,
+	i: { id: number; lineId: number; qtyOrdered?: string; unitCost?: string | null; destination?: string | null; reason: string }
+): PurchaseLine {
+	const why = needReason(i.reason);
+	const p = getRow(ctx, i.id);
+	if (!LIVE.includes(p.status)) throw conflict('wrong_state', `Cannot amend lines on a purchase in ${p.status} status`);
 	const l = getLineRow(ctx, p.id, i.lineId);
 	const received = receivedByLine(ctx, [l.id]).get(l.id) ?? 0;
 	const patch: Partial<typeof purchaseLine.$inferInsert> = {};
 	if (i.qtyOrdered !== undefined) {
 		const q = parseQty(i.qtyOrdered);
 		if (q <= 0) throw invalid('qtyOrdered', 'Quantity must be greater than zero');
-		if (q < received) {
-			throw invalid('qtyOrdered', `Quantity cannot be below the ${formatQty(received as Qty)} already received`);
+		const floor = received + l.qtyCancelled;
+		if (q < floor) {
+			throw invalid('qtyOrdered', `Quantity cannot be below the ${formatQty(floor as Qty)} already received or struck`);
 		}
-		patch.qtyOrdered = q;
+		if (q !== l.qtyOrdered) patch.qtyOrdered = q;
 	}
 	if (i.unitCost !== undefined) {
 		const cost = i.unitCost === null ? null : parseMoney('unitCost', i.unitCost);
-		if (cost !== l.unitCost && received > 0) {
-			throw invalid('unitCost', 'Unit cost is locked once the line has been received (expense records exist)');
+		if (cost !== l.unitCost) {
+			if (received > 0) {
+				throw invalid('unitCost', 'Unit cost is locked once the line has been received (expense records exist)');
+			}
+			patch.unitCost = cost;
 		}
-		patch.unitCost = cost;
 	}
-	if (i.destination !== undefined) patch.destination = i.destination?.trim() || null;
-	if (i.notes !== undefined) patch.notes = i.notes;
-	const row = Object.keys(patch).length ? update(ctx, purchaseLine, l.id, patch) : l;
+	if (i.destination !== undefined) {
+		const d = i.destination?.trim() || null;
+		if (d !== l.destination) patch.destination = d;
+	}
+	if (!Object.keys(patch).length) throw invalid('reason', 'Nothing to amend: every value is the same');
+	const row = update(ctx, purchaseLine, l.id, patch, why);
 	settleStatus(ctx, p.id);
 	const pt = ctx.db.select().from(part).where(eq(part.id, row.partId)).get()!;
 	return presentLine(ctx, row, pt, received);
 }
 
-export function removeLine(ctx: Ctx, id: number, lineId: number): void {
-	const p = getRow(ctx, id);
-	requireOpen(p, 'remove lines');
-	const l = getLineRow(ctx, p.id, lineId);
-	if ((receivedByLine(ctx, [l.id]).get(l.id) ?? 0) > 0) {
-		throw conflict('line_received', 'Cannot delete line that has been partially received');
-	}
-	remove(ctx, purchaseLine, l.id);
-	settleStatus(ctx, p.id);
+/** Strike what is still outstanding on a line. What arrived stays received. */
+export function cancelLine(ctx: Ctx, i: { id: number; lineId: number; reason: string }): PurchaseLine {
+	const why = needReason(i.reason);
+	const p = getRow(ctx, i.id);
+	if (!LIVE.includes(p.status)) throw conflict('wrong_state', `Cannot cancel lines on a purchase in ${p.status} status`);
+	const l = getLineRow(ctx, p.id, i.lineId);
+	const received = receivedByLine(ctx, [l.id]).get(l.id) ?? 0;
+	const open = outstandingOf(l, received);
+	if (open <= 0) throw conflict('nothing_outstanding', 'Nothing is outstanding on this line');
+	const row = update(ctx, purchaseLine, l.id, { qtyCancelled: l.qtyCancelled + open }, why);
+	settleStatus(ctx, p.id, why);
+	const pt = ctx.db.select().from(part).where(eq(part.id, row.partId)).get()!;
+	return presentLine(ctx, row, pt, received);
 }
 
 // ---------------------------------------------------------------- receiving
@@ -498,7 +752,7 @@ export function receive(
 		if (qty <= 0) throw invalid('quantity', 'Received quantity must be positive');
 		const pt = ctx.db.select().from(part).where(eq(part.id, l.partId)).get()!;
 		const got = receivedByLine(ctx, [l.id]).get(l.id) ?? 0;
-		const outstanding = l.qtyOrdered - got;
+		const outstanding = outstandingOf(l, got);
 		if (qty > outstanding && !r.allowOverReceipt) {
 			throw conflict(
 				'over_receipt',
@@ -568,7 +822,7 @@ export function receivedRecords(ctx: DbCtx, id: number) {
 
 type ExpenseRow = typeof purchaseExpense.$inferSelect;
 
-function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string } | null): PurchaseExpense {
+function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string; unitOfMeasure: string } | null): PurchaseExpense {
 	const total =
 		e.kind === 'receipt' ? (e.unitCost === null ? null : lineTotal(e.unitCost, e.quantity as number)) : e.amount;
 	return {
@@ -579,6 +833,7 @@ function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string } |
 		partId: e.partId,
 		partName: p?.name ?? null,
 		partInternalPn: p?.internalPn ?? null,
+		unitOfMeasure: p?.unitOfMeasure ?? null,
 		quantity: e.quantity === null ? null : formatQty(e.quantity as Qty),
 		unitCost: showMoney(e.kind === 'receipt' ? e.unitCost : e.amount),
 		totalCost: showMoney(total),

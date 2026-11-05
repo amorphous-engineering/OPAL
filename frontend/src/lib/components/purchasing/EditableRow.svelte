@@ -1,5 +1,6 @@
 <script lang="ts">
-	// A detail row whose value edits in place: EDIT → field → Enter saves, Esc cancels.
+	// A detail row whose value edits in place: EDIT → field → Enter saves, Esc cancels. Pass
+	// `editable` only in a page's edit mode; otherwise the row is a plain fact.
 	import type { Snippet } from 'svelte';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -128,7 +129,7 @@
 				{#if editable}
 					<button
 						type="button"
-						class="font-mono text-xs tracking-wider text-muted-foreground uppercase opacity-0 group-hover/row:opacity-100 hover:text-info focus-visible:opacity-100"
+						class="font-mono text-xs tracking-wider text-info uppercase hover:underline"
 						onclick={start}
 						aria-label={`Edit ${label}`}>Edit</button
 					>

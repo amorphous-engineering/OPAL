@@ -85,19 +85,20 @@ export function activateMany(ctx: Ctx, ids: number[], cause?: string) {
 }
 
 /** Retire an active part. Records that reference it keep working. */
-export function obsolete(ctx: Ctx, id: number, cause?: string): Part {
+export function obsolete(ctx: Ctx, id: number, cause: string): Part {
 	const row = getRow(ctx, id);
 	if (row.state !== 'active') {
 		throw conflict('wrong_state', `${row.internalPn} is ${row.state}: only an active part can become obsolete`);
 	}
 	return present(
 		ctx,
-		update(ctx, part, id, {
-			state: 'obsolete',
-			obsoletedAt: now(),
-			obsoletedById: actorUserId(ctx.actor),
-			obsoleteCause: cause ?? 'marked obsolete from part page'
-		})
+		update(
+			ctx,
+			part,
+			id,
+			{ state: 'obsolete', obsoletedAt: now(), obsoletedById: actorUserId(ctx.actor), obsoleteCause: cause },
+			cause
+		)
 	);
 }
 

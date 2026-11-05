@@ -42,6 +42,7 @@ const STATE_TONES: Record<string, Tone> = {
 	skipped: 'muted',
 	deprecated: 'muted',
 	cancelled: 'muted',
+	closed_short: 'warn',
 	// trouble
 	on_hold: 'warn',
 	blocked: 'warn',

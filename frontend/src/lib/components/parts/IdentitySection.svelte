@@ -1,11 +1,21 @@
 <script lang="ts">
 	// Every fact about the part, always rendered; absence is a muted dash.
-	import { DetailRow, DetailTable, Section, Timestamp } from '#lib/components/opal/index.js';
+	import {
+		ActionLink,
+		DetailRow,
+		DetailTable,
+		Section,
+		Timestamp
+	} from '#lib/components/opal/index.js';
 	import { markdown } from '#lib/markdown.js';
 	import { qty, stateLabel } from '#lib/format.js';
 	import type { CustomFieldDef, PartDetail } from '@opal/shared';
 
-	let { detail, fields }: { detail: PartDetail; fields: CustomFieldDef[] } = $props();
+	let {
+		detail,
+		fields,
+		editHref = null
+	}: { detail: PartDetail; fields: CustomFieldDef[]; editHref?: string | null } = $props();
 	const part = $derived(detail.part);
 
 	const meta = $derived(part.metadata ?? {});
@@ -20,14 +30,11 @@
 </script>
 
 <Section title="Part">
+	{#snippet actions()}
+		{#if editHref}<ActionLink href={editHref}>EDIT DETAILS</ActionLink>{/if}
+	{/snippet}
 	<DetailTable>
-		<DetailRow
-			label="Tier"
-			value={`T${part.tier}${part.tierName ? ` ${part.tierName.toUpperCase()}` : ''}`}
-		/>
 		<DetailRow label="Category" value={part.category} />
-		<DetailRow label="UOM" value={part.unitOfMeasure.toUpperCase()} />
-		<DetailRow label="Tracking" value={stateLabel(part.trackingType)} />
 		<DetailRow label="Procurement" value={stateLabel(part.procurement)} />
 		<DetailRow
 			label="Reorder point"

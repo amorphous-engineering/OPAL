@@ -6,7 +6,7 @@ import { part } from '../../db/schema/index.ts';
 import { getProjectConfig, getTier } from '../org/project.ts';
 import { componentsOf, usedIn } from './genealogy.ts';
 import { ledgerFor } from './moves.ts';
-import { getStockByOpal, recordByOpal } from './records.ts';
+import { correctionsOf, getStockByOpal, recordByOpal } from './records.ts';
 import { listResults, listTemplates, testStatus } from './tests.ts';
 
 type DbCtx = Pick<Ctx, 'db'>;
@@ -42,6 +42,7 @@ export function stockDetail(ctx: DbCtx, opalNumber: string): StockDetail {
 			transferredFromOpal: arrival?.counterpartOpal ?? null
 		},
 		ledger,
+		corrections: correctionsOf(ctx, rec.id),
 		components: componentsOf(ctx, rec),
 		usedIn: usedIn(ctx, rec),
 		tests: listResults(ctx, rec.id),

@@ -205,6 +205,36 @@ export const zPartDetail = z.object({
 });
 export type PartDetail = z.infer<typeof zPartDetail>;
 
+/** A procedure that names the part in a kit or as an output. */
+export const zPartProcedureUse = z.object({
+	procedureId: z.number().int(),
+	templateNumber: z.string(),
+	procedureName: z.string(),
+	procedureStatus: z.string(),
+	scope: z.enum(['procedure', 'step']),
+	stepTitle: z.string().nullable(),
+	role: z.enum(['consume', 'tooling', 'output']),
+	quantity: zQty,
+	unitOfMeasure: z.string()
+});
+export type PartProcedureUse = z.infer<typeof zPartProcedureUse>;
+
+/** One consume move of the part. */
+export const zPartConsumption = z.object({
+	id: z.number().int(),
+	at: zTimestamp,
+	quantity: zQty,
+	unitOfMeasure: z.string(),
+	usage: z.enum(['consume', 'tooling']),
+	opalNumber: z.string(),
+	executionId: z.number().int().nullable(),
+	woNumber: z.string().nullable(),
+	reason: z.string().nullable(),
+	notes: z.string().nullable(),
+	actorName: z.string().nullable()
+});
+export type PartConsumption = z.infer<typeof zPartConsumption>;
+
 export const zHistoryEntry = z.object({
 	at: zTimestamp,
 	action: z.enum(['create', 'update', 'delete']),
@@ -450,6 +480,26 @@ const parts_ = {
 		access: 'signed-in',
 		mcp: true
 	}),
+	procedureUse: op({
+		name: 'parts.procedureUse',
+		method: 'GET',
+		path: '/parts/:id/procedure-use',
+		summary: 'Procedures that name the part in a kit, a step kit or as an output.',
+		input: z.object({ id: zId }),
+		output: z.array(zPartProcedureUse),
+		access: 'signed-in',
+		mcp: true
+	}),
+	consumption: op({
+		name: 'parts.consumption',
+		method: 'GET',
+		path: '/parts/:id/consumption',
+		summary: 'What was consumed of the part, newest first, with the work order behind each move.',
+		input: z.object({ id: zId, limit: z.coerce.number().int().min(1).max(500).default(100) }),
+		output: z.object({ items: z.array(zPartConsumption), total: z.number().int() }),
+		access: 'signed-in',
+		mcp: true
+	}),
 	qrcode: op({
 		name: 'parts.qrcode',
 		method: 'GET',
@@ -495,8 +545,8 @@ const parts_ = {
 		name: 'parts.obsolete',
 		method: 'POST',
 		path: '/parts/:id/obsolete',
-		summary: 'Retire an active part. Records that reference it keep working.',
-		input: z.object({ id: zId, cause: z.string().trim().min(1).max(255).optional() }),
+		summary: 'Retire an active part. A reason is required. Records that reference it keep working.',
+		input: z.object({ id: zId, cause: z.string().trim().min(1, 'Give a reason').max(255) }),
 		output: zPart,
 		access: 'signed-in',
 		mcp: true

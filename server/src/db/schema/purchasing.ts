@@ -97,6 +97,11 @@ export const purchaseLine = sqliteTable(
 			.notNull()
 			.references(() => part.id),
 		qtyOrdered: integer('qty_ordered').notNull(),
+		/**
+		 * Struck by CANCEL LINE: the quantity that was still outstanding. What arrived is never
+		 * struck. Why, who and when are on the audit row of the change.
+		 */
+		qtyCancelled: integer('qty_cancelled').notNull().default(0),
 		/** Money, scaled by 10,000. */
 		unitCost: integer('unit_cost'),
 		destination: text('destination'),
@@ -107,7 +112,8 @@ export const purchaseLine = sqliteTable(
 	(t) => [
 		index('purchase_line_purchase_idx').on(t.purchaseId),
 		index('purchase_line_part_idx').on(t.partId),
-		check('purchase_line_qty_check', sql`${t.qtyOrdered} > 0`)
+		check('purchase_line_qty_check', sql`${t.qtyOrdered} > 0`),
+		check('purchase_line_cancelled_check', sql`${t.qtyCancelled} >= 0 AND ${t.qtyCancelled} <= ${t.qtyOrdered}`)
 	]
 );
 

@@ -205,7 +205,7 @@ describe('attention queries for the overview', () => {
 		await receive(s, p.id, '1', 'SOON', { expirationDate: today(5) });
 		await receive(s, p.id, '1', 'LATER', { expirationDate: today(200) });
 		const empty = await receive(s, p.id, '1', 'GONE', { expirationDate: today(-1) });
-		await s.call('POST', `/inventory/${empty.id}/adjust`, { adjustment: '-1', reason: 'scrap' });
+		await s.call('POST', `/inventory/${empty.id}/adjust`, { adjustment: '-1', reason: 'scrap', notes: 'dropped' });
 		expect(expiringStock(s.ctx).map((r) => r.location)).toEqual(['EXPIRED', 'SOON']);
 	});
 

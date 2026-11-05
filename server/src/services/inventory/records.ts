@@ -4,6 +4,7 @@ import {
 	STOCK_ATTENTION_DAYS,
 	type Qty,
 	type StockByPart,
+	type StockCorrection,
 	type StockLocation,
 	type StockRecord,
 	type StockSource,
@@ -15,7 +16,7 @@ import {
 } from '@opal/shared';
 import { type SQL, and, asc, desc, eq, gt, inArray, like, lte, or, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
-import { part, stockMove, stockRecord } from '../../db/schema/index.ts';
+import { auditLog, part, stockMove, stockRecord, user } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
 import { getProjectConfig, getTier, levelDefaults } from '../org/project.ts';
 import { nextDesignator, nextSerial } from '../designators.ts';
@@ -495,24 +496,73 @@ export function receiveStock(ctx: Ctx, input: ReceiveInput): StockRecord[] {
 
 // ---- edits ----
 
-export function updateStock(
+export function updateStock(ctx: Ctx, id: number, patch: { alias?: string | null }): StockRecord {
+	recordById(ctx, id);
+	if (patch.alias !== undefined) update(ctx, stockRecord, id, { alias: patch.alias?.trim() || null });
+	return getStock(ctx, id);
+}
+
+/**
+ * Lot, serial and expiry are written once at receipt. Changing one later is a correction: the
+ * old value stays in the audit row with the reason, and the ledger shows it.
+ */
+export function correctStock(
 	ctx: Ctx,
 	id: number,
 	patch: {
 		lotNumber?: string | null;
 		serialNumber?: string | null;
-		alias?: string | null;
 		expirationDate?: string | null;
+		reason: string;
 	}
 ): StockRecord {
-	recordById(ctx, id);
+	const why = patch.reason.trim();
+	if (!why) throw invalid('reason', 'Give a reason');
+	const rec = recordById(ctx, id);
 	const set: Partial<typeof stockRecord.$inferInsert> = {};
-	if (patch.lotNumber !== undefined) set.lotNumber = patch.lotNumber?.trim() || null;
-	if (patch.serialNumber !== undefined) set.serialNumber = patch.serialNumber?.trim() || null;
-	if (patch.alias !== undefined) set.alias = patch.alias?.trim() || null;
-	if (patch.expirationDate !== undefined) set.expirationDate = patch.expirationDate;
-	if (Object.keys(set).length) update(ctx, stockRecord, id, set);
+	if (patch.lotNumber !== undefined && (patch.lotNumber?.trim() || null) !== rec.lotNumber) {
+		set.lotNumber = patch.lotNumber?.trim() || null;
+	}
+	if (patch.serialNumber !== undefined && (patch.serialNumber?.trim() || null) !== rec.serialNumber) {
+		set.serialNumber = patch.serialNumber?.trim() || null;
+	}
+	if (patch.expirationDate !== undefined && patch.expirationDate !== rec.expirationDate) {
+		set.expirationDate = patch.expirationDate;
+	}
+	if (!Object.keys(set).length) throw invalid('reason', 'Nothing to correct: every value is the same');
+	update(ctx, stockRecord, id, set, why);
 	return getStock(ctx, id);
+}
+
+const CORRECTABLE = ['lotNumber', 'serialNumber', 'expirationDate'] as const;
+
+/** Corrections of one record, oldest first, read from the audit log. */
+export function correctionsOf(ctx: Pick<Ctx, 'db'>, stockId: number): StockCorrection[] {
+	const rows = ctx.db
+		.select({ e: auditLog, userName: user.name })
+		.from(auditLog)
+		.leftJoin(user, eq(user.id, auditLog.actorUserId))
+		.where(
+			and(
+				eq(auditLog.entity, 'stock_record'),
+				eq(auditLog.entityId, stockId),
+				eq(auditLog.op, 'inventory.correct')
+			)
+		)
+		.orderBy(asc(auditLog.at), asc(auditLog.id))
+		.all();
+	return rows.flatMap(({ e, userName }) => {
+		const before = (e.before ?? {}) as Record<string, string | null>;
+		const after = (e.after ?? {}) as Record<string, string | null>;
+		return CORRECTABLE.filter((f) => (before[f] ?? null) !== (after[f] ?? null)).map((field) => ({
+			at: e.at,
+			userName,
+			field,
+			old: before[field] ?? null,
+			new: after[field] ?? null,
+			reason: e.reason
+		}));
+	});
 }
 
 export function calibrateStock(ctx: Ctx, id: number): StockRecord {

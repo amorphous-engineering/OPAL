@@ -34,6 +34,18 @@ export const purchasingImpls = [
 		po.removeLine(ctx, i.id, i.lineId);
 		return { ok: true as const };
 	}),
+	implement(o.place, (ctx, i) => po.place(ctx, i.id)),
+	implement(o.hold, (ctx, i) => po.hold(ctx, i.id, i.reason)),
+	implement(o.resume, (ctx, i) => po.resume(ctx, i.id)),
+	implement(o.cancel, (ctx, i) => po.cancel(ctx, i.id, i.reason)),
+	implement(o.closeShort, (ctx, i) => po.closeShort(ctx, i.id, i.reason)),
+	implement(o.discard, (ctx, i) => {
+		po.discard(ctx, i.id);
+		return { ok: true as const };
+	}),
+	implement(o.copy, (ctx, i) => po.copyToDraft(ctx, i.id)),
+	implement(o.amendLine, (ctx, i) => po.amendLine(ctx, i)),
+	implement(o.cancelLine, (ctx, i) => po.cancelLine(ctx, i)),
 	implement(o.receive, (ctx, i) => po.receive(ctx, i)),
 	implement(o.received, (ctx, i) => po.receivedRecords(ctx, i.id)),
 	implement(o.expenses, (ctx, i) => po.listExpenses(ctx, i.id)),

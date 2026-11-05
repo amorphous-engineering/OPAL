@@ -19,7 +19,11 @@
 	import FormField from './FormField.svelte';
 	import { act } from './actions.js';
 
-	let { partId, templates }: { partId: number; templates: StockTestTemplate[] } = $props();
+	let {
+		partId,
+		templates,
+		editing = false
+	}: { partId: number; templates: StockTestTemplate[]; editing?: boolean } = $props();
 
 	let adding = $state(false);
 	let busy = $state(false);
@@ -30,13 +34,16 @@
 	let unit = $state('');
 	let required = $state(false);
 
-	const columns: Column<StockTestTemplate>[] = [
+	const allColumns: Column<StockTestTemplate>[] = [
 		{ key: 'name', label: 'Test' },
 		{ key: 'type', label: 'Type', width: '8rem' },
 		{ key: 'range', label: 'Range', width: '12rem', mono: true },
 		{ key: 'required', label: 'Required', width: '7rem' },
 		{ key: 'actions', label: '', width: '5rem', align: 'right' }
 	];
+
+	// Row tools exist only in edit mode.
+	const columns = $derived(editing ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
 
 	function range(t: StockTestTemplate): string | null {
 		if (t.testType !== 'numeric') return null;
@@ -123,7 +130,9 @@
 {#if templates.length}
 	<Section title="Tests" count={templates.length}>
 		{#snippet actions()}
-			<ActionLink onclick={() => (adding = !adding)}>{adding ? 'CANCEL' : '+ ADD'}</ActionLink>
+			{#if editing}
+				<ActionLink onclick={() => (adding = !adding)}>{adding ? 'CANCEL' : '+ ADD'}</ActionLink>
+			{/if}
 		{/snippet}
 		<DataTable rows={templates} {columns} key={(t) => t.id} emptyLabel="TESTS">
 			{#snippet cell(t, col)}
@@ -139,15 +148,15 @@
 							class="text-muted-foreground">—</span
 						>{/if}
 				{:else}
-					<ActionLink danger onclick={() => remove(t)}>DELETE</ActionLink>
+					{#if editing}<ActionLink onclick={() => remove(t)}>DELETE</ActionLink>{/if}
 				{/if}
 			{/snippet}
 		</DataTable>
-		{#if adding}{@render form()}{/if}
+		{#if editing && adding}{@render form()}{/if}
 	</Section>
 {:else}
 	<div>
-		<EmptyLine label="TESTS" onadd={() => (adding = true)} />
-		{#if adding}{@render form()}{/if}
+		<EmptyLine label="TESTS" onadd={editing ? () => (adding = true) : undefined} />
+		{#if editing && adding}{@render form()}{/if}
 	</div>
 {/if}

@@ -7,6 +7,7 @@ import * as parts from '../services/parts/index.ts';
 import * as lifecycle from '../services/parts/lifecycle.ts';
 import { previewNext } from '../services/parts/numbering.ts';
 import { qrCode } from '../services/parts/qr.ts';
+import * as usage from '../services/parts/usage.ts';
 
 const p = contracts.parts;
 
@@ -25,6 +26,8 @@ export const partsImpls = [
 	implement(p.get, (ctx, i) => parts.get(ctx, i.id)),
 	implement(p.detail, (ctx, i) => parts.detail(ctx, i.id)),
 	implement(p.history, (ctx, i) => history(ctx, i.id, i.limit)),
+	implement(p.procedureUse, (ctx, i) => usage.procedureUse(ctx, i.id)),
+	implement(p.consumption, (ctx, i) => usage.consumption(ctx, i.id, i.limit)),
 	implement(p.qrcode, (ctx, i) => qrCode(ctx, i.id, i.origin)),
 	implement(p.update, (ctx, i) => parts.updatePart(ctx, i)),
 	implement(p.delete, (ctx, i) => {

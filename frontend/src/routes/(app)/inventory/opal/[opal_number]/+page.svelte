@@ -6,9 +6,15 @@
 	} from '#lib/components/inventory/StockActionDialog.svelte';
 	import TestDialog from '#lib/components/inventory/TestDialog.svelte';
 	import { ledgerKind, moveLinks, sourceLabel } from '#lib/components/inventory/types.js';
-	import type { StockGenealogyRow, StockLedgerRow, StockTestResult } from '@opal/shared';
+	import type {
+		StockCorrection,
+		StockGenealogyRow,
+		StockLedgerRow,
+		StockTestResult
+	} from '@opal/shared';
 	import {
 		ActionLink,
+		MoreMenu,
 		confirm,
 		DataTable,
 		DetailRow,
@@ -26,6 +32,7 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { date, qty } from '#lib/format.js';
 	import type { PageProps } from './$types';
 
@@ -51,17 +58,19 @@
 		testOpen = true;
 	}
 
-	// lot / expiry edit
+	// Lot, serial and expiry are written at receipt. Changing one is a correction with a reason.
 	let editOpen = $state(false);
 	let editLot = $state('');
 	let editSerial = $state('');
 	let editExp = $state('');
+	let editReason = $state('');
 	let editBusy = $state(false);
 	let editError = $state<string | null>(null);
 	function openEdit() {
 		editLot = rec?.lotNumber ?? '';
 		editSerial = rec?.serialNumber ?? '';
 		editExp = rec?.expirationDate ?? '';
+		editReason = '';
 		editError = null;
 		editOpen = true;
 	}
@@ -71,16 +80,17 @@
 		editBusy = true;
 		editError = null;
 		try {
-			await opal.inventory.update({
+			await opal.inventory.correct({
 				id: rec.id,
 				lotNumber: editLot.trim() || null,
 				...(d?.part.trackingType === 'serialized'
 					? { serialNumber: editSerial.trim() || null }
 					: {}),
-				expirationDate: editExp || null
+				expirationDate: editExp || null,
+				reason: editReason.trim()
 			});
 			editOpen = false;
-			toast.success('Saved');
+			toast.success('Corrected');
 			await refreshAll();
 		} catch (err) {
 			editError = err instanceof Error ? err.message : 'Save failed';
@@ -128,8 +138,24 @@
 		return n > 0 ? `+${qty(n)}` : qty(n);
 	};
 
-	// Newest first; the balance column keeps the running total readable top to bottom.
-	const ledger = $derived<StockLedgerRow[]>(d ? [...d.ledger].reverse() : []);
+	// Newest first; the balance column keeps the running total readable top to bottom. A
+	// correction holds no quantity: it sits in the ledger as a row of its own, old value struck.
+	type Entry =
+		| { type: 'move'; at: string; r: StockLedgerRow }
+		| { type: 'correction'; at: string; c: StockCorrection };
+	const ledger = $derived<Entry[]>(
+		d
+			? [
+					...d.ledger.map((r): Entry => ({ type: 'move', at: r.at, r })),
+					...d.corrections.map((c): Entry => ({ type: 'correction', at: c.at, c }))
+				].sort((a, b) => b.at.localeCompare(a.at))
+			: []
+	);
+	const FIELD_NAMES = {
+		lotNumber: 'LOT',
+		serialNumber: 'SERIAL',
+		expirationDate: 'EXPIRES'
+	} as const;
 
 	const requiredTemplates = $derived(d?.testTemplates.filter((t) => t.required) ?? []);
 	const requiredPassed = $derived(
@@ -166,29 +192,31 @@
 		{/snippet}
 		{#snippet actions()}
 			<Button size="sm" variant="outline" href="/label?inventory={rec.opalNumber}">LABEL</Button>
-			<Button size="sm" variant="outline" onclick={() => openAction('count')}>COUNT</Button>
-			<Button size="sm" variant="outline" onclick={() => openAction('adjust')}>ADJUST</Button>
-			<Button size="sm" variant="outline" disabled={empty} onclick={() => openAction('move')}
-				>MOVE</Button
-			>
-			{#if d.part.isTooling}
-				<Button size="sm" variant="outline" onclick={calibrate}>CALIBRATE</Button>
+			{#if !empty}
+				<Button size="sm" variant="outline" onclick={() => openAction('count')}>COUNT</Button>
+				<Button size="sm" variant="outline" onclick={() => openAction('adjust')}>ADJUST</Button>
+				<Button size="sm" variant="outline" onclick={() => openAction('move')}>MOVE</Button>
+				{#if d.part.isTooling}
+					<Button size="sm" variant="outline" onclick={calibrate}>CALIBRATE</Button>
+				{/if}
 			{/if}
-			<Button
-				size="sm"
-				variant="destructive"
-				disabled={empty}
-				onclick={() => openAction('adjust', 'scrap')}>SCRAP</Button
-			>
+			<MoreMenu
+				items={[
+					{ label: 'CORRECT', onselect: openEdit, when: !empty },
+					{
+						label: 'SCRAP',
+						onselect: () => openAction('adjust', 'scrap'),
+						strike: true,
+						when: !empty
+					}
+				]}
+			/>
 		{/snippet}
 	</PageHeader>
 
 	<div class="space-y-4 p-4">
 		<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,48rem)_max-content]">
 			<Section title="Record">
-				{#snippet actions()}
-					<ActionLink onclick={openEdit}>EDIT</ActionLink>
-				{/snippet}
 				<DetailTable>
 					<DetailRow label="Part">
 						<a href="/parts/{d.part.id}" class="hover:underline">
@@ -301,53 +329,69 @@
 					{ key: 'actorName', label: 'By' }
 				]}
 				emptyLabel="Ledger"
-				key={(r) => r.id}
+				key={(e) => (e.type === 'move' ? `m${e.r.id}` : `c${e.c.at}${e.c.field}`)}
 			>
-				{#snippet cell(r, col)}
+				{#snippet cell(e, col)}
 					{#if col.key === 'at'}
-						<Timestamp value={r.at} />
-					{:else if col.key === 'kind'}
-						{@const k = ledgerKind(r)}
-						<State value={r.kind} tone={k.tone} label={k.label} />
-					{:else if col.key === 'qty'}
-						{#if Number(r.qty) === 0}
-							<span class="text-muted-foreground">0</span>
-						{:else}
-							<span class={Number(r.qty) > 0 ? 'text-ok' : 'text-warn'}>{signed(r.qty)}</span>
+						<Timestamp value={e.at} />
+					{:else if e.type === 'correction'}
+						{#if col.key === 'kind'}
+							<State value="corrected" tone="info" label="CORRECTED" />
+						{:else if col.key === 'context'}
+							<span class="font-mono text-xs">
+								{FIELD_NAMES[e.c.field]}
+								<s class="text-muted-foreground">{e.c.old ?? '—'}</s> → {e.c.new ?? '—'}
+							</span>
+							{#if e.c.reason}<span class="ml-2 text-muted-foreground">{e.c.reason}</span>{/if}
+						{:else if col.key === 'actorName'}
+							{#if e.c.userName}{e.c.userName}{:else}<span class="text-muted-foreground">—</span
+								>{/if}
 						{/if}
-					{:else if col.key === 'balance'}
-						{qty(r.balance, uom)}
-					{:else if col.key === 'context'}
-						<div class="flex flex-wrap items-baseline gap-x-2">
-							{#each moveLinks(r.links) as l (l.label)}
-								{#if l.href}
-									<a href={l.href} class="font-mono text-info hover:underline">{l.label}</a>
-								{:else}
-									<span class="font-mono text-xs text-muted-foreground">{l.label}</span>
-								{/if}
-							{/each}
-							{#if r.fromLocation || r.toLocation}
-								<span class="font-mono text-xs"
-									>{r.fromLocation || '—'} → {r.toLocation || '—'}</span
-								>
-							{/if}
-							{#if r.counterpartOpal}
-								<a
-									href="/inventory/opal/{r.counterpartOpal}"
-									class="font-mono text-info hover:underline">{r.counterpartOpal}</a
-								>
-							{/if}
-							{#if r.reason && r.reason !== 'tooling'}
-								<span class="font-mono text-xs text-muted-foreground uppercase"
-									>{r.reason.replace(/_/g, ' ')}</span
-								>
-							{/if}
-							{#if r.notes}<span class="text-muted-foreground">{r.notes}</span>{/if}
-						</div>
-					{:else if r.actorName}
-						{r.actorName}
 					{:else}
-						<span class="text-muted-foreground">—</span>
+						{@const r = e.r}
+						{#if col.key === 'kind'}
+							{@const k = ledgerKind(r)}
+							<State value={r.kind} tone={k.tone} label={k.label} />
+						{:else if col.key === 'qty'}
+							{#if Number(r.qty) === 0}
+								<span class="text-muted-foreground">0</span>
+							{:else}
+								<span class={Number(r.qty) > 0 ? 'text-ok' : 'text-warn'}>{signed(r.qty)}</span>
+							{/if}
+						{:else if col.key === 'balance'}
+							{qty(r.balance, uom)}
+						{:else if col.key === 'context'}
+							<div class="flex flex-wrap items-baseline gap-x-2">
+								{#each moveLinks(r.links) as l (l.label)}
+									{#if l.href}
+										<a href={l.href} class="font-mono text-info hover:underline">{l.label}</a>
+									{:else}
+										<span class="font-mono text-xs text-muted-foreground">{l.label}</span>
+									{/if}
+								{/each}
+								{#if r.fromLocation || r.toLocation}
+									<span class="font-mono text-xs"
+										>{r.fromLocation || '—'} → {r.toLocation || '—'}</span
+									>
+								{/if}
+								{#if r.counterpartOpal}
+									<a
+										href="/inventory/opal/{r.counterpartOpal}"
+										class="font-mono text-info hover:underline">{r.counterpartOpal}</a
+									>
+								{/if}
+								{#if r.reason && r.reason !== 'tooling'}
+									<span class="font-mono text-xs text-muted-foreground uppercase"
+										>{r.reason.replace(/_/g, ' ')}</span
+									>
+								{/if}
+								{#if r.notes}<span class="text-muted-foreground">{r.notes}</span>{/if}
+							</div>
+						{:else if r.actorName}
+							{r.actorName}
+						{:else}
+							<span class="text-muted-foreground">—</span>
+						{/if}
 					{/if}
 				{/snippet}
 			</DataTable>
@@ -436,7 +480,7 @@
 	<Dialog.Root bind:open={editOpen}>
 		<Dialog.Content class="sm:max-w-sm">
 			<Dialog.Header>
-				<Dialog.Title class="text-sm font-semibold">Edit record</Dialog.Title>
+				<Dialog.Title class="text-sm font-semibold">Correct record</Dialog.Title>
 			</Dialog.Header>
 			<form onsubmit={saveEdit} class="grid grid-cols-1 gap-3">
 				<div class="grid grid-cols-1 gap-1.5">
@@ -453,10 +497,14 @@
 					<Label class="label" for="e-exp">Expires</Label>
 					<Input id="e-exp" type="date" class="font-mono" bind:value={editExp} />
 				</div>
+				<div class="grid grid-cols-1 gap-1.5">
+					<Label class="label" for="e-reason">Reason</Label>
+					<Textarea id="e-reason" rows={2} bind:value={editReason} required />
+				</div>
 				<ErrorBanner message={editError} />
 				<Dialog.Footer>
 					<Button type="button" variant="outline" onclick={() => (editOpen = false)}>CANCEL</Button>
-					<Button type="submit" disabled={editBusy}>SAVE</Button>
+					<Button type="submit" disabled={editBusy || !editReason.trim()}>CORRECT</Button>
 				</Dialog.Footer>
 			</form>
 		</Dialog.Content>

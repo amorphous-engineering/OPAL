@@ -43,6 +43,7 @@ export const inventoryImpls = [
 	}),
 	implement(c.get, (ctx, i) => inv.getStock(ctx, i.id)),
 	implement(c.update, (ctx, { id, ...patch }) => inv.updateStock(ctx, id, patch)),
+	implement(c.correct, (ctx, { id, ...patch }) => inv.correctStock(ctx, id, patch)),
 	implement(c.adjust, (ctx, i) =>
 		inv.adjustStock(ctx, {
 			stockId: i.id,
