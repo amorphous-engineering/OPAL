@@ -26,11 +26,11 @@
 :root {
 	/* Light: shadcn-svelte's official "neutral" theme, verbatim
 	   (shadcn-svelte.com/registry/colors/neutral.json, the base colour in components.json),
-	   except: radius is shadcn's standard 0.625rem (Mira style), and muted-foreground is darker
+	   except: radius is zero, because OPAL has no rounded corners, and muted-foreground is darker
 	   (0.45, not 0.556) because OPAL sets much of its gray text at 12px. OPAL's own tokens, which
 	   shadcn does not define, use Tailwind's palette one step darker than usual for small text:
 	   ok green-800, warn amber-800, error red-700, info blue-700, dev blue-600, brand orange-700. */
-	--radius: 0.625rem;
+	--radius: 0px;
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
 	--card: oklch(1 0 0);
@@ -121,14 +121,14 @@
 @theme inline {
 	--font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-	--radius-xs: calc(var(--radius) - 6px);
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
+	--radius-xs: 0px;
+	--radius-sm: 0px;
+	--radius-md: 0px;
 	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
-	--radius-2xl: calc(var(--radius) + 8px);
-	--radius-3xl: calc(var(--radius) + 12px);
-	--radius-4xl: calc(var(--radius) + 16px);
+	--radius-xl: 0px;
+	--radius-2xl: 0px;
+	--radius-3xl: 0px;
+	--radius-4xl: 0px;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -242,4 +242,12 @@
 	.prose-opal :where(img) {
 		@apply max-h-80 border border-border;
 	}
+}
+
+/* The vendored badge and avatar use rounded-full, which no token reaches. */
+[data-slot='badge'],
+[data-slot='avatar'],
+[data-slot='avatar-image'],
+[data-slot='avatar-fallback'] {
+	border-radius: 0 !important;
 }
