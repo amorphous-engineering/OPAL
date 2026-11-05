@@ -293,11 +293,17 @@ export function skipStep(ctx: Ctx, input: { id: number; stepId: number; reason: 
 
 // ---------------------------------------------------------------- notes
 
-/** Append a note. A record, not a control: any step state, any execution state. */
+/**
+ * Append a note. A record, not a control: any step state, and a completed work order takes a post
+ * mortem. A struck one takes only comments: its steps are where the strike left them.
+ */
 export function addNote(ctx: Ctx, input: { id: number; stepId: number; body: string }) {
 	const text = input.body.trim();
 	if (!text) throw new OpalError(422, 'invalid_input', 'Note body is empty', { body: 'Note body is empty' });
 	const m = loadModel(ctx.db, input.id);
+	if (m.exec.status === 'void' || m.exec.status === 'closed_short') {
+		throw refuse(`This work order is ${m.exec.status.replace('_', ' ')}: add a comment instead`);
+	}
 	const row = getRow(m, input.stepId);
 	const n = insert(ctx, stepNote, { stepExecutionId: row.id, authorId: actorUserId(ctx.actor), body: text });
 	const author = n.authorId === null ? null : (personRefs(ctx.db, [n.authorId]).get(n.authorId) ?? null);

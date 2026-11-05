@@ -193,6 +193,25 @@ describe('a struck work order on the record', () => {
 	});
 });
 
+describe('a struck work order takes comments, not notes', () => {
+	test('a note on a void work order is refused, and a comment is taken', async () => {
+		const t = await world();
+		const e = await t.cut(await t.published(['A']));
+		const sid = await t.stepOf(e.id, '1');
+		await t.ok('POST', `/executions/${e.id}/void`, { reason: 'x' });
+		expect((await t.call('POST', `/executions/${e.id}/steps/${sid}/notes`, { body: 'n' })).status).toBe(409);
+		expect((await t.call('POST', `/executions/${e.id}/comments`, { body: 'c' })).status).toBe(200);
+	});
+
+	test('a completed work order still takes a note', async () => {
+		const t = await world();
+		const e = await t.cut(await t.published(['A']));
+		const sid = await t.stepOf(e.id, '1');
+		await t.complete(e.id, '1');
+		expect((await t.call('POST', `/executions/${e.id}/steps/${sid}/notes`, { body: 'post mortem' })).status).toBe(200);
+	});
+});
+
 describe('undo is for pencil', () => {
 	test('undo never reverses a void', async () => {
 		const t = await world();
