@@ -7,6 +7,7 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
+		ActionLink,
 		DataTable,
 		DetailRow,
 		DetailTable,
@@ -53,7 +54,9 @@
 	// Pages open for reading. EDIT reveals the pencil of a draft: fields, parent, allocations.
 	const editing = $derived(mutable && isEditing(page.url));
 	// Verification is recorded per allocation on a baselined requirement, without editing it.
-	const recording = $derived(editing || baselined);
+	/** A baselined requirement has no EDIT. Recording verification is its own deliberate act. */
+	let recordingOpen = $state(false);
+	const recording = $derived(editing || (baselined && recordingOpen));
 	/** The newest revision of this number, when it is not this one. */
 	const current = $derived(
 		terminal
@@ -603,6 +606,9 @@
 						onselect={(p) => p && assign(p)}
 						exclude={req.allocations.map((a) => a.partId)}
 					/>{/if}
+				{#if baselined}<ActionLink onclick={() => (recordingOpen = !recordingOpen)}
+						>{recordingOpen ? 'DONE' : 'RECORD VERIFICATION'}</ActionLink
+					>{/if}
 			{/snippet}
 			<DataTable
 				rows={req.allocations}
