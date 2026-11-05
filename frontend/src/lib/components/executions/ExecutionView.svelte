@@ -18,7 +18,6 @@
 		toastError,
 		type MoreItem
 	} from '#lib/components/opal/index.js';
-	import { stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
@@ -42,7 +41,7 @@
 	onMount(() => {
 		store.start().then(() => {
 			// Deep links: ?step=N (snapshot order) or ?op=N jump and expand; with
-			// ?redline_issue=ID the redline dialog opens on that OP, linked to the NC.
+			// ?redline_issue=ID the redline form opens on that OP, linked to the NC.
 			const q = page.url.searchParams;
 			const target = Number(q.get('step')) || Number(q.get('op'));
 			if (target) store.jumpTo(target);
@@ -203,7 +202,6 @@
 					class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-4 py-2 font-mono text-xs text-muted-foreground"
 					data-closure
 				>
-					<span class="font-medium">{stateLabel(inst.status)}</span>
 					{#if inst.closure.at}<Timestamp value={inst.closure.at} />{/if}
 					{#if inst.closure.by}<span>{inst.closure.by}</span>{/if}
 					{#if inst.closure.reason}<span class="font-sans text-sm text-foreground"
@@ -216,7 +214,7 @@
 				</div>
 			{/if}
 			{#if inst.active && isEditing(page.url)}<EditForm {store} facts={inst} />{/if}
-			{#if store.panel?.kind === 'closeShort'}<CloseShortPanel {store} />{/if}
+			{#if inst.active && store.panel?.kind === 'closeShort'}<CloseShortPanel {store} />{/if}
 
 			{#if inst.active && holds.length}
 				<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
@@ -269,7 +267,7 @@
 					id="exec-scroll"
 					class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4 [&_[data-doc-mode]>section:first-of-type]:rounded-t-none [&_[data-doc-mode]>section:first-of-type]:border-t-0"
 				>
-					{#if store.panel?.kind === 'redline'}
+					{#if inst.active && store.panel?.kind === 'redline'}
 						<RedlineForm {store} op={store.panel.op} preselect={store.panel.issueId} />
 					{/if}
 					{#if tab === 'document'}
