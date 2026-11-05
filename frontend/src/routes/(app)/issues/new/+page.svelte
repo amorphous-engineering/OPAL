@@ -155,14 +155,26 @@
 
 		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="description">Description</Label>
-			<MarkdownField quiet id="description" bind:value={description} minRows={4} onsubmit={submitForm} />
+			<MarkdownField
+				quiet
+				id="description"
+				bind:value={description}
+				minRows={4}
+				onsubmit={submitForm}
+			/>
 		</div>
 
 		{#if type === 'non_conformance'}
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="should-be">Should be</Label>
-					<MarkdownField quiet id="should-be" bind:value={shouldBe} minRows={3} onsubmit={submitForm} />
+					<MarkdownField
+						quiet
+						id="should-be"
+						bind:value={shouldBe}
+						minRows={3}
+						onsubmit={submitForm}
+					/>
 				</div>
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="actual">Is</Label>
@@ -177,7 +189,13 @@
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="expected">Expected behavior</Label>
-					<MarkdownField quiet id="expected" bind:value={expected} minRows={2} onsubmit={submitForm} />
+					<MarkdownField
+						quiet
+						id="expected"
+						bind:value={expected}
+						minRows={2}
+						onsubmit={submitForm}
+					/>
 				</div>
 				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="actual-behavior">Actual behavior</Label>

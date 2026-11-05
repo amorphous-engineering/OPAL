@@ -47,3 +47,13 @@ jobs:
           for i in $(seq 1 30); do curl -sf localhost:8080/api/health && break; sleep 1; done
           curl -sf localhost:8080/api/health
           curl -sf localhost:8080/ | grep -q '<html'
+
+      # Committed records must open for reading. See Records in CLAUDE.md.
+      - name: Records open for reading
+        run: |
+          pnpm --filter frontend exec playwright install --with-deps chromium-headless-shell
+          export OPAL_DATA_DIR=$(mktemp -d)
+          cp server/assets/demo-seed.db "$OPAL_DATA_DIR/opal.db"
+          server/dist/opal-linux-x86_64 serve --port 8081 &
+          for i in $(seq 1 30); do curl -sf localhost:8081/api/health && break; sleep 1; done
+          cd frontend && node scripts/check-records.mjs 8081 build kestrel-demo
