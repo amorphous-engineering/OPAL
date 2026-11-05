@@ -163,7 +163,7 @@ describe('gates', () => {
 		const { call, makeUser } = await setup();
 		const bob = makeUser('bob');
 		const gates = (await call(bob, 'GET', '/gates')).json;
-		expect(gates.map((g: any) => g.key)).toEqual(['issue.disposition', 'issue.approve', 'execution.skipRequired']);
+		expect(gates.map((g: any) => g.key)).toEqual(['issue.disposition', 'issue.approve', 'execution.skipRequired', 'execution.closeShort']);
 		const roles = (await call(bob, 'GET', '/roles')).json;
 		const id = (key: string) => roles.find((r: any) => r.key === key).id;
 		expect(gates[0].roleIds).toEqual([id('engineer')]);

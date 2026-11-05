@@ -1,6 +1,7 @@
-/** Executions (work orders): list, cut preview, cut, read, edit, abort. */
+/** Executions (work orders): list, cut preview, cut, read, edit, and the two strikes. */
 import {
 	type CutPreview,
+	type ExecClosure,
 	type Execution,
 	type ExecutionRow as ExecutionRowOut,
 	type ExecutionStatus,
@@ -18,6 +19,7 @@ import type { Db } from '../../db/client.ts';
 import {
 	designatorSequence,
 	execution,
+	executionClosure,
 	executionOutput,
 	executionParticipant,
 	issue,
@@ -25,7 +27,8 @@ import {
 	procedure,
 	procedureVersion,
 	signoff,
-	stepExecution
+	stepExecution,
+	stockMove
 } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
 import { nextDesignator, nextSerial } from '../designators.ts';
@@ -103,6 +106,30 @@ function presentRows(db: Db, rows: ExecutionRow[]): ExecutionRowOut[] {
 	});
 }
 
+/** Who struck a work order, when, why, and the issue it cites. Null unless void or closed short. */
+export function closureOf(db: Db, e: ExecutionRow): ExecClosure | null {
+	if (e.status !== 'void' && e.status !== 'closed_short') return null;
+	// An order aborted before this table existed has no row: nobody recorded who or which issue.
+	const row = db.select().from(executionClosure).where(eq(executionClosure.executionId, e.id)).get();
+	const cited = row?.issueId == null ? undefined : db.select({ n: issue.issueNumber }).from(issue).where(eq(issue.id, row.issueId)).get();
+	return {
+		reason: e.closeReason,
+		by: row?.closedById == null ? null : (userNames(db, [row.closedById]).get(row.closedById) ?? null),
+		at: e.completedAt,
+		issueId: row?.issueId ?? null,
+		issueNumber: cited?.n ?? null
+	};
+}
+
+/**
+ * Work has started once a step moved the status or material moved against the order. A claim
+ * alone is presence, and its time stays on the record either way.
+ */
+export function workStarted(db: Db, e: ExecutionRow): boolean {
+	if (e.status !== 'cut') return true;
+	return db.select({ id: stockMove.id }).from(stockMove).where(eq(stockMove.executionId, e.id)).get() !== undefined;
+}
+
 const durationSeconds = (e: ExecutionRow) =>
 	e.startedAt && e.completedAt ? Math.round((Date.parse(e.completedAt) - Date.parse(e.startedAt)) / 1000) : null;
 
@@ -114,6 +141,7 @@ export function presentExecution(db: Db, m: Model): Execution {
 		versionCreatedAt: m.version.createdAt,
 		durationSeconds: durationSeconds(m.exec),
 		active: isActive(m.exec),
+		closure: closureOf(db, m.exec),
 		steps: stepStates(db, m)
 	};
 }
@@ -193,7 +221,7 @@ export function listExecutions(
 	const wanted = input.status ? input.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
 	const where = and(...common(), wanted.length ? inArray(execution.status, wanted as ExecutionStatus[]) : undefined);
 	const total = ctx.db.select({ n: sql<number>`count(*)` }).from(execution).where(where).get()!.n;
-	const counts: Record<string, number> = { cut: 0, in_work: 0, completed: 0, aborted: 0 };
+	const counts: Record<string, number> = { cut: 0, in_work: 0, completed: 0, void: 0, closed_short: 0 };
 	for (const r of ctx.db
 		.select({ s: execution.status, n: sql<number>`count(*)` })
 		.from(execution)
@@ -364,7 +392,7 @@ export function createExecutions(
 	return { ...getExecution(ctx, ids[0]!), cutIds: ids };
 }
 
-// ---------------------------------------------------------------- edit, abort
+// ---------------------------------------------------------------- edit, strike
 
 export function updateExecution(
 	ctx: Ctx,
@@ -377,9 +405,9 @@ export function updateExecution(
 	}
 ): Execution {
 	const cur = executionRow(ctx.db, input.id);
+	if (!isActive(cur)) throw conflict('execution_closed', `A work order that is ${cur.status.replace('_', ' ')} does not change`);
 	const patch: Partial<typeof execution.$inferInsert> = {};
 	if (input.projectId !== undefined && input.projectId !== cur.projectId) {
-		if (!isActive(cur)) throw conflict('execution_closed', 'The project of a finished work order does not change');
 		const linked = ctx.db.select({ id: issue.id }).from(issue).where(eq(issue.executionId, cur.id)).get();
 		if (linked) throw conflict('has_issues', 'Issues of this work order belong to its project; move them first');
 		patch.projectId = requireActiveProject(ctx.db, input.projectId).id;
@@ -391,13 +419,41 @@ export function updateExecution(
 	return getExecution(ctx, cur.id);
 }
 
-/** Status is derived from the work done; the only settable transition is the abort. */
-export function cancelExecution(ctx: Ctx, input: { id: number; reason?: string | null }): Execution {
-	const cur = executionRow(ctx.db, input.id);
-	if (!isActive(cur)) {
-		throw conflict('execution_closed', `Cannot abort a work order that is ${cur.status.replace('_', ' ')}; only an active work order can be aborted`);
-	}
-	update(ctx, execution, cur.id, { status: 'aborted', completedAt: now(), abortReason: input.reason?.trim() || null });
+/** A strike ends the work order and leaves everything on it legible. */
+function strike(
+	ctx: Ctx,
+	cur: ExecutionRow,
+	status: 'void' | 'closed_short',
+	reason: string,
+	issueId: number | null
+): Execution {
+	update(ctx, execution, cur.id, { status, completedAt: now(), closeReason: reason });
+	insert(ctx, executionClosure, { executionId: cur.id, closedById: actorUserId(ctx.actor), issueId });
+	publish({ type: 'instance_closed', data: { executionId: cur.id } });
 	return getExecution(ctx, cur.id);
 }
 
+function requireOpen(cur: ExecutionRow) {
+	if (!isActive(cur)) throw conflict('execution_closed', `This work order is already ${cur.status.replace('_', ' ')}`);
+}
+
+/** Status otherwise follows from the work done. Only an order nobody has started can be struck whole. */
+export function voidExecution(ctx: Ctx, input: { id: number; reason: string }): Execution {
+	const cur = executionRow(ctx.db, input.id);
+	requireOpen(cur);
+	if (workStarted(ctx.db, cur)) throw conflict('work_started', 'Work has started on this work order: close it short instead');
+	return strike(ctx, cur, 'void', input.reason, null);
+}
+
+/** A started order that truly cannot finish. The issue says why, and it must be this order's own. */
+export function closeShortExecution(ctx: Ctx, input: { id: number; reason: string; issueId: number }): Execution {
+	const cur = executionRow(ctx.db, input.id);
+	requireOpen(cur);
+	if (!workStarted(ctx.db, cur)) throw conflict('work_not_started', 'No work has started on this work order: void it instead');
+	const cited = ctx.db.select().from(issue).where(eq(issue.id, input.issueId)).get();
+	if (!cited || cited.executionId !== cur.id || cited.status === 'void') {
+		const message = 'Cite an issue raised on this work order that is not void';
+		throw new OpalError(422, 'invalid_input', message, { issueId: message });
+	}
+	return strike(ctx, cur, 'closed_short', input.reason, cited.id);
+}

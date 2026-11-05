@@ -112,17 +112,6 @@ describe('reading and editing', () => {
 		expect(u.targetCompletionAt).toBe('2030-01-01T00:00:00.000Z');
 	});
 
-	test('only an active execution can be aborted, and the abort ends it', async () => {
-		const t = await setup();
-		const pid = await t.published(['A']);
-		const e = await t.cut(pid);
-		const a = await t.ok('POST', `/executions/${e.id}/cancel`, { reason: 'wrong part' });
-		expect(a.status).toBe('aborted');
-		expect(a.completedAt).not.toBeNull();
-		expect((await t.call('POST', `/executions/${e.id}/cancel`, {})).status).toBe(409);
-		expect((await t.complete(e.id, '1')).status).toBe(409);
-	});
-
 	test('the project of an execution cannot move while issues belong to it', async () => {
 		const t = await setup();
 		const pid = await t.published(['A']);

@@ -148,7 +148,8 @@ export function executionMetrics(ctx: Ctx, f: ExecutionReportFilter): ExecutionM
 		completed,
 		inWork: n('in_work'),
 		cut: n('cut'),
-		aborted: n('aborted'),
+		void: n('void'),
+		closedShort: n('closed_short'),
 		avgDurationMinutes: avg ? Math.round(avg * 10) / 10 : null,
 		completionRate: rows.length ? Math.round((completed / rows.length) * 1000) / 10 : 0
 	};

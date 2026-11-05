@@ -211,7 +211,7 @@ describe('csv reports', () => {
 		const csv = (await text(s, '/reports/executions/csv')).body;
 		expect(csv).toContain('WO-1,completed,2026-01-01T00:00:00.000Z,2026-01-01T00:00:00.000Z,2026-01-01T01:00:00.000Z,60,1,2');
 		const m = (await s.call('GET', '/reports/analytics/executions')).body;
-		expect(m).toEqual({ totalExecutions: 3, completed: 1, inWork: 1, cut: 1, aborted: 0, avgDurationMinutes: 60, completionRate: 33.3 });
+		expect(m).toEqual({ totalExecutions: 3, completed: 1, inWork: 1, cut: 1, void: 0, closedShort: 0, avgDurationMinutes: 60, completionRate: 33.3 });
 		const none = (await s.call('GET', '/reports/analytics/executions?to=2025-01-01')).body;
 		expect(none.totalExecutions).toBe(0);
 		expect(none.avgDurationMinutes).toBeNull();

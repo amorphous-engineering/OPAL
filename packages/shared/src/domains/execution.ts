@@ -18,7 +18,11 @@ import { zTimestamp } from '../time.ts';
 import { zPersonRef } from './org.ts';
 import { zProcedureDataSchema } from './procedures.ts';
 
-export const EXECUTION_STATUSES = ['cut', 'in_work', 'completed', 'aborted'] as const;
+/**
+ * Status follows from the work done. `void` and `closed_short` are the two strikes: a work order
+ * nobody started is voided, a started one that cannot finish is closed short. Work does not abort.
+ */
+export const EXECUTION_STATUSES = ['cut', 'in_work', 'completed', 'void', 'closed_short'] as const;
 export type ExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 export const EXECUTION_ACTIVE_STATUSES = ['cut', 'in_work'] as const;
 export const EXECUTION_PRIORITIES = ['normal', 'high', 'urgent'] as const;
@@ -40,7 +44,8 @@ export const EXEC_BLOCKER_KINDS = [
 	'hold',
 	'signoff',
 	'role',
-	'out_of_spec'
+	'out_of_spec',
+	'same_person'
 ] as const;
 export const PRODUCTION_STATUSES = ['planned', 'wip', 'completed'] as const;
 export const EXEC_USAGES = ['consume', 'tooling'] as const;
@@ -96,6 +101,16 @@ export const zLaborRow = z.object({
 export type LaborRow = z.infer<typeof zLaborRow>;
 
 /** One execution in a list. */
+/** Why a struck work order stopped: who, when, why, and the issue a closed-short one cites. */
+export const zExecClosure = z.object({
+	reason: z.string().nullable(),
+	by: z.string().nullable(),
+	at: zTimestamp.nullable(),
+	issueId: z.number().int().nullable(),
+	issueNumber: z.string().nullable()
+});
+export type ExecClosure = z.infer<typeof zExecClosure>;
+
 export const zExecutionRow = z.object({
 	id: z.number().int(),
 	woNumber: z.string(),
@@ -155,6 +170,8 @@ export const zExecution = zExecutionRow.extend({
 	versionCreatedAt: zTimestamp,
 	durationSeconds: z.number().int().nullable(),
 	active: z.boolean(),
+	/** Null unless the work order is void or closed short. */
+	closure: zExecClosure.nullable(),
 	steps: z.array(zExecStepState)
 });
 export type Execution = z.infer<typeof zExecution>;
@@ -452,7 +469,11 @@ export const zExecutionDocument = z.object({
 		scheduledStartAt: zTimestamp.nullable(),
 		targetCompletionAt: zTimestamp.nullable(),
 		lastActivityAt: zTimestamp.nullable(),
-		durationSeconds: z.number().int().nullable()
+		durationSeconds: z.number().int().nullable(),
+		closure: zExecClosure.nullable(),
+		/** The viewer can strike it now: the server would accept these. */
+		canVoid: z.boolean(),
+		canCloseShort: z.boolean()
 	}),
 	progress: z.object({ done: z.number().int(), total: z.number().int() }),
 	ops: z.array(zDocOp),
@@ -647,7 +668,8 @@ export const zExecutionReport = z.object({
 		versionNumber: z.number().int(),
 		operator: z.string().nullable(),
 		startedAt: zTimestamp.nullable(),
-		completedAt: zTimestamp.nullable()
+		completedAt: zTimestamp.nullable(),
+		closure: zExecClosure.nullable()
 	}),
 	generatedAt: zTimestamp,
 	endItems: z.array(
@@ -808,15 +830,28 @@ export const execution = {
 		access: 'signed-in',
 		mcp: true
 	}),
-	cancel: op({
-		name: 'execution.cancel',
+	void: op({
+		name: 'execution.void',
 		method: 'POST',
-		path: '/executions/:id/cancel',
-		summary: 'Abort an active execution. Status is otherwise derived from the work done.',
-		input: z.object({ id: zId, reason: z.string().trim().max(2000).nullish() }),
+		path: '/executions/:id/void',
+		summary: 'Strike a work order nobody has started. The reason goes on the record. A started one is closed short.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1).max(2000) }),
 		output: zExecution,
 		access: 'signed-in',
-		mcp: true
+		mcp: true,
+		humanOnly: true
+	}),
+	closeShort: op({
+		name: 'execution.closeShort',
+		method: 'POST',
+		path: '/executions/:id/close-short',
+		summary:
+			'End a started work order that cannot finish. Needs a reason and an issue raised on this work order. The record stays as it stands.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1).max(2000), issueId: zId }),
+		output: zExecution,
+		access: 'execution.closeShort',
+		mcp: true,
+		humanOnly: true
 	}),
 	document: op({
 		name: 'execution.document',
@@ -853,7 +888,7 @@ export const execution = {
 		name: 'execution.report',
 		method: 'GET',
 		path: '/executions/:id/report',
-		summary: 'Report content of a completed execution.',
+		summary: 'Report content of a finished execution: completed, void or closed short.',
 		input: z.object({ id: zId }),
 		output: zExecutionReport,
 		access: 'signed-in',
@@ -967,8 +1002,8 @@ export const execution = {
 		name: 'execution.skip',
 		method: 'POST',
 		path: '/executions/:id/steps/:stepId/skip',
-		summary: 'Skip a step (not applicable). Held scope and open redlines refuse it.',
-		input: z.object({ ...zStepPath, reason: z.string().trim().max(2000).nullish() }),
+		summary: 'Skip a step (not applicable). A reason is required. Held scope and open redlines refuse it.',
+		input: z.object({ ...zStepPath, reason: z.string().trim().min(1).max(2000) }),
 		output: zSignResult,
 		access: 'signed-in',
 		mcp: true

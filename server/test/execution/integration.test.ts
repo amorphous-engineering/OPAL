@@ -177,14 +177,6 @@ describe('other areas', () => {
 		expect(hits.some((h: any) => h.href === `/executions/${e.id}`)).toBe(true);
 	});
 
-	test('undo reverses an abort', async () => {
-		const t = await setup();
-		const e = await t.cut(await t.published(['A']));
-		await t.ok('POST', `/executions/${e.id}/cancel`, {});
-		await t.ok('POST', '/undo/last');
-		expect((await t.get(e.id)).status).toBe('cut');
-	});
-
 	test('every execution operation is exposed to MCP except the page-only reads', async () => {
 		const { contracts } = await import('@opal/shared');
 		const off = Object.values(contracts.execution).filter((c: any) => !c.mcp).map((c: any) => c.name);

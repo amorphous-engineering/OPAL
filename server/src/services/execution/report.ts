@@ -1,4 +1,4 @@
-/** The completed-execution report, the holds payload and the QR code. */
+/** The report of a finished execution, the holds payload and the QR code. */
 import { type ExecutionReport, OpalError, now, unitSymbol } from '@opal/shared';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import QRCode from 'qrcode';
@@ -6,19 +6,16 @@ import type { Ctx } from '../../context.ts';
 import { attachment, dataPoint, dataset, issue, part, project } from '../../db/schema/index.ts';
 import { holdingIssues } from '../issues/holds.ts';
 import { captureDisplay, readingOf } from './document.ts';
+import { closureOf } from './executions.ts';
 import { productionRows } from './material.ts';
-import { loadModel, opRowOf } from './model.ts';
+import { isActive, loadModel, opRowOf } from './model.ts';
 import { signoffRecords, userNames } from './present.ts';
 
 export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): ExecutionReport {
 	const db = ctx.db;
 	const m = loadModel(db, executionId);
-	if (m.exec.status !== 'completed') {
-		throw new OpalError(
-			409,
-			'not_completed',
-			`Work order is ${m.exec.status.toUpperCase().replace('_', ' ')}; reports are only generated for COMPLETED work orders`
-		);
+	if (isActive(m.exec)) {
+		throw new OpalError(409, 'not_finished', `Work order is ${m.exec.status.toUpperCase().replace('_', ' ')}; a report comes when it finishes`);
 	}
 	const ids = m.rows.map((r) => r.id);
 	const recs = signoffRecords(db, ids);
@@ -121,7 +118,8 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 			versionNumber: m.version.versionNumber,
 			operator: nm(m.exec.createdById),
 			startedAt: m.exec.startedAt,
-			completedAt: m.exec.completedAt
+			completedAt: m.exec.completedAt,
+			closure: closureOf(db, m.exec)
 		},
 		generatedAt: now(),
 		endItems,

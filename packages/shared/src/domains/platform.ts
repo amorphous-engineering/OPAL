@@ -57,6 +57,7 @@ export const EVENT_TYPES = [
 	'execution_comment',
 	'instance_started',
 	'instance_completed',
+	'instance_closed',
 	'issue_dispositioned',
 	'user_joined',
 	'user_left',

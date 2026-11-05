@@ -22,10 +22,12 @@ import { laborRows } from './labor.ts';
 import type { Db } from '../../db/client.ts';
 import { attachment, blob, issue, part, project, stepNote, user } from '../../db/schema/index.ts';
 import { dispState, isBlocking, ticketState } from '../issues/state.ts';
+import { holdsGate } from '../org/gates.ts';
 import { roleNamesOf, holdsSlotRole } from '../org/roles.ts';
 import { type HoldingIssue } from '../issues/holds.ts';
 import { type Blocker, completeBlockers, skipBlockers, slotGate } from './gates.ts';
 import { type HoldState, blockersForBound, holdState } from './holds.ts';
+import { closureOf, workStarted } from './executions.ts';
 import { consumptionRows, productionRows, reconcile, unbooked } from './material.ts';
 import { type Model, type Row, isActive, isTerminal, loadModel, progress } from './model.ts';
 import { claimsFor, cursorOf, roster, touch } from './presence.ts';
@@ -359,6 +361,9 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 	const proj = db.select().from(project).where(eq(project.id, exec.projectId)).get()!;
 	const activity = [exec.updatedAt, ...m.rows.map((r) => r.se.updatedAt)].sort();
 	const dur = exec.startedAt && exec.completedAt ? Math.round((Date.parse(exec.completedAt) - Date.parse(exec.startedAt)) / 1000) : null;
+	// Strikes are humanOnly; an API token never sees them offered.
+	const started = workStarted(db, exec);
+	const human = ctx.actor.kind !== 'token';
 
 	return {
 		execution: {
@@ -384,7 +389,10 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			scheduledStartAt: exec.scheduledStartAt,
 			targetCompletionAt: exec.targetCompletionAt,
 			lastActivityAt: activity[activity.length - 1] ?? null,
-			durationSeconds: dur
+			durationSeconds: dur,
+			closure: closureOf(db, exec),
+			canVoid: active && human && !started,
+			canCloseShort: active && human && started && holdsGate(db, ctx.actor, 'execution.closeShort')
 		},
 		progress: progress(m),
 		ops,

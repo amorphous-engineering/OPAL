@@ -235,7 +235,7 @@ describe('gates', () => {
 		const t = await setup();
 		const pid = await t.published(['A', 'B']);
 		const e = await t.cut(pid);
-		await t.ok('POST', `/executions/${e.id}/cancel`, {});
+		await t.ok('POST', `/executions/${e.id}/void`, { reason: 'wrong part' });
 		expect((await t.skip(e.id, '1')).status).toBe(409);
 		expect((await t.sign(e.id, '1', 0)).status).toBe(409);
 	});

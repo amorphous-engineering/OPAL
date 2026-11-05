@@ -86,8 +86,10 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 			wo = `WO-${String(++woMax).padStart(5, '0')}`;
 			warn(c, `procedure_instance ${id}: no work order number, given ${wo}`);
 		}
-		const status = (EXECUTION_STATUSES as readonly string[]).includes(String(r.status)) ? (String(r.status) as (typeof EXECUTION_STATUSES)[number]) : 'cut';
-		if (status !== r.status) warn(c, `procedure_instance ${id}: status "${String(r.status)}" is not valid, used "cut"`);
+		// 1.x could abort a work order. Here that record reads as closed short.
+		const legacy = String(r.status) === 'aborted' ? 'closed_short' : String(r.status);
+		const status = (EXECUTION_STATUSES as readonly string[]).includes(legacy) ? (legacy as (typeof EXECUTION_STATUSES)[number]) : 'cut';
+		if (status !== legacy) warn(c, `procedure_instance ${id}: status "${String(r.status)}" is not valid, used "cut"`);
 		const p = Number(r.priority);
 		return [{
 			id,
@@ -101,7 +103,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 			targetCompletionAt: ts(r.target_completion_at),
 			startedAt: ts(r.started_at),
 			completedAt: ts(r.completed_at),
-			abortReason: null,
+			closeReason: null,
 			createdById: ref(c, 'user', r.started_by_id, `procedure_instance ${id} started_by_id`),
 			createdAt: tsReq(r.created_at),
 			updatedAt: tsReq(r.updated_at)

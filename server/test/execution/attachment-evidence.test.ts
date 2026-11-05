@@ -59,7 +59,7 @@ describe('attachment evidence', () => {
 	test('an execution that is not active freezes the evidence of its open steps', async () => {
 		const t = await setup();
 		const { e, sid, id } = await withCapture(t);
-		await t.ok('POST', `/executions/${e.id}/cancel`, {});
+		await t.ok('POST', `/executions/${e.id}/void`, { reason: 'wrong part' });
 		expect((await upload(t, 'step_execution', sid, 'capture')).status).toBe(409);
 		expect((await t.call('DELETE', `/attachments/${id}`)).status).toBe(409);
 	});
