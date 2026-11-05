@@ -77,7 +77,7 @@ const pages = [
 	[
 		'work order in work',
 		`/executions/${exec('in_work')}`,
-		{ fields: 3, note: 'capture fields, comment', wait: 2000 }
+		{ fields: 4, note: 'capture fields, notes box, comment', wait: 2000 }
 	],
 	[
 		'completed work order',

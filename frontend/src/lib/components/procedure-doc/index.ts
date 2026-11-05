@@ -29,6 +29,7 @@ export { default as GateReason } from './GateReason.svelte';
 export { attachmentUrl, gallery } from './viewer.js';
 export { provideDoc, useDoc } from './controller.js';
 export type {
+	NoteDraft,
 	AuthorActions,
 	ConsumeItem,
 	DocActions,

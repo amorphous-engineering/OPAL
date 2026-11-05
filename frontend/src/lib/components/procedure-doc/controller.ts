@@ -53,6 +53,18 @@ export interface DocActions {
 	uploadPhotos?(step: DocStep, files: File[]): Promise<number[]>;
 }
 
+/**
+ * The viewer's note in progress on a step. It lives with the host, so closing the row or a document
+ * refresh loses nothing. `save` resolves to false when the host refused it, and keeps the text.
+ */
+export interface NoteDraft {
+	body(step: DocStep): string;
+	setBody(step: DocStep, value: string): void;
+	files(step: DocStep): File[];
+	setFiles(step: DocStep, files: File[]): void;
+	save(step: DocStep): Promise<boolean>;
+}
+
 export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 /** The authored properties of a step, by the names the document uses. */
@@ -153,6 +165,8 @@ export interface DocController {
 	fieldValue(step: DocStep, name: string): unknown;
 	setField(step: DocStep, name: string, value: unknown): void;
 	fieldErrors(step: DocStep): Record<string, string>;
+	/** Present where steps take notes. */
+	noteDraft?: NoteDraft;
 	actions: DocActions;
 	/** Template authoring; only in author mode. */
 	author?: AuthorActions;

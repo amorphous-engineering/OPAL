@@ -26,6 +26,7 @@ import {
 	type DocLabor,
 	type DocOp,
 	type DocStep,
+	type NoteDraft,
 	type StockRecord
 } from '#lib/components/procedure-doc/index.js';
 import { adaptDocument, adaptState } from './adapt.js';
@@ -76,6 +77,8 @@ export class ExecutionStore implements DocController {
 
 	private overrides = $state<Record<string, boolean>>({});
 	private drafts = $state<Record<number, Record<string, unknown>>>({});
+	private noteBodies = $state<Record<number, string>>({});
+	private noteFiles = $state<Record<number, File[]>>({});
 	private errors = $state<Record<number, Record<string, string>>>({});
 	private stock: Record<number, StockRecord[]> = {};
 	private statusByKey: Record<string, string> = {};
@@ -91,6 +94,7 @@ export class ExecutionStore implements DocController {
 		this.viewerId = viewerId;
 		this.overrides = read(this.key('opened'), {});
 		this.drafts = read(this.key('draft'), {});
+		this.noteBodies = read(this.key('note'), {});
 	}
 
 	private key(kind: string) {
@@ -418,9 +422,11 @@ export class ExecutionStore implements DocController {
 		if (hit && (key === `step:${order}` || key === `op:${hit.op.order}`)) return true;
 		// Values typed into a step never close under the operator.
 		const [kind, id] = key.split(':');
-		if (kind === 'step') return !!this.drafts[Number(id)];
+		if (kind === 'step') return !!this.drafts[Number(id)] || !!this.noteBodies[Number(id)];
 		const op = this.allOps.find((o) => o.order === Number(id));
-		return !!op && [op.step, ...op.steps].some((s) => this.drafts[s.order]);
+		return (
+			!!op && [op.step, ...op.steps].some((s) => this.drafts[s.order] || this.noteBodies[s.order])
+		);
 	}
 
 	isOpen(key: string): boolean {
@@ -510,6 +516,30 @@ export class ExecutionStore implements DocController {
 			} else open();
 		}
 	}
+
+	// ---------- controller: notes in progress ----------
+
+	noteDraft: NoteDraft = {
+		body: (step) => this.noteBodies[step.order] ?? '',
+		setBody: (step, value) => {
+			this.noteBodies[step.order] = value;
+			write(this.key('note'), this.noteBodies);
+		},
+		files: (step) => this.noteFiles[step.order] ?? [],
+		setFiles: (step, files) => {
+			this.noteFiles[step.order] = files;
+		},
+		save: async (step) => {
+			const body = this.noteDraft.body(step).trim();
+			const files = this.noteDraft.files(step);
+			if (!body && !files.length) return true;
+			if (!(await this.actions.addNote?.(step, body, files))) return false;
+			delete this.noteBodies[step.order];
+			delete this.noteFiles[step.order];
+			write(this.key('note'), this.noteBodies);
+			return true;
+		}
+	};
 
 	// ---------- controller: data capture ----------
 
@@ -601,6 +631,8 @@ export class ExecutionStore implements DocController {
 				}
 				data = this.payload(step);
 			}
+			// A note typed into the box goes on the record with the step, never lost to the step closing.
+			if (!(await this.noteDraft.save(step))) return;
 			try {
 				await opal.execution.sign({
 					id: this.id,
@@ -625,6 +657,7 @@ export class ExecutionStore implements DocController {
 			}
 		},
 		skip: async (step, reason) => {
+			if (!(await this.noteDraft.save(step))) return false;
 			try {
 				await opal.execution.skip({ id: this.id, stepId: step.order, reason });
 				if (this.claimedOrder === step.order)
