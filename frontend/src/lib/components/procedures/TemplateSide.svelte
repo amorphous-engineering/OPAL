@@ -9,8 +9,14 @@
 	let {
 		data,
 		startable,
+		editing,
 		onchange
-	}: { data: TemplateData; startable: boolean; onchange: () => void | Promise<void> } = $props();
+	}: {
+		data: TemplateData;
+		startable: boolean;
+		editing: boolean;
+		onchange: () => void | Promise<void>;
+	} = $props();
 
 	const p = $derived(data.procedure);
 	const execs = $derived(data.executions);
@@ -96,5 +102,12 @@
 		</Section>
 	{/if}
 
-	<ReferenceDocs procedureId={p.id} docs={data.docs} {onchange} compact />
+	<ReferenceDocs
+		procedureId={p.id}
+		docs={data.docs}
+		{onchange}
+		compact
+		addable={p.status !== 'obsolete'}
+		removable={editing}
+	/>
 </div>

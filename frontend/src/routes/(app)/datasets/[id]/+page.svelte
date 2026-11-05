@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { opal } from '#lib/api.js';
 	import {
 		PageHeader,
@@ -7,9 +8,14 @@
 		DataTable,
 		DetailTable,
 		DetailRow,
+		EditToggle,
 		EmptyLine,
+		ErrorBanner,
+		MoreMenu,
 		Timestamp,
+		askReason,
 		confirm,
+		isEditing,
 		toast,
 		toastError,
 		setQuery,
@@ -19,11 +25,14 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte';
 	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
 	import DatasetChart from '#lib/components/datasets/DatasetChart.svelte';
 	import ImportPointsDialog from '#lib/components/datasets/ImportPointsDialog.svelte';
 	import AddPointDialog from '#lib/components/datasets/AddPointDialog.svelte';
-	import EditDatasetDialog from '#lib/components/datasets/EditDatasetDialog.svelte';
 	import type { DataPoint } from '#lib/components/datasets/types.js';
 	import { opUrl, contracts, specResult, specText, unitSymbol } from '@opal/shared';
 	import type { PageProps } from './$types';
@@ -34,9 +43,46 @@
 	const numeric = $derived(fields.filter((f) => f.type === 'number'));
 
 	let addOpen = $state(false);
-	let editOpen = $state(false);
 	let importOpen = $state(false);
 	const archived = $derived(ds.state === 'archived');
+	const editing = $derived(isEditing(page.url) && !archived);
+
+	let name = $state('');
+	let description = $state('');
+	let procedure = $state('');
+	let projectId = $state(0);
+	let busy = $state(false);
+	let error = $state<string | null>(null);
+	$effect(() => {
+		if (editing) {
+			name = ds.name;
+			description = ds.description ?? '';
+			procedure = ds.procedureId ? String(ds.procedureId) : '';
+			projectId = ds.projectId;
+			error = null;
+		}
+	});
+
+	async function save(e: SubmitEvent) {
+		e.preventDefault();
+		busy = true;
+		error = null;
+		try {
+			await opal.datasets.update({
+				id: ds.id,
+				projectId,
+				name: name.trim(),
+				description: description.trim() || null,
+				procedureId: procedure ? Number(procedure) : null
+			});
+			await invalidateAll();
+			await goto(page.url.pathname);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to save';
+		} finally {
+			busy = false;
+		}
+	}
 	const procedureName = $derived(
 		data.procedures.find((p) => p.id === ds.procedureId)?.name ?? `Procedure ${ds.procedureId}`
 	);
@@ -55,7 +101,7 @@
 			mono: f.type === 'number'
 		})),
 		{ key: 'source', label: 'Source' },
-		{ key: 'actions', label: '', width: '5rem', align: 'right' }
+		{ key: 'actions', label: '', width: '11rem', align: 'right' }
 	]);
 
 	const byName = $derived(new Map(fields.map((f) => [f.name, f])));
@@ -67,18 +113,17 @@
 		return String(v);
 	}
 
-	async function removePoint(p: DataPoint) {
-		if (
-			!(await confirm({
-				title: 'Delete data point',
-				body: 'This removes the point from the dataset and from its chart.',
-				action: 'DELETE',
-				destructive: true
-			}))
-		)
-			return;
+	/** A captured point is never removed: it is struck, with a reason, and stays on the page. */
+	async function strikePoint(p: DataPoint) {
+		const reason = await askReason({
+			title: 'Strike data point',
+			body: 'The point stays listed, struck, and no longer counts in the chart or the export.',
+			action: 'STRIKE',
+			destructive: true
+		});
+		if (reason === null) return;
 		try {
-			await opal.datasets.points.remove({ id: ds.id, pointId: p.id });
+			await opal.datasets.points.strike({ id: ds.id, pointId: p.id, reason });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -120,48 +165,90 @@
 		{#if !archived}
 			<Button size="sm" onclick={() => (addOpen = true)}>+ ADD POINT</Button>
 			<Button variant="outline" size="sm" onclick={() => (importOpen = true)}>IMPORT CSV</Button>
-			<Button variant="outline" size="sm" onclick={() => (editOpen = true)}>EDIT</Button>
+			<EditToggle />
 		{/if}
 		<Button variant="outline" size="sm" href={exportHref} download={`dataset-${ds.id}.csv`}
 			>EXPORT CSV</Button
 		>
-		{#if !archived}
-			<Button variant="destructive" size="sm" onclick={removeDataset}
-				>{ds.pointCount > 0 ? 'ARCHIVE' : 'DELETE'}</Button
-			>
-		{/if}
+		<MoreMenu
+			items={[
+				{
+					label: ds.pointCount > 0 ? 'ARCHIVE' : 'DELETE',
+					onselect: removeDataset,
+					strike: true,
+					when: !archived
+				}
+			]}
+		/>
 	{/snippet}
 </PageHeader>
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
 		<Section title="Dataset">
-			<DetailTable>
-				<ProjectRow id={ds.projectId} code={ds.projectCode} name={ds.projectName} />
-				<!-- added by projects -->
-				<DetailRow label="State"
-					>{#if archived}<State value="archived" tone="warn" badge />{:else}<span
-							class="font-mono text-xs text-muted-foreground">ACTIVE</span
-						>{/if}</DetailRow
-				>
-				<DetailRow label="Procedure">
-					{#if ds.procedureId}
-						<a href={`/procedures/${ds.procedureId}`} class="text-info hover:underline"
-							>{procedureName}</a
+			{#if editing}
+				<form class="grid grid-cols-1 gap-3 p-3" onsubmit={save}>
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label for="ed-project">Project</Label>
+						<ProjectSelect
+							id="ed-project"
+							bind:value={projectId}
+							keep={ds.projectId}
+							class="w-full"
+						/>
+					</div>
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label for="ed-name">Name</Label>
+						<Input id="ed-name" bind:value={name} required maxlength={255} />
+					</div>
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label for="ed-desc">Description</Label>
+						<Textarea id="ed-desc" bind:value={description} rows={3} />
+					</div>
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label for="ed-proc">Procedure</Label>
+						<NativeSelect id="ed-proc" bind:value={procedure} class="w-full">
+							<NativeSelectOption value="">None</NativeSelectOption>
+							{#each data.procedures as p (p.id)}
+								<NativeSelectOption value={String(p.id)}>{p.name}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
+					</div>
+					<ErrorBanner message={error} />
+					<div class="flex gap-2">
+						<Button type="submit" size="sm" disabled={busy || !name.trim() || !projectId}
+							>SAVE</Button
 						>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
-				</DetailRow>
-				<DetailRow label="Description">
-					{#if ds.description}
-						<span class="whitespace-pre-wrap">{ds.description}</span>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
-				</DetailRow>
-				<DetailRow label="Created"><Timestamp value={ds.createdAt} /></DetailRow>
-				<DetailRow label="Updated"><Timestamp value={ds.updatedAt} /></DetailRow>
-				{#if archived && ds.archivedAt}
-					<DetailRow label="Archived"><Timestamp value={ds.archivedAt} /></DetailRow>
-				{/if}
-			</DetailTable>
+					</div>
+				</form>
+			{:else}
+				<DetailTable>
+					<ProjectRow id={ds.projectId} code={ds.projectCode} name={ds.projectName} />
+					<!-- added by projects -->
+					<DetailRow label="State"
+						>{#if archived}<State value="archived" tone="warn" badge />{:else}<span
+								class="font-mono text-xs text-muted-foreground">ACTIVE</span
+							>{/if}</DetailRow
+					>
+					<DetailRow label="Procedure">
+						{#if ds.procedureId}
+							<a href={`/procedures/${ds.procedureId}`} class="text-info hover:underline"
+								>{procedureName}</a
+							>
+						{:else}<span class="text-muted-foreground">—</span>{/if}
+					</DetailRow>
+					<DetailRow label="Description">
+						{#if ds.description}
+							<span class="whitespace-pre-wrap">{ds.description}</span>
+						{:else}<span class="text-muted-foreground">—</span>{/if}
+					</DetailRow>
+					<DetailRow label="Created"><Timestamp value={ds.createdAt} /></DetailRow>
+					<DetailRow label="Updated"><Timestamp value={ds.updatedAt} /></DetailRow>
+					{#if archived && ds.archivedAt}
+						<DetailRow label="Archived"><Timestamp value={ds.archivedAt} /></DetailRow>
+					{/if}
+				</DetailTable>
+			{/if}
 		</Section>
 
 		<Section title="Fields" count={fields.length}>
@@ -224,27 +311,41 @@
 		<EmptyLine label="Data points" onadd={archived ? undefined : () => (addOpen = true)} />
 	{:else}
 		<Section title="Data points" count={ds.pointCount}>
-			<DataTable rows={points} {columns} emptyLabel="Data points" key={(p) => p.id} dense>
+			<DataTable
+				rows={points}
+				{columns}
+				emptyLabel="Data points"
+				key={(p) => p.id}
+				rowClass={(p) => (p.struck ? 'text-muted-foreground' : undefined)}
+				dense
+			>
 				{#snippet cell(row, col)}
 					{#if col.key === 'recordedAt'}
-						<Timestamp value={row.recordedAt} />
+						<span class={row.struck ? 'line-through' : undefined}
+							><Timestamp value={row.recordedAt} /></span
+						>
 					{:else if col.key === 'source'}
 						{#if row.stepExecutionId !== null}
 							<span class="font-mono text-xs">Execution step</span>
 						{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else if col.key === 'actions'}
-						{#if !archived}<Button variant="ghost" size="xs" onclick={() => removePoint(row)}
-								>DELETE</Button
+						{#if row.struck}
+							<span class="font-mono text-xs" title={row.struck.reason}
+								>STRUCK <Timestamp value={row.struck.at} /> · {row.struck.reason}</span
+							>
+						{:else if !archived}<Button variant="ghost" size="xs" onclick={() => strikePoint(row)}
+								>STRIKE</Button
 							>{/if}
 					{:else}
 						{@const name = col.key.slice(2)}
 						{@const f = byName.get(name)}
 						{@const v = show(row.values[name])}
 						{#if v}
-							{v}{#if f?.type === 'number' && f.unit}<span class="ml-1 text-muted-foreground"
+							<span class={row.struck ? 'line-through' : undefined}>{v}</span
+							>{#if f?.type === 'number' && f.unit}<span class="ml-1 text-muted-foreground"
 									>{unitSymbol(f.unit)}</span
 								>{/if}
-							{#if f?.spec && specResult(f.spec, row.values[name]) === 'out_of_spec'}
+							{#if !row.struck && f?.spec && specResult(f.spec, row.values[name]) === 'out_of_spec'}
 								<Badge
 									variant="outline"
 									class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
@@ -266,9 +367,3 @@
 
 <AddPointDialog bind:open={addOpen} datasetId={ds.id} {fields} onadded={invalidateAll} />
 <ImportPointsDialog bind:open={importOpen} datasetId={ds.id} onimported={invalidateAll} />
-<EditDatasetDialog
-	bind:open={editOpen}
-	dataset={ds}
-	procedures={data.procedures}
-	onsaved={invalidateAll}
-/>

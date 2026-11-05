@@ -26,6 +26,7 @@ import {
 	dependencyMap,
 	presentDraft,
 	presentStep,
+	draftRow,
 	procedureRow,
 	stepRow,
 	stepRows
@@ -112,7 +113,7 @@ function renormalize(ctx: Ctx, procedureId: number) {
 // ------------------------------------------------------------------- add
 
 export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
-	procedureRow(ctx.db, input.id);
+	draftRow(ctx.db, input.id);
 	const rows = stepRows(ctx.db, input.id);
 	const byId = new Map(rows.map((r) => [r.id, r]));
 
@@ -182,7 +183,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 // ------------------------------------------------------------------- update
 
 export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
-	procedureRow(ctx.db, input.id);
+	draftRow(ctx.db, input.id);
 	const step = stepRow(ctx.db, input.id, input.stepId);
 	const rows = stepRows(ctx.db, input.id);
 	const hasChildren = rows.some((r) => r.parentStepId === step.id);
@@ -244,7 +245,7 @@ export function removeStepDeep(ctx: Ctx, step: StepRow, all: StepRow[]) {
 }
 
 export function deleteStep(ctx: Ctx, procedureId: number, stepId: number): void {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	const step = stepRow(ctx.db, procedureId, stepId);
 	removeStepDeep(ctx, step, stepRows(ctx.db, procedureId));
 	renormalize(ctx, procedureId);
@@ -287,7 +288,7 @@ export function copyStepContent(ctx: Ctx, from: number, to: number) {
 }
 
 export function duplicateStep(ctx: Ctx, procedureId: number, stepId: number): ProcedureStep {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	const source = stepRow(ctx.db, procedureId, stepId);
 	const rows = stepRows(ctx.db, procedureId);
 
@@ -338,7 +339,7 @@ export function moveStep(
 	ctx: Ctx,
 	input: { id: number; stepId: number; parentId: number | null; index: number; isContingency?: boolean }
 ): ProcedureStep {
-	procedureRow(ctx.db, input.id);
+	draftRow(ctx.db, input.id);
 	const step = stepRow(ctx.db, input.id, input.stepId);
 	const rows = stepRows(ctx.db, input.id);
 	if (input.parentId !== null) {
@@ -363,7 +364,7 @@ export function moveStep(
 
 /** Flat reorder: every step id once, in the new document order. A step keeps its parent. */
 export function reorderSteps(ctx: Ctx, procedureId: number, stepIds: number[]): ProcedureStep[] {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	const rows = stepRows(ctx.db, procedureId);
 	const have = new Set(rows.map((r) => r.id));
 	if (stepIds.length !== have.size || new Set(stepIds).size !== have.size || stepIds.some((x) => !have.has(x))) {
@@ -385,7 +386,7 @@ export function listDependencies(ctx: Pick<Ctx, 'db'>, procedureId: number) {
 }
 
 export function setDependencies(ctx: Ctx, procedureId: number, stepId: number, dependsOn: number[]) {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	const rows = stepRows(ctx.db, procedureId);
 	const target = stepRow(ctx.db, procedureId, stepId);
 	if (target.parentStepId !== null) {

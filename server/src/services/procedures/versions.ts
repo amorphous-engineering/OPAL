@@ -33,7 +33,7 @@ import { ensurePartsActive } from '../parts/lifecycle.ts';
 import { getBlob } from '../platform/attachments.ts';
 import { diffPartLists, diffProcedure, diffSteps } from './diff.ts';
 import { presentProcedure } from './index.ts';
-import { procedureRow, stepRows } from './draft.ts';
+import { draftRow, procedureRow, stepRows } from './draft.ts';
 import { buildSnapshot } from './snapshot.ts';
 import { removeStepDeep, invalid } from './steps.ts';
 import { layoutAll } from './tree.ts';
@@ -77,7 +77,8 @@ export function snapshotPartIds(s: ProcedureSnapshot): number[] {
 // ------------------------------------------------------------------- publish
 
 export function publish(ctx: Ctx, procedureId: number, changeNote?: string | null): ProcedureVersion {
-	const proc = procedureRow(ctx.db, procedureId);
+	// An obsolete template is read-only. Publishing would silently put it back on the floor.
+	const proc = draftRow(ctx.db, procedureId);
 	if (!stepRows(ctx.db, procedureId).length) {
 		throw conflict('empty_procedure', 'Cannot publish a procedure with no steps');
 	}
@@ -220,7 +221,7 @@ export function diffVersions(ctx: Ctx, procedureId: number, aId: number, bId: nu
  * were, so one id keeps naming one step across versions. The status and the current version stay.
  */
 export function restoreVersion(ctx: Ctx, procedureId: number, versionId: number): Procedure {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	const row = versionRow(ctx.db, versionId);
 	if (row.procedureId !== procedureId) throw notFound('Version for this procedure');
 	const snap = row.content;

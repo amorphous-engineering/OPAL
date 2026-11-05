@@ -13,7 +13,6 @@
 		hasParams,
 		setQuery
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import {
 		AUDIT_PAGE_SIZE,
 		actionTone,
@@ -23,7 +22,6 @@
 		type AuditEntry
 	} from '#lib/components/audit/audit.js';
 	import ChangesTable from '#lib/components/audit/ChangesTable.svelte';
-	import { undoLast } from '#lib/components/shell/undo.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -66,9 +64,6 @@
 <PageHeader title="Audit log">
 	{#snippet meta()}
 		<span class="mono">{data.total.toLocaleString()} {data.total === 1 ? 'entry' : 'entries'}</span>
-	{/snippet}
-	{#snippet actions()}
-		<Button variant="outline" size="sm" onclick={undoLast}>UNDO LAST CHANGE</Button>
 	{/snippet}
 </PageHeader>
 

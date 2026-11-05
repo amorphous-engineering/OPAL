@@ -704,7 +704,7 @@ describe('catalog import', () => {
 		setSetting({ db, actor: { kind: 'system' }, op: 'test' }, PROJECT_CONFIG_KEY, JSON.stringify({ name: 'P', requirements: catalog }));
 		const other = createTestProject(db, 'OTHER');
 		expect((await call('POST', '/requirements/import', { projectId: 999 })).status).toBe(404);
-		await call('POST', `/projects/${other.id}/archive`);
+		await call('POST', `/projects/${other.id}/archive`, { reason: 'Test' });
 		expect((await call('POST', '/requirements/import', { projectId: other.id })).status).toBe(409);
 		expect((await call('POST', '/requirements/import', {})).status).toBe(422);
 		await call('POST', '/requirements/import', { projectId: project.id });
@@ -755,7 +755,7 @@ describe('projects', () => {
 		const { call, db, project } = await setup();
 		expect((await call('POST', '/requirements', { title: 't', statement: 's', projectId: 999 })).status).toBe(404);
 		const dead = createTestProject(db, 'DEAD');
-		await call('POST', `/projects/${dead.id}/archive`);
+		await call('POST', `/projects/${dead.id}/archive`, { reason: 'Test' });
 		expect((await call('POST', '/requirements', { title: 't', statement: 's', projectId: dead.id })).status).toBe(409);
 		const r = await call('POST', '/requirements', { title: 't', statement: 's', projectId: project.id });
 		expect(r.body).toMatchObject({ projectId: project.id, projectCode: 'TP', projectName: 'Project TP' });

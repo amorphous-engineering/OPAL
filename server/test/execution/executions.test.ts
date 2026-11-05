@@ -19,7 +19,7 @@ describe('cutting an execution', () => {
 		const other = (await t.ok('POST', '/projects', { code: 'OTH', name: 'Other' })) as any;
 		expect((await t.cut(pid)).projectId).toBe(t.proj.id);
 		expect((await t.cut(pid, { projectId: other.id })).projectId).toBe(other.id);
-		await t.ok('POST', `/projects/${other.id}/archive`, {});
+		await t.ok('POST', `/projects/${other.id}/archive`, { reason: 'Test' });
 		const refused = await t.call('POST', '/executions', { procedureId: pid, projectId: other.id });
 		expect(refused.status).toBe(409);
 	});

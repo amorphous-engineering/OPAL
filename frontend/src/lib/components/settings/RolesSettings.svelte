@@ -51,6 +51,16 @@
 
 	async function toggleGate(g: GateInfo, role: Role, on: boolean) {
 		if (gateBusy) return;
+		const who = `${role.memberCount} ${role.memberCount === 1 ? 'member' : 'members'} of ${role.name}`;
+		const ok = await confirm({
+			title: `${on ? 'Grant' : 'Remove'} ${g.label}?`,
+			body: on ? `${who} will be able to do this.` : `${who} will no longer be able to do this.`,
+			action: on ? 'GRANT' : 'REMOVE'
+		});
+		if (!ok) {
+			gateRev++; // put the checkbox back as it was
+			return;
+		}
 		gateBusy = g.key;
 		const ids = g.roleIds.filter((id) => id !== role.id && id !== adminRole?.id);
 		if (on) ids.push(role.id);

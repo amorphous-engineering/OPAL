@@ -195,6 +195,8 @@ export const zProcedure = z.object({
 	description: z.string().nullable(),
 	procedureType: z.enum(PROCEDURE_TYPES),
 	status: z.enum(PROCEDURE_STATUSES),
+	/** The reason given when the template was last made obsolete or reinstated. */
+	statusReason: z.string().nullable(),
 	currentVersionId: z.number().int().nullable(),
 	currentVersionNumber: z.number().int().nullable(),
 	opCount: z.number().int(),
@@ -727,11 +729,12 @@ const versions = {
 		method: 'POST',
 		path: '/procedures/:id/publish',
 		summary:
-			'Freeze the draft as a new immutable version and release the procedure. Refused with no steps, or when the kit or outputs hold draft parts.',
+			'Freeze the draft as a new immutable version and release the procedure. Refused with no steps, when the kit or outputs hold draft parts, and on an obsolete procedure. Needs a person: an agent prepares the draft, a person publishes it.',
 		input: z.object({ id: zId, changeNote: z.string().max(2000).nullable().optional() }),
 		output: zProcedureVersion,
 		access: 'signed-in',
-		mcp: true
+		humanOnly: true,
+		mcp: false
 	}),
 	diff: op({
 		name: 'procedures.versions.diff',
@@ -829,19 +832,40 @@ export const procedures = {
 		name: 'procedures.update',
 		method: 'PATCH',
 		path: '/procedures/:id',
-		summary:
-			'Change name, description, type or status. Released needs a published version. Obsolete retires the procedure.',
+		summary: 'Change project, name, description or type. Refused on an obsolete procedure. Retiring and reinstating are their own operations.',
 		input: z.object({
 			id: zId,
 			projectId: zId.optional(),
 			name: z.string().trim().min(1).max(255).optional(),
 			description: z.string().nullable().optional(),
-			status: z.enum(PROCEDURE_STATUSES).optional(),
 			procedureType: z.enum(PROCEDURE_TYPES).optional()
 		}),
 		output: zProcedure,
 		access: 'signed-in',
 		mcp: true
+	}),
+	obsolete: op({
+		name: 'procedures.obsolete',
+		method: 'POST',
+		path: '/procedures/:id/obsolete',
+		summary:
+			'Retire a released procedure. No new work orders can be cut from it; work orders already cut continue. The reason is required and stays on the record.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1, 'a reason is required').max(2000) }),
+		output: zProcedure,
+		access: 'signed-in',
+		humanOnly: true,
+		mcp: false
+	}),
+	reinstate: op({
+		name: 'procedures.reinstate',
+		method: 'POST',
+		path: '/procedures/:id/reinstate',
+		summary: 'Bring an obsolete procedure back to released (or to draft when nothing was ever published). The reason is required.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1, 'a reason is required').max(2000) }),
+		output: zProcedure,
+		access: 'signed-in',
+		humanOnly: true,
+		mcp: false
 	}),
 	delete: op({
 		name: 'procedures.delete',

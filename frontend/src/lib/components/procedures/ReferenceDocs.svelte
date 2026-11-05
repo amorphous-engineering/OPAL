@@ -17,25 +17,31 @@
 		procedureId,
 		docs,
 		onchange,
-		compact = false
+		compact = false,
+		addable = true,
+		removable = true
 	}: {
 		procedureId: number;
 		docs: Attachment[];
 		onchange: () => void | Promise<void>;
 		/** A narrow column: one line per file instead of a table. */
 		compact?: boolean;
+		/** Adding a file is an addition to the record; an obsolete template takes none. */
+		addable?: boolean;
+		/** A file leaves only while the template is being edited. */
+		removable?: boolean;
 	} = $props();
 
 	let input: HTMLInputElement | undefined = $state();
 	let busy = $state(false);
 
-	const columns: Column<Attachment>[] = [
+	const columns = $derived<Column<Attachment>[]>([
 		{ key: 'filename', label: 'File' },
 		{ key: 'mimeType', label: 'Type', width: '12rem', mono: true },
 		{ key: 'sizeBytes', label: 'Size', width: '6rem', align: 'right', mono: true },
 		{ key: 'createdAt', label: 'Uploaded', width: '10rem' },
-		{ key: 'actions', label: '', width: '5rem', align: 'right' }
-	];
+		...(removable ? [{ key: 'actions', label: '', width: '5rem', align: 'right' as const }] : [])
+	]);
 
 	function size(n: number): string {
 		return n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -83,20 +89,24 @@
 {#if docs.length === 0}
 	<EmptyLine label="Reference documents">
 		{#snippet action()}
-			<button
-				type="button"
-				class="font-medium text-info hover:underline disabled:opacity-50"
-				disabled={busy}
-				onclick={() => input?.click()}>+ UPLOAD</button
-			>
+			{#if addable}
+				<button
+					type="button"
+					class="font-medium text-info hover:underline disabled:opacity-50"
+					disabled={busy}
+					onclick={() => input?.click()}>+ UPLOAD</button
+				>
+			{/if}
 		{/snippet}
 	</EmptyLine>
 {:else}
 	<Section title="Reference documents" count={docs.length}>
 		{#snippet actions()}
-			<Button variant="ghost" size="xs" disabled={busy} onclick={() => input?.click()}
-				>+ UPLOAD</Button
-			>
+			{#if addable}
+				<Button variant="ghost" size="xs" disabled={busy} onclick={() => input?.click()}
+					>+ UPLOAD</Button
+				>
+			{/if}
 		{/snippet}
 		{#if compact}
 			<ul class="m-0 list-none p-0">
@@ -112,12 +122,14 @@
 							title={d.filename}>{d.filename}</a
 						>
 						<span class="font-mono text-muted-foreground">{size(d.sizeBytes)}</span>
-						<button
-							type="button"
-							class="font-mono text-muted-foreground hover:text-error"
-							aria-label={`Delete ${d.filename}`}
-							onclick={() => remove(d)}>×</button
-						>
+						{#if removable}
+							<button
+								type="button"
+								class="font-mono text-muted-foreground hover:text-error"
+								aria-label={`Delete ${d.filename}`}
+								onclick={() => remove(d)}>×</button
+							>
+						{/if}
 					</li>
 				{/each}
 			</ul>

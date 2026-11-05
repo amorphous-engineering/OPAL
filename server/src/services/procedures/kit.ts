@@ -15,7 +15,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import { bomLine, kitItem, part, procedureOutput } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
-import { presentKit, presentOutput, presentOutputs, procedureKitRows, procedureRow, stepRow } from './draft.ts';
+import { draftRow, presentKit, presentOutput, presentOutputs, procedureKitRows, procedureRow, stepRow } from './draft.ts';
 import { invalid } from './steps.ts';
 
 type Usage = 'consume' | 'tooling';
@@ -33,8 +33,8 @@ function requirePart(ctx: Ctx, partId: number) {
 	return p;
 }
 
-function check(ctx: Ctx, scope: Scope) {
-	procedureRow(ctx.db, scope.procedureId);
+function check(ctx: Ctx, scope: Scope, write = false) {
+	(write ? draftRow : procedureRow)(ctx.db, scope.procedureId);
 	if (scope.stepId !== undefined) stepRow(ctx.db, scope.procedureId, scope.stepId);
 }
 
@@ -64,7 +64,7 @@ export function addKit(
 	scope: Scope,
 	input: { partId: number; quantity: string; usage: Usage; notes?: string | null }
 ): ProcedureKitItem {
-	check(ctx, scope);
+	check(ctx, scope, true);
 	requirePart(ctx, input.partId);
 	const quantity = positive(input.quantity);
 	const dup = ctx.db
@@ -90,7 +90,7 @@ export function updateKit(
 	kitId: number,
 	input: { quantity?: string; usage?: Usage; notes?: string | null }
 ): ProcedureKitItem {
-	check(ctx, scope);
+	check(ctx, scope, true);
 	kitRow(ctx, scope, kitId);
 	const patch: Partial<typeof kitItem.$inferInsert> = {};
 	if (input.quantity !== undefined) patch.quantity = positive(input.quantity);
@@ -101,7 +101,7 @@ export function updateKit(
 }
 
 export function removeKit(ctx: Ctx, scope: Scope, kitId: number): void {
-	check(ctx, scope);
+	check(ctx, scope, true);
 	kitRow(ctx, scope, kitId);
 	remove(ctx, kitItem, kitId);
 }
@@ -118,7 +118,7 @@ export function listOutputs(ctx: Ctx, procedureId: number): ProcedureOutput[] {
  * component already in the kit gains the quantity.
  */
 export function addOutput(ctx: Ctx, procedureId: number, partId: number, quantity: string): ProcedureOutput {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	requirePart(ctx, partId);
 	const qty = positive(quantity);
 	const dup = ctx.db
@@ -153,13 +153,13 @@ function outputRow(ctx: Ctx, procedureId: number, outputId: number) {
 }
 
 export function updateOutput(ctx: Ctx, procedureId: number, outputId: number, quantity: string): ProcedureOutput {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	outputRow(ctx, procedureId, outputId);
 	return presentOutput(ctx, update(ctx, procedureOutput, outputId, { quantity: positive(quantity) }));
 }
 
 export function removeOutput(ctx: Ctx, procedureId: number, outputId: number): void {
-	procedureRow(ctx.db, procedureId);
+	draftRow(ctx.db, procedureId);
 	outputRow(ctx, procedureId, outputId);
 	remove(ctx, procedureOutput, outputId);
 }

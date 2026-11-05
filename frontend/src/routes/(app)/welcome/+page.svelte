@@ -107,8 +107,7 @@
 				>
 				<DetailRow label="Network">Other machines on the local network can connect.</DetailRow>
 				<DetailRow label="Audit trail"
-					>Every create, update and delete is logged with who, when and what. Audit log lists them;
-					Ctrl+Z reverts your last change within the hour.</DetailRow
+					>Every create, update and delete is logged with who, when and what. Audit log lists them.</DetailRow
 				>
 				<DetailRow label="Traceability"
 					>Every physical item or batch carries its own OPAL number.</DetailRow

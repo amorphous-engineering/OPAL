@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { opal } from '#lib/api.js';
 	import {
@@ -8,14 +9,15 @@
 		DataTable,
 		DetailTable,
 		DetailRow,
+		EditToggle,
+		MoreMenu,
 		State,
 		Timestamp,
 		confirm,
+		isEditing,
 		toast,
 		toastError
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import WorkcenterForm from '#lib/components/workcenters/WorkcenterForm.svelte';
 	import type { WorkcenterInput } from '#lib/components/workcenters/types.js';
 	import type { PageProps } from './$types';
@@ -42,7 +44,7 @@
 		return [...m.values()];
 	});
 
-	let editOpen = $state(false);
+	const editing = $derived(isEditing(page.url));
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
@@ -51,8 +53,8 @@
 		error = null;
 		try {
 			await opal.org.workcenters.update({ id: wc.id, ...v });
-			editOpen = false;
 			await invalidateAll();
+			await goto(page.url.pathname);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to save';
 			toastError(e);
@@ -91,26 +93,44 @@
 		{#if !wc.isActive}<State value="inactive" tone="muted" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
-		<Button size="sm" variant="outline" onclick={() => (editOpen = true)}>EDIT</Button>
-		{#if wc.isActive}
-			<Button size="sm" variant="outline" onclick={() => setActive(false)}>DEACTIVATE</Button>
-		{:else}
-			<Button size="sm" variant="outline" onclick={() => setActive(true)}>ACTIVATE</Button>
-		{/if}
+		<EditToggle />
+		<MoreMenu
+			items={[
+				{ label: 'DEACTIVATE', onselect: () => setActive(false), strike: true, when: wc.isActive },
+				{ label: 'ACTIVATE', onselect: () => setActive(true), when: !wc.isActive }
+			]}
+		/>
 	{/snippet}
 </PageHeader>
 
 <div class="grid grid-cols-1 gap-4 p-4">
 	<Section title="Workcenter" class="max-w-3xl">
-		<DetailTable>
-			<DetailRow label="Code" value={wc.code} mono />
-			<DetailRow label="Name" value={wc.name} />
-			<DetailRow label="Location" value={wc.location} />
-			<DetailRow label="Description">
-				{#if wc.description}<span class="whitespace-pre-wrap">{wc.description}</span>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
-			</DetailRow>
-		</DetailTable>
+		{#if editing}
+			<div class="p-3">
+				{#key wc.id}
+					<WorkcenterForm
+						initial={wc}
+						submitLabel="SAVE"
+						showActive={false}
+						{busy}
+						{error}
+						onsubmit={save}
+					>
+						{#snippet cancel()}{/snippet}
+					</WorkcenterForm>
+				{/key}
+			</div>
+		{:else}
+			<DetailTable>
+				<DetailRow label="Code" value={wc.code} mono />
+				<DetailRow label="Name" value={wc.name} />
+				<DetailRow label="Location" value={wc.location} />
+				<DetailRow label="Description">
+					{#if wc.description}<span class="whitespace-pre-wrap">{wc.description}</span>
+					{:else}<span class="text-muted-foreground">—</span>{/if}
+				</DetailRow>
+			</DetailTable>
+		{/if}
 	</Section>
 
 	<Section title="Queue" count={work.queue.length}>
@@ -171,16 +191,3 @@
 		</DataTable>
 	</Section>
 </div>
-
-<Dialog.Root bind:open={editOpen}>
-	<Dialog.Content class="max-w-md">
-		<Dialog.Header><Dialog.Title>Edit {wc.code}</Dialog.Title></Dialog.Header>
-		{#key editOpen}
-			<WorkcenterForm initial={wc} submitLabel="SAVE" {busy} {error} onsubmit={save}>
-				{#snippet cancel()}
-					<Button type="button" variant="outline" onclick={() => (editOpen = false)}>CANCEL</Button>
-				{/snippet}
-			</WorkcenterForm>
-		{/key}
-	</Dialog.Content>
-</Dialog.Root>

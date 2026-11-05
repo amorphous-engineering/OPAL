@@ -19,6 +19,8 @@ export const proceduresImpls = [
 	implement(p.create, (ctx, i) => procedures.create(ctx, i)),
 	implement(p.get, (ctx, i) => procedures.get(ctx, i.id)),
 	implement(p.update, (ctx, i) => procedures.updateProcedure(ctx, i)),
+	implement(p.obsolete, (ctx, i) => procedures.obsoleteProcedure(ctx, i.id, i.reason)),
+	implement(p.reinstate, (ctx, i) => procedures.reinstateProcedure(ctx, i.id, i.reason)),
 	implement(p.delete, (ctx, i) => {
 		procedures.deleteProcedure(ctx, i.id);
 		return ok;

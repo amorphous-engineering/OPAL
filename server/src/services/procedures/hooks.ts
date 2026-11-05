@@ -3,7 +3,9 @@
  * part references (a referenced part cannot be deleted), the entity names and search index
  * of the platform, workcenter workload, and undo for the simple writes.
  */
+import { conflict } from '@opal/shared';
 import { eq, isNotNull, ne, sql } from 'drizzle-orm';
+import type { Ctx } from '../../context.ts';
 import {
 	kitItem,
 	procedure,
@@ -16,6 +18,8 @@ import {
 import { registerWorkcenterWork } from '../org/workcenters.ts';
 import { registerPartReference } from '../parts/references.ts';
 import { registerEntity, registerReversible, registerSearchable, revertRows } from '../platform/index.ts';
+import type { AuditRow } from '../platform/undo.ts';
+import { draftRow } from './draft.ts';
 import { documentOrder, numbering } from './tree.ts';
 
 registerPartReference({
@@ -102,7 +106,33 @@ registerWorkcenterWork({
 	}
 });
 
-registerReversible('procedures.create', { revert: (ctx, rows) => revertRows(ctx, rows, { procedure }) });
-registerReversible('procedures.update', { revert: (ctx, rows) => revertRows(ctx, rows, { procedure }) });
-registerReversible('procedures.steps.update', { revert: (ctx, rows) => revertRows(ctx, rows, { procedure_step: procedureStep }) });
+// Undo is for pencil. A template is pencil until its first version exists; the steps of a
+// draft stay pencil for as long as the template can be edited at all.
+function requireNeverPublished(ctx: Ctx, rows: AuditRow[]) {
+	for (const r of rows) {
+		const p = ctx.db.select().from(procedure).where(eq(procedure.id, r.entityId)).get();
+		if (!p) continue;
+		if (p.status !== 'draft' || p.currentVersionId !== null) {
+			throw conflict('not_pencil', `${p.templateNumber} was published, so this change is on the record`);
+		}
+	}
+}
+registerReversible('procedures.create', {
+	authorize: requireNeverPublished,
+	revert: (ctx, rows) => revertRows(ctx, rows, { procedure })
+});
+registerReversible('procedures.update', {
+	authorize: requireNeverPublished,
+	revert: (ctx, rows) => revertRows(ctx, rows, { procedure })
+});
+registerReversible('procedures.steps.update', {
+	authorize: (ctx, rows) => {
+		for (const r of rows) {
+			const s = ctx.db.select().from(procedureStep).where(eq(procedureStep.id, r.entityId)).get();
+			if (!s) continue;
+			draftRow(ctx.db, s.procedureId);
+		}
+	},
+	revert: (ctx, rows) => revertRows(ctx, rows, { procedure_step: procedureStep })
+});
 
