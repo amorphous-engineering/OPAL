@@ -37,7 +37,7 @@
 					requiresSignoff: s.requires_signoff
 				}))
 			});
-			store.closeDialog();
+			store.closePanel();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create redline';
 			toastError(err);
@@ -111,7 +111,7 @@
 	</div>
 	{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
 	<Dialog.Footer>
-		<Button variant="outline" onclick={() => store.closeDialog()}>CANCEL</Button>
+		<Button variant="outline" onclick={() => store.closePanel()}>CANCEL</Button>
 		<Button type="submit" disabled={busy || !title.trim() || steps.some((s) => !s.title.trim())}
 			>CREATE REDLINE</Button
 		>

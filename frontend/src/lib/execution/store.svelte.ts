@@ -52,11 +52,12 @@ function write(key: string, value: unknown) {
 	}
 }
 
-/** Keys for every expandable thing: OP cards (`op:3`) and step bodies (`step:5`). */
-export type OpenDialog =
+/** The one form open on the page. It sits inline: nothing here covers the document. */
+export type OpenPanel =
 	| { kind: 'skip'; step: DocStep }
 	| { kind: 'issue'; step: DocStep }
 	| { kind: 'redline'; op: DocOp; issueId?: number }
+	| { kind: 'closeShort' }
 	| null;
 
 export class ExecutionStore implements DocController {
@@ -67,7 +68,7 @@ export class ExecutionStore implements DocController {
 	doc = $state<ExecutionDocument | null>(null);
 	error = $state<string | null>(null);
 	loading = $state(true);
-	dialog = $state<OpenDialog>(null);
+	panel = $state<OpenPanel>(null);
 	focusedOrder = $state<number | null>(null);
 	claimedOrder = $state<number | null>(null);
 	/** Brief highlight after a jump (rail click, ?op= link). */
@@ -596,9 +597,9 @@ export class ExecutionStore implements DocController {
 				await this.refresh();
 			}
 		},
-		skip: (step) => (this.dialog = { kind: 'skip', step }),
-		raiseIssue: (step) => (this.dialog = { kind: 'issue', step }),
-		redline: (op) => (this.dialog = { kind: 'redline', op }),
+		skip: (step) => (this.panel = { kind: 'skip', step }),
+		raiseIssue: (step) => (this.panel = { kind: 'issue', step }),
+		redline: (op) => (this.panel = { kind: 'redline', op }),
 		deleteRedline: async (op) => {
 			if (
 				!(await confirm({
@@ -699,10 +700,25 @@ export class ExecutionStore implements DocController {
 		if (next) this.focusedOrder = next.step.order;
 	}
 
-	// ---------- dialog operations ----------
+	// ---------- panel operations ----------
 
-	closeDialog() {
-		this.dialog = null;
+	closePanel() {
+		this.panel = null;
+	}
+
+	/** The issue form with this work order, and the step if there is one, carried in the URL. */
+	issueUrl(step?: DocStep): string {
+		const inst = this.doc?.instance;
+		const q = new URLSearchParams({
+			execution: String(this.id),
+			executionLabel: inst?.work_order ?? '',
+			projectId: String(inst?.project.id ?? '')
+		});
+		if (step) {
+			q.set('step', String(step.order));
+			q.set('stepLabel', step.number);
+		}
+		return `/issues/new?${q}`;
 	}
 
 	async skipStep(step: DocStep, reason: string) {
@@ -749,8 +765,13 @@ export class ExecutionStore implements DocController {
 		await this.changed();
 	}
 
-	async abort() {
-		await opal.execution.cancel({ id: this.id });
+	async voidOrder(reason: string) {
+		await opal.execution.void({ id: this.id, reason });
+		await this.changed();
+	}
+
+	async closeShort(reason: string, issueId: number) {
+		await opal.execution.closeShort({ id: this.id, reason, issueId });
 		await this.changed();
 	}
 

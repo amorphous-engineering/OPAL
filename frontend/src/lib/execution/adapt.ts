@@ -216,7 +216,16 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			scheduled_start_at: e.scheduledStartAt,
 			target_completion_at: e.targetCompletionAt,
 			last_activity_at: e.lastActivityAt,
-			duration_seconds: e.durationSeconds
+			duration_seconds: e.durationSeconds,
+			closure: e.closure && {
+				reason: e.closure.reason,
+				by: e.closure.by,
+				at: e.closure.at,
+				issue_id: e.closure.issueId,
+				issue_number: e.closure.issueNumber
+			},
+			can_void: e.canVoid,
+			can_close_short: e.canCloseShort
 		},
 		progress: d.progress,
 		ops: d.ops.map(op),

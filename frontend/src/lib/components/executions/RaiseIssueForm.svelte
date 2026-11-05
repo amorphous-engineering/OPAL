@@ -64,7 +64,7 @@
 				},
 				Array.from(files ?? [])
 			);
-			store.closeDialog();
+			store.closePanel();
 			toast.success(`${issue.issueNumber} raised at ${step.number}`, {
 				action: { label: 'OPEN', onClick: () => (window.location.href = `/issues/${issue.id}`) }
 			});
@@ -138,7 +138,7 @@
 	</div>
 	{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
 	<Dialog.Footer>
-		<Button variant="outline" onclick={() => store.closeDialog()}>CANCEL</Button>
+		<Button variant="outline" onclick={() => store.closePanel()}>CANCEL</Button>
 		<Button type="submit" disabled={busy || !title.trim()}>RAISE</Button>
 	</Dialog.Footer>
 </form>

@@ -11,7 +11,16 @@ import type {
 	DocOp
 } from '#lib/components/procedure-doc/index.js';
 
-export type InstanceStatus = 'cut' | 'in_work' | 'completed' | 'aborted';
+export type InstanceStatus = 'cut' | 'in_work' | 'completed' | 'void' | 'closed_short';
+
+/** Why a struck work order stopped. */
+export interface Closure {
+	reason: string | null;
+	by: string | null;
+	at: string | null;
+	issue_id: number | null;
+	issue_number: string | null;
+}
 
 export interface RosterEntry {
 	user_id: number;
@@ -122,6 +131,9 @@ export interface InstanceFacts {
 	target_completion_at: string | null;
 	last_activity_at: string | null;
 	duration_seconds: number | null;
+	closure: Closure | null;
+	can_void: boolean;
+	can_close_short: boolean;
 }
 
 export interface ExecutionDocument {

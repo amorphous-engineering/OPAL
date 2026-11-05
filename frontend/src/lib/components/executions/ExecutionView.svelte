@@ -6,11 +6,14 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		confirm,
+		askReason,
+		MoreMenu,
 		PageHeader,
 		TabStrip,
+		Timestamp,
 		toastError,
-		ErrorBanner
+		ErrorBanner,
+		type MoreItem
 	} from '#lib/components/opal/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { toneBox, toneFor } from '#lib/components/opal/tone.js';
@@ -20,6 +23,7 @@
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
 	import { session } from '#lib/session.svelte.js';
 	import { ExecutionStore } from '#lib/execution/store.svelte.js';
+	import CloseShortPanel from './CloseShortPanel.svelte';
 	import DataPanel from './DataPanel.svelte';
 	import ExecutionGraph from './ExecutionGraph.svelte';
 	import ExecutionDialogs from './ExecutionDialogs.svelte';
@@ -95,21 +99,31 @@
 		store.jumpTo(order);
 	}
 
-	async function abort() {
+	async function voidOrder() {
 		if (!inst) return;
-		const ok = await confirm({
-			title: `Abort ${inst.work_order ?? 'work order'}?`,
-			body: 'In-progress work stops, the work order closes as ABORTED, and it cannot be resumed.',
-			action: 'ABORT',
+		const reason = await askReason({
+			title: `Void ${inst.work_order ?? 'work order'}?`,
+			body: 'Nobody can work it again. It stays on the record, struck through.',
+			action: 'VOID',
 			destructive: true
 		});
-		if (!ok) return;
+		if (reason === null) return;
 		try {
-			await store.abort();
+			await store.voidOrder(reason);
 		} catch (e) {
-			toastError(e, 'Failed to abort');
+			toastError(e, 'Failed to void');
 		}
 	}
+
+	const more = $derived<MoreItem[]>([
+		{ label: 'VOID', strike: true, when: inst?.can_void, onselect: voidOrder },
+		{
+			label: 'CLOSE SHORT',
+			strike: true,
+			when: inst?.can_close_short,
+			onselect: () => (store.panel = { kind: 'closeShort' })
+		}
+	]);
 </script>
 
 <svelte:window onkeydown={(e) => store.handleKey(e)} />
@@ -166,22 +180,38 @@
 					{/if}
 				{/snippet}
 				{#snippet actions()}
-					{#if inst.status === 'completed'}
+					{#if !inst.active}
 						<Button
 							size="sm"
-							variant="outline"
 							href={`/executions/${inst.id}/report`}
 							target="_blank"
 							rel="noopener">REPORT</Button
 						>
 					{/if}
-					{#if inst.active}
-						<Button size="sm" variant="destructive" onclick={abort}>ABORT</Button>
-					{/if}
+					<MoreMenu items={more} />
 				{/snippet}
 			</PageHeader>
 
-			{#if holds.length}
+			{#if inst.closure}
+				<div
+					class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-4 py-2 font-mono text-xs text-muted-foreground"
+					data-closure
+				>
+					<span class="font-medium">{stateLabel(inst.status)}</span>
+					{#if inst.closure.at}<Timestamp value={inst.closure.at} />{/if}
+					{#if inst.closure.by}<span>{inst.closure.by}</span>{/if}
+					{#if inst.closure.reason}<span class="font-sans text-sm text-foreground"
+							>{inst.closure.reason}</span
+						>{/if}
+					{#if inst.closure.issue_id}<a
+							class="text-info hover:underline"
+							href={`/issues/${inst.closure.issue_id}`}>{inst.closure.issue_number}</a
+						>{/if}
+				</div>
+			{/if}
+			{#if store.panel?.kind === 'closeShort'}<CloseShortPanel {store} />{/if}
+
+			{#if inst.active && holds.length}
 				<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
 					{#each holds as h (h.issue_id)}
 						<span class="font-mono text-xs text-warn">

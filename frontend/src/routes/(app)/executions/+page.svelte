@@ -28,7 +28,14 @@
 
 	const sort = urlSort({ key: 'created', dir: 'desc' });
 	const status = $derived(page.url.searchParams.get('status') ?? 'active');
-	const counts = $derived({ cut: 0, in_work: 0, completed: 0, aborted: 0, ...overview.counts });
+	const counts = $derived({
+		cut: 0,
+		in_work: 0,
+		completed: 0,
+		void: 0,
+		closed_short: 0,
+		...overview.counts
+	});
 	const FILTERS = ['q', 'procedure', 'project', 'mine', 'held'];
 	const filtered = $derived.by(() => {
 		void page.url.search;
@@ -40,8 +47,13 @@
 		{ id: 'cut', label: 'Cut', n: counts.cut },
 		{ id: 'in_work', label: 'In work', n: counts.in_work },
 		{ id: 'completed', label: 'Completed', n: counts.completed },
-		{ id: 'aborted', label: 'Aborted', n: counts.aborted },
-		{ id: 'all', label: 'All', n: counts.cut + counts.in_work + counts.completed + counts.aborted }
+		{ id: 'closed_short', label: 'Closed short', n: counts.closed_short },
+		{ id: 'void', label: 'Void', n: counts.void },
+		{
+			id: 'all',
+			label: 'All',
+			n: counts.cut + counts.in_work + counts.completed + counts.closed_short + counts.void
+		}
 	]);
 
 	const columns: Column<ExecutionRow>[] = [

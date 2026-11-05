@@ -10,11 +10,11 @@
 	let { store, editing = $bindable(false) }: { store: ExecutionStore; editing?: boolean } =
 		$props();
 
-	const open = $derived(!!store.dialog);
+	const open = $derived(!!store.panel && store.panel.kind !== 'closeShort');
 	// Keep the last dialog while it animates out; its form must not see a null step.
-	let d = $state<typeof store.dialog>(null);
+	let d = $state<typeof store.panel>(null);
 	$effect(() => {
-		if (store.dialog) d = store.dialog;
+		if (store.panel) d = store.panel;
 	});
 	const wide = $derived(d?.kind === 'issue' || d?.kind === 'redline');
 </script>
@@ -22,7 +22,7 @@
 <Dialog.Root
 	{open}
 	onOpenChange={(v) => {
-		if (!v) store.closeDialog();
+		if (!v) store.closePanel();
 	}}
 >
 	<Dialog.Content class={wide ? 'sm:max-w-xl' : 'sm:max-w-md'}>

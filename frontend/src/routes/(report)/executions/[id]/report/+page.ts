@@ -7,7 +7,7 @@ export const load: PageLoad = async ({ fetch, params }) => {
 		const report = await opal.using(fetch).execution.report({ id });
 		return { id, report, problem: null as string | null };
 	} catch (e) {
-		// A work order that is not completed has no report: say why, link back.
+		// A work order still in work has no report yet: say why, link back.
 		if (e instanceof ApiError && (e.status === 409 || e.status === 404)) {
 			return { id, report: null, problem: e.message };
 		}

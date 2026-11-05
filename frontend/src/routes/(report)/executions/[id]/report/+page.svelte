@@ -51,9 +51,23 @@
 						<tr>
 							<th class="pr-2 text-left font-bold uppercase">Operator</th>
 							<td class="pr-6">{dash(r.execution.operator)}</td>
-							<th class="pr-2 text-left font-bold uppercase">Completed</th>
+							<th class="pr-2 text-left font-bold uppercase"
+								>{r.execution.closure ? 'Stopped' : 'Completed'}</th
+							>
 							<td>{ts(r.execution.completedAt)}</td>
 						</tr>
+						{#if r.execution.closure}
+							<tr data-closure>
+								<th class="pr-2 text-left font-bold uppercase">Stopped by</th>
+								<td class="pr-6">{dash(r.execution.closure.by)}</td>
+								<th class="pr-2 text-left font-bold uppercase">Issue</th>
+								<td>{dash(r.execution.closure.issueNumber)}</td>
+							</tr>
+							<tr>
+								<th class="pr-2 text-left font-bold uppercase">Reason</th>
+								<td colspan="3">{dash(r.execution.closure.reason)}</td>
+							</tr>
+						{/if}
 						<tr>
 							<th class="pr-2 text-left font-bold uppercase">Generated</th>
 							<td colspan="3">{ts(r.generatedAt)}</td>

@@ -18,7 +18,7 @@
 		error = null;
 		try {
 			await store.skipStep(step, reason);
-			store.closeDialog();
+			store.closePanel();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to skip step';
 			toastError(err);
@@ -41,7 +41,7 @@
 	</FormRow>
 	{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
 	<Dialog.Footer>
-		<Button variant="outline" onclick={() => store.closeDialog()}>CANCEL</Button>
+		<Button variant="outline" onclick={() => store.closePanel()}>CANCEL</Button>
 		<Button type="submit" variant="destructive" disabled={busy || !reason.trim()}>SKIP STEP</Button>
 	</Dialog.Footer>
 </form>
