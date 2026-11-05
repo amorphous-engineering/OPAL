@@ -1,11 +1,15 @@
 <script lang="ts">
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { confirmState } from './confirm.svelte';
 
 	let typed = $state('');
 	const o = $derived(confirmState.options);
-	const blocked = $derived(!!o.typeToConfirm && typed !== o.typeToConfirm);
+	const blocked = $derived(
+		(!!o.typeToConfirm && typed !== o.typeToConfirm) ||
+			(confirmState.needsReason && !confirmState.reason.trim())
+	);
 
 	$effect(() => {
 		if (confirmState.open) typed = '';
@@ -31,6 +35,12 @@
 					>Type <span class="font-mono text-foreground normal-case">{o.typeToConfirm}</span></span
 				>
 				<Input bind:value={typed} autocomplete="off" />
+			</label>
+		{/if}
+		{#if confirmState.needsReason}
+			<label class="grid grid-cols-1 gap-1.5 text-xs">
+				<span class="label">Reason</span>
+				<Textarea id="confirm-reason" bind:value={confirmState.reason} rows={2} />
 			</label>
 		{/if}
 		<AlertDialog.Footer>

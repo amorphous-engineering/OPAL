@@ -90,15 +90,55 @@ screen, in links, in exports and in MCP, and moves no stored row.
 - Every operation needs at least one HTTP-level test (`test:ops` checks it).
 - Real data for screen checks: copy `server/assets/demo-seed.db` (a 1.x demo database) into a temp `OPAL_DATA_DIR` as `opal.db`. The first start imports it. Sign in as `build` / `kestrel-demo`.
 
+## Records
+
+A record is a form. Before its commit moment it is pencil: edit it, delete it. After that it is pen.
+
+**The paper test: if you could not do it to a paper form with a pen, without ripping up the page, the app does not offer it and the server refuses it.** Follow the spirit. The test keeps records honest. It is not a reason to add ceremony.
+
+**What pen can do:** add (a note, attachment, charge, receipt, ledger row), fill in a blank left for later, correct (strike the old value and write the new one beside it, with who, when and why, and the old value stays on the page), stamp a state, sign, strike the whole form (void, cancel: a reason is required and the record stays legible), or file a new form (a revision, a copy).
+
+**What pen cannot do:** overwrite without a trace, remove a line, go back to pencil, change who or when, or withdraw someone's signature as a side effect of another edit.
+
+Commit moments: a purchase order is placed, an issue is raised (its observation), a disposition is signed, a procedure version is published, a work order is cut, a step is completed, a requirement is baselined, a risk is accepted or realized, stock is received. `RECORDS.md` lists what each record offers in each state.
+
+Routing is not the record. Assignee and priority may change while a record is open, and the change is logged. Directory data (a supplier's address, a workcenter's name) is not a commitment. It still opens for reading.
+
+### What a page presents
+
+1. Decide what question the page answers in this state, for the person holding it. Show what that takes and no more. A fact appears once.
+2. Pages open for reading. The only inputs on open are the blank this state is waiting on from this person: receive rows on a placed PO, capture fields on the current step.
+3. EDIT reveals what is still pencil. DONE returns. A record with nothing left in pencil has no EDIT.
+4. One primary action: the move the record is waiting on. Everything else is quiet. Strikes go under MORE, never in red beside the title. Red marks errors and the consequence inside a confirmation.
+5. Offer only what will work. A control the server would refuse is absent. The exception is the expected next step when it is blocked: show it inert, looking disabled, with the reason.
+6. A reader sees that a value changed. Prior values show where the value is read, or in a History section on the page. The audit log alone is not enough. A terminal record looks terminal.
+
+### Work on the floor
+
+7. Routine work is implicit. Completing a step needs no signature and no dialog. The system stamps who and when, and the step row shows them with the title struck through.
+8. A sign-off means something: a person attests to a stated act. Authors declare sign-offs on the steps that need them, and there are few. The default step has none. Two slots mean two different people.
+9. No modals during work. Confirm only what is hard to reverse, and inline where possible. Raising an issue opens the issue form in a new tab, carries the run, step and person with it, and asks only for a title. The rest can come later.
+10. Warnings stay short and sit with the step they govern, in the order warning, caution, note. They hold no action steps. Compact by default, because overuse trains people to skip them.
+11. Every quantity shows its unit. A picker that can outgrow a screen is searchable, with a sensible default (oldest stock first).
+12. Work does not abort. An operation exits through a contingency op or its own exit criteria. A work order nobody has started can be voided. A started one that truly cannot finish is closed short: gated, with a reason and a linked issue, and it stays legible.
+
+### Authority
+
+13. No side doors. An act with the same effect as a gated act needs the same gate. Anything that releases a hold needs the disposition gate: signing, voiding, narrowing containment.
+14. Signatures and strikes are `humanOnly`. Agents prepare, people commit.
+15. Undo is for pencil. It never reverses a commit, a stamp, a signature or a strike. Reopening accepted work voids its acceptance on the spot, so the sign-off has to happen again.
+16. Trust the people using this. Do not explain the interface, ask "are you sure" for something reversible, or force a field that can be filled in later. Add a role check only where the act needs one.
+
 ## UI
 
 - Dense and explicit. Data in tables: detail rows for facts, headed tables for collections. Mono for IDs, numbers and timestamps.
-- Small radii, no shadows or gradients. State colours: ok, warn, error, info. No emoji.
-- Labels are nouns. No copy that explains the interface. Consequence text only in confirmations and errors.
+- No rounded corners, shadows or gradients. State colours: ok, warn, error, info. No emoji.
+- Labels are nouns. No copy that explains the interface. Consequence text only in confirmations and errors. A control or option says what it is once: `ADVISORY`, not `ADVISORY — holds nothing`.
+- State badges only where the state is exceptional or actionable. A badge on every row says nothing. Accent colour marks identifiers and actions, never content.
 - Absolute timestamps. Dense rows may show a relative age with the full time in the tooltip.
 - Never show database IDs.
 - An empty section that applies shows its header and one line that says it is empty. A section that does not apply is absent.
-- Do not hide fields behind toggles. Tabs may split a large page.
+- Do not hide facts behind toggles. Tabs may split a large page. Editors are not facts: they stay behind EDIT (see Records).
 - `frontend/src/lib/components/ui/` is vendored shadcn-svelte. Do not edit or reformat it.
 - Client imports use subpath aliases with extensions: `#lib/api.js`.
 - Render authored markdown only through `markdown()` in `#lib/markdown.js`.

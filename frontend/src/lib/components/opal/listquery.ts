@@ -44,6 +44,11 @@ export function hasParams(keys: readonly string[]): boolean {
 	return keys.some((k) => !!page.url.searchParams.get(k));
 }
 
+/** Whether a record page is in edit mode. Pages open for reading; see EditToggle. */
+export function isEditing(url: { searchParams: { get(key: string): string | null } }): boolean {
+	return url.searchParams.get('edit') === '1';
+}
+
 /** 1-based page number from the URL. */
 export function pageNumber(): number {
 	return Math.max(1, Number(page.url.searchParams.get('page')) || 1);

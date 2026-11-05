@@ -10,6 +10,7 @@ export { default as Pagination } from './Pagination.svelte';
 export { default as SearchInput } from './SearchInput.svelte';
 export {
 	hasParams,
+	isEditing,
 	pageNumber,
 	param,
 	queryHref,
@@ -30,6 +31,8 @@ export { default as Section } from './Section.svelte';
 export { default as State } from './State.svelte';
 export { default as TabStrip } from './TabStrip.svelte';
 export { default as Timestamp } from './Timestamp.svelte';
-export { confirm } from './confirm.svelte';
+export { askReason, confirm } from './confirm.svelte';
+export { default as EditToggle } from './EditToggle.svelte';
+export { default as MoreMenu, type MoreItem } from './MoreMenu.svelte';
 export { toast, toastError } from './toast.js';
 export { toneFor, type Tone } from './tone.js';
