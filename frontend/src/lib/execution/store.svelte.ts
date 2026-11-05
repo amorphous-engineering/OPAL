@@ -58,6 +58,8 @@ export type OpenPanel =
 	| { kind: 'closeShort' }
 	| null;
 
+type WorkRow = { op: DocOp; step: DocStep };
+
 export class ExecutionStore implements DocController {
 	readonly mode = 'execute' as const;
 	readonly id: number;
@@ -267,7 +269,7 @@ export class ExecutionStore implements DocController {
 	}
 
 	/** Rows that take work: a leaf OP, the sub-steps of an OP, and an OP waiting on its own sign-off. */
-	private workRows(ops: DocOp[]) {
+	private workRows(ops: DocOp[]): WorkRow[] {
 		return ops.flatMap((op) => {
 			if (!op.steps.length) return [{ op, step: op.step }];
 			const rows = op.steps.map((step) => ({ op, step }));
@@ -284,9 +286,9 @@ export class ExecutionStore implements DocController {
 	openOrder = $derived.by(() => {
 		const doc = this.doc;
 		if (!doc?.instance.active) return null;
-		type Row = ReturnType<typeof this.workRows>[number];
-		const ready = (r: Row) => isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign);
-		const pick = (rows: Row[]) => rows.find(ready) ?? rows.find((r) => !isTerminal(r.step.status));
+		const ready = (r: WorkRow) => isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign);
+		const pick = (rows: WorkRow[]) =>
+			rows.find(ready) ?? rows.find((r) => !isTerminal(r.step.status));
 		const claimed = this.workRows(this.allOps.filter((o) => o.order === this.claimedOrder));
 		return (pick(claimed) ?? pick(this.workRows(doc.ops)))?.step.order ?? null;
 	});
