@@ -1,6 +1,6 @@
 <script lang="ts">
-	// One step: a single dense line (number, title, who, evidence, state) that
-	// expands into its body. Expanded until complete; the host decides `open`.
+	// One step: a single dense line (number, title, what stops it, evidence, stamp) that expands
+	// into its body. The host decides `open`. Actions live in the body, not on the line.
 	// In author mode the title is a field and the line carries structure tools.
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import { cn } from '#lib/utils.js';
@@ -8,9 +8,7 @@
 	import CursorChips from './CursorChips.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepBadges from './StepBadges.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import StepState from './StepState.svelte';
-	import StepTitleActions from './StepTitleActions.svelte';
+	import StepStamp from './StepStamp.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
 	import RowTools from './author/RowTools.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
@@ -41,7 +39,7 @@
 	const current = $derived(ctl.mode === 'execute' && ctl.currentOrder === step.order);
 	const nAtt = $derived(step.attachments.length);
 	const nNote = $derived(step.notes.length);
-	const countBadge = 'font-mono tracking-wider text-muted-foreground';
+	const count = 'shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground';
 </script>
 
 <div
@@ -91,30 +89,26 @@
 		{#if au}
 			<TitleInput {step} />
 		{:else}
-			<span class={cn('min-w-0 truncate text-sm', step.status === 'skipped' && 'line-through')}
-				>{step.title}</span
-			>
-			<StepState {step} />
+			<span class={cn('min-w-0 truncate text-sm', terminal && 'line-through')}>{step.title}</span>
 			<StepBadges {step} />
 		{/if}
 		{#if nNote}
-			<Badge variant="outline" class={countBadge} title="Operator notes">NOTES · {nNote}</Badge>
+			<span class={count} title="Operator notes">{nNote} {nNote === 1 ? 'NOTE' : 'NOTES'}</span>
 		{/if}
 		{#if nAtt}
 			{#if ctl.actions.showEvidence}
-				<Badge
-					variant="outline"
-					class={cn(countBadge, 'cursor-pointer hover:text-foreground')}
+				<a
+					class={cn(count, 'hover:text-foreground')}
 					href="#evidence"
 					title="Attachments"
 					onclick={(e: MouseEvent) => {
 						e.preventDefault();
 						e.stopPropagation();
 						ctl.actions.showEvidence?.(step);
-					}}>FILES · {nAtt}</Badge
+					}}>{nAtt} {nAtt === 1 ? 'FILE' : 'FILES'}</a
 				>
 			{:else}
-				<Badge variant="outline" class={countBadge} title="Attachments">FILES · {nAtt}</Badge>
+				<span class={count} title="Attachments">{nAtt} {nAtt === 1 ? 'FILE' : 'FILES'}</span>
 			{/if}
 		{/if}
 		{#if !au}<span class="flex-1"></span>{/if}
@@ -124,7 +118,7 @@
 			<SaveBadge {step} quiet />
 			<RowTools {step} {op} isOp={false} />
 		{:else}
-			<StepTitleActions {step} />
+			<StepStamp {step} />
 		{/if}
 	</div>
 	{#if open && !bodyless}

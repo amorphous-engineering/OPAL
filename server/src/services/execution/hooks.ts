@@ -1,7 +1,7 @@
 /**
  * What the execution area registers with other areas, once at module load: part references,
  * entity names, search, workcenter work, the overview section, report rows, the execution
- * counter of procedures, undo, and the issue seams (`issueHooks`).
+ * counter of procedures, and the issue seams (`issueHooks`).
  */
 import { OpalError, type ExecutionRef, type RedlineOp, type StepOption } from '@opal/shared';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
@@ -11,6 +11,7 @@ import type { Db } from '../../db/client.ts';
 import {
 	adhocStep,
 	execution,
+	executionClosure,
 	executionOutput,
 	executionParticipant,
 	procedure,
@@ -23,7 +24,7 @@ import { type HoldChange, issueHooks } from '../issues/hooks.ts';
 import { blockedExecutionIds } from './blocked.ts';
 import { registerWorkcenterWork } from '../org/workcenters.ts';
 import { registerPartReference } from '../parts/references.ts';
-import { notify, registerEntity, registerReversible, registerSearchable, revertRows } from '../platform/index.ts';
+import { notify, publish, registerEntity, registerSearchable } from '../platform/index.ts';
 import { setExecutionCounter } from '../procedures/index.ts';
 import { registerOverviewSection } from '../reports/overview.ts';
 import { registerExecutionReport } from '../reports/exports.ts';
@@ -32,7 +33,7 @@ import { PRIORITY_RANK } from './executions.ts';
 import { isActive, loadModel, opRowOf, progress } from './model.ts';
 import { registerOwnerGuard } from '../platform/attachments.ts';
 
-// ---------------------------------------------------------------- parts, entities, search, undo
+// ---------------------------------------------------------------- parts, entities, search
 
 registerPartReference({
 	name: 'execution_outputs',
@@ -52,6 +53,7 @@ registerEntity(signoff, { label: 'Sign-off', parent: { table: stepExecution, fk:
 registerEntity(stepNote, { label: 'Step note', parent: { table: stepExecution, fk: 'stepExecutionId' } });
 registerEntity(executionParticipant, { label: 'Execution participant', parent: { table: execution, fk: 'executionId' } });
 registerEntity(executionOutput, { label: 'Execution output', parent: { table: execution, fk: 'executionId' } });
+registerEntity(executionClosure, { label: 'Execution closure', parent: { table: execution, fk: 'executionId' } });
 
 registerSearchable({
 	type: 'execution',
@@ -60,12 +62,6 @@ registerSearchable({
 	identifier: execution.woNumber,
 	// The status renders once, as the hit's state; a sublabel would repeat it.
 	hit: (r) => ({ label: r.woNumber, sublabel: null, href: `/executions/${r.id}`, status: r.status })
-});
-
-registerReversible('execution.update', { revert: (ctx, rows) => revertRows(ctx, rows, { execution }) });
-registerReversible('execution.cancel', { revert: (ctx, rows) => revertRows(ctx, rows, { execution }) });
-registerReversible('execution.createRedline', {
-	revert: (ctx, rows) => revertRows(ctx, rows, { adhoc_step: adhocStep, step_execution: stepExecution })
 });
 
 setExecutionCounter((db, ids) => {
@@ -338,6 +334,8 @@ export function operators(db: Db, executionId: number): number[] {
 function onHoldChanged(ctx: Ctx, ch: HoldChange) {
 	const e = ctx.db.select().from(execution).where(eq(execution.id, ch.executionId)).get();
 	if (!e) return;
+	// Raising an issue from its own tab must reach the work order page left open in this one.
+	publish({ type: 'execution_issues_changed', data: { executionId: ch.executionId } });
 	if (!ch.isBlocking) checkCompletion(ctx, ch.executionId);
 	if (ch.wasBlocking === ch.isBlocking) return;
 	const recipients = operators(ctx.db, ch.executionId);

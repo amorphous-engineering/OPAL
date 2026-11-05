@@ -22,7 +22,7 @@
 		type BomTreeNode,
 		type PartDetail
 	} from '@opal/shared';
-	import { qty } from '#lib/format.js';
+	import { qty, qtyUnit } from '#lib/format.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
 	import FormField from './FormField.svelte';
 	import PartPicker from './PartPicker.svelte';
@@ -235,7 +235,7 @@
 							</span>
 						{/if}
 					{:else if col.key === 'qty'}
-						{qty(l.quantity, l.componentUom)}
+						{qtyUnit(l.quantity, l.componentUom)}
 					{:else if col.key === 'ref'}
 						{#if l.referenceDesignator}{l.referenceDesignator}{:else}<span
 								class="text-muted-foreground">—</span

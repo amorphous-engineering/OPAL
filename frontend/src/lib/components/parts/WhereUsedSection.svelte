@@ -1,7 +1,7 @@
 <script lang="ts">
 	// The assemblies that use this part. Always rendered: an unused part is information.
 	import { DataTable, EmptyLine, Section, type Column } from '#lib/components/opal/index.js';
-	import { qty } from '#lib/format.js';
+	import { qtyUnit } from '#lib/format.js';
 	import type { BomLine, PartDetail } from '@opal/shared';
 
 	let { detail }: { detail: PartDetail } = $props();
@@ -30,7 +30,7 @@
 				{:else if col.key === 'name'}
 					{l.assemblyName}
 				{:else if col.key === 'qty'}
-					{qty(l.quantity, detail.part.unitOfMeasure)}
+					{qtyUnit(l.quantity, detail.part.unitOfMeasure)}
 				{:else if l.referenceDesignator}
 					{l.referenceDesignator}
 				{:else}

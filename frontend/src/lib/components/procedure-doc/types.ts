@@ -63,6 +63,8 @@ export interface DocStepKitItem {
 	part_name: string;
 	part_number: string | null;
 	quantity_required: number;
+	/** Absent when authoring. */
+	uom?: string | null;
 	usage_type: 'consume' | 'tooling' | string;
 	notes: string | null;
 }
@@ -154,6 +156,7 @@ export interface DocConsumption {
 	part_name: string;
 	opal_number: string | null;
 	quantity: number;
+	uom: string | null;
 	lot_number: string | null;
 	location: string;
 	usage_type: string;
@@ -270,6 +273,16 @@ export function isBlocked(step: DocStep): boolean {
 	return (
 		!isTerminal(step.status) && step.complete_blockers.some((b) => WAIT_KINDS.includes(b.kind))
 	);
+}
+
+/**
+ * Routine work: a leaf with only the default slot. One action, COMPLETE, and no signature row. A role
+ * on the slot, a second slot, or a slot on an OP with sub-steps is an author's declared sign-off.
+ */
+export function isRoutine(step: DocStep, op: DocOp): boolean {
+	const leaf = step.order !== op.order || op.steps.length === 0;
+	const slots = step.signoffs ?? [];
+	return leaf && slots.length === 1 && !slots[0].role;
 }
 
 /** Can the operator work this step right now? */

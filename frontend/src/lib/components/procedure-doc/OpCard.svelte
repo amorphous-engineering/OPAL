@@ -1,7 +1,7 @@
 <script lang="ts">
-	// One OP: a card with a header bar (number, title, state badges, claim, completion stamp)
-	// over its steps. An OP without sub-steps is its own single step and shows
-	// that step's body directly. Expanded until complete.
+	// One OP: a card with a header bar (number, title, what is exceptional, claim, count) over
+	// its steps. An OP without sub-steps is its own single step and shows that step's body
+	// directly, with its stamp in place of the count.
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { markdown } from '#lib/markdown.js';
@@ -13,9 +13,8 @@
 	import StepBody from './StepBody.svelte';
 	import StepRow from './StepRow.svelte';
 	import StepBadges from './StepBadges.svelte';
-	import StepState from './StepState.svelte';
+	import StepStamp from './StepStamp.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import StepTitleActions from './StepTitleActions.svelte';
 	import SignoffTable from './SignoffTable.svelte';
 	import SignoffEditor from './author/SignoffEditor.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
@@ -77,6 +76,8 @@
 		!leaf && ctl.mode !== 'author' && (op.step.signoffs ?? []).length > 0
 	);
 	const footer = $derived(opSignoffs || (ctl.mode === 'execute' && deletable));
+
+	let deleting = $state(false);
 
 	const warnBadge = 'border-warn/50 bg-warn-muted font-mono tracking-wider text-warn';
 	const mutedBadge = 'font-mono tracking-wider text-muted-foreground';
@@ -149,10 +150,9 @@
 				class={cn(
 					'min-w-0 truncate text-sm font-medium',
 					terminal && 'text-muted-foreground',
-					op.status === 'skipped' && 'line-through'
+					(op.status === 'skipped' || (leaf && terminal)) && 'line-through'
 				)}>{op.title}</span
 			>
-			<StepState step={op.step} />
 		{/if}
 		{#if op.is_contingency}
 			<Badge variant="outline" class={warnBadge}>CONTINGENCY</Badge>
@@ -176,7 +176,8 @@
 				{#if op.step.status === 'awaiting_signoff'}
 					<Badge variant="outline" class={warnBadge}>AWAITING SIGN-OFF</Badge>
 				{:else if ctl.active && op.waiting_on_ops.length}
-					<Badge variant="outline" class={mutedBadge}>AFTER OP {op.waiting_on_ops.join(', ')}</Badge
+					<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
+						>AFTER OP {op.waiting_on_ops.join(', ')}</span
 					>
 				{/if}
 			{/if}
@@ -221,7 +222,17 @@
 					></span
 				>
 			{/if}
-			{#if leaf}<StepTitleActions step={op.step} />{/if}
+			{#if leaf || op.status === 'skipped'}
+				<StepStamp step={op.step} />
+			{:else if ctl.mode === 'execute'}
+				<span
+					class={cn(
+						'shrink-0 font-mono text-xs tabular-nums',
+						terminal ? 'text-ok' : 'text-muted-foreground'
+					)}
+					title="Steps complete">{op.progress.done}/{op.progress.total}</span
+				>
+			{/if}
 		{/if}
 	</div>
 	{#if open}
@@ -268,9 +279,17 @@
 				<div class="grid grid-cols-1 gap-2 border-t border-border bg-muted/30 px-3 py-3">
 					{#if opSignoffs}<SignoffTable step={op.step} {op} />{/if}
 					{#if deletable}
-						<Button size="xs" variant="destructive" onclick={() => ctl.actions.deleteRedline?.(op)}
-							>DELETE REDLINE</Button
-						>
+						<div class="flex items-center gap-2">
+							<Button
+								size="xs"
+								variant={deleting ? 'destructive' : 'outline'}
+								onclick={() => (deleting ? ctl.actions.deleteRedline?.(op) : (deleting = true))}
+								>{deleting ? 'CONFIRM DELETE' : 'DELETE REDLINE'}</Button
+							>
+							{#if deleting}
+								<Button size="xs" variant="ghost" onclick={() => (deleting = false)}>CANCEL</Button>
+							{/if}
+						</div>
 					{/if}
 				</div>
 			{/if}

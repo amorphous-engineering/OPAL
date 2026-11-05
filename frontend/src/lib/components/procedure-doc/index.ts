@@ -14,10 +14,11 @@ export { default as OpCard } from './OpCard.svelte';
 export { default as StepRow } from './StepRow.svelte';
 export { default as StepBody } from './StepBody.svelte';
 export { default as StepKit } from './StepKit.svelte';
+export { default as StockPicker, type StockOption } from './StockPicker.svelte';
 export { default as ExecutionNotes } from './ExecutionNotes.svelte';
 export { default as SignoffTable } from './SignoffTable.svelte';
 export { default as StepImages } from './StepImages.svelte';
-export { default as StepState } from './StepState.svelte';
+export { default as StepStamp } from './StepStamp.svelte';
 export { default as CaptureFields } from './CaptureFields.svelte';
 export { default as CaptureReadout } from './CaptureReadout.svelte';
 export { default as CalloutBlock } from './CalloutBlock.svelte';
@@ -38,6 +39,13 @@ export type {
 	StockRecord,
 	WorkcenterOption
 } from './controller.js';
-export { isActionable, isBlocked, isTerminal, visibleRows, TERMINAL_STATUSES } from './types.js';
+export {
+	isActionable,
+	isBlocked,
+	isRoutine,
+	isTerminal,
+	visibleRows,
+	TERMINAL_STATUSES
+} from './types.js';
 export type * from './types.js';
 export { byPerson, clock, liveSeconds } from './labor.svelte.js';

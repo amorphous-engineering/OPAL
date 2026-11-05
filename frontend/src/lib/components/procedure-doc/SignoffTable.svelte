@@ -1,8 +1,8 @@
 <script lang="ts">
-	// The step's sign-off table (execute and readonly modes): one row per slot —
-	// label, role, signature, COMPLETE chip or SIGN OFF. The server decides which
-	// slot can be signed and why not; this only renders it. A step is complete
-	// when every slot is signed.
+	// A declared sign-off (execute and readonly modes): one row per slot — label, role, signature
+	// or SIGN OFF. Pressing it is the attestation, with no dialog. The server decides which slot can
+	// be signed and why not; this only renders it. A step is complete when every slot is signed.
+	// Routine steps have no table: they complete from StepActions.
 	import { Avatar } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { datetime, iso } from '#lib/format.js';
@@ -61,12 +61,7 @@
 							{/if}
 						</td>
 						<td class="w-32 px-3 py-2 text-right">
-							{#if signed}
-								<span
-									class="inline-flex h-5 items-center rounded-md border border-border px-1.5 text-xs font-medium text-muted-foreground"
-									>COMPLETE</span
-								>
-							{:else if sign}
+							{#if !signed && sign}
 								<Button
 									size="xs"
 									variant={s.can_sign ? 'default' : 'outline'}

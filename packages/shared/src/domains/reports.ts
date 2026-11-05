@@ -145,7 +145,8 @@ export const zExecutionMetrics = z.object({
 	completed: z.number().int(),
 	inWork: z.number().int(),
 	cut: z.number().int(),
-	aborted: z.number().int(),
+	void: z.number().int(),
+	closedShort: z.number().int(),
 	avgDurationMinutes: z.number().nullable(),
 	/** Percent of executions completed, one decimal. */
 	completionRate: z.number()

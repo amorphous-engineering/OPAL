@@ -460,6 +460,26 @@ describe('legacy import of a database with rows in every table', async () => {
 	});
 });
 
+describe('a work order aborted in 1.x', async () => {
+	const dir = tmp();
+	const src = buildLegacyFixture(dir);
+	const legacy = new Database(src);
+	legacy.run("UPDATE procedure_instance SET status = 'aborted' WHERE id = 2");
+	legacy.close();
+	const dest = join(dir, 'new.db');
+	const report = await importLegacy(src, dest, { open });
+
+	test('imports as closed short, not as cut', () => {
+		const out = new Database(dest, { readonly: true });
+		expect(out.query('SELECT status FROM execution WHERE id = 2').get()).toEqual({ status: 'closed_short' });
+		out.close();
+	});
+
+	test('raises no warning: the status has a home', () => {
+		expect(report.warnings.some((w) => w.includes('procedure_instance 2: status'))).toBe(false);
+	});
+});
+
 describe('importInPlace', () => {
 	test('renames the old file, leaves it byte-identical, writes the reports', async () => {
 		const d = tmp();

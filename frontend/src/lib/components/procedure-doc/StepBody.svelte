@@ -11,13 +11,14 @@
 	import CaptureReadout from './CaptureReadout.svelte';
 	import ExecutionNotes from './ExecutionNotes.svelte';
 	import SignoffTable from './SignoffTable.svelte';
+	import StepActions from './StepActions.svelte';
 	import SignoffEditor from './author/SignoffEditor.svelte';
 	import CalloutAdd from './author/CalloutAdd.svelte';
 	import CalloutsEditor from './author/CalloutsEditor.svelte';
 	import MarkdownEditor from './author/MarkdownEditor.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
 	import StepProps from './author/StepProps.svelte';
-	import type { DocOp, DocStep } from './types.js';
+	import { isRoutine, type DocOp, type DocStep } from './types.js';
 
 	let { step, op }: { step: DocStep; op: DocOp } = $props();
 	const ctl = useDoc();
@@ -86,9 +87,10 @@
 
 	{#if authoring}
 		<SignoffEditor {step} {op} />
-	{:else}
+	{:else if !isRoutine(step, op)}
 		<SignoffTable {step} {op} />
 	{/if}
+	{#if !authoring}<StepActions {step} {op} />{/if}
 
 	{#if authoring}
 		<StepProps {step} {op} isOp={op.step === step} />

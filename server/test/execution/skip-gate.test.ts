@@ -74,6 +74,34 @@ describe('skipping a step with required data', () => {
 	});
 });
 
+describe('skipping needs a reason', () => {
+	test('a skip with no reason is refused and the step stays open', async () => {
+		const t = await world();
+		const e = await t.cutWith({});
+		const sid = await t.stepOf(e.id, '1');
+		expect((await t.call('POST', `/executions/${e.id}/steps/${sid}/skip`, {})).status).toBe(422);
+		expect((await t.call('POST', `/executions/${e.id}/steps/${sid}/skip`, { reason: '   ' })).status).toBe(422);
+		expect((await t.get(e.id)).steps[0].status).toBe('pending');
+	});
+
+	test('the reason stays on the skipped step', async () => {
+		const t = await world();
+		const e = await t.cutWith({});
+		expect((await t.skip(e.id, '1', { reason: 'bracket already fitted' })).status).toBe(200);
+		expect((await t.doc(e.id)).ops[0].step.skipReason).toBe('bracket already fitted');
+	});
+
+	test('the document names the gate on a step this person cannot skip, and only for them', async () => {
+		const t = await world();
+		const e = await t.cutWith({ dataSchema: REQUIRED });
+		const asTech = await t.call('GET', `/executions/${e.id}/document`, undefined, t.person('tom', 'technician'));
+		expect(asTech.json.ops[0].step.skipBlockers).toMatchObject([{ kind: 'role', message: 'Requires Engineer or Quality' }]);
+		const asEng = await t.call('GET', `/executions/${e.id}/document`, undefined, t.person('eve', 'engineer'));
+		expect(asEng.json.ops[0].step.skipBlockers).toEqual([]);
+		expect(asEng.json.ops[1].step.skipBlockers).toEqual([]);
+	});
+});
+
 describe('skipping a step with a role-gated sign-off slot', () => {
 	test('a user without the slot role or the gate cannot skip a step that waits for its buyoff', async () => {
 		const t = await world();

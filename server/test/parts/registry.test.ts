@@ -8,11 +8,12 @@ function flatten(tree: Record<string, any>): any[] {
 }
 
 describe('parts operations', () => {
-	test('every parts contract has a handler and is an MCP tool', () => {
+	test('every parts contract has a handler and is an MCP tool, except a person\'s strikes', () => {
 		const bound = new Set(impls.map((i) => i.contract.name));
+		const humanOnly = new Set(['parts.obsolete', 'parts.reinstate']);
 		for (const c of flatten(contracts.parts)) {
 			expect(bound.has(c.name)).toBe(true);
-			expect(c.mcp).toBe(true);
+			expect(c.mcp).toBe(!humanOnly.has(c.name));
 			expect(c.name.startsWith('parts.')).toBe(true);
 		}
 	});

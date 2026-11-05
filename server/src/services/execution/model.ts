@@ -195,6 +195,12 @@ export function progress(m: Model): { done: number; total: number } {
 	return { done: counted.filter((r) => isTerminal(r.se.status)).length, total: counted.length };
 }
 
+/**
+ * Routine work: a leaf with only the default slot. Slot 0 stores who and when, and nothing presents
+ * it as a signature. A role on the slot, or a second slot, is an author's declared sign-off.
+ */
+export const isRoutine = (r: Pick<Row, 'hasChildren' | 'signoffs'>) => !r.hasChildren && r.signoffs.length === 1 && !r.signoffs[0]!.role;
+
 export function getRow(m: Model, stepId: number): Row {
 	const r = m.byId.get(stepId);
 	if (!r) throw notFound('Step');

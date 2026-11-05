@@ -7,7 +7,6 @@
 	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import type { DocOp } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import FormRow from './FormRow.svelte';
@@ -37,7 +36,7 @@
 					requiresSignoff: s.requires_signoff
 				}))
 			});
-			store.closeDialog();
+			store.closePanel();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create redline';
 			toastError(err);
@@ -47,14 +46,17 @@
 	}
 </script>
 
-<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
-	<Dialog.Header>
-		<Dialog.Title>Add redline OP</Dialog.Title>
-		<Dialog.Description>
-			On <span class="font-mono text-foreground">OP {op.number}</span>
-			{op.title}
-		</Dialog.Description>
-	</Dialog.Header>
+<!-- Sits inline above the document: nothing covers the work. The title field takes focus, which
+     brings the form into view from wherever + REDLINE was pressed. -->
+<form
+	class="mb-2 grid grid-cols-1 gap-3 border border-border bg-card p-3"
+	aria-label="Add redline OP"
+	onsubmit={submit}
+>
+	<div class="text-sm font-medium">
+		Add redline OP on <span class="font-mono">OP {op.number}</span>
+		<span class="text-muted-foreground">{op.title}</span>
+	</div>
 	<FormRow label="Authorizing NC" for="rl-issue" required>
 		<NativeSelect id="rl-issue" class="w-full" bind:value={issueId} required>
 			{#each op.open_ncs as nc (nc.id)}
@@ -110,10 +112,10 @@
 		</div>
 	</div>
 	{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
-	<Dialog.Footer>
-		<Button variant="outline" onclick={() => store.closeDialog()}>CANCEL</Button>
+	<div class="flex justify-end gap-2">
+		<Button variant="outline" onclick={() => store.closePanel()}>CANCEL</Button>
 		<Button type="submit" disabled={busy || !title.trim() || steps.some((s) => !s.title.trim())}
 			>CREATE REDLINE</Button
 		>
-	</Dialog.Footer>
+	</div>
 </form>

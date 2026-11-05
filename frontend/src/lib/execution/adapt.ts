@@ -53,6 +53,7 @@ const consumption = (c: ApiDocument['consumptions'][number]) => ({
 	part_name: c.partName,
 	opal_number: c.opalNumber,
 	quantity: num(c.quantity),
+	uom: c.uom,
 	lot_number: c.lotNumber,
 	location: c.location,
 	usage_type: c.usage,
@@ -92,6 +93,7 @@ function step(s: DocStepOut, parentOrder: number | null): DocStep {
 			part_name: k.partName,
 			part_number: k.partNumber,
 			quantity_required: num(k.quantity),
+			uom: k.uom,
 			usage_type: k.usage,
 			notes: k.notes
 		})),
@@ -216,7 +218,16 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			scheduled_start_at: e.scheduledStartAt,
 			target_completion_at: e.targetCompletionAt,
 			last_activity_at: e.lastActivityAt,
-			duration_seconds: e.durationSeconds
+			duration_seconds: e.durationSeconds,
+			closure: e.closure && {
+				reason: e.closure.reason,
+				by: e.closure.by,
+				at: e.closure.at,
+				issue_id: e.closure.issueId,
+				issue_number: e.closure.issueNumber
+			},
+			can_void: e.canVoid,
+			can_close_short: e.canCloseShort
 		},
 		progress: d.progress,
 		ops: d.ops.map(op),
@@ -246,13 +257,13 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 				part_name: k.partName,
 				uom: k.uom,
 				qty_required: num(k.qtyRequired),
-				qty_consumed: num(k.qtyConsumed),
-				variance: num(k.variance)
+				qty_consumed: num(k.qtyConsumed)
 			})),
 			unplanned: d.kit.unplanned.map((k) => ({
 				part_id: k.partId,
 				part_number: k.partNumber,
 				part_name: k.partName,
+				uom: k.uom,
 				qty_consumed: num(k.qtyConsumed)
 			}))
 		},
@@ -261,6 +272,7 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			part_id: o.partId,
 			part_number: o.partNumber,
 			part_name: o.partName,
+			uom: o.uom,
 			quantity: num(o.quantity)
 		})),
 		productions: d.productions.map((p) => ({
@@ -271,6 +283,7 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			serial_number: p.serialNumber,
 			opal_number: p.opalNumber,
 			quantity: num(p.quantity),
+			uom: p.uom,
 			lot_number: p.lotNumber,
 			location: p.location,
 			status: p.status
@@ -315,6 +328,7 @@ export function adaptState(s: ApiState): ExecutionState {
 		})),
 		roster: s.roster.map(rosterEntry),
 		holds: s.holds.map(holdSummary),
+		issue_count: s.issueCount,
 		labor: s.labor.map(labor),
 		generated_at: s.generatedAt
 	};

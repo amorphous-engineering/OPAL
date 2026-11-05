@@ -19,7 +19,7 @@ export const ADMIN_KEY = 'admin';
 
 /** key -> [name, description, default gates]. Order is display order. */
 export const SYSTEM_ROLES: Record<string, [string, string, string[]]> = {
-	engineer: ['Engineer', 'Dispositions issue tickets and verifies engineering-critical steps.', ['issue.disposition', 'execution.skipRequired']],
+	engineer: ['Engineer', 'Dispositions issue tickets and verifies engineering-critical steps.', ['issue.disposition', 'execution.skipRequired', 'execution.closeShort']],
 	technician: ['Technician', 'Performs build and assembly steps.', []],
 	quality: ['Quality', 'Approves issue resolutions and buys off quality-critical steps.', ['issue.approve', 'execution.skipRequired']],
 	admin: ['Admin', 'Administers the application and passes every gate.', []]

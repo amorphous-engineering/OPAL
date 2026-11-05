@@ -5,6 +5,7 @@ import { readMigrationFiles } from 'drizzle-orm/migrator';
 import type { MigrationMeta } from 'drizzle-orm/migrator';
 import { join } from 'node:path';
 import { embedded } from '../http/embedded.ts';
+import { retireAbortedStatus } from './retire-aborted.ts';
 import * as schema from './schema/index.ts';
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
@@ -53,6 +54,9 @@ export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR): Db {
 		dialect: { migrate(m: MigrationMeta[], session: unknown, config: object): void };
 		session: unknown;
 	};
-	applyMigrations(sqlite, pending, () => internals.dialect.migrate(files, internals.session, { migrationsFolder }));
+	applyMigrations(sqlite, pending, () => {
+		retireAbortedStatus(sqlite);
+		internals.dialect.migrate(files, internals.session, { migrationsFolder });
+	});
 	return db;
 }

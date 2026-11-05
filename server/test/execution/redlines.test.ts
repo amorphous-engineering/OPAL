@@ -88,7 +88,7 @@ describe('redlines', () => {
 		expect((await t.complete(e.id, '2R1.1')).status).toBe(422);
 		const first = await t.complete(e.id, '2R1.1', { dataCaptured: { gap: 2 } });
 		expect(first.json.step.status).toBe('awaiting_signoff');
-		await t.sign(e.id, '2R1.1', 1);
+		await t.sign(e.id, '2R1.1', 1, {}, t.benActor);
 		expect((await t.doc(e.id)).ops[1].step.status).toBe('completed');
 	});
 

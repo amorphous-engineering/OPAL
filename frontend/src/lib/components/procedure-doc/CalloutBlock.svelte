@@ -1,6 +1,6 @@
 <script lang="ts">
-	// One callout from the procedure, always visible with the step it belongs to.
-	// CAUTION: heavy red rule on the left, red heading. INFO: the same shape in the info colour.
+	// One callout, with the step it governs: the label inline with the text, small type, a thin
+	// coloured rule. No box. Heavy warnings on every step teach people to skip them.
 	import { cn } from '#lib/utils.js';
 	import type { Callout } from './types.js';
 
@@ -9,22 +9,19 @@
 </script>
 
 {#if callout.text}
-	<div
+	<p
 		role="note"
 		aria-label={caution ? 'Caution' : 'Info'}
 		class={cn(
-			'grid grid-cols-1 gap-1 rounded-lg border border-l-[3px] bg-card px-4 py-3',
-			caution ? 'border-error/40 border-l-error' : 'border-info/40 border-l-info'
+			'm-0 border-l-2 pl-2 text-xs leading-snug whitespace-pre-wrap text-foreground',
+			caution ? 'border-l-warn' : 'border-l-info'
 		)}
 	>
-		<div
+		<span
 			class={cn(
-				'font-mono text-sm font-semibold tracking-wider uppercase',
-				caution ? 'text-error' : 'text-info'
-			)}
-		>
-			{caution ? 'Caution' : 'Info'}
-		</div>
-		<div class="text-sm leading-relaxed whitespace-pre-wrap text-foreground">{callout.text}</div>
-	</div>
+				'mr-1.5 font-mono font-semibold tracking-wider uppercase',
+				caution ? 'text-warn' : 'text-info'
+			)}>{caution ? 'Caution' : 'Info'}</span
+		>{callout.text}
+	</p>
 {/if}

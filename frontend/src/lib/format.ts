@@ -55,6 +55,25 @@ export function datetime(value: string | Date | null | undefined): string {
 	return `${f.y}-${f.mo}-${f.d} ${f.h}:${f.mi}${timeMode() === 'utc' ? 'Z' : ''}`;
 }
 
+/** For a dense row: 14:05 today, 2026-10-22 14:05 on any other day. The tooltip carries the full time. */
+export function dayTime(value: string | Date | null | undefined): string {
+	const d = toDate(value);
+	if (!d) return '—';
+	const f = fields(d);
+	const n = fields(new Date());
+	const zone = timeMode() === 'utc' ? 'Z' : '';
+	if (f.y === n.y && f.mo === n.mo && f.d === n.d) return `${f.h}:${f.mi}${zone}`;
+	return `${f.y}-${f.mo}-${f.d} ${f.h}:${f.mi}${zone}`;
+}
+
+/** A person as a step row shows them: Build Lead is BL, Ana is AN. */
+export function initials(name: string | null | undefined): string {
+	const parts = (name ?? '').split(/\s+/).filter(Boolean);
+	if (!parts.length) return '?';
+	if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+	return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 /** To the second, with the zone named: 2026-10-22 14:05:09Z or 2026-10-22 14:05:09 EDT. */
 export function datetimeSec(value: string | Date | null | undefined): string {
 	const d = toDate(value);
@@ -148,13 +167,10 @@ export function qty(value: number | string | null | undefined, uom?: string | nu
 	return uom && uom !== 'ea' ? `${s} ${uom}` : s;
 }
 
-/** A quantity with its unit, always: `3 ea`. `qty` leaves `ea` off, which reads as unitless on a record. */
+/** A quantity with its unit, always: `3 ea`, `2 pack`. Nothing on the floor is unitless. */
 export function qtyUnit(value: number | string | null | undefined, uom?: string | null): string {
-	if (value === null || value === undefined || value === '') return '—';
-	const n = typeof value === 'number' ? value : Number(value);
-	if (Number.isNaN(n)) return String(value);
-	const s = Number.isInteger(n) ? String(n) : String(Number(n.toFixed(4)));
-	return uom ? `${s} ${uom}` : s;
+	const q = qty(value);
+	return q === '—' ? q : `${q} ${uom || 'ea'}`;
 }
 
 export function money(value: number | string | null | undefined, currency = 'USD'): string {

@@ -1,6 +1,6 @@
 <script lang="ts">
-	// Material in and out of the work order: kit against consumption, the
-	// consumption ledger with provenance, and the productions it yields.
+	// Material in and out of the work order: kit against consumption, the consumption ledger
+	// with provenance, and the productions it yields. Every quantity carries its unit.
 	import { onMount } from 'svelte';
 	import { opal } from '#lib/api.js';
 	import {
@@ -14,16 +14,15 @@
 	import type { Column } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import { qty } from '#lib/format.js';
-	import type { DocConsumption } from '#lib/components/procedure-doc/index.js';
+	import { qtyUnit } from '#lib/format.js';
+	import { StockPicker, type DocConsumption } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import type { KitRow, ProductionRow } from '#lib/execution/types.js';
 
 	let { store }: { store: ExecutionStore } = $props();
 	const doc = $derived(store.doc!);
 	const inst = $derived(doc.instance);
-	const canConsume = $derived(inst.status === 'in_work' || inst.status === 'completed');
+	const canConsume = $derived(inst.status === 'in_work');
 
 	interface Availability {
 		items: {
@@ -66,11 +65,11 @@
 			for (const k of doc.kit.items) {
 				const it = avail.items.find((x) => x.part_id === k.part_id);
 				const need = remaining(k);
-				const fit =
-					it?.available_locations.find((l) => l.quantity >= need) ?? it?.available_locations[0];
+				// Oldest stock first. Draw what it holds, and the rest comes from the next oldest.
+				const oldest = it?.available_locations[0];
 				pick[k.part_id] = {
-					record: fit ? String(fit.inventory_record_id) : '',
-					qty: need ? String(need) : '0'
+					record: oldest ? String(oldest.inventory_record_id) : '',
+					qty: String(oldest ? Math.min(need, oldest.quantity) : need)
 				};
 			}
 		} catch {
@@ -78,14 +77,6 @@
 		}
 	}
 	onMount(loadAvailability);
-
-	const label = (
-		l: Availability['items'][number]['available_locations'][number],
-		uom: string | null
-	) =>
-		[l.opal_number, l.location, `${qty(l.quantity)} ${(uom ?? 'ea').toUpperCase()}`, l.lot_number]
-			.filter(Boolean)
-			.join(' · ');
 
 	async function consumeKit() {
 		const items = doc.kit.items
@@ -193,7 +184,7 @@
 					<table class="w-full border-collapse text-sm">
 						<thead>
 							<tr class="border-b border-border bg-muted/60 text-left">
-								{#each [['PN', ''], ['NAME', ''], ['REQUIRED', 'text-right'], ['AVAILABLE', 'text-right'], ['CONSUMED', 'text-right'], ['VARIANCE', 'text-right'], ['SOURCE', ''], ['QTY', '']] as [h, c] (h)}
+								{#each [['PN', ''], ['NAME', ''], ['REQUIRED', 'text-right'], ['AVAILABLE', 'text-right'], ['CONSUMED', 'text-right'], ['SOURCE', ''], ['QTY', '']] as [h, c] (h)}
 									<th
 										class={`h-8 px-3 font-mono text-xs font-medium tracking-wider text-muted-foreground ${c}`}
 										>{h}</th
@@ -211,40 +202,33 @@
 										></td
 									>
 									<td class="px-3 py-1.5">{k.part_name}</td>
-									<td class="px-3 py-1.5 text-right font-mono">{qty(k.qty_required)}</td>
+									<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
+										>{qtyUnit(k.qty_required, k.uom)}</td
+									>
 									<td
-										class="px-3 py-1.5 text-right font-mono {it &&
+										class="px-3 py-1.5 text-right font-mono whitespace-nowrap {it &&
 										it.quantity_available < remaining(k)
 											? 'text-error'
-											: ''}">{it ? qty(it.quantity_available) : '—'}</td
+											: ''}">{it ? qtyUnit(it.quantity_available, k.uom) : '—'}</td
 									>
-									<td class="px-3 py-1.5 text-right font-mono">{qty(k.qty_consumed)}</td>
-									<td
-										class="px-3 py-1.5 text-right font-mono {k.variance > 0
-											? 'text-warn'
-											: k.variance < 0
-												? 'text-error'
-												: ''}">{k.variance > 0 ? '+' : ''}{qty(k.variance)}</td
+									<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
+										>{qtyUnit(k.qty_consumed, k.uom)}</td
 									>
 									<td class="px-3 py-1.5">
 										{#if canConsume && remaining(k) > 0}
-											<NativeSelect
-												class="w-full min-w-48"
-												size="sm"
-												aria-label={`Source for ${k.part_name}`}
+											<StockPicker
+												records={it?.available_locations.map((l) => ({
+													id: l.inventory_record_id,
+													opal_number: l.opal_number,
+													location: l.location,
+													lot_number: l.lot_number,
+													quantity: l.quantity,
+													uom: it.uom
+												}))}
 												value={pick[k.part_id]?.record ?? ''}
-												onchange={(e) =>
-													(pick[k.part_id] = { ...pick[k.part_id], record: e.currentTarget.value })}
-											>
-												{#if !it}<option value="">Loading…</option>
-												{:else if !it.available_locations.length}<option value="">No stock</option>
-												{:else}
-													{#each it.available_locations as l (l.inventory_record_id)}
-														<option value={String(l.inventory_record_id)}>{label(l, it.uom)}</option
-														>
-													{/each}
-												{/if}
-											</NativeSelect>
+												label={`Source for ${k.part_name}`}
+												onpick={(record) => (pick[k.part_id] = { ...pick[k.part_id], record })}
+											/>
 										{:else}<span class="text-muted-foreground">—</span>{/if}
 									</td>
 									<td class="px-3 py-1.5">
@@ -259,6 +243,9 @@
 												oninput={(e) =>
 													(pick[k.part_id] = { ...pick[k.part_id], qty: e.currentTarget.value })}
 											/>
+											<span class="ml-1 font-mono text-xs text-muted-foreground"
+												>{(k.uom || 'ea').toUpperCase()}</span
+											>
 										{:else}<span class="text-muted-foreground">—</span>{/if}
 									</td>
 								</tr>
@@ -282,7 +269,9 @@
 										></td
 									>
 									<td class="px-3 py-1">{u.part_name}</td>
-									<td class="px-3 py-1 text-right font-mono">{qty(u.qty_consumed)}</td>
+									<td class="px-3 py-1 text-right font-mono whitespace-nowrap"
+										>{qtyUnit(u.qty_consumed, u.uom)}</td
+									>
 								</tr>
 							{/each}
 						</tbody>
@@ -309,7 +298,7 @@
 								href={`/inventory/opal/${r.opal_number}`}>{r.opal_number}</a
 							>{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else if col.key === 'quantity'}
-						{qty(r.quantity)}
+						{qtyUnit(r.quantity, r.uom)}
 					{:else if col.key === 'usage_type'}
 						<State value={r.usage_type} tone={r.usage_type === 'tooling' ? 'info' : 'muted'} />
 					{:else}
@@ -342,7 +331,9 @@
 								href={`/inventory/opal/${r.opal_number}`}>{r.opal_number}</a
 							>{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else if col.key === 'quantity'}
-						{r.status === 'completed' ? qty(r.quantity) : `(${qty(r.quantity)})`}
+						{r.status === 'completed'
+							? qtyUnit(r.quantity, r.uom)
+							: `(${qtyUnit(r.quantity, r.uom)})`}
 					{:else if col.key === 'status'}
 						<State
 							value={r.status}
@@ -395,7 +386,7 @@
 								></td
 							>
 							<td class="px-3 py-1.5">{x.part_name}</td>
-							<td class="px-3 py-1.5 font-mono">{qty(x.quantity)}</td>
+							<td class="px-3 py-1.5 font-mono whitespace-nowrap">{qtyUnit(x.quantity, x.uom)}</td>
 							<td class="px-3 py-1.5"
 								><Input
 									type="number"
@@ -404,7 +395,10 @@
 									class="h-7 w-24 font-mono"
 									bind:value={v.qty}
 									aria-label="Quantity"
-								/></td
+								/>
+								<span class="ml-1 font-mono text-xs text-muted-foreground"
+									>{(x.uom || 'ea').toUpperCase()}</span
+								></td
 							>
 							<td class="px-3 py-1.5"
 								><Input class="h-7 w-36 font-mono" bind:value={v.loc} aria-label="Location" /></td

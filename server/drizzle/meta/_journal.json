@@ -57,6 +57,13 @@
       "when": 1793889771941,
       "tag": "0007_next_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793891073042,
+      "tag": "0008_lowly_paladin",
+      "breakpoints": true
     }
   ]
 }

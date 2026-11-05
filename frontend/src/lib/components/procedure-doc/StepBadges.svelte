@@ -1,6 +1,6 @@
 <script lang="ts">
 	// What stops a step, as badges beside its title: held by a raised issue, a bound hold,
-	// awaiting sign-off, waiting on another step. A finished step shows none (StepState marks it DONE).
+	// awaiting sign-off. Waiting on another step is plain text. A finished step shows none (StepStamp).
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { outOfSpecFields } from './spec.js';
 	import type { DocStep } from './types.js';
@@ -15,7 +15,6 @@
 	const off = $derived(outOfSpecFields(step.data_schema?.fields, step.data_captured));
 	const error = 'border-error/50 bg-error-muted font-mono tracking-wider text-error';
 	const warn = 'border-warn/50 bg-warn-muted font-mono tracking-wider text-warn';
-	const muted = 'font-mono tracking-wider text-muted-foreground';
 </script>
 
 {#if off.length}
@@ -45,6 +44,8 @@
 	{#if step.status === 'awaiting_signoff'}
 		<Badge variant="outline" class={warn}>AWAITING SIGN-OFF</Badge>
 	{:else if step.waiting && !step.holds.length}
-		<Badge variant="outline" class={muted}>{step.waiting.replace(/^WAITING ON /, 'AFTER ')}</Badge>
+		<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
+			>{step.waiting.replace(/^WAITING ON /, 'AFTER ')}</span
+		>
 	{/if}
 {/if}

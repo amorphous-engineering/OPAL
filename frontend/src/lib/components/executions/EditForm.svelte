@@ -1,80 +1,88 @@
 <script lang="ts">
+	// EDIT on a work order: project, priority and dates, which stay pencil while it is open. Each
+	// change saves as it is made, and DONE in the header closes the strip.
 	import { fromInput, toInput } from '#lib/format.js';
-	// Work order facts that can change after the cut: project, schedule, priority.
-	import { toastError } from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
+	import { ErrorBanner, toastError } from '#lib/components/opal/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte';
-	import { EXECUTION_PRIORITIES, type ExecutionPriority } from '@opal/shared';
+	import { EXECUTION_PRIORITIES } from '@opal/shared';
 	import type { InstanceFacts } from '#lib/execution/types.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
-	import FormRow from './FormRow.svelte';
 
-	let {
-		store,
-		facts,
-		onclose
-	}: { store: ExecutionStore; facts: InstanceFacts; onclose: () => void } = $props();
+	let { store, facts }: { store: ExecutionStore; facts: InstanceFacts } = $props();
 
-	// <input type="datetime-local"> holds the chosen zone's "YYYY-MM-DDTHH:mm".
-	const local = toInput;
-
-	// The form edits a snapshot of the facts taken when the dialog opens.
-	// svelte-ignore state_referenced_locally
-	let scheduled = $state(local(facts.scheduled_start_at));
-	// svelte-ignore state_referenced_locally
-	let target = $state(local(facts.target_completion_at));
-	// svelte-ignore state_referenced_locally
-	let priority = $state(facts.priority as ExecutionPriority);
 	// svelte-ignore state_referenced_locally
 	let projectId = $state(facts.project.id);
-	let busy = $state(false);
 	let error = $state<string | null>(null);
 
-	async function submit(e: SubmitEvent) {
-		e.preventDefault();
-		busy = true;
+	async function save(patch: Parameters<ExecutionStore['update']>[0]) {
 		error = null;
 		try {
-			await store.update({
-				projectId: projectId !== facts.project.id ? projectId : undefined,
-				scheduledStartAt: scheduled ? (fromInput(scheduled) ?? null) : null,
-				targetCompletionAt: target ? (fromInput(target) ?? null) : null,
-				priority
-			});
-			onclose();
+			await store.update(patch);
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to save';
+			error = err instanceof Error ? err.message : 'Not saved';
 			toastError(err);
-		} finally {
-			busy = false;
+			projectId = facts.project.id;
 		}
 	}
+	const when = (v: string) => (v ? (fromInput(v) ?? null) : null);
 </script>
 
-<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
-	<Dialog.Header><Dialog.Title>Edit work order</Dialog.Title></Dialog.Header>
-	<FormRow label="Project" for="wo-project" required>
-		<ProjectSelect id="wo-project" bind:value={projectId} keep={facts.project.id} class="w-full" />
-	</FormRow>
-	<div class="grid grid-cols-2 gap-3">
-		<FormRow label="Scheduled start" for="wo-sched">
-			<Input id="wo-sched" type="datetime-local" bind:value={scheduled} class="font-mono" />
-		</FormRow>
-		<FormRow label="Target completion" for="wo-target">
-			<Input id="wo-target" type="datetime-local" bind:value={target} class="font-mono" />
-		</FormRow>
+<form
+	class="grid grid-cols-1 gap-2 border-b border-border bg-muted/30 px-4 py-3"
+	aria-label="Edit work order"
+	onsubmit={(e) => e.preventDefault()}
+>
+	<div class="flex flex-wrap items-end gap-3">
+		<div class="grid grid-cols-1 gap-1">
+			<Label for="wo-project">Project</Label>
+			<ProjectSelect
+				id="wo-project"
+				keep={facts.project.id}
+				bind:value={
+					() => projectId,
+					(v) => {
+						if (v === projectId) return;
+						projectId = v;
+						void save({ projectId: v });
+					}
+				}
+			/>
+		</div>
+		<div class="grid grid-cols-1 gap-1">
+			<Label for="wo-priority">Priority</Label>
+			<NativeSelect
+				id="wo-priority"
+				class="w-32"
+				value={facts.priority}
+				onchange={(e) =>
+					save({ priority: e.currentTarget.value as (typeof EXECUTION_PRIORITIES)[number] })}
+			>
+				{#each EXECUTION_PRIORITIES as p (p)}<option value={p}>{p.toUpperCase()}</option>{/each}
+			</NativeSelect>
+		</div>
+		<div class="grid grid-cols-1 gap-1">
+			<Label for="wo-sched">Scheduled start</Label>
+			<Input
+				id="wo-sched"
+				type="datetime-local"
+				class="font-mono"
+				value={toInput(facts.scheduled_start_at)}
+				onchange={(e) => save({ scheduledStartAt: when(e.currentTarget.value) })}
+			/>
+		</div>
+		<div class="grid grid-cols-1 gap-1">
+			<Label for="wo-target">Target completion</Label>
+			<Input
+				id="wo-target"
+				type="datetime-local"
+				class="font-mono"
+				value={toInput(facts.target_completion_at)}
+				onchange={(e) => save({ targetCompletionAt: when(e.currentTarget.value) })}
+			/>
+		</div>
 	</div>
-	<FormRow label="Priority" for="wo-priority">
-		<NativeSelect id="wo-priority" class="w-48" bind:value={priority}>
-			{#each EXECUTION_PRIORITIES as p (p)}<option value={p}>{p.toUpperCase()}</option>{/each}
-		</NativeSelect>
-	</FormRow>
-	{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
-	<Dialog.Footer>
-		<Button variant="outline" onclick={onclose}>CANCEL</Button>
-		<Button type="submit" disabled={busy}>SAVE</Button>
-	</Dialog.Footer>
+	<ErrorBanner message={error} />
 </form>

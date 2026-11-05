@@ -30,7 +30,7 @@ export async function setup() {
 	const complete = async (id: number, number: string, body: Record<string, unknown> = {}, as?: Actor) =>
 		call('POST', `/executions/${id}/steps/${await stepOf(id, number)}/complete`, body, as);
 	const skip = async (id: number, number: string, body: Record<string, unknown> = {}, as?: Actor) =>
-		call('POST', `/executions/${id}/steps/${await stepOf(id, number)}/skip`, body, as);
+		call('POST', `/executions/${id}/steps/${await stepOf(id, number)}/skip`, { reason: 'not applicable', ...body }, as);
 	const sign = async (id: number, number: string, slot: number, body: Record<string, unknown> = {}, as?: Actor) =>
 		call('POST', `/executions/${id}/steps/${await stepOf(id, number)}/signoffs/${slot}`, body, as);
 	const nc = async (id: number, number: string, body: Record<string, unknown> = {}, as?: Actor) =>

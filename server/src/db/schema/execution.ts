@@ -43,9 +43,13 @@ export const execution = sqliteTable(
 		targetCompletionAt: text('target_completion_at'),
 		/** First completed or skipped work. */
 		startedAt: text('started_at'),
-		/** Completion, or the abort. */
+		/** When it ended: completed, voided or closed short. */
 		completedAt: text('completed_at'),
-		abortReason: text('abort_reason'),
+		/**
+		 * Why it was voided or closed short. The column keeps its old name: it holds the old
+		 * abort reasons, and renaming it makes `db:generate` stop for an interactive answer.
+		 */
+		closeReason: text('abort_reason'),
 		createdById: integer('created_by_id').references(() => user.id, { onDelete: 'set null' }),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
@@ -58,6 +62,22 @@ export const execution = sqliteTable(
 		oneOf('execution_priority_check', 'priority', EXECUTION_PRIORITIES)
 	]
 );
+
+/**
+ * Who struck a work order, and the issue a closed-short one cites. At most one row per order. Its
+ * own table because a generated rebuild of `execution` that also adds columns copies the new
+ * column names into every existing row as text; a rebuild for the status CHECK alone is faithful.
+ */
+export const executionClosure = sqliteTable('execution_closure', {
+	id: id(),
+	executionId: integer('execution_id')
+		.notNull()
+		.unique()
+		.references(() => execution.id, { onDelete: 'cascade' }),
+	closedById: integer('closed_by_id').references(() => user.id, { onDelete: 'set null' }),
+	issueId: integer('issue_id').references((): AnySQLiteColumn => issue.id),
+	createdAt: createdAt()
+});
 
 /**
  * A redline: a step inserted into a running execution to rework a non-conformance.

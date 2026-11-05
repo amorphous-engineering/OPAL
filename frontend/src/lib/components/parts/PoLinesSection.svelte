@@ -9,7 +9,7 @@
 		Timestamp,
 		type Column
 	} from '#lib/components/opal/index.js';
-	import { qty, unitMoney } from '#lib/format.js';
+	import { qty, qtyUnit, unitMoney } from '#lib/format.js';
 	import type { PartDetail, PartPoLine } from '@opal/shared';
 
 	let { detail, lines }: { detail: PartDetail; lines: PartPoLine[] } = $props();
@@ -49,7 +49,7 @@
 				{:else if col.key === 'status'}
 					<State value={l.status} />
 				{:else if col.key === 'received'}
-					{qty(l.qtyReceived)}/{qty(l.qtyOrdered, detail.part.unitOfMeasure)}
+					{qty(l.qtyReceived)}/{qtyUnit(l.qtyOrdered, detail.part.unitOfMeasure)}
 				{:else if col.key === 'cost'}
 					{#if l.unitCost === null}<span class="text-muted-foreground">—</span>{:else}{unitMoney(
 							l.unitCost

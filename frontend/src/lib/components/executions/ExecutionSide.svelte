@@ -15,10 +15,8 @@
 
 	const doc = $derived(store.doc!);
 	const inst = $derived(doc.instance);
-	// Context pre-fill: the issue form takes the project and the work order from here.
-	const newIssue = $derived(
-		`/issues/new?execution=${inst.id}&executionLabel=${encodeURIComponent(inst.work_order ?? '')}&projectId=${inst.project.id}`
-	);
+	// The form takes the project and the work order from the URL, and opens beside the work.
+	const newIssue = $derived(store.issueUrl());
 </script>
 
 <!-- One viewport tall on wide screens and never scrolls as a whole, nor sideways.
@@ -70,7 +68,9 @@
 			count={doc.issues.length || undefined}
 		>
 			{#snippet actions()}
-				<Button size="xs" variant="ghost" href={newIssue}>+ NEW</Button>
+				<Button size="xs" variant="ghost" href={newIssue} target="_blank" rel="noopener"
+					>+ NEW</Button
+				>
 			{/snippet}
 			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
 				<ul class="m-0 list-none p-0">
@@ -101,7 +101,16 @@
 			</div>
 		</Section>
 	{:else}
-		<EmptyLine label="Issues" addHref={newIssue} />
+		<EmptyLine label="Issues">
+			{#snippet action()}
+				<a
+					class="font-mono text-xs font-medium tracking-wider text-info uppercase hover:underline"
+					href={newIssue}
+					target="_blank"
+					rel="noopener">+ NEW</a
+				>
+			{/snippet}
+		</EmptyLine>
 	{/if}
 
 	<ExecutionComments {store} />

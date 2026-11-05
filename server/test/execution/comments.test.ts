@@ -30,10 +30,10 @@ describe('work order comments', () => {
 		expect((await t.call('GET', '/executions/9999/comments')).status).toBe(404);
 	});
 
-	test('a completed or cancelled work order still takes comments', async () => {
+	test('a completed or void work order still takes comments', async () => {
 		const t = await setup();
 		const wo = await t.cut(await t.published());
-		await t.ok('POST', `/executions/${wo.id}/cancel`, { reason: 'scrapped' });
+		await t.ok('POST', `/executions/${wo.id}/void`, { reason: 'scrapped' });
 		const c = await t.ok('POST', `/executions/${wo.id}/comments`, { body: 'Parts went back to stock' });
 		expect(c.body).toBe('Parts went back to stock');
 	});

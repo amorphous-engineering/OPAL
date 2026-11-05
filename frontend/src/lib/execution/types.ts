@@ -11,7 +11,16 @@ import type {
 	DocOp
 } from '#lib/components/procedure-doc/index.js';
 
-export type InstanceStatus = 'cut' | 'in_work' | 'completed' | 'aborted';
+export type InstanceStatus = 'cut' | 'in_work' | 'completed' | 'void' | 'closed_short';
+
+/** Why a struck work order stopped. */
+export interface Closure {
+	reason: string | null;
+	by: string | null;
+	at: string | null;
+	issue_id: number | null;
+	issue_number: string | null;
+}
 
 export interface RosterEntry {
 	user_id: number;
@@ -58,13 +67,13 @@ export interface KitRow {
 	uom: string | null;
 	qty_required: number;
 	qty_consumed: number;
-	variance: number;
 }
 
 export interface UnplannedRow {
 	part_id: number;
 	part_number: string | null;
 	part_name: string;
+	uom: string | null;
 	qty_consumed: number;
 }
 
@@ -72,6 +81,7 @@ export interface OutputRow {
 	part_id: number;
 	part_number: string | null;
 	part_name: string;
+	uom: string | null;
 	quantity: number;
 }
 
@@ -83,6 +93,7 @@ export interface ProductionRow {
 	serial_number: string | null;
 	opal_number: string | null;
 	quantity: number;
+	uom: string | null;
 	lot_number: string | null;
 	location: string;
 	status: 'planned' | 'wip' | 'completed' | string;
@@ -122,6 +133,9 @@ export interface InstanceFacts {
 	target_completion_at: string | null;
 	last_activity_at: string | null;
 	duration_seconds: number | null;
+	closure: Closure | null;
+	can_void: boolean;
+	can_close_short: boolean;
 }
 
 export interface ExecutionDocument {
@@ -165,6 +179,7 @@ export interface ExecutionState {
 	}[];
 	roster: RosterEntry[];
 	holds: HoldEntry[];
+	issue_count: number;
 	labor: DocLabor[];
 	generated_at: string;
 }

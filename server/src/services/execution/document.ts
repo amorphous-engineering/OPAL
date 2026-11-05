@@ -16,20 +16,23 @@ import {
 	specText,
 	unitSymbol
 } from '@opal/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { laborRows } from './labor.ts';
 import type { Db } from '../../db/client.ts';
 import { attachment, blob, issue, part, project, stepNote, user } from '../../db/schema/index.ts';
 import { dispState, isBlocking, ticketState } from '../issues/state.ts';
+import { holdsGate } from '../org/gates.ts';
 import { roleNamesOf, holdsSlotRole } from '../org/roles.ts';
 import { type HoldingIssue } from '../issues/holds.ts';
-import { type Blocker, completeBlockers, skipBlockers, slotGate } from './gates.ts';
+import { type Blocker, blocker, completeBlockers, skipBlockers, slotGate } from './gates.ts';
 import { type HoldState, blockersForBound, holdState } from './holds.ts';
+import { closureOf, workStarted } from './executions.ts';
 import { consumptionRows, productionRows, reconcile, unbooked } from './material.ts';
 import { type Model, type Row, isActive, isTerminal, loadModel, progress } from './model.ts';
 import { claimsFor, cursorOf, roster, touch } from './presence.ts';
 import { initials, personRefs, signoffRecords } from './present.ts';
+import { skipRefusal } from './steps.ts';
 
 type Att = {
 	id: number;
@@ -180,13 +183,14 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			hasNote: notes.some((n) => n.stepExecutionId === row.id),
 			hasNc: issues.some((i) => i.raisedStepId === row.id && i.issueType === 'non_conformance')
 		});
-		const skip = skipBlockers(m, st, row);
+		const skipGate = isTerminal(row.se.status) ? null : skipRefusal(ctx, row);
+		const skip = [...skipBlockers(m, st, row), ...(skipGate ? [blocker('role', skipGate)] : [])];
 		const mine = new Map((recs.get(row.id) ?? []).map((r) => [r.slot, r]));
-		const signedSet = new Set(mine.keys());
+		const signedBy = new Map([...mine].map(([n, r]) => [n, r.signedById]));
 		const signoffs = row.signoffs.map((d, n) => {
 			const rec = mine.get(n);
 			const roleOk = viewerRoles === null ? true : holdsSlotRole(viewerRoles, d.role);
-			const gate = slotGate(m, st, row, n, signedSet, complete, roleOk);
+			const gate = slotGate(m, st, row, n, signedBy, complete, roleOk, viewer);
 			return {
 				slot: n,
 				label: rec?.label ?? d.label,
@@ -225,6 +229,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 				partNumber: parts.get(k.partId)?.internalPn ?? '',
 				partName: parts.get(k.partId)?.name ?? '',
 				quantity: k.quantity,
+				uom: parts.get(k.partId)?.unitOfMeasure ?? 'ea',
 				usage: k.usage,
 				notes: k.notes
 			})),
@@ -359,6 +364,9 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 	const proj = db.select().from(project).where(eq(project.id, exec.projectId)).get()!;
 	const activity = [exec.updatedAt, ...m.rows.map((r) => r.se.updatedAt)].sort();
 	const dur = exec.startedAt && exec.completedAt ? Math.round((Date.parse(exec.completedAt) - Date.parse(exec.startedAt)) / 1000) : null;
+	// Strikes are humanOnly; an API token never sees them offered.
+	const started = workStarted(db, exec);
+	const human = ctx.actor.kind !== 'token';
 
 	return {
 		execution: {
@@ -384,7 +392,10 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			scheduledStartAt: exec.scheduledStartAt,
 			targetCompletionAt: exec.targetCompletionAt,
 			lastActivityAt: activity[activity.length - 1] ?? null,
-			durationSeconds: dur
+			durationSeconds: dur,
+			closure: closureOf(db, exec),
+			canVoid: active && human && !started,
+			canCloseShort: active && human && started && holdsGate(db, ctx.actor, 'execution.closeShort')
 		},
 		progress: progress(m),
 		ops,
@@ -413,6 +424,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			partId: o.partId,
 			partNumber: outputParts.get(o.partId)?.internalPn ?? '',
 			partName: outputParts.get(o.partId)?.name ?? '',
+			uom: outputParts.get(o.partId)?.unitOfMeasure ?? 'ea',
 			quantity: o.quantity
 		})),
 		productions,
@@ -461,6 +473,7 @@ export function buildState(ctx: Ctx, executionId: number): ExecutionState {
 		})),
 		roster: roster(db, m),
 		holds: summarizeHolds(m, st),
+		issueCount: db.select({ n: sql<number>`count(*)` }).from(issue).where(eq(issue.executionId, executionId)).get()!.n,
 		labor: laborRows(db, m),
 		generatedAt: now()
 	};

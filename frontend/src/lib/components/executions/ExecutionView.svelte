@@ -6,38 +6,42 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		confirm,
+		askReason,
+		EditToggle,
+		ErrorBanner,
+		isEditing,
+		MoreMenu,
 		PageHeader,
+		State,
 		TabStrip,
+		Timestamp,
 		toastError,
-		ErrorBanner
+		type MoreItem
 	} from '#lib/components/opal/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { toneBox, toneFor } from '#lib/components/opal/tone.js';
-	import { stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { ProcedureDocument } from '#lib/components/procedure-doc/index.js';
 	import { session } from '#lib/session.svelte.js';
 	import { ExecutionStore } from '#lib/execution/store.svelte.js';
+	import CloseShortPanel from './CloseShortPanel.svelte';
 	import DataPanel from './DataPanel.svelte';
+	import EditForm from './EditForm.svelte';
 	import ExecutionGraph from './ExecutionGraph.svelte';
-	import ExecutionDialogs from './ExecutionDialogs.svelte';
 	import ExecutionNav from './ExecutionNav.svelte';
 	import ExecutionSide from './ExecutionSide.svelte';
 	import ExecutionRecord from './ExecutionRecord.svelte';
 	import MaterialPanel from './MaterialPanel.svelte';
+	import RedlineForm from './RedlineForm.svelte';
 
 	let { id }: { id: number } = $props();
 
 	// svelte-ignore state_referenced_locally
 	const store = new ExecutionStore(id, session.user?.id ?? null);
-	let editing = $state(false);
 
 	onMount(() => {
 		store.start().then(() => {
 			// Deep links: ?step=N (snapshot order) or ?op=N jump and expand; with
-			// ?redline_issue=ID the redline dialog opens on that OP, linked to the NC.
+			// ?redline_issue=ID the redline form opens on that OP, linked to the NC.
 			const q = page.url.searchParams;
 			const target = Number(q.get('step')) || Number(q.get('op'));
 			if (target) store.jumpTo(target);
@@ -46,7 +50,7 @@
 			if (issueId && opOrder && store.active) {
 				const hit = store.allOps.find((o) => o.order === opOrder);
 				if (hit?.open_ncs.some((n) => n.id === issueId)) {
-					store.dialog = { kind: 'redline', op: hit, issueId };
+					store.panel = { kind: 'redline', op: hit, issueId };
 				} else if (hit) {
 					toastError(new Error('That issue is not an open NC on this OP'));
 				}
@@ -57,7 +61,6 @@
 
 	const doc = $derived(store.doc);
 	const inst = $derived(doc?.instance);
-	const metaBadge = 'font-mono tracking-wider text-muted-foreground';
 	const hasData = $derived(
 		!!doc &&
 			(doc.data_rows.length > 0 ||
@@ -95,21 +98,31 @@
 		store.jumpTo(order);
 	}
 
-	async function abort() {
+	async function voidOrder() {
 		if (!inst) return;
-		const ok = await confirm({
-			title: `Abort ${inst.work_order ?? 'work order'}?`,
-			body: 'In-progress work stops, the work order closes as ABORTED, and it cannot be resumed.',
-			action: 'ABORT',
+		const reason = await askReason({
+			title: `Void ${inst.work_order ?? 'work order'}?`,
+			body: 'Nobody can work it again. It stays on the record, struck through.',
+			action: 'VOID',
 			destructive: true
 		});
-		if (!ok) return;
+		if (reason === null) return;
 		try {
-			await store.abort();
+			await store.voidOrder(reason);
 		} catch (e) {
-			toastError(e, 'Failed to abort');
+			toastError(e, 'Failed to void');
 		}
 	}
+
+	const more = $derived<MoreItem[]>([
+		{ label: 'VOID', strike: true, when: inst?.can_void, onselect: voidOrder },
+		{
+			label: 'CLOSE SHORT',
+			strike: true,
+			when: inst?.can_close_short,
+			onselect: () => (store.panel = { kind: 'closeShort' })
+		}
+	]);
 </script>
 
 <svelte:window onkeydown={(e) => store.handleKey(e)} />
@@ -136,52 +149,71 @@
 					{ label: inst.work_order ?? 'Execution' }
 				]}
 			>
+				{#snippet heading()}
+					<h1
+						class={cn(
+							'text-lg font-semibold tracking-tight',
+							inst.closure && 'text-muted-foreground',
+							inst.status === 'void' && 'line-through'
+						)}
+					>
+						{inst.procedure.name}
+					</h1>
+				{/snippet}
+				{#snippet meta()}
+					<span class="font-mono text-xs">
+						<a
+							class="hover:underline"
+							href={`/procedures/${inst.procedure.id}`}
+							title={inst.procedure.name}>{inst.procedure.template_number}</a
+						>
+						v{inst.version.number}
+						<a
+							class="ml-2 hover:underline"
+							href={`/projects/${inst.project.id}`}
+							title={inst.project.name}>{inst.project.code}</a
+						>
+					</span>
+				{/snippet}
 				{#snippet state()}
-					<Badge
-						variant="outline"
-						class={metaBadge}
-						href={`/procedures/${inst.procedure.id}`}
-						title={inst.procedure.name}>{inst.procedure.template_number}</Badge
-					>
-					<Badge variant="outline" class={metaBadge}>v{inst.version.number}</Badge>
-					<Badge
-						variant="outline"
-						class={cn('font-mono tracking-wider', toneBox[toneFor(inst.status)])}
-						>{stateLabel(inst.status)}</Badge
-					>
-					<Badge
-						variant="outline"
-						class={metaBadge}
-						href={`/projects/${inst.project.id}`}
-						title={inst.project.name}>{inst.project.code}</Badge
-					>
+					<State value={inst.status} badge />
 					{#if inst.priority !== 'normal'}
-						<Badge
-							variant="outline"
-							class={cn(
-								'font-mono tracking-wider',
-								toneBox[inst.priority === 'urgent' ? 'error' : 'warn']
-							)}>{inst.priority.toUpperCase()}</Badge
+						<span class="font-mono text-xs font-medium tracking-wide text-warn"
+							>{inst.priority.toUpperCase()}</span
 						>
 					{/if}
 				{/snippet}
 				{#snippet actions()}
-					{#if inst.status === 'completed'}
-						<Button
-							size="sm"
-							variant="outline"
-							href={`/executions/${inst.id}/report`}
-							target="_blank"
-							rel="noopener">REPORT</Button
+					{#if inst.active}<EditToggle />{/if}
+					{#if !inst.active}
+						<Button size="sm" href={`/executions/${inst.id}/report`} target="_blank" rel="noopener"
+							>REPORT</Button
 						>
 					{/if}
-					{#if inst.active}
-						<Button size="sm" variant="destructive" onclick={abort}>ABORT</Button>
-					{/if}
+					<MoreMenu items={more} />
 				{/snippet}
 			</PageHeader>
 
-			{#if holds.length}
+			{#if inst.closure}
+				<div
+					class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-4 py-2 font-mono text-xs text-muted-foreground"
+					data-closure
+				>
+					{#if inst.closure.at}<Timestamp value={inst.closure.at} />{/if}
+					{#if inst.closure.by}<span>{inst.closure.by}</span>{/if}
+					{#if inst.closure.reason}<span class="font-sans text-sm text-foreground"
+							>{inst.closure.reason}</span
+						>{/if}
+					{#if inst.closure.issue_id}<a
+							class="text-info hover:underline"
+							href={`/issues/${inst.closure.issue_id}`}>{inst.closure.issue_number}</a
+						>{/if}
+				</div>
+			{/if}
+			{#if inst.active && isEditing(page.url)}<EditForm {store} facts={inst} />{/if}
+			{#if inst.active && store.panel?.kind === 'closeShort'}<CloseShortPanel {store} />{/if}
+
+			{#if inst.active && holds.length}
 				<div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
 					{#each holds as h (h.issue_id)}
 						<span class="font-mono text-xs text-warn">
@@ -232,6 +264,9 @@
 					id="exec-scroll"
 					class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4 [&_[data-doc-mode]>section:first-of-type]:rounded-t-none [&_[data-doc-mode]>section:first-of-type]:border-t-0"
 				>
+					{#if inst.active && store.panel?.kind === 'redline'}
+						<RedlineForm {store} op={store.panel.op} preselect={store.panel.issueId} />
+					{/if}
 					{#if tab === 'document'}
 						<ProcedureDocument
 							controller={store}
@@ -245,7 +280,7 @@
 					{:else if tab === 'material'}
 						<MaterialPanel {store} />
 					{:else if tab === 'details'}
-						<ExecutionRecord {store} onedit={() => (editing = true)} onjump={jump} />
+						<ExecutionRecord {store} onjump={jump} />
 					{/if}
 				</div>
 			</div>
@@ -257,5 +292,4 @@
 			</aside>
 		</div>
 	</div>
-	<ExecutionDialogs {store} bind:editing />
 {/if}

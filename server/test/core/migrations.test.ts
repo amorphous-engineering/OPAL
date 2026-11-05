@@ -98,9 +98,65 @@ describe('applying migrations', () => {
 		expect((db.$client.query('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys).toBe(1);
 	});
 
-	test('the cut folder helper builds a database at an older migration', () => {
+});
+
+describe('retiring the aborted status', () => {
+	/** A database as it stood before the status changed, holding one work order. */
+	function older(status: string, reason: string | null = null) {
 		const path = join(tempDir(), 'opal.db');
 		openDb(path, migrationsUpTo('0004_skip_required_gate'));
-		expect(count(path, 'execution')).toBe(0);
+		seedWorkOrder(path, status);
+		const db = new Database(path);
+		db.run('UPDATE execution SET abort_reason = ? WHERE id = 1', [reason]);
+		db.close();
+		return path;
+	}
+	const read = (path: string, sql: string) => {
+		const db = new Database(path);
+		const rows = db.query(sql).all();
+		db.close();
+		return rows;
+	};
+
+	test('an aborted work order reads closed short after the upgrade, with its steps and reason', () => {
+		const path = older('aborted', 'wrong part');
+		openDb(path);
+		expect(read(path, 'SELECT status, abort_reason FROM execution')).toEqual([{ status: 'closed_short', abort_reason: 'wrong part' }]);
+		expect(count(path, 'step_execution')).toBe(1);
+		expect(count(path, 'signoff')).toBe(1);
+	});
+
+	test('a work order in any other status keeps it through the upgrade', () => {
+		const path = older('in_work');
+		openDb(path);
+		expect(read(path, 'SELECT status FROM execution')).toEqual([{ status: 'in_work' }]);
+	});
+
+	test('every column of an upgraded work order holds the value it held before', () => {
+		const path = older('completed', 'n/a');
+		const before = read(path, 'SELECT * FROM execution');
+		openDb(path);
+		expect(read(path, 'SELECT * FROM execution')).toEqual(before as never);
+	});
+
+	test('the upgraded table refuses aborted and takes the new statuses', () => {
+		const path = older('cut');
+		const db = openDb(path).$client;
+		expect(() => db.run("UPDATE execution SET status = 'aborted' WHERE id = 1")).toThrow();
+		db.run("UPDATE execution SET status = 'void' WHERE id = 1");
+		db.run("UPDATE execution SET status = 'closed_short' WHERE id = 1");
+	});
+
+	test('an existing engineer role gets the close-short gate once, and an admin removal sticks', () => {
+		const path = older('cut');
+		const db = new Database(path);
+		db.run("INSERT INTO role (id, name, key, is_system, created_at, updated_at) VALUES (1, 'Engineer', 'engineer', 1, 'x', 'x')");
+		db.close();
+		const gates = () => read(path, "SELECT gate FROM role_gate WHERE gate = 'execution.closeShort'");
+		const upgraded = openDb(path).$client;
+		expect(gates()).toEqual([{ gate: 'execution.closeShort' }]);
+		upgraded.run("DELETE FROM role_gate WHERE gate = 'execution.closeShort'");
+		openDb(path);
+		expect(gates()).toEqual([]);
 	});
 });

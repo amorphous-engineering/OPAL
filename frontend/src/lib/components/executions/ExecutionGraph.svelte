@@ -63,7 +63,7 @@
 			<Button
 				size="xs"
 				variant="outline"
-				onclick={() => (store.dialog = { kind: 'redline', op, issueId: op.open_ncs[0].id })}
+				onclick={() => (store.panel = { kind: 'redline', op, issueId: op.open_ncs[0].id })}
 				>REDLINE</Button
 			>
 		{/if}

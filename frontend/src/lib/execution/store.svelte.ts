@@ -8,14 +8,14 @@
  *  - Rows are never replaced under an operator: a refresh keeps the previous
  *    object for every OP and step whose data did not change, and data-capture
  *    drafts live here, outside the rows.
- *  - Expansion: everything is open until it is complete, held and waiting steps
- *    included. A step or OP collapses when it reaches a terminal status, here or
- *    remotely; otherwise the operator's choice is kept (persisted per execution).
+ *  - Expansion: only the current step of the current OP opens by default, and that
+ *    moves as the work does. Whatever the person opened stays open until it finishes
+ *    or they close it (persisted per execution). A step with values typed in stays open.
  *  - Presence is the explicit claim. Focus (keyboard cursor) is local only.
  */
 import type { ExecutionComment } from '@opal/shared';
 import { api, opal } from '#lib/api.js';
-import { confirm, toast, toastError } from '#lib/components/opal/index.js';
+import { toast, toastError } from '#lib/components/opal/index.js';
 import {
 	isActionable,
 	isTerminal,
@@ -52,12 +52,11 @@ function write(key: string, value: unknown) {
 	}
 }
 
-/** Keys for every expandable thing: OP cards (`op:3`) and step bodies (`step:5`). */
-export type OpenDialog =
-	| { kind: 'skip'; step: DocStep }
-	| { kind: 'issue'; step: DocStep }
-	| { kind: 'redline'; op: DocOp; issueId?: number }
-	| null;
+/** The one form open on the page. It sits inline: nothing here covers the document. */
+export type OpenPanel =
+	{ kind: 'redline'; op: DocOp; issueId?: number } | { kind: 'closeShort' } | null;
+
+type WorkRow = { op: DocOp; step: DocStep };
 
 export class ExecutionStore implements DocController {
 	readonly mode = 'execute' as const;
@@ -67,7 +66,7 @@ export class ExecutionStore implements DocController {
 	doc = $state<ExecutionDocument | null>(null);
 	error = $state<string | null>(null);
 	loading = $state(true);
-	dialog = $state<OpenDialog>(null);
+	panel = $state<OpenPanel>(null);
 	focusedOrder = $state<number | null>(null);
 	claimedOrder = $state<number | null>(null);
 	/** Brief highlight after a jump (rail click, ?op= link). */
@@ -90,7 +89,7 @@ export class ExecutionStore implements DocController {
 	constructor(id: number, viewerId: number | null) {
 		this.id = id;
 		this.viewerId = viewerId;
-		this.overrides = read(this.key('open'), {});
+		this.overrides = read(this.key('opened'), {});
 		this.drafts = read(this.key('draft'), {});
 	}
 
@@ -102,6 +101,10 @@ export class ExecutionStore implements DocController {
 
 	get active() {
 		return this.doc?.instance.active ?? false;
+	}
+
+	get struck() {
+		return !!this.doc?.instance.closure;
 	}
 
 	get allOps(): DocOp[] {
@@ -232,7 +235,7 @@ export class ExecutionStore implements DocController {
 			for (const s of op.steps) note(`step:${s.order}`, s.status);
 		}
 		this.statusByKey = seen;
-		write(this.key('open'), this.overrides);
+		write(this.key('opened'), this.overrides);
 
 		// Keep the previous object wherever nothing changed.
 		const mergeOps = (nu: DocOp[], old: DocOp[] | undefined): DocOp[] =>
@@ -267,18 +270,37 @@ export class ExecutionStore implements DocController {
 		}
 	}
 
-	/** The next thing to do: the focused step if it is actionable, else the first
-	 *  actionable step of the claimed OP, else the first actionable step. */
+	/** Rows that take work: a leaf OP, the sub-steps of an OP, and an OP waiting on its own sign-off. */
+	private workRows(ops: DocOp[]): WorkRow[] {
+		return ops.flatMap((op) => {
+			if (!op.steps.length) return [{ op, step: op.step }];
+			const rows = op.steps.map((step) => ({ op, step }));
+			return op.step.status === 'awaiting_signoff' ? [...rows, { op, step: op.step }] : rows;
+		});
+	}
+
+	/**
+	 * The step that opens by default: the first this person can act on in the OP they claimed, else
+	 * in the document. With nothing to act on, the first unfinished one, which answers what is
+	 * stopping the work. Contingency work is optional, so it opens only once someone claims it.
+	 * Clicking around does not move this, so opening one step never closes another.
+	 */
+	openOrder = $derived.by(() => {
+		const doc = this.doc;
+		if (!doc?.instance.active) return null;
+		const ready = (r: WorkRow) => isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign);
+		const pick = (rows: WorkRow[]) =>
+			rows.find(ready) ?? rows.find((r) => !isTerminal(r.step.status));
+		const claimed = this.workRows(this.allOps.filter((o) => o.order === this.claimedOrder));
+		return (pick(claimed) ?? pick(this.workRows(doc.ops)))?.step.order ?? null;
+	});
+
+	/** The one accent on the page: the focused step if it can be worked, else the step that opened. */
 	currentOrder = $derived.by(() => {
-		if (!this.doc) return null;
-		const rows = this.allOps.flatMap((op) =>
-			op.steps.length ? op.steps.map((step) => ({ op, step })) : [{ op, step: op.step }]
-		);
-		const focused = rows.find((r) => r.step.order === this.focusedOrder);
+		if (!this.doc?.instance.active) return null;
+		const focused = this.workRows(this.allOps).find((r) => r.step.order === this.focusedOrder);
 		if (focused && isActionable(focused.step)) return focused.step.order;
-		const claimed = rows.find((r) => r.op.order === this.claimedOrder && isActionable(r.step));
-		if (claimed) return claimed.step.order;
-		return rows.find((r) => isActionable(r.step))?.step.order ?? null;
+		return this.openOrder;
 	});
 
 	/** Focus mode: show only the OP selected in the sidebar, hide the rest. Remembered per browser. */
@@ -353,7 +375,8 @@ export class ExecutionStore implements DocController {
 				x.consumed,
 				x.notes
 			]),
-			s.holds.map((h) => `${h.issue_number}:${h.disposition_state}`)
+			s.holds.map((h) => `${h.issue_number}:${h.disposition_state}`),
+			s.issue_count
 		]);
 	}
 
@@ -386,17 +409,26 @@ export class ExecutionStore implements DocController {
 
 	// ---------- controller: expansion & focus ----------
 
-	// Open until complete. Hosts pass `blocked` too; execution keeps held and waiting
-	// work open so it stays readable.
-	isOpen(key: string, terminal: boolean): boolean {
-		return this.overrides[key] ?? !terminal;
+	private defaultOpen(key: string): boolean {
+		const order = this.openOrder;
+		const hit = order === null ? undefined : this.findStep(order);
+		if (hit && (key === `step:${order}` || key === `op:${hit.op.order}`)) return true;
+		// Values typed into a step never close under the operator.
+		const [kind, id] = key.split(':');
+		if (kind === 'step') return !!this.drafts[Number(id)];
+		const op = this.allOps.find((o) => o.order === Number(id));
+		return !!op && [op.step, ...op.steps].some((s) => this.drafts[s.order]);
 	}
 
-	toggle(key: string, terminal: boolean) {
-		const next = !this.isOpen(key, terminal);
-		if (next === !terminal) delete this.overrides[key];
+	isOpen(key: string): boolean {
+		return this.overrides[key] ?? this.defaultOpen(key);
+	}
+
+	toggle(key: string) {
+		const next = !this.isOpen(key);
+		if (next === this.defaultOpen(key)) delete this.overrides[key];
 		else this.overrides[key] = next;
-		write(this.key('open'), this.overrides);
+		write(this.key('opened'), this.overrides);
 	}
 
 	setFocus(order: number) {
@@ -410,8 +442,10 @@ export class ExecutionStore implements DocController {
 		const { op, step } = hit;
 		// Focus mode: jumping selects the OP, which hides every other one.
 		if (this.focusMode) this.focusOp = op.order;
-		const opTerminal = isTerminal(op.status);
-		if (!this.isOpen(`op:${op.order}`, opTerminal)) this.toggle(`op:${op.order}`, opTerminal);
+		if (!this.isOpen(`op:${op.order}`)) this.toggle(`op:${op.order}`);
+		if (step.order !== op.order && !this.isOpen(`step:${step.order}`)) {
+			this.toggle(`step:${step.order}`);
+		}
 		this.focusedOrder = order;
 		this.pulse = order;
 		setTimeout(() => {
@@ -431,9 +465,7 @@ export class ExecutionStore implements DocController {
 		const t = e.target as HTMLElement | null;
 		if (t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable)) return;
 		if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
-		const rows = visibleRows(this.shownOps, (op) =>
-			this.isOpen(`op:${op.order}`, isTerminal(op.status))
-		);
+		const rows = visibleRows(this.shownOps, (op) => this.isOpen(`op:${op.order}`));
 		if (!rows.length) return;
 		const idx = rows.findIndex((r) => r.step.order === this.focusedOrder);
 		const move = (to: number) => {
@@ -454,9 +486,9 @@ export class ExecutionStore implements DocController {
 		if (e.key === 'Enter') {
 			e.preventDefault();
 			if (isHeader || leaf) {
-				this.toggle(`op:${cur.op.order}`, isTerminal(cur.op.status));
+				this.toggle(`op:${cur.op.order}`);
 			} else {
-				this.toggle(`step:${cur.step.order}`, isTerminal(cur.step.status));
+				this.toggle(`step:${cur.step.order}`);
 			}
 		} else if (e.key === 'c' && this.active) {
 			// Claims are per OP: c claims (or releases) the OP the cursor is in.
@@ -547,14 +579,14 @@ export class ExecutionStore implements DocController {
 			}
 		},
 		sign: async (step, slot) => {
-			// Slot 0 is the old COMPLETE: it carries the captured data and its validation.
+			// Slot 0 is COMPLETE: it carries the captured data and its validation.
 			let data: Record<string, unknown> | undefined;
 			if (slot === 0) {
 				const errs = this.validate(step);
 				this.errors[step.order] = errs;
 				if (Object.keys(errs).length) {
 					toast.error(
-						'Cannot sign off: ' +
+						'Cannot complete: ' +
 							Object.entries(errs)
 								.map(([k, v]) => {
 									const f = step.data_schema?.fields?.find((x) => x.name === k);
@@ -566,13 +598,6 @@ export class ExecutionStore implements DocController {
 				}
 				data = this.payload(step);
 			}
-			// Signing is the commitment: it cannot be undone, so it is always confirmed.
-			const ok = await confirm({
-				title: 'Are you sure you want to sign off this step?',
-				body: 'Ensure all instructions have been completed and all data collects have been entered correctly. This cannot be reverted.',
-				action: 'SIGN'
-			});
-			if (!ok) return;
 			try {
 				await opal.execution.sign({
 					id: this.id,
@@ -592,23 +617,25 @@ export class ExecutionStore implements DocController {
 					this.advanceFrom(step.order);
 				}
 			} catch (e) {
-				toastError(e, 'Failed to sign off step');
+				toastError(e, 'Step not recorded');
 				await this.refresh();
 			}
 		},
-		skip: (step) => (this.dialog = { kind: 'skip', step }),
-		raiseIssue: (step) => (this.dialog = { kind: 'issue', step }),
-		redline: (op) => (this.dialog = { kind: 'redline', op }),
+		skip: async (step, reason) => {
+			try {
+				await opal.execution.skip({ id: this.id, stepId: step.order, reason });
+				if (this.claimedOrder === step.order)
+					await opal.execution.release({ id: this.id }).catch(() => {});
+				await this.changed();
+				return true;
+			} catch (e) {
+				toastError(e, 'Step not skipped');
+				return false;
+			}
+		},
+		issueHref: (step) => this.issueUrl(step),
+		redline: (op) => (this.panel = { kind: 'redline', op }),
 		deleteRedline: async (op) => {
-			if (
-				!(await confirm({
-					title: `Delete redline OP ${op.number}?`,
-					body: 'The redline and its sub-steps are removed. Allowed only while no step has started.',
-					action: 'DELETE',
-					destructive: true
-				}))
-			)
-				return;
 			try {
 				await opal.execution.deleteRedline({ id: this.id, redlineId: op.step.execution_id! });
 				await this.changed();
@@ -656,7 +683,14 @@ export class ExecutionStore implements DocController {
 		},
 		loadStock: async (partId) => {
 			if (this.stock[partId]) return this.stock[partId];
-			const r = await opal.inventory.list({ partId, limit: 200 });
+			// Oldest first: the picker defaults to the first record.
+			const r = await opal.inventory.list({
+				partId,
+				hasStock: 'true',
+				sort: 'createdAt',
+				order: 'asc',
+				limit: 200
+			});
 			return (this.stock[partId] = r.items.map((x) => ({
 				id: x.id,
 				part_id: x.partId,
@@ -691,53 +725,26 @@ export class ExecutionStore implements DocController {
 
 	/** After the step completes, move the keyboard cursor to the next open step. */
 	private advanceFrom(order: number) {
-		const rows = visibleRows(this.shownOps, (op) =>
-			this.isOpen(`op:${op.order}`, isTerminal(op.status))
-		).filter((r) => r.step !== r.op.step || r.op.steps.length === 0);
+		const rows = visibleRows(this.shownOps, (op) => this.isOpen(`op:${op.order}`)).filter(
+			(r) => r.step !== r.op.step || r.op.steps.length === 0
+		);
 		const i = rows.findIndex((r) => r.step.order === order);
 		const next = rows.slice(i + 1).find((r) => !isTerminal(r.step.status));
 		if (next) this.focusedOrder = next.step.order;
 	}
 
-	// ---------- dialog operations ----------
+	// ---------- panel operations ----------
 
-	closeDialog() {
-		this.dialog = null;
+	closePanel() {
+		this.panel = null;
 	}
 
-	async skipStep(step: DocStep, reason: string) {
-		await opal.execution.skip({ id: this.id, stepId: step.order, reason: reason.trim() || null });
-		if (this.claimedOrder === step.order)
-			await opal.execution.release({ id: this.id }).catch(() => {});
-		await this.changed();
-	}
-
-	async raiseIssue(
-		step: DocStep,
-		body: {
-			title: string;
-			description: string | null;
-			priority: 'low' | 'medium' | 'high' | 'critical';
-			shouldBe: string | null;
-			actual: string | null;
-			containment: 'advisory' | 'step' | 'op' | 'wo';
-			containmentStepId: number | null;
-			assignedToId: number | null;
-		},
-		files: File[]
-	) {
-		const issue = await opal.execution.raiseNc({ id: this.id, stepId: step.order, ...body });
-		// Evidence at discovery links to the issue.
-		for (const file of files) {
-			const fd = new FormData();
-			fd.append('file', file);
-			fd.append('ownerType', 'issue');
-			fd.append('ownerId', String(issue.id));
-			fd.append('kind', 'capture');
-			await api.post('/attachments', fd);
-		}
-		await this.changed();
-		return issue;
+	/** The issue form with this work order, and the step if there is one, carried in the URL. */
+	issueUrl(step?: DocStep): string {
+		const inst = this.doc?.instance;
+		const label = encodeURIComponent(inst?.work_order ?? '');
+		const at = step ? `&step=${step.order}&stepLabel=${encodeURIComponent(step.number)}` : '';
+		return `/issues/new?execution=${this.id}&executionLabel=${label}&projectId=${inst?.project.id ?? ''}${at}`;
 	}
 
 	async createRedline(body: {
@@ -749,8 +756,13 @@ export class ExecutionStore implements DocController {
 		await this.changed();
 	}
 
-	async abort() {
-		await opal.execution.cancel({ id: this.id });
+	async voidOrder(reason: string) {
+		await opal.execution.void({ id: this.id, reason });
+		await this.changed();
+	}
+
+	async closeShort(reason: string, issueId: number) {
+		await opal.execution.closeShort({ id: this.id, reason, issueId });
 		await this.changed();
 	}
 
