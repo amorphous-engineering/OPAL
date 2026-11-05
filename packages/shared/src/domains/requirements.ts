@@ -63,6 +63,10 @@ export const zRequirement = z.object({
 	baselinedAt: zTimestamp.nullable(),
 	baselinedById: z.number().int().nullable(),
 	supersedesId: z.number().int().nullable(),
+	/** Set only on a cancelled requirement: when, by whom and why. */
+	cancelledAt: zTimestamp.nullable(),
+	cancelledByName: z.string().nullable(),
+	cancelReason: z.string().nullable(),
 	childrenCount: z.number().int(),
 	allocationCount: z.number().int(),
 	createdAt: zTimestamp,
@@ -243,6 +247,10 @@ export const zRequirementDossier = z.object({
 	stale: z.boolean(),
 	baselinedAt: zTimestamp.nullable(),
 	baselinedBy: z.string().nullable(),
+	/** Set only on a cancelled requirement. */
+	cancelledAt: zTimestamp.nullable(),
+	cancelledBy: z.string().nullable(),
+	cancelReason: z.string().nullable(),
 	supersedesId: z.number().int().nullable(),
 	predecessorRevision: z.number().int().nullable(),
 	createdAt: zTimestamp,
@@ -606,11 +614,13 @@ export const requirements = {
 		name: 'requirements.cancel',
 		method: 'POST',
 		path: '/requirements/:id/cancel',
-		summary: 'Cancel a requirement (terminal).',
-		input: z.object({ id: zId }),
+		summary:
+			'Strike a requirement that has not been superseded (terminal). The reason is required and stays with who and when.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1) }),
 		output: zRequirement,
 		access: 'signed-in',
-		mcp: true
+		mcp: false,
+		humanOnly: true
 	}),
 	reaffirm: op({
 		name: 'requirements.reaffirm',
@@ -692,7 +702,8 @@ export const requirements = {
 		name: 'requirements.updateLink',
 		method: 'PATCH',
 		path: '/requirements/allocations/:id',
-		summary: 'Set the status or notes of a part-requirement link.',
+		summary:
+			'Set the status or notes of a part-requirement link. Verified is recorded with verifyLink, not set here. Refused once the requirement is superseded or cancelled.',
 		input: z.object({
 			id: zId,
 			status: z.enum(REQUIREMENT_ALLOCATION_STATUSES).optional(),
@@ -706,11 +717,13 @@ export const requirements = {
 		name: 'requirements.verifyLink',
 		method: 'POST',
 		path: '/requirements/allocations/:id/verify',
-		summary: 'Mark a part-requirement link verified, by the caller, now.',
+		summary:
+			'Record verification of a part-requirement link, by the signed-in person, now. A person\'s act. Refused once the requirement is superseded or cancelled.',
 		input: z.object({ id: zId, notes: text }),
 		output: zRequirementPartRequirement,
 		access: 'signed-in',
-		mcp: true
+		mcp: false,
+		humanOnly: true
 	}),
 	unassign: op({
 		name: 'requirements.unassign',

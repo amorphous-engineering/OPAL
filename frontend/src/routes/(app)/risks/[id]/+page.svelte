@@ -1,30 +1,32 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import {
 		DataTable,
 		DetailRow,
 		DetailTable,
+		EditToggle,
 		EmptyLine,
+		MoreMenu,
 		PageHeader,
 		Section,
 		State,
 		Timestamp,
+		askReason,
 		confirm,
+		isEditing,
+		queryHref,
 		toast,
 		toastError,
-		type Column
+		type Column,
+		type MoreItem
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { opal } from '#lib/api.js';
 	import References from '#lib/components/risks/References.svelte';
-	import {
-		RISK_DISPOSITIONS,
-		RISK_SIGNATURE_FIELDS,
-		type RiskDisposition,
-		type RiskHistoryRow
-	} from '@opal/shared';
+	import { RISK_DISPOSITIONS, type RiskDisposition, type RiskHistoryRow } from '@opal/shared';
 	import { markdown } from '#lib/markdown.js';
 	import DispositionPanel from '#lib/components/risks/DispositionPanel.svelte';
 	import EditableText from '#lib/components/risks/EditableText.svelte';
@@ -39,33 +41,41 @@
 
 	const risk = $derived(data.risk);
 	const accepted = $derived(risk.disposition === 'accepted');
-	const terminal = $derived(risk.disposition === 'realized');
+	const realized = $derived(risk.disposition === 'realized');
+	const closed = $derived(risk.disposition === 'closed');
+	const live = $derived(!accepted && !realized && !closed);
 	const reviewedBy = $derived(` · ${risk.lastReviewedByName}`);
+
+	// Pages open for reading. EDIT reveals what is still pencil: everything while open, owner and
+	// narrative while accepted, nothing once realized or closed. A realized risk is corrected
+	// deliberately (`?correct=1`), each save with a reason.
+	const editing = $derived((live || accepted) && isEditing(page.url));
+	const editScored = $derived(editing && live);
+	const correcting = $derived(realized && page.url.searchParams.get('correct') === '1');
+	const editFields = $derived(editScored || correcting);
+	const editNarrative = $derived(editing || correcting);
 
 	let target = $state('');
 	let editingAsset = $state(false);
 	let editingNarrative = $state(false);
 	let assetText = $state('');
 
-	/** PATCH fields. Editing the signed scenario or score withdraws an acceptance, so ask first. */
+	/** Save fields. A correction to a realized risk is logged with its reason. */
 	async function patch(
 		fields: Omit<Parameters<typeof opal.risks.update>[0], 'id'>
 	): Promise<boolean> {
-		if (
-			accepted &&
-			Object.keys(fields).some((k) => (RISK_SIGNATURE_FIELDS as readonly string[]).includes(k))
-		) {
-			const ok = await confirm({
-				title: `Withdraw acceptance of ${risk.riskNumber}`,
-				body: `Changing the scenario or score withdraws ${risk.acceptedByName ?? 'the'} acceptance. The risk returns to OPEN.`,
-				action: 'CHANGE'
-			});
-			if (!ok) return false;
-		}
 		try {
-			const r = await opal.risks.update({ id: risk.id, ...fields });
-			if (r.acceptanceInvalidated)
-				toast.warning(`Acceptance withdrawn; ${risk.riskNumber} is open`);
+			if (correcting) {
+				const reason = await askReason({
+					title: `Correct ${risk.riskNumber}`,
+					body: 'The earlier value stays in History with this reason.',
+					action: 'CORRECT'
+				});
+				if (reason === null) return false;
+				await opal.risks.correct({ id: risk.id, ...fields, reason });
+			} else {
+				await opal.risks.update({ id: risk.id, ...fields });
+			}
 			await invalidateAll();
 			return true;
 		} catch (e) {
@@ -95,14 +105,14 @@
 	}
 
 	async function accept() {
-		const ok = await confirm({
+		const rationale = await askReason({
 			title: `Accept ${risk.riskNumber}`,
-			body: `Signs ${risk.riskNumber} at score ${risk.score}${risk.residualScore !== null ? ` → ${risk.residualScore}` : ''} as the current user. Changing the scenario or score afterwards withdraws the acceptance.`,
+			body: `Signs ${risk.riskNumber} at score ${risk.score}${risk.residualScore !== null ? ` → ${risk.residualScore}` : ''} as the current user. Score and scenario then stay fixed until the acceptance is withdrawn.`,
 			action: 'ACCEPT'
 		});
-		if (!ok) return;
+		if (rationale === null) return;
 		try {
-			await opal.risks.accept({ id: risk.id });
+			await opal.risks.accept({ id: risk.id, rationale });
 			toast.success(`${risk.riskNumber} accepted`);
 			await invalidateAll();
 		} catch (e) {
@@ -110,6 +120,45 @@
 			await invalidateAll();
 		}
 	}
+
+	async function withdraw() {
+		const reason = await askReason({
+			title: `Withdraw acceptance of ${risk.riskNumber}`,
+			body: `${risk.acceptedByName ?? 'The'} acceptance is withdrawn. The risk returns to OPEN and its score and scenario can change.`,
+			action: 'WITHDRAW'
+		});
+		if (reason === null) return;
+		try {
+			await opal.risks.withdrawAcceptance({ id: risk.id, reason });
+			await invalidateAll();
+		} catch (e) {
+			toastError(e);
+		}
+	}
+
+	async function moveTo(
+		disposition: 'closed' | 'open',
+		title: string,
+		action: string,
+		body?: string
+	) {
+		const note = await askReason({ title, body, action });
+		if (note === null) return;
+		try {
+			await opal.risks.setDisposition({ id: risk.id, disposition, note });
+			await invalidateAll();
+		} catch (e) {
+			toastError(e);
+		}
+	}
+	const close = () =>
+		moveTo(
+			'closed',
+			`Close ${risk.riskNumber}`,
+			'CLOSE',
+			'The risk leaves the matrix and stays on record as closed.'
+		);
+	const reopen = () => moveTo('open', `Reopen ${risk.riskNumber}`, 'REOPEN');
 
 	async function markReviewed() {
 		try {
@@ -138,11 +187,31 @@
 		}
 	}
 
+	// Disposition moves from the edit panel. Closing and reopening have their own acts under MORE.
 	const targets = $derived(
-		RISK_DISPOSITIONS.filter((d) => d !== risk.disposition && d !== 'accepted')
+		RISK_DISPOSITIONS.filter((d) => d !== risk.disposition && d !== 'accepted' && d !== 'closed')
 	);
 
-	const unmet = $derived(data.readiness.checks.filter((c) => !c.passed));
+	// The acceptance carries its own rationale, so that check does not block the move.
+	const unmet = $derived(
+		data.readiness.checks.filter((c) => !c.passed && c.key !== 'rationale_recorded')
+	);
+	const canAccept = $derived(live && unmet.length === 0);
+
+	const moreItems = $derived<MoreItem[]>([
+		{ label: 'ACCEPT', onselect: accept, when: canAccept },
+		{ label: 'WITHDRAW ACCEPTANCE', onselect: withdraw, when: accepted },
+		{ label: 'CLOSE', onselect: close, strike: true, when: live || accepted },
+		{ label: 'REOPEN', onselect: reopen, when: closed },
+		{ label: 'CORRECT RECORD', onselect: () => goto('?correct=1'), when: realized && !correcting },
+		{ label: '+ NEW RISK', onselect: () => goto('/risks/new'), when: realized },
+		{
+			label: 'DELETE',
+			onselect: remove,
+			strike: true,
+			when: live && risk.acceptedAt === null
+		}
+	]);
 	const scenarioCheck = $derived(data.readiness.checks.find((c) => c.key === 'scenario_complete'));
 	const SHORT: Record<string, string> = {
 		scenario_complete: 'scenario',
@@ -158,7 +227,11 @@
 		residualProbability: 'Residual P',
 		residualImpact: 'Residual I',
 		disposition: 'Disposition',
-		owner: 'Owner'
+		owner: 'Owner',
+		condition: 'Condition',
+		departure: 'Departure',
+		consequence: 'Consequence',
+		asset: 'Asset'
 	};
 	const historyColumns: Column<RiskHistoryRow>[] = [
 		{ key: 'at', label: 'When', width: '10rem' },
@@ -180,6 +253,7 @@
 				label="title"
 				value={risk.title}
 				maxlength={255}
+				readonly={!editFields}
 				onsave={(v) => (v ? patch({ title: v }) : Promise.resolve(false))}
 			/>
 		</h1>
@@ -195,9 +269,20 @@
 		<State value={risk.disposition} tone={dispositionTone(risk.disposition)} />
 	{/snippet}
 	{#snippet actions()}
-		<Button size="sm" variant="ghost" href={`/audit?entity=risk&record=${risk.id}`}>AUDIT</Button>
-		<Button size="sm" variant="outline" onclick={markReviewed}>MARK REVIEWED</Button>
-		<Button size="sm" variant="destructive" onclick={remove}>DELETE</Button>
+		{#if live || accepted}
+			<Button size="sm" onclick={markReviewed}>MARK REVIEWED</Button>
+			<EditToggle />
+		{:else if realized}
+			{#if risk.realizedIssueId}
+				<Button size="sm" href={`/issues/${risk.realizedIssueId}`}
+					>{risk.realizedIssueNumber}</Button
+				>
+			{/if}
+			{#if correcting}
+				<Button size="sm" variant="default" href={queryHref({ correct: null })}>DONE</Button>
+			{/if}
+		{/if}
+		<MoreMenu items={moreItems} />
 	{/snippet}
 </PageHeader>
 
@@ -224,6 +309,7 @@
 							label="condition"
 							value={risk.condition}
 							lint="condition"
+							readonly={!editFields}
 							onsave={(v) => patch({ condition: v })}
 						/>
 					</DetailRow>
@@ -232,11 +318,12 @@
 							label="departure"
 							value={risk.departure}
 							lint="departure"
+							readonly={!editFields}
 							onsave={(v) => patch({ departure: v })}
 						/>
 					</DetailRow>
 					<DetailRow label="Asset">
-						{#if editingAsset}
+						{#if editingAsset && editFields}
 							<div class="flex flex-wrap items-center gap-2">
 								<PartPicker trigger={pickPart} onselect={(p) => p && setAsset(p.id, null)} />
 								<span class="label">or</span>
@@ -275,15 +362,17 @@
 										<span class="text-muted-foreground">—</span>
 									{/if}
 								</div>
-								<button
-									type="button"
-									class="label shrink-0 hover:text-foreground"
-									aria-label="Edit asset"
-									onclick={() => {
-										assetText = risk.assetText ?? '';
-										editingAsset = true;
-									}}>EDIT</button
-								>
+								{#if editFields}
+									<button
+										type="button"
+										class="label shrink-0 hover:text-foreground"
+										aria-label="Edit asset"
+										onclick={() => {
+											assetText = risk.assetText ?? '';
+											editingAsset = true;
+										}}>EDIT</button
+									>
+								{/if}
 							</div>
 						{/if}
 					</DetailRow>
@@ -292,6 +381,7 @@
 							label="consequence"
 							value={risk.consequence}
 							lint="consequence"
+							readonly={!editFields}
 							onsave={(v) => patch({ consequence: v })}
 						/>
 					</DetailRow>
@@ -299,7 +389,10 @@
 			</Section>
 
 			{#if !risk.description && !editingNarrative}
-				<EmptyLine label="Narrative" onadd={() => (editingNarrative = true)} />
+				<EmptyLine
+					label="Narrative"
+					onadd={editNarrative ? () => (editingNarrative = true) : undefined}
+				/>
 			{:else}
 				<Section title="Narrative">
 					<div class="px-3 py-2">
@@ -307,6 +400,7 @@
 							label="narrative"
 							value={risk.description}
 							multiline
+							readonly={!editNarrative}
 							bind:editing={editingNarrative}
 							onsave={(v) => patch({ description: v })}
 						>
@@ -326,63 +420,74 @@
 					<ProjectRow id={risk.projectId} code={risk.projectCode} name={risk.projectName} />
 					<!-- added by projects -->
 					<DetailRow label="Owner">
-						<NativeSelect
-							aria-label="Owner"
-							value={risk.ownerId === null ? '' : String(risk.ownerId)}
-							onchange={(e) => onSelect(e, 'ownerId', num, risk.ownerId)}
-						>
-							<NativeSelectOption value="">—</NativeSelectOption>
-							{#each data.owners as o (o.id)}<NativeSelectOption value={String(o.id)}
-									>{o.name}</NativeSelectOption
-								>{/each}
-						</NativeSelect>
+						{#if editNarrative}
+							<NativeSelect
+								aria-label="Owner"
+								value={risk.ownerId === null ? '' : String(risk.ownerId)}
+								onchange={(e) => onSelect(e, 'ownerId', num, risk.ownerId)}
+							>
+								<NativeSelectOption value="">—</NativeSelectOption>
+								{#each data.owners as o (o.id)}<NativeSelectOption value={String(o.id)}
+										>{o.name}</NativeSelectOption
+									>{/each}
+							</NativeSelect>
+						{:else}{risk.ownerName ?? '—'}{/if}
 					</DetailRow>
 					<DetailRow label="Probability">
-						<NativeSelect
-							aria-label="Probability"
-							value={String(risk.probability)}
-							onchange={(e) => onSelect(e, 'probability', num, risk.probability)}
-						>
-							{#each PROBABILITY as p (p.value)}<NativeSelectOption value={String(p.value)}
-									>{p.label}</NativeSelectOption
-								>{/each}
-						</NativeSelect>
+						{#if editFields}
+							<NativeSelect
+								aria-label="Probability"
+								value={String(risk.probability)}
+								onchange={(e) => onSelect(e, 'probability', num, risk.probability)}
+							>
+								{#each PROBABILITY as p (p.value)}<NativeSelectOption value={String(p.value)}
+										>{p.label}</NativeSelectOption
+									>{/each}
+							</NativeSelect>
+						{:else}{PROBABILITY.find((p) => p.value === risk.probability)?.label}{/if}
 					</DetailRow>
 					<DetailRow label="Impact">
-						<NativeSelect
-							aria-label="Impact"
-							value={String(risk.impact)}
-							onchange={(e) => onSelect(e, 'impact', num, risk.impact)}
-						>
-							{#each IMPACT as p (p.value)}<NativeSelectOption value={String(p.value)}
-									>{p.label}</NativeSelectOption
-								>{/each}
-						</NativeSelect>
+						{#if editFields}
+							<NativeSelect
+								aria-label="Impact"
+								value={String(risk.impact)}
+								onchange={(e) => onSelect(e, 'impact', num, risk.impact)}
+							>
+								{#each IMPACT as p (p.value)}<NativeSelectOption value={String(p.value)}
+										>{p.label}</NativeSelectOption
+									>{/each}
+							</NativeSelect>
+						{:else}{IMPACT.find((p) => p.value === risk.impact)?.label}{/if}
 					</DetailRow>
 					<DetailRow label="Residual P × I">
-						<div class="flex items-center gap-2">
-							<NativeSelect
-								aria-label="Residual probability"
-								value={risk.residualProbability === null ? '' : String(risk.residualProbability)}
-								onchange={(e) => onSelect(e, 'residualProbability', num, risk.residualProbability)}
-							>
-								<NativeSelectOption value="">—</NativeSelectOption>
-								{#each [1, 2, 3, 4, 5] as v (v)}<NativeSelectOption value={String(v)}
-										>{v}</NativeSelectOption
-									>{/each}
-							</NativeSelect>
-							<span class="text-muted-foreground">×</span>
-							<NativeSelect
-								aria-label="Residual impact"
-								value={risk.residualImpact === null ? '' : String(risk.residualImpact)}
-								onchange={(e) => onSelect(e, 'residualImpact', num, risk.residualImpact)}
-							>
-								<NativeSelectOption value="">—</NativeSelectOption>
-								{#each [1, 2, 3, 4, 5] as v (v)}<NativeSelectOption value={String(v)}
-										>{v}</NativeSelectOption
-									>{/each}
-							</NativeSelect>
-						</div>
+						{#if editFields}
+							<div class="flex items-center gap-2">
+								<NativeSelect
+									aria-label="Residual probability"
+									value={risk.residualProbability === null ? '' : String(risk.residualProbability)}
+									onchange={(e) =>
+										onSelect(e, 'residualProbability', num, risk.residualProbability)}
+								>
+									<NativeSelectOption value="">—</NativeSelectOption>
+									{#each [1, 2, 3, 4, 5] as v (v)}<NativeSelectOption value={String(v)}
+											>{v}</NativeSelectOption
+										>{/each}
+								</NativeSelect>
+								<span class="text-muted-foreground">×</span>
+								<NativeSelect
+									aria-label="Residual impact"
+									value={risk.residualImpact === null ? '' : String(risk.residualImpact)}
+									onchange={(e) => onSelect(e, 'residualImpact', num, risk.residualImpact)}
+								>
+									<NativeSelectOption value="">—</NativeSelectOption>
+									{#each [1, 2, 3, 4, 5] as v (v)}<NativeSelectOption value={String(v)}
+											>{v}</NativeSelectOption
+										>{/each}
+								</NativeSelect>
+							</div>
+						{:else if risk.residualProbability !== null && risk.residualImpact !== null}
+							<span class="font-mono">{risk.residualProbability} × {risk.residualImpact}</span>
+						{:else}<span class="text-muted-foreground">—</span>{/if}
 					</DetailRow>
 					<DetailRow label="Score" mono>
 						<Score
@@ -400,7 +505,7 @@
 					<DetailRow label="State">
 						<div class="flex flex-wrap items-center gap-3">
 							<State value={risk.disposition} tone={dispositionTone(risk.disposition)} />
-							{#if !terminal}
+							{#if editScored}
 								<NativeSelect aria-label="Change disposition" size="sm" bind:value={target}>
 									<NativeSelectOption value="">Change to…</NativeSelectOption>
 									{#each targets as d (d)}<NativeSelectOption value={d}
@@ -415,6 +520,7 @@
 							<EditableText
 								label="watch observable"
 								mono
+								readonly={!editFields}
 								value={risk.watchObservable}
 								maxlength={255}
 								onsave={(v) => patch({ watchObservable: v })}
@@ -424,6 +530,7 @@
 							<EditableText
 								label="watch threshold"
 								mono
+								readonly={!editFields}
 								value={risk.watchThreshold}
 								maxlength={255}
 								onsave={(v) => patch({ watchThreshold: v })}
@@ -433,6 +540,7 @@
 							<EditableText
 								label="watch contingency"
 								mono
+								readonly={!editFields}
 								value={risk.watchContingency}
 								onsave={(v) => patch({ watchContingency: v })}
 							/>
@@ -453,42 +561,27 @@
 							>
 						</DetailRow>
 						<DetailRow label="Rationale" value={risk.acceptanceRationale} />
-					{:else if !terminal}
-						<DetailRow label="Acceptance rationale">
-							<EditableText
-								label="acceptance rationale"
-								multiline
-								value={risk.acceptanceRationale}
-								onsave={(v) => patch({ acceptanceRationale: v })}
-							/>
+					{:else if risk.acceptedAt}
+						<DetailRow label="Last accepted">
+							<span class="font-mono text-xs"
+								>{risk.acceptedByName ?? '—'} · <Timestamp value={risk.acceptedAt} /></span
+							>
 						</DetailRow>
-						{#if risk.acceptedAt}
-							<DetailRow label="Last accepted">
-								<span class="font-mono text-xs"
-									>{risk.acceptedByName ?? '—'} · <Timestamp value={risk.acceptedAt} /></span
-								>
-							</DetailRow>
-						{/if}
+					{/if}
+					{#if live && unmet.length}
+						<DetailRow label="Acceptance">
+							<span class="font-mono text-xs text-muted-foreground"
+								>needs {unmet.map((c) => SHORT[c.key] ?? c.key).join(', ')}</span
+							>
+						</DetailRow>
 					{/if}
 				</DetailTable>
-				{#if target && !terminal}
+				{#if target && editScored}
 					<DispositionPanel
 						{risk}
 						target={target as RiskDisposition}
 						ondone={() => (target = '')}
 					/>
-				{/if}
-				{#if !accepted && !terminal}
-					<div class="flex flex-wrap items-center gap-3 border-t border-border px-3 py-2">
-						<Button size="sm" onclick={accept} disabled={!data.readiness.ready}
-							>ACCEPT {risk.riskNumber}</Button
-						>
-						{#if unmet.length}
-							<span class="font-mono text-xs text-muted-foreground"
-								>needs {unmet.map((c) => SHORT[c.key] ?? c.key).join(', ')}</span
-							>
-						{/if}
-					</div>
 				{/if}
 			</Section>
 
@@ -497,6 +590,11 @@
 			<References {risk} />
 
 			<Section title="Record">
+				{#snippet actions()}
+					<Button size="xs" variant="ghost" href={`/audit?entity=risk&record=${risk.id}`}
+						>AUDIT</Button
+					>
+				{/snippet}
 				<DetailTable>
 					<DetailRow label="Last reviewed">
 						{#if risk.lastReviewedAt}
@@ -526,7 +624,7 @@
 					{:else if col.key === 'changes'}
 						<ul class="grid grid-cols-1 gap-0.5 font-mono text-xs">
 							{#each h.changes as c (c.field)}
-								<li class="whitespace-nowrap">
+								<li class="break-words">
 									<span class="text-muted-foreground"
 										>{(FIELD_LABELS[c.field] ?? c.field).toUpperCase()}</span
 									>

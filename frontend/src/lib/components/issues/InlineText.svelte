@@ -15,6 +15,7 @@
 		rich = false,
 		required = false,
 		hint,
+		readonly = false,
 		label
 	}: {
 		value: string | null;
@@ -25,6 +26,8 @@
 		required?: boolean;
 		/** Muted text shown beside an empty value. */
 		hint?: string;
+		/** A fact: no EDIT. Pages pass it until the person switches to edit mode. */
+		readonly?: boolean;
 		label: string;
 	} = $props();
 
@@ -106,11 +109,11 @@
 				<span class="break-words whitespace-pre-wrap">{value}</span>
 			{/if}
 		</div>
-		<button
-			type="button"
-			class="shrink-0 font-mono text-xs tracking-wider text-info uppercase hover:underline"
-			aria-label={`Edit ${label}`}
-			onclick={start}>EDIT</button
-		>
+		{#if !readonly}<button
+				type="button"
+				class="shrink-0 font-mono text-xs tracking-wider text-info uppercase hover:underline"
+				aria-label={`Edit ${label}`}
+				onclick={start}>EDIT</button
+			>{/if}
 	</div>
 {/if}

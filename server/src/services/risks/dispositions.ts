@@ -2,8 +2,9 @@
  * Disposition state machine and acceptance (legacy opal/risks/dispositions.py and readiness.py).
  *
  * Dispositions change freely except:
- * - accepted -> anything needs a note (un-accepting a signature is auditable)
+ * - accepted leaves by `withdrawAcceptance` (a reason, a person), by closing (a note) or by realizing
  * - accepted is reachable only through `accept`, the signature moment
+ * - closed -> anything needs a note: that is the reopen
  * - realized is terminal: the risk lives on as its issue
  */
 import { RISK_DISPOSITIONS, type Risk, type RiskReadiness, conflict, notFound, now } from '@opal/shared';
@@ -48,7 +49,10 @@ export function dispositionBlockers(
 		return ['acceptance requires the accept action: a signature, not a status change'];
 
 	const out: string[] = [];
-	if (r.disposition === 'accepted' && blank(note)) out.push('un-accepting a signed risk requires a note');
+	// What was accepted can still happen or be closed. Any other move first withdraws the acceptance.
+	if (r.disposition === 'accepted' && target !== 'closed' && target !== 'realized')
+		return ['an accepted risk keeps its acceptance until it is withdrawn'];
+	if (r.disposition === 'closed' && blank(note)) out.push('reopening a closed risk requires a reason');
 	switch (target) {
 		case 'mitigate':
 			if (!openLinks(ctx, r.id, 'mitigation'))
@@ -87,7 +91,7 @@ export function dispositionCheck(ctx: Ctx, id: number, target: string) {
 		blockers: dispositionBlockers(ctx, r, target, 'pending'),
 		openMitigations: openLinks(ctx, id, 'mitigation'),
 		openResearch: openLinks(ctx, id, 'research'),
-		needsNote: target === 'closed' || r.disposition === 'accepted'
+		needsNote: target === 'closed' || r.disposition === 'closed'
 	};
 }
 
@@ -110,6 +114,19 @@ export function setDisposition(
 		dispositionNote: blank(input.note) ? null : input.note!.trim(),
 		...(realizedIssueId !== null ? { realizedIssueId } : {})
 	});
+	return one(ctx, id);
+}
+
+/**
+ * Take back a signature. The risk goes to open and the score and scenario become editable. The
+ * acceptance stamps stay on the row, so a risk that was ever accepted is never deleted, and
+ * History shows who accepted and when. Human only: the contract says so.
+ */
+export function withdrawAcceptance(ctx: Ctx, id: number, reason: string): Risk {
+	const r = load(ctx, id);
+	if (r.disposition !== 'accepted')
+		throw conflict('risk_state', `${r.riskNumber} is ${r.disposition}; there is no acceptance to withdraw`);
+	writeUpdate(ctx, risk, id, { disposition: 'open', dispositionNote: reason.trim() });
 	return one(ctx, id);
 }
 

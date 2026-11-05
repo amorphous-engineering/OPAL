@@ -265,11 +265,11 @@ describe('revisions', () => {
 	test('cancel works from any live state and not from a terminal one', async () => {
 		const { req, call, baseline } = await setup();
 		const a = await req();
-		expect((await call('POST', `/requirements/${a.id}/cancel`)).body.lifecycleState).toBe('cancelled');
-		expect((await call('POST', `/requirements/${a.id}/cancel`)).status).toBe(409);
+		expect((await call('POST', `/requirements/${a.id}/cancel`, { reason: 'dropped' })).body.lifecycleState).toBe('cancelled');
+		expect((await call('POST', `/requirements/${a.id}/cancel`, { reason: 'dropped' })).status).toBe(409);
 		const b = await req();
 		await baseline(b.id);
-		expect((await call('POST', `/requirements/${b.id}/cancel`)).body.lifecycleState).toBe('cancelled');
+		expect((await call('POST', `/requirements/${b.id}/cancel`, { reason: 'dropped' })).body.lifecycleState).toBe('cancelled');
 	});
 
 	test('the redline defaults to the superseded revision and 404s on an unknown one', async () => {
@@ -659,7 +659,7 @@ describe('dashboard', () => {
 		await req({ tbr: true, tbrDue: iso(5) });
 		await req();
 		const cancelled = await req({ tbr: true, tbrDue: iso(-5) });
-		await call('POST', `/requirements/${cancelled.id}/cancel`);
+		await call('POST', `/requirements/${cancelled.id}/cancel`, { reason: 'dropped' });
 		const s = (await call('GET', '/requirements/summary')).body;
 		expect(s.overdueTbrs.map((o: any) => [o.reqNumber, o.owner])).toEqual([['REQ-0001', 'ABBY']]);
 	});
@@ -852,5 +852,73 @@ describe('statement and rationale length caps', () => {
 		const r = 'x'.repeat(10_001);
 		expect((await call('POST', '/requirements', { title: 't', statement: 's', rationale: r })).status).toBe(422);
 		expect((await call('POST', '/requirements/lint', { statement: 's', rationale: r })).status).toBe(422);
+	});
+});
+
+describe('cancelling and recording verification are a person\'s acts', () => {
+	const token = (u: { id: number }) => ({ kind: 'token', userId: u.id, isAdmin: true, tokenId: 1 }) as const;
+
+	test('cancelling needs a reason, a person, and keeps who, when and why', async () => {
+		const { req, call, as, admin } = await setup();
+		const r = await req();
+		expect((await call('POST', `/requirements/${r.id}/cancel`, { reason: ' ' })).status).toBe(422);
+		as(token(admin));
+		expect((await call('POST', `/requirements/${r.id}/cancel`, { reason: 'merged into REQ-9' })).status).toBe(403);
+		as(admin);
+		const c = await call('POST', `/requirements/${r.id}/cancel`, { reason: 'merged into REQ-9' });
+		expect(c.body).toMatchObject({
+			lifecycleState: 'cancelled',
+			cancelReason: 'merged into REQ-9',
+			cancelledByName: 'ABBY'
+		});
+		expect(c.body.cancelledAt).toMatch(/Z$/);
+		const d = (await call('GET', `/requirements/${r.id}/dossier`)).body;
+		expect(d).toMatchObject({ cancelReason: 'merged into REQ-9', cancelledBy: 'ABBY' });
+	});
+
+	test('recording verification is refused to an API token, with the status select as a second door', async () => {
+		const { req, call, as, admin, mkPart, baseline } = await setup();
+		const r = await req();
+		const p = mkPart('Bracket', 'P-1');
+		const link = (await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r.reqNumber })).body;
+		await baseline(r.id);
+		as(token(admin));
+		expect((await call('POST', `/requirements/allocations/${link.id}/verify`, { notes: 'x' })).status).toBe(403);
+		expect((await call('PATCH', `/requirements/allocations/${link.id}`, { status: 'waived' })).status).toBe(403);
+		as(admin);
+		const v = (await call('POST', `/requirements/allocations/${link.id}/verify`, { notes: 'x' })).body;
+		expect(v).toMatchObject({ status: 'verified', verifiedBy: { id: admin.id } });
+		expect(v.verifiedAt).toBeTruthy();
+	});
+
+	test('verified is set only by verify, so it always carries who and when', async () => {
+		const { req, call, mkPart } = await setup();
+		const r = await req();
+		const p = mkPart('Bracket', 'P-1');
+		const link = (await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r.reqNumber })).body;
+		expect((await call('PATCH', `/requirements/allocations/${link.id}`, { status: 'verified' })).status).toBe(409);
+	});
+
+	test('allocations are read-only once the requirement is superseded or cancelled', async () => {
+		const { req, call, mkPart, baseline } = await setup();
+		const p = mkPart('Bracket', 'P-1');
+		const q = mkPart('Valve', 'P-2');
+		// Superseded: rev 1 baselined, rev 2 baselined.
+		const r1 = await req();
+		const l1 = (await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r1.reqNumber })).body;
+		await baseline(r1.id);
+		const r2 = (await call('POST', `/requirements/${r1.id}/revise`)).body;
+		await baseline(r2.id);
+		// Cancelled.
+		const c = await req({ title: 'Other' });
+		const l2 = (await call('POST', `/requirements/parts/${q.id}`, { reqNumber: c.reqNumber })).body;
+		await call('POST', `/requirements/${c.id}/cancel`, { reason: 'dropped' });
+		for (const l of [l1, l2]) {
+			const path = `/requirements/allocations/${l.id}`;
+			expect((await call('PATCH', path, { status: 'waived' })).status).toBe(409);
+			expect((await call('PATCH', path, { notes: 'late' })).status).toBe(409);
+			expect((await call('POST', `${path}/verify`, { notes: 'late' })).status).toBe(409);
+			expect((await call('DELETE', path)).status).toBe(409);
+		}
 	});
 });

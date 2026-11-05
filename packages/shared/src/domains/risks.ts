@@ -31,7 +31,7 @@ export const RISK_SORT_KEYS = [
 ] as const;
 /** Dispositions that count as live exposure: the matrix and `active` lists use them. */
 export const RISK_LIVE_DISPOSITIONS = ['open', 'mitigate', 'watch', 'research', 'accepted'] as const;
-/** Changing any of these on an accepted risk withdraws the acceptance (the signature states the score). */
+/** The scenario and the score an acceptance stands on. They cannot change while the risk is accepted. */
 export const RISK_SIGNATURE_FIELDS = [
 	'condition',
 	'departure',
@@ -129,8 +129,6 @@ export const zRisk = z.object({
 	realizedIssueNumber: z.string().nullable(),
 	linkedIssues: z.array(zRiskLinkedIssue),
 	references: z.array(zRiskReference),
-	/** True only on the answer to an update that withdrew an acceptance. */
-	acceptanceInvalidated: z.boolean(),
 	createdAt: zTimestamp,
 	updatedAt: zTimestamp
 });
@@ -200,6 +198,9 @@ export const zRiskUpdate = z.object({
 	watchThreshold: z.string().max(255).nullable().optional(),
 	watchContingency: zText
 });
+
+/** A correction is an update with a reason. */
+export const zRiskCorrect = zRiskUpdate.extend({ reason: z.string().trim().min(1) });
 
 export const zRiskLintFinding = z.object({
 	rule: z.string(),
@@ -350,11 +351,35 @@ export const risks = {
 		method: 'PATCH',
 		path: '/risks/:id',
 		summary:
-			'Update a risk. Changing the scenario or score of an accepted risk withdraws the acceptance (the risk returns to open).',
+			'Update an open risk. While accepted, only owner, narrative and watch fields change: scenario and scores are refused until the acceptance is withdrawn. A realized or closed risk is refused.',
 		input: zRiskUpdate,
 		output: zRisk,
 		access: 'signed-in',
 		mcp: true
+	}),
+	correct: op({
+		name: 'risks.correct',
+		method: 'POST',
+		path: '/risks/:id/correct',
+		summary:
+			'Correct a realized risk. Same fields as an update, with a required reason that History keeps beside the old and new values. Human only.',
+		input: zRiskCorrect,
+		output: zRisk,
+		access: 'signed-in',
+		mcp: false,
+		humanOnly: true
+	}),
+	withdrawAcceptance: op({
+		name: 'risks.withdrawAcceptance',
+		method: 'POST',
+		path: '/risks/:id/withdraw-acceptance',
+		summary:
+			'Withdraw the acceptance of an accepted risk. The risk returns to open and its score and scenario become editable. Reason required. Human only.',
+		input: z.object({ ...idParam, reason: z.string().trim().min(1) }),
+		output: zRisk,
+		access: 'signed-in',
+		mcp: false,
+		humanOnly: true
 	}),
 	delete: op({
 		name: 'risks.delete',

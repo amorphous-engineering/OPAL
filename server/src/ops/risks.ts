@@ -53,6 +53,10 @@ export const risksImpls = [
 	implement(c.create, (ctx, input) => risks.create(ctx, input)),
 	implement(c.get, (ctx, input) => risks.get(ctx, input.id)),
 	implement(c.update, (ctx, input) => risks.updateRisk(ctx, input)),
+	implement(c.correct, (ctx, input) => risks.correctRisk(ctx, input)),
+	implement(c.withdrawAcceptance, (ctx, input) =>
+		dispositions.withdrawAcceptance(ctx, input.id, input.reason)
+	),
 	implement(c.delete, (ctx, input) => risks.deleteRisk(ctx, input.id)),
 	implement(c.readiness, (ctx, input) => dispositions.readiness(ctx, input.id)),
 	implement(c.dispositionCheck, (ctx, input) =>

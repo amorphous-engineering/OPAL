@@ -459,6 +459,14 @@ function requireApprove(ctx: Ctx) {
 	if (!holdsGate(ctx.db, ctx.actor, 'issue.approve')) throw forbidden(GATE_REASON.approve);
 }
 
+/** The gate behind every act that releases a hold. Signing is gated by its contract; the rest call this. */
+function requireDisposition(ctx: Ctx, act: string) {
+	if (ctx.actor.kind === 'token')
+		throw forbidden('This action needs a signed-in person, not an API token');
+	if (!holdsGate(ctx.db, ctx.actor, 'issue.disposition'))
+		throw forbidden(`${GATE_REASON.disposition} to ${act}`);
+}
+
 const assertNotVoid = (r: IssueRow) => {
 	if (r.status === 'void') throw refuse(`${r.issueNumber} is void`);
 };
@@ -466,13 +474,11 @@ const assertNotVoid = (r: IssueRow) => {
 export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Issue {
 	const before = load(ctx, input.id);
 	assertNotVoid(before);
-	// A closed issue is a signed record: only the reopen changes it, and the reopen needs the
-	// gate the closure needed.
+	// A closed issue is a signed record: only `reopen` changes it, and that needs the gate the
+	// closure needed.
 	if (before.status === 'closed') {
 		const edits = Object.entries(input).filter(([k, v]) => k !== 'id' && k !== 'status' && v !== undefined);
-		if (input.status === 'open') requireApprove(ctx);
-		else if (edits.length)
-			throw refuse(`${before.issueNumber} is closed; reopen it before editing`);
+		if (edits.length) throw refuse(`${before.issueNumber} is closed; reopen it before editing`);
 	}
 	const patch: Partial<typeof issue.$inferInsert> = {};
 
@@ -531,15 +537,6 @@ export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Iss
 		validateClose({ ...before, ...patch } as IssueRow);
 		Object.assign(patch, { status: 'closed', closedAt: now(), closedById: actorUserId(ctx.actor) });
 		closing = true;
-	} else if (input.status === 'open' && before.status === 'closed') {
-		// Reopen: clear the stamps so the state derives again.
-		Object.assign(patch, {
-			status: 'open',
-			closedAt: null,
-			closedById: null,
-			reviewRequestedAt: null,
-			reviewRequestedById: null
-		});
 	}
 
 	if (!Object.keys(patch).length) return one(ctx, before.id);
@@ -665,10 +662,15 @@ export function setContainment(
 	assertNotVoid(r);
 	const note = (input.note ?? '').trim();
 	const narrowing = CONTAINMENT_RANK[input.containment] < CONTAINMENT_RANK[r.containment];
-	if (narrowing && isBlocking(r) && !note)
-		throw refuse(
-			`Narrowing containment ${r.containment} → ${input.containment} releases a hold; a note is required`
-		);
+	const releasing = narrowing && isBlocking(r);
+	if (releasing) {
+		// Narrowing a hold is releasing it, however it is reached: the same gate as signing.
+		requireDisposition(ctx, 'narrow containment');
+		if (!note)
+			throw refuse(
+				`Narrowing containment ${r.containment} → ${input.containment} releases a hold; a note is required`
+			);
+	}
 
 	const patch: Partial<typeof issue.$inferInsert> = { containment: input.containment };
 	// Absent keeps the boundary; an explicit null clears it. A boundary must belong to this
@@ -705,6 +707,15 @@ export function setContainment(
 export function voidIssue(ctx: Ctx, id: number, reason: string): Issue {
 	const r = load(ctx, id);
 	assertNotVoid(r);
+	// A signature and a sign-off are pen: a struck form cannot take them back.
+	if (r.status === 'closed' || isDispositioned(r))
+		throw refuse(
+			`${r.issueNumber} is ${r.status === 'closed' ? 'done' : 'dispositioned'} and cannot be voided`
+		);
+	if (ticketState(r) === 'in_review')
+		throw refuse(`${r.issueNumber} is in review; return it to work before voiding`);
+	// Voiding releases the hold, so it takes the gate that signing takes.
+	if (isBlocking(r)) requireDisposition(ctx, 'void an issue that holds work');
 	let after!: IssueRow;
 	watchHold(
 		ctx,
@@ -712,6 +723,42 @@ export function voidIssue(ctx: Ctx, id: number, reason: string): Issue {
 		() => {
 			after = writeUpdate(ctx, issue, id, { status: 'void' });
 			addNote(ctx, r, `Voided: ${reason}`);
+		},
+		() => after
+	);
+	return one(ctx, id);
+}
+
+// ---- reopen ----
+
+/**
+ * Done back to work. The sign-off is withdrawn on the spot (rule 15): the close stamps clear, so
+ * the issue derives to in work and has to go through review and sign-off again. The withdrawn
+ * sign-off stays on the page as a comment with who, when and why. The contract holds the gate.
+ */
+export function reopen(ctx: Ctx, id: number, reason: string): Issue {
+	const r = load(ctx, id);
+	if (r.status !== 'closed') throw refuse(`${r.issueNumber} is not done; nothing to reopen`);
+	const signer =
+		r.closedById === null
+			? null
+			: (ctx.db.select({ name: user.name }).from(user).where(eq(user.id, r.closedById)).get()?.name ??
+				null);
+	let after!: IssueRow;
+	watchHold(
+		ctx,
+		[r.executionId],
+		() => {
+			after = writeUpdate(ctx, issue, id, {
+				status: 'open',
+				closedAt: null,
+				closedById: null,
+				reviewRequestedAt: null,
+				reviewRequestedById: null
+			});
+			const was = `Sign-off by ${signer ?? 'unknown'}${r.closedAt ? ` at ${r.closedAt}` : ''} withdrawn.`;
+			const note = addNote(ctx, r, `Reopened: ${reason.trim()}. ${was}`);
+			notifyComment(ctx, r, note.body);
 		},
 		() => after
 	);

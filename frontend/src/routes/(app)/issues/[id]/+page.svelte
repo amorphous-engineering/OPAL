@@ -1,25 +1,28 @@
 <script lang="ts">
-	import { invalidate } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
+	import { page } from '$app/state';
 	import { api, opal } from '#lib/api.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { MarkdownField } from '#lib/components/markdown/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
 		DataTable,
 		DetailRow,
 		DetailTable,
+		EditToggle,
 		EmptyLine,
+		MoreMenu,
 		PageHeader,
 		Section,
 		State,
 		Timestamp,
+		askReason,
 		confirm,
-		toast,
+		isEditing,
 		toastError,
 		type Column,
+		type MoreItem,
 		Avatar
 	} from '#lib/components/opal/index.js';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
@@ -77,14 +80,23 @@
 		}
 	}
 
-	// ---- Header actions ----
+	// ---- Mode: pages open for reading; EDIT reveals what is still pencil ----
 	const needsCorrective = $derived(
 		issue.issueType === 'non_conformance' && !issue.correctiveAction?.trim()
 	);
 	const ticket = $derived(issue.ticketState);
+	const pending = $derived(ticket === 'pending');
+	const inWork = $derived(ticket === 'in_work');
+	/** Pencil exists only before review: the observation while pending, the resolution in work. */
+	const editable = $derived(!voided && (pending || inWork));
+	const editing = $derived(editable && isEditing(page.url));
+	const editObservation = $derived(editing && pending);
+	const editResolution = $derived(editing && inWork);
 	// Work starts at the signed disposition for containment-bearing issues.
 	const startedAt = $derived(bearing ? issue.dispositionedAt : issue.workStartedAt);
 	const startedBy = $derived(bearing ? issue.dispositionedBy?.name : issue.workStartedBy?.name);
+	const holdsWork = $derived(issue.dispState === 'undispositioned');
+	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(' · ');
 
 	const transition = (step: 'start' | 'review' | 'signOff') =>
 		act(async () => {
@@ -92,96 +104,95 @@
 			await refresh();
 		});
 
-	let returning = $state(false);
-	let returnComment = $state('');
-	let returnBusy = $state(false);
-	async function submitReturn() {
-		if (!returnComment.trim()) return;
-		returnBusy = true;
-		try {
-			await opal.issues.returnFromReview({ id: issue.id, comment: returnComment.trim() });
-			returning = false;
-			returnComment = '';
+	async function returnToWork() {
+		const comment = await askReason({
+			title: `Return ${issue.issueNumber} to work`,
+			action: 'RETURN'
+		});
+		if (comment === null) return;
+		await act(async () => {
+			await opal.issues.returnFromReview({ id: issue.id, comment });
 			await refresh();
-		} catch (e) {
-			toastError(e);
-		} finally {
-			returnBusy = false;
-		}
+		});
 	}
 
 	async function reopen() {
-		await act(() => patch({ status: 'open' }));
-	}
-	let voiding = $state(false);
-	let voidReason = $state('');
-	let voidBusy = $state(false);
-	async function submitVoid() {
-		if (!voidReason.trim()) return;
-		voidBusy = true;
-		try {
-			await opal.issues.void({ id: issue.id, reason: voidReason.trim() });
-			toast.success(`${issue.issueNumber} voided`);
-			voiding = false;
-			voidReason = '';
+		const reason = await askReason({
+			title: `Reopen ${issue.issueNumber}`,
+			body: `The sign-off by ${issue.closedBy?.name ?? 'the signer'} is withdrawn. The issue returns to work and needs sign-off again.`,
+			action: 'REOPEN'
+		});
+		if (reason === null) return;
+		await act(async () => {
+			await opal.issues.reopen({ id: issue.id, reason });
 			await refresh();
-		} catch (e) {
-			toastError(e);
-		} finally {
-			voidBusy = false;
-		}
+		});
+	}
+
+	// Void takes the disposition gate when the issue holds work.
+	const canVoid = $derived(
+		issue.status === 'open' &&
+			!issue.dispositioned &&
+			ticket !== 'in_review' &&
+			(!holdsWork || issue.canDisposition)
+	);
+	async function voidIssue() {
+		const reason = await askReason({
+			title: `Void ${issue.issueNumber}`,
+			body: holdsWork
+				? `Releases ${holdNames(data.holding) || 'every hold'} held by ${issue.issueNumber}. The issue stays on record as void.`
+				: 'The issue stays on record as void and cannot be edited.',
+			action: 'VOID',
+			destructive: true
+		});
+		if (reason === null) return;
+		await act(async () => {
+			await opal.issues.void({ id: issue.id, reason });
+			await refresh();
+		});
 	}
 
 	// ---- Containment ----
-	let noteFor = $state<Containment | null>(null);
-	let note = $state('');
-	let noteBusy = $state(false);
-	// Holds after the proposed narrowing, from the same readout the Holds section uses.
-	let preview = $state<{ label: string; href: string }[]>([]);
-	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(' · ');
+	/** Edit mode only widens. Narrowing a hold releases it: it sits under MORE with a note. */
+	const widerOptions = $derived(
+		CONTAINMENTS.filter((c) => CONTAINMENT_RANK[c] >= CONTAINMENT_RANK[issue.containment])
+	);
+	const narrowerOptions = $derived(
+		CONTAINMENTS.filter((c) => CONTAINMENT_RANK[c] < CONTAINMENT_RANK[issue.containment])
+	);
 
-	async function setContainment(e: Event & { currentTarget: HTMLSelectElement }) {
+	async function widenContainment(e: Event & { currentTarget: HTMLSelectElement }) {
 		const next = e.currentTarget.value as Containment;
-		const select = e.currentTarget;
 		if (next === issue.containment) return;
-		const narrowing = CONTAINMENT_RANK[next] < CONTAINMENT_RANK[issue.containment];
-		if (narrowing && issue.dispState === 'undispositioned') {
-			select.value = issue.containment;
-			note = '';
-			preview = [];
-			noteFor = next;
-			try {
-				preview = await opal.issues.holding({ id: issue.id, containment: next });
-			} catch (err) {
-				toastError(err);
-			}
-			return;
-		}
 		try {
 			await opal.issues.setContainment({ id: issue.id, containment: next });
 			await refresh();
 		} catch (err) {
 			toastError(err);
-			select.value = issue.containment;
+			e.currentTarget.value = issue.containment;
 		}
 	}
 
-	async function commitNarrowing() {
-		if (!noteFor || !note.trim()) return;
-		noteBusy = true;
+	async function narrowTo(next: Containment) {
+		let after: { label: string }[] = [];
 		try {
-			await opal.issues.setContainment({
-				id: issue.id,
-				containment: noteFor,
-				note: note.trim()
-			});
-			noteFor = null;
-			await refresh();
+			after = await opal.issues.holding({ id: issue.id, containment: next });
 		} catch (err) {
 			toastError(err);
-		} finally {
-			noteBusy = false;
+			return;
 		}
+		const note = await askReason({
+			title: `Narrow containment to ${CONTAINMENT_OPTION[next]}`,
+			body: after.length
+				? `${issue.issueNumber} holds ${holdNames(data.holding)}. After this it holds ${holdNames(after)}.`
+				: `Releases ${holdNames(data.holding) || 'every hold'} held by ${issue.issueNumber}.`,
+			action: 'NARROW'
+		});
+		if (note === null) return;
+		await act(async () => {
+			await opal.issues.setContainment({ id: issue.id, containment: next, note });
+			await refresh();
+		});
 	}
 
 	async function setBoundary(e: Event & { currentTarget: HTMLSelectElement }) {
@@ -195,6 +206,22 @@
 			await refresh();
 		});
 	}
+
+	const moreItems = $derived<MoreItem[]>([
+		...narrowerOptions.map((c) => ({
+			label: `NARROW TO ${CONTAINMENT_OPTION[c]}`,
+			onselect: () => narrowTo(c),
+			when: holdsWork && issue.canDisposition
+		})),
+		{ label: 'RETURN', onselect: returnToWork, when: ticket === 'in_review' },
+		{ label: 'REOPEN', onselect: reopen, when: ticket === 'done' && issue.canApprove },
+		{ label: 'VOID', onselect: voidIssue, strike: true, when: canVoid }
+	]);
+
+	/** The reason a void issue carries: the comment `issues.void` wrote. */
+	const voidNote = $derived(
+		voided ? data.comments.findLast((c) => c.body.startsWith('Voided: ')) : undefined
+	);
 
 	// ---- Disposition ----
 	let dispType = $state<DispositionType | ''>('');
@@ -245,6 +272,12 @@
 		} finally {
 			dispBusy = false;
 		}
+	}
+
+	/** The primary action of a holding issue: sign a drafted disposition, else go and draft one. */
+	async function disposition() {
+		if (dispType && dispRationale.trim()) return sign();
+		await goto('?edit=1#disposition');
 	}
 
 	// ---- Links ----
@@ -376,7 +409,7 @@
 {#snippet textRow(
 	label: string,
 	field: TextField,
-	opts?: { required?: boolean; rich?: boolean; hint?: string }
+	opts?: { rich?: boolean; hint?: string; resolution?: boolean }
 )}
 	<DetailRow {label}>
 		<InlineText
@@ -385,6 +418,7 @@
 			multiline
 			rich={opts?.rich ?? true}
 			hint={opts?.hint}
+			readonly={!(opts?.resolution ? editResolution : editObservation)}
 			onsave={text(field)}
 		/>
 	</DetailRow>
@@ -396,8 +430,17 @@
 	crumbs={[{ label: 'Issues', href: '/issues' }, { label: issue.issueNumber }]}
 >
 	{#snippet heading()}
-		<h1 class="min-w-0 text-lg font-semibold tracking-tight [&>div]:items-center">
-			<InlineText label="Title" value={issue.title} required onsave={text('title')} />
+		<h1
+			class={[
+				'min-w-0 text-lg font-semibold tracking-tight [&>div]:items-center',
+				voided && 'text-muted-foreground line-through'
+			]}
+		>
+			{#if editObservation}
+				<InlineText label="Title" value={issue.title} required onsave={text('title')} />
+			{:else}
+				{issue.title}
+			{/if}
 		</h1>
 	{/snippet}
 	{#snippet state()}
@@ -408,38 +451,59 @@
 		{/if}
 	{/snippet}
 	{#snippet actions()}
-		<Button size="sm" variant="ghost" href={`/audit?entity=issue&record=${issue.id}`}>AUDIT</Button>
-		{#if voided}
-			<!-- a void issue is terminal -->
-		{:else if ticket === 'done'}
-			<Button size="sm" variant="outline" disabled={cannotApprove} onclick={reopen}>REOPEN</Button>
-		{:else if ticket === 'pending' && !bearing}
-			<Button size="sm" onclick={() => transition('start')}>START WORK</Button>
-		{:else if ticket === 'in_work'}
-			<Button size="sm" onclick={() => transition('review')}>SUBMIT FOR REVIEW</Button>
-		{:else if ticket === 'in_review'}
-			<Button
-				size="sm"
-				disabled={needsCorrective || cannotApprove}
-				title={cannotApprove
-					? issue.gateReasons.approve
-					: needsCorrective
-						? 'Corrective action is required to sign off'
-						: undefined}
-				onclick={() => transition('signOff')}>SIGN OFF</Button
-			>
-			{#if cannotApprove}
-				<span class="font-mono text-xs text-muted-foreground" data-gate-reason="approve"
-					>{issue.gateReasons.approve ?? 'Requires approval role'}</span
-				>
-			{/if}
-			<Button size="sm" variant="outline" onclick={() => (returning = true)}>RETURN</Button>
-		{/if}
 		{#if !voided}
-			<Button size="sm" variant="destructive" onclick={() => (voiding = true)}>VOID</Button>
+			{#if pending && bearing}
+				<Button
+					size="sm"
+					disabled={dispBusy || !issue.canDisposition}
+					title={issue.canDisposition ? undefined : issue.gateReasons.disposition}
+					onclick={disposition}>DISPOSITION</Button
+				>
+				{#if !issue.canDisposition}
+					<span class="font-mono text-xs text-muted-foreground" data-gate-reason="disposition"
+						>{issue.gateReasons.disposition ?? 'Requires disposition role'}</span
+					>
+				{/if}
+			{:else if pending}
+				<Button size="sm" onclick={() => transition('start')}>START WORK</Button>
+			{:else if inWork}
+				<Button size="sm" onclick={() => transition('review')}>SUBMIT FOR REVIEW</Button>
+			{:else if ticket === 'in_review'}
+				<Button
+					size="sm"
+					disabled={needsCorrective || cannotApprove}
+					title={cannotApprove
+						? issue.gateReasons.approve
+						: needsCorrective
+							? 'Corrective action is required to sign off'
+							: undefined}
+					onclick={() => transition('signOff')}>SIGN OFF</Button
+				>
+				{#if cannotApprove}
+					<span class="font-mono text-xs text-muted-foreground" data-gate-reason="approve"
+						>{issue.gateReasons.approve ?? 'Requires approval role'}</span
+					>
+				{:else if needsCorrective}
+					<span class="font-mono text-xs text-muted-foreground">Corrective action is required</span>
+				{/if}
+			{/if}
+			{#if editable}<EditToggle />{/if}
+			<MoreMenu items={moreItems} />
 		{/if}
 	{/snippet}
 </PageHeader>
+
+{#if voided}
+	<div class="border-b border-border bg-muted/40 px-4 py-2 text-sm" data-void-reason>
+		<span class="label mr-2">Voided</span>
+		{#if voidNote}
+			{voidNote.body.slice('Voided: '.length)}
+			<span class="ml-2 text-xs text-muted-foreground">
+				{voidNote.user?.name ?? '—'} · <Timestamp value={voidNote.createdAt} />
+			</span>
+		{/if}
+	</div>
+{/if}
 
 <div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
 	<div class="grid grid-cols-1 content-start gap-4">
@@ -459,16 +523,17 @@
 					{@render textRow('Expected benefit', 'expectedBenefit')}
 				{/if}
 				{#if typeFields.nc || typeFields.bug || issue.rootCause || issue.correctiveAction}
-					{@render textRow('Root cause', 'rootCause')}
+					{@render textRow('Root cause', 'rootCause', { resolution: true })}
 					{@render textRow('Corrective action', 'correctiveAction', {
-						hint: typeFields.nc && !closed ? 'required for sign-off' : undefined
+						resolution: true,
+						hint: typeFields.nc && !closed && editResolution ? 'required for sign-off' : undefined
 					})}
 				{/if}
 			</DetailTable>
 		</Section>
 
 		{#if issue.dispositioned || (bearing && !closed && !voided)}
-			<Section title="Disposition">
+			<Section id="disposition" title="Disposition">
 				{#snippet actions()}
 					{#if issue.selfDispositioned}
 						<State value="self_dispositioned" tone="warn" badge label="SELF-DISPOSITIONED" />
@@ -490,7 +555,7 @@
 								<Button size="xs" variant="outline" href={redlineHref}>SPAWN REDLINE OP</Button>
 							</DetailRow>
 						{/if}
-					{:else}
+					{:else if editObservation}
 						<DetailRow label="Type">
 							<NativeSelect
 								size="sm"
@@ -534,6 +599,18 @@
 								>
 							{/if}
 						</DetailRow>
+					{:else}
+						<DetailRow
+							label="Type"
+							mono
+							value={issue.dispositionType ? stateLabel(issue.dispositionType) : null}
+						/>
+						<DetailRow label="Rationale">
+							{#if issue.dispositionRationale}
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								<div class="prose-opal">{@html markdown(issue.dispositionRationale)}</div>
+							{:else}<span class="text-muted-foreground">—</span>{/if}
+						</DetailRow>
 					{/if}
 				</DetailTable>
 			</Section>
@@ -562,11 +639,20 @@
 					postComment();
 				}}
 			>
-				<Label for="comment">Comment</Label>
-				<MarkdownField id="comment" bind:value={comment} minRows={3} onsubmit={postComment} />
-				<div>
-					<Button type="submit" size="sm" disabled={commentBusy || !comment.trim()}>POST</Button>
-				</div>
+				<Label for="comment" class="sr-only">Comment</Label>
+				<MarkdownField
+					id="comment"
+					bind:value={comment}
+					minRows={1}
+					quiet
+					placeholder="Add a comment"
+					onsubmit={postComment}
+				/>
+				{#if comment.trim()}
+					<div>
+						<Button type="submit" size="sm" disabled={commentBusy}>POST</Button>
+					</div>
+				{/if}
 			</form>
 		</Section>
 
@@ -639,63 +725,78 @@
 
 	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="Issue">
+			{#snippet actions()}
+				<Button size="xs" variant="ghost" href={`/audit?entity=issue&record=${issue.id}`}
+					>AUDIT</Button
+				>
+			{/snippet}
 			<DetailTable>
 				<ProjectRow id={issue.projectId} code={issue.projectCode} name={issue.projectName} />
 				<!-- added by projects -->
 				<DetailRow label="Type">
-					<NativeSelect
-						size="sm"
-						aria-label="Type"
-						value={issue.issueType}
-						onchange={(e) => act(() => patch({ issueType: e.currentTarget.value as IssueType }))}
-					>
-						{#each ISSUE_TYPES as t (t)}<NativeSelectOption value={t}
-								>{stateLabel(t)}</NativeSelectOption
-							>{/each}
-					</NativeSelect>
+					{#if editObservation}
+						<NativeSelect
+							size="sm"
+							aria-label="Type"
+							value={issue.issueType}
+							onchange={(e) => act(() => patch({ issueType: e.currentTarget.value as IssueType }))}
+						>
+							{#each ISSUE_TYPES as t (t)}<NativeSelectOption value={t}
+									>{stateLabel(t)}</NativeSelectOption
+								>{/each}
+						</NativeSelect>
+					{:else}{stateLabel(issue.issueType)}{/if}
 				</DetailRow>
 				<DetailRow label="Priority">
-					<NativeSelect
-						size="sm"
-						aria-label="Priority"
-						value={issue.priority}
-						onchange={(e) => act(() => patch({ priority: e.currentTarget.value as IssuePriority }))}
-					>
-						{#each ISSUE_PRIORITIES as p (p)}<NativeSelectOption value={p}
-								>{stateLabel(p)}</NativeSelectOption
-							>{/each}
-					</NativeSelect>
+					{#if editing}
+						<NativeSelect
+							size="sm"
+							aria-label="Priority"
+							value={issue.priority}
+							onchange={(e) =>
+								act(() => patch({ priority: e.currentTarget.value as IssuePriority }))}
+						>
+							{#each ISSUE_PRIORITIES as p (p)}<NativeSelectOption value={p}
+									>{stateLabel(p)}</NativeSelectOption
+								>{/each}
+						</NativeSelect>
+					{:else}{stateLabel(issue.priority)}{/if}
 				</DetailRow>
 				<DetailRow label="Containment">
-					<NativeSelect
-						size="sm"
-						aria-label="Containment"
-						value={issue.containment}
-						onchange={setContainment}
-						disabled={closed || voided}
-					>
-						{#each CONTAINMENTS as c (c)}<NativeSelectOption value={c}
-								>{CONTAINMENT_OPTION[c]}</NativeSelectOption
-							>{/each}
-					</NativeSelect>
+					{#if editObservation}
+						<NativeSelect
+							size="sm"
+							aria-label="Containment"
+							value={issue.containment}
+							onchange={widenContainment}
+						>
+							{#each widerOptions as c (c)}<NativeSelectOption value={c}
+									>{CONTAINMENT_OPTION[c]}</NativeSelectOption
+								>{/each}
+						</NativeSelect>
+					{:else}<span class="font-mono">{CONTAINMENT_OPTION[issue.containment]}</span>{/if}
 				</DetailRow>
 				<DetailRow label="Assigned to">
-					<NativeSelect
-						size="sm"
-						aria-label="Assigned to"
-						value={issue.assignedTo === null ? '' : String(issue.assignedTo.id)}
-						onchange={(e) =>
-							act(() =>
-								patch({
-									assignedToId: e.currentTarget.value ? Number(e.currentTarget.value) : null
-								})
-							)}
-					>
-						<NativeSelectOption value="">Unassigned</NativeSelectOption>
-						{#each data.assignees as a (a.id)}
-							<NativeSelectOption value={String(a.id)}>{a.name}</NativeSelectOption>
-						{/each}
-					</NativeSelect>
+					{#if editing}
+						<NativeSelect
+							size="sm"
+							aria-label="Assigned to"
+							value={issue.assignedTo === null ? '' : String(issue.assignedTo.id)}
+							onchange={(e) =>
+								act(() =>
+									patch({
+										assignedToId: e.currentTarget.value ? Number(e.currentTarget.value) : null
+									})
+								)}
+						>
+							<NativeSelectOption value="">Unassigned</NativeSelectOption>
+							{#each data.assignees as a (a.id)}
+								<NativeSelectOption value={String(a.id)}>{a.name}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
+					{:else if issue.assignedTo}{issue.assignedTo.name}{:else}<span
+							class="text-muted-foreground">Unassigned</span
+						>{/if}
 				</DetailRow>
 				<DetailRow label="Raised by" value={issue.raisedBy?.name} />
 				<DetailRow label="Created"><Timestamp value={issue.createdAt} /></DetailRow>
@@ -730,7 +831,7 @@
 
 		<Section title="Links">
 			{#snippet actions()}
-				{#if !voided}
+				{#if editObservation}
 					<PartPicker align="end" onselect={(p) => p && addPart(p.id)}>
 						{#snippet trigger({ props })}
 							<Button {...props} size="xs" variant="outline">+ PART</Button>
@@ -748,7 +849,7 @@
 										>{l.label}</a
 									>
 									<span class="min-w-0 truncate text-muted-foreground">{l.sublabel}</span>
-									{#if !voided}
+									{#if editObservation}
 										<button
 											type="button"
 											class="ml-auto font-mono text-xs tracking-wider text-info uppercase hover:underline"
@@ -775,7 +876,7 @@
 								class="font-mono text-info hover:underline"
 								>{issue.execution.label ?? 'Work order'}</a
 							>
-							{#if !voided}
+							{#if editObservation}
 								<button
 									type="button"
 									class="ml-auto font-mono text-xs tracking-wider text-info uppercase hover:underline"
@@ -786,13 +887,12 @@
 					</div>
 				</DetailRow>
 				<DetailRow label="Boundary">
-					{#if issue.execution && data.steps.length}
+					{#if editObservation && issue.execution && data.steps.length}
 						<NativeSelect
 							size="sm"
 							aria-label="Containment boundary step"
 							value={issue.containmentStepId === null ? '' : String(issue.containmentStepId)}
 							onchange={setBoundary}
-							disabled={voided}
 							class="max-w-full"
 						>
 							<NativeSelectOption value="">—</NativeSelectOption>
@@ -834,98 +934,9 @@
 		</Section>
 
 		<!-- added by risks -->
-		<IssueRisks {issue} {refresh} readonly={voided} />
+		<IssueRisks {issue} {refresh} readonly={!editObservation} />
 
 		<PluginPanels slot="issue.side" recordId={issue.id} number={issue.issueNumber} />
 		<ExternalLinks entityType="issue" entityId={issue.id} />
 	</div>
 </div>
-
-<Dialog.Root open={returning} onOpenChange={(v) => !v && (returning = false)}>
-	<Dialog.Content>
-		<Dialog.Header>
-			<Dialog.Title>Return {issue.issueNumber} to work</Dialog.Title>
-			<Dialog.Description>The comment is recorded in the thread.</Dialog.Description>
-		</Dialog.Header>
-		<form
-			class="grid grid-cols-1 gap-1.5"
-			onsubmit={(e) => {
-				e.preventDefault();
-				submitReturn();
-			}}
-		>
-			<Label for="return-comment">Comment</Label>
-			<Textarea id="return-comment" bind:value={returnComment} rows={3} autofocus />
-			<Dialog.Footer class="mt-2">
-				<Button type="button" variant="outline" onclick={() => (returning = false)}>CANCEL</Button>
-				<Button type="submit" disabled={returnBusy || !returnComment.trim()}>RETURN</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
-
-<Dialog.Root open={voiding} onOpenChange={(v) => !v && (voiding = false)}>
-	<Dialog.Content>
-		<Dialog.Header>
-			<Dialog.Title>Void {issue.issueNumber}</Dialog.Title>
-			<Dialog.Description>
-				{#if bearing && !issue.dispositioned}
-					Voiding releases {holdNames(data.holding) || 'every hold'} held by {issue.issueNumber}.
-					The issue stays on record as void.
-				{:else}
-					The issue stays on record as void and cannot be edited.
-				{/if}
-			</Dialog.Description>
-		</Dialog.Header>
-		<form
-			class="grid grid-cols-1 gap-1.5"
-			onsubmit={(e) => {
-				e.preventDefault();
-				submitVoid();
-			}}
-		>
-			<Label for="void-reason">Reason</Label>
-			<Textarea id="void-reason" bind:value={voidReason} rows={3} autofocus />
-			<Dialog.Footer class="mt-2">
-				<Button type="button" variant="outline" onclick={() => (voiding = false)}>CANCEL</Button>
-				<Button type="submit" variant="destructive" disabled={voidBusy || !voidReason.trim()}
-					>VOID</Button
-				>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
-
-<Dialog.Root open={noteFor !== null} onOpenChange={(v) => !v && (noteFor = null)}>
-	<Dialog.Content>
-		<Dialog.Header>
-			<Dialog.Title>Narrow containment to {stateLabel(noteFor)}</Dialog.Title>
-			<Dialog.Description>
-				{#if preview.length}
-					{issue.issueNumber} holds {holdNames(data.holding)}; after this it holds {holdNames(
-						preview
-					)}. The note is recorded in the thread.
-				{:else}
-					This releases {holdNames(data.holding) || 'every hold'} held by {issue.issueNumber}. The
-					note is recorded in the thread.
-				{/if}
-			</Dialog.Description>
-		</Dialog.Header>
-		<form
-			class="grid grid-cols-1 gap-1.5"
-			onsubmit={(e) => {
-				e.preventDefault();
-				commitNarrowing();
-			}}
-		>
-			<Label for="narrow-note">Note</Label>
-			<Textarea id="narrow-note" bind:value={note} rows={3} autofocus />
-			<Dialog.Footer class="mt-2">
-				<Button type="button" variant="outline" onclick={() => (noteFor = null)}>CANCEL</Button>
-				<Button type="submit" disabled={noteBusy || !note.trim()}
-					>{preview.length ? 'NARROW' : 'RELEASE HOLD'}</Button
-				>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>

@@ -37,6 +37,7 @@ export const issuesImpls = [
 	implement(c.review, (ctx, input) => issues.requestReview(ctx, input.id)),
 	implement(c.returnFromReview, (ctx, input) => issues.returnFromReview(ctx, input.id, input.comment)),
 	implement(c.signOff, (ctx, input) => issues.signOff(ctx, input.id)),
+	implement(c.reopen, (ctx, input) => issues.reopen(ctx, input.id, input.reason)),
 	implement(c.signDisposition, (ctx, input) =>
 		issues.signDisposition(ctx, input.id, input.dispositionType, input.dispositionRationale)
 	),

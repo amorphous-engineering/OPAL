@@ -197,11 +197,7 @@
 
 	{#if check?.needsNote}
 		<div class="grid grid-cols-1 gap-1.5">
-			<Label for="disposition-note"
-				>{risk.disposition === 'accepted' && target !== 'closed'
-					? 'Un-accept note'
-					: 'Close note'}</Label
-			>
+			<Label for="disposition-note">Note</Label>
 			<Input
 				id="disposition-note"
 				class="font-mono"

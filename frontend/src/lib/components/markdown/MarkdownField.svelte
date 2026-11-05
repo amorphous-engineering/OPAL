@@ -45,6 +45,7 @@
 		toolbarEnd,
 		toolbarTail,
 		between,
+		quiet = false,
 		class: className
 	}: {
 		value: string;
@@ -65,8 +66,12 @@
 		toolbarTail?: Snippet;
 		/** Host content between the toolbar row and the editor (callout boxes). */
 		between?: Snippet;
+		/** One quiet line: the toolbar and mode switch appear once the editor has focus or content. */
+		quiet?: boolean;
 		class?: string;
 	} = $props();
+
+	let focused = $state(false);
 
 	let root = $state<HTMLDivElement | null>(null);
 	let host = $state<HTMLDivElement | null>(null);
@@ -262,63 +267,72 @@
 	];
 </script>
 
-<div bind:this={root} class={cn('grid grid-cols-1 gap-2', className)}>
-	<Toolbar.Root aria-label="Formatting">
-		{#if label}
-			<label class="label mr-1" for={id}>{label}</label>
-		{/if}
-		<Toolbar.Group type="multiple" value={marks} size="sm" variant="outline" class="gap-0">
-			{#each marked as t, i (t.mark)}
-				<Toolbar.GroupItem
-					value={t.mark}
-					class={cn('px-1.5 font-mono', t.cls, joined(i, marked.length))}
-					title={t.title}
-					aria-label={t.title}
-					onmousedown={(e) => e.preventDefault()}
-					onclick={() => run(t.cmd)}>{t.label}</Toolbar.GroupItem
-				>
-			{/each}
-		</Toolbar.Group>
-		{#each tools as group, gi (gi)}
-			<span class="flex items-center">
-				{#each group as t, i (t.title)}
-					<Toolbar.Button
-						size="sm"
-						class={cn('px-1.5 font-mono', joined(i, group.length))}
+<div
+	bind:this={root}
+	class={cn('grid grid-cols-1 gap-2', className)}
+	onfocusin={() => (focused = true)}
+	onfocusout={(e) => {
+		if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focused = false;
+	}}
+>
+	{#if !quiet || focused || value}
+		<Toolbar.Root aria-label="Formatting">
+			{#if label}
+				<label class="label mr-1" for={id}>{label}</label>
+			{/if}
+			<Toolbar.Group type="multiple" value={marks} size="sm" variant="outline" class="gap-0">
+				{#each marked as t, i (t.mark)}
+					<Toolbar.GroupItem
+						value={t.mark}
+						class={cn('px-1.5 font-mono', t.cls, joined(i, marked.length))}
 						title={t.title}
 						aria-label={t.title}
 						onmousedown={(e) => e.preventDefault()}
-						onclick={() => run(t.cmd)}>{t.label}</Toolbar.Button
-					>
-				{/each}
-			</span>
-		{/each}
-		<span class="ml-auto flex flex-wrap items-center gap-1">
-			{@render toolbarEnd?.()}
-			<Toolbar.Group
-				type="single"
-				value={markdownMode.value}
-				onValueChange={(v: string) => v && setMarkdownMode(v as (typeof MARKDOWN_MODES)[number])}
-				size="sm"
-				variant="outline"
-				class="gap-0"
-				aria-label="View mode"
-			>
-				{#each MARKDOWN_MODES as m, i (m)}
-					<Toolbar.GroupItem
-						value={m}
-						class={cn(
-							'font-mono uppercase',
-							joined(i, MARKDOWN_MODES.length),
-							'data-[state=on]:bg-foreground data-[state=on]:text-background'
-						)}
-						onmousedown={(e) => e.preventDefault()}>{m}</Toolbar.GroupItem
+						onclick={() => run(t.cmd)}>{t.label}</Toolbar.GroupItem
 					>
 				{/each}
 			</Toolbar.Group>
-			{@render toolbarTail?.()}
-		</span>
-	</Toolbar.Root>
+			{#each tools as group, gi (gi)}
+				<span class="flex items-center">
+					{#each group as t, i (t.title)}
+						<Toolbar.Button
+							size="sm"
+							class={cn('px-1.5 font-mono', joined(i, group.length))}
+							title={t.title}
+							aria-label={t.title}
+							onmousedown={(e) => e.preventDefault()}
+							onclick={() => run(t.cmd)}>{t.label}</Toolbar.Button
+						>
+					{/each}
+				</span>
+			{/each}
+			<span class="ml-auto flex flex-wrap items-center gap-1">
+				{@render toolbarEnd?.()}
+				<Toolbar.Group
+					type="single"
+					value={markdownMode.value}
+					onValueChange={(v: string) => v && setMarkdownMode(v as (typeof MARKDOWN_MODES)[number])}
+					size="sm"
+					variant="outline"
+					class="gap-0"
+					aria-label="View mode"
+				>
+					{#each MARKDOWN_MODES as m, i (m)}
+						<Toolbar.GroupItem
+							value={m}
+							class={cn(
+								'font-mono uppercase',
+								joined(i, MARKDOWN_MODES.length),
+								'data-[state=on]:bg-foreground data-[state=on]:text-background'
+							)}
+							onmousedown={(e) => e.preventDefault()}>{m}</Toolbar.GroupItem
+						>
+					{/each}
+				</Toolbar.Group>
+				{@render toolbarTail?.()}
+			</span>
+		</Toolbar.Root>
+	{/if}
 	{@render between?.()}
 	<div bind:this={host} class="min-w-0"></div>
 </div>
