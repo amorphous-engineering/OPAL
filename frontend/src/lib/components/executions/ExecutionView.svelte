@@ -7,16 +7,17 @@
 	import { page } from '$app/state';
 	import {
 		askReason,
+		EditToggle,
+		ErrorBanner,
+		isEditing,
 		MoreMenu,
 		PageHeader,
+		State,
 		TabStrip,
 		Timestamp,
 		toastError,
-		ErrorBanner,
 		type MoreItem
 	} from '#lib/components/opal/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { toneBox, toneFor } from '#lib/components/opal/tone.js';
 	import { stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
@@ -25,18 +26,18 @@
 	import { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import CloseShortPanel from './CloseShortPanel.svelte';
 	import DataPanel from './DataPanel.svelte';
+	import EditForm from './EditForm.svelte';
 	import ExecutionGraph from './ExecutionGraph.svelte';
-	import ExecutionDialogs from './ExecutionDialogs.svelte';
 	import ExecutionNav from './ExecutionNav.svelte';
 	import ExecutionSide from './ExecutionSide.svelte';
 	import ExecutionRecord from './ExecutionRecord.svelte';
 	import MaterialPanel from './MaterialPanel.svelte';
+	import RedlineForm from './RedlineForm.svelte';
 
 	let { id }: { id: number } = $props();
 
 	// svelte-ignore state_referenced_locally
 	const store = new ExecutionStore(id, session.user?.id ?? null);
-	let editing = $state(false);
 
 	onMount(() => {
 		store.start().then(() => {
@@ -61,7 +62,6 @@
 
 	const doc = $derived(store.doc);
 	const inst = $derived(doc?.instance);
-	const metaBadge = 'font-mono tracking-wider text-muted-foreground';
 	const hasData = $derived(
 		!!doc &&
 			(doc.data_rows.length > 0 ||
@@ -150,36 +150,42 @@
 					{ label: inst.work_order ?? 'Execution' }
 				]}
 			>
+				{#snippet heading()}
+					<h1
+						class={cn(
+							'text-lg font-semibold tracking-tight',
+							inst.closure && 'text-muted-foreground',
+							inst.status === 'void' && 'line-through'
+						)}
+					>
+						{inst.procedure.name}
+					</h1>
+				{/snippet}
+				{#snippet meta()}
+					<span class="font-mono text-xs">
+						<a
+							class="hover:underline"
+							href={`/procedures/${inst.procedure.id}`}
+							title={inst.procedure.name}>{inst.procedure.template_number}</a
+						>
+						v{inst.version.number}
+						<a
+							class="ml-2 hover:underline"
+							href={`/projects/${inst.project.id}`}
+							title={inst.project.name}>{inst.project.code}</a
+						>
+					</span>
+				{/snippet}
 				{#snippet state()}
-					<Badge
-						variant="outline"
-						class={metaBadge}
-						href={`/procedures/${inst.procedure.id}`}
-						title={inst.procedure.name}>{inst.procedure.template_number}</Badge
-					>
-					<Badge variant="outline" class={metaBadge}>v{inst.version.number}</Badge>
-					<Badge
-						variant="outline"
-						class={cn('font-mono tracking-wider', toneBox[toneFor(inst.status)])}
-						>{stateLabel(inst.status)}</Badge
-					>
-					<Badge
-						variant="outline"
-						class={metaBadge}
-						href={`/projects/${inst.project.id}`}
-						title={inst.project.name}>{inst.project.code}</Badge
-					>
+					<State value={inst.status} badge />
 					{#if inst.priority !== 'normal'}
-						<Badge
-							variant="outline"
-							class={cn(
-								'font-mono tracking-wider',
-								toneBox[inst.priority === 'urgent' ? 'error' : 'warn']
-							)}>{inst.priority.toUpperCase()}</Badge
+						<span class="font-mono text-xs font-medium tracking-wide text-warn"
+							>{inst.priority.toUpperCase()}</span
 						>
 					{/if}
 				{/snippet}
 				{#snippet actions()}
+					{#if inst.active}<EditToggle />{/if}
 					{#if !inst.active}
 						<Button
 							size="sm"
@@ -209,6 +215,7 @@
 						>{/if}
 				</div>
 			{/if}
+			{#if inst.active && isEditing(page.url)}<EditForm {store} facts={inst} />{/if}
 			{#if store.panel?.kind === 'closeShort'}<CloseShortPanel {store} />{/if}
 
 			{#if inst.active && holds.length}
@@ -262,6 +269,9 @@
 					id="exec-scroll"
 					class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4 [&_[data-doc-mode]>section:first-of-type]:rounded-t-none [&_[data-doc-mode]>section:first-of-type]:border-t-0"
 				>
+					{#if store.panel?.kind === 'redline'}
+						<RedlineForm {store} op={store.panel.op} preselect={store.panel.issueId} />
+					{/if}
 					{#if tab === 'document'}
 						<ProcedureDocument
 							controller={store}
@@ -275,7 +285,7 @@
 					{:else if tab === 'material'}
 						<MaterialPanel {store} />
 					{:else if tab === 'details'}
-						<ExecutionRecord {store} onedit={() => (editing = true)} onjump={jump} />
+						<ExecutionRecord {store} onjump={jump} />
 					{/if}
 				</div>
 			</div>
@@ -287,5 +297,4 @@
 			</aside>
 		</div>
 	</div>
-	<ExecutionDialogs {store} bind:editing />
 {/if}

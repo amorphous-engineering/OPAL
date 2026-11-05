@@ -2,7 +2,6 @@
 	// The DETAILS tab: time worked, evidence and work-order facts — the record around
 	// the work rather than the work itself.
 	import { cn } from '#lib/utils.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import {
 		Avatar,
 		DataTable,
@@ -24,11 +23,7 @@
 	import { workTime } from '#lib/format.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 
-	let {
-		store,
-		onedit,
-		onjump
-	}: { store: ExecutionStore; onedit: () => void; onjump: (order: number) => void } = $props();
+	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
 
 	const doc = $derived(store.doc!);
 	const inst = $derived(doc.instance);
@@ -153,9 +148,6 @@
 	{/if}
 
 	<Section title="Facts">
-		{#snippet actions()}
-			{#if inst.active}<Button size="xs" variant="ghost" onclick={onedit}>EDIT</Button>{/if}
-		{/snippet}
 		<DetailTable>
 			<DetailRow label="Procedure"
 				><a
@@ -184,7 +176,9 @@
 			<DetailRow label="Target"><Timestamp value={inst.target_completion_at} /></DetailRow>
 			<DetailRow label="Started"><Timestamp value={inst.started_at} /></DetailRow>
 			<DetailRow label="Last activity"><Timestamp value={inst.last_activity_at} /></DetailRow>
-			<DetailRow label="Completed"><Timestamp value={inst.completed_at} /></DetailRow>
+			<DetailRow label={inst.closure ? 'Stopped' : 'Completed'}
+				><Timestamp value={inst.completed_at} /></DetailRow
+			>
 		</DetailTable>
 	</Section>
 </div>
