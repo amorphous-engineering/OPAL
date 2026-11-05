@@ -20,12 +20,7 @@
 	} = $props();
 </script>
 
-<div
-	class={cn(
-		'flex h-10 items-stretch overflow-hidden rounded-lg border border-border bg-card',
-		className
-	)}
->
+<div class={cn('flex h-10 items-stretch overflow-hidden border border-border bg-card', className)}>
 	<Tabs.Root {value} onValueChange={(v) => v && onchange(v)} class="flex min-w-0 flex-1">
 		<Tabs.List class="flex min-w-0 items-center gap-1.5 overflow-x-auto px-2 py-1">
 			{#each tabs as t (t.id)}

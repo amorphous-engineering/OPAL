@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { cn } from '#lib/utils.js';
 	// A purchase order is a form (RECORDS.md). Draft is pencil. Placing is the commit moment, and
 	// after it the page opens for reading: the one blank it waits on is the receive rows. EDIT
 	// reveals what is still pencil, MORE holds the exceptional acts, and a correction keeps the
@@ -246,7 +247,12 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
+<div
+	class={cn(
+		'grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]',
+		draft && '[&_section]:border-dashed'
+	)}
+>
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
 		<Section title="ORDER">
 			<DetailTable>

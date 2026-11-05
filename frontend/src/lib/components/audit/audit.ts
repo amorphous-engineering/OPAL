@@ -37,4 +37,4 @@ export function changeSummary(entry: AuditEntry, max = 4): string {
 		: names.join(', ');
 }
 
-export const actionTone = { create: 'ok', update: 'info', delete: 'error' } as const;
+export const actionTone = { create: 'default', update: 'default', delete: 'default' } as const;

@@ -2,9 +2,8 @@
 	// The risks an issue responds to (mitigation, research) or realizes. Linking and
 	// unlinking go through the risks area; a realized pointer is set on the risk itself.
 	import { opal } from '#lib/api.js';
-	import { EmptyLine, Section, toast, toastError } from '#lib/components/opal/index.js';
+	import { ActionLink, EmptyLine, Section, toast, toastError } from '#lib/components/opal/index.js';
 	import EntityPicker, { type PickerOption } from '#lib/components/opal/EntityPicker.svelte';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { stateLabel } from '#lib/format.js';
 	import { RISK_ISSUE_ROLES, type IssueDetail, type RiskIssueRole } from '@opal/shared';
@@ -70,9 +69,7 @@
 	<Section title="Risks" count={issue.risks.length}>
 		{#snippet actions()}
 			{#if !readonly}
-				<Button variant="ghost" size="xs" onclick={() => (adding = !adding)}
-					>{adding ? 'DONE' : '+ ADD'}</Button
-				>
+				<ActionLink onclick={() => (adding = !adding)}>{adding ? 'DONE' : '+ ADD'}</ActionLink>
 			{/if}
 		{/snippet}
 		<ul class="divide-y divide-border">
@@ -107,7 +104,7 @@
 			onadd={() => (adding = !adding)}
 			addLabel={adding ? 'DONE' : '+ ADD'}
 		/>
-		{#if adding}<div class="rounded-b-lg border border-t-0 border-border bg-card">
+		{#if adding}<div class="border border-t-0 border-border bg-card">
 				{@render form()}
 			</div>{/if}
 	</div>

@@ -75,17 +75,14 @@
 	<!-- Data capture is its own panel: one field per row, label and spec on the
 	     left, the input on the right, so it never reads as part of the prose. -->
 	<section
-		class="overflow-hidden rounded-lg border border-border bg-muted/40 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+		class="overflow-hidden border border-border bg-muted/40 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
 		aria-label="Data capture"
 	>
 		<header class="flex h-8 items-center gap-3 border-b border-border px-3 sm:col-span-full">
 			<span class="label text-foreground">Data</span>
 			{#if required.length}
-				<span
-					class={cn(
-						'font-mono text-xs',
-						recorded === required.length ? 'text-ok' : 'text-muted-foreground'
-					)}>{recorded}/{required.length} required recorded</span
+				<span class={cn('font-mono text-xs', 'text-muted-foreground')}
+					>{recorded}/{required.length} required recorded</span
 				>
 			{:else if fields.length}
 				<span class="font-mono text-xs text-muted-foreground"
@@ -94,7 +91,7 @@
 			{/if}
 			{#if authoring}
 				<span class="ml-auto"
-					><Button size="xs" variant="outline" onclick={addField}>+ FIELD</Button></span
+					><Button size="sm" variant="outline" onclick={addField}>+ FIELD</Button></span
 				>
 			{/if}
 		</header>
@@ -145,7 +142,7 @@
 							{#if bad}
 								<Badge
 									variant="outline"
-									class="shrink-0 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+									class="shrink-0 border-error-fill bg-error-fill font-mono tracking-wider text-error-on"
 									>OUT OF SPEC</Badge
 								>
 							{/if}
@@ -168,12 +165,12 @@
 						>
 							<ToggleGroup.Item
 								value="true"
-								class="px-3 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+								class="px-3 data-[state=on]:bg-foreground data-[state=on]:text-background"
 								>TRUE</ToggleGroup.Item
 							>
 							<ToggleGroup.Item
 								value="false"
-								class="px-3 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+								class="px-3 data-[state=on]:bg-foreground data-[state=on]:text-background"
 								>FALSE</ToggleGroup.Item
 							>
 						</ToggleGroup.Root>
@@ -207,7 +204,7 @@
 												data-pswp
 												href={attachmentUrl(pid)}
 												data-pswp-caption={f.label ?? f.name}
-												class="block aspect-[4/3] h-16 overflow-hidden rounded-md border border-border bg-muted"
+												class="block aspect-[4/3] h-16 overflow-hidden border border-border bg-muted"
 												aria-label={`Enlarge ${f.label ?? f.name}`}
 											>
 												<img
@@ -218,7 +215,7 @@
 												/>
 											</a>
 											<Button
-												size="xs"
+												size="sm"
 												variant="outline"
 												onclick={() => removePhoto(f.name, pid)}
 												aria-label={`Remove photo ${pid}`}>REMOVE</Button

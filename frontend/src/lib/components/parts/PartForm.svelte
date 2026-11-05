@@ -287,7 +287,6 @@
 					<FormField label="Tier" required>
 						{#if schema.tiers.length > 5}
 							<NativeSelect.Root
-								size="sm"
 								aria-label="Tier"
 								value={tier === null ? '' : String(tier)}
 								onchange={(e) =>
@@ -306,7 +305,7 @@
 									<Button
 										type="button"
 										size="sm"
-										variant={tier === t.level ? 'default' : 'outline'}
+										variant="outline"
 										aria-pressed={tier === t.level}
 										onclick={() => (tier = t.level)}>T{t.level} {t.name.toUpperCase()}</Button
 									>
@@ -366,7 +365,6 @@
 				<FormField label="Procurement" for="pf-proc">
 					<NativeSelect.Root
 						id="pf-proc"
-						size="sm"
 						class="w-full"
 						bind:value={procurement}
 						onchange={() => (procurementTouched = true)}
@@ -379,7 +377,6 @@
 				<FormField label="Tracking" for="pf-tracking">
 					<NativeSelect.Root
 						id="pf-tracking"
-						size="sm"
 						class="w-full"
 						bind:value={tracking}
 						onchange={() => (trackingTouched = true)}
@@ -412,7 +409,7 @@
 								<Button
 									type="button"
 									size="sm"
-									variant={bom === value ? 'default' : 'outline'}
+									variant="outline"
 									aria-pressed={bom === value}
 									onclick={() => (bom = value)}>{label}</Button
 								>
@@ -468,12 +465,7 @@
 						</div>
 					{:else if f.type === 'select'}
 						<FormField label={f.label} for={`cf-${f.key}`} required={f.required}>
-							<NativeSelect.Root
-								id={`cf-${f.key}`}
-								size="sm"
-								class="w-full"
-								bind:value={customText[f.key]}
-							>
+							<NativeSelect.Root id={`cf-${f.key}`} class="w-full" bind:value={customText[f.key]}>
 								<NativeSelect.Option value="">—</NativeSelect.Option>
 								{#each f.options as o (o)}<NativeSelect.Option value={o}>{o}</NativeSelect.Option
 									>{/each}

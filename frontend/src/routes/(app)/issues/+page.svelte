@@ -194,9 +194,17 @@
 		{/snippet}
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/issues/new" class="font-medium text-info hover:underline">+ NEW ISSUE</a>
+				<a
+					href="/issues/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW ISSUE</a
+				>
 			{/if}
 		{/snippet}
 	</DataTable>

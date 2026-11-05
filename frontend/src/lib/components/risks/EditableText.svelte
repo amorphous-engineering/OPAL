@@ -119,8 +119,8 @@
 			/>
 		{/if}
 		<div class="flex gap-1.5">
-			<Button size="xs" onclick={save} disabled={busy}>SAVE</Button>
-			<Button size="xs" variant="outline" onclick={() => (editing = false)}>CANCEL</Button>
+			<Button size="sm" onclick={save} disabled={busy}>SAVE</Button>
+			<Button size="sm" variant="outline" onclick={() => (editing = false)}>CANCEL</Button>
 		</div>
 	</div>
 {:else}

@@ -87,9 +87,7 @@
 		<SearchInput label="Search stock" placeholder="OPAL number, part, lot, location" />
 
 		{#if data.partId}
-			<span
-				class="flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs"
-			>
+			<span class="flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs">
 				<span class="text-muted-foreground uppercase">Part</span>
 				{data.records[0]?.partInternalPn ?? data.parts[0]?.internalPn ?? 'selected'}
 				<button
@@ -102,14 +100,14 @@
 
 		<div class="flex" role="group" aria-label="View">
 			<Button
-				size="xs"
-				variant={data.view === 'parts' ? 'default' : 'outline'}
+				size="sm"
+				variant="outline"
 				aria-pressed={data.view === 'parts'}
 				onclick={() => setQuery({ view: 'parts', sort: null, dir: null })}>BY PART</Button
 			>
 			<Button
-				size="xs"
-				variant={data.view === 'records' ? 'default' : 'outline'}
+				size="sm"
+				variant="outline"
 				aria-pressed={data.view === 'records'}
 				onclick={() => setQuery({ view: 'records', sort: null, dir: null })}>RECORDS</Button
 			>
@@ -178,7 +176,10 @@
 			key={(r) => r.opalNumber}
 		>
 			{#snippet emptyAction()}
-				<a href="/inventory/new" class="font-medium text-info hover:underline">+ RECEIVE</a>
+				<a
+					href="/inventory/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline">+ RECEIVE</a
+				>
 			{/snippet}
 			{#snippet cell(r, col)}
 				{#if col.key === 'opalNumber'}

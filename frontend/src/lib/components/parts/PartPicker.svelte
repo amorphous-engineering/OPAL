@@ -96,7 +96,10 @@
 					variant="outline"
 					role="combobox"
 					aria-expanded={open}
-					class={cn('w-full min-w-0 justify-start gap-2 font-normal', className)}
+					class={cn(
+						'w-full min-w-0 justify-start gap-2 border-dashed border-foreground font-normal',
+						className
+					)}
 				>
 					{#if value}
 						<span class="font-mono text-info">{value.internal_pn ?? '—'}</span>
@@ -131,7 +134,7 @@
 			{#if clearable && value}
 				<Button
 					variant="ghost"
-					class="h-auto justify-start rounded-t-none border-0 border-t border-border px-2.5 py-1.5 font-mono font-normal text-info"
+					class="h-auto justify-start border-0 border-t border-border px-2.5 py-1.5 font-mono font-normal text-info"
 					onclick={() => pick(null)}>CLEAR</Button
 				>
 			{/if}

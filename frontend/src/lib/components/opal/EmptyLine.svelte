@@ -3,7 +3,7 @@
 	// one line saying it is empty. Inside a panel that already has the header (a Section or
 	// a list frame), only the line.
 	import type { Snippet } from 'svelte';
-	import { Button } from '#lib/components/ui/button/index.js';
+	import ActionLink from './ActionLink.svelte';
 	import { inFrame } from './frame.js';
 	import Section from './Section.svelte';
 
@@ -40,17 +40,9 @@
 	{#if action}
 		{@render action()}
 	{:else if addHref}
-		<a
-			href={addHref}
-			class="font-mono text-xs font-medium tracking-wider text-info uppercase hover:underline"
-			>{addLabel}</a
-		>
+		<ActionLink href={addHref}>{addLabel}</ActionLink>
 	{:else if onadd}
-		<Button
-			variant="link"
-			class="h-auto border-0 p-0 font-mono tracking-wider text-info uppercase"
-			onclick={onadd}>{addLabel}</Button
-		>
+		<ActionLink onclick={onadd}>{addLabel}</ActionLink>
 	{/if}
 {/snippet}
 

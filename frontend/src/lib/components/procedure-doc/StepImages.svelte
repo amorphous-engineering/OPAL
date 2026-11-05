@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ActionLink } from '#lib/components/opal/index.js';
 	// Authored reference imagery: instruction content, lazy-loaded, opens in the image
 	// viewer. A carousel shows three uniform 4:3 plates at a time (the image fills them, cover)
 	// and pages by three; the viewer shows the whole image. In author mode each figure carries
@@ -72,7 +73,7 @@
 			<div class="flex max-w-3xl items-center gap-2">
 				{#if au}
 					<span class="label">Images</span>
-					<Button size="xs" variant="outline" onclick={() => picker?.click()}>+ IMAGE</Button>
+					<Button size="sm" variant="outline" onclick={() => picker?.click()}>+ IMAGE</Button>
 					{#if !images.length}<span class="font-mono text-xs text-muted-foreground">none</span>{/if}
 					<input
 						bind:this={picker}
@@ -91,14 +92,14 @@
 						>{range} of {images.length}</span
 					>
 					<Button
-						size="icon-xs"
+						size="icon-sm"
 						variant="outline"
 						aria-label="Previous images"
 						disabled={!canPrev}
 						onclick={() => api?.scrollPrev()}>←</Button
 					>
 					<Button
-						size="icon-xs"
+						size="icon-sm"
 						variant="outline"
 						aria-label="Next images"
 						disabled={!canNext}
@@ -126,7 +127,7 @@
 									data-pswp
 									href={imageUrl(img)}
 									data-pswp-caption={img.caption ?? ''}
-									class="block aspect-[4/3] w-full overflow-hidden rounded-md border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
+									class="block aspect-[4/3] w-full overflow-hidden border border-border bg-muted focus-visible:ring-1 focus-visible:ring-ring"
 									aria-label={img.caption ? `Enlarge: ${img.caption}` : 'Enlarge reference image'}
 								>
 									<img
@@ -150,23 +151,21 @@
 									/>
 									<div class="flex items-center gap-0.5">
 										<Button
-											size="xs"
+											size="sm"
 											variant="ghost"
 											aria-label="Move image earlier"
 											onclick={() => au.moveImage(step, img.id!, -1)}>←</Button
 										>
 										<Button
-											size="xs"
+											size="sm"
 											variant="ghost"
 											aria-label="Move image later"
 											onclick={() => au.moveImage(step, img.id!, 1)}>→</Button
 										>
-										<Button
-											size="xs"
-											variant="ghost"
+										<ActionLink
 											class="ml-auto"
 											aria-label="Remove image"
-											onclick={() => au.removeImage(step, img.id!)}>REMOVE</Button
+											onclick={() => au.removeImage(step, img.id!)}>REMOVE</ActionLink
 										>
 									</div>
 								{:else if img.caption}

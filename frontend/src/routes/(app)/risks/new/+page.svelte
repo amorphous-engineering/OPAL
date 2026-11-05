@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { PageHeader, ErrorBanner } from '#lib/components/opal/index.js';
+	import { ActionLink, PageHeader, ErrorBanner } from '#lib/components/opal/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -126,7 +126,7 @@
 				<span class="font-mono text-xs"
 					><a class="text-info hover:underline" href={`/parts/${asset.id}`}>{asset.label}</a></span
 				>
-				<Button variant="ghost" size="xs" onclick={() => (asset = null)}>CLEAR</Button>
+				<ActionLink onclick={() => (asset = null)}>CLEAR</ActionLink>
 			{:else}
 				<PartPicker
 					trigger={pickPart}

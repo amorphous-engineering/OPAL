@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { opal } from '#lib/api.js';
 	import {
+		ActionLink,
 		DataTable,
 		DetailRow,
 		DetailTable,
@@ -199,10 +200,8 @@
 			)}
 		>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" href={`/requirements?project=${project.id}`}>ALL</Button>
-				{#if !archived}<Button variant="ghost" size="xs" href={`/requirements/new?${q}`}
-						>+ NEW</Button
-					>{/if}
+				<ActionLink href={`/requirements?project=${project.id}`}>ALL</ActionLink>
+				{#if !archived}<ActionLink href={`/requirements/new?${q}`}>+ NEW</ActionLink>{/if}
 			{/snippet}
 			<DataTable
 				rows={data.requirements.items}
@@ -227,9 +226,8 @@
 			count={countOf(data.risks.items.length, data.risks.next, data.risks.total)}
 		>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" href={`/risks?project=${project.id}`}>ALL</Button>
-				{#if !archived}<Button variant="ghost" size="xs" href={`/risks/new?${q}`}>+ NEW</Button
-					>{/if}
+				<ActionLink href={`/risks?project=${project.id}`}>ALL</ActionLink>
+				{#if !archived}<ActionLink href={`/risks/new?${q}`}>+ NEW</ActionLink>{/if}
 			{/snippet}
 			<DataTable
 				rows={data.risks.items}
@@ -255,11 +253,8 @@
 			count={countOf(data.issues.items.length, data.issues.next, data.issues.total)}
 		>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" href={`/issues?project=${project.id}&state=all`}
-					>ALL</Button
-				>
-				{#if !archived}<Button variant="ghost" size="xs" href={`/issues/new?${q}`}>+ NEW</Button
-					>{/if}
+				<ActionLink href={`/issues?project=${project.id}&state=all`}>ALL</ActionLink>
+				{#if !archived}<ActionLink href={`/issues/new?${q}`}>+ NEW</ActionLink>{/if}
 			{/snippet}
 			<DataTable
 				rows={data.issues.items}
@@ -288,9 +283,8 @@
 			count={countOf(data.procedures.items.length, data.procedures.next, data.procedures.total)}
 		>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" href={`/procedures?project=${project.id}`}>ALL</Button>
-				{#if !archived}<Button variant="ghost" size="xs" href={`/procedures/new?${q}`}>+ NEW</Button
-					>{/if}
+				<ActionLink href={`/procedures?project=${project.id}`}>ALL</ActionLink>
+				{#if !archived}<ActionLink href={`/procedures/new?${q}`}>+ NEW</ActionLink>{/if}
 			{/snippet}
 			<DataTable
 				rows={data.procedures.items}
@@ -316,7 +310,7 @@
 				count={countOf(data.executions.items.length, data.executions.next, data.executions.total)}
 			>
 				{#snippet actions()}
-					<Button variant="ghost" size="xs" href={`/executions?project=${project.id}`}>ALL</Button>
+					<ActionLink href={`/executions?project=${project.id}`}>ALL</ActionLink>
 				{/snippet}
 				<DataTable
 					rows={data.executions.items}
@@ -343,9 +337,8 @@
 
 		<Section title="Datasets" count={countOf(data.datasets.items.length, data.datasets.next)}>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" href={`/datasets?project=${project.id}`}>ALL</Button>
-				{#if !archived}<Button variant="ghost" size="xs" href={`/datasets/new?${q}`}>+ NEW</Button
-					>{/if}
+				<ActionLink href={`/datasets?project=${project.id}`}>ALL</ActionLink>
+				{#if !archived}<ActionLink href={`/datasets/new?${q}`}>+ NEW</ActionLink>{/if}
 			{/snippet}
 			<DataTable
 				rows={data.datasets.items}

@@ -168,7 +168,7 @@
 				rows={preview.rows}
 				{columns}
 				key={(r) => r.rowNumber}
-				rowClass={(r) => (r.valid ? undefined : 'bg-error-muted/40')}
+				rowClass={(r) => (r.valid ? undefined : 'text-error')}
 				emptyLabel="ROWS"
 			>
 				{#snippet cell(r, col)}

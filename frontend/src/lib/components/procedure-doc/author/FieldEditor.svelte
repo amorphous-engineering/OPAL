@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ActionLink } from '#lib/components/opal/index.js';
 	// One data-capture field's definition, under the live input the operator
 	// will get. Edits write the step's schema.
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -171,7 +172,7 @@
 
 {#if f}
 	<div
-		class="mt-1 grid grid-cols-1 gap-1.5 rounded-md border border-dashed border-border bg-muted/30 p-1.5"
+		class="mt-1 grid grid-cols-1 gap-1.5 border border-dashed border-border bg-muted/30 p-1.5"
 		data-field-editor
 	>
 		<div class="grid grid-cols-2 gap-1.5">
@@ -185,7 +186,6 @@
 				oninput={(e) => setLabel(e.currentTarget.value)}
 			/>
 			<NativeSelect
-				size="sm"
 				aria-label="Type"
 				value={f.type}
 				onchange={(e) => setType(e.currentTarget.value)}
@@ -233,19 +233,18 @@
 				</label>
 			{/if}
 			<span class="ml-auto flex items-center gap-0.5">
-				<Button size="xs" variant="ghost" aria-label="Move field up" onclick={() => move(-1)}
+				<Button size="sm" variant="ghost" aria-label="Move field up" onclick={() => move(-1)}
 					>↑</Button
 				>
-				<Button size="xs" variant="ghost" aria-label="Move field down" onclick={() => move(1)}
+				<Button size="sm" variant="ghost" aria-label="Move field down" onclick={() => move(1)}
 					>↓</Button
 				>
-				<Button size="xs" variant="ghost" aria-label="Remove field" onclick={remove}>REMOVE</Button>
+				<ActionLink aria-label="Remove field" onclick={remove}>REMOVE</ActionLink>
 			</span>
 		</div>
 		{#if f.type === 'number'}
 			<div class="flex flex-wrap items-center gap-1.5" data-spec-editor>
 				<NativeSelect
-					size="sm"
 					aria-label="Spec kind"
 					value={draft.kind}
 					onchange={(e) => editSpec({ kind: e.currentTarget.value as SpecKind | 'none' })}
@@ -272,7 +271,7 @@
 				{/if}
 				{#if suggestion?.spec}
 					<Button
-						size="xs"
+						size="sm"
 						variant="outline"
 						title={`${specText(suggestion?.spec, suggestion?.unit)} from the label`}
 						onclick={applySuggestion}>SUGGEST SPEC</Button
@@ -285,7 +284,7 @@
 			{#if legacy}
 				<div class="flex flex-wrap items-center gap-1.5 font-mono text-xs text-muted-foreground">
 					<span>Min {f.min ?? '…'}</span><span>Max {f.max ?? '…'}</span>
-					<Button size="xs" variant="outline" onclick={convertLimits}>CONVERT TO SPEC</Button>
+					<Button size="sm" variant="outline" onclick={convertLimits}>CONVERT TO SPEC</Button>
 				</div>
 			{/if}
 			{#if f.spec}

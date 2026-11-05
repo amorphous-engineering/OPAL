@@ -119,12 +119,8 @@
 							<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums">
 								{@render was(l, 'qtyOrdered')}{qtyUnit(l.qtyOrdered, l.unitOfMeasure)}
 							</td>
-							<td
-								class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums {l.isComplete
-									? 'text-ok'
-									: num(l.qtyReceived) > 0
-										? 'text-warn'
-										: 'text-muted-foreground'}">{qtyUnit(l.qtyReceived, l.unitOfMeasure)}</td
+							<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums"
+								>{qtyUnit(l.qtyReceived, l.unitOfMeasure)}</td
 							>
 							{#if anyCancelled}
 								<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums">

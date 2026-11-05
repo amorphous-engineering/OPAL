@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Facts about one account. Name edits in place; only an admin edits email.
 	import {
+		ActionLink,
 		DetailRow,
 		DetailTable,
 		Section,
@@ -86,7 +87,7 @@
 <Section title="Profile">
 	{#snippet actions()}
 		{#if canEdit && !editing}
-			<Button variant="ghost" size="xs" onclick={start}>EDIT</Button>
+			<ActionLink onclick={start}>EDIT</ActionLink>
 		{/if}
 	{/snippet}
 	<AvatarEditor {profile} {canEdit} {onupdate} />

@@ -2,6 +2,7 @@
 	// Organization settings: create (first run, with the first project) or edit. One form, one save.
 	import { refreshAll } from '$app/navigation';
 	import {
+		ActionLink,
 		confirm,
 		DataTable,
 		Section,
@@ -304,7 +305,7 @@
 
 		<Section title="Inventory tiers" count={tiers.length}>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" onclick={addTier}>+ ADD TIER</Button>
+				<ActionLink onclick={addTier}>+ ADD TIER</ActionLink>
 			{/snippet}
 			<div class="overflow-x-auto">
 				<table class="w-full border-collapse text-sm">
@@ -348,7 +349,6 @@
 								>
 								<td class="px-2 py-1">
 									<NativeSelect.Root
-										size="sm"
 										class="w-32"
 										aria-label="Default tracking"
 										bind:value={t.tracking}
@@ -364,12 +364,8 @@
 									><Switch size="sm" aria-label="Auto serial" bind:checked={t.autoSerial} /></td
 								>
 								<td class="px-2 py-1 text-right">
-									<Button
-										variant="ghost"
-										size="xs"
-										class="text-destructive"
-										disabled={tiers.length <= 1}
-										onclick={() => removeTier(t)}>REMOVE</Button
+									<ActionLink disabled={tiers.length <= 1} onclick={() => removeTier(t)}
+										>REMOVE</ActionLink
 									>
 								</td>
 							</tr>
@@ -385,7 +381,7 @@
 					<div class="flex flex-wrap gap-1">
 						{#each categories as c (c)}
 							<span
-								class="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-muted pr-0.5 pl-2 font-mono text-xs"
+								class="inline-flex h-6 items-center gap-1 border border-border bg-muted pr-0.5 pl-2 font-mono text-xs"
 							>
 								{c}
 								<button
@@ -420,7 +416,7 @@
 
 		<Section title="Custom fields" count={fields.length}>
 			{#snippet actions()}
-				<Button variant="ghost" size="xs" onclick={addField}>+ ADD FIELD</Button>
+				<ActionLink onclick={addField}>+ ADD FIELD</ActionLink>
 			{/snippet}
 			{#if fields.length}
 				<div class="grid grid-cols-1 gap-2 p-3">
@@ -438,11 +434,8 @@
 								aria-label="Field value"
 								placeholder="Value"
 							/>
-							<Button
-								variant="ghost"
-								size="xs"
-								class="text-destructive"
-								onclick={() => (fields = fields.filter((x) => x.id !== f.id))}>REMOVE</Button
+							<ActionLink onclick={() => (fields = fields.filter((x) => x.id !== f.id))}
+								>REMOVE</ActionLink
 							>
 						</div>
 					{/each}

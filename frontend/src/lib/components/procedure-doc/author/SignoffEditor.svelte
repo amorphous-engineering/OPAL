@@ -41,7 +41,7 @@
 	{#if rows.length === 0}
 		<EmptyLine label="Sign-offs" onadd={add} addLabel="+ SIGN-OFF" />
 	{:else}
-		<div class="overflow-hidden rounded-lg border border-border">
+		<div class="overflow-hidden border border-border">
 			<table class="w-full font-mono text-xs" aria-label="Sign-offs">
 				<tbody>
 					{#each rows as s, i (i)}
@@ -50,7 +50,6 @@
 							<td class="w-36 px-2 py-1">
 								<NativeSelect
 									aria-label={`${slotLabel(i)} sign-off role`}
-									size="sm"
 									class="w-full"
 									value={known.find((n) => n.toLowerCase() === s.role?.toLowerCase()) ??
 										s.role ??
@@ -71,7 +70,7 @@
 							<td class="w-20 px-2 py-1 text-right">
 								<Button
 									type="button"
-									size="xs"
+									size="sm"
 									variant="outline"
 									aria-label={`Remove ${slotLabel(i)} sign-off`}
 									disabled={!removable(i)}

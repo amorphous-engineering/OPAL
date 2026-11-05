@@ -33,11 +33,11 @@
 <div
 	role="search"
 	aria-label={label}
-	class="flex flex-wrap items-center gap-2 border-b border-border p-2"
+	class="flex flex-wrap items-center gap-2 border-b border-border bg-background p-2"
 >
 	{@render children()}
 	{#if active}
-		<Button variant="link" class="h-auto border-0 p-0 font-mono text-info" onclick={reset}
+		<Button variant="link" class="h-auto border-0 p-0 font-mono text-xs text-info" onclick={reset}
 			>CLEAR</Button
 		>
 	{/if}

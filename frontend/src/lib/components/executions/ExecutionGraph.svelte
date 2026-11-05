@@ -57,11 +57,11 @@
 	class="h-[max(28rem,calc(100svh-18rem))] w-full border border-border"
 >
 	{#snippet nodeActions(n)}
-		<Button size="xs" variant="outline" onclick={() => onopen(n.id)}>OPEN</Button>
+		<Button size="sm" variant="outline" onclick={() => onopen(n.id)}>OPEN</Button>
 		{@const op = redlinable(n.id)}
 		{#if op}
 			<Button
-				size="xs"
+				size="sm"
 				variant="outline"
 				onclick={() => (store.panel = { kind: 'redline', op, issueId: op.open_ncs[0].id })}
 				>REDLINE</Button

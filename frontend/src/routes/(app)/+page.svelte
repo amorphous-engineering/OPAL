@@ -115,8 +115,7 @@
 		default: 'text-foreground'
 	};
 
-	const priorityTone = (p: string): Tone =>
-		p === 'critical' ? 'error' : p === 'high' ? 'warn' : 'muted';
+	const priorityTone = (p: string): Tone => (p === 'critical' ? 'error' : 'default');
 
 	const issueCols: Column<IssueRow>[] = [
 		{ key: 'issueNumber', label: 'Issue', width: '6rem' },
@@ -243,7 +242,7 @@
 
 <div class="space-y-4 p-4">
 	<div
-		class="grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-4 xl:grid-cols-7"
+		class="grid grid-cols-2 overflow-hidden border border-border bg-card sm:grid-cols-4 xl:grid-cols-7"
 		aria-label="Attention summary"
 	>
 		{#each stats as s (s.label)}
@@ -254,16 +253,12 @@
 				<div class="label">{s.label}</div>
 				<div
 					class="font-mono text-2xl leading-8 tabular-nums {s.value === 0
-						? 'text-muted-foreground/50'
+						? ''
 						: `font-semibold ${valueClass[s.tone]}`}"
 				>
 					{s.value}
 				</div>
-				<div
-					class="font-mono text-xs {s.value === 0
-						? 'text-muted-foreground/50'
-						: 'text-muted-foreground'}"
-				>
+				<div class="font-mono text-xs text-muted-foreground">
 					{s.sub}
 				</div>
 			</a>
@@ -301,7 +296,7 @@
 							{:else if r.assignee}{r.assignee}
 							{:else}<span class="text-muted-foreground">{dash}</span>{/if}
 						{:else if r.holding}
-							<State value="hold" tone="warn" label="HOLD" />
+							<State value="hold" tone="error" label="HOLD" />
 						{:else}
 							<span class="text-muted-foreground">{dash}</span>
 						{/if}

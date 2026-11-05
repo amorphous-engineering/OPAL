@@ -114,13 +114,7 @@
 		onsubmit={add}
 	>
 		<FormField label="Supplier" for="sup-supplier" class="w-56">
-			<NativeSelect.Root
-				id="sup-supplier"
-				size="sm"
-				class="w-full"
-				bind:value={supplierId}
-				required
-			>
+			<NativeSelect.Root id="sup-supplier" class="w-full" bind:value={supplierId} required>
 				<NativeSelect.Option value="">Select supplier</NativeSelect.Option>
 				{#each available as o (o.id)}<NativeSelect.Option value={String(o.id)}
 						>{o.name}</NativeSelect.Option
@@ -166,7 +160,7 @@
 				{:else if col.key === 'vendorPn'}
 					{s.vendorPn}
 				{:else if col.key === 'preferred'}
-					{#if s.isPreferred}<span class="font-mono text-xs font-medium text-ok">PREFERRED</span
+					{#if s.isPreferred}<span class="font-mono text-xs font-semibold">PREFERRED</span
 						>{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else if col.key === 'leadTime'}
 					{#if s.leadTimeDays != null}{s.leadTimeDays}{:else}<span class="text-muted-foreground"

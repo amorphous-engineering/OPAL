@@ -121,7 +121,7 @@
 				>{check?.openMitigations ?? '—'}</span
 			>
 			· Residual score
-			{#if risk.residualScore !== null}<span class="text-ok">{risk.residualScore}</span>{:else}<span
+			{#if risk.residualScore !== null}<span>{risk.residualScore}</span>{:else}<span
 					class="text-error">not set</span
 				>{/if}
 		</p>
@@ -154,13 +154,13 @@
 	{:else if target === 'realized'}
 		{#if risk.realizedIssueNumber}
 			<p class="font-mono text-xs">
-				Realized issue <a class="text-ok hover:underline" href={`/issues/${risk.realizedIssueId}`}
+				Realized issue <a class="text-info hover:underline" href={`/issues/${risk.realizedIssueId}`}
 					>{risk.realizedIssueNumber}</a
 				>
 			</p>
 		{:else if picked}
 			<p class="font-mono text-xs">
-				Realized issue <span class="text-ok">{picked.label}</span>
+				Realized issue <span>{picked.label}</span>
 				<button
 					type="button"
 					class="label ml-2 hover:text-foreground"

@@ -203,7 +203,7 @@
 						tone={r.status === 'verified' ? 'ok' : r.status === 'open' ? 'default' : 'muted'}
 					/>
 				{:else}
-					<ActionLink danger onclick={() => unassign(r)}>REMOVE</ActionLink>
+					<ActionLink onclick={() => unassign(r)}>REMOVE</ActionLink>
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -226,7 +226,7 @@
 			<Input id="test-name" bind:value={tName} required />
 		</FormField>
 		<FormField label="Type" for="test-type" class="w-32">
-			<NativeSelect.Root id="test-type" size="sm" class="w-full" bind:value={tType}>
+			<NativeSelect.Root id="test-type" class="w-full" bind:value={tType}>
 				<NativeSelect.Option value="boolean">PASS / FAIL</NativeSelect.Option>
 				<NativeSelect.Option value="numeric">NUMERIC</NativeSelect.Option>
 				<NativeSelect.Option value="text">TEXT</NativeSelect.Option>
@@ -268,7 +268,7 @@
 					{@const r = range(t)}
 					{#if r}{r}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else}
-					<ActionLink danger onclick={() => removeTest(t)}>DELETE</ActionLink>
+					<ActionLink onclick={() => removeTest(t)}>DELETE</ActionLink>
 				{/if}
 			{/snippet}
 		</DataTable>

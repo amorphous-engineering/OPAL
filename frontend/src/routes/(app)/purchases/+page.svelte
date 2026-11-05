@@ -97,9 +97,17 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/purchases/new" class="font-medium text-info hover:underline">+ NEW PURCHASE</a>
+				<a
+					href="/purchases/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW PURCHASE</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}

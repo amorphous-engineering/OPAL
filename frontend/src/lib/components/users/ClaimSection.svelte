@@ -1,8 +1,7 @@
 <script lang="ts">
 	// Admin-only: hand a passwordless account to its owner out of band.
 	import { onMount } from 'svelte';
-	import { Section, Timestamp, toastError } from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
+	import { ActionLink, Section, Timestamp, toastError } from '#lib/components/opal/index.js';
 	import { opal } from '#lib/api.js';
 	import CopyField from './CopyField.svelte';
 	import { claimUrl } from './types.js';
@@ -30,8 +29,8 @@
 
 <Section title="Account claim">
 	{#snippet actions()}
-		<Button variant="ghost" size="xs" disabled={busy} onclick={issue}
-			>{link ? 'ISSUE NEW LINK' : 'ISSUE CLAIM LINK'}</Button
+		<ActionLink disabled={busy} onclick={issue}
+			>{link ? 'ISSUE NEW LINK' : 'ISSUE CLAIM LINK'}</ActionLink
 		>
 	{/snippet}
 	<div class="grid grid-cols-1 gap-2 p-3">

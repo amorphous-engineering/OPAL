@@ -126,7 +126,7 @@
 				</tbody>
 			</table>
 			<div>
-				<Button size="xs" variant="outline" disabled={busy} onclick={consume}>CONSUME PARTS</Button>
+				<Button size="sm" variant="outline" disabled={busy} onclick={consume}>CONSUME PARTS</Button>
 			</div>
 		{:else if !step.consumptions.length}
 			<ul class="m-0 list-none p-0 font-mono text-xs text-muted-foreground">
@@ -141,7 +141,7 @@
 		{/if}
 		{#each step.consumptions as c (c.id)}
 			<div class="font-mono text-xs text-muted-foreground">
-				<span class="text-ok">{c.usage_type === 'tooling' ? 'USED' : 'CONSUMED'}</span>
+				<span>{c.usage_type === 'tooling' ? 'USED' : 'CONSUMED'}</span>
 				{c.part_number ?? ''}
 				{c.part_name}{c.usage_type === 'tooling' ? '' : ` × ${qtyUnit(c.quantity, c.uom)}`} from
 				{#if c.opal_number}<a class="text-info" href={`/inventory/opal/${c.opal_number}`}

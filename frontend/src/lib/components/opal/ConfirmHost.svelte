@@ -47,7 +47,7 @@
 			<AlertDialog.Cancel onclick={() => confirmState.settle(false)}>CANCEL</AlertDialog.Cancel>
 			<AlertDialog.Action
 				disabled={blocked}
-				class={o.destructive ? 'bg-destructive text-white hover:bg-destructive/90' : ''}
+				class={o.destructive ? 'bg-error-fill text-error-on shadow-key hover:bg-error-fill' : ''}
 				onclick={() => confirmState.settle(true)}>{o.action ?? 'CONFIRM'}</AlertDialog.Action
 			>
 		</AlertDialog.Footer>

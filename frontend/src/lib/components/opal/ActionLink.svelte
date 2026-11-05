@@ -1,40 +1,36 @@
 <script lang="ts">
-	// Text action in a header bar or row: accent = action (register rule 3).
+	// Text action in a header bar or row: accent = action. Keys carry a shadow; this does not.
 	import type { Snippet } from 'svelte';
 	import { cn } from '#lib/utils.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 
 	let {
 		href,
-		onclick,
 		disabled = false,
-		danger = false,
-		title,
 		class: className,
-		children
+		children,
+		...rest
 	}: {
 		href?: string;
-		onclick?: () => void;
 		disabled?: boolean;
-		danger?: boolean;
-		title?: string;
 		class?: string;
 		children: Snippet;
+		// Anything else a link or trigger passes through: onclick, title, target, aria-*.
+		[key: string]: unknown;
 	} = $props();
 
 	const cls = $derived(
 		cn(
-			'font-mono text-xs font-medium tracking-wide whitespace-nowrap hover:underline disabled:pointer-events-none disabled:opacity-40',
-			danger ? 'text-error' : 'text-info',
+			'inline-flex h-6 items-center font-mono text-xs font-medium tracking-wide whitespace-nowrap text-info hover:underline disabled:pointer-events-none disabled:opacity-40',
 			className
 		)
 	);
 </script>
 
 {#if href}
-	<a {href} {title} class={cls}>{@render children()}</a>
+	<a {href} class={cls} {...rest}>{@render children()}</a>
 {:else}
-	<Button variant="link" {onclick} {disabled} {title} class={cn('h-auto border-0 p-0', cls)}
+	<Button variant="link" {disabled} class={cn('border-0 p-0', cls)} {...rest}
 		>{@render children()}</Button
 	>
 {/if}

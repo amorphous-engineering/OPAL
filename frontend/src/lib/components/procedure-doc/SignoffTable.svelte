@@ -30,7 +30,7 @@
 </script>
 
 {#if rows.length}
-	<div class="overflow-hidden rounded-lg border border-border">
+	<div class="overflow-hidden border border-border">
 		<table
 			class="w-full font-mono text-xs"
 			aria-label="Sign-offs"
@@ -63,7 +63,7 @@
 						<td class="w-32 px-3 py-2 text-right">
 							{#if !signed && sign}
 								<Button
-									size="xs"
+									size="sm"
 									variant={s.can_sign ? 'default' : 'outline'}
 									disabled={!s.can_sign || busy !== null}
 									class={cn(!s.can_sign && 'cursor-not-allowed')}

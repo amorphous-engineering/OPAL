@@ -91,8 +91,8 @@
 			<Input bind:value={draft} aria-label={label} onkeydown={key} autofocus />
 		{/if}
 		<div class="flex gap-1.5">
-			<Button size="xs" disabled={busy || (required && !draft.trim())} onclick={save}>SAVE</Button>
-			<Button size="xs" variant="outline" onclick={() => (editing = false)}>CANCEL</Button>
+			<Button size="sm" disabled={busy || (required && !draft.trim())} onclick={save}>SAVE</Button>
+			<Button size="sm" variant="outline" onclick={() => (editing = false)}>CANCEL</Button>
 		</div>
 	</div>
 {:else}

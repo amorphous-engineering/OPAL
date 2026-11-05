@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { opal } from '#lib/api.js';
 	import {
+		ActionLink,
 		PageHeader,
 		Section,
 		DataTable,
@@ -288,7 +289,6 @@
 			{#snippet actions()}
 				{#if numeric.length > 1}
 					<NativeSelect
-						size="sm"
 						aria-label="Chart field"
 						value={data.field}
 						onchange={(e) => setQuery({ field: e.currentTarget.value })}
@@ -333,8 +333,7 @@
 							<span class="font-mono text-xs" title={row.struck.reason}
 								>STRUCK <Timestamp value={row.struck.at} /> · {row.struck.reason}</span
 							>
-						{:else if !archived}<Button variant="ghost" size="xs" onclick={() => strikePoint(row)}
-								>STRIKE</Button
+						{:else if !archived}<ActionLink onclick={() => strikePoint(row)}>STRIKE</ActionLink
 							>{/if}
 					{:else}
 						{@const name = col.key.slice(2)}
@@ -348,7 +347,7 @@
 							{#if !row.struck && f?.spec && specResult(f.spec, row.values[name]) === 'out_of_spec'}
 								<Badge
 									variant="outline"
-									class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+									class="ml-2 border-error-fill bg-error-fill font-mono tracking-wider text-error-on"
 									>OUT OF SPEC</Badge
 								>
 							{/if}

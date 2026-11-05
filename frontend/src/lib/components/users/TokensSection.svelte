@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
+		ActionLink,
 		confirm,
 		DataTable,
 		Section,
@@ -77,7 +78,7 @@
 
 <Section title="API tokens" count={loaded ? tokens.length : undefined}>
 	{#if revealed}
-		<div class="grid grid-cols-1 gap-2 border-b border-border bg-warn-muted p-3">
+		<div class="grid grid-cols-1 gap-2 border-b border-dashed border-foreground p-3">
 			<div class="text-xs">
 				<span class="font-medium">{revealed.name}</span>
 				<span class="text-muted-foreground">
@@ -90,7 +91,7 @@
 					{#if revealed.expiresAt}Expires <Timestamp value={revealed.expiresAt} />{:else}Never
 						expires{/if}
 				</span>
-				<Button variant="outline" size="xs" onclick={() => (revealed = null)}>DONE</Button>
+				<Button variant="outline" size="sm" onclick={() => (revealed = null)}>DONE</Button>
 			</div>
 		</div>
 	{/if}
@@ -105,9 +106,7 @@
 							class="font-mono text-xs text-muted-foreground">NEVER</span
 						>{/if}
 				{:else}
-					<Button variant="ghost" size="xs" class="text-destructive" onclick={() => revoke(t)}
-						>REVOKE</Button
-					>
+					<ActionLink onclick={() => revoke(t)}>REVOKE</ActionLink>
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -130,6 +129,8 @@
 			aria-label="Expires in days"
 			placeholder="Days (optional)"
 		/>
-		<Button type="submit" size="sm" disabled={busy || !name.trim()}>CREATE TOKEN</Button>
+		<Button type="submit" variant="outline" size="sm" disabled={busy || !name.trim()}
+			>CREATE TOKEN</Button
+		>
 	</form>
 </Section>

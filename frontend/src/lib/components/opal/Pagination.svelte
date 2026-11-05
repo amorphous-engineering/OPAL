@@ -29,14 +29,14 @@
 		<div class="ml-auto flex items-center gap-2">
 			<Button
 				variant="outline"
-				size="xs"
+				size="sm"
 				disabled={current <= 1}
 				onclick={() => setQuery({ page: current - 1 })}>{prevLabel}</Button
 			>
 			<span class="tabular-nums">PAGE {current}/{pageCount}</span>
 			<Button
 				variant="outline"
-				size="xs"
+				size="sm"
 				disabled={current >= pageCount}
 				onclick={() => setQuery({ page: current + 1 })}>{nextLabel}</Button
 			>

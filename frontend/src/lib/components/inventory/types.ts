@@ -22,9 +22,9 @@ export function ledgerKind(row: Pick<StockLedgerRow, 'kind' | 'qty' | 'reason'>)
 	const n = Number(row.qty);
 	switch (row.kind) {
 		case 'receive':
-			return { label: 'RECEIVED', tone: 'ok' };
+			return { label: 'RECEIVED', tone: 'default' };
 		case 'produce':
-			return { label: 'PRODUCED', tone: 'ok' };
+			return { label: 'PRODUCED', tone: 'default' };
 		case 'consume':
 			if (row.reason === 'tooling') return { label: 'TOOLING', tone: 'info' };
 			if (row.reason === 'scrap') return { label: 'SCRAPPED', tone: 'error' };

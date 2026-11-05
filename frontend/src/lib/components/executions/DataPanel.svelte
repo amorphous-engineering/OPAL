@@ -28,7 +28,7 @@
 			<span class="whitespace-pre-wrap">{r.value}</span>
 			<Badge
 				variant="outline"
-				class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+				class="ml-2 border-error-fill bg-error-fill font-mono tracking-wider text-error-on"
 				>OUT OF SPEC</Badge
 			>
 		{:else}

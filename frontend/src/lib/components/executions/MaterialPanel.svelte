@@ -176,7 +176,7 @@
 		<Section title="Kit" count={doc.kit.items.length || undefined}>
 			{#snippet actions()}
 				{#if canConsume && doc.kit.items.some((k) => remaining(k) > 0)}
-					<Button size="xs" disabled={busy} onclick={consumeKit}>CONSUME PARTS</Button>
+					<Button size="sm" disabled={busy} onclick={consumeKit}>CONSUME PARTS</Button>
 				{/if}
 			{/snippet}
 			{#if doc.kit.items.length}

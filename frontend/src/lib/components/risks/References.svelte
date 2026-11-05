@@ -2,6 +2,7 @@
 	// OPAL numbers and work orders the risk refers to.
 	import { invalidateAll } from '$app/navigation';
 	import {
+		ActionLink,
 		DataTable,
 		EmptyLine,
 		Section,
@@ -77,9 +78,7 @@
 {#if risk.references.length}
 	<Section title="References" count={risk.references.length}>
 		{#snippet actions()}
-			<Button variant="ghost" size="xs" onclick={() => (adding = !adding)}
-				>{adding ? 'DONE' : '+ ADD'}</Button
-			>
+			<ActionLink onclick={() => (adding = !adding)}>{adding ? 'DONE' : '+ ADD'}</ActionLink>
 		{/snippet}
 		<DataTable rows={risk.references} {columns} key={(r) => r.id} emptyLabel="References">
 			{#snippet cell(r, col)}
@@ -90,15 +89,13 @@
 				{:else if col.key === 'notes'}
 					{#if r.notes}{r.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
 				{:else}
-					<Button
-						variant="ghost"
-						size="xs"
+					<ActionLink
 						disabled={busy}
 						onclick={() =>
 							run(
 								() => opal.risks.removeReference({ id: risk.id, referenceId: r.id }),
 								`${r.value} removed`
-							)}>REMOVE</Button
+							)}>REMOVE</ActionLink
 					>
 				{/if}
 			{/snippet}
@@ -112,7 +109,7 @@
 			onadd={() => (adding = !adding)}
 			addLabel={adding ? 'DONE' : '+ ADD'}
 		/>
-		{#if adding}<div class="rounded-b-lg border border-t-0 border-border bg-card">
+		{#if adding}<div class="border border-t-0 border-border bg-card">
 				{@render form()}
 			</div>{/if}
 	</div>

@@ -56,7 +56,7 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger
 		aria-label="Account menu"
-		class="group inline-flex h-7 items-center gap-1.5 rounded-md border border-border pr-1.5 pl-0.5 text-xs hover:bg-accent data-[state=open]:bg-accent"
+		class="group inline-flex h-7 items-center gap-1.5 border border-border pr-1.5 pl-0.5 text-xs hover:bg-accent data-[state=open]:bg-accent"
 	>
 		<Avatar {user} size="sm" />
 		<span class="hidden max-w-40 truncate font-medium sm:inline">{user?.name ?? '—'}</span>
@@ -75,7 +75,7 @@
 					<span class="truncate text-sm font-medium">{user?.name}</span>
 					{#if user?.is_admin}
 						<span
-							class="rounded-sm border border-info/40 px-1 font-mono text-[0.625rem] tracking-wider text-info"
+							class="border border-info/40 px-1 font-mono text-[0.625rem] tracking-wider text-info"
 							>ADMIN</span
 						>
 					{/if}
@@ -166,7 +166,7 @@
 			</DropdownMenu.Group>
 
 			<DropdownMenu.Separator />
-			<DropdownMenu.Item variant="destructive" onSelect={signOut}>
+			<DropdownMenu.Item onSelect={signOut}>
 				<SignOutIcon />Sign out
 			</DropdownMenu.Item>
 		</div>

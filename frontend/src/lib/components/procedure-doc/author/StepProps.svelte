@@ -93,7 +93,7 @@
 			{#each others as o (o.order)}
 				<Button
 					size="sm"
-					variant={waits.has(o.order) ? 'default' : 'outline'}
+					variant="outline"
 					aria-pressed={waits.has(o.order)}
 					title={o.title}
 					class={cn('font-mono', !waits.has(o.order) && 'text-muted-foreground')}

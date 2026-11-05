@@ -129,9 +129,17 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/parts/new" class="font-medium text-info hover:underline">+ NEW PART</a>
+				<a
+					href="/parts/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW PART</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(row, col)}
@@ -171,13 +179,13 @@
 			<div class="ml-auto flex items-center gap-2">
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={q.page <= 1}
 					onclick={() => setQuery({ page: null, cursor: null })}>← FIRST</Button
 				>
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={!data.list.next}
 					onclick={() => setQuery({ page: q.page + 1, cursor: data.list.next })}>NEXT →</Button
 				>

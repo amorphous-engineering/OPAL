@@ -86,8 +86,8 @@
 				<button
 					type="button"
 					class={cn(
-						'-ml-px inline-flex h-7 items-center gap-1.5 border border-border px-2.5 font-mono text-xs font-medium tracking-wider uppercase first:ml-0 first:rounded-l-md last:rounded-r-md hover:bg-accent',
-						status === c.id && 'bg-primary text-primary-foreground hover:bg-primary'
+						'-ml-px inline-flex h-7 items-center gap-1.5 border border-border px-2.5 font-mono text-xs font-medium tracking-wider uppercase first:ml-0 hover:bg-accent',
+						status === c.id && 'bg-foreground text-background hover:bg-foreground'
 					)}
 					aria-pressed={status === c.id}
 					onclick={() => setQuery({ status: c.id === 'all' ? null : c.id })}
@@ -126,9 +126,16 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/executions/new" class="font-medium text-info hover:underline">+ CUT WO</a>
+				<a
+					href="/executions/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline">+ CUT WO</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
@@ -152,9 +159,9 @@
 				<State value={r.status} />
 			{:else if col.key === 'progress'}
 				<span class="flex items-center gap-2">
-					<span class="h-1.5 w-16 bg-border" aria-hidden="true"
+					<span class="h-1.5 w-16 bg-desk" aria-hidden="true"
 						><span
-							class="block h-full bg-ok"
+							class="block h-full bg-foreground"
 							style:width={`${r.progressTotal ? (r.progressDone / r.progressTotal) * 100 : 0}%`}
 						></span></span
 					>
@@ -175,7 +182,7 @@
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'heldBy'}
 				{#if r.heldBy.length}
-					<span class="font-mono text-xs text-warn">{r.heldBy.join(', ')}</span>
+					<span class="font-mono text-xs text-error">{r.heldBy.join(', ')}</span>
 				{:else}<span class="text-muted-foreground">—</span>{/if}
 			{:else if col.key === 'created'}
 				<Timestamp value={r.createdAt} relative />

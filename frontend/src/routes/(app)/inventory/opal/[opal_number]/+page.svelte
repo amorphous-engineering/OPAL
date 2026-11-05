@@ -303,7 +303,7 @@
 			</Section>
 
 			{#if data.qrSvg}
-				<div class="rounded-lg border border-border bg-card p-3">
+				<div class="border border-border bg-card p-3">
 					<!-- QR codes are black on transparent; a white ground keeps them scannable in dark mode. -->
 					<img
 						src="data:image/svg+xml;utf8,{encodeURIComponent(data.qrSvg)}"
@@ -356,7 +356,7 @@
 							{#if Number(r.qty) === 0}
 								<span class="text-muted-foreground">0</span>
 							{:else}
-								<span class={Number(r.qty) > 0 ? 'text-ok' : 'text-warn'}>{signed(r.qty)}</span>
+								<span>{signed(r.qty)}</span>
 							{/if}
 						{:else if col.key === 'balance'}
 							{qty(r.balance, uom)}
@@ -446,7 +446,7 @@
 							{:else if col.key === 'actions'}
 								<span class="inline-flex gap-3">
 									<ActionLink onclick={() => openTest(r)}>EDIT</ActionLink>
-									<ActionLink danger onclick={() => removeTest(r)}>DELETE</ActionLink>
+									<ActionLink onclick={() => removeTest(r)}>DELETE</ActionLink>
 								</span>
 							{:else}
 								{@const v = r[col.key as 'testName' | 'value' | 'notes' | 'testedByName']}

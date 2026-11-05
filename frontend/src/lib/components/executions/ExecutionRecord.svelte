@@ -132,7 +132,8 @@
 							<span class="truncate">{r.name ?? '—'}</span>
 							{#if r.clocked_in}<Badge
 									variant="outline"
-									class="border-info/50 bg-info-muted font-mono tracking-wider text-info">IN</Badge
+									class="border-dotted border-foreground font-mono tracking-wider text-foreground"
+									>IN</Badge
 								>{/if}
 						</span>
 					{:else if col.key === 'ops'}
@@ -192,7 +193,7 @@
 						data-pswp
 						href={attachmentUrl(a.id)}
 						data-pswp-caption={a.note ?? a.filename}
-						class="shrink-0 rounded-md border border-border"
+						class="shrink-0 border border-border"
 						aria-label={`Enlarge ${a.filename}`}
 					>
 						<img
@@ -211,7 +212,7 @@
 					>
 				{/if}
 				<div class="min-w-0 flex-1 font-mono text-xs text-muted-foreground">
-					{#if a.kind === 'closeout'}<span class="text-ok">CLOSEOUT</span> ·{/if}
+					{#if a.kind === 'closeout'}<span class="font-semibold">CLOSEOUT</span> ·{/if}
 					{a.uploaded_by ?? ''}
 					<Timestamp value={a.created_at} />
 					{#if a.note}<div class="font-sans text-xs text-foreground">{a.note}</div>{/if}

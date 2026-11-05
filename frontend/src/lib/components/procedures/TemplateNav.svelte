@@ -77,10 +77,7 @@
 				>
 			</DetailRow>
 			<DetailRow label="Status"
-				><State
-					value={p.status}
-					tone={p.status === 'draft' ? 'warn' : p.status === 'obsolete' ? 'error' : 'ok'}
-				/></DetailRow
+				><State value={p.status} tone={p.status === 'obsolete' ? 'muted' : 'default'} /></DetailRow
 			>
 			<DetailRow label="Version">
 				{#if current}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ActionLink } from '#lib/components/opal/index.js';
 	// One OP: a card with a header bar (number, title, what is exceptional, claim, count) over
 	// its steps. An OP without sub-steps is its own single step and shows that step's body
 	// directly, with its stamp in place of the count.
@@ -87,7 +88,7 @@
 
 {#if op.is_ad_hoc && op.redline}
 	<a
-		class="mb-px flex h-7 items-center gap-2 rounded-md border border-warn/50 bg-warn-muted px-3 font-mono text-xs text-warn hover:underline"
+		class="mb-px flex h-7 items-center gap-2 border border-dotted border-foreground bg-background px-3 font-mono text-xs hover:underline"
 		href={`/issues/${op.redline.issue_id}`}
 		title="Open the authorizing NC">REDLINE · {op.redline.issue_number} · {op.redline.title}</a
 	>
@@ -101,7 +102,7 @@
 	class={cn(
 		// clip, not hidden: rounds the corners without becoming a scroll container,
 		// which would stop the title bars from sticking.
-		'overflow-clip rounded-lg border border-border bg-card',
+		'overflow-clip border border-border bg-card',
 		op.is_ad_hoc && 'border-warn/50'
 	)}
 >
@@ -222,7 +223,7 @@
 					role="presentation"
 					onclick={(e) => e.stopPropagation()}
 					onkeydown={(e) => e.stopPropagation()}
-					><Button size="xs" variant="outline" onclick={() => ctl.actions.redline?.(op)}
+					><Button size="sm" variant="outline" onclick={() => ctl.actions.redline?.(op)}
 						>+ REDLINE</Button
 					></span
 				>
@@ -231,10 +232,7 @@
 				<StepStamp step={op.step} />
 			{:else if ctl.mode === 'execute'}
 				<span
-					class={cn(
-						'shrink-0 font-mono text-xs tabular-nums',
-						terminal ? 'text-ok' : 'text-muted-foreground'
-					)}
+					class="shrink-0 font-mono text-xs text-muted-foreground tabular-nums"
 					title="Steps complete">{op.progress.done}/{op.progress.total}</span
 				>
 			{/if}
@@ -275,10 +273,8 @@
 			{/each}
 			{#if au}
 				<div class="border-t border-border bg-muted/20 px-3 py-1">
-					<Button
-						size="xs"
-						variant="ghost"
-						onclick={() => au.addStep(op, op.steps[op.steps.length - 1] ?? op.step)}>+ STEP</Button
+					<ActionLink onclick={() => au.addStep(op, op.steps[op.steps.length - 1] ?? op.step)}
+						>+ STEP</ActionLink
 					>
 				</div>
 			{/if}
@@ -288,13 +284,14 @@
 					{#if deletable}
 						<div class="flex items-center gap-2">
 							<Button
-								size="xs"
-								variant={deleting ? 'destructive' : 'outline'}
+								size="sm"
+								variant={deleting ? 'default' : 'outline'}
+								class={deleting ? 'bg-error-fill text-error-on shadow-key hover:bg-error-fill' : ''}
 								onclick={() => (deleting ? ctl.actions.deleteRedline?.(op) : (deleting = true))}
 								>{deleting ? 'CONFIRM DELETE' : 'DELETE REDLINE'}</Button
 							>
 							{#if deleting}
-								<Button size="xs" variant="ghost" onclick={() => (deleting = false)}>CANCEL</Button>
+								<ActionLink onclick={() => (deleting = false)}>CANCEL</ActionLink>
 							{/if}
 						</div>
 					{/if}

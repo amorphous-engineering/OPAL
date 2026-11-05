@@ -91,7 +91,7 @@
 								<span class="min-w-0 flex-1 truncate">{f.name}</span>
 								<span class="text-muted-foreground">{fileSize(f.size)}</span>
 								<Button
-									size="icon-xs"
+									size="icon-sm"
 									variant="ghost"
 									aria-label={`Remove ${f.name}`}
 									onclick={() =>
@@ -136,7 +136,7 @@
 										data-pswp
 										href={attachmentUrl(f.id)}
 										data-pswp-caption={f.filename}
-										class="block rounded-md border border-border"
+										class="block border border-border"
 										aria-label={`Enlarge ${f.filename}`}
 									>
 										<img

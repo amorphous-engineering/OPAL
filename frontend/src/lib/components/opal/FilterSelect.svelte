@@ -2,6 +2,7 @@
 	// A select bound to one URL parameter. The first option ("All x") is the unfiltered state.
 	import { page } from '$app/state';
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
+	import { cn } from '#lib/utils.js';
 	import { setQuery } from './listquery.js';
 
 	let {
@@ -38,9 +39,8 @@
 </script>
 
 <NativeSelect.Root
-	size="sm"
 	aria-label={label}
-	class={className}
+	class={cn('[&>select]:border-solid', className)}
 	{value}
 	onchange={(e) => change(e.currentTarget.value)}
 >

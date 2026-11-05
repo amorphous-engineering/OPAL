@@ -90,7 +90,7 @@
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label class="label" for="line-part">Part</Label>
 				{#if line}
-					<div class="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-xs">
+					<div class="flex h-8 items-center gap-2 border border-border px-2.5 text-xs">
 						<span class="font-mono text-info">{line.partInternalPn}</span>
 						<span class="truncate">{line.partName}</span>
 					</div>

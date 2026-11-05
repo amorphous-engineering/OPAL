@@ -29,15 +29,14 @@ export const SEVERITIES: { value: RiskSeverity; label: string }[] = [
 export const severityOf = riskSeverityFor;
 
 export const severityTone: Record<RiskSeverity, Tone> = {
-	low: 'ok',
+	low: 'default',
 	medium: 'warn',
 	high: 'error'
 };
 
-/** Disposition colour: only exceptional or settled states carry a tone. */
+/** Disposition colour: a realized risk is the alarm; everything else reads by its word. */
 export function dispositionTone(d: string): Tone {
 	if (d === 'realized') return 'error';
-	if (d === 'accepted') return 'ok';
 	if (d === 'closed') return 'muted';
 	return 'default';
 }

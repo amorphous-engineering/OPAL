@@ -1,4 +1,7 @@
-/** Functional state colour. Only exceptional or actionable states get a tone. */
+/**
+ * Functional state colour. Only exceptional or actionable states get a tone: nothing is lit when
+ * things are normal. Green is a check that passed, never a lifecycle state.
+ */
 export type Tone = 'ok' | 'warn' | 'error' | 'info' | 'muted' | 'default';
 
 export const toneText: Record<Tone, string> = {
@@ -22,11 +25,11 @@ export const toneBox: Record<Tone, string> = {
 /** Common domain states → tone. Unknown states stay neutral. */
 const STATE_TONES: Record<string, Tone> = {
 	// lifecycle / completion
-	completed: 'ok',
+	completed: 'default',
 	signed_off: 'ok',
 	closed: 'muted',
-	active: 'ok',
-	received: 'ok',
+	active: 'default',
+	received: 'default',
 	passed: 'ok',
 	pass: 'ok',
 	// in flight
@@ -36,7 +39,7 @@ const STATE_TONES: Record<string, Tone> = {
 	submitted: 'info',
 	ordered: 'info',
 	awaiting_signoff: 'warn',
-	partial: 'warn',
+	partial: 'default',
 	draft: 'muted',
 	pending: 'muted',
 	skipped: 'muted',
@@ -45,9 +48,9 @@ const STATE_TONES: Record<string, Tone> = {
 	void: 'muted',
 	closed_short: 'muted',
 	// trouble
-	on_hold: 'warn',
-	blocked: 'warn',
-	open: 'warn',
+	on_hold: 'error',
+	blocked: 'error',
+	open: 'default',
 	failed: 'error',
 	fail: 'error',
 	critical: 'error',

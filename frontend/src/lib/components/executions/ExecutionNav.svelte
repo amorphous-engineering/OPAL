@@ -83,11 +83,8 @@
 													: 'text-warn'
 										)}>{word}</span
 									>{/if}
-								<span
-									class={cn(
-										'shrink-0 font-mono text-xs tabular-nums',
-										done && op.status !== 'skipped' ? 'text-ok' : 'text-muted-foreground'
-									)}>{op.progress.done}/{op.progress.total}</span
+								<span class="shrink-0 font-mono text-xs text-muted-foreground tabular-nums"
+									>{op.progress.done}/{op.progress.total}</span
 								>
 							</button>
 							<!-- Outside the row button: the chips are a button of their own. -->

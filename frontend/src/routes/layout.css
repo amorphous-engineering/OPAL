@@ -120,12 +120,11 @@
 	--k2-shadow: 2px 2px 0 #666666;
 }
 
-/* State tints: the state colour at low opacity over whatever is beneath. */
+/* State tints: only the risk matrix, where the band is the information. Anywhere else, fill or line. */
 :root {
 	--ok-muted: color-mix(in oklab, var(--ok) 12%, transparent);
 	--warn-muted: color-mix(in oklab, var(--warn) 14%, transparent);
 	--error-muted: color-mix(in oklab, var(--error) 12%, transparent);
-	--info-muted: color-mix(in oklab, var(--info) 12%, transparent);
 }
 
 @theme inline {
@@ -164,7 +163,6 @@
 	--color-error: var(--error);
 	--color-error-muted: var(--error-muted);
 	--color-info: var(--info);
-	--color-info-muted: var(--info-muted);
 	--color-warn-fill: var(--warn-fill);
 	--color-warn-on: var(--warn-on);
 	--color-error-fill: var(--error-fill);
@@ -276,10 +274,18 @@
 
 	/* Hard shadow: a key you can press. */
 	[data-slot='button'].bg-primary {
-		@apply shadow-key active:shadow-none disabled:shadow-none aria-disabled:shadow-none;
+		@apply shadow-key active:shadow-none;
 	}
 	[data-slot='button'].border-border {
-		@apply shadow-key2 active:shadow-none disabled:shadow-none aria-disabled:shadow-none;
+		@apply shadow-key2 active:shadow-none;
+	}
+	/* Inert: flat and readable. Half-lit blue goes first in glare and reads as maybe. */
+	[data-slot='button']:is(.bg-primary, .border-border):is(:disabled, [aria-disabled='true']) {
+		@apply border-transparent bg-muted text-foreground opacity-100 shadow-none;
+	}
+	/* Black fill: you are here. The active choice of a toggle is not the primary action. */
+	[data-slot='button'][aria-pressed='true'] {
+		@apply border-foreground bg-foreground text-background shadow-none hover:bg-foreground hover:text-background;
 	}
 
 	/* Dashed: not committed yet. Search and filters are not part of a record. */
@@ -310,6 +316,11 @@
 	[data-slot='popover-content'],
 	[data-slot='dialog-content'] {
 		@apply border border-foreground;
+	}
+
+	/* Vendored badges set 10px type. */
+	[data-slot='badge'] {
+		@apply text-xs;
 	}
 
 	/* Corners the radius tokens cannot reach: rounded-full and rounded-[4px]. */

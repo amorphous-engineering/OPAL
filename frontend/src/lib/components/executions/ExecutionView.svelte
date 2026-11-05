@@ -238,12 +238,7 @@
 			<!-- On DOCUMENT the tab bar and the first OP card share an edge (no gap, square
 			     joint), so a pinned OP title bar sits flush under the tabs. -->
 			<div class={cn('flex min-h-0 min-w-0 flex-col', tab === 'document' ? 'gap-0' : 'gap-3')}>
-				<TabStrip
-					{tabs}
-					value={tab}
-					onchange={setTab}
-					class={cn('shrink-0', tab === 'document' && 'rounded-b-none')}
-				>
+				<TabStrip {tabs} value={tab} onchange={setTab} class="shrink-0">
 					{#snippet end()}
 						{#if tab === 'document'}
 							<button

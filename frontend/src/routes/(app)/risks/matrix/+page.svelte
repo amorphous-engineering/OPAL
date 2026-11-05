@@ -98,12 +98,12 @@
 													)}>{cur}</a
 												>
 											{:else}
-												<span class="font-mono text-xs text-muted-foreground/60">{p * i}</span>
+												<span class="font-mono text-xs text-muted-foreground">{p * i}</span>
 											{/if}
 											{#if res}
 												<a
 													href={live(`residual_probability=${p}&residual_impact=${i}`)}
-													class="rounded-sm border border-foreground/50 px-1 font-mono text-xs leading-4 hover:bg-background/60"
+													class="border border-foreground px-1 font-mono text-xs leading-4 hover:bg-background/60"
 													>{res}</a
 												>
 											{/if}
@@ -117,15 +117,14 @@
 				<p class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
 					{#each SEVERITIES as s (s.value)}
 						<span class="flex items-center gap-1.5">
-							<span
-								class={cn('inline-block size-3 rounded-sm border border-border', cellTone[s.value])}
+							<span class={cn('inline-block size-3 border border-border', cellTone[s.value])}
 							></span>
 							{s.label}
 						</span>
 					{/each}
 					<span class="flex items-center gap-1.5"
 						><span class="font-semibold">N</span> current ·
-						<span class="border border-foreground/50 px-1">N</span> residual target</span
+						<span class="border border-foreground px-1">N</span> residual target</span
 					>
 				</p>
 			</div>

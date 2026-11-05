@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
+		ActionLink,
 		confirm,
 		DataTable,
 		Section,
@@ -10,7 +11,6 @@
 		toastError,
 		type Column
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { opal } from '#lib/api.js';
 
 	type AuthSession = Awaited<ReturnType<typeof opal.auth.sessions.list>>['items'][number];
@@ -74,7 +74,7 @@
 <Section title="Sessions" count={loaded ? sessions.length : undefined}>
 	{#snippet actions()}
 		{#if others > 0}
-			<Button variant="ghost" size="xs" onclick={revokeOthers}>SIGN OUT OTHERS</Button>
+			<ActionLink onclick={revokeOthers}>SIGN OUT OTHERS</ActionLink>
 		{/if}
 	{/snippet}
 	<DataTable rows={sessions} {columns} loading={!loaded} emptyLabel="SESSIONS" dense>
@@ -92,9 +92,7 @@
 			{:else if col.key === 'ipAddress'}
 				{s.ipAddress ?? '—'}
 			{:else if !s.current}
-				<Button variant="ghost" size="xs" class="text-destructive" onclick={() => revoke(s)}
-					>REVOKE</Button
-				>
+				<ActionLink onclick={() => revoke(s)}>REVOKE</ActionLink>
 			{/if}
 		{/snippet}
 	</DataTable>

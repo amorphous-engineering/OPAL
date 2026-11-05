@@ -13,7 +13,7 @@
 	const groupActive = (g: (typeof NAV)[number]) => g.items.some((i) => isActive(path, i.href));
 
 	const trigger =
-		'inline-flex h-7 items-center gap-1 rounded-md border border-transparent px-2 font-mono text-xs font-medium tracking-wider uppercase hover:bg-accent data-[state=open]:bg-accent';
+		'inline-flex h-7 items-center gap-1 border border-transparent px-2 font-mono text-xs font-medium tracking-wider uppercase hover:bg-accent data-[state=open]:bg-accent';
 	// You are here.
 	const here =
 		'border-foreground bg-foreground text-background hover:bg-foreground data-[state=open]:bg-foreground';

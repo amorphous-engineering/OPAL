@@ -9,12 +9,12 @@ export const TICKET_LABEL: Record<TicketState, string> = {
 	done: 'DONE'
 };
 
-/** An open issue is not an alarm; what it holds is. So only a finished one gets a colour. */
+/** An open issue is not an alarm; what it holds is. A state word needs no colour here. */
 const TICKET_TONE: Record<TicketState, Tone> = {
 	pending: 'default',
 	in_work: 'default',
 	in_review: 'default',
-	done: 'ok'
+	done: 'default'
 };
 
 export function ticketLabel(state: string): string {
@@ -45,8 +45,7 @@ export const CONTAINMENT_OPTION: Record<string, string> = {
 };
 
 export function priorityTone(p: string): Tone {
-	if (p === 'critical' || p === 'high') return 'error';
-	if (p === 'low') return 'muted';
+	if (p === 'critical') return 'error';
 	return 'default';
 }
 

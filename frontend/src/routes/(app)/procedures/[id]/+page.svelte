@@ -133,7 +133,7 @@
 				{/if}
 				<State
 					value={p.status}
-					tone={p.status === 'draft' ? 'warn' : p.status === 'obsolete' ? 'error' : 'ok'}
+					tone={p.status === 'obsolete' ? 'muted' : 'default'}
 					badge={p.status !== 'released'}
 				/>
 			{/snippet}
@@ -177,10 +177,10 @@
 		</div>
 	{:else if editing}
 		<div
-			class="flex shrink-0 flex-wrap items-baseline gap-x-3 border-b border-warn/50 bg-warn-muted px-4 py-1.5 font-mono text-xs"
+			class="flex shrink-0 flex-wrap items-baseline gap-x-3 border-b border-dashed border-foreground bg-background px-4 py-1.5 font-mono text-xs"
 			role="status"
 		>
-			<span class="font-medium text-warn">DRAFT</span>
+			<span class="font-semibold">DRAFT</span>
 			{#if currentVersion}
 				<span class="text-muted-foreground"
 					>v{currentVersion.versionNumber} RELEASED · DRAFT {unpublished

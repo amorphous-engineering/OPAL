@@ -95,9 +95,7 @@
 		<FilterDate param="from" label="From" max={to || undefined} />
 		<FilterDate param="to" label="To" min={from || undefined} />
 		{#if record && entity}
-			<div
-				class="flex h-7 items-center gap-2 rounded-md border border-border px-2 font-mono text-xs"
-			>
+			<div class="flex h-7 items-center gap-2 border border-border px-2 font-mono text-xs">
 				<span class="text-muted-foreground uppercase">Record</span>
 				<span>{recordEntry?.recordLabel ?? recordEntry?.entityLabel ?? entity}</span>
 				<button
@@ -108,8 +106,10 @@
 			</div>
 		{/if}
 		{#snippet end()}
-			<button type="button" class="font-mono text-xs text-info hover:underline" onclick={toggleAll}
-				>{allOpen ? 'COLLAPSE ALL' : 'EXPAND ALL'}</button
+			<button
+				type="button"
+				class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+				onclick={toggleAll}>{allOpen ? 'COLLAPSE ALL' : 'EXPAND ALL'}</button
 			>
 		{/snippet}
 	</FilterBar>
@@ -118,7 +118,10 @@
 		<EmptyLine label="AUDIT ENTRIES">
 			{#snippet action()}
 				{#if filtered}
-					<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a
+					<a
+						href={page.url.pathname}
+						class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+						>CLEAR FILTERS</a
 					>
 				{/if}
 			{/snippet}

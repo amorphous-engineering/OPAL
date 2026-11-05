@@ -45,7 +45,7 @@
 		</Dialog.Header>
 		<form class="grid grid-cols-1 gap-3" onsubmit={reserve}>
 			<FormField label="Tier" for="rv-tier" required>
-				<NativeSelect.Root id="rv-tier" size="sm" class="w-full" bind:value={tier} required>
+				<NativeSelect.Root id="rv-tier" class="w-full" bind:value={tier} required>
 					<NativeSelect.Option value="">Select tier</NativeSelect.Option>
 					{#each tiers as t (t.level)}
 						<NativeSelect.Option value={String(t.level)}

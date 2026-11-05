@@ -2,6 +2,7 @@
 	import { goto, refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
+		ActionLink,
 		Avatar,
 		DataTable,
 		DetailRow,
@@ -198,7 +199,7 @@
 	{/if}
 	<Section title="Roles" count={roles.length}>
 		{#snippet actions()}
-			{#if isAdmin}<Button size="xs" variant="outline" onclick={() => (creating = !creating)}
+			{#if isAdmin}<Button size="sm" variant="outline" onclick={() => (creating = !creating)}
 					>+ NEW ROLE</Button
 				>{/if}
 		{/snippet}
@@ -272,7 +273,7 @@
 				{#if selected.isSystem}
 					<span class="font-mono text-xs tracking-wider text-muted-foreground">SYSTEM</span>
 				{:else if isAdmin}
-					<Button size="xs" variant="destructive" onclick={remove}>DELETE</Button>
+					<ActionLink onclick={remove}>DELETE</ActionLink>
 				{/if}
 			{/snippet}
 			{#if isAdmin}
@@ -295,7 +296,7 @@
 						</DetailRow>
 					</DetailTable>
 					<div class="flex border-t border-border px-3 py-1.5">
-						<Button type="submit" size="xs" class="flex-1" disabled={busy || !dirty || !name.trim()}
+						<Button type="submit" size="sm" class="flex-1" disabled={busy || !dirty || !name.trim()}
 							>SAVE</Button
 						>
 					</div>

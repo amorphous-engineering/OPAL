@@ -200,10 +200,8 @@
 										/></td
 									>
 									<td class="px-3 py-1 text-right"
-										><ActionLink
-											danger
-											title={`Remove line ${i + 1}`}
-											onclick={() => rows.splice(i, 1)}>REMOVE</ActionLink
+										><ActionLink title={`Remove line ${i + 1}`} onclick={() => rows.splice(i, 1)}
+											>REMOVE</ActionLink
 										></td
 									>
 								</tr>

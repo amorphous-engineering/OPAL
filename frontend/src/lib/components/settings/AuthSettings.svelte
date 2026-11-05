@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { refreshAll } from '$app/navigation';
 	import {
+		ActionLink,
 		DetailRow,
 		DetailTable,
 		Section,
@@ -228,7 +229,7 @@
 	</Section>
 	<Section title="Provider discovery">
 		{#snippet actions()}
-			<Button variant="ghost" size="xs" disabled={testing} onclick={test}>TEST DISCOVERY</Button>
+			<ActionLink disabled={testing} onclick={test}>TEST DISCOVERY</ActionLink>
 		{/snippet}
 		{#if discovery}
 			<div class="border-b border-border px-3 py-2">

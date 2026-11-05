@@ -18,8 +18,8 @@
 			<div class="flex items-center gap-1" role="group" aria-label="Theme">
 				{#each modes as m (m.value)}
 					<Button
-						size="xs"
-						variant={userPrefersMode.current === m.value ? 'default' : 'outline'}
+						size="sm"
+						variant="outline"
 						aria-pressed={userPrefersMode.current === m.value}
 						onclick={() => setMode(m.value)}>{m.label}</Button
 					>
@@ -31,8 +31,8 @@
 			<div class="flex items-center gap-1" role="group" aria-label="Step text">
 				{#each STEP_TEXT_SIZES as s (s)}
 					<Button
-						size="xs"
-						variant={stepText.value === s ? 'default' : 'outline'}
+						size="sm"
+						variant="outline"
 						aria-pressed={stepText.value === s}
 						onclick={() => setStepText(s)}>{s} PX</Button
 					>

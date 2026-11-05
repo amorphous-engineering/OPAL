@@ -209,9 +209,9 @@
 						<span class="mr-2 hidden font-mono text-xs text-muted-foreground md:inline"
 							>a approve · s skip · e edit · j/k move · esc abandon</span
 						>
-						<Button size="xs" onclick={() => disposition('approve')}>APPROVE</Button>
-						<Button size="xs" variant="outline" onclick={() => disposition('skip')}>SKIP</Button>
-						<Button size="xs" variant="outline" onclick={edit}>EDIT</Button>
+						<Button size="sm" onclick={() => disposition('approve')}>APPROVE</Button>
+						<Button size="sm" variant="outline" onclick={() => disposition('skip')}>SKIP</Button>
+						<Button size="sm" variant="outline" onclick={edit}>EDIT</Button>
 					{/snippet}
 					<DetailTable>
 						<DetailRow label="Title">{current.title}</DetailRow>
@@ -241,9 +241,7 @@
 								</span>
 							{:else}<span class="text-muted-foreground">Level-0 root</span>{/if}
 						</DetailRow>
-						<DetailRow label="Statement"
-							><span class="font-mono text-sm">{current.statement}</span></DetailRow
-						>
+						<DetailRow label="Statement"><span>{current.statement}</span></DetailRow>
 						<DetailRow label="Rationale" value={current.rationale} />
 						<DetailRow
 							label="Verification"

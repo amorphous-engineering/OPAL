@@ -82,13 +82,13 @@
 								>
 							{/if}
 							{#if i.changed.includes('statement')}<Redline segments={i.diff.statement} />{:else}
-								<span class="font-mono text-xs">{i.statement}</span>
+								<span>{i.statement}</span>
 							{/if}
 							{#if i.changed.includes('rationale')}<Redline segments={i.diff.rationale} />{/if}
 							{#if i.changed.includes('title')}<Redline segments={i.diff.title} />{/if}
 						</div>
 					{:else}
-						<span class="font-mono text-xs">{i.statement}</span>
+						<span>{i.statement}</span>
 					{/if}
 				{:else}
 					<State value={i.lifecycleState} tone={lifecycleTone(i.lifecycleState)} />

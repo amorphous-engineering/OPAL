@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ActionLink } from '#lib/components/opal/index.js';
 	// Step parts as a table: quantity, usage and notes edit in place; a part
 	// picker adds a line. Consume lines are drawn from stock at execution;
 	// tooling is recorded, not deducted.
@@ -43,7 +44,7 @@
 		{#if !adding}
 			<PartPicker exclude={[...taken]} onselect={open}>
 				{#snippet trigger({ props })}
-					<Button {...props} size="xs" variant="outline">+ PART</Button>
+					<Button {...props} size="sm" variant="outline">+ PART</Button>
 				{/snippet}
 			</PartPicker>
 		{/if}
@@ -86,7 +87,6 @@
 						</td>
 						<td class="px-2 py-1">
 							<NativeSelect
-								size="sm"
 								aria-label={`Usage of ${k.part_name}`}
 								value={k.usage_type}
 								onchange={(e) => au.editKit(step, k.id!, { usage_type: e.currentTarget.value })}
@@ -105,11 +105,9 @@
 							/>
 						</td>
 						<td class="px-2 py-1 text-right">
-							<Button
-								size="xs"
-								variant="ghost"
+							<ActionLink
 								aria-label={`Remove ${k.part_name}`}
-								onclick={() => au.removeKit(step, k.id!)}>REMOVE</Button
+								onclick={() => au.removeKit(step, k.id!)}>REMOVE</ActionLink
 							>
 						</td>
 					</tr>
@@ -118,10 +116,7 @@
 		</table>
 	{/if}
 	{#if adding && chosen}
-		<form
-			class="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/30 p-2"
-			onsubmit={add}
-		>
+		<form class="grid grid-cols-1 gap-2 border border-border bg-muted/30 p-2" onsubmit={add}>
 			<div class="flex flex-wrap items-center gap-2 text-xs">
 				<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
 				<span class="min-w-0 truncate">{chosen.name}</span>
@@ -141,13 +136,13 @@
 					bind:value={qty}
 					required
 				/>
-				<NativeSelect size="sm" aria-label="Usage" bind:value={usage}>
+				<NativeSelect aria-label="Usage" bind:value={usage}>
 					<option value="consume">CONSUME</option>
 					<option value="tooling">TOOLING</option>
 				</NativeSelect>
 				<Input class="h-7 w-48" aria-label="Notes" placeholder="Notes" bind:value={notes} />
-				<Button type="submit" size="xs" disabled={!(Number(qty) > 0)}>ADD</Button>
-				<Button type="button" size="xs" variant="outline" onclick={() => (adding = false)}
+				<Button type="submit" size="sm" disabled={!(Number(qty) > 0)}>ADD</Button>
+				<Button type="button" size="sm" variant="outline" onclick={() => (adding = false)}
 					>CANCEL</Button
 				>
 			</div>

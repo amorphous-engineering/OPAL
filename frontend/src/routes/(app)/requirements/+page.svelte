@@ -268,12 +268,14 @@
 		<div class="flex">
 			<Button
 				size="sm"
-				variant={view === 'tree' ? 'default' : 'outline'}
+				variant="outline"
+				aria-pressed={view === 'tree'}
 				onclick={() => setParam('view', null)}>TREE</Button
 			>
 			<Button
 				size="sm"
-				variant={view === 'list' ? 'default' : 'outline'}
+				variant="outline"
+				aria-pressed={view === 'list'}
 				onclick={() => setParam('view', 'list')}>LIST</Button
 			>
 		</div>
@@ -290,8 +292,7 @@
 				variant="outline"
 				href={data.projectId
 					? `/requirements/queue?project=${data.projectId}`
-					: '/requirements/queue'}
-				class="text-ok">BASELINE QUEUE · {data.tree.queueCount}</Button
+					: '/requirements/queue'}>BASELINE QUEUE · {data.tree.queueCount}</Button
 			>
 		{/if}
 		{#if session.user?.is_admin && unimported.length}
@@ -465,7 +466,7 @@
 								<td class="px-3 py-1">
 									<button
 										type="button"
-										class="block w-full text-left font-mono text-xs"
+										class="block w-full text-left text-xs"
 										aria-expanded={open}
 										onclick={(e) => {
 											e.stopPropagation();

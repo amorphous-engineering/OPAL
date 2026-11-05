@@ -21,17 +21,14 @@
 
 {#if fields.length}
 	<section
-		class="overflow-hidden rounded-lg border border-border bg-muted/40 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+		class="overflow-hidden border border-border bg-muted/40 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
 		aria-label="Captured data"
 	>
 		<header class="flex h-8 items-center gap-3 border-b border-border px-3 sm:col-span-full">
 			<span class="label text-foreground">Data</span>
 			{#if required.length}
-				<span
-					class={cn(
-						'font-mono text-xs',
-						recorded === required.length ? 'text-ok' : 'text-muted-foreground'
-					)}>{recorded}/{required.length} required recorded</span
+				<span class={cn('font-mono text-xs', 'text-muted-foreground')}
+					>{recorded}/{required.length} required recorded</span
 				>
 			{:else}
 				<span class="font-mono text-xs text-muted-foreground"
@@ -63,7 +60,7 @@
 										data-pswp
 										href={attachmentUrl(pid)}
 										data-pswp-caption={f.label ?? f.name}
-										class="block aspect-[4/3] h-16 overflow-hidden rounded-md border border-border bg-muted"
+										class="block aspect-[4/3] h-16 overflow-hidden border border-border bg-muted"
 										aria-label={`Enlarge ${f.label ?? f.name}`}
 									>
 										<img
@@ -88,7 +85,7 @@
 						{#if outOfSpec(f, raw)}
 							<Badge
 								variant="outline"
-								class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+								class="ml-2 border-error-fill bg-error-fill font-mono tracking-wider text-error-on"
 								>OUT OF SPEC</Badge
 							>
 						{/if}

@@ -35,7 +35,7 @@
 
 <a
 	href="#main"
-	class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-1.5 focus:text-sm"
+	class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:border focus:border-border focus:bg-background focus:px-3 focus:py-1.5 focus:text-sm"
 	>Skip to content</a
 >
 
@@ -45,7 +45,7 @@
 	{#if data.demoActive}
 		<div
 			role="status"
-			class="flex h-7 items-center gap-3 border-b border-warn/40 bg-warn-muted px-3 font-mono text-xs tracking-wider text-warn uppercase"
+			class="flex h-7 items-center gap-3 border-b border-warn-fill bg-warn-fill px-3 font-mono text-xs font-medium tracking-wider text-warn-on uppercase"
 		>
 			<span>Demo database active — changes are deleted on exit</span>
 			{#if data.user.is_admin}<a class="underline" href="/settings">Exit demo</a>{/if}
@@ -66,7 +66,7 @@
 			onclick={() => (paletteOpen = true)}
 		>
 			<span class="truncate">Search</span>
-			<span class="ml-auto hidden sm:inline"><Kbd>⌘K</Kbd></span>
+			<span class="ml-auto hidden sm:inline"><Kbd class="text-xs">⌘K</Kbd></span>
 		</Button>
 		<div class="flex shrink-0 items-center gap-2">
 			<NotificationBell initialUnread={data.unreadCount} />

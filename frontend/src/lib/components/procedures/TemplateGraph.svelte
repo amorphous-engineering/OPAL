@@ -76,7 +76,7 @@
 </script>
 
 <OpGraph
-	class="h-full min-h-80 rounded-lg border border-border"
+	class="h-full min-h-80 border border-border"
 	{nodes}
 	{edges}
 	{editable}
@@ -86,6 +86,6 @@
 	ondisconnect={disconnect}
 >
 	{#snippet nodeActions(node)}
-		<Button size="xs" variant="outline" onclick={() => onopen(node.id)}>OPEN</Button>
+		<Button size="sm" variant="outline" onclick={() => onopen(node.id)}>OPEN</Button>
 	{/snippet}
 </OpGraph>

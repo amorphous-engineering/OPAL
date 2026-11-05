@@ -150,7 +150,7 @@
 									></td
 								>
 								<td></td>
-								<td class="px-3 py-1.5 font-mono whitespace-nowrap text-ok tabular-nums"
+								<td class="px-3 py-1.5 font-mono whitespace-nowrap tabular-nums"
 									>{qtyUnit(r.quantity, l.unitOfMeasure)}</td
 								>
 								<td class="px-3 py-1.5">{r.location}</td>
