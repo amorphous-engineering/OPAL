@@ -12,11 +12,18 @@
 	import ScrollIcon from 'phosphor-svelte/lib/Scroll';
 	import SignOutIcon from 'phosphor-svelte/lib/SignOut';
 	import SunIcon from 'phosphor-svelte/lib/Sun';
+	import TextAaIcon from 'phosphor-svelte/lib/TextAa';
 	import UserCircleIcon from 'phosphor-svelte/lib/UserCircle';
 	import UsersIcon from 'phosphor-svelte/lib/Users';
 	import { Avatar, toastError } from '#lib/components/opal/index.js';
 	import { session } from '#lib/session.svelte.js';
 	import { NAV_SHORTCUTS } from '#lib/shortcuts.js';
+	import {
+		STEP_TEXT_SIZES,
+		setStepText,
+		stepText,
+		type StepTextSize
+	} from '#lib/stepText.svelte.js';
 
 	const user = $derived(session.user);
 	const shortcut = (href: string) => NAV_SHORTCUTS.find((s) => s.href === href)?.keys;
@@ -137,6 +144,22 @@
 								<span class="text-muted-foreground">{localZone}</span></DropdownMenu.RadioItem
 							>
 							<DropdownMenu.RadioItem value="utc"><GlobeIcon />UTC</DropdownMenu.RadioItem>
+						</DropdownMenu.RadioGroup>
+					</DropdownMenu.SubContent>
+				</DropdownMenu.Sub>
+				<DropdownMenu.Sub>
+					<DropdownMenu.SubTrigger>
+						<TextAaIcon />Step text
+						<span class="flex-1 text-right text-muted-foreground">{stepText.value} px</span>
+					</DropdownMenu.SubTrigger>
+					<DropdownMenu.SubContent class="w-32">
+						<DropdownMenu.RadioGroup
+							value={String(stepText.value)}
+							onValueChange={(v) => setStepText(Number(v) as StepTextSize)}
+						>
+							{#each STEP_TEXT_SIZES as s (s)}
+								<DropdownMenu.RadioItem value={String(s)}>{s} px</DropdownMenu.RadioItem>
+							{/each}
 						</DropdownMenu.RadioGroup>
 					</DropdownMenu.SubContent>
 				</DropdownMenu.Sub>
