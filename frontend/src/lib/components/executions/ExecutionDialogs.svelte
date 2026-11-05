@@ -1,5 +1,5 @@
 <script lang="ts">
-	// All modal forms of the execution document, driven by store.dialog.
+	// The modal forms still on the execution document, driven by store.panel.
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import EditForm from './EditForm.svelte';

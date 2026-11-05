@@ -15,7 +15,7 @@
  */
 import type { ExecutionComment } from '@opal/shared';
 import { api, opal } from '#lib/api.js';
-import { confirm, toast, toastError } from '#lib/components/opal/index.js';
+import { toast, toastError } from '#lib/components/opal/index.js';
 import {
 	isActionable,
 	isTerminal,
@@ -548,14 +548,14 @@ export class ExecutionStore implements DocController {
 			}
 		},
 		sign: async (step, slot) => {
-			// Slot 0 is the old COMPLETE: it carries the captured data and its validation.
+			// Slot 0 is COMPLETE: it carries the captured data and its validation.
 			let data: Record<string, unknown> | undefined;
 			if (slot === 0) {
 				const errs = this.validate(step);
 				this.errors[step.order] = errs;
 				if (Object.keys(errs).length) {
 					toast.error(
-						'Cannot sign off: ' +
+						'Cannot complete: ' +
 							Object.entries(errs)
 								.map(([k, v]) => {
 									const f = step.data_schema?.fields?.find((x) => x.name === k);
@@ -567,13 +567,6 @@ export class ExecutionStore implements DocController {
 				}
 				data = this.payload(step);
 			}
-			// Signing is the commitment: it cannot be undone, so it is always confirmed.
-			const ok = await confirm({
-				title: 'Are you sure you want to sign off this step?',
-				body: 'Ensure all instructions have been completed and all data collects have been entered correctly. This cannot be reverted.',
-				action: 'SIGN'
-			});
-			if (!ok) return;
 			try {
 				await opal.execution.sign({
 					id: this.id,
@@ -593,7 +586,7 @@ export class ExecutionStore implements DocController {
 					this.advanceFrom(step.order);
 				}
 			} catch (e) {
-				toastError(e, 'Failed to sign off step');
+				toastError(e, 'Step not recorded');
 				await this.refresh();
 			}
 		},
@@ -601,15 +594,6 @@ export class ExecutionStore implements DocController {
 		raiseIssue: (step) => (this.panel = { kind: 'issue', step }),
 		redline: (op) => (this.panel = { kind: 'redline', op }),
 		deleteRedline: async (op) => {
-			if (
-				!(await confirm({
-					title: `Delete redline OP ${op.number}?`,
-					body: 'The redline and its sub-steps are removed. Allowed only while no step has started.',
-					action: 'DELETE',
-					destructive: true
-				}))
-			)
-				return;
 			try {
 				await opal.execution.deleteRedline({ id: this.id, redlineId: op.step.execution_id! });
 				await this.changed();

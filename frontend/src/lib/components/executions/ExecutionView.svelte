@@ -50,7 +50,7 @@
 			if (issueId && opOrder && store.active) {
 				const hit = store.allOps.find((o) => o.order === opOrder);
 				if (hit?.open_ncs.some((n) => n.id === issueId)) {
-					store.dialog = { kind: 'redline', op: hit, issueId };
+					store.panel = { kind: 'redline', op: hit, issueId };
 				} else if (hit) {
 					toastError(new Error('That issue is not an open NC on this OP'));
 				}

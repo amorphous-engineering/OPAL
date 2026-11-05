@@ -272,6 +272,16 @@ export function isBlocked(step: DocStep): boolean {
 	);
 }
 
+/**
+ * Routine work: a leaf with only the default slot. One action, COMPLETE, and no signature row. A role
+ * on the slot, a second slot, or a slot on an OP with sub-steps is an author's declared sign-off.
+ */
+export function isRoutine(step: DocStep, op: DocOp): boolean {
+	const leaf = step.order !== op.order || op.steps.length === 0;
+	const slots = step.signoffs ?? [];
+	return leaf && slots.length === 1 && !slots[0].role;
+}
+
 /** Can the operator work this step right now? */
 export function isActionable(step: DocStep): boolean {
 	return (step.status === 'pending' || step.status === 'in_progress') && !isBlocked(step);
