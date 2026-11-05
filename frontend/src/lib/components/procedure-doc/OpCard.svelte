@@ -224,7 +224,7 @@
 			{/if}
 			{#if leaf || op.status === 'skipped'}
 				<StepStamp step={op.step} />
-			{:else}
+			{:else if ctl.mode === 'execute'}
 				<span
 					class={cn(
 						'shrink-0 font-mono text-xs tabular-nums',
