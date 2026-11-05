@@ -1013,7 +1013,8 @@ export const execution = {
 		input: z.object({ ...zStepPath, reason: z.string().trim().min(1).max(2000) }),
 		output: zSignResult,
 		access: 'signed-in',
-		mcp: true
+		mcp: true,
+		humanOnly: true
 	}),
 	addNote: op({
 		name: 'execution.addNote',
