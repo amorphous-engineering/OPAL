@@ -36,7 +36,8 @@ function audit(
 	entityId: number,
 	action: 'create' | 'update' | 'delete',
 	before: unknown,
-	after: unknown
+	after: unknown,
+	reason: string | null
 ) {
 	if (UNAUDITED.has(getTableName(table))) return;
 	ctx.db
@@ -51,7 +52,8 @@ function audit(
 			actorUserId: ctx.actor.kind === 'user' || ctx.actor.kind === 'token' ? ctx.actor.userId : null,
 			actorTokenId: ctx.actor.kind === 'token' ? ctx.actor.tokenId : null,
 			before: redact(before),
-			after: redact(after)
+			after: redact(after),
+			reason
 		})
 		.run();
 	publish({
@@ -75,7 +77,16 @@ function refsOf(row: unknown): Record<string, number> {
 /** Insert values: everything except the timestamps, which the helper sets. */
 type Values<T extends AnyTable> = Omit<T['$inferInsert'], 'createdAt' | 'updatedAt'>;
 
-export function insert<T extends AnyTable>(ctx: Ctx, table: T, values: Values<T>): T['$inferSelect'] {
+/**
+ * `reason` is the why of a correction or a strike. It lands on the audit row beside the old and
+ * new values, so a page can show who changed what and why without a second copy of the fact.
+ */
+export function insert<T extends AnyTable>(
+	ctx: Ctx,
+	table: T,
+	values: Values<T>,
+	reason?: string
+): T['$inferSelect'] {
 	const ts = now();
 	const row = ctx.db
 		.insert(table)
@@ -86,7 +97,7 @@ export function insert<T extends AnyTable>(ctx: Ctx, table: T, values: Values<T>
 		} as T['$inferInsert'])
 		.returning()
 		.get() as T['$inferSelect'];
-	audit(ctx, table, row.id, 'create', null, row);
+	audit(ctx, table, row.id, 'create', null, row, reason ?? null);
 	return row;
 }
 
@@ -94,7 +105,8 @@ export function update<T extends AnyTable>(
 	ctx: Ctx,
 	table: T,
 	id: number,
-	patch: Partial<Values<T>>
+	patch: Partial<Values<T>>,
+	reason?: string
 ): T['$inferSelect'] {
 	const before = ctx.db.select().from(table).where(eq(table.id, id)).get();
 	if (!before) throw new Error(`update: ${getTableName(table)} ${id} does not exist`);
@@ -104,14 +116,14 @@ export function update<T extends AnyTable>(
 		.where(eq(table.id, id))
 		.returning()
 		.get() as T['$inferSelect'];
-	audit(ctx, table, id, 'update', before, after);
+	audit(ctx, table, id, 'update', before, after, reason ?? null);
 	return after;
 }
 
 /** Hard delete. Only for rows nothing references (drafts); see CLAUDE.md rule 6. */
-export function remove<T extends AnyTable>(ctx: Ctx, table: T, id: number): void {
+export function remove<T extends AnyTable>(ctx: Ctx, table: T, id: number, reason?: string): void {
 	const before = ctx.db.select().from(table).where(eq(table.id, id)).get();
 	if (!before) return;
 	ctx.db.delete(table).where(eq(table.id, id)).run();
-	audit(ctx, table, id, 'delete', before, null);
+	audit(ctx, table, id, 'delete', before, null, reason ?? null);
 }

@@ -52,7 +52,7 @@ describe('status workflow', () => {
 		expect((await setStatus(s, po.id, 'ordered')).status).toBe(409);
 	});
 
-	test('draft, ordered, on hold and cancelled follow the allowed transitions; cancelled is final', async () => {
+	test('placing, holding, resuming and cancelling follow the allowed transitions; there is no way back to draft', async () => {
 		const s = await setup();
 		const p = makePart(s.db);
 		const po = await mkPo(s, { lines: [{ partId: p.id, qtyOrdered: '2' }] });
@@ -60,23 +60,21 @@ describe('status workflow', () => {
 		expect(placed.body.orderedAt).not.toBeNull();
 		expect((await setStatus(s, po.id, 'on_hold')).body.status).toBe('on_hold');
 		expect((await setStatus(s, po.id, 'ordered')).body.status).toBe('ordered');
-		const back = await setStatus(s, po.id, 'draft');
-		expect(back.body.status).toBe('draft');
-		expect(back.body.orderedAt).toBeNull();
 		expect((await setStatus(s, po.id, 'cancelled')).body.status).toBe('cancelled');
 		expect((await setStatus(s, po.id, 'ordered')).status).toBe(409);
 	});
 
-	test('received and partial cannot be set by hand', async () => {
+	test('status cannot be written through the header patch', async () => {
 		const s = await setup();
 		const po = await orderedPo(s, makePart(s.db).id, '1');
-		expect((await setStatus(s, po.id, 'received')).status).toBe(409);
-		expect((await setStatus(s, po.id, 'partial')).status).toBe(409);
+		const r = await s.call('PATCH', `/purchases/${po.id}`, { status: 'received' });
+		expect(r.status).toBe(200);
+		expect(r.body.status).toBe('ordered');
 	});
 
 	test('a cancelled order can only have its notes edited', async () => {
 		const s = await setup();
-		const po = await mkPo(s);
+		const po = await orderedPo(s, makePart(s.db).id, '1');
 		await setStatus(s, po.id, 'cancelled');
 		expect((await s.call('PATCH', `/purchases/${po.id}`, { notes: 'why' })).status).toBe(200);
 		expect((await s.call('PATCH', `/purchases/${po.id}`, { destination: 'X' })).status).toBe(409);
@@ -84,7 +82,7 @@ describe('status workflow', () => {
 
 	test('an order is overdue when its target date has passed and it is not received or cancelled', async () => {
 		const s = await setup();
-		const late = await mkPo(s, { targetDate: '2020-01-01' });
+		const late = await orderedPo(s, makePart(s.db).id, '1', { targetDate: '2020-01-01' });
 		expect(late.isOverdue).toBe(true);
 		await setStatus(s, late.id, 'cancelled');
 		expect((await s.call('GET', `/purchases/${late.id}`)).body.isOverdue).toBe(false);
@@ -93,7 +91,7 @@ describe('status workflow', () => {
 });
 
 describe('lines', () => {
-	test('lines can be added, edited and removed while the order is open', async () => {
+	test('lines can be added, edited and removed while the order is a draft', async () => {
 		const s = await setup();
 		const p = makePart(s.db);
 		const po = await mkPo(s);
@@ -113,24 +111,23 @@ describe('lines', () => {
 		expect((await s.call('GET', `/purchases/${po.id}`)).body.lines).toEqual([]);
 	});
 
-	test('quantity cannot drop below what arrived, cost and deletion lock, and lowering to the received quantity completes the order', async () => {
+	test('quantity cannot drop below what arrived, cost locks after receipt, and amending down to the received quantity completes the order', async () => {
 		const s = await setup();
 		const p = makePart(s.db);
 		const po = await orderedPo(s, p.id, '10');
 		const lineId = po.lines[0].id;
 		await recv(s, po.id, [{ lineId, quantity: '4', location: 'A' }]);
-		const base = `/purchases/${po.id}/lines/${lineId}`;
-		expect((await s.call('PATCH', base, { qtyOrdered: '3' })).status).toBe(422);
-		expect((await s.call('PATCH', base, { unitCost: '9' })).status).toBe(422);
-		expect((await s.call('DELETE', base)).status).toBe(409);
-		expect((await s.call('PATCH', base, { qtyOrdered: '4' })).status).toBe(200);
+		const base = `/purchases/${po.id}/lines/${lineId}/amend`;
+		expect((await s.call('POST', base, { qtyOrdered: '3', reason: 'r' })).status).toBe(422);
+		expect((await s.call('POST', base, { unitCost: '9', reason: 'r' })).status).toBe(422);
+		expect((await s.call('POST', base, { qtyOrdered: '4', reason: 'r' })).status).toBe(200);
 		expect((await s.call('GET', `/purchases/${po.id}`)).body.status).toBe('received');
 	});
 
 	test('lines of a cancelled order cannot change', async () => {
 		const s = await setup();
 		const p = makePart(s.db);
-		const po = await mkPo(s, { lines: [{ partId: p.id, qtyOrdered: '1' }] });
+		const po = await orderedPo(s, p.id, '1');
 		await setStatus(s, po.id, 'cancelled');
 		expect((await s.call('POST', `/purchases/${po.id}/lines`, { partId: p.id, qtyOrdered: '1' })).status).toBe(409);
 	});
@@ -372,7 +369,7 @@ describe('expense ledger', () => {
 
 	test('no charge can be added to a cancelled order', async () => {
 		const s = await setup();
-		const po = await mkPo(s);
+		const po = await orderedPo(s, makePart(s.db).id, '1');
 		await setStatus(s, po.id, 'cancelled');
 		expect((await s.call('POST', `/purchases/${po.id}/expenses`, { kind: 'fee', amount: '1' })).status).toBe(409);
 	});

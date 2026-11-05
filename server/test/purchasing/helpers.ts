@@ -16,7 +16,13 @@ export async function mkPo(s: S, body: Record<string, unknown> = {}) {
 	return r.body;
 }
 
-export const setStatus = (s: S, id: number, status: string) => s.call('PATCH', `/purchases/${id}`, { status });
+/** The hand acts, by the status they lead to: place, resume, hold, cancel. */
+export async function setStatus(s: S, id: number, status: 'ordered' | 'on_hold' | 'cancelled') {
+	if (status === 'on_hold') return s.call('POST', `/purchases/${id}/hold`, {});
+	if (status === 'cancelled') return s.call('POST', `/purchases/${id}/cancel`, { reason: 'test' });
+	const now = (await s.call('GET', `/purchases/${id}`)).body.status;
+	return s.call('POST', `/purchases/${id}/${now === 'on_hold' ? 'resume' : 'place'}`, {});
+}
 
 export const recv = (s: S, id: number, lines: Record<string, unknown>[]) =>
 	s.call('POST', `/purchases/${id}/receive`, { lines });

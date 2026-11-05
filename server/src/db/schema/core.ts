@@ -72,7 +72,9 @@ export const auditLog = sqliteTable(
 			onDelete: 'set null'
 		}),
 		before: text('before', { mode: 'json' }),
-		after: text('after', { mode: 'json' })
+		after: text('after', { mode: 'json' }),
+		/** Why, for a correction or a strike. Absent on routine writes. */
+		reason: text('reason')
 	},
 	(t) => [
 		index('audit_entity_idx').on(t.entity, t.entityId),

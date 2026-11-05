@@ -2,27 +2,44 @@
  * Purchasing: suppliers, their catalog numbers for parts, and purchase orders with lines,
  * receiving and an expense ledger.
  *
- * Status workflow (legacy): draft -> ordered -> partial -> received. `partial` and `received`
- * follow from receiving and are never set by hand. `on_hold` and `cancelled` are set by hand.
- * Money is a decimal string with at most 4 places on the wire.
+ * A purchase order is a form. Draft is pencil. Placing is the commit moment: after it, lines are
+ * never edited or removed. A line is amended or struck with a reason, and the old value stays on
+ * the page (see RECORDS.md). `ordered`, `partial` and `received` follow from receiving. Hand acts
+ * are place, hold, resume, cancel and close short. Money is a decimal string with at most 4 places.
  */
 import { z } from 'zod';
 import { op, zId, zOk, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
 
-export const PURCHASE_STATUSES = ['draft', 'ordered', 'partial', 'received', 'cancelled', 'on_hold'] as const;
+export const PURCHASE_STATUSES = [
+	'draft',
+	'ordered',
+	'partial',
+	'received',
+	'cancelled',
+	'on_hold',
+	'closed_short'
+] as const;
 export type PurchaseStatus = (typeof PURCHASE_STATUSES)[number];
-/** Statuses in which header and lines can still change. */
+/** Statuses in which something is still outstanding or pencil. */
 export const PURCHASE_OPEN_STATUSES = ['draft', 'ordered', 'partial', 'on_hold'] as const;
-/** Hand-driven status changes. */
+/** Statuses of a placed order that still waits for goods. Lines can be added, amended, struck. */
+export const PURCHASE_LIVE_STATUSES = ['ordered', 'partial'] as const;
+/** Terminal statuses. */
+export const PURCHASE_FINAL_STATUSES = ['received', 'cancelled', 'closed_short'] as const;
+/**
+ * Hand-driven status changes, each through its own operation: place (draft -> ordered), hold,
+ * resume (on_hold -> ordered), cancel and close short. There is no way back to draft.
+ */
 export const PURCHASE_TRANSITIONS: Record<PurchaseStatus, readonly PurchaseStatus[]> = {
-	draft: ['ordered', 'cancelled'],
-	ordered: ['draft', 'on_hold', 'cancelled'],
-	partial: ['on_hold', 'cancelled'],
-	on_hold: ['ordered', 'cancelled'],
+	draft: ['ordered'],
+	ordered: ['on_hold', 'cancelled'],
+	partial: ['on_hold', 'closed_short'],
+	on_hold: ['ordered', 'cancelled', 'closed_short'],
 	received: [],
-	cancelled: []
+	cancelled: [],
+	closed_short: []
 };
 export const PURCHASE_CHARGE_KINDS = ['shipping', 'tax', 'duty', 'fee', 'other'] as const;
 export const PURCHASE_EXPENSE_KINDS = ['receipt', ...PURCHASE_CHARGE_KINDS] as const;
@@ -170,8 +187,11 @@ export const zPurchaseLine = z.object({
 	lotRequired: z.boolean(),
 	autoSerial: z.boolean(),
 	qtyOrdered: zQty,
+	/** Struck by CANCEL LINE: the outstanding quantity at that moment. Never received stock. */
+	qtyCancelled: zQty,
 	/** Sum of the receive moves that point at this line. */
 	qtyReceived: zQty,
+	/** Ordered, less what arrived and what was struck. */
 	qtyOutstanding: zQty,
 	unitCost: zPurchaseMoney.nullable(),
 	destination: z.string().nullable(),
@@ -179,6 +199,25 @@ export const zPurchaseLine = z.object({
 	isComplete: z.boolean()
 });
 export type PurchaseLine = z.infer<typeof zPurchaseLine>;
+
+/**
+ * One change to a placed order, read from the audit log: a header field, a line field, a line
+ * added, a line struck. `old` and `new` are display values (a quantity or money as a decimal).
+ */
+export const zPurchaseChange = z.object({
+	at: zTimestamp,
+	userName: z.string().nullable(),
+	scope: z.enum(['order', 'line']),
+	lineId: z.number().int().nullable(),
+	partInternalPn: z.string().nullable(),
+	unitOfMeasure: z.string().nullable(),
+	/** `line` for an added line, else the field name. */
+	field: z.string(),
+	old: z.string().nullable(),
+	new: z.string().nullable(),
+	reason: z.string().nullable()
+});
+export type PurchaseChange = z.infer<typeof zPurchaseChange>;
 
 export const zPurchase = z.object({
 	id: z.number().int(),
@@ -195,6 +234,10 @@ export const zPurchase = z.object({
 	isOverdue: z.boolean(),
 	notes: z.string().nullable(),
 	lines: z.array(zPurchaseLine),
+	/** Everything that changed after placing, oldest first. Empty for a draft. */
+	changes: z.array(zPurchaseChange),
+	/** Reason given when the order was cancelled or closed short. */
+	closedReason: z.string().nullable(),
 	totalLines: z.number().int(),
 	totalCost: zPurchaseMoney.nullable(),
 	createdAt: zTimestamp,
@@ -254,8 +297,21 @@ export const zPurchaseUpdate = z.object({
 	supplierReference: zText(100).nullable().optional(),
 	targetDate: zDate.nullable().optional(),
 	destination: zText(255).nullable().optional(),
-	notes: z.string().nullable().optional(),
-	status: z.enum(PURCHASE_STATUSES).optional()
+	notes: z.string().nullable().optional()
+});
+
+/** A strike or an amendment is a correction on the record: the reason is required. */
+export const zReason = z.string().trim().min(1, 'Give a reason').max(500);
+
+export const zPurchaseLineAmend = z.object({
+	id: zId,
+	lineId: zId,
+	/** Never below what arrived and what was struck. */
+	qtyOrdered: zQty.optional(),
+	/** Locked once the line has a receipt. */
+	unitCost: zPurchaseMoney.nullable().optional(),
+	destination: zText(255).nullable().optional(),
+	reason: zReason
 });
 
 export const zPurchaseLineUpdate = z.object({
@@ -488,7 +544,8 @@ const orders = {
 		name: 'purchasing.orders.update',
 		method: 'PATCH',
 		path: '/purchases/:id',
-		summary: 'Edit the header of a purchase order or move it through its status workflow.',
+		summary:
+			'Edit the header of a draft. After placing, only supplier reference, target date, destination and notes change, and each change is logged.',
 		input: zPurchaseUpdate,
 		output: zPurchase,
 		access: 'signed-in',
@@ -498,7 +555,7 @@ const orders = {
 		name: 'purchasing.orders.addLine',
 		method: 'POST',
 		path: '/purchases/:id/lines',
-		summary: 'Add a line to an open purchase order. The part must be active.',
+		summary: 'Add a line to a draft, or to a placed order that waits for goods. The part must be active.',
 		input: zPurchaseLineInput.extend({ id: zId }),
 		output: zPurchaseLine,
 		access: 'signed-in',
@@ -508,7 +565,7 @@ const orders = {
 		name: 'purchasing.orders.updateLine',
 		method: 'PATCH',
 		path: '/purchases/:id/lines/:lineId',
-		summary: 'Change a line. Quantity cannot drop below what arrived. Unit cost locks after receipt.',
+		summary: 'Change a line of a draft. A placed order changes a line only through amendLine.',
 		input: zPurchaseLineUpdate,
 		output: zPurchaseLine,
 		access: 'signed-in',
@@ -518,11 +575,110 @@ const orders = {
 		name: 'purchasing.orders.removeLine',
 		method: 'DELETE',
 		path: '/purchases/:id/lines/:lineId',
-		summary: 'Remove a line nothing has been received against.',
+		summary: 'Remove a line of a draft. A placed order strikes a line through cancelLine.',
 		input: z.object({ id: zId, lineId: zId }),
 		output: zOk,
 		access: 'signed-in',
 		mcp: true
+	}),
+	place: op({
+		name: 'purchasing.orders.place',
+		method: 'POST',
+		path: '/purchases/:id/place',
+		summary: 'Place a draft with the supplier. Lines and supplier stop being editable. Human only.',
+		input: z.object({ id: zId }),
+		output: zPurchase,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	hold: op({
+		name: 'purchasing.orders.hold',
+		method: 'POST',
+		path: '/purchases/:id/hold',
+		summary: 'Put a placed order on hold. It takes no deliveries until resumed. Human only.',
+		input: z.object({ id: zId, reason: zReason.optional() }),
+		output: zPurchase,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	resume: op({
+		name: 'purchasing.orders.resume',
+		method: 'POST',
+		path: '/purchases/:id/resume',
+		summary: 'Take an order off hold. Human only.',
+		input: z.object({ id: zId }),
+		output: zPurchase,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	cancel: op({
+		name: 'purchasing.orders.cancel',
+		method: 'POST',
+		path: '/purchases/:id/cancel',
+		summary: 'Strike a placed order that received nothing. A reason is required. Human only.',
+		input: z.object({ id: zId, reason: zReason }),
+		output: zPurchase,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	closeShort: op({
+		name: 'purchasing.orders.closeShort',
+		method: 'POST',
+		path: '/purchases/:id/close-short',
+		summary: 'Close a partly received order with its shortfall. A reason is required. Human only.',
+		input: z.object({ id: zId, reason: zReason }),
+		output: zPurchase,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	discard: op({
+		name: 'purchasing.orders.discard',
+		method: 'DELETE',
+		path: '/purchases/:id',
+		summary: 'Delete a draft. Nothing refers to a draft. A placed order is cancelled, never deleted.',
+		input: z.object({ id: zId }),
+		output: zOk,
+		access: 'signed-in',
+		mcp: true
+	}),
+	copy: op({
+		name: 'purchasing.orders.copy',
+		method: 'POST',
+		path: '/purchases/:id/copy',
+		summary: 'File a new draft with the same supplier and lines as a received, closed short or cancelled order.',
+		input: z.object({ id: zId }),
+		output: zPurchase,
+		access: 'signed-in',
+		mcp: true
+	}),
+	amendLine: op({
+		name: 'purchasing.orders.amendLine',
+		method: 'POST',
+		path: '/purchases/:id/lines/:lineId/amend',
+		summary:
+			'Correct quantity, unit cost or destination of a line on a placed order. The old value stays on the page with the reason. Human only.',
+		input: zPurchaseLineAmend,
+		output: zPurchaseLine,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	cancelLine: op({
+		name: 'purchasing.orders.cancelLine',
+		method: 'POST',
+		path: '/purchases/:id/lines/:lineId/cancel',
+		summary:
+			'Strike the outstanding quantity of a line. What arrived stays received. The line stays on the page. Human only.',
+		input: z.object({ id: zId, lineId: zId, reason: zReason }),
+		output: zPurchaseLine,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
 	}),
 	receive: op({
 		name: 'purchasing.orders.receive',
