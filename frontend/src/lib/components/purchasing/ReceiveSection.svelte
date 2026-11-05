@@ -22,7 +22,6 @@
 		/** The order accepts receipts now. */
 		receiving: boolean;
 		locations?: string[];
-		/** The header's RECEIVE button submits this form (`form` attribute). */
 		formId?: string;
 		onreceived: () => void | Promise<void>;
 	} = $props();
@@ -235,6 +234,7 @@
 			<ErrorBanner message={error} class="mx-3 mt-3" />
 			<div class="flex justify-end gap-2 p-3">
 				<Button type="button" variant="outline" onclick={fillAll}>FILL ALL</Button>
+				<Button type="submit">RECEIVE</Button>
 			</div>
 		{/if}
 	</form>

@@ -231,19 +231,17 @@
 		{#if po.isOverdue}<State value="overdue" tone="error" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
-		<EditToggle />
 		{#if draft}
 			<Button
 				disabled={po.lines.length === 0}
 				title={po.lines.length === 0 ? 'No lines' : undefined}
 				onclick={place}>PLACE ORDER</Button
 			>
-		{:else if canReceive}
-			<Button type="submit" form="po-receive">RECEIVE</Button>
 		{:else if held}
 			<Button onclick={() => run(() => opal.purchasing.orders.resume({ id: po.id }))}>RESUME</Button
 			>
 		{/if}
+		<EditToggle />
 		<MoreMenu items={more} />
 	{/snippet}
 </PageHeader>
