@@ -645,7 +645,7 @@ export function addLine(ctx: Ctx, i: LineInput & { id: number }): PurchaseLine {
 }
 
 const penciled = (p: PurchaseRow) =>
-	conflict('line_locked', `Lines of a ${p.status} order are amended or cancelled, not edited or removed`);
+	conflict('line_locked', `Lines of an order that has been placed are amended or cancelled, not edited or removed`);
 
 /** Draft only. A placed order amends (amendLine) or strikes (cancelLine). */
 export function updateLine(

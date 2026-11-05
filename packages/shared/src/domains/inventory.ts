@@ -276,7 +276,11 @@ export const zStockCreate = z.object({
 /** Lot, serial and expiry are facts of the record: they change only through a correction. */
 export const zStockUpdate = z.object({
 	id: zId,
-	alias: z.string().trim().max(100).nullable().optional()
+	alias: z.string().trim().max(100).nullable().optional(),
+	/** These change only through `correct`, with a reason. Refuse them here, so a stale caller is not told it worked. */
+	lotNumber: z.never().optional(),
+	serialNumber: z.never().optional(),
+	expirationDate: z.never().optional()
 });
 
 export const zStockCorrect = z.object({
