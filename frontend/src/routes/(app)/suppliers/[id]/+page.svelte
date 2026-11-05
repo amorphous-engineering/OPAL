@@ -219,7 +219,7 @@
 	<SupplierCatalog
 		supplierId={s.id}
 		entries={data.parts}
-		{editing}
+		editMode={editing}
 		onchanged={() => invalidateAll()}
 	/>
 </div>

@@ -26,13 +26,13 @@
 	let {
 		supplierId,
 		entries,
-		editing = false,
+		editMode = false,
 		onchanged
 	}: {
 		supplierId: number;
 		entries: SupplierPartRow[];
 		/** Edit mode: add, edit and remove exist only here. */
-		editing?: boolean;
+		editMode?: boolean;
 		onchanged: () => void | Promise<void>;
 	} = $props();
 
@@ -117,19 +117,19 @@
 		{ key: 'notes', label: 'Notes' },
 		{ key: 'actions', label: '', align: 'right' }
 	];
-	const columns = $derived(editing ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
+	const columns = $derived(editMode ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
 </script>
 
 {#if entries.length === 0}
 	<EmptyLine
 		label="Parts supplied"
-		onadd={editing ? () => openDialog(null) : undefined}
+		onadd={editMode ? () => openDialog(null) : undefined}
 		addLabel="+ ADD PART"
 	/>
 {:else}
 	<Section title="PARTS SUPPLIED" count={entries.length}>
 		{#snippet actions()}
-			{#if editing}<ActionLink onclick={() => openDialog(null)}>+ ADD PART</ActionLink>{/if}
+			{#if editMode}<ActionLink onclick={() => openDialog(null)}>+ ADD PART</ActionLink>{/if}
 		{/snippet}
 		<DataTable rows={entries} {columns} emptyLabel="Parts supplied" key={(r) => r.id}>
 			{#snippet cell(r, col)}
