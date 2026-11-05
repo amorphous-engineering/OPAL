@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, rewrite]
   pull_request:
-    branches: [master]
+    branches: [master, rewrite]
 
 jobs:
   typescript:
