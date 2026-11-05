@@ -27,7 +27,7 @@
 	const overview = $derived(data.executions);
 
 	const sort = urlSort({ key: 'created', dir: 'desc' });
-	const status = $derived(page.url.searchParams.get('status') ?? 'active');
+	const status = $derived(page.url.searchParams.get('status') ?? 'all');
 	const counts = $derived({
 		cut: 0,
 		in_work: 0,
@@ -39,21 +39,21 @@
 	const FILTERS = ['q', 'procedure', 'project', 'mine', 'held'];
 	const filtered = $derived.by(() => {
 		void page.url.search;
-		return hasParams(FILTERS) || status !== 'active';
+		return hasParams(FILTERS) || status !== 'all';
 	});
 
 	const chips = $derived([
+		{
+			id: 'all',
+			label: 'All',
+			n: counts.cut + counts.in_work + counts.completed + counts.closed_short + counts.void
+		},
 		{ id: 'active', label: 'Active', n: counts.cut + counts.in_work },
 		{ id: 'cut', label: 'Cut', n: counts.cut },
 		{ id: 'in_work', label: 'In work', n: counts.in_work },
 		{ id: 'completed', label: 'Completed', n: counts.completed },
 		{ id: 'closed_short', label: 'Closed short', n: counts.closed_short },
-		{ id: 'void', label: 'Void', n: counts.void },
-		{
-			id: 'all',
-			label: 'All',
-			n: counts.cut + counts.in_work + counts.completed + counts.closed_short + counts.void
-		}
+		{ id: 'void', label: 'Void', n: counts.void }
 	]);
 
 	const columns: Column<ExecutionRow>[] = [
@@ -90,7 +90,7 @@
 						status === c.id && 'bg-primary text-primary-foreground hover:bg-primary'
 					)}
 					aria-pressed={status === c.id}
-					onclick={() => setQuery({ status: c.id === 'active' ? null : c.id })}
+					onclick={() => setQuery({ status: c.id === 'all' ? null : c.id })}
 				>
 					{c.label}<span class={status === c.id ? '' : 'text-muted-foreground'}>{c.n}</span>
 				</button>

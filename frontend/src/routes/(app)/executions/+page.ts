@@ -7,7 +7,7 @@ const PAGE_SIZE = 50;
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	const q = url.searchParams;
-	const status = q.get('status') ?? 'active';
+	const status = q.get('status') ?? 'all';
 	const client = opal.using(fetch);
 	const page = Math.max(1, Number(q.get('page') ?? 1) || 1);
 	const [executions, procedures, projects] = await Promise.all([

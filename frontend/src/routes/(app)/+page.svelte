@@ -74,7 +74,7 @@
 			value: o.executions.total,
 			sub: `${o.executions.flagged} blocked or overdue`,
 			tone: o.executions.flagged > 0 ? 'warn' : 'default',
-			href: '/executions'
+			href: '/executions?status=active'
 		},
 		{
 			label: 'Low stock',
