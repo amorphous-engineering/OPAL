@@ -386,11 +386,11 @@ describe('closing', () => {
 		const i = await raise();
 		await call('PATCH', `/issues/${i.id}`, { status: 'closed' });
 		as({ kind: 'token', userId: admin.id, isAdmin: true, tokenId: 1 });
-		expect((await call('PATCH', `/issues/${i.id}`, { status: 'open' })).status).toBe(403);
+		expect((await call('POST', `/issues/${i.id}/reopen`, { reason: 'found a gap' })).status).toBe(403);
 		as(plain);
-		expect((await call('PATCH', `/issues/${i.id}`, { status: 'open' })).status).toBe(403);
+		expect((await call('POST', `/issues/${i.id}/reopen`, { reason: 'found a gap' })).status).toBe(403);
 		as(admin);
-		expect((await call('PATCH', `/issues/${i.id}`, { status: 'open' })).status).toBe(200);
+		expect((await call('POST', `/issues/${i.id}/reopen`, { reason: 'found a gap' })).status).toBe(200);
 	});
 
 	test('reopening clears the close and review stamps and derives the state again', async () => {
@@ -400,7 +400,7 @@ describe('closing', () => {
 		await p('start');
 		await p('review');
 		await p('signoff');
-		const body = (await call('PATCH', `/issues/${i.id}`, { status: 'open' })).body;
+		const body = (await call('POST', `/issues/${i.id}/reopen`, { reason: 'found a gap' })).body;
 		expect(body.closedAt).toBeNull();
 		expect(body.closedBy).toBeNull();
 		expect(body.reviewRequestedAt).toBeNull();
@@ -411,7 +411,7 @@ describe('closing', () => {
 		const { raise, call } = await setup();
 		const i = await raise();
 		await call('PATCH', `/issues/${i.id}`, { status: 'closed' });
-		const body = (await call('PATCH', `/issues/${i.id}`, { status: 'open' })).body;
+		const body = (await call('POST', `/issues/${i.id}/reopen`, { reason: 'found a gap' })).body;
 		expect(body.ticketState).toBe('pending');
 	});
 
@@ -421,7 +421,7 @@ describe('closing', () => {
 		await sign(i.id);
 		await call('POST', `/issues/${i.id}/review`);
 		await call('POST', `/issues/${i.id}/signoff`);
-		const body = (await call('PATCH', `/issues/${i.id}`, { status: 'open' })).body;
+		const body = (await call('POST', `/issues/${i.id}/reopen`, { reason: 'found a gap' })).body;
 		expect(body.ticketState).toBe('in_work');
 	});
 });
@@ -712,7 +712,7 @@ describe('void', () => {
 		const comments = (await call('GET', `/issues/${i.id}/comments`)).body;
 		expect(comments[0].body).toBe('Voided: raised by mistake');
 		expect((await call('PATCH', `/issues/${i.id}`, { title: 'x' })).status).toBe(409);
-		expect((await call('PATCH', `/issues/${i.id}`, { status: 'open' })).status).toBe(409);
+		expect((await call('POST', `/issues/${i.id}/reopen`, { reason: 'x' })).status).toBe(409);
 		expect((await call('POST', `/issues/${i.id}/void`, { reason: 'again' })).status).toBe(409);
 		expect((await call('POST', `/issues/${i.id}/disposition`, { dispositionType: 'scrap', dispositionRationale: 'x' })).status).toBe(409);
 	});
@@ -933,5 +933,114 @@ describe('projects', () => {
 		const moved = await call('PATCH', `/issues/${a1.id}`, { projectId: b.id });
 		expect(moved.body).toMatchObject({ projectId: b.id, projectCode: 'B' });
 		expect(await ids(`?projectId=${b.id}`)).toHaveLength(2);
+	});
+});
+
+describe('no side doors around the disposition gate', () => {
+	const token = (u: { id: number }, isAdmin = false) =>
+		({ kind: 'token', userId: u.id, isAdmin, tokenId: 1 }) as const;
+
+	test('voiding an issue that holds work needs the issue.disposition gate', async () => {
+		const { raise, call, as, plain, db } = await setup();
+		const i = await raise({ containment: 'wo', executionId: 2 });
+		as(plain);
+		expect((await call('POST', `/issues/${i.id}/void`, { reason: 'mistake' })).status).toBe(403);
+		expect(holdingIssues(db, 2)).toHaveLength(1);
+	});
+
+	test('an API token cannot void an issue', async () => {
+		const { raise, call, as, admin } = await setup();
+		const i = await raise({ containment: 'wo' });
+		as(token(admin, true));
+		expect((await call('POST', `/issues/${i.id}/void`, { reason: 'mistake' })).status).toBe(403);
+	});
+
+	test('voiding an advisory issue needs no gate', async () => {
+		const { raise, call, as, plain } = await setup();
+		const i = await raise();
+		as(plain);
+		expect((await call('POST', `/issues/${i.id}/void`, { reason: 'duplicate' })).status).toBe(200);
+	});
+
+	test('an issue with a signed disposition cannot be voided', async () => {
+		const { raise, sign, call } = await setup();
+		const i = await raise({ containment: 'wo' });
+		await sign(i.id);
+		const r = await call('POST', `/issues/${i.id}/void`, { reason: 'changed my mind' });
+		expect(r.status).toBe(409);
+		expect((await call('GET', `/issues/${i.id}`)).body.status).toBe('open');
+	});
+
+	test('a done issue cannot be voided', async () => {
+		const { raise, call } = await setup();
+		const i = await raise();
+		await call('PATCH', `/issues/${i.id}`, { status: 'closed' });
+		expect((await call('POST', `/issues/${i.id}/void`, { reason: 'x' })).status).toBe(409);
+	});
+
+	test('narrowing containment on an issue that holds work needs the issue.disposition gate', async () => {
+		const { raise, call, as, plain, db } = await setup();
+		const i = await raise({ containment: 'wo', executionId: 2 });
+		as(plain);
+		const r = await call('POST', `/issues/${i.id}/containment`, {
+			containment: 'advisory',
+			note: 'harmless'
+		});
+		expect(r.status).toBe(403);
+		expect(holdingIssues(db, 2)).toHaveLength(1);
+	});
+
+	test('an API token cannot narrow a hold, but can widen one', async () => {
+		const { raise, call, as, admin } = await setup();
+		const i = await raise({ containment: 'step' });
+		as(token(admin, true));
+		const narrow = await call('POST', `/issues/${i.id}/containment`, {
+			containment: 'advisory',
+			note: 'harmless'
+		});
+		expect(narrow.status).toBe(403);
+		const widen = await call('POST', `/issues/${i.id}/containment`, { containment: 'wo' });
+		expect(widen.status).toBe(200);
+	});
+
+	test('anyone can widen containment, including from advisory', async () => {
+		const { raise, call, as, plain } = await setup();
+		const i = await raise();
+		as(plain);
+		const r = await call('POST', `/issues/${i.id}/containment`, { containment: 'op' });
+		expect(r.status).toBe(200);
+	});
+
+	test('reopening done work needs a reason and leaves the withdrawn sign-off in the comments', async () => {
+		const { raise, call } = await setup();
+		const i = await raise();
+		await call('PATCH', `/issues/${i.id}`, { status: 'closed' });
+		expect((await call('POST', `/issues/${i.id}/reopen`, { reason: ' ' })).status).toBe(422);
+		const r = await call('POST', `/issues/${i.id}/reopen`, { reason: 'fix did not hold' });
+		expect(r.body).toMatchObject({ status: 'open', closedAt: null, ticketState: 'pending' });
+		const comments = (await call('GET', `/issues/${i.id}/comments`)).body;
+		const note = comments.find((c: any) => c.body.startsWith('Reopened: '));
+		expect(note.body).toContain('fix did not hold');
+		expect(note.body).toContain('Sign-off by ABBY');
+	});
+
+	test('reopening is refused unless the issue is done', async () => {
+		const { raise, call } = await setup();
+		const i = await raise();
+		expect((await call('POST', `/issues/${i.id}/reopen`, { reason: 'x' })).status).toBe(409);
+	});
+
+	test('a reopened issue needs review and sign-off again', async () => {
+		const { raise, call } = await setup();
+		const i = await raise();
+		const p = (path: string) => call('POST', `/issues/${i.id}/${path}`);
+		await p('start');
+		await p('review');
+		await p('signoff');
+		await call('POST', `/issues/${i.id}/reopen`, { reason: 'again' });
+		expect((await p('signoff')).status).toBe(409);
+		expect((await call('GET', `/issues/${i.id}`)).body.ticketState).toBe('in_work');
+		await p('review');
+		expect((await p('signoff')).body.ticketState).toBe('done');
 	});
 });

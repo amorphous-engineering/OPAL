@@ -196,8 +196,8 @@ export const zIssueUpdate = z.object({
 	title: z.string().trim().min(1).max(255).optional(),
 	description: text,
 	issueType: z.enum(ISSUE_TYPES).optional(),
-	/** `closed` needs the issue.approve gate. `open` reopens a closed issue. */
-	status: z.enum(['open', 'closed']).optional(),
+	/** `closed` needs the issue.approve gate. A closed issue is reopened with `issues.reopen`. */
+	status: z.enum(['closed']).optional(),
 	priority: z.enum(ISSUE_PRIORITIES).optional(),
 	shouldBe: text,
 	actual: text,
@@ -324,6 +324,18 @@ export const issues = {
 		mcp: false,
 		humanOnly: true
 	}),
+	reopen: op({
+		name: 'issues.reopen',
+		method: 'POST',
+		path: '/issues/:id/reopen',
+		summary:
+			'Done back to work. Withdraws the sign-off, so the issue goes through review and sign-off again. The reason and the withdrawn sign-off are kept as a comment.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1) }),
+		output: zIssue,
+		access: 'issue.approve',
+		mcp: false,
+		humanOnly: true
+	}),
 	signDisposition: op({
 		name: 'issues.signDisposition',
 		method: 'POST',
@@ -344,7 +356,7 @@ export const issues = {
 		method: 'POST',
 		path: '/issues/:id/containment',
 		summary:
-			'Change the containment scope. Narrowing a hold needs a note. containmentStepId: absent keeps, null clears.',
+			'Change the containment scope. Widening is open to anyone. Narrowing releases a hold: it needs issue.disposition, a note and a signed-in person. containmentStepId: absent keeps, null clears.',
 		input: z.object({
 			id: zId,
 			containment: z.enum(CONTAINMENTS),
@@ -359,11 +371,13 @@ export const issues = {
 		name: 'issues.void',
 		method: 'POST',
 		path: '/issues/:id/void',
-		summary: 'Void an issue raised by mistake. Releases its holds. The reason is kept as a comment.',
+		summary:
+			'Strike an issue raised by mistake. Releases its holds, so an issue that holds work needs issue.disposition. A dispositioned or done issue cannot be voided. The reason is kept as a comment.',
 		input: z.object({ id: zId, reason: z.string().trim().min(1) }),
 		output: zIssue,
 		access: 'signed-in',
-		mcp: true
+		mcp: false,
+		humanOnly: true
 	}),
 	steps: op({
 		name: 'issues.steps',
