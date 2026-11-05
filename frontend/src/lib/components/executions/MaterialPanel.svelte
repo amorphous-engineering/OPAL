@@ -201,7 +201,7 @@
 											>{k.part_number}</a
 										></td
 									>
-									<td class="px-3 py-1.5">{k.part_name}</td>
+									<td class="min-w-48 px-3 py-1.5">{k.part_name}</td>
 									<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
 										>{qtyUnit(k.qty_required, k.uom)}</td
 									>
@@ -214,7 +214,7 @@
 									<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
 										>{qtyUnit(k.qty_consumed, k.uom)}</td
 									>
-									<td class="px-3 py-1.5">
+									<td class="max-w-64 px-3 py-1.5">
 										{#if canConsume && remaining(k) > 0}
 											<StockPicker
 												records={it?.available_locations.map((l) => ({
@@ -233,19 +233,19 @@
 									</td>
 									<td class="px-3 py-1.5">
 										{#if canConsume && remaining(k) > 0}
-											<Input
-												type="number"
-												min="0"
-												step="any"
-												class="h-7 w-24 font-mono"
-												aria-label={`Quantity of ${k.part_name}`}
-												value={pick[k.part_id]?.qty ?? ''}
-												oninput={(e) =>
-													(pick[k.part_id] = { ...pick[k.part_id], qty: e.currentTarget.value })}
-											/>
-											<span class="ml-1 font-mono text-xs text-muted-foreground"
-												>{(k.uom || 'ea').toUpperCase()}</span
-											>
+											<span class="flex items-center gap-1.5 whitespace-nowrap">
+												<Input
+													type="number"
+													min="0"
+													step="any"
+													class="h-7 w-16 font-mono"
+													aria-label={`Quantity of ${k.part_name}`}
+													value={pick[k.part_id]?.qty ?? ''}
+													oninput={(e) =>
+														(pick[k.part_id] = { ...pick[k.part_id], qty: e.currentTarget.value })}
+												/>
+												<span class="font-mono text-xs text-muted-foreground">{k.uom || 'ea'}</span>
+											</span>
 										{:else}<span class="text-muted-foreground">—</span>{/if}
 									</td>
 								</tr>
