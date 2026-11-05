@@ -1,6 +1,6 @@
 <script lang="ts">
-	// One step: a single dense line (number, title, who, evidence, state) that
-	// expands into its body. Expanded until complete; the host decides `open`.
+	// One step: a single dense line (number, title, what stops it, evidence, stamp) that expands
+	// into its body. The host decides `open`. Actions live in the body, not on the line.
 	// In author mode the title is a field and the line carries structure tools.
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import { cn } from '#lib/utils.js';
@@ -9,7 +9,6 @@
 	import StepBody from './StepBody.svelte';
 	import StepBadges from './StepBadges.svelte';
 	import StepStamp from './StepStamp.svelte';
-	import StepTitleActions from './StepTitleActions.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
 	import RowTools from './author/RowTools.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
@@ -119,7 +118,6 @@
 			<SaveBadge {step} quiet />
 			<RowTools {step} {op} isOp={false} />
 		{:else}
-			<StepTitleActions {step} />
 			<StepStamp {step} />
 		{/if}
 	</div>

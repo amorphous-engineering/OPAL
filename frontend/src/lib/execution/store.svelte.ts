@@ -8,9 +8,9 @@
  *  - Rows are never replaced under an operator: a refresh keeps the previous
  *    object for every OP and step whose data did not change, and data-capture
  *    drafts live here, outside the rows.
- *  - Expansion: everything is open until it is complete, held and waiting steps
- *    included. A step or OP collapses when it reaches a terminal status, here or
- *    remotely; otherwise the operator's choice is kept (persisted per execution).
+ *  - Expansion: only the current step of the current OP opens by default, and that
+ *    moves as the work does. Whatever the person opened stays open until it finishes
+ *    or they close it (persisted per execution). A step with values typed in stays open.
  *  - Presence is the explicit claim. Focus (keyboard cursor) is local only.
  */
 import type { ExecutionComment } from '@opal/shared';
@@ -54,7 +54,6 @@ function write(key: string, value: unknown) {
 
 /** The one form open on the page. It sits inline: nothing here covers the document. */
 export type OpenPanel =
-	| { kind: 'skip'; step: DocStep }
 	| { kind: 'issue'; step: DocStep }
 	| { kind: 'redline'; op: DocOp; issueId?: number }
 	| { kind: 'closeShort' }
@@ -91,7 +90,7 @@ export class ExecutionStore implements DocController {
 	constructor(id: number, viewerId: number | null) {
 		this.id = id;
 		this.viewerId = viewerId;
-		this.overrides = read(this.key('open'), {});
+		this.overrides = read(this.key('opened'), {});
 		this.drafts = read(this.key('draft'), {});
 	}
 
@@ -233,7 +232,7 @@ export class ExecutionStore implements DocController {
 			for (const s of op.steps) note(`step:${s.order}`, s.status);
 		}
 		this.statusByKey = seen;
-		write(this.key('open'), this.overrides);
+		write(this.key('opened'), this.overrides);
 
 		// Keep the previous object wherever nothing changed.
 		const mergeOps = (nu: DocOp[], old: DocOp[] | undefined): DocOp[] =>
@@ -268,18 +267,37 @@ export class ExecutionStore implements DocController {
 		}
 	}
 
-	/** The next thing to do: the focused step if it is actionable, else the first
-	 *  actionable step of the claimed OP, else the first actionable step. */
+	/** Rows that take work: a leaf OP, the sub-steps of an OP, and an OP waiting on its own sign-off. */
+	private workRows(ops: DocOp[]) {
+		return ops.flatMap((op) => {
+			if (!op.steps.length) return [{ op, step: op.step }];
+			const rows = op.steps.map((step) => ({ op, step }));
+			return op.step.status === 'awaiting_signoff' ? [...rows, { op, step: op.step }] : rows;
+		});
+	}
+
+	/**
+	 * The step that opens by default: the first this person can act on in the OP they claimed, else
+	 * in the document. With nothing to act on, the first unfinished one, which answers what is
+	 * stopping the work. Contingency work is optional, so it opens only once someone claims it.
+	 * Clicking around does not move this, so opening one step never closes another.
+	 */
+	openOrder = $derived.by(() => {
+		const doc = this.doc;
+		if (!doc?.instance.active) return null;
+		type Row = ReturnType<typeof this.workRows>[number];
+		const ready = (r: Row) => isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign);
+		const pick = (rows: Row[]) => rows.find(ready) ?? rows.find((r) => !isTerminal(r.step.status));
+		const claimed = this.workRows(this.allOps.filter((o) => o.order === this.claimedOrder));
+		return (pick(claimed) ?? pick(this.workRows(doc.ops)))?.step.order ?? null;
+	});
+
+	/** The one accent on the page: the focused step if it can be worked, else the step that opened. */
 	currentOrder = $derived.by(() => {
-		if (!this.doc) return null;
-		const rows = this.allOps.flatMap((op) =>
-			op.steps.length ? op.steps.map((step) => ({ op, step })) : [{ op, step: op.step }]
-		);
-		const focused = rows.find((r) => r.step.order === this.focusedOrder);
+		if (!this.doc?.instance.active) return null;
+		const focused = this.workRows(this.allOps).find((r) => r.step.order === this.focusedOrder);
 		if (focused && isActionable(focused.step)) return focused.step.order;
-		const claimed = rows.find((r) => r.op.order === this.claimedOrder && isActionable(r.step));
-		if (claimed) return claimed.step.order;
-		return rows.find((r) => isActionable(r.step))?.step.order ?? null;
+		return this.openOrder;
 	});
 
 	/** Focus mode: show only the OP selected in the sidebar, hide the rest. Remembered per browser. */
@@ -387,17 +405,26 @@ export class ExecutionStore implements DocController {
 
 	// ---------- controller: expansion & focus ----------
 
-	// Open until complete. Hosts pass `blocked` too; execution keeps held and waiting
-	// work open so it stays readable.
-	isOpen(key: string, terminal: boolean): boolean {
-		return this.overrides[key] ?? !terminal;
+	private defaultOpen(key: string): boolean {
+		const order = this.openOrder;
+		const hit = order === null ? undefined : this.findStep(order);
+		if (hit && (key === `step:${order}` || key === `op:${hit.op.order}`)) return true;
+		// Values typed into a step never close under the operator.
+		const [kind, id] = key.split(':');
+		if (kind === 'step') return !!this.drafts[Number(id)];
+		const op = this.allOps.find((o) => o.order === Number(id));
+		return !!op && [op.step, ...op.steps].some((s) => this.drafts[s.order]);
 	}
 
-	toggle(key: string, terminal: boolean) {
-		const next = !this.isOpen(key, terminal);
-		if (next === !terminal) delete this.overrides[key];
+	isOpen(key: string): boolean {
+		return this.overrides[key] ?? this.defaultOpen(key);
+	}
+
+	toggle(key: string) {
+		const next = !this.isOpen(key);
+		if (next === this.defaultOpen(key)) delete this.overrides[key];
 		else this.overrides[key] = next;
-		write(this.key('open'), this.overrides);
+		write(this.key('opened'), this.overrides);
 	}
 
 	setFocus(order: number) {
@@ -411,8 +438,10 @@ export class ExecutionStore implements DocController {
 		const { op, step } = hit;
 		// Focus mode: jumping selects the OP, which hides every other one.
 		if (this.focusMode) this.focusOp = op.order;
-		const opTerminal = isTerminal(op.status);
-		if (!this.isOpen(`op:${op.order}`, opTerminal)) this.toggle(`op:${op.order}`, opTerminal);
+		if (!this.isOpen(`op:${op.order}`)) this.toggle(`op:${op.order}`);
+		if (step.order !== op.order && !this.isOpen(`step:${step.order}`)) {
+			this.toggle(`step:${step.order}`);
+		}
 		this.focusedOrder = order;
 		this.pulse = order;
 		setTimeout(() => {
@@ -432,9 +461,7 @@ export class ExecutionStore implements DocController {
 		const t = e.target as HTMLElement | null;
 		if (t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable)) return;
 		if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
-		const rows = visibleRows(this.shownOps, (op) =>
-			this.isOpen(`op:${op.order}`, isTerminal(op.status))
-		);
+		const rows = visibleRows(this.shownOps, (op) => this.isOpen(`op:${op.order}`));
 		if (!rows.length) return;
 		const idx = rows.findIndex((r) => r.step.order === this.focusedOrder);
 		const move = (to: number) => {
@@ -455,9 +482,9 @@ export class ExecutionStore implements DocController {
 		if (e.key === 'Enter') {
 			e.preventDefault();
 			if (isHeader || leaf) {
-				this.toggle(`op:${cur.op.order}`, isTerminal(cur.op.status));
+				this.toggle(`op:${cur.op.order}`);
 			} else {
-				this.toggle(`step:${cur.step.order}`, isTerminal(cur.step.status));
+				this.toggle(`step:${cur.step.order}`);
 			}
 		} else if (e.key === 'c' && this.active) {
 			// Claims are per OP: c claims (or releases) the OP the cursor is in.
@@ -590,8 +617,19 @@ export class ExecutionStore implements DocController {
 				await this.refresh();
 			}
 		},
-		skip: (step) => (this.panel = { kind: 'skip', step }),
-		raiseIssue: (step) => (this.panel = { kind: 'issue', step }),
+		skip: async (step, reason) => {
+			try {
+				await opal.execution.skip({ id: this.id, stepId: step.order, reason });
+				if (this.claimedOrder === step.order)
+					await opal.execution.release({ id: this.id }).catch(() => {});
+				await this.changed();
+				return true;
+			} catch (e) {
+				toastError(e, 'Step not skipped');
+				return false;
+			}
+		},
+		issueHref: (step) => this.issueUrl(step),
 		redline: (op) => (this.panel = { kind: 'redline', op }),
 		deleteRedline: async (op) => {
 			try {
@@ -676,9 +714,9 @@ export class ExecutionStore implements DocController {
 
 	/** After the step completes, move the keyboard cursor to the next open step. */
 	private advanceFrom(order: number) {
-		const rows = visibleRows(this.shownOps, (op) =>
-			this.isOpen(`op:${op.order}`, isTerminal(op.status))
-		).filter((r) => r.step !== r.op.step || r.op.steps.length === 0);
+		const rows = visibleRows(this.shownOps, (op) => this.isOpen(`op:${op.order}`)).filter(
+			(r) => r.step !== r.op.step || r.op.steps.length === 0
+		);
 		const i = rows.findIndex((r) => r.step.order === order);
 		const next = rows.slice(i + 1).find((r) => !isTerminal(r.step.status));
 		if (next) this.focusedOrder = next.step.order;
@@ -703,13 +741,6 @@ export class ExecutionStore implements DocController {
 			q.set('stepLabel', step.number);
 		}
 		return `/issues/new?${q}`;
-	}
-
-	async skipStep(step: DocStep, reason: string) {
-		await opal.execution.skip({ id: this.id, stepId: step.order, reason: reason.trim() || null });
-		if (this.claimedOrder === step.order)
-			await opal.execution.release({ id: this.id }).catch(() => {});
-		await this.changed();
 	}
 
 	async raiseIssue(

@@ -5,7 +5,6 @@
 	import EditForm from './EditForm.svelte';
 	import RaiseIssueForm from './RaiseIssueForm.svelte';
 	import RedlineForm from './RedlineForm.svelte';
-	import SkipForm from './SkipForm.svelte';
 
 	let { store, editing = $bindable(false) }: { store: ExecutionStore; editing?: boolean } =
 		$props();
@@ -28,8 +27,6 @@
 	<Dialog.Content class={wide ? 'sm:max-w-xl' : 'sm:max-w-md'}>
 		{#if d?.kind === 'issue'}
 			<RaiseIssueForm {store} step={d.step} />
-		{:else if d?.kind === 'skip'}
-			<SkipForm {store} step={d.step} />
 		{:else if d?.kind === 'redline'}
 			<RedlineForm {store} op={d.op} preselect={d.issueId} />
 		{/if}

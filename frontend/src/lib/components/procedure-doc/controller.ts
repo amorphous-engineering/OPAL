@@ -35,10 +35,10 @@ export interface DocActions {
 	release?(): Promise<void>;
 	/** Sign one sign-off slot. Slot 0 carries the captured data and the old COMPLETE gate. */
 	sign?(step: DocStep, slot: number): Promise<void>;
-	/** Open the skip dialog. */
-	skip?(step: DocStep): void;
-	/** Open the raise-issue dialog at this step. */
-	raiseIssue?(step: DocStep): void;
+	/** Skip a step. The reason is required. Resolves to false when the host refused it. */
+	skip?(step: DocStep, reason: string): void | Promise<boolean>;
+	/** The issue form for this step, carrying its run and step. + ISSUE opens it in a new tab. */
+	issueHref?(step: DocStep): string;
 	/** Open the redline dialog on an OP that carries an open NC. */
 	redline?(op: DocOp): void;
 	/** Delete a not-yet-started redline OP. */
@@ -141,8 +141,7 @@ export interface DocController {
 	claimedOrder: number | null;
 	/** Time worked on an OP, per person. Absent where no work is clocked (authoring). */
 	laborFor?(opOrder: number): DocLabor[];
-	/** Is the OP card (key `op:3`) or step body (`step:5`) expanded? Defaults: open
-	 *  unless finished — or `blocked` (nothing to act on yet). */
+	/** Is the OP card (key `op:3`) or step body (`step:5`) expanded? The host decides the default. */
 	isOpen(key: string, terminal: boolean, blocked?: boolean): boolean;
 	toggle(key: string, terminal: boolean, blocked?: boolean): void;
 	/** The one step the page points at: the next thing to do. Gets the accent. */

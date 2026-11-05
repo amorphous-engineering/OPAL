@@ -10,7 +10,7 @@ import { type Model, type Row, isActive, isTerminal } from './model.ts';
 
 export type Blocker = ExecBlocker;
 
-const blocker = (kind: Blocker['kind'], message: string, issueId: number | null = null, issueNumber: string | null = null): Blocker => ({
+export const blocker = (kind: Blocker['kind'], message: string, issueId: number | null = null, issueNumber: string | null = null): Blocker => ({
 	kind,
 	message,
 	issueId,

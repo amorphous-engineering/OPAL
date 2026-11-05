@@ -25,13 +25,14 @@ import { dispState, isBlocking, ticketState } from '../issues/state.ts';
 import { holdsGate } from '../org/gates.ts';
 import { roleNamesOf, holdsSlotRole } from '../org/roles.ts';
 import { type HoldingIssue } from '../issues/holds.ts';
-import { type Blocker, completeBlockers, skipBlockers, slotGate } from './gates.ts';
+import { type Blocker, blocker, completeBlockers, skipBlockers, slotGate } from './gates.ts';
 import { type HoldState, blockersForBound, holdState } from './holds.ts';
 import { closureOf, workStarted } from './executions.ts';
 import { consumptionRows, productionRows, reconcile, unbooked } from './material.ts';
 import { type Model, type Row, isActive, isTerminal, loadModel, progress } from './model.ts';
 import { claimsFor, cursorOf, roster, touch } from './presence.ts';
 import { initials, personRefs, signoffRecords } from './present.ts';
+import { skipRefusal } from './steps.ts';
 
 type Att = {
 	id: number;
@@ -182,7 +183,8 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			hasNote: notes.some((n) => n.stepExecutionId === row.id),
 			hasNc: issues.some((i) => i.raisedStepId === row.id && i.issueType === 'non_conformance')
 		});
-		const skip = skipBlockers(m, st, row);
+		const skipGate = isTerminal(row.se.status) ? null : skipRefusal(ctx, row);
+		const skip = [...skipBlockers(m, st, row), ...(skipGate ? [blocker('role', skipGate)] : [])];
 		const mine = new Map((recs.get(row.id) ?? []).map((r) => [r.slot, r]));
 		const signedBy = new Map([...mine].map(([n, r]) => [n, r.signedById]));
 		const signoffs = row.signoffs.map((d, n) => {

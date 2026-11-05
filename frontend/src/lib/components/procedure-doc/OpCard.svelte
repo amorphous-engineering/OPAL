@@ -15,7 +15,6 @@
 	import StepBadges from './StepBadges.svelte';
 	import StepStamp from './StepStamp.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import StepTitleActions from './StepTitleActions.svelte';
 	import SignoffTable from './SignoffTable.svelte';
 	import SignoffEditor from './author/SignoffEditor.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
@@ -223,7 +222,6 @@
 					></span
 				>
 			{/if}
-			{#if leaf}<StepTitleActions step={op.step} />{/if}
 			{#if leaf || op.status === 'skipped'}
 				<StepStamp step={op.step} />
 			{:else}

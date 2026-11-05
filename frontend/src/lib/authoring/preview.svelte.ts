@@ -46,7 +46,6 @@ export class PreviewController implements DocController {
 			this.claimedOrder = null;
 		},
 		sign: this.inert,
-		skip: () => void this.inert(),
-		raiseIssue: () => void this.inert()
+		skip: () => void this.inert()
 	};
 }

@@ -250,23 +250,30 @@ export function signNext(ctx: Ctx, input: { id: number; stepId: number }): SignR
 
 // ---------------------------------------------------------------- skip
 
-export function skipStep(ctx: Ctx, input: { id: number; stepId: number; reason?: string | null }): SignResult {
+/**
+ * Why this person may not skip this row, or null. Skip is terminal, so it must not route around a
+ * commitment the step asks of a qualified person.
+ */
+export function skipRefusal(ctx: Ctx, row: Row): string | null {
+	const roleSlots = row.signoffs.filter((x) => (x.role ?? '').trim());
+	const required = !!row.dataSchema?.fields.some((f) => f.required);
+	if ((!required && !roleSlots.length) || holdsGate(ctx.db, ctx.actor, 'execution.skipRequired')) return null;
+	// A holder of every role the slots name may skip without the gate: that is authority over the
+	// step, which holds even though the same person cannot sign two of its slots.
+	const userId = actorUserId(ctx.actor);
+	const holder = userId === null ? new Set<string>(['admin']) : roleNamesOf(ctx.db, userId);
+	if (!required && roleSlots.every((x) => holdsSlotRole(holder, x.role))) return null;
+	return gateRefusal(ctx.db, 'execution.skipRequired');
+}
+
+export function skipStep(ctx: Ctx, input: { id: number; stepId: number; reason: string }): SignResult {
 	const userId = actorUserId(ctx.actor);
 	let m = loadModel(ctx.db, input.id);
 	requireActive(m);
 	const row = getRow(m, input.stepId);
 	if (isTerminal(row.se.status)) throw refuse(row.se.status === 'skipped' ? 'Step already skipped' : 'Cannot skip completed step');
-	// Skip is terminal, so it must not route around a commitment the step asks of a qualified person.
-	const roleSlots = row.signoffs.filter((x) => (x.role ?? '').trim());
-	const needsGate = !!row.dataSchema?.fields.some((f) => f.required) || roleSlots.length > 0;
-	if (needsGate && !holdsGate(ctx.db, ctx.actor, 'execution.skipRequired')) {
-		// A holder of every role the slots name may skip without the gate: they could sign each slot.
-		const holder = userId === null ? new Set<string>(['admin']) : roleNamesOf(ctx.db, userId);
-		const slotsOk = roleSlots.every((x) => holdsSlotRole(holder, x.role));
-		if (!(roleSlots.length > 0 && slotsOk && !row.dataSchema?.fields.some((f) => f.required))) {
-			throw forbidden(gateRefusal(ctx.db, 'execution.skipRequired'));
-		}
-	}
+	const refusal = skipRefusal(ctx, row);
+	if (refusal) throw forbidden(refusal);
 	const st = holdState(ctx.db, m);
 	const holds: Blocker[] = skipBlockers(m, st, row);
 	if (holds.length) throw refuse(describeBlockers('skip', holds));
@@ -276,7 +283,7 @@ export function skipStep(ctx: Ctx, input: { id: number; stepId: number; reason?:
 		status: 'skipped',
 		completedAt: at,
 		completedById: userId,
-		skipReason: input.reason?.trim() || null
+		skipReason: input.reason
 	});
 	const completed = checkCompletion(ctx, input.id);
 	m = loadModel(ctx.db, input.id);
