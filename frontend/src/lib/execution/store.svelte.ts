@@ -742,16 +742,9 @@ export class ExecutionStore implements DocController {
 	/** The issue form with this work order, and the step if there is one, carried in the URL. */
 	issueUrl(step?: DocStep): string {
 		const inst = this.doc?.instance;
-		const q = new URLSearchParams({
-			execution: String(this.id),
-			executionLabel: inst?.work_order ?? '',
-			projectId: String(inst?.project.id ?? '')
-		});
-		if (step) {
-			q.set('step', String(step.order));
-			q.set('stepLabel', step.number);
-		}
-		return `/issues/new?${q}`;
+		const label = encodeURIComponent(inst?.work_order ?? '');
+		const at = step ? `&step=${step.order}&stepLabel=${encodeURIComponent(step.number)}` : '';
+		return `/issues/new?execution=${this.id}&executionLabel=${label}&projectId=${inst?.project.id ?? ''}${at}`;
 	}
 
 	async createRedline(body: {
