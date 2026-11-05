@@ -63,6 +63,8 @@ export interface DocStepKitItem {
 	part_name: string;
 	part_number: string | null;
 	quantity_required: number;
+	/** Absent when authoring. */
+	uom?: string | null;
 	usage_type: 'consume' | 'tooling' | string;
 	notes: string | null;
 }
@@ -154,6 +156,7 @@ export interface DocConsumption {
 	part_name: string;
 	opal_number: string | null;
 	quantity: number;
+	uom: string | null;
 	lot_number: string | null;
 	location: string;
 	usage_type: string;

@@ -14,6 +14,7 @@ export { default as OpCard } from './OpCard.svelte';
 export { default as StepRow } from './StepRow.svelte';
 export { default as StepBody } from './StepBody.svelte';
 export { default as StepKit } from './StepKit.svelte';
+export { default as StockPicker, type StockOption } from './StockPicker.svelte';
 export { default as ExecutionNotes } from './ExecutionNotes.svelte';
 export { default as SignoffTable } from './SignoffTable.svelte';
 export { default as StepImages } from './StepImages.svelte';

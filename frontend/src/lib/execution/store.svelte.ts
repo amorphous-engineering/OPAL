@@ -679,7 +679,14 @@ export class ExecutionStore implements DocController {
 		},
 		loadStock: async (partId) => {
 			if (this.stock[partId]) return this.stock[partId];
-			const r = await opal.inventory.list({ partId, limit: 200 });
+			// Oldest first: the picker defaults to the first record.
+			const r = await opal.inventory.list({
+				partId,
+				hasStock: 'true',
+				sort: 'createdAt',
+				order: 'asc',
+				limit: 200
+			});
 			return (this.stock[partId] = r.items.map((x) => ({
 				id: x.id,
 				part_id: x.partId,

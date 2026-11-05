@@ -229,6 +229,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 				partNumber: parts.get(k.partId)?.internalPn ?? '',
 				partName: parts.get(k.partId)?.name ?? '',
 				quantity: k.quantity,
+				uom: parts.get(k.partId)?.unitOfMeasure ?? 'ea',
 				usage: k.usage,
 				notes: k.notes
 			})),
@@ -423,6 +424,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			partId: o.partId,
 			partNumber: outputParts.get(o.partId)?.internalPn ?? '',
 			partName: outputParts.get(o.partId)?.name ?? '',
+			uom: outputParts.get(o.partId)?.unitOfMeasure ?? 'ea',
 			quantity: o.quantity
 		})),
 		productions,

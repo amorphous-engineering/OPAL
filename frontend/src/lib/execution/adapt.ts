@@ -53,6 +53,7 @@ const consumption = (c: ApiDocument['consumptions'][number]) => ({
 	part_name: c.partName,
 	opal_number: c.opalNumber,
 	quantity: num(c.quantity),
+	uom: c.uom,
 	lot_number: c.lotNumber,
 	location: c.location,
 	usage_type: c.usage,
@@ -92,6 +93,7 @@ function step(s: DocStepOut, parentOrder: number | null): DocStep {
 			part_name: k.partName,
 			part_number: k.partNumber,
 			quantity_required: num(k.quantity),
+			uom: k.uom,
 			usage_type: k.usage,
 			notes: k.notes
 		})),
@@ -255,13 +257,13 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 				part_name: k.partName,
 				uom: k.uom,
 				qty_required: num(k.qtyRequired),
-				qty_consumed: num(k.qtyConsumed),
-				variance: num(k.variance)
+				qty_consumed: num(k.qtyConsumed)
 			})),
 			unplanned: d.kit.unplanned.map((k) => ({
 				part_id: k.partId,
 				part_number: k.partNumber,
 				part_name: k.partName,
+				uom: k.uom,
 				qty_consumed: num(k.qtyConsumed)
 			}))
 		},
@@ -270,6 +272,7 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			part_id: o.partId,
 			part_number: o.partNumber,
 			part_name: o.partName,
+			uom: o.uom,
 			quantity: num(o.quantity)
 		})),
 		productions: d.productions.map((p) => ({
@@ -280,6 +283,7 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			serial_number: p.serialNumber,
 			opal_number: p.opalNumber,
 			quantity: num(p.quantity),
+			uom: p.uom,
 			lot_number: p.lotNumber,
 			location: p.location,
 			status: p.status

@@ -4,10 +4,10 @@
 	import { untrack } from 'svelte';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { State } from '#lib/components/opal/index.js';
-	import { qty } from '#lib/format.js';
+	import { qtyUnit } from '#lib/format.js';
 	import { useDoc, type StockRecord } from './controller.js';
+	import StockPicker, { type StockOption } from './StockPicker.svelte';
 	import KitEditor from './author/KitEditor.svelte';
 	import type { DocStep } from './types.js';
 
@@ -26,15 +26,8 @@
 	let pick = $state<Record<number, { record: string; qty: string }>>({});
 	let busy = $state(false);
 
-	const label = (r: StockRecord) =>
-		[
-			r.opal_number,
-			r.location,
-			`${qty(r.quantity)} ${(r.part_uom ?? 'ea').toUpperCase()}`,
-			r.lot_number
-		]
-			.filter(Boolean)
-			.join(' · ');
+	const options = (records: StockRecord[] | undefined): StockOption[] | undefined =>
+		records?.map((r) => ({ ...r, uom: r.part_uom }));
 
 	$effect(() => {
 		if (!workable || !ctl.actions.loadStock) return;
@@ -43,8 +36,13 @@
 			ctl.actions.loadStock(k.part_id).then((records) => {
 				const usable = records.filter((r) => Number(r.quantity) > 0);
 				stock[k.part_id] = usable;
-				const fit = usable.find((r) => Number(r.quantity) >= k.quantity_required) ?? usable[0];
-				pick[k.part_id] = { record: fit ? String(fit.id) : '', qty: String(k.quantity_required) };
+				// Oldest stock first. Draw what it holds, and the rest comes from the next oldest.
+				const oldest = usable[0];
+				const draw =
+					oldest && k.usage_type !== 'tooling'
+						? Math.min(k.quantity_required, Number(oldest.quantity))
+						: k.quantity_required;
+				pick[k.part_id] = { record: oldest ? String(oldest.id) : '', qty: String(draw) };
 			});
 		}
 	});
@@ -94,7 +92,9 @@
 										({k.notes})</span
 									>{/if}</td
 							>
-							<td class="px-2 py-1 font-mono">{qty(k.quantity_required)}</td>
+							<td class="px-2 py-1 font-mono whitespace-nowrap"
+								>{qtyUnit(k.quantity_required, k.uom)}</td
+							>
 							<td class="px-2 py-1"
 								><State
 									value={k.usage_type}
@@ -102,24 +102,12 @@
 								/></td
 							>
 							<td class="px-2 py-1">
-								<NativeSelect
-									class="w-full min-w-48"
-									size="sm"
-									aria-label={`Source for ${k.part_name}`}
+								<StockPicker
+									records={options(stock[k.part_id])}
 									value={pick[k.part_id]?.record ?? ''}
-									onchange={(e) =>
-										(pick[k.part_id] = { ...pick[k.part_id], record: e.currentTarget.value })}
-								>
-									{#if !stock[k.part_id]}
-										<option value="">Loading…</option>
-									{:else if !stock[k.part_id].length}
-										<option value="">No stock</option>
-									{:else}
-										{#each stock[k.part_id] as r (r.id)}<option value={String(r.id)}
-												>{label(r)}</option
-											>{/each}
-									{/if}
-								</NativeSelect>
+									label={`Source for ${k.part_name}`}
+									onpick={(record) => (pick[k.part_id] = { ...pick[k.part_id], record })}
+								/>
 							</td>
 							<td class="px-2 py-1">
 								<Input
@@ -145,7 +133,7 @@
 				{#each step.step_kit as k (k.part_id)}
 					<li>
 						{k.part_number ?? ''}
-						{k.part_name} × {qty(k.quantity_required)}
+						{k.part_name} × {qtyUnit(k.quantity_required, k.uom)}
 						{k.usage_type === 'tooling' ? '(TOOLING)' : ''}
 					</li>
 				{/each}
@@ -155,7 +143,7 @@
 			<div class="font-mono text-xs text-muted-foreground">
 				<span class="text-ok">{c.usage_type === 'tooling' ? 'USED' : 'CONSUMED'}</span>
 				{c.part_number ?? ''}
-				{c.part_name}{c.usage_type === 'tooling' ? '' : ` × ${qty(c.quantity)}`} from
+				{c.part_name}{c.usage_type === 'tooling' ? '' : ` × ${qtyUnit(c.quantity, c.uom)}`} from
 				{#if c.opal_number}<a class="text-info" href={`/inventory/opal/${c.opal_number}`}
 						>{c.opal_number}</a
 					>{/if}

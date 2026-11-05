@@ -266,6 +266,7 @@ export const zDocConsumption = z.object({
 	partName: z.string(),
 	opalNumber: z.string(),
 	quantity: zQty,
+	uom: z.string(),
 	lotNumber: z.string().nullable(),
 	location: z.string(),
 	usage: z.enum(EXEC_USAGES),
@@ -279,6 +280,7 @@ export const zDocStepKit = z.object({
 	partNumber: z.string(),
 	partName: z.string(),
 	quantity: zQty,
+	uom: z.string(),
 	usage: z.enum(EXEC_USAGES),
 	notes: z.string().nullable()
 });
@@ -402,12 +404,14 @@ export const zUnplannedRow = z.object({
 	partId: z.number().int(),
 	partNumber: z.string(),
 	partName: z.string(),
+	uom: z.string(),
 	qtyConsumed: zQty
 });
 export const zOutputRow = z.object({
 	partId: z.number().int(),
 	partNumber: z.string(),
 	partName: z.string(),
+	uom: z.string(),
 	quantity: zQty
 });
 export const zProductionRow = z.object({
@@ -419,6 +423,7 @@ export const zProductionRow = z.object({
 	serialNumber: z.string().nullable(),
 	opalNumber: z.string(),
 	quantity: zQty,
+	uom: z.string(),
 	lotNumber: z.string().nullable(),
 	location: z.string(),
 	status: z.enum(PRODUCTION_STATUSES)

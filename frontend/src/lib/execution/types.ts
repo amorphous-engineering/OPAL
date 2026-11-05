@@ -67,13 +67,13 @@ export interface KitRow {
 	uom: string | null;
 	qty_required: number;
 	qty_consumed: number;
-	variance: number;
 }
 
 export interface UnplannedRow {
 	part_id: number;
 	part_number: string | null;
 	part_name: string;
+	uom: string | null;
 	qty_consumed: number;
 }
 
@@ -81,6 +81,7 @@ export interface OutputRow {
 	part_id: number;
 	part_number: string | null;
 	part_name: string;
+	uom: string | null;
 	quantity: number;
 }
 
@@ -92,6 +93,7 @@ export interface ProductionRow {
 	serial_number: string | null;
 	opal_number: string | null;
 	quantity: number;
+	uom: string | null;
 	lot_number: string | null;
 	location: string;
 	status: 'planned' | 'wip' | 'completed' | string;

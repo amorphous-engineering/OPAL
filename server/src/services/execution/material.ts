@@ -46,6 +46,7 @@ export function consumptionRows(db: Db, m: Model, only?: { stepId: number }): Do
 		partName: p.name,
 		opalNumber: rec.opalNumber,
 		quantity: formatQty(-mv.qty as Qty),
+		uom: p.unitOfMeasure,
 		lotNumber: rec.lotNumber,
 		location: rec.location,
 		usage: mv.reason === 'tooling' ? 'tooling' : 'consume',
@@ -185,6 +186,7 @@ export function productionRows(db: Db, m: Model): ProductionRow[] {
 			serialNumber: rec.serialNumber,
 			opalNumber: rec.opalNumber,
 			quantity: formatQty(qty as Qty),
+			uom: p.unitOfMeasure,
 			lotNumber: rec.lotNumber,
 			location: rec.location,
 			status
@@ -215,6 +217,7 @@ export function outputsOf(ctx: Pick<Ctx, 'db'>, executionId: number) {
 		partId: o.partId,
 		partNumber: parts.get(o.partId)!.internalPn,
 		partName: parts.get(o.partId)!.name,
+		uom: parts.get(o.partId)!.unitOfMeasure,
 		quantity: o.quantity
 	}));
 }
@@ -282,7 +285,7 @@ export function reconcile(db: Db, m: Model) {
 	});
 	const unplanned = [...consumed].map(([partId, qty]) => {
 		const p = parts.get(partId)!;
-		return { partId, partNumber: p.internalPn, partName: p.name, qtyConsumed: formatQty(qty as Qty) };
+		return { partId, partNumber: p.internalPn, partName: p.name, uom: p.unitOfMeasure, qtyConsumed: formatQty(qty as Qty) };
 	});
 	return { kitItems, unplanned };
 }
