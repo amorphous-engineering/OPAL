@@ -1,6 +1,10 @@
 <script lang="ts">
 	// Read-only render of a published snapshot's operations: every instruction,
-	// callouts, data field, image and step kit exactly as frozen at publish.
+	// callouts, data field, image and step kit exactly as frozen at publish. A short document
+	// opens fully; a long one opens as its list of operations. An OP opens with a click.
+	import CaretRight from 'phosphor-svelte/lib/CaretRight';
+	import { tick } from 'svelte';
+	import { cn } from '#lib/utils.js';
 	import { EmptyLine, Section } from '#lib/components/opal/index.js';
 	import { duration, qty } from '#lib/format.js';
 	import { CalloutList } from '#lib/components/procedure-doc/index.js';
@@ -14,6 +18,24 @@
 	const partById = $derived(new Map(parts.map((p) => [p.id, p])));
 
 	const grouped = $derived(groupOps(steps));
+
+	// Same threshold the editor uses to open a document fully.
+	const SMALL_DOC = 12;
+	let overrides = $state<Record<number, boolean>>({});
+	const isOpen = (id: number) => overrides[id] ?? steps.length <= SMALL_DOC;
+
+	export function setAll(open: boolean) {
+		overrides = Object.fromEntries(
+			[...grouped.ops, ...grouped.contingency].map((g) => [g.op.id, open])
+		);
+	}
+
+	/** Open one OP and bring it into view. */
+	export async function reveal(opId: number) {
+		overrides[opId] = true;
+		await tick();
+		document.getElementById(`op-${opId}`)?.scrollIntoView({ block: 'start' });
+	}
 </script>
 
 {#snippet detail(s: SnapshotStep)}
@@ -97,8 +119,19 @@
 {/snippet}
 
 {#snippet group(g: OpGroup)}
-	<div class="border-b border-border last:border-b-0">
-		<div class="flex items-baseline gap-3 bg-muted/40 px-3 py-1.5">
+	{@const open = isOpen(g.op.id)}
+	<div id={`op-${g.op.id}`} class="scroll-mt-2 border-b border-border last:border-b-0">
+		<button
+			type="button"
+			class="flex w-full cursor-pointer items-baseline gap-3 bg-muted/40 px-3 py-1.5 text-left hover:bg-accent"
+			aria-expanded={open}
+			onclick={() => (overrides[g.op.id] = !open)}
+		>
+			<CaretRight
+				weight="bold"
+				class={cn('size-3 shrink-0 translate-y-0.5 text-muted-foreground', open && 'rotate-90')}
+				aria-hidden="true"
+			/>
 			<span class="font-mono font-medium">OP {g.op.number}</span>
 			<span class="font-medium">{g.op.title}</span>
 			<span class="ml-auto flex gap-3 font-mono text-xs text-muted-foreground">
@@ -106,9 +139,11 @@
 				{#if g.op.estimatedDurationMinutes}<span>{duration(g.op.estimatedDurationMinutes)}</span
 					>{/if}
 			</span>
-		</div>
-		<div class="px-3 pb-1">{@render detail(g.op)}</div>
-		{#each g.subs as s (s.id)}
+		</button>
+		{#if open}
+			<div class="px-3 pb-1">{@render detail(g.op)}</div>
+		{/if}
+		{#each open ? g.subs : [] as s (s.id)}
 			<div class="border-t border-border px-3 py-1.5 pl-8">
 				<div class="flex items-baseline gap-3">
 					<span class="font-mono text-xs text-muted-foreground">{s.number}</span>

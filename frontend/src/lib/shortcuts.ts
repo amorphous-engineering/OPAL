@@ -24,6 +24,6 @@ export const NAV_SHORTCUTS: (Shortcut & { alt: string; href: string })[] = [
 
 export const ACTION_SHORTCUTS: Shortcut[] = [
 	{ keys: '⌘K / Ctrl+K', label: 'Search' },
-	{ keys: '⌘Z / Ctrl+Z', label: 'Undo last change' },
+	{ keys: '⌘Z / Ctrl+Z', label: 'Undo last draft change' },
 	{ keys: 'Alt+T', label: 'Toggle theme' }
 ];

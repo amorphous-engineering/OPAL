@@ -15,7 +15,8 @@
 		busy = false,
 		error = null,
 		onsubmit,
-		cancel
+		cancel,
+		showActive = true
 	}: {
 		initial?: Partial<WorkcenterInput>;
 		submitLabel: string;
@@ -23,6 +24,8 @@
 		error?: string | null;
 		onsubmit: (v: WorkcenterInput) => void;
 		cancel: Snippet;
+		/** The active switch. Off on the edit page, where DEACTIVATE is its own act. */
+		showActive?: boolean;
 	} = $props();
 
 	// The form seeds once; callers remount it ({#key}) to reseed.
@@ -69,10 +72,12 @@
 		<Label for="wc-desc">Description</Label>
 		<Textarea id="wc-desc" bind:value={description} rows={3} />
 	</div>
-	<div class="flex items-center gap-2">
-		<Switch id="wc-active" bind:checked={active} />
-		<Label for="wc-active">Active</Label>
-	</div>
+	{#if showActive}
+		<div class="flex items-center gap-2">
+			<Switch id="wc-active" bind:checked={active} />
+			<Label for="wc-active">Active</Label>
+		</div>
+	{/if}
 	<ErrorBanner message={error} />
 	<div class="flex justify-end gap-2">
 		{@render cancel()}

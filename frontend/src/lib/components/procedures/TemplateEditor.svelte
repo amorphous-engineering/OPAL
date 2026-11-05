@@ -1,9 +1,10 @@
 <script lang="ts">
-	// The template page body in the execution page's shape: OP index and facts on the
-	// left, the editable document (or DETAILS) in the centre, the surrounding record on
-	// the right. On wide screens only the centre scrolls. Owns the AuthorStore.
+	// The template page in edit mode, in the execution page's shape: OP index and facts on the
+	// left, the editable draft (or DETAILS) in the centre, the surrounding record on the right.
+	// On wide screens only the centre scrolls. Owns the AuthorStore, which exists only here:
+	// reading a template never starts an editor (see TemplateReader).
 	import { onMount, tick, untrack } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
@@ -41,6 +42,15 @@
 		return () => store.stop();
 	});
 
+	// Leaving edit mode (DONE, or any link) sends the last keystrokes first, so what the reader
+	// shows next is the draft as it was left.
+	beforeNavigate((nav) => {
+		if (!nav.to || !(store.summary.dirty || store.summary.saving)) return;
+		nav.cancel();
+		const to = nav.to.url;
+		void store.flushAll().then(() => goto(to));
+	});
+
 	// Report the size of the template to the page once it is known and when it changes.
 	$effect(() => {
 		const c = store.counts;
@@ -48,9 +58,23 @@
 	});
 
 	const doc = $derived(store.doc);
-	const total = $derived(store.counts.ops + store.counts.steps);
 	const status = $derived(store.status);
 	const shown = $derived(store.shownOps);
+	const navOps = $derived(
+		store.allOps.map((o) => ({
+			key: o.order,
+			number: o.number,
+			title: o.title,
+			steps: o.steps.length
+		}))
+	);
+	const selected = $derived(
+		store.focusMode
+			? store.focusOp
+			: store.focusedOrder === null
+				? null
+				: (store.findStep(store.focusedOrder)?.op.order ?? null)
+	);
 
 	const tabs = [
 		{ id: 'document', label: 'Document' },
@@ -103,7 +127,15 @@
 		class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
 		aria-label="Operations"
 	>
-		<TemplateNav {store} {data} {unpublished} onjump={jump} />
+		<TemplateNav
+			ops={navOps}
+			{selected}
+			counts={store.counts}
+			{data}
+			{unpublished}
+			editing
+			onjump={jump}
+		/>
 	</aside>
 	<div class={cn('flex min-h-0 min-w-0 flex-col', tab === 'document' ? 'gap-0' : 'gap-3')}>
 		{#if store.stale}
@@ -217,7 +249,7 @@
 			)}
 		>
 			{#if tab === 'details'}
-				<TemplateDetails {data} onchange={onreload} />
+				<TemplateDetails {data} editing onchange={onreload} />
 			{:else if tab === 'graph'}
 				{#if store.loading}
 					<div class="h-24 animate-pulse bg-muted"></div>
@@ -237,12 +269,6 @@
 					<ProcedureDocument controller={preview} {ops} {contingency} />
 				{:else}
 					<ProcedureDocument controller={store} {ops} {contingency} />
-					{#if total > 0}
-						<p class="mt-2 font-mono text-xs text-muted-foreground">
-							J/K MOVE · ENTER EDIT TITLE · E OPEN/CLOSE · A ADD STEP · O ADD OP · D DUPLICATE · X
-							DELETE · ALT+UP/DOWN MOVE · P PREVIEW
-						</p>
-					{/if}
 				{/if}
 			{/if}
 		</div>
@@ -251,6 +277,6 @@
 		class="min-w-0 overflow-x-hidden lg:h-full lg:min-h-0 lg:overflow-y-hidden lg:pb-4"
 		aria-label="Executions, issues and reference documents"
 	>
-		<TemplateSide {data} {startable} onchange={onreload} />
+		<TemplateSide {data} {startable} editing onchange={onreload} />
 	</aside>
 </div>

@@ -4,7 +4,9 @@ import type {
 	Procedure,
 	ProcedureKitItem,
 	ProcedureOutput,
-	ProcedureVersion
+	ProcedureStep,
+	ProcedureVersion,
+	ProcedureVersionDetail
 } from '@opal/shared';
 import type { ExecutionRow } from './types.js';
 
@@ -17,4 +19,8 @@ export interface TemplateData {
 	executions: { items: ExecutionRow[]; total: number };
 	issues: { items: Issue[]; total: number };
 	docs: Attachment[];
+	/** The released version, which is what the floor works from. Null until one is published. */
+	current: ProcedureVersionDetail | null;
+	/** The draft's steps, loaded only when no version exists to read instead. */
+	draftSteps: ProcedureStep[] | null;
 }

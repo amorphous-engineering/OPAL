@@ -1,13 +1,25 @@
 <script lang="ts">
 	import { goto, refreshAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { opal } from '#lib/api.js';
-	import { PageHeader, State, confirm, toast, toastError } from '#lib/components/opal/index.js';
+	import {
+		EditToggle,
+		MoreMenu,
+		PageHeader,
+		State,
+		Timestamp,
+		askReason,
+		confirm,
+		isEditing,
+		toast,
+		toastError
+	} from '#lib/components/opal/index.js';
 	import CloneDialog from '#lib/components/procedures/CloneDialog.svelte';
 	import DetailsDialog from '#lib/components/procedures/DetailsDialog.svelte';
 	import PublishDialog from '#lib/components/procedures/PublishDialog.svelte';
-	import TemplateView from '#lib/components/procedures/TemplateView.svelte';
+	import TemplateEditor from '#lib/components/procedures/TemplateEditor.svelte';
+	import TemplateReader from '#lib/components/procedures/TemplateReader.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -16,9 +28,12 @@
 	const currentVersion = $derived(data.versions.find((v) => v.id === p.currentVersionId));
 	const nextVersion = $derived((data.versions[0]?.versionNumber ?? 0) + 1);
 	const startable = $derived(p.status === 'released' && !!p.currentVersionId);
+	// The page opens for reading. EDIT (?edit=1) is the only way into the editor, and an
+	// obsolete template has none: reinstating it is the way back.
+	const editing = $derived(isEditing(page.url) && p.status !== 'obsolete');
 	// The editor changes the draft under the loaded page: it reports sizes, and the
 	// draft-vs-published state is re-read from the API after edits settle.
-	let live = $state<{ unpublished: boolean | null; ops: number; steps: number } | null>(null);
+	let live = $state<{ unpublished: boolean | null } | null>(null);
 	let liveFor = 0;
 	$effect(() => {
 		// A reload of the page data is authoritative again.
@@ -29,14 +44,13 @@
 	const templateNumber = $derived(p.templateNumber);
 
 	let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-	function draftChanged(counts: { ops: number; steps: number }) {
+	function draftChanged() {
 		clearTimeout(refreshTimer);
 		const ticket = ++liveFor;
 		refreshTimer = setTimeout(async () => {
 			try {
 				const fresh = await opal.procedures.get({ id: p.id });
-				if (ticket === liveFor)
-					live = { unpublished: fresh.unpublishedChanges, ops: counts.ops, steps: counts.steps };
+				if (ticket === liveFor) live = { unpublished: fresh.unpublishedChanges };
 			} catch {
 				/* the next change re-reads it */
 			}
@@ -44,22 +58,40 @@
 	}
 
 	let publishing = $state(false);
-	let editing = $state(false);
+	let editingDetails = $state(false);
 	let cloning = $state(false);
 
 	const reload = () => refreshAll();
 
-	async function setStatus(status: 'released' | 'obsolete') {
-		if (status === 'obsolete') {
-			const ok = await confirm({
-				title: 'Mark this template obsolete?',
-				body: 'No new work orders can be cut from it. Existing work orders continue.',
-				action: 'OBSOLETE'
-			});
-			if (!ok) return;
-		}
+	/** A published version is the commit: afterwards the page returns to reading it. */
+	async function published() {
+		await goto(`/procedures/${p.id}`, { invalidateAll: true });
+	}
+
+	async function obsolete() {
+		const reason = await askReason({
+			title: `Make ${templateNumber} obsolete?`,
+			body: 'No new work orders can be cut from it. Work orders already cut continue.',
+			action: 'OBSOLETE'
+		});
+		if (reason === null) return;
 		try {
-			await opal.procedures.update({ id: p.id, status });
+			await opal.procedures.obsolete({ id: p.id, reason });
+			await reload();
+		} catch (e) {
+			toastError(e);
+		}
+	}
+
+	async function reinstate() {
+		const reason = await askReason({
+			title: `Reinstate ${templateNumber}?`,
+			body: 'New work orders can be cut from it again.',
+			action: 'REINSTATE'
+		});
+		if (reason === null) return;
+		try {
+			await opal.procedures.reinstate({ id: p.id, reason });
 			await reload();
 		} catch (e) {
 			toastError(e);
@@ -106,36 +138,69 @@
 				/>
 			{/snippet}
 			{#snippet actions()}
-				{#if startable}
+				{#if startable && !editing}
 					<Button href={`/executions/new?procedure_id=${p.id}`}>START EXECUTION</Button>
 				{/if}
-				{#if unpublished !== false}
+				{#if editing && unpublished !== false}
 					<Button onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button>
 				{/if}
-				{#if p.status === 'released'}
-					<Button variant="outline" onclick={() => setStatus('obsolete')}>OBSOLETE</Button>
-				{:else if p.status === 'obsolete'}
-					<Button variant="outline" onclick={() => setStatus('released')}>RELEASE</Button>
+				{#if editing}
+					<Button variant="outline" onclick={() => (editingDetails = true)}>DETAILS</Button>
 				{/if}
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Button variant="outline" {...props} aria-label="More actions">MORE</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="w-44">
-						<DropdownMenu.Item onSelect={() => (editing = true)}>Edit details</DropdownMenu.Item>
-						<DropdownMenu.Item onSelect={() => (cloning = true)}>Clone</DropdownMenu.Item>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item class="text-destructive" onSelect={remove}>Delete</DropdownMenu.Item>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
+				{#if p.status !== 'obsolete'}
+					<EditToggle label={p.status === 'released' ? 'EDIT DRAFT' : 'EDIT'} />
+				{/if}
+				<MoreMenu
+					items={[
+						{ label: 'CLONE', onselect: () => (cloning = true), when: p.status !== 'draft' },
+						{ label: 'OBSOLETE', onselect: obsolete, strike: true, when: p.status === 'released' },
+						{ label: 'REINSTATE', onselect: reinstate, when: p.status === 'obsolete' },
+						{
+							label: 'DELETE',
+							onselect: remove,
+							strike: true,
+							when: data.versions.length === 0 && p.status === 'draft'
+						}
+					]}
+				/>
 			{/snippet}
 		</PageHeader>
 	</div>
-	{#key `${p.id}:${p.updatedAt}`}
-		<TemplateView {data} {unpublished} {startable} onchange={draftChanged} onreload={reload} />
-	{/key}
+	{#if p.status === 'obsolete'}
+		<div
+			class="flex shrink-0 flex-wrap items-baseline gap-x-3 border-b border-border bg-muted px-4 py-1.5 text-xs"
+			role="status"
+		>
+			<span class="font-mono font-medium text-error">OBSOLETE</span>
+			<Timestamp value={p.updatedAt} />
+			<span class="min-w-0 [overflow-wrap:anywhere]">{p.statusReason ?? ''}</span>
+		</div>
+	{:else if editing}
+		<div
+			class="flex shrink-0 flex-wrap items-baseline gap-x-3 border-b border-warn/50 bg-warn-muted px-4 py-1.5 font-mono text-xs"
+			role="status"
+		>
+			<span class="font-medium text-warn">DRAFT</span>
+			{#if currentVersion}
+				<span class="text-muted-foreground"
+					>v{currentVersion.versionNumber} RELEASED · DRAFT {unpublished
+						? 'DIFFERS'
+						: 'MATCHES'}</span
+				>
+			{:else}
+				<span class="text-muted-foreground">NEVER PUBLISHED</span>
+			{/if}
+		</div>
+	{/if}
+	{#if editing}
+		{#key p.id}
+			<TemplateEditor {data} {unpublished} {startable} onchange={draftChanged} onreload={reload} />
+		{/key}
+	{:else}
+		{#key `${p.id}:${p.updatedAt}`}
+			<TemplateReader {data} {unpublished} {startable} onreload={reload} />
+		{/key}
+	{/if}
 </div>
 
 <PublishDialog
@@ -143,10 +208,10 @@
 	procedureId={p.id}
 	{nextVersion}
 	unchanged={unpublished === false}
-	onpublished={reload}
+	onpublished={published}
 />
 <DetailsDialog
-	bind:open={editing}
+	bind:open={editingDetails}
 	procedureId={p.id}
 	name={p.name}
 	description={p.description}

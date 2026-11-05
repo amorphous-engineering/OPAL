@@ -1,21 +1,29 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { opal } from '#lib/api.js';
 	import {
 		DataTable,
 		DetailRow,
 		DetailTable,
+		EditToggle,
+		ErrorBanner,
+		MoreMenu,
 		PageHeader,
 		Section,
 		State,
 		Timestamp,
-		confirm,
+		askReason,
+		isEditing,
 		toast,
 		toastError,
 		type Column
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import EditProjectDialog from '#lib/components/projects/EditProjectDialog.svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { session } from '#lib/session.svelte.js';
 	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import { lifecycleTone } from '#lib/components/requirements/lifecycle.js';
 	import { dispositionTone } from '#lib/components/risks/types.js';
@@ -27,18 +35,53 @@
 	let { data }: PageProps = $props();
 	const project = $derived(data.project);
 	const archived = $derived(project.state === 'archived');
-	let editOpen = $state(false);
+	const editing = $derived(isEditing(page.url) && !archived);
+	const isAdmin = $derived(!!session.user?.is_admin);
+
+	let code = $state('');
+	let name = $state('');
+	let description = $state('');
+	let busy = $state(false);
+	let error = $state<string | null>(null);
+	$effect(() => {
+		if (editing) {
+			code = project.code;
+			name = project.name;
+			description = project.description ?? '';
+			error = null;
+		}
+	});
+
+	async function save(e: SubmitEvent) {
+		e.preventDefault();
+		busy = true;
+		error = null;
+		try {
+			await opal.org.projects.update({
+				id: project.id,
+				code: code.trim(),
+				name: name.trim(),
+				description: description.trim() || null
+			});
+			await invalidateAll();
+			await goto(page.url.pathname);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to save';
+		} finally {
+			busy = false;
+		}
+	}
 
 	async function archive() {
-		const ok = await confirm({
+		const reason = await askReason({
 			title: `Archive ${project.code}`,
 			body: 'An archived project keeps its records and takes no new ones. This cannot be undone.',
 			action: 'ARCHIVE',
 			destructive: true
 		});
-		if (!ok) return;
+		if (reason === null) return;
 		try {
-			await opal.org.projects.archive({ id: project.id });
+			await opal.org.projects.archive({ id: project.id, reason });
 			toast.success('Project archived');
 			await invalidateAll();
 		} catch (e) {
@@ -91,29 +134,59 @@
 		<Button size="sm" variant="ghost" href={`/audit?entity=project&record=${project.id}`}
 			>AUDIT</Button
 		>
-		{#if !archived}
-			<Button variant="outline" size="sm" onclick={() => (editOpen = true)}>EDIT</Button>
-			<Button variant="destructive" size="sm" onclick={archive}>ARCHIVE</Button>
-		{/if}
+		{#if !archived}<EditToggle />{/if}
+		<MoreMenu
+			items={[{ label: 'ARCHIVE', onselect: archive, strike: true, when: !archived && isAdmin }]}
+		/>
 	{/snippet}
 </PageHeader>
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<Section title="Project">
-		<DetailTable>
-			<DetailRow label="Code" mono value={project.code} />
-			<DetailRow label="Name" value={project.name} />
-			<DetailRow label="Description">
-				{#if project.description}<span class="whitespace-pre-wrap">{project.description}</span
-					>{:else}<span class="text-muted-foreground">—</span>{/if}
-			</DetailRow>
-			<DetailRow label="State" mono value={project.state.toUpperCase()} />
-			<DetailRow label="Created"><Timestamp value={project.createdAt} /></DetailRow>
-			<DetailRow label="Updated"><Timestamp value={project.updatedAt} /></DetailRow>
-			{#if archived && project.archivedAt}
-				<DetailRow label="Archived"><Timestamp value={project.archivedAt} /></DetailRow>
-			{/if}
-		</DetailTable>
+		{#if editing}
+			<form class="grid max-w-xl grid-cols-1 gap-3 p-3" onsubmit={save}>
+				<div class="grid grid-cols-1 gap-1.5">
+					<Label for="ep-code">Code</Label>
+					<Input
+						id="ep-code"
+						class="w-40 font-mono uppercase"
+						bind:value={code}
+						maxlength={24}
+						required
+					/>
+				</div>
+				<div class="grid grid-cols-1 gap-1.5">
+					<Label for="ep-name">Name</Label>
+					<Input id="ep-name" bind:value={name} required />
+				</div>
+				<div class="grid grid-cols-1 gap-1.5">
+					<Label for="ep-desc">Description</Label>
+					<Textarea id="ep-desc" bind:value={description} rows={3} />
+				</div>
+				<ErrorBanner message={error} />
+				<div class="flex gap-2">
+					<Button type="submit" size="sm" disabled={busy || !code.trim() || !name.trim()}
+						>SAVE</Button
+					>
+				</div>
+			</form>
+		{:else}
+			<DetailTable>
+				<DetailRow label="Code" mono value={project.code} />
+				<DetailRow label="Name" value={project.name} />
+				<DetailRow label="Description">
+					{#if project.description}<span class="whitespace-pre-wrap">{project.description}</span
+						>{:else}<span class="text-muted-foreground">—</span>{/if}
+				</DetailRow>
+				<DetailRow label="State" mono value={project.state.toUpperCase()} />
+				<DetailRow label="Created"><Timestamp value={project.createdAt} /></DetailRow>
+				<DetailRow label="Updated"><Timestamp value={project.updatedAt} /></DetailRow>
+				{#if archived && project.archivedAt}
+					<DetailRow label="Archived"><Timestamp value={project.archivedAt} /></DetailRow>
+					<DetailRow label="Reason" value={project.archivedReason} />
+				{/if}
+			</DetailTable>
+		{/if}
 	</Section>
 
 	<div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
@@ -297,5 +370,3 @@
 	<PluginPanels slot="project.side" recordId={project.id} number={project.code} />
 	<ExternalLinks entityType="project" entityId={project.id} />
 </div>
-
-<EditProjectDialog bind:open={editOpen} {project} onsaved={() => invalidateAll()} />

@@ -23,11 +23,14 @@
 		kind,
 		procedureId,
 		lines,
+		editable = true,
 		onchange
 	}: {
 		kind: 'kit' | 'outputs';
 		procedureId: number;
 		lines: (KitLine | OutputLine)[];
+		/** Add, change and remove lines. Off, the lines are facts. */
+		editable?: boolean;
 		onchange: () => void | Promise<void>;
 	} = $props();
 
@@ -44,7 +47,7 @@
 		{ key: 'partExternalPn', label: 'Ext PN', width: '9rem', mono: true },
 		{ key: 'quantity', label: qtyHead, align: 'right', width: '8rem' },
 		...(isKit ? [{ key: 'onHand', label: 'On hand', align: 'right' as const, width: '7rem' }] : []),
-		{ key: 'actions', label: '', width: '4rem', align: 'right' }
+		...(editable ? [{ key: 'actions', label: '', width: '4rem', align: 'right' as const }] : [])
 	]);
 
 	// Short = stock below what the kit needs. Consequence renders where it lands.
@@ -90,15 +93,17 @@
 </script>
 
 {#if rows.length === 0}
-	<EmptyLine label={title} onadd={() => (adding = true)} />
+	<EmptyLine label={title} onadd={editable ? () => (adding = true) : undefined} />
 {:else}
 	<Section {title} count={rows.length}>
 		{#snippet actions()}
-			<Button
-				variant="link"
-				class="h-auto border-0 p-0 font-mono text-xs tracking-wider text-info uppercase"
-				onclick={() => (adding = true)}>+ ADD</Button
-			>
+			{#if editable}
+				<Button
+					variant="link"
+					class="h-auto border-0 p-0 font-mono text-xs tracking-wider text-info uppercase"
+					onclick={() => (adding = true)}>+ ADD</Button
+				>
+			{/if}
 		{/snippet}
 		<DataTable {rows} {columns} emptyLabel={title} dense key={(r) => r.id}>
 			{#snippet cell(row, col)}
@@ -111,6 +116,8 @@
 					{#if row.partExternalPn}{row.partExternalPn}{:else}<span class="text-muted-foreground"
 							>—</span
 						>{/if}
+				{:else if col.key === 'quantity' && !editable}
+					<span class="font-mono">{qty(row.quantity, row.unitOfMeasure)}</span>
 				{:else if col.key === 'quantity'}
 					<QtyCell
 						value={row.quantity}

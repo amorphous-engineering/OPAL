@@ -4,6 +4,7 @@
 	import {
 		Avatar,
 		confirm,
+		MoreMenu,
 		PageHeader,
 		Section,
 		State,
@@ -142,17 +143,27 @@
 	{/snippet}
 	{#snippet actions()}
 		{#if isAdmin}
-			<Button variant="outline" size="sm" onclick={toggleAdmin}
-				>{profile.isAdmin ? 'REMOVE ADMIN' : 'MAKE ADMIN'}</Button
-			>
-			{#if !isSelf}
-				{#if profile.isActive && profile.hasPassword}
-					<Button variant="outline" size="sm" onclick={resetPassword}>RESET PASSWORD</Button>
-				{/if}
-				<Button variant="outline" size="sm" onclick={toggleActive}
-					>{profile.isActive ? 'DEACTIVATE' : 'REACTIVATE'}</Button
-				>
-			{/if}
+			<MoreMenu
+				items={[
+					{
+						label: profile.isAdmin ? 'REMOVE ADMIN' : 'MAKE ADMIN',
+						onselect: toggleAdmin,
+						strike: profile.isAdmin
+					},
+					{
+						label: 'RESET PASSWORD',
+						onselect: resetPassword,
+						strike: true,
+						when: !isSelf && profile.isActive && profile.hasPassword
+					},
+					{
+						label: profile.isActive ? 'DEACTIVATE' : 'REACTIVATE',
+						onselect: toggleActive,
+						strike: profile.isActive,
+						when: !isSelf
+					}
+				]}
+			/>
 		{/if}
 	{/snippet}
 </PageHeader>

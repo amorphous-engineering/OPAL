@@ -6,6 +6,7 @@
 		DetailTable,
 		Section,
 		State,
+		confirm,
 		toast,
 		toastError,
 		ErrorBanner
@@ -45,8 +46,46 @@
 	let discovery = $state<DiscoveryResult | null>(null);
 	let testing = $state(false);
 
+	/** What this save changes for people signing in, stated before it applies. */
+	function effects(): string[] {
+		const out: string[] = [];
+		const flip = (now: boolean, was: boolean, what: string) => {
+			if (now !== was) out.push(`${what} sign-in turns ${now ? 'on' : 'off'}.`);
+		};
+		flip(passwordLogin, saved.passwordLoginEnabled, 'Username and password');
+		flip(passkeys, saved.passkeysEnabled, 'Passkey');
+		flip(oidc, saved.oidcEnabled, 'Single sign-on');
+		if (
+			oidc &&
+			(issuer !== saved.oidcIssuer ||
+				clientId !== saved.oidcClientId ||
+				clientSecret !== '' ||
+				clearSecret ||
+				baseUrl !== saved.oidcRedirectBaseUrl ||
+				adminGroup !== saved.oidcAdminGroup ||
+				autoCreate !== saved.oidcAutoCreateUsers)
+		) {
+			out.push('Single sign-on uses the new provider settings from the next sign-in.');
+		}
+		return out;
+	}
+
 	async function save(e: SubmitEvent) {
 		e.preventDefault();
+		const changes = effects();
+		if (changes.length) {
+			const left = [
+				passwordLogin && 'username and password',
+				passkeys && 'passkeys',
+				oidc && 'single sign-on'
+			].filter(Boolean);
+			const ok = await confirm({
+				title: 'Save sign-in settings?',
+				body: `${changes.join(' ')} People can then sign in with: ${left.join(', ') || 'nothing'}. Current sessions stay signed in.`,
+				action: 'SAVE'
+			});
+			if (!ok) return;
+		}
 		busy = true;
 		error = null;
 		try {
