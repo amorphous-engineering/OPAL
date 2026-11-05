@@ -63,6 +63,16 @@
 
 	const activate = (cause: string | undefined) =>
 		act(() => opal.parts.activate({ id: part.id, cause }), `${part.internalPn} activated`);
+	async function reinstate() {
+		const reason = await askReason({
+			title: `Reinstate ${part.internalPn}`,
+			body: 'The part returns to active. Its retirement stays in History.',
+			action: 'REINSTATE'
+		});
+		if (reason === null) return;
+		await act(() => opal.parts.reinstate({ id: part.id, reason }), `${part.internalPn} active`);
+	}
+
 	async function retire() {
 		const cause = await askReason({
 			title: `Mark ${part.internalPn} obsolete`,
@@ -116,6 +126,7 @@
 		<MoreMenu
 			items={[
 				{ label: 'OBSOLETE', onselect: retire, strike: true, when: part.state === 'active' },
+				{ label: 'REINSTATE', onselect: reinstate, when: part.state === 'obsolete' },
 				{ label: 'DELETE', onselect: remove, strike: true, when: detail.deletable }
 			]}
 		/>

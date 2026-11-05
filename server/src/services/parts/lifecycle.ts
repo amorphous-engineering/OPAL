@@ -102,3 +102,11 @@ export function obsolete(ctx: Ctx, id: number, cause: string): Part {
 	);
 }
 
+/** A deliberate return from obsolete. The old retirement stays readable in the part's history. */
+export function reinstate(ctx: Ctx, id: number, reason: string): Part {
+	const row = getRow(ctx, id);
+	if (row.state !== 'obsolete') {
+		throw conflict('wrong_state', `${row.internalPn} is ${row.state}: only an obsolete part can be reinstated`);
+	}
+	return present(ctx, update(ctx, part, id, { state: 'active', obsoletedAt: null, obsoletedById: null, obsoleteCause: null }, reason));
+}

@@ -150,6 +150,7 @@ export const zBomLine = z.object({
 	componentExternalPn: z.string().nullable(),
 	componentTier: z.number().int(),
 	componentState: z.enum(PART_STATES),
+	componentUom: z.string(),
 	quantity: zQty,
 	referenceDesignator: z.string().nullable(),
 	notes: z.string().nullable(),
@@ -549,7 +550,19 @@ const parts_ = {
 		input: z.object({ id: zId, cause: z.string().trim().min(1, 'Give a reason').max(255) }),
 		output: zPart,
 		access: 'signed-in',
-		mcp: true
+		mcp: false,
+		humanOnly: true
+	}),
+	reinstate: op({
+		name: 'parts.reinstate',
+		method: 'POST',
+		path: '/parts/:id/reinstate',
+		summary: 'Return an obsolete part to active. A reason is required, and the retirement stays in its history.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1, 'Give a reason').max(255) }),
+		output: zPart,
+		access: 'signed-in',
+		mcp: false,
+		humanOnly: true
 	})
 };
 

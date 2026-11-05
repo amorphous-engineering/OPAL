@@ -113,6 +113,18 @@ describe('part lifecycle', () => {
 		expect((await api('GET', `/parts/${p.id}/detail`)).json.deletable).toBe(false);
 	});
 
+	test('an obsolete part returns to active only with a reason; an active one cannot be reinstated', async () => {
+		const { api, create, activate } = await setup();
+		const p = await create({ name: 'A' });
+		await activate(p.id);
+		expect((await api('POST', `/parts/${p.id}/reinstate`, { reason: 'still needed' })).status).toBe(409);
+		expect((await api('POST', `/parts/${p.id}/obsolete`, { cause: 'superseded' })).status).toBe(200);
+		expect((await api('POST', `/parts/${p.id}/reinstate`, { reason: ' ' })).status).toBe(422);
+		const res = await api('POST', `/parts/${p.id}/reinstate`, { reason: 'still needed' });
+		expect(res.status).toBe(200);
+		expect(res.json.state).toBe('active');
+	});
+
 	test('an active part becomes obsolete with a cause; a draft cannot', async () => {
 		const { api, create, activate } = await setup();
 		const p = await create({ name: 'A' });

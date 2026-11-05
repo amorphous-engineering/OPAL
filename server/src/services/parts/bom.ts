@@ -38,6 +38,7 @@ function select(ctx: Pick<Ctx, 'db'>, where: ReturnType<typeof eq>): BomLine[] {
 		componentExternalPn: c.externalPn,
 		componentTier: c.tier,
 		componentState: c.state,
+		componentUom: c.unitOfMeasure,
 		quantity: formatQty(line.quantity as Qty),
 		referenceDesignator: line.referenceDesignator,
 		notes: line.notes,

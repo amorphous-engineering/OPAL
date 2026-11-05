@@ -49,7 +49,7 @@
 				{:else if col.key === 'status'}
 					<State value={l.status} />
 				{:else if col.key === 'received'}
-					{qty(l.qtyReceived)}/{qty(l.qtyOrdered)}
+					{qty(l.qtyReceived)}/{qty(l.qtyOrdered, detail.part.unitOfMeasure)}
 				{:else if col.key === 'cost'}
 					{#if l.unitCost === null}<span class="text-muted-foreground">—</span>{:else}{unitMoney(
 							l.unitCost

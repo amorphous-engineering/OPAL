@@ -30,7 +30,7 @@
 				{:else if col.key === 'name'}
 					{l.assemblyName}
 				{:else if col.key === 'qty'}
-					{qty(l.quantity)}
+					{qty(l.quantity, detail.part.unitOfMeasure)}
 				{:else if l.referenceDesignator}
 					{l.referenceDesignator}
 				{:else}

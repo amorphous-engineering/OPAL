@@ -235,7 +235,7 @@
 							</span>
 						{/if}
 					{:else if col.key === 'qty'}
-						{qty(l.quantity)}
+						{qty(l.quantity, l.componentUom)}
 					{:else if col.key === 'ref'}
 						{#if l.referenceDesignator}{l.referenceDesignator}{:else}<span
 								class="text-muted-foreground">—</span
