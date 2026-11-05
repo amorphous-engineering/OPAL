@@ -174,7 +174,7 @@
 	}
 
 	async function narrowTo(next: Containment) {
-		let after: { label: string }[] = [];
+		let after: { label: string }[];
 		try {
 			after = await opal.issues.holding({ id: issue.id, containment: next });
 		} catch (err) {
