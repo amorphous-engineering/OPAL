@@ -9,6 +9,8 @@ export interface ConfirmOptions {
 	destructive?: boolean;
 	/** Require typing this text to enable the action (irreversible operations). */
 	typeToConfirm?: string;
+	/** The field's label in `askReason`. Defaults to Reason. */
+	reasonLabel?: string;
 }
 
 class ConfirmState {

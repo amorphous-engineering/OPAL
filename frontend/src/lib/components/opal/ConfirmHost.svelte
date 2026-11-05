@@ -39,7 +39,7 @@
 		{/if}
 		{#if confirmState.needsReason}
 			<label class="grid grid-cols-1 gap-1.5 text-xs">
-				<span class="label">Reason</span>
+				<span class="label">{o.reasonLabel ?? 'Reason'}</span>
 				<Textarea id="confirm-reason" bind:value={confirmState.reason} rows={2} />
 			</label>
 		{/if}

@@ -108,7 +108,8 @@
 		const rationale = await askReason({
 			title: `Accept ${risk.riskNumber}`,
 			body: `Signs ${risk.riskNumber} at score ${risk.score}${risk.residualScore !== null ? ` → ${risk.residualScore}` : ''} as the current user. Score and scenario then stay fixed until the acceptance is withdrawn.`,
-			action: 'ACCEPT'
+			action: 'ACCEPT',
+			reasonLabel: 'Rationale'
 		});
 		if (rationale === null) return;
 		try {
