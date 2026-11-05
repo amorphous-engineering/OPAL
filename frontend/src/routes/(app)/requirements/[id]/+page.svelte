@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -9,18 +10,23 @@
 		DataTable,
 		DetailRow,
 		DetailTable,
+		EditToggle,
 		EmptyLine,
+		MoreMenu,
 		PageHeader,
 		Section,
 		State,
 		Timestamp,
+		askReason,
 		confirm,
+		isEditing,
 		toast,
 		toastError,
-		type Column
+		type Column,
+		type MoreItem
 	} from '#lib/components/opal/index.js';
 	import { opal } from '#lib/api.js';
-	import { datetimeSec } from '#lib/format.js';
+	import { datetimeSec, stateLabel } from '#lib/format.js';
 	import { session } from '#lib/session.svelte.js';
 	import LintEditor from '#lib/components/requirements/LintEditor.svelte';
 	import PartPicker from '#lib/components/parts/PartPicker.svelte';
@@ -40,8 +46,19 @@
 	let { data }: PageProps = $props();
 	const req = $derived(data.req);
 	const mutable = $derived(req.lifecycleState === 'draft' || req.lifecycleState === 'preliminary');
+	const baselined = $derived(req.lifecycleState === 'baselined');
 	const terminal = $derived(
 		req.lifecycleState === 'superseded' || req.lifecycleState === 'cancelled'
+	);
+	// Pages open for reading. EDIT reveals the pencil of a draft: fields, parent, allocations.
+	const editing = $derived(mutable && isEditing(page.url));
+	// Verification is recorded per allocation on a baselined requirement, without editing it.
+	const recording = $derived(editing || baselined);
+	/** The newest revision of this number, when it is not this one. */
+	const current = $derived(
+		terminal
+			? req.revisions.findLast((r) => r.id !== req.id && r.revision > req.revision)
+			: undefined
 	);
 
 	// Local copies of the text fields; reset whenever the server row changes.
@@ -110,15 +127,15 @@
 	}
 
 	async function cancelIt() {
-		const ok = await confirm({
-			title: `Cancel ${req.reqNumber}?`,
-			body: 'Cancelled is terminal. The requirement stays in the record and cannot be revised or baselined again.',
+		const reason = await askReason({
+			title: `Cancel ${req.reqNumber}`,
+			body: 'Cancelled is terminal. The requirement stays on record and cannot be revised or baselined again.',
 			action: 'CANCEL REQUIREMENT',
 			destructive: true
 		});
-		if (!ok) return;
+		if (reason === null) return;
 		try {
-			await opal.requirements.cancel({ id: req.id });
+			await opal.requirements.cancel({ id: req.id, reason });
 			await invalidateAll();
 		} catch (e) {
 			toastError(e);
@@ -255,9 +272,21 @@
 		{ key: 'label', label: 'Label' }
 	];
 
-	const failingHard = $derived(
-		req.readiness?.checks.filter((c) => c.severity === 'hard' && !c.passed).length ?? 0
+	const blocking = $derived(
+		req.readiness?.checks.filter((c) => c.severity === 'hard' && !c.passed) ?? []
 	);
+	const failingHard = $derived(blocking.length);
+	const blockedBy = $derived(
+		blocking.length
+			? `${blocking[0].label}${blocking.length > 1 ? ` +${blocking.length - 1}` : ''}`
+			: ''
+	);
+
+	const moreItems = $derived<MoreItem[]>([
+		{ label: 'RE-AFFIRM', onselect: reaffirm, when: req.stale && !terminal },
+		{ label: 'DELETE', onselect: deleteIt, strike: true, when: mutable && req.canDelete },
+		{ label: 'CANCEL', onselect: cancelIt, strike: true, when: mutable || baselined }
+	]);
 </script>
 
 <PageHeader
@@ -271,7 +300,7 @@
 >
 	{#snippet heading()}
 		<h1 class="min-w-0 text-lg font-semibold tracking-tight">
-			{#if mutable}
+			{#if editing}
 				<Input
 					class="h-8 w-[min(60ch,60vw)] text-lg font-semibold"
 					aria-label="Title"
@@ -293,21 +322,25 @@
 		{/if}
 	{/snippet}
 	{#snippet actions()}
-		{#if req.stale}<Button size="sm" variant="outline" onclick={reaffirm}>RE-AFFIRM</Button>{/if}
-		<Button size="sm" variant="ghost" href={`/audit?entity=requirement&record=${req.id}`}
-			>AUDIT</Button
-		>
-		{#if req.lifecycleState === 'baselined'}
-			<Button size="sm" onclick={revise}>REVISE</Button>
-		{/if}
-		{#if req.canDelete}
-			<Button size="sm" variant="destructive" onclick={deleteIt}>DELETE</Button>
-		{/if}
-		{#if !terminal}
-			<Button size="sm" variant="outline" class="text-error" onclick={cancelIt}
-				>CANCEL REQUIREMENT</Button
+		{#if mutable}
+			<Button
+				size="sm"
+				disabled={!req.readiness?.ready}
+				title={blockedBy || undefined}
+				onclick={baselineIt}>BASELINE</Button
 			>
+			{#if blockedBy}
+				<span class="font-mono text-xs text-muted-foreground" data-gate-reason="baseline"
+					>{blockedBy}</span
+				>
+			{/if}
+			<EditToggle />
+		{:else if baselined}
+			<Button size="sm" onclick={revise}>REVISE</Button>
+		{:else if current}
+			<Button size="sm" href={`/requirements/${current.id}`}>REV {current.revision}</Button>
 		{/if}
+		<MoreMenu items={moreItems} />
 	{/snippet}
 </PageHeader>
 
@@ -317,7 +350,7 @@
 			<ProjectRow id={req.projectId} code={req.projectCode} name={req.projectName} />
 			<!-- added by projects -->
 			<DetailRow label="Statement">
-				{#if mutable}
+				{#if editing}
 					<LintEditor
 						bind:value={statement}
 						findings={req.lint}
@@ -328,7 +361,7 @@
 				{/if}
 			</DetailRow>
 			<DetailRow label="Rationale">
-				{#if mutable}
+				{#if editing}
 					<Textarea
 						bind:value={rationale}
 						rows={2}
@@ -347,7 +380,7 @@
 		>
 			<DetailTable>
 				<DetailRow label="Category">
-					{#if mutable}
+					{#if editing}
 						<Input
 							class="h-7"
 							bind:value={category}
@@ -358,7 +391,7 @@
 					{:else}{req.category ?? '—'}{/if}
 				</DetailRow>
 				<DetailRow label="Parent">
-					{#if mutable}
+					{#if editing}
 						<NativeSelect
 							size="sm"
 							class="w-full"
@@ -381,7 +414,7 @@
 					{:else}<span class="text-muted-foreground">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Level">
-					{#if mutable}
+					{#if editing}
 						<NativeSelect
 							size="sm"
 							value={String(req.level)}
@@ -398,7 +431,7 @@
 					{:else}<span class="mono">L{req.level}</span>{/if}
 				</DetailRow>
 				<DetailRow label="Verification method">
-					{#if mutable}
+					{#if editing}
 						<NativeSelect
 							size="sm"
 							value={req.verificationMethod ?? ''}
@@ -425,7 +458,7 @@
 			</DetailTable>
 			<DetailTable>
 				<DetailRow label="TBD">
-					{#if mutable}
+					{#if editing}
 						<Checkbox
 							checked={req.tbd}
 							onCheckedChange={(v) => save({ tbd: !!v })}
@@ -436,7 +469,7 @@
 						>{/if}
 				</DetailRow>
 				<DetailRow label="TBR">
-					{#if mutable}
+					{#if editing}
 						<Checkbox
 							checked={req.tbr}
 							onCheckedChange={(v) => save({ tbr: !!v })}
@@ -447,7 +480,7 @@
 						>{/if}
 				</DetailRow>
 				<DetailRow label="TBR owner">
-					{#if mutable}
+					{#if editing}
 						<NativeSelect
 							size="sm"
 							value={String(req.tbrOwnerId ?? '')}
@@ -465,7 +498,7 @@
 					{:else}{req.tbrOwner ?? '—'}{/if}
 				</DetailRow>
 				<DetailRow label="TBR due">
-					{#if mutable}
+					{#if editing}
 						<Input
 							type="date"
 							class="h-7 w-40 font-mono"
@@ -478,6 +511,12 @@
 						/>
 					{:else}<Timestamp value={req.tbrDue} dateOnly />{/if}
 				</DetailRow>
+				{#if req.lifecycleState === 'cancelled'}
+					<DetailRow label="Cancelled">
+						<Timestamp value={req.cancelledAt} />{req.cancelledBy ? ` by ${req.cancelledBy}` : ''}
+					</DetailRow>
+					<DetailRow label="Reason" value={req.cancelReason} />
+				{/if}
 				<DetailRow label="Baselined">
 					{#if req.baselinedAt}
 						<Timestamp value={req.baselinedAt} />{req.baselinedBy ? ` by ${req.baselinedBy}` : ''}
@@ -491,11 +530,6 @@
 
 	{#if mutable && req.readiness}
 		<Section title="BASELINE READINESS" count={failingHard ? `${failingHard} blocking` : 'clear'}>
-			{#snippet actions()}
-				<Button size="xs" disabled={!req.readiness?.ready} onclick={baselineIt}
-					>BASELINE {req.reqNumber}</Button
-				>
-			{/snippet}
 			<DataTable
 				rows={req.readiness.checks}
 				columns={[
@@ -524,7 +558,7 @@
 	{#if req.children.length}
 		<Section title="FLOW-DOWN" count={req.children.length}>
 			{#snippet actions()}
-				{#if !terminal}<Button
+				{#if mutable}<Button
 						size="xs"
 						variant="ghost"
 						class="font-mono text-info"
@@ -552,14 +586,18 @@
 				{/snippet}
 			</DataTable>
 		</Section>
-	{:else if !terminal}
-		<EmptyLine label="Flow-down" onadd={() => (qcOpen = true)} addLabel="+ FLOW DOWN" />
+	{:else}
+		<EmptyLine
+			label="Flow-down"
+			onadd={mutable ? () => (qcOpen = true) : undefined}
+			addLabel="+ FLOW DOWN"
+		/>
 	{/if}
 
 	{#if req.allocations.length}
 		<Section title="PARTS" count={req.allocations.length}>
 			{#snippet actions()}
-				{#if !terminal}<PartPicker
+				{#if editing}<PartPicker
 						align="end"
 						trigger={assignPart}
 						onselect={(p) => p && assign(p)}
@@ -581,17 +619,21 @@
 							>{a.internalPn ?? '—'}</a
 						>
 					{:else if col.key === 'status'}
-						<NativeSelect
-							size="sm"
-							value={a.status}
-							onchange={(e) => setStatus(a, e.currentTarget.value)}
-							aria-label={`Verification of ${a.partName}`}
-						>
-							<NativeSelectOption value="open">OPEN</NativeSelectOption>
-							<NativeSelectOption value="verified">VERIFIED</NativeSelectOption>
-							<NativeSelectOption value="waived">WAIVED</NativeSelectOption>
-							<NativeSelectOption value="not_applicable">NOT APPLICABLE</NativeSelectOption>
-						</NativeSelect>
+						{#if recording}
+							<NativeSelect
+								size="sm"
+								value={a.status}
+								onchange={(e) => setStatus(a, e.currentTarget.value)}
+								aria-label={`Verification of ${a.partName}`}
+							>
+								<NativeSelectOption value="open">OPEN</NativeSelectOption>
+								<NativeSelectOption value="verified">VERIFIED</NativeSelectOption>
+								<NativeSelectOption value="waived">WAIVED</NativeSelectOption>
+								<NativeSelectOption value="not_applicable">NOT APPLICABLE</NativeSelectOption>
+							</NativeSelect>
+						{:else}
+							<span class="font-mono text-xs">{stateLabel(a.status)}</span>
+						{/if}
 					{:else if col.key === 'verified'}
 						{#if a.verifiedAt}
 							<span class="text-xs"
@@ -611,13 +653,15 @@
 								: undefined}>{a.againstRevision}</span
 						>
 					{:else if col.key === 'notes'}
-						<Input
-							class="h-7"
-							value={a.notes ?? ''}
-							onblur={(e) => setNotes(a, e.currentTarget.value)}
-							aria-label={`Notes for ${a.partName}`}
-						/>
-					{:else}
+						{#if recording}
+							<Input
+								class="h-7"
+								value={a.notes ?? ''}
+								onblur={(e) => setNotes(a, e.currentTarget.value)}
+								aria-label={`Notes for ${a.partName}`}
+							/>
+						{:else}{a.notes ?? '—'}{/if}
+					{:else if editing}
 						<Button size="xs" variant="ghost" class="text-error" onclick={() => unassign(a)}
 							>UNASSIGN</Button
 						>
@@ -625,7 +669,7 @@
 				{/snippet}
 			</DataTable>
 		</Section>
-	{:else if !terminal}
+	{:else if editing}
 		<EmptyLine label="Parts">
 			{#snippet action()}<PartPicker
 					align="end"
@@ -633,9 +677,16 @@
 					onselect={(p) => p && assign(p)}
 				/>{/snippet}
 		</EmptyLine>
+	{:else}
+		<EmptyLine label="Parts" />
 	{/if}
 
 	<Section title="REVISIONS" count={req.revisions.length}>
+		{#snippet actions()}
+			<Button size="xs" variant="ghost" href={`/audit?entity=requirement&record=${req.id}`}
+				>AUDIT</Button
+			>
+		{/snippet}
 		<DataTable
 			rows={req.revisions}
 			columns={revColumns}

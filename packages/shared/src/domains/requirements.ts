@@ -247,6 +247,10 @@ export const zRequirementDossier = z.object({
 	stale: z.boolean(),
 	baselinedAt: zTimestamp.nullable(),
 	baselinedBy: z.string().nullable(),
+	/** Set only on a cancelled requirement. */
+	cancelledAt: zTimestamp.nullable(),
+	cancelledBy: z.string().nullable(),
+	cancelReason: z.string().nullable(),
 	supersedesId: z.number().int().nullable(),
 	predecessorRevision: z.number().int().nullable(),
 	createdAt: zTimestamp,

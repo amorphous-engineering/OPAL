@@ -872,6 +872,8 @@ describe('cancelling and recording verification are a person\'s acts', () => {
 			cancelledByName: 'ABBY'
 		});
 		expect(c.body.cancelledAt).toMatch(/Z$/);
+		const d = (await call('GET', `/requirements/${r.id}/dossier`)).body;
+		expect(d).toMatchObject({ cancelReason: 'merged into REQ-9', cancelledBy: 'ABBY' });
 	});
 
 	test('recording verification is refused to an API token, with the status select as a second door', async () => {
