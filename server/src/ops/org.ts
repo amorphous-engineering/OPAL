@@ -81,7 +81,7 @@ export const orgImpls = [
 	implement(c.projects.get, (ctx, input) => projects.getProject(ctx, input.id)),
 	implement(c.projects.create, (ctx, input) => projects.createProject(ctx, input)),
 	implement(c.projects.update, (ctx, input) => projects.updateProject(ctx, input)),
-	implement(c.projects.archive, (ctx, input) => projects.archiveProject(ctx, input.id)),
+	implement(c.projects.archive, (ctx, input) => projects.archiveProject(ctx, input.id, input.reason)),
 	// organization settings
 	implement(c.settings.get, (ctx) => {
 		const config = project.getOrgSettings(ctx.db);

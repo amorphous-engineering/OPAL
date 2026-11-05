@@ -43,6 +43,13 @@
       "when": 1793883518116,
       "tag": "0005_equal_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793883833891,
+      "tag": "0006_amazing_taskmaster",
+      "breakpoints": true
     }
   ]
 }

@@ -13,9 +13,10 @@ import {
 	type SchemaField,
 	unitSymbol
 } from '@opal/shared';
-import { and, asc, count, desc, eq, gte, like, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, isNull, like, lte } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
-import { dataPoint, dataset } from '../../db/schema/index.ts';
+import type { Db } from '../../db/client.ts';
+import { dataPoint, dataset, user } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
 import { parseCsv } from '../parts/csv.ts';
@@ -47,13 +48,24 @@ function present(ctx: Ctx, r: DatasetRow): Dataset {
 	};
 }
 
-const presentPoint = (r: PointRow, source: StepSource | null = null): DataPoint => ({
+const presentPoint = (db: Db, r: PointRow, source: StepSource | null = null): DataPoint => ({
 	id: r.id,
 	datasetId: r.datasetId,
 	recordedAt: r.recordedAt,
 	values: r.values,
 	stepExecutionId: r.stepExecutionId,
 	source, // added by execution
+	struck:
+		r.struckAt === null
+			? null
+			: {
+					at: r.struckAt,
+					byName:
+						r.struckById === null
+							? null
+							: (db.select({ name: user.name }).from(user).where(eq(user.id, r.struckById)).get()?.name ?? null),
+					reason: r.strikeReason ?? ''
+				},
 	createdAt: r.createdAt
 });
 
@@ -171,7 +183,7 @@ export function addPoint(
 		values: i.values,
 		stepExecutionId: i.stepExecutionId ?? null
 	});
-	return presentPoint(r, r.stepExecutionId === null ? null : (stepSources(ctx.db, [r.stepExecutionId]).get(r.stepExecutionId) ?? null)); // added by execution
+	return presentPoint(ctx.db, r, r.stepExecutionId === null ? null : (stepSources(ctx.db, [r.stepExecutionId]).get(r.stepExecutionId) ?? null)); // added by execution
 }
 
 export function listPoints(
@@ -199,13 +211,14 @@ export function listPoints(
 			// added by execution: where each point came from
 			const page = rows.slice(0, i.limit);
 			const src = stepSources(ctx.db, page.map((p) => p.stepExecutionId).filter((x): x is number => x !== null));
-			return page.map((p) => presentPoint(p, p.stepExecutionId === null ? null : (src.get(p.stepExecutionId) ?? null)));
+			return page.map((p) => presentPoint(ctx.db, p, p.stepExecutionId === null ? null : (src.get(p.stepExecutionId) ?? null)));
 		})(),
 		next: rows.length > i.limit ? String(offset + i.limit) : null
 	};
 }
 
-export function removePoint(ctx: Ctx, id: number, pointId: number): void {
+/** Strike a captured point: the row and its values stay, the point stops counting. */
+export function strikePoint(ctx: Ctx, id: number, pointId: number, reason: string): DataPoint {
 	openRow(ctx, id);
 	const p = ctx.db
 		.select()
@@ -213,7 +226,9 @@ export function removePoint(ctx: Ctx, id: number, pointId: number): void {
 		.where(and(eq(dataPoint.id, pointId), eq(dataPoint.datasetId, id)))
 		.get();
 	if (!p) throw notFound('Data point');
-	remove(ctx, dataPoint, pointId);
+	if (p.struckAt !== null) throw conflict('already_struck', 'The point is already struck');
+	const r = update(ctx, dataPoint, pointId, { struckAt: now(), struckById: actorUserId(ctx.actor), strikeReason: reason.trim() });
+	return presentPoint(ctx.db, r, r.stepExecutionId === null ? null : (stepSources(ctx.db, [r.stepExecutionId]).get(r.stepExecutionId) ?? null));
 }
 
 // ---- chart ----
@@ -229,6 +244,7 @@ export function chart(
 	}
 	const where = and(
 		eq(dataPoint.datasetId, i.id),
+		isNull(dataPoint.struckAt),
 		i.start ? gte(dataPoint.recordedAt, iso(i.start)) : undefined,
 		i.end ? lte(dataPoint.recordedAt, iso(i.end)) : undefined
 	);
@@ -277,7 +293,7 @@ export function exportCsv(ctx: Ctx, id: number): string {
 	const points = ctx.db
 		.select()
 		.from(dataPoint)
-		.where(eq(dataPoint.datasetId, id))
+		.where(and(eq(dataPoint.datasetId, id), isNull(dataPoint.struckAt)))
 		.orderBy(asc(dataPoint.recordedAt), asc(dataPoint.id))
 		.all();
 	const lines = [['recorded_at', ...heads, ...(flagged ? ['out_of_spec'] : [])].map((c) => cell(c, true)).join(',')];

@@ -45,6 +45,11 @@ export const dataPoint = sqliteTable(
 		// The step execution that produced the point (wave 3). Plain integer, no foreign key:
 		// the execution tables do not exist yet. The execution area resolves it and adds the link.
 		stepExecutionId: integer('step_execution_id').references((): AnySQLiteColumn => stepExecution.id, { onDelete: 'set null' }), // added by execution
+		// A captured point is never removed. Striking leaves the row and its values on the page and
+		// takes it out of the chart and the export.
+		struckAt: text('struck_at'),
+		struckById: integer('struck_by_id').references(() => user.id, { onDelete: 'set null' }),
+		strikeReason: text('strike_reason'),
 		createdAt: createdAt()
 	},
 	(t) => [

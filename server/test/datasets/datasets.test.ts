@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { auditLog } from '../../src/db/schema/index.ts';
+import { auditLog, dataPoint } from '../../src/db/schema/index.ts';
 import { setup as partsSetup } from '../parts/helpers.ts';
 import { createTestProject } from '../helpers/project.ts'; // added by projects
 
@@ -115,10 +115,38 @@ describe('data points', () => {
 		const ranged = await api('GET', `/datasets/${ds.id}/points?start=2026-01-02T00:00:00Z&end=2026-01-02T12:00:00Z`);
 		expect(ranged.json.items).toHaveLength(1);
 		const id = desc.json.items[0].id;
-		expect((await api('DELETE', `/datasets/${ds.id}/points/${id}`)).status).toBe(200);
+		const struck = await api('POST', `/datasets/${ds.id}/points/${id}/strike`, { reason: 'Probe was unplugged' });
+		expect(struck.status).toBe(200);
+		expect(struck.json.struck).toMatchObject({ reason: 'Probe was unplugged' });
+		// The row stays on the page, struck, and keeps its values.
+		const after = (await api('GET', `/datasets/${ds.id}/points`)).json.items;
+		expect(after).toHaveLength(3);
+		expect(after[0]).toMatchObject({ id, values: { value: 3 } });
+		expect((await api('POST', `/datasets/${ds.id}/points/${id}/strike`, { reason: 'again' })).status).toBe(409);
+		expect((await api('POST', `/datasets/${ds.id}/points/9999/strike`, { reason: 'x' })).status).toBe(404);
+		expect((await api('GET', `/datasets/${ds.id}`)).json.pointCount).toBe(3);
+	});
+
+	test('striking a point needs a reason and removes nothing', async () => {
+		const { api, db, ds, pts } = await make();
+		const p = await pts({ values: { value: 1 } });
+		expect((await api('POST', `/datasets/${ds.id}/points/${p.json.id}/strike`, {})).status).toBe(422);
+		expect((await api('POST', `/datasets/${ds.id}/points/${p.json.id}/strike`, { reason: '  ' })).status).toBe(422);
+		expect((await api('DELETE', `/datasets/${ds.id}/points/${p.json.id}`)).status).toBe(404);
+		expect(db.select().from(dataPoint).all()).toHaveLength(1);
+	});
+
+	test('a struck point leaves the chart and the export but not the list', async () => {
+		const { api, ds, pts } = await make();
+		const a = await pts({ values: { value: 10 }, recordedAt: '2026-01-01T00:00:00Z' });
+		await pts({ values: { value: 20 }, recordedAt: '2026-01-02T00:00:00Z' });
+		await api('POST', `/datasets/${ds.id}/points/${a.json.id}/strike`, { reason: 'Wrong unit' });
+		const chart = (await api('GET', `/datasets/${ds.id}/chart?field=value`)).json;
+		expect(chart.series.map((x: any) => x.value)).toEqual([20]);
+		const csv = (await api('GET', `/datasets/${ds.id}/export`)).text;
+		expect(csv).toContain('20');
+		expect(csv).not.toContain('10');
 		expect((await api('GET', `/datasets/${ds.id}/points`)).json.items).toHaveLength(2);
-		expect((await api('DELETE', `/datasets/${ds.id}/points/${id}`)).status).toBe(404);
-		expect((await api('GET', `/datasets/${ds.id}`)).json.pointCount).toBe(2);
 	});
 
 	test('values are validated against the schema', async () => {
@@ -162,9 +190,9 @@ describe('data points', () => {
 	test('point and dataset changes are audited', async () => {
 		const { api, db, ds, pts } = await make();
 		const p = await pts({ values: { value: 1 } });
-		await api('DELETE', `/datasets/${ds.id}/points/${p.json.id}`);
+		await api('POST', `/datasets/${ds.id}/points/${p.json.id}/strike`, { reason: 'Test' });
 		const rows = db.select().from(auditLog).all().filter((r) => r.entity === 'data_point');
-		expect(rows.map((r) => r.action)).toEqual(['create', 'delete']);
+		expect(rows.map((r) => r.action)).toEqual(['create', 'update']);
 		expect(db.select().from(auditLog).all().some((r) => r.entity === 'dataset' && r.action === 'create')).toBe(true);
 	});
 });
@@ -265,7 +293,7 @@ describe('projects', () => {
 		expect((await raw.api('POST', '/datasets', { name: 'x', schema: { fields: [] } })).status).toBe(422);
 		expect((await api('POST', '/datasets', { name: 'x', schema: { fields: [] }, projectId: 999 })).status).toBe(404);
 		const dead = createTestProject(db, 'DEAD');
-		await api('POST', `/projects/${dead.id}/archive`);
+		await api('POST', `/projects/${dead.id}/archive`, { reason: 'Test' });
 		expect((await api('POST', '/datasets', { name: 'x', schema: { fields: [] }, projectId: dead.id })).status).toBe(409);
 		const r = await api('POST', '/datasets', { name: 'x', schema: { fields: [] } });
 		expect(r.json).toMatchObject({ projectId: project.id, projectCode: 'TP', projectName: 'Project TP' });

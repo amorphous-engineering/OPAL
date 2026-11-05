@@ -18,6 +18,7 @@ const out = (r: Row): Project => ({
 	description: r.description,
 	state: r.state,
 	archivedAt: r.archivedAt,
+	archivedReason: r.archivedReason,
 	createdAt: r.createdAt,
 	updatedAt: r.updatedAt
 });
@@ -108,10 +109,10 @@ export function updateProject(
 	return getProject(ctx, input.id);
 }
 
-export function archiveProject(ctx: Ctx, id: number): Project {
+export function archiveProject(ctx: Ctx, id: number, reason: string): Project {
 	const cur = projectRow(ctx.db, id);
 	if (cur.state === 'archived') throw new OpalError(409, 'project_archived', `Project ${cur.code} is already archived`);
-	update(ctx, project, id, { state: 'archived', archivedAt: now() });
+	update(ctx, project, id, { state: 'archived', archivedAt: now(), archivedReason: reason.trim() });
 	return getProject(ctx, id);
 }
 

@@ -95,6 +95,8 @@ export const zDataPoint = z.object({
 			stepTitle: z.string()
 		})
 		.nullable(),
+	/** Set when the point was struck: it stays listed, and leaves the chart and the export. */
+	struck: z.object({ at: zTimestamp, byName: z.string().nullable(), reason: z.string() }).nullable(),
 	createdAt: zTimestamp
 });
 export type DataPoint = z.infer<typeof zDataPoint>;
@@ -265,15 +267,17 @@ export const datasets = {
 			access: 'signed-in',
 			mcp: true
 		}),
-		remove: op({
-			name: 'datasets.points.remove',
-			method: 'DELETE',
-			path: '/datasets/:id/points/:pointId',
-			summary: 'Delete a point.',
-			input: z.object({ id: zId, pointId: zId }),
-			output: zOk,
+		strike: op({
+			name: 'datasets.points.strike',
+			method: 'POST',
+			path: '/datasets/:id/points/:pointId/strike',
+			summary:
+				'Strike a point that should not count. It stays on the record with who, when and why, and leaves the chart and the export. A reason is required.',
+			input: z.object({ id: zId, pointId: zId, reason: z.string().trim().min(1, 'a reason is required').max(2000) }),
+			output: zDataPoint,
 			access: 'signed-in',
-			mcp: true
+			humanOnly: true,
+			mcp: false
 		})
 	}
 };

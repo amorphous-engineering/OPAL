@@ -611,6 +611,7 @@ export const zProject = z.object({
 	description: z.string().nullable(),
 	state: z.enum(PROJECT_STATES),
 	archivedAt: zTimestamp.nullable(),
+	archivedReason: z.string().nullable(),
 	createdAt: zTimestamp,
 	updatedAt: zTimestamp
 });
@@ -677,11 +678,12 @@ const projects = {
 		name: 'projects.archive',
 		method: 'POST',
 		path: '/projects/:id/archive',
-		summary: 'Archive a project. Terminal: it takes no new records and cannot be reopened.',
-		input: z.object({ id: zId }),
+		summary: 'Archive a project. Terminal: it takes no new records and cannot be reopened. Admin only, by a person. The reason is required.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1, 'a reason is required').max(2000) }),
 		output: zProject,
-		access: 'signed-in',
-		mcp: true
+		access: 'admin',
+		humanOnly: true,
+		mcp: false
 	})
 };
 

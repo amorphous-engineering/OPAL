@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import type { Actor } from '../../src/context.ts';
 import { setup } from './helpers.ts';
 
 describe('projects', () => {
@@ -27,22 +28,36 @@ describe('projects', () => {
 
 	test('archiving is terminal: no edit, no second archive, and the project stays readable', async () => {
 		const { call, makeUser } = await setup();
-		const bob = makeUser('bob');
+		const bob = makeUser('bob', { admin: true });
 		const p = (await call(bob, 'POST', '/projects', { code: 'P', name: 'P' })).json;
-		const a = await call(bob, 'POST', `/projects/${p.id}/archive`);
+		const a = await call(bob, 'POST', `/projects/${p.id}/archive`, { reason: 'Test' });
 		expect(a.json.state).toBe('archived');
 		expect(a.json.archivedAt).toBeTruthy();
-		expect((await call(bob, 'POST', `/projects/${p.id}/archive`)).status).toBe(409);
+		expect((await call(bob, 'POST', `/projects/${p.id}/archive`, { reason: 'Test' })).status).toBe(409);
 		expect((await call(bob, 'PATCH', `/projects/${p.id}`, { name: 'Q' })).status).toBe(409);
 		expect((await call(bob, 'GET', `/projects/${p.id}`)).json.state).toBe('archived');
 	});
 
+	test('archiving a project needs an admin, a person and a reason, which stays on the project', async () => {
+		const { call, makeUser } = await setup();
+		const admin = makeUser('root', { admin: true });
+		const bob = makeUser('bob');
+		const p = (await call(admin, 'POST', '/projects', { code: 'ARC', name: 'Arc' })).json;
+		expect((await call(bob, 'POST', `/projects/${p.id}/archive`, { reason: 'Done' })).status).toBe(403);
+		const token: Actor = { kind: 'token', userId: admin.id, isAdmin: true, tokenId: 1 };
+		expect((await call(token, 'POST', `/projects/${p.id}/archive`, { reason: 'Done' })).status).toBe(403);
+		expect((await call(admin, 'POST', `/projects/${p.id}/archive`, {})).status).toBe(422);
+		expect((await call(admin, 'POST', `/projects/${p.id}/archive`, { reason: '  ' })).status).toBe(422);
+		const done = await call(admin, 'POST', `/projects/${p.id}/archive`, { reason: ' Programme ended ' });
+		expect(done.json).toMatchObject({ state: 'archived', archivedReason: 'Programme ended' });
+	});
+
 	test('the list filters by state and searches name and code', async () => {
 		const { call, makeUser } = await setup();
-		const bob = makeUser('bob');
+		const bob = makeUser('bob', { admin: true });
 		const a = (await call(bob, 'POST', '/projects', { code: 'A', name: 'Lander' })).json;
 		await call(bob, 'POST', '/projects', { code: 'B', name: 'Rover' });
-		await call(bob, 'POST', `/projects/${a.id}/archive`);
+		await call(bob, 'POST', `/projects/${a.id}/archive`, { reason: 'Test' });
 		expect((await call(bob, 'GET', '/projects?state=active')).json.items.map((p: any) => p.code)).toEqual(['B']);
 		expect((await call(bob, 'GET', '/projects?state=archived')).json.items.map((p: any) => p.code)).toEqual(['A']);
 		expect((await call(bob, 'GET', '/projects?search=rov')).json.items).toHaveLength(1);

@@ -101,6 +101,8 @@ export const project = sqliteTable(
 		description: text('description'),
 		state: text('state', { enum: PROJECT_STATES }).notNull().default('active'),
 		archivedAt: text('archived_at'),
+		/** Why the project was archived. Required by the operation; null on rows from before it existed. */
+		archivedReason: text('archived_reason'),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},

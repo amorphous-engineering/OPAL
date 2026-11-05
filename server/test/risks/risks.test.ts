@@ -662,7 +662,7 @@ describe('projects', () => {
 		expect(res.status).toBe(422);
 		expect((await call('POST', '/risks', { title: 't', projectId: 999 })).status).toBe(404);
 		const dead = createTestProject(db, 'DEAD');
-		await call('POST', `/projects/${dead.id}/archive`);
+		await call('POST', `/projects/${dead.id}/archive`, { reason: 'Test' });
 		expect((await call('POST', '/risks', { title: 't', projectId: dead.id })).status).toBe(409);
 		const r = await call('POST', '/risks', { title: 't', projectId: project.id });
 		expect(r.body).toMatchObject({ projectId: project.id, projectCode: 'TP', projectName: 'Project TP' });

@@ -20,8 +20,5 @@ export const datasetsImpls = [
 	implement(d.points.list, (ctx, i) => ds.listPoints(ctx, i)),
 	implement(d.points.import, (ctx, i) => ds.importPoints(ctx, i.id, i.csv)),
 	implement(d.points.add, (ctx, i) => ds.addPoint(ctx, i)),
-	implement(d.points.remove, (ctx, i) => {
-		ds.removePoint(ctx, i.id, i.pointId);
-		return { ok: true as const };
-	})
+	implement(d.points.strike, (ctx, i) => ds.strikePoint(ctx, i.id, i.pointId, i.reason))
 ] as Impl[];
