@@ -5,7 +5,9 @@
  * It has to run before them. The rebuild of `execution` copies its rows into a table whose CHECK
  * refuses `aborted`, and the old table's CHECK refuses `closed_short`, so the value can change only
  * with CHECK enforcement off, ahead of the copy. The old CHECK still naming `aborted` is what marks
- * a database that has not had this step, so it runs exactly once per database.
+ * a database that has not had this step, so it takes effect once per database. If the migrations
+ * then fail, the next open runs it again: these commit ahead of the migration transaction, so every
+ * statement here must stay idempotent.
  *
  * A data rewrite, not an operation: no audit rows. An old aborted order has no linked issue and
  * usually no reason, and it stays that way: nobody recorded them.

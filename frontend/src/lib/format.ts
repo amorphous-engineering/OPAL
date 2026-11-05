@@ -168,7 +168,10 @@ export function qty(value: number | string | null | undefined, uom?: string | nu
 }
 
 /** A quantity with its unit, always: 12 EA, 2.5 KG. Nothing on the floor is unitless. */
-export function qtyUnit(value: number | string | null | undefined, uom: string | null | undefined): string {
+export function qtyUnit(
+	value: number | string | null | undefined,
+	uom: string | null | undefined
+): string {
 	const q = qty(value);
 	return q === '—' ? q : `${q} ${(uom || 'ea').toUpperCase()}`;
 }

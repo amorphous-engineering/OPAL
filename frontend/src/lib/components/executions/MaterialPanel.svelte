@@ -331,7 +331,9 @@
 								href={`/inventory/opal/${r.opal_number}`}>{r.opal_number}</a
 							>{:else}<span class="text-muted-foreground">—</span>{/if}
 					{:else if col.key === 'quantity'}
-						{r.status === 'completed' ? qtyUnit(r.quantity, r.uom) : `(${qtyUnit(r.quantity, r.uom)})`}
+						{r.status === 'completed'
+							? qtyUnit(r.quantity, r.uom)
+							: `(${qtyUnit(r.quantity, r.uom)})`}
 					{:else if col.key === 'status'}
 						<State
 							value={r.status}

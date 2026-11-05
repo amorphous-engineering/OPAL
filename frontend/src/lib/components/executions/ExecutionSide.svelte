@@ -68,7 +68,8 @@
 			count={doc.issues.length || undefined}
 		>
 			{#snippet actions()}
-				<Button size="xs" variant="ghost" href={newIssue} target="_blank" rel="noopener">+ NEW</Button
+				<Button size="xs" variant="ghost" href={newIssue} target="_blank" rel="noopener"
+					>+ NEW</Button
 				>
 			{/snippet}
 			<div class="min-h-0 overflow-x-hidden overflow-y-auto">

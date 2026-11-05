@@ -283,8 +283,7 @@
 							<Button
 								size="xs"
 								variant={deleting ? 'destructive' : 'outline'}
-								onclick={() =>
-									deleting ? ctl.actions.deleteRedline?.(op) : (deleting = true)}
+								onclick={() => (deleting ? ctl.actions.deleteRedline?.(op) : (deleting = true))}
 								>{deleting ? 'CONFIRM DELETE' : 'DELETE REDLINE'}</Button
 							>
 							{#if deleting}

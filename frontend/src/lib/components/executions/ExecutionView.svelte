@@ -186,11 +186,8 @@
 				{#snippet actions()}
 					{#if inst.active}<EditToggle />{/if}
 					{#if !inst.active}
-						<Button
-							size="sm"
-							href={`/executions/${inst.id}/report`}
-							target="_blank"
-							rel="noopener">REPORT</Button
+						<Button size="sm" href={`/executions/${inst.id}/report`} target="_blank" rel="noopener"
+							>REPORT</Button
 						>
 					{/if}
 					<MoreMenu items={more} />

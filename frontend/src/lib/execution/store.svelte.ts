@@ -54,9 +54,7 @@ function write(key: string, value: unknown) {
 
 /** The one form open on the page. It sits inline: nothing here covers the document. */
 export type OpenPanel =
-	| { kind: 'redline'; op: DocOp; issueId?: number }
-	| { kind: 'closeShort' }
-	| null;
+	{ kind: 'redline'; op: DocOp; issueId?: number } | { kind: 'closeShort' } | null;
 
 type WorkRow = { op: DocOp; step: DocStep };
 
