@@ -80,7 +80,7 @@ Files and images are not operations, but they need a permission too:
 - `attachments.download` (or `attachments.list`): the bytes of an attachment or a blob.
 - `users.getAvatar`: a user's photo.
 
-A plugin's token cannot call `/plugins/<id>/...`, its own or another's.
+- `plugins.proxy`: calling `/plugins/<id>/...` with the token, for any plugin. Without it, the token is refused there. A plugin needs this only to call another plugin.
 
 ## HTTP
 
