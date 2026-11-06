@@ -915,6 +915,21 @@ describe('projects', () => {
 		expect((await call('GET', `/requirements/${root.id}`)).body.projectId).toBe(project.id);
 	});
 
+	test('a draft revision cannot carry its baselined predecessor to another project', async () => {
+		const { call, req, db, project, baseline } = await setup();
+		const b = createTestProject(db, 'B');
+		const r1 = await req();
+		await baseline(r1.id);
+		const r2 = (await call('POST', `/requirements/${r1.id}/revise`)).body;
+		const moved = await call('PATCH', `/requirements/${r2.id}`, { projectId: b.id });
+		expect(moved.status).toBe(409);
+		expect((await call('GET', `/requirements/${r1.id}`)).body.projectId).toBe(project.id);
+		expect((await call('GET', `/requirements/${r2.id}`)).body.projectId).toBe(project.id);
+		expect((await call('GET', `/requirements/baselines?projectId=${project.id}`)).body).toHaveLength(1);
+		// The draft itself still edits.
+		expect((await call('PATCH', `/requirements/${r2.id}`, { title: 'Sharper' })).status).toBe(200);
+	});
+
 	test('a baseline event belongs to one project and a mixed batch is refused', async () => {
 		const { call, req, db, project } = await setup();
 		const b = createTestProject(db, 'B');

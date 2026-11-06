@@ -276,6 +276,10 @@ function moveProject(ctx: Ctx, r: RequirementRow, projectId: number) {
 		throw conflict('requirement_in_use', `${r.reqNumber} has a parent; detach it before changing the project`);
 	}
 	const sameNumber = ctx.db.select().from(requirement).where(eq(requirement.reqNumber, r.reqNumber)).all();
+	// A draft revision must not carry a baselined predecessor away from the baseline event that filed it.
+	if (sameNumber.some((x) => !isMutable(x))) {
+		throw conflict('requirement_state', `${r.reqNumber} has a baselined revision and stays in its project`);
+	}
 	const ids = sameNumber.map((x) => x.id);
 	const kids = ctx.db
 		.select({ n: count() })

@@ -244,6 +244,18 @@ describe('issue links', () => {
 	});
 });
 
+describe('striking a work order under a hold', () => {
+	test('voiding an unstarted work order leaves its issue undispositioned and still to sign', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const nc = (await t.nc(e.id, '1')).json;
+		expect((await t.call('POST', `/executions/${e.id}/void`, { reason: 'cut in error' }, t.catActor)).status).toBe(200);
+		expect((await t.call('GET', `/issues/${nc.id}`)).json.dispState).toBe('undispositioned');
+		expect((await t.complete(e.id, '1')).status).toBe(409);
+		expect((await t.disposition(nc.id)).status).toBe(200);
+	});
+});
+
 describe('moving a containment boundary', () => {
 	const contain = (t: Awaited<ReturnType<typeof setup>>, id: number, body: Record<string, unknown>, as?: any) =>
 		t.call('POST', `/issues/${id}/containment`, body, as);

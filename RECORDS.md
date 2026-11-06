@@ -79,6 +79,7 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 | Baselined | What is required, and is it verified? | REVISE | Record verification per allocation, which adds an entry with who and when | | CANCEL (reason required) |
 | Superseded, Cancelled | What replaced this, or why was it dropped? | Link to the current revision | | | |
 
+- A requirement with a baselined revision stays in its project, including through a draft of its next revision.
 - A verification stays until someone takes it back with WITHDRAW VERIFICATION (a person, reason required). The allocation shows who verified, who withdrew, when and why.
 - A verified allocation cannot be removed, nor can one with a withdrawn verification. Mark it not applicable.
 
