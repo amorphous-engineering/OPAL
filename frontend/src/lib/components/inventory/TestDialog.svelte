@@ -86,7 +86,8 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title class="text-sm font-semibold">{test ? 'Fill in test' : 'Run test'}</Dialog.Title>
+			<Dialog.Title class="text-sm font-semibold">{test ? 'Fill in test' : 'Run test'}</Dialog.Title
+			>
 		</Dialog.Header>
 		<form onsubmit={submit} class="grid grid-cols-1 gap-3">
 			{#if !test && templates.length}

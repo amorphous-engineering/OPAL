@@ -481,8 +481,9 @@
 								{/if}
 							{:else}
 								{@const v = r[col.key as 'testName' | 'value' | 'notes' | 'testedByName']}
-								{#if v}<span class={r.struck ? 'line-through' : undefined}>{v}</span
-									>{:else}<span class="text-quiet">—</span>{/if}
+								{#if v}<span class={r.struck ? 'line-through' : undefined}>{v}</span>{:else}<span
+										class="text-quiet">—</span
+									>{/if}
 							{/if}
 						{/snippet}
 					</DataTable>
