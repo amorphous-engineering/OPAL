@@ -143,7 +143,8 @@ const flag = (v: boolean) => (v ? 'true' : 'false');
 export const authImpls = [
 	implement(contracts.auth.config, (ctx) => {
 		const s = readSettings(ctx.db);
-		const oidc = oidcActive(s);
+		// Until someone has run setup, no sign-in method can create the first administrator.
+		const oidc = oidcActive(s) && !needsSetup(ctx);
 		// The setup fields say something only while nobody has claimed the instance. After that, a
 		// public reply must not tell a stranger which host names are listed here.
 		const unclaimed = needsSetup(ctx) && setupCodeRequired();

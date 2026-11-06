@@ -1,3 +1,4 @@
+import { authSetting } from '../../src/db/schema/auth.ts';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { generateKeyPair } from 'jose';
 import { customFetch } from 'openid-client';
@@ -316,6 +317,7 @@ describe('handshake state and redirects', () => {
 describe('identity resolution', () => {
 	const fresh = async () => {
 		const h = await harness();
+		makeUser(h, { username: 'claimed-by-setup', isAdmin: true });
 		return h;
 	};
 	const resolve = (h: Harness, claims: Record<string, unknown>, s = settings()) => resolveIdentity(h.ctx, s, claims);
@@ -330,9 +332,22 @@ describe('identity resolution', () => {
 		expect(u.passwordHash).toBeNull();
 	});
 
-	test('the first account is admin whatever the groups say', async () => {
-		const h = await fresh();
-		expect(resolve(h, { sub: 's1', email: 'a@example.test' }).isAdmin).toBe(true);
+	test('while nobody has run setup, a sign-in at the provider is refused and points to setup', async () => {
+		const h = await harness();
+		expect(() => resolve(h, { sub: 's1', email: 'a@example.test', groups: ['opal-admins'] })).toThrow(/first-run setup/);
+		expect(h.db.select().from(user).all()).toEqual([]);
+	});
+
+	test('while nobody has run setup, the sign-in button is not offered and the route goes to setup', async () => {
+		const h = await harness();
+		const ts = new Date().toISOString();
+		for (const [key, value] of Object.entries({ oidc_enabled: 'true', oidc_issuer: p.issuer, oidc_client_id: 'c' })) {
+			h.db.insert(authSetting).values({ key: key as never, value, createdAt: ts, updatedAt: ts }).run();
+		}
+		expect((await (await h.call('GET', '/auth/config')).json()).oidcEnabled).toBe(false);
+		const res = await h.raw('/oidc/login');
+		expect(res.status).toBe(302);
+		expect(res.headers.get('location')).toBe('/setup');
 	});
 
 	test('the admin group grants admin and losing it revokes admin', async () => {
@@ -355,7 +370,8 @@ describe('identity resolution', () => {
 	});
 
 	test('the last active administrator is never demoted by group sync', async () => {
-		const h = await fresh();
+		const h = await harness();
+		makeUser(h, { username: 'claimed-by-setup' });
 		makeUser(h, { username: 'plain' });
 		const u = resolve(h, { sub: 'l1', email: 'l@example.test', groups: ['opal-admins'] });
 		expect(u.isAdmin).toBe(true);
@@ -548,8 +564,7 @@ describe('oidc routes', () => {
 		expect(sent.get('redirect_uri')).toBe('http://opal.test/oidc/callback');
 		const me = await (await h.call('GET', '/auth/me', undefined, { cookie: session })).json();
 		expect(me.username).toBe('rt');
-		expect(me.isAdmin).toBe(true); // the first account
-		const row = h.db.select().from(user).get()!;
+		const row = h.db.select().from(user).where(eq(user.username, 'rt')).get()!;
 		expect(row.oidcSubject).toBe('rt-1');
 		expect(res.headers.getSetCookie().some((c) => c.startsWith('opal_oidc_state=;') || /opal_oidc_state=;/.test(c))).toBe(true);
 	});
@@ -625,7 +640,7 @@ describe('oidc routes', () => {
 		p.tokens = { id_token: await p.idToken({ sub: 'x1' }, { nonce: 'not-the-nonce' }) };
 		const res = await h.raw(`/oidc/callback?code=c&state=${query.get('state')}`, { cookie });
 		expect(res.headers.get('location')).toContain('nonce');
-		expect(h.db.select().from(user).all()).toHaveLength(0);
+		expect(h.db.select().from(user).all().filter((u) => u.oidcSubject)).toHaveLength(0);
 	});
 
 	test('a refusal inside the sign-in rolls back and shows the message', async () => {

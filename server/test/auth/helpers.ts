@@ -179,7 +179,9 @@ export async function fakeProvider(): Promise<FakeProvider> {
 }
 
 /** Save OIDC settings straight into the database (as the settings page would). */
+/** Settings for the fake provider, on an instance that setup has claimed. */
 export function configureOidc(h: Harness, p: FakeProvider, over: Record<string, string> = {}): void {
+	if (!h.db.select({ id: user.id }).from(user).get()) makeUser(h, { username: 'claimed-by-setup', isAdmin: true });
 	const rows: Record<string, string> = {
 		oidc_enabled: 'true',
 		oidc_issuer: p.issuer,

@@ -11,6 +11,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import * as oc from 'openid-client';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
+import { user } from '../db/schema/index.ts';
 import {
 	buildAuthorizationUrl,
 	exchangeCode,
@@ -57,6 +58,7 @@ export function mountOidc(app: Hono, db: Db): void {
 	app.get('/oidc/login', async (c) => {
 		const settings = readSettings(db);
 		if (!oidcActive(settings)) return c.redirect('/login', 302);
+		if (db.select({ id: user.id }).from(user).get() === undefined) return c.redirect('/setup', 302);
 		const { base, secure } = requestBase(c);
 		const state = oc.randomState();
 		const nonce = oc.randomNonce();

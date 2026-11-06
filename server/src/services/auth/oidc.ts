@@ -331,6 +331,12 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 	// the email stays a display attribute and can never claim an existing account.
 	const verified = claims.email_verified === true || claims.email_verified === 'true';
 
+	// Setup creates the first administrator, with the printed code and a password. Nobody who can
+	// complete a sign-in at the provider takes over an instance without that code.
+	if (ctx.db.select({ id: user.id }).from(user).get() === undefined) {
+		throw new OidcError('This OPAL has no administrator yet. Finish first-run setup with the code the server printed, then set up single sign-on.');
+	}
+
 	const groups = extractGroups(claims, s.oidcGroupsClaim);
 	const grantsAdmin = !!s.oidcAdminGroup && groups.includes(s.oidcAdminGroup);
 
@@ -356,7 +362,6 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 		}
 	}
 
-	let bootstrapAdmin = false;
 	if (!u) {
 		if (!s.oidcAutoCreateUsers) {
 			throw new OidcError(
@@ -368,8 +373,6 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 				'The identity provider reports this email address as unverified. Verify it, then sign in again.'
 			);
 		}
-		// The first account on a fresh install is admin whatever the groups say, so nobody is locked out.
-		bootstrapAdmin = ctx.db.select({ id: user.id }).from(user).get() === undefined;
 		const seed = String(claims.preferred_username ?? '') || (email ? email.split('@')[0]! : '') || displayName(claims, email, subject);
 		u = insert(ctx, user, {
 			name: displayName(claims, email, subject),
@@ -379,7 +382,7 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 			oidcIssuer: s.oidcIssuer,
 			oidcSubject: subject,
 			isActive: true,
-			isAdmin: bootstrapAdmin || grantsAdmin
+			isAdmin: grantsAdmin
 		});
 	}
 
@@ -395,7 +398,7 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 			.get();
 		if (!clash) u = update(ctx, user, u.id, { email });
 	}
-	if (s.oidcAdminGroup && !bootstrapAdmin) u = syncAdmin(ctx, s, claims, groups, u, grantsAdmin);
+	if (s.oidcAdminGroup) u = syncAdmin(ctx, s, claims, groups, u, grantsAdmin);
 	return u;
 }
 

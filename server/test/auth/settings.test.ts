@@ -172,8 +172,8 @@ describe('sign-in settings', () => {
 		try {
 			let s = readSettings(h.db);
 			expect([s.oidcEnabled, s.oidcIssuer, s.oidcClientId, s.oidcAdminGroup]).toEqual([true, 'https://env.example.com', 'env-client', 'env-admins']);
-			expect((await (await h.call('GET', '/auth/config')).json()).oidcEnabled).toBe(true);
 			const cookie = await adminSession(h);
+			expect((await (await h.call('GET', '/auth/config')).json()).oidcEnabled).toBe(true);
 			await h.call(
 				'PUT',
 				'/settings/auth',
