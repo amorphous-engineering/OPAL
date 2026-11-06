@@ -62,6 +62,16 @@ OPAL sets these variables. The plugin fails at start when one is missing.
 - `OPAL_PLUGIN_DATA`: the data folder.
 - `OPAL_SETTINGS`: JSON with all setting values.
 
+The server passes these, `BUN_BE_BUN`, and only the basics from its own environment: `PATH`, home and
+temp folders, locale, time zone, proxy settings and extra CA certificates. It does not pass its own
+secrets or `OPAL_DATA_DIR`. Put what a plugin needs in its settings.
+
+## Trust
+
+Installing a plugin gives it shell-level access to the server. The token limits only its API calls.
+The process runs as the same user as OPAL, with no sandbox, so it can read the data folder, including
+the database. Install only plugins you would trust with a login on that machine.
+
 ## HTTP
 
 The SDK serves `GET /__health` and then your routes. OPAL reaches them at `/plugins/<id>/<path>`.

@@ -15,6 +15,7 @@ Bun.serve({
 		if (url.pathname === '/env') {
 			return Response.json(Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith('OPAL_') || k === 'BUN_BE_BUN')));
 		}
+		if (url.pathname === '/env-names') return Response.json(Object.keys(process.env));
 		if (url.pathname === '/call') return Response.json(await call(url.searchParams.get('path')));
 		if (url.pathname === '/crash') {
 			setTimeout(() => process.exit(3), 10);

@@ -73,6 +73,10 @@ These environment variables set what the server accepts. The defaults suit a tea
 | `OPAL_IDLE_TIMEOUT_SECONDS` | 60 | A connection silent this long is closed (1 to 255). The live event stream sends a heartbeat every 5 seconds and stays open. |
 | `OPAL_MAX_STREAMS_PER_USER` | 30 | Live event streams one account may hold open at once. Each open tab uses one or two. |
 
+### Plugins
+
+An admin can install a plugin from a public GitHub repository. **Installing a plugin gives it shell-level access to the server.** Its API token is limited to the permissions in its manifest, but the process runs as the same user as OPAL with no sandbox, so it can read the data folder, including the database. Install only plugins you would trust with a login on that machine.
+
 ### Upgrade from 1.x
 
 1. Install the last 1.x release and start it once. This upgrades the database.

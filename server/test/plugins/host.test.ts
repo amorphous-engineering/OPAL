@@ -95,6 +95,25 @@ describe('plugin host', () => {
 		expect(JSON.parse(env.OPAL_SETTINGS)).toEqual({ greeting: 'hi', apiKey: 's3' });
 	});
 
+	test('a plugin never inherits the secrets in the server environment', async () => {
+		process.env.OPAL_AUTH_SECRET_PROBE = 'server-secret';
+		process.env.SOME_SERVICE_PASSWORD = 'server-secret';
+		try {
+			addPlugin(db, {});
+			db.insert(pluginSetting).values({ pluginId: 1, key: 'apiKey', value: 's3', secret: true, createdAt: ts, updatedAt: ts }).run();
+			await host.start('echo');
+			await until(() => host.process('echo').state === 'running');
+			const env = await get('/env');
+			expect(Object.keys(env).sort()).toEqual(
+				['BUN_BE_BUN', 'OPAL_PLUGIN_DATA', 'OPAL_PLUGIN_ID', 'OPAL_PLUGIN_PORT', 'OPAL_SETTINGS', 'OPAL_TOKEN', 'OPAL_URL'].sort()
+			);
+			expect(await get('/env-names')).not.toContain('SOME_SERVICE_PASSWORD');
+		} finally {
+			delete process.env.OPAL_AUTH_SECRET_PROBE;
+			delete process.env.SOME_SERVICE_PASSWORD;
+		}
+	});
+
 	test('a disabled plugin does not start', async () => {
 		addPlugin(db, { enabled: false });
 		await host.start('echo');
