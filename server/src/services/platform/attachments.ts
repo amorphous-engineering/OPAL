@@ -242,17 +242,10 @@ function ownerTable(type: string) {
 	return tables.get(type);
 }
 
-/** Sign-in, authority and bookkeeping tables are not records a file can belong to. */
-const NOT_OWNERS = new Set([
-	'attachment', 'blob', 'audit_log', 'undo_mark',
-	'user', 'user_profile', 'user_role', 'role', 'role_gate',
-	'session', 'api_token', 'passkey_credential', 'webauthn_challenge', 'auth_setting',
-	'plugin', 'plugin_setting', 'external_link', 'notification'
-]);
-
 function assertOwner(db: Db, owner: Owner): void {
 	const table = ownerTable(owner.type);
-	if (!table?.id || NOT_OWNERS.has(owner.type)) {
+	// A file can belong only to a record that says when its files may change.
+	if (!table?.id || !guards.has(owner.type)) {
 		throw new OpalError(422, 'invalid_input', 'Invalid input', { ownerType: `unknown owner type ${owner.type}` });
 	}
 	if (!db.select({ id: table.id }).from(table).where(eq(table.id, owner.id)).get()) {
@@ -273,8 +266,9 @@ const guards = new Map<string, OwnerGuard>();
 export const evidenceFrozen = (message: string) => new OpalError(409, 'evidence_frozen', message);
 
 /**
- * An area that freezes its records registers a veto per owner type. Only the operation path
- * (`guardAttach`, `guardChange`) asks it. Internal callers of `attach` and `detach` do not.
+ * Each owner type registers its rule, and a type with no rule cannot own a file: a new table is closed
+ * until its area says otherwise. Only the operation path (`guardAttach`, `guardChange`) asks the rule.
+ * Internal callers of `attach` and `detach` do not.
  */
 export function registerOwnerGuard(ownerType: string, guard: OwnerGuard): void {
 	guards.set(ownerType, guard);
@@ -282,14 +276,16 @@ export function registerOwnerGuard(ownerType: string, guard: OwnerGuard): void {
 
 export function guardAttach(ctx: Ctx, owner: Owner): void {
 	assertOwner(ctx.db, owner);
-	guards.get(owner.type)?.(ctx, owner.id, { action: 'attach' });
+	guards.get(owner.type)!(ctx, owner.id, { action: 'attach' });
 }
 
 /** For the patch and detach operations: runs the guard of the attachment's owner type. */
 export function guardChange(ctx: Ctx, id: number, action: 'patch' | 'detach'): void {
 	const a = ctx.db.select().from(attachment).where(eq(attachment.id, id)).get();
 	if (!a) throw notFound('Attachment');
-	guards.get(a.ownerType)?.(ctx, a.ownerId, { action, attachment: { id: a.id, kind: a.kind, createdAt: a.createdAt } });
+	const guard = guards.get(a.ownerType);
+	if (!guard) throw evidenceFrozen(`A file on ${a.ownerType} cannot change`);
+	guard(ctx, a.ownerId, { action, attachment: { id: a.id, kind: a.kind, createdAt: a.createdAt } });
 }
 
 // ------------------------------------------------------------------- service

@@ -2,8 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { existsSync, rmSync, utimesSync } from 'node:fs';
 import { attachment, auditLog, blob, part } from '../../src/db/schema/index.ts';
 import { insert } from '../../src/write.ts';
-import { assertStorageAvailable, blobPath, purgeOrphanBlobs, storageUsedBytes } from '../../src/services/platform/attachments.ts';
+import { assertStorageAvailable, blobPath, purgeOrphanBlobs, registerOwnerGuard, storageUsedBytes } from '../../src/services/platform/attachments.ts';
 import { setup } from './helpers.ts';
+
+// The app attaches no files to parts. These tests use one as a plain owner with no rule of its own.
+registerOwnerGuard('part', () => {});
 
 type S = Awaited<ReturnType<typeof setup>>;
 
@@ -24,9 +27,9 @@ function upload(s: S, fields: Record<string, string | File>) {
 const text = (body: string, name = 'note.txt', type = 'text/plain') => new File([body], name, { type });
 
 describe('attachments', () => {
-	test('a file can belong to a record, not to a sign-in or authority table', async () => {
+	test('a file can belong only to a record with a rule for its files', async () => {
 		const s = await setup();
-		for (const ownerType of ['user', 'session', 'api_token', 'auth_setting', 'audit_log', 'role']) {
+		for (const ownerType of ['user', 'session', 'api_token', 'auth_setting', 'audit_log', 'role', 'stock_move', 'procedure_version', 'baseline_event', 'purchase_expense', 'signoff']) {
 			const res = await upload(s, { file: text('x'), ownerType, ownerId: '1' });
 			expect(res.status).toBe(422);
 		}

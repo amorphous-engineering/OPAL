@@ -19,6 +19,9 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 | Stock record | Never | Every state |
 | Procedure template | Draft, Released | Draft, Released |
 | Execution, step, note | See Execution | See Execution |
+| Procedure step image | As its template | As its template |
+
+No other record can own a file. A new record type gets files by declaring its rule here and in code.
 
 ## Purchase order
 
