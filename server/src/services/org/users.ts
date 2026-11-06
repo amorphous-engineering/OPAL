@@ -14,7 +14,7 @@ import type { z } from 'zod';
 import type { Actor, Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import * as schema from '../../db/schema/index.ts';
-import { auditLog, role, session, user, userRole, workcenter } from '../../db/schema/index.ts';
+import { apiToken, auditLog, passkeyCredential, role, session, user, userRole, workcenter } from '../../db/schema/index.ts';
 import { hashPassword, humanUsernameBase, isPluginUsername, normalizeUsername, validatePasswordStrength } from '../../auth/tokens.ts';
 import { insert, remove, update } from '../../write.ts';
 import { removeAvatar, setAvatar, decodeBase64 } from './avatars.ts';
@@ -41,6 +41,28 @@ export function revokeAllSessions(db: Db, userId: number): number {
 	const n = db.select({ n: sql<number>`count(*)` }).from(session).where(live).get()!.n;
 	db.update(session).set({ revokedAt: new Date().toISOString() }).where(live).run();
 	return n;
+}
+
+/**
+ * Revoke every live API token of a user (the OAuth grants of MCP clients are tokens too). Written
+ * through `update`, so each revocation has an audit row. A revoked token stays revoked when the
+ * account is reactivated: the person makes new ones.
+ */
+export function revokeAllTokens(ctx: Ctx, userId: number): number {
+	const live = ctx.db
+		.select({ id: apiToken.id })
+		.from(apiToken)
+		.where(and(eq(apiToken.userId, userId), isNull(apiToken.revokedAt)))
+		.all();
+	const at = new Date().toISOString();
+	for (const t of live) update(ctx, apiToken, t.id, { revokedAt: at }, 'account access ended');
+	return live.length;
+}
+
+/** Remove every passkey of a user, through `remove` so the audit log shows each one. */
+function removeAllPasskeys(ctx: Ctx, userId: number): void {
+	const keys = ctx.db.select({ id: passkeyCredential.id }).from(passkeyCredential).where(eq(passkeyCredential.userId, userId)).all();
+	for (const k of keys) remove(ctx, passkeyCredential, k.id, 'password reset');
 }
 
 export function listUsers(
@@ -179,7 +201,10 @@ export function updateUser(ctx: Ctx, input: z.output<typeof zUserUpdate> & { id:
 
 	if (Object.keys(core).length) update(ctx, user, id, core);
 	if (Object.keys(profile).length) upsertProfile(ctx, id, profile);
-	if (fields.isActive === false) revokeAllSessions(ctx.db, id);
+	if (fields.isActive === false) {
+		revokeAllSessions(ctx.db, id);
+		revokeAllTokens(ctx, id);
+	}
 	return orgUser(ctx.db, row(ctx.db, id));
 }
 
@@ -191,6 +216,7 @@ export function deactivateUser(ctx: Ctx, id: number): void {
 	}
 	update(ctx, user, id, { isActive: false });
 	revokeAllSessions(ctx.db, id);
+	revokeAllTokens(ctx, id);
 }
 
 export function resetPassword(ctx: Ctx, id: number): number {
@@ -199,6 +225,9 @@ export function resetPassword(ctx: Ctx, id: number): number {
 		throw new OpalError(400, 'self_reset', 'Change your own password instead of resetting it');
 	}
 	update(ctx, user, id, { passwordHash: null });
+	// A reset is the recovery step for a compromised account: nothing the old holder made may survive it.
+	revokeAllTokens(ctx, id);
+	removeAllPasskeys(ctx, id);
 	return revokeAllSessions(ctx.db, id);
 }
 
