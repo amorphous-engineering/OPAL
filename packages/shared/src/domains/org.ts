@@ -93,6 +93,12 @@ export type UserActivityEntry = z.infer<typeof zActivityEntry>;
 
 export const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+/**
+ * The longest base64 text of an avatar upload: the encoding of MAX_AVATAR_BYTES, a `data:` prefix and a
+ * little slack, so an image a few bytes over the limit still gets the exact "too large" answer from the
+ * service. Anything longer is refused before it is decoded.
+ */
+export const AVATAR_BASE64_MAX = Math.ceil(MAX_AVATAR_BYTES / 3) * 4 + 256;
 
 export const zProfileState = z.object({
 	needsProfileSetup: z.boolean(),
@@ -205,7 +211,7 @@ const users = {
 		method: 'POST',
 		path: '/users/:id/avatar',
 		summary: 'Set the photo of a user: PNG, JPEG, WebP or GIF, at most 2 MB, as base64. Self or admin.',
-		input: z.object({ id: zId, data: z.string().min(1) }),
+		input: z.object({ id: zId, data: z.string().min(1).max(AVATAR_BASE64_MAX, `Avatar too large. Max: ${MAX_AVATAR_BYTES} bytes`) }),
 		output: zOrgUser,
 		access: 'signed-in',
 		mcp: false
