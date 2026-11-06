@@ -97,6 +97,35 @@ describe('host allowlist', () => {
 		expect((await login({ ...proxied, origin: 'http://opal.example.com' })).status).toBe(403);
 	});
 
+	test('an inner proxy that reports http does not stop a browser on https', async () => {
+		process.env.OPAL_TRUST_PROXY = '1';
+		const h = await harness();
+		const login = (headers: Record<string, string>) =>
+			h.app.request('http://opal.example.com/api/auth/login', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', host: 'opal.example.com', origin: 'https://opal.example.com', ...headers },
+				body: JSON.stringify({ username: 'nobody', password: 'x' })
+			});
+		try {
+			// TLS ends at an outer proxy; the inner one sets X-Forwarded-Proto to its own scheme.
+			expect((await login({ 'x-forwarded-proto': 'http' })).status).toBe(401);
+			expect((await login({ 'x-forwarded-proto': 'https, http' })).status).toBe(401);
+			expect((await login({})).status).toBe(401);
+			process.env.OPAL_PUBLIC_URL = 'https://opal.example.com';
+			expect((await login({ 'x-forwarded-proto': 'http' })).status).toBe(401);
+			expect((await login({ 'x-forwarded-proto': 'http', origin: 'http://opal.example.com' })).status).toBe(403);
+			// A person on the machine, beside an https public URL.
+			const local = await h.app.request('http://localhost:8080/api/auth/login', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', host: 'localhost:8080', origin: 'http://localhost:8080' },
+				body: JSON.stringify({ username: 'nobody', password: 'x' })
+			});
+			expect(local.status).toBe(401);
+		} finally {
+			delete process.env.OPAL_PUBLIC_URL;
+		}
+	});
+
 	test('without a trusted proxy a forwarded host means nothing to the cross-site check', async () => {
 		delete process.env.OPAL_TRUST_PROXY;
 		const h = await harness();

@@ -4,7 +4,7 @@
  * passes unless a Referer says otherwise. Bearer requests are immune.
  */
 import type { Context, MiddlewareHandler } from 'hono';
-import { trustProxy } from './client-ip.ts';
+import { requestBase } from './base-url.ts';
 import { browserHost } from './host-guard.ts';
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -17,12 +17,17 @@ function hostOf(url: string): string {
 	}
 }
 
-/** Behind a trusted proxy that names the scheme, an http page must not post to an https site. */
+/**
+ * When this site is https, an http page under the same name must not post to it. Only that direction:
+ * an inner proxy may report `http` while the browser is on https, and `requestBase` knows the answer.
+ * Another name (a loopback address beside an https public URL) is the host check's business.
+ */
 function sameScheme(c: Context, url: string): boolean {
-	const proto = trustProxy() ? c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() : undefined;
-	if (!proto) return true;
+	const { base, secure } = requestBase(c);
+	if (!secure) return true;
 	try {
-		return new URL(url).protocol === `${proto}:`;
+		const from = new URL(url);
+		return from.host !== new URL(base).host || from.protocol === 'https:';
 	} catch {
 		return false;
 	}
