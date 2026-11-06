@@ -151,6 +151,15 @@ describe('plugin proxy', () => {
 		expect(res.headers.get('content-security-policy')).toContain('sandbox');
 	});
 
+	test('a plugin page can be framed by this app and by nothing else', async () => {
+		const s = await setup();
+		addPlugin(s.db, 'kaneo');
+		stubRuntime({ kaneo: upstream.port! });
+		const res = await s.app.request('/plugins/kaneo/redirect');
+		expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+		expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+	});
+
 	test('plugins.panels lists running plugins with a panel in the slot, with a working panel token', async () => {
 		const s = await setup();
 		addPlugin(s.db, 'kaneo', { panels: [{ slot: 'issue.side', title: 'Kaneo', path: '/panel/issue' }] });

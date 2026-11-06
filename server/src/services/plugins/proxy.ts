@@ -56,7 +56,9 @@ async function forward(c: Context, port: number, upstreamPath: string, headers: 
 		if (!STRIP_RESPONSE.has(k)) out.set(k, v);
 	});
 	// Plugin pages share our origin: a page opened outside the panel iframe still gets no script rights on it.
-	out.set('content-security-policy', 'sandbox allow-scripts allow-forms allow-popups');
+	// Only this app's own pages may frame them (the panel iframe); the sandbox keeps the origin opaque.
+	out.set('content-security-policy', "sandbox allow-scripts allow-forms allow-popups; frame-ancestors 'self'");
+	out.set('x-frame-options', 'SAMEORIGIN');
 	return new Response(res.body, { status: res.status, statusText: res.statusText, headers: out });
 }
 

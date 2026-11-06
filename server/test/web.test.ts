@@ -3,8 +3,11 @@ import { Hono } from 'hono';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { securityHeaders } from '../src/http/headers.ts';
 import { mountWeb } from '../src/http/web.ts';
 
+const INLINE = 'window.boot = 1;';
 let dir: string;
 let app: Hono;
 const get = (path: string, init?: RequestInit) => app.request(path, init);
@@ -12,11 +15,12 @@ const get = (path: string, init?: RequestInit) => app.request(path, init);
 beforeAll(() => {
 	dir = mkdtempSync(join(tmpdir(), 'opal-web-'));
 	mkdirSync(join(dir, '_app/immutable'), { recursive: true });
-	writeFileSync(join(dir, 'index.html'), '<!doctype html><title>shell</title>');
+	writeFileSync(join(dir, 'index.html'), `<!doctype html><title>shell</title><script src="/_app/x.js"></script><script>${INLINE}</script>`);
 	writeFileSync(join(dir, 'robots.txt'), 'User-agent: *');
 	writeFileSync(join(dir, '_app/immutable/app.abc.js'), 'export {};');
 	writeFileSync(join(dir, '..secret.txt'), 'outside');
 	app = new Hono();
+	app.use('*', securityHeaders);
 	app.get('/api/health', (c) => c.json({ ok: true }));
 	mountWeb(app, dir);
 });
@@ -85,5 +89,63 @@ describe('web client', () => {
 		mountWeb(bare, empty);
 		expect((await bare.request('/parts')).status).toBe(503);
 		rmSync(empty, { recursive: true });
+	});
+});
+
+
+describe('page security headers', () => {
+	const hash = `'sha256-${createHash('sha256').update(INLINE).digest('base64')}'`;
+
+	test('a page cannot be framed, sniffed, or script from anywhere but itself and its own inline bootstrap', async () => {
+		const res = await get('/parts/12');
+		const csp = res.headers.get('content-security-policy') ?? '';
+		expect(csp).toContain("default-src 'self'");
+		expect(csp).toContain("frame-ancestors 'none'");
+		expect(csp).toContain("object-src 'none'");
+		expect(csp).toContain("base-uri 'none'");
+		expect(csp).toContain("form-action 'self'");
+		expect(csp).toContain("img-src 'self' data:");
+		expect(csp).toContain(`script-src 'self' ${hash}`);
+		expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+		expect(res.headers.get('x-frame-options')).toBe('DENY');
+		expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+		expect(res.headers.get('referrer-policy')).toBe('same-origin');
+	});
+
+	test('a changed bootstrap script gets its own hash, so a rebuilt client still runs', async () => {
+		const other = mkdtempSync(join(tmpdir(), 'opal-web-csp-'));
+		writeFileSync(join(other, 'index.html'), '<script>a()</script>');
+		const a = new Hono();
+		mountWeb(a, other);
+		const first = (await a.request('/')).headers.get('content-security-policy');
+		await Bun.sleep(5);
+		writeFileSync(join(other, 'index.html'), '<script>bb()</script>');
+		const second = (await a.request('/')).headers.get('content-security-policy');
+		expect(second).not.toBe(first);
+		expect(second).toContain(createHash('sha256').update('bb()').digest('base64'));
+		rmSync(other, { recursive: true });
+	});
+
+	test('API replies are nosniff, unframeable and never cached', async () => {
+		const res = await get('/api/health');
+		expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+		expect(res.headers.get('x-frame-options')).toBe('DENY');
+		expect(res.headers.get('cache-control')).toBe('no-store');
+		expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+	});
+
+	test('a reply that sets its own policy keeps it', async () => {
+		const own = new Hono();
+		own.use('*', securityHeaders);
+		own.get('/f', (c) => c.body('x', 200, { 'Content-Security-Policy': 'sandbox', 'Cache-Control': 'private, max-age=60' }));
+		const res = await own.request('/f');
+		expect(res.headers.get('content-security-policy')).toBe('sandbox');
+		expect(res.headers.get('cache-control')).toBe('private, max-age=60');
+	});
+
+	test('HSTS is sent over https only', async () => {
+		expect((await get('/api/health')).headers.get('strict-transport-security')).toBeNull();
+		const res = await get('https://opal.example/api/health');
+		expect(res.headers.get('strict-transport-security')).toContain('max-age=');
 	});
 });
