@@ -72,6 +72,33 @@ const UNLIMITED_BUT_BOUNDED = new Set([
 	'plugins.install.sha'
 ]);
 
+function operationsWithOutput(node: Record<string, any>, prefix = ''): { name: string; output: z.ZodType }[] {
+	return Object.entries(node).flatMap(([k, v]) =>
+		v?.input && v?.output
+			? [{ name: `${prefix}${k}`, output: v.output as z.ZodType }]
+			: v && typeof v === 'object'
+				? operationsWithOutput(v, `${prefix}${k}.`)
+				: []
+	);
+}
+
+describe('output checks', () => {
+	test('no output has a length limit, so a value the server accepted earlier always reads', () => {
+		const limited: string[] = [];
+		for (const op of operationsWithOutput(contracts as Record<string, any>)) {
+			const found: { path: string; s: z.ZodString }[] = [];
+			strings(op.output, '', found);
+			for (const { path, s } of found) if (s.maxLength != null) limited.push(`${op.name}${path}`);
+		}
+		expect(limited).toEqual([]);
+	});
+
+	test('input still has its limits', () => {
+		const s = contracts.parts.create.input as z.ZodType;
+		expect(s.safeParse({ name: 'x'.repeat(100_000) }).success).toBe(false);
+	});
+});
+
 describe('input limits', () => {
 	test('every text an operation accepts has a length limit, so one request cannot store megabytes', () => {
 		const unlimited: string[] = [];
