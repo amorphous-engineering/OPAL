@@ -679,7 +679,7 @@
 								: undefined}>{a.againstRevision}</span
 						>
 					{:else if col.key === 'notes'}
-						{#if recording}
+						{#if recording && a.status !== 'verified'}
 							<Input
 								class="h-7"
 								value={a.notes ?? ''}

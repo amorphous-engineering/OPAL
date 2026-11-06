@@ -674,6 +674,18 @@ describe('withdrawing a verification', () => {
 		expect((await call('POST', `/requirements/allocations/${link.id}/withdraw-verification`, { reason: 'x' })).status).toBe(403);
 	});
 
+	test('the notes of a verified link stay as verified, for a person and a token, until the verification is withdrawn', async () => {
+		const { call, as, admin, path } = await verified();
+		const refused = await call('PATCH', path, { notes: 'rewritten' });
+		expect(refused.status).toBe(409);
+		expect(refused.body.error).toBe('verified_frozen');
+		as(token(admin));
+		expect((await call('PATCH', path, { notes: 'rewritten' })).status).toBe(409);
+		as(admin);
+		expect((await call('POST', `${path}/withdraw-verification`, { reason: 'test was wrong', status: 'open' })).status).toBe(200);
+		expect((await call('PATCH', path, { notes: 'rewritten' })).status).toBe(200);
+	});
+
 	test('withdrawing needs a person and a reason', async () => {
 		const { call, as, admin, path } = await verified();
 		expect((await call('POST', `${path}/withdraw-verification`, { reason: '  ' })).status).toBe(422);

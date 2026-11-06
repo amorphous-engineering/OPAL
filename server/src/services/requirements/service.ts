@@ -612,6 +612,9 @@ export function updateLink(
 	// On a baselined requirement a status is a verification decision: a person's, not a token's.
 	if (input.status !== undefined && input.status !== row.status && req.lifecycleState === 'baselined')
 		requirePerson(ctx);
+	// The note on a verified link is part of what the verifier attested. Withdraw first, then change it.
+	if (row.status === 'verified' && input.notes !== undefined && (input.notes ?? null) !== (row.notes ?? null))
+		throw conflict('verified_frozen', 'The notes of a verified allocation stay as verified. Withdraw the verification to change them');
 	const patch: Record<string, unknown> = {};
 	if (input.status !== undefined) patch.status = input.status;
 	if (input.notes !== undefined) patch.notes = input.notes;
