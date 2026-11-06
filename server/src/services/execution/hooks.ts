@@ -3,7 +3,7 @@
  * entity names, search, workcenter work, the overview section, report rows, the execution
  * counter of procedures, and the issue seams (`issueHooks`).
  */
-import { OpalError, type ExecutionRef, type RedlineOp, type StepOption } from '@opal/shared';
+import type { ExecutionRef, RedlineOp, StepOption } from '@opal/shared';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import { actorUserId } from '../../context.ts';
@@ -32,7 +32,7 @@ import { registerExecutionReport } from '../reports/exports.ts';
 import { checkCompletion } from './steps.ts';
 import { PRIORITY_RANK } from './executions.ts';
 import { isActive, isTerminal, loadModel, opRowOf, progress } from './model.ts';
-import { registerOwnerGuard } from '../platform/attachments.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 
 // ---------------------------------------------------------------- parts, entities, search
 
@@ -81,7 +81,7 @@ setExecutionCounter((db, ids) => {
 // ---------------------------------------------------------------- attachment evidence
 
 /** Captures, step-note files and closeout files are evidence: frozen once the step is signed or the execution ends. */
-const frozen = (message: string) => new OpalError(409, 'evidence_frozen', message);
+const frozen = evidenceFrozen;
 
 function requireActiveExecution(db: Db, executionId: number): void {
 	const e = db.select({ status: execution.status }).from(execution).where(eq(execution.id, executionId)).get();

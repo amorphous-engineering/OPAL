@@ -1,10 +1,20 @@
 import { contracts } from '@opal/shared';
+import { eq } from 'drizzle-orm';
+import { purchase } from '../db/schema/index.ts';
 import { type Impl, implement } from '../registry.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../services/platform/attachments.ts';
 import * as po from '../services/purchasing/index.ts';
 
 const s = contracts.purchasing.suppliers;
 const c = contracts.purchasing.catalog;
 const o = contracts.purchasing.orders;
+
+// A placed order takes new files in every state and keeps the ones it has. Only a draft is pencil.
+registerOwnerGuard('purchase', (ctx, id, change) => {
+	if (change.action === 'attach') return;
+	const p = ctx.db.select({ reference: purchase.reference, status: purchase.status }).from(purchase).where(eq(purchase.id, id)).get();
+	if (p && p.status !== 'draft') throw evidenceFrozen(`${p.reference} was placed: its attachments stay on the record`);
+});
 
 export const purchasingImpls = [
 	implement(s.list, (ctx, i) => po.listSuppliers(ctx, i)),

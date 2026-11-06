@@ -15,10 +15,12 @@
 	let {
 		purchaseId,
 		attachments,
+		removable,
 		onchanged
 	}: {
 		purchaseId: number;
 		attachments: Attachment[];
+		removable: boolean;
 		onchanged: () => void | Promise<void>;
 	} = $props();
 
@@ -128,7 +130,7 @@
 								>{/if}</td
 						>
 						<td class="px-3 py-1.5 text-right"
-							><ActionLink onclick={() => remove(a)}>DELETE</ActionLink></td
+							>{#if removable}<ActionLink onclick={() => remove(a)}>DELETE</ActionLink>{/if}</td
 						>
 					</tr>
 				{/each}

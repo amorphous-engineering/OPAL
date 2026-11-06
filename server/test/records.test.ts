@@ -53,7 +53,7 @@ const HUMAN_ACTS = [
 
 /** Destructive-sounding, but pencil or directory work: the service refuses it on a committed record. */
 const NOT_A_STRIKE = new Set([
-	'attachments.delete', // refused on evidence of signed steps and closed executions
+	'attachments.delete', // refused once the owning record is committed
 	'auth.passkeys.delete',
 	'datasets.archive',
 	'datasets.delete', // refused once a dataset has points

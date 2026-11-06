@@ -256,10 +256,13 @@ function assertOwner(db: Db, owner: Owner): void {
 
 export type OwnerChange =
 	| { action: 'attach' }
-	| { action: 'patch' | 'detach'; attachment: { id: number; kind: AttachmentKind | null } };
+	| { action: 'patch' | 'detach'; attachment: { id: number; kind: AttachmentKind | null; createdAt: string } };
 
 type OwnerGuard = (ctx: Ctx, ownerId: number, change: OwnerChange) => void;
 const guards = new Map<string, OwnerGuard>();
+
+/** The refusal of a guard: a file on a committed record stays, as a line on a paper form would. */
+export const evidenceFrozen = (message: string) => new OpalError(409, 'evidence_frozen', message);
 
 /**
  * An area that freezes its records registers a veto per owner type. Only the operation path
@@ -278,7 +281,7 @@ export function guardAttach(ctx: Ctx, owner: Owner): void {
 export function guardChange(ctx: Ctx, id: number, action: 'patch' | 'detach'): void {
 	const a = ctx.db.select().from(attachment).where(eq(attachment.id, id)).get();
 	if (!a) throw notFound('Attachment');
-	guards.get(a.ownerType)?.(ctx, a.ownerId, { action, attachment: { id: a.id, kind: a.kind } });
+	guards.get(a.ownerType)?.(ctx, a.ownerId, { action, attachment: { id: a.id, kind: a.kind, createdAt: a.createdAt } });
 }
 
 // ------------------------------------------------------------------- service

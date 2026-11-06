@@ -25,6 +25,7 @@ import type { z } from 'zod';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { execution, issue, issueComment, issueLink, part, risk, user } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { nextDesignator } from '../designators.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
 import { holdsGate } from '../org/gates.ts';
@@ -935,3 +936,25 @@ export function removeLink(ctx: Ctx, id: number, linkId: number): { ok: true } {
 	remove(ctx, issueLink, linkId);
 	return { ok: true };
 }
+
+// ---- attachments ----
+
+/**
+ * Files follow the pencil of the page. The observation is pencil until a disposition is signed, and
+ * the resolution until review. A signature covers the files it could see, so a file added after it
+ * stays pencil while the issue is in work. A void issue takes only comments.
+ */
+registerOwnerGuard('issue', (ctx, id, change) => {
+	const r = ctx.db.select().from(issue).where(eq(issue.id, id)).get();
+	if (!r) return;
+	if (change.action === 'attach') {
+		if (r.status === 'void') throw evidenceFrozen(`${r.issueNumber} is void: add a comment instead`);
+		return;
+	}
+	const state = ticketState(r);
+	if (state !== 'pending' && state !== 'in_work')
+		throw evidenceFrozen(`${r.issueNumber} is ${state.replace('_', ' ')}: its attachments stay on the record`);
+	if (r.dispositionedAt !== null && change.attachment.createdAt <= r.dispositionedAt)
+		throw evidenceFrozen(`${r.issueNumber} was signed with this attachment on it: it stays on the record`);
+});
+

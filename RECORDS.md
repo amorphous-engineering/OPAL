@@ -6,6 +6,20 @@ What each record offers in each state. `CLAUDE.md` has the rules. This table app
 
 A reason is required where this file says so. Elsewhere it is optional, and nobody is forced to fill it in.
 
+## Attachments
+
+A file follows the pencil of its record. Removing a file, or changing its kind or note, is open while the record is pencil and refused afterwards. There is no strike for a file: a wrong one gets a note beside it.
+
+| Record | Files can change | New files |
+|---|---|---|
+| Purchase order | Draft | Every state |
+| Issue | Pending, and In work for a file added after the signature | Every state except Void |
+| Requirement | Draft, Preliminary | Draft, Preliminary, Baselined |
+| Risk | Open, if never accepted or realized | Open, Accepted |
+| Stock record | Never | Every state |
+| Procedure template | Draft, Released | Draft, Released |
+| Execution, step, note | See Execution | See Execution |
+
 ## Purchase order
 
 | State | The page answers | Primary | Also | EDIT | MORE |

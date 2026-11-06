@@ -266,7 +266,7 @@ export const platform = {
 			name: 'attachments.update',
 			method: 'PATCH',
 			path: '/attachments/:id',
-			summary: 'Change the kind or the note of an attachment.',
+			summary: 'Change the kind or the note of an attachment. Refused once its record is committed.',
 			input: z.object({
 				id: zId,
 				kind: z.enum(ATTACHMENT_KINDS).nullable().optional(),
@@ -280,7 +280,8 @@ export const platform = {
 			name: 'attachments.delete',
 			method: 'DELETE',
 			path: '/attachments/:id',
-			summary: 'Remove an attachment link. The stored file stays while anything references it.',
+			summary:
+				'Remove an attachment link while its record is still pencil. Refused once the record is committed. The stored file stays while anything references it.',
 			input: z.object({ id: zId }),
 			output: zOk,
 			access: 'signed-in',

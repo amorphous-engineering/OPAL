@@ -1,8 +1,9 @@
-import { contracts } from '@opal/shared';
-import { ne } from 'drizzle-orm';
+import { contracts, RISK_LIVE_DISPOSITIONS } from '@opal/shared';
+import { eq, ne } from 'drizzle-orm';
 import { risk } from '../db/schema/index.ts';
 import { type Impl, implement } from '../registry.ts';
 import { issueHooks } from '../services/issues/hooks.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../services/platform/attachments.ts';
 import { registerEntity, registerSearchable } from '../services/platform/index.ts';
 import * as dispositions from '../services/risks/dispositions.ts';
 import * as links from '../services/risks/links.ts';
@@ -10,6 +11,20 @@ import { lintScenario, lintSegments, SCENARIO_FIELDS } from '../services/risks/l
 import * as risks from '../services/risks/service.ts';
 
 const c = contracts.risks;
+
+// Pencil until accepted or realized, the same test deleting a risk uses. A live risk takes new
+// files. Realized and closed risks hand on to the issue or a new risk.
+registerOwnerGuard('risk', (ctx, id, change) => {
+	const r = ctx.db.select().from(risk).where(eq(risk.id, id)).get();
+	if (!r) return;
+	const live = (RISK_LIVE_DISPOSITIONS as readonly string[]).includes(r.disposition);
+	if (change.action === 'attach') {
+		if (!live) throw evidenceFrozen(`${r.riskNumber} is ${r.disposition}: it takes no new attachments`);
+		return;
+	}
+	if (!live || r.disposition === 'accepted' || r.acceptedAt !== null || r.realizedIssueId !== null)
+		throw evidenceFrozen(`${r.riskNumber} was committed: its attachments stay on the record`);
+});
 
 registerEntity(risk, {
 	label: 'Risk',

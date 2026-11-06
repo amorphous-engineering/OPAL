@@ -1,8 +1,14 @@
 import { contracts, parseQty } from '@opal/shared';
 import { type Impl, implement } from '../registry.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../services/platform/attachments.ts';
 import * as inv from '../services/inventory/index.ts';
 
 const c = contracts.inventory;
+
+// Stock exists only once received, so a certificate may arrive late but never leaves.
+registerOwnerGuard('stock_record', (_ctx, _id, change) => {
+	if (change.action !== 'attach') throw evidenceFrozen('Stock is on the record from receipt: its attachments stay');
+});
 
 // Single-segment routes (by-part, locations, ...) come before `/inventory/:id`.
 export const inventoryImpls = [

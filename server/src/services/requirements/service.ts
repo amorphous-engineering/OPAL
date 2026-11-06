@@ -25,6 +25,7 @@ import {
 	user
 } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { nextDesignator } from '../designators.ts';
 import { getOrgSettings, numbersFor } from '../org/project.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
@@ -675,3 +676,17 @@ export function linkCount(ctx: Pick<Ctx, 'db'>, partId: number): number {
 }
 
 export { readyRows };
+
+// A baselined requirement takes additions and loses nothing. Superseded and cancelled are finished paper.
+registerOwnerGuard('requirement', (ctx, id, change) => {
+	const r = ctx.db.select().from(requirement).where(eq(requirement.id, id)).get();
+	if (!r) return;
+	if (change.action === 'attach') {
+		if (r.lifecycleState === 'superseded' || r.lifecycleState === 'cancelled')
+			throw evidenceFrozen(`${r.reqNumber} rev ${r.revision} is ${r.lifecycleState}: it takes no new attachments`);
+		return;
+	}
+	if (!isMutable(r))
+		throw evidenceFrozen(`${r.reqNumber} rev ${r.revision} is ${r.lifecycleState}: its attachments stay on the record`);
+});
+

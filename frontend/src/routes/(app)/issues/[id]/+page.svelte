@@ -375,14 +375,18 @@
 		});
 	}
 
-	const attachmentColumns: Column<Attachment>[] = [
+	/** A signature covers the files it could see. Later files are pencil like the resolution. */
+	const canRemoveAttachment = (a: Attachment) =>
+		editing && (issue.dispositionedAt === null || a.createdAt > issue.dispositionedAt);
+
+	const attachmentColumns = $derived<Column<Attachment>[]>([
 		{ key: 'file', label: 'File' },
 		{ key: 'type', label: 'Type', width: '9rem' },
 		{ key: 'size', label: 'Size', width: '6rem', align: 'right', mono: true },
 		{ key: 'by', label: 'Added by', width: '9rem' },
 		{ key: 'at', label: 'Added', width: '9rem' },
-		{ key: 'actions', label: '', width: '5rem', align: 'right' }
-	];
+		...(editing ? [{ key: 'actions', label: '', width: '5rem', align: 'right' as const }] : [])
+	]);
 
 	const partLinks = $derived(issue.links.filter((l) => l.kind === 'part')); // added by risks
 	const typeFields = $derived({
@@ -730,7 +734,7 @@
 							{a.uploadedByName ?? '—'}
 						{:else if col.key === 'at'}
 							<Timestamp value={a.createdAt} />
-						{:else}
+						{:else if canRemoveAttachment(a)}
 							<button
 								type="button"
 								class="font-mono text-xs tracking-wider text-error uppercase hover:underline"
