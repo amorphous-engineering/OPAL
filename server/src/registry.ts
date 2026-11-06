@@ -9,7 +9,6 @@ import {
 	type OpInput,
 	type OpOutput,
 	forbidden,
-	matchesPattern,
 	unauthenticated
 } from '@opal/shared';
 import { appendFileSync } from 'node:fs';
@@ -19,6 +18,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
 import { requestBase } from './auth/base-url.ts';
 import { clientIp } from './auth/client-ip.ts';
+import { requireScope } from './auth/scope.ts';
 import { type Actor, type CookieJar, type Ctx, type RequestInfo } from './context.ts';
 import { holdsGate } from './services/org/gates.ts';
 import { canonicalInput, displayOutput } from './numbers.ts';
@@ -65,9 +65,7 @@ export function checkAccess(db: Db, contract: OpContract, actor: Actor): void {
 	if (contract.humanOnly && actor.kind === 'token') {
 		throw forbidden('This action needs a signed-in person, not an API token');
 	}
-	if (actor.kind === 'token' && actor.scopes && !matchesPattern(actor.scopes.ops, contract.name)) {
-		throw new OpalError(403, 'out_of_scope', `This token may not call ${contract.name}`);
-	}
+	requireScope(actor, contract.name);
 	if (contract.access !== 'signed-in' && !holdsGate(db, actor, contract.access)) throw forbidden();
 }
 

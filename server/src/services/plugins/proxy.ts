@@ -5,6 +5,7 @@
  */
 import { eq } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
+import { requireScope } from '../../auth/scope.ts';
 import { verifyPayload } from '../../auth/signing.ts';
 import { actorUserId } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
@@ -30,7 +31,10 @@ async function userOf(c: Context, db: Db, resolveActor: ResolveActor, key: strin
 		if (!p || p.k !== 'panel' || p.p !== key || typeof p.u !== 'number') return null;
 		return db.select({ a: user.isActive }).from(user).where(eq(user.id, p.u)).get()?.a ? p.u : null;
 	}
-	return actorUserId(await resolveActor(c));
+	const actor = await resolveActor(c);
+	// A plugin's token must not reach another plugin's routes under its own user.
+	requireScope(actor, 'plugins.proxy');
+	return actorUserId(actor);
 }
 
 async function forward(c: Context, port: number, upstreamPath: string, headers: Headers): Promise<Response> {

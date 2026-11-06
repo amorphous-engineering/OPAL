@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { AVATAR_TYPES, MAX_AVATAR_BYTES, OpalError, notFound, now } from '@opal/shared';
 import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
+import { requireScope } from '../../auth/scope.ts';
 import type { Ctx } from '../../context.ts';
 import { userProfile } from '../../db/schema/index.ts';
 import { dataDir } from '../../paths.ts';
@@ -148,6 +149,7 @@ export function mountAvatarRoute(app: Hono, db: Ctx['db'], resolveActor: Resolve
 		if (actor.kind === 'anonymous') {
 			return c.json({ error: 'unauthenticated', message: 'Sign in required' }, 401);
 		}
+		requireScope(actor, 'users.getAvatar');
 		const id = Number(c.req.param('id'));
 		const p = Number.isInteger(id) ? db.select().from(userProfile).where(eq(userProfile.userId, id)).get() : undefined;
 		if (!p?.avatarHash || p.avatarSource === 'removed') throw notFound('Avatar');

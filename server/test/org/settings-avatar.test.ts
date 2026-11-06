@@ -3,6 +3,8 @@ import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
+import type { Actor } from '../../src/context.ts';
+import { errorResponse } from '../../src/registry.ts';
 import { mountAvatarRoute } from '../../src/services/org/avatars.ts';
 import { setup } from './helpers.ts';
 
@@ -39,6 +41,28 @@ describe('avatars', () => {
 		expect(Buffer.from(await res.arrayBuffer()).equals(PNG)).toBe(true);
 		current = { kind: 'anonymous' };
 		expect((await app.request(`/api/users/${bob.id}/avatar`)).status).toBe(401);
+	});
+
+	test('a scoped token reads an avatar only with the avatar permission; an unscoped token needs none', async () => {
+		dataDir();
+		const { db, call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: PNG.toString('base64') });
+		let current: Actor = bob.actor;
+		const app = new Hono();
+		app.onError((err, c) => {
+			const { status, body } = errorResponse(err);
+			return c.json(body, status as 400);
+		});
+		mountAvatarRoute(app, db, () => current);
+		const statusAs = async (ops?: string[]) => {
+			current = { kind: 'token', userId: bob.id, isAdmin: false, tokenId: 1, ...(ops ? { scopes: { ops, events: [] } } : {}) };
+			return (await app.request(`/api/users/${bob.id}/avatar`)).status;
+		};
+		expect(await statusAs([])).toBe(403);
+		expect(await statusAs(['users.getAvatar'])).toBe(200);
+		expect(await statusAs(['users.*'])).toBe(200);
+		expect(await statusAs()).toBe(200);
 	});
 
 	test('a user changes own avatar, an admin changes any, nobody else does', async () => {

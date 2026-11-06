@@ -18,6 +18,7 @@ import { actorUserId } from '../../context.ts';
 import { displayOutput } from '../../numbers.ts';
 import { numbersFor } from '../org/project.ts';
 import { actorResolver } from '../../auth/index.ts';
+import { requireScope } from '../../auth/scope.ts';
 import type { Db } from '../../db/client.ts';
 import { type Impl, implement, type ResolveActor, runOp } from '../../registry.ts';
 import { attach, blobIsServable, blobPath, guardAttach, getBlob, maxUploadBytes, row } from './attachments.ts';
@@ -75,6 +76,12 @@ function fileResponse(path: string, mime: string, filename: string | null, force
 	return new Response(Bun.file(path), { headers });
 }
 
+/**
+ * What a scoped token needs to read a file. `attachments.list` counts because its rows carry the
+ * download link, so a plugin that declared it already expects to follow that link.
+ */
+const READ_FILES = ['attachments.download', 'attachments.list'];
+
 /** Bun closes a connection idle for 10 s by default, so the stream speaks more often than that. */
 export const HEARTBEAT_MS = 5_000;
 
@@ -119,13 +126,13 @@ export function mountFiles(app: Hono, db: Db, { resolveActor = actorResolver(db)
 	);
 
 	app.get('/api/attachments/:id/download', async (c) => {
-		await actorOf(c);
+		requireScope(await actorOf(c), ...READ_FILES);
 		const { link, blob } = row(db, Number(c.req.param('id')));
 		return fileResponse(blobPath(blob.sha256), blob.mimeType, link.filename, c.req.query('download') === '1');
 	});
 
 	app.get('/api/blobs/:sha256', async (c) => {
-		await actorOf(c);
+		requireScope(await actorOf(c), ...READ_FILES);
 		const sha = c.req.param('sha256');
 		// A file nothing links or snapshots any more is gone for readers, even before the purge removes it.
 		const known = /^[0-9a-f]{64}$/.test(sha) ? getBlob(db, sha) : undefined;

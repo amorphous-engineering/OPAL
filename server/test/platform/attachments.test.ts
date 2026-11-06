@@ -119,6 +119,29 @@ describe('attachments', () => {
 		expect((await upload(s, { file: text('x'), ownerType: 'part', ownerId: String(id), kind: 'weird' })).status).toBe(422);
 	});
 
+	test('a scoped token reads a file only with an attachments permission; an unscoped token and a person need none', async () => {
+		const s = await setup();
+		const id = await partId(s);
+		const a = await (await upload(s, { file: text('hello'), ownerType: 'part', ownerId: String(id) })).json();
+		const paths = [`/api/attachments/${a.id}/download`, `/api/blobs/${a.sha256}`];
+		const statusAs = async (ops?: string[]) => {
+			s.setActor({ kind: 'token', userId: 1, isAdmin: false, tokenId: 1, ...(ops ? { scopes: { ops, events: [] } } : {}) });
+			return Promise.all(paths.map(async (p) => (await s.app.request(p)).status));
+		};
+		expect(await statusAs([])).toEqual([403, 403]);
+		expect(await statusAs(['parts.list', 'attachments.update'])).toEqual([403, 403]);
+		expect(await statusAs(['attachments.download'])).toEqual([200, 200]);
+		expect(await statusAs(['attachments.list'])).toEqual([200, 200]);
+		expect(await statusAs(['attachments.*'])).toEqual([200, 200]);
+		expect(await statusAs()).toEqual([200, 200]);
+	});
+
+	test('a scoped token is refused before it can learn whether a file exists', async () => {
+		const s = await setup();
+		s.setActor({ kind: 'token', userId: 1, isAdmin: false, tokenId: 1, scopes: { ops: [], events: [] } });
+		expect((await s.app.request('/api/attachments/999/download')).status).toBe(403);
+	});
+
 	test('anonymous callers cannot upload or download', async () => {
 		const s = await setup();
 		s.setActor({ kind: 'anonymous' });

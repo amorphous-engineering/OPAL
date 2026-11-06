@@ -72,6 +72,16 @@ Installing a plugin gives it shell-level access to the server. The token limits 
 The process runs as the same user as OPAL, with no sandbox, so it can read the data folder, including
 the database. Install only plugins you would trust with a login on that machine.
 
+## Permissions
+
+`permissions.ops` in the manifest lists the operations the plugin's token may call: `issues.list`, `issues.*`.
+Files and images are not operations, but they need a permission too:
+
+- `attachments.download` (or `attachments.list`): the bytes of an attachment or a blob.
+- `users.getAvatar`: a user's photo.
+
+A plugin's token cannot call `/plugins/<id>/...`, its own or another's.
+
 ## HTTP
 
 The SDK serves `GET /__health` and then your routes. OPAL reaches them at `/plugins/<id>/<path>`.

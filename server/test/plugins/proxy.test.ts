@@ -44,6 +44,19 @@ describe('plugin proxy', () => {
 		expect(JSON.parse(seen.headers['x-opal-user'])).toEqual({ id: s.person.id, name: 'Ann', username: 'ann' });
 	});
 
+	test("a plugin's scoped token cannot reach a plugin's routes; an unscoped token still can", async () => {
+		const s = await setup();
+		const other = addPlugin(s.db, 'other');
+		addPlugin(s.db, 'kaneo');
+		stubRuntime({ kaneo: upstream.port! });
+		s.setActor(other.actor);
+		const refused = await s.app.request('/plugins/kaneo/panel');
+		expect(refused.status).toBe(403);
+		expect((await refused.json()).error).toBe('out_of_scope');
+		s.setActor({ kind: 'token', userId: s.person.id, isAdmin: true, tokenId: 1 });
+		expect((await s.app.request('/plugins/kaneo/panel')).status).toBe(201);
+	});
+
 	test('an anonymous request is 401', async () => {
 		const s = await setup();
 		addPlugin(s.db, 'kaneo');
