@@ -132,3 +132,13 @@ describe('the shape of a JSON body', () => {
 		expect((await send('{"username":"a"}')).status).toBe(422);
 	});
 });
+
+describe('the JSON body limit and the path', () => {
+	test('percent-encoding the path does not get around it', async () => {
+		process.env.OPAL_MAX_JSON_BYTES = String(LIMIT);
+		const app = createApp({ db: await openTestDb() });
+		for (const path of ['/api/auth/login', '/%61pi/auth/login']) {
+			expect((await post(app, path, big(LIMIT * 2))).status).toBe(413);
+		}
+	});
+});

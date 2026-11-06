@@ -35,7 +35,8 @@ const tooLarge = (c: Context) =>
 	c.json({ error: 'payload_too_large', message: `Request body is larger than ${maxJsonBytes()} bytes` }, 413);
 
 export const jsonBodyLimit: MiddlewareHandler = (c, next) => {
-	const path = new URL(c.req.url).pathname;
+	// Hono routes on the decoded path, so this must look at the same one.
+	const path = c.req.path;
 	if (!LIMITED.some((re) => re.test(path)) || UPLOAD.some((re) => re.test(path))) return next();
 	return bodyLimit({ maxSize: maxJsonBytes(), onError: tooLarge })(c, next);
 };
