@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 const setup = (h: Awaited<ReturnType<typeof harness>>, headers: Record<string, string> = {}) =>
-	h.call('POST', '/auth/setup', ADMIN, headers);
+	h.call('POST', '/auth/setup', ADMIN, { host: 'demo.example', ...headers });
 const sessionCookie = (res: Response) => res.headers.getSetCookie().find((c) => c.startsWith('opal_session='))!;
 
 describe('cookie Secure flag', () => {
@@ -42,7 +42,7 @@ describe('cookie Secure flag', () => {
 		// Age the session so the next request renews it.
 		const { session } = await import('../../src/db/schema/index.ts');
 		h.db.update(session).set({ lastSeenAt: '2020-01-01T00:00:00.000Z' }).run();
-		const res = await h.call('GET', '/auth/me', undefined, { cookie });
+		const res = await h.call('GET', '/auth/me', undefined, { cookie, host: 'demo.example' });
 		expect(res.status).toBe(200);
 		expect(sessionCookie(res)).toMatch(/;\s*Secure/i);
 	});
@@ -62,14 +62,15 @@ describe('cookie Secure flag', () => {
 		configureOidc(h, provider);
 		expect((await beginOidc(h)).res.headers.getSetCookie()[0]!).not.toMatch(/;\s*Secure/i);
 		process.env.OPAL_PUBLIC_URL = 'https://demo.example';
-		expect((await beginOidc(h)).res.headers.getSetCookie()[0]!).toMatch(/;\s*Secure/i);
+		const secure = await h.raw('/oidc/login', { host: 'demo.example' });
+		expect(secure.headers.getSetCookie()[0]!).toMatch(/;\s*Secure/i);
 	});
 
 	test('signing out clears the cookie with the same Secure flag', async () => {
 		process.env.OPAL_PUBLIC_URL = 'https://demo.example';
 		const h = await harness();
 		const cookie = sessionCookie(await setup(h)).split(';')[0]!;
-		const res = await h.call('POST', '/auth/logout', undefined, { cookie });
+		const res = await h.call('POST', '/auth/logout', undefined, { cookie, host: 'demo.example' });
 		expect(sessionCookie(res)).toMatch(/;\s*Secure/i);
 	});
 });

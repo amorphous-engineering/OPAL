@@ -49,6 +49,17 @@ Or download a binary from [GitHub Releases](https://github.com/amorphous-enginee
 
 The server listens on port 8080. Data is in `~/Library/Application Support/OPAL` (macOS), `~/.local/share/opal` (Linux) or `%LOCALAPPDATA%\OPAL` (Windows). Set `OPAL_DATA_DIR` to use another folder.
 
+### Network settings
+
+OPAL serves plain HTTP. Passwords and session cookies cross the network in clear, so put a TLS proxy in front of it for anything beyond a network segment you trust. All of these are optional environment variables; without them nothing changes for a LAN instance.
+
+| Variable | Effect |
+|---|---|
+| `OPAL_PUBLIC_URL` | The URL people use, for example `https://opal.example.com`. Links, OAuth metadata and the `Secure` cookie flag follow it, and its host joins the allowed hosts. With an `https` URL cookies are `Secure`, so reach OPAL by that URL only. |
+| `OPAL_TRUST_PROXY=1` | Believe `X-Forwarded-For`, `-Proto` and `-Host`. Set it only when the proxy overwrites them. The client address is the last `X-Forwarded-For` entry. |
+| `OPAL_TRUST_PROXY_HOPS` | With `OPAL_TRUST_PROXY`, the number of proxies in the chain (default 1). The client address is counted that many entries from the right. |
+| `OPAL_ALLOWED_HOSTS` | Comma-separated host names (`opal.lan,192.168.1.20:8080`). When this or `OPAL_PUBLIC_URL` is set, a request for any other `Host` gets 421. `localhost` and the loopback addresses are always allowed. |
+
 ### Upgrade from 1.x
 
 1. Install the last 1.x release and start it once. This upgrades the database.
