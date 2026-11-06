@@ -109,6 +109,17 @@ describe('a placed order is pen', () => {
 		expect(fields).toEqual(['status']);
 	});
 
+	test('a draft edit in the same millisecond as placing is not history', async () => {
+		const s = await setup();
+		const po = await mkPo(s, { lines: [{ partId: makePart(s.db).id, qtyOrdered: '1' }] });
+		await s.call('PATCH', `/purchases/${po.id}`, { destination: 'Bay 1' });
+		await s.call('POST', `/purchases/${po.id}/place`, {});
+		const placed = await get(s, po.id);
+		s.db.update(auditLog).set({ at: placed.orderedAt }).where(eq(auditLog.entity, 'purchase')).run();
+		const fields = (await get(s, po.id)).changes.map((c: { field: string }) => c.field);
+		expect(fields).toEqual(['status']);
+	});
+
 	test('adding a line after placing is allowed and shows in the changes', async () => {
 		const s = await setup();
 		const extra = makePart(s.db);

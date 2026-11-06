@@ -194,8 +194,17 @@ function changesOf(ctx: DbCtx, p: PurchaseRow): PurchaseChange[] {
 		)
 		.orderBy(asc(auditLog.at), asc(auditLog.id))
 		.all();
+	// A draft edit can land in the same millisecond as placing. The audit order decides which side it is on.
+	const placedRow = rows.find(
+		({ e }) =>
+			e.entity === 'purchase' &&
+			e.action === 'update' &&
+			!(e.before as { orderedAt?: string | null } | null)?.orderedAt &&
+			(e.after as { orderedAt?: string | null } | null)?.orderedAt
+	);
 	const out: PurchaseChange[] = [];
 	for (const { e, userName } of rows) {
+		if (placedRow && e.id < placedRow.e.id) continue;
 		const before = (e.before ?? {}) as Record<string, unknown>;
 		const after = (e.after ?? {}) as Record<string, unknown>;
 		const base = { at: e.at, userName, reason: e.reason };

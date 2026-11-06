@@ -24,8 +24,9 @@ describe('connection timeouts', () => {
 	});
 
 	test('an event stream outlives the idle timeout on its heartbeat, while a half-sent request is closed', async () => {
-		// Just above the 5 s heartbeat, so the stream must keep itself alive to pass.
-		process.env.OPAL_IDLE_TIMEOUT_SECONDS = '7';
+		// Bun checks idle connections every 4 s, so 10 closes a silent one after 8 to 12 s. That is past
+		// the 5 s heartbeat and inside this test, so the stream must keep itself alive to pass.
+		process.env.OPAL_IDLE_TIMEOUT_SECONDS = '10';
 		const { app } = await setup();
 		const server = Bun.serve({ port: 0, hostname: '127.0.0.1', idleTimeout: idleTimeoutSeconds(), fetch: app.fetch });
 		try {
@@ -42,7 +43,7 @@ describe('connection timeouts', () => {
 			const reader = res.body!.getReader();
 			const decoder = new TextDecoder();
 			let beats = 0;
-			while (performance.now() - started < 11_000) {
+			while (performance.now() - started < 14_000) {
 				const { value, done } = await reader.read();
 				if (done) break;
 				beats += decoder.decode(value).split('"heartbeat"').length - 1;
@@ -51,7 +52,7 @@ describe('connection timeouts', () => {
 			const closedAfter = await stalled;
 			expect(beats).toBeGreaterThanOrEqual(3);
 			expect(closedAfter).toBeGreaterThan(5_000);
-			expect(closedAfter).toBeLessThan(11_000);
+			expect(closedAfter).toBeLessThan(14_000);
 		} finally {
 			await server.stop(true);
 		}
