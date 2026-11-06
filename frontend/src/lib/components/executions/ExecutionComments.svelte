@@ -62,7 +62,7 @@
 >
 	{#snippet actions()}
 		{#if all.length > LAST}
-			<ActionLink aria-pressed={collapsed} onclick={toggle}
+			<ActionLink aria-expanded={!collapsed} onclick={toggle}
 				>{collapsed ? 'EXPAND' : 'COLLAPSE'}</ActionLink
 			>
 		{/if}
