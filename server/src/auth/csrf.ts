@@ -3,7 +3,9 @@
  * Origin must come from the Host it asks. Without Origin (curl, scripts) it
  * passes unless a Referer says otherwise. Bearer requests are immune.
  */
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
+import { trustProxy } from './client-ip.ts';
+import { browserHost } from './host-guard.ts';
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -12,6 +14,17 @@ function hostOf(url: string): string {
 		return new URL(url).host;
 	} catch {
 		return '';
+	}
+}
+
+/** Behind a trusted proxy that names the scheme, an http page must not post to an https site. */
+function sameScheme(c: Context, url: string): boolean {
+	const proto = trustProxy() ? c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() : undefined;
+	if (!proto) return true;
+	try {
+		return new URL(url).protocol === `${proto}:`;
+	} catch {
+		return false;
 	}
 }
 
@@ -25,14 +38,15 @@ export const csrfGuard: MiddlewareHandler = async (c, next) => {
 	// OAuth registration and token calls carry no cookies, so a cross-site request gains nothing.
 	if (path === '/oauth/register' || path === '/oauth/token') return next();
 	if (path.startsWith('/plugins/') && c.req.header('x-opal-panel')) return next();
-	const host = c.req.header('host') ?? new URL(c.req.url).host;
+	// The host the browser used. A trusted proxy may reach this server under its own address.
+	const host = browserHost(c);
 	const origin = c.req.header('origin');
 	let bad = false;
 	if (origin !== undefined) {
-		bad = origin === 'null' || hostOf(origin) !== host;
+		bad = origin === 'null' || hostOf(origin) !== host || !sameScheme(c, origin);
 	} else {
 		const referer = c.req.header('referer');
-		bad = !!referer && hostOf(referer) !== '' && hostOf(referer) !== host;
+		bad = !!referer && hostOf(referer) !== '' && (hostOf(referer) !== host || !sameScheme(c, referer));
 	}
 	if (bad) {
 		return c.json({ error: 'forbidden', message: 'Cross-origin request rejected' }, 403);

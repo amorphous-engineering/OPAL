@@ -80,4 +80,31 @@ describe('host allowlist', () => {
 		// Without a forwarded host the Host header counts.
 		expect((await status(h, '10.0.0.5:8080')).status).toBe(421);
 	});
+
+	test('a browser POST through a proxy that rewrites Host reaches the operation', async () => {
+		process.env.OPAL_TRUST_PROXY = '1';
+		const h = await harness();
+		const login = (headers: Record<string, string>) =>
+			h.app.request('http://10.0.0.5:8080/api/auth/login', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', host: '10.0.0.5:8080', ...headers },
+				body: JSON.stringify({ username: 'nobody', password: 'x' })
+			});
+		const proxied = { 'x-forwarded-host': 'opal.example.com', 'x-forwarded-proto': 'https' };
+		expect((await login({ ...proxied, origin: 'https://opal.example.com' })).status).toBe(401);
+		// The guard still works: another site, or the same name over plain http.
+		expect((await login({ ...proxied, origin: 'https://evil.example' })).status).toBe(403);
+		expect((await login({ ...proxied, origin: 'http://opal.example.com' })).status).toBe(403);
+	});
+
+	test('without a trusted proxy a forwarded host means nothing to the cross-site check', async () => {
+		delete process.env.OPAL_TRUST_PROXY;
+		const h = await harness();
+		const res = await h.app.request('http://opal.test/api/auth/login', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', host: 'opal.test', origin: 'https://evil.example', 'x-forwarded-host': 'evil.example' },
+			body: JSON.stringify({ username: 'nobody', password: 'x' })
+		});
+		expect(res.status).toBe(403);
+	});
 });
