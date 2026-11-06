@@ -78,7 +78,8 @@ export function countStock(
 // ---- transfer ----
 
 /**
- * Move stock to another location, and optionally another lot.
+ * Move stock to another location. A record with no lot may take one here, which fills in a blank. A
+ * record with a lot keeps it: changing a lot is a correction, with a person and a reason.
  *
  * - The target is the stock already there for this part, location and lot (never for a
  *   serialized unit). The two records exchange the quantity in two paired moves.
@@ -108,6 +109,12 @@ export function transferStock(
 	}
 	const targetLocation = input.targetLocation.trim();
 	const targetLot = input.targetLotNumber?.trim() || source.lotNumber;
+	if (source.lotNumber !== null && targetLot !== source.lotNumber) {
+		throw conflict(
+			'lot_locked',
+			`${source.opalNumber} is lot ${source.lotNumber}: a move keeps the lot. Correct the record, with a reason, to change it`
+		);
+	}
 	if (source.location === targetLocation && source.lotNumber === targetLot) {
 		throw invalid('targetLocation', 'Cannot transfer to the same location with the same lot number');
 	}

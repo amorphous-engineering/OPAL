@@ -68,7 +68,7 @@ describe('correcting a stock record', () => {
 	test('a move of the whole record is not a correction', async () => {
 		const s = await setup();
 		const rec = await receive(s, makePart(s.db).id, '4', 'A1', { lotNumber: 'L1' });
-		await s.call('POST', '/inventory/transfer', { sourceId: rec.id, targetLocation: 'B2', quantity: '4', targetLotNumber: 'L9' });
+		await s.call('POST', '/inventory/transfer', { sourceId: rec.id, targetLocation: 'B2', quantity: '4' });
 		expect((await detail(s, rec.opalNumber)).corrections).toEqual([]);
 	});
 

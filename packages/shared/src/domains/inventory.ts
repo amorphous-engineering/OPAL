@@ -498,7 +498,7 @@ export const inventory = {
 		method: 'POST',
 		path: '/inventory/transfer',
 		summary:
-			'Move stock to another location or lot. A whole move keeps the OPAL number. A partial move creates a record with a new OPAL number, or merges into the stock already there.',
+			'Move stock to another location. A whole move keeps the OPAL number. A partial move creates a record with a new OPAL number, or merges into the stock already there. A record with no lot can take one here. A record with a lot keeps it: a lot change goes through `inventory.correct`.',
 		input: zStockTransferInput,
 		output: z.object({ source: zStockRecord, target: zStockRecord }),
 		access: 'signed-in',

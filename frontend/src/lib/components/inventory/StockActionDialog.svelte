@@ -252,16 +252,12 @@
 						{#each locations as l (l)}<option value={l}></option>{/each}
 					</datalist>
 				</div>
-				<div class="grid grid-cols-1 gap-1.5">
-					<Label class="label" for="mv-lot">To lot</Label>
-					<Input
-						id="mv-lot"
-						class="font-mono"
-						autocomplete="off"
-						placeholder={record.lotNumber ?? ''}
-						bind:value={toLot}
-					/>
-				</div>
+				{#if record.lotNumber === null}
+					<div class="grid grid-cols-1 gap-1.5">
+						<Label class="label" for="mv-lot">To lot</Label>
+						<Input id="mv-lot" class="font-mono" autocomplete="off" bind:value={toLot} />
+					</div>
+				{/if}
 			{/if}
 
 			{#if action !== 'count'}

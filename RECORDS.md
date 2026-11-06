@@ -132,6 +132,7 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 | Empty | Where did it go? | | Label | |
 
 - The ledger is append-only. Corrections show in the ledger with old and new values.
+- A move keeps the lot of a record that has one. A record with no lot can take one on a move, which fills in a blank. Any other lot change is a CORRECT.
 
 ## Reference data
 
