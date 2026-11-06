@@ -243,3 +243,136 @@ describe('issue links', () => {
 		expect(holding[0].label).toBe('1 COMPLETE');
 	});
 });
+
+describe('striking a work order under a hold', () => {
+	test('voiding an unstarted work order leaves its issue undispositioned and still to sign', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const nc = (await t.nc(e.id, '1')).json;
+		expect((await t.call('POST', `/executions/${e.id}/void`, { reason: 'cut in error' }, t.catActor)).status).toBe(200);
+		expect((await t.call('GET', `/issues/${nc.id}`)).json.dispState).toBe('undispositioned');
+		expect((await t.complete(e.id, '1')).status).toBe(409);
+		expect((await t.disposition(nc.id)).status).toBe(200);
+	});
+});
+
+describe('moving a containment boundary', () => {
+	const contain = (t: Awaited<ReturnType<typeof setup>>, id: number, body: Record<string, unknown>, as?: any) =>
+		t.call('POST', `/issues/${id}/containment`, body, as);
+
+	test('moving the boundary off a held step needs the disposition gate and a note', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const nc = (await t.nc(e.id, '1')).json;
+		const later = await t.stepOf(e.id, '2');
+		const move = { containment: 'step', containmentStepId: later };
+		expect((await contain(t, nc.id, { ...move, note: 'later' }, t.catActor)).status).toBe(403);
+		expect((await t.complete(e.id, '1')).status).toBe(409);
+		const silent = await contain(t, nc.id, move);
+		expect(silent.status).toBe(409);
+		expect(silent.json.message).toContain('releases 1');
+		expect((await contain(t, nc.id, { ...move, note: 'safe to run to step 2' })).status).toBe(200);
+		expect((await t.complete(e.id, '1')).status).toBe(200);
+		expect((await t.complete(e.id, '2')).status).toBe(409);
+		const comments = (await t.call('GET', `/issues/${nc.id}/comments`)).json;
+		expect(comments.some((c: any) => c.body === 'Containment boundary moved, releasing 1: safe to run to step 2')).toBe(true);
+	});
+
+	test('an API token cannot move a boundary off a held step', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const nc = (await t.nc(e.id, '1')).json;
+		const later = await t.stepOf(e.id, '2');
+		const r = await contain(t, nc.id, { containment: 'step', containmentStepId: later, note: 'x' }, t.token);
+		expect(r.status).toBe(403);
+		expect((await t.complete(e.id, '1')).status).toBe(409);
+	});
+
+	test('clearing a boundary that held another step is a release', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const nc = (await t.nc(e.id, '2', { containmentStepId: await t.stepOf(e.id, '1') })).json;
+		expect((await t.complete(e.id, '1')).status).toBe(409);
+		expect((await contain(t, nc.id, { containment: 'step', containmentStepId: null, note: 'x' }, t.catActor)).status).toBe(403);
+		expect((await contain(t, nc.id, { containment: 'step', containmentStepId: null })).status).toBe(409);
+		expect((await contain(t, nc.id, { containment: 'step', containmentStepId: null, note: 'back to where it was raised' })).status).toBe(200);
+		expect((await t.complete(e.id, '1')).status).toBe(200);
+		expect((await t.complete(e.id, '2')).status).toBe(409);
+	});
+
+	test('clearing the only anchor frees the step, though the work order stays held', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const first = await t.stepOf(e.id, '1');
+		const raised = await t.ok('POST', '/issues', { title: 'x', projectId: e.projectId, executionId: e.id, containment: 'step', containmentStepId: first });
+		expect((await contain(t, raised.id, { containment: 'step', containmentStepId: null, note: 'x' }, t.catActor)).status).toBe(403);
+		expect((await contain(t, raised.id, { containment: 'step', containmentStepId: null, note: 'held at the work order' })).status).toBe(200);
+		expect((await t.complete(e.id, '1')).status).toBe(200);
+		expect((await t.complete(e.id, '2')).status).toBe(200);
+		expect((await t.get(e.id)).status).toBe('in_work');
+	});
+
+	test('moving an OP hold to another OP is a release, and within the OP it is not', async () => {
+		const t = await setup();
+		const e = await t.cut(await tree(t));
+		const nc = (await t.nc(e.id, '1.1', { containment: 'op' })).json;
+		const sibling = await t.stepOf(e.id, '1.2');
+		expect((await contain(t, nc.id, { containment: 'op', containmentStepId: sibling }, t.catActor)).status).toBe(200);
+		const elsewhere = await t.stepOf(e.id, '2.1');
+		expect((await contain(t, nc.id, { containment: 'op', containmentStepId: elsewhere, note: 'x' }, t.catActor)).status).toBe(403);
+	});
+
+	test('what frees no unfinished step stays open to anyone', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B', 'C']));
+		const [one, two] = [await t.stepOf(e.id, '1'), await t.stepOf(e.id, '2')];
+		const cat = t.catActor;
+		// The first boundary on a hold with no anchor only adds a hold.
+		const open = await t.ok('POST', '/issues', { title: 'x', projectId: e.projectId, executionId: e.id, containment: 'step' });
+		expect((await contain(t, open.id, { containment: 'step', containmentStepId: two }, cat)).status).toBe(200);
+		expect((await t.complete(e.id, '2')).status).toBe(409);
+		// Naming the raised step as the boundary, then clearing it, changes nothing.
+		const raised = (await t.nc(e.id, '3')).json;
+		const three = await t.stepOf(e.id, '3');
+		expect((await contain(t, raised.id, { containment: 'step', containmentStepId: three }, cat)).status).toBe(200);
+		expect((await contain(t, raised.id, { containment: 'step', containmentStepId: null }, cat)).status).toBe(200);
+		// A whole-work-order hold ignores the boundary.
+		const wide = await t.ok('POST', '/issues', { title: 'y', projectId: e.projectId, executionId: e.id, containment: 'wo' });
+		expect((await contain(t, wide.id, { containment: 'wo', containmentStepId: one }, cat)).status).toBe(200);
+		// A boundary bound to a step already finished holds nothing there.
+		expect((await t.complete(e.id, '1')).status).toBe(200);
+		const done = (await t.nc(e.id, '3', { containmentStepId: one })).json;
+		expect((await contain(t, done.id, { containment: 'step', containmentStepId: two }, cat)).status).toBe(200);
+		// Signed issues hold nothing.
+		const signed = (await t.nc(e.id, '2')).json;
+		await t.disposition(signed.id);
+		expect((await contain(t, signed.id, { containment: 'step', containmentStepId: three }, cat)).status).toBe(200);
+	});
+
+	test('widening a hold so it no longer stops the step needs the disposition gate and a note', async () => {
+		const t = await setup();
+		const e = await t.cut(await tree(t));
+		const nc = (await t.nc(e.id, '1.1')).json;
+		expect((await contain(t, nc.id, { containment: 'op', note: 'x' }, t.catActor)).status).toBe(403);
+		expect((await contain(t, nc.id, { containment: 'op', note: 'x' }, t.token)).status).toBe(403);
+		expect((await t.complete(e.id, '1.1')).status).toBe(409);
+		const silent = await contain(t, nc.id, { containment: 'op' });
+		expect(silent.status).toBe(409);
+		expect(silent.json.message).toContain('releases 1.1');
+		expect((await contain(t, nc.id, { containment: 'op', note: 'hold the whole op instead' })).status).toBe(200);
+		const comments = (await t.call('GET', `/issues/${nc.id}/comments`)).json;
+		expect(comments.some((c: any) => c.body === 'Containment widened step → op, releasing 1.1: hold the whole op instead')).toBe(true);
+		// The wider scope keeps its hold: the sub-steps finish, the op does not.
+		expect((await t.complete(e.id, '1.1')).status).toBe(200);
+		expect((await t.complete(e.id, '1.2')).status).toBe(200);
+		expect((await t.doc(e.id)).ops[0].step.status).toBe('pending');
+	});
+
+	test('widening that keeps every step held stays open to anyone', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const nc = (await t.nc(e.id, '1')).json;
+		expect((await contain(t, nc.id, { containment: 'op' }, t.catActor)).status).toBe(200);
+		expect((await t.complete(e.id, '1')).status).toBe(409);
+	});
+});

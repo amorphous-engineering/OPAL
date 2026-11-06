@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
 export const ISSUE_TYPES = ['non_conformance', 'bug', 'task', 'improvement'] as const;
 /** `void` is the terminal state of an issue raised by mistake (it replaces legacy delete). */
@@ -167,7 +168,7 @@ export const zHoldTarget = z.object({
 });
 export type HoldTarget = z.infer<typeof zHoldTarget>;
 
-const text = z.string().nullable().optional();
+const text = z.string().max(MAX_MARKDOWN).nullable().optional();
 const zLinkInput = z.object({ kind: z.enum(ISSUE_LINK_KINDS), targetId: zId });
 
 export const zIssueCreate = z.object({
@@ -223,12 +224,12 @@ export const issues = {
 		summary:
 			'List issues. Default order: undispositioned containment issues first, then newest. `state` is a comma list of ticket states.',
 		input: zPageInput.extend({
-			q: z.string().optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			projectId: zId.optional(), // added by projects
 			issueType: z.enum(ISSUE_TYPES).optional(),
 			status: z.enum(ISSUE_STATUSES).optional(),
 			dispState: z.enum(DISP_STATES).optional(),
-			state: z.string().optional(),
+			state: z.string().max(MAX_SHORT).optional(),
 			priority: z.enum(ISSUE_PRIORITIES).optional(),
 			assignedToId: zId.optional(),
 			partId: zId.optional(),
@@ -308,7 +309,7 @@ export const issues = {
 		method: 'POST',
 		path: '/issues/:id/review/return',
 		summary: 'In review to in work. The comment is stored on the issue.',
-		input: z.object({ id: zId, comment: z.string().min(1) }),
+		input: z.object({ id: zId, comment: z.string().max(MAX_TEXT).min(1) }),
 		output: zIssue,
 		access: 'signed-in',
 		mcp: true
@@ -330,7 +331,7 @@ export const issues = {
 		path: '/issues/:id/reopen',
 		summary:
 			'Done back to work. Withdraws the sign-off, so the issue goes through review and sign-off again. The reason and the withdrawn sign-off are kept as a comment.',
-		input: z.object({ id: zId, reason: z.string().trim().min(1) }),
+		input: z.object({ id: zId, reason: z.string().max(MAX_TEXT).trim().min(1) }),
 		output: zIssue,
 		access: 'issue.approve',
 		mcp: false,
@@ -344,7 +345,7 @@ export const issues = {
 		input: z.object({
 			id: zId,
 			dispositionType: z.enum(DISPOSITION_TYPES),
-			dispositionRationale: z.string().trim().min(1)
+			dispositionRationale: z.string().max(MAX_TEXT).trim().min(1)
 		}),
 		output: zIssue,
 		access: 'issue.disposition',
@@ -356,12 +357,12 @@ export const issues = {
 		method: 'POST',
 		path: '/issues/:id/containment',
 		summary:
-			'Change the containment scope. Widening is open to anyone. Narrowing releases a hold: it needs issue.disposition, a note and a signed-in person. containmentStepId: absent keeps, null clears.',
+			'Change the containment scope. Widening is open to anyone while every held step stays held. Narrowing a hold, or any change that stops holding an unfinished step, releases it: that needs issue.disposition, a note and a signed-in person. containmentStepId: absent keeps, null clears.',
 		input: z.object({
 			id: zId,
 			containment: z.enum(CONTAINMENTS),
 			containmentStepId: z.number().int().positive().nullable().optional(),
-			note: z.string().nullable().optional()
+			note: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zIssue,
 		access: 'signed-in',
@@ -373,7 +374,7 @@ export const issues = {
 		path: '/issues/:id/void',
 		summary:
 			'Strike an issue raised by mistake. Releases its holds, so an issue that holds work needs issue.disposition. A dispositioned or done issue cannot be voided. The reason is kept as a comment.',
-		input: z.object({ id: zId, reason: z.string().trim().min(1) }),
+		input: z.object({ id: zId, reason: z.string().max(MAX_TEXT).trim().min(1) }),
 		output: zIssue,
 		access: 'signed-in',
 		mcp: false,
@@ -415,7 +416,7 @@ export const issues = {
 		method: 'POST',
 		path: '/issues/:id/comments',
 		summary: 'Comment on an issue.',
-		input: z.object({ id: zId, body: z.string().trim().min(1) }),
+		input: z.object({ id: zId, body: z.string().max(MAX_TEXT).trim().min(1) }),
 		output: zIssueComment,
 		access: 'signed-in',
 		mcp: true

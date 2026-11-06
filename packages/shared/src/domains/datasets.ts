@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { zSpec } from '../specs.ts';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_CSV, MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, MAX_TIMESTAMP } from '../limits.ts';
 
 export const FIELD_TYPES = ['number', 'text', 'boolean', 'date'] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -56,8 +57,8 @@ export const zDatasetSchema = z
 	});
 export type DatasetSchema = z.infer<typeof zDatasetSchema>;
 
-export const zPointValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
-export const zPointValues = z.record(z.string(), zPointValue);
+export const zPointValue = z.union([z.string().max(MAX_TEXT), z.number(), z.boolean(), z.null()]);
+export const zPointValues = z.record(z.string().max(MAX_SHORT), zPointValue);
 export type PointValues = z.infer<typeof zPointValues>;
 
 export const zDataset = z.object({
@@ -101,7 +102,7 @@ export const zDataPoint = z.object({
 });
 export type DataPoint = z.infer<typeof zDataPoint>;
 
-const zRecordedAt = z.iso.datetime({ offset: true });
+const zRecordedAt = z.iso.datetime({ offset: true }).max(MAX_TIMESTAMP);
 const zName = z.string().trim().min(1).max(255);
 const zQueryId = z.coerce.number().int().positive();
 
@@ -124,7 +125,7 @@ export const datasets = {
 		path: '/datasets',
 		summary: 'List datasets, newest first. Filter by name, procedure and state.',
 		input: zPageInput.extend({
-			q: z.string().optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			projectId: zQueryId.optional(), // added by projects
 			procedureId: zQueryId.optional(),
 			state: z.enum(DATASET_STATES).optional()
@@ -142,7 +143,7 @@ export const datasets = {
 		input: z.object({
 			projectId: zId, // added by projects
 			name: zName,
-			description: z.string().trim().nullish(),
+			description: z.string().max(MAX_MARKDOWN).trim().nullish(),
 			schema: zDatasetSchema,
 			procedureId: zId.nullish()
 		}),
@@ -169,7 +170,7 @@ export const datasets = {
 			id: zId,
 			projectId: zId.optional(), // added by projects
 			name: zName.optional(),
-			description: z.string().trim().nullish(),
+			description: z.string().max(MAX_MARKDOWN).trim().nullish(),
 			schema: zDatasetSchema.optional(),
 			procedureId: zId.nullish()
 		}),
@@ -215,7 +216,7 @@ export const datasets = {
 		summary: 'The series of one field over time, oldest first, for graphing.',
 		input: z.object({
 			id: zId,
-			field: z.string().min(1),
+			field: z.string().max(MAX_SHORT).min(1),
 			start: zRecordedAt.optional(),
 			end: zRecordedAt.optional(),
 			limit: z.coerce.number().int().min(1).max(MAX_CHART_POINTS).default(MAX_CHART_POINTS)
@@ -247,7 +248,7 @@ export const datasets = {
 			path: '/datasets/:id/points/import',
 			summary:
 				'Import points from CSV text. The header names the fields; an optional recorded_at column sets the time. All rows are checked first: one bad row imports nothing.',
-			input: z.object({ id: zId, csv: z.string().min(1).max(2_000_000) }),
+			input: z.object({ id: zId, csv: z.string().min(1).max(MAX_CSV) }),
 			output: zDatasetImportResult,
 			access: 'signed-in',
 			mcp: true

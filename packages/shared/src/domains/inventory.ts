@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
 export const MOVE_KINDS = ['receive', 'consume', 'produce', 'adjust', 'count', 'transfer'] as const;
 export type MoveKind = (typeof MOVE_KINDS)[number];
@@ -175,7 +176,7 @@ export type StockTestTemplate = z.infer<typeof zStockTestTemplate>;
 
 export const zStockTestTemplateCreate = z.object({
 	name: z.string().trim().min(1).max(255),
-	description: z.string().nullable().optional(),
+	description: z.string().max(MAX_TEXT).nullable().optional(),
 	required: z.boolean().default(false),
 	testType: z.enum(STOCK_TEST_TYPES).default('boolean'),
 	minValue: zQty.nullable().optional(),
@@ -194,6 +195,8 @@ export const zStockTestResult = z.object({
 	notes: z.string().nullable(),
 	testedAt: zTimestamp.nullable(),
 	testedByName: z.string().nullable(),
+	/** Set when a result was struck: it stays listed and leaves the test status. */
+	struck: z.object({ at: zTimestamp, byName: z.string().nullable(), reason: z.string() }).nullable(),
 	createdAt: zTimestamp
 });
 export type StockTestResult = z.infer<typeof zStockTestResult>;
@@ -203,7 +206,7 @@ export const zStockTestResultInput = z.object({
 	templateId: z.number().int().nullable().optional(),
 	result: z.enum(STOCK_TEST_RESULTS).default('pending'),
 	value: z.string().max(255).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 export const zStockTestStatus = z.object({
@@ -298,7 +301,7 @@ export const zStockTransferInput = z.object({
 	targetLocation: z.string().trim().min(1).max(255),
 	quantity: zQty,
 	targetLotNumber: z.string().trim().max(100).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 export const zReceivingRules = z.object({
@@ -363,8 +366,8 @@ export type StockLabel = z.infer<typeof zStockLabel>;
 
 const stockFilters = z.object({
 	partId: zId.optional(),
-	location: z.string().optional(),
-	q: z.string().optional(),
+	location: z.string().max(MAX_SHORT).optional(),
+	q: z.string().max(MAX_SHORT).optional(),
 	lowStock: zStockFlag.optional()
 });
 
@@ -376,7 +379,7 @@ export const inventory = {
 		summary:
 			'List stock records with balances. Filter by part, location, lot, text, source, depletion, low stock, expiry and calibration.',
 		input: zPageInput.merge(stockFilters).extend({
-			lotNumber: z.string().optional(),
+			lotNumber: z.string().max(MAX_SHORT).optional(),
 			sourceType: z.enum(STOCK_SOURCES).optional(),
 			hasStock: zStockFlag.optional(),
 			expired: zStockFlag.optional(),
@@ -474,7 +477,7 @@ export const inventory = {
 		summary: 'The stock ledger across records, newest first. Filter by part, location, kind.',
 		input: zPageInput.extend({
 			partId: zId.optional(),
-			location: z.string().optional(),
+			location: z.string().max(MAX_SHORT).optional(),
 			kind: z.enum(MOVE_KINDS).optional()
 		}),
 		output: zPage(zStockMoveRow),
@@ -497,7 +500,7 @@ export const inventory = {
 		method: 'POST',
 		path: '/inventory/transfer',
 		summary:
-			'Move stock to another location or lot. A whole move keeps the OPAL number. A partial move creates a record with a new OPAL number, or merges into the stock already there.',
+			'Move stock to another location. A whole move keeps the OPAL number. A partial move creates a record with a new OPAL number, or merges into the stock already there. A record with no lot can take one here. A record with a lot keeps it: a lot change goes through `inventory.correct`.',
 		input: zStockTransferInput,
 		output: z.object({ source: zStockRecord, target: zStockRecord }),
 		access: 'signed-in',
@@ -508,7 +511,7 @@ export const inventory = {
 		method: 'GET',
 		path: '/inventory/opal/:opalNumber',
 		summary: 'Look up a stock record by OPAL number.',
-		input: z.object({ opalNumber: z.string() }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT) }),
 		output: zStockRecord,
 		access: 'signed-in',
 		mcp: true
@@ -519,7 +522,7 @@ export const inventory = {
 		path: '/inventory/opal/:opalNumber/detail',
 		summary:
 			'Everything the record page shows: record, part, source, ledger, genealogy both ways, tests.',
-		input: z.object({ opalNumber: z.string() }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT) }),
 		output: zStockDetail,
 		access: 'signed-in',
 		mcp: true
@@ -529,7 +532,7 @@ export const inventory = {
 		method: 'GET',
 		path: '/inventory/opal/:opalNumber/history',
 		summary: 'The ledger of one OPAL number, oldest first, with a running balance.',
-		input: z.object({ opalNumber: z.string() }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT) }),
 		output: z.array(zStockLedgerRow),
 		access: 'signed-in',
 		mcp: true
@@ -540,7 +543,7 @@ export const inventory = {
 		path: '/inventory/opal/:opalNumber/genealogy',
 		summary:
 			'Components that went into this item and assemblies it went into. `depth` follows the tree further (1 to 8).',
-		input: z.object({ opalNumber: z.string(), depth: z.coerce.number().int().min(1).max(8).default(1) }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT), depth: z.coerce.number().int().min(1).max(8).default(1) }),
 		output: zStockGenealogy,
 		access: 'signed-in',
 		mcp: true
@@ -629,7 +632,7 @@ export const inventory = {
 			id: zId,
 			adjustment: zQty,
 			reason: z.enum(ADJUST_REASONS),
-			notes: z.string().nullable().optional()
+			notes: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zStockRecord,
 		access: 'signed-in',
@@ -640,7 +643,7 @@ export const inventory = {
 		method: 'POST',
 		path: '/inventory/:id/count',
 		summary: 'Record a physical count. The difference to the balance becomes a count move.',
-		input: z.object({ id: zId, countedQuantity: zQty, notes: z.string().nullable().optional() }),
+		input: z.object({ id: zId, countedQuantity: zQty, notes: z.string().max(MAX_TEXT).nullable().optional() }),
 		output: zStockRecord,
 		access: 'signed-in',
 		mcp: true
@@ -649,11 +652,13 @@ export const inventory = {
 		name: 'inventory.calibrate',
 		method: 'POST',
 		path: '/inventory/:id/calibrate',
-		summary: 'Record a calibration of a tooling item. The next due date follows the part interval.',
+		summary:
+			'Record a calibration of a tooling item: a person attests it was done. The next due date follows the part interval. Human only.',
 		input: z.object({ id: zId }),
 		output: zStockRecord,
 		access: 'signed-in',
-		mcp: true
+		mcp: false,
+		humanOnly: true
 	}),
 	tests: {
 		list: op({
@@ -680,7 +685,7 @@ export const inventory = {
 			name: 'inventory.tests.update',
 			method: 'PATCH',
 			path: '/inventory/:id/tests/:testId',
-			summary: 'Change a test result.',
+			summary: 'Fill in a pending test. A result already given stays as it is: strike it and record a new one.',
 			input: zStockTestResultInput.extend({ id: zId, testId: zId }),
 			output: zStockTestResult,
 			access: 'signed-in',
@@ -690,11 +695,27 @@ export const inventory = {
 			name: 'inventory.tests.delete',
 			method: 'DELETE',
 			path: '/inventory/:id/tests/:testId',
-			summary: 'Delete a test result.',
+			summary: 'Delete a pending test. A result already given is struck instead.',
 			input: z.object({ id: zId, testId: zId }),
 			output: zOk,
 			access: 'signed-in',
 			mcp: true
+		}),
+		strike: op({
+			name: 'inventory.tests.strike',
+			method: 'POST',
+			path: '/inventory/:id/tests/:testId/strike',
+			summary:
+				'Strike a test result that should not count. It stays on the record with who, when and why, and leaves the test status. A reason is required. Human only.',
+			input: z.object({
+				id: zId,
+				testId: zId,
+				reason: z.string().trim().min(1, 'a reason is required').max(2000)
+			}),
+			output: zStockTestResult,
+			access: 'signed-in',
+			mcp: false,
+			humanOnly: true
 		}),
 		status: op({
 			name: 'inventory.tests.status',

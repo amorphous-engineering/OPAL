@@ -44,6 +44,19 @@ describe('plugin proxy', () => {
 		expect(JSON.parse(seen.headers['x-opal-user'])).toEqual({ id: s.person.id, name: 'Ann', username: 'ann' });
 	});
 
+	test("a plugin's scoped token cannot reach a plugin's routes; an unscoped token still can", async () => {
+		const s = await setup();
+		const other = addPlugin(s.db, 'other');
+		addPlugin(s.db, 'kaneo');
+		stubRuntime({ kaneo: upstream.port! });
+		s.setActor(other.actor);
+		const refused = await s.app.request('/plugins/kaneo/panel');
+		expect(refused.status).toBe(403);
+		expect((await refused.json()).error).toBe('out_of_scope');
+		s.setActor({ kind: 'token', userId: s.person.id, isAdmin: true, tokenId: 1 });
+		expect((await s.app.request('/plugins/kaneo/panel')).status).toBe(201);
+	});
+
 	test('an anonymous request is 401', async () => {
 		const s = await setup();
 		addPlugin(s.db, 'kaneo');
@@ -149,6 +162,15 @@ describe('plugin proxy', () => {
 		expect(res.status).toBe(302);
 		expect(res.headers.get('location')).toBe('/x');
 		expect(res.headers.get('content-security-policy')).toContain('sandbox');
+	});
+
+	test('a plugin page can be framed by this app and by nothing else', async () => {
+		const s = await setup();
+		addPlugin(s.db, 'kaneo');
+		stubRuntime({ kaneo: upstream.port! });
+		const res = await s.app.request('/plugins/kaneo/redirect');
+		expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+		expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
 	});
 
 	test('plugins.panels lists running plugins with a panel in the slot, with a working panel token', async () => {

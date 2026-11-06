@@ -6,6 +6,23 @@ What each record offers in each state. `CLAUDE.md` has the rules. This table app
 
 A reason is required where this file says so. Elsewhere it is optional, and nobody is forced to fill it in.
 
+## Attachments
+
+A file follows the pencil of its record. Removing a file, or changing its kind or note, is open while the record is pencil and refused afterwards. There is no strike for a file: a wrong one gets a note beside it.
+
+| Record | Files can change | New files |
+|---|---|---|
+| Purchase order | Draft | Every state |
+| Issue | Pending, and In work for a file added after the signature | Every state except Void |
+| Requirement | Draft, Preliminary | Draft, Preliminary, Baselined |
+| Risk | Open, if never accepted or realized | Open, Accepted |
+| Stock record | Never | Every state |
+| Procedure template | Draft, Released | Draft, Released |
+| Execution, step, note | See Execution | See Execution |
+| Procedure step image | As its template | As its template |
+
+No other record can own a file. A new record type gets files by declaring its rule here and in code.
+
 ## Purchase order
 
 | State | The page answers | Primary | Also | EDIT | MORE |
@@ -17,6 +34,8 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 | Received | What did we get and what did it cost? | | Add note, attachment, charge | | COPY TO NEW DRAFT |
 | Closed short, Cancelled | What happened to it? | | Add note, attachment, charge if anything arrived | | COPY TO NEW DRAFT |
 
+- A charge on a draft can be removed. A charge on a placed order is struck, with a reason, by a person. It stays listed with who, when and why, and leaves the total. Receipt rows never change.
+- Each charge on a placed order has STRIKE under its row's MORE. A reason is required, a person does it, and the charge stays listed and leaves the total.
 - AMEND LINE and CANCEL LINE keep the old value on the line, struck through, with the new value, who, when and why. A reason is required.
 - The supplier never changes after placing. Cancel and copy to a new draft.
 - An order never returns to draft after placing. Its placing date never clears.
@@ -27,7 +46,7 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
-| Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
+| Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
 | Pending, advisory | What is it, and who has it? | START WORK | Add comment, attachment | As above | VOID (reason required) |
 | In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee | VOID, while no disposition is signed |
 | In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
@@ -36,6 +55,7 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 
 - Raising needs only a title. Everything else can be filled in later, and an issue raised from a step carries its run, step and person.
 - A signed disposition freezes the observation and the disposition. A signed or done issue cannot be voided.
+- Moving the boundary of a hold off an unfinished step releases that step, so it takes what narrowing takes. Setting a first boundary adds a hold and stays open.
 - A void issue shows its title struck through and its reason at the top. It has no controls except a comment.
 - Disposition fields sit behind EDIT until someone opens them. View mode shows a draft as facts.
 
@@ -52,6 +72,7 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 - A step with no declared sign-off has one action: COMPLETE. No dialog, no signature row. The row then shows the title struck through with initials and time.
 - A step with declared sign-offs shows a slot for each. Pressing SIGN OFF is the attestation, with no dialog. Two slots need two different people.
 - Only the current step of the current operation is open by default. Others are one click away. SKIP and + ISSUE appear on the open step.
+- SKIP on a step with required data or a declared sign-off needs `execution.skipRequired`, or every role its slots name. Once the work is done and waits on sign-off, or a slot is signed, SKIP is gone: sign it, or close the work order short.
 - Completed steps never reopen. A correction is a note or a redline.
 - Capture fields are editable while a step is workable and read-only afterwards.
 - Every quantity on the material tab shows its unit. Source is a search over stock of that part with stock on hand, defaulting to the oldest.
@@ -77,17 +98,24 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 | Baselined | What is required, and is it verified? | REVISE | Record verification per allocation, which adds an entry with who and when | | CANCEL (reason required) |
 | Superseded, Cancelled | What replaced this, or why was it dropped? | Link to the current revision | | | |
 
+- A requirement with a baselined revision stays in its project, including through a draft of its next revision.
+- A verification stays until someone takes it back with WITHDRAW VERIFICATION (a person, reason required). The allocation shows who verified, who withdrew, when and why.
+- A verified allocation cannot be removed, nor can one with a withdrawn verification. Mark it not applicable.
+- The notes of a verified allocation stay as verified. Withdraw the verification to change them.
+
 ## Risk
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
 | Open | What could go wrong, and what are we doing? | MARK REVIEWED | Link issues, add references | All fields, including score and disposition | ACCEPT (rationale required), CLOSE (reason required), DELETE if never accepted or realized |
-| Accepted | Who accepted what, and is that still true? | MARK REVIEWED | Link issues, add references | Owner, narrative | WITHDRAW ACCEPTANCE (reason required, human only), CLOSE (reason required) |
+| Accepted | Who accepted what, and is that still true? | MARK REVIEWED | Link issues, add references | Owner, narrative | WITHDRAW ACCEPTANCE (reason required, human only), MARK REALIZED (linked issue and reason required, human only), CLOSE (reason required, human only) |
 | Realized | What did we forecast, and what happened? | Link to the issue | + NEW RISK for residual exposure | | CORRECT RECORD (reason required, logged) |
-| Closed | Why did this close? | | | | REOPEN (reason required) |
+| Closed | Why did this close? | | | | REOPEN (reason required, human only if it was ever accepted) |
 
 - History on the page shows every change to score, disposition or statement: old, new, who, when, and the note if one was given.
 - A score change never withdraws an acceptance as a side effect. Withdraw first, then change the score.
+- Realizing a risk is a commit, so it takes a person. An agent may prepare it by linking the issue. Realizing an accepted risk also needs a reason.
+- Reopening a closed risk that was accepted voids that acceptance, the same as withdrawing it. The stamps stay as the last acceptance, and accepting again is a new signature.
 - Whether a realized risk should be editable at all is the owner's call, not a standard's. NASA and DoD guidance hands a realized risk to the issue process and is silent on editing. This table locks it by default and leaves a deliberate way out.
 
 ## Part
@@ -100,15 +128,18 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 
 - The part tag with QR stays at the top. Stock, procedure use and consumption all show on the part page.
 - BOM changes on an active part are the one open question. See the sweep report.
+- The unit of measure stops changing once stock or a purchase order line counts in it. A different unit is a new part.
 
 ## Stock record
 
 | State | The page answers | Primary | Also | MORE |
 |---|---|---|---|---|
-| On hand | What is this, where, how many, and what happened to it? | | Label, count, adjust, move | CORRECT lot, serial or expiry (reason required), SCRAP (reason required) |
+| On hand | What is this, where, how many, and what happened to it? | | Label, count, adjust, move, record a test, STRIKE a test result under its row's MORE (reason required, human only), record calibration (human only) | CORRECT lot, serial or expiry (reason required), SCRAP (reason required) |
 | Empty | Where did it go? | | Label | |
 
 - The ledger is append-only. Corrections show in the ledger with old and new values.
+- A pending test is a blank: fill it in or delete it. A result given stays. A person strikes it with a reason, it stays listed with who, when and why, it leaves the test status, and the retest is a new line.
+- A move keeps the lot of a record that has one. A record with no lot can take one on a move, which fills in a blank. Any other lot change is a CORRECT.
 
 ## Reference data
 

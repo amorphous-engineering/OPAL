@@ -4,6 +4,7 @@
  * raw token string. Raw tokens are 32 random bytes as unpadded base64url
  * (Python's secrets.token_urlsafe(32)); API tokens add the `opal_` prefix.
  */
+import { OpalError } from '@opal/shared';
 import { createHash, randomBytes } from 'node:crypto';
 
 export const SESSION_COOKIE = 'opal_session';
@@ -80,6 +81,7 @@ export function humanUsernameBase(raw: string): string {
 /** In-process failure counter keyed by ip:username. OPAL runs as one process. */
 export class LoginThrottle {
 	private failures = new Map<string, number[]>();
+	private swept = Date.now();
 	constructor(
 		private max = 10,
 		private windowMs = 300_000
@@ -95,7 +97,23 @@ export class LoginThrottle {
 		return this.prune(key).length >= this.max;
 	}
 	fail(key: string): void {
+		this.sweep();
 		this.failures.set(key, [...this.prune(key), Date.now()]);
+	}
+	/** Recent failures for a key, without changing anything. */
+	count(key: string): number {
+		return this.prune(key).length;
+	}
+	/** Drop keys whose failures have all aged out, at most once a minute, so names never seen again do not pile up. */
+	private sweep(): void {
+		const t = Date.now();
+		if (t - this.swept < 60_000) return;
+		this.swept = t;
+		for (const key of [...this.failures.keys()]) this.prune(key);
+	}
+	/** Keys held in memory. */
+	get size(): number {
+		return this.failures.size;
 	}
 	reset(key: string): void {
 		this.failures.delete(key);
@@ -108,21 +126,39 @@ export class LoginThrottle {
 }
 export const loginThrottle = new LoginThrottle();
 /**
- * Failures per username from any address. Generous, so a stranger who guesses a name cannot
- * lock a person out for long, yet it caps guessing from many addresses.
+ * Failures per username from any address. Past the cap, addresses this person has never signed in
+ * from share one guess per name every `lockedGuess.intervalMs`, whichever address asks, so a stranger
+ * with many addresses gets no more tries than one with a single address. The person still gets in
+ * from an address they have used, and a stranger who guesses a name cannot lock them out of it.
  */
 export const usernameThrottle = new LoginThrottle(50, 900_000);
+export const lockedGuess = { intervalMs: 5000 };
+
+const nextLockedGuess = new Map<string, number>();
+
+/** Whether a stranger's guess may go ahead against a name over its cap. Taking it uses the slot. */
+export function takeLockedGuess(nameKey: string): boolean {
+	const t = Date.now();
+	if (nextLockedGuess.size > 1000) for (const [k, at] of nextLockedGuess) if (at <= t) nextLockedGuess.delete(k);
+	if ((nextLockedGuess.get(nameKey) ?? 0) > t) return false;
+	nextLockedGuess.set(nameKey, t + lockedGuess.intervalMs);
+	return true;
+}
 
 /**
  * Caps the argon2id work that anonymous requests start at the same time. Each hash takes
  * memory and a thread; a flood of logins must not starve the rest of the server.
  */
 const HASH_SLOTS = 4;
+/** Past this many waiting, a sign-in is told to try again: a long queue only delays everyone. */
+const HASH_QUEUE = 64;
 let hashActive = 0;
 const hashWaiting: Array<() => void> = [];
 export async function withHashSlot<T>(fn: () => Promise<T>): Promise<T> {
-	if (hashActive >= HASH_SLOTS) await new Promise<void>((resolve) => hashWaiting.push(resolve));
-	else hashActive++;
+	if (hashActive >= HASH_SLOTS) {
+		if (hashWaiting.length >= HASH_QUEUE) throw new OpalError(429, 'too_many_attempts', 'The server is busy signing people in. Try again shortly.');
+		await new Promise<void>((resolve) => hashWaiting.push(resolve));
+	} else hashActive++;
 	try {
 		return await fn();
 	} finally {

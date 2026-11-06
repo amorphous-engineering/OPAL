@@ -107,7 +107,7 @@
 							{ key: 'type', label: 'Type', mono: true },
 							{ key: 'required', label: 'Required', mono: true }
 						]}
-						emptyLabel="No settings."
+						emptyLabel="Settings"
 						dense
 					>
 						{#snippet cell(row, col)}
@@ -126,7 +126,7 @@
 							{ key: 'slot', label: 'Slot', mono: true },
 							{ key: 'path', label: 'Path', mono: true }
 						]}
-						emptyLabel="No panels."
+						emptyLabel="Panels"
 						dense
 					/>
 				</Section>

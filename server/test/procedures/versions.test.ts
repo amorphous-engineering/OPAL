@@ -3,6 +3,9 @@ import { zProcedureSnapshot } from '@opal/shared';
 import { eq } from 'drizzle-orm';
 import { attachment, procedureVersion } from '../../src/db/schema/index.ts';
 import { snapshotFromLegacy } from '../../src/services/procedures/snapshot.ts';
+import { existsSync } from 'node:fs';
+import { blobPath, purgeOrphanBlobs } from '../../src/services/platform/attachments.ts';
+import { blobScanTables, textHoldsBlob } from '../../src/services/platform/blob-refs.ts';
 import { versionForExecution, versionHoldsBlob } from '../../src/services/procedures/versions.ts';
 import { referenceCounts } from '../../src/services/parts/references.ts';
 import { setup } from './helpers.ts';
@@ -251,6 +254,10 @@ describe('images in snapshots', () => {
 		expect(res.status).toBe(200);
 		expect(versionHoldsBlob(s.db)(up.json.sha256)).toBe(true);
 		expect(versionHoldsBlob(s.db)('0'.repeat(64))).toBe(false);
+		// The purge must keep it: the scan reads the JSON snapshot column of published versions.
+		expect(blobScanTables()).toEqual(expect.arrayContaining(['procedure_version', 'adhoc_step', 'procedure_step']));
+		expect(await purgeOrphanBlobs(s.db, [textHoldsBlob(s.db)], 0)).toBe(0);
+		expect(existsSync(blobPath(up.json.sha256))).toBe(true);
 	});
 
 	test('inline markdown images become blob links in the snapshot', async () => {

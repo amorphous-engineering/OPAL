@@ -35,6 +35,8 @@ export interface CookieJar {
 export interface RequestInfo {
 	userAgent: string | null;
 	ip: string | null;
+	/** The host name the browser used. */
+	host?: string | null;
 }
 
 export interface Ctx {

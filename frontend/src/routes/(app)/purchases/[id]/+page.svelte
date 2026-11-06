@@ -348,7 +348,12 @@
 			</datalist>
 		</Section>
 
-		<AttachmentsSection purchaseId={po.id} attachments={data.attachments} onchanged={refresh} />
+		<AttachmentsSection
+			purchaseId={po.id}
+			attachments={data.attachments}
+			removable={po.status === 'draft'}
+			onchanged={refresh}
+		/>
 	</div>
 
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
@@ -376,7 +381,8 @@
 			purchaseId={po.id}
 			expenses={data.expenses}
 			canAdd={live || po.status === 'received' || (po.status === 'closed_short' && anyReceived)}
-			canRemove={editing}
+			canRemove={editing && draft}
+			canStrike={!draft}
 			onchanged={refresh}
 		/>
 

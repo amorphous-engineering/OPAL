@@ -7,6 +7,7 @@ import {
 	hashPassword,
 	hashToken,
 	loginThrottle,
+	takeLockedGuess,
 	usernameThrottle,
 	withHashSlot,
 	newToken,
@@ -16,7 +17,10 @@ import {
 	validatePasswordStrength,
 	verifyPassword
 } from '../auth/tokens.ts';
+import { throttleAddress } from '../auth/client-ip.ts';
+import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
+import { checkSetupCode, clearSetupCode, setupCodeRequired } from '../services/auth/setup-code.ts';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { personRefs } from '../services/org/people.ts';
@@ -47,7 +51,8 @@ import {
 	type AuthorizeRequest
 } from '../services/auth/oauth.ts';
 import { resetDiscoveryCache, testDiscovery } from '../services/auth/oidc.ts';
-import { revokeSessions, startSession, type UserRow } from '../services/auth/sessions.ts';
+import { issuerProblem } from '../services/platform/outbound.ts';
+import { hasSignedInFrom, revokeSessions, startSession, type UserRow } from '../services/auth/sessions.ts';
 import { insert, remove, update } from '../write.ts';
 
 const present = (db: Db, u: UserRow) => ({
@@ -137,9 +142,15 @@ const flag = (v: boolean) => (v ? 'true' : 'false');
 export const authImpls = [
 	implement(contracts.auth.config, (ctx) => {
 		const s = readSettings(ctx.db);
-		const oidc = oidcActive(s);
+		// Until someone has run setup, no sign-in method can create the first administrator.
+		const oidc = oidcActive(s) && !needsSetup(ctx);
+		// The setup fields say something only while nobody has claimed the instance. After that, a
+		// public reply must not tell a stranger which host names are listed here.
+		const unclaimed = needsSetup(ctx) && setupCodeRequired();
 		return {
 			needsSetup: needsSetup(ctx),
+			setupCodeRequired: unclaimed,
+			setupHostAllowed: !unclaimed || setupHostAllowed(ctx.request?.host),
 			passwordLoginEnabled: s.passwordLoginEnabled,
 			passkeysEnabled: s.passkeysEnabled,
 			oidcEnabled: oidc,
@@ -149,6 +160,16 @@ export const authImpls = [
 
 	implement(contracts.auth.setup, async (ctx, input) => {
 		if (!needsSetup(ctx)) throw conflict('setup_complete', 'Setup is already complete');
+		if (setupCodeRequired()) {
+			if (!setupHostAllowed(ctx.request?.host)) {
+				throw new OpalError(403, 'setup_host', 'Open this page by IP address, or set OPAL_ALLOWED_HOSTS to include this host name.');
+			}
+			const check = checkSetupCode(input.setupCode, ctx.request?.ip);
+			if (check === 'throttled') throw new OpalError(429, 'too_many_attempts', 'Too many wrong setup codes. Try again in a few minutes.');
+			if (check === 'wrong') {
+				throw new OpalError(403, 'setup_code', 'That setup code is not right. OPAL printed the code where it started.');
+			}
+		}
 		const username = normalizeUsername(input.username);
 		if (!username) throw invalid('username', 'Username is required');
 		if (isPluginUsername(username)) throw invalid('username', 'The plugin. prefix is reserved for plugins');
@@ -169,6 +190,7 @@ export const authImpls = [
 				isActive: true
 			});
 			startSession(ctx, u, 'password');
+			clearSetupCode();
 			return { user: present(ctx.db, u) };
 		});
 	}, { verifyFirst: true }),
@@ -178,19 +200,29 @@ export const authImpls = [
 			throw new OpalError(403, 'forbidden', 'Password sign-in is disabled');
 		}
 		const username = input.username.trim().toLowerCase();
-		const key = `${ctx.request?.ip ?? 'unknown'}:${username}`;
+		const address = throttleAddress(ctx.request?.ip);
+		const key = `${address}:${username}`;
 		const nameKey = `name:${username}`;
-		if (loginThrottle.blocked(key) || usernameThrottle.blocked(nameKey)) {
-			throw new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
+		const tooMany = () => new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
+		if (loginThrottle.blocked(key)) throw tooMany();
+		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
+		// Over the name's limit, strangers share one guess per interval. An address this person has
+		// signed in from keeps only its own limit, so guessing cannot lock them out of it.
+		if (usernameThrottle.blocked(nameKey) && !(u && hasSignedInFrom(ctx.db, u.id, address)) && !takeLockedGuess(nameKey)) {
+			throw tooMany();
 		}
 		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
 		loginThrottle.fail(key);
 		usernameThrottle.fail(nameKey);
-		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
 		const ok = await withHashSlot(async () => {
 			const good = u?.isActive ? await verifyPassword(u.passwordHash, input.password) : false;
 			if (!u || !u.isActive || !u.passwordHash) await burnVerify(input.password);
 			return good;
+		}).catch((e) => {
+			// A full queue checked nothing, so it is not a failed attempt.
+			loginThrottle.release(key);
+			usernameThrottle.release(nameKey);
+			throw e;
 		});
 		if (!u || !ok) {
 			// One message for unknown user, wrong password, inactive and passwordless accounts.
@@ -422,9 +454,8 @@ export const authImpls = [
 				throw invalid('oidcIssuer', 'An issuer URL and client id are required to enable OIDC.');
 			}
 			// Every token exchange posts the client credential to this host: https, or loopback in development.
-			if (!issuer.startsWith('https://') && !/^http:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(issuer)) {
-				throw invalid('oidcIssuer', 'The issuer URL must be https:// (or a localhost URL for development).');
-			}
+			const problem = issuerProblem(issuer);
+			if (problem) throw invalid('oidcIssuer', problem);
 			if (!scopes.split(/\s+/).includes('openid')) {
 				throw invalid('oidcScopes', "The scopes must include 'openid'.");
 			}

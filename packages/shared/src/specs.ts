@@ -9,10 +9,12 @@
  */
 import { z } from 'zod';
 import { unitSymbol } from './units.ts';
+import { MAX_NUMBER_TEXT } from './limits.ts';
 
 /** A plain decimal: optional sign, digits, optional fraction. No exponent. */
 export const zDecimal = z
 	.string()
+	.max(MAX_NUMBER_TEXT)
 	.trim()
 	.regex(/^[-+]?(\d+(\.\d*)?|\.\d+)$/, 'Expected a decimal number such as 12.125');
 

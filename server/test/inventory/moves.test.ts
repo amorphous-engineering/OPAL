@@ -161,17 +161,59 @@ describe('transfer', () => {
 		expect(r.body.source.balance).toBe('0');
 	});
 
-	test('a transfer to another lot moves stock into that lot', async () => {
+	test('a move never changes the lot of a record that has one, whole or part, here or elsewhere', async () => {
 		const s = await setup();
 		const p = makePart(s.db);
 		const src = await receive(s, p.id, '6', 'A1', { lotNumber: 'L1' });
+		for (const [targetLocation, quantity] of [['A1', '6'], ['A1', '2'], ['B2', '6'], ['B2', '2']] as const) {
+			const r = await s.call('POST', '/inventory/transfer', {
+				sourceId: src.id,
+				targetLocation,
+				quantity,
+				targetLotNumber: 'L2'
+			});
+			expect(r.status).toBe(409);
+			expect(r.body.message).toContain('Correct the record');
+		}
+		const after = (await s.call('GET', `/inventory/opal/${src.opalNumber}/detail`)).body.record;
+		expect(after).toMatchObject({ lotNumber: 'L1', location: 'A1', balance: '6' });
+	});
+
+	test('naming the lot a record already has is still an ordinary move', async () => {
+		const s = await setup();
+		const src = await receive(s, makePart(s.db).id, '6', 'A1', { lotNumber: 'L1' });
 		const r = await s.call('POST', '/inventory/transfer', {
 			sourceId: src.id,
-			targetLocation: 'A1',
-			quantity: '2',
-			targetLotNumber: 'L2'
+			targetLocation: 'B2',
+			quantity: '6',
+			targetLotNumber: 'L1'
 		});
-		expect(r.body.target).toMatchObject({ lotNumber: 'L2', location: 'A1', balance: '2' });
+		expect(r.body.target).toMatchObject({ opalNumber: src.opalNumber, lotNumber: 'L1', location: 'B2' });
+	});
+
+	test('a record with no lot can take one on a move, which fills in a blank and shows on the ledger', async () => {
+		const s = await setup();
+		const whole = await receive(s, makePart(s.db).id, '6', 'A1');
+		const r = await s.call('POST', '/inventory/transfer', {
+			sourceId: whole.id,
+			targetLocation: 'A1',
+			quantity: '6',
+			targetLotNumber: 'L7'
+		});
+		expect(r.status).toBe(200);
+		expect(r.body.target).toMatchObject({ opalNumber: whole.opalNumber, lotNumber: 'L7', location: 'A1' });
+		const moves = (await s.call('GET', `/inventory/opal/${whole.opalNumber}/detail`)).body.ledger;
+		expect(moves.at(-1)).toMatchObject({ kind: 'transfer', fromLot: null, toLot: 'L7' });
+
+		const part = await receive(s, makePart(s.db).id, '6', 'A1');
+		const split = await s.call('POST', '/inventory/transfer', {
+			sourceId: part.id,
+			targetLocation: 'B2',
+			quantity: '2',
+			targetLotNumber: 'L8'
+		});
+		expect(split.body.target).toMatchObject({ lotNumber: 'L8', location: 'B2', balance: '2' });
+		expect(split.body.source).toMatchObject({ lotNumber: null, balance: '4' });
 	});
 
 	test('a serialized unit moves whole and is never split or merged', async () => {

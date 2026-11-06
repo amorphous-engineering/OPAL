@@ -163,10 +163,24 @@
 	);
 
 	async function widenContainment(e: Event & { currentTarget: HTMLSelectElement }) {
-		const next = e.currentTarget.value as Containment;
+		const select = e.currentTarget;
+		const next = select.value as Containment;
 		if (next === issue.containment) return;
+		let note: string | undefined;
+		if (boundaryHolds) {
+			const asked = await askReason({
+				title: `Widen containment to ${CONTAINMENT_OPTION[next]}`,
+				body: `${issue.issueNumber} stops holding ${holdNames(data.holding) || 'the step'} if that step is unfinished. It then holds at the wider scope.`,
+				action: 'WIDEN'
+			});
+			if (asked === null) {
+				select.value = issue.containment;
+				return;
+			}
+			note = asked;
+		}
 		try {
-			await opal.issues.setContainment({ id: issue.id, containment: next });
+			await opal.issues.setContainment({ id: issue.id, containment: next, note });
 			await refresh();
 		} catch (err) {
 			toastError(err);
@@ -196,13 +210,37 @@
 		});
 	}
 
+	/** A hold anchored on a step: moving its boundary can release that step. */
+	const boundaryHolds = $derived(
+		holdsWork &&
+			issue.containment !== 'wo' &&
+			(issue.containmentStepId !== null || issue.raisedStepId !== null)
+	);
+	/** A wider scope stops holding the step itself, so on a hold anchored to a step it takes the gate. */
+	const canWiden = $derived(!boundaryHolds || issue.canDisposition);
+
 	async function setBoundary(e: Event & { currentTarget: HTMLSelectElement }) {
-		const v = e.currentTarget.value;
+		const select = e.currentTarget;
+		const v = select.value;
+		let note: string | undefined;
+		if (boundaryHolds) {
+			const asked = await askReason({
+				title: 'Move containment boundary',
+				body: `Releases ${holdNames(data.holding) || 'the hold'} if that step is unfinished. ${issue.issueNumber} then holds the new boundary.`,
+				action: 'MOVE'
+			});
+			if (asked === null) {
+				select.value = issue.containmentStepId === null ? '' : String(issue.containmentStepId);
+				return;
+			}
+			note = asked;
+		}
 		await act(async () => {
 			await opal.issues.setContainment({
 				id: issue.id,
 				containment: issue.containment,
-				containmentStepId: v ? Number(v) : null
+				containmentStepId: v ? Number(v) : null,
+				note
 			});
 			await refresh();
 		});
@@ -353,14 +391,18 @@
 		});
 	}
 
-	const attachmentColumns: Column<Attachment>[] = [
+	/** A signature covers the files it could see. Later files are pencil like the resolution. */
+	const canRemoveAttachment = (a: Attachment) =>
+		editing && (issue.dispositionedAt === null || a.createdAt > issue.dispositionedAt);
+
+	const attachmentColumns = $derived<Column<Attachment>[]>([
 		{ key: 'file', label: 'File' },
 		{ key: 'type', label: 'Type', width: '9rem' },
 		{ key: 'size', label: 'Size', width: '6rem', align: 'right', mono: true },
 		{ key: 'by', label: 'Added by', width: '9rem' },
 		{ key: 'at', label: 'Added', width: '9rem' },
-		{ key: 'actions', label: '', width: '5rem', align: 'right' }
-	];
+		...(editing ? [{ key: 'actions', label: '', width: '5rem', align: 'right' as const }] : [])
+	]);
 
 	const partLinks = $derived(issue.links.filter((l) => l.kind === 'part')); // added by risks
 	const typeFields = $derived({
@@ -708,12 +750,8 @@
 							{a.uploadedByName ?? '—'}
 						{:else if col.key === 'at'}
 							<Timestamp value={a.createdAt} />
-						{:else}
-							<button
-								type="button"
-								class="font-mono text-xs tracking-wider text-error uppercase hover:underline"
-								onclick={() => removeAttachment(a)}>DELETE</button
-							>
+						{:else if canRemoveAttachment(a)}
+							<ActionLink onclick={() => removeAttachment(a)}>DELETE</ActionLink>
 						{/if}
 					{/snippet}
 				</DataTable>
@@ -759,7 +797,7 @@
 					{:else}{stateLabel(issue.priority)}{/if}
 				</DetailRow>
 				<DetailRow label="Containment">
-					{#if editObservation}
+					{#if editObservation && canWiden}
 						<NativeSelect
 							aria-label="Containment"
 							value={issue.containment}
@@ -881,7 +919,7 @@
 					</div>
 				</DetailRow>
 				<DetailRow label="Boundary">
-					{#if editObservation && issue.execution && data.steps.length}
+					{#if editObservation && issue.execution && data.steps.length && (!boundaryHolds || issue.canDisposition)}
 						<NativeSelect
 							aria-label="Containment boundary step"
 							value={issue.containmentStepId === null ? '' : String(issue.containmentStepId)}

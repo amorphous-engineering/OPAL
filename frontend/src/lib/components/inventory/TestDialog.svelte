@@ -21,7 +21,7 @@
 		open: boolean;
 		stockId: number;
 		templates: StockTestTemplate[];
-		/** Editing this result; null records a new one. */
+		/** Filling in this pending test; null records a new one. */
 		test?: StockTestResult | null;
 		ondone: () => void | Promise<void>;
 	} = $props();
@@ -86,7 +86,8 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title class="text-sm font-semibold">{test ? 'Edit test' : 'Run test'}</Dialog.Title>
+			<Dialog.Title class="text-sm font-semibold">{test ? 'Fill in test' : 'Run test'}</Dialog.Title
+			>
 		</Dialog.Header>
 		<form onsubmit={submit} class="grid grid-cols-1 gap-3">
 			{#if !test && templates.length}

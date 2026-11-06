@@ -36,11 +36,13 @@ import { apiToken, authSetting, notification, part, passkeyCredential, user } fr
 import { serialized } from '../../registry.ts';
 import { insert, remove, update } from '../../write.ts';
 import { startSession } from '../auth/sessions.ts';
+import { reissueSetupCode } from '../auth/setup-code.ts';
 import { writeSetting } from '../auth/settings.ts';
 import { upsertProfile } from '../org/profiles.ts';
 import { ensureFts } from '../platform/search.ts';
 import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
 import { renameCheckboxFields } from '../../db/boolean-fields.ts';
+import { removeSnapshots } from '../../db/snapshot.ts';
 import { buildDemoContent } from './demo.ts';
 
 export const DEMO_PREFIX = 'demo.';
@@ -238,6 +240,7 @@ export async function enterDemo(ctx: Ctx): Promise<LifecycleState> {
 
 function removeDemoFiles(h: Home): void {
 	unlinkSqlite(demoPath(h));
+	removeSnapshots(demoPath(h));
 	rmSync(demoAttachments(h), { recursive: true, force: true });
 }
 
@@ -285,11 +288,17 @@ export function factoryReset(ctx: Ctx, confirm: string): void {
 		(live.$client as Database).close();
 		removeDemoFiles(h);
 		unlinkSqlite(h.dbPath);
+		removeSnapshots(h.dbPath);
 		// Attachments: the content-addressed blobs and the avatars.
 		for (const sub of ['blobs', 'avatars']) rmSync(join(dataRoot, sub), { recursive: true, force: true });
+		// What a 1.x import left: the old database, whose users and hashes are the erased organization's.
+		for (const f of ['opal.legacy.db', 'opal.legacy.db-wal', 'opal.legacy.db-shm', 'import-report.txt', 'import-report.json']) {
+			rmSync(join(dataRoot, f), { force: true });
+		}
 		// Signed links from the erased organization must not verify in the new one.
 		rotateAuthSecret();
 		swap(live, await openFile(h.dbPath));
+		reissueSetupCode();
 	});
 }
 

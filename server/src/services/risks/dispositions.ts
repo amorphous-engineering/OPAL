@@ -2,12 +2,20 @@
  * Disposition state machine and acceptance (legacy opal/risks/dispositions.py and readiness.py).
  *
  * Dispositions change freely except:
- * - accepted leaves by `withdrawAcceptance` (a reason, a person), by closing (a note) or by realizing
+ * - accepted leaves by `withdrawAcceptance`, by closing or by realizing: each takes a person and a reason
  * - accepted is reachable only through `accept`, the signature moment
- * - closed -> anything needs a note: that is the reopen
- * - realized is terminal: the risk lives on as its issue
+ * - closed -> anything needs a note: that is the reopen. A risk that was ever accepted also needs a person
+ * - realized is a commit moment: a person makes the move, an agent may prepare the issue. It is terminal
  */
-import { RISK_DISPOSITIONS, type Risk, type RiskReadiness, conflict, notFound, now } from '@opal/shared';
+import {
+	RISK_DISPOSITIONS,
+	type Risk,
+	type RiskReadiness,
+	conflict,
+	forbidden,
+	notFound,
+	now
+} from '@opal/shared';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { issue, issueLink, risk } from '../../db/schema/index.ts';
@@ -53,6 +61,8 @@ export function dispositionBlockers(
 	if (r.disposition === 'accepted' && target !== 'closed' && target !== 'realized')
 		return ['an accepted risk keeps its acceptance until it is withdrawn'];
 	if (r.disposition === 'closed' && blank(note)) out.push('reopening a closed risk requires a reason');
+	if (r.disposition === 'accepted' && target === 'realized' && blank(note))
+		out.push('realizing an accepted risk requires a reason');
 	switch (target) {
 		case 'mitigate':
 			if (!openLinks(ctx, r.id, 'mitigation'))
@@ -91,8 +101,21 @@ export function dispositionCheck(ctx: Ctx, id: number, target: string) {
 		blockers: dispositionBlockers(ctx, r, target, 'pending'),
 		openMitigations: openLinks(ctx, id, 'mitigation'),
 		openResearch: openLinks(ctx, id, 'research'),
-		needsNote: target === 'closed' || r.disposition === 'closed'
+		needsNote: target === 'closed' || r.disposition === 'closed' || r.disposition === 'accepted'
 	};
+}
+
+/**
+ * Moves with the same effect as a signature or its withdrawal. Acceptance stamps stay on a withdrawn
+ * risk too, so reopening one that was accepted and later withdrawn also asks for a person. That is rare,
+ * and nothing on the row tells the two cases apart.
+ */
+function needsPerson(r: RiskRow, target: string): boolean {
+	return (
+		target === 'realized' ||
+		r.disposition === 'accepted' ||
+		(r.disposition === 'closed' && r.acceptedAt !== null)
+	);
 }
 
 export function setDisposition(
@@ -101,6 +124,8 @@ export function setDisposition(
 	input: { disposition: string; note?: string | null; realizedIssueId?: number | null }
 ): Risk {
 	const r = load(ctx, id);
+	if (ctx.actor.kind === 'token' && needsPerson(r, input.disposition))
+		throw forbidden('This action needs a signed-in person, not an API token');
 	const realizedIssueId = input.realizedIssueId ?? null;
 	if (realizedIssueId !== null) {
 		if (!ctx.db.select({ id: issue.id }).from(issue).where(eq(issue.id, realizedIssueId)).get())

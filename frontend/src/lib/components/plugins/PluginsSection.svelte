@@ -8,7 +8,7 @@
 	import { PROCESS_TONES, pluginError, sourceLabel } from './state.js';
 	import { ErrorBanner } from '#lib/components/opal/index.js';
 
-	let { plugins }: { plugins: PluginSummary[] } = $props();
+	let { plugins, available }: { plugins: PluginSummary[]; available: boolean } = $props();
 
 	let source = $state('');
 	let busy = $state(false);
@@ -44,7 +44,7 @@
 		]}
 		href={(p) => `/settings/plugins/${encodeURIComponent(p.id)}`}
 		key={(p) => p.id}
-		emptyLabel="No plugins installed."
+		emptyLabel="Plugins"
 		dense
 	>
 		{#snippet cell(p, col)}
@@ -68,16 +68,22 @@
 			{/if}
 		{/snippet}
 	</DataTable>
-	<form class="flex items-center gap-2 border-t border-border p-3" onsubmit={look}>
-		<Input
-			class="max-w-sm font-mono"
-			bind:value={source}
-			placeholder="owner/repo@ref"
-			aria-label="Plugin source"
-			autocomplete="off"
-		/>
-		<Button type="submit" size="sm" disabled={busy || !source.trim()}>ADD</Button>
-	</form>
+	{#if available}
+		<form class="flex items-center gap-2 border-t border-border p-3" onsubmit={look}>
+			<Input
+				class="max-w-sm font-mono"
+				bind:value={source}
+				placeholder="owner/repo@ref"
+				aria-label="Plugin source"
+				autocomplete="off"
+			/>
+			<Button type="submit" size="sm" disabled={busy || !source.trim()}>ADD</Button>
+		</form>
+	{:else}
+		<p class="border-t border-border p-3 text-sm text-muted-foreground">
+			Plugins are off on this server.
+		</p>
+	{/if}
 	{#if error}<div class="px-3 pb-3"><ErrorBanner message={error} /></div>{/if}
 </Section>
 

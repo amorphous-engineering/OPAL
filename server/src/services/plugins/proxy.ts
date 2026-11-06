@@ -5,7 +5,9 @@
  */
 import { eq } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
+import { requireScope } from '../../auth/scope.ts';
 import { verifyPayload } from '../../auth/signing.ts';
+import { keepConnectionOpen } from '../../http/limits.ts';
 import { actorUserId } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import { user } from '../../db/schema/index.ts';
@@ -30,7 +32,10 @@ async function userOf(c: Context, db: Db, resolveActor: ResolveActor, key: strin
 		if (!p || p.k !== 'panel' || p.p !== key || typeof p.u !== 'number') return null;
 		return db.select({ a: user.isActive }).from(user).where(eq(user.id, p.u)).get()?.a ? p.u : null;
 	}
-	return actorUserId(await resolveActor(c));
+	const actor = await resolveActor(c);
+	// A plugin's token must not reach another plugin's routes under its own user.
+	requireScope(actor, 'plugins.proxy');
+	return actorUserId(actor);
 }
 
 async function forward(c: Context, port: number, upstreamPath: string, headers: Headers): Promise<Response> {
@@ -56,7 +61,9 @@ async function forward(c: Context, port: number, upstreamPath: string, headers: 
 		if (!STRIP_RESPONSE.has(k)) out.set(k, v);
 	});
 	// Plugin pages share our origin: a page opened outside the panel iframe still gets no script rights on it.
-	out.set('content-security-policy', 'sandbox allow-scripts allow-forms allow-popups');
+	// Only this app's own pages may frame them (the panel iframe); the sandbox keeps the origin opaque.
+	out.set('content-security-policy', "sandbox allow-scripts allow-forms allow-popups; frame-ancestors 'self'");
+	out.set('x-frame-options', 'SAMEORIGIN');
 	return new Response(res.body, { status: res.status, statusText: res.statusText, headers: out });
 }
 
@@ -88,6 +95,9 @@ export function mountPluginProxy(app: Hono, db: Db, resolveActor: ResolveActor):
 		const person = db.select().from(user).where(eq(user.id, userId)).get();
 		const headers = forwardHeaders(c);
 		headers.set('x-opal-user', JSON.stringify({ id: userId, name: person?.name ?? '', username: person?.username ?? '' }));
+		// A plugin page may stream, or work a while before it answers. Hooks stay under the idle timeout:
+		// they are anonymous, and a webhook sender gives up long before it.
+		keepConnectionOpen(c);
 		return forward(c, port, rest, headers);
 	});
 

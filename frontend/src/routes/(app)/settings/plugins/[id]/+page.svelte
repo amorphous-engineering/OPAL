@@ -280,7 +280,9 @@
 				>
 			{/each}
 		{/if}
-		<Button variant="outline" size="sm" onclick={update} disabled={busy}>UPDATE</Button>
+		{#if plugin.available}
+			<Button variant="outline" size="sm" onclick={update} disabled={busy}>UPDATE</Button>
+		{/if}
 		<Button variant="outline" size="sm" onclick={remove} disabled={busy}>REMOVE</Button>
 	{/snippet}
 </PageHeader>
@@ -396,7 +398,11 @@
 						{/if}
 					</div>
 				{/each}
-				<div><Button type="submit" size="sm" disabled={saving}>SAVE</Button></div>
+				{#if plugin.available}
+					<div><Button type="submit" size="sm" disabled={saving}>SAVE</Button></div>
+				{:else}
+					<p class="text-sm text-muted-foreground">Plugins are off on this server.</p>
+				{/if}
 			</form>
 		{/if}
 	</Section>
@@ -404,15 +410,17 @@
 	<Section title="Process">
 		{#snippet actions()}
 			{#if plugin.enabled}
-				<ActionLink
-					disabled={busy}
-					onclick={() => act(() => opal.plugins.restart({ id: plugin.id }))}>RESTART</ActionLink
-				>
+				{#if plugin.available}
+					<ActionLink
+						disabled={busy}
+						onclick={() => act(() => opal.plugins.restart({ id: plugin.id }))}>RESTART</ActionLink
+					>
+				{/if}
 				<ActionLink
 					disabled={busy}
 					onclick={() => act(() => opal.plugins.disable({ id: plugin.id }))}>DISABLE</ActionLink
 				>
-			{:else}
+			{:else if plugin.available}
 				<ActionLink
 					disabled={busy}
 					onclick={() => act(() => opal.plugins.enable({ id: plugin.id }))}>ENABLE</ActionLink
@@ -450,7 +458,7 @@
 				{ key: 'slot', label: 'Slot', mono: true },
 				{ key: 'path', label: 'Path', mono: true }
 			]}
-			emptyLabel="No panels."
+			emptyLabel="Panels"
 			dense
 		/>
 	</Section>

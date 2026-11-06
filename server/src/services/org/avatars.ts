@@ -9,18 +9,21 @@
  * already holds the content hash.
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AVATAR_TYPES, MAX_AVATAR_BYTES, OpalError, notFound, now } from '@opal/shared';
 import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
+import { requireScope } from '../../auth/scope.ts';
 import type { Ctx } from '../../context.ts';
 import { userProfile } from '../../db/schema/index.ts';
 import { dataDir } from '../../paths.ts';
 import type { ResolveActor } from '../../registry.ts';
-import { isLoopback } from '../auth/oidc.ts';
+import { readSettings } from '../auth/settings.ts';
 import { inTransaction } from '../auth/tx.ts';
+import { assertStorageAvailable } from '../platform/attachments.ts';
+import { fetchChecked, issuerPolicy, type OutboundPolicy } from '../platform/outbound.ts';
 import { upsertProfile } from './profiles.ts';
 
 const avatarDir = () => join(dataDir(), 'avatars');
@@ -40,6 +43,9 @@ async function writeAvatarFile(hash: string, bytes: Uint8Array): Promise<void> {
 	await writeFile(join(avatarDir(), hash), bytes);
 }
 const readAvatarFile = (hash: string) => readFile(join(avatarDir(), hash));
+/** Refuse when a file this size, not stored yet, would take storage past the quota. */
+const assertAvatarRoom = (ctx: Ctx, hash: string, size: number) =>
+	assertStorageAvailable(ctx.db, existsSync(join(avatarDir(), hash)) ? 0 : size);
 const deleteAvatarFile = (hash: string) => rm(join(avatarDir(), hash), { force: true });
 
 /** Store `bytes` as the avatar of a user. Checks type and size. The caller has checked access. */
@@ -55,6 +61,7 @@ export async function setAvatar(
 	const mime = sniffImage(bytes);
 	if (!mime) throw new OpalError(400, 'invalid_image', 'File is not a PNG, JPEG, WebP or GIF image');
 	const hash = createHash('sha256').update(bytes).digest('hex');
+	assertAvatarRoom(ctx, hash, bytes.length);
 	await writeAvatarFile(hash, bytes);
 	const before = ctx.db.select().from(userProfile).where(eq(userProfile.userId, userId)).get();
 	upsertProfile(ctx, userId, { avatarHash: hash, avatarMime: mime, avatarSource: source, avatarUpdatedAt: now() });
@@ -75,12 +82,12 @@ async function releaseIfUnused(ctx: Ctx, hash: string): Promise<void> {
 
 const PICTURE_TIMEOUT_MS = 5000;
 
-/** Download an avatar image: https (or loopback http), image content, at most MAX_AVATAR_BYTES. */
-export async function fetchPicture(url: string): Promise<Uint8Array> {
-	const allowed = (u: string) => u.startsWith('https://') || isLoopback(u);
-	if (!allowed(url)) throw new Error('unsupported scheme');
-	const res = await fetch(url, { signal: AbortSignal.timeout(PICTURE_TIMEOUT_MS), redirect: 'follow' });
-	if (!allowed(res.url || url)) throw new Error('redirected to an unsupported scheme');
+/**
+ * Download an avatar image: on the identity provider's host or a public https address, with every
+ * redirect checked, image content, at most MAX_AVATAR_BYTES.
+ */
+export async function fetchPicture(url: string, policy: OutboundPolicy = {}): Promise<Uint8Array> {
+	const res = await fetchChecked(url, { signal: AbortSignal.timeout(PICTURE_TIMEOUT_MS) }, policy);
 	if (!res.ok) throw new Error(`HTTP ${res.status}`);
 	const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
 	if (!type.startsWith('image/')) throw new Error(`content type ${type || 'missing'}`);
@@ -108,7 +115,7 @@ export async function refreshFromOidc(ctx: Ctx, userId: number, claims: Record<s
 	const before = ctx.db.select().from(userProfile).where(eq(userProfile.userId, userId)).get();
 	if (!followsProvider(before?.avatarSource)) return;
 	try {
-		const bytes = await fetchPicture(url);
+		const bytes = await fetchPicture(url, issuerPolicy(readSettings(ctx.db).oidcIssuer));
 		const mime = sniffImage(bytes);
 		if (!mime) throw new Error('not a PNG, JPEG, WebP or GIF');
 		const hash = createHash('sha256').update(bytes).digest('hex');
@@ -143,6 +150,7 @@ export function mountAvatarRoute(app: Hono, db: Ctx['db'], resolveActor: Resolve
 		if (actor.kind === 'anonymous') {
 			return c.json({ error: 'unauthenticated', message: 'Sign in required' }, 401);
 		}
+		requireScope(actor, 'users.getAvatar');
 		const id = Number(c.req.param('id'));
 		const p = Number.isInteger(id) ? db.select().from(userProfile).where(eq(userProfile.userId, id)).get() : undefined;
 		if (!p?.avatarHash || p.avatarSource === 'removed') throw notFound('Avatar');

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { op, zEmpty, zId, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
 import { zAuditEntry } from './platform.ts';
+import { MAX_SHORT } from '../limits.ts';
 
 /** Optional project filter. Absent means every project. */
 const zProjectFilter = { projectId: zId.optional() };
@@ -136,8 +137,8 @@ export type ReportExecutionRow = z.infer<typeof zReportExecutionRow>;
 // ---------------------------------------------------------------- analytics
 
 const zWindow = {
-	from: z.string().optional(),
-	to: z.string().optional()
+	from: z.string().max(MAX_SHORT).optional(),
+	to: z.string().max(MAX_SHORT).optional()
 };
 
 export const zExecutionMetrics = z.object({
@@ -212,7 +213,7 @@ export const reports = {
 		'/reports/parts/csv',
 		'Parts with on-hand quantity and stocking locations, as CSV.',
 		z.object({
-			category: z.string().optional(),
+			category: z.string().max(MAX_SHORT).optional(),
 			lowStock: z.union([z.boolean(), z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')]).optional()
 		}),
 		'parts.csv'
@@ -221,28 +222,28 @@ export const reports = {
 		'reports.inventoryCsv',
 		'/reports/inventory/csv',
 		'Stock records with balance, location and lot, as CSV.',
-		z.object({ location: z.string().optional() }),
+		z.object({ location: z.string().max(MAX_SHORT).optional() }),
 		'inventory.csv'
 	),
 	executionsCsv: csv(
 		'reports.executionsCsv',
 		'/reports/executions/csv',
 		'Executions with status, timing and step progress, as CSV.',
-		z.object({ status: z.string().optional(), procedureId: z.coerce.number().int().optional(), ...zProjectFilter, ...zWindow }),
+		z.object({ status: z.string().max(MAX_SHORT).optional(), procedureId: z.coerce.number().int().optional(), ...zProjectFilter, ...zWindow }),
 		'executions.csv'
 	),
 	issuesCsv: csv(
 		'reports.issuesCsv',
 		'/reports/issues/csv',
 		'Issues with type, state, priority and links, as CSV.',
-		z.object({ status: z.string().optional(), issueType: z.string().optional(), priority: z.string().optional(), ...zProjectFilter }),
+		z.object({ status: z.string().max(MAX_SHORT).optional(), issueType: z.string().max(MAX_SHORT).optional(), priority: z.string().max(MAX_SHORT).optional(), ...zProjectFilter }),
 		'issues.csv'
 	),
 	risksCsv: csv(
 		'reports.risksCsv',
 		'/reports/risks/csv',
 		'Risks with score, residual score and owner, as CSV.',
-		z.object({ disposition: z.string().optional(), minScore: z.coerce.number().int().optional(), ...zProjectFilter }),
+		z.object({ disposition: z.string().max(MAX_SHORT).optional(), minScore: z.coerce.number().int().optional(), ...zProjectFilter }),
 		'risks.csv'
 	),
 	executionMetrics: op({
@@ -284,6 +285,7 @@ export const reports = {
 			input: zEmpty,
 			output: zLifecycleState,
 			access: 'admin',
+			humanOnly: true,
 			mcp: false
 		}),
 		exitDemo: op({
@@ -294,6 +296,7 @@ export const reports = {
 			input: zEmpty,
 			output: zLifecycleState,
 			access: 'admin',
+			humanOnly: true,
 			mcp: false
 		}),
 		deleteDemo: op({
@@ -304,6 +307,7 @@ export const reports = {
 			input: zEmpty,
 			output: zLifecycleState,
 			access: 'admin',
+			humanOnly: true,
 			mcp: false
 		}),
 		factoryReset: op({
@@ -311,7 +315,7 @@ export const reports = {
 			method: 'POST',
 			path: '/settings/factory-reset',
 			summary: 'Erase all data, attachments and the demo database. The instance returns to first-run setup.',
-			input: z.object({ confirm: z.string() }),
+			input: z.object({ confirm: z.string().max(MAX_SHORT) }),
 			output: zOk,
 			access: 'admin',
 			humanOnly: true,

@@ -3,7 +3,7 @@ import { asc } from 'drizzle-orm';
 import { plugin } from '../db/schema/index.ts';
 import { type Impl, implement } from '../registry.ts';
 import { refuseInDemo } from '../services/reports/lifecycle.ts';
-import { runtime } from '../services/plugins/runtime.ts';
+import { pluginsEnabled, requirePlugins, runtime } from '../services/plugins/runtime.ts';
 import { missingSettings, saveSettings } from '../services/plugins/settings.ts';
 import { getPlugin, toDetail, toSummary } from '../services/plugins/store.ts';
 import { update } from '../write.ts';
@@ -11,9 +11,13 @@ import { update } from '../write.ts';
 const c = contracts.plugins;
 
 export const pluginsHostImpls: Impl[] = [
-	implement(c.list, (ctx) => ({ items: ctx.db.select().from(plugin).orderBy(asc(plugin.key)).all().map(toSummary) })),
+	implement(c.list, (ctx) => ({
+		items: ctx.db.select().from(plugin).orderBy(asc(plugin.key)).all().map(toSummary),
+		available: pluginsEnabled()
+	})),
 	implement(c.get, (ctx, i) => toDetail(ctx.db, getPlugin(ctx.db, i.id))),
 	implement(c.settings, (ctx, i) => {
+		requirePlugins();
 		refuseInDemo(ctx.db, 'changing plugin settings');
 		const row = getPlugin(ctx.db, i.id);
 		saveSettings(ctx, row, i.values);
@@ -22,6 +26,7 @@ export const pluginsHostImpls: Impl[] = [
 		return toDetail(ctx.db, getPlugin(ctx.db, i.id));
 	}),
 	implement(c.enable, (ctx, i) => {
+		requirePlugins();
 		refuseInDemo(ctx.db, 'enabling a plugin');
 		const row = getPlugin(ctx.db, i.id);
 		const missing = missingSettings(ctx, row);
@@ -44,6 +49,7 @@ export const pluginsHostImpls: Impl[] = [
 		return toDetail(ctx.db, next);
 	}),
 	implement(c.restart, (ctx, i) => {
+		requirePlugins();
 		refuseInDemo(ctx.db, 'restarting a plugin');
 		const row = getPlugin(ctx.db, i.id);
 		if (!row.enabled) throw conflict('plugin_disabled', 'Enable the plugin first');

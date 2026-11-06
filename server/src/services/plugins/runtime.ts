@@ -4,9 +4,18 @@
  * `OPAL_PLUGINS=0` leave the idle runtime in place.
  */
 import type { z } from 'zod';
-import type { zPluginProcess } from '@opal/shared';
+import { conflict, type zPluginProcess } from '@opal/shared';
+import { envFlag } from '../../env.ts';
 
 export type PluginProcess = z.infer<typeof zPluginProcess>;
+
+/** `OPAL_PLUGINS=0`: this server runs no plugins and takes none in. */
+export const pluginsEnabled = () => envFlag('OPAL_PLUGINS', true);
+
+/** For anything that would fetch, unpack, configure or start a plugin. */
+export function requirePlugins(): void {
+	if (!pluginsEnabled()) throw conflict('plugins_off', 'Plugins are off on this server. The operator set OPAL_PLUGINS.');
+}
 
 export interface PluginRuntime {
 	/** Port the plugin's HTTP server listens on (127.0.0.1), or null when it is not running. */

@@ -1,7 +1,10 @@
+import { authSetting } from '../../src/db/schema/auth.ts';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { generateKeyPair } from 'jose';
+import { customFetch } from 'openid-client';
 import { eq } from 'drizzle-orm';
 import { safeNext } from '../../src/auth/oidc.ts';
+import { OutboundRefused } from '../../src/services/platform/outbound.ts';
 import { signPayload } from '../../src/auth/signing.ts';
 import { user } from '../../src/db/schema/index.ts';
 import {
@@ -14,6 +17,7 @@ import {
 	redirectUri,
 	resetDiscoveryCache,
 	resolveIdentity,
+	testDiscovery,
 	verifyIdToken
 } from '../../src/services/auth/oidc.ts';
 import { readSettings, type SignInSettings } from '../../src/services/auth/settings.ts';
@@ -91,6 +95,113 @@ describe('oidc discovery', () => {
 		await expectOidcError(discover(settings()), 'token_endpoint');
 		p.discovery = {};
 		resetDiscoveryCache();
+	});
+});
+
+describe('where discovery may lead', () => {
+	const hitsOf = async (run: (internal: string) => Promise<void>) => {
+		const hits: string[] = [];
+		const internal = Bun.serve({
+			port: 0,
+			hostname: '127.0.0.2',
+			fetch(req) {
+				hits.push(new URL(req.url).pathname);
+				return Response.json({ issuer: p.issuer, authorization_endpoint: 'READ', token_endpoint: 'READ' });
+			}
+		});
+		try {
+			await run(`http://127.0.0.2:${internal.port}`);
+		} finally {
+			internal.stop(true);
+			p.discovery = {};
+			resetDiscoveryCache();
+		}
+		return hits;
+	};
+
+	test('an issuer with credentials is refused without a request, though it seems to name localhost', async () => {
+		const hits = await hitsOf(async (internal) => {
+			const host = new URL(internal).host;
+			await expectOidcError(discover(settings({ oidcIssuer: `http://localhost:x@${host}` }), true), 'username or password');
+		});
+		expect(hits).toEqual([]);
+	});
+
+	for (const name of ['token_endpoint', 'userinfo_endpoint', 'jwks_uri']) {
+		test(`a ${name} on another private host is refused, and nothing is sent to it`, async () => {
+			const hits = await hitsOf(async (internal) => {
+				p.discovery = { [name]: `${internal}/x` };
+				await expectOidcError(discover(settings(), true), name);
+			});
+			expect(hits).toEqual([]);
+		});
+	}
+
+	test('endpoints on the issuer host are fine, also on a private address', async () => {
+		resetDiscoveryCache();
+		await expect(discover(settings(), true)).resolves.toBeDefined();
+	});
+
+	test('a discovery redirect to another private host is refused, and its content never comes back', async () => {
+		const redirecting = Bun.serve({
+			port: 0,
+			hostname: 'localhost',
+			fetch: () => new Response(null, { status: 302, headers: { location: 'http://localhost:1/internal.json' } })
+		});
+		try {
+			const err = await discover(settings({ oidcIssuer: `http://localhost:${redirecting.port}` }), true).catch((e) => e);
+			expect(err).toBeInstanceOf(OidcError);
+			expect(err.message).toContain('Could not read');
+			expect(err.message).not.toContain('localhost:1');
+		} finally {
+			redirecting.stop(true);
+		}
+	});
+
+	test('a closed port, an open port and a non-discovery JSON document all give the same message', async () => {
+		const serveBody = (body: string, status = 200) => Bun.serve({ port: 0, hostname: 'localhost', fetch: () => new Response(body, { status }) });
+		const notJson = serveBody('<html>');
+		const failing = serveBody('nope', 503);
+		const jsonNoIssuer = serveBody(JSON.stringify({ token_endpoint: 'READ', authorization_endpoint: 'READ' }));
+		const jsonArray = serveBody('[]');
+		const closed = serveBody('');
+		const closedUrl = `http://localhost:${closed.port}`;
+		closed.stop(true);
+		try {
+			const urls = [closedUrl, ...[notJson, failing, jsonNoIssuer, jsonArray].map((s) => `http://localhost:${s.port}`)];
+			const messages = new Set<string>();
+			for (const u of urls) {
+				const report = await testDiscovery(settings({ oidcIssuer: u }));
+				expect(report.ok).toBe(false);
+				expect(report.tokenEndpoint).toBeNull();
+				messages.add(report.message.replaceAll(u, '<issuer>'));
+			}
+			expect(messages.size).toBe(1);
+			expect([...messages][0]).toContain('Could not read an OpenID discovery document');
+		} finally {
+			for (const s of [notJson, failing, jsonNoIssuer, jsonArray]) s.stop(true);
+		}
+	});
+
+	test('the token request itself is checked when it is sent, not only at discovery', async () => {
+		resetDiscoveryCache();
+		const { config } = await discover(settings(), true);
+		const hits = await hitsOf(async (internal) => {
+			await expect(config[customFetch]!(`${internal}/token`, { method: 'POST' } as never)).rejects.toBeInstanceOf(OutboundRefused);
+		});
+		expect(hits).toEqual([]);
+	});
+
+	test('with private issuers switched off, a loopback provider is refused and never contacted', async () => {
+		process.env.OPAL_OIDC_ALLOW_PRIVATE = '0';
+		try {
+			const before = p.hits.discovery;
+			await expectOidcError(discover(settings(), true), 'OPAL_OIDC_ALLOW_PRIVATE');
+			expect(p.hits.discovery).toBe(before);
+		} finally {
+			delete process.env.OPAL_OIDC_ALLOW_PRIVATE;
+			resetDiscoveryCache();
+		}
 	});
 });
 
@@ -193,6 +304,8 @@ describe('handshake state and redirects', () => {
 
 	test('post-login redirects stay inside this app', () => {
 		expect(safeNext('//evil.test/')).toBe('/');
+		expect(safeNext('/\t/evil.test/')).toBe('/');
+		expect(safeNext('/\n/evil.test/')).toBe('/');
 		expect(safeNext('https://evil.test')).toBe('/');
 		expect(safeNext('/\\evil.test')).toBe('/');
 		expect(safeNext('/parts')).toBe('/parts');
@@ -204,6 +317,7 @@ describe('handshake state and redirects', () => {
 describe('identity resolution', () => {
 	const fresh = async () => {
 		const h = await harness();
+		makeUser(h, { username: 'claimed-by-setup', isAdmin: true });
 		return h;
 	};
 	const resolve = (h: Harness, claims: Record<string, unknown>, s = settings()) => resolveIdentity(h.ctx, s, claims);
@@ -218,9 +332,22 @@ describe('identity resolution', () => {
 		expect(u.passwordHash).toBeNull();
 	});
 
-	test('the first account is admin whatever the groups say', async () => {
-		const h = await fresh();
-		expect(resolve(h, { sub: 's1', email: 'a@example.test' }).isAdmin).toBe(true);
+	test('while nobody has run setup, a sign-in at the provider is refused and points to setup', async () => {
+		const h = await harness();
+		expect(() => resolve(h, { sub: 's1', email: 'a@example.test', groups: ['opal-admins'] })).toThrow(/first-run setup/);
+		expect(h.db.select().from(user).all()).toEqual([]);
+	});
+
+	test('while nobody has run setup, the sign-in button is not offered and the route goes to setup', async () => {
+		const h = await harness();
+		const ts = new Date().toISOString();
+		for (const [key, value] of Object.entries({ oidc_enabled: 'true', oidc_issuer: p.issuer, oidc_client_id: 'c' })) {
+			h.db.insert(authSetting).values({ key: key as never, value, createdAt: ts, updatedAt: ts }).run();
+		}
+		expect((await (await h.call('GET', '/auth/config')).json()).oidcEnabled).toBe(false);
+		const res = await h.raw('/oidc/login');
+		expect(res.status).toBe(302);
+		expect(res.headers.get('location')).toBe('/setup');
 	});
 
 	test('the admin group grants admin and losing it revokes admin', async () => {
@@ -243,7 +370,8 @@ describe('identity resolution', () => {
 	});
 
 	test('the last active administrator is never demoted by group sync', async () => {
-		const h = await fresh();
+		const h = await harness();
+		makeUser(h, { username: 'claimed-by-setup' });
 		makeUser(h, { username: 'plain' });
 		const u = resolve(h, { sub: 'l1', email: 'l@example.test', groups: ['opal-admins'] });
 		expect(u.isAdmin).toBe(true);
@@ -271,7 +399,7 @@ describe('identity resolution', () => {
 	test('an existing password account is linked by verified email and keeps its password', async () => {
 		const h = await fresh();
 		const existing = makeUser(h, { username: 'grace', email: 'grace@example.test', passwordHash: 'x' });
-		const linked = resolve(h, { sub: 's5', email: 'Grace@Example.test', name: 'Grace Hopper' });
+		const linked = resolve(h, { sub: 's5', email: 'Grace@Example.test', email_verified: true, name: 'Grace Hopper' });
 		expect(linked.id).toBe(existing.id);
 		expect(linked.oidcSubject).toBe('s5');
 		expect(linked.passwordHash).toBe('x');
@@ -283,6 +411,22 @@ describe('identity resolution', () => {
 		expect(() =>
 			resolve(h, { sub: 'attacker', email: 'victim@example.test', email_verified: false })
 		).toThrow(/unverified/);
+	});
+
+	test('an email the provider does not confirm as verified never claims an existing account', async () => {
+		const h = await fresh();
+		const victim = makeUser(h, { username: 'victim', email: 'victim@example.test', isAdmin: true });
+		expect(() => resolve(h, { sub: 'attacker', email: 'victim@example.test' })).toThrow(/does not confirm/);
+		const row = h.db.select().from(user).where(eq(user.id, victim.id)).get()!;
+		expect(row.oidcSubject).toBeNull();
+	});
+
+	test('a new identity is still provisioned when the provider says nothing about its email', async () => {
+		const h = await fresh();
+		makeUser(h, { username: 'seed' });
+		const u = resolve(h, { sub: 'new-1', email: 'new@example.test' });
+		expect(u.oidcSubject).toBe('new-1');
+		expect(u.email).toBe('new@example.test');
 	});
 
 	test('with auto-create off an unknown identity is refused', async () => {
@@ -420,8 +564,7 @@ describe('oidc routes', () => {
 		expect(sent.get('redirect_uri')).toBe('http://opal.test/oidc/callback');
 		const me = await (await h.call('GET', '/auth/me', undefined, { cookie: session })).json();
 		expect(me.username).toBe('rt');
-		expect(me.isAdmin).toBe(true); // the first account
-		const row = h.db.select().from(user).get()!;
+		const row = h.db.select().from(user).where(eq(user.username, 'rt')).get()!;
 		expect(row.oidcSubject).toBe('rt-1');
 		expect(res.headers.getSetCookie().some((c) => c.startsWith('opal_oidc_state=;') || /opal_oidc_state=;/.test(c))).toBe(true);
 	});
@@ -497,7 +640,7 @@ describe('oidc routes', () => {
 		p.tokens = { id_token: await p.idToken({ sub: 'x1' }, { nonce: 'not-the-nonce' }) };
 		const res = await h.raw(`/oidc/callback?code=c&state=${query.get('state')}`, { cookie });
 		expect(res.headers.get('location')).toContain('nonce');
-		expect(h.db.select().from(user).all()).toHaveLength(0);
+		expect(h.db.select().from(user).all().filter((u) => u.oidcSubject)).toHaveLength(0);
 	});
 
 	test('a refusal inside the sign-in rolls back and shows the message', async () => {

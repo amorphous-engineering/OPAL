@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -9,9 +9,9 @@ import type { Actor, Ctx } from '../../src/context.ts';
 import type { Db } from '../../src/db/client.ts';
 import { apiToken, externalLink, plugin, pluginSetting, user } from '../../src/db/schema/index.ts';
 import { pluginsInstallImpls } from '../../src/ops/plugins-install.ts';
-import { errorResponse, mountOps } from '../../src/registry.ts';
+import { errorResponse, mountOps, serialized } from '../../src/registry.ts';
 import { isCompatible } from '../../src/services/plugins/install.ts';
-import { parseSource, setGithubFetch } from '../../src/services/plugins/github.ts';
+import { MAX_DOWNLOAD_BYTES, parseSource, setGithubFetch } from '../../src/services/plugins/github.ts';
 import { pluginDir, pluginsRoot } from '../../src/services/plugins/store.ts';
 import { insert } from '../../src/write.ts';
 import { openTestDb } from '../helpers/db.ts';
@@ -105,6 +105,7 @@ const sys = (): Ctx => ({ db, actor: { kind: 'system' }, op: 'test' });
 beforeEach(async () => {
 	process.env.OPAL_DATA_DIR = mkdtempSync(join(tmpdir(), 'opal-plugins-'));
 	delete process.env.OPAL_PLUGINS_LOCAL;
+	delete process.env.OPAL_PLUGINS;
 	db = await openTestDb();
 	const admin = insert(sys(), user, { username: 'admin', name: 'Admin', isAdmin: true });
 	actor = { kind: 'user', userId: admin.id, isAdmin: true, sessionId: 1 };
@@ -115,7 +116,49 @@ beforeEach(async () => {
 	});
 	mountOps(app, pluginsInstallImpls, db, () => actor);
 });
-afterEach(() => setGithubFetch());
+afterEach(() => {
+	setGithubFetch();
+	delete process.env.OPAL_PLUGINS;
+});
+
+const stagedFolders = () => {
+	const root = join(pluginsRoot(), '.staging');
+	return existsSync(root) ? readdirSync(root) : [];
+};
+
+describe('a server with plugins off', () => {
+	for (const value of ['0', 'false', 'off', 'FALSE']) {
+		test(`OPAL_PLUGINS=${value} refuses a preview without touching the network or the disk`, async () => {
+			process.env.OPAL_PLUGINS = value;
+			const calls = serve({ HEAD: SHA1 }, { HEAD: repoTarball(goodFiles()) });
+			const res = await call('POST', '/plugins/preview', { source: 'owner/repo' });
+			expect(res.status).toBe(409);
+			const body = (await res.json()) as any;
+			expect(body.error).toBe('plugins_off');
+			expect(body.message).toContain('off on this server');
+			expect(calls).toEqual([]);
+			expect(stagedFolders()).toEqual([]);
+		});
+	}
+
+	test('install is refused as well', async () => {
+		process.env.OPAL_PLUGINS = '0';
+		const calls = serve({ HEAD: SHA1 }, { HEAD: repoTarball(goodFiles()) });
+		const res = await call('POST', '/plugins/install', { source: 'owner/repo', sha: SHA1 });
+		expect(res.status).toBe(409);
+		expect(calls).toEqual([]);
+		expect(db.select().from(plugin).all()).toHaveLength(0);
+	});
+
+	test('plugins are on when the setting is unset or says so', async () => {
+		for (const value of [undefined, '', '1', 'true', 'on']) {
+			if (value === undefined) delete process.env.OPAL_PLUGINS;
+			else process.env.OPAL_PLUGINS = value;
+			serve({ HEAD: SHA1 }, { HEAD: repoTarball(goodFiles()) });
+			expect((await call('POST', '/plugins/preview', { source: 'owner/repo' })).status).toBe(200);
+		}
+	});
+});
 
 describe('source parsing', () => {
 	test('four spellings name the same repository', () => {
@@ -193,7 +236,121 @@ describe('plugins.preview', () => {
 		const res = await call('POST', '/plugins/preview', { source: 'owner/repo' });
 		expect(res.status).toBe(422);
 		expect(((await res.json()) as any).error).toBe('invalid_archive');
-		expect(existsSync(join(pluginsRoot(), '.staging', SHA1))).toBe(false);
+		expect(stagedFolders()).toEqual([]);
+	});
+
+	test('an archive entry with a negative size is refused instead of looping', async () => {
+		serve({ HEAD: SHA1 }, { HEAD: rawTarball([{ name: 'pax', type: 'x', body: '14 size=-1536\n' }, { name: 'top/a.txt', body: 'x' }]) });
+		const res = await call('POST', '/plugins/preview', { source: 'owner/repo' });
+		expect(res.status).toBe(422);
+		expect(((await res.json()) as any).error).toBe('invalid_archive');
+	});
+
+	test('a preview leaves no staging folder behind, and install still works after it', async () => {
+		serve({ v1: SHA1 }, { v1: repoTarball(goodFiles()) });
+		const p = (await (await call('POST', '/plugins/preview', { source: 'owner/repo@v1' })).json()) as any;
+		expect(stagedFolders()).toEqual([]);
+		const res = await call('POST', '/plugins/install', { source: `${p.source}@${p.ref}`, sha: p.sha });
+		expect(res.status).toBe(200);
+		expect(existsSync(join(pluginDir('demo', SHA1), 'opal-plugin.json'))).toBe(true);
+		expect(stagedFolders()).toEqual([]);
+	});
+
+	test('a preview that finds a bad manifest leaves no staging folder behind', async () => {
+		serve({ HEAD: SHA1 }, { HEAD: repoTarball({ 'README.md': 'x' }) });
+		expect((await call('POST', '/plugins/preview', { source: 'owner/repo' })).status).toBe(422);
+		expect(stagedFolders()).toEqual([]);
+	});
+
+	test('a failed install leaves no staging folder behind', async () => {
+		serve({ HEAD: SHA1 }, { HEAD: repoTarball({ 'opal-plugin.json': JSON.stringify(manifest()) }) });
+		const res = await call('POST', '/plugins/install', { source: 'owner/repo', sha: SHA1 });
+		expect(res.status).toBe(422);
+		expect(stagedFolders()).toEqual([]);
+	});
+
+	test('a staging folder a crash left behind is removed on the next download', async () => {
+		const old = join(pluginsRoot(), '.staging', 'left-behind');
+		mkdirSync(old, { recursive: true });
+		const hourAgo = new Date(Date.now() - 2 * 3_600_000);
+		utimesSync(old, hourAgo, hourAgo);
+		serve({ HEAD: SHA1 }, { HEAD: repoTarball(goodFiles()) });
+		expect((await call('POST', '/plugins/preview', { source: 'owner/repo' })).status).toBe(200);
+		expect(stagedFolders()).toEqual([]);
+	});
+
+	test('a download over the size cap is refused while it streams, without trusting content-length', async () => {
+		const chunk = new Uint8Array(1024 * 1024);
+		let sent = 0;
+		let cancelled = false;
+		const endless = new ReadableStream<Uint8Array>({
+			pull(c) {
+				sent += chunk.length;
+				c.enqueue(chunk);
+			},
+			cancel() {
+				cancelled = true;
+			}
+		});
+		setGithubFetch(async (url) => (url.includes('/commits/') ? new Response(SHA1) : new Response(endless)));
+		const res = await call('POST', '/plugins/preview', { source: 'owner/repo' });
+		expect(res.status).toBe(413);
+		expect(((await res.json()) as any).error).toBe('plugin_too_large');
+		expect(sent).toBeLessThan(MAX_DOWNLOAD_BYTES + 8 * chunk.length);
+		expect(cancelled).toBe(true);
+	});
+
+	test('a download that declares too many bytes is refused before reading any', async () => {
+		setGithubFetch(async (url) =>
+			url.includes('/commits/') ? new Response(SHA1) : new Response('x', { headers: { 'content-length': String(MAX_DOWNLOAD_BYTES + 1) } })
+		);
+		expect((await call('POST', '/plugins/preview', { source: 'owner/repo' })).status).toBe(413);
+	});
+
+	test('a download that stalls is given up on with a clear error', async () => {
+		setGithubFetch(
+			async (url, init) => {
+				if (url.includes('/commits/')) return new Response(SHA1);
+				// What a real fetch does with the signal: the body fails when it fires.
+				const stalled = new ReadableStream<Uint8Array>({
+					start(c) {
+						init!.signal!.addEventListener('abort', () => c.error(new Error('timed out')));
+					}
+				});
+				return new Response(stalled);
+			},
+			{ downloadTimeoutMs: 20 }
+		);
+		const res = await call('POST', '/plugins/preview', { source: 'owner/repo' });
+		expect(res.status).toBe(502);
+		expect(((await res.json()) as any).error).toBe('github_unreachable');
+	});
+
+	test('every request to GitHub carries a timeout', async () => {
+		const signals: unknown[] = [];
+		setGithubFetch(async (url, init) => {
+			signals.push(init?.signal);
+			return url.includes('/commits/') ? new Response(SHA1) : new Response(repoTarball(goodFiles()) as unknown as BodyInit);
+		});
+		await call('POST', '/plugins/preview', { source: 'owner/repo' });
+		expect(signals).toHaveLength(2);
+		expect(signals.every((s) => s instanceof AbortSignal)).toBe(true);
+	});
+
+	test('other writes go ahead while a plugin downloads', async () => {
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		setGithubFetch(async (url) => {
+			if (url.includes('/commits/')) return new Response(SHA1);
+			await gate;
+			return new Response(repoTarball(goodFiles()) as unknown as BodyInit);
+		});
+		const pending = call('POST', '/plugins/preview', { source: 'owner/repo' });
+		await Bun.sleep(10);
+		// Would never settle if the preview held the write queue.
+		await serialized(async () => undefined);
+		release();
+		expect((await pending).status).toBe(200);
 	});
 
 	test('an absolute path or a symlink in the archive is refused', async () => {

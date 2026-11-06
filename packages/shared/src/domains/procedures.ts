@@ -16,6 +16,7 @@ import { zSpec } from '../specs.ts';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
 export const PROCEDURE_STATUSES = ['draft', 'released', 'obsolete'] as const;
 export type ProcedureStatus = (typeof PROCEDURE_STATUSES)[number];
@@ -49,27 +50,27 @@ export const SECONDARY_SIGNOFF_LABEL = 'Secondary buyoff';
 
 export const zProcedureCallout = z.object({
 	kind: z.enum(CALLOUT_KINDS),
-	text: z.string()
+	text: z.string().max(MAX_MARKDOWN)
 });
 export type ProcedureCallout = z.infer<typeof zProcedureCallout>;
 
 /** One captured value of a step: a typed field the operator fills in. */
 export const zProcedureDataField = z.object({
 	name: z.string().trim().min(1).max(100),
-	label: z.string().optional(),
+	label: z.string().max(MAX_SHORT).optional(),
 	// `checkbox` is the old name of `boolean`: accepted on input, never sent.
 	type: z.preprocess((t) => (t === 'checkbox' ? 'boolean' : t), z.enum(DATA_FIELD_TYPES)),
 	required: z.boolean().optional(),
 	/** A unit code from `UNITS` (units.ts). Older versions may hold free text: show it as is. */
-	unit: z.string().optional(),
+	unit: z.string().max(MAX_SHORT).optional(),
 	/** Numbers only: what a good value is. Out-of-spec values are recorded and flagged. */
 	spec: zSpec.optional(),
 	/** Older versions only: hard limits that refuse a value. New fields use `spec`. */
 	min: z.number().optional(),
 	max: z.number().optional(),
-	step: z.union([z.number(), z.string()]).optional(),
-	options: z.array(z.string()).optional(),
-	placeholder: z.string().optional(),
+	step: z.union([z.number(), z.string().max(MAX_SHORT)]).optional(),
+	options: z.array(z.string().max(MAX_SHORT)).optional(),
+	placeholder: z.string().max(MAX_SHORT).optional(),
 	rows: z.number().int().optional(),
 	/** photo only: one picture or several. */
 	multiple: z.boolean().optional()
@@ -98,7 +99,7 @@ export type ProcedureSignoff = z.infer<typeof zProcedureSignoff>;
 
 /** A sign-off slot as an author sends it: only the role is authored. */
 export const zProcedureSignoffInput = z.object({
-	label: z.string().optional(),
+	label: z.string().max(MAX_SHORT).optional(),
 	role: z.string().max(50).nullable().optional()
 });
 
@@ -350,7 +351,7 @@ export type VersionDiff = z.infer<typeof zVersionDiff>;
 
 /** Fields an author sets on a step. `null` clears a nullable field; absent leaves it alone. */
 const stepFields = {
-	instructions: z.string().nullable().optional(),
+	instructions: z.string().max(MAX_MARKDOWN).nullable().optional(),
 	dataSchema: zProcedureDataSchema.nullable().optional(),
 	estimatedDurationMinutes: z.number().int().min(1).nullable().optional(),
 	/** Replace the slots. Null resets to the default (a leaf: Primary buyoff; an OP with sub-steps: none). */
@@ -389,7 +390,7 @@ export const zStepUpdate = z.object({
 
 const zBuildStep = z.object({
 	title: z.string().trim().min(1).max(255),
-	instructions: z.string().nullable().optional(),
+	instructions: z.string().max(MAX_MARKDOWN).nullable().optional(),
 	requiredRole: z.string().max(50).nullable().optional(),
 	requiresSignoff: z.boolean().optional(),
 	signoffs: z.array(zProcedureSignoffInput).nullable().optional(),
@@ -403,7 +404,7 @@ const zBuildStep = z.object({
 				partId: zId,
 				quantity: zQty,
 				usage: z.enum(KIT_USAGES).default('consume'),
-				notes: z.string().nullable().optional()
+				notes: z.string().max(MAX_TEXT).nullable().optional()
 			})
 		)
 		.optional()
@@ -416,7 +417,7 @@ const zKitAdd = z.object({
 	partId: zId,
 	quantity: zQty,
 	usage: z.enum(KIT_USAGES).default('consume'),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 // ---------------------------------------------------------------- contracts
@@ -579,7 +580,7 @@ const steps = {
 				kitId: zId,
 				quantity: zQty.optional(),
 				usage: z.enum(KIT_USAGES).optional(),
-				notes: z.string().nullable().optional()
+				notes: z.string().max(MAX_TEXT).nullable().optional()
 			}),
 			output: zProcedureKitItem,
 			access: 'signed-in',
@@ -629,7 +630,7 @@ const kit = {
 			kitId: zId,
 			quantity: zQty.optional(),
 			usage: z.enum(KIT_USAGES).optional(),
-			notes: z.string().nullable().optional()
+			notes: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zProcedureKitItem,
 		access: 'signed-in',
@@ -766,7 +767,7 @@ export const procedures = {
 		path: '/procedures',
 		summary: 'List procedures with search, filters, sort and per-row counts.',
 		input: zPageInput.extend({
-			q: z.string().optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			projectId: zId.optional(),
 			status: z.enum(PROCEDURE_STATUSES).optional(),
 			procedureType: z.enum(PROCEDURE_TYPES).optional(),
@@ -785,7 +786,7 @@ export const procedures = {
 		input: z.object({
 			projectId: zId,
 			name: z.string().trim().min(1).max(255),
-			description: z.string().nullable().optional(),
+			description: z.string().max(MAX_MARKDOWN).nullable().optional(),
 			procedureType: z.enum(PROCEDURE_TYPES).default('op')
 		}),
 		output: zProcedure,
@@ -802,7 +803,7 @@ export const procedures = {
 		input: z.object({
 			projectId: zId,
 			name: z.string().trim().min(1).max(255),
-			description: z.string().nullable().optional(),
+			description: z.string().max(MAX_MARKDOWN).nullable().optional(),
 			procedureType: z.enum(PROCEDURE_TYPES).default('op'),
 			steps: z.array(zBuildStep).default([]),
 			kit: z.array(z.object({ partId: zId, quantity: zQty })).default([]),
@@ -837,7 +838,7 @@ export const procedures = {
 			id: zId,
 			projectId: zId.optional(),
 			name: z.string().trim().min(1).max(255).optional(),
-			description: z.string().nullable().optional(),
+			description: z.string().max(MAX_MARKDOWN).nullable().optional(),
 			procedureType: z.enum(PROCEDURE_TYPES).optional()
 		}),
 		output: zProcedure,

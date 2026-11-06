@@ -1,4 +1,4 @@
-/** `opal update`: download, verify and install the latest release. */
+/** `opal update`: download, verify and install the newest release for this build's channel. */
 import { installUpdate } from '../supervisor/updater.ts';
 
 export async function update(_args: string[]): Promise<void> {

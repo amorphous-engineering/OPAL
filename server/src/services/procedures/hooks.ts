@@ -17,6 +17,7 @@ import {
 } from '../../db/schema/index.ts';
 import { registerWorkcenterWork } from '../org/workcenters.ts';
 import { registerPartReference } from '../parts/references.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { registerEntity, registerReversible, registerSearchable, revertRows } from '../platform/index.ts';
 import type { AuditRow } from '../platform/undo.ts';
 import { draftRow } from './draft.ts';
@@ -108,6 +109,18 @@ registerWorkcenterWork({
 
 // Undo is for pencil. A template is pencil until its first version exists; the steps of a
 // draft stay pencil for as long as the template can be edited at all.
+// A retired template has no EDIT: its reference documents wait for a reinstatement.
+const guardTemplateFiles = (ctx: Ctx, id: number) => {
+	const p = ctx.db.select().from(procedure).where(eq(procedure.id, id)).get();
+	if (p?.status === 'obsolete') throw evidenceFrozen(`${p.templateNumber} is obsolete: reinstate it to change its files`);
+};
+registerOwnerGuard('procedure', guardTemplateFiles);
+// A step image follows its template.
+registerOwnerGuard('procedure_step', (ctx, stepId) => {
+	const step = ctx.db.select({ procedureId: procedureStep.procedureId }).from(procedureStep).where(eq(procedureStep.id, stepId)).get();
+	if (step) guardTemplateFiles(ctx, step.procedureId);
+});
+
 function requireNeverPublished(ctx: Ctx, rows: AuditRow[]) {
 	for (const r of rows) {
 		const p = ctx.db.select().from(procedure).where(eq(procedure.id, r.entityId)).get();

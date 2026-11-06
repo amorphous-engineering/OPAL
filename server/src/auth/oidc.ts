@@ -11,6 +11,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import * as oc from 'openid-client';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
+import { user } from '../db/schema/index.ts';
 import {
 	buildAuthorizationUrl,
 	exchangeCode,
@@ -35,12 +36,15 @@ import { SESSION_COOKIE, SESSION_LIFETIME_MS } from './tokens.ts';
 /** Confine post-login redirects to this app. */
 export function safeNext(value: string | undefined | null): string {
 	if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/';
+	// Browsers strip tabs and newlines from a URL before they read it, so those can hide a second slash.
+	// eslint-disable-next-line no-control-regex
+	if (/[\x00-\x1f\x7f]/.test(value)) return '/';
 	return value;
 }
 
 function loginError(c: Context, message: string): Response {
 	console.warn(`OIDC sign-in failed: ${message}`);
-	deleteCookie(c, STATE_COOKIE, { path: '/' });
+	deleteCookie(c, STATE_COOKIE, { path: '/', secure: requestBase(c).secure });
 	return c.redirect(`/login?error=${encodeURIComponent(message)}`, 302);
 }
 
@@ -54,6 +58,7 @@ export function mountOidc(app: Hono, db: Db): void {
 	app.get('/oidc/login', async (c) => {
 		const settings = readSettings(db);
 		if (!oidcActive(settings)) return c.redirect('/login', 302);
+		if (db.select({ id: user.id }).from(user).get() === undefined) return c.redirect('/setup', 302);
 		const { base, secure } = requestBase(c);
 		const state = oc.randomState();
 		const nonce = oc.randomNonce();
@@ -131,7 +136,7 @@ export function mountOidc(app: Hono, db: Db): void {
 				secure,
 				maxAge: SESSION_LIFETIME_MS / 1000
 			});
-			deleteCookie(c, STATE_COOKIE, { path: '/' });
+			deleteCookie(c, STATE_COOKIE, { path: '/', secure });
 			return c.redirect(safeNext(String(stored.next ?? '/')), 302);
 		} catch (e) {
 			if (e instanceof OidcError) return loginError(c, e.message);

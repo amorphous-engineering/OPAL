@@ -1,5 +1,6 @@
 /** `opal import <legacy.db> [--out <new.db>]`: one-time import of a Python-era database. */
 import { importLegacy as runImport, renderReport } from '../import/index.ts';
+import { hardenDataDir } from '../harden.ts';
 import { dbPath } from '../paths.ts';
 import { flag } from './args.ts';
 
@@ -10,6 +11,7 @@ export async function importLegacy(args: string[]): Promise<void> {
 		console.error('Usage: opal import <legacy.db> [--out <new.db>]');
 		process.exit(2);
 	}
+	hardenDataDir();
 	try {
 		console.log(renderReport(await runImport(src, out ?? dbPath())));
 	} catch (e) {

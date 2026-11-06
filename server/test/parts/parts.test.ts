@@ -221,6 +221,42 @@ describe('part update', () => {
 		expect(res.json).toMatchObject({ name: 'New', unitOfMeasure: 'kg', description: 'd', category: 'c' });
 	});
 
+	test('the unit of measure cannot change under stock, because every balance would change meaning', async () => {
+		const { api, create, activate } = await setup();
+		const p = await create({ name: 'Wire', unitOfMeasure: 'm' });
+		await activate(p.id);
+		expect((await api('POST', '/inventory', { partId: p.id, quantity: '10', location: 'A1' })).status).toBe(201);
+		const x = await api('PATCH', `/parts/${p.id}`, { unitOfMeasure: 'kg' });
+		expect(x.status).toBe(409);
+		expect(x.json.message).toContain('unit cannot change');
+		expect((await api('GET', `/parts/${p.id}`)).json.unitOfMeasure).toBe('m');
+		expect((await api('GET', `/parts/${p.id}/detail`)).json.unitLocked).toBe(true);
+		// The edit form sends every field: the same unit again is not a change.
+		const same = await api('PATCH', `/parts/${p.id}`, { unitOfMeasure: 'm', description: 'copper' });
+		expect(same.json).toMatchObject({ unitOfMeasure: 'm', description: 'copper' });
+	});
+
+	test('the unit of measure cannot change under a purchase order line, which commits a quantity in it', async () => {
+		const { api, create, activate } = await setup();
+		const p = await create({ name: 'Wire', unitOfMeasure: 'm', procurement: 'buy' });
+		await activate(p.id);
+		const sup = await api('POST', '/suppliers', { name: 'Acme' });
+		const po = await api('POST', '/purchases', {
+			supplierId: sup.json.id,
+			lines: [{ partId: p.id, qtyOrdered: '5' }]
+		});
+		expect(po.status).toBe(201);
+		expect((await api('PATCH', `/parts/${p.id}`, { unitOfMeasure: 'kg' })).status).toBe(409);
+	});
+
+	test('the unit of measure stays editable while nothing is counted in it', async () => {
+		const { api, create, activate } = await setup();
+		const p = await create({ name: 'Wire', unitOfMeasure: 'ea' });
+		await activate(p.id);
+		expect((await api('GET', `/parts/${p.id}/detail`)).json.unitLocked).toBe(false);
+		expect((await api('PATCH', `/parts/${p.id}`, { unitOfMeasure: 'm' })).json.unitOfMeasure).toBe('m');
+	});
+
 	test('an explicit null on a non-nullable field is refused', async () => {
 		const { api, create } = await setup();
 		const p = await create({ name: 'A' });

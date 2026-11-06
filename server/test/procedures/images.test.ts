@@ -100,3 +100,19 @@ describe('step images', () => {
 		expect(imgs[0].sha256).toBe(up.sha256);
 	});
 });
+
+describe('a step image on a retired template', () => {
+	test('its file cannot be removed or relabelled until the template is reinstated', async () => {
+		const { ok, call, proc, step, upload, png } = await setup();
+		const p = await proc('Retired');
+		const s = await step(p.id, 'S');
+		const up = await upload(p.id, s.id, png(), 'caption');
+		await ok('POST', `/procedures/${p.id}/publish`, {});
+		await ok('POST', `/procedures/${p.id}/obsolete`, { reason: 'retired' });
+		expect((await call('DELETE', `/attachments/${up.json.attachmentId}`)).status).toBe(409);
+		expect((await call('PATCH', `/attachments/${up.json.attachmentId}`, { note: 'x' })).status).toBe(409);
+		expect((await ok('GET', `/procedures/${p.id}/steps/${s.id}/images`)).length).toBe(1);
+		await ok('POST', `/procedures/${p.id}/reinstate`, { reason: 'back in use' });
+		expect((await call('DELETE', `/attachments/${up.json.attachmentId}`)).status).toBe(200);
+	});
+});

@@ -1,16 +1,18 @@
-/** Self-updater: GitHub latest release, SHA-256 verified, binary swap with rollback. */
+/** Self-updater: newest release for this channel, SHA-256 verified, binary swap with rollback. */
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, renameSync, rmSync, statSync, accessSync, constants } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { VERSION } from '../version.ts';
 
 export const RELEASES_URL = 'https://api.github.com/repos/amorphous-engineering/OPAL/releases/latest';
+/** GitHub's Latest is never a prerelease, so a prerelease build reads the whole list instead. */
+export const ALL_RELEASES_URL = 'https://api.github.com/repos/amorphous-engineering/OPAL/releases?per_page=30';
 
 // TODO(Phase 1): verify the minisign signature of SHA256SUMS before trusting it.
 // A checksum from the same release only guards against corrupt downloads, not a hijacked release.
 
 export interface UpdaterOptions {
-	/** Release metadata URL. Tests point this at a local server. */
+	/** Release metadata URL: one release, or a list of them. Tests point this at a local server. */
 	apiUrl?: string;
 	currentVersion?: string;
 	platform?: string;
@@ -117,30 +119,70 @@ export function verifyChecksum(data: Uint8Array, sumsText: string | null, name: 
 interface ReleaseJson {
 	tag_name?: string;
 	body?: string;
+	draft?: boolean;
+	published_at?: string;
 	assets?: { name?: string; browser_download_url?: string }[];
 }
 
-/** Returns the update when the latest release is newer than the current version, else null. */
+/**
+ * The highest version in a release list that this machine can install. A release still uploading
+ * has no binary yet: it is skipped, so the next check finds it. Version order alone is not enough:
+ * `2.0.0-rc.25` sorts above `2.0.0-beta.1` though it came first. So a release published before the
+ * running one is never offered. When the running release is not in the list, because it was pulled
+ * or has aged out, its date is unknown, and only its own track (`beta`) or a stable release is safe.
+ */
+function newestInstallable(list: ReleaseJson[], name: string, current: Semver): ReleaseJson | null {
+	const running = list.find((r) => {
+		const version = parseSemver(r.tag_name ?? '');
+		return version !== null && compareSemver(version, current) === 0;
+	});
+	const track = (v: Semver) => v.pre[0]?.replace(/\d+$/, '');
+	let best: ReleaseJson | null = null;
+	let bestVersion: Semver | null = null;
+	for (const release of list) {
+		if (release.draft) continue;
+		const version = parseSemver(release.tag_name ?? '');
+		// Old tags such as `v1.3.0b1` are in the list for good, so they are not worth a warning.
+		if (!version || !release.assets?.some((a) => a.name === name)) continue;
+		if (running?.published_at) {
+			if (release.published_at && release.published_at <= running.published_at) continue;
+		} else if (version.pre.length && track(version) !== track(current)) continue;
+		if (!bestVersion || compareSemver(version, bestVersion) > 0) {
+			best = release;
+			bestVersion = version;
+		}
+	}
+	return best;
+}
+
+/**
+ * Returns the update when a newer release exists, else null. A stable build follows the release
+ * marked Latest. A prerelease build also follows prereleases, or a tester would stay on their
+ * first beta for good.
+ */
 export async function checkForUpdate(opts: UpdaterOptions = {}): Promise<UpdateInfo | null> {
 	const f = opts.fetch ?? fetch;
 	const log = opts.log ?? ((m) => console.warn(m));
 	const current = opts.currentVersion ?? VERSION;
-	const res = await f(opts.apiUrl ?? process.env.OPAL_UPDATE_API ?? RELEASES_URL, {
+	const cur = parseSemver(current);
+	if (!cur) {
+		log(`Ignoring update check: current version ${JSON.stringify(current)} is not semver`);
+		return null;
+	}
+	const url = opts.apiUrl ?? process.env.OPAL_UPDATE_API ?? (cur.pre.length ? ALL_RELEASES_URL : RELEASES_URL);
+	const res = await f(url, {
 		headers: { accept: 'application/vnd.github+json', 'user-agent': 'opal-updater' },
 		signal: AbortSignal.timeout(15_000)
 	});
 	if (res.status === 404) return null;
 	if (!res.ok) throw new Error(`Release lookup failed: HTTP ${res.status}`);
-	const data = (await res.json()) as ReleaseJson;
+	const answer = (await res.json()) as ReleaseJson | ReleaseJson[];
+	const data = Array.isArray(answer) ? newestInstallable(answer, assetName(opts.platform, opts.arch), cur) : answer;
+	if (!data) return null;
 	const tag = data.tag_name ?? '';
 	const latest = parseSemver(tag);
 	if (!latest) {
 		log(`Ignoring release with malformed tag ${JSON.stringify(tag)}`);
-		return null;
-	}
-	const cur = parseSemver(current);
-	if (!cur) {
-		log(`Ignoring update check: current version ${JSON.stringify(current)} is not semver`);
 		return null;
 	}
 	if (compareSemver(latest, cur) <= 0) return null;

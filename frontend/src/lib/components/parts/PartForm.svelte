@@ -42,7 +42,8 @@
 		assembly: initialAssembly = null,
 		tier: initialTier = null,
 		variantOf = null,
-		nextNumber = null
+		nextNumber = null,
+		unitLocked = false
 	}: {
 		schema: PartSchema;
 		part?: Part | null;
@@ -52,6 +53,8 @@
 		variantOf?: Part | null;
 		/** The number the variant takes, from the server. */
 		nextNumber?: string | null;
+		/** Stock or purchase order lines count in this unit. */
+		unitLocked?: boolean;
 	} = $props();
 	// The form is mounted once per page (keyed by part), so props seed local state on purpose.
 	const p0 = untrack(() => part);
@@ -392,7 +395,7 @@
 					</datalist>
 				</FormField>
 				<FormField label="Unit of measure" for="pf-uom">
-					<Input id="pf-uom" bind:value={uom} class="font-mono" />
+					<Input id="pf-uom" bind:value={uom} class="font-mono" disabled={unitLocked} />
 				</FormField>
 				<FormField label="Reorder point" for="pf-reorder">
 					<Input id="pf-reorder" class="font-mono" inputmode="decimal" bind:value={reorder} />

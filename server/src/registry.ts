@@ -9,7 +9,6 @@ import {
 	type OpInput,
 	type OpOutput,
 	forbidden,
-	matchesPattern,
 	unauthenticated
 } from '@opal/shared';
 import { appendFileSync } from 'node:fs';
@@ -17,7 +16,11 @@ import { sql } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
+import { requestBase } from './auth/base-url.ts';
+import { keepConnectionOpen } from './http/limits.ts';
 import { clientIp } from './auth/client-ip.ts';
+import { browserHost } from './auth/host-guard.ts';
+import { requireScope } from './auth/scope.ts';
 import { type Actor, type CookieJar, type Ctx, type RequestInfo } from './context.ts';
 import { holdsGate } from './services/org/gates.ts';
 import { canonicalInput, displayOutput } from './numbers.ts';
@@ -30,20 +33,23 @@ export interface Impl<C extends OpContract = OpContract> {
 	/**
 	 * The handler runs outside the write queue and enters it through `ctx.write`. For public
 	 * operations that hash passwords: a hash takes hundreds of milliseconds and must not hold
-	 * the queue, or anonymous requests would stall every other write.
+	 * the queue, or anonymous requests would stall every other write. Also for admin operations
+	 * that wait on the network before they write.
 	 */
 	verifyFirst?: boolean;
+	/** The operation can wait on the network past the idle timeout, so its connection stays open. */
+	longRunning?: boolean;
 }
 
 export function implement<C extends OpContract>(
 	contract: C,
 	handler: Impl<C>['handler'],
-	opts?: { verifyFirst?: boolean }
+	opts?: { verifyFirst?: boolean; longRunning?: boolean }
 ): Impl<C> {
-	if (opts?.verifyFirst && contract.access !== 'public') {
-		throw new Error(`${contract.name}: verifyFirst is for public operations`);
+	if (opts?.verifyFirst && contract.access !== 'public' && contract.access !== 'admin') {
+		throw new Error(`${contract.name}: verifyFirst is for public and admin operations`);
 	}
-	return { contract, handler, verifyFirst: opts?.verifyFirst };
+	return { contract, handler, verifyFirst: opts?.verifyFirst, longRunning: opts?.longRunning };
 }
 
 /**
@@ -63,9 +69,7 @@ export function checkAccess(db: Db, contract: OpContract, actor: Actor): void {
 	if (contract.humanOnly && actor.kind === 'token') {
 		throw forbidden('This action needs a signed-in person, not an API token');
 	}
-	if (actor.kind === 'token' && actor.scopes && !matchesPattern(actor.scopes.ops, contract.name)) {
-		throw new OpalError(403, 'out_of_scope', `This token may not call ${contract.name}`);
-	}
+	requireScope(actor, contract.name);
 	if (contract.access !== 'signed-in' && !holdsGate(db, actor, contract.access)) throw forbidden();
 }
 
@@ -153,6 +157,19 @@ async function execute<C extends OpContract>(
 
 export type ResolveActor = (c: Context) => Actor | Promise<Actor>;
 
+/** Deeper than any operation's input. The input walkers recurse, so a deeper body is refused before they run. */
+const MAX_INPUT_DEPTH = 32;
+
+function isPlainInput(input: unknown): boolean {
+	if (input === null || typeof input !== 'object' || Array.isArray(input)) return false;
+	let level: unknown[] = [input];
+	for (let depth = 0; level.length; depth++) {
+		if (depth > MAX_INPUT_DEPTH) return false;
+		level = level.flatMap((v) => (v !== null && typeof v === 'object' ? Object.values(v) : []));
+	}
+	return true;
+}
+
 export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: ResolveActor): void {
 	const seen = new Set<string>();
 	for (const impl of impls) {
@@ -171,13 +188,22 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 				} catch {
 					throw new OpalError(400, 'invalid_json', 'Request body is not valid JSON');
 				}
+				if (!isPlainInput(input)) throw new OpalError(400, 'invalid_json', 'Request body must be a JSON object');
 			}
 			Object.assign(input, hc.req.param());
-			const out = await runOp(impl, db, await resolveActor(hc), input as OpInput<typeof c>, {
+			const actor = await resolveActor(hc);
+			// Only once the body has arrived and the caller may run this: until then the idle timeout
+			// is what closes a request nobody finishes.
+			if (impl.longRunning) {
+				checkAccess(db, c, actor);
+				keepConnectionOpen(hc);
+			}
+			const out = await runOp(impl, db, actor, input as OpInput<typeof c>, {
 				cookies: cookieJar(hc),
 				request: {
 					userAgent: hc.req.header('user-agent') ?? null,
-					ip: clientIp(hc)
+					ip: clientIp(hc),
+					host: browserHost(hc)
 				}
 			});
 			if (c.produces) {
@@ -196,6 +222,11 @@ export function errorResponse(err: unknown): { status: number; body: ApiErrorBod
 	if ((err as { code?: string })?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
 		return { status: 409, body: { error: 'duplicate', message: 'A record with this value exists' } };
 	}
+	// The client hung up partway through its request. Nothing failed here, and logging a stack per
+	// dropped connection would let anyone pad the log.
+	if ((err as { name?: string })?.name === 'AbortError') {
+		return { status: 400, body: { error: 'aborted', message: 'The request was cancelled' } };
+	}
 	console.error(err);
 	return { status: 500, body: { error: 'internal', message: 'Internal error' } };
 }
@@ -205,6 +236,7 @@ function cookieJar(c: Context): CookieJar {
 		get: (name) => getCookie(c, name),
 		set: (name, value, opts) => setCookie(c, name, value, { path: '/', ...opts }),
 		delete: (name, opts) => deleteCookie(c, name, { path: '/', ...opts }),
-		secure: new URL(c.req.url).protocol === 'https:'
+		// The same answer everywhere: OPAL_PUBLIC_URL, else the scheme seen through a trusted proxy.
+		secure: requestBase(c).secure
 	};
 }

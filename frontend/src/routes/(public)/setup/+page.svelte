@@ -15,6 +15,7 @@
 		type AuthConfig
 	} from '#lib/session.svelte.js';
 
+	let setupCode = $state('');
 	let name = $state('');
 	let email = $state('');
 	let username = $state('');
@@ -38,7 +39,13 @@
 		}
 		busy = true;
 		try {
-			const r = await opal.auth.setup({ name, email: email || null, username, password });
+			const r = await opal.auth.setup({
+				name,
+				email: email || null,
+				username,
+				password,
+				...(config?.setupCodeRequired ? { setupCode } : {})
+			});
 			const user = toCurrentUser(r.user);
 			session.set(user);
 			await goto(landingFor(user, null), { replace: true });
@@ -57,50 +64,80 @@
 
 <ErrorBanner message={error} class="mb-3" />
 
-<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="name">Name</Label><Input id="name" bind:value={name} autocomplete="name" required />
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="email">Email</Label><Input
-			id="email"
-			type="email"
-			bind:value={email}
-			autocomplete="email"
-		/>
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="username">Username</Label>
-		<Input
-			id="username"
-			bind:value={username}
-			autocomplete="username"
-			autocapitalize="none"
-			required
-		/>
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="password">Password</Label>
-		<Input
-			id="password"
-			type="password"
-			bind:value={password}
-			autocomplete="new-password"
-			required
-		/>
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="confirm">Confirm password</Label>
-		<Input
-			id="confirm"
-			type="password"
-			bind:value={confirmPw}
-			autocomplete="new-password"
-			required
-		/>
-	</div>
-	<Button type="submit" disabled={busy}>CREATE ADMINISTRATOR</Button>
-</form>
+{#if config && !config.setupHostAllowed}
+	<p class="text-sm">
+		Open this page by the server's IP address to finish setup, or set
+		<span class="font-mono">OPAL_ALLOWED_HOSTS</span> to include this host name and restart OPAL.
+	</p>
+{:else}
+	<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+		{#if config?.setupCodeRequired}
+			<div class="grid grid-cols-1 gap-1.5">
+				<Label for="setup-code">Setup code</Label>
+				<Input
+					id="setup-code"
+					class="font-mono uppercase"
+					bind:value={setupCode}
+					autocomplete="off"
+					autocapitalize="characters"
+					spellcheck="false"
+					required
+				/>
+				<p class="text-xs text-muted-foreground">
+					OPAL printed this code where it started: the terminal, the control page or the service
+					log.
+				</p>
+			</div>
+		{/if}
+		<div class="grid grid-cols-1 gap-1.5">
+			<Label for="name">Name</Label><Input
+				id="name"
+				bind:value={name}
+				autocomplete="name"
+				required
+			/>
+		</div>
+		<div class="grid grid-cols-1 gap-1.5">
+			<Label for="email">Email</Label><Input
+				id="email"
+				type="email"
+				bind:value={email}
+				autocomplete="email"
+			/>
+		</div>
+		<div class="grid grid-cols-1 gap-1.5">
+			<Label for="username">Username</Label>
+			<Input
+				id="username"
+				bind:value={username}
+				autocomplete="username"
+				autocapitalize="none"
+				required
+			/>
+		</div>
+		<div class="grid grid-cols-1 gap-1.5">
+			<Label for="password">Password</Label>
+			<Input
+				id="password"
+				type="password"
+				bind:value={password}
+				autocomplete="new-password"
+				required
+			/>
+		</div>
+		<div class="grid grid-cols-1 gap-1.5">
+			<Label for="confirm">Confirm password</Label>
+			<Input
+				id="confirm"
+				type="password"
+				bind:value={confirmPw}
+				autocomplete="new-password"
+				required
+			/>
+		</div>
+		<Button type="submit" disabled={busy}>CREATE ADMINISTRATOR</Button>
+	</form>
+{/if}
 {#if config?.oidcEnabled}
 	<div class="my-4 flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
 		<Separator class="flex-1" />or<Separator class="flex-1" />

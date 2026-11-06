@@ -582,7 +582,7 @@ describe('part links', () => {
 		expect((await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r.reqNumber })).status).toBe(409);
 	});
 
-	test('verify stamps the caller and the time; status and notes update; unassign removes', async () => {
+	test('verify stamps the caller and the time; status updates; unassign removes an unverified link', async () => {
 		const { req, call, mkPart, admin } = await setup();
 		const r = await req();
 		const p = mkPart('Bracket', 'P-1');
@@ -591,12 +591,14 @@ describe('part links', () => {
 		expect(v).toMatchObject({ status: 'verified', notes: 'tested', verifiedBy: { id: admin.id } });
 		expect(v.verifiedAt).toBeTruthy();
 		expect((await call('GET', `/requirements/${r.id}/dossier`)).body.verification).toBe('verified');
-		const u = await call('PATCH', `/requirements/allocations/${link.id}`, { status: 'waived' });
+		const q = mkPart('Valve', 'P-2');
+		const open = (await call('POST', `/requirements/parts/${q.id}`, { reqNumber: r.reqNumber })).body;
+		const u = await call('PATCH', `/requirements/allocations/${open.id}`, { status: 'waived' });
 		expect(u.body.status).toBe('waived');
-		expect((await call('PATCH', `/requirements/allocations/${link.id}`, { status: 'bogus' })).status).toBe(422);
-		expect((await call('DELETE', `/requirements/allocations/${link.id}`)).status).toBe(200);
-		expect((await call('GET', `/requirements/parts/${p.id}`)).body).toEqual([]);
-		expect((await call('DELETE', `/requirements/allocations/${link.id}`)).status).toBe(404);
+		expect((await call('PATCH', `/requirements/allocations/${open.id}`, { status: 'bogus' })).status).toBe(422);
+		expect((await call('DELETE', `/requirements/allocations/${open.id}`)).status).toBe(200);
+		expect((await call('GET', `/requirements/parts/${q.id}`)).body).toEqual([]);
+		expect((await call('DELETE', `/requirements/allocations/${open.id}`)).status).toBe(404);
 	});
 
 	test('links follow the revision chain, and a verification against an old revision is outdated', async () => {
@@ -633,6 +635,121 @@ describe('part links', () => {
 		expect(await verification()).toBe('partial');
 		await call('POST', `/requirements/allocations/${b.id}/verify`, {});
 		expect(await verification()).toBe('verified');
+	});
+});
+
+describe('withdrawing a verification', () => {
+	const token = (u: { id: number }) => ({ kind: 'token', userId: u.id, isAdmin: true, tokenId: 1 }) as const;
+
+	async function verified() {
+		const s = await setup();
+		const r = await s.req();
+		const p = s.mkPart('Bracket', 'P-1');
+		const link = (await s.call('POST', `/requirements/parts/${p.id}`, { reqNumber: r.reqNumber })).body;
+		await s.baseline(r.id);
+		expect((await s.call('POST', `/requirements/allocations/${link.id}/verify`, {})).status).toBe(200);
+		return { ...s, r, p, link, path: `/requirements/allocations/${link.id}` };
+	}
+
+	test('a verified link cannot leave verified through a status edit, by a person or a token', async () => {
+		const { call, as, admin, path, r } = await verified();
+		for (const status of ['open', 'waived', 'not_applicable']) {
+			const refused = await call('PATCH', path, { status });
+			expect(refused.status).toBe(409);
+			expect(refused.body.error).toBe('use_withdraw');
+		}
+		as(token(admin));
+		expect((await call('PATCH', path, { status: 'open' })).status).toBe(409);
+		as(admin);
+		expect((await call('GET', `/requirements/${r.id}/dossier`)).body.verification).toBe('verified');
+	});
+
+	test('the same holds on a draft requirement', async () => {
+		const { req, call, mkPart, as, admin } = await setup();
+		const r = await req();
+		const link = (await call('POST', `/requirements/parts/${mkPart('B', 'P-1').id}`, { reqNumber: r.reqNumber })).body;
+		await call('POST', `/requirements/allocations/${link.id}/verify`, {});
+		as(token(admin));
+		expect((await call('PATCH', `/requirements/allocations/${link.id}`, { status: 'open' })).status).toBe(409);
+		expect((await call('POST', `/requirements/allocations/${link.id}/withdraw-verification`, { reason: 'x' })).status).toBe(403);
+	});
+
+	test('the notes of a verified link stay as verified, for a person and a token, until the verification is withdrawn', async () => {
+		const { call, as, admin, path } = await verified();
+		const refused = await call('PATCH', path, { notes: 'rewritten' });
+		expect(refused.status).toBe(409);
+		expect(refused.body.error).toBe('verified_frozen');
+		as(token(admin));
+		expect((await call('PATCH', path, { notes: 'rewritten' })).status).toBe(409);
+		as(admin);
+		expect((await call('POST', `${path}/withdraw-verification`, { reason: 'test was wrong', status: 'open' })).status).toBe(200);
+		expect((await call('PATCH', path, { notes: 'rewritten' })).status).toBe(200);
+	});
+
+	test('withdrawing needs a person and a reason', async () => {
+		const { call, as, admin, path } = await verified();
+		expect((await call('POST', `${path}/withdraw-verification`, { reason: '  ' })).status).toBe(422);
+		expect((await call('POST', `${path}/withdraw-verification`, {})).status).toBe(422);
+		as(token(admin));
+		expect((await call('POST', `${path}/withdraw-verification`, { reason: 'x' })).status).toBe(403);
+	});
+
+	test('a withdrawal clears the stamps and keeps who verified, who withdrew, when and why on the link', async () => {
+		const { call, as, admin, plain, path, r, p } = await verified();
+		as(plain);
+		const w = await call('POST', `${path}/withdraw-verification`, { reason: 'test rig out of calibration' });
+		expect(w.status).toBe(200);
+		expect(w.body).toMatchObject({ status: 'open', verifiedAt: null, verifiedBy: null });
+		const entry = { by: plain.username.toUpperCase(), reason: 'test rig out of calibration', status: 'open', verifiedBy: admin.username.toUpperCase() };
+		expect(w.body.withdrawals).toMatchObject([entry]);
+		expect(w.body.withdrawals[0].verifiedAt).toBeTruthy();
+		expect(w.body.withdrawals[0].at).toBeTruthy();
+		const d = (await call('GET', `/requirements/${r.id}/dossier`)).body;
+		expect(d.verification).toBe('open');
+		expect(d.allocations[0].withdrawals).toMatchObject([entry]);
+		expect((await call('GET', `/requirements/parts/${p.id}`)).body[0].withdrawals).toMatchObject([entry]);
+	});
+
+	test('a withdrawal can land on waived or not applicable, and a link verified again keeps its history', async () => {
+		const { call, path } = await verified();
+		expect((await call('POST', `${path}/withdraw-verification`, { status: 'verified', reason: 'x' })).status).toBe(422);
+		const w = await call('POST', `${path}/withdraw-verification`, { status: 'waived', reason: 'covered elsewhere' });
+		expect(w.body.status).toBe('waived');
+		const again = await call('POST', `${path}/verify`, {});
+		expect(again.body.status).toBe('verified');
+		expect(again.body.withdrawals).toHaveLength(1);
+		const twice = await call('POST', `${path}/withdraw-verification`, { reason: 'second thoughts' });
+		expect(twice.body.withdrawals).toHaveLength(2);
+		expect((await call('POST', `${path}/withdraw-verification`, { reason: 'nothing left' })).status).toBe(409);
+	});
+
+	test('verifying a verified link is refused, so who and when cannot be replaced', async () => {
+		const { call, as, plain, admin, path, p } = await verified();
+		as(plain);
+		expect((await call('POST', `${path}/verify`, {})).status).toBe(409);
+		as(admin);
+		const after = (await call('GET', `/requirements/parts/${p.id}`)).body;
+		expect(after[0].verifiedBy.id).toBe(admin.id);
+	});
+
+	test('a verified link cannot be removed, and neither can one with a withdrawn verification', async () => {
+		const { call, path, p } = await verified();
+		const refused = await call('DELETE', path);
+		expect(refused.status).toBe(409);
+		expect(refused.body.error).toBe('link_verified');
+		await call('POST', `${path}/withdraw-verification`, { reason: 'wrong part' });
+		const kept = await call('DELETE', path);
+		expect(kept.status).toBe(409);
+		expect(kept.body.error).toBe('link_has_history');
+		expect((await call('PATCH', path, { status: 'not_applicable' })).status).toBe(200);
+		expect((await call('GET', `/requirements/parts/${p.id}`)).body).toHaveLength(1);
+	});
+
+	test('a superseded requirement keeps its verified links as they stand', async () => {
+		const { call, path, r, baseline } = await verified();
+		const rev2 = (await call('POST', `/requirements/${r.id}/revise`)).body;
+		await baseline(rev2.id);
+		expect((await call('POST', `${path}/withdraw-verification`, { reason: 'late' })).status).toBe(409);
 	});
 });
 
@@ -808,6 +925,21 @@ describe('projects', () => {
 		const moved = await call('PATCH', `/requirements/${lone.id}`, { projectId: b.id });
 		expect(moved.body).toMatchObject({ projectId: b.id, projectCode: 'B' });
 		expect((await call('GET', `/requirements/${root.id}`)).body.projectId).toBe(project.id);
+	});
+
+	test('a draft revision cannot carry its baselined predecessor to another project', async () => {
+		const { call, req, db, project, baseline } = await setup();
+		const b = createTestProject(db, 'B');
+		const r1 = await req();
+		await baseline(r1.id);
+		const r2 = (await call('POST', `/requirements/${r1.id}/revise`)).body;
+		const moved = await call('PATCH', `/requirements/${r2.id}`, { projectId: b.id });
+		expect(moved.status).toBe(409);
+		expect((await call('GET', `/requirements/${r1.id}`)).body.projectId).toBe(project.id);
+		expect((await call('GET', `/requirements/${r2.id}`)).body.projectId).toBe(project.id);
+		expect((await call('GET', `/requirements/baselines?projectId=${project.id}`)).body).toHaveLength(1);
+		// The draft itself still edits.
+		expect((await call('PATCH', `/requirements/${r2.id}`, { title: 'Sharper' })).status).toBe(200);
 	});
 
 	test('a baseline event belongs to one project and a mixed batch is refused', async () => {

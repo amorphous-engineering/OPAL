@@ -1,7 +1,7 @@
 import { now } from '@opal/shared';
 import type { Actor } from '../../src/context.ts';
-import { issueHooks } from '../../src/services/issues/hooks.ts';
 import { user } from '../../src/db/schema/index.ts';
+import { restoreIssueHooks } from '../issues/helpers.ts';
 import { setup as procedureSetup } from '../procedures/helpers.ts';
 
 /** The procedures harness plus shorthands for cutting and working executions. */
@@ -52,6 +52,6 @@ export async function setup() {
 		await ok('POST', `/procedures/${p.id}/publish`, {});
 		return p.id as number;
 	};
-	issueHooks.deliver = issueHooks.deliver; // seams are registered by the execution ops at import time
+	restoreIssueHooks();
 	return { ...base, ben, cat, benActor, catActor, author, cut, doc, get, stepOf, complete, skip, sign, nc, disposition, stock, published, bulk };
 }

@@ -46,6 +46,42 @@ interface Entry {
 
 const systemCtx = (db: Db): Ctx => ({ db, actor: { kind: 'system' }, op: 'plugins.host' });
 
+/**
+ * What a plugin process inherits from the server: enough to run and to reach the network.
+ * An allowlist, because the server's environment holds its secrets (OPAL_AUTH_SECRET,
+ * OPAL_OIDC_CLIENT_SECRET) and whatever the operator's service manager adds next.
+ */
+const INHERITED_ENV = [
+	'PATH',
+	'HOME',
+	'USERPROFILE',
+	'TMPDIR',
+	'TEMP',
+	'TMP',
+	'LANG',
+	'LC_ALL',
+	'TZ',
+	'SYSTEMROOT',
+	'PATHEXT',
+	'HTTP_PROXY',
+	'HTTPS_PROXY',
+	'NO_PROXY',
+	'http_proxy',
+	'https_proxy',
+	'no_proxy',
+	'NODE_EXTRA_CA_CERTS',
+	'SSL_CERT_FILE'
+];
+
+function inheritedEnv(): Record<string, string> {
+	const env: Record<string, string> = {};
+	for (const name of INHERITED_ENV) {
+		const value = process.env[name];
+		if (value !== undefined) env[name] = value;
+	}
+	return env;
+}
+
 export class PluginHost implements PluginRuntime {
 	private entries = new Map<string, Entry>();
 	/** Queued token revokes, so stopAll can wait for them. */
@@ -193,7 +229,7 @@ export class PluginHost implements PluginRuntime {
 				stderr: 'pipe',
 				stdin: 'ignore',
 				env: {
-					...process.env,
+					...inheritedEnv(),
 					BUN_BE_BUN: '1',
 					OPAL_URL: `http://127.0.0.1:${process.env.OPAL_PORT ?? 8080}`,
 					OPAL_TOKEN: raw,

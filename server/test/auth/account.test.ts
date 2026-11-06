@@ -202,6 +202,15 @@ describe('password change', () => {
 		expect(await signIn(h, 'sso', 'first-password-1')).toStartWith('opal_session=');
 	});
 
+	test("changing your own password keeps your API tokens: agents must not break on a routine change", async () => {
+		const h = await harness();
+		const cookie = await adminSession(h);
+		const { token } = await (await h.call('POST', '/auth/tokens', { name: 'agent' }, { cookie })).json();
+		const res = await h.call('POST', '/auth/password', { currentPassword: ADMIN.password, newPassword: 'brand-new-password-1' }, { cookie });
+		expect(res.status).toBe(200);
+		expect((await h.call('GET', '/auth/me', undefined, { authorization: `Bearer ${token}` })).status).toBe(200);
+	});
+
 	test('an API token cannot change a password', async () => {
 		const h = await harness();
 		const cookie = await adminSession(h);

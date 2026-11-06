@@ -29,7 +29,7 @@ import {
 	requireConfiguredTier,
 	retirePartNumber
 } from './numbering.ts';
-import { hasTrackingLock, referenceCounts } from './references.ts';
+import { hasTrackingLock, hasUnitLock, referenceCounts } from './references.ts';
 import { family, familyOf, nextVariantNumber } from './variants.ts';
 
 type Row = typeof part.$inferSelect;
@@ -170,6 +170,7 @@ export function detail(ctx: Ctx, id: number): PartDetail {
 		expects: sectionExpectations(row.procurement),
 		references: refs,
 		deletable: row.state === 'draft' && Object.keys(refs).length === 0,
+		unitLocked: hasUnitLock(ctx, id),
 		bom: listLines(ctx, id),
 		whereUsed: whereUsedLines(ctx, id),
 		family: family(ctx.db, row)
@@ -287,7 +288,15 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 		patch.tier = tier;
 	}
 	if (input.name !== undefined) patch.name = input.name;
-	if (input.unitOfMeasure !== undefined) patch.unitOfMeasure = input.unitOfMeasure;
+	if (input.unitOfMeasure !== undefined && input.unitOfMeasure !== row.unitOfMeasure) {
+		if (hasUnitLock(ctx, row.id)) {
+			throw conflict(
+				'unit_locked',
+				`${row.internalPn} has stock or purchase order lines counted in ${row.unitOfMeasure}: the unit cannot change`
+			);
+		}
+		patch.unitOfMeasure = input.unitOfMeasure;
+	}
 	if (input.procurement !== undefined) patch.procurement = input.procurement;
 	if (input.externalPn !== undefined) patch.externalPn = blank(input.externalPn);
 	if (input.description !== undefined) patch.description = blank(input.description);

@@ -21,7 +21,9 @@ const HUMAN_ACTS = [
 	'execution.signoff',
 	'execution.skip',
 	'execution.void',
+	'inventory.calibrate',
 	'inventory.correct',
+	'inventory.tests.strike',
 	'issues.reopen',
 	'issues.signDisposition',
 	'issues.signOff',
@@ -39,11 +41,13 @@ const HUMAN_ACTS = [
 	'purchasing.orders.hold',
 	'purchasing.orders.place',
 	'purchasing.orders.resume',
+	'purchasing.orders.strikeCharge',
 	'requirements.baseline',
 	'requirements.baselineBatch',
 	'requirements.cancel',
 	'requirements.reaffirm',
 	'requirements.verifyLink',
+	'requirements.withdrawVerification',
 	'risks.accept',
 	'risks.correct',
 	'risks.reviewStamp',
@@ -52,13 +56,13 @@ const HUMAN_ACTS = [
 
 /** Destructive-sounding, but pencil or directory work: the service refuses it on a committed record. */
 const NOT_A_STRIKE = new Set([
-	'attachments.delete', // refused on evidence of signed steps and closed executions
+	'attachments.delete', // refused once the owning record is committed
 	'auth.passkeys.delete',
 	'datasets.archive',
 	'datasets.delete', // refused once a dataset has points
 	'execution.deleteRedline', // refused once a redline's work has started
 	'inventory.templates.delete',
-	'inventory.tests.delete', // KNOWN GAP: should be struck with a reason, see RECORDS.md
+	'inventory.tests.delete', // pending tests only
 	'issues.removeLink',
 	'parts.bom.remove', // KNOWN GAP: the owner has not decided on active BOM change control
 	'parts.delete', // drafts only
@@ -72,13 +76,13 @@ const NOT_A_STRIKE = new Set([
 	'procedures.versions.restore', // copies a version into the draft
 	'purchasing.catalog.remove',
 	'purchasing.orders.discard', // drafts only
-	'purchasing.orders.removeCharge',
+	'purchasing.orders.removeCharge', // drafts only
 	'purchasing.orders.removeLine', // drafts only
 	'purchasing.suppliers.delete', // refused once an order refers to the supplier
 	'reports.lifecycle.deleteDemo',
 	'requirements.assign',
 	'requirements.delete', // unreferenced drafts only
-	'requirements.unassign',
+	'requirements.unassign', // refused on a verified link or one with a withdrawn verification
 	'risks.delete', // refused once accepted or realized
 	'risks.removeReference',
 	'roles.delete',

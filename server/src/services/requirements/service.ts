@@ -25,6 +25,7 @@ import {
 	user
 } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { nextDesignator } from '../designators.ts';
 import { getOrgSettings, numbersFor } from '../org/project.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
@@ -38,7 +39,7 @@ import {
 } from './lifecycle.ts';
 import { lintRequirement } from './lint.ts';
 import { readiness, readyRows } from './readiness.ts';
-import { eventDetail, eventSummaries, queueItems, redline, summary, tree, dossier } from './views.ts';
+import { eventDetail, eventSummaries, queueItems, redline, summary, tree, dossier, withdrawalsByLink } from './views.ts';
 
 const invalid = (field: string, message: string) =>
 	new OpalError(422, 'invalid_input', message, { [field]: message });
@@ -276,6 +277,10 @@ function moveProject(ctx: Ctx, r: RequirementRow, projectId: number) {
 		throw conflict('requirement_in_use', `${r.reqNumber} has a parent; detach it before changing the project`);
 	}
 	const sameNumber = ctx.db.select().from(requirement).where(eq(requirement.reqNumber, r.reqNumber)).all();
+	// A draft revision must not carry a baselined predecessor away from the baseline event that filed it.
+	if (sameNumber.some((x) => !isMutable(x))) {
+		throw conflict('requirement_state', `${r.reqNumber} has a baselined revision and stays in its project`);
+	}
 	const ids = sameNumber.map((x) => x.id);
 	const kids = ctx.db
 		.select({ n: count() })
@@ -502,6 +507,7 @@ export function catalogPending(ctx: Ctx) {
 
 function linkOut(ctx: Pick<Ctx, 'db'>, ids: number[]): PartLink[] {
 	if (!ids.length) return [];
+	const withdrawals = withdrawalsByLink(ctx, ids);
 	const rows = ctx.db
 		.select({ pr: partRequirement, req: requirement, vid: user.id, vname: user.name })
 		.from(partRequirement)
@@ -527,6 +533,7 @@ function linkOut(ctx: Pick<Ctx, 'db'>, ids: number[]): PartLink[] {
 		notes: pr.notes,
 		verifiedAt: pr.verifiedAt,
 		verifiedBy: vid !== null && vname !== null ? { id: vid, name: vname } : null,
+		withdrawals: withdrawals.get(pr.id) ?? [],
 		createdAt: pr.createdAt,
 		updatedAt: pr.updatedAt
 	}));
@@ -600,9 +607,14 @@ export function updateLink(
 	const req = requireLive(ctx, row.requirementId);
 	if (input.status === 'verified' && row.status !== 'verified')
 		throw conflict('use_verify', 'Verification is recorded with who and when: use verify');
+	if (row.status === 'verified' && input.status !== undefined && input.status !== 'verified')
+		throw conflict('use_withdraw', 'Taking back a verification needs a person and a reason: use withdraw verification');
 	// On a baselined requirement a status is a verification decision: a person's, not a token's.
 	if (input.status !== undefined && input.status !== row.status && req.lifecycleState === 'baselined')
 		requirePerson(ctx);
+	// The note on a verified link is part of what the verifier attested. Withdraw first, then change it.
+	if (row.status === 'verified' && input.notes !== undefined && (input.notes ?? null) !== (row.notes ?? null))
+		throw conflict('verified_frozen', 'The notes of a verified allocation stay as verified. Withdraw the verification to change them');
 	const patch: Record<string, unknown> = {};
 	if (input.status !== undefined) patch.status = input.status;
 	if (input.notes !== undefined) patch.notes = input.notes;
@@ -614,6 +626,8 @@ export function verifyLink(ctx: Ctx, input: { id: number; notes?: string | null 
 	const row = loadLink(ctx, input.id);
 	requireLive(ctx, row.requirementId);
 	requirePerson(ctx);
+	// A second verify would replace who and when.
+	if (row.status === 'verified') throw conflict('already_verified', 'This link is already verified');
 	writeUpdate(ctx, partRequirement, row.id, {
 		status: 'verified',
 		verifiedAt: now(),
@@ -623,8 +637,32 @@ export function verifyLink(ctx: Ctx, input: { id: number; notes?: string | null 
 	return linkOut(ctx, [row.id])[0]!;
 }
 
+/** Strike a recorded verification. The audit row keeps the old who and when beside the reason. */
+export function withdrawVerification(
+	ctx: Ctx,
+	input: { id: number; status: Exclude<PartLink['status'], 'verified'>; reason: string }
+): PartLink {
+	const row = loadLink(ctx, input.id);
+	requireLive(ctx, row.requirementId);
+	requirePerson(ctx);
+	if (row.status !== 'verified') throw conflict('not_verified', 'This link is not verified');
+	writeUpdate(
+		ctx,
+		partRequirement,
+		row.id,
+		{ status: input.status, verifiedAt: null, verifiedById: null },
+		input.reason.trim()
+	);
+	return linkOut(ctx, [row.id])[0]!;
+}
+
 export function unassign(ctx: Ctx, id: number): { ok: true } {
-	requireLive(ctx, loadLink(ctx, id).requirementId);
+	const row = loadLink(ctx, id);
+	requireLive(ctx, row.requirementId);
+	if (row.status === 'verified')
+		throw conflict('link_verified', 'This link is verified: withdraw the verification, then mark it not applicable');
+	if (withdrawalsByLink(ctx, [id]).size)
+		throw conflict('link_has_history', 'This link has a withdrawn verification on record: mark it not applicable');
 	remove(ctx, partRequirement, id);
 	return { ok: true };
 }
@@ -641,3 +679,17 @@ export function linkCount(ctx: Pick<Ctx, 'db'>, partId: number): number {
 }
 
 export { readyRows };
+
+// A baselined requirement takes additions and loses nothing. Superseded and cancelled are finished paper.
+registerOwnerGuard('requirement', (ctx, id, change) => {
+	const r = ctx.db.select().from(requirement).where(eq(requirement.id, id)).get();
+	if (!r) return;
+	if (change.action === 'attach') {
+		if (r.lifecycleState === 'superseded' || r.lifecycleState === 'cancelled')
+			throw evidenceFrozen(`${r.reqNumber} rev ${r.revision} is ${r.lifecycleState}: it takes no new attachments`);
+		return;
+	}
+	if (!isMutable(r))
+		throw evidenceFrozen(`${r.reqNumber} rev ${r.revision} is ${r.lifecycleState}: its attachments stay on the record`);
+});
+

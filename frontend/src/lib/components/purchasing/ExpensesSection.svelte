@@ -1,13 +1,16 @@
 <script lang="ts">
-	// Expense ledger: immutable receive records plus charges (shipping, tax, duty, fee).
+	// Expense ledger: immutable receive records plus charges (shipping, tax, duty, fee). A draft's
+	// charge can be removed. A placed order's charge is struck, stays listed and leaves the total.
 	import {
 		ActionLink,
 		Section,
 		EmptyLine,
 		Timestamp,
+		askReason,
 		confirm,
 		toastError,
-		ErrorBanner
+		ErrorBanner,
+		MoreMenu
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -23,19 +26,23 @@
 		expenses,
 		canAdd,
 		canRemove = false,
+		canStrike = false,
 		onchanged
 	}: {
 		purchaseId: number;
 		expenses: PurchaseExpense[];
 		canAdd: boolean;
-		/** Edit mode: a charge is the one thing on an order that can be taken back. */
+		/** A draft in edit mode: its charges are still pencil. */
 		canRemove?: boolean;
+		/** A placed order: a charge is struck with a reason. */
+		canStrike?: boolean;
 		onchanged: () => void | Promise<void>;
 	} = $props();
 
 	const KINDS = PURCHASE_CHARGE_KINDS;
-	const total = $derived(expenses.reduce((sum, e) => sum + num(e.totalCost), 0));
-	const hasCost = $derived(expenses.some((e) => e.totalCost != null));
+	const counted = $derived(expenses.filter((e) => !e.struck));
+	const total = $derived(counted.reduce((sum, e) => sum + num(e.totalCost), 0));
+	const hasCost = $derived(counted.some((e) => e.totalCost != null));
 
 	let open = $state(false);
 	let kind = $state<(typeof PURCHASE_CHARGE_KINDS)[number]>('shipping');
@@ -70,6 +77,22 @@
 				err instanceof ApiError || err instanceof Error ? err.message : 'Failed to add charge';
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function strike(e: PurchaseExpense) {
+		const reason = await askReason({
+			title: `Strike ${e.kind} charge`,
+			body: `The ${money(e.totalCost)} charge stays listed, struck, and leaves the total.`,
+			action: 'STRIKE',
+			destructive: true
+		});
+		if (reason === null) return;
+		try {
+			await opal.purchasing.orders.strikeCharge({ id: purchaseId, expenseId: e.id, reason });
+			await onchanged();
+		} catch (err) {
+			toastError(err);
 		}
 	}
 
@@ -121,11 +144,16 @@
 				</thead>
 				<tbody>
 					{#each expenses as e (e.id)}
-						<tr class="border-b border-border align-top">
+						<tr class={['border-b border-border align-top', e.struck && 'text-muted-foreground']}>
 							<!-- A part receipt: PN and name. A charge: its kind and notes. -->
 							<td class="px-3 py-1.5 whitespace-nowrap">
 								{#if e.kind !== 'receipt'}
-									<span class="font-mono text-xs tracking-wide uppercase">{e.kind}</span>
+									<span
+										class={[
+											'font-mono text-xs tracking-wide uppercase',
+											e.struck && 'line-through'
+										]}>{e.kind}</span
+									>
 								{:else}
 									<a href={`/parts/${e.partId}`} class="font-mono text-info hover:underline"
 										>{e.partInternalPn}</a
@@ -134,7 +162,9 @@
 							</td>
 							<td class="px-3 py-1.5">
 								{#if e.kind !== 'receipt'}
-									<span class="text-muted-foreground">{e.notes ?? ''}</span>
+									<span class={['text-muted-foreground', e.struck && 'line-through']}
+										>{e.notes ?? ''}</span
+									>
 								{:else}
 									{e.partName ?? ''}
 								{/if}
@@ -145,10 +175,24 @@
 							<td class="px-3 py-1.5 text-right font-mono tabular-nums"
 								>{e.kind !== 'receipt' ? '' : unitMoney(e.unitCost)}</td
 							>
-							<td class="px-3 py-1.5 text-right font-mono tabular-nums">{money(e.totalCost)}</td>
+							<td
+								class={[
+									'px-3 py-1.5 text-right font-mono tabular-nums',
+									e.struck && 'line-through'
+								]}>{money(e.totalCost)}</td
+							>
 							<td class="px-3 py-1.5"><Timestamp value={e.at} /></td>
 							<td class="px-3 py-1.5 text-right">
-								{#if e.kind !== 'receipt' && canRemove}
+								{#if e.struck}
+									<span class="font-mono text-xs"
+										>STRUCK {e.struck.byName ?? '—'} · <Timestamp value={e.struck.at} /> · {e.struck
+											.reason}</span
+									>
+								{:else if e.kind !== 'receipt' && canStrike}
+									<MoreMenu
+										items={[{ label: 'STRIKE', onselect: () => strike(e), strike: true }]}
+									/>
+								{:else if e.kind !== 'receipt' && canRemove}
 									<ActionLink onclick={() => remove(e)}>REMOVE</ActionLink>
 								{/if}
 							</td>

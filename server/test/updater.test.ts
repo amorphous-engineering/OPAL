@@ -4,11 +4,13 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, chmodSync, statSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+	ALL_RELEASES_URL,
 	assetName,
 	checkForUpdate,
 	compareSemver,
 	downloadUpdate,
 	parseSemver,
+	RELEASES_URL,
 	rollbackBinary,
 	sha256Hex,
 	swapBinary,
@@ -60,6 +62,118 @@ describe('checksum', () => {
 		expect(() => verifyChecksum(data, `${'0'.repeat(64)}  opal-linux-x86_64\n`, 'opal-linux-x86_64')).toThrow(/mismatch/);
 		expect(() => verifyChecksum(data, null, 'opal-linux-x86_64')).toThrow(/no SHA256SUMS/);
 		expect(() => verifyChecksum(data, `${sum}  other\n`, 'opal-linux-x86_64')).toThrow(/no entry/);
+	});
+});
+
+describe('which releases a build follows', () => {
+	const common = { platform: 'linux', arch: 'x64', log: () => {} };
+	const release = (tag: string, extra: object = {}) => ({
+		tag_name: tag,
+		body: `notes for ${tag}`,
+		assets: [
+			{ name: 'opal-linux-x86_64', browser_download_url: `https://example.test/${tag}/opal-linux-x86_64` },
+			{ name: 'SHA256SUMS', browser_download_url: `https://example.test/${tag}/SHA256SUMS` }
+		],
+		...extra
+	});
+	/** Answers like GitHub, and records which address the updater asked. */
+	const github = (answer: unknown) => {
+		const asked: string[] = [];
+		const stub = (async (input: Request | string | URL) => {
+			asked.push(String(input));
+			return Response.json(answer);
+		}) as typeof fetch;
+		return { asked, fetch: stub };
+	};
+
+	test('a beta tester is offered the next beta', async () => {
+		const g = github([release('v2.0.0-beta.2'), release('v2.0.0-beta.1'), release('v1.3.2')]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0-beta.2');
+		expect(g.asked[0]).toBe(ALL_RELEASES_URL);
+	});
+
+	test('a beta tester is offered the stable release when it arrives', async () => {
+		const g = github([release('v2.0.0'), release('v2.0.0-rc.1'), release('v2.0.0-beta.1')]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-rc.1' });
+		expect(info?.tag).toBe('v2.0.0');
+	});
+
+	test('a stable build never reads the prerelease list', async () => {
+		const g = github(release('v1.3.2'));
+		expect(await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '1.3.2' })).toBeNull();
+		expect(g.asked[0]).toBe(RELEASES_URL);
+	});
+
+	test('a tester on the newest prerelease is up to date, and is never moved back to an older one', async () => {
+		const g = github([release('v2.0.0-beta.1'), release('v2.0.0-rc.25'), release('v1.3.2')]);
+		expect(await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-rc.25' })).toBeNull();
+	});
+
+	test('a beta tester is not sent to an older release candidate that sorts higher', async () => {
+		const g = github([
+			release('v2.0.0-beta.1', { published_at: '2026-11-07T00:00:00Z' }),
+			release('v2.0.0-rc.25', { published_at: '2026-11-06T00:00:00Z' }),
+			release('v1.3.2', { published_at: '2026-05-20T00:00:00Z' })
+		]);
+		expect(await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' })).toBeNull();
+	});
+
+	test('a beta tester is offered the next beta over an older release candidate', async () => {
+		const g = github([
+			release('v2.0.0-beta.2', { published_at: '2026-11-08T00:00:00Z' }),
+			release('v2.0.0-beta.1', { published_at: '2026-11-07T00:00:00Z' }),
+			release('v2.0.0-rc.25', { published_at: '2026-11-06T00:00:00Z' })
+		]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0-beta.2');
+	});
+
+	test('a beta tester is offered a release candidate published after their beta', async () => {
+		const g = github([
+			release('v2.0.0-rc.26', { published_at: '2026-11-09T00:00:00Z' }),
+			release('v2.0.0-beta.1', { published_at: '2026-11-07T00:00:00Z' }),
+			release('v2.0.0-rc.25', { published_at: '2026-11-06T00:00:00Z' })
+		]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0-rc.26');
+	});
+
+	test('a tester on a pulled beta gets the next beta, not an older release candidate', async () => {
+		const g = github([
+			release('v2.0.0-beta.2', { published_at: '2026-11-08T00:00:00Z' }),
+			release('v2.0.0-rc.24', { published_at: '2026-10-27T00:00:00Z' })
+		]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0-beta.2');
+	});
+
+	test('a tester on a pulled beta is offered nothing when only older release candidates exist', async () => {
+		const g = github([release('v2.0.0-rc.24'), release('v1.3.2')]);
+		expect(await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' })).toBeNull();
+	});
+
+	test('a tester on a pulled beta is still offered the stable release', async () => {
+		const g = github([release('v2.0.0'), release('v2.0.0-rc.24')]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0');
+	});
+
+	test('a release whose binaries are still uploading is not offered yet', async () => {
+		const g = github([release('v2.0.0-beta.3', { assets: [] }), release('v2.0.0-beta.2')]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0-beta.2');
+	});
+
+	test('a draft is never offered', async () => {
+		const g = github([release('v2.0.0-beta.2', { draft: true }), release('v2.0.0-beta.1')]);
+		expect(await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' })).toBeNull();
+	});
+
+	test('a malformed tag in the list does not hide a good release', async () => {
+		const g = github([release('nightly'), release('v2.0.0-beta.2')]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0-beta.2');
 	});
 });
 

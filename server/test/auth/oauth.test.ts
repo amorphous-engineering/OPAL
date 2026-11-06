@@ -90,11 +90,11 @@ describe('oauth for mcp clients', () => {
 		const h = await harness();
 		process.env.OPAL_PUBLIC_URL = 'https://opal.example.com/';
 		try {
-			const res = await h.app.request('http://opal.test/mcp', { method: 'POST', headers: { 'x-forwarded-proto': 'http' } });
+			const res = await h.app.request('http://opal.test/mcp', { method: 'POST', headers: { 'x-forwarded-proto': 'http', host: 'opal.example.com' } });
 			expect(res.headers.get('www-authenticate')).toContain(
 				'resource_metadata="https://opal.example.com/.well-known/oauth-protected-resource/mcp"'
 			);
-			const pr = await (await h.raw('/.well-known/oauth-protected-resource/mcp')).json();
+			const pr = await (await h.raw('/.well-known/oauth-protected-resource/mcp', { host: 'opal.example.com' })).json();
 			expect(pr).toMatchObject({ resource: 'https://opal.example.com/mcp', authorization_servers: ['https://opal.example.com'] });
 		} finally {
 			delete process.env.OPAL_PUBLIC_URL;

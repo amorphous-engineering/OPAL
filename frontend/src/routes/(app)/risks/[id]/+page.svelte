@@ -203,6 +203,7 @@
 	const moreItems = $derived<MoreItem[]>([
 		{ label: 'ACCEPT', onselect: accept, when: canAccept },
 		{ label: 'WITHDRAW ACCEPTANCE', onselect: withdraw, when: accepted },
+		{ label: 'MARK REALIZED', onselect: () => (target = 'realized'), when: accepted },
 		{ label: 'CLOSE', onselect: close, strike: true, when: live || accepted },
 		{ label: 'REOPEN', onselect: reopen, when: closed },
 		{ label: 'CORRECT RECORD', onselect: () => goto('?correct=1'), when: realized && !correcting },
@@ -578,7 +579,7 @@
 						</DetailRow>
 					{/if}
 				</DetailTable>
-				{#if target && editScored}
+				{#if target && (editScored || (accepted && target === 'realized'))}
 					<DispositionPanel
 						{risk}
 						target={target as RiskDisposition}

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { op, zId, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, zJsonObject } from '../limits.ts';
 
 /** How the UI shows times. Storage is always UTC. */
 export const zTimeDisplay = z.enum(['local', 'utc']);
@@ -22,6 +23,10 @@ export type AuthUser = z.infer<typeof zAuthUser>;
 
 export const zAuthConfig = z.object({
 	needsSetup: z.boolean(),
+	/** While nobody has claimed the instance: setup asks for the code the server printed. Otherwise false. */
+	setupCodeRequired: z.boolean(),
+	/** False only while unclaimed, on a host name setup refuses. */
+	setupHostAllowed: z.boolean(),
 	passwordLoginEnabled: z.boolean(),
 	passkeysEnabled: z.boolean(),
 	/** True only when OIDC is switched on AND has an issuer and a client id. */
@@ -106,7 +111,7 @@ export const zPasskeyInfo = z.object({
 });
 
 /** WebAuthn JSON passes through untouched: the browser and the library own its shape. */
-const zJson = z.record(z.string(), z.unknown());
+const zJson = z.record(z.string().max(MAX_SHORT), z.unknown());
 const zWebauthnOptions = z.object({ publicKey: zJson });
 
 /**
@@ -239,7 +244,7 @@ const passkeys = {
 		method: 'POST',
 		path: '/auth/passkeys/register/complete',
 		summary: 'Finish registering a passkey with the browser\'s credential.',
-		input: z.object({ name: z.string().trim().max(100).default('Passkey'), credential: zJson }),
+		input: z.object({ name: z.string().trim().max(100).default('Passkey'), credential: zJsonObject() }),
 		output: z.object({ ok: z.literal(true), id: z.number().int(), name: z.string() }),
 		access: 'signed-in',
 		humanOnly: true,
@@ -260,7 +265,7 @@ const passkeys = {
 		method: 'POST',
 		path: '/auth/passkeys/login/complete',
 		summary: 'Finish a passkey sign-in with the browser\'s assertion.',
-		input: z.object({ credential: zJson }),
+		input: z.object({ credential: zJsonObject() }),
 		output: zSignedIn,
 		access: 'public',
 		mcp: false
@@ -400,7 +405,8 @@ export const auth = {
 			username: z.string().trim().min(1).max(64),
 			name: z.string().trim().min(1).max(255),
 			password: zPassword,
-			email: z.string().trim().max(255).nullable().optional()
+			email: z.string().trim().max(255).nullable().optional(),
+			setupCode: z.string().trim().max(40).optional()
 		}),
 		output: zSignedIn,
 		access: 'public',

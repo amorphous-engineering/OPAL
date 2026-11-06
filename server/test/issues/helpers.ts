@@ -7,6 +7,14 @@ import { issueHooks, platformDeliver } from '../../src/services/issues/hooks.ts'
 import { openTestDb } from '../helpers/db.ts';
 import { createTestProject } from '../helpers/project.ts'; // added by projects
 
+// The seams are process-wide and test files share them. The execution ops set them once, at import,
+// so whatever clears them has to put them back, or the next file loses them.
+const registered = { ...issueHooks, holdChanged: [...issueHooks.holdChanged] };
+
+export function restoreIssueHooks() {
+	Object.assign(issueHooks, registered, { holdChanged: [...registered.holdChanged] });
+}
+
 export async function setup() {
 	const db = await openTestDb();
 	// added by execution: the seam tests use made-up execution and step ids, so foreign keys are off here
@@ -63,6 +71,7 @@ export async function setup() {
 	issueHooks.executionExists = null;
 	issueHooks.describe = null;
 	issueHooks.stepOptions = null;
+	issueHooks.freedSteps = null;
 	issueHooks.detailExtras = null;
 	issueHooks.holdChanged.length = 0;
 	return {

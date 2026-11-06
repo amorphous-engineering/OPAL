@@ -1,9 +1,10 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MIGRATIONS_DIR, openDb } from '../../src/db/client.ts';
+import { snapshotBeforeMigrating } from '../../src/db/snapshot.ts';
 
 const dirs: string[] = [];
 const tempDir = () => {
@@ -98,6 +99,78 @@ describe('applying migrations', () => {
 		expect((db.$client.query('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys).toBe(1);
 	});
 
+});
+
+describe('the copy taken before an upgrade', () => {
+	const copies = (dir: string) => readdirSync(dir).filter((f) => f.includes('.pre-migration-')).sort();
+	/** A database one migration behind the current ones, holding one work order. */
+	function behind() {
+		const dir = tempDir();
+		const path = join(dir, 'opal.db');
+		openDb(path, migrationsUpTo('0004_skip_required_gate'));
+		seedWorkOrder(path, 'aborted');
+		return { dir, path };
+	}
+
+	test('an upgrade leaves a readable copy of the database as it was', () => {
+		const { dir, path } = behind();
+		openDb(path);
+		const [copy] = copies(dir);
+		const old = new Database(join(dir, copy!), { readonly: true });
+		expect(old.query('SELECT status FROM execution').all()).toEqual([{ status: 'aborted' }]);
+		old.close();
+		const db = new Database(path);
+		expect(db.query('SELECT status FROM execution').all()).toEqual([{ status: 'closed_short' }]);
+		db.close();
+	});
+
+	test('the copy is private to the account that runs OPAL', () => {
+		const { dir, path } = behind();
+		openDb(path);
+		const mode = statSync(join(dir, copies(dir)[0]!)).mode & 0o777;
+		if (process.platform !== 'win32') expect(mode).toBe(0o600);
+	});
+
+	test('opening a new database or one with nothing pending takes no copy', () => {
+		const dir = tempDir();
+		const path = join(dir, 'opal.db');
+		openDb(path);
+		openDb(path);
+		expect(copies(dir)).toEqual([]);
+	});
+
+	test('only the three newest copies are kept', () => {
+		const { dir, path } = behind();
+		for (const stamp of ['2026-01-01', '2026-01-02', '2026-01-03']) writeFileSync(join(dir, `opal.pre-migration-${stamp}.db`), 'x');
+		openDb(path);
+		const left = copies(dir);
+		expect(left.length).toBe(3);
+		expect(left).not.toContain('opal.pre-migration-2026-01-01.db');
+		expect(left).toContain('opal.pre-migration-2026-01-03.db');
+	});
+
+	test('a copy that cannot be taken stops the upgrade and leaves the database as it was', () => {
+		const { path } = behind();
+		const applied = () => count(path, '__drizzle_migrations');
+		const before = applied();
+		expect(() =>
+			openDb(path, MIGRATIONS_DIR, () => {
+				throw new Error('disk full');
+			})
+		).toThrow('disk full');
+		expect(applied()).toBe(before);
+		const db = new Database(path);
+		expect(db.query('SELECT status FROM execution').all()).toEqual([{ status: 'aborted' }]);
+		db.close();
+	});
+
+	test('a failed copy says the database was left as it was and leaves no partial file', () => {
+		const { dir, path } = behind();
+		const db = new Database(path);
+		expect(() => snapshotBeforeMigrating(db, join(path, 'not-a-folder', 'opal.db'))).toThrow(/left as it was/);
+		db.close();
+		expect(copies(dir)).toEqual([]);
+	});
 });
 
 describe('retiring the aborted status', () => {

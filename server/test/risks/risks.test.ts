@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { risk, riskReference } from '../../src/db/schema/index.ts';
+import { apiToken, risk, riskReference } from '../../src/db/schema/index.ts';
 import { createTestProject } from '../helpers/project.ts'; // added by projects
 import { setup } from './helpers.ts';
 
@@ -10,6 +10,16 @@ async function ready(t: Awaited<ReturnType<typeof setup>>, body: Record<string, 
 	const p = await t.call('PATCH', `/risks/${r.id}`, { acceptanceRationale: 'Within appetite' });
 	expect(p.status).toBe(200);
 	return p.body;
+}
+
+/** Act as an API token. A real row, because the audit log refers to it when a write goes through. */
+function asToken(t: Awaited<ReturnType<typeof setup>>) {
+	const tokenId = t.db
+		.insert(apiToken)
+		.values({ userId: t.admin.id, name: 'agent', tokenHash: 'h', createdAt: new Date().toISOString() })
+		.returning()
+		.get().id;
+	t.as({ kind: 'token', userId: t.admin.id, isAdmin: true, tokenId });
 }
 
 describe('creating and reading risks', () => {
@@ -421,6 +431,95 @@ describe('acceptance', () => {
 		expect((await t.call('GET', `/risks/${r.id}`)).body.disposition).toBe('accepted');
 	});
 
+	test('an API token cannot move an accepted risk: closing it is refused and it stays accepted', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		await t.call('POST', `/risks/${r.id}/accept`, {});
+		const i = await t.mkIssue('It happened');
+		asToken(t);
+		const x = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'closed', note: 'quietly' });
+		expect(x.status).toBe(403);
+		const y = await t.call('POST', `/risks/${r.id}/disposition`, {
+			disposition: 'realized',
+			note: 'quietly',
+			realizedIssueId: i.id
+		});
+		expect(y.status).toBe(403);
+		expect((await t.call('GET', `/risks/${r.id}`)).body.disposition).toBe('accepted');
+	});
+
+	test('an API token cannot reopen a closed risk that was accepted, so the score stays locked behind a person', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		await t.call('POST', `/risks/${r.id}/accept`, {});
+		await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'closed', note: 'retired' });
+		asToken(t);
+		for (const disposition of ['open', 'watch', 'research']) {
+			const x = await t.call('POST', `/risks/${r.id}/disposition`, { disposition, note: 'back again' });
+			expect(x.status).toBe(403);
+		}
+		expect((await t.call('GET', `/risks/${r.id}`)).body.disposition).toBe('closed');
+		expect((await t.call('PATCH', `/risks/${r.id}`, { probability: 4 })).status).toBe(409);
+	});
+
+	test('a person reopening a closed risk that was accepted gives a reason and the acceptance no longer stands', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		await t.call('POST', `/risks/${r.id}/accept`, {});
+		await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'closed', note: 'retired' });
+		expect((await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'open' })).status).toBe(409);
+		const x = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'open', note: 'came back' });
+		expect(x.body).toMatchObject({ disposition: 'open', acceptedByName: 'ABBY' });
+		const hist = (await t.call('GET', `/risks/${r.id}/history`)).body;
+		expect(hist[0].note).toBe('came back');
+		expect(hist[0].changes).toContainEqual({ field: 'disposition', from: 'closed', to: 'open' });
+	});
+
+	test('what was accepted can still be realized by a person, with a linked issue and a reason', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		await t.call('POST', `/risks/${r.id}/accept`, {});
+		const i = await t.mkIssue('It happened');
+		const noReason = await t.call('POST', `/risks/${r.id}/disposition`, {
+			disposition: 'realized',
+			realizedIssueId: i.id
+		});
+		expect(noReason.status).toBe(409);
+		expect(noReason.body.message).toContain('reason');
+		expect((await t.call('GET', `/risks/${r.id}/disposition-check?target=realized`)).body.needsNote).toBe(true);
+		const ok = await t.call('POST', `/risks/${r.id}/disposition`, {
+			disposition: 'realized',
+			note: 'the seat failed',
+			realizedIssueId: i.id
+		});
+		expect(ok.body).toMatchObject({ disposition: 'realized', acceptedByName: 'ABBY' });
+	});
+
+	test('realizing a risk is a commit: an API token may prepare the issue, and a person makes the move', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		asToken(t);
+		const spawned = await t.call('POST', `/risks/${r.id}/issues/spawn`, { role: 'realized', title: 'It happened' });
+		expect(spawned.status).toBeLessThan(300);
+		const x = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'realized' });
+		expect(x.status).toBe(403);
+		expect((await t.call('GET', `/risks/${r.id}`)).body.disposition).toBe('open');
+		t.as(t.admin);
+		const ok = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'realized' });
+		expect(ok.body.disposition).toBe('realized');
+	});
+
+	test('an API token still works an open risk: it can move it to watch and close it', async () => {
+		const t = await setup();
+		const r = await t.mk({ watchObservable: 'seat wear', watchThreshold: '2 mm' });
+		asToken(t);
+		expect((await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'watch' })).status).toBe(200);
+		const closed = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'closed', note: 'gone' });
+		expect(closed.status).toBe(200);
+		const back = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'open', note: 'returned' });
+		expect(back.body.disposition).toBe('open');
+	});
+
 	test('a score change on an accepted risk is refused and never withdraws the acceptance', async () => {
 		const t = await setup();
 		const r = await ready(t);
@@ -805,7 +904,11 @@ describe('realized and closed risks are not edited by default', () => {
 		const r = await ready(t);
 		await t.call('POST', `/risks/${r.id}/accept`, {});
 		const i = await t.mkIssue('It happened');
-		const x = await t.call('POST', `/risks/${r.id}/disposition`, { disposition: 'realized', realizedIssueId: i.id });
+		const x = await t.call('POST', `/risks/${r.id}/disposition`, {
+			disposition: 'realized',
+			note: 'it happened anyway',
+			realizedIssueId: i.id
+		});
 		expect(x.body.disposition).toBe('realized');
 	});
 });

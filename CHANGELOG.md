@@ -2,7 +2,7 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
-## 2.0.0-beta1
+## 2.0.0-beta.1
 
 OPAL 2 is a rewrite in TypeScript: one Bun binary, one SQLite file. The Python 1.x backend is gone, and
 extensions and Onshape are postponed. These changes are since `v2.0.0-rc.24`.
@@ -23,7 +23,7 @@ extensions and Onshape are postponed. These changes are since `v2.0.0-rc.24`.
 - Migrations ran with foreign keys on, so a table rebuild could cascade-delete child rows.
 - Any user or token could void an issue to release its hold. Releasing a hold now needs the disposition gate.
 
-## Unreleased
+## 1.4 betas (the 1.x line)
 
 ### Added
 - **OpenID Connect single sign-on.** OPAL can now federate with any spec-compliant OIDC provider — Pocket ID, Authentik, Keycloak, Auth0, Entra ID — using the OAuth 2.0 authorization-code flow with PKCE. Configure it at **Settings → Authentication**: issuer URL, client id, optional client secret, scopes, and the group claim that grants admin. A **TEST DISCOVERY** button fetches the provider's metadata and reports the endpoints it advertises, and the page shows the exact callback URL to register with the provider.

@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
+import type { Actor } from '../../src/context.ts';
+import { errorResponse } from '../../src/registry.ts';
 import { mountAvatarRoute } from '../../src/services/org/avatars.ts';
 import { setup } from './helpers.ts';
 
@@ -41,6 +43,28 @@ describe('avatars', () => {
 		expect((await app.request(`/api/users/${bob.id}/avatar`)).status).toBe(401);
 	});
 
+	test('a scoped token reads an avatar only with the avatar permission; an unscoped token needs none', async () => {
+		dataDir();
+		const { db, call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: PNG.toString('base64') });
+		let current: Actor = bob.actor;
+		const app = new Hono();
+		app.onError((err, c) => {
+			const { status, body } = errorResponse(err);
+			return c.json(body, status as 400);
+		});
+		mountAvatarRoute(app, db, () => current);
+		const statusAs = async (ops?: string[]) => {
+			current = { kind: 'token', userId: bob.id, isAdmin: false, tokenId: 1, ...(ops ? { scopes: { ops, events: [] } } : {}) };
+			return (await app.request(`/api/users/${bob.id}/avatar`)).status;
+		};
+		expect(await statusAs([])).toBe(403);
+		expect(await statusAs(['users.getAvatar'])).toBe(200);
+		expect(await statusAs(['users.*'])).toBe(200);
+		expect(await statusAs()).toBe(200);
+	});
+
 	test('a user changes own avatar, an admin changes any, nobody else does', async () => {
 		dataDir();
 		const { call, makeUser } = await setup();
@@ -68,6 +92,31 @@ describe('avatars', () => {
 		const bob = makeUser('bob');
 		const big = Buffer.concat([PNG.subarray(0, 8), Buffer.alloc(2 * 1024 * 1024 + 1)]);
 		expect((await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: big.toString('base64') })).status).toBe(413);
+	});
+
+	test('an upload far over the limit is refused from its length alone, before it is decoded or stored', async () => {
+		const dir = dataDir();
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		const r = await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: 'A'.repeat(3 * 1024 * 1024) });
+		expect(r.status).toBe(422);
+		expect(r.json.fields.data).toContain('Avatar too large');
+		expect(existsSync(join(dir, 'avatars'))).toBe(false);
+	});
+
+	test('a new avatar is refused with 507 when it would pass OPAL_STORAGE_QUOTA_BYTES', async () => {
+		dataDir();
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		process.env.OPAL_STORAGE_QUOTA_BYTES = String(PNG.length + GIF.length - 1);
+		try {
+			expect((await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: PNG.toString('base64') })).status).toBe(200);
+			const r = await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: GIF.toString('base64') });
+			expect(r.status).toBe(507);
+			expect(r.json.error).toBe('storage_full');
+		} finally {
+			delete process.env.OPAL_STORAGE_QUOTA_BYTES;
+		}
 	});
 
 	test('removing the avatar deletes the file and shows initials; a shared file stays while another user holds it', async () => {

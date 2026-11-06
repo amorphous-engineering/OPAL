@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { auditLog, session, user } from '../../src/db/schema/index.ts';
+import { now } from '@opal/shared';
+import { apiToken, auditLog, session, user } from '../../src/db/schema/index.ts';
 import { setup } from './helpers.ts';
 
 describe('creating users', () => {
@@ -287,5 +288,51 @@ describe('onboarding', () => {
 		const bob = makeUser('bob');
 		const r = await call(bob, 'POST', '/users/me/setup-profile', { name: 'Robert' });
 		expect(r.json.name).toBe('Robert');
+	});
+});
+
+describe('an API token cannot mint or promote a person', () => {
+	const tokenOf = (p: { id: number }, isAdmin: boolean) => ({ kind: 'token' as const, userId: p.id, isAdmin, tokenId: 1 });
+
+	test('an admin token cannot create a user, change roles, or map a gate', async () => {
+		const { call, makeUser } = await setup();
+		const root = makeUser('root', { admin: true });
+		const bob = makeUser('bob');
+		const t = tokenOf(root, true);
+		expect((await call(t, 'POST', '/users', { name: 'Ghost', username: 'ghost', password: 'ghost-pass-1234', isAdmin: true })).status).toBe(403);
+		expect((await call(t, 'PUT', `/users/${bob.id}/roles`, { roleIds: [] })).status).toBe(403);
+		expect((await call(t, 'POST', '/roles', { name: 'Signer' })).status).toBe(403);
+		expect((await call(t, 'PUT', '/gates/issue.approve', { roleIds: [] })).status).toBe(403);
+	});
+
+	test('an admin token cannot set admin, active or email on an account, but may edit its profile', async () => {
+		const { call, makeUser, db } = await setup();
+		const root = makeUser('root', { admin: true });
+		const bob = makeUser('bob');
+		const t = tokenOf(root, true);
+		expect((await call(t, 'PATCH', `/users/${bob.id}`, { isAdmin: true })).status).toBe(403);
+		expect((await call(t, 'PATCH', `/users/${bob.id}`, { isActive: false })).status).toBe(403);
+		expect((await call(t, 'PATCH', `/users/${bob.id}`, { email: 'root@x.local' })).status).toBe(403);
+		// A token with no row is enough for the refusals above; an edit that writes needs a real one for its audit row.
+		const row = db.insert(apiToken).values({ userId: root.id, name: 'agent', tokenHash: 'h1', createdAt: now() }).returning().get();
+		expect((await call({ ...t, tokenId: row.id }, 'PATCH', `/users/${bob.id}`, { jobTitle: 'Tech' })).status).toBe(200);
+	});
+
+	test('a token that sends back the values an account already has is not changing them', async () => {
+		const { call, makeUser, db } = await setup();
+		const root = makeUser('root', { admin: true });
+		const bob = makeUser('bob');
+		const row = db.insert(apiToken).values({ userId: root.id, name: 'agent', tokenHash: 'h2', createdAt: now() }).returning().get();
+		const t = { kind: 'token' as const, userId: root.id, isAdmin: true, tokenId: row.id };
+		const me = (await call(root, 'GET', `/users/${bob.id}`)).json;
+		const res = await call(t, 'PATCH', `/users/${bob.id}`, { name: 'Bob', email: me.email, isActive: true, isAdmin: false });
+		expect(res.status).toBe(200);
+		expect(res.json.name).toBe('Bob');
+	});
+
+	test('a person who is an admin still can', async () => {
+		const { call, makeUser } = await setup();
+		const root = makeUser('root', { admin: true });
+		expect((await call(root, 'POST', '/users', { name: 'Real', username: 'real' })).status).toBe(201);
 	});
 });

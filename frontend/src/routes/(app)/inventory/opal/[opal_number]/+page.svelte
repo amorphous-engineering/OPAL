@@ -15,6 +15,7 @@
 	import {
 		ActionLink,
 		MoreMenu,
+		askReason,
 		confirm,
 		DataTable,
 		DetailRow,
@@ -119,14 +120,31 @@
 	async function removeTest(t: StockTestResult) {
 		if (!rec) return;
 		const ok = await confirm({
-			title: `Delete ${t.testName} result`,
-			body: 'The result is removed from this record. The audit log keeps the deletion.',
+			title: `Delete pending ${t.testName}`,
+			body: 'No result was given, so the line is removed.',
 			action: 'DELETE',
 			destructive: true
 		});
 		if (!ok) return;
 		try {
 			await opal.inventory.tests.delete({ id: rec.id, testId: t.id });
+			await refreshAll();
+		} catch (e) {
+			toastError(e);
+		}
+	}
+
+	async function strikeTest(t: StockTestResult) {
+		if (!rec) return;
+		const reason = await askReason({
+			title: `Strike ${t.testName} result`,
+			body: 'The result stays listed, struck, and no longer counts in the test status.',
+			action: 'STRIKE',
+			destructive: true
+		});
+		if (reason === null) return;
+		try {
+			await opal.inventory.tests.strike({ id: rec.id, testId: t.id, reason });
 			await refreshAll();
 		} catch (e) {
 			toastError(e);
@@ -160,7 +178,7 @@
 	const requiredTemplates = $derived(d?.testTemplates.filter((t) => t.required) ?? []);
 	const requiredPassed = $derived(
 		requiredTemplates.filter((t) =>
-			d?.tests.some((x) => x.templateId === t.id && x.result === 'pass')
+			d?.tests.some((x) => x.templateId === t.id && x.result === 'pass' && !x.struck)
 		).length
 	);
 
@@ -433,23 +451,41 @@
 						]}
 						emptyLabel="Tests"
 						key={(r) => r.id}
+						rowClass={(r) => (r.struck ? 'text-muted-foreground' : undefined)}
 					>
 						{#snippet cell(r, col)}
 							{#if col.key === 'result'}
-								<State
-									value={r.result}
-									tone={r.result === 'pass' ? 'ok' : r.result === 'fail' ? 'error' : 'warn'}
-								/>
+								{#if r.struck}
+									<span class="font-mono text-xs uppercase line-through">{r.result}</span>
+								{:else}
+									<State
+										value={r.result}
+										tone={r.result === 'pass' ? 'ok' : r.result === 'fail' ? 'error' : 'warn'}
+									/>
+								{/if}
 							{:else if col.key === 'testedAt'}
 								<Timestamp value={r.testedAt} />
 							{:else if col.key === 'actions'}
-								<span class="inline-flex gap-3">
-									<ActionLink onclick={() => openTest(r)}>EDIT</ActionLink>
-									<ActionLink onclick={() => removeTest(r)}>DELETE</ActionLink>
-								</span>
+								{#if r.struck}
+									<span class="font-mono text-xs"
+										>STRUCK {r.struck.byName ?? '—'} · <Timestamp value={r.struck.at} /> · {r.struck
+											.reason}</span
+									>
+								{:else if r.result === 'pending'}
+									<span class="inline-flex gap-3">
+										<ActionLink onclick={() => openTest(r)}>FILL IN</ActionLink>
+										<ActionLink onclick={() => removeTest(r)}>DELETE</ActionLink>
+									</span>
+								{:else}
+									<MoreMenu
+										items={[{ label: 'STRIKE', onselect: () => strikeTest(r), strike: true }]}
+									/>
+								{/if}
 							{:else}
 								{@const v = r[col.key as 'testName' | 'value' | 'notes' | 'testedByName']}
-								{#if v}{v}{:else}<span class="text-quiet">—</span>{/if}
+								{#if v}<span class={r.struck ? 'line-through' : undefined}>{v}</span>{:else}<span
+										class="text-quiet">—</span
+									>{/if}
 							{/if}
 						{/snippet}
 					</DataTable>

@@ -1,11 +1,12 @@
 # OPAL installer for Windows — downloads a release binary.
-# Usage: irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 #
 # Options, as environment variables (piping to iex takes no arguments):
 #   $env:OPAL_PRERELEASE = "1"         install the newest release, prereleases included
 #   $env:OPAL_VERSION = "v2.0.0-rc.21" install one release
 # Or as parameters: & ([scriptblock]::Create((irm <url>))) -Prerelease
-# With no option the installer takes the release GitHub marks as Latest.
+# With no option the installer takes the release GitHub marks as Latest, which is still 1.x
+# and stops, because 1.x releases have no checksums. Set OPAL_PRERELEASE=1 for the OPAL 2 beta.
 param(
     [switch]$Prerelease,
     [string]$Version
@@ -18,6 +19,7 @@ if (-not $Version -and $env:OPAL_VERSION) { $Version = $env:OPAL_VERSION }
 if (-not $Prerelease -and $env:OPAL_PRERELEASE -and $env:OPAL_PRERELEASE -ne "0") { $Prerelease = $true }
 $InstallDir = Join-Path $env:LOCALAPPDATA "OPAL"
 $InstallPath = Join-Path $InstallDir "opal.exe"
+$BeforeV2Path = Join-Path $InstallDir "opal.before-v2.exe"
 
 # --- Output helpers ---
 
@@ -92,6 +94,10 @@ function Find-DownloadUrl {
 
     $Sums = $Release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
     if (-not $Sums) {
+        if (-not $Version -and -not $Prerelease) {
+            # 1.x releases have no checksum file, and the release marked Latest is still one of them.
+            Write-Err "The release marked Latest has no SHA256SUMS, so it cannot be verified. To install the OPAL 2 beta, set OPAL_PRERELEASE=1 and run this again."
+        }
         Write-Err "The release has no SHA256SUMS file"
     }
     $script:SumsUrl = $Sums.browser_download_url
@@ -158,6 +164,21 @@ function Install-Binary {
     }
 
     Test-Checksum -File $TmpFile -AssetName $AssetName
+
+    # 1.x installs to this same path, and OPAL 2 cannot read a 1.x database yet. The first install
+    # over an older OPAL keeps that program, so going back is one command. Later installs leave
+    # it alone: it is the way back to 1.x, not to the last beta.
+    if ((Test-Path $InstallPath) -and -not (Test-Path $BeforeV2Path)) {
+        # Through a temporary name: a copy cut short must not pass for the way back.
+        try {
+            Copy-Item -Path $InstallPath -Destination "$BeforeV2Path.tmp" -ErrorAction Stop
+            Move-Item -Path "$BeforeV2Path.tmp" -Destination $BeforeV2Path -Force -ErrorAction Stop
+        } catch {
+            Write-Err "Could not keep your previous OPAL; nothing was changed: $_"
+        }
+        Write-Warn "Kept your previous OPAL at $BeforeV2Path"
+        Write-Warn "If that was 1.x, this version cannot read its data yet. To go back: Move-Item -Force `"$BeforeV2Path`" `"$InstallPath`""
+    }
 
     Move-Item -Path $TmpFile -Destination $InstallPath -Force
 

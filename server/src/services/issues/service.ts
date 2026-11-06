@@ -25,6 +25,7 @@ import type { z } from 'zod';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { execution, issue, issueComment, issueLink, part, risk, user } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
+import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { nextDesignator } from '../designators.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
 import { holdsGate } from '../org/gates.ts';
@@ -662,13 +663,33 @@ export function setContainment(
 	assertNotVoid(r);
 	const note = (input.note ?? '').trim();
 	const narrowing = CONTAINMENT_RANK[input.containment] < CONTAINMENT_RANK[r.containment];
-	const releasing = narrowing && isBlocking(r);
-	if (releasing) {
+	const nextStepId =
+		input.containmentStepId !== undefined ? input.containmentStepId : r.containmentStepId;
+	const moved = (nextStepId ?? r.raisedStepId) !== (r.containmentStepId ?? r.raisedStepId);
+	// Any change is a release when an unfinished step stops being held. A wider scope can do that: an
+	// OP hold stops the OP from closing, but no longer the step it was raised on. Setting the first
+	// boundary, or one on a step already finished, only adds a hold, so it stays open to anyone.
+	const changed = moved || input.containment !== r.containment;
+	const freed =
+		changed && isBlocking(r) && r.executionId !== null
+			? (issueHooks.freedSteps?.(ctx, r.executionId, r, {
+					containment: input.containment,
+					containmentStepId: nextStepId,
+					raisedStepId: r.raisedStepId
+				}) ?? [])
+			: [];
+	if (isBlocking(r) && narrowing) {
 		// Narrowing a hold is releasing it, however it is reached: the same gate as signing.
 		requireDisposition(ctx, 'narrow containment');
 		if (!note)
 			throw refuse(
 				`Narrowing containment ${r.containment} → ${input.containment} releases a hold; a note is required`
+			);
+	} else if (freed.length) {
+		requireDisposition(ctx, moved ? 'move a containment boundary' : 'widen this containment');
+		if (!note)
+			throw refuse(
+				`${moved ? 'Moving the containment boundary' : `Widening containment ${r.containment} → ${input.containment}`} releases ${freed.join(', ')}; a note is required`
 			);
 	}
 
@@ -696,6 +717,14 @@ export function setContainment(
 			after = writeUpdate(ctx, issue, r.id, patch);
 			if (narrowing && note)
 				addNote(ctx, r, `Containment narrowed ${r.containment} → ${input.containment}: ${note}`);
+			else if (moved && note)
+				addNote(
+					ctx,
+					r,
+					`Containment boundary moved${freed.length ? `, releasing ${freed.join(', ')}` : ''}: ${note}`
+				);
+			else if (freed.length && note)
+				addNote(ctx, r, `Containment widened ${r.containment} → ${input.containment}, releasing ${freed.join(', ')}: ${note}`);
 		},
 		() => after
 	);
@@ -910,3 +939,25 @@ export function removeLink(ctx: Ctx, id: number, linkId: number): { ok: true } {
 	remove(ctx, issueLink, linkId);
 	return { ok: true };
 }
+
+// ---- attachments ----
+
+/**
+ * Files follow the pencil of the page. The observation is pencil until a disposition is signed, and
+ * the resolution until review. A signature covers the files it could see, so a file added after it
+ * stays pencil while the issue is in work. A void issue takes only comments.
+ */
+registerOwnerGuard('issue', (ctx, id, change) => {
+	const r = ctx.db.select().from(issue).where(eq(issue.id, id)).get();
+	if (!r) return;
+	if (change.action === 'attach') {
+		if (r.status === 'void') throw evidenceFrozen(`${r.issueNumber} is void: add a comment instead`);
+		return;
+	}
+	const state = ticketState(r);
+	if (state !== 'pending' && state !== 'in_work')
+		throw evidenceFrozen(`${r.issueNumber} is ${state.replace('_', ' ')}: its attachments stay on the record`);
+	if (r.dispositionedAt !== null && change.attachment.createdAt <= r.dispositionedAt)
+		throw evidenceFrozen(`${r.issueNumber} was signed with this attachment on it: it stays on the record`);
+});
+

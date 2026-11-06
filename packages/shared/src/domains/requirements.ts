@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
 /** draft -> preliminary -> baselined -> superseded | cancelled. Only draft and preliminary edit in place. */
 export const REQUIREMENT_LIFECYCLE_STATES = ['draft', 'preliminary', 'baselined', 'superseded', 'cancelled'] as const;
@@ -208,6 +209,17 @@ export type RequirementCheck = z.infer<typeof zRequirementCheck>;
 export const zRequirementReadiness = z.object({ ready: z.boolean(), checks: z.array(zRequirementCheck) });
 export type RequirementReadiness = z.infer<typeof zRequirementReadiness>;
 
+/** A verification taken back: who had signed it, who took it back, when and why. */
+export const zRequirementWithdrawal = z.object({
+	at: zTimestamp,
+	by: z.string().nullable(),
+	reason: z.string().nullable(),
+	status: z.enum(REQUIREMENT_ALLOCATION_STATUSES),
+	verifiedAt: zTimestamp.nullable(),
+	verifiedBy: z.string().nullable()
+});
+export type RequirementWithdrawal = z.infer<typeof zRequirementWithdrawal>;
+
 export const zRequirementAllocation = z.object({
 	id: z.number().int(),
 	partId: z.number().int(),
@@ -220,7 +232,8 @@ export const zRequirementAllocation = z.object({
 	/** The revision the link was made against. */
 	againstRevision: z.number().int(),
 	/** Verified or waived against an older revision than the one in force. */
-	outdated: z.boolean()
+	outdated: z.boolean(),
+	withdrawals: z.array(zRequirementWithdrawal)
 });
 export type RequirementAllocation = z.infer<typeof zRequirementAllocation>;
 
@@ -402,6 +415,7 @@ export const zRequirementPartRequirement = z.object({
 	notes: z.string().nullable(),
 	verifiedAt: zTimestamp.nullable(),
 	verifiedBy: z.object({ id: z.number().int(), name: z.string() }).nullable(),
+	withdrawals: z.array(zRequirementWithdrawal),
 	createdAt: zTimestamp,
 	updatedAt: zTimestamp
 });
@@ -520,7 +534,7 @@ export const requirements = {
 		method: 'GET',
 		path: '/requirements/number/:reqNumber',
 		summary: 'The current revision of a requirement by its REQ number.',
-		input: z.object({ reqNumber: z.string() }),
+		input: z.object({ reqNumber: z.string().max(MAX_SHORT) }),
 		output: zRequirement,
 		access: 'signed-in',
 		mcp: true
@@ -533,10 +547,10 @@ export const requirements = {
 		input: zPageInput.extend({
 			projectId: zId.optional(), // added by projects
 			state: z.enum(REQUIREMENT_LIFECYCLE_STATES).optional(),
-			category: z.string().optional(),
+			category: z.string().max(MAX_SHORT).optional(),
 			level: numberFilter.optional(),
 			parentId: zId.optional(),
-			q: z.string().optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			includeSuperseded: z
 				.enum(['true', 'false'])
 				.transform((v) => v === 'true')
@@ -616,7 +630,7 @@ export const requirements = {
 		path: '/requirements/:id/cancel',
 		summary:
 			'Strike a requirement that has not been superseded (terminal). The reason is required and stays with who and when.',
-		input: z.object({ id: zId, reason: z.string().trim().min(1) }),
+		input: z.object({ id: zId, reason: z.string().max(MAX_TEXT).trim().min(1) }),
 		output: zRequirement,
 		access: 'signed-in',
 		mcp: false,
@@ -691,7 +705,7 @@ export const requirements = {
 		summary: 'Link a requirement to a part by REQ number. The current revision is linked.',
 		input: z.object({
 			partId: zId,
-			reqNumber: z.string().trim().min(1),
+			reqNumber: z.string().max(MAX_SHORT).trim().min(1),
 			notes: text
 		}),
 		output: zRequirementPartRequirement,
@@ -703,7 +717,7 @@ export const requirements = {
 		method: 'PATCH',
 		path: '/requirements/allocations/:id',
 		summary:
-			'Set the status or notes of a part-requirement link. Verified is recorded with verifyLink, not set here. Refused once the requirement is superseded or cancelled.',
+			'Set the status or notes of a part-requirement link. Verified is recorded with verifyLink and taken back with withdrawVerification, not set here. Refused once the requirement is superseded or cancelled.',
 		input: z.object({
 			id: zId,
 			status: z.enum(REQUIREMENT_ALLOCATION_STATUSES).optional(),
@@ -718,8 +732,24 @@ export const requirements = {
 		method: 'POST',
 		path: '/requirements/allocations/:id/verify',
 		summary:
-			'Record verification of a part-requirement link, by the signed-in person, now. A person\'s act. Refused once the requirement is superseded or cancelled.',
+			'Record verification of a part-requirement link, by the signed-in person, now. A person\'s act. Refused on a link already verified, or once the requirement is superseded or cancelled.',
 		input: z.object({ id: zId, notes: text }),
+		output: zRequirementPartRequirement,
+		access: 'signed-in',
+		mcp: false,
+		humanOnly: true
+	}),
+	withdrawVerification: op({
+		name: 'requirements.withdrawVerification',
+		method: 'POST',
+		path: '/requirements/allocations/:id/withdraw-verification',
+		summary:
+			'Take back a recorded verification. A person\'s act, with a reason. The link moves to `status` (open by default), and who verified it, who took it back, when and why stay on the link.',
+		input: z.object({
+			id: zId,
+			status: z.enum(['open', 'waived', 'not_applicable']).default('open'),
+			reason: z.string().trim().min(1).max(2000)
+		}),
 		output: zRequirementPartRequirement,
 		access: 'signed-in',
 		mcp: false,
@@ -729,7 +759,8 @@ export const requirements = {
 		name: 'requirements.unassign',
 		method: 'DELETE',
 		path: '/requirements/allocations/:id',
-		summary: 'Remove a requirement link from a part.',
+		summary:
+			'Remove a requirement link from a part. Refused on a link that is verified or that has a withdrawn verification: those stay on the record.',
 		input: z.object({ id: zId }),
 		output: zOk,
 		access: 'signed-in',

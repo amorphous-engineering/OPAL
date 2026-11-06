@@ -109,6 +109,17 @@ describe('a placed order is pen', () => {
 		expect(fields).toEqual(['status']);
 	});
 
+	test('a draft edit in the same millisecond as placing is not history', async () => {
+		const s = await setup();
+		const po = await mkPo(s, { lines: [{ partId: makePart(s.db).id, qtyOrdered: '1' }] });
+		await s.call('PATCH', `/purchases/${po.id}`, { destination: 'Bay 1' });
+		await s.call('POST', `/purchases/${po.id}/place`, {});
+		const placed = await get(s, po.id);
+		s.db.update(auditLog).set({ at: placed.orderedAt }).where(eq(auditLog.entity, 'purchase')).run();
+		const fields = (await get(s, po.id)).changes.map((c: { field: string }) => c.field);
+		expect(fields).toEqual(['status']);
+	});
+
 	test('adding a line after placing is allowed and shows in the changes', async () => {
 		const s = await setup();
 		const extra = makePart(s.db);
@@ -343,6 +354,60 @@ describe('copy to new draft', () => {
 	});
 });
 
+describe('charges on an order', () => {
+	const charge = async (s: Awaited<ReturnType<typeof setup>>, id: number) =>
+		(await s.call('POST', `/purchases/${id}/expenses`, { kind: 'shipping', amount: '12.50', note: 'Carrier' })).body;
+	const ledger = async (s: Awaited<ReturnType<typeof setup>>, id: number) =>
+		(await s.call('GET', `/purchases/${id}/expenses`)).body;
+
+	test('a charge on a draft is pencil and can be removed, not struck', async () => {
+		const s = await setup();
+		const po = await mkPo(s);
+		const c = await charge(s, po.id);
+		expect((await s.call('POST', `/purchases/${po.id}/expenses/${c.id}/strike`, { reason: 'r' })).status).toBe(409);
+		expect((await s.call('DELETE', `/purchases/${po.id}/expenses/${c.id}`)).status).toBe(200);
+		expect(await ledger(s, po.id)).toEqual([]);
+	});
+
+	test('a charge on a placed order cannot be removed: pen cannot remove a line', async () => {
+		const s = await setup();
+		const po = await orderedPo(s, makePart(s.db).id);
+		const c = await charge(s, po.id);
+		const x = await s.call('DELETE', `/purchases/${po.id}/expenses/${c.id}`);
+		expect(x.status).toBe(409);
+		expect(x.body.message).toContain('Strike');
+		expect(await ledger(s, po.id)).toHaveLength(1);
+	});
+
+	test('striking a charge needs a reason, keeps it legible with who, when and why, and logs the reason', async () => {
+		const s = await setup();
+		const po = await orderedPo(s, makePart(s.db).id);
+		const c = await charge(s, po.id);
+		expect((await s.call('POST', `/purchases/${po.id}/expenses/${c.id}/strike`, { reason: ' ' })).status).toBe(422);
+		const r = await s.call('POST', `/purchases/${po.id}/expenses/${c.id}/strike`, { reason: 'Billed twice' });
+		expect(r.status).toBe(200);
+		expect(r.body.struck).toMatchObject({ byName: 'Ada Admin', reason: 'Billed twice' });
+		const [row] = await ledger(s, po.id);
+		expect(row).toMatchObject({ id: c.id, totalCost: '12.5', notes: 'Carrier' });
+		expect(row.struck).toMatchObject({ byName: 'Ada Admin', reason: 'Billed twice' });
+		expect(row.struck.at).toBeTruthy();
+		const audit = s.db.select().from(auditLog).where(eq(auditLog.op, 'purchasing.orders.strikeCharge')).all();
+		expect(audit[0]).toMatchObject({ entity: 'purchase_expense', reason: 'Billed twice' });
+		expect((await s.call('POST', `/purchases/${po.id}/expenses/${c.id}/strike`, { reason: 'again' })).status).toBe(409);
+	});
+
+	test('a charge can be struck once the order has closed, and a receipt row never can', async () => {
+		const s = await setup();
+		const po = await orderedPo(s, makePart(s.db).id, '1');
+		const c = await charge(s, po.id);
+		await recv(s, po.id, [{ lineId: line(po), quantity: '1', location: 'A' }]);
+		expect((await get(s, po.id)).status).toBe('received');
+		expect((await s.call('POST', `/purchases/${po.id}/expenses/${c.id}/strike`, { reason: 'Refunded' })).status).toBe(200);
+		const receipt = (await ledger(s, po.id)).find((e: { kind: string }) => e.kind === 'receipt');
+		expect((await s.call('POST', `/purchases/${po.id}/expenses/${receipt.id}/strike`, { reason: 'r' })).status).toBe(409);
+	});
+});
+
 describe('agents prepare, people commit', () => {
 	/** The same database, called as an API token. */
 	async function asToken() {
@@ -370,6 +435,17 @@ describe('agents prepare, people commit', () => {
 			person: () => (actor = { kind: 'user', userId: s.admin.id, isAdmin: true, sessionId: 1 })
 		};
 	}
+
+	test('an API token can add a charge but cannot remove or strike one on a placed order', async () => {
+		const t = await asToken();
+		const po = await orderedPo(t.s, makePart(t.s.db).id);
+		t.token();
+		const c = await t.call('POST', `/purchases/${po.id}/expenses`, { kind: 'fee', amount: '1' });
+		expect(c.status).toBe(200);
+		expect((await t.call('DELETE', `/purchases/${po.id}/expenses/${c.body.id}`)).status).toBe(409);
+		expect((await t.call('POST', `/purchases/${po.id}/expenses/${c.body.id}/strike`, { reason: 'r' })).status).toBe(403);
+		expect((await t.call('GET', `/purchases/${po.id}/expenses`)).body[0].struck).toBeNull();
+	});
 
 	test('an API token cannot place, hold, resume, amend, cancel a line, cancel or close short', async () => {
 		const t = await asToken();

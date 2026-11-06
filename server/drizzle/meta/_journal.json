@@ -64,6 +64,20 @@
       "when": 1793891073042,
       "tag": "0008_lowly_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793948431073,
+      "tag": "0009_demonic_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793948601564,
+      "tag": "0010_majestic_frog_thor",
+      "breakpoints": true
     }
   ]
 }

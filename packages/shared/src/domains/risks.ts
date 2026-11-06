@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { op, zId, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, MAX_TEXT, MAX_TOKEN } from '../limits.ts';
 
 /** CRM dispositions (elevate omitted). `accepted` is reachable only through `risks.accept`. */
 export const RISK_DISPOSITIONS = [
@@ -66,7 +67,7 @@ export function riskSeverityFor(score: number): RiskSeverity {
 }
 
 const zScale = z.number().int().min(1).max(5);
-const zText = z.string().nullable().optional();
+const zText = z.string().max(MAX_TEXT).nullable().optional();
 
 export const zRiskLinkedIssue = z.object({
 	linkId: z.number().int(),
@@ -142,7 +143,7 @@ const zFlag = z.preprocess(
 
 /** Filters shared by the list and the bulk review stamp. */
 export const zRiskFilters = z.object({
-	q: z.string().optional(),
+	q: z.string().max(MAX_SHORT).optional(),
 	projectId: zId.optional(), // added by projects
 	disposition: z.enum(RISK_DISPOSITIONS).optional(),
 	severity: z.enum(RISK_SEVERITIES).optional(),
@@ -200,7 +201,7 @@ export const zRiskUpdate = z.object({
 });
 
 /** A correction is an update with a reason. */
-export const zRiskCorrect = zRiskUpdate.extend({ reason: z.string().trim().min(1) });
+export const zRiskCorrect = zRiskUpdate.extend({ reason: z.string().max(MAX_TEXT).trim().min(1) });
 
 export const zRiskLintFinding = z.object({
 	rule: z.string(),
@@ -221,9 +222,9 @@ export const zRiskLintSegment = z.object({
 export type RiskLintSegment = z.infer<typeof zRiskLintSegment>;
 
 const zLintFields = z.object({
-	condition: z.string().nullable().optional(),
-	departure: z.string().nullable().optional(),
-	consequence: z.string().nullable().optional()
+	condition: z.string().max(MAX_TEXT).nullable().optional(),
+	departure: z.string().max(MAX_TEXT).nullable().optional(),
+	consequence: z.string().max(MAX_TEXT).nullable().optional()
 });
 const zByField = <T extends z.ZodType>(t: T) =>
 	z.object({ condition: t, departure: t, consequence: t });
@@ -315,7 +316,7 @@ export const risks = {
 		input: zRiskFilters.extend({
 			sort: z.enum(RISK_SORT_KEYS).default('score'),
 			dir: z.enum(['asc', 'desc']).default('desc'),
-			cursor: z.string().optional(),
+			cursor: z.string().max(MAX_TOKEN).optional(),
 			limit: z.coerce.number().int().min(1).max(500).default(50)
 		}),
 		output: z.object({
@@ -375,7 +376,7 @@ export const risks = {
 		path: '/risks/:id/withdraw-acceptance',
 		summary:
 			'Withdraw the acceptance of an accepted risk. The risk returns to open and its score and scenario become editable. Reason required. Human only.',
-		input: z.object({ ...idParam, reason: z.string().trim().min(1) }),
+		input: z.object({ ...idParam, reason: z.string().max(MAX_TEXT).trim().min(1) }),
 		output: zRisk,
 		access: 'signed-in',
 		mcp: false,
@@ -407,7 +408,7 @@ export const risks = {
 		method: 'GET',
 		path: '/risks/:id/disposition-check',
 		summary: 'What blocks a disposition change, with live counts of open response issues.',
-		input: z.object({ ...idParam, target: z.string() }),
+		input: z.object({ ...idParam, target: z.string().max(MAX_SHORT) }),
 		output: z.object({
 			target: z.string(),
 			blockers: z.array(z.string()),
@@ -433,11 +434,11 @@ export const risks = {
 		method: 'POST',
 		path: '/risks/:id/disposition',
 		summary:
-			'Change the disposition. A 409 names each unmet requirement. `accepted` is reachable only through `risks.accept`.',
+			'Change the disposition. A 409 names each unmet requirement. `accepted` is reachable only through `risks.accept`. Realizing a risk, moving an accepted risk, or reopening a closed risk that was accepted needs a person: an API token gets a 403. An agent may link the issue first with `risks.spawnIssue`.',
 		input: z.object({
 			...idParam,
 			disposition: z.enum(RISK_DISPOSITIONS),
-			note: z.string().nullable().optional(),
+			note: z.string().max(MAX_TEXT).nullable().optional(),
 			/** For `realized`: the issue the departure became. */
 			realizedIssueId: zId.nullable().optional()
 		}),
@@ -450,7 +451,7 @@ export const risks = {
 		method: 'POST',
 		path: '/risks/:id/accept',
 		summary: 'Accept the risk: the signature. Needs a complete readiness panel. Human only.',
-		input: z.object({ ...idParam, rationale: z.string().nullable().optional() }),
+		input: z.object({ ...idParam, rationale: z.string().max(MAX_TEXT).nullable().optional() }),
 		output: zRisk,
 		access: 'signed-in',
 		mcp: true,

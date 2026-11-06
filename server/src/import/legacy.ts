@@ -38,7 +38,7 @@ export { openSchemaImportDb } from './open.ts';
 
 export const LEGACY_HEAD = 'b8d2f1a5c3e0';
 export const OLD_VERSION_MESSAGE =
-	'This database is from an older OPAL version. Install the last 1.x release, start it once to upgrade the database, then start this version again.';
+	'This database is from OPAL 1.x, and this beta cannot import 1.x databases yet. The file was not changed. Go back to 1.x for it (the installer kept your previous program as opal.before-v2, next to this one), or set OPAL_DATA_DIR to an empty folder to try this version.';
 
 /** Tables that are not imported, with the reason. Row counts are read from the source. */
 const SKIPPED: Record<string, string> = {

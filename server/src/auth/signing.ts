@@ -6,7 +6,7 @@
  * The secret is OPAL_AUTH_SECRET, else a file next to the database (`.opal_auth_secret`).
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dataDir } from '../paths.ts';
 
@@ -24,8 +24,8 @@ export function authSecret(): string {
 		if (!secret) {
 			secret = randomBytes(32).toString('hex');
 			mkdirSync(dir, { recursive: true });
-			writeFileSync(file, secret, 'utf8');
-			chmodSync(file, 0o600);
+			// Created owner-only, never readable by others even for an instant.
+			writeFileSync(file, secret, { encoding: 'utf8', mode: 0o600 });
 		}
 	} catch (e) {
 		console.warn(`Could not persist the auth secret (${(e as Error).message}); using a process secret`);

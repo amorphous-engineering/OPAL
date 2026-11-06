@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { op, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, MAX_TOKEN, zJsonObject } from '../limits.ts';
 
 // ------------------------------------------------------------------ manifest
 
@@ -92,7 +93,7 @@ export const zPluginManifest = z.strictObject({
 	opal: z.string().min(1).max(60),
 	main: zInnerPath,
 	summary: z.string().max(200).optional(),
-	homepage: z.url().optional(),
+	homepage: z.url().max(MAX_TOKEN).optional(),
 	permissions: z
 		.strictObject({
 			ops: z.array(zOpPattern).max(200).default([]),
@@ -153,6 +154,8 @@ export const zPluginSettingValue = z.object({
 });
 
 export const zPluginDetail = zPluginSummary.extend({
+	/** False when the operator turned plugins off: nothing can be configured or started. */
+	available: z.boolean(),
 	manifest: zPluginManifest,
 	settings: z.array(zPluginSettingValue),
 	/** The last lines the process wrote, oldest first. */
@@ -216,7 +219,7 @@ export const plugins = {
 		path: '/plugins',
 		summary: 'List installed plugins and the state of their processes.',
 		input: z.object({}),
-		output: z.object({ items: z.array(zPluginSummary) }),
+		output: z.object({ items: z.array(zPluginSummary), available: z.boolean() }),
 		access: 'admin',
 		mcp: false
 	}),
@@ -256,7 +259,7 @@ export const plugins = {
 		method: 'PUT',
 		path: '/plugins/:id/settings',
 		summary: 'Save plugin settings and restart the plugin. A secret left out keeps its value.',
-		input: zKey.extend({ values: z.record(z.string(), z.unknown()) }),
+		input: zKey.extend({ values: zJsonObject() }),
 		output: zPluginDetail,
 		access: 'admin',
 		humanOnly: true,

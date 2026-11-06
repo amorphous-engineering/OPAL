@@ -4,6 +4,7 @@ import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { variantFormat } from '../designators.ts';
 import { zTimestamp } from '../time.ts';
 import { zTimeDisplay } from './auth.ts';
+import { MAX_SHORT, MAX_TEXT, zJsonObject } from '../limits.ts';
 
 /** A boolean that arrives as 'true' or 'false' in a query string. */
 const zQueryBool = z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]);
@@ -92,6 +93,12 @@ export type UserActivityEntry = z.infer<typeof zActivityEntry>;
 
 export const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+/**
+ * The longest base64 text of an avatar upload: the encoding of MAX_AVATAR_BYTES, a `data:` prefix and a
+ * little slack, so an image a few bytes over the limit still gets the exact "too large" answer from the
+ * service. Anything longer is refused before it is decoded.
+ */
+export const AVATAR_BASE64_MAX = Math.ceil(MAX_AVATAR_BYTES / 3) * 4 + 256;
 
 export const zProfileState = z.object({
 	needsProfileSetup: z.boolean(),
@@ -105,7 +112,7 @@ const users = {
 		path: '/users',
 		summary: 'List users by name. Filter by text (name, username, email) and active state.',
 		input: zPageInput.extend({
-			search: z.string().optional(),
+			search: z.string().max(MAX_SHORT).optional(),
 			isActive: zQueryBool.optional()
 		}),
 		output: zPage(zOrgUser).extend({ total: z.number().int() }),
@@ -130,6 +137,7 @@ const users = {
 		input: zUserCreate,
 		output: zOrgUser,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	get: op({
@@ -195,6 +203,7 @@ const users = {
 		input: z.object({ id: zId, roleIds: z.array(zId) }),
 		output: zOrgUser,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	uploadAvatar: op({
@@ -202,7 +211,7 @@ const users = {
 		method: 'POST',
 		path: '/users/:id/avatar',
 		summary: 'Set the photo of a user: PNG, JPEG, WebP or GIF, at most 2 MB, as base64. Self or admin.',
-		input: z.object({ id: zId, data: z.string().min(1) }),
+		input: z.object({ id: zId, data: z.string().min(1).max(AVATAR_BASE64_MAX, `Avatar too large. Max: ${MAX_AVATAR_BYTES} bytes`) }),
 		output: zOrgUser,
 		access: 'signed-in',
 		mcp: false
@@ -305,6 +314,7 @@ const roles = {
 		}),
 		output: zRole,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	update: op({
@@ -319,6 +329,7 @@ const roles = {
 		}),
 		output: zRole,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	delete: op({
@@ -329,6 +340,7 @@ const roles = {
 		input: z.object({ id: zId }),
 		output: zOk,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	})
 };
@@ -349,9 +361,10 @@ const gates = {
 		method: 'PUT',
 		path: '/gates/:key',
 		summary: 'Replace the roles that pass a gate with exactly roleIds.',
-		input: z.object({ key: z.string(), roleIds: z.array(zId) }),
+		input: z.object({ key: z.string().max(MAX_SHORT), roleIds: z.array(zId) }),
 		output: zGate,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	})
 };
@@ -400,7 +413,7 @@ export type WorkcenterWork = z.infer<typeof zWorkcenterWork>;
 const zWorkcenterFields = {
 	name: z.string().trim().min(1).max(255),
 	code: z.string().trim().min(1).max(50),
-	description: z.string().nullable().optional(),
+	description: z.string().max(MAX_TEXT).nullable().optional(),
 	location: z.string().max(255).nullable().optional(),
 	isActive: z.boolean()
 };
@@ -413,7 +426,7 @@ const workcenters = {
 		summary: 'Workcenters by code, with step counts. Active ones unless activeOnly is false.',
 		input: z.object({
 			activeOnly: zQueryBool.optional(),
-			search: z.string().optional()
+			search: z.string().max(MAX_SHORT).optional()
 		}),
 		output: z.array(zWorkcenter),
 		access: 'signed-in',
@@ -482,13 +495,14 @@ const workcenters = {
 
 export const zTier = z.object({
 	level: z.number().int(),
-	name: z.string().trim().min(1, 'must not be blank'),
+	name: z.string().max(MAX_SHORT).trim().min(1, 'must not be blank'),
 	code: z
 		.string()
+		.max(MAX_SHORT)
 		.trim()
 		.min(1, 'must not be blank')
 		.refine((c) => !/\s/.test(c), 'must not contain spaces'),
-	description: z.string().default(''),
+	description: z.string().max(MAX_TEXT).default(''),
 	defaultTracking: z.enum(['serialized', 'bulk']),
 	requireLot: z.boolean(),
 	autoSerial: z.boolean()
@@ -518,11 +532,12 @@ export const DEFAULT_PART_NUMBER_FORMAT = '{prefix}{sep}{tier_code}{sep}{sequenc
 
 export const zPartNumbering = z
 	.object({
-		prefix: z.string().default(''),
-		separator: z.string().default('-'),
+		prefix: z.string().max(MAX_SHORT).default(''),
+		separator: z.string().max(MAX_SHORT).default('-'),
 		sequenceDigits: z.number().int().min(1).max(10).default(4),
 		format: z
 			.string()
+			.max(MAX_SHORT)
 			.default('{prefix}{sep}{tier_code}{sep}{sequence}')
 			.superRefine((value, ctx) => {
 				const allowed = PART_NUMBER_VARIABLES.map((v) => `{${v}}`).join(', ');
@@ -578,13 +593,13 @@ export type OrgSettings = z.infer<typeof zOrgSettings>;
 
 export const zOrgSettingsInput = z
 	.object({
-		name: z.string().trim().min(1, 'must not be blank'),
-		description: z.string().default(''),
+		name: z.string().max(MAX_SHORT).trim().min(1, 'must not be blank'),
+		description: z.string().max(MAX_TEXT).default(''),
 		tiers: z.array(zTierInput).min(1, 'at least one tier is required'),
 		partNumbering: zPartNumbering,
-		categories: z.array(z.string()).default([]),
+		categories: z.array(z.string().max(MAX_SHORT)).default([]),
 		/** Omitted keeps the stored custom fields. */
-		customFields: z.record(z.string(), z.unknown()).nullable().optional()
+		customFields: zJsonObject().nullable().optional()
 	})
 	.superRefine((v, ctx) => {
 		if (new Set(v.tiers.map((t) => t.level)).size !== v.tiers.length) {
@@ -630,7 +645,7 @@ const projects = {
 		method: 'GET',
 		path: '/projects',
 		summary: 'List projects by code. `state` narrows to active or archived projects.',
-		input: zPageInput.extend({ state: z.enum(PROJECT_STATES).optional(), search: z.string().optional() }),
+		input: zPageInput.extend({ state: z.enum(PROJECT_STATES).optional(), search: z.string().max(MAX_SHORT).optional() }),
 		output: zPage(zProject),
 		access: 'signed-in',
 		mcp: true
@@ -652,8 +667,8 @@ const projects = {
 		summary: 'Create a project. The code is unique, stored in upper case.',
 		input: z.object({
 			code: zProjectCode,
-			name: z.string().trim().min(1, 'must not be blank'),
-			description: z.string().nullable().optional()
+			name: z.string().max(MAX_SHORT).trim().min(1, 'must not be blank'),
+			description: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zProject,
 		access: 'signed-in',
@@ -667,8 +682,8 @@ const projects = {
 		input: z.object({
 			id: zId,
 			code: zProjectCode.optional(),
-			name: z.string().trim().min(1, 'must not be blank').optional(),
-			description: z.string().nullable().optional()
+			name: z.string().max(MAX_SHORT).trim().min(1, 'must not be blank').optional(),
+			description: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zProject,
 		access: 'signed-in',

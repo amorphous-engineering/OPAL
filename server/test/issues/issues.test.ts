@@ -1,9 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { auditLog, issueLink } from '../../src/db/schema/index.ts';
 import { holdingIssues } from '../../src/services/issues/holds.ts';
 import { issueHooks, type IssueNotification } from '../../src/services/issues/hooks.ts';
 import { createTestProject } from '../helpers/project.ts'; // added by projects
-import { setup } from './helpers.ts';
+import { restoreIssueHooks, setup } from './helpers.ts';
+
+afterAll(restoreIssueHooks);
 
 describe('raising', () => {
 	test('an advisory issue gets the next IT number, opens, and is pending', async () => {

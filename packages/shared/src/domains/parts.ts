@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_CSV, MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, zJsonObject } from '../limits.ts';
 
 export const TRACKING_TYPES = ['serialized', 'bulk'] as const;
 export const PROCUREMENT = ['make', 'buy', 'both'] as const;
@@ -27,7 +28,7 @@ export type Procurement = (typeof PROCUREMENT)[number];
 export type TrackingType = (typeof TRACKING_TYPES)[number];
 
 /** Project-defined fields. Values live under `metadata[key]` on the part. */
-export const zPartMetadata = z.record(z.string(), z.unknown());
+export const zPartMetadata = z.record(z.string().max(MAX_SHORT), z.unknown());
 
 export const zPart = z.object({
 	id: z.number().int(),
@@ -61,12 +62,12 @@ const zBool = z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v
 
 const partFields = {
 	externalPn: z.string().trim().max(255).nullable().optional(),
-	description: z.string().nullable().optional(),
+	description: z.string().max(MAX_MARKDOWN).nullable().optional(),
 	category: z.string().trim().max(100).nullable().optional(),
 	reorderPoint: zQty.nullable().optional(),
 	isTooling: z.boolean().optional(),
 	calibrationIntervalDays: z.number().int().positive().nullable().optional(),
-	metadata: zPartMetadata.nullable().optional()
+	metadata: zJsonObject().nullable().optional()
 };
 
 export const zPartCreate = z.object({
@@ -200,6 +201,8 @@ export const zPartDetail = z.object({
 	/** Nonzero counts of everything that references this part. */
 	references: z.record(z.string(), z.number().int()),
 	deletable: z.boolean(),
+	/** Stock or purchase order lines count in this unit, so it cannot change. */
+	unitLocked: z.boolean(),
 	bom: z.array(zBomLine),
 	whereUsed: z.array(zBomLine),
 	family: zPartFamily
@@ -374,7 +377,7 @@ const parts_ = {
 		method: 'POST',
 		path: '/parts/import/preview',
 		summary: 'Parse and check CSV text for a parts import. Creates nothing.',
-		input: z.object({ csv: z.string().min(1) }),
+		input: z.object({ csv: z.string().max(MAX_CSV).min(1) }),
 		output: zImportPreview,
 		access: 'signed-in',
 		mcp: true
@@ -424,9 +427,9 @@ const parts_ = {
 		path: '/parts',
 		summary: 'List parts. Filter by text, state, tier, category, procurement and tooling. Newest first by default.',
 		input: zPageInput.extend({
-			q: z.string().optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			state: z.enum(PART_STATES).optional(),
-			category: z.string().optional(),
+			category: z.string().max(MAX_SHORT).optional(),
 			tier: z.coerce.number().int().optional(),
 			procurement: z.enum(PROCUREMENT).optional(),
 			tooling: zBool.optional(),
@@ -607,7 +610,7 @@ const bom = {
 			componentId: zId,
 			quantity: zQty.default('1'),
 			referenceDesignator: z.string().trim().max(50).nullable().optional(),
-			notes: z.string().nullable().optional()
+			notes: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zBomLine,
 		access: 'signed-in',
@@ -622,7 +625,7 @@ const bom = {
 			lineId: zId,
 			quantity: zQty.optional(),
 			referenceDesignator: z.string().trim().max(50).nullable().optional(),
-			notes: z.string().nullable().optional()
+			notes: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zBomLine,
 		access: 'signed-in',

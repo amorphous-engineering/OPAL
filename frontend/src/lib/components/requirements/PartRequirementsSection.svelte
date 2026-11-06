@@ -70,7 +70,7 @@
 	async function unassign(r: Link) {
 		const ok = await confirm({
 			title: `Remove ${r.reqNumber} from ${partNumber}`,
-			body: 'The allocation and its verification status are deleted. The requirement itself is unchanged.',
+			body: 'The allocation is deleted. The requirement itself is unchanged.',
 			action: 'REMOVE',
 			destructive: true
 		});
@@ -160,7 +160,9 @@
 					<span class="flex justify-end gap-3">
 						{#if r.status !== 'verified'}<ActionLink onclick={() => verify(r)}>VERIFY</ActionLink
 							>{/if}
-						<ActionLink onclick={() => unassign(r)}>REMOVE</ActionLink>
+						{#if r.status !== 'verified' && !r.withdrawals.length}<ActionLink
+								onclick={() => unassign(r)}>REMOVE</ActionLink
+							>{/if}
 					</span>
 				{/if}
 			{/snippet}

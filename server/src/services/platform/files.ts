@@ -18,9 +18,10 @@ import { actorUserId } from '../../context.ts';
 import { displayOutput } from '../../numbers.ts';
 import { numbersFor } from '../org/project.ts';
 import { actorResolver } from '../../auth/index.ts';
+import { requireScope } from '../../auth/scope.ts';
 import type { Db } from '../../db/client.ts';
 import { type Impl, implement, type ResolveActor, runOp } from '../../registry.ts';
-import { attach, blobPath, guardAttach, getBlob, maxUploadBytes, row } from './attachments.ts';
+import { attach, blobIsServable, blobPath, guardAttach, getBlob, maxUploadBytes, row } from './attachments.ts';
 import { subscribe } from './events.ts';
 
 /** Not in the shared contract tree: the body is a file, so no JSON client call exists for it. */
@@ -75,8 +76,22 @@ function fileResponse(path: string, mime: string, filename: string | null, force
 	return new Response(Bun.file(path), { headers });
 }
 
+/**
+ * What a scoped token needs to read a file. `attachments.list` counts because its rows carry the
+ * download link, so a plugin that declared it already expects to follow that link.
+ */
+const READ_FILES = ['attachments.download', 'attachments.list'];
+
 /** Bun closes a connection idle for 10 s by default, so the stream speaks more often than that. */
-const HEARTBEAT_MS = 5_000;
+export const HEARTBEAT_MS = 5_000;
+
+/**
+ * Open event streams per person. A tab holds one or two, and a browser allows few connections
+ * to one address, so 30 covers many tabs and devices; a script that opens more is refused.
+ */
+export const DEFAULT_MAX_STREAMS_PER_USER = 30;
+export const maxStreamsPerUser = () => Number(process.env.OPAL_MAX_STREAMS_PER_USER) || DEFAULT_MAX_STREAMS_PER_USER;
+const openStreams = new Map<number, number>();
 
 export interface FilesOptions {
 	resolveActor?: ResolveActor;
@@ -111,15 +126,17 @@ export function mountFiles(app: Hono, db: Db, { resolveActor = actorResolver(db)
 	);
 
 	app.get('/api/attachments/:id/download', async (c) => {
-		await actorOf(c);
+		requireScope(await actorOf(c), ...READ_FILES);
 		const { link, blob } = row(db, Number(c.req.param('id')));
 		return fileResponse(blobPath(blob.sha256), blob.mimeType, link.filename, c.req.query('download') === '1');
 	});
 
 	app.get('/api/blobs/:sha256', async (c) => {
-		await actorOf(c);
+		requireScope(await actorOf(c), ...READ_FILES);
 		const sha = c.req.param('sha256');
-		const b = /^[0-9a-f]{64}$/.test(sha) ? getBlob(db, sha) : undefined;
+		// A file nothing links or snapshots any more is gone for readers, even before the purge removes it.
+		const known = /^[0-9a-f]{64}$/.test(sha) ? getBlob(db, sha) : undefined;
+		const b = known && blobIsServable(db, sha) ? known : undefined;
 		if (!b) throw new OpalError(404, 'not_found', 'File not found');
 		const res = fileResponse(blobPath(sha), b.mimeType, null, c.req.query('download') === '1');
 		res.headers.set('Cache-Control', 'private, max-age=31536000, immutable');
@@ -128,28 +145,51 @@ export function mountFiles(app: Hono, db: Db, { resolveActor = actorResolver(db)
 
 	app.get('/api/events/stream', async (c) => {
 		const actor = await actorOf(c);
+		const userId = actorUserId(actor);
+		const held = userId === null ? 0 : (openStreams.get(userId) ?? 0);
+		if (userId !== null && held >= maxStreamsPerUser()) {
+			throw new OpalError(429, 'too_many_streams', 'Too many event streams are open for this account. Close a tab and try again.');
+		}
+		if (userId !== null) openStreams.set(userId, held + 1);
+		let released = false;
+		const release = () => {
+			if (released || userId === null) return;
+			released = true;
+			const left = (openStreams.get(userId) ?? 1) - 1;
+			if (left > 0) openStreams.set(userId, left);
+			else openStreams.delete(userId);
+		};
 		return streamSSE(c, async (stream) => {
-			// A scoped token is a plugin: it gets only the event types its manifest lists.
-			const scopes = actor.kind === 'token' ? actor.scopes : undefined;
-			const unsubscribe = subscribe(
-				actorUserId(actor),
-				(event) => {
-					if (scopes && !matchesPattern(scopes.events, event.type)) return;
-					// Events leave outside runOp: show numbers at the display width here.
-					const shown = displayOutput(event, numbersFor(db));
-					void stream.writeSSE({ data: JSON.stringify(shown) }).catch(() => undefined);
-				},
-				{ plugin: !!scopes }
-			);
-			stream.onAbort(unsubscribe);
-			// First frame lets EventSource.onopen fire and proxies flush headers.
-			await stream.writeSSE({ data: JSON.stringify({ type: 'heartbeat', data: { status: 'alive' }, timestamp: new Date().toISOString() }) });
-			while (!stream.aborted && !stream.closed) {
-				await stream.sleep(HEARTBEAT_MS);
-				if (stream.aborted) break;
+			let unsubscribe = () => {};
+			try {
+				// A scoped token is a plugin: it gets only the event types its manifest lists.
+				const scopes = actor.kind === 'token' ? actor.scopes : undefined;
+				unsubscribe = subscribe(
+					userId,
+					(event) => {
+						if (scopes && !matchesPattern(scopes.events, event.type)) return;
+						// Events leave outside runOp: show numbers at the display width here.
+						const shown = displayOutput(event, numbersFor(db));
+						void stream.writeSSE({ data: JSON.stringify(shown) }).catch(() => undefined);
+					},
+					{ plugin: !!scopes }
+				);
+				// Free the slot when the client leaves, not when the next heartbeat notices.
+				stream.onAbort(() => {
+					unsubscribe();
+					release();
+				});
+				// First frame lets EventSource.onopen fire and proxies flush headers.
 				await stream.writeSSE({ data: JSON.stringify({ type: 'heartbeat', data: { status: 'alive' }, timestamp: new Date().toISOString() }) });
+				while (!stream.aborted && !stream.closed) {
+					await stream.sleep(HEARTBEAT_MS);
+					if (stream.aborted) break;
+					await stream.writeSSE({ data: JSON.stringify({ type: 'heartbeat', data: { status: 'alive' }, timestamp: new Date().toISOString() }) });
+				}
+			} finally {
+				unsubscribe();
+				release();
 			}
-			unsubscribe();
 		});
 	});
 }

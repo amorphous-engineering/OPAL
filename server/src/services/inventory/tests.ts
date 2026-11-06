@@ -4,12 +4,14 @@ import {
 	type StockTestResult,
 	type StockTestStatus,
 	type StockTestTemplate,
+	conflict,
 	formatQty,
 	notFound,
 	now,
 	parseQty
 } from '@opal/shared';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { type Ctx, actorUserId } from '../../context.ts';
 import { stockTestResult, testTemplate, user } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
@@ -35,7 +37,7 @@ function toTemplate(t: TemplateRow): StockTestTemplate {
 	};
 }
 
-function toResult(r: ResultRow, testedByName: string | null): StockTestResult {
+function toResult(r: ResultRow, testedByName: string | null, struckByName: string | null): StockTestResult {
 	return {
 		id: r.id,
 		stockId: r.stockId,
@@ -46,6 +48,7 @@ function toResult(r: ResultRow, testedByName: string | null): StockTestResult {
 		notes: r.notes,
 		testedAt: r.testedAt,
 		testedByName,
+		struck: r.struckAt === null ? null : { at: r.struckAt, byName: struckByName, reason: r.strikeReason ?? '' },
 		createdAt: r.createdAt
 	};
 }
@@ -102,26 +105,40 @@ export function deleteTemplate(ctx: Ctx, partId: number, templateId: number): vo
 	remove(ctx, testTemplate, templateId);
 }
 
-export function listResults(ctx: DbCtx, stockId: number): StockTestResult[] {
+const struckBy = alias(user, 'struck_by');
+
+function resultRows(ctx: DbCtx) {
 	return ctx.db
-		.select({ r: stockTestResult, by: user.name })
+		.select({ r: stockTestResult, by: user.name, struckByName: struckBy.name })
 		.from(stockTestResult)
 		.leftJoin(user, eq(user.id, stockTestResult.testedById))
+		.leftJoin(struckBy, eq(struckBy.id, stockTestResult.struckById));
+}
+
+export function listResults(ctx: DbCtx, stockId: number): StockTestResult[] {
+	return resultRows(ctx)
 		.where(eq(stockTestResult.stockId, stockId))
 		.orderBy(desc(stockTestResult.createdAt), desc(stockTestResult.id))
 		.all()
-		.map((x) => toResult(x.r, x.by));
+		.map((x) => toResult(x.r, x.by, x.struckByName));
 }
 
 function getResult(ctx: DbCtx, stockId: number, testId: number): StockTestResult {
-	const x = ctx.db
-		.select({ r: stockTestResult, by: user.name })
-		.from(stockTestResult)
-		.leftJoin(user, eq(user.id, stockTestResult.testedById))
+	const x = resultRows(ctx)
 		.where(and(eq(stockTestResult.id, testId), eq(stockTestResult.stockId, stockId)))
 		.get();
 	if (!x) throw notFound('Test result');
-	return toResult(x.r, x.by);
+	return toResult(x.r, x.by, x.struckByName);
+}
+
+/** Pending is a blank left for later. A result someone gave is pen, whoever gave it. */
+function requirePending(cur: StockTestResult): void {
+	if (cur.result !== 'pending') {
+		throw conflict(
+			'result_recorded',
+			`${cur.testName} has a result on record. Strike it with a reason and record a new one`
+		);
+	}
 }
 
 interface ResultInput {
@@ -157,22 +174,31 @@ export function updateResult(
 	testId: number,
 	input: ResultInput
 ): StockTestResult {
-	const cur = getResult(ctx, stockId, testId);
-	// The tester is whoever first gave a result other than pending.
-	const firstResult = input.result !== 'pending' && !cur.testedAt;
+	requirePending(getResult(ctx, stockId, testId));
 	update(ctx, stockTestResult, testId, {
 		testName: input.testName,
 		result: input.result,
 		value: input.value ?? null,
 		notes: input.notes ?? null,
-		...(firstResult ? { testedAt: now(), testedById: actorUserId(ctx.actor) } : {})
+		// The tester is whoever gave the result.
+		...(input.result !== 'pending' ? { testedAt: now(), testedById: actorUserId(ctx.actor) } : {})
 	});
 	return getResult(ctx, stockId, testId);
 }
 
 export function deleteResult(ctx: Ctx, stockId: number, testId: number): void {
-	getResult(ctx, stockId, testId);
+	requirePending(getResult(ctx, stockId, testId));
 	remove(ctx, stockTestResult, testId);
+}
+
+/** The result stays listed with who, when and why, and stops counting toward the test status. */
+export function strikeResult(ctx: Ctx, stockId: number, testId: number, reason: string): StockTestResult {
+	const cur = getResult(ctx, stockId, testId);
+	if (cur.result === 'pending') throw conflict('wrong_state', `${cur.testName} has no result yet: delete it instead`);
+	if (cur.struck) throw conflict('already_struck', `${cur.testName} is already struck`);
+	const why = reason.trim();
+	update(ctx, stockTestResult, testId, { struckAt: now(), struckById: actorUserId(ctx.actor), strikeReason: why }, why);
+	return getResult(ctx, stockId, testId);
 }
 
 /**
@@ -184,7 +210,7 @@ export function testStatus(ctx: DbCtx, stockId: number): StockTestStatus {
 	const results = ctx.db
 		.select()
 		.from(stockTestResult)
-		.where(eq(stockTestResult.stockId, stockId))
+		.where(and(eq(stockTestResult.stockId, stockId), isNull(stockTestResult.struckAt)))
 		.all();
 	const count = (r: ResultRow['result']) => results.filter((x) => x.result === r).length;
 	const required = ctx.db

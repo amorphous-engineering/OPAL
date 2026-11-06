@@ -10,12 +10,21 @@
  *   verified email once, then matched on the subject.
  * - This module resolves a user. It never mints a session.
  */
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, customFetch, jwtVerify } from 'jose';
 import * as oc from 'openid-client';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import { user } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
+import {
+	checkedFetcher,
+	checkOutbound,
+	fetchChecked,
+	issuerPolicy,
+	issuerProblem,
+	type OutboundPolicy,
+	parseOutboundUrl
+} from '../platform/outbound.ts';
 import { type SignInSettings } from './settings.ts';
 import { uniqueUsername, type UserRow } from './sessions.ts';
 
@@ -27,8 +36,6 @@ const HTTP_TIMEOUT_MS = 10_000;
 
 /** A sign-in attempt failed. The message is safe to show the user. */
 export class OidcError extends Error {}
-
-export const isLoopback = (url: string) => /^http:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(url);
 
 // ---------------------------------------------------------------- discovery
 
@@ -60,51 +67,72 @@ function clientAuth(secret: string): oc.ClientAuth {
 	};
 }
 
+/**
+ * Read the discovery document. Whatever goes wrong before a real document is in hand, the caller
+ * hears the same thing, or the settings page would tell an admin which internal ports are open.
+ * The detail goes to the server log.
+ */
+async function readDiscoveryDocument(url: string, policy: OutboundPolicy): Promise<Record<string, any>> {
+	try {
+		const res = await fetchChecked(url, { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) }, policy);
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const doc = (await res.json()) as unknown;
+		if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new Error('not a JSON object');
+		if (!(doc as Record<string, unknown>).issuer) throw new Error('no issuer in the document');
+		return doc as Record<string, any>;
+	} catch (e) {
+		console.warn(`OIDC discovery at ${url} failed: ${(e as Error).message}`);
+		throw new OidcError(`Could not read an OpenID discovery document at ${url}. Check the issuer URL and that this server can reach it. The server log has the detail.`);
+	}
+}
+
+/** The endpoints the server itself calls must pass the rule. The browser goes to authorization_endpoint. */
+async function checkEndpoints(doc: Record<string, any>, policy: OutboundPolicy): Promise<void> {
+	try {
+		parseOutboundUrl(String(doc.authorization_endpoint));
+	} catch {
+		throw new OidcError('The authorization_endpoint in the discovery document is not a usable URL.');
+	}
+	for (const name of ['token_endpoint', 'userinfo_endpoint', 'jwks_uri']) {
+		if (!doc[name]) continue;
+		try {
+			await checkOutbound(String(doc[name]), policy);
+		} catch (e) {
+			console.warn(`OIDC discovery: ${name} refused: ${(e as Error).message}`);
+			throw new OidcError(`The ${name} in the discovery document is not on the issuer's host or a public https address.`);
+		}
+	}
+}
+
 export async function discover(s: OidcSettings, force = false): Promise<Discovered> {
 	const issuer = s.oidcIssuer;
 	if (!issuer) throw new OidcError('No OIDC issuer is configured.');
-	if (!issuer.startsWith('https://') && !isLoopback(issuer)) {
-		throw new OidcError('The OIDC issuer must be an https:// URL.');
-	}
+	const problem = issuerProblem(issuer);
+	if (problem) throw new OidcError(problem);
 	const key = `${issuer}\n${s.oidcClientId}\n${s.oidcClientSecret}`;
 	const hit = cache.get(key);
 	if (!force && hit && Date.now() - hit.at < DISCOVERY_TTL_MS) return hit;
 
-	const url = `${issuer}/.well-known/openid-configuration`;
-	let metadata: unknown;
-	try {
-		const res = await fetch(url, { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS), redirect: 'follow' });
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		metadata = await res.json().catch(() => {
-			throw new OidcError(`The identity provider at ${url} did not return JSON.`);
-		});
-	} catch (e) {
-		if (e instanceof OidcError) throw e;
-		throw new OidcError(`Could not reach the identity provider at ${url}: ${(e as Error).message}`);
-	}
-	if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
-		throw new OidcError(`The discovery document at ${url} is not an object.`);
-	}
-	const doc = metadata as Record<string, any>;
+	const policy = issuerPolicy(issuer);
+	const doc = await readDiscoveryDocument(`${issuer}/.well-known/openid-configuration`, policy);
 	// The document's issuer is authoritative; a mismatch means the wrong provider answered.
-	const advertised = String(doc.issuer ?? '').replace(/\/+$/, '');
-	if (advertised && advertised !== issuer) {
+	const advertised = String(doc.issuer).replace(/\/+$/, '');
+	if (advertised !== issuer) {
 		throw new OidcError(`Issuer mismatch: configured ${issuer}, provider advertises ${advertised}.`);
 	}
 	for (const required of ['authorization_endpoint', 'token_endpoint']) {
 		if (!doc[required]) throw new OidcError(`The discovery document is missing ${required}.`);
 	}
-	const config = new oc.Configuration(
-		{ ...doc, issuer: doc.issuer ?? issuer } as oc.ServerMetadata,
-		s.oidcClientId,
-		{},
-		clientAuth(s.oidcClientSecret)
-	);
-	if (isLoopback(issuer)) oc.allowInsecureRequests(config);
+	await checkEndpoints(doc, policy);
+	const config = new oc.Configuration(doc as oc.ServerMetadata, s.oidcClientId, {}, clientAuth(s.oidcClientSecret));
+	config[oc.customFetch] = checkedFetcher(policy) as oc.CustomFetch;
+	if (new URL(issuer).protocol === 'http:') oc.allowInsecureRequests(config);
 	const found: Discovered = {
 		metadata: doc,
 		config,
-		jwks: doc.jwks_uri ? createRemoteJWKSet(new URL(doc.jwks_uri), { timeoutDuration: HTTP_TIMEOUT_MS }) : null,
+		jwks: doc.jwks_uri
+			? createRemoteJWKSet(new URL(doc.jwks_uri), { timeoutDuration: HTTP_TIMEOUT_MS, [customFetch]: checkedFetcher(policy) })
+			: null,
 		at: Date.now()
 	};
 	cache.set(key, found);
@@ -298,8 +326,16 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 	const emailRaw = claims.email;
 	let email = typeof emailRaw === 'string' && emailRaw ? emailRaw.trim().toLowerCase() : null;
 	const unverified = !!email && (claims.email_verified === false || claims.email_verified === 'false');
-	// An unverified email must never claim an existing account.
 	if (unverified) email = null;
+	// Only a provider that says so has checked the address. Silence is not a yes: without the claim
+	// the email stays a display attribute and can never claim an existing account.
+	const verified = claims.email_verified === true || claims.email_verified === 'true';
+
+	// Setup creates the first administrator, with the printed code and a password. Nobody who can
+	// complete a sign-in at the provider takes over an instance without that code.
+	if (ctx.db.select({ id: user.id }).from(user).get() === undefined) {
+		throw new OidcError('This OPAL has no administrator yet. Finish first-run setup with the code the server printed, then set up single sign-on.');
+	}
 
 	const groups = extractGroups(claims, s.oidcGroupsClaim);
 	const grantsAdmin = !!s.oidcAdminGroup && groups.includes(s.oidcAdminGroup);
@@ -316,10 +352,16 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 			.from(user)
 			.where(and(eq(sql`lower(${user.email})`, email), isNull(user.oidcSubject)))
 			.get();
-		if (candidate) u = update(ctx, user, candidate.id, { oidcIssuer: s.oidcIssuer, oidcSubject: subject });
+		if (candidate) {
+			if (!verified) {
+				throw new OidcError(
+					`An OPAL account already uses ${email}, and the identity provider does not confirm this address is verified. Ask an administrator.`
+				);
+			}
+			u = update(ctx, user, candidate.id, { oidcIssuer: s.oidcIssuer, oidcSubject: subject });
+		}
 	}
 
-	let bootstrapAdmin = false;
 	if (!u) {
 		if (!s.oidcAutoCreateUsers) {
 			throw new OidcError(
@@ -331,8 +373,6 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 				'The identity provider reports this email address as unverified. Verify it, then sign in again.'
 			);
 		}
-		// The first account on a fresh install is admin whatever the groups say, so nobody is locked out.
-		bootstrapAdmin = ctx.db.select({ id: user.id }).from(user).get() === undefined;
 		const seed = String(claims.preferred_username ?? '') || (email ? email.split('@')[0]! : '') || displayName(claims, email, subject);
 		u = insert(ctx, user, {
 			name: displayName(claims, email, subject),
@@ -342,7 +382,7 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 			oidcIssuer: s.oidcIssuer,
 			oidcSubject: subject,
 			isActive: true,
-			isAdmin: bootstrapAdmin || grantsAdmin
+			isAdmin: grantsAdmin
 		});
 	}
 
@@ -358,7 +398,7 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 			.get();
 		if (!clash) u = update(ctx, user, u.id, { email });
 	}
-	if (s.oidcAdminGroup && !bootstrapAdmin) u = syncAdmin(ctx, s, claims, groups, u, grantsAdmin);
+	if (s.oidcAdminGroup) u = syncAdmin(ctx, s, claims, groups, u, grantsAdmin);
 	return u;
 }
 

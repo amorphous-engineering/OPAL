@@ -95,6 +95,25 @@ describe('plugin host', () => {
 		expect(JSON.parse(env.OPAL_SETTINGS)).toEqual({ greeting: 'hi', apiKey: 's3' });
 	});
 
+	test('a plugin never inherits the secrets in the server environment', async () => {
+		process.env.OPAL_AUTH_SECRET_PROBE = 'server-secret';
+		process.env.SOME_SERVICE_PASSWORD = 'server-secret';
+		try {
+			addPlugin(db, {});
+			db.insert(pluginSetting).values({ pluginId: 1, key: 'apiKey', value: 's3', secret: true, createdAt: ts, updatedAt: ts }).run();
+			await host.start('echo');
+			await until(() => host.process('echo').state === 'running');
+			const env = await get('/env');
+			expect(Object.keys(env).sort()).toEqual(
+				['BUN_BE_BUN', 'OPAL_PLUGIN_DATA', 'OPAL_PLUGIN_ID', 'OPAL_PLUGIN_PORT', 'OPAL_SETTINGS', 'OPAL_TOKEN', 'OPAL_URL'].sort()
+			);
+			expect(await get('/env-names')).not.toContain('SOME_SERVICE_PASSWORD');
+		} finally {
+			delete process.env.OPAL_AUTH_SECRET_PROBE;
+			delete process.env.SOME_SERVICE_PASSWORD;
+		}
+	});
+
 	test('a disabled plugin does not start', async () => {
 		addPlugin(db, { enabled: false });
 		await host.start('echo');
@@ -210,6 +229,31 @@ describe('plugin operations', () => {
 	afterEach(() => setRuntime(idleRuntime));
 
 	const stored = (key: string) => db.select().from(pluginSetting).where(eq(pluginSetting.key, key)).get();
+
+	test('a server with plugins off refuses settings, enable and restart, and still lets an admin look and switch off', async () => {
+		db.update(plugin).set({ enabled: true }).run();
+		process.env.OPAL_PLUGINS = 'off';
+		try {
+			for (const res of [
+				await call('PUT', '/plugins/echo/settings', { values: { greeting: 'x' } }),
+				await call('POST', '/plugins/echo/enable'),
+				await call('POST', '/plugins/echo/restart')
+			]) {
+				expect(res.status).toBe(409);
+				expect(((await res.json()) as any).error).toBe('plugins_off');
+			}
+			expect(calls).toEqual([]);
+			const list = await call('GET', '/plugins');
+			expect(list.status).toBe(200);
+			expect(((await list.json()) as any).available).toBe(false);
+			const detail = await call('GET', '/plugins/echo');
+			expect(detail.status).toBe(200);
+			expect(((await detail.json()) as any).available).toBe(false);
+			expect((await call('POST', '/plugins/echo/disable')).status).toBe(200);
+		} finally {
+			delete process.env.OPAL_PLUGINS;
+		}
+	});
 
 	test('plugins.list shows every plugin with its process state', async () => {
 		const res = await call('GET', '/plugins');

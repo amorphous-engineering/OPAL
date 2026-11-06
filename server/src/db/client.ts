@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { embedded } from '../http/embedded.ts';
 import { retireAbortedStatus } from './retire-aborted.ts';
 import * as schema from './schema/index.ts';
+import { snapshotBeforeMigrating } from './snapshot.ts';
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -40,7 +41,7 @@ function applyMigrations(sqlite: Database, pending: MigrationMeta[], apply: () =
 	}
 }
 
-export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR): Db {
+export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR, snapshot = snapshotBeforeMigrating): Db {
 	const sqlite = new Database(path, { create: true, strict: true });
 	sqlite.run('PRAGMA journal_mode = WAL');
 	sqlite.run('PRAGMA foreign_keys = ON');
@@ -50,6 +51,10 @@ export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR): Db {
 	const files = embedded()?.migrations ?? readMigrationFiles({ migrationsFolder });
 	const last = lastApplied(sqlite);
 	const pending = files.filter((m) => m.folderMillis > last);
+	// A new database has nothing to lose, and a test's :memory: has no folder to put a copy in.
+	if (pending.length && last > 0 && path !== ':memory:') {
+		console.log(`Copied the database before upgrading it: ${snapshot(sqlite, path)}`);
+	}
 	const internals = db as unknown as {
 		dialect: { migrate(m: MigrationMeta[], session: unknown, config: object): void };
 		session: unknown;

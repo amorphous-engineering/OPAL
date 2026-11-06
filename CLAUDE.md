@@ -30,6 +30,7 @@ pnpm --filter @opal/server test:ops     # fails when an operation has no test
 pnpm --filter @opal/server db:generate   # migration from schema.ts changes; review the SQL
 node frontend/scripts/check-screens.mjs <port> <dir> <user> <pass> <paths...>   # screenshots + errors per screen
 node frontend/scripts/check-records.mjs <port> <user> <pass>   # committed records open for reading (on an imported seed)
+node frontend/scripts/check-markdown.mjs <port> <user> <pass>  # record text renders as formatting only (adds comments to the first issue)
 pnpm build                         # client, then every binary into server/dist/
 ```
 

@@ -23,6 +23,10 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
+        with:
+
+          bun-version: 1.4.4
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -57,3 +61,4 @@ jobs:
           server/dist/opal-linux-x86_64 serve --port 8081 &
           for i in $(seq 1 30); do curl -sf localhost:8081/api/health && break; sleep 1; done
           cd frontend && node scripts/check-records.mjs 8081 build kestrel-demo
+          node scripts/check-markdown.mjs 8081 build kestrel-demo

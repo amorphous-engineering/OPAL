@@ -38,6 +38,7 @@ export const load: PageLoad = async ({ parent, fetch }) => {
 		signIn,
 		auth,
 		lifecycle,
-		plugins: plugins?.items ?? null
+		plugins: plugins?.items ?? null,
+		pluginsAvailable: plugins?.available ?? false
 	};
 };

@@ -211,6 +211,9 @@ describe('factory reset', () => {
 		const t = await boot();
 		mkdirSync(join(dir, 'blobs'));
 		writeFileSync(join(dir, 'blobs', 'abc'), 'x');
+		writeFileSync(join(dir, 'opal.legacy.db'), 'old');
+		writeFileSync(join(dir, 'import-report.txt'), 'report');
+		writeFileSync(join(dir, 'opal.pre-migration-2026-01-01.db'), 'copy');
 		await t.call('POST', '/settings/demo/enter');
 		await t.settled();
 		const { exitDemo } = await import('../../src/services/reports/lifecycle.ts');
@@ -222,6 +225,9 @@ describe('factory reset', () => {
 		expect(parts(t.db)).toEqual([]);
 		expect(t.db.select().from(user).all()).toEqual([]);
 		expect(existsSync(join(dir, 'blobs'))).toBe(false);
+		expect(existsSync(join(dir, 'opal.legacy.db'))).toBe(false);
+		expect(existsSync(join(dir, 'import-report.txt'))).toBe(false);
+		expect(existsSync(join(dir, 'opal.pre-migration-2026-01-01.db'))).toBe(false);
 		expect(existsSync(join(dir, 'demo.opal.db'))).toBe(false);
 		expect(process.env.OPAL_DATA_DIR).toBe(dir);
 		const ts = now();

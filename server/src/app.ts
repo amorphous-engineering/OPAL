@@ -1,10 +1,13 @@
 /** Builds the HTTP app: /api operations, /mcp, then the web client. */
 import { Hono } from 'hono';
 import { csrfGuard } from './auth/csrf.ts';
+import { hostGuard } from './auth/host-guard.ts';
 import { actorResolver } from './auth/index.ts';
 import type { Db } from './db/client.ts';
+import { securityHeaders } from './http/headers.ts';
 import { mountRawRoutes } from './http/routes.ts';
 import { mountWeb } from './http/web.ts';
+import { jsonBodyLimit } from './http/limits.ts';
 import { mountMcp } from './mcp/index.ts';
 import { impls } from './ops/index.ts';
 import { errorResponse, mountOps, type ResolveActor } from './registry.ts';
@@ -31,6 +34,9 @@ export function createApp({ db, resolveActor = actorResolver(db), web = false }:
 		const { status, body } = errorResponse(err);
 		return c.json(body, status as 400);
 	});
+	app.use('*', securityHeaders);
+	app.use('*', hostGuard);
+	app.use('*', jsonBodyLimit);
 	app.use('*', csrfGuard);
 	mountRawRoutes(app, db, resolveActor);
 	mountOps(app, impls, db, resolveActor);

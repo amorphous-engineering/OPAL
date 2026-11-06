@@ -6,6 +6,7 @@ import type { Actor } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { apiToken, session, user } from '../db/schema/index.ts';
 import { type ResolveActor, serialized } from '../registry.ts';
+import { requestBase } from './base-url.ts';
 import {
 	addMs,
 	API_TOKEN_PREFIX,
@@ -82,7 +83,7 @@ function fromCookie(db: Db, c: Context, raw: string | undefined): Actor {
 			path: '/',
 			httpOnly: true,
 			sameSite: 'Lax',
-			secure: new URL(c.req.url).protocol === 'https:',
+			secure: requestBase(c).secure,
 			maxAge: SESSION_LIFETIME_MS / 1000
 		});
 	}
