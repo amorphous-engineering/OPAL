@@ -40,7 +40,7 @@ export function safeNext(value: string | undefined | null): string {
 
 function loginError(c: Context, message: string): Response {
 	console.warn(`OIDC sign-in failed: ${message}`);
-	deleteCookie(c, STATE_COOKIE, { path: '/' });
+	deleteCookie(c, STATE_COOKIE, { path: '/', secure: requestBase(c).secure });
 	return c.redirect(`/login?error=${encodeURIComponent(message)}`, 302);
 }
 
@@ -131,7 +131,7 @@ export function mountOidc(app: Hono, db: Db): void {
 				secure,
 				maxAge: SESSION_LIFETIME_MS / 1000
 			});
-			deleteCookie(c, STATE_COOKIE, { path: '/' });
+			deleteCookie(c, STATE_COOKIE, { path: '/', secure });
 			return c.redirect(safeNext(String(stored.next ?? '/')), 302);
 		} catch (e) {
 			if (e instanceof OidcError) return loginError(c, e.message);

@@ -17,6 +17,7 @@ import { sql } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
+import { requestBase } from './auth/base-url.ts';
 import { clientIp } from './auth/client-ip.ts';
 import { type Actor, type CookieJar, type Ctx, type RequestInfo } from './context.ts';
 import { holdsGate } from './services/org/gates.ts';
@@ -205,6 +206,7 @@ function cookieJar(c: Context): CookieJar {
 		get: (name) => getCookie(c, name),
 		set: (name, value, opts) => setCookie(c, name, value, { path: '/', ...opts }),
 		delete: (name, opts) => deleteCookie(c, name, { path: '/', ...opts }),
-		secure: new URL(c.req.url).protocol === 'https:'
+		// The same answer everywhere: OPAL_PUBLIC_URL, else the scheme seen through a trusted proxy.
+		secure: requestBase(c).secure
 	};
 }
