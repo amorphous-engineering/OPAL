@@ -280,7 +280,9 @@
 				>
 			{/each}
 		{/if}
-		<Button variant="outline" size="sm" onclick={update} disabled={busy}>UPDATE</Button>
+		{#if plugin.available}
+			<Button variant="outline" size="sm" onclick={update} disabled={busy}>UPDATE</Button>
+		{/if}
 		<Button variant="outline" size="sm" onclick={remove} disabled={busy}>REMOVE</Button>
 	{/snippet}
 </PageHeader>
