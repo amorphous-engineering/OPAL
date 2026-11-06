@@ -314,7 +314,7 @@ describe('an API token cannot mint or promote a person', () => {
 		expect((await call(t, 'PATCH', `/users/${bob.id}`, { isActive: false })).status).toBe(403);
 		expect((await call(t, 'PATCH', `/users/${bob.id}`, { email: 'root@x.local' })).status).toBe(403);
 		// A token with no row is enough for the refusals above; an edit that writes needs a real one for its audit row.
-		const row = db.insert(apiToken).values({ userId: root.id, name: 'agent', tokenHash: 'h1', createdAt: now(), updatedAt: now() }).returning().get();
+		const row = db.insert(apiToken).values({ userId: root.id, name: 'agent', tokenHash: 'h1', createdAt: now() }).returning().get();
 		expect((await call({ ...t, tokenId: row.id }, 'PATCH', `/users/${bob.id}`, { jobTitle: 'Tech' })).status).toBe(200);
 	});
 
