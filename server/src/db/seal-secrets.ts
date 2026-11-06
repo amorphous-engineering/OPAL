@@ -3,8 +3,8 @@
  * reseals what an older key sealed. It runs every time a database opens, and does nothing when there
  * is nothing to do, so it also covers an import, a restored copy and a changed key.
  *
- * A data rewrite, not an operation: no audit rows. Nothing readable changes, and an audit row would
- * only record that the server started.
+ * A data rewrite, not an operation: sealing leaves no audit row. Nothing readable changes, and a row
+ * would only record that the server started. Hiding values already in the log does leave one.
  *
  * Sealing a row does not remove the old value from the file. SQLite leaves it in freed space and in
  * the write-ahead log, so a rewrite ends with VACUUM and a truncated log. `user_version` records that
@@ -12,6 +12,7 @@
  * the next start instead of leaving the old bytes behind for good.
  */
 import { Database } from 'bun:sqlite';
+import { now } from '@opal/shared';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { authSettingScope, isSealed, openSealed, openingKeys, pluginSettingScope, seal } from '../auth/sealed.ts';
@@ -59,7 +60,8 @@ function storedSecrets(sqlite: Database): Stored[] {
 			if (!row.secret && !declared) continue;
 			if (row.value === null) continue;
 			const value = JSON.parse(row.value) as unknown;
-			if (value === '') continue;
+			// An empty secret has nothing to hide, but one that just became secret may have history to hide.
+			if (value === '' && row.secret) continue;
 			const sealed = !!row.secret && isSealed(value);
 			out.push({
 				label: `plugin ${row.plugin}: ${row.key}`,
@@ -76,16 +78,48 @@ function storedSecrets(sqlite: Database): Stored[] {
 	return out;
 }
 
-/** A setting that became secret: what the audit log kept while it was not, it hides now. */
-export function hideAuditedValue(sqlite: Database, settingId: number): void {
-	sqlite
+/** Who hid the values. At a start, nobody did: the server found them. */
+export interface HiddenBy {
+	op: string;
+	invocation?: string | null;
+	actorUserId?: number | null;
+	actorTokenId?: number | null;
+}
+
+/**
+ * A setting that became secret: what the audit log kept while it was not, it hides now, because a copy
+ * of the database must not reveal it. The log is the record of last resort, so changing it leaves a
+ * row of its own. The audit screen shows field changes, not the reason, so the row carries both.
+ */
+export function hideAuditedValue(sqlite: Database, settingId: number, by: HiddenBy = { op: 'secrets.seal' }): void {
+	const { changes } = sqlite
 		.query(
 			`UPDATE audit_log SET
-				"before" = CASE WHEN json_type("before", '$.value') IS NOT NULL THEN json_set("before", '$.value', '[redacted]') ELSE "before" END,
-				"after" = CASE WHEN json_type("after", '$.value') IS NOT NULL THEN json_set("after", '$.value', '[redacted]') ELSE "after" END
-			WHERE entity = 'plugin_setting' AND entity_id = ?`
+				"before" = CASE WHEN json_type("before", '$.value') NOT IN ('null') THEN json_set("before", '$.value', '[redacted]') ELSE "before" END,
+				"after" = CASE WHEN json_type("after", '$.value') NOT IN ('null') THEN json_set("after", '$.value', '[redacted]') ELSE "after" END
+			WHERE entity = 'plugin_setting' AND entity_id = ? AND (
+				(json_type("before", '$.value') NOT IN ('null') AND json_extract("before", '$.value') IS NOT '[redacted]')
+				OR (json_type("after", '$.value') NOT IN ('null') AND json_extract("after", '$.value') IS NOT '[redacted]')
+			)`
 		)
 		.run(settingId);
+	if (!changes) return;
+	sqlite
+		.query(
+			`INSERT INTO audit_log (at, entity, entity_id, action, op, invocation, actor_user_id, actor_token_id, "before", "after", reason)
+			VALUES (?, 'plugin_setting', ?, 'update', ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			now(),
+			settingId,
+			by.op,
+			by.invocation ?? null,
+			by.actorUserId ?? null,
+			by.actorTokenId ?? null,
+			JSON.stringify({ earlierValues: 'in the log' }),
+			JSON.stringify({ earlierValues: '[redacted]' }),
+			'Earlier values hidden: this setting became secret'
+		);
 }
 
 export interface SealOutcome {

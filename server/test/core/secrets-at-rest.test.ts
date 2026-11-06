@@ -7,10 +7,11 @@ import { addKeyToFile, authSettingScope, isSealed, KEY_FILE, keyFilePath, openSe
 import { rotateSecretsKey } from '../../src/commands/secrets.ts';
 import type { Ctx } from '../../src/context.ts';
 import { MIGRATIONS_DIR, openDb, type Db } from '../../src/db/client.ts';
-import { holdsPlaintextSecret, sweepCopies } from '../../src/db/seal-secrets.ts';
+import { hideAuditedValue, holdsPlaintextSecret, sweepCopies } from '../../src/db/seal-secrets.ts';
 import { auditLog, plugin, pluginSetting, user } from '../../src/db/schema/index.ts';
 import { hardenDataDir } from '../../src/harden.ts';
 import { oidcActive, readSettings, writeSetting } from '../../src/services/auth/settings.ts';
+import { auditEntries } from '../../src/services/platform/audit.ts';
 import { missingSettings, saveSettings } from '../../src/services/plugins/settings.ts';
 import { findPlugin, settingValues, toDetail, unreadableSettings } from '../../src/services/plugins/store.ts';
 
@@ -219,6 +220,52 @@ describe('upgrading an rc.24 database', () => {
 		expect(late.secret).toBe(true);
 		expect(JSON.stringify(db.select().from(auditLog).all())).not.toContain(LATE);
 		expect(JSON.stringify(db.select().from(auditLog).all())).toContain('[redacted]');
+		db.$client.close();
+	});
+
+	test('hiding values in the audit log leaves its own row, and everything else on the old row stands', () => {
+		rc24Database();
+		const db = openDb(path);
+		const late = db.select().from(pluginSetting).all().find((s) => s.key === 'late')!;
+		const rows = db.select().from(auditLog).all().filter((r) => r.entityId === late.id && r.entity === 'plugin_setting');
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toMatchObject({ at: ts, action: 'create', op: 'test', after: { key: 'late', value: '[redacted]', secret: false } });
+		expect(rows[1]).toMatchObject({
+			action: 'update',
+			op: 'secrets.seal',
+			actorUserId: null,
+			reason: 'Earlier values hidden: this setting became secret'
+		});
+		// As the audit screen shows it, to an admin.
+		const admin = { ...sys(db), actor: { kind: 'user', userId: 1, isAdmin: true, sessionId: 1 } } as Ctx;
+		expect(auditEntries(admin, [rows[1]!])[0]!.changes).toMatchObject([{ field: 'earlierValues', old: 'in the log', new: '[redacted]' }]);
+		// A later start finds nothing to hide and records nothing.
+		db.$client.close();
+		const again = openDb(path);
+		const count = again.select().from(auditLog).all().filter((r) => r.op === 'secrets.seal').length;
+		expect(count).toBe(1);
+		hideAuditedValue(again.$client, late.id);
+		expect(again.select().from(auditLog).all().filter((r) => r.op === 'secrets.seal')).toHaveLength(1);
+		again.$client.close();
+	});
+
+	test('a setting that became secret while empty still has its history hidden', () => {
+		rc24Database();
+		const raw = new Database(path, { strict: true });
+		raw.run("UPDATE plugin_setting SET value = '\"\"' WHERE key = 'late'");
+		raw.close();
+		const db = openDb(path);
+		expect(db.select().from(pluginSetting).all().find((s) => s.key === 'late')!.secret).toBe(true);
+		expect(settingValues(db, pluginRow(db))).toMatchObject({ late: '' });
+		db.$client.close();
+		expect(rawBytes()).not.toContain(LATE);
+	});
+
+	test('a setting that was always secret records nothing', () => {
+		rc24Database();
+		const db = openDb(path);
+		const apiKey = db.select().from(pluginSetting).all().find((s) => s.key === 'apiKey')!;
+		expect(db.select().from(auditLog).all().filter((r) => r.entity === 'plugin_setting' && r.entityId === apiKey.id)).toHaveLength(0);
 		db.$client.close();
 	});
 

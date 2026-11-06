@@ -11,7 +11,7 @@ import {
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { PLUGIN_USERNAME_PREFIX } from '../../auth/tokens.ts';
-import type { Ctx } from '../../context.ts';
+import { actorUserId, type Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import { hideAuditedValue } from '../../db/seal-secrets.ts';
 import { apiToken, externalLink, passkeyCredential, plugin, pluginSetting, user } from '../../db/schema/index.ts';
@@ -216,7 +216,12 @@ function commitInstall(ctx: Ctx, src: ParsedSource, sha: string, dir: string): P
 		} else if (def.type === 'secret' && !s.secret) {
 			// The new version calls this a secret, so the value it already has becomes one.
 			update(ctx, pluginSetting, s.id, { secret: true, value: s.value === null ? null : sealSetting(row.key, s.key, s.value) });
-			hideAuditedValue(ctx.db.$client, s.id);
+			hideAuditedValue(ctx.db.$client, s.id, {
+				op: ctx.op,
+				invocation: ctx.invocation,
+				actorUserId: actorUserId(ctx.actor),
+				actorTokenId: ctx.actor.kind === 'token' ? ctx.actor.tokenId : null
+			});
 		}
 	}
 	if (row.enabled) runtime().start(row.key).catch(() => {});

@@ -451,6 +451,10 @@ describe('plugins.install', () => {
 		expect(isSealed(stored.value)).toBe(true);
 		expect(settingValues(db, db.select().from(plugin).get()!)).toMatchObject({ token: 'was-visible' });
 		expect(JSON.stringify(db.select().from(auditLog).all())).not.toContain('was-visible');
+		// The change to the log is on the log, with the admin who updated the plugin.
+		const hidden = db.select().from(auditLog).all().filter((r) => r.reason === 'Earlier values hidden: this setting became secret');
+		expect(hidden).toHaveLength(1);
+		expect(hidden[0]).toMatchObject({ entity: 'plugin_setting', entityId: stored.id, actorUserId: 1, after: { earlierValues: '[redacted]' } });
 	});
 
 	test('an update that stops calling a setting secret keeps it sealed and hidden', async () => {
