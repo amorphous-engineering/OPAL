@@ -1,4 +1,5 @@
 /** `opal` with no command: the supervisor and its local control page. */
+import { hardenDataDir } from '../harden.ts';
 import { dataDir } from '../paths.ts';
 import { hasDisplay, openBrowser } from '../supervisor/browser.ts';
 import { childPort } from '../supervisor/child.ts';
@@ -6,6 +7,7 @@ import { Supervisor, defaultChildCommand } from '../supervisor/supervisor.ts';
 import { flag } from './args.ts';
 
 export function supervise(args: string[]): void {
+	hardenDataDir();
 	// Flags for the supervisor itself are not passed on to the server.
 	const controlPort = Number(flag(args, 'control-port') ?? 8079);
 	const noBrowser = args.includes('--no-browser');

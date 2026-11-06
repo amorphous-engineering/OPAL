@@ -9,9 +9,12 @@ import { setRuntime } from '../services/plugins/runtime.ts';
 import { plugin } from '../db/schema/index.ts';
 import { eq } from 'drizzle-orm';
 import { idleTimeoutSeconds, maxRequestBytes } from '../http/limits.ts';
+import { hardenDataDir } from '../harden.ts';
 import { flag } from './args.ts';
 
 export async function serve(args: string[]): Promise<void> {
+	// Before the folder or any file in it is created.
+	hardenDataDir();
 	mkdirSync(dataDir(), { recursive: true });
 	// A Python-era database is imported once; the old file is kept as opal.legacy.db.
 	const report = await importInPlace(dbPath());
