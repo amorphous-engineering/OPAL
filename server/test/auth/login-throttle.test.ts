@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
-import { hashPassword, LoginThrottle, lockedGuess } from '../../src/auth/tokens.ts';
+import { hashPassword, LoginThrottle, lockedGuess, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, harness, makeUser } from './helpers.ts';
 
 afterEach(() => {
@@ -134,5 +134,17 @@ describe('anonymous password checks', () => {
 		const body = { username: 'first', name: 'First', password: 'correct-horse-battery' };
 		const [a, b] = await Promise.all([h.call('POST', '/auth/setup', body), h.call('POST', '/auth/setup', { ...body, username: 'second' })]);
 		expect([a.status, b.status].sort()).toEqual([200, 409]);
+	});
+});
+
+describe('the password hash queue', () => {
+	test('a sign-in past the queue is told to try again instead of waiting', async () => {
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const waiting = Array.from({ length: 4 + 64 }, () => withHashSlot(() => held));
+		await expect(withHashSlot(async () => 'never')).rejects.toMatchObject({ status: 429 });
+		release();
+		await Promise.all(waiting);
+		expect(await withHashSlot(async () => 'free again')).toBe('free again');
 	});
 });

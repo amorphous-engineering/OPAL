@@ -4,6 +4,7 @@
  * raw token string. Raw tokens are 32 random bytes as unpadded base64url
  * (Python's secrets.token_urlsafe(32)); API tokens add the `opal_` prefix.
  */
+import { OpalError } from '@opal/shared';
 import { createHash, randomBytes } from 'node:crypto';
 
 export const SESSION_COOKIE = 'opal_session';
@@ -138,11 +139,15 @@ export const lockedGuess = { delayMs: 1500 };
  * memory and a thread; a flood of logins must not starve the rest of the server.
  */
 const HASH_SLOTS = 4;
+/** Past this many waiting, a sign-in is told to try again: a long queue only delays everyone. */
+const HASH_QUEUE = 64;
 let hashActive = 0;
 const hashWaiting: Array<() => void> = [];
 export async function withHashSlot<T>(fn: () => Promise<T>): Promise<T> {
-	if (hashActive >= HASH_SLOTS) await new Promise<void>((resolve) => hashWaiting.push(resolve));
-	else hashActive++;
+	if (hashActive >= HASH_SLOTS) {
+		if (hashWaiting.length >= HASH_QUEUE) throw new OpalError(429, 'too_many_attempts', 'The server is busy signing people in. Try again shortly.');
+		await new Promise<void>((resolve) => hashWaiting.push(resolve));
+	} else hashActive++;
 	try {
 		return await fn();
 	} finally {
