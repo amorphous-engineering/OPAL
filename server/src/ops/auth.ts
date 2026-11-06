@@ -21,7 +21,7 @@ import {
 import { throttleAddress } from '../auth/client-ip.ts';
 import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
-import { clearSetupCode, setupCodeMatches, setupCodeRequired } from '../services/auth/setup-code.ts';
+import { checkSetupCode, clearSetupCode, setupCodeRequired } from '../services/auth/setup-code.ts';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { personRefs } from '../services/org/people.ts';
@@ -165,7 +165,9 @@ export const authImpls = [
 			if (!setupHostAllowed(ctx.request?.host)) {
 				throw new OpalError(403, 'setup_host', 'Open this page by IP address, or set OPAL_ALLOWED_HOSTS to include this host name.');
 			}
-			if (!setupCodeMatches(input.setupCode)) {
+			const check = checkSetupCode(input.setupCode, ctx.request?.ip);
+			if (check === 'throttled') throw new OpalError(429, 'too_many_attempts', 'Too many wrong setup codes. Try again in a few minutes.');
+			if (check === 'wrong') {
 				throw new OpalError(403, 'setup_code', 'That setup code is not right. OPAL printed the code where it started.');
 			}
 		}

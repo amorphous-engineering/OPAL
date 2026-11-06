@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, describe, expect, setSystemTime, spyOn, test } from 'bun:test';
 import { createApp } from '../../src/app.ts';
 import { armSetupCode, disarmSetupCode, reissueSetupCode } from '../../src/services/auth/setup-code.ts';
 import { openTestDb } from '../helpers/db.ts';
@@ -8,8 +8,8 @@ const IP = 'http://192.168.1.20:8080';
 
 async function app() {
 	const a = createApp({ db: await openTestDb() });
-	const post = (origin: string, body: object) =>
-		a.request(`${origin}/api/auth/setup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+	const post = (origin: string, body: object, ip?: string) =>
+		a.request(`${origin}/api/auth/setup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, { ip });
 	const config = async (origin: string) => (await (await a.request(`${origin}/api/auth/config`)).json()) as any;
 	return { post, config };
 }
@@ -40,13 +40,33 @@ describe('first-run setup', () => {
 		expect((await config(IP)).needsSetup).toBe(false);
 	});
 
-	test('a run of wrong guesses replaces the code', async () => {
+	test('one address gets a few wrong tries, and the right code from another address still works', async () => {
+		const { post } = await app();
+		const code = armed();
+		const wrong = { ...BODY, setupCode: 'AAAA-AAAA' };
+		for (let i = 0; i < 10; i++) expect((await post(IP, wrong, '192.0.2.1')).status).toBe(403);
+		expect((await post(IP, { ...BODY, setupCode: code }, '192.0.2.1')).status).toBe(429);
+		expect((await post(IP, { ...BODY, setupCode: code }, '192.0.2.2')).status).toBe(200);
+	});
+
+	test('a long run of wrong codes replaces the code at most once a minute, printing once', async () => {
 		const { post } = await app();
 		const code = armed();
 		const log = spyOn(console, 'log').mockImplementation(() => {});
-		for (let i = 0; i < 20; i++) await post(IP, { ...BODY, setupCode: 'AAAA-AAAA' });
-		log.mockRestore();
-		expect((await post(IP, { ...BODY, setupCode: code })).status).toBe(403);
+		const flood = async (n: number, at: number) => {
+			for (let i = 0; i < n; i++) await post(IP, { ...BODY, setupCode: 'AAAA-AAAA' }, `10.${at}.${i >> 8}.${i & 255}`);
+		};
+		try {
+			await flood(1000, 1);
+			expect(log.mock.calls.length).toBe(0);
+			setSystemTime(new Date(Date.now() + 61_000));
+			await flood(1, 2);
+			expect(log.mock.calls.length).toBe(1);
+			expect((await post(IP, { ...BODY, setupCode: code }, '192.0.2.9')).status).toBe(403);
+		} finally {
+			setSystemTime();
+			log.mockRestore();
+		}
 	});
 
 	test('a host name nobody listed is refused even with the code, since a web page can choose its own name', async () => {
