@@ -55,7 +55,7 @@ Setup works at `localhost`, at the server's IP address, or at a host name you li
 
 ### Data
 
-The server listens on port 8080. Data is in `~/Library/Application Support/OPAL` (macOS), `~/.local/share/opal` (Linux) or `%LOCALAPPDATA%\OPAL` (Windows). Set `OPAL_DATA_DIR` to use another folder. On Linux and macOS the server makes the folder and everything it writes there readable by the account that runs OPAL only (mode `0700` and `0600`), and tightens an older folder at start.
+The server listens on port 8080. Data is in `~/Library/Application Support/OPAL` (macOS), `~/.local/share/opal` (Linux) or `%LOCALAPPDATA%\OPAL` (Windows). Set `OPAL_DATA_DIR` to use another folder. On Linux and macOS the server creates a new data folder for its own account only, and restricts the files it keeps there at each start. A folder that already exists keeps its own mode, because it may be shared.
 
 Uploaded files and photos are not limited in total by default. Set `OPAL_STORAGE_QUOTA_BYTES` to cap them together: past the cap, new uploads and photos are refused with a message until files are removed. A file nothing links to or publishes any more is deleted from disk after seven days. A cap of 50 GB (`53687091200`) suits most teams; choose one well below your free disk. OPAL does not refuse writes when the disk runs low, so watch the disk check in `/api/health`.
 
@@ -66,7 +66,7 @@ OPAL serves plain HTTP. Passwords and session cookies cross the network in clear
 | Variable | Effect |
 |---|---|
 | `OPAL_PUBLIC_URL` | The URL people use, for example `https://opal.example.com`. Links, OAuth metadata and the `Secure` cookie flag follow it, and its host joins the allowed hosts. With an `https` URL cookies are `Secure`, so reach OPAL by that URL only. |
-| `OPAL_TRUST_PROXY=1` | Believe `X-Forwarded-For`, `-Proto` and `-Host`. Set it only when the proxy overwrites them. The client address is the last `X-Forwarded-For` entry. |
+| `OPAL_TRUST_PROXY=1` | Believe `X-Forwarded-For`, `-Proto` and `-Host`. Set it only when the proxy overwrites them. `X-Forwarded-Host` has to match what the browser's address bar shows, port included, so on a non-standard port use nginx's `$http_host`, not `$host`. The client address is the last `X-Forwarded-For` entry. |
 | `OPAL_TRUST_PROXY_HOPS` | With `OPAL_TRUST_PROXY`, the number of proxies in the chain (default 1). The client address is counted that many entries from the right. |
 | `OPAL_ALLOWED_HOSTS` | Comma-separated host names (`opal.lan,192.168.1.20:8080`). When this or `OPAL_PUBLIC_URL` is set, a request for any other `Host` gets 421. `localhost` and the loopback addresses are always allowed. |
 
@@ -88,6 +88,8 @@ An admin can install a plugin from a public GitHub repository. **Installing a pl
 Set `OPAL_PLUGINS=0` to turn plugins off on a server. Nothing starts, and OPAL refuses to preview, install, configure, enable or restart one.
 
 ### Single sign-on (OIDC)
+
+Run first-run setup before relying on single sign-on: it can't create the first account. Setup makes a password administrator, so keep password sign-in on until that person can also get in through the provider. If you set `OPAL_PASSWORD_LOGIN_ENABLED=0` from the start, link them through a verified provider email or `OPAL_OIDC_ADMIN_GROUP`.
 
 The identity provider can be on a private address. OPAL trusts the issuer host an admin configures. The token, userinfo and key endpoints in its discovery document, and any redirect or `picture` URL, must be on that same host and port or on a public https address. Link-local and cloud metadata addresses are always refused. Failures in **Test** show one message; the server log has the detail.
 

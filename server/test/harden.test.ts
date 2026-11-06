@@ -81,6 +81,22 @@ describe('data folder permissions', () => {
 		}
 	});
 
+	posix('a database under another name in the data folder is tightened too', () => {
+		const old = process.umask();
+		const dir = mkdtempSync(join(tmpdir(), 'opal-harden-'));
+		process.env.OPAL_DATA_DIR = dir;
+		process.env.OPAL_DB_FILE = join(dir, 'custom.db');
+		try {
+			writeFileSync(process.env.OPAL_DB_FILE, 'x');
+			chmodSync(process.env.OPAL_DB_FILE, 0o644);
+			hardenDataDir();
+			expect(mode(process.env.OPAL_DB_FILE)).toBe(0o600);
+		} finally {
+			delete process.env.OPAL_DB_FILE;
+			process.umask(old);
+		}
+	});
+
 	posix('the auth secret file is created with mode 0600 whatever the umask', () => {
 		const dir = mkdtempSync(join(tmpdir(), 'opal-harden-'));
 		process.env.OPAL_DATA_DIR = dir;

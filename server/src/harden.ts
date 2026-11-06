@@ -13,7 +13,7 @@
  * keep the mode of the binary it replaces. The server it starts sets its own.
  */
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { dataDir, dbPath } from './paths.ts';
 
 /** Remove group and other bits from one path. Quiet when it is not there or not ours. */
@@ -50,6 +50,7 @@ export function hardenDataDir(opts: { umask?: boolean } = {}): void {
 		warn.push(`${dir}: ${(e as Error).message}`);
 	}
 	const db = dbPath();
-	if (dirname(db) !== dir && existsSync(db)) for (const f of [db, `${db}-wal`, `${db}-shm`]) restrict(f, warn);
+	// The database may have another name, or sit elsewhere (OPAL_DB_FILE).
+	if (existsSync(db)) for (const f of [db, `${db}-wal`, `${db}-shm`]) restrict(f, warn);
 	if (warn.length) console.warn(`Could not restrict permissions on the data folder: ${warn.join('; ')}`);
 }
