@@ -84,7 +84,7 @@
 />
 
 {#snippet picker()}
-	<NativeSelect size="sm" bind:value={kind} aria-label="Document kind" class="w-36">
+	<NativeSelect bind:value={kind} aria-label="Document kind" class="w-36">
 		{#each KINDS as k (k.value)}<option value={k.value}>{k.label}</option>{/each}
 	</NativeSelect>
 	<ActionLink disabled={busy} onclick={() => input?.click()}>+ UPLOAD</ActionLink>
@@ -128,7 +128,7 @@
 								>{/if}</td
 						>
 						<td class="px-3 py-1.5 text-right"
-							><ActionLink danger onclick={() => remove(a)}>DELETE</ActionLink></td
+							><ActionLink onclick={() => remove(a)}>DELETE</ActionLink></td
 						>
 					</tr>
 				{/each}

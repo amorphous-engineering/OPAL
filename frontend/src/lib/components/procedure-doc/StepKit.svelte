@@ -126,7 +126,7 @@
 				</tbody>
 			</table>
 			<div>
-				<Button size="xs" variant="outline" disabled={busy} onclick={consume}>CONSUME PARTS</Button>
+				<Button size="sm" variant="outline" disabled={busy} onclick={consume}>CONSUME PARTS</Button>
 			</div>
 		{:else if !step.consumptions.length}
 			<ul class="m-0 list-none p-0 font-mono text-xs text-muted-foreground">

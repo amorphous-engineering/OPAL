@@ -80,7 +80,7 @@
 			/>
 		</div>
 		<div>
-			<Button type="submit" size="sm" disabled={busy}>CHANGE PASSWORD</Button>
+			<Button type="submit" variant="outline" size="sm" disabled={busy}>CHANGE PASSWORD</Button>
 		</div>
 	</form>
 </Section>

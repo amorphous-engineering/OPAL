@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { opal } from '#lib/api.js';
 	import {
+		ActionLink,
 		DataTable,
 		DetailRow,
 		DetailTable,
@@ -105,11 +106,11 @@
 		<Section title="Received" count={created.length}>
 			{#snippet actions()}
 				<Button
-					size="xs"
+					size="sm"
 					variant="outline"
 					href="/label?inventory={created!.map((i) => i.opalNumber).join(',')}">PRINT LABELS</Button
 				>
-				<Button size="xs" variant="outline" onclick={another}>RECEIVE MORE</Button>
+				<Button size="sm" variant="outline" onclick={another}>RECEIVE MORE</Button>
 			{/snippet}
 			<DataTable
 				rows={created}
@@ -134,7 +135,7 @@
 			</DataTable>
 		</Section>
 	{:else}
-		<form onsubmit={submit} class="rounded-lg border border-border bg-card">
+		<form onsubmit={submit} class="border border-border bg-card">
 			<DetailTable>
 				<DetailRow label="Part *">
 					{#if part}
@@ -144,9 +145,7 @@
 							<span class="font-mono text-xs text-muted-foreground uppercase"
 								>{part.tracking_type}{rules?.tierName ? ` · ${rules?.tierName}` : ''}</span
 							>
-							<Button size="xs" variant="ghost" class="ml-auto" onclick={() => (part = null)}
-								>CHANGE</Button
-							>
+							<ActionLink class="ml-auto" onclick={() => (part = null)}>CHANGE</ActionLink>
 						</div>
 					{:else}
 						<PartPicker

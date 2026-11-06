@@ -17,7 +17,7 @@ export function lifecycleTone(state: string): Tone {
 		case 'baselined':
 			return 'ok';
 		case 'preliminary':
-			return 'info';
+			return 'draft';
 		case 'superseded':
 		case 'cancelled':
 			return 'muted';
@@ -31,7 +31,7 @@ export function verificationTone(v: Verification): Tone {
 		case 'verified':
 			return 'ok';
 		case 'partial':
-			return 'warn';
+			return 'info';
 		default:
 			return 'muted';
 	}

@@ -52,7 +52,7 @@
 			{#if part.description}
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 				<div class="prose-opal">{@html markdown(part.description)}</div>
-			{:else}<span class="text-muted-foreground">—</span>{/if}
+			{:else}<span class="text-quiet">—</span>{/if}
 		</DetailRow>
 		{#each fields as f (f.key)}
 			<DetailRow label={f.label} value={show(meta[f.key])} />
@@ -69,7 +69,7 @@
 				{#if part.activationCause}<div class="text-xs text-muted-foreground">
 						{part.activationCause}
 					</div>{/if}
-			{:else}<span class="text-muted-foreground">—</span>{/if}
+			{:else}<span class="text-quiet">—</span>{/if}
 		</DetailRow>
 		<DetailRow label="Obsoleted">
 			{#if part.obsoletedAt}
@@ -77,7 +77,7 @@
 				{#if part.obsoleteCause}<div class="text-xs text-muted-foreground">
 						{part.obsoleteCause}
 					</div>{/if}
-			{:else}<span class="text-muted-foreground">—</span>{/if}
+			{:else}<span class="text-quiet">—</span>{/if}
 		</DetailRow>
 	</DetailTable>
 </Section>

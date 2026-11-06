@@ -18,7 +18,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			q: q.get('q') || undefined,
 			mine: q.get('mine') === '1' ? 'true' : undefined,
 			held: q.get('held') === '1' ? 'true' : undefined,
-			sort: EXECUTION_SORT_KEYS.find((s) => s === q.get('sort')),
+			sort: EXECUTION_SORT_KEYS.find((s) => s === q.get('sort')) ?? 'lastAction',
 			dir: q.get('dir') === 'asc' ? 'asc' : 'desc',
 			// The cursor is the row offset.
 			cursor: page > 1 ? String((page - 1) * PAGE_SIZE) : undefined,

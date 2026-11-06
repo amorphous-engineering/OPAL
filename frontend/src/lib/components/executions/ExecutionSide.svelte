@@ -2,8 +2,7 @@
 	// Right column: who is working where, the work order's issues, and its comment
 	// thread. Roster entries jump into the document.
 	import { cn } from '#lib/utils.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Avatar, EmptyLine, Section, State } from '#lib/components/opal/index.js';
+	import { ActionLink, Avatar, EmptyLine, Section, State } from '#lib/components/opal/index.js';
 	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
 	import ExecutionComments from './ExecutionComments.svelte';
@@ -68,9 +67,7 @@
 			count={doc.issues.length || undefined}
 		>
 			{#snippet actions()}
-				<Button size="xs" variant="ghost" href={newIssue} target="_blank" rel="noopener"
-					>+ NEW</Button
-				>
+				<ActionLink href={newIssue} target="_blank" rel="noopener">+ NEW</ActionLink>
 			{/snippet}
 			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
 				<ul class="m-0 list-none p-0">

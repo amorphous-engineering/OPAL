@@ -106,29 +106,37 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/datasets/new" class="font-medium text-info hover:underline">+ NEW DATASET</a>
+				<a
+					href="/datasets/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW DATASET</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(row, col)}
 			{#if col.key === 'name'}
 				<span class="font-medium">{row.name}</span>
 			{:else if col.key === 'project'}
-				{row.projectCode}
+				<span class="text-quiet">{row.projectCode}</span>
 			{:else if col.key === 'procedure'}
 				{#if row.procedureId}
 					<a href={`/procedures/${row.procedureId}`} class="text-info hover:underline"
 						>{procedureName(row.procedureId)}</a
 					>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'fields'}
 				{row.schema.fields.length}
 			{:else if col.key === 'pointCount'}
 				{row.pointCount}
 			{:else if col.key === 'state'}
 				{#if row.state === 'archived'}
-					<State value="archived" tone="warn" badge />
+					<State value="archived" tone="muted" badge />
 				{:else}
 					<span class="font-mono text-xs text-muted-foreground">ACTIVE</span>
 				{/if}
@@ -146,13 +154,13 @@
 			<div class="ml-auto flex items-center gap-2">
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={data.page <= 1}
 					onclick={() => setQuery({ page: null, cursor: null })}>← FIRST</Button
 				>
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={!data.list.next}
 					onclick={() => setQuery({ page: data.page + 1, cursor: data.list.next })}>NEXT →</Button
 				>

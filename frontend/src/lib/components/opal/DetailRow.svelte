@@ -23,13 +23,7 @@
 		class="w-40 py-1.5 pr-3 pl-3 text-left align-top font-mono text-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase"
 		>{label}</th
 	>
-	<td
-		class={cn(
-			'py-1.5 pr-3 align-top',
-			mono && 'font-mono tabular-nums',
-			empty && 'text-muted-foreground'
-		)}
-	>
+	<td class={cn('py-1.5 pr-3 align-top', mono && 'font-mono tabular-nums', empty && 'text-quiet')}>
 		{#if children}{@render children()}{:else if empty}—{:else}{value}{/if}
 	</td>
 </tr>

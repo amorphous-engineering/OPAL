@@ -34,7 +34,7 @@ export type ExecutionPriority = (typeof EXECUTION_PRIORITIES)[number];
 export const EXEC_STEP_STATUSES = ['pending', 'awaiting_signoff', 'completed', 'skipped'] as const;
 export type ExecStepStatus = (typeof EXEC_STEP_STATUSES)[number];
 export const EXEC_TERMINAL_STATUSES: readonly string[] = ['completed', 'skipped'];
-export const EXECUTION_SORT_KEYS = ['workOrder', 'procedure', 'status', 'created', 'target', 'priority'] as const;
+export const EXECUTION_SORT_KEYS = ['workOrder', 'procedure', 'status', 'created', 'lastAction', 'target', 'priority'] as const;
 export const EXEC_BLOCKER_KINDS = [
 	'nc',
 	'sequence',
@@ -126,6 +126,8 @@ export const zExecutionRow = z.object({
 	createdAt: zTimestamp,
 	startedAt: zTimestamp.nullable(),
 	completedAt: zTimestamp.nullable(),
+	/** The latest act by a person: a step, sign-off, note, comment, clock-in or the closing strike. */
+	lastActionAt: zTimestamp,
 	scheduledStartAt: zTimestamp.nullable(),
 	targetCompletionAt: zTimestamp.nullable(),
 	createdBy: z.string().nullable(),

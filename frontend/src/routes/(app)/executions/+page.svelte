@@ -26,7 +26,7 @@
 	let { data }: PageProps = $props();
 	const overview = $derived(data.executions);
 
-	const sort = urlSort({ key: 'created', dir: 'desc' });
+	const sort = urlSort({ key: 'lastAction', dir: 'desc' });
 	const status = $derived(page.url.searchParams.get('status') ?? 'all');
 	const counts = $derived({
 		cut: 0,
@@ -57,13 +57,14 @@
 	]);
 
 	const columns: Column<ExecutionRow>[] = [
-		{ key: 'workOrder', label: 'Work order', sortable: true, width: '9rem' },
+		{ key: 'workOrder', label: 'Work order', sortable: true, width: '7rem' },
 		{ key: 'project', label: 'Project', width: '9rem' },
 		{ key: 'procedure', label: 'Procedure', sortable: true },
 		{ key: 'status', label: 'Status', sortable: true, width: '7rem' },
 		{ key: 'progress', label: 'Progress', width: '10rem' },
 		{ key: 'working', label: 'Working' },
-		{ key: 'heldBy', label: 'Held by', width: '10rem' },
+		{ key: 'heldBy', label: 'Held by', width: '7rem' },
+		{ key: 'lastAction', label: 'Last action', sortable: true, width: '7rem', align: 'right' },
 		{ key: 'created', label: 'Cut', sortable: true, width: '5rem', align: 'right' },
 		{ key: 'target', label: 'Target', sortable: true, width: '8rem' }
 	];
@@ -86,8 +87,8 @@
 				<button
 					type="button"
 					class={cn(
-						'-ml-px inline-flex h-7 items-center gap-1.5 border border-border px-2.5 font-mono text-xs font-medium tracking-wider uppercase first:ml-0 first:rounded-l-md last:rounded-r-md hover:bg-accent',
-						status === c.id && 'bg-primary text-primary-foreground hover:bg-primary'
+						'-ml-px inline-flex h-7 items-center gap-1.5 border border-border px-2.5 font-mono text-xs font-medium tracking-wider uppercase first:ml-0 hover:bg-accent',
+						status === c.id && 'bg-foreground text-background hover:bg-foreground'
 					)}
 					aria-pressed={status === c.id}
 					onclick={() => setQuery({ status: c.id === 'all' ? null : c.id })}
@@ -126,9 +127,16 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/executions/new" class="font-medium text-info hover:underline">+ CUT WO</a>
+				<a
+					href="/executions/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline">+ CUT WO</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
@@ -143,18 +151,28 @@
 					/>
 				{/if}
 			{:else if col.key === 'project'}
-				<span class="font-mono text-xs">{r.projectCode}</span>
+				<span class="font-mono text-xs text-quiet">{r.projectCode}</span>
 			{:else if col.key === 'procedure'}
-				<span class="font-mono text-muted-foreground">{r.procedureNumber}</span>
-				{r.procedureName}
-				<span class="font-mono text-muted-foreground">v{r.versionNumber}</span>
+				<!-- A record that is over falls back; a completed one still reads. -->
+				<span class={['void', 'closed_short'].includes(r.status) ? 'text-quiet' : ''}>
+					<span class="font-mono text-muted-foreground">{r.procedureNumber}</span>
+					{r.procedureName}
+					<span class="font-mono text-muted-foreground">v{r.versionNumber}</span>
+				</span>
 			{:else if col.key === 'status'}
 				<State value={r.status} />
 			{:else if col.key === 'progress'}
 				<span class="flex items-center gap-2">
-					<span class="h-1.5 w-16 bg-border" aria-hidden="true"
+					<span class="h-1.5 w-16 bg-desk" aria-hidden="true"
 						><span
-							class="block h-full bg-ok"
+							class={[
+								'block h-full',
+								r.progressTotal > 0 && r.progressDone >= r.progressTotal
+									? 'bg-ok'
+									: ['void', 'closed_short'].includes(r.status)
+										? 'bg-quiet'
+										: 'bg-foreground'
+							]}
 							style:width={`${r.progressTotal ? (r.progressDone / r.progressTotal) * 100 : 0}%`}
 						></span></span
 					>
@@ -164,7 +182,7 @@
 				{#if r.working.length}
 					<span class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs">
 						{#each r.working as w (w.userId)}
-							<span class="inline-flex items-center gap-1.5">
+							<span class="inline-flex items-center gap-1.5 whitespace-nowrap">
 								<Avatar user={{ id: w.userId, name: w.name, avatarUrl: w.avatarUrl }} size="xs" />
 								{w.name ?? '?'}{#if w.stepNumber}<span class="text-muted-foreground">
 										OP {w.stepNumber}</span
@@ -172,13 +190,15 @@
 							</span>
 						{/each}
 					</span>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'heldBy'}
 				{#if r.heldBy.length}
-					<span class="font-mono text-xs text-warn">{r.heldBy.join(', ')}</span>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+					<span class="font-mono text-xs text-error">{r.heldBy.join(', ')}</span>
+				{:else}<span class="text-quiet">—</span>{/if}
+			{:else if col.key === 'lastAction'}
+				<Timestamp value={r.lastActionAt} relative />
 			{:else if col.key === 'created'}
-				<Timestamp value={r.createdAt} relative />
+				<span class="text-quiet"><Timestamp value={r.createdAt} relative /></span>
 			{:else if col.key === 'target'}
 				<Timestamp value={r.targetCompletionAt} dateOnly />
 			{/if}

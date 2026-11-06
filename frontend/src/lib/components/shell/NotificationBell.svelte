@@ -64,11 +64,11 @@
 
 <Popover.Root bind:open>
 	<Popover.Trigger
-		class="relative inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
+		class="relative inline-flex h-7 items-center gap-1.5 border border-border px-2 font-mono text-xs tracking-wider uppercase hover:bg-accent"
 		aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
 	>
 		Inbox
-		{#if unread > 0}<span class="rounded-sm bg-error px-1 text-xs text-white tabular-nums"
+		{#if unread > 0}<span class="bg-error-fill px-1 text-xs text-error-on tabular-nums"
 				>{unread}</span
 			>{/if}
 	</Popover.Trigger>

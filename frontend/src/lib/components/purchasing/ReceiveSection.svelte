@@ -156,7 +156,7 @@
 								<td class="px-3 py-1.5">{r.location}</td>
 								<td class="px-3 py-1.5 font-mono"
 									>{#if r.serialNumber || r.lotNumber}{r.serialNumber ?? r.lotNumber}{:else}<span
-											class="text-muted-foreground">—</span
+											class="text-quiet">—</span
 										>{/if}</td
 								>
 								<td class="px-3 py-1.5 font-mono whitespace-nowrap"

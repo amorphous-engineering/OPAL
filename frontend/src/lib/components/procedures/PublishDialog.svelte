@@ -108,15 +108,15 @@
 				<Textarea id="change-note" rows={3} bind:value={note} maxlength={2000} />
 			</div>
 			{#if drafts.length}
-				<div role="alert" class="rounded-md border border-warn/50 bg-warn-muted p-2 text-xs">
-					<p class="mb-1.5 font-mono font-medium text-warn uppercase">Draft parts block publish</p>
+				<div role="alert" class="border border-warn-fill bg-warn-fill p-2 text-xs text-warn-on">
+					<p class="mb-1.5 font-mono font-semibold uppercase">Draft parts block publish</p>
 					<ul class="grid grid-cols-1 gap-1">
 						{#each drafts as p (p.id)}
 							<li class="flex items-center gap-2">
 								<span class="truncate font-mono">{p.text}</span>
 								<Button
 									type="button"
-									size="xs"
+									size="sm"
 									variant="outline"
 									class="ml-auto"
 									disabled={activating !== null}

@@ -60,7 +60,7 @@
 			<Button
 				{...props}
 				variant="outline"
-				size="xs"
+				size="sm"
 				class="w-full min-w-48 justify-start font-mono"
 				aria-label={label}
 			>

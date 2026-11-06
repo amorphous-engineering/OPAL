@@ -176,7 +176,7 @@
 		<Section title="Kit" count={doc.kit.items.length || undefined}>
 			{#snippet actions()}
 				{#if canConsume && doc.kit.items.some((k) => remaining(k) > 0)}
-					<Button size="xs" disabled={busy} onclick={consumeKit}>CONSUME PARTS</Button>
+					<Button size="sm" disabled={busy} onclick={consumeKit}>CONSUME PARTS</Button>
 				{/if}
 			{/snippet}
 			{#if doc.kit.items.length}
@@ -229,7 +229,7 @@
 												label={`Source for ${k.part_name}`}
 												onpick={(record) => (pick[k.part_id] = { ...pick[k.part_id], record })}
 											/>
-										{:else}<span class="text-muted-foreground">—</span>{/if}
+										{:else}<span class="text-quiet">—</span>{/if}
 									</td>
 									<td class="px-3 py-1.5">
 										{#if canConsume && remaining(k) > 0}
@@ -246,7 +246,7 @@
 												/>
 												<span class="font-mono text-xs text-muted-foreground">{k.uom || 'ea'}</span>
 											</span>
-										{:else}<span class="text-muted-foreground">—</span>{/if}
+										{:else}<span class="text-quiet">—</span>{/if}
 									</td>
 								</tr>
 							{/each}
@@ -296,7 +296,7 @@
 						{#if r.opal_number}<a
 								class="text-info hover:underline"
 								href={`/inventory/opal/${r.opal_number}`}>{r.opal_number}</a
-							>{:else}<span class="text-muted-foreground">—</span>{/if}
+							>{:else}<span class="text-quiet">—</span>{/if}
 					{:else if col.key === 'quantity'}
 						{qtyUnit(r.quantity, r.uom)}
 					{:else if col.key === 'usage_type'}
@@ -329,7 +329,7 @@
 						{#if r.opal_number}<a
 								class="text-info hover:underline"
 								href={`/inventory/opal/${r.opal_number}`}>{r.opal_number}</a
-							>{:else}<span class="text-muted-foreground">—</span>{/if}
+							>{:else}<span class="text-quiet">—</span>{/if}
 					{:else if col.key === 'quantity'}
 						{r.status === 'completed'
 							? qtyUnit(r.quantity, r.uom)

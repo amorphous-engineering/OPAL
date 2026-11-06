@@ -81,7 +81,7 @@
 					/>{/if}
 			{:else}
 				{@const v = (s as unknown as Record<string, unknown>)[col.key]}
-				{#if v === null || v === undefined || v === ''}<span class="text-muted-foreground">—</span
+				{#if v === null || v === undefined || v === ''}<span class="text-quiet">—</span
 					>{:else}{v}{/if}
 			{/if}
 		{/snippet}
@@ -92,8 +92,15 @@
 
 {#snippet addAction()}
 	{#if filtered}
-		<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+		<a
+			href={page.url.pathname}
+			class="font-mono text-xs font-medium tracking-wide text-info hover:underline">CLEAR FILTERS</a
+		>
 	{:else}
-		<a href="/suppliers/new" class="font-medium text-info hover:underline">+ NEW SUPPLIER</a>
+		<a
+			href="/suppliers/new"
+			class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+			>+ NEW SUPPLIER</a
+		>
 	{/if}
 {/snippet}

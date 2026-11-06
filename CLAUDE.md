@@ -132,20 +132,10 @@ Routing is not the record. Assignee and priority may change while a record is op
 
 ## UI
 
-- Dense and explicit. Data in tables: detail rows for facts, headed tables for collections. Mono for IDs, numbers and timestamps.
-- No rounded corners or gradients. State colours: ok, warn, error, info. No emoji.
-- Marks have one meaning each. Solid line: section boundary. Dotted line: row in a section. Dashed box: not committed yet (a blank, a typed value). Hard 2px shadow, no blur: a key you can press and the menu it opens; never a panel. Black fill: you are here. Amber and red are for alerts only; nothing is lit when things are normal.
-- Almost no grey. Hierarchy comes from weight, size and position, because grey is the first thing glare removes.
-- The look is Tailwind tokens in `frontend/src/routes/layout.css`, plus one short Marks block for what a token cannot reach inside vendored components. Everything else is a utility class at the call site. No per-component CSS, no overrides outside the layers.
-- Labels are nouns. No copy that explains the interface. Consequence text only in confirmations and errors. A control or option says what it is once: `ADVISORY`, not `ADVISORY — holds nothing`.
-- State badges only where the state is exceptional or actionable. A badge on every row says nothing. Accent colour marks identifiers and actions, never content.
-- Absolute timestamps. Dense rows may show a relative age with the full time in the tooltip.
-- Never show database IDs.
-- An empty section that applies shows its header and one line that says it is empty. A section that does not apply is absent.
-- Do not hide facts behind toggles. Tabs may split a large page. Editors are not facts: they stay behind EDIT (see Records).
-- `frontend/src/lib/components/ui/` is vendored shadcn-svelte. Do not edit or reformat it.
+`STYLE.md` is the style guide: type, marks, the importance ladder for state, keys and pages. Read it before changing anything on screen.
+
+- `frontend/src/lib/components/ui/` is vendored shadcn-svelte. Do not edit or reformat it. `pnpm test` fails when the Marks block stops matching it.
 - Client imports use subpath aliases with extensions: `#lib/api.js`.
-- Render authored markdown only through `markdown()` in `#lib/markdown.js`.
 
 ## Style
 

@@ -2,6 +2,7 @@
 	// Issues that respond to (mitigation) or investigate (research) a risk.
 	import { invalidateAll } from '$app/navigation';
 	import {
+		ActionLink,
 		DataTable,
 		EmptyLine,
 		Section,
@@ -109,9 +110,7 @@
 {#if risk.linkedIssues.length}
 	<Section title="Linked issues" count={risk.linkedIssues.length}>
 		{#snippet actions()}
-			<Button variant="ghost" size="xs" onclick={() => (adding = !adding)}
-				>{adding ? 'DONE' : '+ ADD'}</Button
-			>
+			<ActionLink onclick={() => (adding = !adding)}>{adding ? 'DONE' : '+ ADD'}</ActionLink>
 		{/snippet}
 		<DataTable
 			rows={risk.linkedIssues}
@@ -130,8 +129,7 @@
 				{:else if col.key === 'status'}
 					<State value={l.status} />
 				{:else}
-					<Button variant="ghost" size="xs" disabled={busy} onclick={() => unlink(l)}>UNLINK</Button
-					>
+					<ActionLink disabled={busy} onclick={() => unlink(l)}>UNLINK</ActionLink>
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -144,7 +142,7 @@
 			onadd={() => (adding = !adding)}
 			addLabel={adding ? 'DONE' : '+ ADD'}
 		/>
-		{#if adding}<div class="rounded-b-lg border border-t-0 border-border bg-card">
+		{#if adding}<div class="border border-t-0 border-border bg-card">
 				{@render form()}
 			</div>{/if}
 	</div>

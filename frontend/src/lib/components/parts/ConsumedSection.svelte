@@ -41,13 +41,13 @@
 					{#if c.executionId}<a
 							href={`/executions/${c.executionId}`}
 							class="text-info hover:underline">{c.woNumber}</a
-						>{:else}<span class="text-muted-foreground">—</span>{/if}
+						>{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'by'}
-					{#if c.actorName}{c.actorName}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if c.actorName}{c.actorName}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if c.notes}
 					{c.notes}
 				{:else}
-					<span class="text-muted-foreground">—</span>
+					<span class="text-quiet">—</span>
 				{/if}
 			{/snippet}
 		</DataTable>

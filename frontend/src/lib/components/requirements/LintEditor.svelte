@@ -71,7 +71,7 @@
 	<div class="relative">
 		<div
 			aria-hidden="true"
-			class="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-transparent"
+			class="pointer-events-none absolute inset-0 overflow-hidden border border-transparent px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-transparent"
 		>
 			{#each segments as s, i (i)}{#if s.severity}<span
 						class={cn(

@@ -268,12 +268,14 @@
 		<div class="flex">
 			<Button
 				size="sm"
-				variant={view === 'tree' ? 'default' : 'outline'}
+				variant="outline"
+				aria-pressed={view === 'tree'}
 				onclick={() => setParam('view', null)}>TREE</Button
 			>
 			<Button
 				size="sm"
-				variant={view === 'list' ? 'default' : 'outline'}
+				variant="outline"
+				aria-pressed={view === 'list'}
 				onclick={() => setParam('view', 'list')}>LIST</Button
 			>
 		</div>
@@ -290,8 +292,7 @@
 				variant="outline"
 				href={data.projectId
 					? `/requirements/queue?project=${data.projectId}`
-					: '/requirements/queue'}
-				class="text-ok">BASELINE QUEUE · {data.tree.queueCount}</Button
+					: '/requirements/queue'}>BASELINE QUEUE · {data.tree.queueCount}</Button
 			>
 		{/if}
 		{#if session.user?.is_admin && unimported.length}
@@ -457,7 +458,9 @@
 											>r{r.revision}</span
 										>{/if}
 								</td>
-								<td class="px-3 py-1 font-mono text-xs whitespace-nowrap">{r.projectCode}</td>
+								<td class="px-3 py-1 font-mono text-xs whitespace-nowrap text-quiet"
+									>{r.projectCode}</td
+								>
 								<!-- added by projects -->
 								<td class="px-3 py-1"
 									><span class="line-clamp-1" title={r.title}>{r.title}</span></td
@@ -465,7 +468,7 @@
 								<td class="px-3 py-1">
 									<button
 										type="button"
-										class="block w-full text-left font-mono text-xs"
+										class="block w-full text-left text-xs"
 										aria-expanded={open}
 										onclick={(e) => {
 											e.stopPropagation();
@@ -505,7 +508,7 @@
 											title={r.parts.map((p) => `${p.name} (${p.status})`).join(', ')}
 											>{r.parts[0].name}{r.parts.length > 1 ? ` +${r.parts.length - 1}` : ''}</span
 										>
-									{:else}<span class="text-muted-foreground">—</span>{/if}
+									{:else}<span class="text-quiet">—</span>{/if}
 								</td>
 								<td class="px-3 py-1">
 									<span class="flex gap-2 font-mono text-xs font-medium">

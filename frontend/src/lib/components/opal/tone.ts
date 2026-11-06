@@ -1,12 +1,16 @@
-/** Functional state colour. Only exceptional or actionable states get a tone. */
-export type Tone = 'ok' | 'warn' | 'error' | 'info' | 'muted' | 'default';
+/**
+ * Importance sets contrast (STYLE.md). Stopped and waiting are filled in a badge; the rest are words:
+ * info is in flight, ok reached a good state, default at rest, draft not started, muted over.
+ */
+export type Tone = 'ok' | 'warn' | 'error' | 'info' | 'draft' | 'muted' | 'default';
 
 export const toneText: Record<Tone, string> = {
 	ok: 'text-ok',
 	warn: 'text-warn',
 	error: 'text-error',
-	info: 'text-foreground',
-	muted: 'text-muted-foreground',
+	info: 'font-bold text-foreground',
+	draft: 'text-tan',
+	muted: 'font-normal text-quiet',
 	default: 'text-foreground'
 };
 
@@ -14,45 +18,53 @@ export const toneBox: Record<Tone, string> = {
 	ok: 'border-dotted border-ok text-ok',
 	warn: 'border-warn-fill bg-warn-fill text-warn-on',
 	error: 'border-error-fill bg-error-fill text-error-on',
-	info: 'border-transparent px-0 text-foreground',
-	muted: 'border-dotted border-foreground text-foreground',
+	info: 'border-transparent px-0 font-bold text-foreground',
+	draft: 'border-transparent px-0 text-tan',
+	muted: 'border-dotted border-quiet font-normal text-quiet',
 	default: 'border-dotted border-foreground text-foreground'
 };
 
 /** Common domain states → tone. Unknown states stay neutral. */
 const STATE_TONES: Record<string, Tone> = {
-	// lifecycle / completion
+	// reached a good state
 	completed: 'ok',
 	signed_off: 'ok',
-	closed: 'muted',
-	active: 'ok',
 	received: 'ok',
 	passed: 'ok',
 	pass: 'ok',
+	done: 'ok',
+	verified: 'ok',
+	baselined: 'ok',
+	accepted: 'ok',
 	// in flight
 	in_progress: 'info',
 	in_work: 'info',
-	cut: 'info',
-	submitted: 'info',
-	ordered: 'info',
+	in_review: 'info',
+	partial: 'info',
+	// not started, still pencil
+	draft: 'draft',
+	cut: 'draft',
+	pending: 'draft',
+	preliminary: 'draft',
+	// waiting on a person
 	awaiting_signoff: 'warn',
-	partial: 'warn',
-	draft: 'muted',
-	pending: 'muted',
+	// over
+	closed: 'muted',
 	skipped: 'muted',
 	deprecated: 'muted',
+	obsolete: 'muted',
+	superseded: 'muted',
 	cancelled: 'muted',
 	void: 'muted',
 	closed_short: 'muted',
-	// trouble
-	on_hold: 'warn',
-	blocked: 'warn',
-	open: 'warn',
+	// stopped
+	on_hold: 'error',
+	blocked: 'error',
 	failed: 'error',
 	fail: 'error',
 	critical: 'error',
-	high: 'error',
-	medium: 'warn',
+	// priority and severity below stopped
+	high: 'info',
 	low: 'muted'
 };
 

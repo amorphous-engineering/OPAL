@@ -232,7 +232,6 @@
 	:global(.spotlight [data-slot='command-item']) {
 		padding: 0.5rem 0.75rem;
 		font-size: var(--text-sm);
-		border-radius: 0.5rem;
 	}
 	:global(.spotlight [cmdk-group-heading]) {
 		padding-top: 0.5rem;

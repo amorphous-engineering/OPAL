@@ -176,11 +176,11 @@
 					{@const l = lots(g)}
 					{#if l.length === 1}{l[0]}{:else if l.length > 1}<span class="text-muted-foreground"
 							>{l.length} lots</span
-						>{:else}<span class="text-muted-foreground">—</span>{/if}
+						>{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'status'}
 					{@const s = status(g)}
 					{#if s}<State value={s.label} tone={s.tone} label={s.label} />{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				{:else}
 					{qty(g.quantity)}

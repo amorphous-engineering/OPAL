@@ -50,6 +50,21 @@ export const PRIORITY_RANK = { normal: 0, high: 1, urgent: 2 } as const;
 
 // ---------------------------------------------------------------- present
 
+/**
+ * When a person last did something on the order. Derived, never stored. `updated_at` will not do:
+ * a claim, an import or a system write moves it. A cut order nobody has touched answers with its cut.
+ * Written out in full because Drizzle shortens column references on a single-table select, which
+ * would point them at the subquery's own table.
+ */
+const lastActionSql = sql<string>`COALESCE(NULLIF(MAX(
+	COALESCE(execution.completed_at, ''),
+	COALESCE((SELECT MAX(s.completed_at) FROM step_execution s WHERE s.execution_id = execution.id), ''),
+	COALESCE((SELECT MAX(o.signed_at) FROM signoff o JOIN step_execution s ON s.id = o.step_execution_id WHERE s.execution_id = execution.id), ''),
+	COALESCE((SELECT MAX(n.created_at) FROM step_note n JOIN step_execution s ON s.id = n.step_execution_id WHERE s.execution_id = execution.id), ''),
+	COALESCE((SELECT MAX(c.created_at) FROM execution_comment c WHERE c.execution_id = execution.id), ''),
+	COALESCE((SELECT MAX(COALESCE(w.ended_at, w.started_at)) FROM work_interval w WHERE w.execution_id = execution.id), '')
+), ''), execution.created_at)`;
+
 function presentRows(db: Db, rows: ExecutionRow[]): ExecutionRowOut[] {
 	if (!rows.length) return [];
 	const projects = projectRefs(db, rows.map((r) => r.projectId));
@@ -70,6 +85,14 @@ function presentRows(db: Db, rows: ExecutionRow[]): ExecutionRowOut[] {
 			.map((v) => [v.id, v.n])
 	);
 	const names = userNames(db, rows.map((r) => r.createdById));
+	const lastActions = new Map(
+		db
+			.select({ id: execution.id, at: lastActionSql })
+			.from(execution)
+			.where(inArray(execution.id, rows.map((r) => r.id)))
+			.all()
+			.map((r) => [r.id, r.at])
+	);
 	return rows.map((e) => {
 		const m = loadModel(db, e.id);
 		const prog = progress(m);
@@ -90,6 +113,7 @@ function presentRows(db: Db, rows: ExecutionRow[]): ExecutionRowOut[] {
 			createdAt: e.createdAt,
 			startedAt: e.startedAt,
 			completedAt: e.completedAt,
+			lastActionAt: lastActions.get(e.id)!,
 			scheduledStartAt: e.scheduledStartAt,
 			targetCompletionAt: e.targetCompletionAt,
 			createdBy: e.createdById === null ? null : (names.get(e.createdById) ?? null),
@@ -157,6 +181,7 @@ const SORTS = {
 	procedure: sql`(SELECT name FROM procedure WHERE procedure.id = ${execution.procedureId})`,
 	status: execution.status,
 	created: execution.id,
+	lastAction: lastActionSql,
 	target: execution.targetCompletionAt,
 	priority: sql`CASE ${execution.priority} WHEN 'urgent' THEN 2 WHEN 'high' THEN 1 ELSE 0 END`
 } as const;

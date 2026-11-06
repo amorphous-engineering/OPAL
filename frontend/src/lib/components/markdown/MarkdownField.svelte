@@ -247,8 +247,7 @@
 	];
 
 	/** Square inner corners so a run of buttons reads as one segmented control. */
-	const joined = (i: number, n: number) =>
-		cn(i > 0 && '-ml-px rounded-l-none', i < n - 1 && 'rounded-r-none');
+	const joined = (i: number) => cn(i > 0 && '-ml-px');
 
 	const tools: { label: string; title: string; cmd: Command }[][] = [
 		[
@@ -284,7 +283,7 @@
 				{#each marked as t, i (t.mark)}
 					<Toolbar.GroupItem
 						value={t.mark}
-						class={cn('px-1.5 font-mono', t.cls, joined(i, marked.length))}
+						class={cn('px-1.5 font-mono text-xs', t.cls, joined(i))}
 						title={t.title}
 						aria-label={t.title}
 						onmousedown={(e) => e.preventDefault()}
@@ -297,7 +296,7 @@
 					{#each group as t, i (t.title)}
 						<Toolbar.Button
 							size="sm"
-							class={cn('px-1.5 font-mono', joined(i, group.length))}
+							class={cn('px-1.5 font-mono text-xs', joined(i))}
 							title={t.title}
 							aria-label={t.title}
 							onmousedown={(e) => e.preventDefault()}
@@ -321,8 +320,8 @@
 						<Toolbar.GroupItem
 							value={m}
 							class={cn(
-								'font-mono uppercase',
-								joined(i, MARKDOWN_MODES.length),
+								'font-mono text-xs uppercase',
+								joined(i),
 								'data-[state=on]:bg-foreground data-[state=on]:text-background'
 							)}
 							onmousedown={(e) => e.preventDefault()}>{m}</Toolbar.GroupItem

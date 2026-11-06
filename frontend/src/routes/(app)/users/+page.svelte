@@ -84,9 +84,17 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/users/new" class="font-medium text-info hover:underline">+ NEW USER</a>
+				<a
+					href="/users/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW USER</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(u, col)}
@@ -97,17 +105,16 @@
 				</span>
 				{#if !u.isActive}<State value="inactive" tone="muted" class="ml-2" />{/if}
 			{:else if col.key === 'jobTitle'}
-				{#if u.jobTitle}{u.jobTitle}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if u.jobTitle}{u.jobTitle}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'workcenter'}
-				{#if u.workcenter}{u.workcenter.name}{:else}<span class="text-muted-foreground">—</span
-					>{/if}
+				{#if u.workcenter}{u.workcenter.name}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'email'}
-				{#if u.email}{u.email}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if u.email}{u.email}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'roles'}
 				{#if u.roles.length}
 					<span class="text-xs">{u.roles.map((r) => r.name).join(' · ')}</span>
 				{:else}
-					<span class="text-muted-foreground">—</span>
+					<span class="text-quiet">—</span>
 				{/if}
 			{:else if col.key === 'sign_in'}
 				{@const methods = signInMethods(u)}

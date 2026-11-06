@@ -70,7 +70,7 @@
 	<div class="grid grid-cols-1 gap-2">
 		<span class="label">Sub-steps</span>
 		{#each steps as s, i (i)}
-			<div class="grid grid-cols-1 gap-1.5 rounded-md border border-border p-2">
+			<div class="grid grid-cols-1 gap-1.5 border border-border p-2">
 				<div class="flex items-center gap-2">
 					<span class="font-mono text-xs text-muted-foreground">{i + 1}.</span>
 					<Input
@@ -87,7 +87,7 @@
 						>
 					</label>
 					<Button
-						size="xs"
+						size="sm"
 						variant="outline"
 						disabled={steps.length === 1}
 						onclick={() => (steps = steps.filter((_, j) => j !== i))}>REMOVE</Button
@@ -103,7 +103,7 @@
 		{/each}
 		<div>
 			<Button
-				size="xs"
+				size="sm"
 				variant="outline"
 				onclick={() =>
 					(steps = [...steps, { title: '', instructions: '', requires_signoff: false }])}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { cn } from '#lib/utils.js';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -347,7 +348,12 @@
 	{/snippet}
 </PageHeader>
 
-<div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
+<div
+	class={cn(
+		'grid grid-cols-[minmax(0,1fr)] gap-4 p-4',
+		req.lifecycleState === 'draft' && '[&_section]:border-dashed'
+	)}
+>
 	<Section title="REQUIREMENT">
 		<DetailTable>
 			<ProjectRow id={req.projectId} code={req.projectCode} name={req.projectName} />
@@ -360,7 +366,7 @@
 						onsave={(t) => saveText('statement', t)}
 					/>
 				{:else}
-					<span class="font-mono text-xs">{req.statement}</span>
+					<span>{req.statement}</span>
 				{/if}
 			</DetailRow>
 			<DetailRow label="Rationale">
@@ -374,12 +380,12 @@
 				{:else if req.rationale}
 					{req.rationale}
 				{:else}
-					<span class="text-muted-foreground">—</span>
+					<span class="text-quiet">—</span>
 				{/if}
 			</DetailRow>
 		</DetailTable>
 		<div
-			class="grid grid-cols-1 border-t border-border md:grid-cols-2 md:divide-x md:divide-border"
+			class="grid grid-cols-1 items-start border-t border-border md:grid-cols-2 md:divide-x md:divide-border"
 		>
 			<DetailTable>
 				<DetailRow label="Category">
@@ -396,7 +402,6 @@
 				<DetailRow label="Parent">
 					{#if editing}
 						<NativeSelect
-							size="sm"
 							class="w-full"
 							value={String(req.parentId ?? '')}
 							onchange={(e) =>
@@ -414,12 +419,11 @@
 						<a href={`/requirements/${p.id}`} class="hover:underline"
 							><span class="mono text-info">{p.reqNumber}</span> {p.title}</a
 						>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Level">
 					{#if editing}
 						<NativeSelect
-							size="sm"
 							value={String(req.level)}
 							onchange={(e) => save({ level: Number(e.currentTarget.value) })}
 							aria-label="Level"
@@ -436,7 +440,6 @@
 				<DetailRow label="Verification method">
 					{#if editing}
 						<NativeSelect
-							size="sm"
 							value={req.verificationMethod ?? ''}
 							onchange={(e) =>
 								save({
@@ -468,7 +471,7 @@
 							aria-label="TBD"
 						/>
 					{:else if req.tbd}<State value="tbd" tone="error" label="TBD" />{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				</DetailRow>
 				<DetailRow label="TBR">
@@ -479,13 +482,12 @@
 							aria-label="TBR"
 						/>
 					{:else if req.tbr}<State value="tbr" tone="warn" label="TBR" />{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				</DetailRow>
 				<DetailRow label="TBR owner">
 					{#if editing}
 						<NativeSelect
-							size="sm"
 							value={String(req.tbrOwnerId ?? '')}
 							onchange={(e) =>
 								save({
@@ -523,7 +525,7 @@
 				<DetailRow label="Baselined">
 					{#if req.baselinedAt}
 						<Timestamp value={req.baselinedAt} />{req.baselinedBy ? ` by ${req.baselinedBy}` : ''}
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Created"><Timestamp value={req.createdAt} /></DetailRow>
 				<DetailRow label="Updated"><Timestamp value={req.updatedAt} /></DetailRow>
@@ -561,12 +563,7 @@
 	{#if req.children.length}
 		<Section title="FLOW-DOWN" count={req.children.length}>
 			{#snippet actions()}
-				{#if mutable}<Button
-						size="xs"
-						variant="ghost"
-						class="font-mono text-info"
-						onclick={() => (qcOpen = true)}>+ FLOW DOWN</Button
-					>{/if}
+				{#if mutable}<ActionLink onclick={() => (qcOpen = true)}>+ FLOW DOWN</ActionLink>{/if}
 			{/snippet}
 			<DataTable
 				rows={req.children}
@@ -582,7 +579,7 @@
 						<State value={c.lifecycleState} tone={lifecycleTone(c.lifecycleState)} />
 					{:else if col.key === 'stale'}
 						{#if c.stale}<State value="stale" tone="warn" label="STALE" />{:else}<span
-								class="text-muted-foreground">—</span
+								class="text-quiet">—</span
 							>{/if}
 					{:else if col.key === 'level'}{c.level}
 					{:else}{c.title}{/if}
@@ -627,7 +624,6 @@
 					{:else if col.key === 'status'}
 						{#if recording}
 							<NativeSelect
-								size="sm"
 								value={a.status}
 								onchange={(e) => setStatus(a, e.currentTarget.value)}
 								aria-label={`Verification of ${a.partName}`}
@@ -645,7 +641,7 @@
 							<span class="text-xs"
 								><Timestamp value={a.verifiedAt} />{a.verifiedBy ? ` ${a.verifiedBy}` : ''}</span
 							>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 						{#if a.outdated}<span
 								class="ml-2 font-mono text-xs font-medium text-warn"
 								title={`Closed against rev ${a.againstRevision}; rev ${req.revision} is not verified`}
@@ -668,9 +664,7 @@
 							/>
 						{:else}{a.notes ?? '—'}{/if}
 					{:else if editing}
-						<Button size="xs" variant="ghost" class="text-error" onclick={() => unassign(a)}
-							>UNASSIGN</Button
-						>
+						<ActionLink onclick={() => unassign(a)}>UNASSIGN</ActionLink>
 					{/if}
 				{/snippet}
 			</DataTable>
@@ -689,9 +683,7 @@
 
 	<Section title="REVISIONS" count={req.revisions.length}>
 		{#snippet actions()}
-			<Button size="xs" variant="ghost" href={`/audit?entity=requirement&record=${req.id}`}
-				>AUDIT</Button
-			>
+			<ActionLink href={`/audit?entity=requirement&record=${req.id}`}>AUDIT</ActionLink>
 		{/snippet}
 		<DataTable
 			rows={req.revisions}
@@ -708,7 +700,7 @@
 					<State value={r.lifecycleState} tone={lifecycleTone(r.lifecycleState)} />
 				{:else if col.key === 'statement'}
 					<span
-						class="line-clamp-2 font-mono text-xs {r.lifecycleState === 'superseded'
+						class="line-clamp-2 {r.lifecycleState === 'superseded'
 							? 'text-muted-foreground line-through'
 							: ''}">{r.statement}</span
 					>
@@ -719,13 +711,13 @@
 			<div class="grid grid-cols-1 gap-2 border-t border-border p-3">
 				<div class="flex items-center gap-2">
 					<span class="label">Redline</span>
-					<NativeSelect size="sm" bind:value={revA} aria-label="Redline from revision">
+					<NativeSelect bind:value={revA} aria-label="Redline from revision">
 						{#each req.revisions as r (r.id)}
 							<NativeSelectOption value={r.revision}>rev {r.revision}</NativeSelectOption>
 						{/each}
 					</NativeSelect>
 					<span class="font-mono text-muted-foreground">→</span>
-					<NativeSelect size="sm" bind:value={revB} aria-label="Redline to revision">
+					<NativeSelect bind:value={revB} aria-label="Redline to revision">
 						{#each req.revisions as r (r.id)}
 							<NativeSelectOption value={r.revision}>rev {r.revision}</NativeSelectOption>
 						{/each}
@@ -776,5 +768,5 @@
 />
 
 {#snippet assignPart({ props }: { props: Record<string, unknown> })}
-	<Button variant="ghost" size="xs" {...props} class="font-mono text-info">+ ASSIGN PART</Button>
+	<ActionLink {...props}>+ ASSIGN PART</ActionLink>
 {/snippet}

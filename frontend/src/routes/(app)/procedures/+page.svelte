@@ -97,9 +97,17 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/procedures/new" class="font-medium text-info hover:underline">+ NEW TEMPLATE</a>
+				<a
+					href="/procedures/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW TEMPLATE</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
@@ -108,7 +116,7 @@
 			{:else if col.key === 'name'}
 				<a href={`/procedures/${r.id}`} class="font-medium text-info hover:underline">{r.name}</a>
 			{:else if col.key === 'project'}
-				{r.projectCode}
+				<span class="text-quiet">{r.projectCode}</span>
 			{:else if col.key === 'type'}
 				{r.procedureType.toUpperCase()}
 			{:else if col.key === 'status'}
@@ -118,8 +126,7 @@
 					<State value={r.status} tone={r.status === 'draft' ? 'warn' : 'error'} badge />
 				{/if}
 			{:else if col.key === 'version'}
-				{#if r.currentVersionNumber}v{r.currentVersionNumber}{:else}<span
-						class="text-muted-foreground">—</span
+				{#if r.currentVersionNumber}v{r.currentVersionNumber}{:else}<span class="text-quiet">—</span
 					>{/if}
 			{:else if col.key === 'steps'}
 				{r.stepCount}
@@ -140,13 +147,13 @@
 			<div class="ml-auto flex items-center gap-2">
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={data.page <= 1}
 					onclick={() => setQuery({ page: null, cursor: null })}>← FIRST</Button
 				>
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={!data.result.next}
 					onclick={() => setQuery({ page: data.page + 1, cursor: data.result.next })}>NEXT →</Button
 				>

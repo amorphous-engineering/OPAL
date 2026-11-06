@@ -110,13 +110,14 @@
 		ok: 'text-ok',
 		warn: 'text-warn',
 		error: 'text-error',
-		info: 'text-info',
-		muted: 'text-muted-foreground',
+		info: 'text-foreground',
+		draft: 'text-tan',
+		muted: 'text-quiet',
 		default: 'text-foreground'
 	};
 
 	const priorityTone = (p: string): Tone =>
-		p === 'critical' ? 'error' : p === 'high' ? 'warn' : 'muted';
+		p === 'critical' ? 'error' : p === 'high' ? 'info' : p === 'low' ? 'muted' : 'default';
 
 	const issueCols: Column<IssueRow>[] = [
 		{ key: 'issueNumber', label: 'Issue', width: '6rem' },
@@ -243,7 +244,7 @@
 
 <div class="space-y-4 p-4">
 	<div
-		class="grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-4 xl:grid-cols-7"
+		class="grid grid-cols-2 overflow-hidden border border-border bg-card sm:grid-cols-4 xl:grid-cols-7"
 		aria-label="Attention summary"
 	>
 		{#each stats as s (s.label)}
@@ -254,16 +255,12 @@
 				<div class="label">{s.label}</div>
 				<div
 					class="font-mono text-2xl leading-8 tabular-nums {s.value === 0
-						? 'text-muted-foreground/50'
+						? ''
 						: `font-semibold ${valueClass[s.tone]}`}"
 				>
 					{s.value}
 				</div>
-				<div
-					class="font-mono text-xs {s.value === 0
-						? 'text-muted-foreground/50'
-						: 'text-muted-foreground'}"
-				>
+				<div class="font-mono text-xs text-muted-foreground">
 					{s.sub}
 				</div>
 			</a>
@@ -301,7 +298,7 @@
 							{:else if r.assignee}{r.assignee}
 							{:else}<span class="text-muted-foreground">{dash}</span>{/if}
 						{:else if r.holding}
-							<State value="hold" tone="warn" label="HOLD" />
+							<State value="hold" tone="error" label="HOLD" />
 						{:else}
 							<span class="text-muted-foreground">{dash}</span>
 						{/if}
@@ -339,7 +336,7 @@
 							{r.stepsDone}/{r.stepsTotal}
 						{:else if col.key === 'flag'}
 							{#if r.blocked}<State value="blocked" tone="error" label="BLOCKED" />
-							{:else if r.overdue}<State value="overdue" tone="warn" label="OVERDUE" />
+							{:else if r.overdue}<State value="overdue" tone="error" label="OVERDUE" />
 							{:else if r.status === 'cut'}<span
 									class="font-mono text-xs whitespace-nowrap text-muted-foreground"
 									>NOT STARTED</span
@@ -408,7 +405,7 @@
 						{:else if col.key === 'supplier'}
 							{r.supplier}
 						{:else if col.key === 'status'}
-							<State value={r.status} tone={r.status === 'partial' ? 'warn' : 'muted'} />
+							<State value={r.status} />
 						{:else if col.key === 'targetDate'}
 							{#if r.overdue}<span class="text-error"
 									><Timestamp value={r.targetDate} dateOnly /></span

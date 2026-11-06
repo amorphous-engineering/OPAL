@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		ActionLink,
 		confirm,
 		DetailRow,
 		DetailTable,
@@ -7,7 +8,6 @@
 		State,
 		toastError
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { opal } from '#lib/api.js';
 	import type { AgentActivation } from './types.js';
 
@@ -35,8 +35,8 @@
 <Section title="MCP agent">
 	{#snippet actions()}
 		{#if isAdmin}
-			<Button variant="ghost" size="xs" onclick={() => set(!state.enabled)}
-				>{state.enabled ? 'DISABLE' : 'ENABLE'}</Button
+			<ActionLink onclick={() => set(!state.enabled)}
+				>{state.enabled ? 'DISABLE' : 'ENABLE'}</ActionLink
 			>
 		{/if}
 	{/snippet}

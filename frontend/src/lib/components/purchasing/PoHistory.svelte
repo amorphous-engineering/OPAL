@@ -38,7 +38,7 @@
 			{:else if c.reason}
 				{c.reason}
 			{:else}
-				<span class="text-muted-foreground">—</span>
+				<span class="text-quiet">—</span>
 			{/if}
 		{/snippet}
 	</DataTable>

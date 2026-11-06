@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { opal } from '#lib/api.js';
-	import { PageHeader, Section, toastError, ErrorBanner } from '#lib/components/opal/index.js';
+	import {
+		ActionLink,
+		PageHeader,
+		Section,
+		toastError,
+		ErrorBanner
+	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -130,13 +136,7 @@
 
 	<Section title="Fields" count={rows.length}>
 		{#snippet actions()}
-			<Button
-				type="button"
-				variant="ghost"
-				size="xs"
-				class="font-mono text-info"
-				onclick={() => rows.push(blank())}>+ ADD FIELD</Button
-			>
+			<ActionLink type="button" onclick={() => rows.push(blank())}>+ ADD FIELD</ActionLink>
 		{/snippet}
 		<table class="w-full border-collapse text-sm">
 			<thead>
@@ -174,12 +174,12 @@
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<UnitPicker bind:value={row.unit} label={`Field ${i + 1} unit`} />
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<SpecEditor bind:draft={row.spec} unit={row.unit} label={`Field ${i + 1} spec`} />
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							<Checkbox bind:checked={row.required} aria-label={`Field ${i + 1} required`} />
@@ -187,15 +187,13 @@
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<Checkbox bind:checked={row.chart} aria-label={`Field ${i + 1} charted`} />
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5 text-right">
-							<Button
+							<ActionLink
 								type="button"
-								variant="ghost"
-								size="xs"
 								disabled={rows.length === 1}
-								onclick={() => rows.splice(i, 1)}>REMOVE</Button
+								onclick={() => rows.splice(i, 1)}>REMOVE</ActionLink
 							>
 						</td>
 					</tr>

@@ -65,7 +65,7 @@
 				{:else if col.key === 'status'}
 					{@const s = status(r)}
 					{#if s}<State value={s.label} tone={s.tone} label={s.label} />{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				{:else}
 					{qty(r.balance, part.unitOfMeasure)}

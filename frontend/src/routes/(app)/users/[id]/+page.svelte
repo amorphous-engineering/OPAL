@@ -6,12 +6,10 @@
 		confirm,
 		MoreMenu,
 		PageHeader,
-		Section,
 		State,
 		toast,
 		toastError
 	} from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { opal } from '#lib/api.js';
 	import { session } from '#lib/session.svelte.js';
 	import ActivitySection from '#lib/components/users/ActivitySection.svelte';
@@ -142,25 +140,32 @@
 		{#if !profile.isActive}<State value="inactive" tone="muted" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
-		{#if isAdmin}
+		{#if isAdmin || isSelf}
 			<MoreMenu
 				items={[
 					{
 						label: profile.isAdmin ? 'REMOVE ADMIN' : 'MAKE ADMIN',
 						onselect: toggleAdmin,
-						strike: profile.isAdmin
+						strike: profile.isAdmin,
+						when: isAdmin
 					},
 					{
 						label: 'RESET PASSWORD',
 						onselect: resetPassword,
 						strike: true,
-						when: !isSelf && profile.isActive && profile.hasPassword
+						when: isAdmin && !isSelf && profile.isActive && profile.hasPassword
 					},
 					{
 						label: profile.isActive ? 'DEACTIVATE' : 'REACTIVATE',
 						onselect: toggleActive,
 						strike: profile.isActive,
-						when: !isSelf
+						when: isAdmin && !isSelf
+					},
+					{
+						label: 'DEACTIVATE MY ACCOUNT',
+						onselect: deactivateSelf,
+						strike: true,
+						when: isSelf
 					}
 				]}
 			/>
@@ -199,14 +204,5 @@
 			<TokensSection />
 		{/if}
 		<ActivitySection entries={data.activity} userId={profile.id} />
-		{#if isSelf}
-			<Section title="Account">
-				<div class="p-3">
-					<Button variant="destructive" size="sm" onclick={deactivateSelf}
-						>DEACTIVATE MY ACCOUNT</Button
-					>
-				</div>
-			</Section>
-		{/if}
 	</div>
 </div>

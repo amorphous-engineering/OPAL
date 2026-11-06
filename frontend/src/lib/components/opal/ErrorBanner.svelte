@@ -1,5 +1,5 @@
 <script lang="ts">
-	// An error stated where it lands: one muted-red box (role=alert). It renders only while
+	// An error stated where it lands: one red box (role=alert). It renders only while
 	// `message` is set, so callers need no {#if}. `children` replaces the message when the
 	// error has structure (a list of problems).
 	import type { Snippet } from 'svelte';
@@ -14,9 +14,7 @@
 </script>
 
 {#if children || message}
-	<Alert.Root
-		class={cn('block rounded-md border-error/40 bg-error-muted text-xs text-error', className)}
-	>
+	<Alert.Root class={cn('block border-error bg-card text-xs text-error', className)}>
 		{#if children}{@render children()}{:else}{message}{/if}
 	</Alert.Root>
 {/if}

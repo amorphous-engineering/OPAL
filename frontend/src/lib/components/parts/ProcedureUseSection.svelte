@@ -34,7 +34,7 @@
 				{:else if col.key === 'name'}
 					{u.procedureName}
 				{:else if col.key === 'step'}
-					{#if u.stepTitle}{u.stepTitle}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if u.stepTitle}{u.stepTitle}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'role'}
 					<span class="font-mono text-xs text-muted-foreground">{stateLabel(u.role)}</span>
 				{:else if col.key === 'qty'}

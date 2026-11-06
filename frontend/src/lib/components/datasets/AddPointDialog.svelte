@@ -92,7 +92,7 @@
 								{#if specResult(f.spec, inputs[f.name]) === 'out_of_spec'}
 									<Badge
 										variant="outline"
-										class="border-error/50 bg-error-muted font-mono tracking-wider text-error"
+										class="border-error-fill bg-error-fill font-mono tracking-wider text-error-on dark:bg-error-fill"
 										>OUT OF SPEC</Badge
 									>
 								{/if}

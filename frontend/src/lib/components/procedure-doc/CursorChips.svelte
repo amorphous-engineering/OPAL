@@ -41,7 +41,7 @@
 			user={{ id: c.user_id, name: c.name ?? c.initials, avatar_url: c.avatar_url }}
 			size="xs"
 			class={cn(
-				c.user_id === viewerId && 'border-foreground/60 font-semibold',
+				c.user_id === viewerId && 'border-foreground font-semibold',
 				c.stale && 'opacity-50'
 			)}
 		/>
@@ -57,7 +57,7 @@
 {#if cursors.length && labor}
 	<Popover.Root bind:open>
 		<Popover.Trigger
-			class="inline-flex items-center gap-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+			class="inline-flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 			aria-label="Time worked"
 			onclick={(e: MouseEvent) => e.stopPropagation()}
 		>
@@ -107,7 +107,8 @@
 				{#if here.has(p.user_id)}
 					<Badge
 						variant="outline"
-						class="border-info/50 bg-info-muted font-mono tracking-wider text-info">IN</Badge
+						class="border-dotted border-foreground font-mono tracking-wider text-foreground dark:bg-transparent"
+						>IN</Badge
 					>
 				{/if}
 				<span class="w-20 text-right font-mono text-xs tabular-nums"

@@ -123,7 +123,7 @@
 			>
 				{#snippet display()}
 					{#if s.email}<a href={`mailto:${s.email}`} class="text-info hover:underline">{s.email}</a
-						>{:else}<span class="text-muted-foreground">—</span>{/if}
+						>{:else}<span class="text-quiet">—</span>{/if}
 				{/snippet}
 			</EditableRow>
 			<EditableRow
@@ -150,7 +150,7 @@
 							target="_blank"
 							rel="noopener noreferrer"
 							class="break-all text-info hover:underline">{s.website}</a
-						>{:else}<span class="text-muted-foreground">—</span>{/if}
+						>{:else}<span class="text-quiet">—</span>{/if}
 				{/snippet}
 			</EditableRow>
 			<EditableRow
@@ -201,9 +201,9 @@
 							<Timestamp value={r.orderedAt} dateOnly />
 						{:else if col.key === 'targetDate'}
 							{#if r.targetDate}<span class={r.isOverdue ? 'text-error' : ''}>{r.targetDate}</span
-								>{:else}<span class="text-muted-foreground">—</span>{/if}
+								>{:else}<span class="text-quiet">—</span>{/if}
 						{:else if col.key === 'lines'}
-							{#if r.totalLines === 0}<span class="text-muted-foreground">—</span
+							{#if r.totalLines === 0}<span class="text-quiet">—</span
 								>{:else}{r.linesComplete}/{r.totalLines}{/if}
 						{:else if col.key === 'totalCost'}
 							{money(r.totalCost)}

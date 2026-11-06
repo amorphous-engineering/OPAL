@@ -167,13 +167,13 @@
 				>
 				{#if n.body}<div class="text-xs text-muted-foreground">{n.body}</div>{/if}
 			{:else if col.key === 'actorName'}
-				{#if n.actorName}{n.actorName}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if n.actorName}{n.actorName}{:else}<span class="text-quiet">—</span>{/if}
 			{:else}
 				<span class="inline-flex gap-1">
 					{#if !n.readAt}
-						<Button variant="outline" size="xs" onclick={() => markRead(n)}>MARK READ</Button>
+						<Button variant="outline" size="sm" onclick={() => markRead(n)}>MARK READ</Button>
 					{/if}
-					<Button variant="outline" size="xs" onclick={() => dismiss(n)}>DISMISS</Button>
+					<Button variant="outline" size="sm" onclick={() => dismiss(n)}>DISMISS</Button>
 				</span>
 			{/if}
 		{/snippet}
@@ -181,5 +181,8 @@
 </ListFrame>
 
 {#snippet clearAction()}
-	<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+	<a
+		href={page.url.pathname}
+		class="font-mono text-xs font-medium tracking-wide text-info hover:underline">CLEAR FILTERS</a
+	>
 {/snippet}

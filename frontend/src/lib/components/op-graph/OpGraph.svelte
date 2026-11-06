@@ -215,19 +215,17 @@
 		width: 100%;
 		height: 100%;
 		min-height: 240px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md, 6px);
 		background: var(--card);
 		overflow: hidden;
 
 		--opg-edge: var(--muted-foreground);
-		--opg-line: color-mix(in oklab, var(--foreground) 24%, var(--card));
+		--opg-line: var(--border);
 		--opg-edge-sel: var(--info);
 		--xy-background-color: var(--card);
 		--xy-node-color: var(--foreground);
 		--xy-node-background-color: var(--card);
 		--xy-node-border: 1px solid var(--border);
-		--xy-node-border-radius: 4px;
+		--xy-node-border-radius: 0;
 		--xy-node-boxshadow-hover: none;
 		--xy-node-boxshadow-selected: none;
 		--xy-edge-stroke: var(--opg-edge);
@@ -245,7 +243,7 @@
 		--xy-controls-box-shadow: none;
 		--xy-edge-label-background-color: var(--card);
 		--xy-edge-label-color: var(--foreground);
-		--xy-selection-background-color: var(--info-muted);
+		--xy-selection-background-color: var(--muted);
 		--xy-selection-border: 1px dotted var(--info);
 	}
 	.op-graph :global(.svelte-flow) {
@@ -257,7 +255,7 @@
 	.op-graph :global(.svelte-flow__controls) {
 		box-shadow: none;
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: 0;
 		overflow: hidden;
 	}
 	.op-graph :global(.svelte-flow__controls-button) {
@@ -290,7 +288,7 @@
 		color: var(--foreground);
 		border: 1px solid var(--opg-line);
 		border-left: 3px solid var(--opg-line);
-		border-radius: 4px;
+		border-radius: 0;
 		font-size: var(--text-xs);
 		line-height: 1.2;
 		--opg-tone: var(--foreground);
@@ -327,11 +325,11 @@
 	.op-graph :global(.opg-node.selected) {
 		border-color: var(--info);
 		border-left-color: var(--info);
-		background: var(--info-muted);
+		background: var(--muted);
 	}
 	.op-graph :global(.opg-node.flash) {
 		border-color: var(--error);
-		background: var(--error-muted);
+		background: var(--muted);
 	}
 	.op-graph :global(.opg-row) {
 		display: flex;
@@ -377,7 +375,7 @@
 		padding: 3px;
 		background: var(--popover);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: 0;
 		white-space: nowrap;
 	}
 
@@ -387,7 +385,7 @@
 		height: 8px;
 		min-width: 0;
 		min-height: 0;
-		border-radius: 2px;
+		border-radius: 0;
 		border: 1px solid var(--card);
 		background: var(--info);
 	}
@@ -420,7 +418,7 @@
 		color: var(--muted-foreground);
 		background: var(--card);
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: 0;
 		cursor: pointer;
 	}
 	.op-graph :global(.opg-remove:hover) {

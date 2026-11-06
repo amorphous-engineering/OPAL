@@ -67,9 +67,17 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/projects/new" class="font-medium text-info hover:underline">+ NEW PROJECT</a>
+				<a
+					href="/projects/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW PROJECT</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(p, col)}
@@ -77,9 +85,9 @@
 				<span class="font-mono text-info">{p.code}</span>
 			{:else if col.key === 'description'}
 				{#if p.description}<span class="line-clamp-1 text-muted-foreground">{p.description}</span
-					>{:else}<span class="text-muted-foreground">—</span>{/if}
+					>{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'state'}
-				{#if p.state === 'archived'}<State value="archived" tone="warn" />{:else}<span
+				{#if p.state === 'archived'}<State value="archived" tone="muted" />{:else}<span
 						class="font-mono text-xs text-muted-foreground">ACTIVE</span
 					>{/if}
 			{:else if col.key === 'createdAt'}

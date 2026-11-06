@@ -10,7 +10,7 @@
 </script>
 
 {#if !value}
-	<span class="text-muted-foreground">—</span>
+	<span class="text-quiet">—</span>
 {:else}
 	<time
 		class="font-mono text-xs whitespace-nowrap tabular-nums"

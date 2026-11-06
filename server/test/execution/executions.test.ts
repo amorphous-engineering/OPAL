@@ -97,6 +97,27 @@ describe('reading and editing', () => {
 		expect((await t.ok('GET', `/executions?limit=1&cursor=${p1.next}`)).items).toHaveLength(1);
 	});
 
+	test('last action follows what people did, and a cut order nobody touched answers with its cut', async () => {
+		const t = await setup();
+		const first = await t.cut(await t.published(['A', 'B'], {}));
+		const second = await t.cut(await t.published(['A', 'B'], {}));
+		const numbers = async (query: string) => (await t.ok('GET', `/executions?${query}`)).items.map((e: any) => e.woNumber);
+		const lastAction = async (id: number) => (await t.get(id)).lastActionAt;
+
+		expect(await lastAction(first.id)).toBe(first.createdAt);
+		expect(await numbers('sort=lastAction&dir=desc')).toEqual([second.woNumber, first.woNumber]);
+
+		await Bun.sleep(2);
+		await t.complete(first.id, '1');
+		expect(await lastAction(first.id)).not.toBe(first.createdAt);
+		expect(await numbers('sort=lastAction&dir=desc')).toEqual([first.woNumber, second.woNumber]);
+		expect(await numbers('sort=lastAction&dir=asc')).toEqual([second.woNumber, first.woNumber]);
+
+		await Bun.sleep(2);
+		await t.ok('POST', `/executions/${second.id}/comments`, { body: 'Bench is free' });
+		expect(await numbers('sort=lastAction&dir=desc')).toEqual([second.woNumber, first.woNumber]);
+	});
+
 	test('an unknown execution is 404', async () => {
 		const t = await setup();
 		expect((await t.call('GET', '/executions/999')).status).toBe(404);

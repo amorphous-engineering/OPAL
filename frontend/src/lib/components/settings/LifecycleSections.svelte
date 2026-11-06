@@ -107,9 +107,9 @@
 	</DetailTable>
 	<div class="flex gap-2 border-t border-border p-3">
 		{#if current.demoActive}
-			<Button size="sm" disabled={busy} onclick={exit}>EXIT DEMO</Button>
+			<Button variant="outline" size="sm" disabled={busy} onclick={exit}>EXIT DEMO</Button>
 		{:else}
-			<Button size="sm" disabled={busy} onclick={enter}
+			<Button variant="outline" size="sm" disabled={busy} onclick={enter}
 				>{current.demoFileExists ? 'RESUME DEMO' : 'ENTER DEMO'}</Button
 			>
 			{#if current.demoFileExists}
@@ -121,8 +121,8 @@
 	</div>
 </Section>
 
-<Section title="Factory reset" class="border-error/50">
+<Section title="Factory reset">
 	<div class="p-3">
-		<Button variant="destructive" size="sm" disabled={busy} onclick={reset}>FACTORY RESET</Button>
+		<Button variant="outline" size="sm" disabled={busy} onclick={reset}>FACTORY RESET</Button>
 	</div>
 </Section>

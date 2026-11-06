@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { opal } from '#lib/api.js';
 	import {
+		ActionLink,
 		PageHeader,
 		Section,
 		DataTable,
@@ -226,7 +227,7 @@
 					<ProjectRow id={ds.projectId} code={ds.projectCode} name={ds.projectName} />
 					<!-- added by projects -->
 					<DetailRow label="State"
-						>{#if archived}<State value="archived" tone="warn" badge />{:else}<span
+						>{#if archived}<State value="archived" tone="muted" badge />{:else}<span
 								class="font-mono text-xs text-muted-foreground">ACTIVE</span
 							>{/if}</DetailRow
 					>
@@ -235,12 +236,12 @@
 							<a href={`/procedures/${ds.procedureId}`} class="text-info hover:underline"
 								>{procedureName}</a
 							>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					</DetailRow>
 					<DetailRow label="Description">
 						{#if ds.description}
 							<span class="whitespace-pre-wrap">{ds.description}</span>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					</DetailRow>
 					<DetailRow label="Created"><Timestamp value={ds.createdAt} /></DetailRow>
 					<DetailRow label="Updated"><Timestamp value={ds.updatedAt} /></DetailRow>
@@ -268,15 +269,14 @@
 					{#if col.key === 'chart'}
 						{row.type === 'number' ? (row.chart ? 'YES' : 'NO') : '—'}
 					{:else if col.key === 'unit'}
-						{#if row.unit}{unitSymbol(row.unit)}{:else}<span class="text-muted-foreground">—</span
-							>{/if}
+						{#if row.unit}{unitSymbol(row.unit)}{:else}<span class="text-quiet">—</span>{/if}
 					{:else if col.key === 'spec'}
 						{#if row.spec}{specText(row.spec, row.unit)}
 						{:else if row.min !== undefined || row.max !== undefined}{row.min ?? ''} … {row.max ??
-								''}{:else}<span class="text-muted-foreground">—</span>{/if}
+								''}{:else}<span class="text-quiet">—</span>{/if}
 					{:else}
 						{@const v = (row as unknown as Record<string, string | undefined>)[col.key]}
-						{#if v}{v}{:else}<span class="text-muted-foreground">—</span>{/if}
+						{#if v}{v}{:else}<span class="text-quiet">—</span>{/if}
 					{/if}
 				{/snippet}
 			</DataTable>
@@ -288,7 +288,6 @@
 			{#snippet actions()}
 				{#if numeric.length > 1}
 					<NativeSelect
-						size="sm"
 						aria-label="Chart field"
 						value={data.field}
 						onchange={(e) => setQuery({ field: e.currentTarget.value })}
@@ -327,14 +326,13 @@
 					{:else if col.key === 'source'}
 						{#if row.stepExecutionId !== null}
 							<span class="font-mono text-xs">Execution step</span>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					{:else if col.key === 'actions'}
 						{#if row.struck}
 							<span class="font-mono text-xs" title={row.struck.reason}
 								>STRUCK <Timestamp value={row.struck.at} /> · {row.struck.reason}</span
 							>
-						{:else if !archived}<Button variant="ghost" size="xs" onclick={() => strikePoint(row)}
-								>STRIKE</Button
+						{:else if !archived}<ActionLink onclick={() => strikePoint(row)}>STRIKE</ActionLink
 							>{/if}
 					{:else}
 						{@const name = col.key.slice(2)}
@@ -348,11 +346,11 @@
 							{#if !row.struck && f?.spec && specResult(f.spec, row.values[name]) === 'out_of_spec'}
 								<Badge
 									variant="outline"
-									class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+									class="ml-2 border-error-fill bg-error-fill font-mono tracking-wider text-error-on dark:bg-error-fill"
 									>OUT OF SPEC</Badge
 								>
 							{/if}
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					{/if}
 				{/snippet}
 			</DataTable>

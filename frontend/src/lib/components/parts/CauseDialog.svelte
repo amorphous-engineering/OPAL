@@ -58,8 +58,10 @@
 			</FormField>
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (open = false)}>CANCEL</Button>
-				<Button type="submit" variant={destructive ? 'destructive' : 'default'} disabled={busy}
-					>{action}</Button
+				<Button
+					type="submit"
+					class={destructive ? 'bg-error-fill text-error-on shadow-key hover:bg-error-fill' : ''}
+					disabled={busy}>{action}</Button
 				>
 			</Dialog.Footer>
 		</form>

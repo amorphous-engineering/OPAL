@@ -160,7 +160,7 @@
 					<span class="flex justify-end gap-3">
 						{#if r.status !== 'verified'}<ActionLink onclick={() => verify(r)}>VERIFY</ActionLink
 							>{/if}
-						<ActionLink danger onclick={() => unassign(r)}>REMOVE</ActionLink>
+						<ActionLink onclick={() => unassign(r)}>REMOVE</ActionLink>
 					</span>
 				{/if}
 			{/snippet}

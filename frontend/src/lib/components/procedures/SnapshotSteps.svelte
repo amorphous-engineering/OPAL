@@ -53,7 +53,7 @@
 						src={`/api/blobs/${img.sha256}`}
 						alt={img.caption ?? ''}
 						loading="lazy"
-						class="max-h-40 rounded-md border border-border"
+						class="max-h-40 border border-border"
 					/>
 					{#if img.caption}<figcaption class="mt-0.5 text-xs text-muted-foreground">
 							{img.caption}
@@ -103,7 +103,7 @@
 
 {#snippet signoffs(s: SnapshotStep)}
 	{#if s.signoffs.length}
-		<div class="my-1 max-w-xl overflow-hidden rounded-lg border border-border">
+		<div class="my-1 max-w-xl overflow-hidden border border-border">
 			<table class="w-full font-mono text-xs" aria-label="Sign-offs">
 				<tbody>
 					{#each s.signoffs as so, i (i)}

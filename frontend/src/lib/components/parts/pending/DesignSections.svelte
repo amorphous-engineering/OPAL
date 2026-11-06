@@ -189,7 +189,7 @@
 							class="text-info hover:underline">{r.requirement_id}</a
 						>{:else}{r.requirement_id}{/if}
 				{:else if col.key === 'title'}
-					{#if r.title}{r.title}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r.title}{r.title}{:else}<span class="text-quiet">—</span>{/if}
 					{#if r.tbd}<State value="tbd" tone="warn" label="TBD" class="ml-2" />{/if}
 					{#if r.tbr}<State value="tbr" tone="warn" label="TBR" class="ml-2" />{/if}
 					{#if r.stale}<State value="stale" tone="warn" label="STALE" class="ml-2" />{/if}
@@ -203,7 +203,7 @@
 						tone={r.status === 'verified' ? 'ok' : r.status === 'open' ? 'default' : 'muted'}
 					/>
 				{:else}
-					<ActionLink danger onclick={() => unassign(r)}>REMOVE</ActionLink>
+					<ActionLink onclick={() => unassign(r)}>REMOVE</ActionLink>
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -226,7 +226,7 @@
 			<Input id="test-name" bind:value={tName} required />
 		</FormField>
 		<FormField label="Type" for="test-type" class="w-32">
-			<NativeSelect.Root id="test-type" size="sm" class="w-full" bind:value={tType}>
+			<NativeSelect.Root id="test-type" class="w-full" bind:value={tType}>
 				<NativeSelect.Option value="boolean">PASS / FAIL</NativeSelect.Option>
 				<NativeSelect.Option value="numeric">NUMERIC</NativeSelect.Option>
 				<NativeSelect.Option value="text">TEXT</NativeSelect.Option>
@@ -266,9 +266,9 @@
 					<span class="font-mono text-xs text-muted-foreground">{stateLabel(t.test_type)}</span>
 				{:else if col.key === 'range'}
 					{@const r = range(t)}
-					{#if r}{r}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r}{r}{:else}<span class="text-quiet">—</span>{/if}
 				{:else}
-					<ActionLink danger onclick={() => removeTest(t)}>DELETE</ActionLink>
+					<ActionLink onclick={() => removeTest(t)}>DELETE</ActionLink>
 				{/if}
 			{/snippet}
 		</DataTable>

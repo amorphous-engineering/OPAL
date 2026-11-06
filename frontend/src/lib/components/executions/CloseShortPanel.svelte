@@ -65,7 +65,7 @@
 		<Button
 			type="submit"
 			size="sm"
-			variant="destructive"
+			class="bg-error-fill text-error-on shadow-key hover:bg-error-fill"
 			disabled={busy || !reason.trim() || !issueId}>CLOSE SHORT</Button
 		>
 		<Button size="sm" variant="ghost" onclick={() => store.closePanel()}>CANCEL</Button>

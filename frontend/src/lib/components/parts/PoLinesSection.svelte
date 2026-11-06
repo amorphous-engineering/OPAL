@@ -51,13 +51,13 @@
 				{:else if col.key === 'received'}
 					{qty(l.qtyReceived)}/{qtyUnit(l.qtyOrdered, detail.part.unitOfMeasure)}
 				{:else if col.key === 'cost'}
-					{#if l.unitCost === null}<span class="text-muted-foreground">—</span>{:else}{unitMoney(
+					{#if l.unitCost === null}<span class="text-quiet">—</span>{:else}{unitMoney(
 							l.unitCost
 						)}{/if}
 				{:else if l.targetDate}
 					<Timestamp value={l.targetDate} dateOnly />
 				{:else}
-					<span class="text-muted-foreground">—</span>
+					<span class="text-quiet">—</span>
 				{/if}
 			{/snippet}
 		</DataTable>

@@ -7,6 +7,7 @@
 	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import {
+		ActionLink,
 		DataTable,
 		DetailRow,
 		DetailTable,
@@ -402,7 +403,7 @@
 	{#if at}
 		{by ?? '—'} · <Timestamp value={at} />
 	{:else}
-		<span class="text-muted-foreground">—</span>
+		<span class="text-quiet">—</span>
 	{/if}
 {/snippet}
 
@@ -552,13 +553,12 @@
 						</DetailRow>
 						{#if hasRedlineAction && redlineHref}
 							<DetailRow label="Redline">
-								<Button size="xs" variant="outline" href={redlineHref}>SPAWN REDLINE OP</Button>
+								<Button size="sm" variant="outline" href={redlineHref}>SPAWN REDLINE OP</Button>
 							</DetailRow>
 						{/if}
 					{:else if editObservation}
 						<DetailRow label="Type">
 							<NativeSelect
-								size="sm"
 								aria-label="Disposition type"
 								bind:value={dispType}
 								onchange={saveDraft}
@@ -609,7 +609,7 @@
 							{#if issue.dispositionRationale}
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								<div class="prose-opal">{@html markdown(issue.dispositionRationale)}</div>
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</DetailRow>
 					{/if}
 				</DetailTable>
@@ -658,11 +658,11 @@
 
 		{#snippet addFiles()}
 			{#if !voided}
-				<Button size="xs" variant="outline" disabled={uploading} onclick={() => fileInput?.click()}>
+				<Button size="sm" variant="outline" disabled={uploading} onclick={() => fileInput?.click()}>
 					+ ADD FILE
 				</Button>
 				<Button
-					size="xs"
+					size="sm"
 					variant="outline"
 					disabled={uploading}
 					onclick={() => cameraInput?.click()}
@@ -726,9 +726,7 @@
 	<div class="grid grid-cols-1 content-start gap-4">
 		<Section title="Issue">
 			{#snippet actions()}
-				<Button size="xs" variant="ghost" href={`/audit?entity=issue&record=${issue.id}`}
-					>AUDIT</Button
-				>
+				<ActionLink href={`/audit?entity=issue&record=${issue.id}`}>AUDIT</ActionLink>
 			{/snippet}
 			<DetailTable>
 				<ProjectRow id={issue.projectId} code={issue.projectCode} name={issue.projectName} />
@@ -736,7 +734,6 @@
 				<DetailRow label="Type">
 					{#if editObservation}
 						<NativeSelect
-							size="sm"
 							aria-label="Type"
 							value={issue.issueType}
 							onchange={(e) => act(() => patch({ issueType: e.currentTarget.value as IssueType }))}
@@ -750,7 +747,6 @@
 				<DetailRow label="Priority">
 					{#if editing}
 						<NativeSelect
-							size="sm"
 							aria-label="Priority"
 							value={issue.priority}
 							onchange={(e) =>
@@ -765,7 +761,6 @@
 				<DetailRow label="Containment">
 					{#if editObservation}
 						<NativeSelect
-							size="sm"
 							aria-label="Containment"
 							value={issue.containment}
 							onchange={widenContainment}
@@ -779,7 +774,6 @@
 				<DetailRow label="Assigned to">
 					{#if editing}
 						<NativeSelect
-							size="sm"
 							aria-label="Assigned to"
 							value={issue.assignedTo === null ? '' : String(issue.assignedTo.id)}
 							onchange={(e) =>
@@ -834,7 +828,7 @@
 				{#if editObservation}
 					<PartPicker align="end" onselect={(p) => p && addPart(p.id)}>
 						{#snippet trigger({ props })}
-							<Button {...props} size="xs" variant="outline">+ PART</Button>
+							<Button {...props} size="sm" variant="outline">+ PART</Button>
 						{/snippet}
 					</PartPicker>
 				{/if}
@@ -859,14 +853,14 @@
 								</li>
 							{/each}
 						</ul>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Procedure">
 					{#if issue.execution?.procedureId}
 						<a href={`/procedures/${issue.execution.procedureId}`} class="text-info hover:underline"
 							>{issue.execution.procedureName}</a
 						>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Execution">
 					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
@@ -883,13 +877,12 @@
 									onclick={() => act(() => patch({ executionId: null }))}>CLEAR</button
 								>
 							{/if}
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					</div>
 				</DetailRow>
 				<DetailRow label="Boundary">
 					{#if editObservation && issue.execution && data.steps.length}
 						<NativeSelect
-							size="sm"
 							aria-label="Containment boundary step"
 							value={issue.containmentStepId === null ? '' : String(issue.containmentStepId)}
 							onchange={setBoundary}
@@ -904,7 +897,7 @@
 						</NativeSelect>
 					{:else if issue.containmentStepLabel}
 						<span class="font-mono">{issue.containmentStepLabel}</span>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Raised at" mono>
 					{#if issue.raisedStepLabel && issue.execution}
@@ -912,7 +905,7 @@
 							href={`/executions/${issue.execution.id}?op=${issue.raisedOpOrder ?? ''}`}
 							class="text-info hover:underline">{issue.raisedStepLabel}</a
 						>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				{#if issue.redlineOps.length}
 					<DetailRow label="Redline ops">

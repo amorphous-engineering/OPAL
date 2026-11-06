@@ -136,7 +136,7 @@
 				{#if col.key === 'partInternalPn'}
 					<a href={`/parts/${r.partId}`} class="text-info hover:underline">{r.partInternalPn}</a>
 				{:else if col.key === 'isPreferred'}
-					{#if r.isPreferred}<State value="preferred" tone="ok" />{/if}
+					{#if r.isPreferred}<State value="preferred" tone="default" />{/if}
 				{:else if col.key === 'leadTimeDays'}
 					{#if r.leadTimeDays != null}{r.leadTimeDays}{:else}<span class="text-muted-foreground"
 							>—</span
@@ -146,7 +146,7 @@
 				{:else if col.key === 'lastOrderedAt'}
 					<Timestamp value={r.lastOrderedAt} dateOnly />
 				{:else if col.key === 'notes'}
-					{#if r.notes}{r.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r.notes}{r.notes}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'actions'}
 					<span class="inline-flex gap-3">
 						<ActionLink onclick={() => openDialog(r)}>EDIT</ActionLink>
@@ -171,7 +171,7 @@
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label class="label" for="cat-part">Part</Label>
 				{#if editing}
-					<div class="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-xs">
+					<div class="flex h-8 items-center gap-2 border border-border px-2.5 text-xs">
 						<span class="font-mono text-info">{editing.partInternalPn}</span>
 						<span class="truncate">{editing.partName}</span>
 					</div>

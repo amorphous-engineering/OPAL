@@ -63,7 +63,7 @@
 	]}
 >
 	{#snippet state()}
-		{#if v.isCurrent}<State value="released" tone="ok" label="CURRENT" />{:else}<State
+		{#if v.isCurrent}<State value="released" tone="default" label="CURRENT" />{:else}<State
 				value="obsolete"
 				tone="muted"
 				label="SUPERSEDED"

@@ -1,7 +1,6 @@
 <script lang="ts">
 	// Right column: recent executions, open issues and reference documents.
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { EmptyLine, Section, State } from '#lib/components/opal/index.js';
+	import { ActionLink, EmptyLine, Section, State } from '#lib/components/opal/index.js';
 	import { ticketLabel, ticketTone } from '#lib/components/issues/issues.js';
 	import ReferenceDocs from './ReferenceDocs.svelte';
 	import type { TemplateData } from './template-data.js';
@@ -38,9 +37,7 @@
 		>
 			{#snippet actions()}
 				{#if execs.total > execs.items.length}
-					<Button size="xs" variant="ghost" href={`/executions?procedure=${p.id}&status=all`}
-						>ALL →</Button
-					>
+					<ActionLink href={`/executions?procedure=${p.id}&status=all`}>ALL →</ActionLink>
 				{/if}
 			{/snippet}
 			<div class="min-h-0 overflow-x-hidden overflow-y-auto">
@@ -72,9 +69,7 @@
 		>
 			{#snippet actions()}
 				{#if issues.total > issues.items.length}
-					<Button size="xs" variant="ghost" href={`/issues?procedure=${p.id}&status=open`}
-						>ALL →</Button
-					>
+					<ActionLink href={`/issues?procedure=${p.id}&status=open`}>ALL →</ActionLink>
 				{/if}
 			{/snippet}
 			<div class="min-h-0 overflow-x-hidden overflow-y-auto">

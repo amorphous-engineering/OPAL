@@ -161,23 +161,31 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/risks/new" class="font-medium text-info hover:underline">+ NEW RISK</a>
+				<a
+					href="/risks/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW RISK</a
+				>
 			{/if}
 		{/snippet}
 		{#snippet cell(r, col)}
 			{#if col.key === 'riskNumber'}
 				<span class="font-mono text-info">{r.riskNumber}</span>
 			{:else if col.key === 'project'}
-				{r.projectCode}
+				<span class="text-quiet">{r.projectCode}</span>
 			{:else if col.key === 'title'}
 				{r.title}
 			{:else if col.key === 'asset'}
 				{#if r.assetDisplay}<span
 						class="block max-w-[32rem] truncate text-muted-foreground"
 						title={r.assetDisplay}>{r.assetDisplay}</span
-					>{:else}<span class="text-muted-foreground">—</span>{/if}
+					>{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'disposition'}
 				<State value={r.disposition} tone={dispositionTone(r.disposition)} />
 			{:else if col.key === 'score'}
@@ -188,7 +196,7 @@
 					residualSeverity={r.residualSeverity}
 				/>
 			{:else if col.key === 'owner'}
-				{#if r.ownerName}{r.ownerName}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if r.ownerName}{r.ownerName}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'reviewed'}
 				<Timestamp value={r.lastReviewedAt} />
 			{/if}
@@ -203,13 +211,13 @@
 			<div class="ml-auto flex items-center gap-2">
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={q.page <= 1}
 					onclick={() => setQuery({ page: null, cursor: null })}>← FIRST</Button
 				>
 				<Button
 					variant="outline"
-					size="xs"
+					size="sm"
 					disabled={!data.list.next}
 					onclick={() => setQuery({ page: q.page + 1, cursor: data.list.next })}>NEXT →</Button
 				>

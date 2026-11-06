@@ -93,14 +93,14 @@
 			{#each others as o (o.order)}
 				<Button
 					size="sm"
-					variant={waits.has(o.order) ? 'default' : 'outline'}
+					variant="outline"
 					aria-pressed={waits.has(o.order)}
 					title={o.title}
 					class={cn('font-mono', !waits.has(o.order) && 'text-muted-foreground')}
 					onclick={() => toggleWait(o.order)}>OP {o.number}</Button
 				>
 			{:else}
-				<span class="font-mono text-xs text-muted-foreground">—</span>
+				<span class="font-mono text-xs text-quiet">—</span>
 			{/each}
 		</div>
 	</div>

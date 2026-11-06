@@ -4,10 +4,9 @@
 	// time, markdown body. The composer sends on Enter (Shift+Enter for a new line). Live: a
 	// comment from anyone reloads the thread through the store's event stream.
 	import ArrowUpIcon from 'phosphor-svelte/lib/ArrowUp';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import * as MessageScroller from '#lib/components/ui/message-scroller/index.js';
-	import { Avatar, Section, Timestamp } from '#lib/components/opal/index.js';
+	import { ActionLink, Avatar, Section, Timestamp } from '#lib/components/opal/index.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import { cn } from '#lib/utils.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
@@ -63,8 +62,8 @@
 >
 	{#snippet actions()}
 		{#if all.length > LAST}
-			<Button size="xs" variant="ghost" aria-pressed={collapsed} onclick={toggle}
-				>{collapsed ? 'EXPAND' : 'COLLAPSE'}</Button
+			<ActionLink aria-expanded={!collapsed} onclick={toggle}
+				>{collapsed ? 'EXPAND' : 'COLLAPSE'}</ActionLink
 			>
 		{/if}
 	{/snippet}
@@ -119,7 +118,7 @@
 			<InputGroup.Addon align="block-end" class="pt-1">
 				<InputGroup.Button
 					type="submit"
-					variant="default"
+					variant="outline"
 					size="icon-sm"
 					disabled={!draft.trim() || sending}
 					class="ml-auto"

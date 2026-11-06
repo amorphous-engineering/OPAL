@@ -125,7 +125,7 @@
 				<TemplateDetails {data} editing={false} onchange={onreload} />
 			{:else if tab === 'graph'}
 				<OpGraph
-					class="h-full min-h-80 rounded-lg border border-border"
+					class="h-full min-h-80 border border-border"
 					nodes={graph.nodes}
 					edges={graph.edges}
 					editable={false}
@@ -133,7 +133,7 @@
 					onselect={(id) => (selected = id)}
 				>
 					{#snippet nodeActions(node)}
-						<Button size="xs" variant="outline" onclick={() => jump(node.id)}>OPEN</Button>
+						<Button size="sm" variant="outline" onclick={() => jump(node.id)}>OPEN</Button>
 					{/snippet}
 				</OpGraph>
 			{:else}

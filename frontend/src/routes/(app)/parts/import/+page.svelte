@@ -168,7 +168,7 @@
 				rows={preview.rows}
 				{columns}
 				key={(r) => r.rowNumber}
-				rowClass={(r) => (r.valid ? undefined : 'bg-error-muted/40')}
+				rowClass={(r) => (r.valid ? undefined : 'text-error')}
 				emptyLabel="ROWS"
 			>
 				{#snippet cell(r, col)}
@@ -182,13 +182,13 @@
 								>{skipDuplicates ? 'skipped' : 'imported'}</span
 							>
 						{:else}
-							<span class="text-muted-foreground">—</span>
+							<span class="text-quiet">—</span>
 						{/if}
 					{:else if col.key === 'reorderPoint'}
 						{r.reorderPoint === null ? '—' : qty(r.reorderPoint)}
 					{:else}
 						{@const v = (r as unknown as Record<string, unknown>)[col.key]}
-						{#if v === null || v === ''}<span class="text-muted-foreground">—</span>{:else}{v}{/if}
+						{#if v === null || v === ''}<span class="text-quiet">—</span>{:else}{v}{/if}
 					{/if}
 				{/snippet}
 			</DataTable>

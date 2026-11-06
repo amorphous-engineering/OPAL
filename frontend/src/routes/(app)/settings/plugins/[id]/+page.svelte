@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import {
+		ActionLink,
 		confirm,
 		DataTable,
 		DetailRow,
@@ -403,24 +404,18 @@
 	<Section title="Process">
 		{#snippet actions()}
 			{#if plugin.enabled}
-				<Button
-					variant="ghost"
-					size="xs"
+				<ActionLink
 					disabled={busy}
-					onclick={() => act(() => opal.plugins.restart({ id: plugin.id }))}>RESTART</Button
+					onclick={() => act(() => opal.plugins.restart({ id: plugin.id }))}>RESTART</ActionLink
 				>
-				<Button
-					variant="ghost"
-					size="xs"
+				<ActionLink
 					disabled={busy}
-					onclick={() => act(() => opal.plugins.disable({ id: plugin.id }))}>DISABLE</Button
+					onclick={() => act(() => opal.plugins.disable({ id: plugin.id }))}>DISABLE</ActionLink
 				>
 			{:else}
-				<Button
-					variant="ghost"
-					size="xs"
+				<ActionLink
 					disabled={busy}
-					onclick={() => act(() => opal.plugins.enable({ id: plugin.id }))}>ENABLE</Button
+					onclick={() => act(() => opal.plugins.enable({ id: plugin.id }))}>ENABLE</ActionLink
 				>
 			{/if}
 		{/snippet}

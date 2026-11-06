@@ -16,7 +16,7 @@
 	]}
 >
 	{#snippet state()}
-		{#if data.part.state === 'draft'}<State value="draft" tone="warn" badge />{/if}
+		{#if data.part.state === 'draft'}<State value="draft" badge />{/if}
 	{/snippet}
 </PageHeader>
 {#key data.part.id}

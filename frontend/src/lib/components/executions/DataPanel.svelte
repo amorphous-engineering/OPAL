@@ -28,13 +28,14 @@
 			<span class="whitespace-pre-wrap">{r.value}</span>
 			<Badge
 				variant="outline"
-				class="ml-2 border-error/50 bg-error-muted font-mono tracking-wider text-error"
+				class="ml-2 border-error-fill bg-error-fill font-mono tracking-wider text-error-on dark:bg-error-fill"
 				>OUT OF SPEC</Badge
 			>
 		{:else}
 			{@const v = (r as unknown as Record<string, unknown>)[col.key]}
-			{#if v === null || v === undefined || v === ''}<span class="text-muted-foreground">—</span
-				>{:else}<span class="whitespace-pre-wrap">{v}</span>{/if}
+			{#if v === null || v === undefined || v === ''}<span class="text-quiet">—</span>{:else}<span
+					class="whitespace-pre-wrap">{v}</span
+				>{/if}
 		{/if}
 	{/snippet}
 </DataTable>

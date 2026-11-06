@@ -62,7 +62,7 @@
 		{@render actions?.()}
 		<Toolbar.Button
 			size="sm"
-			class="font-mono"
+			class="font-mono text-xs"
 			disabled={uploading > 0}
 			onclick={() => picker?.click()}>{uploading ? 'UPLOADING' : 'INSERT IMAGE'}</Toolbar.Button
 		>

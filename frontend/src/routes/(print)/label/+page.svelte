@@ -71,7 +71,6 @@
 	<label class="ml-4 flex items-center gap-2 text-xs">
 		<span class="label">Stock</span>
 		<NativeSelect
-			size="sm"
 			value={sizeKey}
 			onchange={(e) => setSize(e.currentTarget.value)}
 			aria-label="Label stock"

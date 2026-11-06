@@ -140,21 +140,16 @@
 	<div class={cn('flex min-h-0 min-w-0 flex-col', tab === 'document' ? 'gap-0' : 'gap-3')}>
 		{#if store.stale}
 			<div
-				class="mb-3 flex shrink-0 items-center gap-3 rounded-lg border border-warn/50 bg-warn-muted px-3 py-1.5 text-xs"
+				class="mb-3 flex shrink-0 items-center gap-3 border border-warn-fill bg-warn-fill px-3 py-1.5 text-xs text-warn-on"
 				role="status"
 			>
-				<span class="font-mono text-warn">CHANGED ELSEWHERE</span>
-				<Button size="xs" variant="outline" onclick={() => store.refreshFromServer()}
+				<span class="font-mono font-semibold">CHANGED ELSEWHERE</span>
+				<Button size="sm" variant="outline" onclick={() => store.refreshFromServer()}
 					>REFRESH</Button
 				>
 			</div>
 		{/if}
-		<TabStrip
-			{tabs}
-			value={tab}
-			onchange={setTab}
-			class={cn('shrink-0', tab === 'document' && 'rounded-b-none')}
-		>
+		<TabStrip {tabs} value={tab} onchange={setTab} class="shrink-0">
 			{#snippet end()}
 				{#if tab === 'document'}
 					{#if status !== 'idle' || store.savedAt}
@@ -206,7 +201,9 @@
 						class={cn(
 							barButton,
 							'border-l border-border',
-							store.focusMode ? 'bg-card text-info' : 'text-muted-foreground hover:text-foreground'
+							store.focusMode
+								? 'bg-foreground text-background'
+								: 'text-muted-foreground hover:text-foreground'
 						)}
 						aria-pressed={store.focusMode}
 						title="Show only the operation selected in the sidebar"
@@ -223,7 +220,9 @@
 					type="button"
 					class={cn(
 						barButton,
-						!previewing ? 'bg-card text-info' : 'text-muted-foreground hover:text-foreground'
+						!previewing
+							? 'bg-foreground text-background'
+							: 'text-muted-foreground hover:text-foreground'
 					)}
 					aria-pressed={!previewing}
 					onclick={() => (previewing = false)}>Edit</button
@@ -233,7 +232,9 @@
 					class={cn(
 						barButton,
 						'border-l border-border',
-						previewing ? 'bg-card text-info' : 'text-muted-foreground hover:text-foreground'
+						previewing
+							? 'bg-foreground text-background'
+							: 'text-muted-foreground hover:text-foreground'
 					)}
 					aria-pressed={previewing}
 					title="The document as an operator sees it (p)"

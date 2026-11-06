@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Facts about one account. Name edits in place; only an admin edits email.
 	import {
+		ActionLink,
 		DetailRow,
 		DetailTable,
 		Section,
@@ -86,7 +87,7 @@
 <Section title="Profile">
 	{#snippet actions()}
 		{#if canEdit && !editing}
-			<Button variant="ghost" size="xs" onclick={start}>EDIT</Button>
+			<ActionLink onclick={start}>EDIT</ActionLink>
 		{/if}
 	{/snippet}
 	<AvatarEditor {profile} {canEdit} {onupdate} />
@@ -115,7 +116,7 @@
 					/>
 				{:else if profile.email}
 					<a class="text-info hover:underline" href={`mailto:${profile.email}`}>{profile.email}</a>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			</DetailRow>
 			<DetailRow label="Job title">
 				{#if editing}
@@ -139,7 +140,7 @@
 						class="h-7 max-w-sm"
 					/>
 				{:else if profile.phone}<span class="font-mono text-xs">{profile.phone}</span>{:else}<span
-						class="text-muted-foreground">—</span
+						class="text-quiet">—</span
 					>{/if}
 			</DetailRow>
 			<DetailRow label="Workcenter">
@@ -154,7 +155,7 @@
 					<a class="text-info hover:underline" href={`/workcenters/${profile.workcenter.id}`}
 						>{profile.workcenter.name}</a
 					>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			</DetailRow>
 			<DetailRow label="Status">
 				{#if profile.isActive}<State value="active" />{:else}<State

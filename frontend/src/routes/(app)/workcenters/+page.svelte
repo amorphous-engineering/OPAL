@@ -82,9 +82,16 @@
 	>
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/workcenters/new" class="font-medium text-info hover:underline">+ NEW WORKCENTER</a
+				<a
+					href="/workcenters/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW WORKCENTER</a
 				>
 			{/if}
 		{/snippet}
@@ -96,7 +103,7 @@
 				{#if !row.isActive}<State value="inactive" tone="muted" />{/if}
 			{:else}
 				{@const v = (row as unknown as Record<string, string | number | null>)[col.key]}
-				{#if v === null || v === ''}<span class="text-muted-foreground">—</span>{:else}{v}{/if}
+				{#if v === null || v === ''}<span class="text-quiet">—</span>{:else}{v}{/if}
 			{/if}
 		{/snippet}
 	</DataTable>

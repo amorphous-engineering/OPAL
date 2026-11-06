@@ -123,15 +123,15 @@
 								class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums {l.isComplete
 									? 'text-ok'
 									: num(l.qtyReceived) > 0
-										? 'text-warn'
-										: 'text-muted-foreground'}">{qtyUnit(l.qtyReceived, l.unitOfMeasure)}</td
+										? 'font-bold'
+										: 'text-quiet'}">{qtyUnit(l.qtyReceived, l.unitOfMeasure)}</td
 							>
 							{#if anyCancelled}
 								<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums">
 									{#if num(l.qtyCancelled) > 0}{qtyUnit(
 											l.qtyCancelled,
 											l.unitOfMeasure
-										)}{:else}<span class="text-muted-foreground">—</span>{/if}
+										)}{:else}<span class="text-quiet">—</span>{/if}
 								</td>
 							{/if}
 							<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap tabular-nums">
@@ -142,7 +142,7 @@
 							>
 							<td class="px-3 py-1.5">
 								{@render was(l, 'destination')}{#if l.destination}{l.destination}{:else}<span
-										class="text-muted-foreground">—</span
+										class="text-quiet">—</span
 									>{/if}
 							</td>
 							{#if showActions}

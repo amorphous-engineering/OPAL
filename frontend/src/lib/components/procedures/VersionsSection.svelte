@@ -53,7 +53,6 @@
 					<span class="text-info">v{v.versionNumber}</span>
 					{#if v.id === currentVersionId}<State
 							value="released"
-							tone="ok"
 							label="CURRENT"
 							class="ml-2"
 						/>{/if}
@@ -63,7 +62,7 @@
 					{v.createdByName ?? '—'}
 				{:else if col.key === 'changeNote'}
 					{#if v.changeNote}<span class="line-clamp-2">{v.changeNote}</span>{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				{:else if col.key === 'actions'}
 					<span class="font-mono text-xs whitespace-nowrap">
@@ -93,18 +92,18 @@
 				}}
 			>
 				<span class="label">Compare</span>
-				<NativeSelect bind:value={a} size="sm" aria-label="From version" class="w-24">
+				<NativeSelect bind:value={a} aria-label="From version" class="w-24">
 					{#each versions as v (v.id)}
 						<NativeSelectOption value={String(v.id)}>v{v.versionNumber}</NativeSelectOption>
 					{/each}
 				</NativeSelect>
 				<span class="font-mono text-xs text-muted-foreground">→</span>
-				<NativeSelect bind:value={b} size="sm" aria-label="To version" class="w-24">
+				<NativeSelect bind:value={b} aria-label="To version" class="w-24">
 					{#each versions as v (v.id)}
 						<NativeSelectOption value={String(v.id)}>v{v.versionNumber}</NativeSelectOption>
 					{/each}
 				</NativeSelect>
-				<Button type="submit" size="xs" variant="outline" disabled={!a || !b || a === b}
+				<Button type="submit" size="sm" variant="outline" disabled={!a || !b || a === b}
 					>COMPARE</Button
 				>
 			</form>

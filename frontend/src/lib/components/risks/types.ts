@@ -34,7 +34,7 @@ export const severityTone: Record<RiskSeverity, Tone> = {
 	high: 'error'
 };
 
-/** Disposition colour: only exceptional or settled states carry a tone. */
+/** Disposition colour: realized is the alarm, accepted is settled; the rest read by their word. */
 export function dispositionTone(d: string): Tone {
 	if (d === 'realized') return 'error';
 	if (d === 'accepted') return 'ok';

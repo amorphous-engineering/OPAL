@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { cn } from '#lib/utils.js';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
@@ -107,9 +108,9 @@
 	crumbs={[{ label: 'Parts', href: '/parts' }, { label: part.internalPn }]}
 >
 	{#snippet state()}
-		{#if isDraft}<State value="draft" tone="warn" badge />
-		{:else if part.state === 'obsolete'}<State value="obsolete" tone="error" badge />
-		{:else}<State value="active" tone="muted" />{/if}
+		{#if isDraft}<State value="draft" badge />
+		{:else if part.state === 'obsolete'}<State value="obsolete" tone="muted" badge />
+		{:else}<State value="active" tone="default" />{/if}
 	{/snippet}
 	{#snippet actions()}
 		<Button variant="outline" size="sm" href={`/label?part=${part.id}`}>PRINT LABEL</Button>
@@ -136,9 +137,9 @@
 {#if isDraft}
 	<div
 		role="status"
-		class="mx-4 mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-warn/50 bg-warn-muted px-3 py-2"
+		class="mx-4 mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border border-dashed border-foreground bg-card px-3 py-2"
 	>
-		<State value="draft" tone="warn" badge />
+		<State value="draft" badge />
 		<dl
 			class="grid min-w-0 flex-1 [grid-template-columns:max-content_1fr] gap-x-3 gap-y-0.5 text-xs"
 		>
@@ -158,7 +159,10 @@
 <!-- Sections of other areas (stock, PO lines, suppliers, procedure use, consumption,
 	requirements, tests, Onshape) mount here when their area lands. -->
 <div
-	class="grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(24rem,30rem)_minmax(0,1fr)]"
+	class={cn(
+		'grid grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(24rem,30rem)_minmax(0,1fr)]',
+		isDraft && '[&_section]:border-dashed'
+	)}
 >
 	<div class="grid min-w-0 grid-cols-1 gap-3">
 		<PartTag

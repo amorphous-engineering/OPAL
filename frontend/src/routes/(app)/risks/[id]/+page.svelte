@@ -2,6 +2,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
+		ActionLink,
 		DataTable,
 		DetailRow,
 		DetailTable,
@@ -290,7 +291,7 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 p-4">
 	<div
 		class={[
-			'rounded-lg border border-border bg-card px-3 py-2 text-sm',
+			'border border-border bg-card px-3 py-2 text-sm',
 			!risk.statement && 'font-mono text-xs text-muted-foreground'
 		]}
 	>
@@ -340,11 +341,11 @@
 									}}
 								/>
 								<Button
-									size="xs"
+									size="sm"
 									disabled={!assetText.trim()}
 									onclick={() => setAsset(null, assetText.trim())}>SAVE</Button
 								>
-								<Button size="xs" variant="outline" onclick={() => (editingAsset = false)}
+								<Button size="sm" variant="outline" onclick={() => (editingAsset = false)}
 									>CANCEL</Button
 								>
 							</div>
@@ -360,7 +361,7 @@
 									{:else if risk.assetText}
 										{risk.assetText}
 									{:else}
-										<span class="text-muted-foreground">—</span>
+										<span class="text-quiet">—</span>
 									{/if}
 								</div>
 								{#if editFields}
@@ -488,7 +489,7 @@
 							</div>
 						{:else if risk.residualProbability !== null && risk.residualImpact !== null}
 							<span class="font-mono">{risk.residualProbability} × {risk.residualImpact}</span>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					</DetailRow>
 					<DetailRow label="Score" mono>
 						<Score
@@ -507,7 +508,7 @@
 						<div class="flex flex-wrap items-center gap-3">
 							<State value={risk.disposition} tone={dispositionTone(risk.disposition)} />
 							{#if editScored}
-								<NativeSelect aria-label="Change disposition" size="sm" bind:value={target}>
+								<NativeSelect aria-label="Change disposition" bind:value={target}>
 									<NativeSelectOption value="">Change to…</NativeSelectOption>
 									{#each targets as d (d)}<NativeSelectOption value={d}
 											>{d.toUpperCase()}</NativeSelectOption
@@ -592,9 +593,7 @@
 
 			<Section title="Record">
 				{#snippet actions()}
-					<Button size="xs" variant="ghost" href={`/audit?entity=risk&record=${risk.id}`}
-						>AUDIT</Button
-					>
+					<ActionLink href={`/audit?entity=risk&record=${risk.id}`}>AUDIT</ActionLink>
 				{/snippet}
 				<DetailTable>
 					<DetailRow label="Last reviewed">
@@ -605,7 +604,7 @@
 								/>{#if risk.lastReviewedByName}{reviewedBy}{/if}</span
 							>
 						{:else}
-							<span class="text-muted-foreground">—</span>
+							<span class="text-quiet">—</span>
 						{/if}
 					</DetailRow>
 					<DetailRow label="Created"><Timestamp value={risk.createdAt} /></DetailRow>

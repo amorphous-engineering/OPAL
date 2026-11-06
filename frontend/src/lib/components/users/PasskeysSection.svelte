@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
+		ActionLink,
 		confirm,
 		DataTable,
 		Section,
@@ -132,17 +133,13 @@
 					{:else if col.key === 'createdAt'}<Timestamp value={k.createdAt} dateOnly />
 					{:else if col.key === 'lastUsedAt'}<Timestamp value={k.lastUsedAt} dateOnly />
 					{:else}
-						<Button
-							variant="ghost"
-							size="xs"
+						<ActionLink
 							onclick={() => {
 								draft = k.name;
 								renaming = k.id;
-							}}>RENAME</Button
+							}}>RENAME</ActionLink
 						>
-						<Button variant="ghost" size="xs" class="text-destructive" onclick={() => remove(k)}
-							>REMOVE</Button
-						>
+						<ActionLink onclick={() => remove(k)}>REMOVE</ActionLink>
 					{/if}
 				{/snippet}
 			</DataTable>

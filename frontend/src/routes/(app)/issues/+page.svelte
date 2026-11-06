@@ -155,7 +155,7 @@
 			{#if col.key === 'number'}
 				<span class="text-info">{i.issueNumber}</span>
 			{:else if col.key === 'project'}
-				{i.projectCode}
+				<span class="text-quiet">{i.projectCode}</span>
 			{:else if col.key === 'title'}
 				{i.title}
 			{:else if col.key === 'type'}
@@ -173,8 +173,7 @@
 			{:else if col.key === 'priority'}
 				<State value={i.priority} tone={priorityTone(i.priority)} />
 			{:else if col.key === 'assignee'}
-				{#if i.assignedTo}{i.assignedTo.name}{:else}<span class="text-muted-foreground">—</span
-					>{/if}
+				{#if i.assignedTo}{i.assignedTo.name}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'links'}
 				{#if i.links.length || i.execution}
 					<span class="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs">
@@ -187,16 +186,24 @@
 							>
 						{/if}
 					</span>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'created'}
 				<Timestamp value={i.createdAt} />
 			{/if}
 		{/snippet}
 		{#snippet emptyAction()}
 			{#if filtered}
-				<a href={page.url.pathname} class="font-medium text-info hover:underline">CLEAR FILTERS</a>
+				<a
+					href={page.url.pathname}
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>CLEAR FILTERS</a
+				>
 			{:else}
-				<a href="/issues/new" class="font-medium text-info hover:underline">+ NEW ISSUE</a>
+				<a
+					href="/issues/new"
+					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
+					>+ NEW ISSUE</a
+				>
 			{/if}
 		{/snippet}
 	</DataTable>
