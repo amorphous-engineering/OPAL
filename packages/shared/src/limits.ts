@@ -8,8 +8,8 @@
 export const MAX_SHORT = 255;
 /** Cursors, URLs and other opaque tokens. */
 export const MAX_TOKEN = 2_000;
-/** A note, reason, comment or rationale: a paragraph or two. */
-export const MAX_TEXT = 4_000;
+/** A note, reason, comment or rationale. These render as markdown and a root-cause write-up can run long. */
+export const MAX_TEXT = 16_000;
 /** Long prose a person writes as a document: descriptions, step instructions. About 10,000 words. */
 export const MAX_MARKDOWN = 64_000;
 /** A pasted CSV import. */

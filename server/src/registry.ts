@@ -154,6 +154,19 @@ async function execute<C extends OpContract>(
 
 export type ResolveActor = (c: Context) => Actor | Promise<Actor>;
 
+/** Deeper than any operation's input. The input walkers recurse, so a deeper body is refused before they run. */
+const MAX_INPUT_DEPTH = 32;
+
+function isPlainInput(input: unknown): boolean {
+	if (input === null || typeof input !== 'object' || Array.isArray(input)) return false;
+	let level: unknown[] = [input];
+	for (let depth = 0; level.length; depth++) {
+		if (depth > MAX_INPUT_DEPTH) return false;
+		level = level.flatMap((v) => (v !== null && typeof v === 'object' ? Object.values(v) : []));
+	}
+	return true;
+}
+
 export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: ResolveActor): void {
 	const seen = new Set<string>();
 	for (const impl of impls) {
@@ -172,6 +185,7 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 				} catch {
 					throw new OpalError(400, 'invalid_json', 'Request body is not valid JSON');
 				}
+				if (!isPlainInput(input)) throw new OpalError(400, 'invalid_json', 'Request body must be a JSON object');
 			}
 			Object.assign(input, hc.req.param());
 			const out = await runOp(impl, db, await resolveActor(hc), input as OpInput<typeof c>, {

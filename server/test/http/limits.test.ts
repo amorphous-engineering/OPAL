@@ -111,3 +111,24 @@ describe('request body limits', () => {
 		expect(maxRequestBytes()).toBe(DEFAULT_MAX_JSON_BYTES);
 	});
 });
+
+describe('the shape of a JSON body', () => {
+	const send = async (body: string) => {
+		const db = await openTestDb();
+		const app = createApp({ db });
+		return app.request('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+	};
+
+	test('a body that is not an object is a bad request, not a server fault', async () => {
+		for (const body of ['null', '[1]', '"x"', '7']) expect((await send(body)).status).toBe(400);
+	});
+
+	test('a deeply nested body is refused before any code walks it', async () => {
+		const deep = `{"username":${'['.repeat(100000)}${']'.repeat(100000)},"password":"x"}`;
+		expect((await send(deep)).status).toBe(400);
+	});
+
+	test('an ordinary object still reaches validation', async () => {
+		expect((await send('{"username":"a"}')).status).toBe(422);
+	});
+});
