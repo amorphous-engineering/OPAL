@@ -160,6 +160,11 @@ export const stockTestResult = sqliteTable(
 		notes: text('notes'),
 		testedAt: text('tested_at'),
 		testedById: integer('tested_by_id').references(() => user.id, { onDelete: 'set null' }),
+		// A given result is never removed or rewritten. Striking leaves it on the page and takes it
+		// out of the test status.
+		struckAt: text('struck_at'),
+		struckById: integer('struck_by_id').references(() => user.id, { onDelete: 'set null' }),
+		strikeReason: text('strike_reason'),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},

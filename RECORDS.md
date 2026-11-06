@@ -129,10 +129,11 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 
 | State | The page answers | Primary | Also | MORE |
 |---|---|---|---|---|
-| On hand | What is this, where, how many, and what happened to it? | | Label, count, adjust, move, record calibration (human only) | CORRECT lot, serial or expiry (reason required), SCRAP (reason required) |
+| On hand | What is this, where, how many, and what happened to it? | | Label, count, adjust, move, record a test, STRIKE a test result (reason required, human only), record calibration (human only) | CORRECT lot, serial or expiry (reason required), SCRAP (reason required) |
 | Empty | Where did it go? | | Label | |
 
 - The ledger is append-only. Corrections show in the ledger with old and new values.
+- A pending test is a blank: fill it in or delete it. A result given stays. A person strikes it with a reason, it stays listed with who, when and why, it leaves the test status, and the retest is a new line.
 - A move keeps the lot of a record that has one. A record with no lot can take one on a move, which fills in a blank. Any other lot change is a CORRECT.
 
 ## Reference data

@@ -23,6 +23,7 @@ const HUMAN_ACTS = [
 	'execution.void',
 	'inventory.calibrate',
 	'inventory.correct',
+	'inventory.tests.strike',
 	'issues.reopen',
 	'issues.signDisposition',
 	'issues.signOff',
@@ -61,7 +62,7 @@ const NOT_A_STRIKE = new Set([
 	'datasets.delete', // refused once a dataset has points
 	'execution.deleteRedline', // refused once a redline's work has started
 	'inventory.templates.delete',
-	'inventory.tests.delete', // KNOWN GAP: should be struck with a reason, see RECORDS.md
+	'inventory.tests.delete', // pending tests only
 	'issues.removeLink',
 	'parts.bom.remove', // KNOWN GAP: the owner has not decided on active BOM change control
 	'parts.delete', // drafts only

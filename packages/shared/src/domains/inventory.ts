@@ -195,6 +195,8 @@ export const zStockTestResult = z.object({
 	notes: z.string().nullable(),
 	testedAt: zTimestamp.nullable(),
 	testedByName: z.string().nullable(),
+	/** Set when a result was struck: it stays listed and leaves the test status. */
+	struck: z.object({ at: zTimestamp, byName: z.string().nullable(), reason: z.string() }).nullable(),
 	createdAt: zTimestamp
 });
 export type StockTestResult = z.infer<typeof zStockTestResult>;
@@ -683,7 +685,7 @@ export const inventory = {
 			name: 'inventory.tests.update',
 			method: 'PATCH',
 			path: '/inventory/:id/tests/:testId',
-			summary: 'Change a test result.',
+			summary: 'Fill in a pending test. A result already given stays as it is: strike it and record a new one.',
 			input: zStockTestResultInput.extend({ id: zId, testId: zId }),
 			output: zStockTestResult,
 			access: 'signed-in',
@@ -693,11 +695,27 @@ export const inventory = {
 			name: 'inventory.tests.delete',
 			method: 'DELETE',
 			path: '/inventory/:id/tests/:testId',
-			summary: 'Delete a test result.',
+			summary: 'Delete a pending test. A result already given is struck instead.',
 			input: z.object({ id: zId, testId: zId }),
 			output: zOk,
 			access: 'signed-in',
 			mcp: true
+		}),
+		strike: op({
+			name: 'inventory.tests.strike',
+			method: 'POST',
+			path: '/inventory/:id/tests/:testId/strike',
+			summary:
+				'Strike a test result that should not count. It stays on the record with who, when and why, and leaves the test status. A reason is required. Human only.',
+			input: z.object({
+				id: zId,
+				testId: zId,
+				reason: z.string().trim().min(1, 'a reason is required').max(2000)
+			}),
+			output: zStockTestResult,
+			access: 'signed-in',
+			mcp: false,
+			humanOnly: true
 		}),
 		status: op({
 			name: 'inventory.tests.status',

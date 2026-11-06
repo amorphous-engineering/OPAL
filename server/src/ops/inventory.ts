@@ -72,5 +72,6 @@ export const inventoryImpls = [
 		inv.deleteResult(ctx, i.id, i.testId);
 		return { ok: true as const };
 	}),
+	implement(c.tests.strike, (ctx, i) => inv.strikeResult(ctx, i.id, i.testId, i.reason)),
 	implement(c.tests.status, (ctx, i) => inv.testStatus(ctx, i.id))
 ] as Impl[];

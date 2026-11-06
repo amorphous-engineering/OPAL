@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { createApp } from '../../src/app.ts';
+import { apiToken } from '../../src/db/schema/index.ts';
 import { makePart, receive, setup } from './helpers.ts';
 
 async function withRecord() {
@@ -43,14 +45,16 @@ describe('test results', () => {
 		expect(done.body.testedByName).toBe('Ada Admin');
 	});
 
-	test('changing a pending result to pass stamps the tester once', async () => {
+	test('filling in a pending test stamps the tester, and the result given then stands', async () => {
 		const { s, rec } = await withRecord();
 		const t = await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'Hi-pot' });
-		const up = await s.call('PATCH', `/inventory/${rec.id}/tests/${t.body.id}`, { testName: 'Hi-pot', result: 'pass', notes: 'ok' });
-		expect(up.body).toMatchObject({ result: 'pass', notes: 'ok', testedByName: 'Ada Admin' });
-		const first = up.body.testedAt;
-		const again = await s.call('PATCH', `/inventory/${rec.id}/tests/${t.body.id}`, { testName: 'Hi-pot', result: 'fail' });
-		expect(again.body.testedAt).toBe(first);
+		const up = await s.call('PATCH', `/inventory/${rec.id}/tests/${t.body.id}`, { testName: 'Hi-pot', result: 'fail', notes: 'arced' });
+		expect(up.body).toMatchObject({ result: 'fail', notes: 'arced', testedByName: 'Ada Admin' });
+		const again = await s.call('PATCH', `/inventory/${rec.id}/tests/${t.body.id}`, { testName: 'Hi-pot', result: 'pass' });
+		expect(again.status).toBe(409);
+		expect(again.body.message).toContain('Strike');
+		const [row] = (await s.call('GET', `/inventory/${rec.id}/tests`)).body;
+		expect(row).toMatchObject({ result: 'fail', notes: 'arced', testedAt: up.body.testedAt });
 	});
 
 	test('a result can name a template, and an unknown template is refused', async () => {
@@ -72,12 +76,80 @@ describe('test results', () => {
 		expect(list.body[0]).toMatchObject({ testName: 'Torque', templateId: null });
 	});
 
-	test('a result can be deleted, and a wrong record or id is not found', async () => {
+	test('a pending test can be deleted, and a wrong record or id is not found', async () => {
 		const { s, rec } = await withRecord();
-		const t = await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'A', result: 'pass' });
+		const t = await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'A' });
+		expect((await s.call('POST', `/inventory/${rec.id}/tests/${t.body.id}/strike`, { reason: 'r' })).status).toBe(409);
 		expect((await s.call('DELETE', `/inventory/${rec.id}/tests/${t.body.id}`)).status).toBe(200);
 		expect((await s.call('DELETE', `/inventory/${rec.id}/tests/${t.body.id}`)).status).toBe(404);
 		expect((await s.call('POST', '/inventory/999/tests', { testName: 'A' })).status).toBe(404);
+	});
+
+	test('a given result cannot be deleted, by anyone', async () => {
+		const { s, rec } = await withRecord();
+		const t = await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'A', result: 'fail' });
+		const x = await s.call('DELETE', `/inventory/${rec.id}/tests/${t.body.id}`);
+		expect(x.status).toBe(409);
+		expect((await s.call('GET', `/inventory/${rec.id}/tests`)).body).toHaveLength(1);
+	});
+
+	test('striking a result needs a reason, keeps it legible with who, when and why, and takes it out of the status', async () => {
+		const { s, rec, p } = await withRecord();
+		const req = await s.call('POST', `/inventory/parts/${p.id}/test-templates`, { name: 'Torque', required: true });
+		const bad = await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'Torque', templateId: req.body.id, result: 'fail', value: '9' });
+		expect((await s.call('GET', `/inventory/${rec.id}/test-status`)).body.overall).toBe('fail');
+		expect((await s.call('POST', `/inventory/${rec.id}/tests/${bad.body.id}/strike`, { reason: ' ' })).status).toBe(422);
+		const r = await s.call('POST', `/inventory/${rec.id}/tests/${bad.body.id}/strike`, { reason: 'Wrong fixture' });
+		expect(r.status).toBe(200);
+		expect(r.body).toMatchObject({ result: 'fail', value: '9', testedByName: 'Ada Admin' });
+		expect(r.body.struck).toMatchObject({ byName: 'Ada Admin', reason: 'Wrong fixture' });
+		expect((await s.call('POST', `/inventory/${rec.id}/tests/${bad.body.id}/strike`, { reason: 'again' })).status).toBe(409);
+		expect((await s.call('PATCH', `/inventory/${rec.id}/tests/${bad.body.id}`, { testName: 'x', result: 'pass' })).status).toBe(409);
+		const status = (await s.call('GET', `/inventory/${rec.id}/test-status`)).body;
+		expect(status).toMatchObject({ total: 0, failed: 0, overall: 'pending', missingRequired: ['Torque'] });
+		// The retest is a new line beside the struck one.
+		await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'Torque', templateId: req.body.id, result: 'pass', value: '5' });
+		expect((await s.call('GET', `/inventory/${rec.id}/test-status`)).body.overall).toBe('pass');
+		expect((await s.call('GET', `/inventory/opal/${rec.opalNumber}/detail`)).body.tests).toHaveLength(2);
+	});
+
+	test('a struck pass does not satisfy a required test', async () => {
+		const { s, rec, p } = await withRecord();
+		const req = await s.call('POST', `/inventory/parts/${p.id}/test-templates`, { name: 'Torque', required: true });
+		const ok = await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'Torque', templateId: req.body.id, result: 'pass' });
+		await s.call('POST', `/inventory/${rec.id}/tests/${ok.body.id}/strike`, { reason: 'Never ran' });
+		expect((await s.call('GET', `/inventory/${rec.id}/test-status`)).body).toMatchObject({ requiredPassed: false, overall: 'pending' });
+	});
+
+	test('an API token can record a result and fill in a pending test, and cannot strike, change or delete a result given', async () => {
+		const { s, rec } = await withRecord();
+		const given = await s.call('POST', `/inventory/${rec.id}/tests`, { testName: 'Leak', result: 'fail' });
+		const tokenId = s.db
+			.insert(apiToken)
+			.values({ userId: s.admin.id, name: 't', tokenHash: 'h', createdAt: new Date().toISOString() })
+			.returning()
+			.get().id;
+		const app = createApp({
+			db: s.db,
+			resolveActor: () => ({ kind: 'token', userId: s.admin.id, isAdmin: true, tokenId })
+		});
+		const asToken = async (method: string, path: string, body?: unknown) => {
+			const res = await app.request(`/api${path}`, {
+				method,
+				headers: body === undefined ? {} : { 'content-type': 'application/json' },
+				body: body === undefined ? undefined : JSON.stringify(body)
+			});
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		const pending = await asToken('POST', `/inventory/${rec.id}/tests`, { testName: 'Visual' });
+		expect(pending.status).toBe(201);
+		expect((await asToken('PATCH', `/inventory/${rec.id}/tests/${pending.body.id}`, { testName: 'Visual', result: 'pass' })).status).toBe(200);
+		const path = `/inventory/${rec.id}/tests/${given.body.id}`;
+		expect((await asToken('POST', `${path}/strike`, { reason: 'r' })).status).toBe(403);
+		expect((await asToken('PATCH', path, { testName: 'Leak', result: 'pass' })).status).toBe(409);
+		expect((await asToken('DELETE', path)).status).toBe(409);
+		const row = (await s.call('GET', `/inventory/${rec.id}/tests`)).body.find((x: { id: number }) => x.id === given.body.id);
+		expect(row).toMatchObject({ result: 'fail', struck: null });
 	});
 
 	test('test status counts results and tracks the required tests of the part', async () => {
