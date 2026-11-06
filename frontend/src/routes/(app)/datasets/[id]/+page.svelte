@@ -227,7 +227,7 @@
 					<ProjectRow id={ds.projectId} code={ds.projectCode} name={ds.projectName} />
 					<!-- added by projects -->
 					<DetailRow label="State"
-						>{#if archived}<State value="archived" tone="warn" badge />{:else}<span
+						>{#if archived}<State value="archived" tone="muted" badge />{:else}<span
 								class="font-mono text-xs text-muted-foreground">ACTIVE</span
 							>{/if}</DetailRow
 					>

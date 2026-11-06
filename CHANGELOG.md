@@ -2,6 +2,27 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
+## 2.0.0-beta1
+
+OPAL 2 is a rewrite in TypeScript: one Bun binary, one SQLite file. The Python 1.x backend is gone, and
+extensions and Onshape are postponed. These changes are since `v2.0.0-rc.24`.
+
+### Changed
+- **Committed records read like paper.** Pages open for reading, EDIT shows only what is still pencil, and strikes sit under MORE. A placed purchase order is amended with the old value struck beside the new one. `RECORDS.md` lists what each record offers in each state.
+- **Routine work stays out of the way.** ABORT is gone: an unstarted work order is voided, and a started one exits through a contingency op or a gated close short with a reason and a linked issue. The notes box is always open on a step, and a typed note saves with COMPLETE or SKIP. A second sign-off must come from a different person.
+- **The PAPER look.** Black ink on white paper, or reversed at night, with one meaning for each line, shadow and fill. Day is the default. `STYLE.md` is the new style guide.
+- **State by importance.** Stopped and waiting records are filled, in flight is bold, reached states are green words, not started is tan, and finished-with records fall back.
+- **Nothing below 12px** on screen, except printed labels and the traveler. Step text can be 14, 16 or 18px per browser.
+
+### Added
+- **Connection ticker.** ONLINE, STALE or OFFLINE at the left of the status bar. Any break stays as STALE with its times until pressed, which reloads the page's data.
+- **Last action** on the executions list, as a column and the default sort.
+
+### Fixed
+- HOLD and HELD were nearly invisible in dark mode.
+- Migrations ran with foreign keys on, so a table rebuild could cascade-delete child rows.
+- Any user or token could void an issue to release its hold. Releasing a hold now needs the disposition gate.
+
 ## Unreleased
 
 ### Added

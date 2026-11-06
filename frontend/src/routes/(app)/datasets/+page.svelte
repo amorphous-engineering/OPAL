@@ -136,7 +136,7 @@
 				{row.pointCount}
 			{:else if col.key === 'state'}
 				{#if row.state === 'archived'}
-					<State value="archived" tone="warn" badge />
+					<State value="archived" tone="muted" badge />
 				{:else}
 					<span class="font-mono text-xs text-muted-foreground">ACTIVE</span>
 				{/if}

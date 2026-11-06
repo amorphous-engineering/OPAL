@@ -336,7 +336,7 @@
 							{r.stepsDone}/{r.stepsTotal}
 						{:else if col.key === 'flag'}
 							{#if r.blocked}<State value="blocked" tone="error" label="BLOCKED" />
-							{:else if r.overdue}<State value="overdue" tone="warn" label="OVERDUE" />
+							{:else if r.overdue}<State value="overdue" tone="error" label="OVERDUE" />
 							{:else if r.status === 'cut'}<span
 									class="font-mono text-xs whitespace-nowrap text-muted-foreground"
 									>NOT STARTED</span
@@ -405,7 +405,7 @@
 						{:else if col.key === 'supplier'}
 							{r.supplier}
 						{:else if col.key === 'status'}
-							<State value={r.status} tone={r.status === 'partial' ? 'warn' : 'muted'} />
+							<State value={r.status} />
 						{:else if col.key === 'targetDate'}
 							{#if r.overdue}<span class="text-error"
 									><Timestamp value={r.targetDate} dateOnly /></span

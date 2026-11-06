@@ -139,7 +139,7 @@
 		role="status"
 		class="mx-4 mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border border-dashed border-foreground bg-card px-3 py-2"
 	>
-		<State value="draft" tone="warn" badge />
+		<State value="draft" badge />
 		<dl
 			class="grid min-w-0 flex-1 [grid-template-columns:max-content_1fr] gap-x-3 gap-y-0.5 text-xs"
 		>

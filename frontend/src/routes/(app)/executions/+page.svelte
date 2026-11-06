@@ -57,13 +57,13 @@
 	]);
 
 	const columns: Column<ExecutionRow>[] = [
-		{ key: 'workOrder', label: 'Work order', sortable: true, width: '9rem' },
+		{ key: 'workOrder', label: 'Work order', sortable: true, width: '7rem' },
 		{ key: 'project', label: 'Project', width: '9rem' },
 		{ key: 'procedure', label: 'Procedure', sortable: true },
 		{ key: 'status', label: 'Status', sortable: true, width: '7rem' },
 		{ key: 'progress', label: 'Progress', width: '10rem' },
 		{ key: 'working', label: 'Working' },
-		{ key: 'heldBy', label: 'Held by', width: '10rem' },
+		{ key: 'heldBy', label: 'Held by', width: '7rem' },
 		{ key: 'lastAction', label: 'Last action', sortable: true, width: '7rem', align: 'right' },
 		{ key: 'created', label: 'Cut', sortable: true, width: '5rem', align: 'right' },
 		{ key: 'target', label: 'Target', sortable: true, width: '8rem' }

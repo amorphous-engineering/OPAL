@@ -129,7 +129,7 @@
 	crumbs={[{ label: 'Projects', href: '/projects' }, { label: project.code }]}
 >
 	{#snippet state()}
-		{#if archived}<State value="archived" tone="warn" badge />{/if}
+		{#if archived}<State value="archived" tone="muted" badge />{/if}
 	{/snippet}
 	{#snippet actions()}
 		<Button size="sm" variant="ghost" href={`/audit?entity=project&record=${project.id}`}
@@ -351,7 +351,7 @@
 				{#snippet cell(r, col)}
 					{#if col.key === 'pointCount'}{r.pointCount}
 					{:else if col.key === 'state'}
-						{#if r.state === 'archived'}<State value="archived" tone="warn" />{:else}<span
+						{#if r.state === 'archived'}<State value="archived" tone="muted" />{:else}<span
 								class="font-mono text-xs text-muted-foreground">ACTIVE</span
 							>{/if}
 					{:else}{r.name}{/if}
