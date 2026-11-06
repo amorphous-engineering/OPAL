@@ -7,7 +7,7 @@ import { Supervisor, defaultChildCommand } from '../supervisor/supervisor.ts';
 import { flag } from './args.ts';
 
 export function supervise(args: string[]): void {
-	hardenDataDir();
+	hardenDataDir({ umask: false });
 	// Flags for the supervisor itself are not passed on to the server.
 	const controlPort = Number(flag(args, 'control-port') ?? 8079);
 	const noBrowser = args.includes('--no-browser');

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { chmodSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authSecret, rotateAuthSecret } from '../src/auth/signing.ts';
@@ -39,9 +39,43 @@ describe('data folder permissions', () => {
 			mkdirSync(join(dir, 'blobs'));
 			chmodSync(join(dir, 'blobs'), 0o775);
 			hardenDataDir();
-			expect(mode(dir)).toBe(0o700);
+			// The folder existed, so it may be shared; what OPAL keeps inside is what gets tightened.
+			expect(mode(dir)).toBe(0o775);
 			for (const f of ['opal.db', 'opal.db-wal', 'opal.db-shm', 'opal.legacy.db']) expect(mode(join(dir, f))).toBe(0o600);
 			expect(mode(join(dir, 'blobs'))).toBe(0o700);
+		} finally {
+			process.umask(old);
+		}
+	});
+
+	posix('another program\'s files and links in a shared folder are left alone', () => {
+		const old = process.umask();
+		const base = mkdtempSync(join(tmpdir(), 'opal-harden-'));
+		const dir = join(base, 'shared');
+		mkdirSync(dir);
+		const nas = join(base, 'nas-blobs');
+		mkdirSync(nas);
+		chmodSync(nas, 0o775);
+		process.env.OPAL_DATA_DIR = dir;
+		delete process.env.OPAL_DB_FILE;
+		try {
+			writeFileSync(join(dir, 'backup-notes.txt'), 'x');
+			chmodSync(join(dir, 'backup-notes.txt'), 0o664);
+			symlinkSync(nas, join(dir, 'blobs'));
+			hardenDataDir();
+			expect(mode(join(dir, 'backup-notes.txt'))).toBe(0o664);
+			expect(mode(nas)).toBe(0o775);
+		} finally {
+			process.umask(old);
+		}
+	});
+
+	posix('the supervisor keeps its umask, so an update keeps the mode of the binary it replaces', () => {
+		const old = process.umask(0o022);
+		process.env.OPAL_DATA_DIR = mkdtempSync(join(tmpdir(), 'opal-harden-'));
+		try {
+			hardenDataDir({ umask: false });
+			expect(process.umask()).toBe(0o022);
 		} finally {
 			process.umask(old);
 		}
