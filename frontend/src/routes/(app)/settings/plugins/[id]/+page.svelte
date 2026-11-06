@@ -396,7 +396,11 @@
 						{/if}
 					</div>
 				{/each}
-				<div><Button type="submit" size="sm" disabled={saving}>SAVE</Button></div>
+				{#if plugin.available}
+					<div><Button type="submit" size="sm" disabled={saving}>SAVE</Button></div>
+				{:else}
+					<p class="text-sm text-muted-foreground">Plugins are off on this server.</p>
+				{/if}
 			</form>
 		{/if}
 	</Section>
@@ -404,15 +408,17 @@
 	<Section title="Process">
 		{#snippet actions()}
 			{#if plugin.enabled}
-				<ActionLink
-					disabled={busy}
-					onclick={() => act(() => opal.plugins.restart({ id: plugin.id }))}>RESTART</ActionLink
-				>
+				{#if plugin.available}
+					<ActionLink
+						disabled={busy}
+						onclick={() => act(() => opal.plugins.restart({ id: plugin.id }))}>RESTART</ActionLink
+					>
+				{/if}
 				<ActionLink
 					disabled={busy}
 					onclick={() => act(() => opal.plugins.disable({ id: plugin.id }))}>DISABLE</ActionLink
 				>
-			{:else}
+			{:else if plugin.available}
 				<ActionLink
 					disabled={busy}
 					onclick={() => act(() => opal.plugins.enable({ id: plugin.id }))}>ENABLE</ActionLink

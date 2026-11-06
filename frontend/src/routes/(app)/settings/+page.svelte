@@ -49,7 +49,7 @@
 
 	{#if isAdmin && data.plugins}
 		<SettingsGroup id="plugins" title="Plugins">
-			<PluginsSection plugins={data.plugins} />
+			<PluginsSection plugins={data.plugins} available={data.pluginsAvailable} />
 		</SettingsGroup>
 	{/if}
 

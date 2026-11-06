@@ -127,6 +127,15 @@ const stagedFolders = () => {
 };
 
 describe('a server with plugins off', () => {
+	test('the plugin list tells the client, so it can leave out what the server would refuse', async () => {
+		process.env.OPAL_PLUGINS = '0';
+		const off = (await (await call('GET', '/plugins')).json()) as any;
+		expect(off.available).toBe(false);
+		delete process.env.OPAL_PLUGINS;
+		const on = (await (await call('GET', '/plugins')).json()) as any;
+		expect(on.available).toBe(true);
+	});
+
 	for (const value of ['0', 'false', 'off', 'FALSE']) {
 		test(`OPAL_PLUGINS=${value} refuses a preview without touching the network or the disk`, async () => {
 			process.env.OPAL_PLUGINS = value;

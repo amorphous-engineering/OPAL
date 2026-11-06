@@ -154,6 +154,8 @@ export const zPluginSettingValue = z.object({
 });
 
 export const zPluginDetail = zPluginSummary.extend({
+	/** False when the operator turned plugins off: nothing can be configured or started. */
+	available: z.boolean(),
 	manifest: zPluginManifest,
 	settings: z.array(zPluginSettingValue),
 	/** The last lines the process wrote, oldest first. */
@@ -217,7 +219,7 @@ export const plugins = {
 		path: '/plugins',
 		summary: 'List installed plugins and the state of their processes.',
 		input: z.object({}),
-		output: z.object({ items: z.array(zPluginSummary) }),
+		output: z.object({ items: z.array(zPluginSummary), available: z.boolean() }),
 		access: 'admin',
 		mcp: false
 	}),

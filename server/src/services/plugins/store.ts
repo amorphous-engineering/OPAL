@@ -5,7 +5,7 @@ import { notFound, type PluginDetail, type PluginSummary } from '@opal/shared';
 import type { Db } from '../../db/client.ts';
 import { plugin, pluginSetting, user } from '../../db/schema/index.ts';
 import { dataDir } from '../../paths.ts';
-import { runtime } from './runtime.ts';
+import { pluginsEnabled, runtime } from './runtime.ts';
 
 export type PluginRow = typeof plugin.$inferSelect;
 
@@ -74,6 +74,7 @@ export function toDetail(db: Db, row: PluginRow): PluginDetail {
 	const u = db.select({ username: user.username }).from(user).where(eq(user.id, row.userId)).get();
 	return {
 		...toSummary(row),
+		available: pluginsEnabled(),
 		manifest: row.manifest,
 		settings: row.manifest.settings.map((def) => {
 			const s = byKey.get(def.key);
