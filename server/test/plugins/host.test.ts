@@ -243,8 +243,12 @@ describe('plugin operations', () => {
 				expect(((await res.json()) as any).error).toBe('plugins_off');
 			}
 			expect(calls).toEqual([]);
-			expect((await call('GET', '/plugins')).status).toBe(200);
-			expect((await call('GET', '/plugins/echo')).status).toBe(200);
+			const list = await call('GET', '/plugins');
+			expect(list.status).toBe(200);
+			expect(((await list.json()) as any).available).toBe(false);
+			const detail = await call('GET', '/plugins/echo');
+			expect(detail.status).toBe(200);
+			expect(((await detail.json()) as any).available).toBe(false);
 			expect((await call('POST', '/plugins/echo/disable')).status).toBe(200);
 		} finally {
 			delete process.env.OPAL_PLUGINS;
