@@ -19,6 +19,14 @@ export const maxJsonBytes = () => Number(process.env.OPAL_MAX_JSON_BYTES) || DEF
 /** What Bun accepts before the app sees the request: an upload plus its form fields. */
 export const maxRequestBytes = () => Math.max(maxUploadBytes() + 1024 * 1024, maxJsonBytes());
 
+/** Seconds a connection may stay silent. The event stream sends a heartbeat every 5 s. */
+export const DEFAULT_IDLE_TIMEOUT_SECONDS = 60;
+export const idleTimeoutSeconds = () => {
+	const n = Number(process.env.OPAL_IDLE_TIMEOUT_SECONDS);
+	// Bun accepts 0 (never) to 255.
+	return Number.isInteger(n) && n > 0 && n <= 255 ? n : DEFAULT_IDLE_TIMEOUT_SECONDS;
+};
+
 /** The two multipart routes keep the upload limit they set themselves. */
 const UPLOAD = [/^\/api\/attachments$/, /^\/api\/procedures\/[^/]+\/steps\/[^/]+\/images$/];
 const LIMITED = [/^\/api\//, /^\/oauth\//, /^\/mcp$/];

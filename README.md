@@ -68,6 +68,8 @@ These environment variables set what the server accepts. The defaults suit a tea
 |---|---|---|
 | `OPAL_MAX_JSON_BYTES` | 4194304 (4 MiB) | Largest JSON request body, for the API, `/oauth/*` and `/mcp`. Larger requests get 413. |
 | `OPAL_MAX_UPLOAD_BYTES` | 10485760 (10 MiB) | Largest uploaded file. |
+| `OPAL_IDLE_TIMEOUT_SECONDS` | 60 | A connection silent this long is closed (1 to 255). The live event stream sends a heartbeat every 5 seconds and stays open. |
+| `OPAL_MAX_STREAMS_PER_USER` | 30 | Live event streams one account may hold open at once. Each open tab uses one or two. |
 
 ### Upgrade from 1.x
 
