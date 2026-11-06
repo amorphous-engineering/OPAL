@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { isIPv6 } from 'node:net';
 
 /** One setting for every forwarded header: OIDC base URL and client address alike. */
 export const trustProxy = () => /^(1|true|yes|on)$/i.test(process.env.OPAL_TRUST_PROXY ?? '');
@@ -7,6 +8,23 @@ export const trustProxy = () => /^(1|true|yes|on)$/i.test(process.env.OPAL_TRUST
 function proxyHops(): number {
 	const n = Number.parseInt(process.env.OPAL_TRUST_PROXY_HOPS ?? '', 10);
 	return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
+/**
+ * What a throttle counts as one client. One IPv6 customer usually holds a whole /64, so counting
+ * single addresses would give them billions of tries. An IPv4-mapped address counts as its IPv4.
+ */
+export function throttleAddress(ip: string | null | undefined): string {
+	if (!ip) return 'unknown';
+	const bare = ip.split('%')[0]!.toLowerCase();
+	if (!isIPv6(bare)) return bare;
+	const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(bare);
+	if (mapped) return mapped[1]!;
+	const [head = '', tail] = bare.split('::');
+	const left = head ? head.split(':') : [];
+	const right = tail ? tail.split(':') : [];
+	const groups = bare.includes('::') ? [...left, ...Array(8 - left.length - right.length).fill('0'), ...right] : left;
+	return `${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')}::/64`;
 }
 
 /**

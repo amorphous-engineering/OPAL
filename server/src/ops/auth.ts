@@ -7,6 +7,7 @@ import {
 	hashPassword,
 	hashToken,
 	loginThrottle,
+	takeLockedGuess,
 	usernameThrottle,
 	lockedGuess,
 	withHashSlot,
@@ -17,6 +18,7 @@ import {
 	validatePasswordStrength,
 	verifyPassword
 } from '../auth/tokens.ts';
+import { throttleAddress } from '../auth/client-ip.ts';
 import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
 import { clearSetupCode, setupCodeMatches, setupCodeRequired } from '../services/auth/setup-code.ts';
@@ -51,7 +53,7 @@ import {
 } from '../services/auth/oauth.ts';
 import { resetDiscoveryCache, testDiscovery } from '../services/auth/oidc.ts';
 import { issuerProblem } from '../services/platform/outbound.ts';
-import { revokeSessions, startSession, type UserRow } from '../services/auth/sessions.ts';
+import { hasSignedInFrom, revokeSessions, startSession, type UserRow } from '../services/auth/sessions.ts';
 import { insert, remove, update } from '../write.ts';
 
 const present = (db: Db, u: UserRow) => ({
@@ -196,26 +198,31 @@ export const authImpls = [
 			throw new OpalError(403, 'forbidden', 'Password sign-in is disabled');
 		}
 		const username = input.username.trim().toLowerCase();
-		const key = `${ctx.request?.ip ?? 'unknown'}:${username}`;
+		const address = throttleAddress(ctx.request?.ip);
+		const key = `${address}:${username}`;
 		const nameKey = `name:${username}`;
-		// An address over its own limit is refused. Over the name's limit, only an address that has
-		// already failed against this name is refused: a stranger's guesses must not lock the
-		// person out of a clean address.
-		const nameLocked = usernameThrottle.blocked(nameKey);
-		if (loginThrottle.blocked(key) || (nameLocked && loginThrottle.count(key) > 0)) {
-			throw new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
+		const tooMany = () => new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
+		if (loginThrottle.blocked(key)) throw tooMany();
+		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
+		// Over the name's limit, strangers share one guess per interval. An address this person has
+		// signed in from keeps only its own limit, so guessing cannot lock them out of it.
+		if (usernameThrottle.blocked(nameKey) && !(u && hasSignedInFrom(ctx.db, u.id, address)) && !takeLockedGuess(nameKey)) {
+			throw tooMany();
 		}
 		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
 		loginThrottle.fail(key);
 		usernameThrottle.fail(nameKey);
-		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
 		const ok = await withHashSlot(async () => {
 			const good = u?.isActive ? await verifyPassword(u.passwordHash, input.password) : false;
 			if (!u || !u.isActive || !u.passwordHash) await burnVerify(input.password);
 			return good;
+		}).catch((e) => {
+			// A full queue checked nothing, so it is not a failed attempt.
+			loginThrottle.release(key);
+			usernameThrottle.release(nameKey);
+			throw e;
 		});
 		if (!u || !ok) {
-			if (nameLocked) await new Promise((r) => setTimeout(r, lockedGuess.delayMs));
 			// One message for unknown user, wrong password, inactive and passwordless accounts.
 			throw new OpalError(401, 'invalid_credentials', 'Invalid username or password');
 		}

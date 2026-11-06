@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
+import { throttleAddress } from '../../src/auth/client-ip.ts';
 import { hashPassword, LoginThrottle, lockedGuess, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, harness, makeUser } from './helpers.ts';
 
 afterEach(() => {
 	delete process.env.OPAL_TRUST_PROXY;
 	delete process.env.OPAL_TRUST_PROXY_HOPS;
-	lockedGuess.delayMs = 1500;
+	lockedGuess.intervalMs = 5000;
 	setSystemTime();
 });
 
@@ -59,9 +60,9 @@ describe('login throttle', () => {
 		expect(last).toBe(429);
 	});
 
-	test('failures against one username from many addresses never lock out a correct password from a clean address', async () => {
+	test('failures against one username from many addresses never lock out a correct password once its turn comes', async () => {
 		const h = await harness();
-		lockedGuess.delayMs = 0;
+		lockedGuess.intervalMs = 0;
 		makeUser(h, { username: 'per-name', passwordHash: await hashPassword('right-password-1') });
 		const attempt = (ip: string, password = 'x') =>
 			h.app.request(
@@ -75,27 +76,88 @@ describe('login throttle', () => {
 			);
 		const early = await Promise.all(Array.from({ length: 50 }, (_, i) => attempt(`192.0.2.${i}`)));
 		expect(early.every((r) => r.status === 401)).toBe(true);
-		// An address that has already failed against this name is refused.
-		expect((await attempt('192.0.2.3', 'right-password-1')).status).toBe(429);
-		// A clean address is still checked: a wrong guess is a 401, the right password signs in.
+		// Even an address that failed before is checked: one typo must not end the owner's day.
+		expect((await attempt('192.0.2.3', 'right-password-1')).status).toBe(200);
 		expect((await attempt('198.51.100.7')).status).toBe(401);
-		const ok = await attempt('198.51.100.8', 'right-password-1');
-		expect(ok.status).toBe(200);
+		expect((await attempt('198.51.100.8', 'right-password-1')).status).toBe(200);
 	});
 
-	test('wrong guesses from clean addresses are answered after a delay once a username is over its cap', async () => {
+	describe('past the name cap', () => {
+		const setupLocked = async (username: string) => {
+			const h = await harness();
+			makeUser(h, { username, passwordHash: await hashPassword('right-password-1') });
+			const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
+				h.app.request(
+					'http://opal.test/api/auth/login',
+					{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) },
+					{ ip }
+				);
+			// Fifty failures from many addresses, with no shared slot yet.
+			lockedGuess.intervalMs = 0;
+			for (let i = 0; i < 5; i++) await Promise.all(Array.from({ length: 10 }, (_, j) => attempt(`10.${i}.${j}.1`)));
+			lockedGuess.intervalMs = 60_000;
+			return { h, attempt };
+		};
+
+		test('guesses sent at once from many addresses get one password check between them', async () => {
+			const { attempt } = await setupLocked('flooded');
+			const results = await Promise.all(Array.from({ length: 60 }, (_, i) => attempt(`192.0.2.${i}`)));
+			const counts = results.reduce<Record<number, number>>((n, r) => ({ ...n, [r.status]: (n[r.status] ?? 0) + 1 }), {});
+			expect(counts).toEqual({ 401: 1, 429: 59 });
+		});
+
+		test('an address the person has signed in from still gets in, even after a typo', async () => {
+			const h = await harness();
+			makeUser(h, { username: 'owner', passwordHash: await hashPassword('right-password-1') });
+			const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
+				h.app.request(
+					'http://opal.test/api/auth/login',
+					{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'owner', password }) },
+					{ ip }
+				);
+			expect((await attempt('198.51.100.9', 'right-password-1')).status).toBe(200);
+			lockedGuess.intervalMs = 0;
+			for (let i = 0; i < 5; i++) await Promise.all(Array.from({ length: 10 }, (_, j) => attempt(`10.${i}.${j}.1`)));
+			lockedGuess.intervalMs = 60_000;
+			expect((await attempt('192.0.2.1')).status).toBe(401); // a stranger takes the slot
+			expect((await attempt('192.0.2.2', 'right-password-1')).status).toBe(429);
+			expect((await attempt('198.51.100.9')).status).toBe(401); // the owner's typo
+			expect((await attempt('198.51.100.9', 'right-password-1')).status).toBe(200);
+		});
+	});
+
+	test('addresses in one IPv6 /64 count as one client', async () => {
 		const h = await harness();
-		lockedGuess.delayMs = 300;
 		const attempt = (ip: string) =>
 			h.app.request(
 				'http://opal.test/api/auth/login',
-				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'slowed', password: 'x' }) },
+				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'sixty-four', password: 'wrong-guess-xxxx' }) },
 				{ ip }
 			);
-		await Promise.all(Array.from({ length: 50 }, (_, i) => attempt(`192.0.2.${i}`)));
-		const t0 = Date.now();
-		expect((await attempt('203.0.113.50')).status).toBe(401);
-		expect(Date.now() - t0).toBeGreaterThanOrEqual(280);
+		for (let i = 1; i <= 10; i++) expect((await attempt(`2001:db8:1:2::${i.toString(16)}`)).status).toBe(401);
+		expect((await attempt('2001:db8:1:2:ffff::1')).status).toBe(429);
+		expect((await attempt('2001:db8:1:3::1')).status).toBe(401);
+		expect(throttleAddress('2001:0db8:0:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:0:2::/64');
+		expect(throttleAddress('::ffff:192.0.2.1')).toBe('192.0.2.1');
+		expect(throttleAddress('192.0.2.1')).toBe('192.0.2.1');
+		expect(throttleAddress(null)).toBe('unknown');
+	});
+
+	test('a sign-in the full queue turned away does not count as a failed attempt', async () => {
+		const h = await harness();
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const waiting = Array.from({ length: 4 + 64 }, () => withHashSlot(() => held));
+		const attempt = () =>
+			h.app.request(
+				'http://opal.test/api/auth/login',
+				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'queued', password: 'wrong-guess-xxxx' }) },
+				{ ip: '198.51.100.20' }
+			);
+		for (let i = 0; i < 12; i++) expect((await attempt()).status).toBe(429);
+		release();
+		await Promise.all(waiting);
+		expect((await attempt()).status).toBe(401);
 	});
 
 	test('failure records for names that are never seen again are dropped', () => {

@@ -126,13 +126,24 @@ export class LoginThrottle {
 }
 export const loginThrottle = new LoginThrottle();
 /**
- * Failures per username from any address. Past the cap, an address that has not failed against
- * that name recently is still checked, but a wrong guess from it is answered after
- * LOCKED_GUESS_DELAY_MS. So a stranger who guesses a name cannot lock the person out, yet
- * guessing from many addresses is slowed. Addresses that already failed are refused.
+ * Failures per username from any address. Past the cap, addresses this person has never signed in
+ * from share one guess per name every `lockedGuess.intervalMs`, whichever address asks, so a stranger
+ * with many addresses gets no more tries than one with a single address. The person still gets in
+ * from an address they have used, and a stranger who guesses a name cannot lock them out of it.
  */
 export const usernameThrottle = new LoginThrottle(50, 900_000);
-export const lockedGuess = { delayMs: 1500 };
+export const lockedGuess = { intervalMs: 5000 };
+
+const nextLockedGuess = new Map<string, number>();
+
+/** Whether a stranger's guess may go ahead against a name over its cap. Taking it uses the slot. */
+export function takeLockedGuess(nameKey: string): boolean {
+	const t = Date.now();
+	if (nextLockedGuess.size > 1000) for (const [k, at] of nextLockedGuess) if (at <= t) nextLockedGuess.delete(k);
+	if ((nextLockedGuess.get(nameKey) ?? 0) > t) return false;
+	nextLockedGuess.set(nameKey, t + lockedGuess.intervalMs);
+	return true;
+}
 
 /**
  * Caps the argon2id work that anonymous requests start at the same time. Each hash takes

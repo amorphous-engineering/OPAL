@@ -1,5 +1,6 @@
 /** Session minting and revocation, shared by every sign-in method. */
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne } from 'drizzle-orm';
+import { throttleAddress } from '../../auth/client-ip.ts';
 import {
 	addMs,
 	hashToken,
@@ -9,6 +10,7 @@ import {
 	SESSION_LIFETIME_MS
 } from '../../auth/tokens.ts';
 import type { Ctx } from '../../context.ts';
+import type { Db } from '../../db/client.ts';
 import { session, user } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
 
@@ -56,6 +58,18 @@ export function revokeSessions(ctx: Ctx, userId: number, exceptSessionId?: numbe
 	const at = new Date().toISOString();
 	for (const r of rows) update(ctx, session, r.id, { revokedAt: at });
 	return rows.length;
+}
+
+/** Whether a recent session of this person came from this client. `address` is a `throttleAddress`. */
+export function hasSignedInFrom(db: Db, userId: number, address: string): boolean {
+	return db
+		.select({ ip: session.ipAddress })
+		.from(session)
+		.where(eq(session.userId, userId))
+		.orderBy(desc(session.id))
+		.limit(50)
+		.all()
+		.some((s) => s.ip !== null && throttleAddress(s.ip) === address);
 }
 
 /** A free username derived from `raw`: digits are appended until it is unique. */
