@@ -19,7 +19,7 @@ $env:OPAL_PRERELEASE = "1"
 irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 ```
 
-Without the prerelease option the installers take the release marked Latest, which is still 1.x. To install one exact release:
+The prerelease option is needed for now: the release marked Latest is still 1.x, which these installers cannot verify, so they stop. To install one exact release:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh -s -- --version v2.0.0-beta.1

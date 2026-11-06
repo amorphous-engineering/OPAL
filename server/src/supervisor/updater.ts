@@ -130,12 +130,7 @@ interface ReleaseJson {
  * `2.0.0-rc.25` sorts above `2.0.0-beta.1` though it came first, so a release published before the
  * running one is never offered.
  */
-function newestInstallable(
-	list: ReleaseJson[],
-	name: string,
-	current: Semver,
-	log: (message: string) => void
-): ReleaseJson | null {
+function newestInstallable(list: ReleaseJson[], name: string, current: Semver): ReleaseJson | null {
 	const running = list.find((r) => {
 		const version = parseSemver(r.tag_name ?? '');
 		return version !== null && compareSemver(version, current) === 0;
@@ -145,11 +140,8 @@ function newestInstallable(
 	for (const release of list) {
 		if (release.draft) continue;
 		const version = parseSemver(release.tag_name ?? '');
-		if (!version) {
-			log(`Ignoring release with malformed tag ${JSON.stringify(release.tag_name ?? '')}`);
-			continue;
-		}
-		if (!release.assets?.some((a) => a.name === name)) continue;
+		// Old tags such as `v1.3.0b1` are in the list for good, so they are not worth a warning.
+		if (!version || !release.assets?.some((a) => a.name === name)) continue;
 		if (running && release.published_at && release.published_at <= running) continue;
 		if (!bestVersion || compareSemver(version, bestVersion) > 0) {
 			best = release;
@@ -181,7 +173,7 @@ export async function checkForUpdate(opts: UpdaterOptions = {}): Promise<UpdateI
 	if (res.status === 404) return null;
 	if (!res.ok) throw new Error(`Release lookup failed: HTTP ${res.status}`);
 	const answer = (await res.json()) as ReleaseJson | ReleaseJson[];
-	const data = Array.isArray(answer) ? newestInstallable(answer, assetName(opts.platform, opts.arch), cur, log) : answer;
+	const data = Array.isArray(answer) ? newestInstallable(answer, assetName(opts.platform, opts.arch), cur) : answer;
 	if (!data) return null;
 	const tag = data.tag_name ?? '';
 	const latest = parseSemver(tag);

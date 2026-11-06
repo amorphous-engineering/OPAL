@@ -6,7 +6,8 @@
 #   --prerelease       install the newest release, prereleases included
 #   --version <tag>    install one release, for example v2.0.0-rc.21
 # The same as environment variables: OPAL_PRERELEASE=1, OPAL_VERSION=<tag>.
-# With no option the installer takes the release GitHub marks as Latest.
+# With no option the installer takes the release GitHub marks as Latest, which is still 1.x
+# and stops, because 1.x releases have no checksums. Use --prerelease for the OPAL 2 beta.
 set -eu
 
 REPO="amorphous-engineering/OPAL"
@@ -176,7 +177,12 @@ sha256_of() {
 verify_checksum() {
     # verify_checksum FILE: compare with the SHA256SUMS line for ASSET_NAME.
     info "Verifying SHA-256..."
-    SUMS="$(download_text "$SUMS_URL")" || err "Could not download SHA256SUMS"
+    if ! SUMS="$(download_text "$SUMS_URL")"; then
+        # 1.x releases have no checksum file, and the release marked Latest is still one of them.
+        [ -z "$WANT_VERSION" ] && [ -z "$WANT_PRERELEASE" ] \
+            && err "The release marked Latest (${TAG}) has no SHA256SUMS, so it cannot be verified. To install the OPAL 2 beta, run this again with --prerelease."
+        err "Could not download SHA256SUMS"
+    fi
     EXPECTED="$(printf '%s\n' "$SUMS" | awk -v n="$ASSET_NAME" '$2 == n { print $1 }')"
     [ -n "$EXPECTED" ] || err "SHA256SUMS has no entry for ${ASSET_NAME}"
     ACTUAL="$(sha256_of "$1")"

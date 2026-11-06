@@ -5,7 +5,8 @@
 #   $env:OPAL_PRERELEASE = "1"         install the newest release, prereleases included
 #   $env:OPAL_VERSION = "v2.0.0-rc.21" install one release
 # Or as parameters: & ([scriptblock]::Create((irm <url>))) -Prerelease
-# With no option the installer takes the release GitHub marks as Latest.
+# With no option the installer takes the release GitHub marks as Latest, which is still 1.x
+# and stops, because 1.x releases have no checksums. Set OPAL_PRERELEASE=1 for the OPAL 2 beta.
 param(
     [switch]$Prerelease,
     [string]$Version
@@ -92,6 +93,10 @@ function Find-DownloadUrl {
 
     $Sums = $Release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
     if (-not $Sums) {
+        if (-not $Version -and -not $Prerelease) {
+            # 1.x releases have no checksum file, and the release marked Latest is still one of them.
+            Write-Err "The release marked Latest has no SHA256SUMS, so it cannot be verified. To install the OPAL 2 beta, set OPAL_PRERELEASE=1 and run this again."
+        }
         Write-Err "The release has no SHA256SUMS file"
     }
     $script:SumsUrl = $Sums.browser_download_url
