@@ -271,7 +271,7 @@ describe('identity resolution', () => {
 	test('an existing password account is linked by verified email and keeps its password', async () => {
 		const h = await fresh();
 		const existing = makeUser(h, { username: 'grace', email: 'grace@example.test', passwordHash: 'x' });
-		const linked = resolve(h, { sub: 's5', email: 'Grace@Example.test', name: 'Grace Hopper' });
+		const linked = resolve(h, { sub: 's5', email: 'Grace@Example.test', email_verified: true, name: 'Grace Hopper' });
 		expect(linked.id).toBe(existing.id);
 		expect(linked.oidcSubject).toBe('s5');
 		expect(linked.passwordHash).toBe('x');
@@ -283,6 +283,22 @@ describe('identity resolution', () => {
 		expect(() =>
 			resolve(h, { sub: 'attacker', email: 'victim@example.test', email_verified: false })
 		).toThrow(/unverified/);
+	});
+
+	test('an email the provider does not confirm as verified never claims an existing account', async () => {
+		const h = await fresh();
+		const victim = makeUser(h, { username: 'victim', email: 'victim@example.test', isAdmin: true });
+		expect(() => resolve(h, { sub: 'attacker', email: 'victim@example.test' })).toThrow(/does not confirm/);
+		const row = h.db.select().from(user).where(eq(user.id, victim.id)).get()!;
+		expect(row.oidcSubject).toBeNull();
+	});
+
+	test('a new identity is still provisioned when the provider says nothing about its email', async () => {
+		const h = await fresh();
+		makeUser(h, { username: 'seed' });
+		const u = resolve(h, { sub: 'new-1', email: 'new@example.test' });
+		expect(u.oidcSubject).toBe('new-1');
+		expect(u.email).toBe('new@example.test');
 	});
 
 	test('with auto-create off an unknown identity is refused', async () => {

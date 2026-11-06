@@ -298,8 +298,10 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 	const emailRaw = claims.email;
 	let email = typeof emailRaw === 'string' && emailRaw ? emailRaw.trim().toLowerCase() : null;
 	const unverified = !!email && (claims.email_verified === false || claims.email_verified === 'false');
-	// An unverified email must never claim an existing account.
 	if (unverified) email = null;
+	// Only a provider that says so has checked the address. Silence is not a yes: without the claim
+	// the email stays a display attribute and can never claim an existing account.
+	const verified = claims.email_verified === true || claims.email_verified === 'true';
 
 	const groups = extractGroups(claims, s.oidcGroupsClaim);
 	const grantsAdmin = !!s.oidcAdminGroup && groups.includes(s.oidcAdminGroup);
@@ -316,7 +318,14 @@ export function resolveIdentity(ctx: Ctx, s: OidcSettings, claims: Record<string
 			.from(user)
 			.where(and(eq(sql`lower(${user.email})`, email), isNull(user.oidcSubject)))
 			.get();
-		if (candidate) u = update(ctx, user, candidate.id, { oidcIssuer: s.oidcIssuer, oidcSubject: subject });
+		if (candidate) {
+			if (!verified) {
+				throw new OidcError(
+					`An OPAL account already uses ${email}, and the identity provider does not confirm this address is verified. Ask an administrator.`
+				);
+			}
+			u = update(ctx, user, candidate.id, { oidcIssuer: s.oidcIssuer, oidcSubject: subject });
+		}
 	}
 
 	let bootstrapAdmin = false;
