@@ -4,7 +4,7 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, write
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MIGRATIONS_DIR, openDb } from '../../src/db/client.ts';
-import { removeSnapshots, snapshotBeforeMigrating } from '../../src/db/snapshot.ts';
+import { snapshotBeforeMigrating } from '../../src/db/snapshot.ts';
 
 const dirs: string[] = [];
 const tempDir = () => {
@@ -149,19 +149,27 @@ describe('the copy taken before an upgrade', () => {
 		expect(left).toContain('opal.pre-migration-2026-01-03.db');
 	});
 
-	test('a copy that cannot be taken stops the upgrade and says the database is untouched', () => {
+	test('a copy that cannot be taken stops the upgrade and leaves the database as it was', () => {
 		const { path } = behind();
+		const applied = () => count(path, '__drizzle_migrations');
+		const before = applied();
+		expect(() =>
+			openDb(path, MIGRATIONS_DIR, () => {
+				throw new Error('disk full');
+			})
+		).toThrow('disk full');
+		expect(applied()).toBe(before);
 		const db = new Database(path);
-		expect(() => snapshotBeforeMigrating(db, join(path, 'not-a-folder', 'opal.db'))).toThrow(/left as it was/);
+		expect(db.query('SELECT status FROM execution').all()).toEqual([{ status: 'aborted' }]);
 		db.close();
 	});
 
-	test('a factory reset also erases the copies', () => {
+	test('a failed copy says the database was left as it was and leaves no partial file', () => {
 		const { dir, path } = behind();
-		openDb(path);
-		removeSnapshots(path);
+		const db = new Database(path);
+		expect(() => snapshotBeforeMigrating(db, join(path, 'not-a-folder', 'opal.db'))).toThrow(/left as it was/);
+		db.close();
 		expect(copies(dir)).toEqual([]);
-		expect(readdirSync(dir)).toContain('opal.db');
 	});
 });
 

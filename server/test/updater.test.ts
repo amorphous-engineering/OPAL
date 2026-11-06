@@ -139,6 +139,26 @@ describe('which releases a build follows', () => {
 		expect(info?.tag).toBe('v2.0.0-rc.26');
 	});
 
+	test('a tester on a pulled beta gets the next beta, not an older release candidate', async () => {
+		const g = github([
+			release('v2.0.0-beta.2', { published_at: '2026-11-08T00:00:00Z' }),
+			release('v2.0.0-rc.24', { published_at: '2026-10-27T00:00:00Z' })
+		]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0-beta.2');
+	});
+
+	test('a tester on a pulled beta is offered nothing when only older release candidates exist', async () => {
+		const g = github([release('v2.0.0-rc.24'), release('v1.3.2')]);
+		expect(await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' })).toBeNull();
+	});
+
+	test('a tester on a pulled beta is still offered the stable release', async () => {
+		const g = github([release('v2.0.0'), release('v2.0.0-rc.24')]);
+		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });
+		expect(info?.tag).toBe('v2.0.0');
+	});
+
 	test('a release whose binaries are still uploading is not offered yet', async () => {
 		const g = github([release('v2.0.0-beta.3', { assets: [] }), release('v2.0.0-beta.2')]);
 		const info = await checkForUpdate({ ...common, fetch: g.fetch, currentVersion: '2.0.0-beta.1' });

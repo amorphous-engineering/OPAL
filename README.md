@@ -46,7 +46,7 @@ Or download a binary from [GitHub Releases](https://github.com/amorphous-enginee
 |---|---|
 | `opal` | Starts the server and opens a control page in the browser: status, log, start, stop, update. |
 | `opal serve` | Starts only the server. Use this under systemd or another service manager. |
-| `opal update` | Downloads, verifies and installs the newest release. A prerelease build also follows later prereleases. |
+| `opal update` | Downloads and installs the newest release. A prerelease build also follows later prereleases. It checks the download against the release's checksums, which catches a damaged file but not a tampered release. |
 
 ### First run
 
@@ -100,7 +100,7 @@ OPAL links a sign-in to an existing account by email only when the provider send
 
 ### Coming from 1.x
 
-This beta cannot import a 1.x database yet. If it finds one in the data folder it stops and leaves the file alone. Keep using 1.x for that data, or set `OPAL_DATA_DIR` to an empty folder to try this version beside it. 1.x extensions and the Onshape integration do not carry over.
+This beta cannot import a 1.x database yet. If it finds one in the data folder it stops and leaves the file alone. Keep using 1.x for that data, or set `OPAL_DATA_DIR` to an empty folder to try this version beside it. The installer replaces the `opal` program and keeps the previous one, and the [quickstart](QUICKSTART.md#if-you-already-use-opal-1x) shows how to go back. 1.x extensions and the Onshape integration do not carry over.
 
 ### Back up and roll back
 

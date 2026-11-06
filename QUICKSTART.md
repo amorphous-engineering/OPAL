@@ -25,7 +25,21 @@ opal
 
 This starts the server and opens a control page with its status and log. To run only the server, without the control page, use `opal serve`.
 
-If you have used OPAL 1.x on this computer, this beta will stop rather than touch that database. Keep 1.x for it, and give the beta its own empty folder:
+## If you already use OPAL 1.x
+
+This beta cannot read a 1.x database yet. If it finds one, it stops and leaves the file alone. The installer also replaces the `opal` program, so anything that starts `opal`, including a service, now starts the beta.
+
+The installer keeps your previous program the first time. To go back to 1.x:
+
+```bash
+mv ~/.local/bin/opal.before-v2 ~/.local/bin/opal
+```
+
+```powershell
+Move-Item -Force "$env:LOCALAPPDATA\OPAL\opal.before-v2.exe" "$env:LOCALAPPDATA\OPAL\opal.exe"
+```
+
+To try the beta beside your 1.x data, give it its own empty folder:
 
 ```bash
 OPAL_DATA_DIR=~/opal-beta opal

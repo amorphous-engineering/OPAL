@@ -14,6 +14,7 @@ REPO="amorphous-engineering/OPAL"
 RELEASES_URL="https://github.com/${REPO}/releases"
 INSTALL_DIR="${HOME}/.local/bin"
 INSTALL_PATH="${INSTALL_DIR}/opal"
+BEFORE_V2_PATH="${INSTALL_DIR}/opal.before-v2"
 
 WANT_VERSION="${OPAL_VERSION:-}"
 WANT_PRERELEASE="${OPAL_PRERELEASE:-}"
@@ -211,6 +212,17 @@ install_binary() {
     fi
 
     verify_checksum "$TMP_FILE"
+
+    # 1.x installs to this same path, and OPAL 2 cannot read a 1.x database yet. The first install
+    # over an older OPAL keeps that program, so going back is one command. Later installs leave
+    # it alone: it is the way back to 1.x, not to the last beta.
+    if [ -e "$INSTALL_PATH" ] && [ ! -e "$BEFORE_V2_PATH" ]; then
+        # Through a temporary name: a copy cut short must not pass for the way back.
+        cp -p "$INSTALL_PATH" "${BEFORE_V2_PATH}.tmp" || err "Could not keep your previous OPAL; nothing was changed"
+        mv -f "${BEFORE_V2_PATH}.tmp" "$BEFORE_V2_PATH"
+        warn "Kept your previous OPAL at ${BEFORE_V2_PATH}"
+        warn "If that was 1.x, this version cannot read its data yet. To go back: mv \"${BEFORE_V2_PATH}\" \"${INSTALL_PATH}\""
+    fi
 
     mv -f "$TMP_FILE" "$INSTALL_PATH"
     chmod +x "$INSTALL_PATH"

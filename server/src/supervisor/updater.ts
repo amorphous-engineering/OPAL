@@ -127,14 +127,16 @@ interface ReleaseJson {
 /**
  * The highest version in a release list that this machine can install. A release still uploading
  * has no binary yet: it is skipped, so the next check finds it. Version order alone is not enough:
- * `2.0.0-rc.25` sorts above `2.0.0-beta.1` though it came first, so a release published before the
- * running one is never offered.
+ * `2.0.0-rc.25` sorts above `2.0.0-beta.1` though it came first. So a release published before the
+ * running one is never offered. When the running release is not in the list, because it was pulled
+ * or has aged out, its date is unknown, and only its own track (`beta`) or a stable release is safe.
  */
 function newestInstallable(list: ReleaseJson[], name: string, current: Semver): ReleaseJson | null {
 	const running = list.find((r) => {
 		const version = parseSemver(r.tag_name ?? '');
 		return version !== null && compareSemver(version, current) === 0;
-	})?.published_at;
+	});
+	const track = (v: Semver) => v.pre[0]?.replace(/\d+$/, '');
 	let best: ReleaseJson | null = null;
 	let bestVersion: Semver | null = null;
 	for (const release of list) {
@@ -142,7 +144,9 @@ function newestInstallable(list: ReleaseJson[], name: string, current: Semver): 
 		const version = parseSemver(release.tag_name ?? '');
 		// Old tags such as `v1.3.0b1` are in the list for good, so they are not worth a warning.
 		if (!version || !release.assets?.some((a) => a.name === name)) continue;
-		if (running && release.published_at && release.published_at <= running) continue;
+		if (running?.published_at) {
+			if (release.published_at && release.published_at <= running.published_at) continue;
+		} else if (version.pre.length && track(version) !== track(current)) continue;
 		if (!bestVersion || compareSemver(version, bestVersion) > 0) {
 			best = release;
 			bestVersion = version;
