@@ -17,7 +17,7 @@ import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
 import { zPersonRef } from './org.ts';
 import { zProcedureDataSchema } from './procedures.ts';
-import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, MAX_TIMESTAMP, MAX_TOKEN } from '../limits.ts';
+import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, MAX_TIMESTAMP, MAX_TOKEN, zJsonObject } from '../limits.ts';
 
 /**
  * Status follows from the work done. `void` and `closed_short` are the two strikes: a work order
@@ -973,7 +973,7 @@ export const execution = {
 			'Complete a step: stamps who and when (slot 0), with the captured data validated against the step data schema. Refused while a hold, sequence, dependency, redline or open sub-step stands.',
 		input: z.object({
 			...zStepPath,
-			dataCaptured: z.record(z.string().max(MAX_SHORT), z.unknown()).nullish(),
+			dataCaptured: zJsonObject().nullish(),
 			notes: z.string().max(MAX_TEXT).nullish()
 		}),
 		output: zSignResult,
@@ -990,7 +990,7 @@ export const execution = {
 		input: z.object({
 			...zStepPath,
 			slot: z.coerce.number().int().min(0),
-			dataCaptured: z.record(z.string().max(MAX_SHORT), z.unknown()).nullish()
+			dataCaptured: zJsonObject().nullish()
 		}),
 		output: zSignResult,
 		access: 'signed-in',

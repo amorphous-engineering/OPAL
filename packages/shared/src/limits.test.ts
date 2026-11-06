@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { z } from 'zod';
 import { contracts } from './contracts.ts';
-import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from './limits.ts';
+import { LIMITED_JSON, MAX_JSON_TEXT, MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, zJsonObject } from './limits.ts';
 
 type Node = { _zod: { def: Record<string, unknown> } };
 
@@ -82,6 +82,32 @@ function operationsWithOutput(node: Record<string, any>, prefix = ''): { name: s
 	);
 }
 
+/** Free-form values an operation accepts with no size cap around them. */
+function openJson(s: unknown, path: string, out: string[], seen = new Set<unknown>()): void {
+	const node = s as Node | undefined;
+	if (!node?._zod || LIMITED_JSON.has(node as object) || seen.has(s)) return;
+	seen.add(s);
+	const def = node._zod.def as Record<string, any>;
+	if (def.type === 'unknown' || def.type === 'any') out.push(path);
+	if (def.type === 'object') for (const [k, v] of Object.entries(def.shape)) openJson(v, `${path}.${k}`, out, seen);
+	for (const key of ['element', 'innerType', 'valueType', 'in', 'out', 'left', 'right']) if (def[key]) openJson(def[key], path, out, seen);
+	for (const key of ['options', 'items']) for (const o of def[key] ?? []) openJson(o, path, out, seen);
+}
+
+describe('free-form input', () => {
+	test('every free-form value an operation accepts sits inside a size cap, so one request cannot store megabytes there', () => {
+		const open: string[] = [];
+		for (const op of operations(contracts as Record<string, any>)) openJson(op.input, op.name, open);
+		expect(open).toEqual([]);
+	});
+
+	test('the cap counts the whole value', () => {
+		const s = zJsonObject();
+		expect(s.safeParse({ note: 'x'.repeat(100) }).success).toBe(true);
+		expect(s.safeParse({ note: 'x'.repeat(MAX_JSON_TEXT + 1) }).success).toBe(false);
+	});
+});
+
 describe('output checks', () => {
 	test('no output has a length limit, so a value the server accepted earlier always reads', () => {
 		const limited: string[] = [];
@@ -100,7 +126,7 @@ describe('output checks', () => {
 });
 
 describe('input limits', () => {
-	test('every text an operation accepts has a length limit, so one request cannot store megabytes', () => {
+	test('every text an operation accepts has a length limit', () => {
 		const unlimited: string[] = [];
 		for (const op of operations(contracts as Record<string, any>)) {
 			const found: { path: string; s: z.ZodString }[] = [];

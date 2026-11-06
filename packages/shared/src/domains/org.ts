@@ -4,7 +4,7 @@ import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { variantFormat } from '../designators.ts';
 import { zTimestamp } from '../time.ts';
 import { zTimeDisplay } from './auth.ts';
-import { MAX_SHORT, MAX_TEXT } from '../limits.ts';
+import { MAX_SHORT, MAX_TEXT, zJsonObject } from '../limits.ts';
 
 /** A boolean that arrives as 'true' or 'false' in a query string. */
 const zQueryBool = z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]);
@@ -599,7 +599,7 @@ export const zOrgSettingsInput = z
 		partNumbering: zPartNumbering,
 		categories: z.array(z.string().max(MAX_SHORT)).default([]),
 		/** Omitted keeps the stored custom fields. */
-		customFields: z.record(z.string().max(MAX_SHORT), z.unknown()).nullable().optional()
+		customFields: zJsonObject().nullable().optional()
 	})
 	.superRefine((v, ctx) => {
 		if (new Set(v.tiers.map((t) => t.level)).size !== v.tiers.length) {

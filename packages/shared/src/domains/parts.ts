@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
-import { MAX_CSV, MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from '../limits.ts';
+import { MAX_CSV, MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, zJsonObject } from '../limits.ts';
 
 export const TRACKING_TYPES = ['serialized', 'bulk'] as const;
 export const PROCUREMENT = ['make', 'buy', 'both'] as const;
@@ -67,7 +67,7 @@ const partFields = {
 	reorderPoint: zQty.nullable().optional(),
 	isTooling: z.boolean().optional(),
 	calibrationIntervalDays: z.number().int().positive().nullable().optional(),
-	metadata: zPartMetadata.nullable().optional()
+	metadata: zJsonObject().nullable().optional()
 };
 
 export const zPartCreate = z.object({

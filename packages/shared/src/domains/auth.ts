@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { op, zId, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
-import { MAX_SHORT } from '../limits.ts';
+import { MAX_SHORT, zJsonObject } from '../limits.ts';
 
 /** How the UI shows times. Storage is always UTC. */
 export const zTimeDisplay = z.enum(['local', 'utc']);
@@ -244,7 +244,7 @@ const passkeys = {
 		method: 'POST',
 		path: '/auth/passkeys/register/complete',
 		summary: 'Finish registering a passkey with the browser\'s credential.',
-		input: z.object({ name: z.string().trim().max(100).default('Passkey'), credential: zJson }),
+		input: z.object({ name: z.string().trim().max(100).default('Passkey'), credential: zJsonObject() }),
 		output: z.object({ ok: z.literal(true), id: z.number().int(), name: z.string() }),
 		access: 'signed-in',
 		humanOnly: true,
@@ -265,7 +265,7 @@ const passkeys = {
 		method: 'POST',
 		path: '/auth/passkeys/login/complete',
 		summary: 'Finish a passkey sign-in with the browser\'s assertion.',
-		input: z.object({ credential: zJson }),
+		input: z.object({ credential: zJsonObject() }),
 		output: zSignedIn,
 		access: 'public',
 		mcp: false

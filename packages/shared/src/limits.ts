@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Length limits for text people send in. Every input string has one, because a stored string is
  * copied into the audit log and the search index, and the server reads each one in a single pass.
@@ -18,3 +20,17 @@ export const MAX_CSV = 2_000_000;
 export const MAX_NUMBER_TEXT = 40;
 /** An ISO 8601 timestamp, with a fraction and an offset. */
 export const MAX_TIMESTAMP = 40;
+/** Free-form JSON someone sends in: a part's metadata, captured data, plugin settings. */
+export const MAX_JSON_TEXT = 256_000;
+
+/** Free-form objects that carry their own cap. The walker in the tests stops here. */
+export const LIMITED_JSON = new WeakSet<object>();
+
+/** An object with free-form values. Text limits cannot see inside it, so its whole size is capped. */
+export function zJsonObject() {
+	const schema = z
+		.record(z.string().max(MAX_SHORT), z.unknown())
+		.refine((v) => JSON.stringify(v).length <= MAX_JSON_TEXT, `Must be at most ${MAX_JSON_TEXT} characters as JSON`);
+	LIMITED_JSON.add(schema);
+	return schema;
+}

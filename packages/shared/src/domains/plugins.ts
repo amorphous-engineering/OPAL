@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { op, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
-import { MAX_SHORT, MAX_TOKEN } from '../limits.ts';
+import { MAX_SHORT, MAX_TOKEN, zJsonObject } from '../limits.ts';
 
 // ------------------------------------------------------------------ manifest
 
@@ -259,7 +259,7 @@ export const plugins = {
 		method: 'PUT',
 		path: '/plugins/:id/settings',
 		summary: 'Save plugin settings and restart the plugin. A secret left out keeps its value.',
-		input: zKey.extend({ values: z.record(z.string().max(MAX_SHORT), z.unknown()) }),
+		input: zKey.extend({ values: zJsonObject() }),
 		output: zPluginDetail,
 		access: 'admin',
 		humanOnly: true,
