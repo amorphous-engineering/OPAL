@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { op, zId, zOk, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
 export const PURCHASE_STATUSES = [
 	'draft',
@@ -93,12 +94,12 @@ const zSupplierWebsite = z
 
 const supplierFields = {
 	code: zText(50).nullable().optional(),
-	description: z.string().nullable().optional(),
+	description: z.string().max(MAX_TEXT).nullable().optional(),
 	website: zSupplierWebsite.nullable().optional(),
 	email: zText(255).nullable().optional(),
 	phone: zText(50).nullable().optional(),
-	address: z.string().nullable().optional(),
-	notes: z.string().nullable().optional()
+	address: z.string().max(MAX_TEXT).nullable().optional(),
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 };
 
 export const zSupplierCreate = z.object({
@@ -147,7 +148,7 @@ export const zSupplierPartCreate = z.object({
 	vendorPn: zText(255).min(1),
 	isPreferred: z.boolean().default(false),
 	leadTimeDays: z.number().int().min(0).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 export const zSupplierPartUpdate = z.object({
 	id: zId,
@@ -155,7 +156,7 @@ export const zSupplierPartUpdate = z.object({
 	vendorPn: zText(255).min(1).optional(),
 	isPreferred: z.boolean().optional(),
 	leadTimeDays: z.number().int().min(0).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 /** A PO line seen from the part. */
@@ -277,7 +278,7 @@ export const zPurchaseLineInput = z.object({
 	qtyOrdered: zQty,
 	unitCost: zPurchaseMoney.nullable().optional(),
 	destination: zText(255).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 export const zPurchaseCreate = z.object({
@@ -286,7 +287,7 @@ export const zPurchaseCreate = z.object({
 	supplierReference: zText(100).nullable().optional(),
 	targetDate: zDate.nullable().optional(),
 	destination: zText(255).nullable().optional(),
-	notes: z.string().nullable().optional(),
+	notes: z.string().max(MAX_TEXT).nullable().optional(),
 	lines: z.array(zPurchaseLineInput).default([])
 });
 
@@ -297,7 +298,7 @@ export const zPurchaseUpdate = z.object({
 	supplierReference: zText(100).nullable().optional(),
 	targetDate: zDate.nullable().optional(),
 	destination: zText(255).nullable().optional(),
-	notes: z.string().nullable().optional(),
+	notes: z.string().max(MAX_TEXT).nullable().optional(),
 	/** A status moves only through place, hold, resume, cancel and close short. Refuse it here, so a stale caller is not told it worked. */
 	status: z.never().optional()
 });
@@ -322,7 +323,7 @@ export const zPurchaseLineUpdate = z.object({
 	qtyOrdered: zQty.optional(),
 	unitCost: zPurchaseMoney.nullable().optional(),
 	destination: zText(255).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 export const zPurchaseReceive = z.object({
@@ -383,7 +384,7 @@ const suppliers = {
 		path: '/suppliers',
 		summary: 'List suppliers. Search by name, code or email; filter by active.',
 		input: zPageInput.extend({
-			q: z.string().optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			active: zFlag.optional(),
 			sort: z.enum(SUPPLIER_SORT_KEYS).default('name'),
 			dir: z.enum(['asc', 'desc']).default('asc')
@@ -511,8 +512,8 @@ const orders = {
 			awaiting: zFlag.optional(),
 			overdue: zFlag.optional(),
 			supplierId: zId.optional(),
-			supplier: z.string().optional(),
-			q: z.string().optional(),
+			supplier: z.string().max(MAX_SHORT).optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			targetFrom: zDate.optional(),
 			targetTo: zDate.optional(),
 			sort: z.enum(PURCHASE_SORT_KEYS).default('createdAt'),

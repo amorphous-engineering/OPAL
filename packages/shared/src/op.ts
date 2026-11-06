@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import type { Gate } from './gates.ts';
+import { MAX_TOKEN } from './limits.ts';
 
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
@@ -55,7 +56,7 @@ export const zOk = z.object({ ok: z.literal(true) });
 
 /** Cursor pagination, the one list style. `next` is null on the last page. */
 export const zPageInput = z.object({
-	cursor: z.string().optional(),
+	cursor: z.string().max(MAX_TOKEN).optional(),
 	limit: z.coerce.number().int().min(1).max(500).default(100)
 });
 

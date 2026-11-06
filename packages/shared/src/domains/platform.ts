@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT } from '../limits.ts';
 
 // ---------------------------------------------------------------- attachments
 
@@ -253,7 +254,7 @@ export const platform = {
 			path: '/attachments',
 			summary: 'List the files attached to one record, newest first.',
 			input: z.object({
-				ownerType: z.string(),
+				ownerType: z.string().max(MAX_SHORT),
 				ownerId: zId,
 				kind: z.enum(ATTACHMENT_KINDS).optional()
 			}),
@@ -383,14 +384,14 @@ export const platform = {
 			path: '/audit',
 			summary: 'Audit entries, newest first. Filter by record, action, user and date.',
 			input: zPageInput.extend({
-				entity: z.string().optional(),
+				entity: z.string().max(MAX_SHORT).optional(),
 				entityId: zId.optional(),
 				action: z.enum(AUDIT_ACTIONS).optional(),
 				userId: zId.optional(),
 				/** YYYY-MM-DD or an ISO 8601 instant, inclusive. */
-				from: z.string().optional(),
+				from: z.string().max(MAX_SHORT).optional(),
 				/** YYYY-MM-DD (the whole day) or an ISO 8601 instant, exclusive. */
-				to: z.string().optional(),
+				to: z.string().max(MAX_SHORT).optional(),
 				/** Page by position instead of by cursor (page-number UIs). */
 				offset: z.coerce.number().int().min(0).optional()
 			}),
@@ -413,7 +414,7 @@ export const platform = {
 			method: 'GET',
 			path: '/audit/history/:entity/:entityId',
 			summary: 'Every change to one record, newest first.',
-			input: zPageInput.extend({ entity: z.string(), entityId: zId }),
+			input: zPageInput.extend({ entity: z.string().max(MAX_SHORT), entityId: zId }),
 			output: zPage(zAuditEntry),
 			access: 'signed-in',
 			mcp: true
@@ -448,7 +449,7 @@ export const platform = {
 			path: '/search',
 			summary: 'Search every area at once. Up to `limit` hits per entity type.',
 			input: z.object({
-				q: z.string().min(1),
+				q: z.string().max(MAX_SHORT).min(1),
 				limit: z.coerce.number().int().min(1).max(20).default(5)
 			}),
 			output: z.array(zSearchHit),

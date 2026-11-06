@@ -17,6 +17,7 @@ import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
 import { zPersonRef } from './org.ts';
 import { zProcedureDataSchema } from './procedures.ts';
+import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, MAX_TIMESTAMP, MAX_TOKEN } from '../limits.ts';
 
 /**
  * Status follows from the work done. `void` and `closed_short` are the two strikes: a work order
@@ -637,7 +638,7 @@ export const zBomReconciliation = z.object({
 
 export const zRedlineStepInput = z.object({
 	title: z.string().trim().min(1).max(255),
-	instructions: z.string().nullish(),
+	instructions: z.string().max(MAX_MARKDOWN).nullish(),
 	dataSchema: zProcedureDataSchema.nullish(),
 	requiresSignoff: z.boolean().default(false)
 });
@@ -756,7 +757,7 @@ export type ExecutionReport = z.infer<typeof zExecutionReport>;
 // ---------------------------------------------------------------- inputs
 
 const zStepPath = { id: zId, stepId: zId };
-const zLocalTime = z.iso.datetime({ offset: true });
+const zLocalTime = z.iso.datetime({ offset: true }).max(MAX_TIMESTAMP);
 
 export const execution = {
 	list: op({
@@ -766,10 +767,10 @@ export const execution = {
 		summary:
 			'List executions (work orders) with progress, holds and who is working. Filters: status (comma list), procedureId, projectId, q, mine, held.',
 		input: zPageInput.extend({
-			status: z.string().optional(),
+			status: z.string().max(MAX_SHORT).optional(),
 			procedureId: z.coerce.number().int().positive().optional(),
 			projectId: z.coerce.number().int().positive().optional(),
-			q: z.string().optional(),
+			q: z.string().max(MAX_SHORT).optional(),
 			mine: z.enum(['true', 'false']).optional(),
 			held: z.enum(['true', 'false']).optional(),
 			sort: z.enum(EXECUTION_SORT_KEYS).optional(),
@@ -908,7 +909,7 @@ export const execution = {
 		method: 'GET',
 		path: '/executions/:id/qr.svg',
 		summary: 'QR code linking to the execution page. origin: the browser origin.',
-		input: z.object({ id: zId, origin: z.string().optional() }),
+		input: z.object({ id: zId, origin: z.string().max(MAX_TOKEN).optional() }),
 		output: z.string(),
 		access: 'signed-in',
 		mcp: false,
@@ -972,8 +973,8 @@ export const execution = {
 			'Complete a step: stamps who and when (slot 0), with the captured data validated against the step data schema. Refused while a hold, sequence, dependency, redline or open sub-step stands.',
 		input: z.object({
 			...zStepPath,
-			dataCaptured: z.record(z.string(), z.unknown()).nullish(),
-			notes: z.string().nullish()
+			dataCaptured: z.record(z.string().max(MAX_SHORT), z.unknown()).nullish(),
+			notes: z.string().max(MAX_TEXT).nullish()
 		}),
 		output: zSignResult,
 		access: 'signed-in',
@@ -989,7 +990,7 @@ export const execution = {
 		input: z.object({
 			...zStepPath,
 			slot: z.coerce.number().int().min(0),
-			dataCaptured: z.record(z.string(), z.unknown()).nullish()
+			dataCaptured: z.record(z.string().max(MAX_SHORT), z.unknown()).nullish()
 		}),
 		output: zSignResult,
 		access: 'signed-in',
@@ -1024,7 +1025,7 @@ export const execution = {
 		path: '/executions/:id/steps/:stepId/notes',
 		summary:
 			'Append a timestamped, authored note to a step. Any step state, any execution state. Attach files with POST /api/attachments (ownerType step_note).',
-		input: z.object({ ...zStepPath, body: z.string() }),
+		input: z.object({ ...zStepPath, body: z.string().max(MAX_TEXT) }),
 		output: zStepNote,
 		access: 'signed-in',
 		mcp: true
@@ -1058,10 +1059,10 @@ export const execution = {
 		input: z.object({
 			...zStepPath,
 			title: z.string().trim().min(1).max(255),
-			description: z.string().nullish(),
+			description: z.string().max(MAX_MARKDOWN).nullish(),
 			priority: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
-			shouldBe: z.string().nullish(),
-			actual: z.string().nullish(),
+			shouldBe: z.string().max(MAX_MARKDOWN).nullish(),
+			actual: z.string().max(MAX_MARKDOWN).nullish(),
 			containment: z.enum(['advisory', 'step', 'op', 'wo']).default('step'),
 			containmentStepId: z.number().int().positive().nullish(),
 			assignedToId: z.number().int().positive().nullish()
@@ -1112,7 +1113,7 @@ export const execution = {
 		method: 'POST',
 		path: '/executions/:id/consume',
 		summary: 'Consume stock for the execution as a whole (procedure level).',
-		input: z.object({ id: zId, items: z.array(zConsumeLine).min(1), notes: z.string().nullish() }),
+		input: z.object({ id: zId, items: z.array(zConsumeLine).min(1), notes: z.string().max(MAX_TEXT).nullish() }),
 		output: z.array(zConsumptionRow),
 		access: 'signed-in',
 		mcp: true
@@ -1122,7 +1123,7 @@ export const execution = {
 		method: 'POST',
 		path: '/executions/:id/steps/:stepId/consume',
 		summary: 'Consume stock at one step. Tooling is booked and returned (a zero move).',
-		input: z.object({ ...zStepPath, items: z.array(zConsumeLine).min(1), notes: z.string().nullish() }),
+		input: z.object({ ...zStepPath, items: z.array(zConsumeLine).min(1), notes: z.string().max(MAX_TEXT).nullish() }),
 		output: z.array(zConsumptionRow),
 		access: 'signed-in',
 		mcp: true
@@ -1149,13 +1150,13 @@ export const execution = {
 					z.object({
 						partId: zId,
 						quantity: zQty,
-						location: z.string().trim().min(1),
-						lotNumber: z.string().nullish(),
-						serialNumber: z.string().nullish()
+						location: z.string().max(MAX_SHORT).trim().min(1),
+						lotNumber: z.string().max(MAX_SHORT).nullish(),
+						serialNumber: z.string().max(MAX_SHORT).nullish()
 					})
 				)
 				.min(1),
-			notes: z.string().nullish()
+			notes: z.string().max(MAX_TEXT).nullish()
 		}),
 		output: z.array(zProductionRow),
 		access: 'signed-in',
@@ -1187,7 +1188,7 @@ export const execution = {
 		path: '/executions/:id/finalize',
 		summary:
 			'After completion: book the planned outputs into stock at a location and record the genealogy of the consumed components.',
-		input: z.object({ id: zId, location: z.string().trim().min(1), notes: z.string().nullish() }),
+		input: z.object({ id: zId, location: z.string().max(MAX_SHORT).trim().min(1), notes: z.string().max(MAX_TEXT).nullish() }),
 		output: z.object({ executionId: z.number().int(), productions: z.array(zProductionRow) }),
 		access: 'signed-in',
 		mcp: true

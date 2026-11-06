@@ -1,0 +1,96 @@
+import { describe, expect, test } from 'bun:test';
+import { z } from 'zod';
+import { contracts } from './contracts.ts';
+import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from './limits.ts';
+
+type Node = { _zod: { def: Record<string, unknown> } };
+
+/** Every string an operation accepts, with where it sits. */
+function strings(s: unknown, path: string, out: { path: string; s: z.ZodString }[], seen = new Set<unknown>()): void {
+	const node = s as Node | undefined;
+	if (!node?._zod) return;
+	const def = node._zod.def as Record<string, any>;
+	if (def.type === 'string') {
+		out.push({ path, s: s as z.ZodString });
+		return;
+	}
+	if (seen.has(s)) return;
+	seen.add(s);
+	switch (def.type) {
+		case 'object':
+			for (const [k, v] of Object.entries(def.shape)) strings(v, `${path}.${k}`, out, seen);
+			break;
+		case 'array':
+			strings(def.element, `${path}[]`, out, seen);
+			break;
+		case 'optional':
+		case 'nullable':
+		case 'default':
+		case 'prefault':
+		case 'readonly':
+		case 'catch':
+		case 'nonoptional':
+			strings(def.innerType, path, out, seen);
+			break;
+		case 'union':
+			for (const o of def.options) strings(o, path, out, seen);
+			break;
+		case 'record':
+			strings(def.keyType, `${path}{key}`, out, seen);
+			strings(def.valueType, `${path}{}`, out, seen);
+			break;
+		case 'pipe':
+			strings(def.in, path, out, seen);
+			strings(def.out, path, out, seen);
+			break;
+		case 'tuple':
+			for (const i of def.items) strings(i, `${path}[]`, out, seen);
+			break;
+		case 'intersection':
+			strings(def.left, path, out, seen);
+			strings(def.right, path, out, seen);
+			break;
+	}
+}
+
+function operations(node: Record<string, any>, prefix = ''): { name: string; input: z.ZodType }[] {
+	return Object.entries(node).flatMap(([k, v]) =>
+		v?.input && v?.output ? [{ name: `${prefix}${k}`, input: v.input as z.ZodType }] : v && typeof v === 'object' ? operations(v, `${prefix}${k}.`) : []
+	);
+}
+
+/** Strings with no length limit of their own. Each is bounded by its pattern or owned elsewhere. */
+const UNLIMITED_BUT_BOUNDED = new Set([
+	// A YYYY-MM-DD pattern, anchored: 10 characters.
+	'inventory.create.expirationDate',
+	'inventory.correct.expirationDate',
+	'purchasing.orders.list.targetFrom',
+	'purchasing.orders.list.targetTo',
+	'purchasing.orders.create.targetDate',
+	'purchasing.orders.update.targetDate',
+	// A 40-character hex digest or the word `local`, anchored.
+	'plugins.install.sha'
+]);
+
+describe('input limits', () => {
+	test('every text an operation accepts has a length limit, so one request cannot store megabytes', () => {
+		const unlimited: string[] = [];
+		for (const op of operations(contracts as Record<string, any>)) {
+			const found: { path: string; s: z.ZodString }[] = [];
+			strings(op.input, '', found);
+			for (const { path, s } of found) {
+				if (s.maxLength == null) unlimited.push(`${op.name}${path}`);
+			}
+		}
+		const unexpected = unlimited.filter((u) => !UNLIMITED_BUT_BOUNDED.has(u) && !u.startsWith('org.users.uploadAvatar'));
+		expect(unexpected).toEqual([]);
+	});
+
+	test('the limits leave room for real writing and stay far below a request that stalls the server', () => {
+		expect(MAX_SHORT).toBeGreaterThanOrEqual(255);
+		// The longest text in the demo data is 1,330 characters.
+		expect(MAX_TEXT).toBeGreaterThanOrEqual(4_000);
+		expect(MAX_MARKDOWN).toBeGreaterThanOrEqual(64_000);
+		expect(MAX_MARKDOWN).toBeLessThanOrEqual(1_000_000);
+	});
+});

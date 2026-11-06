@@ -3,6 +3,7 @@
  * On the wire a quantity is a decimal string ("1.5"), never a float.
  */
 import { z } from 'zod';
+import { MAX_NUMBER_TEXT } from './limits.ts';
 
 export const QTY_DECIMALS = 4;
 export const QTY_SCALE = 10 ** QTY_DECIMALS;
@@ -13,7 +14,7 @@ export type Qty = number & { readonly __qty: unique symbol };
 const DECIMAL = /^-?\d+(\.\d{1,4})?$/;
 
 /** Wire format: a decimal string with at most four places. */
-export const zQty = z.string().regex(DECIMAL, 'Quantity must be a decimal with at most 4 places');
+export const zQty = z.string().max(MAX_NUMBER_TEXT).regex(DECIMAL, 'Quantity must be a decimal with at most 4 places');
 
 export function parseQty(s: string): Qty {
 	if (!DECIMAL.test(s)) throw new RangeError(`Invalid quantity: ${s}`);

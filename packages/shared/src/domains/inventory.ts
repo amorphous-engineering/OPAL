@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
 export const MOVE_KINDS = ['receive', 'consume', 'produce', 'adjust', 'count', 'transfer'] as const;
 export type MoveKind = (typeof MOVE_KINDS)[number];
@@ -175,7 +176,7 @@ export type StockTestTemplate = z.infer<typeof zStockTestTemplate>;
 
 export const zStockTestTemplateCreate = z.object({
 	name: z.string().trim().min(1).max(255),
-	description: z.string().nullable().optional(),
+	description: z.string().max(MAX_TEXT).nullable().optional(),
 	required: z.boolean().default(false),
 	testType: z.enum(STOCK_TEST_TYPES).default('boolean'),
 	minValue: zQty.nullable().optional(),
@@ -203,7 +204,7 @@ export const zStockTestResultInput = z.object({
 	templateId: z.number().int().nullable().optional(),
 	result: z.enum(STOCK_TEST_RESULTS).default('pending'),
 	value: z.string().max(255).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 export const zStockTestStatus = z.object({
@@ -298,7 +299,7 @@ export const zStockTransferInput = z.object({
 	targetLocation: z.string().trim().min(1).max(255),
 	quantity: zQty,
 	targetLotNumber: z.string().trim().max(100).nullable().optional(),
-	notes: z.string().nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
 
 export const zReceivingRules = z.object({
@@ -363,8 +364,8 @@ export type StockLabel = z.infer<typeof zStockLabel>;
 
 const stockFilters = z.object({
 	partId: zId.optional(),
-	location: z.string().optional(),
-	q: z.string().optional(),
+	location: z.string().max(MAX_SHORT).optional(),
+	q: z.string().max(MAX_SHORT).optional(),
 	lowStock: zStockFlag.optional()
 });
 
@@ -376,7 +377,7 @@ export const inventory = {
 		summary:
 			'List stock records with balances. Filter by part, location, lot, text, source, depletion, low stock, expiry and calibration.',
 		input: zPageInput.merge(stockFilters).extend({
-			lotNumber: z.string().optional(),
+			lotNumber: z.string().max(MAX_SHORT).optional(),
 			sourceType: z.enum(STOCK_SOURCES).optional(),
 			hasStock: zStockFlag.optional(),
 			expired: zStockFlag.optional(),
@@ -474,7 +475,7 @@ export const inventory = {
 		summary: 'The stock ledger across records, newest first. Filter by part, location, kind.',
 		input: zPageInput.extend({
 			partId: zId.optional(),
-			location: z.string().optional(),
+			location: z.string().max(MAX_SHORT).optional(),
 			kind: z.enum(MOVE_KINDS).optional()
 		}),
 		output: zPage(zStockMoveRow),
@@ -508,7 +509,7 @@ export const inventory = {
 		method: 'GET',
 		path: '/inventory/opal/:opalNumber',
 		summary: 'Look up a stock record by OPAL number.',
-		input: z.object({ opalNumber: z.string() }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT) }),
 		output: zStockRecord,
 		access: 'signed-in',
 		mcp: true
@@ -519,7 +520,7 @@ export const inventory = {
 		path: '/inventory/opal/:opalNumber/detail',
 		summary:
 			'Everything the record page shows: record, part, source, ledger, genealogy both ways, tests.',
-		input: z.object({ opalNumber: z.string() }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT) }),
 		output: zStockDetail,
 		access: 'signed-in',
 		mcp: true
@@ -529,7 +530,7 @@ export const inventory = {
 		method: 'GET',
 		path: '/inventory/opal/:opalNumber/history',
 		summary: 'The ledger of one OPAL number, oldest first, with a running balance.',
-		input: z.object({ opalNumber: z.string() }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT) }),
 		output: z.array(zStockLedgerRow),
 		access: 'signed-in',
 		mcp: true
@@ -540,7 +541,7 @@ export const inventory = {
 		path: '/inventory/opal/:opalNumber/genealogy',
 		summary:
 			'Components that went into this item and assemblies it went into. `depth` follows the tree further (1 to 8).',
-		input: z.object({ opalNumber: z.string(), depth: z.coerce.number().int().min(1).max(8).default(1) }),
+		input: z.object({ opalNumber: z.string().max(MAX_SHORT), depth: z.coerce.number().int().min(1).max(8).default(1) }),
 		output: zStockGenealogy,
 		access: 'signed-in',
 		mcp: true
@@ -629,7 +630,7 @@ export const inventory = {
 			id: zId,
 			adjustment: zQty,
 			reason: z.enum(ADJUST_REASONS),
-			notes: z.string().nullable().optional()
+			notes: z.string().max(MAX_TEXT).nullable().optional()
 		}),
 		output: zStockRecord,
 		access: 'signed-in',
@@ -640,7 +641,7 @@ export const inventory = {
 		method: 'POST',
 		path: '/inventory/:id/count',
 		summary: 'Record a physical count. The difference to the balance becomes a count move.',
-		input: z.object({ id: zId, countedQuantity: zQty, notes: z.string().nullable().optional() }),
+		input: z.object({ id: zId, countedQuantity: zQty, notes: z.string().max(MAX_TEXT).nullable().optional() }),
 		output: zStockRecord,
 		access: 'signed-in',
 		mcp: true

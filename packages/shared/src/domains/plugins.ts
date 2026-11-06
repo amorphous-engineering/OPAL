@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { op, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT, MAX_TOKEN } from '../limits.ts';
 
 // ------------------------------------------------------------------ manifest
 
@@ -92,7 +93,7 @@ export const zPluginManifest = z.strictObject({
 	opal: z.string().min(1).max(60),
 	main: zInnerPath,
 	summary: z.string().max(200).optional(),
-	homepage: z.url().optional(),
+	homepage: z.url().max(MAX_TOKEN).optional(),
 	permissions: z
 		.strictObject({
 			ops: z.array(zOpPattern).max(200).default([]),
@@ -256,7 +257,7 @@ export const plugins = {
 		method: 'PUT',
 		path: '/plugins/:id/settings',
 		summary: 'Save plugin settings and restart the plugin. A secret left out keeps its value.',
-		input: zKey.extend({ values: z.record(z.string(), z.unknown()) }),
+		input: zKey.extend({ values: z.record(z.string().max(MAX_SHORT), z.unknown()) }),
 		output: zPluginDetail,
 		access: 'admin',
 		humanOnly: true,

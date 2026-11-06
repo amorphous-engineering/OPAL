@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { op, zId, zOk } from '../op.ts';
 import { zTimestamp } from '../time.ts';
+import { MAX_SHORT } from '../limits.ts';
 
 /** How the UI shows times. Storage is always UTC. */
 export const zTimeDisplay = z.enum(['local', 'utc']);
@@ -106,7 +107,7 @@ export const zPasskeyInfo = z.object({
 });
 
 /** WebAuthn JSON passes through untouched: the browser and the library own its shape. */
-const zJson = z.record(z.string(), z.unknown());
+const zJson = z.record(z.string().max(MAX_SHORT), z.unknown());
 const zWebauthnOptions = z.object({ publicKey: zJson });
 
 /**
