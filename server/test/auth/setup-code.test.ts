@@ -65,6 +65,17 @@ describe('first-run setup', () => {
 		expect((await (await app()).config('http://opal.lan:8080')).setupHostAllowed).toBe(true);
 	});
 
+	test('once the instance is claimed, the public config says nothing about setup or listed hosts', async () => {
+		const { post, config } = await app();
+		const code = armed();
+		expect((await post(IP, { ...BODY, setupCode: code })).status).toBe(200);
+		for (const origin of [IP, 'http://evil.example']) {
+			const c = await config(origin);
+			expect(c.setupCodeRequired).toBe(false);
+			expect(c.setupHostAllowed).toBe(true);
+		}
+	});
+
 	test('going back to first run prints a new code', () => {
 		const code = armed();
 		const log = spyOn(console, 'log').mockImplementation(() => {});

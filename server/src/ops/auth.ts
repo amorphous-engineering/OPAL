@@ -142,10 +142,13 @@ export const authImpls = [
 	implement(contracts.auth.config, (ctx) => {
 		const s = readSettings(ctx.db);
 		const oidc = oidcActive(s);
+		// The setup fields say something only while nobody has claimed the instance. After that, a
+		// public reply must not tell a stranger which host names are listed here.
+		const unclaimed = needsSetup(ctx) && setupCodeRequired();
 		return {
 			needsSetup: needsSetup(ctx),
-			setupCodeRequired: setupCodeRequired(),
-			setupHostAllowed: !setupCodeRequired() || setupHostAllowed(ctx.request?.host),
+			setupCodeRequired: unclaimed,
+			setupHostAllowed: !unclaimed || setupHostAllowed(ctx.request?.host),
 			passwordLoginEnabled: s.passwordLoginEnabled,
 			passkeysEnabled: s.passkeysEnabled,
 			oidcEnabled: oidc,

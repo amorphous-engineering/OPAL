@@ -23,9 +23,9 @@ export type AuthUser = z.infer<typeof zAuthUser>;
 
 export const zAuthConfig = z.object({
 	needsSetup: z.boolean(),
-	/** First-run setup asks for the code the server printed where it started. */
+	/** While nobody has claimed the instance: setup asks for the code the server printed. Otherwise false. */
 	setupCodeRequired: z.boolean(),
-	/** False when this page was reached under a host name setup refuses. */
+	/** False only while unclaimed, on a host name setup refuses. */
 	setupHostAllowed: z.boolean(),
 	passwordLoginEnabled: z.boolean(),
 	passkeysEnabled: z.boolean(),

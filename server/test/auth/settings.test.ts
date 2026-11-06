@@ -142,6 +142,8 @@ describe('sign-in settings', () => {
 		const cfg = await (await h.call('GET', '/auth/config')).json();
 		expect(cfg).toEqual({
 			needsSetup: false,
+			setupCodeRequired: false,
+			setupHostAllowed: true,
 			passwordLoginEnabled: false,
 			passkeysEnabled: true,
 			oidcEnabled: true,
