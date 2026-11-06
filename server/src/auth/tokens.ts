@@ -80,6 +80,7 @@ export function humanUsernameBase(raw: string): string {
 /** In-process failure counter keyed by ip:username. OPAL runs as one process. */
 export class LoginThrottle {
 	private failures = new Map<string, number[]>();
+	private swept = Date.now();
 	constructor(
 		private max = 10,
 		private windowMs = 300_000
@@ -95,7 +96,23 @@ export class LoginThrottle {
 		return this.prune(key).length >= this.max;
 	}
 	fail(key: string): void {
+		this.sweep();
 		this.failures.set(key, [...this.prune(key), Date.now()]);
+	}
+	/** Recent failures for a key, without changing anything. */
+	count(key: string): number {
+		return this.prune(key).length;
+	}
+	/** Drop keys whose failures have all aged out, at most once a minute, so names never seen again do not pile up. */
+	private sweep(): void {
+		const t = Date.now();
+		if (t - this.swept < 60_000) return;
+		this.swept = t;
+		for (const key of [...this.failures.keys()]) this.prune(key);
+	}
+	/** Keys held in memory. */
+	get size(): number {
+		return this.failures.size;
 	}
 	reset(key: string): void {
 		this.failures.delete(key);
@@ -108,10 +125,13 @@ export class LoginThrottle {
 }
 export const loginThrottle = new LoginThrottle();
 /**
- * Failures per username from any address. Generous, so a stranger who guesses a name cannot
- * lock a person out for long, yet it caps guessing from many addresses.
+ * Failures per username from any address. Past the cap, an address that has not failed against
+ * that name recently is still checked, but a wrong guess from it is answered after
+ * LOCKED_GUESS_DELAY_MS. So a stranger who guesses a name cannot lock the person out, yet
+ * guessing from many addresses is slowed. Addresses that already failed are refused.
  */
 export const usernameThrottle = new LoginThrottle(50, 900_000);
+export const lockedGuess = { delayMs: 1500 };
 
 /**
  * Caps the argon2id work that anonymous requests start at the same time. Each hash takes

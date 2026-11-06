@@ -8,6 +8,7 @@ import {
 	hashToken,
 	loginThrottle,
 	usernameThrottle,
+	lockedGuess,
 	withHashSlot,
 	newToken,
 	isPluginUsername,
@@ -180,7 +181,11 @@ export const authImpls = [
 		const username = input.username.trim().toLowerCase();
 		const key = `${ctx.request?.ip ?? 'unknown'}:${username}`;
 		const nameKey = `name:${username}`;
-		if (loginThrottle.blocked(key) || usernameThrottle.blocked(nameKey)) {
+		// An address over its own limit is refused. Over the name's limit, only an address that has
+		// already failed against this name is refused: a stranger's guesses must not lock the
+		// person out of a clean address.
+		const nameLocked = usernameThrottle.blocked(nameKey);
+		if (loginThrottle.blocked(key) || (nameLocked && loginThrottle.count(key) > 0)) {
 			throw new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
 		}
 		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
@@ -193,6 +198,7 @@ export const authImpls = [
 			return good;
 		});
 		if (!u || !ok) {
+			if (nameLocked) await new Promise((r) => setTimeout(r, lockedGuess.delayMs));
 			// One message for unknown user, wrong password, inactive and passwordless accounts.
 			throw new OpalError(401, 'invalid_credentials', 'Invalid username or password');
 		}

@@ -1,8 +1,12 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { adminSession, harness } from './helpers.ts';
+import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
+import { hashPassword, LoginThrottle, lockedGuess } from '../../src/auth/tokens.ts';
+import { adminSession, harness, makeUser } from './helpers.ts';
 
 afterEach(() => {
 	delete process.env.OPAL_TRUST_PROXY;
+	delete process.env.OPAL_TRUST_PROXY_HOPS;
+	lockedGuess.delayMs = 1500;
+	setSystemTime();
 });
 
 describe('login throttle', () => {
@@ -29,21 +33,79 @@ describe('login throttle', () => {
 		expect(other.status).toBe(401);
 	});
 
-	test('failures against one username are limited whatever the source address', async () => {
-		const { app } = await harness();
-		const attempt = (ip: string) =>
-			app.request(
+	test('the address a trusted proxy appended is the throttle key, not what the client wrote before it', async () => {
+		process.env.OPAL_TRUST_PROXY = '1';
+		const { call } = await harness();
+		let last = 0;
+		for (let i = 0; i < 12; i++) {
+			// The client rotates the leftmost entries; the proxy appends the one real address.
+			last = (
+				await call('POST', '/auth/login', { username: 'xff-forged', password: 'x' }, { 'x-forwarded-for': `6.6.${i}.1, 203.0.113.9` })
+			).status;
+		}
+		expect(last).toBe(429);
+	});
+
+	test('with several trusted proxies the address is counted from the right by the configured hop count', async () => {
+		process.env.OPAL_TRUST_PROXY = '1';
+		process.env.OPAL_TRUST_PROXY_HOPS = '2';
+		const { call } = await harness();
+		let last = 0;
+		for (let i = 0; i < 12; i++) {
+			last = (
+				await call('POST', '/auth/login', { username: 'xff-hops', password: 'x' }, { 'x-forwarded-for': `6.6.${i}.1, 198.51.100.4, 10.0.0.${i}` })
+			).status;
+		}
+		expect(last).toBe(429);
+	});
+
+	test('failures against one username from many addresses never lock out a correct password from a clean address', async () => {
+		const h = await harness();
+		lockedGuess.delayMs = 0;
+		makeUser(h, { username: 'per-name', passwordHash: await hashPassword('right-password-1') });
+		const attempt = (ip: string, password = 'x') =>
+			h.app.request(
 				'http://opal.test/api/auth/login',
 				{
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ username: 'per-name', password: 'x' })
+					body: JSON.stringify({ username: 'per-name', password })
 				},
 				{ ip }
 			);
 		const early = await Promise.all(Array.from({ length: 50 }, (_, i) => attempt(`192.0.2.${i}`)));
 		expect(early.every((r) => r.status === 401)).toBe(true);
-		expect((await attempt('198.51.100.7')).status).toBe(429);
+		// An address that has already failed against this name is refused.
+		expect((await attempt('192.0.2.3', 'right-password-1')).status).toBe(429);
+		// A clean address is still checked: a wrong guess is a 401, the right password signs in.
+		expect((await attempt('198.51.100.7')).status).toBe(401);
+		const ok = await attempt('198.51.100.8', 'right-password-1');
+		expect(ok.status).toBe(200);
+	});
+
+	test('wrong guesses from clean addresses are answered after a delay once a username is over its cap', async () => {
+		const h = await harness();
+		lockedGuess.delayMs = 300;
+		const attempt = (ip: string) =>
+			h.app.request(
+				'http://opal.test/api/auth/login',
+				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'slowed', password: 'x' }) },
+				{ ip }
+			);
+		await Promise.all(Array.from({ length: 50 }, (_, i) => attempt(`192.0.2.${i}`)));
+		const t0 = Date.now();
+		expect((await attempt('203.0.113.50')).status).toBe(401);
+		expect(Date.now() - t0).toBeGreaterThanOrEqual(280);
+	});
+
+	test('failure records for names that are never seen again are dropped', () => {
+		const t = new LoginThrottle(10, 300_000);
+		const start = Date.now();
+		for (let i = 0; i < 500; i++) t.fail(`name:ghost-${i}`);
+		expect(t.size).toBe(500);
+		setSystemTime(new Date(start + 400_000));
+		t.fail('name:someone-new');
+		expect(t.size).toBe(1);
 	});
 });
 
