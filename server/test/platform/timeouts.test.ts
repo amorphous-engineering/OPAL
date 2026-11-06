@@ -32,7 +32,7 @@ describe('connection timeouts', () => {
 			const started = performance.now();
 			// A request whose body never arrives.
 			const stalled = new Promise<number>((resolve) => {
-				const sock = connect(server.port, '127.0.0.1');
+				const sock = connect(server.port!, '127.0.0.1');
 				sock.on('close', () => resolve(performance.now() - started));
 				sock.on('error', () => undefined);
 				sock.write('POST /api/attachments HTTP/1.1\r\nHost: x\r\nContent-Length: 100000\r\nContent-Type: multipart/form-data; boundary=x\r\n\r\n{');
