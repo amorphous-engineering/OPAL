@@ -84,7 +84,27 @@ These environment variables set what the server accepts. The defaults suit a tea
 
 ### Plugins
 
-An admin can install a plugin from a public GitHub repository. **Installing a plugin gives it shell-level access to the server.** Its API token is limited to the permissions in its manifest, but the process runs as the same user as OPAL with no sandbox, so it can read the data folder, including the database. Install only plugins you would trust with a login on that machine.
+An admin can install a plugin from a public GitHub repository. Its API token is limited to the permissions in its manifest. What the process itself can do depends on where OPAL runs:
+
+| OPAL runs on | What limits the plugin process | What the plugin can read and write |
+|---|---|---|
+| Linux, as a normal user, with Landlock (kernel 5.13 or later, on by default in most current distributions) | Landlock and a seccomp filter. It runs as the same OS user. | Its own `plugin-data/<id>`, read and write. Its own code and system files such as `/usr`, read only. Not the database, the auth secret, the rest of the data folder, other plugins or your home folder. |
+| Linux, as root | A separate OS user for each plugin (no account to create), plus Landlock and the filter when the kernel has them. | The same, and the data folder must sit where any user can pass through its parent folders (`/var/lib/opal`, not `/root`). |
+| Linux without Landlock (older kernels, some containers), as a normal user | Nothing. | **Shell-level access.** Everything OPAL can read, including the database. |
+| macOS, Windows | Nothing. | **Shell-level access.** Everything OPAL can read, including the database. |
+
+The plugin page shows which applies under **Confinement**, from what the server checked when that plugin started, and the plugin's log says the same. `none` means shell-level access. Set `OPAL_PLUGIN_CONFINEMENT=required` to refuse to start a plugin that cannot be confined, or `off` to run every plugin as the OPAL user.
+
+**Confinement limits the damage from a plugin. It does not make an untrusted plugin safe.** Even when confined, a plugin can:
+
+- open any network connection, including to other programs and other plugins on this computer, and to anything your network lets this computer reach;
+- use every permission and secret you gave it;
+- use up memory, CPU and disk;
+- see other processes' command lines and read world-readable system files;
+- learn the size and times of a file in the data folder if it knows the name;
+- on a kernel before 6.12, as the same OS user, send signals to OPAL and your other processes, which can stop them.
+
+Install only plugins you would trust with a login on that machine. On macOS, on Windows and on Linux without Landlock, that is exactly what you are giving them.
 
 Set `OPAL_PLUGINS=0` to turn plugins off on a server. Nothing starts, and OPAL refuses to preview, install, configure, enable or restart one.
 

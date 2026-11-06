@@ -1,0 +1,8 @@
+{
+	"id": "reach",
+	"name": "Reach",
+	"version": "0.1.0",
+	"opal": ">=0.0.0",
+	"main": "main.js",
+	"permissions": { "ops": ["platform.health"], "events": [], "hooks": false }
+}

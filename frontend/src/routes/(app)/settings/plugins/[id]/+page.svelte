@@ -25,6 +25,7 @@
 	import PreviewDialog from '#lib/components/plugins/PreviewDialog.svelte';
 	import ProjectMapField from '#lib/components/plugins/ProjectMapField.svelte';
 	import {
+		CONFINEMENT_LABELS,
 		PROCESS_TONES,
 		pluginError,
 		pluginOptions,
@@ -432,6 +433,12 @@
 				<State value={proc.state} tone={PROCESS_TONES[proc.state] ?? 'muted'} />
 			</DetailRow>
 			<DetailRow label="PID" value={proc.pid} mono />
+			<DetailRow label="Confinement">
+				{#if proc.confinement}
+					{@const c = CONFINEMENT_LABELS[proc.confinement]}
+					<State value={proc.confinement} label={c?.text} tone={c?.tone ?? 'muted'} />
+				{/if}
+			</DetailRow>
 			<DetailRow label="Started"><Timestamp value={proc.startedAt} /></DetailRow>
 			<DetailRow label="Restarts" value={proc.restarts} mono />
 			<DetailRow label="Exit code" value={proc.exitCode} mono />

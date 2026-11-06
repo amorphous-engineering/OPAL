@@ -18,6 +18,9 @@ extensions and Onshape are postponed. These changes are since `v2.0.0-rc.24`.
 - **Connection ticker.** ONLINE, STALE or OFFLINE at the left of the status bar. Any break stays as STALE with its times until pressed, which reloads the page's data.
 - **Last action** on the executions list, as a column and the default sort.
 
+### Security
+- **Plugins are confined on Linux.** A plugin reaches only its own `plugin-data/<id>`, its code and system files, using Landlock and a seccomp filter, or a separate OS user when OPAL runs as root. The plugin page shows the result under **Confinement**, and `OPAL_PLUGIN_CONFINEMENT` can require it or turn it off. macOS, Windows and Linux without Landlock are not confined: there a plugin still has shell-level access. A plugin that used `/tmp` or files outside its repository must change, see the SDK README.
+
 ### Fixed
 - HOLD and HELD were nearly invisible in dark mode.
 - Migrations ran with foreign keys on, so a table rebuild could cascade-delete child rows.

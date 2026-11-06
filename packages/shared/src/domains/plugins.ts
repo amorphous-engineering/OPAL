@@ -121,9 +121,15 @@ export function matchesPattern(patterns: readonly string[], name: string): boole
 
 export const PLUGIN_PROCESS_STATES = ['stopped', 'starting', 'running', 'crashed'] as const;
 
+/** How the OS limits a plugin's process. `none` means it can read all that OPAL can. */
+export const PLUGIN_CONFINEMENTS = ['landlock', 'separate-user', 'none'] as const;
+export type PluginConfinement = (typeof PLUGIN_CONFINEMENTS)[number];
+
 export const zPluginProcess = z.object({
 	state: z.enum(PLUGIN_PROCESS_STATES),
 	pid: z.number().int().nullable(),
+	/** Null until a run starts. */
+	confinement: z.enum(PLUGIN_CONFINEMENTS).nullable(),
 	startedAt: zTimestamp.nullable(),
 	restarts: z.number().int(),
 	exitCode: z.number().int().nullable()
