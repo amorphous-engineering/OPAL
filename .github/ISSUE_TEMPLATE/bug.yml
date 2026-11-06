@@ -1,0 +1,38 @@
+name: Something is wrong
+description: Report a bug or anything that got in your way.
+body:
+  - type: markdown
+    attributes:
+      value: Issues are public, so leave out real company data. Report a security problem privately, under **Report a vulnerability** on the Security tab.
+  - type: input
+    id: version
+    attributes:
+      label: OPAL version
+      description: In Settings, under System, or from `opal --version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Running on
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (x86_64)
+        - Linux (arm64)
+        - Windows
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened?
+      description: Include what you expected, and the steps if you know them. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Anything relevant from the terminal or the control page.
+      render: text

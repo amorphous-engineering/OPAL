@@ -6,29 +6,31 @@ A local-first system for hardware teams: parts, stock, purchasing, procedures an
 
 ## Install
 
+**OPAL 2 is in beta.** Try it and tell us what breaks, but do not keep your only copy of real data in it yet. New here? Start with the [quickstart](QUICKSTART.md).
+
 ```bash
 # macOS / Linux
-curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh -s -- --prerelease
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
+$env:OPAL_PRERELEASE = "1"
+irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 ```
 
-The installers take the release marked Latest. To install a prerelease or one exact release:
+Without the prerelease option the installers take the release marked Latest, which is still 1.x. To install one exact release:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh -s -- --prerelease
-curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh -s -- --version v2.0.0-rc.21
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh -s -- --version v2.0.0-beta.1
 ```
 
 ```powershell
-$env:OPAL_PRERELEASE = "1"            # or: $env:OPAL_VERSION = "v2.0.0-rc.21"
-irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
+$env:OPAL_VERSION = "v2.0.0-beta.1"
+irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 ```
 
-Or download a binary from [GitHub Releases](https://github.com/amorphous-engineering/OPAL/releases/latest) and check it against `SHA256SUMS`.
+Or download a binary from [GitHub Releases](https://github.com/amorphous-engineering/OPAL/releases) and check it against `SHA256SUMS`.
 
 | Platform | File |
 |----------|------|
@@ -44,8 +46,7 @@ Or download a binary from [GitHub Releases](https://github.com/amorphous-enginee
 |---|---|
 | `opal` | Starts the server and opens a control page in the browser: status, log, start, stop, update. |
 | `opal serve` | Starts only the server. Use this under systemd or another service manager. |
-| `opal update` | Downloads, verifies and installs the latest release. |
-| `opal import <file>` | Imports a database from a 1.x release into a new file. |
+| `opal update` | Downloads, verifies and installs the newest release. A prerelease build also follows later prereleases. |
 
 ### First run
 
@@ -97,12 +98,15 @@ Private-address issuers are allowed by default, so on-premises providers keep wo
 
 OPAL links a sign-in to an existing account by email only when the provider sends `email_verified: true`. Some providers leave that claim out. With those, a person whose email already belongs to an OPAL account is refused at sign-in, and OPAL has no action to link the two yet. New people still get a new account. If your provider omits the claim, have people sign in before you create their accounts, or remove the email from the existing account first.
 
-### Upgrade from 1.x
+### Coming from 1.x
 
-1. Install the last 1.x release and start it once. This upgrades the database.
-2. Install this version and start it.
+This beta cannot import a 1.x database yet. If it finds one in the data folder it stops and leaves the file alone. Keep using 1.x for that data, or set `OPAL_DATA_DIR` to an empty folder to try this version beside it. 1.x extensions and the Onshape integration do not carry over.
 
-On the first start, OPAL imports the old database into a new file. It keeps the old file as `opal.legacy.db` and writes `import-report.txt` next to it.
+### Back up and roll back
+
+OPAL has no scheduled backups. To back up, stop OPAL and copy the whole data folder.
+
+Before an update changes the database, OPAL copies it to `opal.pre-migration-<time>.db` in the data folder and keeps the newest three. The [quickstart](QUICKSTART.md#go-back-after-a-bad-update) shows how to go back.
 
 ## Connect Claude Code (MCP)
 
@@ -113,6 +117,10 @@ claude mcp add --transport http opal https://<host>/mcp
 Run `/mcp` in Claude Code and select `opal`. Sign in to OPAL in the browser and approve the client. For claude.ai, add a custom connector with the same URL. Behind a reverse proxy that terminates TLS, set `OPAL_PUBLIC_URL` to the URL people use, for example `https://opal.example.com`.
 
 Scripts can use an API token instead: add `--header "Authorization: Bearer opal_<token>"`.
+
+## Report a problem
+
+[Open an issue](https://github.com/amorphous-engineering/OPAL/issues/new?template=bug.yml). Issues are public, so leave out real company data. Report a security problem privately, under **Report a vulnerability** on the repository's Security tab.
 
 ## Develop
 

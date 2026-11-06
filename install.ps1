@@ -1,5 +1,5 @@
 # OPAL installer for Windows — downloads a release binary.
-# Usage: irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 #
 # Options, as environment variables (piping to iex takes no arguments):
 #   $env:OPAL_PRERELEASE = "1"         install the newest release, prereleases included

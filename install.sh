@@ -1,6 +1,6 @@
 #!/bin/sh
 # OPAL installer — downloads a release binary for macOS/Linux.
-# Usage: curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/master/install.sh | sh
+# Usage: curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh
 #
 # Options (after `sh -s --` when piped):
 #   --prerelease       install the newest release, prereleases included
