@@ -662,13 +662,32 @@ export function setContainment(
 	assertNotVoid(r);
 	const note = (input.note ?? '').trim();
 	const narrowing = CONTAINMENT_RANK[input.containment] < CONTAINMENT_RANK[r.containment];
-	const releasing = narrowing && isBlocking(r);
-	if (releasing) {
+	const nextStepId =
+		input.containmentStepId !== undefined ? input.containmentStepId : r.containmentStepId;
+	const moved = (nextStepId ?? r.raisedStepId) !== (r.containmentStepId ?? r.raisedStepId);
+	// Moving the boundary is a release when an unfinished step stops being held. Setting the first
+	// boundary, or one on a step already finished, only adds a hold, so it stays open to anyone.
+	// Widening on the same anchor keeps the hold at the wider scope and also stays open.
+	const freed =
+		moved && isBlocking(r) && r.executionId !== null
+			? (issueHooks.freedSteps?.(ctx, r.executionId, r, {
+					containment: input.containment,
+					containmentStepId: nextStepId,
+					raisedStepId: r.raisedStepId
+				}) ?? [])
+			: [];
+	if (isBlocking(r) && narrowing) {
 		// Narrowing a hold is releasing it, however it is reached: the same gate as signing.
 		requireDisposition(ctx, 'narrow containment');
 		if (!note)
 			throw refuse(
 				`Narrowing containment ${r.containment} → ${input.containment} releases a hold; a note is required`
+			);
+	} else if (freed.length) {
+		requireDisposition(ctx, 'move a containment boundary');
+		if (!note)
+			throw refuse(
+				`Moving the containment boundary releases ${freed.join(', ')}; a note is required`
 			);
 	}
 
@@ -696,6 +715,12 @@ export function setContainment(
 			after = writeUpdate(ctx, issue, r.id, patch);
 			if (narrowing && note)
 				addNote(ctx, r, `Containment narrowed ${r.containment} → ${input.containment}: ${note}`);
+			else if (moved && note)
+				addNote(
+					ctx,
+					r,
+					`Containment boundary moved${freed.length ? `, releasing ${freed.join(', ')}` : ''}: ${note}`
+				);
 		},
 		() => after
 	);

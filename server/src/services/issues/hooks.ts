@@ -52,6 +52,13 @@ export interface IssueHooks {
 		| null;
 	/** Execution area: steps of an execution, as boundary candidates. */
 	stepOptions: ((ctx: Ctx, executionId: number) => StepOption[]) | null;
+	/**
+	 * Execution area: the unfinished steps a hold stops under `before` and no longer under `after`,
+	 * by display number. A step it names can run once the change lands, so the change is a release.
+	 */
+	freedSteps:
+		| ((ctx: Ctx, executionId: number, before: HoldAnchor, after: HoldAnchor) => string[])
+		| null;
 	/** Risks and execution area: what an issue touches (linked risks, redline ops). */
 	detailExtras:
 		| ((
@@ -67,6 +74,8 @@ export interface IssueHooks {
 	 */
 	holdChanged: ((ctx: Ctx, change: HoldChange) => void)[];
 }
+
+export type HoldAnchor = Pick<IssueRow, 'containment' | 'containmentStepId' | 'raisedStepId'>;
 
 export const platformDeliver = (ctx: Ctx, n: IssueNotification): void => {
 	platformNotify(ctx, {
@@ -87,6 +96,7 @@ export const issueHooks: IssueHooks = {
 	executionExists: null,
 	describe: null,
 	stepOptions: null,
+	freedSteps: null,
 	detailExtras: null,
 	linkedRisks: null, // added by risks
 	holdChanged: []

@@ -36,6 +36,7 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 
 - Raising needs only a title. Everything else can be filled in later, and an issue raised from a step carries its run, step and person.
 - A signed disposition freezes the observation and the disposition. A signed or done issue cannot be voided.
+- Moving the boundary of a hold off an unfinished step releases that step, so it takes what narrowing takes. Setting a first boundary adds a hold and stays open.
 - A void issue shows its title struck through and its reason at the top. It has no controls except a comment.
 - Disposition fields sit behind EDIT until someone opens them. View mode shows a draft as facts.
 

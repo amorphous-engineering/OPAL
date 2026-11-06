@@ -357,7 +357,7 @@ export const issues = {
 		method: 'POST',
 		path: '/issues/:id/containment',
 		summary:
-			'Change the containment scope. Widening is open to anyone. Narrowing releases a hold: it needs issue.disposition, a note and a signed-in person. containmentStepId: absent keeps, null clears.',
+			'Change the containment scope. Widening is open to anyone. Narrowing a hold, or moving its boundary off an unfinished step, releases it: that needs issue.disposition, a note and a signed-in person. containmentStepId: absent keeps, null clears.',
 		input: z.object({
 			id: zId,
 			containment: z.enum(CONTAINMENTS),

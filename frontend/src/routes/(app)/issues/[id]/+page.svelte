@@ -196,13 +196,35 @@
 		});
 	}
 
+	/** A hold anchored on a step: moving its boundary can release that step. */
+	const boundaryHolds = $derived(
+		holdsWork &&
+			issue.containment !== 'wo' &&
+			(issue.containmentStepId !== null || issue.raisedStepId !== null)
+	);
+
 	async function setBoundary(e: Event & { currentTarget: HTMLSelectElement }) {
-		const v = e.currentTarget.value;
+		const select = e.currentTarget;
+		const v = select.value;
+		let note: string | undefined;
+		if (boundaryHolds) {
+			const asked = await askReason({
+				title: 'Move containment boundary',
+				body: `Releases ${holdNames(data.holding) || 'the hold'} if that step is unfinished. ${issue.issueNumber} then holds the new boundary.`,
+				action: 'MOVE'
+			});
+			if (asked === null) {
+				select.value = issue.containmentStepId === null ? '' : String(issue.containmentStepId);
+				return;
+			}
+			note = asked;
+		}
 		await act(async () => {
 			await opal.issues.setContainment({
 				id: issue.id,
 				containment: issue.containment,
-				containmentStepId: v ? Number(v) : null
+				containmentStepId: v ? Number(v) : null,
+				note
 			});
 			await refresh();
 		});
@@ -881,7 +903,7 @@
 					</div>
 				</DetailRow>
 				<DetailRow label="Boundary">
-					{#if editObservation && issue.execution && data.steps.length}
+					{#if editObservation && issue.execution && data.steps.length && (!boundaryHolds || issue.canDisposition)}
 						<NativeSelect
 							aria-label="Containment boundary step"
 							value={issue.containmentStepId === null ? '' : String(issue.containmentStepId)}

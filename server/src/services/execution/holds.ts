@@ -10,7 +10,7 @@
  */
 import type { Db } from '../../db/client.ts';
 import { type HoldingIssue, holdingIssues } from '../issues/holds.ts';
-import { type Model, type Row, opRowOf } from './model.ts';
+import { type Model, type Row, isTerminal, opRowOf } from './model.ts';
 
 export interface HoldState {
 	/** step execution id -> issues holding that step's complete */
@@ -26,6 +26,39 @@ export interface HoldState {
 
 const push = (m: Map<number, HoldingIssue[]>, k: number, i: HoldingIssue) => m.set(k, [...(m.get(k) ?? []), i]);
 
+export type HoldScope = Pick<HoldingIssue, 'containment' | 'containmentStepId' | 'raisedStepId'>;
+
+type Reach =
+	| { kind: 'wo' }
+	| { kind: 'op'; op: Row }
+	| { kind: 'bound'; at: Row; op: Row }
+	| { kind: 'raised'; at: Row; op: Row };
+
+/** Where a hold lands in this execution. No resolvable step holds the execution itself. */
+function reachOf(model: Model, scope: HoldScope): Reach {
+	const at =
+		(scope.containmentStepId !== null ? model.byId.get(scope.containmentStepId) : undefined) ??
+		(scope.raisedStepId !== null ? model.byId.get(scope.raisedStepId) : undefined);
+	if (scope.containment === 'wo' || !at) return { kind: 'wo' };
+	const op = opRowOf(model, at);
+	if (scope.containment === 'op') return { kind: 'op', op };
+	const boundElsewhere =
+		scope.containmentStepId !== null && scope.raisedStepId !== null && scope.containmentStepId !== scope.raisedStepId;
+	return { kind: boundElsewhere ? 'bound' : 'raised', at, op };
+}
+
+/**
+ * The rows this scope stops from completing. A bound step also stops its OP, through the open
+ * sub-step, until it is finished.
+ */
+export function rowsHeldBy(model: Model, scope: HoldScope): Row[] {
+	const reach = reachOf(model, scope);
+	if (reach.kind === 'wo') return [];
+	if (reach.kind === 'op') return [reach.op];
+	if (reach.kind === 'bound' && isTerminal(reach.at.se.status)) return [];
+	return [reach.at, reach.op];
+}
+
 export function holdState(db: Db, model: Model): HoldState {
 	const all = holdingIssues(db, model.exec.id);
 	const st: HoldState = {
@@ -36,26 +69,16 @@ export function holdState(db: Db, model: Model): HoldState {
 		all
 	};
 	for (const issue of all) {
-		const anchor =
-			(issue.containmentStepId !== null ? model.byId.get(issue.containmentStepId) : undefined) ??
-			(issue.raisedStepId !== null ? model.byId.get(issue.raisedStepId) : undefined);
-		if (issue.containment === 'wo' || !anchor) {
-			// No resolvable step in this execution holds the execution itself.
+		const reach = reachOf(model, issue);
+		if (reach.kind === 'wo') {
 			st.woBlocked.push(issue);
-			continue;
-		}
-		const op = opRowOf(model, anchor);
-		if (issue.containment === 'op') {
-			push(st.opCompleteBlocked, op.id, issue);
-			continue;
-		}
-		const boundElsewhere =
-			issue.containmentStepId !== null && issue.raisedStepId !== null && issue.containmentStepId !== issue.raisedStepId;
-		if (boundElsewhere) {
-			push(st.startBlocked, anchor.id, issue);
+		} else if (reach.kind === 'op') {
+			push(st.opCompleteBlocked, reach.op.id, issue);
+		} else if (reach.kind === 'bound') {
+			push(st.startBlocked, reach.at.id, issue);
 		} else {
-			push(st.completeBlocked, anchor.id, issue);
-			if (op.id !== anchor.id) push(st.opCompleteBlocked, op.id, issue);
+			push(st.completeBlocked, reach.at.id, issue);
+			if (reach.op.id !== reach.at.id) push(st.opCompleteBlocked, reach.op.id, issue);
 		}
 	}
 	return st;

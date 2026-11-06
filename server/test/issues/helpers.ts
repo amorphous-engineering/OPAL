@@ -63,6 +63,7 @@ export async function setup() {
 	issueHooks.executionExists = null;
 	issueHooks.describe = null;
 	issueHooks.stepOptions = null;
+	issueHooks.freedSteps = null;
 	issueHooks.detailExtras = null;
 	issueHooks.holdChanged.length = 0;
 	return {
