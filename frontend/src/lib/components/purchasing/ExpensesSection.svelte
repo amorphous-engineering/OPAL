@@ -9,7 +9,8 @@
 		askReason,
 		confirm,
 		toastError,
-		ErrorBanner
+		ErrorBanner,
+		MoreMenu
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -161,7 +162,9 @@
 							</td>
 							<td class="px-3 py-1.5">
 								{#if e.kind !== 'receipt'}
-									<span class="text-muted-foreground">{e.notes ?? ''}</span>
+									<span class={['text-muted-foreground', e.struck && 'line-through']}
+										>{e.notes ?? ''}</span
+									>
 								{:else}
 									{e.partName ?? ''}
 								{/if}
@@ -186,7 +189,9 @@
 											.reason}</span
 									>
 								{:else if e.kind !== 'receipt' && canStrike}
-									<ActionLink onclick={() => strike(e)}>STRIKE</ActionLink>
+									<MoreMenu
+										items={[{ label: 'STRIKE', onselect: () => strike(e), strike: true }]}
+									/>
 								{:else if e.kind !== 'receipt' && canRemove}
 									<ActionLink onclick={() => remove(e)}>REMOVE</ActionLink>
 								{/if}

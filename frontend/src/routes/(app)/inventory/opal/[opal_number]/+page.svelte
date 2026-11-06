@@ -477,7 +477,9 @@
 										<ActionLink onclick={() => removeTest(r)}>DELETE</ActionLink>
 									</span>
 								{:else}
-									<ActionLink onclick={() => strikeTest(r)}>STRIKE</ActionLink>
+									<MoreMenu
+										items={[{ label: 'STRIKE', onselect: () => strikeTest(r), strike: true }]}
+									/>
 								{/if}
 							{:else}
 								{@const v = r[col.key as 'testName' | 'value' | 'notes' | 'testedByName']}
