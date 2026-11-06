@@ -11,7 +11,8 @@ import {
 	type DatasetState,
 	type PointValues,
 	type SchemaField,
-	unitSymbol
+	unitSymbol,
+	zPointValue
 } from '@opal/shared';
 import { and, asc, count, desc, eq, gte, isNull, like, lte } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
@@ -372,7 +373,11 @@ export function importPoints(ctx: Ctx, id: number, text: string) {
 		const values: PointValues = {};
 		for (const [c, f] of mapped) {
 			const raw = r[c] ?? '';
-			if (raw.trim() !== '') values[f.name] = parseCell(f, raw);
+			if (raw.trim() === '') continue;
+			const value = parseCell(f, raw);
+			// The CSV arrives as one string, so each cell gets the limit a single point gets here.
+			if (!zPointValue.safeParse(value).success) problems[`row ${line}`] = `Row ${line}: the value of ${f.name} is too long`;
+			values[f.name] = value;
 		}
 		let recordedAt = now();
 		const rawTime = timeCol >= 0 ? (r[timeCol] ?? '').trim() : '';
