@@ -168,7 +168,7 @@ export function updateUser(ctx: Ctx, input: z.output<typeof zUserUpdate> & { id:
 	}
 
 	// Authority and identity: an email claims an OIDC sign-in, and admin is admin. Agents prepare, people commit.
-	const authority = given.filter((k) => k === 'isAdmin' || k === 'isActive' || k === 'email');
+	const authority = (['isAdmin', 'isActive', 'email'] as const).filter((k) => fields[k] !== undefined && fields[k] !== target[k]);
 	if (authority.length && ctx.actor.kind === 'token') {
 		throw forbidden('This action needs a signed-in person, not an API token');
 	}

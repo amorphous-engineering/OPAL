@@ -318,6 +318,18 @@ describe('an API token cannot mint or promote a person', () => {
 		expect((await call({ ...t, tokenId: row.id }, 'PATCH', `/users/${bob.id}`, { jobTitle: 'Tech' })).status).toBe(200);
 	});
 
+	test('a token that sends back the values an account already has is not changing them', async () => {
+		const { call, makeUser, db } = await setup();
+		const root = makeUser('root', { admin: true });
+		const bob = makeUser('bob');
+		const row = db.insert(apiToken).values({ userId: root.id, name: 'agent', tokenHash: 'h2', createdAt: now() }).returning().get();
+		const t = { kind: 'token' as const, userId: root.id, isAdmin: true, tokenId: row.id };
+		const me = (await call(root, 'GET', `/users/${bob.id}`)).json;
+		const res = await call(t, 'PATCH', `/users/${bob.id}`, { name: 'Bob', email: me.email, isActive: true, isAdmin: false });
+		expect(res.status).toBe(200);
+		expect(res.json.name).toBe('Bob');
+	});
+
 	test('a person who is an admin still can', async () => {
 		const { call, makeUser } = await setup();
 		const root = makeUser('root', { admin: true });
