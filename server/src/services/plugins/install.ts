@@ -21,7 +21,8 @@ import { runtime } from './runtime.ts';
 import { findPlugin, getPlugin, pluginDir, pluginsRoot, type PluginRow } from './store.ts';
 import { extractTarGz } from './tar.ts';
 
-const stagingDir = (sha: string) => join(pluginsRoot(), '.staging', sha);
+const stagingRoot = () => join(pluginsRoot(), '.staging');
+const STAGING_MAX_AGE_MS = 3_600_000;
 
 /** A folder with its manifest checked: `main` exists and stays inside the folder. */
 function readManifest(dir: string): PluginManifest {
@@ -64,22 +65,34 @@ export function isCompatible(range: string, version = VERSION): boolean {
 	}
 }
 
-/** Download a commit into the staging folder, or reuse it. */
+/** Folders a crash left behind. Every normal path removes its own. */
+function pruneStaging(): void {
+	const root = stagingRoot();
+	if (!existsSync(root)) return;
+	for (const name of readdirSync(root)) {
+		const path = join(root, name);
+		if (Date.now() - statSync(path).mtimeMs > STAGING_MAX_AGE_MS) rmSync(path, { recursive: true, force: true });
+	}
+}
+
+/**
+ * Download a commit into a staging folder of its own. The caller removes it. A preview keeps
+ * nothing: install downloads the same commit again, and a commit's content cannot change between.
+ */
 async function stage(src: ParsedSource, sha: string): Promise<string> {
-	const dir = stagingDir(sha);
-	if (existsSync(join(dir, PLUGIN_MANIFEST_FILE))) return dir;
+	pruneStaging();
 	const data = await downloadTarball(src.owner!, src.repo!, sha);
-	const tmp = `${dir}.tmp-${crypto.randomUUID()}`;
+	const dir = join(stagingRoot(), `${sha}-${crypto.randomUUID()}`);
 	try {
-		extractTarGz(data, tmp);
-		rmSync(dir, { recursive: true, force: true });
-		renameSync(tmp, dir);
+		extractTarGz(data, dir);
 	} catch (e) {
-		rmSync(tmp, { recursive: true, force: true });
+		unstage(dir);
 		throw e;
 	}
 	return dir;
 }
+
+const unstage = (dir: string) => rmSync(dir, { recursive: true, force: true });
 
 function localDir(src: ParsedSource): string {
 	if (!existsSync(src.path!) || !statSync(src.path!).isDirectory()) {
@@ -90,15 +103,17 @@ function localDir(src: ParsedSource): string {
 
 export async function preview(db: Db, input: string): Promise<PluginPreview> {
 	const src = parseSource(input);
-	let sha: string;
-	let dir: string;
-	if (src.kind === 'local') {
-		sha = 'local';
-		dir = localDir(src);
-	} else {
-		sha = await resolveSha(src.owner!, src.repo!, src.ref);
-		dir = await stage(src, sha);
+	if (src.kind === 'local') return describe(db, src, 'local', localDir(src));
+	const sha = await resolveSha(src.owner!, src.repo!, src.ref);
+	const dir = await stage(src, sha);
+	try {
+		return describe(db, src, sha, dir);
+	} finally {
+		unstage(dir);
 	}
+}
+
+function describe(db: Db, src: ParsedSource, sha: string, dir: string): PluginPreview {
 	const manifest = readManifest(dir);
 	const row = findPlugin(db, manifest.id);
 	return {
@@ -128,16 +143,24 @@ function ensureUser(ctx: Ctx, manifest: PluginManifest): number {
 	return insert(ctx, user, { username, name: manifest.name, isActive: true, isAdmin: false }).id;
 }
 
+/** The download happens here, outside the write queue. Everything after it is the write. */
 export async function install(ctx: Ctx, input: string, sha: string): Promise<PluginRow> {
 	const src = parseSource(input);
-	let dir: string;
 	if (src.kind === 'local') {
 		if (sha !== 'local') throw new OpalError(422, 'invalid_input', 'A local plugin has the SHA local', { sha: 'Use local' });
-		dir = localDir(src);
-	} else {
-		if (sha === 'local') throw new OpalError(422, 'invalid_input', 'A GitHub plugin needs a commit SHA', { sha: 'Use a commit' });
-		dir = await stage(src, sha);
+		const dir = localDir(src);
+		return ctx.write!(() => commitInstall(ctx, src, sha, dir));
 	}
+	if (sha === 'local') throw new OpalError(422, 'invalid_input', 'A GitHub plugin needs a commit SHA', { sha: 'Use a commit' });
+	const dir = await stage(src, sha);
+	try {
+		return await ctx.write!(() => commitInstall(ctx, src, sha, dir));
+	} finally {
+		unstage(dir);
+	}
+}
+
+function commitInstall(ctx: Ctx, src: ParsedSource, sha: string, dir: string): PluginRow {
 	const manifest = readManifest(dir);
 	if (!isCompatible(manifest.opal)) {
 		throw conflict('incompatible_plugin', `Plugin ${manifest.id} needs OPAL ${manifest.opal}. This server is ${VERSION}.`);

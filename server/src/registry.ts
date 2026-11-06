@@ -31,7 +31,8 @@ export interface Impl<C extends OpContract = OpContract> {
 	/**
 	 * The handler runs outside the write queue and enters it through `ctx.write`. For public
 	 * operations that hash passwords: a hash takes hundreds of milliseconds and must not hold
-	 * the queue, or anonymous requests would stall every other write.
+	 * the queue, or anonymous requests would stall every other write. Also for admin operations
+	 * that wait on the network before they write.
 	 */
 	verifyFirst?: boolean;
 }
@@ -41,8 +42,8 @@ export function implement<C extends OpContract>(
 	handler: Impl<C>['handler'],
 	opts?: { verifyFirst?: boolean }
 ): Impl<C> {
-	if (opts?.verifyFirst && contract.access !== 'public') {
-		throw new Error(`${contract.name}: verifyFirst is for public operations`);
+	if (opts?.verifyFirst && contract.access !== 'public' && contract.access !== 'admin') {
+		throw new Error(`${contract.name}: verifyFirst is for public and admin operations`);
 	}
 	return { contract, handler, verifyFirst: opts?.verifyFirst };
 }

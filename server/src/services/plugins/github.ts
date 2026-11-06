@@ -1,5 +1,7 @@
 /** Find a plugin on GitHub: parse the source, resolve a ref to a commit, download the tarball. */
 import { OpalError } from '@opal/shared';
+import { envFlag } from '../../env.ts';
+import { MAX_TOTAL_BYTES } from './tar.ts';
 
 export interface ParsedSource {
 	/** What the database stores: `github:owner/repo` or `local:/abs/path`. */
@@ -14,16 +16,23 @@ export interface ParsedSource {
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 let fetchImpl: Fetch = (url, init) => fetch(url, init);
+const API_TIMEOUT_MS = 15_000;
+const DOWNLOAD_TIMEOUT_MS = 120_000;
+let downloadTimeoutMs = DOWNLOAD_TIMEOUT_MS;
+
+/** The compressed tarball. Extraction applies its own limits to what is inside. */
+export const MAX_DOWNLOAD_BYTES = MAX_TOTAL_BYTES;
 
 /** Tests replace the network. Pass nothing to restore it. */
-export function setGithubFetch(f?: Fetch): void {
+export function setGithubFetch(f?: Fetch, opts: { downloadTimeoutMs?: number } = {}): void {
 	fetchImpl = f ?? ((url, init) => fetch(url, init));
+	downloadTimeoutMs = opts.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS;
 }
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const bad = (msg: string) => new OpalError(422, 'invalid_source', msg, { source: msg });
 
-export const localPluginsAllowed = () => process.env.OPAL_PLUGINS_LOCAL === '1';
+export const localPluginsAllowed = () => envFlag('OPAL_PLUGINS_LOCAL');
 
 function repoParts(owner: string, repo: string): { owner: string; repo: string } {
 	const r = repo.replace(/\.git$/, '');
@@ -75,10 +84,15 @@ export function parseStored(source: string): ParsedSource {
 	return parseSource(source.startsWith('github:') ? source.slice('github:'.length) : source);
 }
 
-async function get(url: string, headers: Record<string, string>, what: string): Promise<Response> {
+/** The signal covers the whole exchange, so it also ends a body that stalls halfway. */
+async function get(url: string, headers: Record<string, string>, what: string, timeoutMs: number): Promise<Response> {
 	let res: Response;
 	try {
-		res = await fetchImpl(url, { headers: { 'user-agent': 'opal-plugin-installer', ...headers }, redirect: 'follow' });
+		res = await fetchImpl(url, {
+			headers: { 'user-agent': 'opal-plugin-installer', ...headers },
+			redirect: 'follow',
+			signal: AbortSignal.timeout(timeoutMs)
+		});
 	} catch (e) {
 		throw new OpalError(502, 'github_unreachable', `Cannot reach GitHub: ${(e as Error).message}`);
 	}
@@ -96,7 +110,8 @@ export async function resolveSha(owner: string, repo: string, ref: string | null
 	const res = await get(
 		`https://api.github.com/repos/${owner}/${repo}/commits/${target}`,
 		{ accept: 'application/vnd.github.sha' },
-		ref ? `Ref ${ref} of ${owner}/${repo}` : `Repository ${owner}/${repo}`
+		ref ? `Ref ${ref} of ${owner}/${repo}` : `Repository ${owner}/${repo}`,
+		API_TIMEOUT_MS
 	);
 	const sha = (await res.text()).trim();
 	if (!/^[0-9a-f]{40}$/.test(sha)) throw new OpalError(502, 'github_error', 'GitHub did not return a commit SHA');
@@ -104,10 +119,26 @@ export async function resolveSha(owner: string, repo: string, ref: string | null
 }
 
 export async function downloadTarball(owner: string, repo: string, sha: string): Promise<Uint8Array> {
-	const res = await get(`https://codeload.github.com/${owner}/${repo}/tar.gz/${sha}`, {}, `Commit ${sha.slice(0, 7)} of ${owner}/${repo}`);
+	const res = await get(
+		`https://codeload.github.com/${owner}/${repo}/tar.gz/${sha}`,
+		{},
+		`Commit ${sha.slice(0, 7)} of ${owner}/${repo}`,
+		downloadTimeoutMs
+	);
+	const tooLarge = () => new OpalError(413, 'plugin_too_large', `The plugin download is larger than ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB`);
+	if (Number(res.headers.get('content-length') ?? 0) > MAX_DOWNLOAD_BYTES) throw tooLarge();
+	// Read in chunks: a lying or absent content-length must not make us buffer an unbounded body.
+	const chunks: Uint8Array[] = [];
+	let size = 0;
 	try {
-		return new Uint8Array(await res.arrayBuffer());
+		for await (const chunk of res.body ?? []) {
+			size += chunk.length;
+			if (size > MAX_DOWNLOAD_BYTES) throw tooLarge();
+			chunks.push(chunk);
+		}
 	} catch (e) {
+		if (e instanceof OpalError) throw e;
 		throw new OpalError(502, 'github_unreachable', `The download from GitHub failed: ${(e as Error).message}`);
 	}
+	return new Uint8Array(Buffer.concat(chunks));
 }

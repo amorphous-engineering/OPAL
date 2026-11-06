@@ -77,6 +77,8 @@ These environment variables set what the server accepts. The defaults suit a tea
 
 An admin can install a plugin from a public GitHub repository. **Installing a plugin gives it shell-level access to the server.** Its API token is limited to the permissions in its manifest, but the process runs as the same user as OPAL with no sandbox, so it can read the data folder, including the database. Install only plugins you would trust with a login on that machine.
 
+Set `OPAL_PLUGINS=0` to turn plugins off on a server. Nothing starts, and OPAL refuses to preview, install, configure, enable or restart one.
+
 ### Upgrade from 1.x
 
 1. Install the last 1.x release and start it once. This upgrades the database.

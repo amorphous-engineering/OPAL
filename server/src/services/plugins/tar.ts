@@ -76,6 +76,8 @@ export function extractTarGz(data: Uint8Array, dest: string): { files: number; b
 		const type = String.fromCharCode(h[156] || 0x30);
 		off += 512;
 		if (pax.size && !'xgLK'.includes(type)) size = parseInt(pax.size, 10);
+		// A negative size would walk the offset backwards and read the same header forever.
+		if (!Number.isFinite(size) || size < 0) throw bad(`The archive has an entry with a bad size: ${name}`);
 		const padded = Math.ceil(size / 512) * 512;
 		if (off + size > tar.length) throw bad('The archive is cut short');
 		const body = tar.subarray(off, off + size);

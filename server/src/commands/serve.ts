@@ -5,7 +5,7 @@ import { loadDevSchema } from '../db/dev.ts';
 import { importInPlace } from '../import/index.ts';
 import { dataDir, dbPath } from '../paths.ts';
 import { PluginHost } from '../services/plugins/host.ts';
-import { setRuntime } from '../services/plugins/runtime.ts';
+import { pluginsEnabled, setRuntime } from '../services/plugins/runtime.ts';
 import { plugin } from '../db/schema/index.ts';
 import { eq } from 'drizzle-orm';
 import { idleTimeoutSeconds, maxRequestBytes } from '../http/limits.ts';
@@ -42,7 +42,7 @@ export async function serve(args: string[]): Promise<void> {
 		// The socket address, for session records when no proxy sets x-forwarded-for.
 		fetch: (req, server) => app.fetch(req, { ip: server.requestIP(req)?.address ?? null })
 	});
-	if (process.env.OPAL_PLUGINS !== '0') {
+	if (pluginsEnabled()) {
 		const host = new PluginHost(db);
 		setRuntime(host);
 		for (const row of db.select({ key: plugin.key }).from(plugin).where(eq(plugin.enabled, true)).all()) void host.start(row.key);

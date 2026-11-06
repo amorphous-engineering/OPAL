@@ -230,6 +230,27 @@ describe('plugin operations', () => {
 
 	const stored = (key: string) => db.select().from(pluginSetting).where(eq(pluginSetting.key, key)).get();
 
+	test('a server with plugins off refuses settings, enable and restart, and still lets an admin look and switch off', async () => {
+		db.update(plugin).set({ enabled: true }).run();
+		process.env.OPAL_PLUGINS = 'off';
+		try {
+			for (const res of [
+				await call('PUT', '/plugins/echo/settings', { values: { greeting: 'x' } }),
+				await call('POST', '/plugins/echo/enable'),
+				await call('POST', '/plugins/echo/restart')
+			]) {
+				expect(res.status).toBe(409);
+				expect(((await res.json()) as any).error).toBe('plugins_off');
+			}
+			expect(calls).toEqual([]);
+			expect((await call('GET', '/plugins')).status).toBe(200);
+			expect((await call('GET', '/plugins/echo')).status).toBe(200);
+			expect((await call('POST', '/plugins/echo/disable')).status).toBe(200);
+		} finally {
+			delete process.env.OPAL_PLUGINS;
+		}
+	});
+
 	test('plugins.list shows every plugin with its process state', async () => {
 		const res = await call('GET', '/plugins');
 		expect(res.status).toBe(200);
