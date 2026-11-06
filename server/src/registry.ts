@@ -177,7 +177,6 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 		if (seen.has(c.name)) throw new Error(`Duplicate operation ${c.name}`);
 		seen.add(c.name);
 		app.on(c.method, `/api${c.path}`, async (hc) => {
-			if (impl.longRunning) keepConnectionOpen(hc);
 			let input: Record<string, unknown> = {};
 			if (c.method === 'GET' || c.method === 'DELETE') {
 				input = Object.fromEntries(new URL(hc.req.url).searchParams);
@@ -192,7 +191,14 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 				if (!isPlainInput(input)) throw new OpalError(400, 'invalid_json', 'Request body must be a JSON object');
 			}
 			Object.assign(input, hc.req.param());
-			const out = await runOp(impl, db, await resolveActor(hc), input as OpInput<typeof c>, {
+			const actor = await resolveActor(hc);
+			// Only once the body has arrived and the caller may run this: until then the idle timeout
+			// is what closes a request nobody finishes.
+			if (impl.longRunning) {
+				checkAccess(db, c, actor);
+				keepConnectionOpen(hc);
+			}
+			const out = await runOp(impl, db, actor, input as OpInput<typeof c>, {
 				cookies: cookieJar(hc),
 				request: {
 					userAgent: hc.req.header('user-agent') ?? null,

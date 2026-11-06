@@ -39,8 +39,6 @@ async function userOf(c: Context, db: Db, resolveActor: ResolveActor, key: strin
 }
 
 async function forward(c: Context, port: number, upstreamPath: string, headers: Headers): Promise<Response> {
-	// A plugin page may stream, or work a while before it answers.
-	keepConnectionOpen(c);
 	const url = new URL(c.req.url);
 	url.searchParams.delete('pt');
 	const query = url.searchParams.toString();
@@ -97,6 +95,9 @@ export function mountPluginProxy(app: Hono, db: Db, resolveActor: ResolveActor):
 		const person = db.select().from(user).where(eq(user.id, userId)).get();
 		const headers = forwardHeaders(c);
 		headers.set('x-opal-user', JSON.stringify({ id: userId, name: person?.name ?? '', username: person?.username ?? '' }));
+		// A plugin page may stream, or work a while before it answers. Hooks stay under the idle timeout:
+		// they are anonymous, and a webhook sender gives up long before it.
+		keepConnectionOpen(c);
 		return forward(c, port, rest, headers);
 	});
 
