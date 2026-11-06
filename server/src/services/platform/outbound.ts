@@ -69,7 +69,8 @@ const PRIVATE = blockList([
 	'2001::/32',
 	'2001:db8::/32',
 	'2002::/16',
-	'fc00::/7'
+	'fc00::/7',
+	'fec0::/10'
 ]);
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
