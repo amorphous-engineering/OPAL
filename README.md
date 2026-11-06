@@ -47,9 +47,17 @@ Or download a binary from [GitHub Releases](https://github.com/amorphous-enginee
 | `opal update` | Downloads, verifies and installs the latest release. |
 | `opal import <file>` | Imports a database from a 1.x release into a new file. |
 
+### First run
+
+The first time OPAL starts, it prints a setup code to the terminal, and to the log on the control page if you ran `opal`. Under a service manager it is in the service log, such as `journalctl -u opal`. Open `http://localhost:8080/setup` and enter the code to create the first administrator. The code changes each time OPAL starts.
+
+Setup works at `localhost`, at the server's IP address, or at a host name you list in `OPAL_ALLOWED_HOSTS` or `OPAL_PUBLIC_URL`. A web page can point a name it owns at your server, so OPAL refuses setup under any other name.
+
+### Data
+
 The server listens on port 8080. Data is in `~/Library/Application Support/OPAL` (macOS), `~/.local/share/opal` (Linux) or `%LOCALAPPDATA%\OPAL` (Windows). Set `OPAL_DATA_DIR` to use another folder. On Linux and macOS the server makes the folder and everything it writes there readable by the account that runs OPAL only (mode `0700` and `0600`), and tightens an older folder at start.
 
-Uploaded files and photos are not limited in total by default. Set `OPAL_STORAGE_QUOTA_BYTES` to cap them together: past the cap, new uploads and photos are refused with a message until files are removed. A file nothing links to or publishes any more is deleted from disk after seven days.
+Uploaded files and photos are not limited in total by default. Set `OPAL_STORAGE_QUOTA_BYTES` to cap them together: past the cap, new uploads and photos are refused with a message until files are removed. A file nothing links to or publishes any more is deleted from disk after seven days. A cap of 50 GB (`53687091200`) suits most teams; choose one well below your free disk. OPAL does not refuse writes when the disk runs low, so watch the disk check in `/api/health`.
 
 ### Network settings
 
@@ -83,7 +91,9 @@ Set `OPAL_PLUGINS=0` to turn plugins off on a server. Nothing starts, and OPAL r
 
 The identity provider can be on a private address. OPAL trusts the issuer host an admin configures. The token, userinfo and key endpoints in its discovery document, and any redirect or `picture` URL, must be on that same host and port or on a public https address. Link-local and cloud metadata addresses are always refused. Failures in **Test** show one message; the server log has the detail.
 
-On a server that must not reach its own network, set `OPAL_OIDC_ALLOW_PRIVATE=0`, so the issuer has to be on a public address too. A firewall is still the real boundary, because a name can resolve differently between OPAL's check and the request.
+Private-address issuers are allowed by default, so on-premises providers keep working. On an internet-facing server, or one that must not reach its own network, set `OPAL_OIDC_ALLOW_PRIVATE=0`, so the issuer has to be on a public address too. A firewall is still the real boundary, because a name can resolve differently between OPAL's check and the request.
+
+OPAL links a sign-in to an existing account by email only when the provider sends `email_verified: true`. Some providers leave that claim out. With those, a person whose email already belongs to an OPAL account is refused at sign-in, and OPAL has no action to link the two yet. New people still get a new account. If your provider omits the claim, have people sign in before you create their accounts, or remove the email from the existing account first.
 
 ### Upgrade from 1.x
 

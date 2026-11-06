@@ -42,7 +42,7 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
-| Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
+| Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
 | Pending, advisory | What is it, and who has it? | START WORK | Add comment, attachment | As above | VOID (reason required) |
 | In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee | VOID, while no disposition is signed |
 | In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
@@ -97,13 +97,14 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 - A requirement with a baselined revision stays in its project, including through a draft of its next revision.
 - A verification stays until someone takes it back with WITHDRAW VERIFICATION (a person, reason required). The allocation shows who verified, who withdrew, when and why.
 - A verified allocation cannot be removed, nor can one with a withdrawn verification. Mark it not applicable.
+- The notes of a verified allocation stay as verified. Withdraw the verification to change them.
 
 ## Risk
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
 | Open | What could go wrong, and what are we doing? | MARK REVIEWED | Link issues, add references | All fields, including score and disposition | ACCEPT (rationale required), CLOSE (reason required), DELETE if never accepted or realized |
-| Accepted | Who accepted what, and is that still true? | MARK REVIEWED | Link issues, add references | Owner, narrative | WITHDRAW ACCEPTANCE (reason required, human only), CLOSE (reason required, human only) |
+| Accepted | Who accepted what, and is that still true? | MARK REVIEWED | Link issues, add references | Owner, narrative | WITHDRAW ACCEPTANCE (reason required, human only), MARK REALIZED (linked issue and reason required, human only), CLOSE (reason required, human only) |
 | Realized | What did we forecast, and what happened? | Link to the issue | + NEW RISK for residual exposure | | CORRECT RECORD (reason required, logged) |
 | Closed | Why did this close? | | | | REOPEN (reason required, human only if it was ever accepted) |
 
