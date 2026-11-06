@@ -94,6 +94,27 @@ describe('correcting a stock record', () => {
 	});
 });
 
+describe('calibrating a tool', () => {
+	test('a calibration is an attestation: an API token cannot record one and the due date does not move', async () => {
+		const s = await setup();
+		const tool = makePart(s.db, { isTooling: true, calibrationIntervalDays: 365 });
+		const rec = await receive(s, tool.id, '1');
+		const tokenId = s.db
+			.insert(apiToken)
+			.values({ userId: s.admin.id, name: 't', tokenHash: 'h', createdAt: new Date().toISOString() })
+			.returning()
+			.get().id;
+		const app = createApp({
+			db: s.db,
+			resolveActor: () => ({ kind: 'token', userId: s.admin.id, isAdmin: true, tokenId })
+		});
+		const res = await app.request(`/api/inventory/${rec.id}/calibrate`, { method: 'POST' });
+		expect(res.status).toBe(403);
+		expect((await detail(s, rec.opalNumber)).record.lastCalibratedAt).toBeNull();
+		expect((await s.call('POST', `/inventory/${rec.id}/calibrate`)).body.lastCalibratedAt).not.toBeNull();
+	});
+});
+
 describe('scrapping stock', () => {
 	test('a scrap needs a note that says why, and the note lands on the ledger', async () => {
 		const s = await setup();

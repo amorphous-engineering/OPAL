@@ -650,11 +650,13 @@ export const inventory = {
 		name: 'inventory.calibrate',
 		method: 'POST',
 		path: '/inventory/:id/calibrate',
-		summary: 'Record a calibration of a tooling item. The next due date follows the part interval.',
+		summary:
+			'Record a calibration of a tooling item: a person attests it was done. The next due date follows the part interval. Human only.',
 		input: z.object({ id: zId }),
 		output: zStockRecord,
 		access: 'signed-in',
-		mcp: true
+		mcp: false,
+		humanOnly: true
 	}),
 	tests: {
 		list: op({

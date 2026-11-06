@@ -21,6 +21,7 @@ const HUMAN_ACTS = [
 	'execution.signoff',
 	'execution.skip',
 	'execution.void',
+	'inventory.calibrate',
 	'inventory.correct',
 	'issues.reopen',
 	'issues.signDisposition',

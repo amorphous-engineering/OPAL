@@ -127,7 +127,7 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 
 | State | The page answers | Primary | Also | MORE |
 |---|---|---|---|---|
-| On hand | What is this, where, how many, and what happened to it? | | Label, count, adjust, move | CORRECT lot, serial or expiry (reason required), SCRAP (reason required) |
+| On hand | What is this, where, how many, and what happened to it? | | Label, count, adjust, move, record calibration (human only) | CORRECT lot, serial or expiry (reason required), SCRAP (reason required) |
 | Empty | Where did it go? | | Label | |
 
 - The ledger is append-only. Corrections show in the ledger with old and new values.
