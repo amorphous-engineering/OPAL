@@ -133,7 +133,7 @@ export async function planLaunch(start: PluginStart, machine: Machine = thisMach
 		read: [...SYSTEM_READ, ...SYSTEM_READ_ETC, ...caFiles(start.env), process.execPath, start.code],
 		write: [start.data],
 		devices: DEVICES,
-		forbidden: [dbPath(), join(dataDir(), '.opal_auth_secret'), dataDir()],
+		forbidden: [dbPath(), ...['.opal_auth_secret', '.opal_secrets_key', '.opal_secrets_key.tmp'].map((f) => join(dataDir(), f)), dataDir()],
 		// Applied at the moment of exec. The launcher itself runs with no HOME: the plugin can write to
 		// this one, and nothing it wrote may be near a runtime that has not been confined yet.
 		env: { HOME: start.data, TMPDIR: tmp, TMP: tmp, TEMP: tmp },

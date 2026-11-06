@@ -47,6 +47,8 @@ function outside(q) {
 		dbWal: attempt(() => readFileSync(`${db}-wal`).length),
 		dbWrite: attempt(() => writeFileSync(db, 'overwritten')),
 		secret: attempt(() => readFileSync(join(root, '.opal_auth_secret'), 'utf8')),
+		secretsKey: attempt(() => readFileSync(join(root, '.opal_secrets_key'), 'utf8')),
+		secretsKeyTmp: attempt(() => readFileSync(join(root, '.opal_secrets_key.tmp'), 'utf8')),
 		dataFolder: attempt(() => readdirSync(root)),
 		rename: attempt(() => renameSync(db, join(own, 'stolen.db'))),
 		symlink: attempt(() => {

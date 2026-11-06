@@ -20,6 +20,7 @@ const FIXTURE = join(import.meta.dir, '..', 'fixtures', 'plugins', 'reach');
 const manifest = JSON.parse(readFileSync(join(FIXTURE, 'opal-plugin.json'), 'utf8'));
 const DB_HEAD = 'SQLite format 3';
 const SECRET = 'the-auth-secret';
+const SECRETS_KEY = 'the-key-to-stored-secrets';
 const SHA1 = 'a'.repeat(40);
 const SHA2 = 'b'.repeat(40);
 
@@ -55,6 +56,8 @@ function fillDataFolder(): { dir: string; held: Database } {
 	held.run('CREATE TABLE t (x)');
 	held.run("INSERT INTO t VALUES ('private')");
 	writeFileSync(join(dir, '.opal_auth_secret'), SECRET, { mode: 0o600 });
+	writeFileSync(join(dir, '.opal_secrets_key'), SECRETS_KEY, { mode: 0o600 });
+	writeFileSync(join(dir, '.opal_secrets_key.tmp'), SECRETS_KEY, { mode: 0o600 });
 	mkdirSync(join(dir, 'plugin-data', 'other'), { recursive: true });
 	writeFileSync(join(dir, 'plugin-data', 'other', 'note.txt'), 'not yours');
 	return { dir, held };
@@ -145,6 +148,13 @@ describe.if(LANDLOCK)('a confined plugin on Linux', () => {
 		expect(o.secret.code).toBe('EACCES');
 		expect(JSON.stringify(o)).not.toContain(DB_HEAD);
 		expect(JSON.stringify(o)).not.toContain(SECRET);
+	});
+
+	test('cannot read the key that decrypts stored secrets', async () => {
+		const o = await s.get(`/outside?home=${encodeURIComponent(homedir())}`);
+		expect(o.secretsKey).toEqual({ ok: false, code: 'EACCES' });
+		expect(o.secretsKeyTmp).toEqual({ ok: false, code: 'EACCES' });
+		expect(JSON.stringify(o)).not.toContain(SECRETS_KEY);
 	});
 
 	test('cannot change the database in any way, and it stays intact', async () => {
@@ -451,7 +461,7 @@ describe.if(ROOT)('a plugin started by root', () => {
 
 	test('cannot read the database or the secret, or write to its own code', async () => {
 		const o = await s.get(`/outside?home=${encodeURIComponent(homedir())}`);
-		for (const name of ['db', 'secret', 'dataFolder', 'sibling', 'codeWrite', 'dbWrite', 'chmod', 'truncate', 'serverEnviron']) denied(o[name]);
+		for (const name of ['db', 'secret', 'secretsKey', 'dataFolder', 'sibling', 'codeWrite', 'dbWrite', 'chmod', 'truncate', 'serverEnviron']) denied(o[name]);
 		expect(readdirSync(s.dir)).toContain('opal.db');
 	});
 
