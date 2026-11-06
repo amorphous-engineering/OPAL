@@ -24,6 +24,7 @@ export * from './labels.ts';
 registerPartReference({
 	name: 'inventory_records',
 	locksTracking: true,
+	locksUnit: true,
 	count: (ctx, id) =>
 		ctx.db.select({ n: sql<number>`count(*)` }).from(stockRecord).where(eq(stockRecord.partId, id)).get()?.n ?? 0
 });

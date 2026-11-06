@@ -122,6 +122,7 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 
 - The part tag with QR stays at the top. Stock, procedure use and consumption all show on the part page.
 - BOM changes on an active part are the one open question. See the sweep report.
+- The unit of measure stops changing once stock or a purchase order line counts in it. A different unit is a new part.
 
 ## Stock record
 

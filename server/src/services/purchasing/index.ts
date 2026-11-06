@@ -17,6 +17,7 @@ registerPartReference({
 });
 registerPartReference({
 	name: 'purchase_lines',
+	locksUnit: true,
 	count: (ctx, id) =>
 		ctx.db.select({ n: sql<number>`count(*)` }).from(purchaseLine).where(eq(purchaseLine.partId, id)).get()?.n ?? 0
 });

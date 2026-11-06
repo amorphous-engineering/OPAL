@@ -201,6 +201,8 @@ export const zPartDetail = z.object({
 	/** Nonzero counts of everything that references this part. */
 	references: z.record(z.string(), z.number().int()),
 	deletable: z.boolean(),
+	/** Stock or purchase order lines count in this unit, so it cannot change. */
+	unitLocked: z.boolean(),
 	bom: z.array(zBomLine),
 	whereUsed: z.array(zBomLine),
 	family: zPartFamily

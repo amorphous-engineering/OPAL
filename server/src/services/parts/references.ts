@@ -13,6 +13,8 @@ export interface PartReference {
 	count(ctx: Pick<Ctx, 'db'>, partId: number): number;
 	/** True when these rows describe the tracking type (stock records do). */
 	locksTracking?: boolean;
+	/** True when these rows are committed quantities counted in the part's unit (stock, PO lines). */
+	locksUnit?: boolean;
 }
 
 const sources = new Map<string, PartReference>();
@@ -42,6 +44,12 @@ export function referenceCounts(ctx: Pick<Ctx, 'db'>, partId: number): Record<st
 		if (n > 0) out[ref.name] = n;
 	}
 	return out;
+}
+
+/** A new unit would silently change what every one of these quantities means. */
+export function hasUnitLock(ctx: Pick<Ctx, 'db'>, partId: number): boolean {
+	for (const ref of sources.values()) if (ref.locksUnit && ref.count(ctx, partId) > 0) return true;
+	return false;
 }
 
 export function hasTrackingLock(ctx: Pick<Ctx, 'db'>, partId: number): boolean {
