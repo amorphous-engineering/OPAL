@@ -361,7 +361,7 @@
 									{:else if risk.assetText}
 										{risk.assetText}
 									{:else}
-										<span class="text-muted-foreground">—</span>
+										<span class="text-quiet">—</span>
 									{/if}
 								</div>
 								{#if editFields}
@@ -489,7 +489,7 @@
 							</div>
 						{:else if risk.residualProbability !== null && risk.residualImpact !== null}
 							<span class="font-mono">{risk.residualProbability} × {risk.residualImpact}</span>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					</DetailRow>
 					<DetailRow label="Score" mono>
 						<Score
@@ -604,7 +604,7 @@
 								/>{#if risk.lastReviewedByName}{reviewedBy}{/if}</span
 							>
 						{:else}
-							<span class="text-muted-foreground">—</span>
+							<span class="text-quiet">—</span>
 						{/if}
 					</DetailRow>
 					<DetailRow label="Created"><Timestamp value={risk.createdAt} /></DetailRow>

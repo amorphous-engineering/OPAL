@@ -14,6 +14,10 @@ export const LEVELS: { value: number; label: string }[] = [
 
 export function lifecycleTone(state: string): Tone {
 	switch (state) {
+		case 'baselined':
+			return 'ok';
+		case 'preliminary':
+			return 'draft';
 		case 'superseded':
 		case 'cancelled':
 			return 'muted';
@@ -26,6 +30,8 @@ export function verificationTone(v: Verification): Tone {
 	switch (v) {
 		case 'verified':
 			return 'ok';
+		case 'partial':
+			return 'info';
 		default:
 			return 'muted';
 	}

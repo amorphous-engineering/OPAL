@@ -167,7 +167,7 @@
 				>
 				{#if n.body}<div class="text-xs text-muted-foreground">{n.body}</div>{/if}
 			{:else if col.key === 'actorName'}
-				{#if n.actorName}{n.actorName}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if n.actorName}{n.actorName}{:else}<span class="text-quiet">—</span>{/if}
 			{:else}
 				<span class="inline-flex gap-1">
 					{#if !n.readAt}

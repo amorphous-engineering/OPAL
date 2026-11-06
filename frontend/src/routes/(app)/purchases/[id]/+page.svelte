@@ -295,7 +295,7 @@
 						{#if po.targetDate}
 							<span class={po.isOverdue ? 'text-error' : ''}>{po.targetDate}</span>
 						{:else}
-							<span class="text-muted-foreground">—</span>
+							<span class="text-quiet">—</span>
 						{/if}
 					{/snippet}
 				</EditableRow>

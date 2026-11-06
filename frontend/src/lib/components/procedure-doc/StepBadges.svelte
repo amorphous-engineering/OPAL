@@ -13,8 +13,10 @@
 
 	// A value that misses its spec stays flagged after the step is done.
 	const off = $derived(outOfSpecFields(step.data_schema?.fields, step.data_captured));
-	const error = 'border-error-fill bg-error-fill font-mono font-bold tracking-wider text-error-on';
-	const warn = 'border-warn-fill bg-warn-fill font-mono font-bold tracking-wider text-warn-on';
+	const error =
+		'border-error-fill bg-error-fill font-mono dark:bg-error-fill font-bold tracking-wider text-error-on';
+	const warn =
+		'border-warn-fill bg-warn-fill font-mono dark:bg-warn-fill font-bold tracking-wider text-warn-on';
 </script>
 
 {#if off.length}

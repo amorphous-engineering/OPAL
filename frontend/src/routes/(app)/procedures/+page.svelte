@@ -116,7 +116,7 @@
 			{:else if col.key === 'name'}
 				<a href={`/procedures/${r.id}`} class="font-medium text-info hover:underline">{r.name}</a>
 			{:else if col.key === 'project'}
-				{r.projectCode}
+				<span class="text-quiet">{r.projectCode}</span>
 			{:else if col.key === 'type'}
 				{r.procedureType.toUpperCase()}
 			{:else if col.key === 'status'}
@@ -126,8 +126,7 @@
 					<State value={r.status} tone={r.status === 'draft' ? 'warn' : 'error'} badge />
 				{/if}
 			{:else if col.key === 'version'}
-				{#if r.currentVersionNumber}v{r.currentVersionNumber}{:else}<span
-						class="text-muted-foreground">—</span
+				{#if r.currentVersionNumber}v{r.currentVersionNumber}{:else}<span class="text-quiet">—</span
 					>{/if}
 			{:else if col.key === 'steps'}
 				{r.stepCount}

@@ -20,7 +20,7 @@
 	} = $props();
 
 	const draft = $derived(value?.toLowerCase() === 'draft');
-	const t = $derived(draft ? 'muted' : (tone ?? toneFor(value)));
+	const t = $derived(draft ? 'draft' : (tone ?? toneFor(value)));
 	const text = $derived(label ?? stateLabel(value));
 </script>
 
@@ -29,7 +29,7 @@
 		class={cn(
 			'inline-flex h-5 items-center border px-1.5 font-mono text-xs font-medium tracking-wide whitespace-nowrap',
 			toneBox[t],
-			draft && 'border-dashed',
+			draft && 'border-dashed border-tan px-1.5',
 			className
 		)}>{text}</span
 	>

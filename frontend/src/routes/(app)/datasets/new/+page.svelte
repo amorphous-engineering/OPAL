@@ -174,12 +174,12 @@
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<UnitPicker bind:value={row.unit} label={`Field ${i + 1} unit`} />
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<SpecEditor bind:draft={row.spec} unit={row.unit} label={`Field ${i + 1} spec`} />
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							<Checkbox bind:checked={row.required} aria-label={`Field ${i + 1} required`} />
@@ -187,7 +187,7 @@
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<Checkbox bind:checked={row.chart} aria-label={`Field ${i + 1} charted`} />
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</td>
 						<td class="px-3 py-1.5 text-right">
 							<ActionLink

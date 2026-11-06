@@ -29,14 +29,15 @@ export const SEVERITIES: { value: RiskSeverity; label: string }[] = [
 export const severityOf = riskSeverityFor;
 
 export const severityTone: Record<RiskSeverity, Tone> = {
-	low: 'default',
+	low: 'ok',
 	medium: 'warn',
 	high: 'error'
 };
 
-/** Disposition colour: a realized risk is the alarm; everything else reads by its word. */
+/** Disposition colour: realized is the alarm, accepted is settled; the rest read by their word. */
 export function dispositionTone(d: string): Tone {
 	if (d === 'realized') return 'error';
+	if (d === 'accepted') return 'ok';
 	if (d === 'closed') return 'muted';
 	return 'default';
 }

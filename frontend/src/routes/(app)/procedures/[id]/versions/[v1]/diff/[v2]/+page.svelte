@@ -185,7 +185,7 @@
 							<ul class="grid grid-cols-1 gap-0.5 font-mono text-xs">
 								{#each r.changedFields as f (f)}<li>{describe(f, r.changes[f])}</li>{/each}
 							</ul>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					{:else}
 						{r.number}
 					{/if}

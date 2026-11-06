@@ -493,7 +493,7 @@
 					{#if col.key === 'level'}
 						{t.name || '—'} <span class="font-mono text-xs text-muted-foreground">L{t.level}</span>
 					{:else if formatProblem}
-						<span class="text-muted-foreground">—</span>
+						<span class="text-quiet">—</span>
 					{:else}
 						<span class="text-info"
 							>{render(t, col.key === 'tenth' ? 10 : 1, col.key === 'variant' ? 2 : 1)}</span

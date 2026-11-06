@@ -103,7 +103,7 @@
 				{#if !row.isActive}<State value="inactive" tone="muted" />{/if}
 			{:else}
 				{@const v = (row as unknown as Record<string, string | number | null>)[col.key]}
-				{#if v === null || v === ''}<span class="text-muted-foreground">—</span>{:else}{v}{/if}
+				{#if v === null || v === ''}<span class="text-quiet">—</span>{:else}{v}{/if}
 			{/if}
 		{/snippet}
 	</DataTable>

@@ -189,14 +189,14 @@
 				{:else if col.key === 'partName'}
 					{r.partName}
 				{:else if col.key === 'location'}
-					{#if r.location}{r.location}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r.location}{r.location}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'quantity'}
 					<span class={Number(r.balance) === 0 ? 'text-muted-foreground' : ''}
 						>{qty(r.balance, r.partUom)}</span
 					>
 				{:else if col.key === 'lotNumber'}
 					{@const lot = r.serialNumber ?? r.lotNumber}
-					{#if lot}{lot}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if lot}{lot}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'sourceType'}
 					<span class="font-mono text-xs text-muted-foreground">{sourceLabel(r.sourceType)}</span>
 				{:else if col.key === 'expirationDate'}
@@ -209,7 +209,7 @@
 								label="{r.daysUntilExpiration}D"
 								class="ml-1"
 							/>{/if}
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'calibrationDueAt'}
 					{#if r.partIsTooling && r.calibrationDueAt}
 						{date(r.calibrationDueAt)}
@@ -225,7 +225,7 @@
 								label="DUE"
 								class="ml-1"
 							/>{/if}
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'createdAt'}
 					<Timestamp value={r.createdAt} dateOnly />
 				{/if}
@@ -250,8 +250,7 @@
 					{qty(r.balance, r.unitOfMeasure)}
 					{#if r.isLowStock}<State value="low" tone="warn" label="LOW" class="ml-1" />{/if}
 				{:else if col.key === 'reorderPoint'}
-					{#if r.reorderPoint !== null}{qty(r.reorderPoint)}{:else}<span
-							class="text-muted-foreground">—</span
+					{#if r.reorderPoint !== null}{qty(r.reorderPoint)}{:else}<span class="text-quiet">—</span
 						>{/if}
 				{:else if col.key === 'recordCount'}
 					{r.recordCount}

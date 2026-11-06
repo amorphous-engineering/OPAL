@@ -123,13 +123,13 @@
 			{#if col.key === 'name'}
 				<span class="font-medium">{row.name}</span>
 			{:else if col.key === 'project'}
-				{row.projectCode}
+				<span class="text-quiet">{row.projectCode}</span>
 			{:else if col.key === 'procedure'}
 				{#if row.procedureId}
 					<a href={`/procedures/${row.procedureId}`} class="text-info hover:underline"
 						>{procedureName(row.procedureId)}</a
 					>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'fields'}
 				{row.schema.fields.length}
 			{:else if col.key === 'pointCount'}

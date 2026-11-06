@@ -121,9 +121,9 @@
 			{:else if col.key === 'targetDate'}
 				{#if r.targetDate}
 					<span class={r.isOverdue ? 'text-error' : ''}>{r.targetDate}</span>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'lines'}
-				{#if r.totalLines === 0}<span class="text-muted-foreground">—</span
+				{#if r.totalLines === 0}<span class="text-quiet">—</span
 					>{:else}{r.linesComplete}/{r.totalLines}{/if}
 			{:else if col.key === 'totalCost'}
 				{money(r.totalCost)}

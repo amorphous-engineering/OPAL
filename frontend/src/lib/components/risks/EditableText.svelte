@@ -131,7 +131,7 @@
 			{#if value}
 				{#if display}{@render display(value)}{:else}{value}{/if}
 			{:else}
-				<span class="text-muted-foreground">—</span>
+				<span class="text-quiet">—</span>
 			{/if}
 		</div>
 		{#if !readonly}

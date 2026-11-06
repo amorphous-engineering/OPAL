@@ -178,14 +178,14 @@
 			{#if col.key === 'riskNumber'}
 				<span class="font-mono text-info">{r.riskNumber}</span>
 			{:else if col.key === 'project'}
-				{r.projectCode}
+				<span class="text-quiet">{r.projectCode}</span>
 			{:else if col.key === 'title'}
 				{r.title}
 			{:else if col.key === 'asset'}
 				{#if r.assetDisplay}<span
 						class="block max-w-[32rem] truncate text-muted-foreground"
 						title={r.assetDisplay}>{r.assetDisplay}</span
-					>{:else}<span class="text-muted-foreground">—</span>{/if}
+					>{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'disposition'}
 				<State value={r.disposition} tone={dispositionTone(r.disposition)} />
 			{:else if col.key === 'score'}
@@ -196,7 +196,7 @@
 					residualSeverity={r.residualSeverity}
 				/>
 			{:else if col.key === 'owner'}
-				{#if r.ownerName}{r.ownerName}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if r.ownerName}{r.ownerName}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'reviewed'}
 				<Timestamp value={r.lastReviewedAt} />
 			{/if}

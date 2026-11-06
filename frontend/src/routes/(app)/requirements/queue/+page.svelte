@@ -284,7 +284,7 @@
 								{@const s = status(r)}
 								{#if s === 'staged'}<State value="staged" tone="ok" label="APPROVED" />
 								{:else if s === 'skipped'}<State value="skipped" tone="muted" label="SKIPPED" />
-								{:else}<span class="text-muted-foreground">—</span>{/if}
+								{:else}<span class="text-quiet">—</span>{/if}
 							{:else if col.key === 'level'}{r.level}
 							{:else}{r.title}{/if}
 						{/snippet}

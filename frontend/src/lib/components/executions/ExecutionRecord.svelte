@@ -132,7 +132,7 @@
 							<span class="truncate">{r.name ?? '—'}</span>
 							{#if r.clocked_in}<Badge
 									variant="outline"
-									class="border-dotted border-foreground font-mono tracking-wider text-foreground"
+									class="border-dotted border-foreground font-mono tracking-wider text-foreground dark:bg-transparent"
 									>IN</Badge
 								>{/if}
 						</span>
@@ -212,7 +212,7 @@
 					>
 				{/if}
 				<div class="min-w-0 flex-1 font-mono text-xs text-muted-foreground">
-					{#if a.kind === 'closeout'}<span class="font-semibold">CLOSEOUT</span> ·{/if}
+					{#if a.kind === 'closeout'}<span class="text-ok">CLOSEOUT</span> ·{/if}
 					{a.uploaded_by ?? ''}
 					<Timestamp value={a.created_at} />
 					{#if a.note}<div class="font-sans text-xs text-foreground">{a.note}</div>{/if}

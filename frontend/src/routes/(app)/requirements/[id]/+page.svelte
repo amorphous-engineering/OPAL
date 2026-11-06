@@ -380,7 +380,7 @@
 				{:else if req.rationale}
 					{req.rationale}
 				{:else}
-					<span class="text-muted-foreground">—</span>
+					<span class="text-quiet">—</span>
 				{/if}
 			</DetailRow>
 		</DetailTable>
@@ -419,7 +419,7 @@
 						<a href={`/requirements/${p.id}`} class="hover:underline"
 							><span class="mono text-info">{p.reqNumber}</span> {p.title}</a
 						>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Level">
 					{#if editing}
@@ -471,7 +471,7 @@
 							aria-label="TBD"
 						/>
 					{:else if req.tbd}<State value="tbd" tone="error" label="TBD" />{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				</DetailRow>
 				<DetailRow label="TBR">
@@ -482,7 +482,7 @@
 							aria-label="TBR"
 						/>
 					{:else if req.tbr}<State value="tbr" tone="warn" label="TBR" />{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				</DetailRow>
 				<DetailRow label="TBR owner">
@@ -525,7 +525,7 @@
 				<DetailRow label="Baselined">
 					{#if req.baselinedAt}
 						<Timestamp value={req.baselinedAt} />{req.baselinedBy ? ` by ${req.baselinedBy}` : ''}
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Created"><Timestamp value={req.createdAt} /></DetailRow>
 				<DetailRow label="Updated"><Timestamp value={req.updatedAt} /></DetailRow>
@@ -579,7 +579,7 @@
 						<State value={c.lifecycleState} tone={lifecycleTone(c.lifecycleState)} />
 					{:else if col.key === 'stale'}
 						{#if c.stale}<State value="stale" tone="warn" label="STALE" />{:else}<span
-								class="text-muted-foreground">—</span
+								class="text-quiet">—</span
 							>{/if}
 					{:else if col.key === 'level'}{c.level}
 					{:else}{c.title}{/if}
@@ -641,7 +641,7 @@
 							<span class="text-xs"
 								><Timestamp value={a.verifiedAt} />{a.verifiedBy ? ` ${a.verifiedBy}` : ''}</span
 							>
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 						{#if a.outdated}<span
 								class="ml-2 font-mono text-xs font-medium text-warn"
 								title={`Closed against rev ${a.againstRevision}; rev ${req.revision} is not verified`}

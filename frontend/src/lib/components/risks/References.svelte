@@ -87,7 +87,7 @@
 				{:else if col.key === 'value'}
 					{r.value}
 				{:else if col.key === 'notes'}
-					{#if r.notes}{r.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r.notes}{r.notes}{:else}<span class="text-quiet">—</span>{/if}
 				{:else}
 					<ActionLink
 						disabled={busy}

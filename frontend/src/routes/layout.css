@@ -19,7 +19,8 @@
  * Colour is functional only:
  *   blue               identifier + action: primary keys, links, focus; never content
  *   OPAL orange        the wordmark only (--brand)
- *   ok / warn / error  state words. warn-fill and error-fill are the lit blocks: CAUTION, HOLD.
+ *   ok / tan / quiet   state words and secondary text, by importance. STYLE.md has the ladder.
+ *   warn / error       alert words. warn-fill and error-fill are the lit blocks: CAUTION, HOLD.
  *   dev blue           the version string of a development build
  * What each line and the shadow mean is under Marks, at the end of this file.
  */
@@ -44,6 +45,10 @@
 	--input: #bbbbbb;
 	--ring: #002dce;
 	--ok: #00794c;
+	--ok-fill: #00794c;
+	--ok-on: #ffffff;
+	--tan: #86662c;
+	--quiet: #595959;
 	--warn: #8a4b00;
 	--warn-fill: #ffb700;
 	--warn-on: #000000;
@@ -93,6 +98,10 @@
 	--input: #444444;
 	--ring: #8ab4ff;
 	--ok: #4ade80;
+	--ok-fill: #4ade80;
+	--ok-on: #000000;
+	--tan: #a98a54;
+	--quiet: #9c9c9c;
 	--warn: #ffb700;
 	--warn-fill: #ffb700;
 	--warn-on: #000000;
@@ -163,6 +172,10 @@
 	--color-error: var(--error);
 	--color-error-muted: var(--error-muted);
 	--color-info: var(--info);
+	--color-ok-fill: var(--ok-fill);
+	--color-ok-on: var(--ok-on);
+	--color-tan: var(--tan);
+	--color-quiet: var(--quiet);
 	--color-warn-fill: var(--warn-fill);
 	--color-warn-on: var(--warn-on);
 	--color-error-fill: var(--error-fill);
@@ -319,15 +332,9 @@
 		@apply border border-foreground;
 	}
 
-	/* Vendored badges set 10px type, and in dark mode a tint over the fill a hold asks for. */
+	/* Vendored badges set 10px type. */
 	[data-slot='badge'] {
-		@apply text-xs dark:bg-transparent;
-	}
-	[data-slot='badge'].bg-error-fill {
-		@apply dark:bg-error-fill;
-	}
-	[data-slot='badge'].bg-warn-fill {
-		@apply dark:bg-warn-fill;
+		@apply text-xs;
 	}
 
 	/* Corners the radius tokens cannot reach: rounded-full and rounded-[4px]. */

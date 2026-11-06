@@ -81,9 +81,11 @@
 	let deleting = $state(false);
 
 	const holdBadge =
-		'border-error-fill bg-error-fill font-mono font-bold tracking-wider text-error-on';
-	const warnBadge = 'border-warn-fill bg-warn-fill font-mono font-bold tracking-wider text-warn-on';
-	const mutedBadge = 'border-dotted border-foreground font-mono tracking-wider text-foreground';
+		'border-error-fill bg-error-fill font-mono dark:bg-error-fill font-bold tracking-wider text-error-on';
+	const warnBadge =
+		'border-warn-fill bg-warn-fill font-mono dark:bg-warn-fill font-bold tracking-wider text-warn-on';
+	const mutedBadge =
+		'border-dotted border-foreground font-mono tracking-wider text-foreground dark:bg-transparent';
 </script>
 
 {#if op.is_ad_hoc && op.redline}
@@ -102,7 +104,7 @@
 	class={cn(
 		// clip, not hidden: hidden makes a scroll container, which stops the title bars from sticking.
 		'overflow-clip border border-border bg-card',
-		op.is_ad_hoc && 'border-warn/50'
+		op.is_ad_hoc && 'border-warn'
 	)}
 >
 	<div
@@ -231,7 +233,10 @@
 				<StepStamp step={op.step} />
 			{:else if ctl.mode === 'execute'}
 				<span
-					class="shrink-0 font-mono text-xs text-muted-foreground tabular-nums"
+					class={cn(
+						'shrink-0 font-mono text-xs tabular-nums',
+						terminal ? 'text-ok' : 'text-muted-foreground'
+					)}
 					title="Steps complete">{op.progress.done}/{op.progress.total}</span
 				>
 			{/if}

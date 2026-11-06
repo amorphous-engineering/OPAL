@@ -127,7 +127,7 @@
 				<DetailRow label="Location" value={wc.location} />
 				<DetailRow label="Description">
 					{#if wc.description}<span class="whitespace-pre-wrap">{wc.description}</span>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 			</DetailTable>
 		{/if}
@@ -158,7 +158,7 @@
 					{row.stepTitle ?? ''}
 				{:else if col.key === 'stepStatus'}
 					{#if row.stepStatus !== 'pending'}<State value={row.stepStatus} />
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				{:else}
 					<Timestamp value={row.targetCompletionAt} dateOnly />
 				{/if}

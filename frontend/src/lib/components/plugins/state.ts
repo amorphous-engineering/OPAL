@@ -3,7 +3,7 @@ import type { Tone } from '#lib/components/opal/index.js';
 import { zPluginOptions, type PluginOptions } from '@opal/shared';
 
 export const PROCESS_TONES: Record<string, Tone> = {
-	running: 'default',
+	running: 'ok',
 	starting: 'warn',
 	crashed: 'error',
 	stopped: 'muted'

@@ -166,7 +166,7 @@
 								{#if e.userName}
 									<a href="/users/{e.userId}" class="hover:underline">{e.userName}</a>
 								{:else}
-									<span class="text-muted-foreground">—</span>
+									<span class="text-quiet">—</span>
 								{/if}
 							</td>
 							<td class="px-3 py-1.5">
@@ -191,7 +191,7 @@
 								{:else if e.recordLabel}
 									<span class="font-mono">{e.recordLabel}</span>
 								{:else}
-									<span class="text-muted-foreground">—</span>
+									<span class="text-quiet">—</span>
 								{/if}
 							</td>
 							<td class="px-3 py-1.5">

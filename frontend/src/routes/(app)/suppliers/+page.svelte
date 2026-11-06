@@ -81,7 +81,7 @@
 					/>{/if}
 			{:else}
 				{@const v = (s as unknown as Record<string, unknown>)[col.key]}
-				{#if v === null || v === undefined || v === ''}<span class="text-muted-foreground">—</span
+				{#if v === null || v === undefined || v === ''}<span class="text-quiet">—</span
 					>{:else}{v}{/if}
 			{/if}
 		{/snippet}

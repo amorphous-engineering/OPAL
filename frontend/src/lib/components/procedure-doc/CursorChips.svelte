@@ -107,7 +107,7 @@
 				{#if here.has(p.user_id)}
 					<Badge
 						variant="outline"
-						class="border-dotted border-foreground font-mono tracking-wider text-foreground"
+						class="border-dotted border-foreground font-mono tracking-wider text-foreground dark:bg-transparent"
 						>IN</Badge
 					>
 				{/if}

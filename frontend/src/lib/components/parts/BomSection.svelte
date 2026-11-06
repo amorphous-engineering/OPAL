@@ -237,11 +237,11 @@
 					{:else if col.key === 'qty'}
 						{qtyUnit(l.quantity, l.componentUom)}
 					{:else if col.key === 'ref'}
-						{#if l.referenceDesignator}{l.referenceDesignator}{:else}<span
-								class="text-muted-foreground">—</span
+						{#if l.referenceDesignator}{l.referenceDesignator}{:else}<span class="text-quiet"
+								>—</span
 							>{/if}
 					{:else if col.key === 'notes'}
-						{#if l.notes}{l.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
+						{#if l.notes}{l.notes}{:else}<span class="text-quiet">—</span>{/if}
 					{:else}
 						<span class="inline-flex gap-3">
 							<ActionLink onclick={() => startEdit(l)}>EDIT</ActionLink>

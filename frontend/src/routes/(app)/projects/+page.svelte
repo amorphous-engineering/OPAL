@@ -85,7 +85,7 @@
 				<span class="font-mono text-info">{p.code}</span>
 			{:else if col.key === 'description'}
 				{#if p.description}<span class="line-clamp-1 text-muted-foreground">{p.description}</span
-					>{:else}<span class="text-muted-foreground">—</span>{/if}
+					>{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'state'}
 				{#if p.state === 'archived'}<State value="archived" tone="warn" />{:else}<span
 						class="font-mono text-xs text-muted-foreground">ACTIVE</span

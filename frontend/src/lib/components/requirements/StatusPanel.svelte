@@ -54,12 +54,12 @@
 						>{summary.readyToBaseline} in queue</a
 					>
 				{:else}
-					<span class="text-muted-foreground">—</span>
+					<span class="text-quiet">—</span>
 				{/if}
 			</DetailRow>
 			<DetailRow label="Stale">
-				{#if summary.stale.length}{@render refs(summary.stale)}{:else}<span
-						class="text-muted-foreground">—</span
+				{#if summary.stale.length}{@render refs(summary.stale)}{:else}<span class="text-quiet"
+						>—</span
 					>{/if}
 			</DetailRow>
 			<DetailRow label="Overdue TBR">
@@ -73,11 +73,11 @@
 							>
 						{/each}
 					</span>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			</DetailRow>
 			<DetailRow label="Stuck drafts">
 				{#if summary.stuckDrafts.length}{@render refs(summary.stuckDrafts)}{:else}<span
-						class="text-muted-foreground">—</span
+						class="text-quiet">—</span
 					>{/if}
 			</DetailRow>
 		</DetailTable>

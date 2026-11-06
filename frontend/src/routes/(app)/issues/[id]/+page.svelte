@@ -403,7 +403,7 @@
 	{#if at}
 		{by ?? '—'} · <Timestamp value={at} />
 	{:else}
-		<span class="text-muted-foreground">—</span>
+		<span class="text-quiet">—</span>
 	{/if}
 {/snippet}
 
@@ -609,7 +609,7 @@
 							{#if issue.dispositionRationale}
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								<div class="prose-opal">{@html markdown(issue.dispositionRationale)}</div>
-							{:else}<span class="text-muted-foreground">—</span>{/if}
+							{:else}<span class="text-quiet">—</span>{/if}
 						</DetailRow>
 					{/if}
 				</DetailTable>
@@ -853,14 +853,14 @@
 								</li>
 							{/each}
 						</ul>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Procedure">
 					{#if issue.execution?.procedureId}
 						<a href={`/procedures/${issue.execution.procedureId}`} class="text-info hover:underline"
 							>{issue.execution.procedureName}</a
 						>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Execution">
 					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
@@ -877,7 +877,7 @@
 									onclick={() => act(() => patch({ executionId: null }))}>CLEAR</button
 								>
 							{/if}
-						{:else}<span class="text-muted-foreground">—</span>{/if}
+						{:else}<span class="text-quiet">—</span>{/if}
 					</div>
 				</DetailRow>
 				<DetailRow label="Boundary">
@@ -897,7 +897,7 @@
 						</NativeSelect>
 					{:else if issue.containmentStepLabel}
 						<span class="font-mono">{issue.containmentStepLabel}</span>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="Raised at" mono>
 					{#if issue.raisedStepLabel && issue.execution}
@@ -905,7 +905,7 @@
 							href={`/executions/${issue.execution.id}?op=${issue.raisedOpOrder ?? ''}`}
 							class="text-info hover:underline">{issue.raisedStepLabel}</a
 						>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				{#if issue.redlineOps.length}
 					<DetailRow label="Redline ops">

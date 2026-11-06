@@ -44,7 +44,7 @@
 			<DetailRow label="Categories">
 				{#if organization.categories.length}
 					<span class="font-mono text-xs">{organization.categories.join(' · ')}</span>
-				{:else}<span class="text-muted-foreground">—</span>{/if}
+				{:else}<span class="text-quiet">—</span>{/if}
 			</DetailRow>
 			{#each customFields as [key, value] (key)}
 				<DetailRow label={key} value={String(value)} />
@@ -60,8 +60,7 @@
 					{:else if col.key === 'autoSerial'}
 						<span class="font-mono text-xs">{t.autoSerial ? 'AUTO' : '—'}</span>
 					{:else if col.key === 'description'}
-						{#if t.description}{t.description}{:else}<span class="text-muted-foreground">—</span
-							>{/if}
+						{#if t.description}{t.description}{:else}<span class="text-quiet">—</span>{/if}
 					{:else}
 						{(t as unknown as Record<string, unknown>)[col.key]}
 					{/if}

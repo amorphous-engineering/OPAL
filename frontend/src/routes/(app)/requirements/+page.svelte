@@ -458,7 +458,9 @@
 											>r{r.revision}</span
 										>{/if}
 								</td>
-								<td class="px-3 py-1 font-mono text-xs whitespace-nowrap">{r.projectCode}</td>
+								<td class="px-3 py-1 font-mono text-xs whitespace-nowrap text-quiet"
+									>{r.projectCode}</td
+								>
 								<!-- added by projects -->
 								<td class="px-3 py-1"
 									><span class="line-clamp-1" title={r.title}>{r.title}</span></td
@@ -506,7 +508,7 @@
 											title={r.parts.map((p) => `${p.name} (${p.status})`).join(', ')}
 											>{r.parts[0].name}{r.parts.length > 1 ? ` +${r.parts.length - 1}` : ''}</span
 										>
-									{:else}<span class="text-muted-foreground">—</span>{/if}
+									{:else}<span class="text-quiet">—</span>{/if}
 								</td>
 								<td class="px-3 py-1">
 									<span class="flex gap-2 font-mono text-xs font-medium">

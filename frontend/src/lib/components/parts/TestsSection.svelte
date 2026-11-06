@@ -142,10 +142,10 @@
 					<span class="font-mono text-xs text-muted-foreground">{stateLabel(t.testType)}</span>
 				{:else if col.key === 'range'}
 					{@const r = range(t)}
-					{#if r}{r}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r}{r}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'required'}
 					{#if t.required}<span class="font-mono text-xs">REQUIRED</span>{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				{:else}
 					{#if editing}<ActionLink onclick={() => remove(t)}>DELETE</ActionLink>{/if}

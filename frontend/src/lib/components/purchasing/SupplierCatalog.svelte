@@ -146,7 +146,7 @@
 				{:else if col.key === 'lastOrderedAt'}
 					<Timestamp value={r.lastOrderedAt} dateOnly />
 				{:else if col.key === 'notes'}
-					{#if r.notes}{r.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r.notes}{r.notes}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'actions'}
 					<span class="inline-flex gap-3">
 						<ActionLink onclick={() => openDialog(r)}>EDIT</ActionLink>

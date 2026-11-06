@@ -62,7 +62,7 @@
 					{v.createdByName ?? '—'}
 				{:else if col.key === 'changeNote'}
 					{#if v.changeNote}<span class="line-clamp-2">{v.changeNote}</span>{:else}<span
-							class="text-muted-foreground">—</span
+							class="text-quiet">—</span
 						>{/if}
 				{:else if col.key === 'actions'}
 					<span class="font-mono text-xs whitespace-nowrap">

@@ -218,7 +218,7 @@
 						<span class="ml-2 font-mono text-xs tracking-wider text-muted-foreground">SYSTEM</span>
 					{/if}
 				{:else if col.key === 'description'}
-					{#if r.description}{r.description}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if r.description}{r.description}{:else}<span class="text-quiet">—</span>{/if}
 				{:else}
 					{r.memberCount}
 				{/if}

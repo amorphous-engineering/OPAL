@@ -51,7 +51,7 @@
 <div class="border-b border-border bg-background px-4 py-2.5">
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
 		<!-- Baseline row: the count reads as part of the title, not as a centered chip. -->
-		<div class="flex items-baseline gap-x-3">
+		<div class="flex min-w-0 flex-wrap items-baseline gap-x-3">
 			{#if identifier}<span class="font-mono text-lg font-semibold whitespace-nowrap text-info"
 					>{identifier}</span
 				>{/if}
@@ -59,8 +59,8 @@
 					{title}
 				</h1>{/if}
 			{#if meta}<span class="text-sm text-muted-foreground">{@render meta()}</span>{/if}
+			{@render state?.()}
 		</div>
-		{@render state?.()}
 		<div class="ml-auto flex flex-wrap items-center gap-2">{@render actions?.()}</div>
 	</div>
 </div>

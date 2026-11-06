@@ -61,7 +61,7 @@
 				{#if col.key === 'when'}
 					<Timestamp value={h.at} />
 				{:else if col.key === 'who'}
-					{#if h.userName}{h.userName}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if h.userName}{h.userName}{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'action'}
 					<span class="font-mono text-xs text-muted-foreground">{h.action.toUpperCase()}</span>
 				{:else}
@@ -77,7 +77,7 @@
 								</li>
 							{/each}
 						</ul>
-					{:else}<span class="text-muted-foreground">—</span>{/if}
+					{:else}<span class="text-quiet">—</span>{/if}
 				{/if}
 			{/snippet}
 		</DataTable>

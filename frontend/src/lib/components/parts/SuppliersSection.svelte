@@ -161,13 +161,13 @@
 					{s.vendorPn}
 				{:else if col.key === 'preferred'}
 					{#if s.isPreferred}<span class="font-mono text-xs font-semibold">PREFERRED</span
-						>{:else}<span class="text-muted-foreground">—</span>{/if}
+						>{:else}<span class="text-quiet">—</span>{/if}
 				{:else if col.key === 'leadTime'}
 					{#if s.leadTimeDays != null}{s.leadTimeDays}{:else}<span class="text-muted-foreground"
 							>—</span
 						>{/if}
 				{:else if col.key === 'notes'}
-					{#if s.notes}{s.notes}{:else}<span class="text-muted-foreground">—</span>{/if}
+					{#if s.notes}{s.notes}{:else}<span class="text-quiet">—</span>{/if}
 				{:else}
 					<span class="inline-flex gap-3">
 						{#if !s.isPreferred}<ActionLink onclick={() => prefer(s)}>PREFER</ActionLink>{/if}

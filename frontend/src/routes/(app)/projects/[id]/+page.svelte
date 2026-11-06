@@ -177,7 +177,7 @@
 				<DetailRow label="Name" value={project.name} />
 				<DetailRow label="Description">
 					{#if project.description}<span class="whitespace-pre-wrap">{project.description}</span
-						>{:else}<span class="text-muted-foreground">—</span>{/if}
+						>{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
 				<DetailRow label="State" mono value={project.state.toUpperCase()} />
 				<DetailRow label="Created"><Timestamp value={project.createdAt} /></DetailRow>

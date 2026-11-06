@@ -27,8 +27,11 @@
 		<header class="flex h-8 items-center gap-3 border-b border-border px-3 sm:col-span-full">
 			<span class="label text-foreground">Data</span>
 			{#if required.length}
-				<span class={cn('font-mono text-xs', 'text-muted-foreground')}
-					>{recorded}/{required.length} required recorded</span
+				<span
+					class={cn(
+						'font-mono text-xs',
+						recorded === required.length ? 'text-ok' : 'text-muted-foreground'
+					)}>{recorded}/{required.length} required recorded</span
 				>
 			{:else}
 				<span class="font-mono text-xs text-muted-foreground"
@@ -73,10 +76,10 @@
 								{/each}
 							</div>
 						{:else}
-							<span class="text-muted-foreground">—</span>
+							<span class="text-quiet">—</span>
 						{/if}
 					{:else if !present(raw)}
-						<span class="text-muted-foreground">—</span>
+						<span class="text-quiet">—</span>
 					{:else if f.type === 'boolean'}
 						{raw ? 'TRUE' : 'FALSE'}
 					{:else}
@@ -85,7 +88,7 @@
 						{#if outOfSpec(f, raw)}
 							<Badge
 								variant="outline"
-								class="ml-2 border-error-fill bg-error-fill font-mono tracking-wider text-error-on"
+								class="ml-2 border-error-fill bg-error-fill font-mono tracking-wider text-error-on dark:bg-error-fill"
 								>OUT OF SPEC</Badge
 							>
 						{/if}

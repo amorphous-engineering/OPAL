@@ -344,8 +344,7 @@
 							</span>
 							{#if e.c.reason}<span class="ml-2 text-muted-foreground">{e.c.reason}</span>{/if}
 						{:else if col.key === 'actorName'}
-							{#if e.c.userName}{e.c.userName}{:else}<span class="text-muted-foreground">—</span
-								>{/if}
+							{#if e.c.userName}{e.c.userName}{:else}<span class="text-quiet">—</span>{/if}
 						{/if}
 					{:else}
 						{@const r = e.r}
@@ -390,7 +389,7 @@
 						{:else if r.actorName}
 							{r.actorName}
 						{:else}
-							<span class="text-muted-foreground">—</span>
+							<span class="text-quiet">—</span>
 						{/if}
 					{/if}
 				{/snippet}
@@ -450,7 +449,7 @@
 								</span>
 							{:else}
 								{@const v = r[col.key as 'testName' | 'value' | 'notes' | 'testedByName']}
-								{#if v}{v}{:else}<span class="text-muted-foreground">—</span>{/if}
+								{#if v}{v}{:else}<span class="text-quiet">—</span>{/if}
 							{/if}
 						{/snippet}
 					</DataTable>

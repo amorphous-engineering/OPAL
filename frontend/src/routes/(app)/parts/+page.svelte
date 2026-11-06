@@ -148,9 +148,9 @@
 			{:else if col.key === 'name'}
 				{row.name}{#if row.isTooling}<span class="label ml-2">Tool</span>{/if}
 			{:else if col.key === 'externalPn'}
-				{#if row.externalPn}{row.externalPn}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if row.externalPn}{row.externalPn}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'category'}
-				{#if row.category}{row.category}{:else}<span class="text-muted-foreground">—</span>{/if}
+				{#if row.category}{row.category}{:else}<span class="text-quiet">—</span>{/if}
 			{:else if col.key === 'tier'}
 				<span class="font-mono text-xs"
 					>T{row.tier}{#if row.tierName}

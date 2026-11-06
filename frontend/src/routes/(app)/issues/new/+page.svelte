@@ -283,6 +283,6 @@
 			}}
 		/>
 	{:else}
-		<span class="text-muted-foreground">—</span>
+		<span class="text-quiet">—</span>
 	{/if}
 {/snippet}

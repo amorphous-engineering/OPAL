@@ -109,8 +109,8 @@
 >
 	{#snippet state()}
 		{#if isDraft}<State value="draft" badge />
-		{:else if part.state === 'obsolete'}<State value="obsolete" tone="error" badge />
-		{:else}<State value="active" tone="muted" />{/if}
+		{:else if part.state === 'obsolete'}<State value="obsolete" tone="muted" badge />
+		{:else}<State value="active" tone="default" />{/if}
 	{/snippet}
 	{#snippet actions()}
 		<Button variant="outline" size="sm" href={`/label?part=${part.id}`}>PRINT LABEL</Button>

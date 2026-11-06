@@ -110,12 +110,14 @@
 		ok: 'text-ok',
 		warn: 'text-warn',
 		error: 'text-error',
-		info: 'text-info',
-		muted: 'text-muted-foreground',
+		info: 'text-foreground',
+		draft: 'text-tan',
+		muted: 'text-quiet',
 		default: 'text-foreground'
 	};
 
-	const priorityTone = (p: string): Tone => (p === 'critical' ? 'error' : 'default');
+	const priorityTone = (p: string): Tone =>
+		p === 'critical' ? 'error' : p === 'high' ? 'info' : p === 'low' ? 'muted' : 'default';
 
 	const issueCols: Column<IssueRow>[] = [
 		{ key: 'issueNumber', label: 'Issue', width: '6rem' },

@@ -100,7 +100,7 @@
 					onclick={() => toggleWait(o.order)}>OP {o.number}</Button
 				>
 			{:else}
-				<span class="font-mono text-xs text-muted-foreground">—</span>
+				<span class="font-mono text-xs text-quiet">—</span>
 			{/each}
 		</div>
 	</div>

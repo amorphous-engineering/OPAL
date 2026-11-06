@@ -51,12 +51,12 @@ from most to least important.
 - The word always carries the meaning. Colour adds to it and must survive being lost to glare.
 - Secondary columns (project code, a date that is not the sort key, a dash) sit at quiet, so the column
   the page exists for stands out.
-- No tints. They are the first thing glare removes. The risk matrix is the one exception, because its
+- No tints, because they are the first thing glare removes. The risk matrix is the one exception, because its
   bands are the information.
 - Accent blue marks identifiers and actions, never content.
 
-Every colour clears 4.5:1 on the background it sits on. Quiet stays at 7:1 in day and night, because
-it still has to be read.
+Every colour clears 4.5:1 on the background it sits on. Quiet stays at about 7:1 in day and night,
+because it still has to be read.
 
 ## Connection
 
@@ -64,12 +64,14 @@ The left end of the status bar always shows one small fill:
 
 | Fill | Meaning |
 |---|---|
-| Green ONLINE | The server answered and live updates are connected |
-| Amber STALE | Live updates dropped, or the last answer is over 30 seconds old |
-| Red OFFLINE | No server, or the browser is offline |
+| Green ONLINE | The server answers and live updates are connected, and nothing has broken since the last check |
+| Amber STALE | Anything short of a consistent connection |
+| Red OFFLINE | No server, or the browser is offline, right now |
 
-The tooltip gives the reason. A healthy connection stays visible, because a missing indicator cannot
-prove anything.
+STALE latches. Even one short drop stays on the ticker with its times, because what is on screen may
+have missed something. Pressing it reloads the page's data and clears it. A failed health check while
+the server still answers also shows as STALE, with the reason beside it. A healthy connection stays
+visible, because a missing indicator proves nothing.
 
 ## Keys and actions
 
