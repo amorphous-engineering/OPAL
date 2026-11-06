@@ -163,10 +163,24 @@
 	);
 
 	async function widenContainment(e: Event & { currentTarget: HTMLSelectElement }) {
-		const next = e.currentTarget.value as Containment;
+		const select = e.currentTarget;
+		const next = select.value as Containment;
 		if (next === issue.containment) return;
+		let note: string | undefined;
+		if (boundaryHolds) {
+			const asked = await askReason({
+				title: `Widen containment to ${CONTAINMENT_OPTION[next]}`,
+				body: `${issue.issueNumber} stops holding ${holdNames(data.holding) || 'the step'} if that step is unfinished. It then holds at the wider scope.`,
+				action: 'WIDEN'
+			});
+			if (asked === null) {
+				select.value = issue.containment;
+				return;
+			}
+			note = asked;
+		}
 		try {
-			await opal.issues.setContainment({ id: issue.id, containment: next });
+			await opal.issues.setContainment({ id: issue.id, containment: next, note });
 			await refresh();
 		} catch (err) {
 			toastError(err);
@@ -202,6 +216,8 @@
 			issue.containment !== 'wo' &&
 			(issue.containmentStepId !== null || issue.raisedStepId !== null)
 	);
+	/** A wider scope stops holding the step itself, so on a hold anchored to a step it takes the gate. */
+	const canWiden = $derived(!boundaryHolds || issue.canDisposition);
 
 	async function setBoundary(e: Event & { currentTarget: HTMLSelectElement }) {
 		const select = e.currentTarget;
@@ -785,7 +801,7 @@
 					{:else}{stateLabel(issue.priority)}{/if}
 				</DetailRow>
 				<DetailRow label="Containment">
-					{#if editObservation}
+					{#if editObservation && canWiden}
 						<NativeSelect
 							aria-label="Containment"
 							value={issue.containment}

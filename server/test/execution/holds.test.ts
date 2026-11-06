@@ -349,13 +349,30 @@ describe('moving a containment boundary', () => {
 		expect((await contain(t, signed.id, { containment: 'step', containmentStepId: three }, cat)).status).toBe(200);
 	});
 
-	test('widening on the same anchor stays open, and the wider scope keeps its hold', async () => {
+	test('widening a hold so it no longer stops the step needs the disposition gate and a note', async () => {
 		const t = await setup();
 		const e = await t.cut(await tree(t));
 		const nc = (await t.nc(e.id, '1.1')).json;
-		expect((await contain(t, nc.id, { containment: 'op' }, t.catActor)).status).toBe(200);
+		expect((await contain(t, nc.id, { containment: 'op', note: 'x' }, t.catActor)).status).toBe(403);
+		expect((await contain(t, nc.id, { containment: 'op', note: 'x' }, t.token)).status).toBe(403);
+		expect((await t.complete(e.id, '1.1')).status).toBe(409);
+		const silent = await contain(t, nc.id, { containment: 'op' });
+		expect(silent.status).toBe(409);
+		expect(silent.json.message).toContain('releases 1.1');
+		expect((await contain(t, nc.id, { containment: 'op', note: 'hold the whole op instead' })).status).toBe(200);
+		const comments = (await t.call('GET', `/issues/${nc.id}/comments`)).json;
+		expect(comments.some((c: any) => c.body === 'Containment widened step → op, releasing 1.1: hold the whole op instead')).toBe(true);
+		// The wider scope keeps its hold: the sub-steps finish, the op does not.
 		expect((await t.complete(e.id, '1.1')).status).toBe(200);
 		expect((await t.complete(e.id, '1.2')).status).toBe(200);
 		expect((await t.doc(e.id)).ops[0].step.status).toBe('pending');
+	});
+
+	test('widening that keeps every step held stays open to anyone', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['A', 'B']));
+		const nc = (await t.nc(e.id, '1')).json;
+		expect((await contain(t, nc.id, { containment: 'op' }, t.catActor)).status).toBe(200);
+		expect((await t.complete(e.id, '1')).status).toBe(409);
 	});
 });

@@ -666,11 +666,12 @@ export function setContainment(
 	const nextStepId =
 		input.containmentStepId !== undefined ? input.containmentStepId : r.containmentStepId;
 	const moved = (nextStepId ?? r.raisedStepId) !== (r.containmentStepId ?? r.raisedStepId);
-	// Moving the boundary is a release when an unfinished step stops being held. Setting the first
+	// Any change is a release when an unfinished step stops being held. A wider scope can do that: an
+	// OP hold stops the OP from closing, but no longer the step it was raised on. Setting the first
 	// boundary, or one on a step already finished, only adds a hold, so it stays open to anyone.
-	// Widening on the same anchor keeps the hold at the wider scope and also stays open.
+	const changed = moved || input.containment !== r.containment;
 	const freed =
-		moved && isBlocking(r) && r.executionId !== null
+		changed && isBlocking(r) && r.executionId !== null
 			? (issueHooks.freedSteps?.(ctx, r.executionId, r, {
 					containment: input.containment,
 					containmentStepId: nextStepId,
@@ -685,10 +686,10 @@ export function setContainment(
 				`Narrowing containment ${r.containment} → ${input.containment} releases a hold; a note is required`
 			);
 	} else if (freed.length) {
-		requireDisposition(ctx, 'move a containment boundary');
+		requireDisposition(ctx, moved ? 'move a containment boundary' : 'widen this containment');
 		if (!note)
 			throw refuse(
-				`Moving the containment boundary releases ${freed.join(', ')}; a note is required`
+				`${moved ? 'Moving the containment boundary' : `Widening containment ${r.containment} → ${input.containment}`} releases ${freed.join(', ')}; a note is required`
 			);
 	}
 
@@ -722,6 +723,8 @@ export function setContainment(
 					r,
 					`Containment boundary moved${freed.length ? `, releasing ${freed.join(', ')}` : ''}: ${note}`
 				);
+			else if (freed.length && note)
+				addNote(ctx, r, `Containment widened ${r.containment} → ${input.containment}, releasing ${freed.join(', ')}: ${note}`);
 		},
 		() => after
 	);
