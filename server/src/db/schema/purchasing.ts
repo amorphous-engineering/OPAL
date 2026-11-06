@@ -120,8 +120,9 @@ export const purchaseLine = sqliteTable(
 /**
  * The expense ledger of an order. A `receipt` row is written once per received line and never
  * changes: it freezes the unit cost at the time of receipt. Any other kind is a charge
- * (shipping, tax, ...) a person adds and may remove. A receipt's total is quantity times unit
- * cost. A charge's total is `amount`.
+ * (shipping, tax, ...) a person adds. A draft's charge may be removed. A placed order's charge is
+ * struck: it stays listed with who, when and why, and leaves the total. A receipt's total is
+ * quantity times unit cost. A charge's total is `amount`.
  */
 export const purchaseExpense = sqliteTable(
 	'purchase_expense',
@@ -142,6 +143,9 @@ export const purchaseExpense = sqliteTable(
 		amount: integer('amount'),
 		at: text('at').notNull(),
 		notes: text('notes'),
+		struckAt: text('struck_at'),
+		struckById: integer('struck_by_id').references(() => user.id, { onDelete: 'set null' }),
+		strikeReason: text('strike_reason'),
 		createdAt: createdAt()
 	},
 	(t) => [

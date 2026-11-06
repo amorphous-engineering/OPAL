@@ -60,6 +60,7 @@ export const purchasingImpls = [
 	implement(o.received, (ctx, i) => po.receivedRecords(ctx, i.id)),
 	implement(o.expenses, (ctx, i) => po.listExpenses(ctx, i.id)),
 	implement(o.addCharge, (ctx, i) => po.addCharge(ctx, i)),
+	implement(o.strikeCharge, (ctx, i) => po.strikeCharge(ctx, i.id, i.expenseId, i.reason)),
 	implement(o.removeCharge, (ctx, i) => {
 		po.removeCharge(ctx, i.id, i.expenseId);
 		return { ok: true as const };

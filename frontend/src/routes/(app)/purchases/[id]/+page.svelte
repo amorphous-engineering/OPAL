@@ -381,7 +381,8 @@
 			purchaseId={po.id}
 			expenses={data.expenses}
 			canAdd={live || po.status === 'received' || (po.status === 'closed_short' && anyReceived)}
-			canRemove={editing}
+			canRemove={editing && draft}
+			canStrike={!draft}
 			onchanged={refresh}
 		/>
 

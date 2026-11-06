@@ -822,7 +822,11 @@ export function receivedRecords(ctx: DbCtx, id: number) {
 
 type ExpenseRow = typeof purchaseExpense.$inferSelect;
 
-function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string; unitOfMeasure: string } | null): PurchaseExpense {
+function presentExpense(
+	e: ExpenseRow,
+	p: { name: string; internalPn: string; unitOfMeasure: string } | null,
+	struckByName: string | null = null
+): PurchaseExpense {
 	const total =
 		e.kind === 'receipt' ? (e.unitCost === null ? null : lineTotal(e.unitCost, e.quantity as number)) : e.amount;
 	return {
@@ -838,20 +842,22 @@ function presentExpense(e: ExpenseRow, p: { name: string; internalPn: string; un
 		unitCost: showMoney(e.kind === 'receipt' ? e.unitCost : e.amount),
 		totalCost: showMoney(total),
 		at: e.at,
-		notes: e.notes
+		notes: e.notes,
+		struck: e.struckAt === null ? null : { at: e.struckAt, byName: struckByName, reason: e.strikeReason ?? '' }
 	};
 }
 
 export function listExpenses(ctx: DbCtx, id: number): PurchaseExpense[] {
 	getRow(ctx, id);
 	return ctx.db
-		.select({ e: purchaseExpense, p: part })
+		.select({ e: purchaseExpense, p: part, by: user.name })
 		.from(purchaseExpense)
 		.leftJoin(part, eq(part.id, purchaseExpense.partId))
+		.leftJoin(user, eq(user.id, purchaseExpense.struckById))
 		.where(eq(purchaseExpense.purchaseId, id))
 		.orderBy(asc(purchaseExpense.at), asc(purchaseExpense.id))
 		.all()
-		.map(({ e, p }) => presentExpense(e, p));
+		.map(({ e, p, by }) => presentExpense(e, p, by));
 }
 
 export function addCharge(
@@ -871,16 +877,37 @@ export function addCharge(
 	return presentExpense(e, null);
 }
 
-export function removeCharge(ctx: Ctx, id: number, expenseId: number): void {
-	getRow(ctx, id);
+function chargeRow(ctx: DbCtx, id: number, expenseId: number): ExpenseRow {
 	const e = ctx.db
 		.select()
 		.from(purchaseExpense)
 		.where(and(eq(purchaseExpense.id, expenseId), eq(purchaseExpense.purchaseId, id)))
 		.get();
 	if (!e) throw notFound(`Expense ${expenseId}`);
-	if (e.kind === 'receipt') throw conflict('receipt_immutable', 'Receive records are immutable; only charges can be removed');
+	if (e.kind === 'receipt') throw conflict('receipt_immutable', 'Receive records are immutable; only charges can change');
+	return e;
+}
+
+/** A draft is pencil, so its charge can go. On a placed order the charge is struck instead. */
+export function removeCharge(ctx: Ctx, id: number, expenseId: number): void {
+	const p = getRow(ctx, id);
+	const e = chargeRow(ctx, id, expenseId);
+	if (p.status !== 'draft') {
+		throw conflict('charge_committed', `A charge on a ${p.status} order stays on the page. Strike it with a reason`);
+	}
 	remove(ctx, purchaseExpense, e.id);
+}
+
+/** The charge stays listed with who, when and why, and stops counting toward the total. */
+export function strikeCharge(ctx: Ctx, id: number, expenseId: number, reason: string): PurchaseExpense {
+	const p = getRow(ctx, id);
+	const e = chargeRow(ctx, id, expenseId);
+	if (p.status === 'draft') throw conflict('wrong_state', 'A charge on a draft is removed, not struck');
+	if (e.struckAt !== null) throw conflict('already_struck', 'The charge is already struck');
+	const by = actorUserId(ctx.actor);
+	const struck = update(ctx, purchaseExpense, e.id, { struckAt: now(), struckById: by, strikeReason: reason.trim() }, reason.trim());
+	const byName = by === null ? null : (ctx.db.select({ name: user.name }).from(user).where(eq(user.id, by)).get()?.name ?? null);
+	return presentExpense(struck, null, byName);
 }
 
 // ---------------------------------------------------------------- part side

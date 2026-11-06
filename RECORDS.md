@@ -25,12 +25,13 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
 | Draft | Is this ready to send? | PLACE ORDER | | Everything: supplier, reference, dates, destination, notes, lines | DISCARD (deletes, because nothing refers to a draft) |
-| Ordered | What is coming and when? | RECEIVE (blank receive rows on the page) | Add note, attachment, charge | Supplier reference, promised date, destination | AMEND LINE, ADD LINE, CANCEL LINE, PUT ON HOLD, CANCEL ORDER |
-| Partial | What is still outstanding? | RECEIVE | Add note, attachment, charge | Supplier reference, promised date, destination | AMEND LINE, ADD LINE, CANCEL LINE (outstanding quantity only), PUT ON HOLD, CLOSE SHORT |
-| On hold | Why is it held, and is it still coming? | RESUME | Add note, attachment | | CANCEL ORDER or CLOSE SHORT |
-| Received | What did we get and what did it cost? | | Add note, attachment, charge | | COPY TO NEW DRAFT |
-| Closed short, Cancelled | What happened to it? | | Add note, attachment, charge if anything arrived | | COPY TO NEW DRAFT |
+| Ordered | What is coming and when? | RECEIVE (blank receive rows on the page) | Add note, attachment, charge, STRIKE a charge | Supplier reference, promised date, destination | AMEND LINE, ADD LINE, CANCEL LINE, PUT ON HOLD, CANCEL ORDER |
+| Partial | What is still outstanding? | RECEIVE | Add note, attachment, charge, STRIKE a charge | Supplier reference, promised date, destination | AMEND LINE, ADD LINE, CANCEL LINE (outstanding quantity only), PUT ON HOLD, CLOSE SHORT |
+| On hold | Why is it held, and is it still coming? | RESUME | Add note, attachment, STRIKE a charge | | CANCEL ORDER or CLOSE SHORT |
+| Received | What did we get and what did it cost? | | Add note, attachment, charge, STRIKE a charge | | COPY TO NEW DRAFT |
+| Closed short, Cancelled | What happened to it? | | Add note, attachment, charge if anything arrived, STRIKE a charge | | COPY TO NEW DRAFT |
 
+- A charge on a draft can be removed. A charge on a placed order is struck, with a reason, by a person. It stays listed with who, when and why, and leaves the total. Receipt rows never change.
 - AMEND LINE and CANCEL LINE keep the old value on the line, struck through, with the new value, who, when and why. A reason is required.
 - The supplier never changes after placing. Cancel and copy to a new draft.
 - An order never returns to draft after placing. Its placing date never clears.

@@ -371,7 +371,9 @@ export const zPurchaseExpense = z.object({
 	unitCost: zPurchaseMoney.nullable(),
 	totalCost: zPurchaseMoney.nullable(),
 	at: zTimestamp,
-	notes: z.string().nullable()
+	notes: z.string().nullable(),
+	/** Set when a charge was struck: it stays listed and leaves the total. */
+	struck: z.object({ at: zTimestamp, byName: z.string().nullable(), reason: z.string() }).nullable()
 });
 export type PurchaseExpense = z.infer<typeof zPurchaseExpense>;
 
@@ -734,11 +736,27 @@ const orders = {
 		name: 'purchasing.orders.removeCharge',
 		method: 'DELETE',
 		path: '/purchases/:id/expenses/:expenseId',
-		summary: 'Remove a charge. Receipt rows are permanent.',
+		summary: 'Remove a charge from a draft. A placed order strikes it instead. Receipt rows are permanent.',
 		input: z.object({ id: zId, expenseId: zId }),
 		output: zOk,
 		access: 'signed-in',
 		mcp: true
+	}),
+	strikeCharge: op({
+		name: 'purchasing.orders.strikeCharge',
+		method: 'POST',
+		path: '/purchases/:id/expenses/:expenseId/strike',
+		summary:
+			'Strike a charge on a placed order. It stays listed with who, when and why, and leaves the total. A reason is required. Human only.',
+		input: z.object({
+			id: zId,
+			expenseId: zId,
+			reason: z.string().trim().min(1, 'a reason is required').max(2000)
+		}),
+		output: zPurchaseExpense,
+		access: 'signed-in',
+		mcp: false,
+		humanOnly: true
 	})
 };
 

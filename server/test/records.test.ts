@@ -40,6 +40,7 @@ const HUMAN_ACTS = [
 	'purchasing.orders.hold',
 	'purchasing.orders.place',
 	'purchasing.orders.resume',
+	'purchasing.orders.strikeCharge',
 	'requirements.baseline',
 	'requirements.baselineBatch',
 	'requirements.cancel',
@@ -74,7 +75,7 @@ const NOT_A_STRIKE = new Set([
 	'procedures.versions.restore', // copies a version into the draft
 	'purchasing.catalog.remove',
 	'purchasing.orders.discard', // drafts only
-	'purchasing.orders.removeCharge',
+	'purchasing.orders.removeCharge', // drafts only
 	'purchasing.orders.removeLine', // drafts only
 	'purchasing.suppliers.delete', // refused once an order refers to the supplier
 	'reports.lifecycle.deleteDemo',
