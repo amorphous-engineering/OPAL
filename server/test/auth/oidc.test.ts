@@ -303,6 +303,8 @@ describe('handshake state and redirects', () => {
 
 	test('post-login redirects stay inside this app', () => {
 		expect(safeNext('//evil.test/')).toBe('/');
+		expect(safeNext('/\t/evil.test/')).toBe('/');
+		expect(safeNext('/\n/evil.test/')).toBe('/');
 		expect(safeNext('https://evil.test')).toBe('/');
 		expect(safeNext('/\\evil.test')).toBe('/');
 		expect(safeNext('/parts')).toBe('/parts');

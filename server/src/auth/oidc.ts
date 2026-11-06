@@ -35,6 +35,9 @@ import { SESSION_COOKIE, SESSION_LIFETIME_MS } from './tokens.ts';
 /** Confine post-login redirects to this app. */
 export function safeNext(value: string | undefined | null): string {
 	if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/';
+	// Browsers strip tabs and newlines from a URL before they read it, so those can hide a second slash.
+	// eslint-disable-next-line no-control-regex
+	if (/[\x00-\x1f\x7f]/.test(value)) return '/';
 	return value;
 }
 
