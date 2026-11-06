@@ -8,6 +8,7 @@ import { PluginHost } from '../services/plugins/host.ts';
 import { setRuntime } from '../services/plugins/runtime.ts';
 import { plugin } from '../db/schema/index.ts';
 import { eq } from 'drizzle-orm';
+import { maxRequestBytes } from '../http/limits.ts';
 import { flag } from './args.ts';
 
 export async function serve(args: string[]): Promise<void> {
@@ -23,11 +24,13 @@ export async function serve(args: string[]): Promise<void> {
 	// Settings > System reports the address this process listens on, flags included.
 	process.env.OPAL_PORT = String(port);
 	process.env.OPAL_HOST = hostname;
+	// maxRequestBodySize is Bun's global limit, so it allows an upload; createApp holds JSON bodies lower.
 	// The event stream stays open; Bun's default 10 s idle limit would cut it.
 	Bun.serve({
 		port,
 		hostname,
 		idleTimeout: 0,
+		maxRequestBodySize: maxRequestBytes(),
 		// The socket address, for session records when no proxy sets x-forwarded-for.
 		fetch: (req, server) => app.fetch(req, { ip: server.requestIP(req)?.address ?? null })
 	});

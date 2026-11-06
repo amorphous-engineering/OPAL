@@ -6,6 +6,7 @@ import { actorResolver } from './auth/index.ts';
 import type { Db } from './db/client.ts';
 import { mountRawRoutes } from './http/routes.ts';
 import { mountWeb } from './http/web.ts';
+import { jsonBodyLimit } from './http/limits.ts';
 import { mountMcp } from './mcp/index.ts';
 import { impls } from './ops/index.ts';
 import { errorResponse, mountOps, type ResolveActor } from './registry.ts';
@@ -33,6 +34,7 @@ export function createApp({ db, resolveActor = actorResolver(db), web = false }:
 		return c.json(body, status as 400);
 	});
 	app.use('*', hostGuard);
+	app.use('*', jsonBodyLimit);
 	app.use('*', csrfGuard);
 	mountRawRoutes(app, db, resolveActor);
 	mountOps(app, impls, db, resolveActor);

@@ -60,6 +60,15 @@ OPAL serves plain HTTP. Passwords and session cookies cross the network in clear
 | `OPAL_TRUST_PROXY_HOPS` | With `OPAL_TRUST_PROXY`, the number of proxies in the chain (default 1). The client address is counted that many entries from the right. |
 | `OPAL_ALLOWED_HOSTS` | Comma-separated host names (`opal.lan,192.168.1.20:8080`). When this or `OPAL_PUBLIC_URL` is set, a request for any other `Host` gets 421. `localhost` and the loopback addresses are always allowed. |
 
+### Limits
+
+These environment variables set what the server accepts. The defaults suit a team on a local network.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OPAL_MAX_JSON_BYTES` | 4194304 (4 MiB) | Largest JSON request body, for the API, `/oauth/*` and `/mcp`. Larger requests get 413. |
+| `OPAL_MAX_UPLOAD_BYTES` | 10485760 (10 MiB) | Largest uploaded file. |
+
 ### Upgrade from 1.x
 
 1. Install the last 1.x release and start it once. This upgrades the database.
