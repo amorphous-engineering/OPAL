@@ -751,11 +751,7 @@
 						{:else if col.key === 'at'}
 							<Timestamp value={a.createdAt} />
 						{:else if canRemoveAttachment(a)}
-							<button
-								type="button"
-								class="font-mono text-xs tracking-wider text-error uppercase hover:underline"
-								onclick={() => removeAttachment(a)}>DELETE</button
-							>
+							<ActionLink onclick={() => removeAttachment(a)}>DELETE</ActionLink>
 						{/if}
 					{/snippet}
 				</DataTable>
