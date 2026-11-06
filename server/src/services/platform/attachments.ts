@@ -17,16 +17,18 @@ import {
 	now,
 	OpalError
 } from '@opal/shared';
-import { and, count, desc, eq, inArray, is, notInArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, is, lte, notExists, sql } from 'drizzle-orm';
 import { getTableName } from 'drizzle-orm';
 import { SQLiteTable } from 'drizzle-orm/sqlite-core';
-import { mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { existsSync, readdirSync, statSync, unlinkSync, utimesSync } from 'node:fs';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { actorUserId, type Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import * as schema from '../../db/schema/index.ts';
 import { attachment, blob, user } from '../../db/schema/index.ts';
 import { dataDir } from '../../paths.ts';
+import { textHoldsBlob } from './blob-refs.ts';
 import { insert, remove, update } from '../../write.ts';
 
 export const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -61,15 +63,15 @@ export function sha256Hex(bytes: Uint8Array): string {
 	return new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
 }
 
-/** Write the bytes under their hash (once) and record the blob. Returns the hash. */
+/**
+ * Write the bytes under their hash (once) and record the blob. Returns the hash. A blob that is
+ * already stored has its file time refreshed, which restarts the purge grace period; that check
+ * and the row insert run in one tick so a purge cannot fall between them.
+ */
 export async function storeBlob(db: Db, bytes: Uint8Array, mimeType: string): Promise<string> {
 	const sha = sha256Hex(bytes);
 	const path = blobPath(sha);
-	const exists = await stat(path).then(
-		() => true,
-		() => false
-	);
-	if (!exists) {
+	if (!touchBlob(sha)) {
 		await mkdir(blobDir(), { recursive: true });
 		const tmp = `${path}.${crypto.randomUUID()}.tmp`;
 		await writeFile(tmp, bytes);
@@ -82,29 +84,145 @@ export async function storeBlob(db: Db, bytes: Uint8Array, mimeType: string): Pr
 	return sha;
 }
 
+/** Set a blob file's time to now. False when the file is not there. */
+function touchBlob(sha256: string): boolean {
+	try {
+		const t = new Date();
+		utimesSync(blobPath(sha256), t, t);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export function getBlob(db: Db, sha256: string) {
 	return db.select().from(blob).where(eq(blob.sha256, sha256)).get();
 }
 
+/** A blob stays this long after its last link was removed or its bytes were last uploaded. */
+export const BLOB_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+/** At most this many blobs go in one run; the next run takes the rest. */
+const PURGE_BATCH = 200;
+
 /**
- * Remove blob files and rows that no attachment links to and that no other
- * area claims. `isReferenced` is each area's check for hashes it holds (for
- * example published snapshots). Not called automatically.
+ * Remove blob files and rows that no attachment links to and that no other area claims.
+ * `isReferenced` is each area's check for hashes it holds (for example published snapshots); a
+ * blob is purged only when none of them claims it, so anything that cannot be proved unreferenced
+ * stays. A blob younger than `graceMs` stays too: the file time is the last upload or unlink.
+ * Each blob is checked and removed in one tick, so an upload cannot interleave.
  */
 export async function purgeOrphanBlobs(
 	db: Db,
-	isReferenced: ((sha256: string) => boolean)[] = []
+	isReferenced: ((sha256: string) => boolean)[] = [],
+	graceMs = BLOB_GRACE_MS
 ): Promise<number> {
-	const linked = db.selectDistinct({ sha: attachment.blobSha256 }).from(attachment).all().map((r) => r.sha);
-	const orphans = (linked.length
-		? db.select().from(blob).where(notInArray(blob.sha256, linked)).all()
-		: db.select().from(blob).all()
-	).filter((b) => !isReferenced.some((f) => f(b.sha256)));
-	for (const b of orphans) {
-		await unlink(blobPath(b.sha256)).catch(() => undefined);
+	const cutoff = Date.now() - graceMs;
+	const candidates = db
+		.select()
+		.from(blob)
+		.where(
+			and(
+				lte(blob.createdAt, new Date(cutoff).toISOString()),
+				notExists(db.select({ one: sql`1` }).from(attachment).where(eq(attachment.blobSha256, blob.sha256)))
+			)
+		)
+		.orderBy(asc(blob.createdAt))
+		.limit(PURGE_BATCH)
+		.all();
+	let purged = 0;
+	for (const [i, b] of candidates.entries()) {
+		if (i > 0 && i % 10 === 0) await new Promise((r) => setImmediate(r));
+		const path = blobPath(b.sha256);
+		try {
+			if (existsSync(path) && statSync(path).mtimeMs > cutoff) continue;
+		} catch {
+			continue;
+		}
+		if (linkCount(db, b.sha256) > 0 || isReferenced.some((f) => f(b.sha256))) continue;
 		db.delete(blob).where(eq(blob.sha256, b.sha256)).run();
+		try {
+			unlinkSync(path);
+		} catch {
+			// Already gone.
+		}
+		purged++;
 	}
-	return orphans.length;
+	removeStaleTempFiles(cutoff);
+	return purged;
+}
+
+/** Half-written uploads left by a crash. */
+function removeStaleTempFiles(cutoff: number): void {
+	try {
+		for (const name of readdirSync(blobDir())) {
+			if (!name.endsWith('.tmp')) continue;
+			const path = join(blobDir(), name);
+			if (statSync(path).mtimeMs <= cutoff) unlinkSync(path);
+		}
+	} catch {
+		// No blob folder yet.
+	}
+}
+
+/** Does the hash appear in a published version, a copied instruction or any other stored text? */
+export const blobIsHeld = (db: Db) => textHoldsBlob(db);
+
+/** Can a signed-in person fetch this blob by hash? Only while something still uses it. */
+export function blobIsServable(db: Db, sha256: string): boolean {
+	return linkCount(db, sha256) > 0 || blobIsHeld(db)(sha256);
+}
+
+const SWEEP_EVERY_MS = 24 * 60 * 60 * 1000;
+const SWEEP_FIRST_MS = 10 * 60 * 1000;
+
+/**
+ * Purge once shortly after start and then daily. The timers do not keep the process alive.
+ * `serialized` is the write queue: the purge never runs inside an operation's open transaction, where a
+ * rollback could bring back a row whose file was already removed. `held` adds the checks of areas that
+ * keep hashes (the published versions); the scan of every text column always runs as well.
+ */
+export function startBlobSweeper(
+	db: Db,
+	serialized: <T>(fn: () => Promise<T>) => Promise<T>,
+	held: ((sha256: string) => boolean)[] = []
+): void {
+	const run = () =>
+		serialized(() => purgeOrphanBlobs(db, [...held, blobIsHeld(db)])).then(
+			(n) => n && console.log(`Removed ${n} unreferenced file(s) from blob storage`),
+			(e) => console.warn(`Blob purge failed: ${(e as Error).message}`)
+		);
+	setTimeout(() => {
+		void run();
+		setInterval(() => void run(), SWEEP_EVERY_MS).unref();
+	}, SWEEP_FIRST_MS).unref();
+}
+
+// ------------------------------------------------------------------- quota
+
+/** `OPAL_STORAGE_QUOTA_BYTES`: the most that blobs and avatars may take together. Unset or 0: no limit. */
+export const storageQuotaBytes = () => Number(process.env.OPAL_STORAGE_QUOTA_BYTES) || 0;
+
+/** Bytes held by blobs (one row per distinct content) and avatar files. */
+export function storageUsedBytes(db: Db): number {
+	const blobs = db.select({ n: sql<number>`coalesce(sum(${blob.sizeBytes}), 0)` }).from(blob).get()?.n ?? 0;
+	let avatars = 0;
+	try {
+		const dir = join(dataDir(), 'avatars');
+		for (const name of readdirSync(dir)) avatars += statSync(join(dir, name)).size;
+	} catch {
+		// No avatars yet.
+	}
+	return blobs + avatars;
+}
+
+/** Refuse (507) when `extraBytes` of new content would take storage past the quota. */
+export function assertStorageAvailable(db: Db, extraBytes: number): void {
+	const quota = storageQuotaBytes();
+	if (!quota || extraBytes <= 0) return;
+	const used = storageUsedBytes(db);
+	if (used + extraBytes > quota) {
+		throw new OpalError(507, 'storage_full', `Storage quota reached (${used} of ${quota} bytes used). Remove files or raise OPAL_STORAGE_QUOTA_BYTES`);
+	}
 }
 
 // -------------------------------------------------------------------- owners
@@ -224,6 +342,8 @@ export async function attach(ctx: Ctx, owner: Owner, file: FileInput): Promise<A
 		throw new OpalError(413, 'file_too_large', `File too large (${file.bytes.byteLength} bytes). Max: ${maxUploadBytes()} bytes`);
 	}
 	assertOwner(ctx.db, owner);
+	// Equal content is stored once, so a copy of a stored file adds nothing.
+	assertStorageAvailable(ctx.db, getBlob(ctx.db, sha256Hex(file.bytes)) ? 0 : file.bytes.byteLength);
 	const sha = await storeBlob(ctx.db, file.bytes, mime);
 	const row = insert(ctx, attachment, {
 		blobSha256: sha,
@@ -271,10 +391,11 @@ export function patch(ctx: Ctx, id: number, input: { kind?: AttachmentKind | nul
 	return present(ctx.db, [row])[0]!;
 }
 
-/** Remove the link only. The blob stays. */
+/** Remove the link only. The blob stays, with its grace period restarted. */
 export function detach(ctx: Ctx, id: number): void {
-	get(ctx, id);
+	const a = get(ctx, id);
 	remove(ctx, attachment, id);
+	touchBlob(a.sha256);
 }
 
 /** For an owner that is hard-deleted: drop all its links. Returns how many. */
@@ -284,7 +405,11 @@ export function detachAll(ctx: Ctx, owner: Owner): number {
 		.from(attachment)
 		.where(and(eq(attachment.ownerType, owner.type), eq(attachment.ownerId, owner.id)))
 		.all();
+	const shas = new Set(
+		ctx.db.select({ sha: attachment.blobSha256 }).from(attachment).where(inArray(attachment.id, rows.map((r) => r.id))).all().map((r) => r.sha)
+	);
 	for (const r of rows) remove(ctx, attachment, r.id);
+	for (const sha of shas) touchBlob(sha);
 	return rows.length;
 }
 

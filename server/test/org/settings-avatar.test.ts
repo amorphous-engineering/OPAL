@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
@@ -68,6 +68,31 @@ describe('avatars', () => {
 		const bob = makeUser('bob');
 		const big = Buffer.concat([PNG.subarray(0, 8), Buffer.alloc(2 * 1024 * 1024 + 1)]);
 		expect((await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: big.toString('base64') })).status).toBe(413);
+	});
+
+	test('an upload far over the limit is refused from its length alone, before it is decoded or stored', async () => {
+		const dir = dataDir();
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		const r = await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: 'A'.repeat(4 * 1024 * 1024) });
+		expect(r.status).toBe(422);
+		expect(r.json.fields.data).toContain('Avatar too large');
+		expect(existsSync(join(dir, 'avatars'))).toBe(false);
+	});
+
+	test('a new avatar is refused with 507 when it would pass OPAL_STORAGE_QUOTA_BYTES', async () => {
+		dataDir();
+		const { call, makeUser } = await setup();
+		const bob = makeUser('bob');
+		process.env.OPAL_STORAGE_QUOTA_BYTES = String(PNG.length + GIF.length - 1);
+		try {
+			expect((await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: PNG.toString('base64') })).status).toBe(200);
+			const r = await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: GIF.toString('base64') });
+			expect(r.status).toBe(507);
+			expect(r.json.error).toBe('storage_full');
+		} finally {
+			delete process.env.OPAL_STORAGE_QUOTA_BYTES;
+		}
 	});
 
 	test('removing the avatar deletes the file and shows initials; a shared file stays while another user holds it', async () => {

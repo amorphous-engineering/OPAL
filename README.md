@@ -47,7 +47,9 @@ Or download a binary from [GitHub Releases](https://github.com/amorphous-enginee
 | `opal update` | Downloads, verifies and installs the latest release. |
 | `opal import <file>` | Imports a database from a 1.x release into a new file. |
 
-The server listens on port 8080. Data is in `~/Library/Application Support/OPAL` (macOS), `~/.local/share/opal` (Linux) or `%LOCALAPPDATA%\OPAL` (Windows). Set `OPAL_DATA_DIR` to use another folder.
+The server listens on port 8080. Data is in `~/Library/Application Support/OPAL` (macOS), `~/.local/share/opal` (Linux) or `%LOCALAPPDATA%\OPAL` (Windows). Set `OPAL_DATA_DIR` to use another folder. On Linux and macOS the server makes the folder and everything it writes there readable by the account that runs OPAL only (mode `0700` and `0600`), and tightens an older folder at start.
+
+Uploaded files and photos are not limited in total by default. Set `OPAL_STORAGE_QUOTA_BYTES` to cap them together: past the cap, new uploads and photos are refused with a message until files are removed. A file nothing links to or publishes any more is deleted from disk after seven days.
 
 ### Network settings
 

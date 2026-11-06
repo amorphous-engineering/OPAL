@@ -287,6 +287,10 @@ export function factoryReset(ctx: Ctx, confirm: string): void {
 		unlinkSqlite(h.dbPath);
 		// Attachments: the content-addressed blobs and the avatars.
 		for (const sub of ['blobs', 'avatars']) rmSync(join(dataRoot, sub), { recursive: true, force: true });
+		// What a 1.x import left: the old database, whose users and hashes are the erased organization's.
+		for (const f of ['opal.legacy.db', 'opal.legacy.db-wal', 'opal.legacy.db-shm', 'import-report.txt', 'import-report.json']) {
+			rmSync(join(dataRoot, f), { force: true });
+		}
 		// Signed links from the erased organization must not verify in the new one.
 		rotateAuthSecret();
 		swap(live, await openFile(h.dbPath));

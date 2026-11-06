@@ -9,7 +9,7 @@
  * already holds the content hash.
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AVATAR_TYPES, MAX_AVATAR_BYTES, OpalError, notFound, now } from '@opal/shared';
@@ -21,6 +21,7 @@ import { dataDir } from '../../paths.ts';
 import type { ResolveActor } from '../../registry.ts';
 import { isLoopback } from '../auth/oidc.ts';
 import { inTransaction } from '../auth/tx.ts';
+import { assertStorageAvailable } from '../platform/attachments.ts';
 import { upsertProfile } from './profiles.ts';
 
 const avatarDir = () => join(dataDir(), 'avatars');
@@ -40,6 +41,9 @@ async function writeAvatarFile(hash: string, bytes: Uint8Array): Promise<void> {
 	await writeFile(join(avatarDir(), hash), bytes);
 }
 const readAvatarFile = (hash: string) => readFile(join(avatarDir(), hash));
+/** Refuse when a file this size, not stored yet, would take storage past the quota. */
+const assertAvatarRoom = (ctx: Ctx, hash: string, size: number) =>
+	assertStorageAvailable(ctx.db, existsSync(join(avatarDir(), hash)) ? 0 : size);
 const deleteAvatarFile = (hash: string) => rm(join(avatarDir(), hash), { force: true });
 
 /** Store `bytes` as the avatar of a user. Checks type and size. The caller has checked access. */
@@ -55,6 +59,7 @@ export async function setAvatar(
 	const mime = sniffImage(bytes);
 	if (!mime) throw new OpalError(400, 'invalid_image', 'File is not a PNG, JPEG, WebP or GIF image');
 	const hash = createHash('sha256').update(bytes).digest('hex');
+	assertAvatarRoom(ctx, hash, bytes.length);
 	await writeAvatarFile(hash, bytes);
 	const before = ctx.db.select().from(userProfile).where(eq(userProfile.userId, userId)).get();
 	upsertProfile(ctx, userId, { avatarHash: hash, avatarMime: mime, avatarSource: source, avatarUpdatedAt: now() });

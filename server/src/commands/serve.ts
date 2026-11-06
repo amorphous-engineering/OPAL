@@ -10,6 +10,9 @@ import { plugin } from '../db/schema/index.ts';
 import { eq } from 'drizzle-orm';
 import { idleTimeoutSeconds, maxRequestBytes } from '../http/limits.ts';
 import { hardenDataDir } from '../harden.ts';
+import { serialized } from '../registry.ts';
+import { versionHoldsBlob } from '../services/procedures/versions.ts';
+import { startBlobSweeper } from '../services/platform/attachments.ts';
 import { flag } from './args.ts';
 
 export async function serve(args: string[]): Promise<void> {
@@ -22,6 +25,7 @@ export async function serve(args: string[]): Promise<void> {
 	// OPAL_DEV_SCHEMA=1: build a fresh dev database from schema.ts instead of migrations.
 	const db = process.env.OPAL_DEV_SCHEMA === '1' ? await (await loadDevSchema()).openSchemaDb(dbPath()) : openDb(dbPath());
 	const app = createApp({ db, web: true });
+	startBlobSweeper(db, serialized, [versionHoldsBlob(db)]);
 	const port = Number(flag(args, 'port') ?? process.env.OPAL_PORT ?? 8080);
 	const hostname = flag(args, 'host') ?? process.env.OPAL_HOST ?? '0.0.0.0';
 	// Settings > System reports the address this process listens on, flags included.

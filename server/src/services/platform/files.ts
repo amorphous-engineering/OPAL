@@ -20,7 +20,7 @@ import { numbersFor } from '../org/project.ts';
 import { actorResolver } from '../../auth/index.ts';
 import type { Db } from '../../db/client.ts';
 import { type Impl, implement, type ResolveActor, runOp } from '../../registry.ts';
-import { attach, blobPath, guardAttach, getBlob, maxUploadBytes, row } from './attachments.ts';
+import { attach, blobIsServable, blobPath, guardAttach, getBlob, maxUploadBytes, row } from './attachments.ts';
 import { subscribe } from './events.ts';
 
 /** Not in the shared contract tree: the body is a file, so no JSON client call exists for it. */
@@ -127,7 +127,9 @@ export function mountFiles(app: Hono, db: Db, { resolveActor = actorResolver(db)
 	app.get('/api/blobs/:sha256', async (c) => {
 		await actorOf(c);
 		const sha = c.req.param('sha256');
-		const b = /^[0-9a-f]{64}$/.test(sha) ? getBlob(db, sha) : undefined;
+		// A file nothing links or snapshots any more is gone for readers, even before the purge removes it.
+		const known = /^[0-9a-f]{64}$/.test(sha) ? getBlob(db, sha) : undefined;
+		const b = known && blobIsServable(db, sha) ? known : undefined;
 		if (!b) throw new OpalError(404, 'not_found', 'File not found');
 		const res = fileResponse(blobPath(sha), b.mimeType, null, c.req.query('download') === '1');
 		res.headers.set('Cache-Control', 'private, max-age=31536000, immutable');

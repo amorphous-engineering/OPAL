@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync, utimesSync } from 'node:fs';
 import { attachment, auditLog, blob, part } from '../../src/db/schema/index.ts';
 import { insert } from '../../src/write.ts';
-import { blobPath, purgeOrphanBlobs } from '../../src/services/platform/attachments.ts';
+import { assertStorageAvailable, blobPath, purgeOrphanBlobs, storageUsedBytes } from '../../src/services/platform/attachments.ts';
 import { setup } from './helpers.ts';
 
 type S = Awaited<ReturnType<typeof setup>>;
@@ -147,11 +147,10 @@ describe('attachments', () => {
 		expect((await s.call('DELETE', `/attachments/${a.id}`)).status).toBe(200);
 		expect(s.db.select().from(attachment).all()).toHaveLength(0);
 		expect(existsSync(blobPath(a.sha256))).toBe(true);
-		expect((await s.app.request(`/api/blobs/${a.sha256}`)).status).toBe(200);
 		expect((await s.call('DELETE', `/attachments/${a.id}`)).status).toBe(404);
 		// A hash that a snapshot still references is not purged.
-		expect(await purgeOrphanBlobs(s.db, [(h) => h === a.sha256])).toBe(0);
-		expect(await purgeOrphanBlobs(s.db)).toBe(1);
+		expect(await purgeOrphanBlobs(s.db, [(h) => h === a.sha256], 0)).toBe(0);
+		expect(await purgeOrphanBlobs(s.db, [], 0)).toBe(1);
 		expect(existsSync(blobPath(a.sha256))).toBe(false);
 	});
 
@@ -161,7 +160,7 @@ describe('attachments', () => {
 		const a = await (await upload(s, { file: text('shared'), ownerType: 'part', ownerId: String(id) })).json();
 		await upload(s, { file: text('shared', 'b.txt'), ownerType: 'part', ownerId: String(id) });
 		await s.call('DELETE', `/attachments/${a.id}`);
-		expect(await purgeOrphanBlobs(s.db)).toBe(0);
+		expect(await purgeOrphanBlobs(s.db, [], 0)).toBe(0);
 	});
 
 	test('upload and delete leave audit rows', async () => {
@@ -171,5 +170,68 @@ describe('attachments', () => {
 		await s.call('DELETE', `/attachments/${a.id}`);
 		const rows = s.db.select().from(auditLog).all().filter((r) => r.entity === 'attachment');
 		expect(rows.map((r) => [r.action, r.op])).toEqual([['create', 'attachments.upload'], ['delete', 'attachments.delete']]);
+	});
+
+	test('a blob whose attachment was deleted is not served unless a published version still uses it', async () => {
+		const s = await setup();
+		const id = await partId(s);
+		const a = await (await upload(s, { file: text('deleted'), ownerType: 'part', ownerId: String(id) })).json();
+		expect((await s.app.request(`/api/blobs/${a.sha256}`)).status).toBe(200);
+		await s.call('DELETE', `/attachments/${a.id}`);
+		expect((await s.app.request(`/api/blobs/${a.sha256}`)).status).toBe(404);
+		// Text that carries the hash, as a published snapshot or a copied step does, keeps it readable.
+		const b = await (await upload(s, { file: text('in a snapshot'), ownerType: 'part', ownerId: String(id) })).json();
+		insert({ db: s.db, op: 't', actor: { kind: 'system' } }, part, { internalPn: 'P-held', name: `see /api/blobs/${b.sha256}`, unitOfMeasure: 'ea', trackingType: 'bulk', procurement: 'make', tier: 1 });
+		await s.call('DELETE', `/attachments/${b.id}`);
+		expect((await s.app.request(`/api/blobs/${b.sha256}`)).status).toBe(200);
+	});
+
+	test('the purge keeps a blob until it has been unreferenced for the grace period', async () => {
+		const s = await setup();
+		const id = await partId(s);
+		const a = await (await upload(s, { file: text('recent'), ownerType: 'part', ownerId: String(id) })).json();
+		await s.call('DELETE', `/attachments/${a.id}`);
+		expect(await purgeOrphanBlobs(s.db)).toBe(0);
+		expect(existsSync(blobPath(a.sha256))).toBe(true);
+		// Old on disk but the row is recent: still kept. Both clocks must be past the grace period.
+		const old = new Date(Date.now() - 8 * 24 * 3600 * 1000);
+		utimesSync(blobPath(a.sha256), old, old);
+		expect(await purgeOrphanBlobs(s.db)).toBe(0);
+		s.db.update(blob).set({ createdAt: old.toISOString() }).run();
+		expect(await purgeOrphanBlobs(s.db)).toBe(1);
+		expect(existsSync(blobPath(a.sha256))).toBe(false);
+	});
+
+	test('the purge keeps a blob that a published snapshot or copied step text mentions, found in any text column', async () => {
+		const s = await setup();
+		const id = await partId(s);
+		const a = await (await upload(s, { file: text('frozen'), ownerType: 'part', ownerId: String(id) })).json();
+		await s.call('DELETE', `/attachments/${a.id}`);
+		const { textHoldsBlob } = await import('../../src/services/platform/blob-refs.ts');
+		expect(textHoldsBlob(s.db)(a.sha256)).toBe(false);
+		insert({ db: s.db, op: 't', actor: { kind: 'system' } }, part, { internalPn: 'P-ref', name: 'x', description: `![f](/api/blobs/${a.sha256})`, unitOfMeasure: 'ea', trackingType: 'bulk', procurement: 'make', tier: 1 });
+		expect(textHoldsBlob(s.db)(a.sha256)).toBe(true);
+		expect(await purgeOrphanBlobs(s.db, [textHoldsBlob(s.db)], 0)).toBe(0);
+		expect(existsSync(blobPath(a.sha256))).toBe(true);
+	});
+
+	test('uploads past OPAL_STORAGE_QUOTA_BYTES are refused with 507, and a copy of stored content is not', async () => {
+		const s = await setup();
+		const id = await partId(s);
+		await upload(s, { file: text('12345678'), ownerType: 'part', ownerId: String(id) });
+		expect(storageUsedBytes(s.db)).toBe(8);
+		process.env.OPAL_STORAGE_QUOTA_BYTES = '10';
+		try {
+			const res = await upload(s, { file: text('abcdefgh', 'b.txt'), ownerType: 'part', ownerId: String(id) });
+			expect(res.status).toBe(507);
+			expect((await res.json()).error).toBe('storage_full');
+			expect(s.db.select().from(attachment).all()).toHaveLength(1);
+			expect((await upload(s, { file: text('12345678', 'copy.txt'), ownerType: 'part', ownerId: String(id) })).status).toBe(201);
+			expect(() => assertStorageAvailable(s.db, 2)).not.toThrow();
+			expect(() => assertStorageAvailable(s.db, 3)).toThrow();
+		} finally {
+			delete process.env.OPAL_STORAGE_QUOTA_BYTES;
+		}
+		expect((await upload(s, { file: text('abcdefgh', 'b.txt'), ownerType: 'part', ownerId: String(id) })).status).toBe(201);
 	});
 });
