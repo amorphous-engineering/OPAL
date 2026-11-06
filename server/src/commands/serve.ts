@@ -6,7 +6,8 @@ import { importInPlace } from '../import/index.ts';
 import { dataDir, dbPath } from '../paths.ts';
 import { PluginHost } from '../services/plugins/host.ts';
 import { pluginsEnabled, setRuntime } from '../services/plugins/runtime.ts';
-import { plugin } from '../db/schema/index.ts';
+import { plugin, user } from '../db/schema/index.ts';
+import { armSetupCode } from '../services/auth/setup-code.ts';
 import { eq } from 'drizzle-orm';
 import { idleTimeoutSeconds, maxRequestBytes } from '../http/limits.ts';
 import { hardenDataDir } from '../harden.ts';
@@ -56,4 +57,6 @@ export async function serve(args: string[]): Promise<void> {
 		}
 	}
 	console.log(`OPAL listening on http://${hostname}:${port} (data: ${dataDir()})`);
+	const unclaimed = db.select({ id: user.id }).from(user).limit(1).get() === undefined;
+	armSetupCode(unclaimed, `http://${hostname === '0.0.0.0' || hostname === '::' ? 'localhost' : hostname}:${port}`);
 }

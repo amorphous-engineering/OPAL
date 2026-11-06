@@ -17,7 +17,9 @@ import {
 	validatePasswordStrength,
 	verifyPassword
 } from '../auth/tokens.ts';
+import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
+import { clearSetupCode, setupCodeMatches, setupCodeRequired } from '../services/auth/setup-code.ts';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { personRefs } from '../services/org/people.ts';
@@ -142,6 +144,8 @@ export const authImpls = [
 		const oidc = oidcActive(s);
 		return {
 			needsSetup: needsSetup(ctx),
+			setupCodeRequired: setupCodeRequired(),
+			setupHostAllowed: !setupCodeRequired() || setupHostAllowed(ctx.request?.host),
 			passwordLoginEnabled: s.passwordLoginEnabled,
 			passkeysEnabled: s.passkeysEnabled,
 			oidcEnabled: oidc,
@@ -151,6 +155,14 @@ export const authImpls = [
 
 	implement(contracts.auth.setup, async (ctx, input) => {
 		if (!needsSetup(ctx)) throw conflict('setup_complete', 'Setup is already complete');
+		if (setupCodeRequired()) {
+			if (!setupHostAllowed(ctx.request?.host)) {
+				throw new OpalError(403, 'setup_host', 'Open this page by IP address, or set OPAL_ALLOWED_HOSTS to include this host name.');
+			}
+			if (!setupCodeMatches(input.setupCode)) {
+				throw new OpalError(403, 'setup_code', 'That setup code is not right. OPAL printed the code where it started.');
+			}
+		}
 		const username = normalizeUsername(input.username);
 		if (!username) throw invalid('username', 'Username is required');
 		if (isPluginUsername(username)) throw invalid('username', 'The plugin. prefix is reserved for plugins');
@@ -171,6 +183,7 @@ export const authImpls = [
 				isActive: true
 			});
 			startSession(ctx, u, 'password');
+			clearSetupCode();
 			return { user: present(ctx.db, u) };
 		});
 	}, { verifyFirst: true }),

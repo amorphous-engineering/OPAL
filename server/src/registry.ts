@@ -18,6 +18,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
 import { requestBase } from './auth/base-url.ts';
 import { clientIp } from './auth/client-ip.ts';
+import { browserHost } from './auth/host-guard.ts';
 import { requireScope } from './auth/scope.ts';
 import { type Actor, type CookieJar, type Ctx, type RequestInfo } from './context.ts';
 import { holdsGate } from './services/org/gates.ts';
@@ -191,7 +192,8 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 				cookies: cookieJar(hc),
 				request: {
 					userAgent: hc.req.header('user-agent') ?? null,
-					ip: clientIp(hc)
+					ip: clientIp(hc),
+					host: browserHost(hc)
 				}
 			});
 			if (c.produces) {

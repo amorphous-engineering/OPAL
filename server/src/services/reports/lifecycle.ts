@@ -36,6 +36,7 @@ import { apiToken, authSetting, notification, part, passkeyCredential, user } fr
 import { serialized } from '../../registry.ts';
 import { insert, remove, update } from '../../write.ts';
 import { startSession } from '../auth/sessions.ts';
+import { reissueSetupCode } from '../auth/setup-code.ts';
 import { writeSetting } from '../auth/settings.ts';
 import { upsertProfile } from '../org/profiles.ts';
 import { ensureFts } from '../platform/search.ts';
@@ -294,6 +295,7 @@ export function factoryReset(ctx: Ctx, confirm: string): void {
 		// Signed links from the erased organization must not verify in the new one.
 		rotateAuthSecret();
 		swap(live, await openFile(h.dbPath));
+		reissueSetupCode();
 	});
 }
 

@@ -23,6 +23,10 @@ export type AuthUser = z.infer<typeof zAuthUser>;
 
 export const zAuthConfig = z.object({
 	needsSetup: z.boolean(),
+	/** First-run setup asks for the code the server printed where it started. */
+	setupCodeRequired: z.boolean(),
+	/** False when this page was reached under a host name setup refuses. */
+	setupHostAllowed: z.boolean(),
 	passwordLoginEnabled: z.boolean(),
 	passkeysEnabled: z.boolean(),
 	/** True only when OIDC is switched on AND has an issuer and a client id. */
@@ -401,7 +405,8 @@ export const auth = {
 			username: z.string().trim().min(1).max(64),
 			name: z.string().trim().min(1).max(255),
 			password: zPassword,
-			email: z.string().trim().max(255).nullable().optional()
+			email: z.string().trim().max(255).nullable().optional(),
+			setupCode: z.string().trim().max(40).optional()
 		}),
 		output: zSignedIn,
 		access: 'public',
