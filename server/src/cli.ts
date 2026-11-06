@@ -3,6 +3,7 @@
 // The compiled binary loads modules in bundle order, so it must come first.
 import 'reflect-metadata';
 import { importLegacy } from './commands/import.ts';
+import { secrets } from './commands/secrets.ts';
 import { serve } from './commands/serve.ts';
 import { supervise } from './commands/supervise.ts';
 import { update } from './commands/update.ts';
@@ -13,6 +14,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
 	serve,
 	import: importLegacy,
 	update,
+	secrets,
 	version: () => console.log(VERSION)
 };
 

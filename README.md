@@ -84,7 +84,7 @@ These environment variables set what the server accepts. The defaults suit a tea
 
 ### Plugins
 
-An admin can install a plugin from a public GitHub repository. **Installing a plugin gives it shell-level access to the server.** Its API token is limited to the permissions in its manifest, but the process runs as the same user as OPAL with no sandbox, so it can read the data folder, including the database. Install only plugins you would trust with a login on that machine.
+An admin can install a plugin from a public GitHub repository. **Installing a plugin gives it shell-level access to the server.** Its API token is limited to the permissions in its manifest, but the process runs as the same user as OPAL with no sandbox, so it can read the data folder, including the database and the key to its stored secrets. Install only plugins you would trust with a login on that machine.
 
 Set `OPAL_PLUGINS=0` to turn plugins off on a server. Nothing starts, and OPAL refuses to preview, install, configure, enable or restart one.
 
@@ -104,9 +104,23 @@ This beta cannot import a 1.x database yet. If it finds one in the data folder i
 
 ### Back up and roll back
 
-OPAL has no scheduled backups. To back up, stop OPAL and copy the whole data folder.
+OPAL has no scheduled backups. To back up, stop OPAL and copy the whole data folder. That includes `.opal_secrets_key` (see below), which a backup needs to restore everything.
 
 Before an update changes the database, OPAL copies it to `opal.pre-migration-<time>.db` in the data folder and keeps the newest three. The [quickstart](QUICKSTART.md#go-back-after-a-bad-update) shows how to go back.
+
+### Stored secrets and their key
+
+OPAL encrypts the single sign-on client secret and plugin secrets in the database. A copy of `opal.db` on its own does not reveal them.
+
+The key is `.opal_secrets_key` in the data folder, made the first time a secret is saved. To keep it away from the data, set `OPAL_SECRETS_KEY` to at least 32 characters, for example from `openssl rand -hex 32`, and keep that value in your backups or password manager. A copy of the data folder is otherwise a copy of the database and its key together, so treat it as sensitive. The key does not protect against someone who can read the whole folder on the server, including a plugin. On Windows, file modes do not restrict the key file, so use the folder's own permissions.
+
+- **Restored without the key:** OPAL starts and your records are all there. The secrets cannot be read, so OPAL names them in its log and shows them as unreadable in Settings. Single sign-on and any plugin holding one of them stop working until you enter them again in Settings or restore the key. Restore the key first if you can: a secret entered in the meantime uses a new key, and has to be entered again once the old key is back. If nobody can sign in, set `OPAL_OIDC_CLIENT_SECRET` to the secret from your provider and restart.
+- **Changing the key:** stop OPAL and run `opal secrets rotate`. Back up again afterward, because an older backup needs its older key. With `OPAL_SECRETS_KEY`, move the old value to `OPAL_SECRETS_KEY_PREVIOUS`, set a new `OPAL_SECRETS_KEY`, start OPAL once, then remove `OPAL_SECRETS_KEY_PREVIOUS`. If you think a key has leaked, change the secrets at the provider or plugin as well.
+- **Moving from the file to the variable:** set `OPAL_SECRETS_KEY`, start OPAL once, then delete `.opal_secrets_key`.
+- **Factory reset:** deletes the file with the database and makes a new key for the next secret. `OPAL_SECRETS_KEY` stays as you set it.
+- **Secrets set by environment variable:** `OPAL_OIDC_CLIENT_SECRET` stays in the environment and is never written to the database. A secret saved in Settings takes its place.
+
+**Older files in the data folder still hold secrets in plaintext.** The copy taken when you first upgrade to this version keeps them, because an older version cannot read an encrypted value. OPAL names these `opal.pre-migration-*.db` files at each start. Delete them when you no longer need to go back that far. `opal.legacy.db`, left by a 1.x import, holds them too, as do any backups made before this version.
 
 ## Connect Claude Code (MCP)
 

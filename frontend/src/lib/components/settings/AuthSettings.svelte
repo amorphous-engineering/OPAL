@@ -175,8 +175,18 @@
 					type="password"
 					bind:value={clientSecret}
 					autocomplete="new-password"
-					placeholder={saved.hasClientSecret ? 'Stored. Blank keeps it.' : 'None (public client)'}
+					placeholder={saved.clientSecretUnreadable
+						? 'Stored, but unreadable. Enter it again.'
+						: saved.hasClientSecret
+							? 'Stored. Blank keeps it.'
+							: 'None (public client)'}
 				/>
+				{#if saved.clientSecretUnreadable}
+					<p class="text-error">
+						The stored secret cannot be read with this server's key. Enter it again, or restore the
+						key from a backup.
+					</p>
+				{/if}
 				{#if saved.hasClientSecret}
 					<div class="flex items-center gap-2">
 						<Switch id="clear-secret" size="sm" bind:checked={clearSecret} />

@@ -4,7 +4,7 @@ import { OpalError, type PluginSettingDef } from '@opal/shared';
 import type { Ctx } from '../../context.ts';
 import { pluginSetting } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
-import { settingRow, settingValues, type PluginRow } from './store.ts';
+import { plainSetting, sealSetting, settingRow, settingValues, type PluginRow } from './store.ts';
 
 /** The stored value for one input, or an error text. */
 function check(def: PluginSettingDef, v: unknown): { value: unknown } | { error: string } {
@@ -70,12 +70,15 @@ export function saveSettings(ctx: Ctx, row: PluginRow, values: Record<string, un
 	if (Object.keys(fields).length) throw new OpalError(422, 'invalid_settings', 'Some settings are not valid', fields);
 	for (const { def, value } of writes) {
 		const existing = settingRow(ctx.db, row.id, def.key);
+		const secret = def.type === 'secret' || !!existing?.secret;
+		const stored = () => (secret ? sealSetting(row.key, def.key, value) : value);
 		if (value === null) {
 			if (existing) remove(ctx, pluginSetting, existing.id);
 		} else if (!existing) {
-			insert(ctx, pluginSetting, { pluginId: row.id, key: def.key, value, secret: def.type === 'secret' });
-		} else if (JSON.stringify(existing.value) !== JSON.stringify(value)) {
-			update(ctx, pluginSetting, existing.id, { value });
+			insert(ctx, pluginSetting, { pluginId: row.id, key: def.key, value: stored(), secret });
+			// Against the plain value: sealing the same secret twice gives different text.
+		} else if (JSON.stringify(plainSetting(row, existing)) !== JSON.stringify(value)) {
+			update(ctx, pluginSetting, existing.id, { value: stored(), secret });
 		}
 	}
 }

@@ -60,6 +60,7 @@ Handlers are thin. Business rules live in `server/src/services`.
 12. No request header gives identity. Identity comes from the session cookie or a bearer API token. Token actors cannot do `humanOnly` operations.
 13. Working docs, audits and scratch notes go in `notes/` (gitignored). The repo is public.
 14. Sequence numbers (part numbers, OPAL-, PO-, T-, WO-, IT-, RISK-, REQ-) follow the rules in the next section. Serials (`001`) do not.
+15. A secret kept in the database is sealed with `server/src/auth/sealed.ts`, never stored as plain text, and never reaches the audit log. A new kind of secret is added to `server/src/db/seal-secrets.ts` as well.
 
 ## Sequence numbers
 

@@ -6,6 +6,7 @@ import type { MigrationMeta } from 'drizzle-orm/migrator';
 import { join } from 'node:path';
 import { embedded } from '../http/embedded.ts';
 import { retireAbortedStatus } from './retire-aborted.ts';
+import { holdsPlaintextSecret, sealDatabase } from './seal-secrets.ts';
 import * as schema from './schema/index.ts';
 import { snapshotBeforeMigrating } from './snapshot.ts';
 
@@ -51,8 +52,10 @@ export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR, snapshot
 	const files = embedded()?.migrations ?? readMigrationFiles({ migrationsFolder });
 	const last = lastApplied(sqlite);
 	const pending = files.filter((m) => m.folderMillis > last);
+	const onDisk = path !== ':memory:';
 	// A new database has nothing to lose, and a test's :memory: has no folder to put a copy in.
-	if (pending.length && last > 0 && path !== ':memory:') {
+	// Sealing the first time is an upgrade too: this copy is the way back to a version that cannot read a sealed value.
+	if (last > 0 && onDisk && (pending.length || holdsPlaintextSecret(sqlite))) {
 		console.log(`Copied the database before upgrading it: ${snapshot(sqlite, path)}`);
 	}
 	const internals = db as unknown as {
@@ -63,5 +66,6 @@ export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR, snapshot
 		retireAbortedStatus(sqlite);
 		internals.dialect.migrate(files, internals.session, { migrationsFolder });
 	});
+	if (onDisk) sealDatabase(sqlite, last === 0);
 	return db;
 }

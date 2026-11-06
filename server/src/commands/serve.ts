@@ -1,7 +1,9 @@
 import { mkdirSync } from 'node:fs';
+import { openingKeys } from '../auth/sealed.ts';
 import { createApp } from '../app.ts';
 import { openDb } from '../db/client.ts';
 import { loadDevSchema } from '../db/dev.ts';
+import { sweepCopies } from '../db/seal-secrets.ts';
 import { importInPlace } from '../import/index.ts';
 import { dataDir, dbPath } from '../paths.ts';
 import { PluginHost } from '../services/plugins/host.ts';
@@ -20,6 +22,13 @@ export async function serve(args: string[]): Promise<void> {
 	// Before the folder or any file in it is created.
 	hardenDataDir();
 	mkdirSync(dataDir(), { recursive: true });
+	// A bad key stops here, in words for the person starting OPAL, not at the first saved secret.
+	try {
+		openingKeys();
+	} catch (e) {
+		console.error((e as Error).message);
+		process.exit(1);
+	}
 	// A Python-era database is imported once; the old file is kept as opal.legacy.db.
 	let report: Awaited<ReturnType<typeof importInPlace>>;
 	try {
@@ -32,6 +41,7 @@ export async function serve(args: string[]): Promise<void> {
 	if (report) console.log('Imported the legacy database. See import-report.txt next to it.');
 	// OPAL_DEV_SCHEMA=1: build a fresh dev database from schema.ts instead of migrations.
 	const db = process.env.OPAL_DEV_SCHEMA === '1' ? await (await loadDevSchema()).openSchemaDb(dbPath()) : openDb(dbPath());
+	sweepCopies(dbPath());
 	const app = createApp({ db, web: true });
 	startBlobSweeper(db, serialized, [versionHoldsBlob(db)]);
 	const port = Number(flag(args, 'port') ?? process.env.OPAL_PORT ?? 8080);

@@ -128,6 +128,7 @@ const settingsView = (s: SignInSettings) => ({
 	oidcIssuer: s.oidcIssuer,
 	oidcClientId: s.oidcClientId,
 	hasClientSecret: !!s.oidcClientSecret,
+	clientSecretUnreadable: s.oidcClientSecretUnreadable,
 	oidcScopes: s.oidcScopes,
 	oidcProviderName: s.oidcProviderName,
 	oidcGroupsClaim: s.oidcGroupsClaim,

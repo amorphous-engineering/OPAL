@@ -13,7 +13,7 @@ const MARK = '.pre-migration-';
 
 const stemOf = (path: string) => basename(path, extname(path)) + MARK;
 
-function snapshots(path: string): string[] {
+export function snapshotPaths(path: string): string[] {
 	const stem = stemOf(path);
 	return readdirSync(dirname(path))
 		.filter((f) => f.startsWith(stem) && f.endsWith('.db'))
@@ -40,11 +40,11 @@ export function snapshotBeforeMigrating(sqlite: Database, path: string): string 
 			`Could not copy the database before upgrading it, so it was left as it was: ${(e as Error).message}. Check the free disk space in ${dirname(path)}, then start again.`
 		);
 	}
-	for (const old of snapshots(path).slice(0, -KEEP)) rmSync(old, { force: true });
+	for (const old of snapshotPaths(path).slice(0, -KEEP)) rmSync(old, { force: true });
 	return dest;
 }
 
 /** A factory reset erases the organization, and these hold its data too. */
 export function removeSnapshots(path: string): void {
-	for (const old of snapshots(path)) rmSync(old, { force: true });
+	for (const old of snapshotPaths(path)) rmSync(old, { force: true });
 }

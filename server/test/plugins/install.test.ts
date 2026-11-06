@@ -5,14 +5,16 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { isSealed } from '../../src/auth/sealed.ts';
 import type { Actor, Ctx } from '../../src/context.ts';
 import type { Db } from '../../src/db/client.ts';
-import { apiToken, externalLink, plugin, pluginSetting, user } from '../../src/db/schema/index.ts';
+import { apiToken, auditLog, externalLink, plugin, pluginSetting, user } from '../../src/db/schema/index.ts';
 import { pluginsInstallImpls } from '../../src/ops/plugins-install.ts';
 import { errorResponse, mountOps, serialized } from '../../src/registry.ts';
 import { isCompatible } from '../../src/services/plugins/install.ts';
 import { MAX_DOWNLOAD_BYTES, parseSource, setGithubFetch } from '../../src/services/plugins/github.ts';
-import { pluginDir, pluginsRoot } from '../../src/services/plugins/store.ts';
+import { saveSettings } from '../../src/services/plugins/settings.ts';
+import { pluginDir, pluginsRoot, settingValues, toDetail } from '../../src/services/plugins/store.ts';
 import { insert } from '../../src/write.ts';
 import { openTestDb } from '../helpers/db.ts';
 
@@ -437,6 +439,32 @@ describe('plugins.install', () => {
 		insert(sys(), pluginSetting, { pluginId: row.id, key: 'old', value: 'v', secret: false });
 		await installSha(SHA2, 'HEAD', goodFiles());
 		expect(db.select().from(pluginSetting).all().map((s) => s.key)).toEqual(['url']);
+	});
+
+	test('an update that makes a setting secret seals the value it has and hides it from the audit log', async () => {
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
+		const row = db.select().from(plugin).get()!;
+		insert(sys(), pluginSetting, { pluginId: row.id, key: 'token', value: 'was-visible', secret: false });
+		await installSha(SHA2, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }] }));
+		const stored = db.select().from(pluginSetting).get()!;
+		expect(stored.secret).toBe(true);
+		expect(isSealed(stored.value)).toBe(true);
+		expect(settingValues(db, db.select().from(plugin).get()!)).toMatchObject({ token: 'was-visible' });
+		expect(JSON.stringify(db.select().from(auditLog).all())).not.toContain('was-visible');
+	});
+
+	test('an update that stops calling a setting secret keeps it sealed and hidden', async () => {
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }] }));
+		let row = db.select().from(plugin).get()!;
+		saveSettings(sys(), row, { token: 'still-secret' });
+		await installSha(SHA2, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
+		row = db.select().from(plugin).get()!;
+		expect(isSealed(db.select().from(pluginSetting).get()!.value)).toBe(true);
+		expect(settingValues(db, row)).toMatchObject({ token: 'still-secret' });
+		expect(toDetail(db, row).settings[0]!.value).toBeNull();
+		saveSettings(sys(), row, { token: 'changed' });
+		expect(db.select().from(pluginSetting).get()!.secret).toBe(true);
+		expect(JSON.stringify(db.select().from(auditLog).all())).not.toContain('changed');
 	});
 
 	test('a local source is refused without OPAL_PLUGINS_LOCAL', async () => {

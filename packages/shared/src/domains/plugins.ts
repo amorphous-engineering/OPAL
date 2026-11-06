@@ -150,7 +150,9 @@ export const zPluginSettingValue = z.object({
 	/** Null for a secret: the API never returns a secret value. */
 	value: z.unknown().nullable(),
 	/** For a secret: a value is stored. */
-	set: z.boolean()
+	set: z.boolean(),
+	/** For a secret: one is stored but no key opens it, so it has to be entered again. */
+	unreadable: z.boolean()
 });
 
 export const zPluginDetail = zPluginSummary.extend({

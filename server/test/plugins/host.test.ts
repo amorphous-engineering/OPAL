@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
 import { createApp } from '../../src/app.ts';
+import { pluginSettingScope, readStored, seal } from '../../src/auth/sealed.ts';
 import type { Actor } from '../../src/context.ts';
 import type { Db } from '../../src/db/client.ts';
 import { apiToken, plugin, pluginSetting, user } from '../../src/db/schema/index.ts';
@@ -95,9 +96,28 @@ describe('plugin host', () => {
 		expect(JSON.parse(env.OPAL_SETTINGS)).toEqual({ greeting: 'hi', apiKey: 's3' });
 	});
 
+	test('a sealed secret reaches the plugin as its plain value', async () => {
+		addPlugin(db, {});
+		const value = seal(JSON.stringify('s3'), pluginSettingScope('echo', 'apiKey'));
+		db.insert(pluginSetting).values({ pluginId: 1, key: 'apiKey', value, secret: true, createdAt: ts, updatedAt: ts }).run();
+		await host.start('echo');
+		await until(() => host.process('echo').state === 'running');
+		expect(JSON.parse((await get('/env')).OPAL_SETTINGS)).toEqual({ greeting: 'hi', apiKey: 's3' });
+	});
+
+	test('a plugin whose secret no key opens stays stopped and says why', async () => {
+		addPlugin(db, {});
+		const value = seal(JSON.stringify('s3'), pluginSettingScope('some-other-plugin', 'apiKey'));
+		db.insert(pluginSetting).values({ pluginId: 1, key: 'apiKey', value, secret: true, createdAt: ts, updatedAt: ts }).run();
+		await host.start('echo');
+		await until(() => host.process('echo').state === 'stopped');
+		expect(host.log('echo').join(' ')).toContain('cannot be read');
+	});
+
 	test('a plugin never inherits the secrets in the server environment', async () => {
 		process.env.OPAL_AUTH_SECRET_PROBE = 'server-secret';
 		process.env.SOME_SERVICE_PASSWORD = 'server-secret';
+		process.env.OPAL_SECRETS_KEY_PREVIOUS = 'server-secret-key-0123456789abcdef-0123456789';
 		try {
 			addPlugin(db, {});
 			db.insert(pluginSetting).values({ pluginId: 1, key: 'apiKey', value: 's3', secret: true, createdAt: ts, updatedAt: ts }).run();
@@ -111,6 +131,7 @@ describe('plugin host', () => {
 		} finally {
 			delete process.env.OPAL_AUTH_SECRET_PROBE;
 			delete process.env.SOME_SERVICE_PASSWORD;
+			delete process.env.OPAL_SECRETS_KEY_PREVIOUS;
 		}
 	});
 
@@ -269,7 +290,7 @@ describe('plugin operations', () => {
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.username).toBe('plugin.echo');
-		expect(body.settings.find((s: any) => s.key === 'apiKey')).toEqual({ key: 'apiKey', value: null, set: true });
+		expect(body.settings.find((s: any) => s.key === 'apiKey')).toEqual({ key: 'apiKey', value: null, set: true, unreadable: false });
 		expect(body.settings.find((s: any) => s.key === 'greeting').value).toBe('yo');
 		expect((await call('GET', '/plugins/nope')).status).toBe(404);
 	});
@@ -296,12 +317,14 @@ describe('plugin operations', () => {
 
 	test('plugins.settings keeps a secret that is left out and clears it with an empty string', async () => {
 		await call('PUT', '/plugins/echo/settings', { values: { apiKey: 'one', retries: 3, verbose: true, mode: 'fast', extra: { a: 1 } } });
-		expect(stored('apiKey')?.value).toBe('one');
+		const sealed = stored('apiKey')?.value;
+		expect(sealed).not.toContain('one');
+		expect(readStored(sealed as string, pluginSettingScope('echo', 'apiKey'))).toBe(JSON.stringify('one'));
 		expect(stored('apiKey')?.secret).toBe(true);
 		await call('PUT', '/plugins/echo/settings', { values: { greeting: 'x' } });
-		expect(stored('apiKey')?.value).toBe('one');
+		expect(stored('apiKey')?.value).toBe(sealed);
 		await call('PUT', '/plugins/echo/settings', { values: { apiKey: null } });
-		expect(stored('apiKey')?.value).toBe('one');
+		expect(stored('apiKey')?.value).toBe(sealed);
 		await call('PUT', '/plugins/echo/settings', { values: { apiKey: '' } });
 		expect(stored('apiKey')).toBeUndefined();
 		expect(stored('extra')?.value).toEqual({ a: 1 });

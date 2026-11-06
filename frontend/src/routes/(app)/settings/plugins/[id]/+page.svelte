@@ -148,6 +148,8 @@
 	let formError = $state<string | null>(null);
 	let saving = $state(false);
 	const isSet = (key: string) => plugin.settings.find((s) => s.key === key)?.set ?? false;
+	const isUnreadable = (key: string) =>
+		plugin.settings.find((s) => s.key === key)?.unreadable ?? false;
 
 	async function save(e: SubmitEvent) {
 		e.preventDefault();
@@ -343,7 +345,7 @@
 										value={isSet(d.key) ? 'set' : 'not_set'}
 										badge
 										tone={isSet(d.key) ? 'ok' : 'warn'}
-										label={isSet(d.key) ? 'SET' : 'NOT SET'}
+										label={isUnreadable(d.key) ? 'UNREADABLE' : isSet(d.key) ? 'SET' : 'NOT SET'}
 									/>{/if}
 							</Label>
 							{#if d.type === 'project-map'}
@@ -383,7 +385,11 @@
 									type="password"
 									autocomplete="new-password"
 									bind:value={draft[d.key] as string}
-									placeholder={isSet(d.key) ? 'Stored. Blank keeps it.' : ''}
+									placeholder={isUnreadable(d.key)
+										? "Stored, but this server's key cannot read it. Enter it again."
+										: isSet(d.key)
+											? 'Stored. Blank keeps it.'
+											: ''}
 								/>
 							{:else}
 								<Input

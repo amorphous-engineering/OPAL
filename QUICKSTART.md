@@ -65,7 +65,7 @@ Installing a plugin gives it shell-level access to this computer. To turn plugin
 
 ## Back up your data
 
-OPAL has no scheduled backups. Stop OPAL and copy the whole data folder:
+OPAL has no scheduled backups. Stop OPAL and copy the whole data folder, including the hidden file `.opal_secrets_key`. Without that file, a restored OPAL has all your records but needs its single sign-on and plugin secrets entered again:
 
 | System | Data folder |
 |---|---|
@@ -93,6 +93,8 @@ Before an update changes the database, OPAL copies it to `opal.pre-migration-<ti
 4. Rename the copy you want to `opal.db`, then start OPAL.
 
 Anything recorded after the update is not in that copy.
+
+A version from before secrets were encrypted cannot read an encrypted secret. Use the copy taken when you first upgraded, which still holds them readable. With any later copy, enter the single sign-on and plugin secrets again after going back.
 
 ## Report a problem
 
