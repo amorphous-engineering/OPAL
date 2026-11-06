@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { connect } from 'node:net';
+import { errorResponse } from '../../src/registry.ts';
 import { addPlugin, restoreRuntime, setup, stubRuntime } from '../plugins/helpers.ts';
 
 describe('work that can sit silent past the idle timeout', () => {
@@ -119,4 +120,16 @@ describe('work that can sit silent past the idle timeout', () => {
 			server.stop(true);
 		}
 	}, 20_000);
+});
+
+describe('a client that hangs up partway through', () => {
+	test('is not a server fault and leaves no stack in the log', () => {
+		const error = spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			expect(errorResponse(new DOMException('aborted', 'AbortError')).status).toBe(400);
+			expect(error).not.toHaveBeenCalled();
+		} finally {
+			error.mockRestore();
+		}
+	});
 });

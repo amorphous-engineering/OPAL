@@ -9,7 +9,6 @@ import {
 	loginThrottle,
 	takeLockedGuess,
 	usernameThrottle,
-	lockedGuess,
 	withHashSlot,
 	newToken,
 	isPluginUsername,

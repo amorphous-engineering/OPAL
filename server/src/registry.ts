@@ -222,6 +222,11 @@ export function errorResponse(err: unknown): { status: number; body: ApiErrorBod
 	if ((err as { code?: string })?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
 		return { status: 409, body: { error: 'duplicate', message: 'A record with this value exists' } };
 	}
+	// The client hung up partway through its request. Nothing failed here, and logging a stack per
+	// dropped connection would let anyone pad the log.
+	if ((err as { name?: string })?.name === 'AbortError') {
+		return { status: 400, body: { error: 'aborted', message: 'The request was cancelled' } };
+	}
 	console.error(err);
 	return { status: 500, body: { error: 'internal', message: 'Internal error' } };
 }
