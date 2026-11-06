@@ -44,7 +44,7 @@
 		]}
 		href={(p) => `/settings/plugins/${encodeURIComponent(p.id)}`}
 		key={(p) => p.id}
-		emptyLabel="No plugins installed."
+		emptyLabel="Plugins"
 		dense
 	>
 		{#snippet cell(p, col)}

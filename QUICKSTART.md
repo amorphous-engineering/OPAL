@@ -37,7 +37,7 @@ The first start prints a setup code in the terminal, and in the log on the contr
 
 ## Look around with demo data
 
-In **Settings**, under **Demo data**, press **ENTER DEMO**. This opens a separate database holding a sample rocket project: parts, stock, purchase orders, procedures, work orders, issues, risks and requirements. Your own database is not touched. The switch applies to everyone using this OPAL until you exit the demo, so try it before others join.
+In **Settings**, under **Demo data**, press **ENTER DEMO**. This opens a separate database holding a sample rocket project: parts, stock, purchase orders, procedures, work orders, issues, risks and requirements. Your own database is not touched, and changes made in the demo are deleted when you exit it. The switch applies to everyone using this OPAL, and anyone else has to sign in again, so try it before others join.
 
 Good places to start: open a work order under **Executions** and complete a step, raise an issue from it, or place a purchase order and receive against it.
 

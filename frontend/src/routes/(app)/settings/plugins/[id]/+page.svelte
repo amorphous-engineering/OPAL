@@ -458,7 +458,7 @@
 				{ key: 'slot', label: 'Slot', mono: true },
 				{ key: 'path', label: 'Path', mono: true }
 			]}
-			emptyLabel="No panels."
+			emptyLabel="Panels"
 			dense
 		/>
 	</Section>
