@@ -201,7 +201,9 @@
 						class={cn(
 							barButton,
 							'border-l border-border',
-							store.focusMode ? 'bg-card text-info' : 'text-muted-foreground hover:text-foreground'
+							store.focusMode
+								? 'bg-foreground text-background'
+								: 'text-muted-foreground hover:text-foreground'
 						)}
 						aria-pressed={store.focusMode}
 						title="Show only the operation selected in the sidebar"
@@ -218,7 +220,9 @@
 					type="button"
 					class={cn(
 						barButton,
-						!previewing ? 'bg-card text-info' : 'text-muted-foreground hover:text-foreground'
+						!previewing
+							? 'bg-foreground text-background'
+							: 'text-muted-foreground hover:text-foreground'
 					)}
 					aria-pressed={!previewing}
 					onclick={() => (previewing = false)}>Edit</button
@@ -228,7 +232,9 @@
 					class={cn(
 						barButton,
 						'border-l border-border',
-						previewing ? 'bg-card text-info' : 'text-muted-foreground hover:text-foreground'
+						previewing
+							? 'bg-foreground text-background'
+							: 'text-muted-foreground hover:text-foreground'
 					)}
 					aria-pressed={previewing}
 					title="The document as an operator sees it (p)"

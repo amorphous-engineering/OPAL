@@ -17,6 +17,9 @@
 	}
 </script>
 
-<Toolbar.Button size="sm" class="font-mono" onclick={() => add('caution')}>+ CAUTION</Toolbar.Button
+<Toolbar.Button size="sm" class="font-mono text-xs" onclick={() => add('caution')}
+	>+ CAUTION</Toolbar.Button
 >
-<Toolbar.Button size="sm" class="font-mono" onclick={() => add('info')}>+ INFO</Toolbar.Button>
+<Toolbar.Button size="sm" class="font-mono text-xs" onclick={() => add('info')}
+	>+ INFO</Toolbar.Button
+>
