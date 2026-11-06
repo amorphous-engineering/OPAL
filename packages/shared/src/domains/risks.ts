@@ -434,7 +434,7 @@ export const risks = {
 		method: 'POST',
 		path: '/risks/:id/disposition',
 		summary:
-			'Change the disposition. A 409 names each unmet requirement. `accepted` is reachable only through `risks.accept`.',
+			'Change the disposition. A 409 names each unmet requirement. `accepted` is reachable only through `risks.accept`. Realizing a risk, moving an accepted risk, or reopening a closed risk that was accepted needs a person: an API token gets a 403. An agent may link the issue first with `risks.spawnIssue`.',
 		input: z.object({
 			...idParam,
 			disposition: z.enum(RISK_DISPOSITIONS),

@@ -102,12 +102,14 @@ A file follows the pencil of its record. Removing a file, or changing its kind o
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
 | Open | What could go wrong, and what are we doing? | MARK REVIEWED | Link issues, add references | All fields, including score and disposition | ACCEPT (rationale required), CLOSE (reason required), DELETE if never accepted or realized |
-| Accepted | Who accepted what, and is that still true? | MARK REVIEWED | Link issues, add references | Owner, narrative | WITHDRAW ACCEPTANCE (reason required, human only), CLOSE (reason required) |
+| Accepted | Who accepted what, and is that still true? | MARK REVIEWED | Link issues, add references | Owner, narrative | WITHDRAW ACCEPTANCE (reason required, human only), CLOSE (reason required, human only) |
 | Realized | What did we forecast, and what happened? | Link to the issue | + NEW RISK for residual exposure | | CORRECT RECORD (reason required, logged) |
-| Closed | Why did this close? | | | | REOPEN (reason required) |
+| Closed | Why did this close? | | | | REOPEN (reason required, human only if it was ever accepted) |
 
 - History on the page shows every change to score, disposition or statement: old, new, who, when, and the note if one was given.
 - A score change never withdraws an acceptance as a side effect. Withdraw first, then change the score.
+- Realizing a risk is a commit, so it takes a person. An agent may prepare it by linking the issue. Realizing an accepted risk also needs a reason.
+- Reopening a closed risk that was accepted voids that acceptance, the same as withdrawing it. The stamps stay as the last acceptance, and accepting again is a new signature.
 - Whether a realized risk should be editable at all is the owner's call, not a standard's. NASA and DoD guidance hands a realized risk to the issue process and is silent on editing. This table locks it by default and leaves a deliberate way out.
 
 ## Part
