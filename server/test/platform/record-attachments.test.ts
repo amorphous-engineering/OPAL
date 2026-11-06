@@ -1,13 +1,15 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
-import { setup as issueSetup } from '../issues/helpers.ts';
+import { restoreIssueHooks, setup as issueSetup } from '../issues/helpers.ts';
 import { makePart, mkPo, setStatus, setup as purchaseSetup } from '../purchasing/helpers.ts';
 import { setup as procedureSetup } from '../procedures/helpers.ts';
 import { setup as requirementSetup } from '../requirements/helpers.ts';
 import { setup as riskSetup } from '../risks/helpers.ts';
+
+afterAll(restoreIssueHooks);
 
 beforeAll(() => {
 	process.env.OPAL_DATA_DIR = mkdtempSync(join(tmpdir(), 'opal-record-attachments-'));
