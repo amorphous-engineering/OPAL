@@ -44,6 +44,7 @@ const HUMAN_ACTS = [
 	'requirements.cancel',
 	'requirements.reaffirm',
 	'requirements.verifyLink',
+	'requirements.withdrawVerification',
 	'risks.accept',
 	'risks.correct',
 	'risks.reviewStamp',
@@ -78,7 +79,7 @@ const NOT_A_STRIKE = new Set([
 	'reports.lifecycle.deleteDemo',
 	'requirements.assign',
 	'requirements.delete', // unreferenced drafts only
-	'requirements.unassign',
+	'requirements.unassign', // refused on a verified link or one with a withdrawn verification
 	'risks.delete', // refused once accepted or realized
 	'risks.removeReference',
 	'roles.delete',

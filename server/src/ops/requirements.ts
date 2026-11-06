@@ -51,6 +51,7 @@ export const requirementsImpls = [
 	implement(c.assign, (ctx, input) => svc.assign(ctx, input)),
 	implement(c.updateLink, (ctx, input) => svc.updateLink(ctx, input)),
 	implement(c.verifyLink, (ctx, input) => svc.verifyLink(ctx, input)),
+	implement(c.withdrawVerification, (ctx, input) => svc.withdrawVerification(ctx, input)),
 	implement(c.unassign, (ctx, input) => svc.unassign(ctx, input.id)),
 	implement(c.list, (ctx, input) => svc.list(ctx, input)),
 	implement(c.create, (ctx, input) => svc.create(ctx, input)),

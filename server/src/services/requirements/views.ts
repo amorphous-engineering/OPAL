@@ -17,11 +17,13 @@ import type {
 	RequirementRedline,
 	RequirementSummary,
 	RequirementTree,
-	RequirementVerificationStatus
+	RequirementVerificationStatus,
+	RequirementWithdrawal
 } from '@opal/shared';
 import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import {
+	auditLog,
 	baselineEvent,
 	baselineEventItem,
 	part,
@@ -60,6 +62,44 @@ export function verificationStatus(
 	return done ? 'partial' : 'open';
 }
 
+/**
+ * Withdrawn verifications by link, oldest first. The audit row of the withdrawal is the one home
+ * of the fact: it holds the old who and when, who took it back, when and the reason.
+ */
+export function withdrawalsByLink(ctx: Pick<Ctx, 'db'>, ids?: number[]): Map<number, RequirementWithdrawal[]> {
+	const rows = ctx.db
+		.select()
+		.from(auditLog)
+		.where(
+			and(
+				eq(auditLog.entity, 'part_requirement'),
+				eq(auditLog.op, 'requirements.withdrawVerification'),
+				ids ? inArray(auditLog.entityId, ids) : undefined
+			)
+		)
+		.orderBy(asc(auditLog.at), asc(auditLog.id))
+		.all();
+	const out = new Map<number, RequirementWithdrawal[]>();
+	if (!rows.length) return out;
+	const obj = (v: unknown) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
+	const names = new Map(ctx.db.select({ id: user.id, name: user.name }).from(user).all().map((u) => [u.id, u.name]));
+	for (const r of rows) {
+		const before = obj(r.before);
+		const verifier = typeof before.verifiedById === 'number' ? before.verifiedById : null;
+		const list = out.get(r.entityId) ?? [];
+		list.push({
+			at: r.at,
+			by: r.actorUserId === null ? null : (names.get(r.actorUserId) ?? null),
+			reason: r.reason,
+			status: obj(r.after).status as RequirementWithdrawal['status'],
+			verifiedAt: typeof before.verifiedAt === 'string' ? before.verifiedAt : null,
+			verifiedBy: verifier === null ? null : (names.get(verifier) ?? null)
+		});
+		out.set(r.entityId, list);
+	}
+	return out;
+}
+
 /** Every link of a requirement, keyed by req_number. */
 export function allocationsByNumber(ctx: Pick<Ctx, 'db'>): Map<string, Allocation[]> {
 	const rows = ctx.db
@@ -70,6 +110,7 @@ export function allocationsByNumber(ctx: Pick<Ctx, 'db'>): Map<string, Allocatio
 		.leftJoin(user, eq(user.id, partRequirement.verifiedById))
 		.orderBy(asc(part.name), asc(partRequirement.id))
 		.all();
+	const withdrawals = withdrawalsByLink(ctx);
 	const out = new Map<string, Allocation[]>();
 	for (const { pr, part: p, req, verifier } of rows) {
 		const list = out.get(req.reqNumber) ?? [];
@@ -83,7 +124,8 @@ export function allocationsByNumber(ctx: Pick<Ctx, 'db'>): Map<string, Allocatio
 			verifiedAt: pr.verifiedAt,
 			verifiedBy: verifier,
 			againstRevision: req.revision,
-			outdated: false
+			outdated: false,
+			withdrawals: withdrawals.get(pr.id) ?? []
 		});
 		out.set(req.reqNumber, list);
 	}

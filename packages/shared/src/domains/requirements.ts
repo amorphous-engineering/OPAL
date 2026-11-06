@@ -209,6 +209,17 @@ export type RequirementCheck = z.infer<typeof zRequirementCheck>;
 export const zRequirementReadiness = z.object({ ready: z.boolean(), checks: z.array(zRequirementCheck) });
 export type RequirementReadiness = z.infer<typeof zRequirementReadiness>;
 
+/** A verification taken back: who had signed it, who took it back, when and why. */
+export const zRequirementWithdrawal = z.object({
+	at: zTimestamp,
+	by: z.string().nullable(),
+	reason: z.string().nullable(),
+	status: z.enum(REQUIREMENT_ALLOCATION_STATUSES),
+	verifiedAt: zTimestamp.nullable(),
+	verifiedBy: z.string().nullable()
+});
+export type RequirementWithdrawal = z.infer<typeof zRequirementWithdrawal>;
+
 export const zRequirementAllocation = z.object({
 	id: z.number().int(),
 	partId: z.number().int(),
@@ -221,7 +232,8 @@ export const zRequirementAllocation = z.object({
 	/** The revision the link was made against. */
 	againstRevision: z.number().int(),
 	/** Verified or waived against an older revision than the one in force. */
-	outdated: z.boolean()
+	outdated: z.boolean(),
+	withdrawals: z.array(zRequirementWithdrawal)
 });
 export type RequirementAllocation = z.infer<typeof zRequirementAllocation>;
 
@@ -403,6 +415,7 @@ export const zRequirementPartRequirement = z.object({
 	notes: z.string().nullable(),
 	verifiedAt: zTimestamp.nullable(),
 	verifiedBy: z.object({ id: z.number().int(), name: z.string() }).nullable(),
+	withdrawals: z.array(zRequirementWithdrawal),
 	createdAt: zTimestamp,
 	updatedAt: zTimestamp
 });
@@ -704,7 +717,7 @@ export const requirements = {
 		method: 'PATCH',
 		path: '/requirements/allocations/:id',
 		summary:
-			'Set the status or notes of a part-requirement link. Verified is recorded with verifyLink, not set here. Refused once the requirement is superseded or cancelled.',
+			'Set the status or notes of a part-requirement link. Verified is recorded with verifyLink and taken back with withdrawVerification, not set here. Refused once the requirement is superseded or cancelled.',
 		input: z.object({
 			id: zId,
 			status: z.enum(REQUIREMENT_ALLOCATION_STATUSES).optional(),
@@ -719,8 +732,24 @@ export const requirements = {
 		method: 'POST',
 		path: '/requirements/allocations/:id/verify',
 		summary:
-			'Record verification of a part-requirement link, by the signed-in person, now. A person\'s act. Refused once the requirement is superseded or cancelled.',
+			'Record verification of a part-requirement link, by the signed-in person, now. A person\'s act. Refused on a link already verified, or once the requirement is superseded or cancelled.',
 		input: z.object({ id: zId, notes: text }),
+		output: zRequirementPartRequirement,
+		access: 'signed-in',
+		mcp: false,
+		humanOnly: true
+	}),
+	withdrawVerification: op({
+		name: 'requirements.withdrawVerification',
+		method: 'POST',
+		path: '/requirements/allocations/:id/withdraw-verification',
+		summary:
+			'Take back a recorded verification. A person\'s act, with a reason. The link moves to `status` (open by default), and who verified it, who took it back, when and why stay on the link.',
+		input: z.object({
+			id: zId,
+			status: z.enum(['open', 'waived', 'not_applicable']).default('open'),
+			reason: z.string().trim().min(1).max(2000)
+		}),
 		output: zRequirementPartRequirement,
 		access: 'signed-in',
 		mcp: false,
@@ -730,7 +759,8 @@ export const requirements = {
 		name: 'requirements.unassign',
 		method: 'DELETE',
 		path: '/requirements/allocations/:id',
-		summary: 'Remove a requirement link from a part.',
+		summary:
+			'Remove a requirement link from a part. Refused on a link that is verified or that has a withdrawn verification: those stay on the record.',
 		input: z.object({ id: zId }),
 		output: zOk,
 		access: 'signed-in',

@@ -38,7 +38,7 @@ import {
 } from './lifecycle.ts';
 import { lintRequirement } from './lint.ts';
 import { readiness, readyRows } from './readiness.ts';
-import { eventDetail, eventSummaries, queueItems, redline, summary, tree, dossier } from './views.ts';
+import { eventDetail, eventSummaries, queueItems, redline, summary, tree, dossier, withdrawalsByLink } from './views.ts';
 
 const invalid = (field: string, message: string) =>
 	new OpalError(422, 'invalid_input', message, { [field]: message });
@@ -502,6 +502,7 @@ export function catalogPending(ctx: Ctx) {
 
 function linkOut(ctx: Pick<Ctx, 'db'>, ids: number[]): PartLink[] {
 	if (!ids.length) return [];
+	const withdrawals = withdrawalsByLink(ctx, ids);
 	const rows = ctx.db
 		.select({ pr: partRequirement, req: requirement, vid: user.id, vname: user.name })
 		.from(partRequirement)
@@ -527,6 +528,7 @@ function linkOut(ctx: Pick<Ctx, 'db'>, ids: number[]): PartLink[] {
 		notes: pr.notes,
 		verifiedAt: pr.verifiedAt,
 		verifiedBy: vid !== null && vname !== null ? { id: vid, name: vname } : null,
+		withdrawals: withdrawals.get(pr.id) ?? [],
 		createdAt: pr.createdAt,
 		updatedAt: pr.updatedAt
 	}));
@@ -600,6 +602,8 @@ export function updateLink(
 	const req = requireLive(ctx, row.requirementId);
 	if (input.status === 'verified' && row.status !== 'verified')
 		throw conflict('use_verify', 'Verification is recorded with who and when: use verify');
+	if (row.status === 'verified' && input.status !== undefined && input.status !== 'verified')
+		throw conflict('use_withdraw', 'Taking back a verification needs a person and a reason: use withdraw verification');
 	// On a baselined requirement a status is a verification decision: a person's, not a token's.
 	if (input.status !== undefined && input.status !== row.status && req.lifecycleState === 'baselined')
 		requirePerson(ctx);
@@ -614,6 +618,8 @@ export function verifyLink(ctx: Ctx, input: { id: number; notes?: string | null 
 	const row = loadLink(ctx, input.id);
 	requireLive(ctx, row.requirementId);
 	requirePerson(ctx);
+	// A second verify would replace who and when.
+	if (row.status === 'verified') throw conflict('already_verified', 'This link is already verified');
 	writeUpdate(ctx, partRequirement, row.id, {
 		status: 'verified',
 		verifiedAt: now(),
@@ -623,8 +629,32 @@ export function verifyLink(ctx: Ctx, input: { id: number; notes?: string | null 
 	return linkOut(ctx, [row.id])[0]!;
 }
 
+/** Strike a recorded verification. The audit row keeps the old who and when beside the reason. */
+export function withdrawVerification(
+	ctx: Ctx,
+	input: { id: number; status: Exclude<PartLink['status'], 'verified'>; reason: string }
+): PartLink {
+	const row = loadLink(ctx, input.id);
+	requireLive(ctx, row.requirementId);
+	requirePerson(ctx);
+	if (row.status !== 'verified') throw conflict('not_verified', 'This link is not verified');
+	writeUpdate(
+		ctx,
+		partRequirement,
+		row.id,
+		{ status: input.status, verifiedAt: null, verifiedById: null },
+		input.reason.trim()
+	);
+	return linkOut(ctx, [row.id])[0]!;
+}
+
 export function unassign(ctx: Ctx, id: number): { ok: true } {
-	requireLive(ctx, loadLink(ctx, id).requirementId);
+	const row = loadLink(ctx, id);
+	requireLive(ctx, row.requirementId);
+	if (row.status === 'verified')
+		throw conflict('link_verified', 'This link is verified: withdraw the verification, then mark it not applicable');
+	if (withdrawalsByLink(ctx, [id]).size)
+		throw conflict('link_has_history', 'This link has a withdrawn verification on record: mark it not applicable');
 	remove(ctx, partRequirement, id);
 	return { ok: true };
 }

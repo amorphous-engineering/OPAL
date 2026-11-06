@@ -188,10 +188,22 @@
 		}
 	}
 
-	async function setStatus(a: Allocation, status: string) {
+	async function setStatus(a: Allocation, select: HTMLSelectElement) {
+		const status = select.value as Allocation['status'];
 		try {
 			if (status === 'verified') await opal.requirements.verifyLink({ id: a.id });
-			else await opal.requirements.updateLink({ id: a.id, status: status as Allocation['status'] });
+			else if (a.status === 'verified') {
+				const reason = await askReason({
+					title: `Withdraw verification of ${a.partName}`,
+					body: `The verification by ${a.verifiedBy ?? 'unknown'} stays on the record as withdrawn.`,
+					action: 'WITHDRAW'
+				});
+				if (reason === null) {
+					select.value = a.status;
+					return;
+				}
+				await opal.requirements.withdrawVerification({ id: a.id, status, reason });
+			} else await opal.requirements.updateLink({ id: a.id, status });
 		} catch (e) {
 			toastError(e);
 		}
@@ -211,7 +223,7 @@
 	async function unassign(a: Allocation) {
 		const ok = await confirm({
 			title: `Unassign ${a.partName} from ${req.reqNumber}?`,
-			body: 'The part stops carrying this requirement and its verification record is removed.',
+			body: 'The part stops carrying this requirement.',
 			action: 'UNASSIGN',
 			destructive: true
 		});
@@ -625,7 +637,7 @@
 						{#if recording}
 							<NativeSelect
 								value={a.status}
-								onchange={(e) => setStatus(a, e.currentTarget.value)}
+								onchange={(e) => setStatus(a, e.currentTarget)}
 								aria-label={`Verification of ${a.partName}`}
 							>
 								<NativeSelectOption value="open">OPEN</NativeSelectOption>
@@ -647,6 +659,18 @@
 								title={`Closed against rev ${a.againstRevision}; rev ${req.revision} is not verified`}
 								>OUTDATED</span
 							>{/if}
+						{#each a.withdrawals as w (w.at)}
+							<div class="text-xs text-quiet">
+								<span class="line-through"
+									>{#if w.verifiedAt}<Timestamp value={w.verifiedAt} />{/if}{w.verifiedBy
+										? ` ${w.verifiedBy}`
+										: ''}</span
+								>
+								WITHDRAWN <Timestamp value={w.at} />{w.by ? ` ${w.by}` : ''}{w.reason
+									? `: ${w.reason}`
+									: ''}
+							</div>
+						{/each}
 					{:else if col.key === 'againstRevision'}
 						<span
 							class={a.againstRevision !== req.revision ? 'text-warn' : ''}
@@ -663,7 +687,7 @@
 								aria-label={`Notes for ${a.partName}`}
 							/>
 						{:else}{a.notes ?? '—'}{/if}
-					{:else if editing}
+					{:else if editing && a.status !== 'verified' && !a.withdrawals.length}
 						<ActionLink onclick={() => unassign(a)}>UNASSIGN</ActionLink>
 					{/if}
 				{/snippet}
