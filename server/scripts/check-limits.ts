@@ -6,7 +6,8 @@
  *   cd server && bun scripts/check-limits.ts /path/to/copy-of/opal.db
  *
  * It opens the file read-only and refuses the default data folder. Copy opal.db with its -wal and
- * -shm files.
+ * -shm files. It matches columns to limits by field name, so an entry can be a false alarm: read it
+ * before acting on it.
  */
 import { Database } from 'bun:sqlite';
 import { contracts } from '@opal/shared';
@@ -59,16 +60,25 @@ export function limitsByField(): Map<string, number> {
 	return limits;
 }
 
+/**
+ * The audit log keeps whatever was written and is never parsed as a record. Settings hold values the
+ * server writes as JSON, and the rest is sign-in bookkeeping, so a field name there means something else.
+ */
+const NOT_RECORDS = new Set([
+	'audit_log', 'undo_mark', 'app_setting', 'auth_setting', 'plugin_setting', 'plugin',
+	'session', 'api_token', 'passkey_credential', 'webauthn_challenge', 'blob'
+]);
+
 export function overLimits(file: string): { over: OverLimit[]; skipped: string[] } {
 	const sqlite = new Database(file, { readonly: true });
 	const db = drizzle(sqlite);
 	const limits = limitsByField();
 	const over: OverLimit[] = [];
 	const skipped: string[] = [];
-	// The audit log keeps whatever was written. It is history and is never parsed as a record.
 	for (const table of Object.values(schema)) {
-		if (!is(table, SQLiteTable) || getTableName(table) === 'audit_log') continue;
+		if (!is(table, SQLiteTable)) continue;
 		const name = getTableName(table);
+		if (NOT_RECORDS.has(name)) continue;
 		const columns = getTableColumns(table) as Record<string, any>;
 		if (!columns.id) continue;
 		for (const [key, col] of Object.entries(columns)) {
