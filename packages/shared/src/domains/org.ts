@@ -130,6 +130,7 @@ const users = {
 		input: zUserCreate,
 		output: zOrgUser,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	get: op({
@@ -195,6 +196,7 @@ const users = {
 		input: z.object({ id: zId, roleIds: z.array(zId) }),
 		output: zOrgUser,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	uploadAvatar: op({
@@ -305,6 +307,7 @@ const roles = {
 		}),
 		output: zRole,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	update: op({
@@ -319,6 +322,7 @@ const roles = {
 		}),
 		output: zRole,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	}),
 	delete: op({
@@ -329,6 +333,7 @@ const roles = {
 		input: z.object({ id: zId }),
 		output: zOk,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	})
 };
@@ -352,6 +357,7 @@ const gates = {
 		input: z.object({ key: z.string(), roleIds: z.array(zId) }),
 		output: zGate,
 		access: 'admin',
+		humanOnly: true,
 		mcp: false
 	})
 };

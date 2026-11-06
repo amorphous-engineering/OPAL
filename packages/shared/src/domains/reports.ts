@@ -284,6 +284,7 @@ export const reports = {
 			input: zEmpty,
 			output: zLifecycleState,
 			access: 'admin',
+			humanOnly: true,
 			mcp: false
 		}),
 		exitDemo: op({
@@ -294,6 +295,7 @@ export const reports = {
 			input: zEmpty,
 			output: zLifecycleState,
 			access: 'admin',
+			humanOnly: true,
 			mcp: false
 		}),
 		deleteDemo: op({
@@ -304,6 +306,7 @@ export const reports = {
 			input: zEmpty,
 			output: zLifecycleState,
 			access: 'admin',
+			humanOnly: true,
 			mcp: false
 		}),
 		factoryReset: op({

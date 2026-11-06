@@ -145,6 +145,12 @@ export function updateUser(ctx: Ctx, input: z.output<typeof zUserUpdate> & { id:
 		if (bad.length) throw forbidden(`Cannot change fields: ${bad.join(', ')}`);
 	}
 
+	// Authority and identity: an email claims an OIDC sign-in, and admin is admin. Agents prepare, people commit.
+	const authority = given.filter((k) => k === 'isAdmin' || k === 'isActive' || k === 'email');
+	if (authority.length && ctx.actor.kind === 'token') {
+		throw forbidden('This action needs a signed-in person, not an API token');
+	}
+
 	const core: Partial<typeof user.$inferInsert> = {};
 	if (fields.name !== undefined) core.name = fields.name;
 	if (fields.email !== undefined) {
