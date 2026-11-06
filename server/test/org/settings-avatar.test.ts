@@ -74,7 +74,7 @@ describe('avatars', () => {
 		const dir = dataDir();
 		const { call, makeUser } = await setup();
 		const bob = makeUser('bob');
-		const r = await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: 'A'.repeat(4 * 1024 * 1024) });
+		const r = await call(bob, 'POST', `/users/${bob.id}/avatar`, { data: 'A'.repeat(3 * 1024 * 1024) });
 		expect(r.status).toBe(422);
 		expect(r.json.fields.data).toContain('Avatar too large');
 		expect(existsSync(join(dir, 'avatars'))).toBe(false);
