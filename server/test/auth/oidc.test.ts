@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { generateKeyPair } from 'jose';
+import { customFetch } from 'openid-client';
 import { eq } from 'drizzle-orm';
 import { safeNext } from '../../src/auth/oidc.ts';
+import { OutboundRefused } from '../../src/services/platform/outbound.ts';
 import { signPayload } from '../../src/auth/signing.ts';
 import { user } from '../../src/db/schema/index.ts';
 import {
@@ -14,6 +16,7 @@ import {
 	redirectUri,
 	resetDiscoveryCache,
 	resolveIdentity,
+	testDiscovery,
 	verifyIdToken
 } from '../../src/services/auth/oidc.ts';
 import { readSettings, type SignInSettings } from '../../src/services/auth/settings.ts';
@@ -91,6 +94,113 @@ describe('oidc discovery', () => {
 		await expectOidcError(discover(settings()), 'token_endpoint');
 		p.discovery = {};
 		resetDiscoveryCache();
+	});
+});
+
+describe('where discovery may lead', () => {
+	const hitsOf = async (run: (internal: string) => Promise<void>) => {
+		const hits: string[] = [];
+		const internal = Bun.serve({
+			port: 0,
+			hostname: '127.0.0.2',
+			fetch(req) {
+				hits.push(new URL(req.url).pathname);
+				return Response.json({ issuer: p.issuer, authorization_endpoint: 'READ', token_endpoint: 'READ' });
+			}
+		});
+		try {
+			await run(`http://127.0.0.2:${internal.port}`);
+		} finally {
+			internal.stop(true);
+			p.discovery = {};
+			resetDiscoveryCache();
+		}
+		return hits;
+	};
+
+	test('an issuer with credentials is refused without a request, though it seems to name localhost', async () => {
+		const hits = await hitsOf(async (internal) => {
+			const host = new URL(internal).host;
+			await expectOidcError(discover(settings({ oidcIssuer: `http://localhost:x@${host}` }), true), 'username or password');
+		});
+		expect(hits).toEqual([]);
+	});
+
+	for (const name of ['token_endpoint', 'userinfo_endpoint', 'jwks_uri']) {
+		test(`a ${name} on another private host is refused, and nothing is sent to it`, async () => {
+			const hits = await hitsOf(async (internal) => {
+				p.discovery = { [name]: `${internal}/x` };
+				await expectOidcError(discover(settings(), true), name);
+			});
+			expect(hits).toEqual([]);
+		});
+	}
+
+	test('endpoints on the issuer host are fine, also on a private address', async () => {
+		resetDiscoveryCache();
+		await expect(discover(settings(), true)).resolves.toBeDefined();
+	});
+
+	test('a discovery redirect to another private host is refused, and its content never comes back', async () => {
+		const redirecting = Bun.serve({
+			port: 0,
+			hostname: 'localhost',
+			fetch: () => new Response(null, { status: 302, headers: { location: 'http://localhost:1/internal.json' } })
+		});
+		try {
+			const err = await discover(settings({ oidcIssuer: `http://localhost:${redirecting.port}` }), true).catch((e) => e);
+			expect(err).toBeInstanceOf(OidcError);
+			expect(err.message).toContain('Could not read');
+			expect(err.message).not.toContain('localhost:1');
+		} finally {
+			redirecting.stop(true);
+		}
+	});
+
+	test('a closed port, an open port and a non-discovery JSON document all give the same message', async () => {
+		const serveBody = (body: string, status = 200) => Bun.serve({ port: 0, hostname: 'localhost', fetch: () => new Response(body, { status }) });
+		const notJson = serveBody('<html>');
+		const failing = serveBody('nope', 503);
+		const jsonNoIssuer = serveBody(JSON.stringify({ token_endpoint: 'READ', authorization_endpoint: 'READ' }));
+		const jsonArray = serveBody('[]');
+		const closed = serveBody('');
+		const closedUrl = `http://localhost:${closed.port}`;
+		closed.stop(true);
+		try {
+			const urls = [closedUrl, ...[notJson, failing, jsonNoIssuer, jsonArray].map((s) => `http://localhost:${s.port}`)];
+			const messages = new Set<string>();
+			for (const u of urls) {
+				const report = await testDiscovery(settings({ oidcIssuer: u }));
+				expect(report.ok).toBe(false);
+				expect(report.tokenEndpoint).toBeNull();
+				messages.add(report.message.replaceAll(u, '<issuer>'));
+			}
+			expect(messages.size).toBe(1);
+			expect([...messages][0]).toContain('Could not read an OpenID discovery document');
+		} finally {
+			for (const s of [notJson, failing, jsonNoIssuer, jsonArray]) s.stop(true);
+		}
+	});
+
+	test('the token request itself is checked when it is sent, not only at discovery', async () => {
+		resetDiscoveryCache();
+		const { config } = await discover(settings(), true);
+		const hits = await hitsOf(async (internal) => {
+			await expect(config[customFetch]!(`${internal}/token`, { method: 'POST' } as never)).rejects.toBeInstanceOf(OutboundRefused);
+		});
+		expect(hits).toEqual([]);
+	});
+
+	test('with private issuers switched off, a loopback provider is refused and never contacted', async () => {
+		process.env.OPAL_OIDC_ALLOW_PRIVATE = '0';
+		try {
+			const before = p.hits.discovery;
+			await expectOidcError(discover(settings(), true), 'OPAL_OIDC_ALLOW_PRIVATE');
+			expect(p.hits.discovery).toBe(before);
+		} finally {
+			delete process.env.OPAL_OIDC_ALLOW_PRIVATE;
+			resetDiscoveryCache();
+		}
 	});
 });
 

@@ -79,6 +79,12 @@ An admin can install a plugin from a public GitHub repository. **Installing a pl
 
 Set `OPAL_PLUGINS=0` to turn plugins off on a server. Nothing starts, and OPAL refuses to preview, install, configure, enable or restart one.
 
+### Single sign-on (OIDC)
+
+The identity provider can be on a private address. OPAL trusts the issuer host an admin configures. The token, userinfo and key endpoints in its discovery document, and any redirect or `picture` URL, must be on that same host and port or on a public https address. Link-local and cloud metadata addresses are always refused. Failures in **Test** show one message; the server log has the detail.
+
+On a server that must not reach its own network, set `OPAL_OIDC_ALLOW_PRIVATE=0`, so the issuer has to be on a public address too. A firewall is still the real boundary, because a name can resolve differently between OPAL's check and the request.
+
 ### Upgrade from 1.x
 
 1. Install the last 1.x release and start it once. This upgrades the database.

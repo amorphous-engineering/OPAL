@@ -104,6 +104,8 @@ describe('sign-in settings', () => {
 	const unsafe: [string, Record<string, unknown>, string][] = [
 		['enabling OIDC needs an issuer and a client id', { oidcEnabled: true }, 'issuer URL and client id'],
 		['an http issuer is refused', { oidcEnabled: true, oidcIssuer: 'http://evil.example', oidcClientId: 'x' }, 'https://'],
+		['an issuer with credentials is refused', { oidcEnabled: true, oidcIssuer: 'http://localhost:x@127.0.0.2:9000', oidcClientId: 'x' }, 'username or password'],
+		['an issuer with a fragment is refused', { oidcEnabled: true, oidcIssuer: 'https://10.0.0.5/secret.json#', oidcClientId: 'x' }, 'fragment'],
 		[
 			'scopes must include openid',
 			{ oidcEnabled: true, oidcIssuer: 'https://id.example.com', oidcClientId: 'x', oidcScopes: 'profile' },
@@ -250,7 +252,8 @@ describe('test discovery', () => {
 		);
 		const res = await (await h.call('POST', '/settings/auth/test', {}, { cookie })).json();
 		expect(res.ok).toBe(false);
-		expect(res.message).toContain('Could not reach');
+		expect(res.message).toContain('Could not read');
+		expect(res.message).not.toContain('ECONNREFUSED');
 	});
 
 	test('saving settings drops the cached provider metadata', async () => {

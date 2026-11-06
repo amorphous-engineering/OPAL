@@ -96,6 +96,8 @@ export interface FakeProvider {
 	userinfo: Record<string, unknown> | null;
 	/** What `/picture` answers: the `picture` claim can point there. */
 	picture: { type: string; body: Uint8Array } | null;
+	/** Where `/picture-moved` redirects. */
+	pictureMovedTo: string;
 	lastTokenRequest: { body: URLSearchParams; authorization: string | null } | null;
 	hits: { discovery: number };
 	/** Overrides for the discovery document. */
@@ -134,6 +136,7 @@ export async function fakeProvider(): Promise<FakeProvider> {
 			if (url.pathname === '/userinfo') {
 				return provider.userinfo ? Response.json(provider.userinfo) : new Response('no', { status: 404 });
 			}
+			if (url.pathname === '/picture-moved') return new Response(null, { status: 302, headers: { location: provider.pictureMovedTo } });
 			if (url.pathname === '/picture') {
 				const pic = provider.picture;
 				return pic ? new Response(new Uint8Array(pic.body), { headers: { 'content-type': pic.type } }) : new Response('no', { status: 404 });
@@ -155,6 +158,7 @@ export async function fakeProvider(): Promise<FakeProvider> {
 		tokens: null,
 		userinfo: null,
 		picture: null,
+		pictureMovedTo: '/picture',
 		lastTokenRequest: null,
 		hits: { discovery: 0 },
 		discovery: {},

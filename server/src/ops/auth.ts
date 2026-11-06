@@ -48,6 +48,7 @@ import {
 	type AuthorizeRequest
 } from '../services/auth/oauth.ts';
 import { resetDiscoveryCache, testDiscovery } from '../services/auth/oidc.ts';
+import { issuerProblem } from '../services/platform/outbound.ts';
 import { revokeSessions, startSession, type UserRow } from '../services/auth/sessions.ts';
 import { insert, remove, update } from '../write.ts';
 
@@ -428,9 +429,8 @@ export const authImpls = [
 				throw invalid('oidcIssuer', 'An issuer URL and client id are required to enable OIDC.');
 			}
 			// Every token exchange posts the client credential to this host: https, or loopback in development.
-			if (!issuer.startsWith('https://') && !/^http:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(issuer)) {
-				throw invalid('oidcIssuer', 'The issuer URL must be https:// (or a localhost URL for development).');
-			}
+			const problem = issuerProblem(issuer);
+			if (problem) throw invalid('oidcIssuer', problem);
 			if (!scopes.split(/\s+/).includes('openid')) {
 				throw invalid('oidcScopes', "The scopes must include 'openid'.");
 			}

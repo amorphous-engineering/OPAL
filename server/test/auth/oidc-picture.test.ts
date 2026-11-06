@@ -95,4 +95,43 @@ describe('oidc picture', () => {
 		await signInWithPicture(h, 'http://example.test/me.png');
 		expect(profileOf(h).profile?.avatarHash ?? null).toBeNull();
 	});
+
+	test('a picture on another private host is never fetched, and sign-in still works', async () => {
+		const hits: string[] = [];
+		const internal = Bun.serve({
+			port: 0,
+			hostname: '127.0.0.2',
+			fetch(req) {
+				hits.push(new URL(req.url).pathname);
+				return new Response(new Uint8Array(PNG), { headers: { 'content-type': 'image/png' } });
+			}
+		});
+		try {
+			const h = await harness();
+			configureOidc(h, p);
+			p.pictureMovedTo = `https://127.0.0.2:${internal.port}/secret.png`;
+			for (const picture of [
+				`http://127.0.0.2:${internal.port}/secret.png`,
+				`http://localhost:x@127.0.0.2:${internal.port}/secret.png`,
+				`https://127.0.0.2:${internal.port}/secret.png`,
+				`${p.issuer}/picture-moved`
+			]) {
+				const session = await signInWithPicture(h, picture);
+				expect(session).toBeTruthy();
+				expect(profileOf(h).profile?.avatarHash ?? null).toBeNull();
+			}
+			expect(hits).toEqual([]);
+		} finally {
+			internal.stop(true);
+			p.pictureMovedTo = '/picture';
+		}
+	});
+
+	test('a picture the provider redirects within its own host is still used', async () => {
+		const h = await harness();
+		configureOidc(h, p);
+		p.picture = { type: 'image/png', body: PNG };
+		await signInWithPicture(h, `${p.issuer}/picture-moved`);
+		expect(profileOf(h).profile?.avatarMime).toBe('image/png');
+	});
 });
