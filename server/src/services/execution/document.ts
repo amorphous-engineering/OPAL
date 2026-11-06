@@ -184,8 +184,8 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			hasNc: issues.some((i) => i.raisedStepId === row.id && i.issueType === 'non_conformance')
 		});
 		const skipGate = isTerminal(row.se.status) ? null : skipRefusal(ctx, row);
-		const skip = [...skipBlockers(m, st, row), ...(skipGate ? [blocker('role', skipGate)] : [])];
 		const mine = new Map((recs.get(row.id) ?? []).map((r) => [r.slot, r]));
+		const skip = [...skipBlockers(m, st, row, mine.size > 0), ...(skipGate ? [blocker('role', skipGate)] : [])];
 		const signedBy = new Map([...mine].map(([n, r]) => [n, r.signedById]));
 		const signoffs = row.signoffs.map((d, n) => {
 			const rec = mine.get(n);

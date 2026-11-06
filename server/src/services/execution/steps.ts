@@ -12,7 +12,7 @@ import { holdsSlotRole, roleNamesOf } from '../org/roles.ts';
 import { attachmentsFor, detach, publish } from '../platform/index.ts';
 import { type Blocker, completeBlockers, describeBlockers, skipBlockers, slotGate } from './gates.ts';
 import { holdState, rowHeld } from './holds.ts';
-import { type Model, type Row, getRow, isActive, isTerminal, loadModel } from './model.ts';
+import { type Model, type Row, getRow, isActive, isRoutine, isTerminal, loadModel } from './model.ts';
 import { personRefs, signedSlots, stepState } from './present.ts';
 
 const refuse = (message: string, status = 409) => new OpalError(status, 'step_blocked', message);
@@ -255,14 +255,16 @@ export function signNext(ctx: Ctx, input: { id: number; stepId: number }): SignR
  * commitment the step asks of a qualified person.
  */
 export function skipRefusal(ctx: Ctx, row: Row): string | null {
-	const roleSlots = row.signoffs.filter((x) => (x.role ?? '').trim());
+	// A routine leaf's one unnamed slot is the implicit COMPLETE, not a declared sign-off.
+	const declared = row.signoffs.length > 0 && !isRoutine(row);
 	const required = !!row.dataSchema?.fields.some((f) => f.required);
-	if ((!required && !roleSlots.length) || holdsGate(ctx.db, ctx.actor, 'execution.skipRequired')) return null;
+	if ((!required && !declared) || holdsGate(ctx.db, ctx.actor, 'execution.skipRequired')) return null;
 	// A holder of every role the slots name may skip without the gate: that is authority over the
-	// step, which holds even though the same person cannot sign two of its slots.
+	// step, which holds even though the same person cannot sign two of its slots. An unnamed slot
+	// names no authority, so it leaves only the gate.
 	const userId = actorUserId(ctx.actor);
 	const holder = userId === null ? new Set<string>(['admin']) : roleNamesOf(ctx.db, userId);
-	if (!required && roleSlots.every((x) => holdsSlotRole(holder, x.role))) return null;
+	if (!required && row.signoffs.every((x) => (x.role ?? '').trim() && holdsSlotRole(holder, x.role))) return null;
 	return gateRefusal(ctx.db, 'execution.skipRequired');
 }
 
@@ -275,7 +277,7 @@ export function skipStep(ctx: Ctx, input: { id: number; stepId: number; reason: 
 	const refusal = skipRefusal(ctx, row);
 	if (refusal) throw forbidden(refusal);
 	const st = holdState(ctx.db, m);
-	const holds: Blocker[] = skipBlockers(m, st, row);
+	const holds: Blocker[] = skipBlockers(m, st, row, signedSlots(ctx.db, row.id).size > 0);
 	if (holds.length) throw refuse(describeBlockers('skip', holds));
 	const started = markInWork(ctx, m);
 	const at = now();

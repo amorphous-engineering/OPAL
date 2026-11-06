@@ -52,6 +52,7 @@ A reason is required where this file says so. Elsewhere it is optional, and nobo
 - A step with no declared sign-off has one action: COMPLETE. No dialog, no signature row. The row then shows the title struck through with initials and time.
 - A step with declared sign-offs shows a slot for each. Pressing SIGN OFF is the attestation, with no dialog. Two slots need two different people.
 - Only the current step of the current operation is open by default. Others are one click away. SKIP and + ISSUE appear on the open step.
+- SKIP on a step with required data or a declared sign-off needs `execution.skipRequired`, or every role its slots name. Once the work is done and waits on sign-off, or a slot is signed, SKIP is gone: sign it, or close the work order short.
 - Completed steps never reopen. A correction is a note or a redline.
 - Capture fields are editable while a step is workable and read-only afterwards.
 - Every quantity on the material tab shows its unit. Source is a search over stock of that part with stock on hand, defaulting to the oldest.

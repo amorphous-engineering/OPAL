@@ -103,10 +103,9 @@ describe('skipping needs a reason', () => {
 });
 
 describe('skipping a step with a role-gated sign-off slot', () => {
-	test('a user without the slot role or the gate cannot skip a step that waits for its buyoff', async () => {
+	test('a user without the slot role or the gate cannot skip a step that declares a buyoff', async () => {
 		const t = await world();
 		const e = await t.cutWith({ signoffs: [{ role: null }, { role: 'Quality' }] });
-		expect((await t.complete(e.id, '1', {}, t.person('tom', 'technician'))).status).toBe(200);
 		const r = await t.skip(e.id, '1', {}, t.person('ted', 'technician'));
 		expect(r.status).toBe(403);
 		expect((await t.skip(e.id, '1', {}, t.person('quinn', 'quality'))).status).toBe(200);
@@ -119,5 +118,58 @@ describe('skipping a step with a role-gated sign-off slot', () => {
 		const e = await t.cutWith({ signoffs: [{ role: 'Quality' }] });
 		expect((await t.skip(e.id, '1', {}, t.person('tom', 'technician'))).status).toBe(403);
 		expect((await t.skip(e.id, '1', {}, t.person('quinn', 'quality'))).status).toBe(200);
+	});
+});
+
+describe('skipping a step with a declared sign-off', () => {
+	test('a second slot that names no role still needs the gate', async () => {
+		const t = await world();
+		const e = await t.cutWith({ signoffs: [{ role: null }, { role: null }] });
+		expect((await t.skip(e.id, '1', {}, t.person('tom', 'technician'))).status).toBe(403);
+		expect((await t.skip(e.id, '1', {}, t.person('eve', 'engineer'))).status).toBe(200);
+	});
+
+	test('holding the role of one slot gives no authority over an unnamed one', async () => {
+		const t = await world();
+		const admin = t.db.insert(user).values({ username: 'root', name: 'root', isAdmin: true, createdAt: 'x', updatedAt: 'x' }).returning().get();
+		await t.call('PUT', '/gates/execution.skipRequired', { roleIds: [] }, t.asUser(admin));
+		const e = await t.cutWith({ signoffs: [{ role: null }, { role: 'Quality' }] });
+		expect((await t.skip(e.id, '1', {}, t.person('quinn', 'quality'))).status).toBe(403);
+	});
+
+	test('a signed slot refuses every skip, gate or not, and the stamps of the signature stay', async () => {
+		const t = await world();
+		const e = await t.cutWith({ signoffs: [{ role: null }, { role: 'Quality' }] });
+		const tom = t.person('tom', 'technician');
+		expect((await t.complete(e.id, '1', {}, tom)).status).toBe(200);
+		const before = (await t.get(e.id)).steps[0];
+		expect(before.status).toBe('awaiting_signoff');
+		for (const who of [t.person('quinn', 'quality'), t.person('eve', 'engineer')]) {
+			const r = await t.skip(e.id, '1', {}, who);
+			expect(r.status).toBe(409);
+			expect(r.json.message).toContain('sign-off');
+		}
+		expect((await t.get(e.id)).steps[0]).toEqual(before);
+		const doc = await t.call('GET', `/executions/${e.id}/document`, undefined, t.person('eve'));
+		expect(doc.json.ops[0].step.skipBlockers.map((b: any) => b.kind)).toEqual(['signoff']);
+	});
+
+	test('an OP whose sub-steps are done and that waits on its buyoff cannot be skipped', async () => {
+		const t = await world();
+		const p = await t.proc('Skip buyoff');
+		const op = await t.step(p.id, 'Inspect', { signoffs: [{ role: null }] });
+		await t.step(p.id, 'Look', { parentId: op.id });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const e = await t.cut(p.id);
+		expect((await t.skip(e.id, '1.1', {}, t.person('tom', 'technician'))).status).toBe(200);
+		expect((await t.get(e.id)).steps[0].status).toBe('awaiting_signoff');
+		expect((await t.skip(e.id, '1', {}, t.person('eve', 'engineer'))).status).toBe(409);
+		expect((await t.get(e.id)).steps[0].status).toBe('awaiting_signoff');
+	});
+
+	test('a routine step keeps its implicit slot out of the gate', async () => {
+		const t = await world();
+		const e = await t.cutWith({});
+		expect((await t.skip(e.id, '1', {}, t.person('nobody'))).status).toBe(200);
 	});
 });

@@ -93,9 +93,13 @@ export const completeBlockers = (m: Model, st: HoldState, row: Row, cap?: Captur
 
 /**
  * Skip is terminal, so it inherits the held scope, open redlines and open sub-steps. It leaves
- * out strict sequence and OP dependencies: skipping need not wait for predecessors.
+ * out strict sequence and OP dependencies: skipping need not wait for predecessors. Work that is
+ * done or signed was applicable: a skip would say otherwise and take the signer's stamps with it.
  */
-export const skipBlockers = (m: Model, st: HoldState, row: Row): Blocker[] => [
+export const skipBlockers = (m: Model, st: HoldState, row: Row, signed: boolean): Blocker[] => [
+	...(!isTerminal(row.se.status) && (signed || row.se.status === 'awaiting_signoff')
+		? [blocker('signoff', 'The work is done and waits on sign-off')]
+		: []),
 	...heldScopeBlockers(st, row),
 	...sequenceBlockers(m, row).filter((b) => b.kind === 'redline' || b.kind === 'children')
 ];

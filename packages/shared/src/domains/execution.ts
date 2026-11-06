@@ -1012,7 +1012,8 @@ export const execution = {
 		name: 'execution.skip',
 		method: 'POST',
 		path: '/executions/:id/steps/:stepId/skip',
-		summary: 'Skip a step (not applicable). A reason is required. Held scope and open redlines refuse it.',
+		summary:
+			'Skip a step (not applicable). A reason is required. Held scope and open redlines refuse it, and so does a step that is done and waits on sign-off. Required data or a declared sign-off needs execution.skipRequired.',
 		input: z.object({ ...zStepPath, reason: z.string().trim().min(1).max(2000) }),
 		output: zSignResult,
 		access: 'signed-in',

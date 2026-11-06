@@ -21,8 +21,8 @@ export const GATE_INFO: Record<string, { label: string; description: string; def
 		defaultRoles: ['quality']
 	},
 	'execution.skipRequired': {
-		label: 'Skip steps with required data',
-		description: 'Mark a step not applicable when it has required data fields or a sign-off slot that names a role.',
+		label: 'Skip steps with required data or a sign-off',
+		description: 'Mark a step not applicable when it has required data fields or a declared sign-off.',
 		defaultRoles: ['engineer', 'quality']
 	},
 	'execution.closeShort': {
