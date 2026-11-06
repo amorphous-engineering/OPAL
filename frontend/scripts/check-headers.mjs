@@ -71,7 +71,7 @@ const paths = [
 	'/settings',
 	'/settings/plugins',
 	'/settings/users',
-	'/label',
+	parts[0] && `/label?part=${parts[0].id}`,
 	'/oauth/authorize?response_type=code&client_id=x&redirect_uri=http%3A%2F%2F127.0.0.1%3A1%2Fcb&code_challenge=x&code_challenge_method=S256'
 ].filter(Boolean);
 
@@ -97,28 +97,52 @@ for (const path of paths) {
 			.catch(() => '')
 	).trim();
 	console.log(body.length > 20 ? 'ok   ' : 'EMPTY', path);
+	if (path.startsWith('/label?')) {
+		// The QR is a data: image.
+		const qr = await page.$$eval('img', (i) => i.filter((x) => x.naturalWidth > 0).length);
+		console.log(qr ? 'ok   ' : 'EMPTY', 'label QR images drawn:', qr);
+		if (!qr) problems.push('label QR not drawn');
+	}
 }
 
 // Another origin frames the app. Same host, other port, as a hostile page on the network would.
+// Run twice: with the headers as served (must be blocked), then with the framing headers
+// stripped in flight (must load), which shows this check can tell the two apart.
 where = 'framing';
 const srv = http.createServer((q, r) => {
 	r.setHeader('content-type', 'text/html');
 	r.end(`<iframe id=f src="${base}/settings" width=900 height=600></iframe>`);
 });
 await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
-const fr = await ctx.newPage();
-await fr.goto(`http://localhost:${srv.address().port}/`);
-await fr.waitForTimeout(2500);
-const inner = fr.frames().find((f) => f !== fr.mainFrame());
-let text = '';
-try {
-	text = (await inner.locator('body').innerText({ timeout: 1500 })).trim();
-} catch {
-	/* a blocked frame has no readable body */
-}
-const framed = /settings|organization|users/i.test(text) && text.length > 40;
-console.log(framed ? 'FRAMED' : 'frame blocked', JSON.stringify(text.slice(0, 60)));
-if (framed) problems.push('another origin could frame /settings');
+const framedText = async (strip) => {
+	const fr = await ctx.newPage();
+	if (strip) {
+		await fr.route(`${base}/settings`, async (route) => {
+			const res = await route.fetch();
+			const headers = { ...res.headers() };
+			delete headers['x-frame-options'];
+			delete headers['content-security-policy'];
+			await route.fulfill({ response: res, headers });
+		});
+	}
+	await fr.goto(`http://localhost:${srv.address().port}/`);
+	await fr.waitForTimeout(2500);
+	const inner = fr.frames().find((f) => f !== fr.mainFrame());
+	let text = '';
+	try {
+		text = (await inner.locator('body').innerText({ timeout: 4000 })).trim();
+	} catch {
+		/* a blocked frame has no readable body */
+	}
+	await fr.close();
+	return text;
+};
+const blocked = await framedText(false);
+const control = await framedText(true);
+console.log('framed as served:', JSON.stringify(blocked.slice(0, 60)));
+console.log('framed with headers stripped (control):', JSON.stringify(control.slice(0, 60)));
+if (blocked.length > 40) problems.push('another origin could frame /settings');
+if (control.length <= 40) problems.push('framing control did not load: this check proves nothing');
 srv.close();
 
 await browser.close();
