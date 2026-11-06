@@ -242,9 +242,17 @@ function ownerTable(type: string) {
 	return tables.get(type);
 }
 
+/** Sign-in, authority and bookkeeping tables are not records a file can belong to. */
+const NOT_OWNERS = new Set([
+	'attachment', 'blob', 'audit_log', 'undo_mark',
+	'user', 'user_profile', 'user_role', 'role', 'role_gate',
+	'session', 'api_token', 'passkey_credential', 'webauthn_challenge', 'auth_setting',
+	'plugin', 'plugin_setting', 'external_link', 'notification'
+]);
+
 function assertOwner(db: Db, owner: Owner): void {
 	const table = ownerTable(owner.type);
-	if (!table?.id || owner.type === 'attachment' || owner.type === 'blob') {
+	if (!table?.id || NOT_OWNERS.has(owner.type)) {
 		throw new OpalError(422, 'invalid_input', 'Invalid input', { ownerType: `unknown owner type ${owner.type}` });
 	}
 	if (!db.select({ id: table.id }).from(table).where(eq(table.id, owner.id)).get()) {

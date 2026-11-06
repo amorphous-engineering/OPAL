@@ -24,6 +24,14 @@ function upload(s: S, fields: Record<string, string | File>) {
 const text = (body: string, name = 'note.txt', type = 'text/plain') => new File([body], name, { type });
 
 describe('attachments', () => {
+	test('a file can belong to a record, not to a sign-in or authority table', async () => {
+		const s = await setup();
+		for (const ownerType of ['user', 'session', 'api_token', 'auth_setting', 'audit_log', 'role']) {
+			const res = await upload(s, { file: text('x'), ownerType, ownerId: '1' });
+			expect(res.status).toBe(422);
+		}
+	});
+
 	test('upload stores the file under its SHA-256 and links it to one owner', async () => {
 		const s = await setup();
 		const id = await partId(s);
