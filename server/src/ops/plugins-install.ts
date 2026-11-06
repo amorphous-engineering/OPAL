@@ -16,7 +16,7 @@ export const pluginsInstallImpls: Impl[] = [
 			refuseInDemo(ctx.db, 'installing a plugin');
 			return installer.preview(ctx.db, i.source);
 		},
-		{ verifyFirst: true }
+		{ verifyFirst: true, longRunning: true }
 	),
 	implement(
 		c.install,
@@ -26,7 +26,7 @@ export const pluginsInstallImpls: Impl[] = [
 			const row = await installer.install(ctx, i.source, i.sha);
 			return toDetail(ctx.db, getPlugin(ctx.db, row.key));
 		},
-		{ verifyFirst: true }
+		{ verifyFirst: true, longRunning: true }
 	),
 	implement(c.remove, async (ctx, i) => {
 		await installer.remove(ctx, i.id);

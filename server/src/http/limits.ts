@@ -40,3 +40,11 @@ export const jsonBodyLimit: MiddlewareHandler = (c, next) => {
 	if (!LIMITED.some((re) => re.test(path)) || UPLOAD.some((re) => re.test(path))) return next();
 	return bodyLimit({ maxSize: maxJsonBytes(), onError: tooLarge })(c, next);
 };
+
+/**
+ * Turns off the idle timeout for this request, for work that can sit silent past it: a plugin download,
+ * a plugin page that streams. `serve` provides it. Under tests and `app.request` nothing happens.
+ */
+export function keepConnectionOpen(c: Context): void {
+	(c.env as { keepOpen?: () => void } | undefined)?.keepOpen?.();
+}

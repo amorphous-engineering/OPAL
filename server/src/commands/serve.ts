@@ -41,7 +41,7 @@ export async function serve(args: string[]): Promise<void> {
 		idleTimeout: idleTimeoutSeconds(),
 		maxRequestBodySize: maxRequestBytes(),
 		// The socket address, for session records when no proxy sets x-forwarded-for.
-		fetch: (req, server) => app.fetch(req, { ip: server.requestIP(req)?.address ?? null })
+		fetch: (req, server) => app.fetch(req, { ip: server.requestIP(req)?.address ?? null, keepOpen: () => server.timeout(req, 0) })
 	});
 	if (pluginsEnabled()) {
 		const host = new PluginHost(db);

@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { requireScope } from '../../auth/scope.ts';
 import { verifyPayload } from '../../auth/signing.ts';
+import { keepConnectionOpen } from '../../http/limits.ts';
 import { actorUserId } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import { user } from '../../db/schema/index.ts';
@@ -38,6 +39,8 @@ async function userOf(c: Context, db: Db, resolveActor: ResolveActor, key: strin
 }
 
 async function forward(c: Context, port: number, upstreamPath: string, headers: Headers): Promise<Response> {
+	// A plugin page may stream, or work a while before it answers.
+	keepConnectionOpen(c);
 	const url = new URL(c.req.url);
 	url.searchParams.delete('pt');
 	const query = url.searchParams.toString();

@@ -17,6 +17,7 @@ import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { z } from 'zod';
 import { requestBase } from './auth/base-url.ts';
+import { keepConnectionOpen } from './http/limits.ts';
 import { clientIp } from './auth/client-ip.ts';
 import { browserHost } from './auth/host-guard.ts';
 import { requireScope } from './auth/scope.ts';
@@ -36,17 +37,19 @@ export interface Impl<C extends OpContract = OpContract> {
 	 * that wait on the network before they write.
 	 */
 	verifyFirst?: boolean;
+	/** The operation can wait on the network past the idle timeout, so its connection stays open. */
+	longRunning?: boolean;
 }
 
 export function implement<C extends OpContract>(
 	contract: C,
 	handler: Impl<C>['handler'],
-	opts?: { verifyFirst?: boolean }
+	opts?: { verifyFirst?: boolean; longRunning?: boolean }
 ): Impl<C> {
 	if (opts?.verifyFirst && contract.access !== 'public' && contract.access !== 'admin') {
 		throw new Error(`${contract.name}: verifyFirst is for public and admin operations`);
 	}
-	return { contract, handler, verifyFirst: opts?.verifyFirst };
+	return { contract, handler, verifyFirst: opts?.verifyFirst, longRunning: opts?.longRunning };
 }
 
 /**
@@ -174,6 +177,7 @@ export function mountOps(app: Hono, impls: Impl[], db: Db, resolveActor: Resolve
 		if (seen.has(c.name)) throw new Error(`Duplicate operation ${c.name}`);
 		seen.add(c.name);
 		app.on(c.method, `/api${c.path}`, async (hc) => {
+			if (impl.longRunning) keepConnectionOpen(hc);
 			let input: Record<string, unknown> = {};
 			if (c.method === 'GET' || c.method === 'DELETE') {
 				input = Object.fromEntries(new URL(hc.req.url).searchParams);
