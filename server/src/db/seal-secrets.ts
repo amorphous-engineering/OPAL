@@ -78,6 +78,14 @@ function storedSecrets(sqlite: Database): Stored[] {
 	return out;
 }
 
+/** The stored secrets no key here opens, named for a message. */
+export function unreadableSecrets(sqlite: Database): string[] {
+	const keys = openingKeys();
+	return storedSecrets(sqlite)
+		.filter((s) => s.sealed && !openSealed(s.text, s.scope, keys))
+		.map((s) => s.label);
+}
+
 /** Who hid the values. At a start, nobody did: the server found them. */
 export interface HiddenBy {
 	op: string;

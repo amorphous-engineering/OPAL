@@ -14,7 +14,7 @@
  * rotation, a factory reset or a move of the data folder.
  */
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs';
+import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { dataDir } from '../paths.ts';
 
@@ -65,13 +65,10 @@ function envKey(name: 'OPAL_SECRETS_KEY' | 'OPAL_SECRETS_KEY_PREVIOUS'): string 
 	return value;
 }
 
-/** Durable before it is used: a secret sealed with a key that a crash then loses is gone. */
-function writeKeyFile(keys: string[]): void {
-	const path = keyFilePath();
-	const dir = dirname(path);
-	const tmp = `${path}.tmp`;
-	mkdirSync(dir, { recursive: true, mode: 0o700 });
-	rmSync(tmp, { force: true });
+/** Durable before it is used: a secret sealed with a key that a crash then loses is gone. Returns the temp file. */
+function writeTemp(path: string, keys: string[]): string {
+	mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+	const tmp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
 	const fd = openSync(tmp, 'wx', 0o600);
 	try {
 		writeSync(fd, `${keys.join('\n')}\n`);
@@ -79,7 +76,10 @@ function writeKeyFile(keys: string[]): void {
 	} finally {
 		closeSync(fd);
 	}
-	renameSync(tmp, path);
+	return tmp;
+}
+
+function syncFolder(dir: string): void {
 	try {
 		const d = openSync(dir, 'r');
 		try {
@@ -92,22 +92,56 @@ function writeKeyFile(keys: string[]): void {
 	}
 }
 
+/** Replaces the file. Through a link, so a key kept on another volume stays there. */
+function writeKeyFile(keys: string[]): void {
+	let path = keyFilePath();
+	try {
+		path = realpathSync(path);
+	} catch {
+		/* no file yet */
+	}
+	renameSync(writeTemp(path, keys), path);
+	syncFolder(dirname(path));
+}
+
 const newKey = () => randomBytes(32).toString('hex');
 
-/** The key that seals. Made on first need, so an instance with no secrets has no key to look after. */
-function sealingKey(): string {
-	const configured = envKey('OPAL_SECRETS_KEY');
-	if (configured) return configured;
-	const [first] = fileKeys();
-	if (first) return first;
+/**
+ * The first key. Two processes can both find none, and one may already have sealed a value with
+ * its key, so the file that got there first stays: a link refuses to replace it, where a rename would not.
+ */
+function createKeyFile(): string {
+	const path = keyFilePath();
 	const made = newKey();
-	writeKeyFile([made]);
+	const tmp = writeTemp(path, [made]);
+	try {
+		linkSync(tmp, path);
+	} catch (e) {
+		const code = (e as { code?: string }).code;
+		if (code === 'EEXIST') {
+			const [winner] = fileKeys();
+			if (!winner) throw new Error(`${path} exists but cannot be read as a secrets key.`);
+			return winner;
+		}
+		if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') throw e;
+		// A folder with no hard links. The file is still complete when it appears.
+		renameSync(tmp, path);
+	} finally {
+		rmSync(tmp, { force: true });
+	}
+	syncFolder(dirname(path));
 	return made;
 }
 
+/** The key that seals now, or none before the first secret. Asking never makes one. */
+const currentKey = () => envKey('OPAL_SECRETS_KEY') ?? fileKeys()[0];
+
+/** The key that seals. Made on first need, so an instance with no secrets has no key to look after. */
+const sealingKey = () => currentKey() ?? createKeyFile();
+
 /** Every key that may open a value, the sealing key first. A file left after moving to the variable still counts. */
 export function openingKeys(): string[] {
-	const keys = [envKey('OPAL_SECRETS_KEY'), envKey('OPAL_SECRETS_KEY_PREVIOUS'), ...fileKeys()].filter((k): k is string => !!k);
+	const keys = [envKey('OPAL_SECRETS_KEY'), ...fileKeys(), envKey('OPAL_SECRETS_KEY_PREVIOUS')].filter((k): k is string => !!k);
 	return [...new Set(keys)];
 }
 
@@ -138,9 +172,11 @@ function openWith(material: string, sealed: string, scope: string): string | nul
 
 /** The plain value and whether it was sealed with the key in charge, or null when no key opens it. */
 export function openSealed(sealed: string, scope: string, keys = openingKeys()): { plain: string; current: boolean } | null {
-	for (const [i, key] of keys.entries()) {
+	// By value, not position: with only OPAL_SECRETS_KEY_PREVIOUS set, the one key there is does not seal.
+	const sealing = currentKey();
+	for (const key of keys) {
 		const plain = openWith(key, sealed, scope);
-		if (plain !== null) return { plain, current: i === 0 };
+		if (plain !== null) return { plain, current: key === sealing };
 	}
 	return null;
 }

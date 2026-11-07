@@ -1,10 +1,10 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { chmodSync, cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { addKeyToFile, authSettingScope, isSealed, KEY_FILE, keyFilePath, openSealed, seal, readStored } from '../../src/auth/sealed.ts';
-import { rotateSecretsKey } from '../../src/commands/secrets.ts';
+import { rotateSecretsKey, rotationRefusal } from '../../src/commands/secrets.ts';
 import type { Ctx } from '../../src/context.ts';
 import { MIGRATIONS_DIR, openDb, type Db } from '../../src/db/client.ts';
 import { hideAuditedValue, holdsPlaintextSecret, sweepCopies } from '../../src/db/seal-secrets.ts';
@@ -172,6 +172,19 @@ describe('the key', () => {
 		expect(existsSync(join(dir, KEY_FILE))).toBe(false);
 		delete process.env.OPAL_SECRETS_KEY;
 		expect(readStored(sealed, 's')).toBeNull();
+	});
+
+	test('processes that make the first key at the same moment all use the one that stays', async () => {
+		const module = join(import.meta.dir, '../../src/auth/sealed.ts');
+		const at = Date.now() + 1000;
+		const { OPAL_SECRETS_KEY: _none, ...env } = process.env;
+		const script = `import { seal } from '${module}'; while (Date.now() < ${at}) {} console.log(seal('value', 's'));`;
+		const runs = Array.from({ length: 6 }, () => Bun.spawn(['bun', '-e', script], { cwd: dir, env: { ...env, OPAL_DATA_DIR: dir }, stderr: 'pipe' }));
+		const out = await Promise.all(runs.map((r) => new Response(r.stdout).text()));
+		const sealed = out.map((o) => o.trim());
+		expect(sealed.every(isSealed)).toBe(true);
+		for (const value of sealed) expect(readStored(value, 's')).toBe('value');
+		expect(readFileSync(join(dir, KEY_FILE), 'utf8').trim().split('\n')).toHaveLength(1);
 	});
 });
 
@@ -509,6 +522,84 @@ describe('rotating the key', () => {
 		const db = openDb(path);
 		expect(readSettings(db).oidcClientSecret).toBe(OIDC);
 		db.$client.close();
+	});
+
+	test('moving from the variable to the file reseals at the next start, so _PREVIOUS can go', () => {
+		const old = 'a-key-leaving-the-service-manager-0123456789';
+		process.env.OPAL_SECRETS_KEY = old;
+		rc24Database();
+		openDb(path).$client.close();
+		delete process.env.OPAL_SECRETS_KEY;
+		process.env.OPAL_SECRETS_KEY_PREVIOUS = old;
+		openDb(path).$client.close();
+		expect(existsSync(join(dir, KEY_FILE))).toBe(true);
+		expect(openSealed(sealedSecret(), authSettingScope('oidc_client_secret'), [old])).toBeNull();
+		delete process.env.OPAL_SECRETS_KEY_PREVIOUS;
+		const db = openDb(path);
+		expect(readSettings(db).oidcClientSecret).toBe(OIDC);
+		expect(readSettings(db).oidcClientSecretUnreadable).toBe(false);
+		db.$client.close();
+	});
+
+	test('a _PREVIOUS left set does not reseal what the file key already sealed', () => {
+		rc24Database();
+		openDb(path).$client.close();
+		process.env.OPAL_SECRETS_KEY_PREVIOUS = 'an-old-key-nobody-removed-0123456789abcdef';
+		const before = sealedSecret();
+		openDb(path).$client.close();
+		openDb(path).$client.close();
+		expect(sealedSecret()).toBe(before);
+	});
+
+	test('a rotation reseals what _PREVIOUS opens', () => {
+		const old = 'a-key-leaving-the-service-manager-0123456789';
+		process.env.OPAL_SECRETS_KEY = old;
+		rc24Database();
+		openDb(path).$client.close();
+		delete process.env.OPAL_SECRETS_KEY;
+		process.env.OPAL_SECRETS_KEY_PREVIOUS = old;
+		expect(rotationRefusal()).toBeNull();
+		expect(rotateSecretsKey()).toBe(true);
+		expect(openSealed(sealedSecret(), authSettingScope('oidc_client_secret'), [old])).toBeNull();
+	});
+
+	test('a rotation that could not read the secrets refuses and changes nothing', () => {
+		process.env.OPAL_SECRETS_KEY = 'a-key-only-the-service-manager-has-0123456789';
+		rc24Database();
+		openDb(path).$client.close();
+		delete process.env.OPAL_SECRETS_KEY;
+		const before = sealedSecret();
+		const refusal = rotationRefusal();
+		expect(refusal).toContain('Nothing changed');
+		expect(refusal).toContain('oidc_client_secret');
+		expect(existsSync(join(dir, KEY_FILE))).toBe(false);
+		expect(sealedSecret()).toBe(before);
+	});
+
+	test('a rotation refuses a 1.x database and leaves it untouched', () => {
+		const legacy = new Database(path, { create: true });
+		legacy.run('CREATE TABLE alembic_version (version_num TEXT)');
+		legacy.close();
+		const before = readFileSync(path);
+		expect(rotationRefusal()).toContain('1.x');
+		expect(readFileSync(path).equals(before)).toBe(true);
+		expect(readdirSync(dir).sort()).toEqual(['opal.db']);
+	});
+
+	(process.platform === 'win32' ? test.skip : test)('a key file linked to another folder stays linked', () => {
+		const elsewhere = mkdtempSync(join(tmpdir(), 'opal-key-'));
+		try {
+			const real = join(elsewhere, 'key');
+			seal('value', 's');
+			renameSync(join(dir, KEY_FILE), real);
+			symlinkSync(real, join(dir, KEY_FILE));
+			const before = readFileSync(real, 'utf8');
+			expect(rotateSecretsKey()).toBe(true);
+			expect(lstatSync(join(dir, KEY_FILE)).isSymbolicLink()).toBe(true);
+			expect(readFileSync(real, 'utf8')).not.toBe(before);
+		} finally {
+			rmSync(elsewhere, { recursive: true, force: true });
+		}
 	});
 
 	test('moving from the file to the variable reseals at the next start', () => {
