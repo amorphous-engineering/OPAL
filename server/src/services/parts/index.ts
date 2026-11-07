@@ -29,7 +29,7 @@ import {
 	requireConfiguredTier,
 	retirePartNumber
 } from './numbering.ts';
-import { copiesOf, hasTrackingLock, hasUnitLock, publishedKits, referenceCounts } from './references.ts';
+import { copiesOf, hasTrackingLock, hasUnitLock, lockedAssemblyUsing, publishedKits, referenceCounts } from './references.ts';
 import { family, familyOf, nextVariantNumber } from './variants.ts';
 
 type Row = typeof part.$inferSelect;
@@ -171,6 +171,7 @@ export function detail(ctx: Ctx, id: number): PartDetail {
 		references: refs,
 		deletable: row.state === 'draft' && Object.keys(refs).length === 0,
 		unitLocked: hasUnitLock(ctx, id),
+		identityLocked: lockedAssemblyUsing(ctx, id) !== null,
 		bom: listLines(ctx, id),
 		bomLockedBy: row.state === 'obsolete' ? null : copiesOf(ctx, id),
 		publishedKits: publishedKits(ctx, id),
@@ -296,6 +297,10 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 			`${row.internalPn} is ${row.state}: its tier cannot change`
 		);
 	}
+	if (tierChange) {
+		const usedBy = lockedAssemblyUsing(ctx, row.id);
+		if (usedBy) throw conflict('identity_locked', `${row.internalPn} is in the BOM of ${usedBy}, which has copies built to it: its number and tier cannot change`);
+	}
 	// Tracking decides how stock is stored (one record per unit or one lump).
 	if (input.trackingType !== undefined && input.trackingType !== row.trackingType) {
 		if (hasTrackingLock(ctx, row.id)) {
@@ -314,9 +319,12 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 	if (input.name !== undefined) patch.name = input.name;
 	if (input.unitOfMeasure !== undefined && input.unitOfMeasure !== row.unitOfMeasure) {
 		if (hasUnitLock(ctx, row.id)) {
+			const usedBy = lockedAssemblyUsing(ctx, row.id);
 			throw conflict(
 				'unit_locked',
-				`${row.internalPn} has stock or purchase order lines counted in ${row.unitOfMeasure}: the unit cannot change`
+				usedBy
+					? `${row.internalPn} is in the BOM of ${usedBy}, which has copies built to it: the unit cannot change`
+					: `${row.internalPn} has stock or purchase order lines counted in ${row.unitOfMeasure}: the unit cannot change`
 			);
 		}
 		patch.unitOfMeasure = input.unitOfMeasure;

@@ -20,5 +20,5 @@
 	{/snippet}
 </PageHeader>
 {#key data.part.id}
-	<PartForm schema={data.schema} part={data.part} unitLocked={data.unitLocked} />
+	<PartForm schema={data.schema} part={data.part} unitLocked={data.unitLocked} identityLocked={data.identityLocked} />
 {/key}

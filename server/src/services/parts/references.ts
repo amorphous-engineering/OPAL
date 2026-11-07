@@ -5,7 +5,7 @@
  */
 import { eq, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
-import { bomLine } from '../../db/schema/index.ts';
+import { bomLine, part } from '../../db/schema/index.ts';
 
 export interface PartReference {
 	/** Key in the `references` map, e.g. `inventory_records`. */
@@ -58,6 +58,20 @@ export function copiesOf(ctx: Pick<Ctx, 'db'>, partId: number): string | null {
 	return found.length ? found.join(', ') : null;
 }
 
+/**
+ * The assembly with copies whose BOM names this part, if any. Those copies were built to that line, and
+ * the line reads through the part: its number and its unit say what the quantity means.
+ */
+export function lockedAssemblyUsing(ctx: Pick<Ctx, 'db'>, partId: number): string | null {
+	const assemblies = ctx.db
+		.select({ id: part.id, internalPn: part.internalPn })
+		.from(bomLine)
+		.innerJoin(part, eq(part.id, bomLine.assemblyId))
+		.where(eq(bomLine.componentId, partId))
+		.all();
+	return assemblies.find((a) => copySources.some((s) => s.count(ctx, a.id) > 0))?.internalPn ?? null;
+}
+
 export interface PublishedKit {
 	procedureId: number;
 	templateNumber: string;
@@ -87,7 +101,7 @@ export function referenceCounts(ctx: Pick<Ctx, 'db'>, partId: number): Record<st
 /** A new unit would silently change what every one of these quantities means. */
 export function hasUnitLock(ctx: Pick<Ctx, 'db'>, partId: number): boolean {
 	for (const ref of sources.values()) if (ref.locksUnit && ref.count(ctx, partId) > 0) return true;
-	return false;
+	return lockedAssemblyUsing(ctx, partId) !== null;
 }
 
 export function hasTrackingLock(ctx: Pick<Ctx, 'db'>, partId: number): boolean {

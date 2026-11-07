@@ -231,3 +231,72 @@ describe('a voided build leaves nothing behind that locks the BOM', () => {
 		expect(await t.lockedBy()).toBe('1 stock record');
 	});
 });
+
+describe('a locked BOM does not change meaning through its component', () => {
+	test('the unit of a component stops changing once an assembly using it has copies', async () => {
+		const s = await fixture();
+		// While the BOM is pencil, the component is too.
+		expect((await s.api('PATCH', `/parts/${s.a.id}`, { unitOfMeasure: 'g' })).status).toBe(200);
+		expect((await s.api('GET', `/parts/${s.a.id}/detail`)).json.unitLocked).toBe(false);
+
+		addStock(s, s.asm.id);
+		const refused = await s.api('PATCH', `/parts/${s.a.id}`, { unitOfMeasure: 'kg' });
+		expect(refused.status).toBe(409);
+		expect(refused.json.error).toBe('unit_locked');
+		expect(refused.json.message).toContain(s.asm.internalPn);
+		const bom = (await s.api('GET', `/parts/${s.asm.id}/bom`)).json;
+		expect([bom[0].quantity, bom[0].componentUom]).toEqual(['2', 'g']);
+		expect((await s.api('GET', `/parts/${s.a.id}/detail`)).json.unitLocked).toBe(true);
+	});
+
+	test('a component of an assembly without copies keeps its unit free', async () => {
+		const s = await fixture();
+		addStock(s, s.b.id);
+		expect((await s.api('PATCH', `/parts/${s.a.id}`, { unitOfMeasure: 'kg' })).status).toBe(200);
+	});
+
+	test('a voided build frees the unit of its components again', async () => {
+		const t = await executionSetup();
+		const asm = await t.ok('POST', '/parts', { name: 'Assembly', tier: 1 });
+		const comp = await t.ok('POST', '/parts', { name: 'Comp', tier: 3, trackingType: 'bulk' });
+		await t.ok('POST', `/parts/${comp.id}/activate`, { cause: 't' });
+		await t.ok('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		await t.ok('POST', `/parts/${asm.id}/activate`, { cause: 't' });
+		const p = await t.proc('Build it', { procedureType: 'build' });
+		await t.step(p.id, 'Do it');
+		await t.ok('POST', `/procedures/${p.id}/outputs`, { partId: asm.id, quantity: '1' });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const wo = await t.cut(p.id);
+		expect((await t.call('PATCH', `/parts/${comp.id}`, { unitOfMeasure: 'kg' })).status).toBe(409);
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		expect((await t.call('PATCH', `/parts/${comp.id}`, { unitOfMeasure: 'kg' })).status).toBe(200);
+	});
+
+	test('a draft component in a locked BOM keeps its number and tier', async () => {
+		const s = await setup();
+		const asm = await s.create({ name: 'Assembly' });
+		const comp = await s.create({ name: 'Draft comp', tier: 3 });
+		await s.api('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		await s.api('POST', `/parts/${asm.id}/activate`, {});
+		// Before any copy, a draft may still move.
+		expect((await s.api('GET', `/parts/${comp.id}/detail`)).json.identityLocked).toBe(false);
+
+		s.db.insert(stockRecord).values({ partId: asm.id, opalNumber: 'OPAL-0000000001', location: 'BIN', createdAt: TS, updatedAt: TS }).run();
+		const refused = await s.api('PATCH', `/parts/${comp.id}`, { tier: 2 });
+		expect(refused.status).toBe(409);
+		expect(refused.json.error).toBe('identity_locked');
+		const detail = (await s.api('GET', `/parts/${comp.id}/detail`)).json;
+		expect(detail.identityLocked).toBe(true);
+		expect(detail.part.internalPn).toBe(comp.internalPn);
+		expect(detail.part.tier).toBe(3);
+		expect((await s.api('GET', `/parts/${asm.id}/bom`)).json[0].componentPn).toBe(comp.internalPn);
+	});
+
+	test('a draft component in a BOM still in pencil can change tier', async () => {
+		const s = await setup();
+		const asm = await s.create({ name: 'Assembly' });
+		const comp = await s.create({ name: 'Draft comp', tier: 3 });
+		await s.api('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		expect((await s.api('PATCH', `/parts/${comp.id}`, { tier: 2 })).status).toBe(200);
+	});
+});

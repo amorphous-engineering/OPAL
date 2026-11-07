@@ -212,8 +212,10 @@ export const zPartDetail = z.object({
 	/** Nonzero counts of everything that references this part. */
 	references: z.record(z.string(), z.number().int()),
 	deletable: z.boolean(),
-	/** Stock or purchase order lines count in this unit, so it cannot change. */
+	/** Stock or purchase order lines count in this unit, or a locked BOM reads through it, so it cannot change. */
 	unitLocked: z.boolean(),
+	/** A locked BOM names this part, so a draft keeps its number and tier. */
+	identityLocked: z.boolean(),
 	bom: z.array(zBomLine),
 	/** What exists of this part, in words, when that locks its BOM. Null while the BOM is pencil. */
 	bomLockedBy: z.string().nullable(),

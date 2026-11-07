@@ -131,7 +131,8 @@ No other record can own a file. A new record type gets files by declaring its ru
 - The part tag with QR stays at the top. Stock, procedure use and consumption all show on the part page.
 - A BOM is pencil until copies exist: a stock record, a placed PO line, or a work order that outputs the part and was not voided. The stock record a voided work order reserved for its output is not a copy, so voiding the only cut unlocks the BOM. From then on the server refuses BOM changes. REVISE files a draft copy with the BOM under a new number, and the old part stays as it is, because its copies were built to it. Assemblies keep naming the old part until someone changes them.
 - A published procedure does not lock the BOM, because nothing exists yet. Its kit stays as published, and EDIT on the BOM says so.
-- The unit of measure stops changing once stock or a purchase order line counts in it. A different unit is a new part.
+- The unit of measure stops changing once stock or a purchase order line counts in it, or once an assembly with copies names the part in its BOM. A different unit is a new part.
+- A draft part in the BOM of an assembly with copies keeps its number and tier.
 
 ## Stock record
 

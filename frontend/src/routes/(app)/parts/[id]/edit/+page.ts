@@ -6,5 +6,5 @@ export const load: PageLoad = async ({ params, fetch }) => {
 	const [detail, schema] = await orHttpError(
 		Promise.all([client.parts.detail({ id: Number(params.id) }), client.parts.schema({})])
 	);
-	return { part: detail.part, unitLocked: detail.unitLocked, schema };
+	return { part: detail.part, unitLocked: detail.unitLocked, identityLocked: detail.identityLocked, schema };
 };
