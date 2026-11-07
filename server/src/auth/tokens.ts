@@ -93,7 +93,8 @@ export class LoginThrottle {
 	private swept = Date.now();
 	constructor(
 		private max = 10,
-		private windowMs = 300_000
+		private windowMs = 300_000,
+		private maxKeys = Infinity
 	) {}
 	private prune(key: string): number[] {
 		const t = Date.now();
@@ -107,7 +108,22 @@ export class LoginThrottle {
 	}
 	fail(key: string): void {
 		this.sweep();
-		this.failures.set(key, [...this.prune(key), Date.now()]);
+		const kept = this.prune(key);
+		if (!kept.length && this.failures.size >= this.maxKeys) this.makeRoom();
+		this.failures.set(key, [...kept, Date.now()]);
+	}
+	/**
+	 * Forgets the oldest key still under its limit. A key at its limit goes only when nothing else is
+	 * left, so failing against many other names cannot wipe out a limit an address has already reached.
+	 */
+	private makeRoom(): void {
+		for (const key of this.failures.keys()) {
+			if (this.prune(key).length < this.max) {
+				this.failures.delete(key);
+				return;
+			}
+		}
+		this.failures.delete(this.failures.keys().next().value!);
 	}
 	/** Recent failures for a key, without changing anything. */
 	count(key: string): number {
@@ -142,6 +158,12 @@ export const loginThrottle = new LoginThrottle();
  */
 export const usernameThrottle = new LoginThrottle(50, 900_000);
 export const lockedGuess = { intervalMs: 5000, askerTtlMs: 60_000 };
+
+/**
+ * Failures per address and username over a day. An address this person has not signed in from stops
+ * here, so holding a few addresses buys a few dozen guesses a day, not a place in line all day.
+ */
+export const dailyThrottle = new LoginThrottle(30, 24 * 3600 * 1000, 50_000);
 
 /** A person is told to come back within this, so they are back before their place lapses. */
 const MAX_WAIT_MS = 30_000;

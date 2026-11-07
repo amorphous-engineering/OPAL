@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { throttleAddress } from '../../src/auth/client-ip.ts';
-import { hashPassword, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
+import { dailyThrottle, hashPassword, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, cookieOf, harness, makeUser } from './helpers.ts';
 
 afterEach(() => {
@@ -214,6 +214,63 @@ describe('login throttle', () => {
 		});
 	});
 
+	describe('the daily limit on an address', () => {
+		const start = Date.now();
+		const fillDay = (ip: string, username: string) => {
+			for (let i = 0; i < 30; i++) dailyThrottle.fail(`${ip}:${username}`);
+		};
+		/** Thirty wrong guesses from one address, spread out so the five-minute limit never applies. */
+		const useUpDay = async (attempt: (ip: string, password?: string) => Response | Promise<Response>, ip: string) => {
+			for (let i = 0; i < 30; i++) {
+				setSystemTime(new Date(start + i * 31_000));
+				expect((await attempt(ip)).status).toBe(401);
+			}
+			setSystemTime(new Date(start + 30 * 31_000));
+		};
+
+		test('an address stops after thirty wrong guesses at a name in a day, whichever name is locked', async () => {
+			const { attempt } = await setupUser('daily-used');
+			await useUpDay(attempt, '172.21.0.1');
+			expect((await attempt('172.21.0.1')).status).toBe(429);
+			expect((await attempt('172.21.0.1', 'right-password-1')).status).toBe(429);
+			setSystemTime(new Date(start + 6 * 3600 * 1000));
+			expect((await attempt('172.21.0.1')).status).toBe(429);
+			setSystemTime(new Date(start + 25 * 3600 * 1000));
+			expect((await attempt('172.21.0.1')).status).toBe(401);
+		}, 60_000);
+
+		test('another address and a place the person has signed in from are not affected', async () => {
+			const { attempt } = await setupUser('daily-others');
+			expect((await attempt('198.51.100.30', 'right-password-1')).status).toBe(200);
+			fillDay('172.21.1.1', 'daily-others');
+			expect((await attempt('172.21.1.1')).status).toBe(429);
+			expect((await attempt('203.0.113.30', 'right-password-1')).status).toBe(200);
+			expect((await attempt('198.51.100.30', 'right-password-1')).status).toBe(200);
+		});
+
+		test('the same address can still try another name', async () => {
+			await setupUser('daily-first');
+			fillDay('172.21.2.1', 'daily-first');
+			const other = await setupUser('daily-second');
+			expect((await other.attempt('172.21.2.1', 'right-password-1')).status).toBe(200);
+		});
+
+		test('an unknown name is limited the same way, so the limit does not reveal who exists', async () => {
+			const { attempt, h } = await setupUser('daily-real');
+			fillDay('172.21.3.1', 'daily-real');
+			fillDay('172.21.3.1', 'daily-nobody');
+			const real = await attempt('172.21.3.1');
+			const unknown = await h.app.request(
+				'http://opal.test/api/auth/login',
+				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'daily-nobody', password: 'wrong-guess-xxxx' }) },
+				{ ip: '172.21.3.1' }
+			);
+			expect(unknown.status).toBe(429);
+			expect(real.status).toBe(429);
+			expect((await unknown.json()).message).toBe((await real.json()).message);
+		});
+	});
+
 	describe('an address whose session was revoked', () => {
 		const lockedOut = async (username: string) => {
 			const { h, attempt } = await setupUser(username);
@@ -279,6 +336,23 @@ describe('login throttle', () => {
 		release();
 		await Promise.all(waiting);
 		expect((await attempt()).status).toBe(401);
+	});
+
+	test('a limit with a bound on its keys forgets the oldest first', () => {
+		const t = new LoginThrottle(2, 300_000, 3);
+		for (const key of ['a', 'b', 'c', 'd']) t.fail(key);
+		expect(t.size).toBe(3);
+		expect(t.count('a')).toBe(0);
+		expect(t.count('d')).toBe(1);
+	});
+
+	test('failing against many other names does not clear a limit an address has reached', () => {
+		const t = new LoginThrottle(2, 300_000, 3);
+		t.fail('reached');
+		t.fail('reached');
+		for (let i = 0; i < 20; i++) t.fail(`other-${i}`);
+		expect(t.size).toBe(3);
+		expect(t.blocked('reached')).toBe(true);
 	});
 
 	test('failure records for names that are never seen again are dropped', () => {

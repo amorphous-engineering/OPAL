@@ -6,6 +6,7 @@ import {
 	burnVerify,
 	hashPassword,
 	hashToken,
+	dailyThrottle,
 	loginThrottle,
 	takeLockedGuess,
 	usernameThrottle,
@@ -210,14 +211,19 @@ export const authImpls = [
 		};
 		if (loginThrottle.blocked(key)) throw tooMany();
 		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
-		// Over the name's limit, strangers take turns by address at one guess per interval. An address
-		// this person has signed in from keeps only its own limit, so guessing cannot lock them out of it.
-		if (usernameThrottle.blocked(nameKey) && !(u && hasSignedInFrom(ctx.db, u.id, address))) {
+		// Strangers have a limit per day, and over the name's limit they take turns by address at one
+		// guess per interval. An address this person has signed in from keeps only its own limit, so
+		// guessing cannot lock them out of it.
+		const overName = usernameThrottle.blocked(nameKey);
+		const overDay = dailyThrottle.blocked(key);
+		if ((overName || overDay) && !(u && hasSignedInFrom(ctx.db, u.id, address))) {
+			if (overDay) throw tooMany();
 			const waitMs = takeLockedGuess(nameKey, address);
 			if (waitMs) throw tooMany(waitMs);
 		}
 		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
 		loginThrottle.fail(key);
+		dailyThrottle.fail(key);
 		usernameThrottle.fail(nameKey);
 		const ok = await withHashSlot(async () => {
 			const good = u?.isActive ? await verifyPassword(u.passwordHash, input.password) : false;
@@ -226,6 +232,7 @@ export const authImpls = [
 		}).catch((e) => {
 			// A full queue checked nothing, so it is not a failed attempt.
 			loginThrottle.release(key);
+			dailyThrottle.release(key);
 			usernameThrottle.release(nameKey);
 			throw e;
 		});
@@ -234,6 +241,7 @@ export const authImpls = [
 			throw new OpalError(401, 'invalid_credentials', 'Invalid username or password');
 		}
 		loginThrottle.reset(key);
+		dailyThrottle.reset(key);
 		usernameThrottle.release(nameKey);
 		return ctx.write!(() => {
 			startSession(ctx, u, 'password');
