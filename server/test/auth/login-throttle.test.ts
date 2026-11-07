@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
+import { afterEach, describe, expect, setSystemTime, spyOn, test } from 'bun:test';
 import { throttleAddress } from '../../src/auth/client-ip.ts';
 import { dailyThrottle, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, cookieOf, harness, makeUser } from './helpers.ts';
@@ -375,18 +375,31 @@ describe('anonymous password checks', () => {
 		const cookie = await adminSession(h);
 		const total = 8;
 		let done = 0;
-		const logins = Array.from({ length: total }, (_, i) =>
-			h.call('POST', '/auth/login', { username: `queue-ghost-${i}`, password: 'wrong-password' }).then((r) => {
-				done++;
-				return r;
-			})
-		);
-		const write = await h.call('POST', '/auth/tokens', { name: 'during-logins' }, { cookie });
-		const finishedBefore = done;
-		expect(write.status).toBe(201);
-		// Behind serialized logins the write would finish after every one of them.
-		expect(finishedBefore).toBeLessThan(total);
-		expect((await Promise.all(logins)).every((r) => r.status === 401)).toBe(true);
+		// Every check waits for the write, so this does not depend on how long a check takes.
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const verify = spyOn(Bun.password, 'verify').mockImplementation(async () => {
+			await held;
+			return false;
+		});
+		try {
+			const logins = Array.from({ length: total }, (_, i) =>
+				h.call('POST', '/auth/login', { username: `queue-ghost-${i}`, password: 'wrong-password' }).then((r) => {
+					done++;
+					return r;
+				})
+			);
+			const write = await h.call('POST', '/auth/tokens', { name: 'during-logins' }, { cookie });
+			const finishedBefore = done;
+			release();
+			expect(write.status).toBe(201);
+			// Behind serialized logins the write would never get its turn.
+			expect(finishedBefore).toBeLessThan(total);
+			expect((await Promise.all(logins)).every((r) => r.status === 401)).toBe(true);
+		} finally {
+			release();
+			verify.mockRestore();
+		}
 	});
 
 	test('two setup requests at once create one administrator', async () => {
