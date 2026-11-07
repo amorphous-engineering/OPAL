@@ -81,7 +81,8 @@
 			await done(toCurrentUser(r.user));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Sign-in failed';
-			password = '';
+			// "Try again in a moment" says nothing about the password, so it stays for the next try.
+			if (!(err instanceof ApiError && err.status === 429)) password = '';
 		} finally {
 			busy = false;
 		}

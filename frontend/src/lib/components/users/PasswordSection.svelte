@@ -3,7 +3,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { opal } from '#lib/api.js';
+	import { ApiError, opal } from '#lib/api.js';
 
 	let { hasPassword, onchanged }: { hasPassword: boolean; onchanged: () => void } = $props();
 
@@ -34,7 +34,7 @@
 			);
 			onchanged();
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Could not change the password';
+			error = err instanceof ApiError && err.fields?.newPassword ? err.fields.newPassword : err instanceof Error ? err.message : 'Could not change the password';
 		} finally {
 			busy = false;
 		}

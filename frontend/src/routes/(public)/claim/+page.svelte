@@ -40,7 +40,7 @@
 			session.set(user);
 			await goto(landingFor(user, null), { replace: true });
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Could not set password';
+			error = err instanceof ApiError ? (err.fields?.password ?? err.message) : 'Could not set password';
 		} finally {
 			busy = false;
 		}
