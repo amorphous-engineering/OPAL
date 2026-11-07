@@ -43,6 +43,7 @@ import {
 	json,
 	keep,
 	keepLegacyRow,
+	leaveInLegacyRow,
 	num,
 	oneOf,
 	readTable,
@@ -254,7 +255,7 @@ export function importRequirements(c: ImportCtx): void {
 		target ??= latest.get(String(r.requirement_id)) ?? null;
 		const key = `${Number(r.part_id)}/${target}`;
 		if (!c.ids.part!.has(Number(r.part_id)) || target === null || seen.has(key)) {
-			keepLegacyRow(c, 'part_requirements', r, target === null ? `requirement ${String(r.requirement_id)} does not exist` : 'part or requirement is not imported, or the pair repeats');
+			leaveInLegacyRow(c, 'part_requirements', r, target === null ? `requirement ${String(r.requirement_id)} does not exist` : 'part or requirement is not imported, or the pair repeats');
 			warn(c, `part_requirements ${id}: kept in legacy_row (no matching requirement, or a repeated pair)`);
 			continue;
 		}

@@ -4,12 +4,13 @@ import { createApp } from '../app.ts';
 import { openDb, type Db } from '../db/client.ts';
 import { loadDevSchema } from '../db/dev.ts';
 import { scrubDatabase, scrubPending, sweepCopies } from '../db/seal-secrets.ts';
-import { importInPlace } from '../import/index.ts';
+import { importInPlace, reportSummary } from '../import/index.ts';
 import { dataDir, dbPath } from '../paths.ts';
 import { PluginHost } from '../services/plugins/host.ts';
 import { pluginsEnabled, setRuntime } from '../services/plugins/runtime.ts';
 import { plugin, user } from '../db/schema/index.ts';
 import { armSetupCode } from '../services/auth/setup-code.ts';
+import { firstAdminClaimLinks } from '../services/auth/claim.ts';
 import { eq } from 'drizzle-orm';
 import { idleTimeoutSeconds, maxRequestBytes } from '../http/limits.ts';
 import { hardenDataDir } from '../harden.ts';
@@ -48,7 +49,7 @@ export async function serve(args: string[]): Promise<void> {
 		console.error((e as Error).message);
 		process.exit(1);
 	}
-	if (report) console.log('Imported the legacy database. See import-report.txt next to it.');
+	if (report) console.log(reportSummary(report, dataDir()));
 	// OPAL_DEV_SCHEMA=1: build a fresh dev database from schema.ts instead of migrations.
 	const devSchema = process.env.OPAL_DEV_SCHEMA === '1';
 	let db: Db;
@@ -98,5 +99,11 @@ export async function serve(args: string[]): Promise<void> {
 	// version, so nothing new can be asked of it: this waits until it has had its answer.
 	if (!devSchema && scrubPending(db.$client)) setTimeout(() => void serialized(async () => scrubDatabase(db.$client)), SCRUB_DELAY_MS);
 	const unclaimed = db.select({ id: user.id }).from(user).limit(1).get() === undefined;
-	armSetupCode(unclaimed, `http://${hostname === '0.0.0.0' || hostname === '::' ? 'localhost' : hostname}:${port}`);
+	const url = `http://${hostname === '0.0.0.0' || hostname === '::' ? 'localhost' : hostname}:${port}`;
+	armSetupCode(unclaimed, url);
+	// A database from before OPAL had passwords has people in it and nobody who can sign in, so
+	// setup is closed. These links are printed in the same place as the setup code.
+	for (const link of firstAdminClaimLinks(db, url)) {
+		console.log(`No administrator can sign in yet. ${link.username} sets a password here: ${link.url}`);
+	}
 }

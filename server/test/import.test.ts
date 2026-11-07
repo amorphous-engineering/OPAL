@@ -419,7 +419,7 @@ describe('legacy import of a database with rows in every table', async () => {
 	});
 
 	test('skipped tables are listed with their row counts', () => {
-		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['auth_session', 1], ['extension', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['webauthn_challenge', 1]]);
+		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['attachment (legacy_row)', 1], ['auth_session', 1], ['extension', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['part_requirements (legacy_row)', 1], ['stock_transfer (legacy_row)', 1], ['webauthn_challenge', 1]]);
 	});
 
 	test('one summary audit row per table', () => {

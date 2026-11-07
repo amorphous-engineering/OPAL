@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'nod
 import { join } from 'node:path';
 import { ATTACHMENT_KINDS } from '@opal/shared';
 import { attachment, blob } from '../db/schema/index.ts';
-import { type ImportCtx, type Row, derived, fail, insertRows, keepLegacyRow, oneOf, readTable, ref, str, track, tsReq, warn } from './context.ts';
+import { type ImportCtx, type Row, derived, fail, insertRows, leaveInLegacyRow, oneOf, readTable, ref, str, track, tsReq, warn } from './context.ts';
 
 /**
  * Owner type = the owner's table name. The execution names are set from the execution
@@ -80,7 +80,7 @@ export function importAttachments(c: ImportCtx): BlobMap {
 		else if (r.purchase_id) owner = { type: OWNER.purchase, id: Number(r.purchase_id) };
 		if (!owner) {
 			warn(c, `attachment ${id} ${filename}: no owner, file stored but not linked`);
-			keepLegacyRow(c, 'attachment', r, 'no owner');
+			leaveInLegacyRow(c, 'attachment', r, 'no owner');
 			continue;
 		}
 		links.push({

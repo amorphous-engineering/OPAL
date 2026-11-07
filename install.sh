@@ -213,15 +213,16 @@ install_binary() {
 
     verify_checksum "$TMP_FILE"
 
-    # 1.x installs to this same path, and OPAL 2 cannot read a 1.x database yet. The first install
-    # over an older OPAL keeps that program, so going back is one command. Later installs leave
-    # it alone: it is the way back to 1.x, not to the last beta.
+    # 1.x installs to this same path. OPAL 2 imports a 1.x database and keeps the original as
+    # opal.legacy.db, which only the old program can open. The first install over an older OPAL
+    # keeps that program. Later installs leave it alone: it is the way back to 1.x, not to the
+    # last beta.
     if [ -e "$INSTALL_PATH" ] && [ ! -e "$BEFORE_V2_PATH" ]; then
         # Through a temporary name: a copy cut short must not pass for the way back.
         cp -p "$INSTALL_PATH" "${BEFORE_V2_PATH}.tmp" || err "Could not keep your previous OPAL; nothing was changed"
         mv -f "${BEFORE_V2_PATH}.tmp" "$BEFORE_V2_PATH"
         warn "Kept your previous OPAL at ${BEFORE_V2_PATH}"
-        warn "If that was 1.x, this version cannot read its data yet. To go back: mv \"${BEFORE_V2_PATH}\" \"${INSTALL_PATH}\""
+        warn "If that was 1.x, stop it first. This version imports its database on the first start and keeps the original as opal.legacy.db. To go back, see QUICKSTART.md."
     fi
 
     mv -f "$TMP_FILE" "$INSTALL_PATH"
