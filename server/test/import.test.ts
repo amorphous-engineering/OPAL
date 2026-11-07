@@ -310,7 +310,7 @@ describe('legacy import of a database with rows in every table', async () => {
 
 	test('rows with no home in the new schema are kept in legacy_row with the reason', () => {
 		expect(q('SELECT table_name, row_id FROM legacy_row ORDER BY id').map((r) => `${r.table_name} ${r.row_id}`)).toEqual(
-			expect.arrayContaining(['issue_reference 1', 'part_requirements 3', 'attachment 6', 'stock_transfer 2', 'issue 3'])
+			expect.arrayContaining(['issue_reference 1', 'attachment 6', 'stock_transfer 2', 'issue 3'])
 		);
 		expect(JSON.parse(String(one("SELECT data FROM legacy_row WHERE table_name = 'issue_reference'").data))).toMatchObject({ reference_type: 'opal', reference_value: 'OPAL-00001' });
 	});
@@ -328,17 +328,20 @@ describe('legacy import of a database with rows in every table', async () => {
 			{ id: 1, req_number: 'REQ-0001', revision: 1, lifecycle_state: 'baselined', parent_id: null, supersedes_id: null, tbr: 0, tbr_owner_id: null },
 			{ id: 2, req_number: 'REQ-0002', revision: 1, lifecycle_state: 'draft', parent_id: 1, supersedes_id: null, tbr: 1, tbr_owner_id: 7 },
 			{ id: 3, req_number: 'REQ-0003', revision: 1, lifecycle_state: 'cancelled', parent_id: null, supersedes_id: null, tbr: 0, tbr_owner_id: null },
-			{ id: 4, req_number: 'REQ-0001', revision: 2, lifecycle_state: 'preliminary', parent_id: null, supersedes_id: 1, tbr: 0, tbr_owner_id: null }
+			{ id: 4, req_number: 'REQ-0001', revision: 2, lifecycle_state: 'preliminary', parent_id: null, supersedes_id: 1, tbr: 0, tbr_owner_id: null },
+			{ id: 5, req_number: 'LEGACY-TEXT', revision: 1, lifecycle_state: 'draft', parent_id: null, supersedes_id: null, tbr: 0, tbr_owner_id: null }
 		]);
 		expect(q('SELECT event_id, requirement_id, created_at FROM baseline_event_item')).toEqual([{ event_id: 1, requirement_id: 1, created_at: '2026-03-01T10:00:00.123Z' }]);
 	});
 
-	test('part allocations: the foreign key wins, a typed number resolves to the latest revision, the rest is kept aside', () => {
+	test('part allocations: the foreign key wins, a typed number resolves to the latest revision, free text gets a draft requirement', () => {
 		expect(q('SELECT part_id, requirement_id, status FROM part_requirement ORDER BY id')).toEqual([
 			{ part_id: 10, requirement_id: 1, status: 'verified' },
-			{ part_id: 14, requirement_id: 2, status: 'open' }
+			{ part_id: 14, requirement_id: 2, status: 'open' },
+			{ part_id: 14, requirement_id: 5, status: 'open' }
 		]);
-		expect(q("SELECT row_id FROM legacy_row WHERE table_name = 'part_requirements'")).toEqual([{ row_id: 3 }]);
+		expect(q("SELECT row_id FROM legacy_row WHERE table_name = 'part_requirements'")).toEqual([]);
+		expect(report.warnings.some((w) => w.includes('LEGACY-TEXT') && w.includes('draft requirement'))).toBe(true);
 	});
 
 	test('datasets: deleted becomes archived, points keep their step execution', () => {
@@ -419,7 +422,7 @@ describe('legacy import of a database with rows in every table', async () => {
 	});
 
 	test('skipped tables are listed with their row counts', () => {
-		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['attachment (legacy_row)', 1], ['auth_session', 1], ['extension', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['part_requirements (legacy_row)', 1], ['stock_transfer (legacy_row)', 1], ['webauthn_challenge', 1]]);
+		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['attachment (legacy_row)', 1], ['auth_session', 1], ['extension', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['stock_transfer (legacy_row)', 1], ['webauthn_challenge', 1]]);
 	});
 
 	test('one summary audit row per table', () => {

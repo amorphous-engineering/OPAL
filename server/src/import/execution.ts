@@ -23,7 +23,7 @@
  * - inventory_production with a work order -> execution_output (the plan); the stock move
  *   of a consumption or production gets execution_id and step_execution_id.
  */
-import { EXECUTION_PRIORITIES, EXECUTION_STATUSES, type ProcedureSnapshot } from '@opal/shared';
+import { canonicalDesignator, EXECUTION_PRIORITIES, EXECUTION_STATUSES, type ProcedureSnapshot } from '@opal/shared';
 import { eq, inArray } from 'drizzle-orm';
 import {
 	adhocStep,
@@ -50,6 +50,7 @@ import {
 	json,
 	keepLegacyRow,
 	legacyQty,
+	numberBook,
 	num,
 	readTable,
 	ref,
@@ -76,6 +77,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 	// ---- executions
 	const usedWo = new Set(instances.map((i) => str(i.work_order_number)).filter((x): x is string => !!x));
 	let woMax = Math.max(0, ...[...usedWo].map((w) => Number(/^WO-(\d+)$/.exec(w)?.[1] ?? 0)));
+	const woNumber = numberBook(c, 'procedure_instance', canonicalDesignator);
 	const execRows = instances.flatMap((r) => {
 		const id = Number(r.id);
 		if (!c.ids.procedure!.has(Number(r.procedure_id)) || !c.ids.procedure_version!.has(Number(r.version_id))) {
@@ -94,7 +96,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 		const p = Number(r.priority);
 		return [{
 			id,
-			woNumber: wo,
+			woNumber: woNumber(id, wo),
 			projectId: c.projectId,
 			procedureId: Number(r.procedure_id),
 			versionId: Number(r.version_id),

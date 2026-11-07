@@ -68,6 +68,8 @@ export interface ImportReport {
 	stockDifferences: StockDifference[];
 	/** Purchase lines whose legacy received quantity had no receive moves; a holding stock record took the gap. */
 	receiptGaps: { purchaseLineId: number; reference: string; partNumber: string; quantity: number; opalNumber: string }[];
+	/** Numbers that had to change because another record has the same one, at any width. */
+	renumbered: { table: string; id: number; from: string; to: string }[];
 	/** Rows with values outside the new enums, and what they became. */
 	warnings: string[];
 	/** Why the result was not put in place. Null when it was. */
@@ -133,6 +135,7 @@ export function emptyReport(source: string, dest: string, version: string, at: s
 		placeholderPns: [],
 		stockDifferences: [],
 		receiptGaps: [],
+		renumbered: [],
 		warnings: [],
 		refused: null,
 		acceptedFailures: false,
@@ -211,6 +214,29 @@ export function chunks<T>(rows: T[], size: number): T[][] {
 	const out: T[][] = [];
 	for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
 	return out;
+}
+
+/**
+ * Hands out one number per record. 1.x let people type or repeat some of these, and two records that
+ * differ only in width are one number here, so the second would be dropped or would stop every later
+ * start. The first by id keeps its number. A later one gets the same number marked as a duplicate, so
+ * it still reads as what people called it. `scope` is what else makes a number unique, such as a revision.
+ */
+export function numberBook(c: ImportCtx, table: string, canonical: (v: string) => string): (id: number, value: string, scope?: unknown) => string {
+	const taken = new Set<string>();
+	return (id, value, scope = '') => {
+		const stored = canonical(value);
+		const key = (v: string) => `${v}\0${String(scope)}`;
+		let chosen = value;
+		if (taken.has(key(stored))) {
+			let n = 2;
+			while (taken.has(key(`${stored}-DUP${n}`))) n++;
+			chosen = `${stored}-DUP${n}`;
+			c.report.renumbered.push({ table, id, from: value, to: chosen });
+		}
+		taken.add(key(canonical(chosen)));
+		return chosen;
+	};
 }
 
 // ---------------------------------------------------------------- reading

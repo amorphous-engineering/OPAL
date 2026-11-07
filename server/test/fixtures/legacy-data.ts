@@ -213,7 +213,7 @@ export function buildLegacyFixture(dir: string, opts: { version?: string } = {})
 	ins(db, 'baseline_event_item', { id: 1, event_id: 1, requirement_id: 1 });
 	ins(db, 'part_requirements', { id: 1, part_id: 10, requirement_id: 'REQ-0001', requirement_ref_id: 1, status: 'verified', verified_at: T1, verified_by_id: 7 });
 	ins(db, 'part_requirements', { id: 2, part_id: 14, requirement_id: 'REQ-0002', requirement_ref_id: null, status: 'open' }); // resolved by number
-	ins(db, 'part_requirements', { id: 3, part_id: 14, requirement_id: 'LEGACY-TEXT', requirement_ref_id: null, status: 'open' }); // kept in legacy_row
+	ins(db, 'part_requirements', { id: 3, part_id: 14, requirement_id: 'LEGACY-TEXT', requirement_ref_id: null, status: 'open' }); // no requirement: gets a draft one
 	ins(db, 'dataset', { id: 1, name: 'Chamber pressure', schema: { fields: [{ name: 'psi', type: 'number' }] }, procedure_id: 1 });
 	ins(db, 'dataset', { id: 2, name: 'Old', schema: { fields: [] }, deleted_at: T1 });
 	ins(db, 'data_point', { id: 1, dataset_id: 1, recorded_at: '2026-04-04 04:04:04.5', values: { psi: 100 }, step_execution_id: 2 });

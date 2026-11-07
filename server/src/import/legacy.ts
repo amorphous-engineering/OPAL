@@ -480,6 +480,8 @@ export function renderReport(r: ImportReport): string {
 	for (const p of r.obsoleteParts) L.push(`  ${p.id}  ${p.internalPn}`);
 	L.push('', `Parts given a placeholder number: ${r.placeholderPns.length}`);
 	for (const p of r.placeholderPns) L.push(`  ${p.id}  ${p.internalPn}`);
+	L.push('', `Numbers changed so that each stays unique: ${r.renumbered.length}`);
+	for (const n of r.renumbered) L.push(`  ${n.table} ${n.id}: ${n.from} is now ${n.to}. An earlier record has that number.`);
 	L.push('', `Warnings: ${r.warnings.length}`);
 	for (const w of r.warnings) L.push(`  ${w}`);
 	L.push('', `Failed rows: ${r.failedRows.length}`);
@@ -575,7 +577,8 @@ export function reportSummary(report: ImportReport, dir: string): string {
 	const release = RELEASED_HEADS[report.alembicVersion];
 	const { failed, unaccounted } = problemCounts(report);
 	const problems = `${failed} failed rows${unaccounted ? `, ${unaccounted} not accounted for` : ''}${report.acceptedFailures ? ' (accepted)' : ''}, ${report.warnings.length} warnings`;
-	const summary = `Imported the ${release ? `OPAL ${release}` : 'legacy'} database: ${problems}. See ${join(dir, 'import-report.txt')}.`;
+	const changed = report.renumbered.length ? ` ${report.renumbered.length} numbers changed so that each stays unique.` : '';
+	const summary = `Imported the ${release ? `OPAL ${release}` : 'legacy'} database: ${problems}.${changed} See ${join(dir, 'import-report.txt')}.`;
 	if (!report.onshapeKeys.length) return summary;
 	return `${summary}\nWarning: Onshape does not carry over to OPAL 2. These keys were not imported: ${report.onshapeKeys.join(', ')}. They are still in plaintext in ${report.source}. Revoke them in Onshape if you no longer need them.`;
 }

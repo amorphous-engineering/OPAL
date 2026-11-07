@@ -6,7 +6,7 @@
  * rows built from the old movement rows. Where the old quantity and the ledger sum differ, one
  * more move closes the gap (see the rules below).
  */
-import { ADJUST_REASONS, QTY_SCALE, STOCK_SOURCES, STOCK_TEST_RESULTS, STOCK_TEST_TYPES } from '@opal/shared';
+import { ADJUST_REASONS, canonicalDesignator, QTY_SCALE, STOCK_SOURCES, STOCK_TEST_RESULTS, STOCK_TEST_TYPES } from '@opal/shared';
 import { eq, sql } from 'drizzle-orm';
 import { part, purchase, purchaseLine, stockMove, stockRecord, stockTestResult, testTemplate } from '../db/schema/index.ts';
 import {
@@ -20,6 +20,7 @@ import {
 	keep,
 	leaveInLegacyRow,
 	legacyQty,
+	numberBook,
 	oneOf,
 	readTable,
 	ref,
@@ -83,7 +84,7 @@ export function importInventory(c: ImportCtx): InventoryLinks {
 	// ---- stock records
 	let opalMax = 0;
 	for (const r of records) opalMax = Math.max(opalMax, Number(/^OPAL-(\d+)$/.exec(String(r.opal_number ?? ''))?.[1] ?? 0));
-	const seen = new Set<string>();
+	const stockNumber = numberBook(c, 'inventory_record', canonicalDesignator);
 	const recordRows: Record<string, unknown>[] = [];
 	const lineIds = c.ids.purchase_line ?? new Set<number>();
 	for (const r of records) {
@@ -93,11 +94,11 @@ export function importInventory(c: ImportCtx): InventoryLinks {
 			continue;
 		}
 		let opal = str(r.opal_number);
-		if (!opal || seen.has(opal)) {
+		if (!opal) {
 			opal = `OPAL-${String(++opalMax).padStart(5, '0')}`;
-			warn(c, `inventory_record ${id}: OPAL number ${str(r.opal_number) ?? 'missing'} unusable, given ${opal}`);
+			warn(c, `inventory_record ${id}: OPAL number missing, given ${opal}`);
 		}
-		seen.add(opal);
+		opal = stockNumber(id, opal);
 		const production = r.source_production_id ? productionById.get(Number(r.source_production_id)) : undefined;
 		let lot = str(r.lot_number);
 		let serial: string | null = null;

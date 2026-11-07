@@ -2,7 +2,7 @@
  * master_procedure, procedure_step, step_dependency, step_image, kit, step_kit,
  * procedure_output, procedure_version.
  */
-import { KIT_USAGES, PROCEDURE_TYPES, type ProcedureSnapshot, type ProcedureCallout, zProcedureSnapshot } from '@opal/shared';
+import { canonicalDesignator, KIT_USAGES, PROCEDURE_TYPES, type ProcedureSnapshot, type ProcedureCallout, zProcedureSnapshot } from '@opal/shared';
 import {
 	kitItem,
 	procedure,
@@ -26,6 +26,7 @@ import {
 	keep,
 	legacyQty,
 	num,
+	numberBook,
 	oneOf,
 	readTable,
 	ref,
@@ -88,15 +89,17 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 	const typeOf = new Map<number, 'op' | 'build'>();
 	const numberOf = new Map<number, string>();
 	const nameOf = new Map<number, string>();
+	const templateNumber = numberBook(c, 'master_procedure', canonicalDesignator);
 	const procRows = masters.map((r) => {
 		const id = Number(r.id);
 		const procedureType = oneOf(c, r.procedure_type, PROCEDURE_TYPES, 'op', `master_procedure ${id} procedure_type`);
 		typeOf.set(id, procedureType);
-		numberOf.set(id, String(r.template_number));
+		const number = templateNumber(id, String(r.template_number));
+		numberOf.set(id, number);
 		nameOf.set(id, String(r.name));
 		return {
 			id,
-			templateNumber: String(r.template_number),
+			templateNumber: number,
 			projectId: c.projectId,
 			name: String(r.name),
 			description: str(r.description),
