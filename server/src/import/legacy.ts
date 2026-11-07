@@ -25,8 +25,10 @@ import {
 	type ResolvedOptions,
 	type Row,
 	type SourceTableLine,
+	assertPlainNames,
 	emptyReport,
 	fail,
+	ident,
 	tableExists
 } from './context.ts';
 import { importExecutions } from './execution.ts';
@@ -64,7 +66,7 @@ function tableNames(src: Database): string[] {
 
 /** Rows in a table. A 1.x search index can fail to answer this, and its _docsize table still knows. */
 function countRows(src: Database, table: string): number {
-	const count = (t: string) => (src.query(`SELECT COUNT(*) AS n FROM "${t}"`).get() as { n: number }).n;
+	const count = (t: string) => (src.query(`SELECT COUNT(*) AS n FROM ${ident(t)}`).get() as { n: number }).n;
 	try {
 		return count(table);
 	} catch {
@@ -180,7 +182,7 @@ export function importInto(src: Database, d: Db, report: ImportReport, opts: Res
 
 		for (const t of tableNames(src)) {
 			if (t in c.report.tables || t in SKIPPED || /_fts(_|$)/.test(t)) continue;
-			const rows = (src.query(`SELECT COUNT(*) AS n FROM "${t}"`).get() as Row).n as number;
+			const rows = countRows(src, t);
 			c.report.notImported.push({ table: t, rows, note: 'no importer' });
 			if (rows > 0) fail(c, t, 0, `${rows} rows have no importer`);
 		}
@@ -222,6 +224,7 @@ export async function importLegacy(srcPath: string, destPath: string, options: I
 	let db: Db | undefined;
 	try {
 		const version = checkSource(source.db, srcPath);
+		assertPlainNames(source.db);
 		const report = emptyReport(srcPath, destPath, version, now());
 		const before = sourceRows(source.db);
 		if (version !== LEGACY_HEAD) report.bridge = bridgeToHead(source.db, version);

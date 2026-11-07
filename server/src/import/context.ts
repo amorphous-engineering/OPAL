@@ -203,12 +203,30 @@ export function chunks<T>(rows: T[], size: number): T[][] {
 
 // ---------------------------------------------------------------- reading
 
+/**
+ * A name read from a legacy file, ready for SQL. The file is not trusted, and no release of 1.x made
+ * a name with anything else in it, so anything else is refused.
+ */
+export function ident(name: string): string {
+	if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`The database has something named ${JSON.stringify(name)}, which no OPAL 1.x made. It was not imported, and the file was not changed.`);
+	return `"${name}"`;
+}
+
+/** Every name in the file, checked before any of them is used. */
+export function assertPlainNames(src: Database): void {
+	const schema = src.query('SELECT type, name FROM sqlite_master').all() as { type: string; name: string }[];
+	for (const { type, name } of schema) {
+		ident(name);
+		if (type === 'table' || type === 'view') columns(src, name).forEach(ident);
+	}
+}
+
 export function tableExists(src: Database, name: string): boolean {
 	return !!src.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
 }
 
 export function columns(src: Database, table: string): string[] {
-	return (src.query(`PRAGMA table_info("${table}")`).all() as Row[]).map((r) => String(r.name));
+	return (src.query(`PRAGMA table_info(${ident(table)})`).all() as Row[]).map((r) => String(r.name));
 }
 
 /**
@@ -220,7 +238,7 @@ export function readTable(c: ImportCtx, table: string, used: readonly string[], 
 		c.report.tables[table] = { read: 0, imported: 0, droppedColumns: [] };
 		return [];
 	}
-	const rows = c.src.query(`SELECT * FROM "${table}" ORDER BY ${order}`).all() as Row[];
+	const rows = c.src.query(`SELECT * FROM ${ident(table)} ORDER BY ${ident(order)}`).all() as Row[];
 	const have = columns(c.src, table);
 	c.report.tables[table] = {
 		read: rows.length,

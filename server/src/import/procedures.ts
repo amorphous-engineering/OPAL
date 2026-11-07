@@ -110,7 +110,7 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 	track(c, 'procedure', insertRows(c, 'master_procedure', procedure, procRows));
 
 	// ---- steps
-	const steps = readTable(c, 'procedure_step', ['id', 'procedure_id', 'parent_step_id', 'order', 'step_number', 'level', 'title', 'instructions', 'required_data_schema', 'is_contingency', 'requires_signoff', 'signoffs', 'estimated_duration_minutes', 'required_role', 'callouts', 'strict_sequence', 'workcenter_id', 'created_at', 'updated_at'], '"order"');
+	const steps = readTable(c, 'procedure_step', ['id', 'procedure_id', 'parent_step_id', 'order', 'step_number', 'level', 'title', 'instructions', 'required_data_schema', 'is_contingency', 'requires_signoff', 'signoffs', 'estimated_duration_minutes', 'required_role', 'callouts', 'strict_sequence', 'workcenter_id', 'created_at', 'updated_at'], 'order');
 	const live = steps.filter((s) => c.ids.procedure!.has(Number(s.procedure_id)));
 	const hasKids = new Set(live.map((s) => num(s.parent_step_id)).filter((x): x is number => x !== null));
 	const sibling = new Map<string, number>();
