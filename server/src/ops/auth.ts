@@ -18,7 +18,7 @@ import {
 	validatePasswordStrength,
 	verifyPassword
 } from '../auth/tokens.ts';
-import { throttleAddress } from '../auth/client-ip.ts';
+import { ignoredForward, throttleAddress, trustProxy } from '../auth/client-ip.ts';
 import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
 import { checkSetupCode, clearSetupCode, setupCodeRequired } from '../services/auth/setup-code.ts';
@@ -124,6 +124,7 @@ const passkeyInfo = (r: typeof passkeyCredential.$inferSelect) => ({
 // ---------------------------------------------------------------- settings view
 
 const settingsView = (s: SignInSettings) => ({
+	ignoredForwardFrom: trustProxy() ? null : ignoredForward.seenFrom,
 	passwordLoginEnabled: s.passwordLoginEnabled,
 	passkeysEnabled: s.passkeysEnabled,
 	oidcEnabled: s.oidcEnabled,

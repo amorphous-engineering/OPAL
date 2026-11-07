@@ -1,7 +1,12 @@
-import { afterEach, describe, expect, setSystemTime, spyOn, test } from 'bun:test';
-import { throttleAddress } from '../../src/auth/client-ip.ts';
+import { afterEach, beforeEach, describe, expect, setSystemTime, spyOn, test } from 'bun:test';
+import { ignoredForward, throttleAddress } from '../../src/auth/client-ip.ts';
 import { dailyThrottle, hashPassword, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, cookieOf, harness, makeUser } from './helpers.ts';
+
+// The tests here send x-forwarded-for on purpose. Those that check the warning clear this first.
+beforeEach(() => {
+	ignoredForward.seenFrom = 'already warned';
+});
 
 afterEach(() => {
 	delete process.env.OPAL_TRUST_PROXY;
@@ -268,6 +273,59 @@ describe('login throttle', () => {
 			expect(unknown.status).toBe(429);
 			expect(real.status).toBe(429);
 			expect((await unknown.json()).message).toBe((await real.json()).message);
+		});
+	});
+
+	describe('a forwarded address with trust off', () => {
+		const warnings = () => spyOn(console, 'warn').mockImplementation(() => {});
+		const forwarded = (h: Awaited<ReturnType<typeof harness>>, value: string) =>
+			h.app.request('http://opal.test/api/auth/config', { headers: { 'x-forwarded-for': value } }, { ip: '10.9.9.9' });
+
+		test('warns once in the log, naming the address that sent it and not what it said', async () => {
+			const h = await harness();
+			ignoredForward.seenFrom = null;
+			const warn = warnings();
+			try {
+				await forwarded(h, '203.0.113.200');
+				await forwarded(h, '203.0.113.201');
+				const lines = warn.mock.calls.map(([line]) => String(line)).filter((line) => line.includes('X-Forwarded-For'));
+				expect(lines).toHaveLength(1);
+				expect(lines[0]).toContain('10.9.9.9');
+				expect(lines[0]).toContain('OPAL_TRUST_PROXY=1');
+				expect(lines[0]).not.toContain('203.0.113.200');
+			} finally {
+				warn.mockRestore();
+			}
+		});
+
+		test('tells an administrator under sign-in settings, and no one else', async () => {
+			const h = await harness();
+			const admin = await adminSession(h);
+			ignoredForward.seenFrom = null;
+			const settings = async () => (await (await h.call('GET', '/settings/auth', undefined, { cookie: admin })).json()).ignoredForwardFrom;
+			expect(await settings()).toBeNull();
+			const warn = warnings();
+			try {
+				await forwarded(h, '203.0.113.200');
+			} finally {
+				warn.mockRestore();
+			}
+			expect(await settings()).toBe('10.9.9.9');
+			expect((await h.call('GET', '/settings/auth')).status).toBe(401);
+			expect(JSON.stringify(await (await h.call('GET', '/auth/config')).json())).not.toContain('10.9.9.9');
+		});
+
+		test('says nothing without the header, or with trust on', async () => {
+			const h = await harness();
+			const admin = await adminSession(h);
+			ignoredForward.seenFrom = null;
+			await h.app.request('http://opal.test/api/auth/config', {}, { ip: '10.9.9.9' });
+			expect(ignoredForward.seenFrom).toBeNull();
+			process.env.OPAL_TRUST_PROXY = '1';
+			await forwarded(h, '203.0.113.200');
+			expect(ignoredForward.seenFrom).toBeNull();
+			ignoredForward.seenFrom = '10.9.9.9';
+			expect((await (await h.call('GET', '/settings/auth', undefined, { cookie: admin })).json()).ignoredForwardFrom).toBeNull();
 		});
 	});
 

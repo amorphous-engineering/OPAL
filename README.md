@@ -67,9 +67,19 @@ OPAL serves plain HTTP. Passwords and session cookies cross the network in clear
 | Variable | Effect |
 |---|---|
 | `OPAL_PUBLIC_URL` | The URL people use, for example `https://opal.example.com`. Links, OAuth metadata and the `Secure` cookie flag follow it, and its host joins the allowed hosts. With an `https` URL cookies are `Secure`, so reach OPAL by that URL only. |
-| `OPAL_TRUST_PROXY=1` | Believe `X-Forwarded-For`, `-Proto` and `-Host`. Set it only when the proxy overwrites them. `X-Forwarded-Host` has to match what the browser's address bar shows, port included, so on a non-standard port use nginx's `$http_host`, not `$host`. The client address is the last `X-Forwarded-For` entry. |
+| `OPAL_TRUST_PROXY=1` | Believe `X-Forwarded-For`, `-Proto` and `-Host`. Behind a proxy you need this: without it everyone behind the proxy counts as one address and shares one [sign-in limit](#sign-in-limits), so OPAL warns once in its log and under **Settings**, **Sign-in**. Set it only when the proxy overwrites these headers. `X-Forwarded-Host` has to match what the browser's address bar shows, port included, so on a non-standard port use nginx's `$http_host`, not `$host`. The client address is the last `X-Forwarded-For` entry. |
 | `OPAL_TRUST_PROXY_HOPS` | With `OPAL_TRUST_PROXY`, the number of proxies in the chain (default 1). The client address is counted that many entries from the right. |
 | `OPAL_ALLOWED_HOSTS` | Comma-separated host names (`opal.lan,192.168.1.20:8080`). When this or `OPAL_PUBLIC_URL` is set, a request for any other `Host` gets 421. `localhost` and the loopback addresses are always allowed. |
+
+### Sign-in limits
+
+Wrong passwords are limited per person and address: 10 in 5 minutes, and 30 in a day from an address where that person has no live session. Past 50 wrong tries at a name in 15 minutes, addresses where that person has no live session take turns. Passkeys and single sign-on have none of these limits.
+
+Past the limit in a day, even the right password is refused for as long as the message says, up to 24 hours. To get in sooner:
+
+- Use a passkey, single sign-on, or another address.
+- Ask an administrator to reset your password under **Users** and issue a claim link. The link signs you in.
+- Restart OPAL, with **Restart** on the control page or `systemctl --user restart opal` for the [systemd unit](contrib/opal.service). This clears every limit for every address. A sole administrator cannot reset their own password, so this or another address is their way in.
 
 ### Limits
 

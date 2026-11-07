@@ -144,6 +144,14 @@
 				<Switch id="passkeys" bind:checked={passkeys} />
 				<Label for="passkeys">Passkeys</Label>
 			</div>
+			{#if saved.ignoredForwardFrom}
+				<p class="text-error">
+					<span class="font-mono">{saved.ignoredForwardFrom}</span> sent X-Forwarded-For, and OPAL ignores
+					it because OPAL_TRUST_PROXY is not set. If that address is your proxy, set OPAL_TRUST_PROXY=1 and
+					restart: until then everyone behind it counts as one address and shares one sign-in limit. If it
+					is not a proxy, a client sent the header itself.
+				</p>
+			{/if}
 		</div>
 	</Section>
 
