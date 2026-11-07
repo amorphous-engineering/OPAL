@@ -8,6 +8,7 @@ import {
 	hashToken,
 	dailyThrottle,
 	loginThrottle,
+	refuseIfHashQueueFull,
 	takeLockedGuess,
 	usernameThrottle,
 	withHashSlot,
@@ -121,6 +122,17 @@ const passkeyInfo = (r: typeof passkeyCredential.$inferSelect) => ({
 	transports: r.transports
 });
 
+/** The largest unit that says how long: 30 seconds, 5 minutes, 24 hours. Rounded up, so coming back then works. */
+function spellWait(ms: number): string {
+	const seconds = Math.max(1, Math.ceil(ms / 1000));
+	const [n, unit] =
+		seconds < 60 ? [seconds, 'second'] : seconds < 3600 ? [Math.ceil(seconds / 60), 'minute'] : [Math.ceil(seconds / 3600), 'hour'];
+	return `${n} ${unit}${n === 1 ? '' : 's'}`;
+}
+
+/** A day is long enough to need another way in. Nobody else can restart the server, so saying this helps only the person it should. */
+const DAY_LIMIT_WAY_OUT = ' An administrator can reset your password, and restarting OPAL clears this limit.';
+
 // ---------------------------------------------------------------- settings view
 
 const settingsView = (s: SignInSettings) => ({
@@ -203,41 +215,35 @@ export const authImpls = [
 		if (!readSettings(ctx.db).passwordLoginEnabled) {
 			throw new OpalError(403, 'forbidden', 'Password sign-in is disabled');
 		}
+		// A full queue checks nothing, so it is not a failed attempt and leaves no trace in the limits below.
+		refuseIfHashQueueFull();
 		const username = input.username.trim().toLowerCase();
 		const address = throttleAddress(ctx.request?.ip);
 		const key = `${address}:${username}`;
 		const nameKey = `name:${username}`;
-		const tooMany = (waitMs?: number) => {
-			const seconds = waitMs === undefined ? 0 : Math.ceil(waitMs / 1000);
-			const when = seconds ? `in ${seconds} second${seconds === 1 ? '' : 's'}` : 'later';
-			return new OpalError(429, 'too_many_attempts', `Too many failed attempts. Try again ${when}.`);
-		};
-		if (loginThrottle.blocked(key)) throw tooMany();
+		const tooMany = (waitMs: number, wayOut = '') =>
+			new OpalError(429, 'too_many_attempts', `Too many failed attempts. Try again in ${spellWait(waitMs)}.${wayOut}`);
+		if (loginThrottle.blocked(key)) throw tooMany(loginThrottle.retryAfter(key));
 		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
 		// Strangers have a limit per day, and over the name's limit they take turns by address at one
 		// guess per interval. An address this person has signed in from keeps only its own limit, so
-		// guessing cannot lock them out of it.
-		const overName = usernameThrottle.blocked(nameKey);
-		const overDay = dailyThrottle.blocked(key);
-		if ((overName || overDay) && !(u && hasSignedInFrom(ctx.db, u.id, address))) {
-			if (overDay) throw tooMany();
-			const waitMs = takeLockedGuess(nameKey, address);
-			if (waitMs) throw tooMany(waitMs);
+		// guessing cannot lock them out of it, and what it got wrong does not follow them after signing out.
+		const stranger = !(u && hasSignedInFrom(ctx.db, u.id, address));
+		if (stranger) {
+			if (dailyThrottle.blocked(key)) throw tooMany(dailyThrottle.retryAfter(key), DAY_LIMIT_WAY_OUT);
+			if (usernameThrottle.blocked(nameKey)) {
+				const waitMs = takeLockedGuess(nameKey, address);
+				if (waitMs) throw tooMany(waitMs);
+			}
 		}
 		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
 		loginThrottle.fail(key);
-		dailyThrottle.fail(key);
+		if (stranger) dailyThrottle.fail(key);
 		usernameThrottle.fail(nameKey);
 		const ok = await withHashSlot(async () => {
 			const good = u?.isActive ? await verifyPassword(u.passwordHash, input.password) : false;
 			if (!u || !u.isActive || !u.passwordHash) await burnVerify(input.password);
 			return good;
-		}).catch((e) => {
-			// A full queue checked nothing, so it is not a failed attempt.
-			loginThrottle.release(key);
-			dailyThrottle.release(key);
-			usernameThrottle.release(nameKey);
-			throw e;
 		});
 		if (!u || !ok) {
 			// One message for unknown user, wrong password, inactive and passwordless accounts.

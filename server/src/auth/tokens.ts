@@ -110,20 +110,31 @@ export class LoginThrottle {
 		this.sweep();
 		const kept = this.prune(key);
 		if (!kept.length && this.failures.size >= this.maxKeys) this.makeRoom();
-		this.failures.set(key, [...kept, Date.now()]);
+		// The newest `max` are all `blocked` and `retryAfter` read, so a list costs no more than that.
+		this.failures.set(key, [...kept, Date.now()].slice(-this.max));
 	}
 	/**
-	 * Forgets the oldest key still under its limit. A key at its limit goes only when nothing else is
-	 * left, so failing against many other names cannot wipe out a limit an address has already reached.
+	 * Forgets whichever key has the fewest failures, the oldest among equals. Filling the table to clear
+	 * a count of n then takes n failures at every other key, so each guess won back costs a table's worth
+	 * of password checks. Newest-first would let one failure at a new name erase the one before it.
 	 */
 	private makeRoom(): void {
-		for (const key of this.failures.keys()) {
-			if (this.prune(key).length < this.max) {
-				this.failures.delete(key);
-				return;
+		let fewest: string | undefined;
+		let least = Infinity;
+		for (const [key, list] of this.failures) {
+			if (list.length < least) {
+				fewest = key;
+				least = list.length;
+				if (least <= 1) break;
 			}
 		}
-		this.failures.delete(this.failures.keys().next().value!);
+		if (fewest !== undefined) this.failures.delete(fewest);
+	}
+	/** How long until a key at its limit may try again, in ms. 0 when it is not at its limit. */
+	retryAfter(key: string): number {
+		const kept = this.prune(key);
+		const freedBy = kept[kept.length - this.max];
+		return freedBy === undefined ? 0 : Math.max(0, freedBy + this.windowMs - Date.now());
 	}
 	/** Recent failures for a key, without changing anything. */
 	count(key: string): number {
@@ -146,24 +157,27 @@ export class LoginThrottle {
 	/** Take back the newest failure: an attempt counted before its check ended well. */
 	release(key: string): void {
 		const kept = this.prune(key);
-		if (kept.length) this.failures.set(key, kept.slice(0, -1));
+		if (kept.length > 1) this.failures.set(key, kept.slice(0, -1));
+		else this.failures.delete(key);
 	}
 }
-export const loginThrottle = new LoginThrottle();
+/** Each table is capped, so memory stays bounded however many names and addresses fail. */
+const MAX_THROTTLE_KEYS = 50_000;
+export const loginThrottle = new LoginThrottle(10, 300_000, MAX_THROTTLE_KEYS);
 /**
  * Failures per username from any address. Past the cap, addresses this person has not signed in from
  * take turns at one guess per name every `lockedGuess.intervalMs`, however many addresses ask, so a
  * stranger with many addresses gets no more tries than the line allows. The person still gets in from
  * an address they have used, and a new address gets its turn however hard others ask.
  */
-export const usernameThrottle = new LoginThrottle(50, 900_000);
+export const usernameThrottle = new LoginThrottle(50, 900_000, MAX_THROTTLE_KEYS);
 export const lockedGuess = { intervalMs: 5000, askerTtlMs: 60_000 };
 
 /**
  * Failures per address and username over a day. An address this person has not signed in from stops
  * here, so holding a few addresses buys a few dozen guesses a day, not a place in line all day.
  */
-export const dailyThrottle = new LoginThrottle(30, 24 * 3600 * 1000, 50_000);
+export const dailyThrottle = new LoginThrottle(30, 24 * 3600 * 1000, MAX_THROTTLE_KEYS);
 
 /** A person is told to come back within this, so they are back before their place lapses. */
 const MAX_WAIT_MS = 30_000;
@@ -233,9 +247,15 @@ const HASH_SLOTS = 4;
 const HASH_QUEUE = 64;
 let hashActive = 0;
 const hashWaiting: Array<() => void> = [];
+/** Throws when a check asked for now would be turned away. */
+export function refuseIfHashQueueFull(): void {
+	if (hashActive >= HASH_SLOTS && hashWaiting.length >= HASH_QUEUE) {
+		throw new OpalError(429, 'too_many_attempts', 'The server is busy signing people in. Try again shortly.');
+	}
+}
 export async function withHashSlot<T>(fn: () => Promise<T>): Promise<T> {
+	refuseIfHashQueueFull();
 	if (hashActive >= HASH_SLOTS) {
-		if (hashWaiting.length >= HASH_QUEUE) throw new OpalError(429, 'too_many_attempts', 'The server is busy signing people in. Try again shortly.');
 		await new Promise<void>((resolve) => hashWaiting.push(resolve));
 	} else hashActive++;
 	try {
