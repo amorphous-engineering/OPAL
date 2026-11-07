@@ -2,6 +2,17 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
+## 2.0.0-beta.2
+
+### Added
+- **OPAL 2 imports real 1.x databases**, from every release from 1.2.2 through 1.4.0-beta.3. The first start, or `opal import`, brings a private copy forward and imports it. The original stays as `opal.legacy.db`, byte for byte. `import-report.txt` lists every table in the old file and what became of its rows.
+- **A printed sign-in link for databases from before 1.4.** They have no passwords, so the first start prints a link where the administrator sets one.
+- **`opal.project.yaml` is read once** for databases from before 1.4, so the project name, tiers and part numbering carry over. `opal import --project` names the file if OPAL cannot find it.
+
+### Not carried over
+- Extensions, Onshape links and Onshape keys. The report lists them. When keys were left out, the import also warns in the terminal: they are still in plaintext in the old database, so revoke them in Onshape if you no longer need them.
+- Free-text part requirement rows from before the requirement register, when no requirement has that number. They stay in the `legacy_row` table, and the report lists them.
+
 ## 2.0.0-beta.1
 
 OPAL 2 is a rewrite in TypeScript: one Bun binary, one SQLite file. The Python 1.x backend is gone, and

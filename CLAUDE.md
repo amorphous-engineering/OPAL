@@ -90,6 +90,7 @@ screen, in links, in exports and in MCP, and moves no stored row.
 - `bun test`. Each test opens `openDb(':memory:')` and calls the app with `app.request()`. No server process.
 - Name tests after the business rule they check.
 - Every operation needs at least one HTTP-level test (`test:ops` checks it).
+- `server/test/fixtures/legacy-released` holds databases made by the released 1.x code. `build.sh` there remakes them; real Alembic's result is the expected output of `src/import/bridge.ts`.
 - Real data for screen checks: copy `server/assets/demo-seed.db` (a 1.x demo database) into a temp `OPAL_DATA_DIR` as `opal.db`. The first start imports it. Sign in as `build` / `kestrel-demo`.
 
 ## Records

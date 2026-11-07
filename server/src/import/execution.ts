@@ -40,6 +40,7 @@ import {
 } from '../db/schema/index.ts';
 import { slotLabel } from '../services/procedures/signoffs.ts';
 import { effectiveSignoffs } from '../services/procedures/signoffs.ts';
+import { captureFieldsFrom } from './capture-fields.ts';
 import {
 	type ImportCtx,
 	type Row,
@@ -238,7 +239,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 			number: String(r.step_number_str),
 			title: String(r.title ?? ''),
 			instructions: str(r.instructions),
-			dataSchema: json(r.required_data_schema),
+			dataSchema: captureFieldsFrom(c, r.required_data_schema, `step_execution ${id}`),
 			signoffs: slots,
 			createdById: null,
 			createdAt: tsReq(r.created_at)

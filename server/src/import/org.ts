@@ -191,14 +191,36 @@ export function importRoles(c: ImportCtx): void {
 		.map((r) => ({ id: Number(r.id), roleId: Number(r.role_id), gate: String(r.gate) })));
 }
 
-/** app_setting: sign-in keys go to auth_setting, the rest stays in app_setting. */
+export const NO_ONSHAPE = 'the Onshape integration does not carry over to OPAL 2';
+
+/** The project configuration without its Onshape section. Anything else stays as it was. */
+function withoutOnshape(c: ImportCtx, value: string | null): string | null {
+	const cfg = json<Record<string, unknown>>(value);
+	if (!cfg || typeof cfg !== 'object' || !('onshape' in cfg)) return value;
+	const documents = (cfg.onshape as { documents?: unknown } | null)?.documents;
+	const { onshape: _gone, ...rest } = cfg;
+	if (Array.isArray(documents) && documents.length) {
+		c.report.notImported.push({ table: 'project_config (onshape)', rows: documents.length, note: `${NO_ONSHAPE}: linked documents` });
+	}
+	return JSON.stringify(rest);
+}
+
+/** app_setting: sign-in keys go to auth_setting, Onshape keys stay behind, the rest stays in app_setting. */
 export function importSettings(c: ImportCtx): void {
 	const rows = readTable(c, 'app_setting', ['key', 'value', 'created_at', 'updated_at'], 'key');
 	const authKeys: readonly string[] = AUTH_SETTING_KEYS;
 	let auth = 0;
 	let app = 0;
+	// Onshape API keys and webhook secrets have no use here, so they do not move into a new file.
+	const onshape = rows.filter((r) => String(r.key).startsWith('onshape_'));
+	if (onshape.length) {
+		c.report.tables.app_setting!.leftOut = onshape.length;
+		c.report.onshapeKeys = onshape.filter((r) => str(r.value) && /_(key|secret|token)$/.test(String(r.key))).map((r) => String(r.key));
+		c.report.notImported.push({ table: 'app_setting (onshape_*)', rows: onshape.length, note: `${NO_ONSHAPE}: ${onshape.map((r) => String(r.key)).join(', ')}` });
+	}
 	for (const r of rows) {
-		const base = { key: String(r.key), value: str(r.value), createdAt: tsReq(r.created_at), updatedAt: tsReq(r.updated_at) };
+		if (String(r.key).startsWith('onshape_')) continue;
+		const base = { key: String(r.key), value: r.key === 'project_config' ? withoutOnshape(c, str(r.value)) : str(r.value), createdAt: tsReq(r.created_at), updatedAt: tsReq(r.updated_at) };
 		try {
 			if (authKeys.includes(base.key)) {
 				c.d.insert(authSetting).values(base).run();

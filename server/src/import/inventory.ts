@@ -18,7 +18,7 @@ import {
 	fail,
 	insertRows,
 	keep,
-	keepLegacyRow,
+	leaveInLegacyRow,
 	legacyQty,
 	oneOf,
 	readTable,
@@ -197,7 +197,7 @@ export function importInventory(c: ImportCtx): InventoryLinks {
 	for (const t of transfers) {
 		const id = Number(t.id);
 		if (String(t.status) !== 'completed') {
-			keepLegacyRow(c, 'stock_transfer', t, `status ${String(t.status)} moves no stock`);
+			leaveInLegacyRow(c, 'stock_transfer', t, `status ${String(t.status)} moves no stock`);
 			continue;
 		}
 		const q = legacyQty(t.quantity) ?? 0;

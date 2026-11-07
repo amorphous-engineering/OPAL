@@ -5,6 +5,7 @@ import type { Database } from 'bun:sqlite';
 import { QTY_SCALE } from '@opal/shared';
 import type { Db } from '../db/client.ts';
 import { legacyRow } from '../db/schema/legacy.ts';
+import type { BridgeReport } from './bridge.ts';
 
 export type Row = Record<string, unknown>;
 
@@ -13,6 +14,18 @@ export interface TableReport {
 	imported: number;
 	/** Legacy columns that have no home in the new schema. */
 	droppedColumns: string[];
+	/** Rows left out on purpose. Listed under notImported, so they are not failures. */
+	leftOut?: number;
+}
+
+/** One table of the source file as it was, and what became of its rows. */
+export interface SourceTableLine {
+	table: string;
+	/** Rows in the file, before anything ran. */
+	rows: number;
+	outcome: string;
+	/** Rows nothing explains: read, but neither imported, failed nor left out. Should be 0. */
+	unaccounted: number;
 }
 
 export interface StockDifference {
@@ -28,8 +41,19 @@ export interface StockDifference {
 export interface ImportReport {
 	source: string;
 	dest: string;
+	/** The revision of the source file, before the bridge. */
 	alembicVersion: string;
 	at: string;
+	/** How a released 1.x database was brought forward. Null when it needed nothing. */
+	bridge: BridgeReport | null;
+	/** Every table of the source file, as it was. */
+	sourceTables: SourceTableLine[];
+	/** Where the project configuration came from when it was not in the database. */
+	projectFile: string | null;
+	/** Active people with no way to sign in yet. They set a password from a claim link. */
+	noSignIn: { id: number; username: string; isAdmin: boolean }[];
+	/** Onshape credentials with a value, left in the source file. Names only: never their values. */
+	onshapeKeys: string[];
 	/** Per legacy table: rows read and rows written to its main new table. */
 	tables: Record<string, TableReport>;
 	/** Rows written to tables that have no legacy twin. */
@@ -56,6 +80,8 @@ export interface ImportOptions {
 	blobsDir?: string;
 	/** Where avatar files go. Default: `<destination folder>/avatars`. */
 	avatarsDir?: string;
+	/** The 1.x `opal.project.yaml`, for databases that do not hold their project configuration. */
+	projectFile?: string;
 }
 
 export interface ResolvedOptions {
@@ -85,6 +111,11 @@ export function emptyReport(source: string, dest: string, version: string, at: s
 		dest,
 		alembicVersion: version,
 		at,
+		bridge: null,
+		sourceTables: [],
+		projectFile: null,
+		noSignIn: [],
+		onshapeKeys: [],
 		tables: {},
 		derived: {},
 		notImported: [],
@@ -190,11 +221,15 @@ export function readTable(c: ImportCtx, table: string, used: readonly string[], 
 		return [];
 	}
 	const rows = c.src.query(`SELECT * FROM "${table}" ORDER BY ${order}`).all() as Row[];
+	const have = columns(c.src, table);
 	c.report.tables[table] = {
 		read: rows.length,
 		imported: 0,
-		droppedColumns: columns(c.src, table).filter((col) => !used.includes(col))
+		droppedColumns: have.filter((col) => !used.includes(col))
 	};
+	// A database nobody expected: without this its values would quietly read as empty.
+	const missing = used.filter((col) => !have.includes(col));
+	if (rows.length && missing.length) warn(c, `${table}: ${missing.join(', ')} not in this database, read as empty`);
 	return rows;
 }
 
@@ -231,6 +266,18 @@ export function keepLegacyRow(c: ImportCtx, table: string, row: Row, reason: str
 		})
 		.run();
 	c.report.derived.legacy_row = (c.report.derived.legacy_row ?? 0) + 1;
+}
+
+/** A row with no home in the new schema, so it is not imported. It stays readable in legacy_row. */
+export function leaveInLegacyRow(c: ImportCtx, table: string, row: Row, reason: string): void {
+	keepLegacyRow(c, table, row, reason);
+	if (!c.legacyTables) return;
+	const t = c.report.tables[table];
+	if (t) t.leftOut = (t.leftOut ?? 0) + 1;
+	const name = `${table} (legacy_row)`;
+	const line = c.report.notImported.find((n) => n.table === name);
+	if (line) line.rows++;
+	else c.report.notImported.push({ table: name, rows: 1, note: 'no home in OPAL 2, each row kept with its reason in the legacy_row table' });
 }
 
 /**

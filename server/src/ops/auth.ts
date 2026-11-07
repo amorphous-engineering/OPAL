@@ -21,6 +21,7 @@ import { throttleAddress } from '../auth/client-ip.ts';
 import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
 import { checkSetupCode, clearSetupCode, setupCodeRequired } from '../services/auth/setup-code.ts';
+import { CLAIM_LINK_TTL_MS, claimToken } from '../services/auth/claim.ts';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { personRefs } from '../services/org/people.ts';
@@ -435,10 +436,7 @@ export const authImpls = [
 		if (!u.isActive || u.passwordHash) {
 			throw new OpalError(400, 'not_claimable', 'This account already has a password; no claim link is needed');
 		}
-		return {
-			token: signPayload({ kind: 'account-claim', uid: u.id, born: u.createdAt, rev: u.updatedAt }, CLAIM_LINK_TTL_MS),
-			expiresAt: addMs(CLAIM_LINK_TTL_MS)
-		};
+		return { token: claimToken(u), expiresAt: addMs(CLAIM_LINK_TTL_MS) };
 	}),
 
 	// ------------------------------------------------------------ settings
@@ -546,8 +544,6 @@ export const authImpls = [
 		return { ok: true as const };
 	})
 ] as Impl[];
-
-const CLAIM_LINK_TTL_MS = 7 * 86_400_000;
 
 /** The account a claim link names, while it is still unclaimed. */
 function claimable(ctx: Ctx, token: string): UserRow | undefined {

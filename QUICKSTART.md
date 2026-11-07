@@ -27,19 +27,33 @@ This starts the server and opens a control page with its status and log. To run 
 
 ## If you already use OPAL 1.x
 
-This beta cannot read a 1.x database yet. If it finds one, it stops and leaves the file alone. The installer also replaces the `opal` program, so anything that starts `opal`, including a service, now starts the beta.
+Stop 1.x first. The installer replaces the `opal` program, so anything that starts `opal`, including a service, now starts OPAL 2.
 
-The installer keeps your previous program the first time. To go back to 1.x:
+The first start imports the database in the data folder, from any release from 1.2.2 through 1.4.0-beta.3. The original file is not changed: it stays next to the new database as `opal.legacy.db`. `import-report.txt`, in the same folder, lists every table in the old file, what moved, and what did not. Read it before you rely on the result. Extensions and the Onshape integration do not carry over, and the report lists what they held.
+
+Databases from before 1.4 have no passwords. The first start then prints a link in the terminal, and in the log on the control page, where the administrator sets one. Under **Users**, the administrator can make links for everyone else. Skip the first-account step below.
+
+Before 1.4, the project name, tiers and part numbering lived in `opal.project.yaml`. OPAL looks for it next to the database, one folder up, and in the current folder and its parents. If it finds none, the report says so, and new part numbers use the default format.
+
+A database somewhere else, or a project file OPAL cannot find:
+
+```bash
+opal import /path/to/opal.db --project /path/to/opal.project.yaml
+```
+
+To go back to 1.x, restore both the program and the database. Anything you did in OPAL 2 stays behind in `opal.v2.db`. The installer keeps your previous program the first time.
 
 ```bash
 mv ~/.local/bin/opal.before-v2 ~/.local/bin/opal
+cd ~/.local/share/opal && mv opal.db opal.v2.db && mv opal.legacy.db opal.db
 ```
 
 ```powershell
 Move-Item -Force "$env:LOCALAPPDATA\OPAL\opal.before-v2.exe" "$env:LOCALAPPDATA\OPAL\opal.exe"
+cd "$env:LOCALAPPDATA\OPAL"; Move-Item opal.db opal.v2.db; Move-Item opal.legacy.db opal.db
 ```
 
-To try the beta beside your 1.x data, give it its own empty folder:
+To try the beta beside your 1.x data without importing it, give it its own empty folder:
 
 ```bash
 OPAL_DATA_DIR=~/opal-beta opal
