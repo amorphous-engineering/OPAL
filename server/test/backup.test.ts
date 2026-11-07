@@ -137,6 +137,17 @@ function rewriteManifest(backup: string, change: (m: { files: Record<string, str
 	writeFileSync(path, JSON.stringify(m));
 }
 
+/** A restore that stops the way a crash would, after writing everything but the database. */
+function crashBeforePublishing(backup: string): void {
+	expect(() =>
+		restoreBackup(backup, {
+			publishing: () => {
+				throw new Error('crash');
+			}
+		})
+	).toThrow('crash');
+}
+
 const sha256 = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
 async function runCli(args: string[], env: Record<string, string>) {
@@ -673,11 +684,10 @@ describe('a restore that stops partway', () => {
 
 		// What a crash leaves: the marker, some files, one of them half written, no database.
 		const dir = join(tempDir(), 'r');
-		mkdirSync(join(dir, 'blobs'), { recursive: true });
-		writeFileSync(join(dir, RESTORE_MARKER), 'x');
+		process.env.OPAL_DATA_DIR = dir;
+		crashBeforePublishing(path);
 		writeFileSync(join(dir, 'blobs', i.sha), 'half');
 		writeFileSync(join(dir, 'opal.db.restoring'), 'half');
-		process.env.OPAL_DATA_DIR = dir;
 
 		expect(() => assertNoUnfinishedRestore()).toThrow(/did not finish/);
 		const serve = await runCli(['serve', '--port', '0'], { OPAL_DATA_DIR: dir, OPAL_PLUGINS: '0' });
@@ -710,5 +720,202 @@ describe('a restore that stops partway', () => {
 		}
 		expect(statSync(dir).mode & 0o777).toBe(0o700);
 		for (const p of walk(dir)) expect(lstatSync(p).mode & 0o077).toBe(0);
+	});
+});
+
+describe('a restore keeps its hands off a live database', () => {
+	test('a server started while a restore verifies refuses, before anything is written', async () => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		const dir = join(tempDir(), 'r');
+		process.env.OPAL_DATA_DIR = dir;
+		let serve: { exitCode: number; stderr: Buffer } | undefined;
+		restoreBackup(path, {
+			verifying: () => {
+				expect(readdirSync(dir)).toEqual([RESTORE_MARKER]);
+				serve = Bun.spawnSync([process.execPath, cli, 'serve', '--port', '0'], { env: { ...process.env, OPAL_DATA_DIR: dir, OPAL_PLUGINS: '0' } });
+				expect(existsSync(join(dir, 'opal.db'))).toBe(false);
+			}
+		});
+		expect(serve!.exitCode).toBe(1);
+		expect(serve!.stderr.toString()).toContain(`opal restore ${path}`);
+		expect(existsSync(join(dir, RESTORE_MARKER))).toBe(false);
+		const back = open(dir);
+		expect(await (await back.app.request((await filesOf(back, i.issueId))[0]!.href)).text()).toBe('the bracket is bent');
+		back.close();
+	});
+
+	test('a backup that fails verification leaves the folder as it found it', async () => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		writeFileSync(join(path, 'blobs', i.sha), 'cut');
+
+		const missing = join(tempDir(), 'r', 'data');
+		process.env.OPAL_DATA_DIR = missing;
+		expect(() => restoreBackup(path)).toThrow(/changed since/);
+		expect(existsSync(missing)).toBe(false);
+
+		const empty = join(tempDir(), 'r2');
+		mkdirSync(empty);
+		process.env.OPAL_DATA_DIR = empty;
+		expect(() => restoreBackup(path)).toThrow(/changed since/);
+		expect(readdirSync(empty)).toEqual([]);
+	});
+
+	test.each([['opal.db'], ['opal.db-wal'], ['opal.db-shm'], ['something-else']])('%s appearing during a restore stops it, and nothing is replaced', async (name) => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		const dir = join(tempDir(), 'r');
+		process.env.OPAL_DATA_DIR = dir;
+		const stray = join(dir, name);
+		expect(() => restoreBackup(path, { publishing: () => writeFileSync(stray, 'live') })).toThrow(/Something else wrote/);
+		expect(readFileSync(stray, 'utf8')).toBe('live');
+		if (name !== 'opal.db') expect(existsSync(join(dir, 'opal.db'))).toBe(false);
+		expect(existsSync(join(dir, RESTORE_MARKER))).toBe(true);
+		// It stays refused until a person has looked at the folder.
+		expect(() => restoreBackup(path)).toThrow();
+		expect(readFileSync(stray, 'utf8')).toBe('live');
+	});
+});
+
+describe('a restore that stopped can be finished', () => {
+	test('after a crash with the database in place, serve points at restore and restore finishes without writing it again', async () => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		const dir = join(tempDir(), 'r');
+		process.env.OPAL_DATA_DIR = dir;
+		crashBeforePublishing(path);
+		// The link is made, and the crash came before the temp file and the marker went.
+		copyFileSync(join(dir, 'opal.db.restoring'), join(dir, 'opal.db'));
+		const before = statSync(join(dir, 'opal.db')).mtimeMs;
+
+		const serve = await runCli(['serve', '--port', '0'], { OPAL_DATA_DIR: dir, OPAL_PLUGINS: '0' });
+		expect(serve.code).toBe(1);
+		expect(serve.err).toContain(`opal restore ${path}`);
+
+		const done = restoreBackup(path);
+		expect(done.path).toBe(join(dir, 'opal.db'));
+		expect(existsSync(join(dir, RESTORE_MARKER))).toBe(false);
+		expect(existsSync(join(dir, 'opal.db.restoring'))).toBe(false);
+		expect(statSync(join(dir, 'opal.db')).mtimeMs).toBe(before);
+		const back = open(dir);
+		expect(await (await back.app.request((await filesOf(back, i.issueId))[0]!.href)).text()).toBe('the bracket is bent');
+		back.close();
+	});
+
+	test.each([
+		['different content', 'opal.db', 'a database someone wrote to'],
+		['a write-ahead log beside it', 'opal.db-wal', 'x']
+	])('a database with %s is not taken for the restored one', async (_what, name, text) => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		const dir = join(tempDir(), 'r');
+		process.env.OPAL_DATA_DIR = dir;
+		crashBeforePublishing(path);
+		copyFileSync(join(dir, 'opal.db.restoring'), join(dir, 'opal.db'));
+		writeFileSync(join(dir, name), text);
+		const before = sha256(join(dir, 'opal.db'));
+
+		expect(() => restoreBackup(path)).toThrow(/is not the one in/);
+		expect(sha256(join(dir, 'opal.db'))).toBe(before);
+		expect(existsSync(join(dir, RESTORE_MARKER))).toBe(true);
+	});
+
+	test('a resumed restore refuses a different backup, and the first one still finishes', async () => {
+		const i = await small();
+		const parent = join(tempDir(), 'b');
+		const first = takeBackup(parent);
+		const second = takeBackup(parent);
+		i.close();
+		const dir = join(tempDir(), 'r');
+		process.env.OPAL_DATA_DIR = dir;
+		crashBeforePublishing(first.path);
+
+		expect(() => restoreBackup(second.path)).toThrow(/different backup/);
+		expect(existsSync(join(dir, 'opal.db'))).toBe(false);
+		restoreBackup(first.path);
+		expect(existsSync(join(dir, RESTORE_MARKER))).toBe(false);
+		expect(existsSync(join(dir, 'opal.db'))).toBe(true);
+	});
+
+	test('a marker left empty by a crash takes any backup, because nothing was written yet', async () => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		const dir = join(tempDir(), 'r');
+		mkdirSync(dir);
+		writeFileSync(join(dir, RESTORE_MARKER), '');
+		process.env.OPAL_DATA_DIR = dir;
+		restoreBackup(path);
+		expect(existsSync(join(dir, RESTORE_MARKER))).toBe(false);
+		expect(existsSync(join(dir, 'opal.db'))).toBe(true);
+	});
+
+	test('a marker nobody can read stops the restore and says what to do', async () => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		const dir = join(tempDir(), 'r');
+		mkdirSync(dir);
+		writeFileSync(join(dir, RESTORE_MARKER), 'not json');
+		process.env.OPAL_DATA_DIR = dir;
+		expect(() => restoreBackup(path)).toThrow(/Move the folder aside/);
+		expect(() => assertNoUnfinishedRestore()).toThrow(/did not finish/);
+	});
+});
+
+describe('restore reads only regular files', () => {
+	async function backupWith(change: (backup: string, m: { files: Record<string, string> }) => void): Promise<string> {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		rewriteManifest(path, (m) => change(path, m));
+		process.env.OPAL_DATA_DIR = join(tempDir(), 'r');
+		return path;
+	}
+	const mkfifo = (path: string) => expect(Bun.spawnSync(['mkfifo', path]).exitCode).toBe(0);
+
+	posix('a FIFO in a manifest is refused without waiting on it', async () => {
+		const path = await backupWith((backup, m) => {
+			mkfifo(join(backup, '.opal_fifo'));
+			m.files['.opal_fifo'] = 'a'.repeat(64);
+		});
+		expect(() => restoreBackup(path)).toThrow(/not a regular file: \.opal_fifo/);
+		expect(existsSync(join(process.env.OPAL_DATA_DIR!, RESTORE_MARKER))).toBe(false);
+	});
+
+	posix('a FIFO as the manifest itself is refused without waiting on it', async () => {
+		const i = await small();
+		const { path } = takeBackup(join(tempDir(), 'b'));
+		i.close();
+		rmSync(join(path, 'manifest.json'));
+		mkfifo(join(path, 'manifest.json'));
+		process.env.OPAL_DATA_DIR = join(tempDir(), 'r');
+		expect(() => restoreBackup(path)).toThrow(/cannot be read/);
+	});
+
+	posix('a symbolic link in a manifest is refused, at the file or on the way to it', async () => {
+		const outside = join(tempDir(), 'outside');
+		mkdirSync(outside);
+		writeFileSync(join(outside, 'secret'), 'theirs');
+		const hash = sha256(join(outside, 'secret'));
+		const link = await backupWith((backup, m) => {
+			mkdirSync(join(backup, 'plugin-data', 'x'), { recursive: true });
+			symlinkSync(join(outside, 'secret'), join(backup, 'plugin-data', 'x', 'link'));
+			m.files['plugin-data/x/link'] = hash;
+		});
+		expect(() => restoreBackup(link)).toThrow(/not a regular file: plugin-data\/x\/link/);
+
+		const through = await backupWith((backup, m) => {
+			mkdirSync(join(backup, 'plugin-data'), { recursive: true });
+			symlinkSync(outside, join(backup, 'plugin-data', 'x'));
+			m.files['plugin-data/x/secret'] = hash;
+		});
+		expect(() => restoreBackup(through)).toThrow(/not a regular file: plugin-data\/x\/secret/);
 	});
 });

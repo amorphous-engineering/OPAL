@@ -30,19 +30,22 @@ import {
 	copyFileSync,
 	existsSync,
 	fsyncSync,
+	linkSync,
+	lstatSync,
 	mkdirSync,
 	openSync,
 	readdirSync,
 	readFileSync,
 	readSync,
 	renameSync,
+	rmdirSync,
 	rmSync,
 	statSync,
 	unlinkSync,
 	writeFileSync,
 	writeSync
 } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { lastApplied, migrationFiles } from '../../db/client.ts';
 import { hardenDataDir } from '../../harden.ts';
 import { dataDir, dbPath } from '../../paths.ts';
@@ -65,8 +68,16 @@ const KEY_FILE = /^\.opal_[a-z_]+$/;
 const MANIFEST_PATH = /^(opal\.db|(blobs|avatars)\/[0-9a-f]{64}|\.opal_[a-z_]+|(plugins|plugin-data)\/[^\\:]+)$/;
 const isSafePath = (p: string) => MANIFEST_PATH.test(p) && !p.split('/').some((s) => s === '..' || s === '.' || s === '');
 
-/** Present in the data folder from the first file a restore writes until the database is in place. */
+/** Present in the data folder from before a restore reads its backup in full until the database is in place. */
 export const RESTORE_MARKER = '.opal-restore-unfinished';
+
+/** What the marker holds, so that a second run can tell whether it is finishing the same restore. */
+interface RestoreMarker {
+	backup: string;
+	/** The hash of the backup's manifest, which names the hash of every file in it. */
+	manifest: string;
+	startedAt: string;
+}
 
 /**
  * A file can vanish after the copy was taken: a replaced avatar goes at once, an unreferenced blob when the
@@ -340,8 +351,30 @@ function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 
 	};
 }
 
+/**
+ * What sits at a path inside a backup, looking at every step without following links. Hashing a FIFO would
+ * wait forever, and a link would bring in something from outside the backup.
+ */
+function entryKind(folder: string, rel: string): 'file' | 'absent' | 'other' {
+	const steps = rel.split('/');
+	let path = folder;
+	for (const [i, step] of steps.entries()) {
+		path = join(path, step);
+		let stat;
+		try {
+			stat = lstatSync(path);
+		} catch (e) {
+			if (isMissing(e)) return 'absent';
+			throw e;
+		}
+		if (i === steps.length - 1 ? !stat.isFile() : !stat.isDirectory()) return 'other';
+	}
+	return 'file';
+}
+
 function readManifest(folder: string): Manifest | null {
 	try {
+		if (entryKind(folder, MANIFEST) !== 'file') return null;
 		const parsed = JSON.parse(readFileSync(join(folder, MANIFEST), 'utf8')) as Manifest;
 		if (parsed?.format !== FORMAT || typeof parsed.files !== 'object' || parsed.files === null) return null;
 		return parsed;
@@ -446,33 +479,37 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 	}
 }
 
+const notABackup = (folder: string, why: string) => new Error(`${folder} is not a complete OPAL backup: ${why}.`);
+
+/** What can be said about a backup from its manifest alone, which takes no time. */
+function readBackup(folder: string): Manifest {
+	if (!existsSync(folder) || !statSync(folder).isDirectory()) throw notABackup(folder, 'there is no such folder');
+	if (entryKind(folder, MANIFEST) === 'absent') throw notABackup(folder, `it has no ${MANIFEST}, which is written last. It may be from an interrupted backup`);
+	const manifest = readManifest(folder);
+	if (!manifest) throw notABackup(folder, `its ${MANIFEST} cannot be read`);
+	if (manifest.formatVersion !== FORMAT_VERSION) throw new Error(`${folder} has backup format ${manifest.formatVersion}, which this version of OPAL cannot read. It was made by OPAL ${manifest.opalVersion}.`);
+	const strange = Object.keys(manifest.files).filter((p) => !isSafePath(p));
+	if (strange.length) throw notABackup(folder, `its ${MANIFEST} names unexpected paths: ${list(strange)}`);
+	if (!manifest.files[DB_FILE]) throw notABackup(folder, `its ${MANIFEST} names no database`);
+	return manifest;
+}
+
 /** Reads a backup and proves it complete. Throws, saying what is wrong, when it is not. Writes nothing. */
 export function verifyBackup(folder: string): Manifest {
-	const notABackup = (why: string) => new Error(`${folder} is not a complete OPAL backup: ${why}.`);
-	if (!existsSync(folder) || !statSync(folder).isDirectory()) throw notABackup('there is no such folder');
-	if (!existsSync(join(folder, MANIFEST))) throw notABackup(`it has no ${MANIFEST}, which is written last. It may be from an interrupted backup`);
-	const manifest = readManifest(folder);
-	if (!manifest) throw notABackup(`its ${MANIFEST} cannot be read`);
-	if (manifest.formatVersion !== FORMAT_VERSION) throw new Error(`${folder} has backup format ${manifest.formatVersion}, which this version of OPAL cannot read. It was made by OPAL ${manifest.opalVersion}.`);
+	const manifest = readBackup(folder);
 	const paths = Object.keys(manifest.files);
-	const strange = paths.filter((p) => !isSafePath(p));
-	if (strange.length) throw notABackup(`its ${MANIFEST} names unexpected paths: ${list(strange)}`);
-	if (!manifest.files[DB_FILE]) throw notABackup(`its ${MANIFEST} names no database`);
-
-	const absent: string[] = [];
-	const damaged: string[] = [];
-	for (const rel of paths) {
-		const path = join(folder, ...rel.split('/'));
-		if (!existsSync(path)) absent.push(rel);
-		else if (hashFile(path) !== manifest.files[rel]) damaged.push(rel);
-	}
-	if (absent.length) throw notABackup(`${plural(absent.length, 'file')} missing: ${list(absent)}`);
-	if (damaged.length) throw notABackup(`${plural(damaged.length, 'file')} changed since the backup was written: ${list(damaged)}`);
+	const kinds = new Map(paths.map((rel) => [rel, entryKind(folder, rel)]));
+	const irregular = paths.filter((rel) => kinds.get(rel) === 'other');
+	if (irregular.length) throw notABackup(folder, `${plural(irregular.length, 'path')} in its ${MANIFEST} not a regular file: ${list(irregular)}`);
+	const absent = paths.filter((rel) => kinds.get(rel) === 'absent');
+	if (absent.length) throw notABackup(folder, `${plural(absent.length, 'file')} missing: ${list(absent)}`);
+	const damaged = paths.filter((rel) => hashFile(join(folder, ...rel.split('/'))) !== manifest.files[rel]);
+	if (damaged.length) throw notABackup(folder, `${plural(damaged.length, 'file')} changed since the backup was written: ${list(damaged)}`);
 
 	const copyDb = join(folder, DB_FILE);
 	checkIntegrity(copyDb);
 	const unlisted = needs(copyDb).blobs.filter((sha) => !manifest.files[`blobs/${sha}`]);
-	if (unlisted.length) throw notABackup(`the database needs ${plural(unlisted.length, 'attachment file')} it does not hold: ${list(unlisted)}`);
+	if (unlisted.length) throw notABackup(folder, `the database needs ${plural(unlisted.length, 'attachment file')} it does not hold: ${list(unlisted)}`);
 
 	const sqlite = new Database(copyDb, { readonly: true });
 	let applied: number;
@@ -487,11 +524,37 @@ export function verifyBackup(folder: string): Manifest {
 	return manifest;
 }
 
-/** Throws when a folder holds a restore that stopped partway. `serve` must not start on it: it would run with an empty database. */
-export function assertNoUnfinishedRestore(): void {
-	if (existsSync(join(dataDir(), RESTORE_MARKER))) {
-		throw new Error(`A restore into ${dataDir()} did not finish. Run \`opal restore\` again with the same backup.`);
+/** What a marker says. Empty: a crash in the moment after making it, before any other file was written. */
+function readRestoreMarker(path: string): RestoreMarker | 'blank' | 'none' {
+	let text: string;
+	try {
+		text = readFileSync(path, 'utf8');
+	} catch (e) {
+		if (isMissing(e)) return 'none';
+		throw e;
 	}
+	if (!text.trim()) return 'blank';
+	try {
+		const parsed = JSON.parse(text) as RestoreMarker;
+		if (typeof parsed?.manifest === 'string' && typeof parsed.backup === 'string') return parsed;
+	} catch {
+		/* said below */
+	}
+	throw new Error(`${path} cannot be read, so nothing can say which backup this folder was being restored from. Move the folder aside and restore into an empty one.`);
+}
+
+/** Throws when a folder holds a restore that is running or stopped partway. `serve` must not start on it: it would run with an empty database. */
+export function assertNoUnfinishedRestore(): void {
+	const marker = join(dataDir(), RESTORE_MARKER);
+	if (!existsSync(marker)) return;
+	let started: ReturnType<typeof readRestoreMarker> = 'blank';
+	try {
+		started = readRestoreMarker(marker);
+	} catch {
+		/* the name of the backup is a courtesy here */
+	}
+	const again = typeof started === 'object' ? `\`opal restore ${started.backup}\`` : '`opal restore` with the same backup';
+	throw new Error(`A restore into ${dataDir()} is running or did not finish. If it stopped, run ${again} again.`);
 }
 
 export interface RestoreResult {
@@ -501,31 +564,108 @@ export interface RestoreResult {
 	opalVersion: string;
 }
 
+/** Takes the database out of `incoming` without replacing anything: a link refuses an existing file, where a rename would not. */
+function publishDatabase(incoming: string, target: string, refuse: (what: string) => Error): void {
+	try {
+		linkSync(incoming, target);
+	} catch (e) {
+		const code = (e as { code?: string }).code;
+		if (code === 'EEXIST') throw refuse(basename(target));
+		if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') throw e;
+		// A folder with no hard links. The check just before this one is all there is.
+		renameRetrying(incoming, target);
+		return;
+	}
+	unlinkSync(incoming);
+}
+
 /**
- * Restores into the data folder, which must hold nothing yet. The database arrives last, by rename: until
- * then the marker tells `serve` and a repeated restore that this folder is unfinished. A repeated restore
- * writes over what the last one left. There is no way to restore over a database.
+ * Restores into the data folder, which must hold nothing yet. The marker comes first, before the backup
+ * is read in full, because that can take minutes and `serve` must refuse the folder from the start. The
+ * database arrives last. A repeated restore of the same backup writes over what the last one left, or
+ * only clears the marker if the database had already arrived. There is no way to restore over a database.
+ *
+ * `stages` lets a test act at the moments another process could.
  */
-export function restoreBackup(folder: string): RestoreResult {
+export function restoreBackup(folder: string, stages: { verifying?: () => void; publishing?: () => void } = {}): RestoreResult {
 	const target = dbPath();
 	const dir = dataDir();
 	const marker = join(dir, RESTORE_MARKER);
-	if ([target, `${target}-wal`, `${target}-shm`].some((p) => existsSync(p))) {
-		throw new Error(`${dir} already has a database (${target}). Restore never replaces one. Set OPAL_DATA_DIR to an empty folder, or move this one aside first.`);
-	}
-	const resuming = existsSync(marker);
-	if (!resuming && existsSync(dir)) {
-		const present = readdirSync(dir);
-		if (present.length) throw new Error(`${dir} is not empty (${list(present)}). Restore only writes into an empty folder. Set OPAL_DATA_DIR to an empty one, or move these aside first.`);
+	const incoming = `${target}.restoring`;
+	const liveFiles = [target, `${target}-wal`, `${target}-shm`];
+	const hasDatabase = () => liveFiles.some((p) => existsSync(p));
+	const replaces = `Restore never replaces one. Set OPAL_DATA_DIR to an empty folder, or move this one aside first.`;
+
+	const started = readRestoreMarker(marker);
+	if (started === 'none') {
+		if (hasDatabase()) throw new Error(`${dir} already has a database (${target}). ${replaces}`);
+		if (existsSync(dir)) {
+			const present = readdirSync(dir);
+			if (present.length) throw new Error(`${dir} is not empty (${list(present)}). Restore only writes into an empty folder. Set OPAL_DATA_DIR to an empty one, or move these aside first.`);
+		}
 	}
 
-	const manifest = verifyBackup(folder);
+	const manifest = readBackup(folder);
+	const manifestHash = hashFile(join(folder, MANIFEST));
+	const result: RestoreResult = { path: target, counts: manifest.counts, createdAt: manifest.createdAt, opalVersion: manifest.opalVersion };
+	const removeMarker = () => {
+		unlinkSync(marker);
+		fsyncFolder(dir);
+	};
+	if (typeof started === 'object' && started.manifest !== manifestHash) {
+		throw new Error(`The restore into ${dir} was from ${started.backup}, and ${folder} is a different backup. Run it again with that one, or move this folder aside and restore into an empty one.`);
+	}
+	if (started !== 'none' && hasDatabase()) {
+		// The last run stopped between putting the database in place and removing the marker, or something else made this file.
+		const unopened = !existsSync(`${target}-wal`) && !existsSync(`${target}-shm`);
+		if (typeof started !== 'object' || !unopened || !existsSync(target) || hashFile(target) !== manifest.files[DB_FILE]) {
+			throw new Error(`${dir} has a database (${target}) that is not the one in ${folder}, so something else made or opened it during the restore. ${replaces}`);
+		}
+		rmSync(incoming, { force: true });
+		fsyncFolder(dirname(target));
+		removeMarker();
+		return result;
+	}
 
+	const hadFolder = existsSync(dir);
 	// Creates a missing data folder owner-only and sets the umask for what follows.
 	hardenDataDir();
 	mkdirSync(dir, { recursive: true });
-	writeFileSync(marker, `Restoring ${folder} at ${now()}\n`, { mode: 0o600 });
+	const says = `${JSON.stringify({ backup: folder, manifest: manifestHash, startedAt: now() } satisfies RestoreMarker)}\n`;
+	if (started === 'none') {
+		let fd: number;
+		try {
+			fd = openSync(marker, 'wx', 0o600);
+		} catch (e) {
+			if ((e as { code?: string }).code === 'EEXIST') throw new Error(`Another restore into ${dir} has just started.`);
+			throw e;
+		}
+		try {
+			writeSync(fd, says);
+			fsyncSync(fd);
+		} finally {
+			closeSync(fd);
+		}
+	} else if (started === 'blank') {
+		writeFileSync(marker, says, { mode: 0o600 });
+	}
 	fsyncFolder(dir);
+
+	try {
+		stages.verifying?.();
+		verifyBackup(folder);
+	} catch (e) {
+		// Nothing is written yet, so a first run leaves the folder as it found it. A later run still has an unfinished folder.
+		if (typeof started !== 'object') {
+			removeMarker();
+			try {
+				if (!hadFolder) rmdirSync(dir);
+			} catch {
+				/* something else has moved in, and the error that brought us here says more */
+			}
+		}
+		throw e;
+	}
 
 	const places = new Set<string>();
 	const write = (rel: string, to: string) => {
@@ -537,12 +677,18 @@ export function restoreBackup(folder: string): RestoreResult {
 	for (const rel of Object.keys(manifest.files)) {
 		if (rel !== DB_FILE) write(rel, join(dir, ...rel.split('/')));
 	}
-	const incoming = `${target}.restoring`;
 	write(DB_FILE, incoming);
 	for (const place of places) fsyncFolder(place);
-	renameRetrying(incoming, target);
+	stages.publishing?.();
+
+	// The marker keeps out anything that starts from here on, but not a server already past its own check when the marker appeared.
+	const refuse = (what: string) =>
+		new Error(`Something else wrote to ${dir} during this restore: ${what}. Nothing was replaced, and the restored database is not in place. Stop whatever is using this folder, move it aside and restore into an empty one.`);
+	const ours = new Set([RESTORE_MARKER, basename(incoming), ...Object.keys(manifest.files).filter((rel) => rel !== DB_FILE).map((rel) => rel.split('/')[0]!)]);
+	const appeared = new Set([...readdirSync(dir).filter((name) => !ours.has(name)), ...liveFiles.filter((p) => existsSync(p)).map((p) => basename(p))]);
+	if (appeared.size) throw refuse(list([...appeared]));
+	publishDatabase(incoming, target, refuse);
 	fsyncFolder(dirname(target));
-	unlinkSync(marker);
-	fsyncFolder(dir);
-	return { path: target, counts: manifest.counts, createdAt: manifest.createdAt, opalVersion: manifest.opalVersion };
+	removeMarker();
+	return result;
 }
