@@ -113,6 +113,48 @@ describe('1.x stopped in the middle of a write', () => {
 	});
 });
 
+describe('a 1.x database in WAL mode stopped without closing', () => {
+	/** Committed rows that are only in the -wal file, as a killed 1.4 leaves them. */
+	function walFolder(): { dir: string; src: string } {
+		const from = tmp();
+		const live = buildLegacyFixture(from);
+		const db = new Database(live);
+		db.run('PRAGMA journal_mode = WAL');
+		db.run('PRAGMA wal_autocheckpoint = 0');
+		db.run("UPDATE part SET name = 'only in the wal ' || name");
+		const dir = tmp();
+		const src = join(dir, 'opal.db');
+		copyFileSync(live, src);
+		copyFileSync(`${live}-wal`, `${src}-wal`);
+		copyFileSync(`${live}-shm`, `${src}-shm`);
+		db.close();
+		Bun.spawnSync(['cp', '-r', join(from, 'attachments'), dir]);
+		return { dir, src };
+	}
+
+	test('the import reads what only the -wal file holds', async () => {
+		const { dir, src } = walFolder();
+		await importInPlace(src, { open, acceptFailedRows: true });
+		const fresh = new Database(join(dir, 'opal.db'));
+		const rows = fresh.query('SELECT name FROM part').all() as { name: string }[];
+		fresh.close();
+		expect(rows.length).toBeGreaterThan(0);
+		expect(rows.every((r) => r.name.startsWith('only in the wal '))).toBe(true);
+	});
+
+	test('the original moves with its -wal and -shm, both unchanged, and none stays beside the new file', async () => {
+		const { dir, src } = walFolder();
+		const before = { main: sha(src), wal: sha(`${src}-wal`), shm: sha(`${src}-shm`) };
+		await importInPlace(src, { open, acceptFailedRows: true });
+		const legacy = join(dir, 'opal.legacy.db');
+		expect({ main: sha(legacy), wal: sha(`${legacy}-wal`), shm: sha(`${legacy}-shm`) }).toEqual(before);
+		const check = tmp();
+		copyFileSync(legacy, join(check, 'opal.legacy.db'));
+		copyFileSync(`${legacy}-wal`, join(check, 'opal.legacy.db-wal'));
+		expect(names(join(check, 'opal.legacy.db')).every((n) => n.startsWith('only in the wal '))).toBe(true);
+	});
+});
+
 describe('the private copy', () => {
 	const copies = (dir: string) => readdirSync(dir).filter((n) => n.startsWith('opal-import-src-'));
 
