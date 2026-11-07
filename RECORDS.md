@@ -101,6 +101,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 | Superseded, Cancelled | What replaced this, or why was it dropped? | Link to the current revision | Allocations as they stood | | |
 
 - A requirement with a baselined revision stays in its project, including through a draft of its next revision.
+- Cancelling a draft of the next revision leaves the baseline in force, and that baseline can be revised again. The cancelled draft stays on record under its revision number, and the next revision takes the next number. While a draft is open, the baselined revision links to it in place of REVISE.
 - A draft of the next revision changes nothing. The baseline in force keeps its allocations and children until the draft baselines. The draft page shows those allocations read-only, marked with the revision they stand on.
 - When a revision baselines, the superseded revision's allocations stay as they stand, verifications included. Each part gets a new open allocation on the new revision with the same notes, and a person verifies it again. The new allocation shows how the part closed on the prior revision. An allocation marked not applicable does not carry.
 - When a revision baselines, live children move to it and show STALE until someone edits or re-affirms them. Superseded and cancelled children keep the parent they had.

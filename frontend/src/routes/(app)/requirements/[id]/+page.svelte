@@ -58,10 +58,26 @@
 	/** A baselined requirement has no EDIT. Recording verification is its own deliberate act. */
 	let recordingOpen = $state(false);
 	const recording = $derived(editing || (baselined && recordingOpen));
-	/** The newest revision of this number, when it is not this one. */
-	const current = $derived(
-		terminal
-			? req.revisions.findLast((r) => r.id !== req.id && r.revision > req.revision)
+	const live = (r: { lifecycleState: string }) =>
+		r.lifecycleState === 'draft' ||
+		r.lifecycleState === 'preliminary' ||
+		r.lifecycleState === 'baselined';
+	/** Where finished paper points. A cancelled draft points back to the baseline still in force. */
+	const current = $derived.by(() => {
+		if (!terminal) return undefined;
+		const others = req.revisions.filter((r) => r.id !== req.id);
+		return others.findLast(live) ?? others.findLast((r) => r.revision > req.revision);
+	});
+	/** One next revision at a time: while it is open, REVISE would be refused, so link to it instead. */
+	const openRevision = $derived(
+		baselined ? req.revisions.find((r) => r.revision > req.revision && live(r)) : undefined
+	);
+	/** The baseline this draft would replace, which stays in force if the draft is cancelled. */
+	const inForce = $derived(
+		mutable
+			? req.revisions.find(
+					(r) => r.revision === req.predecessorRevision && r.lifecycleState === 'baselined'
+				)
 			: undefined
 	);
 
@@ -131,12 +147,21 @@
 	}
 
 	async function cancelIt() {
-		const reason = await askReason({
-			title: `Cancel ${req.reqNumber}`,
-			body: 'Cancelled is terminal. The requirement stays on record and cannot be revised or baselined again.',
-			action: 'CANCEL REQUIREMENT',
-			destructive: true
-		});
+		const reason = await askReason(
+			inForce
+				? {
+						title: `Cancel ${req.reqNumber} rev ${req.revision}`,
+						body: `This draft stays on record. Rev ${inForce.revision} stays in force and can be revised again.`,
+						action: 'CANCEL REVISION',
+						destructive: true
+					}
+				: {
+						title: `Cancel ${req.reqNumber}`,
+						body: 'Cancelled is terminal. The requirement stays on record and cannot be revised or baselined again.',
+						action: 'CANCEL REQUIREMENT',
+						destructive: true
+					}
+		);
 		if (reason === null) return;
 		try {
 			await opal.requirements.cancel({ id: req.id, reason });
@@ -354,6 +379,8 @@
 				>
 			{/if}
 			<EditToggle />
+		{:else if openRevision}
+			<Button size="sm" href={`/requirements/${openRevision.id}`}>REV {openRevision.revision}</Button>
 		{:else if baselined}
 			<Button size="sm" onclick={revise}>REVISE</Button>
 		{:else if current}

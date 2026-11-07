@@ -105,16 +105,20 @@ export function reviseRow(ctx: Ctx, r: RequirementRow): RequirementRow {
 			`cannot revise from state '${r.lifecycleState}' (only baselined rows can be revised; drafts are edited in place)`
 		);
 	}
-	const next = ctx.db
-		.select({ id: requirement.id })
+	const all = ctx.db
+		.select({ revision: requirement.revision, lifecycleState: requirement.lifecycleState })
 		.from(requirement)
-		.where(eq(requirement.supersedesId, r.id))
-		.get();
-	if (next) throw refuse(`${r.reqNumber} already has a newer revision`);
+		.where(eq(requirement.reqNumber, r.reqNumber))
+		.all();
+	// A cancelled draft leaves this row in force, so it does not block the next try. It stays on the
+	// record under its own revision number, which the next try does not reuse.
+	if (all.some((x) => x.revision > r.revision && x.lifecycleState !== 'cancelled')) {
+		throw refuse(`${r.reqNumber} already has a newer revision`);
+	}
 	return insert(ctx, requirement, {
 		reqNumber: r.reqNumber,
 		projectId: r.projectId, // added by projects
-		revision: r.revision + 1,
+		revision: Math.max(...all.map((x) => x.revision)) + 1,
 		lifecycleState: 'draft',
 		title: r.title,
 		statement: r.statement,

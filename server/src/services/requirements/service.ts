@@ -154,14 +154,19 @@ export function get(ctx: Ctx, id: number): Requirement {
 	return one(ctx, load(ctx, id));
 }
 
-/** The current revision of a number: the highest one that is not superseded. */
+/**
+ * The current revision of a number: the highest live one, so a cancelled draft does not hide the
+ * baseline still in force. With none live, the highest cancelled one says why the number ended.
+ */
 export function currentByNumber(ctx: Pick<Ctx, 'db'>, reqNumber: string): RequirementRow | undefined {
-	return ctx.db
-		.select()
-		.from(requirement)
-		.where(and(eq(requirement.reqNumber, reqNumber), ne(requirement.lifecycleState, 'superseded')))
-		.orderBy(desc(requirement.revision))
-		.get();
+	const highest = (...states: RequirementRow['lifecycleState'][]) =>
+		ctx.db
+			.select()
+			.from(requirement)
+			.where(and(eq(requirement.reqNumber, reqNumber), inArray(requirement.lifecycleState, states)))
+			.orderBy(desc(requirement.revision))
+			.get();
+	return highest(...LIVE) ?? highest('cancelled');
 }
 
 export function byNumber(ctx: Ctx, reqNumber: string): Requirement {

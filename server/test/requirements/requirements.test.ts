@@ -950,6 +950,70 @@ describe('a revision that baselines takes over from the one it supersedes', () =
 		});
 	});
 
+	describe('a cancelled draft revision', () => {
+		async function struck() {
+			const s = await revising('open');
+			await s.call('POST', `/requirements/${s.r2.id}/cancel`, { reason: 'wrong direction' });
+			return s;
+		}
+
+		test('leaves the baseline in force as the current revision of its number', async () => {
+			const { call, r1 } = await struck();
+			const current = await call('GET', `/requirements/number/${r1.reqNumber}`);
+			expect(current.body).toMatchObject({ id: r1.id, revision: 1, lifecycleState: 'baselined' });
+		});
+
+		test('leaves the number open to new allocations, on the baseline in force', async () => {
+			const { call, mkPart, r1, p } = await struck();
+			const other = mkPart('Flange', 'P-2');
+			const added = await call('POST', `/requirements/parts/${other.id}`, { reqNumber: r1.reqNumber });
+			expect(added.status).toBe(200);
+			expect(added.body.requirementId).toBe(r1.id);
+			const again = await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r1.reqNumber });
+			expect(again.status).toBe(409);
+			expect(again.body.error).toBe('duplicate');
+		});
+
+		test('lets the baseline in force be revised again, and keeps its own revision number', async () => {
+			const { call, r1, r2 } = await struck();
+			const r3 = await call('POST', `/requirements/${r1.id}/revise`);
+			expect(r3.status).toBe(200);
+			expect(r3.body).toMatchObject({ revision: 3, lifecycleState: 'draft', supersedesId: r1.id });
+			expect((await call('GET', `/requirements/${r2.id}`)).body).toMatchObject({ revision: 2, lifecycleState: 'cancelled', cancelReason: 'wrong direction' });
+			expect((await call('GET', `/requirements/${r1.id}/revisions`)).body.map((x: any) => x.revision)).toEqual([1, 2, 3]);
+		});
+
+		test('hands over to the next revision from the baseline in force, not from the struck text', async () => {
+			const { call, db, baseline, r1, r2, p } = await struck();
+			const r3 = (await call('POST', `/requirements/${r1.id}/revise`)).body;
+			expect(r3.statement).toBe(r1.statement);
+			await baseline(r3.id);
+			expect((await call('GET', `/requirements/${r1.id}`)).body.lifecycleState).toBe('superseded');
+			expect((await call('GET', `/requirements/${r2.id}`)).body.lifecycleState).toBe('cancelled');
+			expect(linkOf(db, r2.id)).toEqual([]);
+			expect(linkOf(db, r3.id).map((l: any) => l.partId)).toEqual([p.id]);
+			expect((await call('GET', `/requirements/number/${r1.reqNumber}`)).body.id).toBe(r3.id);
+			expect((await call('GET', `/requirements/${r3.id}/dossier`)).body.predecessorRevision).toBe(1);
+		});
+
+		test('does not free a second open revision', async () => {
+			const { call, r1 } = await struck();
+			expect((await call('POST', `/requirements/${r1.id}/revise`)).status).toBe(200);
+			const second = await call('POST', `/requirements/${r1.id}/revise`);
+			expect(second.status).toBe(409);
+			expect(second.body.error).toBe('requirement_state');
+		});
+
+		test('does not revive a number whose every revision is cancelled', async () => {
+			const { call, mkPart, r1, r2 } = await struck();
+			await call('POST', `/requirements/${r1.id}/cancel`, { reason: 'dropped' });
+			expect((await call('GET', `/requirements/number/${r1.reqNumber}`)).body.id).toBe(r2.id);
+			const other = mkPart('Flange', 'P-2');
+			expect((await call('POST', `/requirements/parts/${other.id}`, { reqNumber: r1.reqNumber })).status).toBe(409);
+			expect((await call('POST', `/requirements/${r1.id}/revise`)).status).toBe(409);
+		});
+	});
+
 	describe('a revision superseded before allocations carried', () => {
 		/** The state an older database holds: the link only on the superseded row. */
 		async function older() {

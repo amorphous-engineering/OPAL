@@ -22,6 +22,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 
 ### Fixed
 - **A revised requirement no longer strands its parts and children.** When a revision baselines, each allocated part gets a new open allocation to verify against the new text, and the old allocation stays as the evidence for the old text. Children move to the new revision and stay STALE until someone reviews them. Revisions superseded before this fix keep their old allocations: allocate the part again from its page.
+- **A cancelled draft revision no longer leaves its requirement stuck.** The baseline stays in force, takes new allocations and can be revised again. The cancelled draft stays on record under its own revision number.
 
 ## 2.0.0-beta.1
 
