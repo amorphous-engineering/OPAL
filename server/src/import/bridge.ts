@@ -18,6 +18,7 @@
  * code at each tag, next to the same databases upgraded by Alembic.
  */
 import type { Database, SQLQueryBindings } from 'bun:sqlite';
+import { ident } from './context.ts';
 
 export const LEGACY_HEAD = 'b8d2f1a5c3e0';
 
@@ -69,28 +70,28 @@ class Bridge {
 	constructor(readonly db: Database) {}
 
 	columns(table: string): Set<string> {
-		return new Set((this.db.query(`PRAGMA table_info("${table}")`).all() as { name: string }[]).map((r) => r.name));
+		return new Set((this.db.query(`PRAGMA table_info(${ident(table)})`).all() as { name: string }[]).map((r) => r.name));
 	}
 
 	addColumn(table: string, column: string, type = '', dflt?: string): void {
 		if (this.columns(table).has(column)) return;
-		this.db.run(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${type}${dflt === undefined ? '' : ` NOT NULL DEFAULT ${dflt}`}`);
+		this.db.query(`ALTER TABLE ${ident(table)} ADD COLUMN ${ident(column)} ${type}${dflt === undefined ? '' : ` NOT NULL DEFAULT ${dflt}`}`).run();
 	}
 
 	renameColumn(table: string, from: string, to: string): void {
-		if (this.columns(table).has(from)) this.db.run(`ALTER TABLE "${table}" RENAME COLUMN "${from}" TO "${to}"`);
+		if (this.columns(table).has(from)) this.db.query(`ALTER TABLE ${ident(table)} RENAME COLUMN ${ident(from)} TO ${ident(to)}`).run();
 	}
 
 	/** Records the value count now. The column goes at the end of the bridge, when no step can need it. */
 	retire(table: string, column: string, why: string): void {
 		if (!this.columns(table).has(column)) return;
-		const n = this.db.query(`SELECT COUNT(*) AS n FROM "${table}" WHERE "${column}" IS NOT NULL`).get() as { n: number };
+		const n = this.db.query(`SELECT COUNT(*) AS n FROM ${ident(table)} WHERE ${ident(column)} IS NOT NULL`).get() as { n: number };
 		this.retired.push({ table, column, rows: n.n, why });
 	}
 
-	/** Runs a statement and returns the rows it changed. */
+	/** Runs one statement and returns the rows it changed. A prepared statement can never be two. */
 	run(sql: string, ...params: SQLQueryBindings[]): number {
-		return this.db.run(sql, params).changes;
+		return this.db.query(sql).run(...params).changes;
 	}
 
 	all<T>(sql: string, ...params: SQLQueryBindings[]): T[] {
@@ -110,10 +111,11 @@ class Bridge {
 	dropRetiredColumns(): void {
 		for (const table of new Set(this.retired.map((r) => r.table))) {
 			const gone = new Set(this.retired.filter((r) => r.table === table).map((r) => r.column));
-			const keep = [...this.columns(table)].filter((c) => !gone.has(c)).map((c) => `"${c}"`);
-			this.db.run(`CREATE TABLE "__bridge_${table}" AS SELECT ${keep.join(', ')} FROM "${table}"`);
-			this.db.run(`DROP TABLE "${table}"`);
-			this.db.run(`ALTER TABLE "__bridge_${table}" RENAME TO "${table}"`);
+			const keep = [...this.columns(table)].filter((c) => !gone.has(c)).map(ident);
+			const copy = ident(`__bridge_${table}`);
+			this.run(`CREATE TABLE ${copy} AS SELECT ${keep.join(', ')} FROM ${ident(table)}`);
+			this.run(`DROP TABLE ${ident(table)}`);
+			this.run(`ALTER TABLE ${copy} RENAME TO ${ident(table)}`);
 		}
 	}
 }
@@ -599,6 +601,12 @@ const STEPS: { revision: string; title: string; apply?: (b: Bridge) => void; mis
 const allTables = (db: Database): string[] =>
 	(db.query("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name);
 
+/** Nothing the bridge runs should ever reach another file, so if something did, stop before it counts. */
+function assertOnlyMain(db: Database): void {
+	const names = (db.query('PRAGMA database_list').all() as { name: string }[]).map((d) => d.name).filter((n) => n !== 'main' && n !== 'temp');
+	if (names.length) throw new Error(`the file attached other databases (${names.join(', ')})`);
+}
+
 /**
  * The revisions a database can start from: the released heads, and whatever else lies on the line
  * between them. The stamp alone does not say what a file holds. Files stopped on one arm of a
@@ -630,7 +638,7 @@ export function bridgeToHead(db: Database, revision: string): BridgeReport {
 	try {
 		// FTS sync triggers would fire on every update below, and they fail on these databases.
 		for (const t of db.query("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as { name: string }[]) {
-			db.run(`DROP TRIGGER "${t.name}"`);
+			db.query(`DROP TRIGGER ${ident(t.name)}`).run();
 		}
 		for (const [i, step] of STEPS.entries()) {
 			const pastStamp = i < first;
@@ -642,7 +650,8 @@ export function bridgeToHead(db: Database, revision: string): BridgeReport {
 		}
 		current = 'retiring columns';
 		b.dropRetiredColumns();
-		db.run(`UPDATE alembic_version SET version_num = '${LEGACY_HEAD}'`);
+		db.query('UPDATE alembic_version SET version_num = ?').run(LEGACY_HEAD);
+		assertOnlyMain(db);
 		db.run('COMMIT');
 	} catch (e) {
 		db.run('ROLLBACK');

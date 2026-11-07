@@ -28,7 +28,7 @@ describe('legacy import of a database with rows in every table', async () => {
 	const src = buildLegacyFixture(dir);
 	const before = readFileSync(src);
 	const dest = join(dir, 'new.db');
-	const report = await importLegacy(src, dest, { open });
+	const report = await importLegacy(src, dest, { open, acceptFailedRows: true });
 	const out = new Database(dest, { readonly: true });
 	const q = (s: string) => out.query(s).all() as Cells[];
 	const one = (s: string) => q(s)[0] as Cells;
@@ -94,7 +94,11 @@ describe('legacy import of a database with rows in every table', async () => {
 	test('a deleted role is left out with its grants and gates', () => {
 		expect(q('SELECT id, name, key FROM role ORDER BY id')).toEqual([{ id: 1, name: 'Engineer', key: 'engineer' }, { id: 2, name: 'Welder', key: null }]);
 		expect(q('SELECT user_id, role_id FROM user_role')).toEqual([{ user_id: 7, role_id: 1 }]);
-		expect(q('SELECT gate FROM role_gate').map((r) => r.gate)).toEqual(['issue.disposition']);
+		expect(q('SELECT role_id, gate FROM role_gate ORDER BY role_id, gate')).toEqual([
+			{ role_id: 1, gate: 'execution.closeShort' },
+			{ role_id: 1, gate: 'execution.skipRequired' },
+			{ role_id: 1, gate: 'issue.disposition' }
+		]);
 	});
 
 	test('one project is made from the project config and holds every scoped record', () => {
@@ -310,7 +314,7 @@ describe('legacy import of a database with rows in every table', async () => {
 
 	test('rows with no home in the new schema are kept in legacy_row with the reason', () => {
 		expect(q('SELECT table_name, row_id FROM legacy_row ORDER BY id').map((r) => `${r.table_name} ${r.row_id}`)).toEqual(
-			expect.arrayContaining(['issue_reference 1', 'part_requirements 3', 'attachment 6', 'stock_transfer 2', 'issue 3'])
+			expect.arrayContaining(['issue_reference 1', 'attachment 6', 'stock_transfer 2', 'issue 3'])
 		);
 		expect(JSON.parse(String(one("SELECT data FROM legacy_row WHERE table_name = 'issue_reference'").data))).toMatchObject({ reference_type: 'opal', reference_value: 'OPAL-00001' });
 	});
@@ -328,17 +332,20 @@ describe('legacy import of a database with rows in every table', async () => {
 			{ id: 1, req_number: 'REQ-0001', revision: 1, lifecycle_state: 'baselined', parent_id: null, supersedes_id: null, tbr: 0, tbr_owner_id: null },
 			{ id: 2, req_number: 'REQ-0002', revision: 1, lifecycle_state: 'draft', parent_id: 1, supersedes_id: null, tbr: 1, tbr_owner_id: 7 },
 			{ id: 3, req_number: 'REQ-0003', revision: 1, lifecycle_state: 'cancelled', parent_id: null, supersedes_id: null, tbr: 0, tbr_owner_id: null },
-			{ id: 4, req_number: 'REQ-0001', revision: 2, lifecycle_state: 'preliminary', parent_id: null, supersedes_id: 1, tbr: 0, tbr_owner_id: null }
+			{ id: 4, req_number: 'REQ-0001', revision: 2, lifecycle_state: 'preliminary', parent_id: null, supersedes_id: 1, tbr: 0, tbr_owner_id: null },
+			{ id: 5, req_number: 'LEGACY-TEXT', revision: 1, lifecycle_state: 'draft', parent_id: null, supersedes_id: null, tbr: 0, tbr_owner_id: null }
 		]);
 		expect(q('SELECT event_id, requirement_id, created_at FROM baseline_event_item')).toEqual([{ event_id: 1, requirement_id: 1, created_at: '2026-03-01T10:00:00.123Z' }]);
 	});
 
-	test('part allocations: the foreign key wins, a typed number resolves to the latest revision, the rest is kept aside', () => {
+	test('part allocations: the foreign key wins, a typed number resolves to the latest revision, free text gets a draft requirement', () => {
 		expect(q('SELECT part_id, requirement_id, status FROM part_requirement ORDER BY id')).toEqual([
 			{ part_id: 10, requirement_id: 1, status: 'verified' },
-			{ part_id: 14, requirement_id: 2, status: 'open' }
+			{ part_id: 14, requirement_id: 2, status: 'open' },
+			{ part_id: 14, requirement_id: 5, status: 'open' }
 		]);
-		expect(q("SELECT row_id FROM legacy_row WHERE table_name = 'part_requirements'")).toEqual([{ row_id: 3 }]);
+		expect(q("SELECT row_id FROM legacy_row WHERE table_name = 'part_requirements'")).toEqual([]);
+		expect(report.warnings.some((w) => w.includes('LEGACY-TEXT') && w.includes('draft requirement'))).toBe(true);
 	});
 
 	test('datasets: deleted becomes archived, points keep their step execution', () => {
@@ -419,7 +426,7 @@ describe('legacy import of a database with rows in every table', async () => {
 	});
 
 	test('skipped tables are listed with their row counts', () => {
-		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['attachment (legacy_row)', 1], ['auth_session', 1], ['extension', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['part_requirements (legacy_row)', 1], ['stock_transfer (legacy_row)', 1], ['webauthn_challenge', 1]]);
+		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['attachment (legacy_row)', 1], ['auth_session', 1], ['extension', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['stock_transfer (legacy_row)', 1], ['webauthn_challenge', 1]]);
 	});
 
 	test('one summary audit row per table', () => {
@@ -452,11 +459,11 @@ describe('legacy import of a database with rows in every table', async () => {
 	test('refuses a wrong alembic version', async () => {
 		const d = tmp();
 		const old = buildLegacyFixture(d, { version: 'deadbeef0000' });
-		await expect(importLegacy(old, join(d, 'x.db'), { open })).rejects.toThrow(OLD_VERSION_MESSAGE);
+		await expect(importLegacy(old, join(d, 'x.db'), { open, acceptFailedRows: true })).rejects.toThrow(OLD_VERSION_MESSAGE);
 	});
 
 	test('refuses an existing destination', async () => {
-		await expect(importLegacy(src, dest, { open })).rejects.toThrow('already exists');
+		await expect(importLegacy(src, dest, { open, acceptFailedRows: true })).rejects.toThrow('already exists');
 	});
 });
 
@@ -467,7 +474,7 @@ describe('a work order aborted in 1.x', async () => {
 	legacy.run("UPDATE procedure_instance SET status = 'aborted' WHERE id = 2");
 	legacy.close();
 	const dest = join(dir, 'new.db');
-	const report = await importLegacy(src, dest, { open });
+	const report = await importLegacy(src, dest, { open, acceptFailedRows: true });
 
 	test('imports as closed short, not as cut', () => {
 		const out = new Database(dest, { readonly: true });
@@ -485,20 +492,20 @@ describe('importInPlace', () => {
 		const d = tmp();
 		const p = buildLegacyFixture(d);
 		const before = readFileSync(p);
-		const report = await importInPlace(p, { open });
+		const report = await importInPlace(p, { open, acceptFailedRows: true });
 		expect(report?.tables.part!.imported).toBe(6);
 		expect(readFileSync(join(d, 'opal.legacy.db')).equals(before)).toBe(true);
 		expect(existsSync(`${p}.new`)).toBe(false);
 		expect(existsSync(join(d, 'import-report.txt'))).toBe(true);
 		expect(JSON.parse(readFileSync(join(d, 'import-report.json'), 'utf8')).tables.user.imported).toBe(2);
 		expect(existsSync(join(d, 'blobs'))).toBe(true);
-		expect(await importInPlace(p, { open })).toBeNull();
+		expect(await importInPlace(p, { open, acceptFailedRows: true })).toBeNull();
 	});
 
 	test('the renamed file is complete on its own: no WAL left behind, every row readable', async () => {
 		const d = tmp();
 		const p = buildLegacyFixture(d);
-		await importInPlace(p, { open });
+		await importInPlace(p, { open, acceptFailedRows: true });
 		expect(existsSync(`${p}.new-wal`)).toBe(false);
 		const db = new Database(p, { readonly: true });
 		expect((db.query('SELECT COUNT(*) AS n FROM part').get() as { n: number }).n).toBe(6);
@@ -510,7 +517,7 @@ describe('importInPlace', () => {
 		const p = buildLegacyFixture(d);
 		copyFileSync(p, join(d, 'opal.legacy.db'));
 		const before = readFileSync(p);
-		await expect(importInPlace(p, { open })).rejects.toThrow('already exists');
+		await expect(importInPlace(p, { open, acceptFailedRows: true })).rejects.toThrow('already exists');
 		expect(readFileSync(p).equals(before)).toBe(true);
 	});
 });
@@ -520,7 +527,7 @@ describe('seeded demo database', () => {
 		const d = tmp();
 		const copy = join(d, 'seed.db');
 		copyFileSync(SEED, copy);
-		const report = await importLegacy(copy, join(d, 'out.db'), { open });
+		const report = await importLegacy(copy, join(d, 'out.db'), { open, acceptFailedRows: true });
 		expect(report.failedRows).toEqual([]);
 		for (const [name, t] of Object.entries(report.tables)) {
 			if (name === 'designator_sequence') continue;

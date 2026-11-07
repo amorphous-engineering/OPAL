@@ -23,7 +23,7 @@ import { ignoredForward, throttleAddress, trustProxy } from '../auth/client-ip.t
 import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
 import { checkSetupCode, clearSetupCode, setupCodeRequired } from '../services/auth/setup-code.ts';
-import { CLAIM_LINK_TTL_MS, claimToken } from '../services/auth/claim.ts';
+import { CLAIM_LINK_TTL_MS, claimToken, fromThisStart } from '../services/auth/claim.ts';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { personRefs } from '../services/org/people.ts';
@@ -569,9 +569,15 @@ export const authImpls = [
 /** The account a claim link names, while it is still unclaimed. */
 function claimable(ctx: Ctx, token: string): UserRow | undefined {
 	const payload = verifyPayload(token);
-	if (!payload || payload.kind !== 'account-claim' || typeof payload.uid !== 'number') return undefined;
+	if (!payload || typeof payload.uid !== 'number') return undefined;
+	const printed = payload.kind === 'printed-claim';
+	if (!printed && payload.kind !== 'account-claim') return undefined;
+	// A password is no use where passwords are off, and setting one must not start a session past that.
+	if (!readSettings(ctx.db).passwordLoginEnabled) return undefined;
+	if (printed && (!fromThisStart(payload.start) || !setupHostAllowed(ctx.request?.host))) return undefined;
 	const u = ctx.db.select().from(user).where(eq(user.id, payload.uid)).get();
 	if (!u || !u.isActive || u.passwordHash) return undefined;
+	if (printed && u.oidcSubject) return undefined;
 	// A user id is reused after a factory reset, and a password reset puts an account back in the
 	// passwordless state. createdAt names the account instance; updatedAt moves on every reset,
 	// so a link only works for the account state it was issued against.

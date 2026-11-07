@@ -25,10 +25,18 @@ export function storeDesignator(prefix: DesignatorPrefix, sequence: number): str
 	return `${prefix}-${pad(sequence, STORED_DIGITS)}`;
 }
 
+/** An import marks a later record that shared a number: `WO-0042-DUP2`. It reads and resolves as the number it repeats, at any width. */
+const DUPLICATE_MARK = /-DUP\d+$/;
+const splitMark = (value: string): [base: string, mark: string] => {
+	const m = DUPLICATE_MARK.exec(value);
+	return m ? [value.slice(0, m.index), m[0]] : [value, ''];
+};
+
 /** Any width of a designator to its stored form. Other text comes back unchanged. */
 export function canonicalDesignator(value: string): string {
-	const m = ANY_WIDTH.exec(value.trim());
-	return m ? `${m[1]!.toUpperCase()}-${pad(Number(m[2]), STORED_DIGITS)}` : value;
+	const [base, mark] = splitMark(value.trim());
+	const m = ANY_WIDTH.exec(base);
+	return m ? `${m[1]!.toUpperCase()}-${pad(Number(m[2]), STORED_DIGITS)}${mark}` : value;
 }
 
 /** Part number scheme, as the settings describe it. */
@@ -153,6 +161,14 @@ export function numberCodec(width: number, scheme: PartNumberScheme = FALLBACK_S
 	const leadVariant = (digits: string) =>
 		digits === '' || (digits.length < VARIANT_DIGITS && digits.startsWith('0')) ? digits : pad(Number(digits), VARIANT_DIGITS);
 	const code = (j: string | undefined, v: string | undefined) => (j && v ? j + pad(Number(v), VARIANT_DIGITS) : '');
+	const canonical = (value: string): string => {
+		const v = value.trim();
+		const d = canonicalDesignator(v);
+		if (d !== v) return d;
+		const [base, mark] = splitMark(v);
+		const m = pnAny?.exec(base);
+		return m ? m[1]! + full(m[2]!) + m[3]! + code(m[4], m[5]) + mark : value;
+	};
 
 	return {
 		width,
@@ -166,15 +182,10 @@ export function numberCodec(width: number, scheme: PartNumberScheme = FALLBACK_S
 			}
 			return out;
 		},
-		canonical(value) {
-			const v = value.trim();
-			const d = canonicalDesignator(v);
-			if (d !== v) return d;
-			const m = pnAny?.exec(v);
-			return m ? m[1]! + full(m[2]!) + m[3]! + code(m[4], m[5]) : value;
-		},
+		canonical,
 		search(q) {
 			const v = q.trim();
+			if (DUPLICATE_MARK.test(v)) return canonical(v);
 			const d = desigPartial.exec(v);
 			if (d) return `${d[1]!.toUpperCase()}-${lead(d[2]!)}`;
 			const pv = pnVariantPartial?.exec(v);

@@ -2,7 +2,7 @@
  * master_procedure, procedure_step, step_dependency, step_image, kit, step_kit,
  * procedure_output, procedure_version.
  */
-import { KIT_USAGES, PROCEDURE_TYPES, type ProcedureSnapshot, type ProcedureCallout, zProcedureSnapshot } from '@opal/shared';
+import { CALLOUT_KINDS, canonicalDesignator, KIT_USAGES, PROCEDURE_TYPES, type ProcedureSnapshot, type ProcedureCallout, zProcedureSnapshot } from '@opal/shared';
 import {
 	kitItem,
 	procedure,
@@ -26,6 +26,7 @@ import {
 	keep,
 	legacyQty,
 	num,
+	numberBook,
 	oneOf,
 	readTable,
 	ref,
@@ -71,6 +72,23 @@ function freezeLinks(text: string | null, blobs: BlobMap): string | null {
 	});
 }
 
+/** The kinds OPAL 2 has. A warning is a caution, and the kind the text was written under stays in the text. */
+function calloutsFrom(c: ImportCtx, value: unknown, where: string): ProcedureCallout[] | null {
+	const list = json<unknown>(value);
+	if (!Array.isArray(list)) return null;
+	return list.flatMap((raw: unknown, i) => {
+		const x = (raw && typeof raw === 'object' ? raw : {}) as { kind?: unknown; text?: unknown };
+		if (typeof x.text !== 'string' || !x.text) {
+			warn(c, `${where}: callout ${i + 1} has no text, left out`);
+			return [];
+		}
+		if ((CALLOUT_KINDS as readonly unknown[]).includes(x.kind)) return [{ kind: x.kind as ProcedureCallout['kind'], text: x.text }];
+		const kind = String(x.kind).toLowerCase() === 'warning' ? ('caution' as const) : ('info' as const);
+		warn(c, `${where}: callout ${i + 1} of kind ${JSON.stringify(x.kind)} reads as ${kind}`);
+		return [{ kind, text: kind === 'info' ? `${String(x.kind)}: ${x.text}` : x.text }];
+	});
+}
+
 function status(c: ImportCtx, r: Row): 'draft' | 'released' | 'obsolete' {
 	if (r.deleted_at) return 'obsolete';
 	const s = String(r.status);
@@ -88,15 +106,17 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 	const typeOf = new Map<number, 'op' | 'build'>();
 	const numberOf = new Map<number, string>();
 	const nameOf = new Map<number, string>();
+	const templateNumber = numberBook(c, 'master_procedure', canonicalDesignator);
 	const procRows = masters.map((r) => {
 		const id = Number(r.id);
 		const procedureType = oneOf(c, r.procedure_type, PROCEDURE_TYPES, 'op', `master_procedure ${id} procedure_type`);
 		typeOf.set(id, procedureType);
-		numberOf.set(id, String(r.template_number));
+		const number = templateNumber(id, String(r.template_number));
+		numberOf.set(id, number);
 		nameOf.set(id, String(r.name));
 		return {
 			id,
-			templateNumber: String(r.template_number),
+			templateNumber: number,
 			projectId: c.projectId,
 			name: String(r.name),
 			description: str(r.description),
@@ -110,7 +130,7 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 	track(c, 'procedure', insertRows(c, 'master_procedure', procedure, procRows));
 
 	// ---- steps
-	const steps = readTable(c, 'procedure_step', ['id', 'procedure_id', 'parent_step_id', 'order', 'step_number', 'level', 'title', 'instructions', 'required_data_schema', 'is_contingency', 'requires_signoff', 'signoffs', 'estimated_duration_minutes', 'required_role', 'callouts', 'strict_sequence', 'workcenter_id', 'created_at', 'updated_at'], '"order"');
+	const steps = readTable(c, 'procedure_step', ['id', 'procedure_id', 'parent_step_id', 'order', 'step_number', 'level', 'title', 'instructions', 'required_data_schema', 'is_contingency', 'requires_signoff', 'signoffs', 'estimated_duration_minutes', 'required_role', 'callouts', 'strict_sequence', 'workcenter_id', 'created_at', 'updated_at'], 'order');
 	const live = steps.filter((s) => c.ids.procedure!.has(Number(s.procedure_id)));
 	const hasKids = new Set(live.map((s) => num(s.parent_step_id)).filter((x): x is number => x !== null));
 	const sibling = new Map<string, number>();
@@ -128,7 +148,6 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 		const stored = Array.isArray(explicit)
 			? explicit.map((x) => ({ role: x.role ?? null }))
 			: kids ? (requires ? [{ role }] : []) : requires ? [{ role }, { role: null }] : [{ role }];
-		const callouts = json<ProcedureCallout[]>(r.callouts);
 		return {
 			id,
 			procedureId: Number(r.procedure_id),
@@ -140,7 +159,7 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 			dataSchema: captureFieldsFrom(c, r.required_data_schema, `procedure_step ${id}`),
 			signoffs: effectiveSignoffs(stored, kids).map((s) => ({ role: s.role })),
 			estimatedDurationMinutes: num(r.estimated_duration_minutes),
-			callouts: Array.isArray(callouts) ? callouts.map((x) => ({ kind: x.kind, text: x.text })) : [],
+			callouts: calloutsFrom(c, r.callouts, `procedure_step ${id}`) ?? [],
 			strictSequence: bool(r.strict_sequence),
 			workcenterId: ref(c, 'workcenter', r.workcenter_id, `procedure_step ${id} workcenter_id`),
 			createdAt: tsReq(r.created_at),
@@ -248,13 +267,17 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 		const full = withStepKeys(content, nameOf.get(pid)!, stepsOf.get(pid));
 		const readable = {
 			...full,
-			steps: full.steps.map((s) => ({ ...s, required_data_schema: captureFieldsFrom(c, s.required_data_schema, `procedure_version ${id}, step ${s.step_number}`) }))
+			steps: full.steps.map((s) => ({
+				...s,
+				required_data_schema: captureFieldsFrom(c, s.required_data_schema, `procedure_version ${id}, step ${s.step_number}`),
+				callouts: s.callouts == null ? s.callouts : calloutsFrom(c, s.callouts, `procedure_version ${id}, step ${s.step_number}`)
+			}))
 		};
 		const snap: ProcedureSnapshot = snapshotFromLegacy(readable, { templateNumber: numberOf.get(pid)!, projectId: c.projectId, procedureType: typeOf.get(pid)! }, blobOf);
 		for (const s of snap.steps) s.instructions = freezeLinks(s.instructions, blobs);
-		// Kept either way: the record is the point, and the report names what stops it opening.
+		// Kept either way: the record is the point. It would not open, so a person has to know and accept that.
 		const check = zProcedureSnapshot.safeParse(snap);
-		if (!check.success) warn(c, `procedure_version ${id} does not read as OPAL 2 expects: ${check.error.issues[0]!.path.join('.')}: ${check.error.issues[0]!.message}`);
+		if (!check.success) fail(c, 'procedure_version', id, `will not open in OPAL 2: ${check.error.issues[0]!.path.join('.')}: ${check.error.issues[0]!.message}`);
 		for (const li of content.steps.flatMap((s) => s.images ?? [])) {
 			if (!blobs.has(li.attachment_id)) warn(c, `procedure_version ${id}: image attachment ${li.attachment_id} has no file, image dropped`);
 		}

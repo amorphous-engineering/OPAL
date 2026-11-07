@@ -110,7 +110,7 @@ OPAL links a sign-in to an existing account by email only when the provider send
 
 ### Coming from 1.x
 
-The first start imports a 1.x database found in the data folder, from any release from 1.2.2 through 1.4.0-beta.3. The original file is not changed and stays beside the new one as `opal.legacy.db`. `import-report.txt` lists every table in the old file, what moved and what did not. `opal import <file>` does the same for a database somewhere else. Stop 1.x first: the installer replaces the `opal` program and keeps the previous one. 1.x extensions and the Onshape integration do not carry over, and the report lists what they held. The [quickstart](QUICKSTART.md#if-you-already-use-opal-1x) covers passwords, `opal.project.yaml` and how to go back.
+The first start imports a 1.x database found in the data folder, from any release from 1.2.2 through 1.4.0-beta.3. The original file is not changed and stays beside the new one as `opal.legacy.db`. `import-report.txt` lists every table in the old file, what moved and what did not. `opal import <file>` does the same for a database somewhere else. If any row would be lost, nothing changes: OPAL stops, the old file stays where it was, and the report names each row. Fix the cause and start again, or run `opal import <file> --accept-failed-rows` to go on without those rows. Stop 1.x first: the installer replaces the `opal` program and keeps the previous one. 1.x extensions and the Onshape integration do not carry over, and the report lists what they held. The [quickstart](QUICKSTART.md#if-you-already-use-opal-1x) covers passwords, `opal.project.yaml` and how to go back.
 
 ### Back up and roll back
 

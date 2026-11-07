@@ -4,7 +4,7 @@
 const FLAGS: Record<string, Record<string, boolean>> = {
 	supervise: { 'control-port': true, 'no-browser': false, port: true, host: true },
 	serve: { port: true, host: true },
-	import: { out: true, project: true, attachments: true },
+	import: { out: true, project: true, attachments: true, 'accept-failed-rows': false },
 	backup: { keep: true },
 	restore: {},
 	secrets: {},
@@ -25,6 +25,7 @@ export const USAGE = `Usage: opal [command] [flags]
       --out <file>        Where to write the new database
       --project <file>    The opal.project.yaml, if OPAL cannot find it
       --attachments <dir> The 1.x attachments folder, if OPAL cannot find it
+      --accept-failed-rows  Import although some rows fail. Without it nothing changes
   opal backup <folder>    Write a backup into a new subfolder, while OPAL runs or not
       --keep <n>          Then remove this instance's finished backups beyond the newest n
   opal restore <backup>   Restore a backup into an empty data folder

@@ -272,7 +272,8 @@
 		const key = `${issue.id}:${issue.updatedAt}`;
 		if (key !== seededFor) {
 			seededFor = key;
-			dispType = issue.dispositionType ?? '';
+			// `other` is only ever a signed 1.x disposition, and a signed one is not in this form.
+			dispType = issue.dispositionType === 'other' ? '' : (issue.dispositionType ?? '');
 			dispRationale = issue.dispositionRationale ?? '';
 		}
 	});

@@ -1,5 +1,5 @@
 /** part, bom_lines (with part.parent_id), supplier, supplier_part, purchase, purchase_line, purchase_expense. */
-import { PART_STATES, PROCUREMENT, PURCHASE_CHARGE_KINDS, PURCHASE_STATUSES, TRACKING_TYPES } from '@opal/shared';
+import { canonicalDesignator, PART_STATES, PROCUREMENT, PURCHASE_CHARGE_KINDS, PURCHASE_STATUSES, TRACKING_TYPES } from '@opal/shared';
 import {
 	bomLine,
 	part,
@@ -9,6 +9,7 @@ import {
 	supplier,
 	supplierPart
 } from '../db/schema/index.ts';
+import { numbersFor } from '../services/org/project.ts';
 import { mergeLegacyBom } from '../services/parts/legacy.ts';
 import {
 	type ImportCtx,
@@ -22,6 +23,7 @@ import {
 	keep,
 	legacyQty,
 	num,
+	numberBook,
 	oneOf,
 	readTable,
 	ref,
@@ -41,6 +43,8 @@ const PART_COLS = [
 
 export function importParts(c: ImportCtx): void {
 	const parts = readTable(c, 'part', PART_COLS);
+	const codec = numbersFor(c.d);
+	const partNumber = numberBook(c, 'part', (v) => codec.canonical(v));
 	const rows = parts.map((r) => {
 		const id = Number(r.id);
 		let internalPn = str(r.internal_pn);
@@ -48,6 +52,7 @@ export function importParts(c: ImportCtx): void {
 			internalPn = `LEGACY-${id}`;
 			c.report.placeholderPns.push({ id, internalPn });
 		}
+		internalPn = partNumber(id, internalPn);
 		let state = oneOf(c, r.lifecycle_state, PART_STATES, 'draft', `part ${id} lifecycle_state`);
 		const deleted = ts(r.deleted_at);
 		if (deleted) {
@@ -155,6 +160,7 @@ export function importPurchasing(c: ImportCtx): void {
 	const orders = readTable(c, 'purchase', ['id', 'reference', 'supplier', 'supplier_id', 'supplier_reference', 'status', 'ordered_at', 'received_at', 'target_date', 'destination', 'created_by_id', 'received_by_id', 'notes', 'created_at', 'updated_at']);
 	const taken = new Set(orders.map((r) => str(r.reference)).filter((x): x is string => !!x));
 	let poNumber = Math.max(0, ...[...taken].map((x) => Number(/^PO-(\d+)$/.exec(x)?.[1] ?? 0)));
+	const orderNumber = numberBook(c, 'purchase', canonicalDesignator);
 	const rows = orders.map((r) => {
 		const id = Number(r.id);
 		let reference = str(r.reference);
@@ -167,7 +173,7 @@ export function importPurchasing(c: ImportCtx): void {
 		const supplierId = ref(c, 'supplier', r.supplier_id, `purchase ${id} supplier_id`);
 		return {
 			id,
-			reference,
+			reference: orderNumber(id, reference),
 			supplierId,
 			supplierName: supplierId ? null : str(r.supplier)?.trim() || 'Unknown supplier',
 			supplierReference: str(r.supplier_reference),

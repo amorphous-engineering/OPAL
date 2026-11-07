@@ -9,14 +9,16 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { zProcedureDataSchema, zProcedureSnapshot } from '@opal/shared';
+import { contracts, zProcedureDataSchema, zProcedureSnapshot } from '@opal/shared';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app.ts';
 import { openDb } from '../src/db/client.ts';
+import { storeNumbersAtFullWidth } from '../src/db/full-width-numbers.ts';
 import { user } from '../src/db/schema/index.ts';
 import { bridgeToHead, canBridge, RELEASED_HEADS } from '../src/import/bridge.ts';
 import { checkSource, importInPlace, importLegacy, LEGACY_HEAD, OLD_VERSION_MESSAGE, openSchemaImportDb, renderReport, reportSummary } from '../src/import/index.ts';
 import { firstAdminClaimLinks } from '../src/services/auth/claim.ts';
+import { numbersFor } from '../src/services/org/project.ts';
 import { buildLegacyFixture } from './fixtures/legacy-data.ts';
 
 const FIXTURES = join(import.meta.dir, 'fixtures/legacy-released');
@@ -54,6 +56,276 @@ const RELEASES: [name: string, revision: string][] = [
 	['v1.4.0-beta.2', 'c1a2b3d4e5f6'],
 	['v1.4.0-beta.3', 'f3a9d2c8b501']
 ];
+
+describe('a stamp is only what the file claims', () => {
+	test.each(RELEASES.filter(([, revision]) => revision !== 'f3a9d2c8b501'))('%s stamped at the head is refused or reads the same', async (name) => {
+		const correctDir = tmp();
+		const correct = (await importInPlace(unpack(name, correctDir), { open }))!;
+		const dir = tmp();
+		const src = unpack(name, dir);
+		const db = new Database(src);
+		db.query('UPDATE alembic_version SET version_num = ?').run(LEGACY_HEAD);
+		db.close();
+		const before = sha(src);
+		const report = await importInPlace(src, { open }).catch((e: Error) => e);
+		if (report instanceof Error) {
+			expect(report.message).toMatch(/Its stamp may be wrong|Could not bring/);
+			expect(sha(src)).toBe(before);
+			return;
+		}
+		expect(Object.fromEntries(Object.entries(report!.tables).map(([t, r]) => [t, r.imported]))).toEqual(Object.fromEntries(Object.entries(correct.tables).map(([t, r]) => [t, r.imported])));
+	});
+
+	test('a 1.4.0-beta.3 file stamped at the head does not lose its procedures', async () => {
+		const correctDir = tmp();
+		const correct = (await importInPlace(unpack('v1.4.0-beta.3', correctDir), { open }))!;
+		const dir = tmp();
+		const src = unpack('v1.4.0-beta.3', dir);
+		const db = new Database(src);
+		db.query('UPDATE alembic_version SET version_num = ?').run(LEGACY_HEAD);
+		db.close();
+		const report = await importInPlace(src, { open }).catch((e: Error) => e);
+		if (report instanceof Error) expect(report.message).toMatch(/Its stamp may be wrong|Could not bring|Did not import/);
+		else expect(report!.tables.master_procedure!.imported).toBe(correct.tables.master_procedure!.imported);
+		expect(existsSync(join(dir, 'opal.legacy.db'))).toBe(!(report instanceof Error));
+	});
+});
+
+describe('numbers that are one number at full width', () => {
+	const firstTwoOf = (db: Database, table: string) => (db.query(`SELECT id FROM ${table} ORDER BY id LIMIT 2`).all() as { id: number }[]).map((r) => r.id);
+
+	test('two work orders with one number keep every step and signature, and both open', async () => {
+		const counts = (path: string) => {
+			const out = new Database(path, { readonly: true });
+			const n = (t: string) => (out.query(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
+			const all = { execution: n('execution'), steps: n('step_execution'), signoffs: n('signoff'), notes: n('step_note') };
+			out.close();
+			return all;
+		};
+		const whole = tmp();
+		const expected = unpack('v1.4.0-beta.3', whole);
+		await importInPlace(expected, { open });
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		const old = new Database(src);
+		const [a, b] = firstTwoOf(old, 'procedure_instance');
+		old.query('UPDATE procedure_instance SET work_order_number = ? WHERE id IN (?, ?)').run('WO-0042', a!, b!);
+		old.close();
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.failedRows).toEqual([]);
+		expect(report.renumbered).toEqual([{ table: 'procedure_instance', id: b!, from: 'WO-0042', to: 'WO-0042-DUP2' }]);
+		expect(renderReport(report)).toContain('WO-0042 is now WO-0042-DUP2');
+		expect(counts(src)).toEqual(counts(expected));
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+		const again = new Database(src, { readonly: true });
+		expect((again.query('SELECT wo_number AS n FROM execution WHERE id IN (?, ?) ORDER BY id').all(a!, b!) as { n: string }[]).map((r) => r.n)).toEqual(['WO-0000000042', 'WO-0000000042-DUP2']);
+		again.close();
+	});
+
+	test.each([
+		['purchase', 'reference', 'purchase', 'reference', 'PO-12', 'PO-0012', 'PO-0000000012', 'PO-0012'],
+		['inventory_record', 'opal_number', 'stock_record', 'opal_number', 'OPAL-9912', 'OPAL-09912', 'OPAL-0000009912', 'OPAL-9912'],
+		['part', 'internal_pn', 'part', 'internal_pn', 'KST-F-0001', 'KST-F-00001', 'KST-F-0000000001', 'KST-F-0001']
+	])('%s numbers that differ only in width both survive, and OPAL still starts', async (table, column, newTable, newColumn, first, second, stored, shown) => {
+		const d = tmp();
+		const src = unpack('v1.3.2', d);
+		const old = new Database(src);
+		const [a, b] = firstTwoOf(old, table);
+		old.query(`UPDATE ${table} SET ${column} = ? WHERE id = ?`).run(first, a!);
+		old.query(`UPDATE ${table} SET ${column} = ? WHERE id = ?`).run(second, b!);
+		old.close();
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.failedRows).toEqual([]);
+		expect(report.renumbered).toEqual([{ table, id: b!, from: second, to: `${shown}-DUP2` }]);
+		// Twice: the width step runs at the first start, and it must never trip on what it stored.
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+		const out = new Database(src, { readonly: true });
+		expect((out.query(`SELECT ${newColumn} AS n FROM ${newTable} WHERE id IN (?, ?) ORDER BY id`).all(a!, b!) as { n: string }[]).map((r) => r.n)).toEqual([stored, `${stored}-DUP2`]);
+		out.close();
+	});
+
+	test('a duplicate opens by the number people see, at any width', async () => {
+		const d = tmp();
+		const src = unpack('v1.3.2', d);
+		const old = new Database(src);
+		const [a, b] = firstTwoOf(old, 'inventory_record');
+		old.query('UPDATE inventory_record SET opal_number = ? WHERE id = ?').run('OPAL-9912', a!);
+		old.query('UPDATE inventory_record SET opal_number = ? WHERE id = ?').run('OPAL-09912', b!);
+		old.close();
+		await importInPlace(src, { open });
+		const { refused } = await openEveryRecord(src, ['/inventory/opal/OPAL-9912-DUP2', '/inventory/opal/OPAL-09912-DUP2', '/inventory/opal/OPAL-9912']);
+		expect(refused).toEqual([]);
+	});
+
+	test('a duplicate reads at the width the organization shows', async () => {
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		const old = new Database(src);
+		const [a, b] = firstTwoOf(old, 'procedure_instance');
+		old.query('UPDATE procedure_instance SET work_order_number = ? WHERE id IN (?, ?)').run('WO-0042', a!, b!);
+		old.close();
+		await importInPlace(src, { open });
+		const db = await open(src);
+		createApp({ db });
+		expect(numbersFor(db).display('WO-0000000042-DUP2')).toBe('WO-0042-DUP2');
+		expect(numbersFor(db).canonical('WO-0000000042-DUP2')).toBe('WO-0000000042-DUP2');
+		db.$client.close();
+	});
+
+	test('a number that collides at full width on an older database names the row and moves nothing', async () => {
+		const db = await open(join(tmp(), 'x.db'));
+		const at = '2026-01-01T00:00:00.000Z';
+		const sql = db.$client;
+		sql.query('INSERT INTO purchase (id, reference, supplier_name, status, created_at, updated_at) VALUES (1, ?, ?, ?, ?, ?), (2, ?, ?, ?, ?, ?)').run('PO-12', 'x', 'draft', at, at, 'PO-0012', 'x', 'draft', at, at);
+		expect(() => storeNumbersAtFullWidth(db, true)).toThrow(/PO-12 \(row 1\) becomes PO-0000000012/);
+		expect((sql.query('SELECT reference AS r FROM purchase ORDER BY id').all() as { r: string }[]).map((x) => x.r)).toEqual(['PO-12', 'PO-0012']);
+		sql.close();
+	});
+});
+
+describe('what someone signed', () => {
+	const signedOther = (src: string, stamped: boolean) => {
+		const old = new Database(src);
+		const row = old.query('SELECT id FROM issue ORDER BY id LIMIT 1').get() as { id: number };
+		old.query('UPDATE issue SET disposition_type = ?, disposition_rationale = ?, dispositioned_at = ? WHERE id = ?').run('other', 'Hold for re-inspection by vendor', stamped ? '2026-02-02 10:00:00.000000' : null, row.id);
+		old.close();
+		return row.id;
+	};
+	const issueRow = (src: string, id: number) => {
+		const out = new Database(src, { readonly: true });
+		const row = out.query('SELECT disposition_type AS type, disposition_rationale AS why, dispositioned_at AS at FROM issue WHERE id = ?').get(id) as { type: string | null; why: string | null; at: string | null };
+		out.close();
+		return row;
+	};
+
+	test('a signed other stays other and never reads as use as is', async () => {
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		const id = signedOther(src, true);
+		const report = (await importInPlace(src, { open }))!;
+		expect(issueRow(src, id)).toEqual({ type: 'other', why: 'Hold for re-inspection by vendor', at: '2026-02-02T10:00:00.000Z' });
+		expect(report.warnings.some((w) => w.includes(`issue ${id}`) && w.includes('kept as signed'))).toBe(true);
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+	});
+
+	test('an unsigned other waits for a person, with what it said kept beside the rationale', async () => {
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		const id = signedOther(src, false);
+		await importInPlace(src, { open });
+		expect(issueRow(src, id)).toEqual({ type: null, why: '1.x disposition: other. Hold for re-inspection by vendor', at: null });
+	});
+
+	test('a person cannot sign other: only an import can write it', () => {
+		const sign = contracts.issues.signDisposition.input as { safeParse(v: unknown): { success: boolean } };
+		expect(sign.safeParse({ id: 1, dispositionType: 'other', dispositionRationale: 'x' }).success).toBe(false);
+		expect(sign.safeParse({ id: 1, dispositionType: 'scrap', dispositionRationale: 'x' }).success).toBe(true);
+	});
+
+	test('an OPAL 2 database takes the new value, and its table rebuild keeps comments', () => {
+		const d = tmp();
+		const earlier = join(d, 'earlier');
+		const migrations = join(import.meta.dir, '../drizzle');
+		Bun.spawnSync(['cp', '-r', migrations, earlier]);
+		const journal = JSON.parse(readFileSync(join(earlier, 'meta/_journal.json'), 'utf8'));
+		const last = journal.entries.findIndex((e: { tag: string }) => e.tag.startsWith('0012_'));
+		journal.entries = journal.entries.slice(0, last);
+		writeFileSync(join(earlier, 'meta/_journal.json'), JSON.stringify(journal));
+		const path = join(d, 'opal.db');
+		const before = openDb(path, earlier, () => null);
+		const at = '2026-01-01T00:00:00.000Z';
+		before.$client.query('INSERT INTO project (id, code, name, state, created_at, updated_at) VALUES (1, ?, ?, ?, ?, ?)').run('P', 'P', 'active', at, at);
+		before.$client.query('INSERT INTO issue (id, issue_number, project_id, title, created_at, updated_at) VALUES (1, ?, 1, ?, ?, ?)').run('IT-0000000001', 't', at, at);
+		before.$client.query('INSERT INTO issue_comment (id, issue_id, body, created_at) VALUES (1, 1, ?, ?)').run('keep me', at);
+		expect(() => before.$client.query("UPDATE issue SET disposition_type = 'other' WHERE id = 1").run()).toThrow();
+		before.$client.close();
+		const after = openDb(path, undefined, () => null);
+		expect(after.$client.query('SELECT body FROM issue_comment').all()).toEqual([{ body: 'keep me' }]);
+		after.$client.query("UPDATE issue SET disposition_type = 'other' WHERE id = 1").run();
+		// The rebuild took the search triggers with the old table. The first start puts them back.
+		createApp({ db: after });
+		expect((after.$client.query("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'issue'").get() as { n: number }).n).toBeGreaterThan(0);
+		after.$client.close();
+	});
+});
+
+describe('odd values a record has to open with', () => {
+	test('a dataset with no fields, captured data that is a list and a callout of another kind all open', async () => {
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		const old = new Database(src);
+		old.run(`UPDATE dataset SET schema = '{"columns":["a"]}'`);
+		old.run(`UPDATE step_execution SET data_captured = '[1, 2]' WHERE id = (SELECT MIN(id) FROM step_execution)`);
+		const version = old.query('SELECT id, content FROM procedure_version ORDER BY id LIMIT 1').get() as { id: number; content: string };
+		const content = JSON.parse(version.content);
+		content.steps[0].callouts = [{ kind: 'tip', text: 'Wear gloves' }];
+		old.query('UPDATE procedure_version SET content = ? WHERE id = ?').run(JSON.stringify(content), version.id);
+		old.close();
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.failedRows).toEqual([]);
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+	});
+});
+
+describe('requirements in the project file', () => {
+	test('the catalog becomes draft requirements, with the words 1.x held', async () => {
+		const d = tmp();
+		const src = unpack('v1.3.2', d);
+		await importInPlace(src, { open });
+		const yaml = Bun.YAML.parse(readFileSync(join(FIXTURES, 'v1.3.2.project.yaml'), 'utf8')) as { requirements: { id: string; title: string; description: string }[] };
+		const out = new Database(src, { readonly: true });
+		const rows = out.query('SELECT req_number AS n, title, statement, lifecycle_state AS state FROM requirement ORDER BY id').all() as { n: string; title: string; statement: string; state: string }[];
+		out.close();
+		expect(rows.length).toBe(yaml.requirements.length);
+		expect(rows.map((r) => r.state)).toEqual(yaml.requirements.map(() => 'draft'));
+		expect(rows[0]).toMatchObject({ n: yaml.requirements[0]!.id, title: yaml.requirements[0]!.title, statement: yaml.requirements[0]!.description });
+	});
+
+	test('verified and waived allocations keep their status and date', async () => {
+		const d = tmp();
+		const src = unpack('v1.3.2', d);
+		const old = new Database(src, { readonly: true });
+		const before = old.query('SELECT status, COUNT(*) AS n, COUNT(verified_at) AS dated FROM part_requirements GROUP BY status ORDER BY status').all();
+		old.close();
+		await importInPlace(src, { open });
+		const out = new Database(src, { readonly: true });
+		expect(out.query('SELECT status, COUNT(*) AS n, COUNT(verified_at) AS dated FROM part_requirement GROUP BY status ORDER BY status').all()).toEqual(before as never);
+		out.close();
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+	});
+
+	/** A database that has both a requirement table and a catalog, as one between 1.3 and 1.4 can. */
+	const withCatalog = (src: string, statement: string) => {
+		const old = new Database(src);
+		const row = old.query("SELECT value FROM app_setting WHERE key = 'project_config'").get() as { value: string };
+		const requirements = [{ id: 'REQ-900', title: 'From the file', description: statement }];
+		old.query("UPDATE app_setting SET value = ? WHERE key = 'project_config'").run(JSON.stringify({ ...JSON.parse(row.value), requirements }));
+		old.query("INSERT INTO requirement (id, req_number, title, statement, level, tbd, tbr, stale, lifecycle_state, revision, created_at, updated_at) VALUES (900, 'REQ-0900', 't', 'The tank shall hold', 0, 0, 0, 0, 'baselined', 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00')").run();
+		old.close();
+	};
+
+	test('a catalog entry and a requirement that are the same at any width are one requirement', async () => {
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		withCatalog(src, 'The tank shall hold');
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.renumbered).toEqual([]);
+		const out = new Database(src, { readonly: true });
+		expect((out.query(`SELECT COUNT(*) AS n FROM requirement WHERE req_number IN ('REQ-900', 'REQ-0900')`).get() as { n: number }).n).toBe(1);
+		out.close();
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+	});
+
+	test('a catalog entry that says something else keeps its own requirement', async () => {
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		withCatalog(src, 'Something else');
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.renumbered.map((n) => n.to)).toEqual(['REQ-0900-DUP2']);
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+	});
+});
 
 const tableNames = (db: Database) =>
 	(db.query("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name).filter((n) => !n.startsWith('sqlite_') && !n.includes('_fts'));
@@ -218,7 +490,7 @@ describe.each(RELEASES.map(([name]) => name))('importing %s', (name) => {
 });
 
 /** Signs in on an imported file and opens every record the way a page does. Returns the refusals. */
-async function openEveryRecord(path: string): Promise<{ opened: Record<string, number>; refused: string[] }> {
+async function openEveryRecord(path: string, alsoOpen: string[] = []): Promise<{ opened: Record<string, number>; refused: string[] }> {
 	const db = await open(path);
 	try {
 		const admin = db.select().from(user).all().find((u) => u.isActive && u.isAdmin)!;
@@ -234,6 +506,10 @@ async function openEveryRecord(path: string): Promise<{ opened: Record<string, n
 		const get = (path: string) => app.request(`http://opal.test/api${path}`, { headers: { cookie } });
 		const opened: Record<string, number> = {};
 		const refused: string[] = [];
+		for (const extra of alsoOpen) {
+			const res = await get(extra);
+			if (res.status !== 200) refused.push(`${extra}: ${res.status}`);
+		}
 		for (const kind of ['requirements', 'parts', 'risks', 'issues', 'procedures', 'executions', 'purchases', 'suppliers', 'workcenters', 'datasets']) {
 			opened[kind] = 0;
 			for (let cursor = ''; ; ) {
@@ -425,12 +701,13 @@ describe('a file whose stamp claims steps it never had', () => {
 		expect(report.warnings.filter((w) => w.includes('not in this database'))).toEqual([]);
 	});
 
-	test('free-text allocations with no requirement are kept and accounted for, not lost', async () => {
+	test('allocations from the project file catalog stay allocations, verified and waived ones too', async () => {
 		const report = (await reportPromise)!;
 		expect(report.sourceTables.filter((t) => t.unaccounted > 0)).toEqual([]);
-		expect(report.notImported.find((n) => n.table === 'part_requirements (legacy_row)')?.rows).toBe(allocations);
+		expect(report.notImported.find((n) => n.table === 'part_requirements (legacy_row)')).toBeUndefined();
 		const out = new Database(join(dir, 'opal.db'), { readonly: true });
-		expect((out.query("SELECT COUNT(*) AS n FROM legacy_row WHERE table_name = 'part_requirements'").get() as { n: number }).n).toBe(allocations);
+		expect((out.query('SELECT COUNT(*) AS n FROM part_requirement').get() as { n: number }).n).toBe(allocations);
+		expect((out.query("SELECT COUNT(*) AS n FROM legacy_row WHERE table_name = 'part_requirements'").get() as { n: number }).n).toBe(0);
 		out.close();
 	});
 

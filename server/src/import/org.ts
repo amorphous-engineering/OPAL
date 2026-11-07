@@ -1,6 +1,4 @@
 /** Users, profiles, tokens, passkeys, roles, workcenters, settings and the project. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { AVATAR_TYPES, now } from '@opal/shared';
 import {
@@ -17,7 +15,9 @@ import {
 	workcenter
 } from '../db/schema/index.ts';
 import { humanUsernameBase, isPluginUsername } from '../auth/tokens.ts';
+import { SYSTEM_ROLES } from '../services/org/roles.ts';
 import { AUTH_SETTING_KEYS } from '../db/schema/auth.ts';
+import { sourceFile, storeByHash } from './files.ts';
 import {
 	type ImportCtx,
 	bool,
@@ -92,17 +92,14 @@ export function importPeople(c: ImportCtx): void {
 			let mime: string | null = null;
 			let source = str(r.avatar_source);
 			if (r.avatar_filename && source !== 'removed') {
-				const path = join(c.attachmentsDir, 'avatars', String(r.avatar_filename));
-				if (existsSync(path)) {
-					const bytes = readFileSync(path);
-					hash = createHash('sha256').update(bytes).digest('hex');
-					mime = sniffMime(bytes) ?? str(r.avatar_mime);
-					mkdirSync(c.avatarsDir, { recursive: true });
-					const out = join(c.avatarsDir, hash);
-					if (!existsSync(out)) writeFileSync(out, bytes);
+				const file = sourceFile(join(c.attachmentsDir, 'avatars'), r.avatar_filename);
+				if ('missing' in file) warn(c, `user ${id}: avatar file ${String(r.avatar_filename)} is missing, avatar cleared`);
+				else if ('refused' in file) fail(c, 'user', id, `avatar: ${file.refused}`);
+				else {
+					const stored = storeByHash(file.path, c.avatarsDir, c.createdFiles);
+					hash = stored.sha256;
+					mime = sniffMime(stored.head) ?? str(r.avatar_mime);
 					source ??= 'upload';
-				} else {
-					warn(c, `user ${id}: avatar file ${String(r.avatar_filename)} is missing, avatar cleared`);
 				}
 			}
 			return {
@@ -150,6 +147,8 @@ export function importPeople(c: ImportCtx): void {
 	})));
 }
 
+const GATES_NEW_IN_OPAL_2 = ['execution.skipRequired', 'execution.closeShort'];
+
 /** role, user_role, role_gate. A soft-deleted role is left out with its grants. */
 export function importRoles(c: ImportCtx): void {
 	const roles = readTable(c, 'role', ['id', 'name', 'description', 'key', 'is_system', 'created_at', 'updated_at', 'deleted_at']);
@@ -189,6 +188,17 @@ export function importRoles(c: ImportCtx): void {
 	insertRows(c, 'role_gate', roleGate, gates
 		.filter((r) => c.ids.role!.has(Number(r.role_id)) || (warn(c, `role_gate ${Number(r.id)}: role is not imported, gate skipped`), false))
 		.map((r) => ({ id: Number(r.id), roleId: Number(r.role_id), gate: String(r.gate) })));
+
+	// Gates 1.x did not have. Without these only an administrator could close short or skip a required
+	// step. The gates it had stay as its administrators left them.
+	let added = 0;
+	for (const r of live.filter((x) => c.ids.role!.has(Number(x.id)))) {
+		const defaults = SYSTEM_ROLES[String(r.key)]?.[2] ?? [];
+		for (const gate of defaults.filter((g) => GATES_NEW_IN_OPAL_2.includes(g))) {
+			added += c.d.insert(roleGate).values({ roleId: Number(r.id), gate }).onConflictDoNothing().returning({ id: roleGate.id }).all().length;
+		}
+	}
+	derived(c, 'role_gate_new_in_opal_2', added);
 }
 
 export const NO_ONSHAPE = 'the Onshape integration does not carry over to OPAL 2';
