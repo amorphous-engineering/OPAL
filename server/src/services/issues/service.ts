@@ -28,6 +28,7 @@ import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { nextDesignator } from '../designators.ts';
 import { projectRefs, requireActiveProject } from '../org/projects.ts'; // added by projects
+import { requireAddable, requireRemovable } from '../risks/line-rules.ts'; // added by risks
 import { holdsGate } from '../org/gates.ts';
 import { hasBlocker } from './holds.ts';
 import { excerpt, issueHooks, notify } from './hooks.ts';
@@ -896,9 +897,11 @@ function checkLinkTarget(ctx: Ctx, kind: IssueLinkKind, targetId: number) {
 			if (!ctx.db.select({ id: part.id }).from(part).where(eq(part.id, targetId)).get())
 				throw invalid('targetId', `Part ${targetId} not found`);
 			return;
-		case 'risk': // added by risks
-			if (!ctx.db.select({ id: risk.id }).from(risk).where(eq(risk.id, targetId)).get())
-				throw invalid('targetId', `Risk ${targetId} not found`);
+		case 'risk': { // added by risks
+			const target = ctx.db.select().from(risk).where(eq(risk.id, targetId)).get();
+			if (!target) throw invalid('targetId', `Risk ${targetId} not found`);
+			requireAddable(target);
+		}
 	}
 }
 
@@ -942,6 +945,10 @@ export function removeLink(ctx: Ctx, id: number, linkId: number): { ok: true } {
 		.get();
 	if (!row) throw notFound('Link');
 	requirePendingLinks(load(ctx, id));
+	if (row.riskId !== null) {
+		const target = ctx.db.select().from(risk).where(eq(risk.id, row.riskId)).get();
+		if (target) requireRemovable(target);
+	}
 	remove(ctx, issueLink, linkId);
 	return { ok: true };
 }

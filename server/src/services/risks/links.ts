@@ -12,26 +12,13 @@ import { issue, issueLink, risk, riskReference } from '../../db/schema/index.ts'
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { create as createIssue } from '../issues/service.ts';
 import { numbersFor } from '../org/project.ts';
+import { requireAddable, requireRemovable } from './line-rules.ts';
 import { load, one } from './service.ts';
 
 function loadIssue(ctx: Ctx, id: number) {
 	const row = ctx.db.select().from(issue).where(eq(issue.id, id)).get();
 	if (!row) throw notFound('Issue');
 	return row;
-}
-
-/** A realized or closed risk is finished paper: it takes no new lines. */
-function requireAddable(row: ReturnType<typeof load>): void {
-	if (row.disposition === 'realized' || row.disposition === 'closed') {
-		throw conflict('risk_state', `${row.riskNumber} is ${row.disposition}, so it takes no new links or references`);
-	}
-}
-
-/** Lines stand once a person accepted the risk with them on the page. */
-function requireRemovable(row: ReturnType<typeof load>): void {
-	if (row.disposition === 'accepted' || row.disposition === 'realized' || row.disposition === 'closed') {
-		throw conflict('risk_state', `${row.riskNumber} is ${row.disposition}, so its links and references stay`);
-	}
 }
 
 export function linkIssue(ctx: Ctx, riskId: number, issueId: number, role: RiskIssueRole): Risk {
