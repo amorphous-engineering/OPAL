@@ -125,6 +125,17 @@ describe('the private copy', () => {
 		expect(copies(dir)).toEqual([]);
 	});
 
+	test('half an avatar left by a killed run is removed by the next run', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		mkdirSync(join(dir, 'avatars'));
+		writeFileSync(join(dir, 'avatars', 'half.tmp'), 'half');
+		writeFileSync(join(dir, 'avatars', 'abc123'), 'an avatar');
+		await importInPlace(src, { open, acceptFailedRows: true });
+		expect(readdirSync(join(dir, 'avatars'))).toContain('abc123');
+		expect(readdirSync(join(dir, 'avatars'))).not.toContain('half.tmp');
+	});
+
 	test('a finished import leaves no copy in the folder', async () => {
 		const dir = tmp();
 		const src = buildLegacyFixture(dir);

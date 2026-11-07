@@ -234,6 +234,24 @@ describe('what someone signed', () => {
 	});
 });
 
+describe('odd values a record has to open with', () => {
+	test('a dataset with no fields, captured data that is a list and a callout of another kind all open', async () => {
+		const d = tmp();
+		const src = unpack('v1.4.0-beta.3', d);
+		const old = new Database(src);
+		old.run(`UPDATE dataset SET schema = '{"columns":["a"]}'`);
+		old.run(`UPDATE step_execution SET data_captured = '[1, 2]' WHERE id = (SELECT MIN(id) FROM step_execution)`);
+		const version = old.query('SELECT id, content FROM procedure_version ORDER BY id LIMIT 1').get() as { id: number; content: string };
+		const content = JSON.parse(version.content);
+		content.steps[0].callouts = [{ kind: 'tip', text: 'Wear gloves' }];
+		old.query('UPDATE procedure_version SET content = ? WHERE id = ?').run(JSON.stringify(content), version.id);
+		old.close();
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.failedRows).toEqual([]);
+		expect((await openEveryRecord(src)).refused).toEqual([]);
+	});
+});
+
 describe('requirements in the project file', () => {
 	test('the catalog becomes draft requirements, with the words 1.x held', async () => {
 		const d = tmp();

@@ -359,6 +359,12 @@ function assertAttachmentsFolder(src: Database, srcPath: string, folder: string)
 	throw new Error(`${srcPath} has ${rows} attachments and their folder ${folder} is not there. Nothing was changed. If the files are elsewhere: opal import ${srcPath} --attachments <folder>. To import without them: opal import ${srcPath} --accept-failed-rows`);
 }
 
+/** A stopped run can leave half a file here. The blob sweeper does this for its own folder; nothing does for avatars. */
+function removeTempFiles(dir: string): void {
+	if (!existsSync(dir)) return;
+	for (const name of readdirSync(dir)) if (name.endsWith('.tmp')) rmSync(join(dir, name), { force: true });
+}
+
 const SIDECARS = ['-wal', '-shm', '-journal'];
 
 function removeWithSidecars(path: string): void {
@@ -374,6 +380,7 @@ export async function importLegacy(srcPath: string, destPath: string, options: I
 	const source = openSource(srcPath, destDir);
 	const blobsDir = options.blobsDir ?? join(destDir, 'blobs');
 	const avatarsDir = options.avatarsDir ?? join(destDir, 'avatars');
+	removeTempFiles(avatarsDir);
 	const createdFiles: string[] = [];
 	let db: Db | undefined;
 	let finished = false;
