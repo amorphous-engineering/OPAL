@@ -9,6 +9,9 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **`opal restore <backup-folder>`.** Restores into an empty data folder, and refuses a folder with anything in it or an incomplete backup.
 - **systemd user units in `contrib/`.** `opal.service` runs `opal serve`, and `opal-backup.timer` backs up nightly and keeps 14.
 
+### Fixed
+- **A revised requirement no longer strands its parts and children.** When a revision baselines, each allocated part gets a new open allocation to verify against the new text, and the old allocation stays as the evidence for the old text. Children move to the new revision and stay STALE until someone reviews them. Revisions superseded before this fix keep their old allocations: allocate the part again from its page.
+
 ## 2.0.0-beta.1
 
 OPAL 2 is a rewrite in TypeScript: one Bun binary, one SQLite file. The Python 1.x backend is gone, and
