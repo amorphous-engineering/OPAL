@@ -209,6 +209,7 @@ function commitInstall(ctx: Ctx, src: ParsedSource, sha: string, dir: string): P
 		for (const name of readdirSync(root)) if (!keep.has(name)) rmSync(join(root, name), { recursive: true, force: true });
 	}
 	const defs = new Map(manifest.settings.map((s) => [s.key, s]));
+	let replaced = false;
 	for (const s of ctx.db.select().from(pluginSetting).where(eq(pluginSetting.pluginId, row.id)).all()) {
 		const def = defs.get(s.key);
 		if (!def) {
@@ -216,15 +217,20 @@ function commitInstall(ctx: Ctx, src: ParsedSource, sha: string, dir: string): P
 		} else if (def.type === 'secret' && !s.secret) {
 			// The new version calls this a secret, so the value it already has becomes one.
 			update(ctx, pluginSetting, s.id, { secret: true, value: s.value === null ? null : sealSetting(row.key, s.key, s.value) });
-			hideAuditedValue(ctx.db.$client, s.id, {
-				op: ctx.op,
-				invocation: ctx.invocation,
-				actorUserId: actorUserId(ctx.actor),
-				actorTokenId: ctx.actor.kind === 'token' ? ctx.actor.tokenId : null
-			});
-			markOldBytes(ctx.db.$client);
+			replaced = true;
 		}
 	}
+	// Each one the manifest calls secret, with a row or not: a value cleared earlier is still in the log.
+	const by = {
+		op: ctx.op,
+		invocation: ctx.invocation,
+		actorUserId: actorUserId(ctx.actor),
+		actorTokenId: ctx.actor.kind === 'token' ? ctx.actor.tokenId : null
+	};
+	for (const d of manifest.settings) {
+		if (d.type === 'secret' && hideAuditedValue(ctx.db.$client, { pluginId: row.id, key: d.key }, by)) replaced = true;
+	}
+	if (replaced) markOldBytes(ctx.db.$client);
 	if (row.enabled) runtime().start(row.key).catch(() => {});
 	return row;
 }

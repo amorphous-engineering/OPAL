@@ -149,6 +149,8 @@ export const zPluginSettingValue = z.object({
 	key: z.string(),
 	/** Null for a secret: the API never returns a secret value. */
 	value: z.unknown().nullable(),
+	/** Treat it as a secret: the manifest says so, or it was given as one before a plugin update stopped saying so. */
+	secret: z.boolean(),
 	/** For a secret: a value is stored. */
 	set: z.boolean(),
 	/** For a secret: one is stored but no key opens it, so it has to be entered again. */

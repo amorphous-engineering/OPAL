@@ -82,6 +82,10 @@
 		for (const d of p.manifest.settings) {
 			const cur = p.settings.find((s) => s.key === d.key);
 			const v = cur?.value ?? d.default ?? null;
+			if (cur?.secret) {
+				out[d.key] = '';
+				continue;
+			}
 			if (d.type === 'project-map') {
 				const obj = typeof v === 'string' ? safeJson(v) : v;
 				out[d.key] = obj && typeof obj === 'object' ? { ...(obj as Record<string, string>) } : {};
@@ -150,6 +154,8 @@
 	const isSet = (key: string) => plugin.settings.find((s) => s.key === key)?.set ?? false;
 	const isUnreadable = (key: string) =>
 		plugin.settings.find((s) => s.key === key)?.unreadable ?? false;
+	// By what the server says: a value given as a secret stays one after an update stops calling it that.
+	const isSecret = (key: string) => plugin.settings.find((s) => s.key === key)?.secret ?? false;
 
 	async function save(e: SubmitEvent) {
 		e.preventDefault();
@@ -157,7 +163,7 @@
 		const values: Record<string, unknown> = {};
 		for (const d of m.settings as PluginSettingDef[]) {
 			const v = draft[d.key];
-			if (d.type === 'secret') {
+			if (isSecret(d.key)) {
 				if (v !== '') values[d.key] = v;
 			} else if (d.type === 'boolean') values[d.key] = v;
 			else if (d.type === 'project-map') values[d.key] = v;
@@ -331,7 +337,7 @@
 				<ErrorBanner message={formError} />
 				{#each m.settings as d (d.key)}
 					<div class="grid grid-cols-1 gap-1.5">
-						{#if d.type === 'boolean'}
+						{#if d.type === 'boolean' && !isSecret(d.key)}
 							<div class="flex items-center gap-2">
 								<Switch id="s-{d.key}" bind:checked={draft[d.key] as boolean} />
 								<Label for="s-{d.key}">{d.label}</Label>
@@ -341,14 +347,27 @@
 								{d.label}
 								{#if d.required}<span class="font-mono text-xs text-muted-foreground">REQUIRED</span
 									>{/if}
-								{#if d.type === 'secret'}<State
+								{#if isSecret(d.key)}<State
 										value={isSet(d.key) ? 'set' : 'not_set'}
 										badge
 										tone={isSet(d.key) ? 'ok' : 'warn'}
 										label={isUnreadable(d.key) ? 'UNREADABLE' : isSet(d.key) ? 'SET' : 'NOT SET'}
 									/>{/if}
 							</Label>
-							{#if d.type === 'project-map'}
+							{#if isSecret(d.key)}
+								<Input
+									id="s-{d.key}"
+									class="font-mono"
+									type="password"
+									autocomplete="new-password"
+									bind:value={draft[d.key] as string}
+									placeholder={isUnreadable(d.key)
+										? "Stored, but this server's key cannot read it. Enter it again."
+										: isSet(d.key)
+											? 'Stored. Blank keeps it.'
+											: ''}
+								/>
+							{:else if d.type === 'project-map'}
 								<ProjectMapField
 									id="s-{d.key}"
 									bind:value={draft[d.key] as Record<string, string>}
@@ -377,19 +396,6 @@
 									class="font-mono text-xs"
 									rows={5}
 									bind:value={draft[d.key] as string}
-								/>
-							{:else if d.type === 'secret'}
-								<Input
-									id="s-{d.key}"
-									class="font-mono"
-									type="password"
-									autocomplete="new-password"
-									bind:value={draft[d.key] as string}
-									placeholder={isUnreadable(d.key)
-										? "Stored, but this server's key cannot read it. Enter it again."
-										: isSet(d.key)
-											? 'Stored. Blank keeps it.'
-											: ''}
 								/>
 							{:else}
 								<Input

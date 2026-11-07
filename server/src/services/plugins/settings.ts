@@ -47,6 +47,7 @@ function check(def: PluginSettingDef, v: unknown): { value: unknown } | { error:
 /**
  * `null` clears a setting (the default applies). A secret left out or `null`
  * keeps its value; an empty string clears it. Other keys left out stay as they are.
+ * A value given as a secret stays one after a plugin update stops calling it that.
  */
 export function saveSettings(ctx: Ctx, row: PluginRow, values: Record<string, unknown>): void {
 	const defs = new Map(row.manifest.settings.map((d) => [d.key, d]));
@@ -58,8 +59,9 @@ export function saveSettings(ctx: Ctx, row: PluginRow, values: Record<string, un
 			fields[key] = 'Unknown setting';
 			continue;
 		}
-		if (v === undefined || (v === null && def.type === 'secret')) continue;
-		if (v === null || (def.type === 'secret' && v === '')) {
+		const secret = def.type === 'secret' || !!settingRow(ctx.db, row.id, key)?.secret;
+		if (v === undefined || (v === null && secret)) continue;
+		if (v === null || (secret && v === '')) {
 			writes.push({ def, value: null });
 			continue;
 		}

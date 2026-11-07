@@ -105,6 +105,7 @@ export function toDetail(db: Db, row: PluginRow): PluginDetail {
 			return {
 				key: def.key,
 				value: isSecret ? null : (plain ?? def.default ?? null),
+				secret: isSecret,
 				set: plain != null && plain !== '',
 				unreadable: plain === undefined
 			};

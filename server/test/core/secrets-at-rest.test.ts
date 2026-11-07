@@ -257,7 +257,7 @@ describe('upgrading an rc.24 database', () => {
 		const again = openDb(path);
 		const count = again.select().from(auditLog).all().filter((r) => r.op === 'secrets.seal').length;
 		expect(count).toBe(1);
-		hideAuditedValue(again.$client, late.id);
+		hideAuditedValue(again.$client, { pluginId: late.pluginId, key: late.key });
 		expect(again.select().from(auditLog).all().filter((r) => r.op === 'secrets.seal')).toHaveLength(1);
 		again.$client.close();
 	});
@@ -370,6 +370,21 @@ describe('upgrading an rc.24 database', () => {
 		const db = openDb(path);
 		expect((db.$client.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(1);
 		db.$client.close();
+	});
+});
+
+describe('history of a setting with no row today', () => {
+	test('a first start hides values an older version logged for a secret that was cleared', () => {
+		rc24Database();
+		const raw = new Database(path, { strict: true });
+		raw.run('DELETE FROM plugin_setting WHERE key = ?', ['late']);
+		raw.run('UPDATE audit_log SET "after" = ? WHERE entity = ?', [JSON.stringify({ pluginId: 1, key: 'late', value: LATE, secret: false }), 'plugin_setting']);
+		raw.close();
+		const db = openDb(path);
+		expect(JSON.stringify(db.select().from(auditLog).all())).not.toContain(LATE);
+		expect(db.select().from(auditLog).all().filter((r) => r.reason === 'Earlier values hidden: this setting became secret')).toHaveLength(1);
+		db.$client.close();
+		expect(rawBytes()).not.toContain(LATE);
 	});
 });
 

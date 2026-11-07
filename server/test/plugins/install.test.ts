@@ -457,6 +457,46 @@ describe('plugins.install', () => {
 		expect(hidden[0]).toMatchObject({ entity: 'plugin_setting', entityId: stored.id, actorUserId: 1, after: { earlierValues: '[redacted]' } });
 	});
 
+	test('an update that makes a setting secret hides the values of rows it had before, cleared and entered again', async () => {
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
+		const row = () => db.select().from(plugin).get()!;
+		saveSettings(sys(), row(), { token: 'first-value' });
+		saveSettings(sys(), row(), { token: null });
+		saveSettings(sys(), row(), { token: 'second-value' });
+		await installSha(SHA2, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }] }));
+		const log = JSON.stringify(db.select().from(auditLog).all());
+		expect(log).not.toContain('first-value');
+		expect(log).not.toContain('second-value');
+		expect(db.select().from(auditLog).all().filter((r) => r.reason === 'Earlier values hidden: this setting became secret')).toHaveLength(1);
+		expect(settingValues(db, row())).toMatchObject({ token: 'second-value' });
+	});
+
+	test('an update that makes a setting secret hides its history even when it has no value today', async () => {
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
+		const row = () => db.select().from(plugin).get()!;
+		saveSettings(sys(), row(), { token: 'cleared-value' });
+		saveSettings(sys(), row(), { token: null });
+		db.$client.run('PRAGMA user_version = 1');
+		await installSha(SHA2, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }] }));
+		expect(JSON.stringify(db.select().from(auditLog).all())).not.toContain('cleared-value');
+		const hidden = db.select().from(auditLog).all().filter((r) => r.reason === 'Earlier values hidden: this setting became secret');
+		expect(hidden).toHaveLength(1);
+		expect(hidden[0]).toMatchObject({ entity: 'plugin_setting', after: { earlierValues: '[redacted]' } });
+		expect((db.$client.query('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(0);
+	});
+
+	test('hiding a setting leaves the same key on another plugin alone', async () => {
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
+		const row = () => db.select().from(plugin).get()!;
+		saveSettings(sys(), row(), { token: 'first-value' });
+		db.$client.run(
+			`INSERT INTO audit_log (at, entity, entity_id, action, op, "after") VALUES ('2026-01-01T00:00:00.000Z', 'plugin_setting', 9999, 'create', 'test', ?)`,
+			[JSON.stringify({ pluginId: 9999, key: 'token', value: 'another-plugin-value', secret: false })]
+		);
+		await installSha(SHA2, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }] }));
+		expect(JSON.stringify(db.select().from(auditLog).all())).toContain('another-plugin-value');
+	});
+
 	test('an update that makes a setting secret has the next start clear the old value from the file', async () => {
 		const marker = () => (db.$client.query('PRAGMA user_version').get() as { user_version: number }).user_version;
 		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
@@ -481,6 +521,18 @@ describe('plugins.install', () => {
 		saveSettings(sys(), row, { token: 'changed' });
 		expect(db.select().from(pluginSetting).get()!.secret).toBe(true);
 		expect(JSON.stringify(db.select().from(auditLog).all())).not.toContain('changed');
+	});
+
+	test('saving the form keeps a value given as a secret after an update stops calling it that', async () => {
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }, { key: 'other', label: 'Other', type: 'text' }] }));
+		saveSettings(sys(), db.select().from(plugin).get()!, { token: 'still-secret' });
+		await installSha(SHA2, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }, { key: 'other', label: 'Other', type: 'text' }] }));
+		const row = () => db.select().from(plugin).get()!;
+		expect(toDetail(db, row()).settings[0]).toMatchObject({ key: 'token', value: null, secret: true, set: true });
+		saveSettings(sys(), row(), { token: null, other: 'edited' });
+		expect(settingValues(db, row())).toMatchObject({ token: 'still-secret', other: 'edited' });
+		saveSettings(sys(), row(), { token: '' });
+		expect(settingValues(db, row()).token).toBeUndefined();
 	});
 
 	test('a local source is refused without OPAL_PLUGINS_LOCAL', async () => {

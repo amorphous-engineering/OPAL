@@ -51,8 +51,8 @@ function storedSecrets(sqlite: Database): Stored[] {
 	}
 	if (hasTable(sqlite, 'plugin_setting') && hasTable(sqlite, 'plugin')) {
 		const rows = sqlite
-			.query('SELECT s.id, s.key, s.value, s.secret, p.key AS plugin, p.manifest FROM plugin_setting s JOIN plugin p ON p.id = s.plugin_id')
-			.all() as { id: number; key: string; value: string | null; secret: number; plugin: string; manifest: string }[];
+			.query('SELECT s.id, s.plugin_id AS pluginId, s.key, s.value, s.secret, p.key AS plugin, p.manifest FROM plugin_setting s JOIN plugin p ON p.id = s.plugin_id')
+			.all() as { id: number; pluginId: number; key: string; value: string | null; secret: number; plugin: string; manifest: string }[];
 		const update = sqlite.query('UPDATE plugin_setting SET value = ?, secret = 1 WHERE id = ?');
 		for (const row of rows) {
 			// The flag could fall behind the manifest: an older server kept it when a plugin update made a setting secret.
@@ -70,7 +70,7 @@ function storedSecrets(sqlite: Database): Stored[] {
 				sealed,
 				write: (next) => {
 					update.run(JSON.stringify(next), row.id);
-					if (!row.secret) hideAuditedValue(sqlite, row.id);
+					if (!row.secret) hideAuditedValue(sqlite, { pluginId: row.pluginId, key: row.key });
 				}
 			});
 		}
@@ -98,20 +98,32 @@ export interface HiddenBy {
  * A setting that became secret: what the audit log kept while it was not, it hides now, because a copy
  * of the database must not reveal it. The log is the record of last resort, so changing it leaves a
  * row of its own. The audit screen shows field changes, not the reason, so the row carries both.
+ *
+ * It finds the setting by plugin and key, not by row. Clearing a setting removes its row, and entering a
+ * value again makes a new one, so a setting can have several rows in its past and none today. A plugin
+ * removed and installed again has a new id, so what the log holds from before that stays as it was.
+ *
+ * Returns whether anything was hidden.
  */
-export function hideAuditedValue(sqlite: Database, settingId: number, by: HiddenBy = { op: 'secrets.seal' }): void {
-	const { changes } = sqlite
+export function hideAuditedValue(sqlite: Database, setting: { pluginId: number; key: string }, by: HiddenBy = { op: 'secrets.seal' }): boolean {
+	const { pluginId, key } = setting;
+	const hidden = sqlite
 		.query(
 			`UPDATE audit_log SET
 				"before" = CASE WHEN json_type("before", '$.value') NOT IN ('null') THEN json_set("before", '$.value', '[redacted]') ELSE "before" END,
 				"after" = CASE WHEN json_type("after", '$.value') NOT IN ('null') THEN json_set("after", '$.value', '[redacted]') ELSE "after" END
-			WHERE entity = 'plugin_setting' AND entity_id = ? AND (
+			WHERE entity = 'plugin_setting' AND (
+				entity_id IN (SELECT id FROM plugin_setting WHERE plugin_id = ? AND key = ?)
+				OR (json_extract("before", '$.pluginId') = ? AND json_extract("before", '$.key') = ?)
+				OR (json_extract("after", '$.pluginId') = ? AND json_extract("after", '$.key') = ?)
+			) AND (
 				(json_type("before", '$.value') NOT IN ('null') AND json_extract("before", '$.value') IS NOT '[redacted]')
 				OR (json_type("after", '$.value') NOT IN ('null') AND json_extract("after", '$.value') IS NOT '[redacted]')
-			)`
+			)
+			RETURNING entity_id AS entityId`
 		)
-		.run(settingId);
-	if (!changes) return;
+		.all(pluginId, key, pluginId, key, pluginId, key) as { entityId: number }[];
+	if (!hidden.length) return false;
 	sqlite
 		.query(
 			`INSERT INTO audit_log (at, entity, entity_id, action, op, invocation, actor_user_id, actor_token_id, "before", "after", reason)
@@ -119,7 +131,7 @@ export function hideAuditedValue(sqlite: Database, settingId: number, by: Hidden
 		)
 		.run(
 			now(),
-			settingId,
+			Math.max(...hidden.map((h) => h.entityId)),
 			by.op,
 			by.invocation ?? null,
 			by.actorUserId ?? null,
@@ -128,6 +140,22 @@ export function hideAuditedValue(sqlite: Database, settingId: number, by: Hidden
 			JSON.stringify({ earlierValues: '[redacted]' }),
 			'Earlier values hidden: this setting became secret'
 		);
+	return true;
+}
+
+/** Every setting that is secret today, with a row or without one. Finds what an older version left in the log. */
+function hideSecretHistory(sqlite: Database): void {
+	if (!hasTable(sqlite, 'plugin_setting') || !hasTable(sqlite, 'plugin') || !hasTable(sqlite, 'audit_log')) return;
+	const plugins = sqlite.query('SELECT id, manifest FROM plugin').all() as { id: number; manifest: string }[];
+	const flagged = sqlite.query('SELECT plugin_id AS pluginId, key FROM plugin_setting WHERE secret = 1').all() as { pluginId: number; key: string }[];
+	const run = sqlite.transaction(() => {
+		for (const { id, manifest } of plugins) {
+			const defs = (JSON.parse(manifest) as { settings?: { key: string; type: string }[] }).settings ?? [];
+			for (const d of defs) if (d.type === 'secret') hideAuditedValue(sqlite, { pluginId: id, key: d.key });
+		}
+		for (const setting of flagged) hideAuditedValue(sqlite, setting);
+	});
+	run();
 }
 
 export interface SealOutcome {
@@ -198,8 +226,12 @@ export function sealDatabase(sqlite: Database, isNew = false): SealOutcome {
 	const outcome = sealRows(sqlite, true);
 	const version = (sqlite.query('PRAGMA user_version').get() as { user_version: number }).user_version;
 	if (version !== 1) {
-		if (isNew) sqlite.run('PRAGMA user_version = 1');
-		else removeResidue(sqlite, true);
+		if (isNew) {
+			sqlite.run('PRAGMA user_version = 1');
+		} else {
+			hideSecretHistory(sqlite);
+			removeResidue(sqlite, true);
+		}
 	}
 	if (outcome.unreadable.length) {
 		console.error(

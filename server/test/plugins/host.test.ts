@@ -290,7 +290,7 @@ describe('plugin operations', () => {
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.username).toBe('plugin.echo');
-		expect(body.settings.find((s: any) => s.key === 'apiKey')).toEqual({ key: 'apiKey', value: null, set: true, unreadable: false });
+		expect(body.settings.find((s: any) => s.key === 'apiKey')).toEqual({ key: 'apiKey', value: null, secret: true, set: true, unreadable: false });
 		expect(body.settings.find((s: any) => s.key === 'greeting').value).toBe('yo');
 		expect((await call('GET', '/plugins/nope')).status).toBe(404);
 	});
