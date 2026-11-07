@@ -457,6 +457,18 @@ describe('plugins.install', () => {
 		expect(hidden[0]).toMatchObject({ entity: 'plugin_setting', entityId: stored.id, actorUserId: 1, after: { earlierValues: '[redacted]' } });
 	});
 
+	test('an update that makes a setting secret has the next start clear the old value from the file', async () => {
+		const marker = () => (db.$client.query('PRAGMA user_version').get() as { user_version: number }).user_version;
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
+		const row = db.select().from(plugin).get()!;
+		insert(sys(), pluginSetting, { pluginId: row.id, key: 'token', value: 'was-visible', secret: false });
+		db.$client.run('PRAGMA user_version = 1');
+		await installSha(SHA2, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'text' }] }));
+		expect(marker()).toBe(1);
+		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }] }));
+		expect(marker()).toBe(0);
+	});
+
 	test('an update that stops calling a setting secret keeps it sealed and hidden', async () => {
 		await installSha(SHA1, 'HEAD', goodFiles({ settings: [{ key: 'token', label: 'Token', type: 'secret' }] }));
 		let row = db.select().from(plugin).get()!;

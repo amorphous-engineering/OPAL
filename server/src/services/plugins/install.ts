@@ -13,7 +13,7 @@ import { join, resolve, sep } from 'node:path';
 import { PLUGIN_USERNAME_PREFIX } from '../../auth/tokens.ts';
 import { actorUserId, type Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
-import { hideAuditedValue } from '../../db/seal-secrets.ts';
+import { hideAuditedValue, markOldBytes } from '../../db/seal-secrets.ts';
 import { apiToken, externalLink, passkeyCredential, plugin, pluginSetting, user } from '../../db/schema/index.ts';
 import { VERSION } from '../../version.ts';
 import { insert, remove as removeRow, update } from '../../write.ts';
@@ -222,6 +222,7 @@ function commitInstall(ctx: Ctx, src: ParsedSource, sha: string, dir: string): P
 				actorUserId: actorUserId(ctx.actor),
 				actorTokenId: ctx.actor.kind === 'token' ? ctx.actor.tokenId : null
 			});
+			markOldBytes(ctx.db.$client);
 		}
 	}
 	if (row.enabled) runtime().start(row.key).catch(() => {});

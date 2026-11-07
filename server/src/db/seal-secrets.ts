@@ -155,10 +155,15 @@ function sealRows(sqlite: Database, sealPlaintext: boolean): SealOutcome {
 				outcome.changed++;
 			}
 		}
-		if (outcome.changed) sqlite.run('PRAGMA user_version = 0');
+		if (outcome.changed) markOldBytes(sqlite);
 	});
 	run();
 	return outcome;
+}
+
+/** Inside the transaction that replaced a value: the next start removes what it left behind in the file. */
+export function markOldBytes(sqlite: Database): void {
+	sqlite.run('PRAGMA user_version = 0');
 }
 
 function removeResidue(sqlite: Database, inWal: boolean): void {
