@@ -9,7 +9,8 @@
  * Sealing a row does not remove the old value from the file. SQLite leaves it in freed space and in
  * the write-ahead log, so a rewrite ends with VACUUM and a truncated log. `user_version` records that
  * this finished, and a sealing transaction clears it, so a VACUUM that failed (a full disk) runs at
- * the next start instead of leaving the old bytes behind for good.
+ * the next start instead of leaving the old bytes behind for good. The secrets are sealed by then, so
+ * trouble with the leftovers is a warning and does not stop the server.
  */
 import { Database } from 'bun:sqlite';
 import { now } from '@opal/shared';
@@ -22,6 +23,25 @@ import { snapshotPaths } from './snapshot.ts';
 
 const hasTable = (sqlite: Database, name: string) =>
 	!!sqlite.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+
+/**
+ * Takes out the Onshape settings an earlier 1.x import brought along, API keys included. Onshape did not
+ * carry over and nothing here reads them, so this leaves such a database as a new import would.
+ * `opal.legacy.db` still has them. It covers any database this step opens, the copies too: no older
+ * version reads them either. The live database records it. A copy has no audience, and may have an older log.
+ */
+function removeOnshapeSettings(sqlite: Database, record: boolean): number {
+	if (!hasTable(sqlite, 'app_setting')) return 0;
+	const rows = sqlite.query(`DELETE FROM app_setting WHERE key LIKE 'onshape\\_%' ESCAPE '\\' RETURNING id, key`).all() as { id: number; key: string }[];
+	if (record) {
+		for (const { id, key } of rows) {
+			sqlite
+				.query(`INSERT INTO audit_log (at, entity, entity_id, action, op, "before", reason) VALUES (?, 'app_setting', ?, 'delete', 'secrets.seal', ?, ?)`)
+				.run(now(), id, JSON.stringify({ key, value: '[redacted]' }), 'A setting for an integration OPAL no longer has');
+		}
+	}
+	return rows.length;
+}
 
 interface Stored {
 	/** How the setting is named in a message. Holds no value. */
@@ -159,20 +179,23 @@ function hideSecretHistory(sqlite: Database): void {
 }
 
 export interface SealOutcome {
-	/** Rows written. */
+	/** Rows written or removed. */
 	changed: number;
+	/** Of those, settings no longer kept. */
+	removed: number;
 	/** Secrets no key opens. */
 	unreadable: string[];
 	/** Secrets in plaintext that were left that way. */
 	plaintext: number;
 }
 
-function sealRows(sqlite: Database, sealPlaintext: boolean): SealOutcome {
-	const outcome: SealOutcome = { changed: 0, unreadable: [], plaintext: 0 };
+function sealRows(sqlite: Database, sealPlaintext: boolean, live: boolean): SealOutcome {
+	const outcome: SealOutcome = { changed: 0, removed: 0, unreadable: [], plaintext: 0 };
 	const items = storedSecrets(sqlite);
-	if (!items.length) return outcome;
-	const keys = openingKeys();
+	const keys = items.length ? openingKeys() : [];
 	const run = sqlite.transaction(() => {
+		outcome.removed = removeOnshapeSettings(sqlite, live);
+		outcome.changed = outcome.removed;
 		for (const item of items) {
 			if (!item.sealed) {
 				if (!sealPlaintext) {
@@ -202,10 +225,27 @@ export function markOldBytes(sqlite: Database): void {
 	sqlite.run('PRAGMA user_version = 0');
 }
 
-function removeResidue(sqlite: Database, inWal: boolean): void {
+/** Whether it finished. The old bytes leave the main file with the checkpoint, and a reader can hold that back. */
+function removeResidue(sqlite: Database, inWal: boolean): boolean {
 	sqlite.run('VACUUM');
+	if (inWal && (sqlite.query('PRAGMA wal_checkpoint(TRUNCATE)').get() as { busy: number }).busy) return false;
 	sqlite.run('PRAGMA user_version = 1');
 	if (inWal) sqlite.run('PRAGMA wal_checkpoint(TRUNCATE)');
+	return true;
+}
+
+/** Whether old values may still be in the file, waiting for `scrubDatabase`. */
+export const scrubPending = (sqlite: Database) => (sqlite.query('PRAGMA user_version').get() as { user_version: number }).user_version !== 1;
+
+/** Clears what a rewrite left in the file. It needs room for a copy of the database, and may not get it. */
+export function scrubDatabase(sqlite: Database): void {
+	const later = 'Stored secrets are encrypted, but older values may stay in the database file until OPAL tries this again at the next start.';
+	try {
+		hideSecretHistory(sqlite);
+		if (!removeResidue(sqlite, true)) console.warn(`Another program had the database open while OPAL compacted it. ${later}`);
+	} catch (e) {
+		console.warn(`Could not compact the database: ${(e as Error).message}. Check the free disk space. ${later}`);
+	}
 }
 
 /**
@@ -221,17 +261,16 @@ export function holdsPlaintextSecret(sqlite: Database): boolean {
 	}
 }
 
-/** Seals a live database. A new one has nothing to scrub. */
-export function sealDatabase(sqlite: Database, isNew = false): SealOutcome {
-	const outcome = sealRows(sqlite, true);
-	const version = (sqlite.query('PRAGMA user_version').get() as { user_version: number }).user_version;
-	if (version !== 1) {
-		if (isNew) {
-			sqlite.run('PRAGMA user_version = 1');
-		} else {
-			hideSecretHistory(sqlite);
-			removeResidue(sqlite, true);
-		}
+/**
+ * Seals a live database. A new one has nothing to scrub. With `scrubLater`, the caller runs
+ * `scrubDatabase` itself, because a large file takes a while and the server has to answer first.
+ */
+export function sealDatabase(sqlite: Database, isNew = false, scrubLater = false): SealOutcome {
+	const outcome = sealRows(sqlite, true, true);
+	if (outcome.removed) console.log('Removed the Onshape settings and API keys a 1.x import brought along. OPAL does not use them, and opal.legacy.db still has them.');
+	if (scrubPending(sqlite)) {
+		if (isNew) sqlite.run('PRAGMA user_version = 1');
+		else if (!scrubLater) scrubDatabase(sqlite);
 	}
 	if (outcome.unreadable.length) {
 		console.error(
@@ -246,7 +285,7 @@ export function sealDatabase(sqlite: Database, isNew = false): SealOutcome {
 function sealCopy(path: string, sealPlaintext: boolean): SealOutcome {
 	const sqlite = new Database(path, { strict: true });
 	try {
-		const outcome = sealRows(sqlite, sealPlaintext);
+		const outcome = sealRows(sqlite, sealPlaintext, false);
 		if (outcome.changed) removeResidue(sqlite, false);
 		return outcome;
 	} finally {

@@ -7,7 +7,7 @@ import { addKeyToFile, authSettingScope, isSealed, KEY_FILE, keyFilePath, openSe
 import { rotateSecretsKey, rotationRefusal } from '../../src/commands/secrets.ts';
 import type { Ctx } from '../../src/context.ts';
 import { MIGRATIONS_DIR, openDb, type Db } from '../../src/db/client.ts';
-import { hideAuditedValue, holdsPlaintextSecret, sweepCopies } from '../../src/db/seal-secrets.ts';
+import { hideAuditedValue, holdsPlaintextSecret, scrubDatabase, scrubPending, sealDatabase, sweepCopies } from '../../src/db/seal-secrets.ts';
 import { auditLog, plugin, pluginSetting, user } from '../../src/db/schema/index.ts';
 import { hardenDataDir } from '../../src/harden.ts';
 import { oidcActive, readSettings, writeSetting } from '../../src/services/auth/settings.ts';
@@ -358,6 +358,122 @@ describe('upgrading an rc.24 database', () => {
 		odd.run('CREATE TABLE plugin_setting (id INTEGER PRIMARY KEY)');
 		expect(holdsPlaintextSecret(odd)).toBe(false);
 		odd.close();
+	});
+
+	test('a compaction that fails is a warning: the server opens, and the next start tries again', () => {
+		rc24Database();
+		openDb(path).$client.close();
+		class FullDisk extends Database {
+			override run(sql: string, ...rest: never[]) {
+				if (sql === 'VACUUM') throw new Error('database or disk is full');
+				return super.run(sql, ...rest);
+			}
+		}
+		const full = new FullDisk(path, { strict: true });
+		full.run('PRAGMA user_version = 0');
+		const warn = spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			expect(() => sealDatabase(full)).not.toThrow();
+			expect(warn.mock.calls.flat().join(' ')).toContain('database or disk is full');
+		} finally {
+			warn.mockRestore();
+		}
+		expect(scrubPending(full)).toBe(true);
+		full.close();
+		const db = openDb(path);
+		expect(readSettings(db).oidcClientSecret).toBe(OIDC);
+		expect(scrubPending(db.$client)).toBe(false);
+		db.$client.close();
+	});
+
+	test('the mark stays clear while another reader keeps the old bytes in the file', () => {
+		rc24Database();
+		openDb(path).$client.close();
+		const raw = new Database(path, { strict: true });
+		raw.run('UPDATE auth_setting SET updated_at = updated_at');
+		raw.run('PRAGMA user_version = 0');
+		raw.run('PRAGMA wal_checkpoint(TRUNCATE)');
+		const reader = new Database(path, { readonly: true });
+		reader.run('BEGIN');
+		reader.query('SELECT COUNT(*) FROM user').get();
+		const warn = spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			scrubDatabase(raw);
+			expect(warn).toHaveBeenCalled();
+		} finally {
+			warn.mockRestore();
+		}
+		expect(scrubPending(raw)).toBe(true);
+		reader.run('COMMIT');
+		reader.close();
+		scrubDatabase(raw);
+		expect(scrubPending(raw)).toBe(false);
+		raw.close();
+	});
+
+	test('a server can seal now and compact once it is answering', () => {
+		rc24Database();
+		const db = openDb(path, undefined, undefined, { scrubLater: true });
+		expect(readSettings(db).oidcClientSecret).toBe(OIDC);
+		const stored = db.$client.query("SELECT value FROM auth_setting WHERE key = 'oidc_client_secret'").get() as { value: string };
+		expect(isSealed(stored.value)).toBe(true);
+		expect(scrubPending(db.$client)).toBe(true);
+		scrubDatabase(db.$client);
+		expect(scrubPending(db.$client)).toBe(false);
+		db.$client.close();
+		expect(rawBytes()).not.toContain(OIDC);
+		expect(rawBytes()).not.toContain(OLD_OIDC);
+	});
+
+	test('a copy made by a process that was killed is not counted and does not last', () => {
+		rc24Database();
+		const unfinished = join(dir, 'opal.pre-migration-2020-01-01.db.tmp');
+		writeFileSync(unfinished, 'half a copy');
+		openDb(path).$client.close();
+		expect(existsSync(unfinished)).toBe(false);
+		expect(copies()).toHaveLength(1);
+		const copy = new Database(join(dir, copies()[0]!), { readonly: true });
+		expect(copy.query('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+		copy.close();
+	});
+
+	test('Onshape settings from an earlier 1.x import leave the file, and the audit log says so without the values', () => {
+		rc24Database();
+		const raw = new Database(path, { strict: true });
+		const keys = ['onshape_access_key', 'onshape_secret_key', 'onshape_webhook_secret'];
+		for (const key of keys) raw.run('INSERT INTO app_setting (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)', [key, `MARKER-${key}`, ts, ts]);
+		raw.run('INSERT INTO app_setting (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)', ['onshape_base_url', 'https://cad.example.com', ts, ts]);
+		raw.close();
+		const log = spyOn(console, 'log').mockImplementation(() => {});
+		const db = openDb(path);
+		log.mockRestore();
+		expect(db.$client.query("SELECT key FROM app_setting WHERE key LIKE 'onshape%'").all()).toEqual([]);
+		const rows = db.select().from(auditLog).all().filter((r) => r.entity === 'app_setting');
+		expect(rows).toHaveLength(4);
+		expect(rows.map((r) => (r.before as { key: string }).key).sort()).toEqual(['onshape_access_key', 'onshape_base_url', 'onshape_secret_key', 'onshape_webhook_secret']);
+		expect(rows[0]).toMatchObject({ action: 'delete', op: 'secrets.seal', before: { value: '[redacted]' } });
+		db.$client.close();
+		for (const key of keys) expect(rawBytes()).not.toContain(`MARKER-${key}`);
+	});
+
+	test('a copy from before the upgrade loses the Onshape settings too, and keeps what an older version reads', () => {
+		rc24Database();
+		const raw = new Database(path, { strict: true });
+		raw.run('INSERT INTO app_setting (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)', ['onshape_secret_key', 'MARKER-COPY', ts, ts]);
+		raw.close();
+		openDb(path).$client.close();
+		const copy = join(dir, copies()[0]!);
+		expect(sweepCopies(path)).toBe(true);
+		const bytes = readFileSync(copy).toString('latin1');
+		expect(bytes).not.toContain('MARKER-COPY');
+		expect(bytes).toContain(OIDC);
+	});
+
+	test('no copy is made when told none is needed, as right after an import', () => {
+		rc24Database();
+		openDb(path, undefined, () => null).$client.close();
+		expect(copies()).toEqual([]);
+		expect(rawBytes()).not.toContain(OIDC);
 	});
 
 	test('a scrub that did not finish runs at the next start', () => {

@@ -5,7 +5,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 ## Unreleased
 
 ### Added
-- **Stored secrets are encrypted.** The single sign-on client secret and plugin secrets are encrypted in the database with a key kept outside it: `.opal_secrets_key` in the data folder, or `OPAL_SECRETS_KEY`. Existing secrets are encrypted at the first start. Back up the key with the data, and see [Stored secrets and their key](README.md#stored-secrets-and-their-key) for what happens without it. `opal secrets rotate` changes the key. When a plugin update makes a setting secret, its earlier values are hidden in the audit log, and a new audit entry records that.
+- **Stored secrets are encrypted.** The single sign-on client secret and plugin secrets are encrypted in the database with a key kept outside it: `.opal_secrets_key` in the data folder, or `OPAL_SECRETS_KEY`. Existing secrets are encrypted at the first start. Back up the key with the data, and see [Stored secrets and their key](README.md#stored-secrets-and-their-key) for what happens without it. `opal secrets rotate` changes the key. When a plugin update makes a setting secret, its earlier values are hidden in the audit log, and a new audit entry records that. Onshape settings and API keys from a 1.x database are removed at the first start, since OPAL does not use them. `opal.legacy.db` still holds them.
 
 ## 2.0.0-beta.1
 

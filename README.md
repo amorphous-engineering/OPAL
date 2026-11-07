@@ -110,7 +110,7 @@ Before an update changes the database, OPAL copies it to `opal.pre-migration-<ti
 
 ### Stored secrets and their key
 
-OPAL encrypts the single sign-on client secret and plugin secrets in the database. A copy of `opal.db` on its own does not reveal them.
+OPAL encrypts the single sign-on client secret and plugin secrets in the database. A copy of `opal.db` on its own does not reveal them. Onshape settings and API keys from a 1.x database are not kept: OPAL does not use them, and it removes them at the first start of this version.
 
 The key is `.opal_secrets_key` in the data folder, made the first time a secret is saved. To keep it away from the data, set `OPAL_SECRETS_KEY` to at least 32 characters, for example from `openssl rand -hex 32`, and keep that value in your backups or password manager. A copy of the data folder is otherwise a copy of the database and its key together, so treat it as sensitive. The key does not protect against someone who can read the whole folder on the server, including a plugin. On Windows, file modes do not restrict the key file, so use the folder's own permissions.
 
@@ -121,7 +121,7 @@ The key is `.opal_secrets_key` in the data folder, made the first time a secret 
 - **Factory reset:** deletes the file with the database and makes a new key for the next secret. `OPAL_SECRETS_KEY` stays as you set it.
 - **Secrets set by environment variable:** `OPAL_OIDC_CLIENT_SECRET` stays in the environment and is never written to the database. A secret saved in Settings takes its place.
 
-**Older files in the data folder still hold secrets in plaintext.** The copy taken when you first upgrade to this version keeps them, because an older version cannot read an encrypted value. OPAL names these `opal.pre-migration-*.db` files at each start. Delete them when you no longer need to go back that far. `opal.legacy.db`, left by a 1.x import, holds them too, as do any backups made before this version.
+**Older files in the data folder still hold secrets in plaintext.** The copy taken when you first upgrade to this version keeps them, because an older version cannot read an encrypted value. OPAL names these `opal.pre-migration-*.db` files at each start. Delete them when you no longer need to go back that far. `opal.legacy.db`, left by a 1.x import, holds them too, along with any Onshape API keys, as do any backups made before this version.
 
 ## Connect Claude Code (MCP)
 
