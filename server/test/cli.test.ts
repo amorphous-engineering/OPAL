@@ -27,6 +27,7 @@ describe('what the command line asks for', () => {
 		expect(parseCommand(['--port', '9000', '--no-browser'])).toEqual({ kind: 'run', command: 'supervise', args: ['--port', '9000', '--no-browser'] });
 		expect(parseCommand(['serve', '--host', '127.0.0.1'])).toEqual({ kind: 'run', command: 'serve', args: ['--host', '127.0.0.1'] });
 		expect(parseCommand(['import', 'old.db', '--out', 'dir'])).toEqual({ kind: 'run', command: 'import', args: ['old.db', '--out', 'dir'] });
+		expect(parseCommand(['import', 'old.db', '--project', 'p.yaml', '--attachments', 'a'])).toEqual({ kind: 'run', command: 'import', args: ['old.db', '--project', 'p.yaml', '--attachments', 'a'] });
 		expect(parseCommand(['--version'])).toEqual({ kind: 'run', command: 'version', args: [] });
 		expect(parseCommand(['-v'])).toEqual({ kind: 'run', command: 'version', args: [] });
 	});

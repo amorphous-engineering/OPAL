@@ -4,7 +4,7 @@
 const FLAGS: Record<string, Record<string, boolean>> = {
 	supervise: { 'control-port': true, 'no-browser': false, port: true, host: true },
 	serve: { port: true, host: true },
-	import: { out: true, project: true },
+	import: { out: true, project: true, attachments: true },
 	backup: { keep: true },
 	restore: {},
 	secrets: {},
@@ -24,6 +24,7 @@ export const USAGE = `Usage: opal [command] [flags]
   opal import <file>      Import a 1.x database
       --out <folder>      Where to write the result
       --project <file>    The opal.project.yaml, if OPAL cannot find it
+      --attachments <dir> The 1.x attachments folder, if OPAL cannot find it
   opal backup <folder>    Write a backup into a new subfolder, while OPAL runs or not
       --keep <n>          Then remove older finished backups beyond the newest n
   opal restore <backup>   Restore a backup into an empty data folder
