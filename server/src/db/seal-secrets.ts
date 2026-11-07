@@ -16,7 +16,7 @@ import { Database } from 'bun:sqlite';
 import { now } from '@opal/shared';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { authSettingScope, isSealed, openSealed, openingKeys, pluginSettingScope, seal } from '../auth/sealed.ts';
+import { authSettingScope, isSealed, openSealed, openingKeys, opensWith, pluginSettingScope, seal } from '../auth/sealed.ts';
 import { DEMO_PREFIX } from '../paths.ts';
 import { SECRET_AUTH_SETTINGS } from './schema/auth.ts';
 import { snapshotPaths } from './snapshot.ts';
@@ -98,11 +98,10 @@ function storedSecrets(sqlite: Database): Stored[] {
 	return out;
 }
 
-/** The stored secrets no key here opens, named for a message. */
-export function unreadableSecrets(sqlite: Database): string[] {
-	const keys = openingKeys();
+/** The stored secrets none of these keys opens, named for a message. */
+export function unreadableSecrets(sqlite: Database, keys = openingKeys()): string[] {
 	return storedSecrets(sqlite)
-		.filter((s) => s.sealed && !openSealed(s.text, s.scope, keys))
+		.filter((s) => s.sealed && !opensWith(s.text, s.scope, keys))
 		.map((s) => s.label);
 }
 

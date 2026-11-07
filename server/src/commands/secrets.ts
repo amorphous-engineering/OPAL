@@ -1,6 +1,7 @@
 /**
  * `opal secrets rotate`: replace the key in the key file and reseal everything with the new one.
- * Stop OPAL first. If this stops partway, the file keeps both keys, nothing becomes unreadable, and
+ * Stop OPAL and any backup first: a backup that copies the database before this and the key file after
+ * it holds a key that opens nothing in it. If this stops partway, the file keeps both keys, nothing becomes unreadable, and
  * running it again finishes the job.
  */
 import { Database } from 'bun:sqlite';

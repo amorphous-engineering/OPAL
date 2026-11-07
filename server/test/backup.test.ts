@@ -24,7 +24,7 @@ import { authSettingScope, KEY_FILE, readStored, seal } from '../src/auth/sealed
 import { authSecret } from '../src/auth/signing.ts';
 import type { Actor } from '../src/context.ts';
 import { openDb, type Db } from '../src/db/client.ts';
-import { blob, part, user, userProfile } from '../src/db/schema/index.ts';
+import { authSetting, blob, part, user, userProfile } from '../src/db/schema/index.ts';
 import { assertNoUnfinishedRestore, RESTORE_MARKER, restoreBackup, takeBackup, verifyBackup } from '../src/services/platform/backup.ts';
 import { createTestProject } from './helpers/project.ts';
 
@@ -312,6 +312,105 @@ describe('a backup restores to a working instance', () => {
 		expect(existsSync(join(to, 'avatars', 'b'.repeat(64)))).toBe(false);
 		expect(readFileSync(join(to, 'plugins', 'lamp', 'abc123', 'main.js'), 'utf8')).toBe('code');
 		expect(readFileSync(join(to, 'plugin-data', 'lamp', 'state.json'), 'utf8')).toBe('{}');
+	});
+});
+
+describe('a backup says whether its keys open its secrets', () => {
+	const keepKey = (fn: () => Promise<void>) => async () => {
+		const pinned = process.env.OPAL_SECRETS_KEY;
+		delete process.env.OPAL_SECRETS_KEY;
+		try {
+			await fn();
+		} finally {
+			process.env.OPAL_SECRETS_KEY = pinned;
+		}
+	};
+	const storeSecret = (i: Instance) => {
+		const ts = now();
+		i.db.insert(authSetting).values({ key: 'oidc_client_secret', value: seal('the client secret', authSettingScope('oidc_client_secret')), createdAt: ts, updatedAt: ts }).run();
+	};
+
+	test(
+		'with the key file in the backup, the secrets open and it says the keys are included',
+		keepKey(async () => {
+			const i = await small();
+			storeSecret(i);
+			i.close();
+			const parent = join(tempDir(), 'b');
+			const r = takeBackup(parent);
+			expect(r.secretsOpen).toBe(true);
+			expect(r.warnings.join(' ')).not.toContain('oidc_client_secret');
+			const cli_ = await runCli(['backup', parent], { OPAL_DATA_DIR: i.dir, OPAL_SECRETS_KEY: '' });
+			expect(cli_.code).toBe(0);
+			expect(cli_.out).toContain('database and its keys together');
+		})
+	);
+
+	test(
+		'a secret sealed with a key in the server environment only is named, and the keys are not claimed',
+		keepKey(async () => {
+			const i = await small();
+			process.env.OPAL_SECRETS_KEY = 'a-key-only-the-server-unit-has-0123456789';
+			storeSecret(i);
+			delete process.env.OPAL_SECRETS_KEY;
+			i.close();
+			const parent = join(tempDir(), 'b');
+			const r = takeBackup(parent);
+			expect(r.secretsOpen).toBe(false);
+			expect(r.warnings.join(' ')).toContain('will need entering again after a restore: oidc_client_secret');
+			expect(existsSync(join(i.dir, KEY_FILE))).toBe(false);
+
+			const cli_ = await runCli(['backup', parent], { OPAL_DATA_DIR: i.dir, OPAL_SECRETS_KEY: '' });
+			expect(cli_.code).toBe(0);
+			expect(cli_.out).not.toContain('keys together');
+			expect(cli_.err).toContain('oidc_client_secret');
+		})
+	);
+
+	test(
+		'a key in the environment of the backup itself does not count, because it is not in the backup',
+		keepKey(async () => {
+			const i = await small();
+			process.env.OPAL_SECRETS_KEY = 'a-key-only-the-server-unit-has-0123456789';
+			storeSecret(i);
+			i.close();
+			const r = takeBackup(join(tempDir(), 'b'));
+			expect(r.secretsOpen).toBe(false);
+			expect(r.warnings.join(' ')).toContain('oidc_client_secret');
+		})
+	);
+
+	test(
+		'a key file that no longer opens what the copy holds is caught, as after a rotation during the backup',
+		keepKey(async () => {
+			const i = await small();
+			storeSecret(i);
+			i.close();
+			writeFileSync(join(i.dir, KEY_FILE), `${'n'.repeat(64)}\n`);
+			const r = takeBackup(join(tempDir(), 'b'));
+			expect(r.secretsOpen).toBe(false);
+			expect(r.warnings.join(' ')).toContain('oidc_client_secret');
+		})
+	);
+
+	test(
+		'checking leaves the live database and the key file as they were',
+		keepKey(async () => {
+			const i = await small();
+			storeSecret(i);
+			i.close();
+			const before = [sha256(join(i.dir, 'opal.db')), sha256(join(i.dir, KEY_FILE))];
+			takeBackup(join(tempDir(), 'b'));
+			expect([sha256(join(i.dir, 'opal.db')), sha256(join(i.dir, KEY_FILE))]).toEqual(before);
+		})
+	);
+
+	test('with no stored secret there is nothing to warn about', async () => {
+		const i = await small();
+		i.close();
+		const r = takeBackup(join(tempDir(), 'b'));
+		expect(r.secretsOpen).toBe(true);
+		expect(r.warnings.join(' ')).not.toContain('entering again');
 	});
 });
 

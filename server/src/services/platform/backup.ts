@@ -46,7 +46,9 @@ import {
 	writeSync
 } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
+import { KEY_FILE as SECRETS_KEY_FILE, keysInFile } from '../../auth/sealed.ts';
 import { lastApplied, migrationFiles } from '../../db/client.ts';
+import { unreadableSecrets } from '../../db/seal-secrets.ts';
 import { hardenDataDir } from '../../harden.ts';
 import { dataDir, dbPath } from '../../paths.ts';
 import { VERSION } from '../../version.ts';
@@ -235,8 +237,31 @@ function walk(root: string, links: string[]): string[] {
 
 const toManifestPath = (rel: string) => rel.split(sep).join('/');
 
+/**
+ * Whether the keys that went into the backup open what went into it. They may not: a key in the
+ * environment is left out, and a rotation between the database copy and the key copy leaves the new key
+ * beside values sealed with the old one. It reads only the copies, because a restore has only those.
+ */
+function secretsOpen(work: string, warnings: string[]): boolean {
+	let sqlite: Database | undefined;
+	try {
+		const keys = keysInFile(join(work, SECRETS_KEY_FILE));
+		sqlite = new Database(join(work, DB_FILE), { readonly: true, strict: true });
+		const unreadable = unreadableSecrets(sqlite, keys);
+		if (unreadable.length) {
+			warnings.push(`These stored secrets do not open with the keys in this backup, so they will need entering again after a restore: ${list(unreadable)}. The key that opens them is not in the backup: it may be OPAL_SECRETS_KEY, or the key file changed during this backup.`);
+		}
+		return !unreadable.length;
+	} catch (e) {
+		warnings.push(`Could not check that the stored secrets open with the keys in this backup: ${(e as Error).message}`);
+		return false;
+	} finally {
+		sqlite?.close();
+	}
+}
+
 /** Fills `work` and returns what the manifest records. Throws when the copy is not complete and sound. */
-function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 'counts' | 'files'> {
+function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 'counts' | 'files'> & { secretsOpen: boolean } {
 	const files: Record<string, string> = {};
 	const copyDb = join(work, DB_FILE);
 	const copy = (from: string, rel: string) => {
@@ -313,6 +338,8 @@ function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 
 		}
 	}
 
+	const opens = secretsOpen(work, warnings);
+
 	let pluginFiles = 0;
 	const links: string[] = [];
 	const unportable: string[] = [];
@@ -341,6 +368,7 @@ function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 
 	files[DB_FILE] = hashFile(copyDb, true);
 	return {
 		files,
+		secretsOpen: opens,
 		counts: {
 			databaseBytes: statSync(copyDb).size,
 			attachments: blobs.length,
@@ -421,6 +449,8 @@ function prune(parent: string, keep: number, written: string, warnings: string[]
 export interface BackupResult {
 	path: string;
 	counts: Counts;
+	/** Every stored secret in this backup opens with the keys in this backup. */
+	secretsOpen: boolean;
 	removed: string[];
 	unfinished: string[];
 	warnings: string[];
@@ -441,9 +471,11 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 		const warnings: string[] = [];
 		mkdirSync(work, { mode: 0o700 });
 		let counts: Counts;
+		let opens: boolean;
 		try {
 			const filled = fill(work, source, warnings);
 			counts = filled.counts;
+			opens = filled.secretsOpen;
 			const manifest: Manifest = {
 				format: FORMAT,
 				formatVersion: FORMAT_VERSION,
@@ -473,7 +505,7 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 			throw e;
 		}
 		const removed = opts.keep === undefined ? [] : prune(parent, opts.keep, name, warnings);
-		return { path: final, counts, removed, unfinished: backupFolders(parent).unfinished, warnings };
+		return { path: final, counts, secretsOpen: opens, removed, unfinished: backupFolders(parent).unfinished, warnings };
 	} finally {
 		if (umask !== undefined) process.umask(umask);
 	}

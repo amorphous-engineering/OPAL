@@ -40,8 +40,8 @@ export function pinKeyFolder(dir: string | undefined): void {
 
 export const keyFilePath = () => join(pinnedFolder ?? dataDir(), KEY_FILE);
 
-function fileKeys(): string[] {
-	const path = keyFilePath();
+/** The keys in a key file, the sealing key first. None when there is no file. */
+export function keysInFile(path: string): string[] {
 	let text: string;
 	try {
 		text = readFileSync(path, 'utf8');
@@ -55,6 +55,8 @@ function fileKeys(): string[] {
 	}
 	return lines;
 }
+
+const fileKeys = () => keysInFile(keyFilePath());
 
 function envKey(name: 'OPAL_SECRETS_KEY' | 'OPAL_SECRETS_KEY_PREVIOUS'): string | undefined {
 	const value = process.env[name]?.trim();
@@ -169,6 +171,9 @@ function openWith(material: string, sealed: string, scope: string): string | nul
 		return null;
 	}
 }
+
+/** Whether one of these keys opens the value. Asks nothing of the key file or the environment. */
+export const opensWith = (sealed: string, scope: string, keys: string[]) => keys.some((key) => openWith(key, sealed, scope) !== null);
 
 /** The plain value and whether it was sealed with the key in charge, or null when no key opens it. */
 export function openSealed(sealed: string, scope: string, keys = openingKeys()): { plain: string; current: boolean } | null {
