@@ -532,10 +532,8 @@ describe('--keep', () => {
 	test('a number that is not a whole number of at least 1 is refused before anything happens', async () => {
 		const i = await small();
 		const parent = join(tempDir(), 'b');
-		for (const keep of ['0', '-1', '1.5', 'all']) {
-			const r = await runCli(['backup', parent, '--keep', keep], { OPAL_DATA_DIR: i.dir });
-			expect(r.code).toBe(2);
-		}
+		const runs = await Promise.all(['0', '-1', '1.5', 'all'].map((keep) => runCli(['backup', parent, '--keep', keep], { OPAL_DATA_DIR: i.dir })));
+		expect(runs.map((r) => r.code)).toEqual([2, 2, 2, 2]);
 		i.close();
 		expect(existsSync(parent)).toBe(false);
 	}, 120_000);
