@@ -18,6 +18,7 @@ import { user } from '../src/db/schema/index.ts';
 import { bridgeToHead, canBridge, RELEASED_HEADS } from '../src/import/bridge.ts';
 import { checkSource, importInPlace, importLegacy, LEGACY_HEAD, OLD_VERSION_MESSAGE, openSchemaImportDb, renderReport, reportSummary } from '../src/import/index.ts';
 import { firstAdminClaimLinks } from '../src/services/auth/claim.ts';
+import { blobIsHeld, purgeOrphanBlobs } from '../src/services/platform/attachments.ts';
 import { numbersFor } from '../src/services/org/project.ts';
 import { buildLegacyFixture } from './fixtures/legacy-data.ts';
 
@@ -250,6 +251,64 @@ describe('what someone signed', () => {
 	});
 });
 
+describe('a file with no owner', () => {
+	// v1.2.8 attachment 2 is a template drawing, which had no owner before 1.3.
+	const stepsOf = (db: Database) => (db.query('SELECT id FROM procedure_step ORDER BY id').all() as { id: number }[]).map((r) => r.id);
+
+	test('belongs to the first step whose text links it, and the link still opens', async () => {
+		const d = tmp();
+		const src = unpack('v1.2.8', d);
+		const old = new Database(src);
+		const [first, second] = stepsOf(old);
+		for (const step of [first!, second!]) old.query('UPDATE procedure_step SET instructions = ? WHERE id = ?').run('See ![drawing](/api/attachments/2/download)', step);
+		old.close();
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.tables.attachment).toMatchObject({ read: 2, imported: 2 });
+		expect(report.tables.attachment!.leftOut ?? 0).toBe(0);
+		expect(report.warnings.some((w) => w.includes('attachment 2') && w.includes(`linked to step ${first}`))).toBe(true);
+		const out = new Database(src, { readonly: true });
+		expect(out.query('SELECT owner_type, owner_id, kind FROM attachment WHERE id = 2').get()).toEqual({ owner_type: 'procedure_step', owner_id: first!, kind: 'inline' });
+		expect(out.query("SELECT COUNT(*) AS n FROM legacy_row WHERE table_name = 'attachment'").get()).toEqual({ n: 0 });
+		out.close();
+		// The download route finds the file through the data folder.
+		const before = process.env.OPAL_DATA_DIR;
+		process.env.OPAL_DATA_DIR = d;
+		try {
+			expect((await openEveryRecord(src, ['/attachments/2/download'])).refused).toEqual([]);
+		} finally {
+			process.env.OPAL_DATA_DIR = before;
+		}
+	});
+
+	test('nothing links to is still kept after the sweep that removes what nothing names', async () => {
+		const d = tmp();
+		const src = unpack('v1.2.8', d);
+		const report = (await importInPlace(src, { open }))!;
+		expect(report.warnings.some((w) => w.includes('attachment 2') && w.includes('nothing links to it'))).toBe(true);
+		const db = await open(src);
+		const kept = db.$client.query("SELECT json_extract(data, '$.blob_sha256') AS sha FROM legacy_row WHERE table_name = 'attachment'").get() as { sha: string };
+		expect(kept.sha).toMatch(/^[0-9a-f]{64}$/);
+		// A blob nothing names, to show the sweep would take one.
+		db.$client.query('INSERT INTO blob (sha256, size_bytes, mime_type, created_at) VALUES (?, 1, ?, ?)').run('0'.repeat(64), 'text/plain', '2020-01-01T00:00:00.000Z');
+		expect(await purgeOrphanBlobs(db, [blobIsHeld(db)], 0)).toBe(1);
+		expect(db.$client.query('SELECT sha256 FROM blob WHERE sha256 = ?').get(kept.sha)).toEqual({ sha256: kept.sha });
+		db.$client.close();
+		expect(existsSync(join(d, 'blobs', kept.sha))).toBe(true);
+	});
+
+	test('a file a step names is not left to the sweep either', async () => {
+		const d = tmp();
+		const src = unpack('v1.2.8', d);
+		const old = new Database(src);
+		old.query('UPDATE procedure_step SET instructions = ? WHERE id = ?').run('See ![drawing](/api/attachments/2/download)', stepsOf(old)[0]!);
+		old.close();
+		await importInPlace(src, { open });
+		const db = await open(src);
+		expect(await purgeOrphanBlobs(db, [blobIsHeld(db)], 0)).toBe(0);
+		db.$client.close();
+	});
+});
+
 describe('odd values a record has to open with', () => {
 	test('a dataset with no fields, captured data that is a list and a callout of another kind all open', async () => {
 		const d = tmp();
@@ -461,7 +520,7 @@ describe.each(RELEASES.map(([name]) => name))('importing %s', (name) => {
 
 	test('copies attachment files, and carries the project name', async () => {
 		const report = (await reportPromise)!;
-		// Before 1.3 a template's drawing has no owner. Its file is stored and its row kept in legacy_row.
+		// Before 1.3 a template's drawing has no owner. With no step linking it, its file is stored and its row kept in legacy_row.
 		expect(report.tables.attachment!.imported + (report.tables.attachment!.leftOut ?? 0)).toBe(sourceCount('attachment'));
 		expect(readdirSync(join(dir, 'blobs')).length).toBe(sourceCount('attachment'));
 		const out = new Database(join(dir, 'opal.db'), { readonly: true });

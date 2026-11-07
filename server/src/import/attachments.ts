@@ -32,6 +32,20 @@ const COLS = [
 /** Legacy attachment id to its blob. Used to rewrite snapshot links. */
 export type BlobMap = Map<number, BlobInfo>;
 
+/** How step text links a file while it has an attachment row. */
+export const INLINE_LINK = /\/api\/attachments\/(\d+)\/download/g;
+
+/** Each attachment id a step's text links to, with the first step that does. */
+function linkedFromStepText(c: ImportCtx): Map<number, number> {
+	const linked = new Map<number, number>();
+	for (const r of c.src.query('SELECT id, instructions FROM procedure_step WHERE instructions IS NOT NULL ORDER BY id').all() as Row[]) {
+		for (const [, id] of String(r.instructions).matchAll(INLINE_LINK)) {
+			if (!linked.has(Number(id))) linked.set(Number(id), Number(r.id));
+		}
+	}
+	return linked;
+}
+
 export function importAttachments(c: ImportCtx): BlobMap {
 	const rows = readTable(c, 'attachment', COLS);
 	const map: BlobMap = new Map();
@@ -40,6 +54,8 @@ export function importAttachments(c: ImportCtx): BlobMap {
 	for (const r of c.src.query('SELECT attachment_id, step_id FROM step_image ORDER BY id').all() as Row[]) {
 		if (!stepImage.has(Number(r.attachment_id))) stepImage.set(Number(r.attachment_id), Number(r.step_id));
 	}
+
+	const inText = linkedFromStepText(c);
 
 	const blobs = new Map<string, { size: number; mime: string; at: string }>();
 	const links: Record<string, unknown>[] = [];
@@ -79,9 +95,16 @@ export function importAttachments(c: ImportCtx): BlobMap {
 		else if (r.issue_id) owner = { type: OWNER.issue, id: Number(r.issue_id) };
 		else if (r.procedure_id) owner = { type: OWNER.procedure, id: Number(r.procedure_id) };
 		else if (r.purchase_id) owner = { type: OWNER.purchase, id: Number(r.purchase_id) };
+		else if (inText.has(id)) {
+			// Before 1.3 a template's drawing had no owner, and only the step text said where it belonged.
+			owner = { type: OWNER.procedureStep, id: inText.get(id)! };
+			kind = 'inline';
+			warn(c, `attachment ${id} ${filename}: no owner, linked to step ${owner.id}, whose text shows it`);
+		}
 		if (!owner) {
-			warn(c, `attachment ${id} ${filename}: no owner, file stored but not linked`);
-			leaveInLegacyRow(c, 'attachment', r, 'no owner');
+			warn(c, `attachment ${id} ${filename}: no owner and nothing links to it. The file is kept, and nothing on screen shows it`);
+			// The hash is what keeps the file: the blob sweep reads this table and removes what nothing names.
+			leaveInLegacyRow(c, 'attachment', { ...r, blob_sha256: sha }, 'no owner');
 			continue;
 		}
 		links.push({

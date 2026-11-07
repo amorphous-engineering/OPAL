@@ -14,7 +14,7 @@ import {
 } from '../db/schema/index.ts';
 import { type LegacyContent, snapshotFromLegacy } from '../services/procedures/snapshot.ts';
 import { effectiveSignoffs } from '../services/procedures/signoffs.ts';
-import { type BlobMap } from './attachments.ts';
+import { type BlobMap, INLINE_LINK } from './attachments.ts';
 import { captureFieldsFrom } from './capture-fields.ts';
 import {
 	type ImportCtx,
@@ -36,8 +36,6 @@ import {
 	tsReq,
 	warn
 } from './context.ts';
-
-const INLINE_LINK = /\/api\/attachments\/(\d+)\/download/g;
 
 /** Far above any step id AUTOINCREMENT will reach, so it never names a later draft step. */
 const NO_LIVE_STEP = 1_000_000_000;
