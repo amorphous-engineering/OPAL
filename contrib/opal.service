@@ -1,0 +1,43 @@
+# OPAL as a systemd user service: no root needed, and it runs as the person who installed OPAL.
+#
+#   cp contrib/opal.service contrib/opal-backup.service contrib/opal-backup.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now opal.service opal-backup.timer
+#   loginctl enable-linger "$USER"     # keeps both running after you log out
+#
+# Assumes the installer's paths: the program in ~/.local/bin and the data in ~/.local/share/opal.
+# This runs `opal serve`, without the control page, so an update is `opal update` then a restart.
+[Unit]
+Description=OPAL
+
+[Service]
+Environment=OPAL_DATA_DIR=%h/.local/share/opal
+# The rules below mount the home folder read-only, and a missing writable path stops the start.
+# "+" runs this one line outside those rules.
+ExecStartPre=+/usr/bin/mkdir -p -m 0700 %h/.local/share/opal
+ExecStart=%h/.local/bin/opal serve
+Restart=on-failure
+RestartSec=5
+
+# Hardening. Do not add MemoryDenyWriteExecute: Bun's JavaScript engine compiles code at run time.
+# ProtectHome stays read-only, not yes, because the program and the data are both under home.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/opal
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=default.target

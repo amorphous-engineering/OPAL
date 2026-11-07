@@ -14,12 +14,19 @@ import { hardenDataDir } from '../harden.ts';
 import { serialized } from '../registry.ts';
 import { versionHoldsBlob } from '../services/procedures/versions.ts';
 import { startBlobSweeper } from '../services/platform/attachments.ts';
+import { assertNoUnfinishedRestore } from '../services/platform/backup.ts';
 import { flag } from './args.ts';
 
 export async function serve(args: string[]): Promise<void> {
 	// Before the folder or any file in it is created.
 	hardenDataDir();
 	mkdirSync(dataDir(), { recursive: true });
+	try {
+		assertNoUnfinishedRestore();
+	} catch (e) {
+		console.error((e as Error).message);
+		process.exit(1);
+	}
 	// A Python-era database is imported once; the old file is kept as opal.legacy.db.
 	let report: Awaited<ReturnType<typeof importInPlace>>;
 	try {

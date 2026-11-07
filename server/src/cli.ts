@@ -2,6 +2,7 @@
 // The passkey library's X.509 code (tsyringe) needs this polyfill before it loads.
 // The compiled binary loads modules in bundle order, so it must come first.
 import 'reflect-metadata';
+import { backup, restore } from './commands/backup.ts';
 import { importLegacy } from './commands/import.ts';
 import { parseCommand, USAGE } from './commands/parse.ts';
 import { serve } from './commands/serve.ts';
@@ -13,6 +14,8 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
 	supervise,
 	serve,
 	import: importLegacy,
+	backup,
+	restore,
 	update,
 	version: () => console.log(VERSION)
 };

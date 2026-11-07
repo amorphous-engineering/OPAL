@@ -65,7 +65,7 @@ Installing a plugin gives it shell-level access to this computer. To turn plugin
 
 ## Back up your data
 
-OPAL has no scheduled backups. Stop OPAL and copy the whole data folder:
+OPAL keeps its data in one folder:
 
 | System | Data folder |
 |---|---|
@@ -74,6 +74,39 @@ OPAL has no scheduled backups. Stop OPAL and copy the whole data folder:
 | Windows | `%LOCALAPPDATA%\OPAL` |
 
 `OPAL_DATA_DIR` replaces this folder if you set it.
+
+To back up, while OPAL runs or not:
+
+```bash
+opal backup /mnt/other-disk/opal-backups --keep 14
+```
+
+This writes a new subfolder and prints its path. It keeps the newest 14 backups in that folder and removes no other files. If it cannot write a complete backup, it says why and exits non-zero.
+
+A backup contains your password hashes, key files and every record, so keep it as private as the data folder. A backup on the same disk is not a backup: if the disk fails you lose both. Copy it to another machine.
+
+To restore, into an empty data folder:
+
+```bash
+OPAL_DATA_DIR=~/.local/share/opal-restored opal restore /mnt/other-disk/opal-backups/opal-backup-2026-11-06T02-30-00-000Z
+OPAL_DATA_DIR=~/.local/share/opal-restored opal serve
+```
+
+Restore refuses a folder that already has anything in it. To go back to a backup in the same place, stop OPAL and move the old folder aside first. Try a restore once before you need one.
+
+### Back up every night on Linux
+
+`contrib/` in the repository has systemd user units. `opal.service` runs OPAL. `opal-backup.timer` backs it up at about 02:30 and keeps 14. Edit `opal-backup.service` first: it writes to `~/opal-backups`, which you should change to another disk everywhere the file names it.
+
+```bash
+mkdir -p ~/.config/systemd/user ~/opal-backups
+cp contrib/opal.service contrib/opal-backup.service contrib/opal-backup.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now opal.service opal-backup.timer
+loginctl enable-linger "$USER"
+```
+
+Without `enable-linger`, OPAL and the timer stop when you log out. To check the last backup, run `systemctl --user status opal-backup.service`. A failed backup shows as failed there, and `journalctl --user -u opal-backup.service` says why. Nothing else tells you, so look now and then.
 
 ## Update
 

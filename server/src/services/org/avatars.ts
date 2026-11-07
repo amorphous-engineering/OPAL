@@ -26,7 +26,7 @@ import { assertStorageAvailable } from '../platform/attachments.ts';
 import { fetchChecked, issuerPolicy, type OutboundPolicy } from '../platform/outbound.ts';
 import { upsertProfile } from './profiles.ts';
 
-const avatarDir = () => join(dataDir(), 'avatars');
+export const avatarDir = () => join(dataDir(), 'avatars');
 
 /** The mime type of PNG/JPEG/WebP/GIF bytes, from the magic number. */
 export function sniffImage(d: Uint8Array): (typeof AVATAR_TYPES)[number] | null {

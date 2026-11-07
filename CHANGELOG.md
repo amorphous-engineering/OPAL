@@ -2,6 +2,13 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
+## Unreleased
+
+### Added
+- **`opal backup <folder> [--keep <n>]`.** Writes a checked backup while OPAL runs: the database, attachments, avatars, plugins and key files. A backup holds secrets, and its files are owner-only.
+- **`opal restore <backup-folder>`.** Restores into an empty data folder, and refuses a folder with anything in it or an incomplete backup.
+- **systemd user units in `contrib/`.** `opal.service` runs `opal serve`, and `opal-backup.timer` backs up nightly and keeps 14.
+
 ## 2.0.0-beta.1
 
 OPAL 2 is a rewrite in TypeScript: one Bun binary, one SQLite file. The Python 1.x backend is gone, and

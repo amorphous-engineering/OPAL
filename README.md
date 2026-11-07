@@ -104,7 +104,17 @@ This beta cannot import a 1.x database yet. If it finds one in the data folder i
 
 ### Back up and roll back
 
-OPAL has no scheduled backups. To back up, stop OPAL and copy the whole data folder.
+`opal backup <folder>` writes a backup into a new subfolder of `<folder>`, named by the time. OPAL can keep running and keeps taking writes while it does. `--keep <n>` then removes older finished backups beyond the newest `n`, and removes nothing else.
+
+A backup holds a copy of the database, the attachments and avatars the database names, installed plugins and their data, and the key files in the data folder. It leaves out the demo database, the `opal.pre-migration-*` copies and `opal.legacy.db`. A plugin's data is copied as it stands, not from one moment as the database is. A key or secret set by an environment variable, such as `OPAL_AUTH_SECRET`, is not in the backup, so keep it somewhere else. Neither is a plugin installed from a local folder.
+
+The command checks the copy before it names the backup finished: SQLite's integrity check on the database, and that every attachment file is present and matches its hash. If a check fails it prints what failed, exits non-zero, removes the unfinished copy and leaves older backups alone. A missing attachment file stops the backup every time until the file is put back, because it is damage to the live data. A missing avatar only warns. A backup that was interrupted stays as a folder ending in `.partial`. It is never counted, restored or removed for you, so delete it yourself.
+
+**A backup contains secrets.** It holds password hashes, the key files and everything in your records, so its folder and files are owner-only. Treat it like the data folder itself. **A backup on the same disk is not a backup.** Copy it to another machine, or point `<folder>` at another disk.
+
+`opal restore <backup-folder>` restores into the data folder (`OPAL_DATA_DIR`, or the default). It refuses a folder that already has a database or anything else in it, and there is no flag to override that. It refuses a backup that is incomplete or changed since it was written, and one made by a newer version than the program restoring it. If it stops partway, OPAL will not start on that folder until you run the same command again. Anything recorded after the backup was taken is not in it.
+
+`contrib/` has systemd user units: `opal.service` runs `opal serve`, and `opal-backup.timer` backs up nightly and keeps 14. The [quickstart](QUICKSTART.md#back-up-your-data) shows how to install them.
 
 Before an update changes the database, OPAL copies it to `opal.pre-migration-<time>.db` in the data folder and keeps the newest three. The [quickstart](QUICKSTART.md#go-back-after-a-bad-update) shows how to go back.
 

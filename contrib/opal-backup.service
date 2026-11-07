@@ -1,0 +1,36 @@
+# One backup, started by opal-backup.timer. See opal.service for how to install these.
+#
+# Change %h/opal-backups to a folder on another disk, on all three lines that name it. A backup on the
+# same disk as the data is lost with it. A backup holds secrets, so keep the folder private.
+#
+# See the last run with: systemctl --user status opal-backup.service
+[Unit]
+Description=OPAL backup
+
+[Service]
+Type=oneshot
+Environment=OPAL_DATA_DIR=%h/.local/share/opal
+ExecStartPre=+/usr/bin/mkdir -p -m 0700 %h/opal-backups
+ExecStart=%h/.local/bin/opal backup %h/opal-backups --keep 14
+Nice=10
+IOSchedulingClass=idle
+
+# As in opal.service. The data folder stays writable because SQLite keeps its shared-memory file there
+# to read a database that OPAL has open. The backup does not change the data.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/opal %h/opal-backups
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+RestrictAddressFamilies=AF_UNIX
