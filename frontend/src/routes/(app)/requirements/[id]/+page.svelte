@@ -380,7 +380,9 @@
 			{/if}
 			<EditToggle />
 		{:else if openRevision}
-			<Button size="sm" href={`/requirements/${openRevision.id}`}>REV {openRevision.revision}</Button>
+			<Button size="sm" href={`/requirements/${openRevision.id}`}
+				>REV {openRevision.revision}</Button
+			>
 		{:else if baselined}
 			<Button size="sm" onclick={revise}>REVISE</Button>
 		{:else if current}
