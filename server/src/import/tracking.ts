@@ -146,10 +146,7 @@ export function importIssues(c: ImportCtx): void {
 
 	// Cross-references to OPAL and work order numbers have no table in the new schema.
 	const refs = readTable(c, 'issue_reference', ['id', 'issue_id', 'reference_type', 'reference_value', 'notes', 'created_at', 'updated_at']);
-	for (const r of refs) {
-		keepLegacyRow(c, 'issue_reference', r, 'the new issue has no reference table');
-		c.report.tables.issue_reference!.imported++;
-	}
+	for (const r of refs) leaveInLegacyRow(c, 'issue_reference', r, 'the new issue has no reference table');
 }
 
 export function importRisks(c: ImportCtx): void {

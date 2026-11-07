@@ -426,7 +426,15 @@ describe('legacy import of a database with rows in every table', async () => {
 	});
 
 	test('skipped tables are listed with their row counts', () => {
-		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['attachment (legacy_row)', 1], ['auth_session', 1], ['extension', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['stock_transfer (legacy_row)', 1], ['webauthn_challenge', 1]]);
+		expect(report.notImported.map((t) => [t.table, t.rows]).sort()).toEqual([['attachment (legacy_row)', 1], ['auth_session', 1], ['extension', 1], ['issue_reference (legacy_row)', 1], ['onshape_link', 1], ['onshape_sync_log', 1], ['stock_transfer (legacy_row)', 1], ['webauthn_challenge', 1]]);
+	});
+
+	test('a reference to an OPAL or work order number is left out, not counted as imported', () => {
+		expect(report.tables.issue_reference).toMatchObject({ read: 1, imported: 0, leftOut: 1 });
+		const line = report.sourceTables.find((t) => t.table === 'issue_reference')!;
+		expect(line.unaccounted).toBe(0);
+		expect(line.outcome).toContain('imported 0 of 1 read');
+		expect(line.outcome).toContain('1 left out');
 	});
 
 	test('one summary audit row per table', () => {

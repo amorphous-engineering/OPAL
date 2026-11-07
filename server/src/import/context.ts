@@ -375,7 +375,7 @@ export function keepLegacyRow(c: ImportCtx, table: string, row: Row, reason: str
 	c.report.derived.legacy_row = (c.report.derived.legacy_row ?? 0) + 1;
 }
 
-/** A row with no home in the new schema, so it is not imported. It stays readable in legacy_row. */
+/** A row with no home in the new schema, so it is not imported. It stays in legacy_row, which no page reads yet. */
 export function leaveInLegacyRow(c: ImportCtx, table: string, row: Row, reason: string): void {
 	keepLegacyRow(c, table, row, reason);
 	if (!c.legacyTables) return;
