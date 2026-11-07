@@ -51,8 +51,9 @@ export function parseCommand(argv: string[]): Parsed {
 	if (!flags) return { kind: 'error', message: `Unknown command: ${command}` };
 	for (let i = 0; i < rest.length; i++) {
 		const a = rest[i]!;
-		if (!a.startsWith('--')) continue;
-		const takesValue = flags[a.slice(2)];
+		if (!a.startsWith('-')) continue;
+		// `-p 9000` must not pass as a word and leave OPAL on the default port.
+		const takesValue = a.startsWith('--') ? flags[a.slice(2)] : undefined;
 		if (takesValue === undefined) return { kind: 'error', message: `Unknown flag for ${command}: ${a}` };
 		if (takesValue) {
 			const value = rest[i + 1];

@@ -17,6 +17,13 @@ describe('what the command line asks for', () => {
 		expect(parseCommand(['nonsense'])).toEqual({ kind: 'error', message: 'Unknown command: nonsense' });
 	});
 
+	test('a single-dash flag nobody knows is refused, so OPAL does not start on a port nobody asked for', () => {
+		expect(parseCommand(['serve', '-p', '9000'])).toEqual({ kind: 'error', message: 'Unknown flag for serve: -p' });
+		expect(parseCommand(['backup', 'dir', '-k'])).toEqual({ kind: 'error', message: 'Unknown flag for backup: -k' });
+		// A value is not a flag, whatever it starts with. `--keep` says for itself what is wrong with this one.
+		expect(parseCommand(['backup', 'dir', '--keep', '-1'])).toEqual({ kind: 'run', command: 'backup', args: ['dir', '--keep', '-1'] });
+	});
+
 	test('a flag that takes a value needs one', () => {
 		expect(parseCommand(['--port'])).toEqual({ kind: 'error', message: '--port needs a value' });
 		expect(parseCommand(['--port', '--no-browser'])).toEqual({ kind: 'error', message: '--port needs a value' });
