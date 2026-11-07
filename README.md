@@ -79,7 +79,7 @@ Past the limit in a day, even the right password is refused for as long as the m
 
 - Use a passkey, single sign-on, or another address.
 - Ask an administrator to reset your password under **Users** and issue a claim link. The link signs you in.
-- Restart OPAL, with **Restart** on the control page or `systemctl --user restart opal` for the [systemd unit](contrib/opal.service). This clears every limit for every address. A sole administrator cannot reset their own password, so this or another address is their way in.
+- Restart OPAL: **Restart** on the control page, stop and start `opal serve`, or `systemctl --user restart opal` for the [systemd unit](contrib/opal.service). This clears every limit for every address. A sole administrator cannot reset their own password, so this or another address is their way in.
 
 ### Limits
 
