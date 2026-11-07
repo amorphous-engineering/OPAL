@@ -12,7 +12,7 @@ import { issue, issueLink, risk, riskReference } from '../../db/schema/index.ts'
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { create as createIssue } from '../issues/service.ts';
 import { numbersFor } from '../org/project.ts';
-import { requireAddable, requireRemovable } from './line-rules.ts';
+import { keepsItsLines, requireAddable, requireRemovable } from './line-rules.ts';
 import { load, one } from './service.ts';
 
 function loadIssue(ctx: Ctx, id: number) {
@@ -130,7 +130,7 @@ export function removeReference(ctx: Ctx, riskId: number, referenceId: number): 
 /** For the issue page: the risks an issue responds to or realizes. */
 export function risksOfIssue(ctx: Ctx, issueId: number) {
 	const linked = ctx.db
-		.select({ id: risk.id, riskNumber: risk.riskNumber, title: risk.title, role: issueLink.riskRole })
+		.select({ id: risk.id, riskNumber: risk.riskNumber, title: risk.title, disposition: risk.disposition, role: issueLink.riskRole })
 		.from(issueLink)
 		.innerJoin(risk, eq(risk.id, issueLink.riskId))
 		.where(and(eq(issueLink.issueId, issueId), isNotNull(issueLink.riskId)))
@@ -139,13 +139,14 @@ export function risksOfIssue(ctx: Ctx, issueId: number) {
 			riskId: r.id,
 			riskNumber: r.riskNumber,
 			title: r.title,
-			relation: r.role!
+			relation: r.role!,
+			canUnlink: !keepsItsLines(r.disposition)
 		}));
 	const realized = ctx.db
 		.select({ id: risk.id, riskNumber: risk.riskNumber, title: risk.title })
 		.from(risk)
 		.where(eq(risk.realizedIssueId, issueId))
 		.all()
-		.map((r) => ({ riskId: r.id, riskNumber: r.riskNumber, title: r.title, relation: 'realized' as const }));
+		.map((r) => ({ riskId: r.id, riskNumber: r.riskNumber, title: r.title, relation: 'realized' as const, canUnlink: false }));
 	return [...linked, ...realized];
 }

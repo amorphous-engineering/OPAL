@@ -73,7 +73,9 @@ export const zLinkedRisk = z.object({
 	riskId: z.number().int(),
 	riskNumber: z.string(),
 	title: z.string(),
-	relation: z.enum(['mitigation', 'research', 'realized'])
+	relation: z.enum(['mitigation', 'research', 'realized']),
+	/** The risk's state lets this line come off. The realized pointer is not a line, so never. */
+	canUnlink: z.boolean()
 });
 export type LinkedRisk = z.infer<typeof zLinkedRisk>;
 
