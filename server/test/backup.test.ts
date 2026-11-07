@@ -20,6 +20,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app.ts';
+import { authSettingScope, KEY_FILE, readStored, seal } from '../src/auth/sealed.ts';
 import { authSecret } from '../src/auth/signing.ts';
 import type { Actor } from '../src/context.ts';
 import { openDb, type Db } from '../src/db/client.ts';
@@ -160,8 +161,10 @@ describe('a backup restores to a working instance', () => {
 		for (let k = 0; k < 20; k++) await writeOne();
 		const before = n;
 
+		// The test preload pins this variable, and a backup rightly warns about it.
+		const { OPAL_SECRETS_KEY: _pinned, ...env } = process.env;
 		const proc = Bun.spawn([process.execPath, cli, 'backup', parent], {
-			env: { ...process.env, OPAL_DATA_DIR: live.dir },
+			env: { ...env, OPAL_DATA_DIR: live.dir },
 			stdout: 'pipe',
 			stderr: 'pipe'
 		});
@@ -243,18 +246,37 @@ describe('a backup restores to a working instance', () => {
 	});
 
 	test('a key held in the environment is not in the backup, and the backup says so', async () => {
+		const pinned = process.env.OPAL_SECRETS_KEY;
 		const i = await small();
-		process.env.OPAL_SECRETS_KEY = 'held-elsewhere';
 		try {
-			const { warnings } = takeBackup(join(tempDir(), 'b'));
-			expect(warnings.join(' ')).toContain('OPAL_SECRETS_KEY is set');
-		} finally {
+			process.env.OPAL_SECRETS_KEY = 'held-elsewhere';
+			expect(takeBackup(join(tempDir(), 'b')).warnings.join(' ')).toContain('OPAL_SECRETS_KEY is set');
 			delete process.env.OPAL_SECRETS_KEY;
+			expect(takeBackup(join(tempDir(), 'c')).warnings.join(' ')).not.toContain('OPAL_SECRETS_KEY');
+		} finally {
+			process.env.OPAL_SECRETS_KEY = pinned;
 			i.close();
 		}
-		const j = await small();
-		expect(takeBackup(join(tempDir(), 'b')).warnings.join(' ')).not.toContain('OPAL_SECRETS_KEY');
-		j.close();
+	});
+
+	test('a secret saved with a key file reads back after a restore, because the key travels with the backup', async () => {
+		const pinned = process.env.OPAL_SECRETS_KEY;
+		delete process.env.OPAL_SECRETS_KEY;
+		const i = await small();
+		try {
+			const scope = authSettingScope('oidc_client_secret');
+			const stored = seal('client-secret-value', scope);
+			expect(existsSync(join(i.dir, KEY_FILE))).toBe(true);
+			const { path } = takeBackup(join(tempDir(), 'b'));
+			expect(existsSync(join(path, KEY_FILE))).toBe(true);
+			i.close();
+			process.env.OPAL_DATA_DIR = join(tempDir(), 'r');
+			restoreBackup(path);
+			expect(existsSync(join(process.env.OPAL_DATA_DIR, KEY_FILE))).toBe(true);
+			expect(readStored(stored, scope)).toBe('client-secret-value');
+		} finally {
+			process.env.OPAL_SECRETS_KEY = pinned;
+		}
 	});
 
 	test('avatars and plugin files come back where the instance looks for them', async () => {
