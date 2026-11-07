@@ -205,3 +205,25 @@ describe('part numbers with variants off', () => {
 		expect(f.canonical('PN-1-3-2')).toBe('PN-1-0000000003-002');
 	});
 });
+
+describe('a number an import marked as a duplicate', () => {
+	const scheme = { prefix: 'KST', separator: '-', format: '{prefix}{sep}{tier_code}{sep}{sequence}', tiers: [{ level: 1, code: 'F', name: 'FLIGHT' }] };
+	const codec = numberCodec(4, scheme);
+
+	test.each([
+		['WO-42-DUP2', 'WO-0000000042-DUP2', 'WO-0042-DUP2'],
+		['WO-0042-DUP2', 'WO-0000000042-DUP2', 'WO-0042-DUP2'],
+		['OPAL-9912-DUP3', 'OPAL-0000009912-DUP3', 'OPAL-9912-DUP3'],
+		['KST-F-0001-DUP2', 'KST-F-0000000001-DUP2', 'KST-F-0001-DUP2']
+	])('%s means the one record at any width', (typed, stored, shown) => {
+		expect(codec.canonical(typed)).toBe(stored);
+		expect(codec.canonical(stored)).toBe(stored);
+		expect(codec.display(stored)).toBe(shown);
+		expect(codec.search(typed)).toBe(stored);
+	});
+
+	test('a word that only ends the same way is not touched', () => {
+		expect(codec.canonical('ACME-DUP2')).toBe('ACME-DUP2');
+		expect(canonicalDesignator('ACME-7-DUP2')).toBe('ACME-7-DUP2');
+	});
+});

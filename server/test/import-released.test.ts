@@ -145,6 +145,19 @@ describe('numbers that are one number at full width', () => {
 		out.close();
 	});
 
+	test('a duplicate opens by the number people see, at any width', async () => {
+		const d = tmp();
+		const src = unpack('v1.3.2', d);
+		const old = new Database(src);
+		const [a, b] = firstTwoOf(old, 'inventory_record');
+		old.query('UPDATE inventory_record SET opal_number = ? WHERE id = ?').run('OPAL-9912', a!);
+		old.query('UPDATE inventory_record SET opal_number = ? WHERE id = ?').run('OPAL-09912', b!);
+		old.close();
+		await importInPlace(src, { open });
+		const { refused } = await openEveryRecord(src, ['/inventory/opal/OPAL-9912-DUP2', '/inventory/opal/OPAL-09912-DUP2', '/inventory/opal/OPAL-9912']);
+		expect(refused).toEqual([]);
+	});
+
 	test('a duplicate reads at the width the organization shows', async () => {
 		const d = tmp();
 		const src = unpack('v1.4.0-beta.3', d);
@@ -230,6 +243,9 @@ describe('what someone signed', () => {
 		const after = openDb(path, undefined, () => null);
 		expect(after.$client.query('SELECT body FROM issue_comment').all()).toEqual([{ body: 'keep me' }]);
 		after.$client.query("UPDATE issue SET disposition_type = 'other' WHERE id = 1").run();
+		// The rebuild took the search triggers with the old table. The first start puts them back.
+		createApp({ db: after });
+		expect((after.$client.query("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'issue'").get() as { n: number }).n).toBeGreaterThan(0);
 		after.$client.close();
 	});
 });
@@ -474,7 +490,7 @@ describe.each(RELEASES.map(([name]) => name))('importing %s', (name) => {
 });
 
 /** Signs in on an imported file and opens every record the way a page does. Returns the refusals. */
-async function openEveryRecord(path: string): Promise<{ opened: Record<string, number>; refused: string[] }> {
+async function openEveryRecord(path: string, alsoOpen: string[] = []): Promise<{ opened: Record<string, number>; refused: string[] }> {
 	const db = await open(path);
 	try {
 		const admin = db.select().from(user).all().find((u) => u.isActive && u.isAdmin)!;
@@ -490,6 +506,10 @@ async function openEveryRecord(path: string): Promise<{ opened: Record<string, n
 		const get = (path: string) => app.request(`http://opal.test/api${path}`, { headers: { cookie } });
 		const opened: Record<string, number> = {};
 		const refused: string[] = [];
+		for (const extra of alsoOpen) {
+			const res = await get(extra);
+			if (res.status !== 200) refused.push(`${extra}: ${res.status}`);
+		}
 		for (const kind of ['requirements', 'parts', 'risks', 'issues', 'procedures', 'executions', 'purchases', 'suppliers', 'workcenters', 'datasets']) {
 			opened[kind] = 0;
 			for (let cursor = ''; ; ) {
