@@ -863,7 +863,7 @@
 
 		<Section title="Links">
 			{#snippet actions()}
-				{#if editObservation}
+				{#if editing}
 					<PartPicker align="end" onselect={(p) => p && addPart(p.id)}>
 						{#snippet trigger({ props })}
 							<Button {...props} size="sm" variant="outline">+ PART</Button>

@@ -807,7 +807,7 @@ describe('execution area labels', () => {
 		issueHooks.stepOptions = () => [{ id: 11, label: '3.7', title: 'Torque bolts' }];
 		issueHooks.detailExtras = () => ({
 			raisedOpOrder: 3,
-			risks: [{ riskId: 1, riskNumber: 'RISK-00001', title: 'Cold solder', relation: 'mitigation' }],
+			risks: [{ riskId: 1, riskNumber: 'RISK-00001', title: 'Cold solder', relation: 'mitigation', canUnlink: true }],
 			redlineOps: []
 		});
 		const d = (await call('GET', `/issues/${i.id}`)).body;
@@ -1047,19 +1047,53 @@ describe('no side doors around the disposition gate', () => {
 	});
 });
 
-describe('the links of an issue are part of its observation', () => {
-	test('a pending issue adds and removes part links, and one past pending does neither', async () => {
+describe('the links of an issue', () => {
+	test('a pending issue adds and removes part links', async () => {
+		const t = await setup();
+		const a = t.mkPart('A', 'P-A');
+		const i = await t.raise();
+		const link = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id });
+		expect(link.status).toBeLessThan(300);
+		expect((await t.call('DELETE', `/issues/${i.id}/links/${link.body.id}`)).status).toBe(200);
+	});
+
+	test('an issue in work takes a newly affected part, and no line comes off', async () => {
 		const t = await setup();
 		const a = t.mkPart('A', 'P-A');
 		const b = t.mkPart('B', 'P-B');
 		const i = await t.raise();
-		const link = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id });
-		expect(link.status).toBeLessThan(300);
-		const other = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: b.id });
-		expect((await t.call('DELETE', `/issues/${i.id}/links/${other.body.id}`)).status).toBe(200);
+		const first = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id });
 		expect((await t.call('POST', `/issues/${i.id}/start`)).status).toBe(200);
-		expect((await t.call('DELETE', `/issues/${i.id}/links/${link.body.id}`)).status).toBe(409);
-		expect((await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: b.id })).status).toBe(409);
+
+		const added = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: b.id });
+		expect(added.status).toBeLessThan(300);
+		expect((await t.call('GET', `/issues/${i.id}`)).body.links).toHaveLength(2);
+		for (const link of [first, added]) {
+			const refused = await t.call('DELETE', `/issues/${i.id}/links/${link.body.id}`);
+			expect(refused.status).toBe(409);
+			expect(refused.body.error).toBe('issue_state');
+		}
+	});
+
+	test('an issue in work leaves risk links to the risk page', async () => {
+		const t = await setup();
+		const i = await t.raise();
+		expect((await t.call('POST', `/issues/${i.id}/start`)).status).toBe(200);
+		const refused = await t.call('POST', `/issues/${i.id}/links`, { kind: 'risk', targetId: 1 });
+		expect(refused.status).toBe(409);
+		expect(refused.body.error).toBe('issue_state');
+	});
+
+	test('an issue in review or done takes no new part link', async () => {
+		const t = await setup();
+		const a = t.mkPart('A', 'P-A');
+		const i = await t.raise();
+		expect((await t.call('POST', `/issues/${i.id}/start`)).status).toBe(200);
+		expect((await t.call('PATCH', `/issues/${i.id}`, { rootCause: 'x', correctiveAction: 'y' })).status).toBe(200);
+		expect((await t.call('POST', `/issues/${i.id}/review`)).status).toBe(200);
+		expect((await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id })).status).toBe(409);
+		expect((await t.call('POST', `/issues/${i.id}/signoff`)).status).toBe(200);
+		expect((await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id })).status).toBe(409);
 	});
 
 	test('a void issue keeps its links', async () => {
@@ -1069,5 +1103,7 @@ describe('the links of an issue are part of its observation', () => {
 		const link = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id });
 		expect((await t.call('POST', `/issues/${i.id}/void`, { reason: 'duplicate' })).status).toBe(200);
 		expect((await t.call('DELETE', `/issues/${i.id}/links/${link.body.id}`)).status).toBe(409);
+		const b = t.mkPart('B', 'P-B');
+		expect((await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: b.id })).status).toBe(409);
 	});
 });

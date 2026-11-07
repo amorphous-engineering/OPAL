@@ -48,13 +48,15 @@ No other record can own a file. A new record type gets files by declaring its ru
 |---|---|---|---|---|---|
 | Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
 | Pending, advisory | What is it, and who has it? | START WORK | Add comment, attachment | As above | VOID (reason required) |
-| In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee | VOID, while no disposition is signed |
+| In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee, + PART (adds a link, none comes off) | VOID, while no disposition is signed |
 | In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
 | Done | What happened, and who signed? | | Add comment, attachment | | REOPEN (needs `issue.approve`, reason required) |
 | Void | Why was this struck? | | Add comment | | |
 
 - Raising needs only a title. Everything else can be filled in later, and an issue raised from a step carries its run, step and person.
 - A signed disposition freezes the observation and the disposition. A signed or done issue cannot be voided.
+- A part link can be added while Pending or In work, because investigation is when another affected part turns up. It comes off only while Pending. In review, Done and Void take no new link.
+- A risk link also obeys the risk, from either page: a realized or closed risk takes no new line, and an accepted, realized or closed risk loses none.
 - Moving the boundary of a hold off an unfinished step releases that step, so it takes what narrowing takes. Setting a first boundary adds a hold and stays open.
 - A void issue shows its title struck through and its reason at the top. It has no controls except a comment.
 - Disposition fields sit behind EDIT until someone opens them. View mode shows a draft as facts.
