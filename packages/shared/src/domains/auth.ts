@@ -119,6 +119,8 @@ const zWebauthnOptions = z.object({ publicKey: zJson });
  * returned: `hasClientSecret` says whether one is stored.
  */
 export const zAuthSettings = z.object({
+	/** The address that sent X-Forwarded-For while OPAL_TRUST_PROXY is off, or null if none has. */
+	ignoredForwardFrom: z.string().nullable(),
 	passwordLoginEnabled: z.boolean(),
 	passkeysEnabled: z.boolean(),
 	oidcEnabled: z.boolean(),

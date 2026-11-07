@@ -1,7 +1,12 @@
-import { afterEach, describe, expect, setSystemTime, spyOn, test } from 'bun:test';
-import { throttleAddress } from '../../src/auth/client-ip.ts';
-import { dailyThrottle, hashPassword, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
+import { afterEach, beforeEach, describe, expect, setSystemTime, spyOn, test } from 'bun:test';
+import { ignoredForward, throttleAddress } from '../../src/auth/client-ip.ts';
+import { dailyThrottle, hashPassword, loginThrottle, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, cookieOf, harness, makeUser } from './helpers.ts';
+
+// The tests here send x-forwarded-for on purpose. Those that check the warning clear this first.
+beforeEach(() => {
+	ignoredForward.seenFrom = 'already warned';
+});
 
 afterEach(() => {
 	delete process.env.OPAL_TRUST_PROXY;
@@ -269,6 +274,111 @@ describe('login throttle', () => {
 			expect(real.status).toBe(429);
 			expect((await unknown.json()).message).toBe((await real.json()).message);
 		});
+
+		test('the refusal says how long is left and how else to get in', async () => {
+			const { attempt } = await setupUser('daily-told');
+			setSystemTime(new Date(start));
+			fillDay('172.21.4.1', 'daily-told');
+			const fresh = (await (await attempt('172.21.4.1', 'right-password-1')).json()).message;
+			expect(fresh).toBe('Too many failed attempts. Try again in 24 hours. An administrator can reset your password, and restarting OPAL clears this limit.');
+			setSystemTime(new Date(start + 22.5 * 3600 * 1000));
+			expect((await (await attempt('172.21.4.1', 'right-password-1')).json()).message).toContain('Try again in 2 hours.');
+		});
+
+		test('an administrator can reset the password of someone at the limit, and the claim link signs them in', async () => {
+			const h = await harness();
+			const admin = await adminSession(h);
+			const bob = makeUser(h, { username: 'daily-claim', passwordHash: await hashPassword('right-password-1') });
+			fillDay('172.21.5.1', 'daily-claim');
+			expect((await h.call('POST', `/users/${bob.id}/reset-password`, undefined, { cookie: admin })).status).toBe(200);
+			const link = await h.call('POST', '/auth/claim-links', { userId: bob.id }, { cookie: admin });
+			expect(link.status).toBe(201);
+			const claimed = await h.app.request(
+				'http://opal.test/api/auth/claim',
+				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: (await link.json()).token, password: 'brand-new-password-1' }) },
+				{ ip: '172.21.5.1' }
+			);
+			expect(claimed.status).toBe(200);
+			expect(cookieOf(claimed)).toBeTruthy();
+		});
+
+		test('what a person gets wrong while signed in does not lock them out when they sign out', async () => {
+			const { h, attempt } = await setupUser('daily-signed-in');
+			const ip = '172.21.6.1';
+			const cookie = cookieOf(await attempt(ip, 'right-password-1'));
+			for (let i = 0; i < 31; i++) {
+				setSystemTime(new Date(start + i * 31_000));
+				expect((await attempt(ip)).status).toBe(401);
+			}
+			setSystemTime(new Date(start + 31 * 31_000));
+			expect((await h.call('POST', '/auth/logout', {}, { cookie })).status).toBe(200);
+			expect((await attempt(ip, 'right-password-1')).status).toBe(200);
+		}, 60_000);
+	});
+
+	test('the five-minute limit says how long is left, in minutes', async () => {
+		const { attempt } = await setupUser('short-told');
+		const start = Date.now();
+		setSystemTime(new Date(start));
+		for (let i = 0; i < 10; i++) expect((await attempt('172.22.0.1')).status).toBe(401);
+		const refused = await attempt('172.22.0.1', 'right-password-1');
+		expect(refused.status).toBe(429);
+		expect((await refused.json()).message).toBe('Too many failed attempts. Try again in 5 minutes.');
+		setSystemTime(new Date(start + 299_500));
+		expect((await (await attempt('172.22.0.1')).json()).message).toBe('Too many failed attempts. Try again in 1 second.');
+	}, 60_000);
+
+	describe('a forwarded address with trust off', () => {
+		const warnings = () => spyOn(console, 'warn').mockImplementation(() => {});
+		const forwarded = (h: Awaited<ReturnType<typeof harness>>, value: string) =>
+			h.app.request('http://opal.test/api/auth/config', { headers: { 'x-forwarded-for': value } }, { ip: '10.9.9.9' });
+
+		test('warns once in the log, naming the address that sent it and not what it said', async () => {
+			const h = await harness();
+			ignoredForward.seenFrom = null;
+			const warn = warnings();
+			try {
+				await forwarded(h, '203.0.113.200');
+				await forwarded(h, '203.0.113.201');
+				const lines = warn.mock.calls.map(([line]) => String(line)).filter((line) => line.includes('X-Forwarded-For'));
+				expect(lines).toHaveLength(1);
+				expect(lines[0]).toContain('10.9.9.9');
+				expect(lines[0]).toContain('OPAL_TRUST_PROXY=1');
+				expect(lines[0]).not.toContain('203.0.113.200');
+			} finally {
+				warn.mockRestore();
+			}
+		});
+
+		test('tells an administrator under sign-in settings, and no one else', async () => {
+			const h = await harness();
+			const admin = await adminSession(h);
+			ignoredForward.seenFrom = null;
+			const settings = async () => (await (await h.call('GET', '/settings/auth', undefined, { cookie: admin })).json()).ignoredForwardFrom;
+			expect(await settings()).toBeNull();
+			const warn = warnings();
+			try {
+				await forwarded(h, '203.0.113.200');
+			} finally {
+				warn.mockRestore();
+			}
+			expect(await settings()).toBe('10.9.9.9');
+			expect((await h.call('GET', '/settings/auth')).status).toBe(401);
+			expect(JSON.stringify(await (await h.call('GET', '/auth/config')).json())).not.toContain('10.9.9.9');
+		});
+
+		test('says nothing without the header, or with trust on', async () => {
+			const h = await harness();
+			const admin = await adminSession(h);
+			ignoredForward.seenFrom = null;
+			await h.app.request('http://opal.test/api/auth/config', {}, { ip: '10.9.9.9' });
+			expect(ignoredForward.seenFrom).toBeNull();
+			process.env.OPAL_TRUST_PROXY = '1';
+			await forwarded(h, '203.0.113.200');
+			expect(ignoredForward.seenFrom).toBeNull();
+			ignoredForward.seenFrom = '10.9.9.9';
+			expect((await (await h.call('GET', '/settings/auth', undefined, { cookie: admin })).json()).ignoredForwardFrom).toBeNull();
+		});
 	});
 
 	describe('an address whose session was revoked', () => {
@@ -353,6 +463,86 @@ describe('login throttle', () => {
 		for (let i = 0; i < 20; i++) t.fail(`other-${i}`);
 		expect(t.size).toBe(3);
 		expect(t.blocked('reached')).toBe(true);
+	});
+
+	test('failing against many other names does not give back guesses an address has used', () => {
+		const t = new LoginThrottle(30, 300_000, 100);
+		for (let i = 0; i < 29; i++) t.fail('guesser');
+		for (let i = 0; i < 1000; i++) t.fail(`other-${i}`);
+		expect(t.size).toBe(100);
+		expect(t.count('guesser')).toBe(29);
+	});
+
+	test('with the table full, a guess at another name between guesses does not clear the count', () => {
+		const t = new LoginThrottle(30, 300_000, 100);
+		for (let i = 0; i < 100; i++) t.fail(`filler-${i}`);
+		for (let i = 0; i < 30; i++) {
+			t.fail('guesser');
+			t.fail(`between-${i}`);
+		}
+		expect(t.blocked('guesser')).toBe(true);
+	});
+
+	test('a table of keys with several failures gives up the one with the fewest', () => {
+		const t = new LoginThrottle(30, 300_000, 3);
+		for (const [key, n] of [['most', 3], ['fewest', 2], ['more', 3]] as const) for (let i = 0; i < n; i++) t.fail(key);
+		t.fail('new');
+		expect(t.count('fewest')).toBe(0);
+		expect(t.count('most')).toBe(3);
+		expect(t.count('more')).toBe(3);
+	});
+
+	test('a key at its limit holds no more failures than the limit, and still ages out from the newest', () => {
+		const start = Date.now();
+		const t = new LoginThrottle(3, 300_000);
+		for (let i = 0; i < 20; i++) {
+			setSystemTime(new Date(start + i * 1000));
+			t.fail('hot');
+		}
+		expect(t.count('hot')).toBe(3);
+		setSystemTime(new Date(start + 17 * 1000 + 299_000));
+		expect(t.blocked('hot')).toBe(true);
+		expect(t.retryAfter('hot')).toBe(1000);
+		setSystemTime(new Date(start + 17 * 1000 + 300_000));
+		expect(t.blocked('hot')).toBe(false);
+		expect(t.retryAfter('hot')).toBe(0);
+	});
+
+	test('taking back the only failure leaves no record of the key', () => {
+		const t = new LoginThrottle(3, 300_000);
+		t.fail('once');
+		t.release('once');
+		expect(t.size).toBe(0);
+	});
+
+	test('sign-ins the full queue turned away leave no record at any limit, whatever names they use', async () => {
+		const h = await harness();
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const waiting = Array.from({ length: 4 + 64 }, () => withHashSlot(() => held));
+		const before = [loginThrottle.size, usernameThrottle.size, dailyThrottle.size];
+		for (let i = 0; i < 300; i++) {
+			const res = await h.app.request(
+				'http://opal.test/api/auth/login',
+				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: `turned-away-${i}`, password: 'wrong-guess-xxxx' }) },
+				{ ip: `198.51.101.${i % 250}` }
+			);
+			expect(res.status).toBe(429);
+		}
+		release();
+		await Promise.all(waiting);
+		expect([loginThrottle.size, usernameThrottle.size, dailyThrottle.size]).toEqual(before);
+	});
+
+	test('a turn in line is not used up by a sign-in the full queue turned away', async () => {
+		const { attempt } = await setupLocked('queued-turn');
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const waiting = Array.from({ length: 4 + 64 }, () => withHashSlot(() => held));
+		expect((await attempt('192.0.2.60')).status).toBe(429);
+		release();
+		await Promise.all(waiting);
+		expect((await attempt('192.0.2.60')).status).toBe(401);
 	});
 
 	test('failure records for names that are never seen again are dropped', () => {
