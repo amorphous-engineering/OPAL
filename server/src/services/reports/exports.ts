@@ -104,8 +104,11 @@ let executionRows: ExecutionRows = () => [];
  * The execution area calls this once. Its function returns one row per execution matching
  * `status`, `procedureId` and `projectId` (the date window is applied here, on `createdAt`).
  */
-export function registerExecutionReport(fn: ExecutionRows): void {
+/** Returns the one it replaced, so a test can put it back: module state outlives a test file. */
+export function registerExecutionReport(fn: ExecutionRows): ExecutionRows {
+	const previous = executionRows;
 	executionRows = fn;
+	return previous;
 }
 
 function executions(ctx: Ctx, f: ExecutionReportFilter): ReportExecutionRow[] {

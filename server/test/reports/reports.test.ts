@@ -203,7 +203,7 @@ describe('csv reports', () => {
 			id, procedure: 'P', version: 1, workOrder: `WO-${id}`, status, priority: null,
 			createdAt: '2026-01-01T00:00:00.000Z', startedAt: started, completedAt: done, stepsCompleted: 1, stepsTotal: 2
 		});
-		registerExecutionReport(() => [
+		const real = registerExecutionReport(() => [
 			row(1, 'completed', '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z'),
 			row(2, 'in_work', '2026-01-01T00:00:00.000Z', null),
 			row(3, 'cut', null, null)
@@ -215,7 +215,7 @@ describe('csv reports', () => {
 		const none = (await s.call('GET', '/reports/analytics/executions?to=2025-01-01')).body;
 		expect(none.totalExecutions).toBe(0);
 		expect(none.avgDurationMinutes).toBeNull();
-		registerExecutionReport(() => []);
+		registerExecutionReport(real);
 	});
 
 	test('issue metrics: open splits into advisory, undispositioned and dispositioned', async () => {
