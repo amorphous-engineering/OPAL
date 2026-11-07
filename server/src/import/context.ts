@@ -70,6 +70,10 @@ export interface ImportReport {
 	receiptGaps: { purchaseLineId: number; reference: string; partNumber: string; quantity: number; opalNumber: string }[];
 	/** Rows with values outside the new enums, and what they became. */
 	warnings: string[];
+	/** Why the result was not put in place. Null when it was. */
+	refused: string | null;
+	/** A person said to go ahead past the failed rows. */
+	acceptedFailures: boolean;
 	failedRows: { table: string; id: number; reason: string }[];
 }
 
@@ -82,6 +86,8 @@ export interface ImportOptions {
 	avatarsDir?: string;
 	/** The 1.x `opal.project.yaml`, for databases that do not hold their project configuration. */
 	projectFile?: string;
+	/** Go ahead although rows failed or are not accounted for. Without it the result is not kept. */
+	acceptFailedRows?: boolean;
 }
 
 export interface ResolvedOptions {
@@ -128,6 +134,8 @@ export function emptyReport(source: string, dest: string, version: string, at: s
 		stockDifferences: [],
 		receiptGaps: [],
 		warnings: [],
+		refused: null,
+		acceptedFailures: false,
 		failedRows: []
 	};
 }

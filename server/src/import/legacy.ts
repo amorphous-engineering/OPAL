@@ -38,6 +38,7 @@ import { openImportDb } from './open.ts';
 import { importPeople, importProject, importRoles, importSettings, NO_ONSHAPE } from './org.ts';
 import { importParts, importPurchasing, importSuppliers } from './parts.ts';
 import { importProcedures } from './procedures.ts';
+import { missingFromHead } from './head-shape.ts';
 import { addProjectFile } from './project-file.ts';
 import { importDatasets, importIssues, importNotifications, importRequirements, importRisks } from './tracking.ts';
 
@@ -322,6 +323,33 @@ export function importInto(src: Database, d: Db, report: ImportReport, opts: Res
 	}
 }
 
+/**
+ * The rule: a result with a single failed row, or a single row nothing explains, does not replace the
+ * original. A person decides that, after reading which rows they are.
+ */
+function problemCounts(report: ImportReport): { failed: number; unaccounted: number } {
+	return { failed: report.failedRows.length, unaccounted: report.sourceTables.reduce((n, t) => n + t.unaccounted, 0) };
+}
+
+function refusal(srcPath: string, { failed, unaccounted }: { failed: number; unaccounted: number }, dir: string): string {
+	return `Did not import ${srcPath}: ${failed} rows failed and ${unaccounted} rows are not accounted for, and the import keeps every row or does not happen. Nothing was changed, and the old database is still in place. Each row is listed in ${join(dir, 'import-report.txt')}. Fix the cause and start again, or import without those rows: opal import ${srcPath} --accept-failed-rows`;
+}
+
+function assertHeadShape(src: Database, version: string, srcPath: string): void {
+	const missing = missingFromHead(src);
+	if (!missing.length) return;
+	const release = RELEASED_HEADS[version];
+	throw new Error(`${srcPath} says it is at Alembic revision ${version}${release ? ` (OPAL ${release})` : ''}, but it does not have ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ` and ${missing.length - 5} more` : ''}. It was not imported, and the file was not changed. Its stamp may be wrong.`);
+}
+
+/** Without its folder every attachment fails and images drop out of published versions, so that is not left to the row count. */
+function assertAttachmentsFolder(src: Database, srcPath: string, folder: string): void {
+	if (!tableExists(src, 'attachment')) return;
+	const rows = countRows(src, 'attachment');
+	if (rows === 0 || (existsSync(folder) && statSync(folder).isDirectory())) return;
+	throw new Error(`${srcPath} has ${rows} attachments and their folder ${folder} is not there. Nothing was changed. If the files are elsewhere: opal import ${srcPath} --attachments <folder>. To import without them: opal import ${srcPath} --accept-failed-rows`);
+}
+
 const SIDECARS = ['-wal', '-shm', '-journal'];
 
 function removeWithSidecars(path: string): void {
@@ -347,12 +375,17 @@ export async function importLegacy(srcPath: string, destPath: string, options: I
 		if (existsSync(`${srcPath}-journal`) && statSync(`${srcPath}-journal`).size > 0) {
 			report.warnings.push('The database had an unfinished write from when 1.x last stopped. It was read with that write undone, as 1.x would have done. The original and its journal are kept together.');
 		}
+		const attachmentsDir = options.attachmentsDir ?? join(dirname(srcPath), 'attachments');
+		if (!options.acceptFailedRows) assertAttachmentsFolder(source.db, srcPath, attachmentsDir);
 		const before = sourceRows(source.db);
-		if (version !== LEGACY_HEAD) report.bridge = bridgeToHead(source.db, version);
+		// At every stamp, the head too: a stamp is only what the file claims.
+		const bridge = bridgeToHead(source.db, version);
+		if (version !== LEGACY_HEAD || bridge.steps.length) report.bridge = bridge;
+		assertHeadShape(source.db, version, srcPath);
 		addProjectFile(source.db, srcPath, options.projectFile, report);
 		db = await (options.open ?? openImportDb)(destPath);
 		importInto(source.db, db, report, {
-			attachmentsDir: options.attachmentsDir ?? join(dirname(srcPath), 'attachments'),
+			attachmentsDir,
 			blobsDir,
 			avatarsDir,
 			legacyTables: true,
@@ -361,6 +394,16 @@ export async function importLegacy(srcPath: string, destPath: string, options: I
 		noteExtensionsFolder(dirname(srcPath), report);
 		report.sourceTables = accountFor(report, before);
 		report.noSignIn = noSignInPeople(db, report);
+		const problems = problemCounts(report);
+		if (problems.failed + problems.unaccounted > 0) {
+			if (!options.acceptFailedRows) {
+				report.dest = 'not written';
+				report.refused = refusal(srcPath, problems, destDir);
+				writeReports(report, destDir);
+				throw new Error(report.refused);
+			}
+			report.acceptedFailures = true;
+		}
 		finished = true;
 		return report;
 	} finally {
@@ -392,6 +435,8 @@ export function renderReport(r: ImportReport): string {
 	const L: string[] = [];
 	const release = RELEASED_HEADS[r.alembicVersion];
 	L.push(`OPAL legacy import, ${r.at}`, `Source: ${r.source}`, `Result: ${r.dest}`, `Alembic: ${r.alembicVersion}${release ? ` (OPAL ${release})` : ''}`, '');
+	if (r.refused) L.push(r.refused, '');
+	if (r.acceptedFailures) L.push(`Imported without the failed rows, because --accept-failed-rows was given.`, '');
 	if (r.bridge) {
 		L.push(`Brought forward to ${r.bridge.to} on a private copy, ${r.bridge.steps.length} steps. The source file was not changed.`);
 		for (const s of r.bridge.steps.filter((x) => x.changes.length)) {
@@ -528,7 +573,8 @@ export function writeReports(report: ImportReport, dir: string): void {
 /** The one line a person starting OPAL needs. */
 export function reportSummary(report: ImportReport, dir: string): string {
 	const release = RELEASED_HEADS[report.alembicVersion];
-	const problems = `${report.failedRows.length} failed rows, ${report.warnings.length} warnings`;
+	const { failed, unaccounted } = problemCounts(report);
+	const problems = `${failed} failed rows${unaccounted ? `, ${unaccounted} not accounted for` : ''}${report.acceptedFailures ? ' (accepted)' : ''}, ${report.warnings.length} warnings`;
 	const summary = `Imported the ${release ? `OPAL ${release}` : 'legacy'} database: ${problems}. See ${join(dir, 'import-report.txt')}.`;
 	if (!report.onshapeKeys.length) return summary;
 	return `${summary}\nWarning: Onshape does not carry over to OPAL 2. These keys were not imported: ${report.onshapeKeys.join(', ')}. They are still in plaintext in ${report.source}. Revoke them in Onshape if you no longer need them.`;

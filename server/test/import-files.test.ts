@@ -5,11 +5,11 @@
 import { Database } from 'bun:sqlite';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, appendFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db/client.ts';
-import { hasAlembicVersion, importInPlace, importLegacy, importPending, mightBeLegacy, openSchemaImportDb } from '../src/import/index.ts';
+import { hasAlembicVersion, importInPlace, importLegacy, importPending, mightBeLegacy, openSchemaImportDb, reportSummary } from '../src/import/index.ts';
 import { buildLegacyFixture } from './fixtures/legacy-data.ts';
 
 const dirs: string[] = [];
@@ -56,7 +56,7 @@ describe('1.x stopped in the middle of a write', () => {
 
 	test('the import reads what was committed, not the unfinished write', async () => {
 		const { src, dir, committed } = crashedFolder();
-		const report = (await importInPlace(src, { open }))!;
+		const report = (await importInPlace(src, { open, acceptFailedRows: true }))!;
 		expect(report.warnings.some((w) => w.includes('unfinished write'))).toBe(true);
 		const fresh = new Database(join(dir, 'opal.db'));
 		expect((fresh.query('SELECT name FROM part ORDER BY id').all() as { name: string }[]).map((r) => r.name)).toEqual(committed);
@@ -66,7 +66,7 @@ describe('1.x stopped in the middle of a write', () => {
 
 	test('the new database does not land beside the journal of the old one', async () => {
 		const { src, dir } = crashedFolder();
-		await importInPlace(src, { open });
+		await importInPlace(src, { open, acceptFailedRows: true });
 		expect(existsSync(join(dir, 'opal.db-journal'))).toBe(false);
 		expect(existsSync(join(dir, 'opal.legacy.db-journal'))).toBe(true);
 	});
@@ -74,7 +74,7 @@ describe('1.x stopped in the middle of a write', () => {
 	test('the original moves with its journal, and opens to what was committed', async () => {
 		const { src, dir, committed } = crashedFolder();
 		const before = { main: sha(src), journal: sha(`${src}-journal`) };
-		await importInPlace(src, { open });
+		await importInPlace(src, { open, acceptFailedRows: true });
 		expect(sha(join(dir, 'opal.legacy.db'))).toBe(before.main);
 		expect(sha(join(dir, 'opal.legacy.db-journal'))).toBe(before.journal);
 		// On a copy, because opening it plays the journal back.
@@ -94,7 +94,7 @@ describe('1.x stopped in the middle of a write', () => {
 		Buffer.from([0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7]).copy(tail, 8);
 		appendFileSync(`${src}-journal`, Buffer.concat([name, tail]));
 		const before = sha(src);
-		await expect(importInPlace(src, { open })).rejects.toThrow('names another journal');
+		await expect(importInPlace(src, { open, acceptFailedRows: true })).rejects.toThrow('names another journal');
 		expect(readFileSync(victim, 'utf8')).toBe('keep me');
 		expect(sha(src)).toBe(before);
 	});
@@ -106,7 +106,7 @@ describe('1.x stopped in the middle of a write', () => {
 		bytes.fill(0xee, 4096, 12288);
 		writeFileSync(src, bytes);
 		const before = sha(src);
-		await expect(importInPlace(src, { open })).rejects.toThrow(/damaged|malformed/);
+		await expect(importInPlace(src, { open, acceptFailedRows: true })).rejects.toThrow(/damaged|malformed/);
 		expect(sha(src)).toBe(before);
 		expect(existsSync(join(dir, 'opal.legacy.db'))).toBe(false);
 		expect(existsSync(join(dir, 'opal.db.new'))).toBe(false);
@@ -121,21 +121,21 @@ describe('the private copy', () => {
 		const src = buildLegacyFixture(dir);
 		mkdirSync(join(dir, 'opal-import-src-left'));
 		writeFileSync(join(dir, 'opal-import-src-left', 'source.db'), 'plaintext');
-		await importInPlace(src, { open });
+		await importInPlace(src, { open, acceptFailedRows: true });
 		expect(copies(dir)).toEqual([]);
 	});
 
 	test('a finished import leaves no copy in the folder', async () => {
 		const dir = tmp();
 		const src = buildLegacyFixture(dir);
-		await importInPlace(src, { open });
+		await importInPlace(src, { open, acceptFailedRows: true });
 		expect(copies(dir)).toEqual([]);
 	});
 
 	test('a refused import leaves no copy in the folder', async () => {
 		const dir = tmp();
 		writeFileSync(join(dir, 'opal.db'), 'not a database, and long enough to have a header at all, which it needs to be looked at. And a little more than a hundred bytes.');
-		await importInPlace(join(dir, 'opal.db'), { open });
+		await importInPlace(join(dir, 'opal.db'), { open, acceptFailedRows: true });
 		expect(copies(dir)).toEqual([]);
 	});
 
@@ -178,7 +178,7 @@ describe('stopped between the renames', () => {
 	async function finished() {
 		const dir = tmp();
 		const src = buildLegacyFixture(dir);
-		await importInPlace(src, { open });
+		await importInPlace(src, { open, acceptFailedRows: true });
 		return { src, ready: join(dir, 'opal.db.imported'), legacy: join(dir, 'opal.legacy.db') };
 	}
 
@@ -190,7 +190,7 @@ describe('stopped between the renames', () => {
 		copyFileSync(legacy, src);
 		rmSync(legacy);
 		expect(importPending(src)).toBe(true);
-		const report = (await importInPlace(src, { open }))!;
+		const report = (await importInPlace(src, { open, acceptFailedRows: true }))!;
 		expect(report.dest).toBe(src);
 		expect(sha(src)).toBe(newBytes);
 		expect(sha(legacy)).toBe(oldBytes);
@@ -203,7 +203,7 @@ describe('stopped between the renames', () => {
 		copyFileSync(src, ready);
 		rmSync(src);
 		writeFileSync(`${src}-journal`, 'the journal of the old file');
-		const report = (await importInPlace(src, { open }))!;
+		const report = (await importInPlace(src, { open, acceptFailedRows: true }))!;
 		expect(report.dest).toBe(src);
 		expect(sha(src)).toBe(newBytes);
 		expect(existsSync(`${src}-journal`)).toBe(false);
@@ -218,7 +218,7 @@ describe('stopped between the renames', () => {
 		rmSync(src);
 		writeFileSync(`${src}.new`, 'half made');
 		expect(importPending(src)).toBe(true);
-		await expect(importInPlace(src, { open })).rejects.toThrow('did not finish');
+		await expect(importInPlace(src, { open, acceptFailedRows: true })).rejects.toThrow('did not finish');
 		expect(existsSync(src)).toBe(false);
 	});
 
@@ -226,9 +226,82 @@ describe('stopped between the renames', () => {
 		const dir = tmp();
 		const src = buildLegacyFixture(dir);
 		writeFileSync(`${src}.new`, 'half made');
-		expect(await importInPlace(src, { open })).not.toBeNull();
+		expect(await importInPlace(src, { open, acceptFailedRows: true })).not.toBeNull();
 		expect(existsSync(`${src}.new`)).toBe(false);
 		expect(statSync(src).size).toBeGreaterThan(100);
+	});
+});
+
+describe('a bad result', () => {
+	test('one failed row leaves the old database where it was, and the report names the row', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		const before = sha(src);
+		await expect(importInPlace(src, { open })).rejects.toThrow(/Did not import .*rows failed.*--accept-failed-rows/);
+		expect(sha(src)).toBe(before);
+		expect(existsSync(join(dir, 'opal.legacy.db'))).toBe(false);
+		expect(existsSync(join(dir, 'opal.db.new'))).toBe(false);
+		expect(existsSync(join(dir, 'opal.db.imported'))).toBe(false);
+		const report = readFileSync(join(dir, 'import-report.txt'), 'utf8');
+		expect(report).toContain('Did not import');
+		expect(report).toContain('Result: not written');
+		expect(report).toContain('attachment 4: file a4-missing.png is missing');
+	});
+
+	test('a refused import takes back the files it added', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		await expect(importInPlace(src, { open })).rejects.toThrow('Did not import');
+		expect(existsSync(join(dir, 'blobs')) ? readdirSync(join(dir, 'blobs')) : []).toEqual([]);
+	});
+
+	test('a person can accept the failed rows, and the report says so', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		const report = (await importInPlace(src, { open, acceptFailedRows: true }))!;
+		expect(report.acceptedFailures).toBe(true);
+		expect(existsSync(join(dir, 'opal.legacy.db'))).toBe(true);
+		expect(reportSummary(report, dir)).toContain('(accepted)');
+		expect(readFileSync(join(dir, 'import-report.txt'), 'utf8')).toContain('--accept-failed-rows was given');
+	});
+
+	test('rows nothing explains refuse the swap too', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		const db = new Database(src);
+		db.run('CREATE TABLE nothing_reads_this (id INTEGER PRIMARY KEY)');
+		db.run('INSERT INTO nothing_reads_this VALUES (1)');
+		db.close();
+		await expect(importInPlace(src, { open })).rejects.toThrow('not accounted for');
+	});
+
+	test('attachment rows with no folder are refused, pointing at the flag', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		rmSync(join(dir, 'attachments'), { recursive: true });
+		const before = sha(src);
+		await expect(importInPlace(src, { open })).rejects.toThrow(/attachments.*not there.*--attachments <folder>/);
+		expect(sha(src)).toBe(before);
+	});
+
+	test('the folder can be named instead', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		const elsewhere = join(dir, 'moved');
+		renameSync(join(dir, 'attachments'), elsewhere);
+		const report = (await importInPlace(src, { open, acceptFailedRows: true, attachmentsDir: elsewhere }))!;
+		expect(report.failedRows.filter((f) => f.table === 'attachment').length).toBe(1);
+	});
+
+	test('a database that lacks what its stamp claims is refused, naming what is missing', async () => {
+		const dir = tmp();
+		const src = buildLegacyFixture(dir);
+		const db = new Database(src);
+		db.run('ALTER TABLE step_note DROP COLUMN body');
+		db.close();
+		const before = sha(src);
+		await expect(importInPlace(src, { open, acceptFailedRows: true })).rejects.toThrow(/step_note\.body.*Its stamp may be wrong/);
+		expect(sha(src)).toBe(before);
 	});
 });
 
@@ -241,7 +314,7 @@ describe('opal import', () => {
 		db.run("INSERT INTO alembic_version VALUES ('b8d2f1a5c3e0')");
 		db.close();
 		const out = join(tmp(), 'new.db');
-		await expect(importLegacy(src, out, { open: async (p) => { await open(p); throw new Error('stopped'); } })).rejects.toThrow();
+		await expect(importLegacy(src, out, { acceptFailedRows: true, open: async (p) => { await open(p); throw new Error('stopped'); } })).rejects.toThrow();
 		expect(existsSync(out)).toBe(false);
 	});
 
@@ -250,7 +323,7 @@ describe('opal import', () => {
 		const src = buildLegacyFixture(dir);
 		const before = readdirSync(dir).sort();
 		const out = join(tmp(), 'new.db');
-		await importLegacy(src, out, { open });
+		await importLegacy(src, out, { open, acceptFailedRows: true });
 		expect(readdirSync(dir).sort()).toEqual(before);
 	});
 });

@@ -33,7 +33,7 @@ describe('names in the file', () => {
 		db.run(`ALTER TABLE part ADD COLUMN "${name.replaceAll('"', '""')}" TEXT`);
 		db.close();
 		const before = sha(src);
-		await expect(importInPlace(src, { open })).rejects.toThrow('no OPAL 1.x made');
+		await expect(importInPlace(src, { open, acceptFailedRows: true })).rejects.toThrow('no OPAL 1.x made');
 		expect(existsSync(stray(dir))).toBe(false);
 		expect(sha(src)).toBe(before);
 		expect(existsSync(join(dir, 'opal.legacy.db'))).toBe(false);
@@ -47,7 +47,7 @@ describe('names in the file', () => {
 		db.run(`CREATE TRIGGER "${name.replaceAll('"', '""')}" AFTER INSERT ON part BEGIN SELECT 1; END`);
 		db.close();
 		const before = sha(src);
-		await expect(importInPlace(src, { open })).rejects.toThrow('no OPAL 1.x made');
+		await expect(importInPlace(src, { open, acceptFailedRows: true })).rejects.toThrow('no OPAL 1.x made');
 		expect(existsSync(stray(dir))).toBe(false);
 		expect(sha(src)).toBe(before);
 	});
@@ -71,7 +71,7 @@ describe('files named in rows', () => {
 		const src = buildLegacyFixture(dir);
 		writeFileSync(join(dir, 'secret.key'), 'top secret');
 		issueAttachment(src, stored);
-		const report = await importLegacy(src, join(dir, 'new.db'), { open });
+		const report = await importLegacy(src, join(dir, 'new.db'), { open, acceptFailedRows: true });
 		expect(report.failedRows.some((f) => f.table === 'attachment')).toBe(true);
 		const stolen = createHash('sha256').update('top secret').digest('hex');
 		expect(existsSync(join(dir, 'blobs', stolen))).toBe(false);
@@ -83,7 +83,7 @@ describe('files named in rows', () => {
 		writeFileSync(join(dir, 'secret.key'), 'top secret');
 		symlinkSync(join(dir, 'secret.key'), join(dir, 'attachments', 'innocent.png'));
 		issueAttachment(src, 'innocent.png');
-		const report = await importLegacy(src, join(dir, 'new.db'), { open });
+		const report = await importLegacy(src, join(dir, 'new.db'), { open, acceptFailedRows: true });
 		expect(report.failedRows.some((f) => f.table === 'attachment' && f.reason.includes('not a regular file'))).toBe(true);
 		expect(existsSync(join(dir, 'blobs', createHash('sha256').update('top secret').digest('hex')))).toBe(false);
 	});
@@ -95,7 +95,7 @@ describe('files named in rows', () => {
 		writeFileSync(join(dir, 'elsewhere', 'secret.key'), 'top secret');
 		symlinkSync(join(dir, 'elsewhere'), join(dir, 'attachments', 'sub'));
 		issueAttachment(src, 'sub/secret.key');
-		const report = await importLegacy(src, join(dir, 'new.db'), { open });
+		const report = await importLegacy(src, join(dir, 'new.db'), { open, acceptFailedRows: true });
 		expect(report.failedRows.some((f) => f.table === 'attachment' && f.reason.includes('leads outside'))).toBe(true);
 	});
 
@@ -104,7 +104,7 @@ describe('files named in rows', () => {
 		const src = buildLegacyFixture(dir);
 		Bun.spawnSync(['mkfifo', join(dir, 'attachments', 'pipe.png')]);
 		issueAttachment(src, 'pipe.png');
-		const report = await importLegacy(src, join(dir, 'new.db'), { open });
+		const report = await importLegacy(src, join(dir, 'new.db'), { open, acceptFailedRows: true });
 		expect(report.failedRows.some((f) => f.table === 'attachment' && f.reason.includes('not a regular file'))).toBe(true);
 	});
 
@@ -115,7 +115,7 @@ describe('files named in rows', () => {
 		const db = new Database(src);
 		db.query('UPDATE user SET avatar_filename = ?, avatar_source = ? WHERE id = (SELECT MIN(id) FROM user)').run('../../secret.key', 'upload');
 		db.close();
-		const report = await importLegacy(src, join(dir, 'new.db'), { open });
+		const report = await importLegacy(src, join(dir, 'new.db'), { open, acceptFailedRows: true });
 		expect(report.failedRows.some((f) => f.table === 'user' && f.reason.startsWith('avatar'))).toBe(true);
 		expect(existsSync(join(dir, 'avatars', createHash('sha256').update('top secret').digest('hex')))).toBe(false);
 	});
@@ -130,7 +130,7 @@ describe('files named in rows', () => {
 		const hash = createHash('sha256').update(whole).digest('hex');
 		mkdirSync(join(dir, 'blobs'));
 		writeFileSync(join(dir, 'blobs', hash), whole.subarray(0, 3));
-		await importLegacy(src, join(dir, 'new.db'), { open });
+		await importLegacy(src, join(dir, 'new.db'), { open, acceptFailedRows: true });
 		expect(createHash('sha256').update(readFileSync(join(dir, 'blobs', hash))).digest('hex')).toBe(hash);
 	});
 
@@ -144,7 +144,7 @@ describe('files named in rows', () => {
 		};
 		mkdirSync(join(dir, 'blobs'));
 		writeFileSync(join(dir, 'blobs', 'found-here'), 'x');
-		await expect(importLegacy(src, join(dir, 'new.db'), { open: failing })).rejects.toThrow('stopped on purpose');
+		await expect(importLegacy(src, join(dir, 'new.db'), { open: failing, acceptFailedRows: true })).rejects.toThrow('stopped on purpose');
 		expect(readdirSync(join(dir, 'blobs'))).toEqual(['found-here']);
 		expect(existsSync(join(dir, 'new.db'))).toBe(false);
 	});

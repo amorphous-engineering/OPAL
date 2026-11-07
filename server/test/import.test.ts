@@ -28,7 +28,7 @@ describe('legacy import of a database with rows in every table', async () => {
 	const src = buildLegacyFixture(dir);
 	const before = readFileSync(src);
 	const dest = join(dir, 'new.db');
-	const report = await importLegacy(src, dest, { open });
+	const report = await importLegacy(src, dest, { open, acceptFailedRows: true });
 	const out = new Database(dest, { readonly: true });
 	const q = (s: string) => out.query(s).all() as Cells[];
 	const one = (s: string) => q(s)[0] as Cells;
@@ -452,11 +452,11 @@ describe('legacy import of a database with rows in every table', async () => {
 	test('refuses a wrong alembic version', async () => {
 		const d = tmp();
 		const old = buildLegacyFixture(d, { version: 'deadbeef0000' });
-		await expect(importLegacy(old, join(d, 'x.db'), { open })).rejects.toThrow(OLD_VERSION_MESSAGE);
+		await expect(importLegacy(old, join(d, 'x.db'), { open, acceptFailedRows: true })).rejects.toThrow(OLD_VERSION_MESSAGE);
 	});
 
 	test('refuses an existing destination', async () => {
-		await expect(importLegacy(src, dest, { open })).rejects.toThrow('already exists');
+		await expect(importLegacy(src, dest, { open, acceptFailedRows: true })).rejects.toThrow('already exists');
 	});
 });
 
@@ -467,7 +467,7 @@ describe('a work order aborted in 1.x', async () => {
 	legacy.run("UPDATE procedure_instance SET status = 'aborted' WHERE id = 2");
 	legacy.close();
 	const dest = join(dir, 'new.db');
-	const report = await importLegacy(src, dest, { open });
+	const report = await importLegacy(src, dest, { open, acceptFailedRows: true });
 
 	test('imports as closed short, not as cut', () => {
 		const out = new Database(dest, { readonly: true });
@@ -485,20 +485,20 @@ describe('importInPlace', () => {
 		const d = tmp();
 		const p = buildLegacyFixture(d);
 		const before = readFileSync(p);
-		const report = await importInPlace(p, { open });
+		const report = await importInPlace(p, { open, acceptFailedRows: true });
 		expect(report?.tables.part!.imported).toBe(6);
 		expect(readFileSync(join(d, 'opal.legacy.db')).equals(before)).toBe(true);
 		expect(existsSync(`${p}.new`)).toBe(false);
 		expect(existsSync(join(d, 'import-report.txt'))).toBe(true);
 		expect(JSON.parse(readFileSync(join(d, 'import-report.json'), 'utf8')).tables.user.imported).toBe(2);
 		expect(existsSync(join(d, 'blobs'))).toBe(true);
-		expect(await importInPlace(p, { open })).toBeNull();
+		expect(await importInPlace(p, { open, acceptFailedRows: true })).toBeNull();
 	});
 
 	test('the renamed file is complete on its own: no WAL left behind, every row readable', async () => {
 		const d = tmp();
 		const p = buildLegacyFixture(d);
-		await importInPlace(p, { open });
+		await importInPlace(p, { open, acceptFailedRows: true });
 		expect(existsSync(`${p}.new-wal`)).toBe(false);
 		const db = new Database(p, { readonly: true });
 		expect((db.query('SELECT COUNT(*) AS n FROM part').get() as { n: number }).n).toBe(6);
@@ -510,7 +510,7 @@ describe('importInPlace', () => {
 		const p = buildLegacyFixture(d);
 		copyFileSync(p, join(d, 'opal.legacy.db'));
 		const before = readFileSync(p);
-		await expect(importInPlace(p, { open })).rejects.toThrow('already exists');
+		await expect(importInPlace(p, { open, acceptFailedRows: true })).rejects.toThrow('already exists');
 		expect(readFileSync(p).equals(before)).toBe(true);
 	});
 });
@@ -520,7 +520,7 @@ describe('seeded demo database', () => {
 		const d = tmp();
 		const copy = join(d, 'seed.db');
 		copyFileSync(SEED, copy);
-		const report = await importLegacy(copy, join(d, 'out.db'), { open });
+		const report = await importLegacy(copy, join(d, 'out.db'), { open, acceptFailedRows: true });
 		expect(report.failedRows).toEqual([]);
 		for (const [name, t] of Object.entries(report.tables)) {
 			if (name === 'designator_sequence') continue;

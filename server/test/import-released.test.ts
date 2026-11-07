@@ -55,6 +55,40 @@ const RELEASES: [name: string, revision: string][] = [
 	['v1.4.0-beta.3', 'f3a9d2c8b501']
 ];
 
+describe('a stamp is only what the file claims', () => {
+	test.each(RELEASES.filter(([, revision]) => revision !== 'f3a9d2c8b501'))('%s stamped at the head is refused or reads the same', async (name) => {
+		const correctDir = tmp();
+		const correct = (await importInPlace(unpack(name, correctDir), { open }))!;
+		const dir = tmp();
+		const src = unpack(name, dir);
+		const db = new Database(src);
+		db.query('UPDATE alembic_version SET version_num = ?').run(LEGACY_HEAD);
+		db.close();
+		const before = sha(src);
+		const report = await importInPlace(src, { open }).catch((e: Error) => e);
+		if (report instanceof Error) {
+			expect(report.message).toMatch(/Its stamp may be wrong|Could not bring/);
+			expect(sha(src)).toBe(before);
+			return;
+		}
+		expect(Object.fromEntries(Object.entries(report!.tables).map(([t, r]) => [t, r.imported]))).toEqual(Object.fromEntries(Object.entries(correct.tables).map(([t, r]) => [t, r.imported])));
+	});
+
+	test('a 1.4.0-beta.3 file stamped at the head does not lose its procedures', async () => {
+		const correctDir = tmp();
+		const correct = (await importInPlace(unpack('v1.4.0-beta.3', correctDir), { open }))!;
+		const dir = tmp();
+		const src = unpack('v1.4.0-beta.3', dir);
+		const db = new Database(src);
+		db.query('UPDATE alembic_version SET version_num = ?').run(LEGACY_HEAD);
+		db.close();
+		const report = await importInPlace(src, { open }).catch((e: Error) => e);
+		if (report instanceof Error) expect(report.message).toMatch(/Its stamp may be wrong|Could not bring|Did not import/);
+		else expect(report!.tables.master_procedure!.imported).toBe(correct.tables.master_procedure!.imported);
+		expect(existsSync(join(dir, 'opal.legacy.db'))).toBe(!(report instanceof Error));
+	});
+});
+
 const tableNames = (db: Database) =>
 	(db.query("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name).filter((n) => !n.startsWith('sqlite_') && !n.includes('_fts'));
 const columnNames = (db: Database, t: string) => (db.query(`PRAGMA table_info("${t}")`).all() as { name: string }[]).map((r) => r.name);
