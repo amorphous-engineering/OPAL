@@ -10,9 +10,9 @@
  */
 import { Database } from 'bun:sqlite';
 import { now } from '@opal/shared';
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Db } from '../db/client.ts';
 import { auditLog } from '../db/schema/index.ts';
 import { noSignInPeople } from '../services/auth/claim.ts';
@@ -109,27 +109,131 @@ function accountFor(report: ImportReport, source: Map<string, number>): SourceTa
 	});
 }
 
+/** The private copy holds everything the old file did, secrets included, so its folder is private and swept. */
+const COPY_PREFIX = 'opal-import-src-';
+const TMP_COPY_AGE_MS = 3_600_000;
+
+function removeCopies(dir: string, olderThanMs = 0): void {
+	let names: string[];
+	try {
+		names = readdirSync(dir).filter((n) => n.startsWith(COPY_PREFIX));
+	} catch {
+		return;
+	}
+	for (const name of names) {
+		try {
+			const path = join(dir, name);
+			if (Date.now() - statSync(path).mtimeMs >= olderThanMs) rmSync(path, { recursive: true, force: true });
+		} catch {
+			// Someone else's, or gone already.
+		}
+	}
+}
+
 /**
- * Opens a private copy of the source. The old file is never opened, so it stays
- * byte-identical. Read-only opens are not portable: a WAL file with no -wal sidecar
- * needs an immutable URI, and Bun's bundled SQLite on Linux rejects URI filenames.
+ * Copies left by a run that was killed. Earlier versions put theirs in the system temp folder, where
+ * another install may be working right now, so only an old one goes there.
  */
-export function openSource(path: string): { db: Database; close(): void } {
-	const dir = mkdtempSync(join(tmpdir(), 'opal-import-src-'));
-	const copy = join(dir, 'source.db');
-	copyFileSync(path, copy);
-	if (existsSync(`${path}-wal`)) copyFileSync(`${path}-wal`, `${copy}-wal`);
-	const db = new Database(copy);
-	return {
-		db,
-		close() {
-			db.close();
+export function sweepImportCopies(dir: string): void {
+	removeCopies(dir);
+	removeCopies(tmpdir(), TMP_COPY_AGE_MS);
+}
+
+/** 1.x never writes a transaction across two databases. SQLite would open and may delete a file named here. */
+const SUPER_JOURNAL_MAGIC = Buffer.from([0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7]);
+
+function assertPlainJournal(path: string): void {
+	const size = statSync(path).size;
+	if (size < 16) return;
+	const tail = Buffer.alloc(8);
+	const fd = openSync(path, 'r');
+	try {
+		readSync(fd, tail, 0, 8, size - 8);
+	} finally {
+		closeSync(fd);
+	}
+	if (tail.equals(SUPER_JOURNAL_MAGIC)) throw new Error(`${path} names another journal, which no OPAL 1.x writes. It was not imported, and the file was not changed.`);
+}
+
+/** Beside the copy under the name SQLite looks for, so an unfinished write rolls back there and not in the original. */
+function copySidecar(from: string, to: string): void {
+	if (!existsSync(from)) return;
+	if (!lstatSync(from).isFile()) throw new Error(`${from} is not a regular file. It was not imported, and the file was not changed.`);
+	if (from.endsWith('-journal')) assertPlainJournal(from);
+	copyFileSync(from, to);
+}
+
+/**
+ * Opens a private copy of the source, with what SQLite needs to finish or undo its last write, in `workDir`.
+ * The old file is never opened, so it stays byte-identical. Read-only opens are not portable: a WAL file
+ * with no -wal sidecar needs an immutable URI, and Bun's bundled SQLite on Linux rejects URI filenames.
+ */
+export function openSource(path: string, workDir: string = dirname(path)): { db: Database; close(): void } {
+	const dir = mkdtempSync(join(workDir, COPY_PREFIX));
+	const remove = () => {
+		try {
 			rmSync(dir, { recursive: true, force: true });
+		} catch {
+			// Windows can hold a file a moment after close. The next start sweeps it.
 		}
 	};
+	try {
+		const copy = join(dir, 'source.db');
+		copyFileSync(path, copy);
+		copySidecar(`${path}-wal`, `${copy}-wal`);
+		copySidecar(`${path}-journal`, `${copy}-journal`);
+		const db = new Database(copy);
+		// The schema in this file is not ours: a view or trigger in it gets no special powers.
+		db.run('PRAGMA trusted_schema = OFF');
+		return {
+			db,
+			close() {
+				db.close();
+				remove();
+			}
+		};
+	} catch (e) {
+		remove();
+		throw e;
+	}
+}
+
+/** After a crash the copy has rolled back by now. What is still wrong is damage, and it would be read as data. */
+function assertReadable(src: Database, label: string): void {
+	let problems: string[];
+	try {
+		problems = (src.query('PRAGMA quick_check(5)').all() as { quick_check: string }[]).map((r) => r.quick_check).filter((m) => m !== 'ok');
+	} catch (e) {
+		problems = [e instanceof Error ? e.message : String(e)];
+	}
+	if (problems.length) throw new Error(`${label} is damaged: ${problems.join('; ')}. It was not imported, and the file was not changed. A backup from before the damage can be imported instead.`);
+}
+
+const SQLITE_MAGIC = 'SQLite format 3\0';
+const USER_VERSION_AT = 60;
+
+/**
+ * Whether this file could be a 1.x database, from its first bytes. OPAL 2 sets user_version on its own
+ * files and Alembic never does, so a running install is not copied at every start to find this out.
+ */
+export function mightBeLegacy(path: string): boolean {
+	if (!existsSync(path)) return false;
+	const head = Buffer.alloc(100);
+	const fd = openSync(path, 'r');
+	let got: number;
+	try {
+		got = readSync(fd, head, 0, 100, 0);
+	} finally {
+		closeSync(fd);
+	}
+	if (got < 100 || head.toString('latin1', 0, 16) !== SQLITE_MAGIC) return false;
+	// An unfinished write may be in the first page too, so only the rolled-back file can answer.
+	if (existsSync(`${path}-journal`) && statSync(`${path}-journal`).size > 0) return true;
+	return head.readUInt32BE(USER_VERSION_AT) === 0;
 }
 
 export function hasAlembicVersion(path: string): boolean {
+	if (!mightBeLegacy(path)) return false;
 	const source = openSource(path);
 	try {
 		return !!source.db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'alembic_version'").get();
@@ -154,7 +258,7 @@ export function checkSource(src: Database, label: string): string {
  */
 export function importInto(src: Database, d: Db, report: ImportReport, opts: ResolvedOptions): void {
 	const sqlite = d.$client;
-	const c: ImportCtx = { legacyTables: opts.legacyTables, src, d, report, attachmentsDir: opts.attachmentsDir, blobsDir: opts.blobsDir, avatarsDir: opts.avatarsDir, ids: {}, projectId: 0 };
+	const c: ImportCtx = { legacyTables: opts.legacyTables, src, d, report, attachmentsDir: opts.attachmentsDir, blobsDir: opts.blobsDir, avatarsDir: opts.avatarsDir, createdFiles: opts.createdFiles ?? [], ids: {}, projectId: 0 };
 	// Foreign keys are checked once at the end, so cycles (a risk and its realized issue) and
 	// order do not matter. A violation is reported as a failed row.
 	sqlite.run('PRAGMA foreign_keys = OFF');
@@ -218,27 +322,46 @@ export function importInto(src: Database, d: Db, report: ImportReport, opts: Res
 	}
 }
 
+const SIDECARS = ['-wal', '-shm', '-journal'];
+
+function removeWithSidecars(path: string): void {
+	for (const suffix of ['', ...SIDECARS]) rmSync(path + suffix, { force: true });
+}
+
 export async function importLegacy(srcPath: string, destPath: string, options: ImportOptions & { open?: (path: string) => Promise<Db> } = {}): Promise<ImportReport> {
 	if (existsSync(destPath)) throw new Error(`Destination already exists: ${destPath}`);
-	const source = openSource(srcPath);
+	const destDir = dirname(destPath);
+	mkdirSync(destDir, { recursive: true });
+	sweepImportCopies(destDir);
+	const source = openSource(srcPath, destDir);
+	const blobsDir = options.blobsDir ?? join(destDir, 'blobs');
+	const avatarsDir = options.avatarsDir ?? join(destDir, 'avatars');
+	const createdFiles: string[] = [];
 	let db: Db | undefined;
+	let finished = false;
 	try {
+		assertReadable(source.db, srcPath);
 		const version = checkSource(source.db, srcPath);
 		assertPlainNames(source.db);
 		const report = emptyReport(srcPath, destPath, version, now());
+		if (existsSync(`${srcPath}-journal`) && statSync(`${srcPath}-journal`).size > 0) {
+			report.warnings.push('The database had an unfinished write from when 1.x last stopped. It was read with that write undone, as 1.x would have done. The original and its journal are kept together.');
+		}
 		const before = sourceRows(source.db);
 		if (version !== LEGACY_HEAD) report.bridge = bridgeToHead(source.db, version);
 		addProjectFile(source.db, srcPath, options.projectFile, report);
 		db = await (options.open ?? openImportDb)(destPath);
 		importInto(source.db, db, report, {
 			attachmentsDir: options.attachmentsDir ?? join(dirname(srcPath), 'attachments'),
-			blobsDir: options.blobsDir ?? join(dirname(destPath), 'blobs'),
-			avatarsDir: options.avatarsDir ?? join(dirname(destPath), 'avatars'),
-			legacyTables: true
+			blobsDir,
+			avatarsDir,
+			legacyTables: true,
+			createdFiles
 		});
 		noteExtensionsFolder(dirname(srcPath), report);
 		report.sourceTables = accountFor(report, before);
 		report.noSignIn = noSignInPeople(db, report);
+		finished = true;
 		return report;
 	} finally {
 		source.close();
@@ -248,6 +371,11 @@ export async function importLegacy(srcPath: string, destPath: string, options: I
 			db.$client.run('PRAGMA wal_checkpoint(TRUNCATE)');
 			db.$client.run('PRAGMA journal_mode = DELETE');
 			db.$client.close(true);
+		}
+		// An empty database at the destination would look like a new install.
+		if (!finished) {
+			removeWithSidecars(destPath);
+			for (const file of createdFiles) rmSync(file, { force: true });
 		}
 	}
 }
@@ -314,41 +442,81 @@ export function renderReport(r: ImportReport): string {
 	return `${L.join('\n')}\n`;
 }
 
+const legacyPathOf = (dbPath: string) => join(dirname(dbPath), 'opal.legacy.db');
+const newPathOf = (dbPath: string) => `${dbPath}.new`;
+/** The result under this name is complete, and swapping it in is all that is left to do. */
+const readyPathOf = (dbPath: string) => `${dbPath}.imported`;
+
+/** Whether the next start has import work to do. Cheap, and true for anything that needs a closer look. */
+export function importPending(dbPath: string): boolean {
+	return existsSync(readyPathOf(dbPath)) || existsSync(newPathOf(dbPath)) || mightBeLegacy(dbPath);
+}
+
+function fsyncPath(path: string): void {
+	let fd: number | undefined;
+	try {
+		fd = openSync(path, 'r');
+		fsyncSync(fd);
+	} catch {
+		// Windows cannot open a folder this way.
+	} finally {
+		if (fd !== undefined) closeSync(fd);
+	}
+}
+
+/**
+ * Puts the finished result in place. The old file moves first and its sidecars with it: a journal left
+ * behind would be played back into the new file. Safe to run again from any point it was stopped.
+ */
+function finishSwap(dbPath: string): void {
+	const legacyPath = legacyPathOf(dbPath);
+	if (existsSync(dbPath)) {
+		if (existsSync(legacyPath)) throw new Error(`Cannot finish the import: ${dbPath} and ${legacyPath} both exist, and the finished result is ${readyPathOf(dbPath)}. Move one of them, then start again.`);
+		renameSync(dbPath, legacyPath);
+	}
+	for (const suffix of SIDECARS) {
+		if (existsSync(dbPath + suffix)) renameSync(dbPath + suffix, legacyPath + suffix);
+	}
+	renameSync(readyPathOf(dbPath), dbPath);
+	fsyncPath(dirname(dbPath));
+}
+
 /**
  * If the file at dbPath is a legacy database, import into <dbPath>.new, then rename the
  * old file to opal.legacy.db and the new one to opal.db. The old file is never changed.
  * Returns null when the file is already in the new format.
  */
 export async function importInPlace(dbPath: string, options: Parameters<typeof importLegacy>[2] = {}): Promise<ImportReport | null> {
-	if (!existsSync(dbPath) || !hasAlembicVersion(dbPath)) return null;
 	const dir = dirname(dbPath);
-	const legacyPath = join(dir, 'opal.legacy.db');
-	const newPath = `${dbPath}.new`;
+	const legacyPath = legacyPathOf(dbPath);
+	const newPath = newPathOf(dbPath);
+	// A run stopped between its renames. The report was written before the first of them.
+	if (existsSync(readyPathOf(dbPath))) {
+		finishSwap(dbPath);
+		return JSON.parse(readFileSync(join(dir, 'import-report.json'), 'utf8')) as ImportReport;
+	}
+	if (!existsSync(dbPath) && existsSync(legacyPath) && existsSync(newPath)) {
+		throw new Error(`${dbPath} is missing, and ${newPath} is an import that did not finish. To import again, remove ${newPath} and rename ${legacyPath} to ${dbPath}.`);
+	}
+	if (!existsSync(dbPath) || !hasAlembicVersion(dbPath)) {
+		removeWithSidecars(newPath);
+		return null;
+	}
 	if (existsSync(legacyPath)) {
 		throw new Error(`Cannot import: ${legacyPath} already exists. Move it, then start again.`);
 	}
-	for (const suffix of ['', '-wal', '-shm']) rmSync(newPath + suffix, { force: true });
+	removeWithSidecars(newPath);
 
-	let report: ImportReport;
-	try {
-		report = await importLegacy(dbPath, newPath, { blobsDir: join(dir, 'blobs'), avatarsDir: join(dir, 'avatars'), ...options });
-	} catch (e) {
-		// A half-made result is no use to anyone, and the next start would only delete it.
-		for (const suffix of ['', '-wal', '-shm']) rmSync(newPath + suffix, { force: true });
-		throw e;
-	}
+	const report = await importLegacy(dbPath, newPath, { blobsDir: join(dir, 'blobs'), avatarsDir: join(dir, 'avatars'), ...options });
 	if (existsSync(`${newPath}-wal`)) throw new Error(`Import left ${newPath}-wal behind; not renaming.`);
-
-	renameSync(dbPath, legacyPath);
-	for (const suffix of ['-wal', '-shm']) {
-		if (existsSync(dbPath + suffix)) renameSync(dbPath + suffix, legacyPath + suffix);
-	}
-	renameSync(newPath, join(dir, basename(dbPath)));
-	for (const suffix of ['-wal', '-shm']) rmSync(newPath + suffix, { force: true });
 	report.source = legacyPath;
 	report.dest = dbPath;
-
 	writeReports(report, dir);
+
+	fsyncPath(newPath);
+	renameSync(newPath, readyPathOf(dbPath));
+	fsyncPath(dir);
+	finishSwap(dbPath);
 	return report;
 }
 

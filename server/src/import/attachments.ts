@@ -1,9 +1,7 @@
 /** attachment: copy each file into the blob store by SHA-256 and link it to its owner. */
-import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 import { ATTACHMENT_KINDS } from '@opal/shared';
 import { attachment, blob } from '../db/schema/index.ts';
+import { sourceFile, storeByHash } from './files.ts';
 import { type ImportCtx, type Row, derived, fail, insertRows, leaveInLegacyRow, oneOf, readTable, ref, str, track, tsReq, warn } from './context.ts';
 
 /**
@@ -47,18 +45,20 @@ export function importAttachments(c: ImportCtx): BlobMap {
 	const links: Record<string, unknown>[] = [];
 	for (const r of rows) {
 		const id = Number(r.id);
-		const path = join(c.attachmentsDir, String(r.stored_filename));
-		if (!existsSync(path)) {
+		const file = sourceFile(c.attachmentsDir, r.stored_filename);
+		if ('missing' in file) {
 			fail(c, 'attachment', id, `file ${String(r.stored_filename)} is missing`);
 			continue;
 		}
-		const bytes = readFileSync(path);
-		const sha = createHash('sha256').update(bytes).digest('hex');
+		if ('refused' in file) {
+			fail(c, 'attachment', id, file.refused);
+			continue;
+		}
+		const stored = storeByHash(file.path, c.blobsDir, c.createdFiles);
+		const sha = stored.sha256;
+		if (r.size_bytes != null && Number(r.size_bytes) !== stored.size) warn(c, `attachment ${id} ${String(r.original_filename)}: the record says ${Number(r.size_bytes)} bytes and the file has ${stored.size}, kept the file`);
 		if (!blobs.has(sha)) {
-			mkdirSync(c.blobsDir, { recursive: true });
-			const out = join(c.blobsDir, sha);
-			if (!existsSync(out)) copyFileSync(path, out);
-			blobs.set(sha, { size: statSync(path).size, mime: String(r.mime_type), at: tsReq(r.created_at) });
+			blobs.set(sha, { size: stored.size, mime: String(r.mime_type), at: tsReq(r.created_at) });
 		} else {
 			const b = blobs.get(sha)!;
 			const at = tsReq(r.created_at);

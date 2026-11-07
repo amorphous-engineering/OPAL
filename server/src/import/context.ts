@@ -90,6 +90,8 @@ export interface ResolvedOptions {
 	avatarsDir: string;
 	/** False when the destination has no legacy_audit and legacy_row tables. Their rows are then lost. */
 	legacyTables: boolean;
+	/** Files the import adds are listed here, so a failed one can remove them. */
+	createdFiles?: string[];
 }
 
 export interface ImportCtx {
@@ -100,6 +102,8 @@ export interface ImportCtx {
 	attachmentsDir: string;
 	blobsDir: string;
 	avatarsDir: string;
+	/** Files this import added to the blob and avatar folders. */
+	createdFiles: string[];
 	/** Ids that exist in the destination, per new table. Filled as tables are written. */
 	ids: Record<string, Set<number>>;
 	projectId: number;
