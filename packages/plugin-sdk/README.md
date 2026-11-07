@@ -68,7 +68,7 @@ secrets or `OPAL_DATA_DIR`. Put what a plugin needs in its settings.
 
 ## Trust
 
-The token limits a plugin's API calls. What limits its process depends on the system, and on macOS, on Windows and on Linux without Landlock nothing does: the plugin has shell-level access, runs as the same user as OPAL and can read the database. The README in the OPAL repository has the table. Install only plugins you would trust with a login on that machine.
+The token limits a plugin's API calls. What limits its process depends on the system, and on macOS, on Windows, on Linux without Landlock and for root in a container with mapped user IDs nothing does: the plugin has shell-level access, runs as the same user as OPAL and can read the database. The README in the OPAL repository has the table. Install only plugins you would trust with a login on that machine.
 
 ## Running confined
 

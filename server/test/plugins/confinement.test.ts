@@ -469,11 +469,13 @@ describe.if(ROOT)('a plugin started by root', () => {
 		expect((await s.get('/inside')).write).toEqual({ ok: true, value: 'kept' });
 		expect(await s.get('/api?path=/auth/me')).toEqual({ status: 200 });
 		await s.get('/keep?text=across-updates');
+		const { pid } = s.host.process('reach');
 		await s.installCommit(SHA2, '2');
-		await until(() => s.host.process('reach').state === 'starting' || s.host.process('reach').state === 'running');
-		await s.running();
+		await until(() => s.host.process('reach').state === 'running' && s.host.process('reach').pid !== pid);
 		const v = await s.get('/version');
 		expect(v.version).toBe('2');
 		expect(v.mine).toEqual({ ok: true, value: 'across-updates' });
+		expect(s.host.process('reach').confinement).toBe('separate-user');
+		denied((await s.get(`/outside?home=${encodeURIComponent(homedir())}`)).db);
 	});
 });

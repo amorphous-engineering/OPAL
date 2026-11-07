@@ -42,6 +42,8 @@ function outside(q) {
 	const db = join(root, 'opal.db');
 	const code = new URL('.', import.meta.url).pathname;
 	const server = process.ppid;
+	// Under a user of its own the plugin cannot even list these, which also counts as refused.
+	const fds = attempt(() => readdirSync(`/proc/${server}/fd`));
 	return {
 		db: attempt(() => readFileSync(db).subarray(0, 15).toString()),
 		dbWal: attempt(() => readFileSync(`${db}-wal`).length),
@@ -73,7 +75,7 @@ function outside(q) {
 		serverMem: attempt(() => readFileSync(`/proc/${server}/mem`).length),
 		serverCwd: attempt(() => readdirSync(`/proc/${server}/cwd/`)),
 		serverRoot: attempt(() => readdirSync(`/proc/${server}/root${root}`)),
-		serverFds: readdirSync(`/proc/${server}/fd`).map((fd) => attempt(() => readlinkSync(`/proc/${server}/fd/${fd}`)))
+		serverFds: fds.ok ? fds.value.map((fd) => attempt(() => readlinkSync(`/proc/${server}/fd/${fd}`))) : [fds]
 	};
 }
 
