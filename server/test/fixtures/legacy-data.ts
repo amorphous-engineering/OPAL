@@ -42,6 +42,8 @@ export function buildLegacyFixture(dir: string, opts: { version?: string } = {})
 	mkdirSync(join(dir, 'attachments', 'avatars'), { recursive: true });
 	const path = join(dir, 'opal.db');
 	const db = new Database(path, { create: true });
+	// One commit, not one per row: a slow disk spends minutes on this fixture otherwise.
+	db.run('BEGIN');
 	db.exec(readFileSync(SCHEMA, 'utf8'));
 	db.run('DELETE FROM alembic_version');
 	db.run('INSERT INTO alembic_version VALUES (?)', [opts.version ?? LEGACY_HEAD]);
@@ -243,6 +245,7 @@ export function buildLegacyFixture(dir: string, opts: { version?: string } = {})
 	ins(db, 'extension', { id: 'ext1', name: 'E', version: '1', origin: 'user', enabled: 1, installed_at: T0, manifest: {} });
 	ins(db, 'onshape_link', { part_id: 10, document_id: 'd', element_id: 'e', part_id_onshape: 'p', stale: 0 });
 	ins(db, 'onshape_sync_log', { started_at: T0, direction: 'pull', trigger: 'manual', status: 'ok', parts_created: 0, parts_updated: 0, bom_lines_created: 0, bom_lines_updated: 0, bom_lines_removed: 0 });
+	db.run('COMMIT');
 	db.close();
 	return path;
 }
