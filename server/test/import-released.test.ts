@@ -113,8 +113,8 @@ describe('numbers that are one number at full width', () => {
 		old.close();
 		const report = (await importInPlace(src, { open }))!;
 		expect(report.failedRows).toEqual([]);
-		expect(report.renumbered).toEqual([{ table: 'procedure_instance', id: b!, from: 'WO-0042', to: 'WO-0000000042-DUP2' }]);
-		expect(renderReport(report)).toContain('WO-0042 is now WO-0000000042-DUP2');
+		expect(report.renumbered).toEqual([{ table: 'procedure_instance', id: b!, from: 'WO-0042', to: 'WO-0042-DUP2' }]);
+		expect(renderReport(report)).toContain('WO-0042 is now WO-0042-DUP2');
 		expect(counts(src)).toEqual(counts(expected));
 		expect((await openEveryRecord(src)).refused).toEqual([]);
 		const again = new Database(src, { readonly: true });
@@ -123,10 +123,10 @@ describe('numbers that are one number at full width', () => {
 	});
 
 	test.each([
-		['purchase', 'reference', 'purchase', 'reference', 'PO-12', 'PO-0012', 'PO-0000000012'],
-		['inventory_record', 'opal_number', 'stock_record', 'opal_number', 'OPAL-9912', 'OPAL-09912', 'OPAL-0000009912'],
-		['part', 'internal_pn', 'part', 'internal_pn', 'KST-F-0001', 'KST-F-00001', 'KST-F-0000000001']
-	])('%s numbers that differ only in width both survive, and OPAL still starts', async (table, column, newTable, newColumn, first, second, stored) => {
+		['purchase', 'reference', 'purchase', 'reference', 'PO-12', 'PO-0012', 'PO-0000000012', 'PO-0012'],
+		['inventory_record', 'opal_number', 'stock_record', 'opal_number', 'OPAL-9912', 'OPAL-09912', 'OPAL-0000009912', 'OPAL-9912'],
+		['part', 'internal_pn', 'part', 'internal_pn', 'KST-F-0001', 'KST-F-00001', 'KST-F-0000000001', 'KST-F-0001']
+	])('%s numbers that differ only in width both survive, and OPAL still starts', async (table, column, newTable, newColumn, first, second, stored, shown) => {
 		const d = tmp();
 		const src = unpack('v1.3.2', d);
 		const old = new Database(src);
@@ -136,7 +136,7 @@ describe('numbers that are one number at full width', () => {
 		old.close();
 		const report = (await importInPlace(src, { open }))!;
 		expect(report.failedRows).toEqual([]);
-		expect(report.renumbered).toEqual([{ table, id: b!, from: second, to: `${stored}-DUP2` }]);
+		expect(report.renumbered).toEqual([{ table, id: b!, from: second, to: `${shown}-DUP2` }]);
 		// Twice: the width step runs at the first start, and it must never trip on what it stored.
 		expect((await openEveryRecord(src)).refused).toEqual([]);
 		expect((await openEveryRecord(src)).refused).toEqual([]);
@@ -322,7 +322,7 @@ describe('requirements in the project file', () => {
 		const src = unpack('v1.4.0-beta.3', d);
 		withCatalog(src, 'Something else');
 		const report = (await importInPlace(src, { open }))!;
-		expect(report.renumbered.map((n) => n.to)).toEqual(['REQ-0000000900-DUP2']);
+		expect(report.renumbered.map((n) => n.to)).toEqual(['REQ-0900-DUP2']);
 		expect((await openEveryRecord(src)).refused).toEqual([]);
 	});
 });

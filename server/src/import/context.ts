@@ -5,6 +5,7 @@ import type { Database } from 'bun:sqlite';
 import { QTY_SCALE } from '@opal/shared';
 import type { Db } from '../db/client.ts';
 import { legacyRow } from '../db/schema/legacy.ts';
+import { numbersFor } from '../services/org/project.ts';
 import type { BridgeReport } from './bridge.ts';
 
 export type Row = Record<string, unknown>;
@@ -236,7 +237,8 @@ export function numberBook(c: ImportCtx, table: string, canonical: (v: string) =
 			let n = 2;
 			while (taken.has(key(`${stored}-DUP${n}`))) n++;
 			chosen = `${stored}-DUP${n}`;
-			c.report.renumbered.push({ table, id, from: value, to: chosen });
+			// The report is read by people, so it shows the number as they will see it.
+			c.report.renumbered.push({ table, id, from: value, to: numbersFor(c.d).display(chosen) });
 		}
 		taken.add(key(canonical(chosen)));
 		return chosen;
