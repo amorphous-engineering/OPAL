@@ -34,7 +34,12 @@
 			);
 			onchanged();
 		} catch (err) {
-			error = err instanceof ApiError && err.fields?.newPassword ? err.fields.newPassword : err instanceof Error ? err.message : 'Could not change the password';
+			error =
+				err instanceof ApiError && err.fields?.newPassword
+					? err.fields.newPassword
+					: err instanceof Error
+						? err.message
+						: 'Could not change the password';
 		} finally {
 			busy = false;
 		}

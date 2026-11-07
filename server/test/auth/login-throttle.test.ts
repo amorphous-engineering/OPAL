@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { throttleAddress } from '../../src/auth/client-ip.ts';
-import { dailyThrottle, hashPassword, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
+import { dailyThrottle, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, cookieOf, harness, makeUser } from './helpers.ts';
+
+/** A stored hash sets its own cost, and these tests are about who gets a check, not what one costs. */
+const cheapHash = (password: string) => Bun.password.hash(password, { algorithm: 'argon2id', memoryCost: 8, timeCost: 1 });
 
 afterEach(() => {
 	delete process.env.OPAL_TRUST_PROXY;
@@ -63,7 +66,7 @@ describe('login throttle', () => {
 	test('failures against one username from many addresses never lock out a correct password once its turn comes', async () => {
 		const h = await harness();
 		lockedGuess.intervalMs = 0;
-		makeUser(h, { username: 'per-name', passwordHash: await hashPassword('right-password-1') });
+		makeUser(h, { username: 'per-name', passwordHash: await cheapHash('right-password-1') });
 		const attempt = (ip: string, password = 'x') =>
 			h.app.request(
 				'http://opal.test/api/auth/login',
@@ -90,7 +93,7 @@ describe('login throttle', () => {
 
 	const setupUser = async (username: string) => {
 		const h = await harness();
-		makeUser(h, { username, passwordHash: await hashPassword('right-password-1') });
+		makeUser(h, { username, passwordHash: await cheapHash('right-password-1') });
 		const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
 			h.app.request(
 				'http://opal.test/api/auth/login',
@@ -116,7 +119,7 @@ describe('login throttle', () => {
 
 		test('an address the person has signed in from still gets in, even after a typo', async () => {
 			const h = await harness();
-			makeUser(h, { username: 'owner', passwordHash: await hashPassword('right-password-1') });
+			makeUser(h, { username: 'owner', passwordHash: await cheapHash('right-password-1') });
 			const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
 				h.app.request(
 					'http://opal.test/api/auth/login',
