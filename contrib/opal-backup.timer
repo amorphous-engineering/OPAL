@@ -1,0 +1,12 @@
+# Starts opal-backup.service every night. See opal.service for how to install these.
+[Unit]
+Description=Nightly OPAL backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=15min
+# A night the machine was off is made up at the next start.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

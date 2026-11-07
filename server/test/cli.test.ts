@@ -6,7 +6,7 @@ import { parseCommand } from '../src/commands/parse.ts';
 
 describe('what the command line asks for', () => {
 	test('asking for help never starts anything, wherever the flag sits', () => {
-		for (const argv of [['--help'], ['-h'], ['help'], ['serve', '--help'], ['update', '-h'], ['import', 'a.db', '--help']]) {
+		for (const argv of [['--help'], ['-h'], ['help'], ['serve', '--help'], ['update', '-h'], ['import', 'a.db', '--help'], ['backup', 'folder', '--help'], ['restore', 'folder', '-h'], ['backup', '--help', '--keep', '3']]) {
 			expect(parseCommand(argv)).toEqual({ kind: 'help' });
 		}
 	});
@@ -31,13 +31,25 @@ describe('what the command line asks for', () => {
 		expect(parseCommand(['-v'])).toEqual({ kind: 'run', command: 'version', args: [] });
 	});
 
+	test('backup takes a folder and --keep, and restore takes a folder and nothing else', () => {
+		expect(parseCommand(['backup', 'dir', '--keep', '14'])).toEqual({ kind: 'run', command: 'backup', args: ['dir', '--keep', '14'] });
+		expect(parseCommand(['restore', 'dir'])).toEqual({ kind: 'run', command: 'restore', args: ['dir'] });
+		expect(parseCommand(['backup', 'dir', '--keep'])).toEqual({ kind: 'error', message: '--keep needs a value' });
+		// There is no force flag: restore never replaces a database.
+		expect(parseCommand(['restore', 'dir', '--force'])).toEqual({ kind: 'error', message: 'Unknown flag for restore: --force' });
+	});
+
 	test('help and a wrong flag leave the data folder untouched', async () => {
 		const dir = mkdtempSync(join(tmpdir(), 'opal-cli-'));
 		const data = join(dir, 'data');
 		try {
 			for (const [args, code] of [
 				[['--help'], 0],
-				[['--bogus'], 2]
+				[['--bogus'], 2],
+				[['backup', join(dir, 'backups'), '--help'], 0],
+				[['restore', join(dir, 'backups'), '--help'], 0],
+				[['backup'], 2],
+				[['restore'], 2]
 			] as const) {
 				const p = Bun.spawn([process.execPath, join(import.meta.dir, '../src/cli.ts'), ...args], {
 					env: { ...process.env, OPAL_DATA_DIR: data },

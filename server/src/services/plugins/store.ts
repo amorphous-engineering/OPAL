@@ -13,7 +13,8 @@ export type PluginRow = typeof plugin.$inferSelect;
 export const pluginsRoot = () => join(dataDir(), 'plugins');
 export const pluginDir = (key: string, sha: string) => join(pluginsRoot(), key, sha);
 /** State the plugin keeps across updates (OPAL_PLUGIN_DATA). */
-export const pluginDataDir = (key: string) => join(dataDir(), 'plugin-data', key);
+export const pluginDataRoot = () => join(dataDir(), 'plugin-data');
+export const pluginDataDir = (key: string) => join(pluginDataRoot(), key);
 
 /** Folder the plugin runs from: a local source runs in place. */
 export function codeDir(row: PluginRow): string {
