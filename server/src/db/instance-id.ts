@@ -22,5 +22,6 @@ export function instanceIdOf(sqlite: Database): string | null {
 export function ensureInstanceId(sqlite: Database): void {
 	if (instanceIdOf(sqlite)) return;
 	const ts = now();
-	sqlite.query('INSERT INTO app_setting (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)').run(KEY, randomUUID(), ts, ts);
+	// Two processes can open a new database at once. The first one's id stands.
+	sqlite.query('INSERT OR IGNORE INTO app_setting (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)').run(KEY, randomUUID(), ts, ts);
 }
