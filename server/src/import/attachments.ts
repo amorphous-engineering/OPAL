@@ -43,7 +43,8 @@ export function importAttachments(c: ImportCtx): BlobMap {
 
 	const blobs = new Map<string, { size: number; mime: string; at: string }>();
 	const links: Record<string, unknown>[] = [];
-	for (const r of rows) {
+	for (const [i, r] of rows.entries()) {
+		if (i > 0 && i % 100 === 0) c.progress(`attachments, ${i} of ${rows.length}`);
 		const id = Number(r.id);
 		const file = sourceFile(c.attachmentsDir, r.stored_filename);
 		if ('missing' in file) {

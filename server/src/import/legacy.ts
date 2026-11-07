@@ -259,28 +259,36 @@ export function checkSource(src: Database, label: string): string {
  */
 export function importInto(src: Database, d: Db, report: ImportReport, opts: ResolvedOptions): void {
 	const sqlite = d.$client;
-	const c: ImportCtx = { legacyTables: opts.legacyTables, src, d, report, attachmentsDir: opts.attachmentsDir, blobsDir: opts.blobsDir, avatarsDir: opts.avatarsDir, createdFiles: opts.createdFiles ?? [], ids: {}, projectId: 0 };
+	const c: ImportCtx = { legacyTables: opts.legacyTables, src, d, report, attachmentsDir: opts.attachmentsDir, blobsDir: opts.blobsDir, avatarsDir: opts.avatarsDir, createdFiles: opts.createdFiles ?? [], progress: opts.onProgress ?? (() => {}), ids: {}, projectId: 0 };
 	// Foreign keys are checked once at the end, so cycles (a risk and its realized issue) and
 	// order do not matter. A violation is reported as a failed row.
 	sqlite.run('PRAGMA foreign_keys = OFF');
 	sqlite.run('BEGIN');
 	try {
+		c.progress('people and settings');
 		importPeople(c);
 		importRoles(c);
 		importSettings(c);
 		c.projectId = importProject(c);
+		c.progress('parts and purchasing');
 		importParts(c);
 		importSuppliers(c);
 		importPurchasing(c);
+		c.progress('attachments');
 		const blobs = importAttachments(c);
+		c.progress('procedures');
 		importProcedures(c, blobs);
+		c.progress('stock');
 		const links = importInventory(c);
+		c.progress('issues, risks and requirements');
 		importIssues(c);
 		importRisks(c);
 		importRequirements(c);
 		importDatasets(c);
 		importNotifications(c);
+		c.progress('work orders');
 		importExecutions(c, links);
+		c.progress('history');
 		importAudit(c);
 		importDesignators(c);
 		setSequences(c);
@@ -361,6 +369,7 @@ export async function importLegacy(srcPath: string, destPath: string, options: I
 	const destDir = dirname(destPath);
 	mkdirSync(destDir, { recursive: true });
 	sweepImportCopies(destDir);
+	options.onProgress?.('reading the old database');
 	const source = openSource(srcPath, destDir);
 	const blobsDir = options.blobsDir ?? join(destDir, 'blobs');
 	const avatarsDir = options.avatarsDir ?? join(destDir, 'avatars');
@@ -389,7 +398,8 @@ export async function importLegacy(srcPath: string, destPath: string, options: I
 			blobsDir,
 			avatarsDir,
 			legacyTables: true,
-			createdFiles
+			createdFiles,
+			onProgress: options.onProgress
 		});
 		noteExtensionsFolder(dirname(srcPath), report);
 		report.sourceTables = accountFor(report, before);
@@ -494,6 +504,12 @@ const newPathOf = (dbPath: string) => `${dbPath}.new`;
 /** The result under this name is complete, and swapping it in is all that is left to do. */
 const readyPathOf = (dbPath: string) => `${dbPath}.imported`;
 
+/** What an import stopped from outside leaves. A finished result stays: the next start swaps it in. */
+export function removeStoppedImport(dbPath: string): void {
+	removeCopies(dirname(dbPath));
+	removeWithSidecars(newPathOf(dbPath));
+}
+
 /** Whether the next start has import work to do. Cheap, and true for anything that needs a closer look. */
 export function importPending(dbPath: string): boolean {
 	return existsSync(readyPathOf(dbPath)) || existsSync(newPathOf(dbPath)) || mightBeLegacy(dbPath);
@@ -556,6 +572,12 @@ export async function importInPlace(dbPath: string, options: Parameters<typeof i
 
 	const report = await importLegacy(dbPath, newPath, { blobsDir: join(dir, 'blobs'), avatarsDir: join(dir, 'avatars'), ...options });
 	if (existsSync(`${newPath}-wal`)) throw new Error(`Import left ${newPath}-wal behind; not renaming.`);
+	try {
+		options.onProgress?.('putting the result in place');
+	} catch (e) {
+		removeWithSidecars(newPath);
+		throw e;
+	}
 	report.source = legacyPath;
 	report.dest = dbPath;
 	writeReports(report, dir);

@@ -90,6 +90,8 @@ export interface ImportOptions {
 	projectFile?: string;
 	/** Go ahead although rows failed or are not accounted for. Without it the result is not kept. */
 	acceptFailedRows?: boolean;
+	/** Called as the import moves on. Throwing stops it, and the import cleans up as for any failure. */
+	onProgress?: (what: string) => void;
 }
 
 export interface ResolvedOptions {
@@ -100,6 +102,7 @@ export interface ResolvedOptions {
 	legacyTables: boolean;
 	/** Files the import adds are listed here, so a failed one can remove them. */
 	createdFiles?: string[];
+	onProgress?: (what: string) => void;
 }
 
 export interface ImportCtx {
@@ -112,6 +115,7 @@ export interface ImportCtx {
 	avatarsDir: string;
 	/** Files this import added to the blob and avatar folders. */
 	createdFiles: string[];
+	progress: (what: string) => void;
 	/** Ids that exist in the destination, per new table. Filled as tables are written. */
 	ids: Record<string, Set<number>>;
 	projectId: number;
