@@ -6,6 +6,7 @@
  */
 import { OpalError } from '@opal/shared';
 import { createHash, randomBytes } from 'node:crypto';
+import commonPasswordsText from './common-passwords.txt' with { type: 'text' };
 
 export const SESSION_COOKIE = 'opal_session';
 export const API_TOKEN_PREFIX = 'opal_';
@@ -53,9 +54,17 @@ export function burnVerify(password: string): Promise<boolean> {
 	return dummy.then((h) => verifyPassword(h, password));
 }
 
+let commonPasswords: Set<string> | undefined;
+function isCommonPassword(password: string): boolean {
+	commonPasswords ??= new Set(commonPasswordsText.split('\n').filter((line) => line && !line.startsWith('#')));
+	return commonPasswords.has(password.toLowerCase());
+}
+
+/** Length alone lets through what an attacker tries first, however few guesses the sign-in limit leaves them. */
 export function validatePasswordStrength(password: string): string | null {
 	if (password.length < 10) return 'Password must be at least 10 characters.';
 	if (password.length > 256) return 'Password must be at most 256 characters.';
+	if (isCommonPassword(password)) return 'That password is too common. Choose another.';
 	return null;
 }
 
