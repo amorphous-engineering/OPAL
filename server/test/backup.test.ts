@@ -242,6 +242,21 @@ describe('a backup restores to a working instance', () => {
 		expect(authSecret()).toBe(secret);
 	});
 
+	test('a key held in the environment is not in the backup, and the backup says so', async () => {
+		const i = await small();
+		process.env.OPAL_SECRETS_KEY = 'held-elsewhere';
+		try {
+			const { warnings } = takeBackup(join(tempDir(), 'b'));
+			expect(warnings.join(' ')).toContain('OPAL_SECRETS_KEY is set');
+		} finally {
+			delete process.env.OPAL_SECRETS_KEY;
+			i.close();
+		}
+		const j = await small();
+		expect(takeBackup(join(tempDir(), 'b')).warnings.join(' ')).not.toContain('OPAL_SECRETS_KEY');
+		j.close();
+	});
+
 	test('avatars and plugin files come back where the instance looks for them', async () => {
 		const i = await small();
 		const avatar = 'a'.repeat(64);

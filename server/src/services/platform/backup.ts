@@ -288,6 +288,10 @@ function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 
 	// A lost photo reads the same in the restored instance as it does now, and blocks no record.
 	if (missingAvatars.length) warnings.push(`${plural(missingAvatars.length, 'avatar file')} named by a profile are missing from ${avatarDir()}, so the backup does not have them either: ${list(missingAvatars)}`);
 
+	if (process.env.OPAL_SECRETS_KEY) {
+		warnings.push('OPAL_SECRETS_KEY is set, so the key to stored secrets is not in this backup. Keep it separately, or those secrets must be entered again after a restore.');
+	}
+
 	// After the database copy: a key that sealed a value in the copy was on disk before that value was saved.
 	let keyFiles = 0;
 	// OPAL_DB_FILE can put the database somewhere else, with no data folder at all.

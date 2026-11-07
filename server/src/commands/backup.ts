@@ -28,6 +28,7 @@ export function backup(args: string[]): void {
 		const r = takeBackup(positional[0]!, keepText === undefined ? {} : { keep: Number(keepText) });
 		console.log(`Backup finished: ${r.path}`);
 		for (const line of describe(r.counts)) console.log(line);
+		console.log('This backup holds the database and its keys together. Keep it private.');
 		if (r.removed.length) console.log(`  Older backups removed: ${r.removed.length}`);
 		for (const name of r.unfinished) console.log(`  Not a finished backup, left alone: ${name}`);
 		for (const w of r.warnings) console.warn(`Warning: ${w}`);
