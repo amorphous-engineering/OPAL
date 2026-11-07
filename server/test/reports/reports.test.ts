@@ -111,14 +111,14 @@ describe('overview', () => {
 
 	test('the execution area adds its section through the hook', async () => {
 		const s = await setup();
-		registerOverviewSection('executions', () => ({
+		const real = registerOverviewSection('executions', () => ({
 			items: [{ label: 'WO-1', procedure: 'P', status: 'in_work', stepsDone: 1, stepsTotal: 2, blocked: false, overdue: false, targetCompletionAt: null, mine: true, href: '/executions/1' }],
 			total: 1,
 			flagged: 0
 		}));
 		const o = (await s.call('GET', '/overview')).body;
 		expect(o.executions.items[0].label).toBe('WO-1');
-		registerOverviewSection('executions', () => ({ items: [], total: 0, flagged: 0 }));
+		registerOverviewSection('executions', real);
 	});
 
 	test('recent activity lists the newest audit entries', async () => {
