@@ -22,7 +22,7 @@ export const USAGE = `Usage: opal [command] [flags]
   opal serve              Start the server without the control page
       --port <n>, --host <addr>
   opal import <file>      Import a 1.x database
-      --out <folder>      Where to write the result
+      --out <file>        Where to write the new database
       --project <file>    The opal.project.yaml, if OPAL cannot find it
       --attachments <dir> The 1.x attachments folder, if OPAL cannot find it
   opal backup <folder>    Write a backup into a new subfolder, while OPAL runs or not
