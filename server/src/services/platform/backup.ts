@@ -48,6 +48,7 @@ import {
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { KEY_FILE as SECRETS_KEY_FILE, keysInFile } from '../../auth/sealed.ts';
 import { lastApplied, migrationFiles } from '../../db/client.ts';
+import { instanceIdOf } from '../../db/instance-id.ts';
 import { unreadableSecrets } from '../../db/seal-secrets.ts';
 import { hardenDataDir } from '../../harden.ts';
 import { dataDir, dbPath } from '../../paths.ts';
@@ -100,6 +101,8 @@ interface Manifest {
 	formatVersion: number;
 	createdAt: string;
 	opalVersion: string;
+	/** Which instance this is a backup of. `--keep` leaves any other alone, and a backup from before these existed. */
+	instanceId?: string;
 	counts: Counts;
 	/** Every file in the backup, by path with forward slashes, with its SHA-256. */
 	files: Record<string, string>;
@@ -261,7 +264,7 @@ function secretsOpen(work: string, warnings: string[]): boolean {
 }
 
 /** Fills `work` and returns what the manifest records. Throws when the copy is not complete and sound. */
-function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 'counts' | 'files'> & { secretsOpen: boolean } {
+function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 'counts' | 'files'> & { secretsOpen: boolean; instanceId: string | null } {
 	const files: Record<string, string> = {};
 	const copyDb = join(work, DB_FILE);
 	const copy = (from: string, rel: string) => {
@@ -366,9 +369,17 @@ function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 
 	if (unportable.length) warnings.push(`File names with a colon or backslash are not backed up: ${list(unportable)}`);
 
 	files[DB_FILE] = hashFile(copyDb, true);
+	const copied = new Database(copyDb, { readonly: true });
+	let instanceId: string | null;
+	try {
+		instanceId = instanceIdOf(copied);
+	} finally {
+		copied.close();
+	}
 	return {
 		files,
 		secretsOpen: opens,
+		instanceId,
 		counts: {
 			databaseBytes: statSync(copyDb).size,
 			attachments: blobs.length,
@@ -424,14 +435,20 @@ function backupFolders(parent: string): { finished: string[]; unfinished: string
 }
 
 /**
- * Removes finished backups beyond the newest `keep`, counting the one just written. Only a folder with a
- * finished name and a valid manifest is a candidate. The manifest goes first, so a crash in the middle
- * cannot leave a part of a backup that still reads as finished.
+ * Removes this instance's finished backups beyond the newest `keep`, counting the one just written. Only a
+ * folder with a finished name and a valid manifest is a candidate, and only if the manifest names this
+ * instance, because a folder may be shared. The manifest goes first, so a crash in the middle cannot leave
+ * a part of a backup that still reads as finished.
  */
-function prune(parent: string, keep: number, written: string, warnings: string[]): string[] {
+function prune(parent: string, keep: number, written: string, instanceId: string | null, warnings: string[]): { removed: string[]; leftAlone: number } {
 	const others = backupFolders(parent).finished.filter((n) => n !== written);
+	if (!instanceId) {
+		warnings.push('This database has no instance id yet, so --keep removed nothing. Start OPAL once with this version, and the next backup will prune.');
+		return { removed: [], leftAlone: others.length };
+	}
+	const ours = others.filter((n) => readManifest(join(parent, n))?.instanceId === instanceId);
 	// Newest first. The one just written always stays, even if the clock has moved backwards.
-	const excess = others.reverse().slice(keep - 1);
+	const excess = ours.reverse().slice(keep - 1);
 	const removed: string[] = [];
 	for (const name of excess) {
 		const path = join(parent, name);
@@ -443,7 +460,7 @@ function prune(parent: string, keep: number, written: string, warnings: string[]
 			warnings.push(`Could not remove the old backup ${path}: ${(e as Error).message}`);
 		}
 	}
-	return removed;
+	return { removed, leftAlone: others.length - ours.length };
 }
 
 export interface BackupResult {
@@ -452,6 +469,8 @@ export interface BackupResult {
 	/** Every stored secret in this backup opens with the keys in this backup. */
 	secretsOpen: boolean;
 	removed: string[];
+	/** With `--keep`: finished backups here of another instance, or from before instances had ids. */
+	leftAlone: number;
 	unfinished: string[];
 	warnings: string[];
 }
@@ -472,15 +491,18 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 		mkdirSync(work, { mode: 0o700 });
 		let counts: Counts;
 		let opens: boolean;
+		let instanceId: string | null;
 		try {
 			const filled = fill(work, source, warnings);
 			counts = filled.counts;
 			opens = filled.secretsOpen;
+			instanceId = filled.instanceId;
 			const manifest: Manifest = {
 				format: FORMAT,
 				formatVersion: FORMAT_VERSION,
 				createdAt: now(),
 				opalVersion: VERSION,
+				...(instanceId ? { instanceId } : {}),
 				counts,
 				files: filled.files
 			};
@@ -504,8 +526,8 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 			}
 			throw e;
 		}
-		const removed = opts.keep === undefined ? [] : prune(parent, opts.keep, name, warnings);
-		return { path: final, counts, secretsOpen: opens, removed, unfinished: backupFolders(parent).unfinished, warnings };
+		const { removed, leftAlone } = opts.keep === undefined ? { removed: [], leftAlone: 0 } : prune(parent, opts.keep, name, instanceId, warnings);
+		return { path: final, counts, secretsOpen: opens, removed, leftAlone, unfinished: backupFolders(parent).unfinished, warnings };
 	} finally {
 		if (umask !== undefined) process.umask(umask);
 	}

@@ -30,6 +30,7 @@ export function backup(args: string[]): void {
 		for (const line of describe(r.counts)) console.log(line);
 		console.log(r.counts.keyFiles > 0 && r.secretsOpen ? 'This backup holds the database and its keys together. Keep it private.' : 'This backup holds the database. Keep it private.');
 		if (r.removed.length) console.log(`  Older backups removed: ${r.removed.length}`);
+		if (r.leftAlone) console.log(`  Backups of another instance, or from before instances had ids, left alone: ${r.leftAlone}`);
 		for (const name of r.unfinished) console.log(`  Not a finished backup, left alone: ${name}`);
 		for (const w of r.warnings) console.warn(`Warning: ${w}`);
 	} catch (e) {

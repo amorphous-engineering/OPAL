@@ -6,6 +6,7 @@ import type { MigrationMeta } from 'drizzle-orm/migrator';
 import { join } from 'node:path';
 import { embedded } from '../http/embedded.ts';
 import { retireAbortedStatus } from './retire-aborted.ts';
+import { ensureInstanceId } from './instance-id.ts';
 import { holdsPlaintextSecret, sealDatabase } from './seal-secrets.ts';
 import * as schema from './schema/index.ts';
 import { snapshotBeforeMigrating } from './snapshot.ts';
@@ -80,6 +81,9 @@ export function openDb(
 		retireAbortedStatus(sqlite);
 		internals.dialect.migrate(files, internals.session, { migrationsFolder });
 	});
-	if (onDisk) sealDatabase(sqlite, last === 0, options.scrubLater);
+	if (onDisk) {
+		sealDatabase(sqlite, last === 0, options.scrubLater);
+		ensureInstanceId(sqlite);
+	}
 	return db;
 }

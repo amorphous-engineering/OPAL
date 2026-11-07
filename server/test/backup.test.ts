@@ -627,6 +627,80 @@ describe('--keep', () => {
 		expect(newest.unfinished).toEqual(expect.arrayContaining([noManifest, badManifest, unfinished, 'opal-backup-notes']));
 	});
 
+	test('two instances in one folder do not remove each other\'s backups', async () => {
+		const parent = join(tempDir(), 'shared');
+		const first = await small();
+		const a = takeBackup(parent, { keep: 1 });
+		first.close();
+
+		const second = open(join(tempDir(), 'other'));
+		second.db.$client.query("UPDATE app_setting SET value = 'another-instance' WHERE key = 'instance_id'").run();
+		const b = takeBackup(parent, { keep: 1 });
+		expect(b.removed).toEqual([]);
+		expect(b.leftAlone).toBe(1);
+		const c = takeBackup(parent, { keep: 1 });
+		second.close();
+		expect(c.removed).toEqual([b.path.slice(parent.length + 1)]);
+		expect(existsSync(join(a.path, 'manifest.json'))).toBe(true);
+	});
+
+	test('a backup from before instances had ids is left alone', async () => {
+		const i = await small();
+		const parent = join(tempDir(), 'b');
+		const old = takeBackup(parent);
+		rewriteManifest(old.path, (m) => delete (m as { instanceId?: string }).instanceId);
+		const newest = takeBackup(parent, { keep: 1 });
+		i.close();
+		expect(newest.removed).toEqual([]);
+		expect(newest.leftAlone).toBe(1);
+		expect(existsSync(join(old.path, 'manifest.json'))).toBe(true);
+	});
+
+	test('a database with no id prunes nothing and says so', async () => {
+		const i = await small();
+		const parent = join(tempDir(), 'b');
+		const older = takeBackup(parent);
+		i.db.$client.query("DELETE FROM app_setting WHERE key = 'instance_id'").run();
+		const newest = takeBackup(parent, { keep: 1 });
+		i.close();
+		expect(newest.removed).toEqual([]);
+		expect(newest.warnings.join(' ')).toContain('no instance id');
+		expect(existsSync(older.path)).toBe(true);
+	});
+
+	test('a restored instance goes on pruning the backups it came from', async () => {
+		const i = await small();
+		const parent = join(tempDir(), 'b');
+		const { path } = takeBackup(parent);
+		const idOf = (m: string) => JSON.parse(readFileSync(join(m, 'manifest.json'), 'utf8')).instanceId;
+		const id = idOf(path);
+		expect(id).toBeTruthy();
+		i.close();
+		process.env.OPAL_DATA_DIR = join(tempDir(), 'r');
+		restoreBackup(path);
+		const back = open(process.env.OPAL_DATA_DIR);
+		const next = takeBackup(parent, { keep: 1 });
+		back.close();
+		expect(idOf(next.path)).toBe(id);
+		expect(next.removed).toEqual([path.slice(parent.length + 1)]);
+	});
+
+	test('opening a database gives it one id, and opening it again keeps it', () => {
+		const dir = join(tempDir(), 'fresh');
+		mkdirSync(dir);
+		const file = join(dir, 'opal.db');
+		process.env.OPAL_DATA_DIR = dir;
+		const read = () => {
+			const db = openDb(file);
+			const row = db.$client.query("SELECT value FROM app_setting WHERE key = 'instance_id'").get() as { value: string };
+			db.$client.close();
+			return row.value;
+		};
+		const id = read();
+		expect(id).toMatch(/^[0-9a-f-]{36}$/);
+		expect(read()).toBe(id);
+	});
+
 	test('the backup just written stays even when the clock has moved backwards', async () => {
 		const i = await small();
 		const parent = join(tempDir(), 'b');

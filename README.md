@@ -104,7 +104,7 @@ The first start imports a 1.x database found in the data folder, from any releas
 
 ### Back up and roll back
 
-`opal backup <folder>` writes a backup into a new subfolder of `<folder>`, named by the time. OPAL can keep running and keeps taking writes while it does. `--keep <n>` then removes older finished backups beyond the newest `n`, and removes nothing else.
+`opal backup <folder>` writes a backup into a new subfolder of `<folder>`, named by the time. OPAL can keep running and keeps taking writes while it does. `--keep <n>` then removes this instance's older finished backups beyond the newest `n`, and removes nothing else. A folder can hold the backups of several instances. A backup from before this version names no instance, so `--keep` leaves it for you to delete. A restored instance, or a copy of a data folder, counts as the same instance as the backup it came from.
 
 A backup holds a copy of the database, the attachments and avatars the database names, installed plugins and their data, and the key files in the data folder. It leaves out the demo database, the `opal.pre-migration-*` copies and `opal.legacy.db`. A plugin's data is copied as it stands, not from one moment as the database is. A key or secret set by an environment variable, such as `OPAL_AUTH_SECRET`, is not in the backup, so keep it somewhere else. Neither is a plugin installed from a local folder.
 

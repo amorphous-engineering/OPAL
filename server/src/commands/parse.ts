@@ -26,7 +26,7 @@ export const USAGE = `Usage: opal [command] [flags]
       --project <file>    The opal.project.yaml, if OPAL cannot find it
       --attachments <dir> The 1.x attachments folder, if OPAL cannot find it
   opal backup <folder>    Write a backup into a new subfolder, while OPAL runs or not
-      --keep <n>          Then remove older finished backups beyond the newest n
+      --keep <n>          Then remove this instance's finished backups beyond the newest n
   opal restore <backup>   Restore a backup into an empty data folder
   opal secrets rotate     Replace the key to stored secrets, with OPAL and backups stopped
   opal update             Install the newest release
