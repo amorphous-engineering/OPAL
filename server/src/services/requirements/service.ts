@@ -34,6 +34,7 @@ import {
 	cancelRow,
 	ensureMutable,
 	isMutable,
+	LIVE,
 	type RequirementRow,
 	reviseRow
 } from './lifecycle.ts';
@@ -235,19 +236,27 @@ function checkParent(ctx: Pick<Ctx, 'db'>, parentId: number, selfId?: number): R
 	const parent = ctx.db.select().from(requirement).where(eq(requirement.id, parentId)).get();
 	if (!parent) throw invalid('parentId', `Parent requirement ${parentId} not found`);
 	if (selfId !== undefined) {
-		if (parentId === selfId) throw invalid('parentId', 'A requirement cannot be its own parent');
-		// Walk up from the proposed parent; meeting this row means a cycle.
-		const seen = new Set<number>();
-		let cursor: RequirementRow | undefined = parent;
-		while (cursor && !seen.has(cursor.id)) {
-			if (cursor.id === selfId) {
+		const self = load(ctx, selfId);
+		if (parent.reqNumber === self.reqNumber) {
+			throw invalid('parentId', 'A requirement cannot be its own parent');
+		}
+		// Children follow a number from revision to revision, so a row-by-row walk misses the cycle
+		// that closes when a revision baselines. Walk up by number, through every live revision.
+		const rows = ctx.db.select().from(requirement).all();
+		const numberOf = new Map(rows.map((x) => [x.id, x.reqNumber]));
+		const seen = new Set<string>();
+		const numbers = [parent.reqNumber];
+		while (numbers.length) {
+			const n = numbers.pop()!;
+			if (n === self.reqNumber) {
 				throw invalid('parentId', 'A requirement cannot be parented under its own descendant');
 			}
-			seen.add(cursor.id);
-			cursor =
-				cursor.parentId !== null
-					? ctx.db.select().from(requirement).where(eq(requirement.id, cursor.parentId)).get()
-					: undefined;
+			if (seen.has(n)) continue;
+			seen.add(n);
+			for (const x of rows) {
+				if (x.reqNumber !== n || x.parentId === null) continue;
+				if ((LIVE as readonly string[]).includes(x.lifecycleState)) numbers.push(numberOf.get(x.parentId)!);
+			}
 		}
 	}
 	return parent;
@@ -553,13 +562,15 @@ function requirePart(ctx: Pick<Ctx, 'db'>, partId: number) {
 
 export function forPart(ctx: Ctx, partId: number): PartLink[] {
 	requirePart(ctx, partId);
-	const ids = ctx.db
-		.select({ id: partRequirement.id })
+	const links = ctx.db
+		.select({ id: partRequirement.id, reqNumber: requirement.reqNumber })
 		.from(partRequirement)
+		.innerJoin(requirement, eq(requirement.id, partRequirement.requirementId))
 		.where(eq(partRequirement.partId, partId))
-		.all()
-		.map((x) => x.id);
-	return linkOut(ctx, ids);
+		.orderBy(asc(requirement.revision))
+		.all();
+	// One row per requirement: its newest link. Older links stand on their own revision's page.
+	return linkOut(ctx, [...new Map(links.map((x) => [x.reqNumber, x.id])).values()]);
 }
 
 export function assign(ctx: Ctx, input: { partId: number; reqNumber: string; notes?: string | null }): PartLink {
@@ -568,12 +579,19 @@ export function assign(ctx: Ctx, input: { partId: number; reqNumber: string; not
 	const req = currentByNumber(ctx, number);
 	if (!req) throw invalid('reqNumber', `Requirement ${number} not found`);
 	requireLive(ctx, req.id);
-	// One link per part and requirement number, whichever revision it was made against.
+	// One live link per part and number, across the current revision and the baseline in force while
+	// a draft of it is open. A link on finished paper is the record of that revision, not an allocation.
 	const dup = ctx.db
 		.select({ id: partRequirement.id })
 		.from(partRequirement)
 		.innerJoin(requirement, eq(requirement.id, partRequirement.requirementId))
-		.where(and(eq(partRequirement.partId, input.partId), eq(requirement.reqNumber, number)))
+		.where(
+			and(
+				eq(partRequirement.partId, input.partId),
+				eq(requirement.reqNumber, number),
+				inArray(requirement.lifecycleState, [...LIVE])
+			)
+		)
 		.get();
 	if (dup) throw conflict('duplicate', `Requirement ${number} is already assigned to this part`);
 	const row = insert(ctx, partRequirement, {
@@ -668,12 +686,13 @@ export function unassign(ctx: Ctx, id: number): { ok: true } {
 	return { ok: true };
 }
 
-/** How many requirement links a part has (the parts area lists it under what references a part). */
+/** How many requirements a part is linked to (the parts area lists it under what references a part). */
 export function linkCount(ctx: Pick<Ctx, 'db'>, partId: number): number {
 	return (
 		ctx.db
-			.select({ n: sql<number>`count(*)` })
+			.select({ n: sql<number>`count(distinct ${requirement.reqNumber})` })
 			.from(partRequirement)
+			.innerJoin(requirement, eq(requirement.id, partRequirement.requirementId))
 			.where(eq(partRequirement.partId, partId))
 			.get()?.n ?? 0
 	);

@@ -236,6 +236,9 @@
 		}
 	}
 
+	/** A draft revision also shows the links of the baseline in force. Those change on that page. */
+	const ownLink = (a: Allocation) => a.againstRevision === req.revision;
+
 	const allocColumns: Column<Allocation>[] = [
 		{ key: 'internalPn', label: 'PN', mono: true, width: '9rem' },
 		{ key: 'partName', label: 'Name' },
@@ -634,7 +637,7 @@
 							>{a.internalPn ?? '—'}</a
 						>
 					{:else if col.key === 'status'}
-						{#if recording}
+						{#if recording && ownLink(a)}
 							<NativeSelect
 								value={a.status}
 								onchange={(e) => setStatus(a, e.currentTarget)}
@@ -659,6 +662,16 @@
 								title={`Closed against rev ${a.againstRevision}; rev ${req.revision} is not verified`}
 								>OUTDATED</span
 							>{/if}
+						{#if a.previous}
+							<div class="text-xs text-quiet">
+								REV {a.previous.revision}
+								{stateLabel(a.previous.status)}
+								{#if a.previous.verifiedAt}<Timestamp value={a.previous.verifiedAt} />{/if}{a
+									.previous.verifiedBy
+									? ` ${a.previous.verifiedBy}`
+									: ''}
+							</div>
+						{/if}
 						{#each a.withdrawals as w (w.at)}
 							<div class="text-xs text-quiet">
 								<span class="line-through"
@@ -679,7 +692,7 @@
 								: undefined}>{a.againstRevision}</span
 						>
 					{:else if col.key === 'notes'}
-						{#if recording && a.status !== 'verified'}
+						{#if recording && ownLink(a) && a.status !== 'verified'}
 							<Input
 								class="h-7"
 								value={a.notes ?? ''}
@@ -687,7 +700,7 @@
 								aria-label={`Notes for ${a.partName}`}
 							/>
 						{:else}{a.notes ?? '—'}{/if}
-					{:else if editing && a.status !== 'verified' && !a.withdrawals.length}
+					{:else if editing && ownLink(a) && a.status !== 'verified' && !a.withdrawals.length}
 						<ActionLink onclick={() => unassign(a)}>UNASSIGN</ActionLink>
 					{/if}
 				{/snippet}

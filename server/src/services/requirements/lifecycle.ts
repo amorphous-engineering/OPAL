@@ -5,19 +5,22 @@
  *
  * A baselined row is immutable. Editing one means `revise`, which returns a NEW draft row
  * (revision + 1, supersedes set). The old row stays the baseline in force until the new
- * revision itself baselines, then it flips to superseded and its direct children go stale.
- * Rules that a machine can decide (lint blockers) are enforced here. Nothing else blocks.
+ * revision itself baselines. Then it flips to superseded and the new revision takes over its part
+ * allocations and its children. Rules that a machine can decide (lint blockers) are enforced here.
+ * Nothing else blocks.
  */
 import { type RequirementLifecycleState, conflict, now } from '@opal/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
-import { requirement } from '../../db/schema/index.ts';
+import { partRequirement, requirement } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
 import { baselineLintBlockers } from './lint.ts';
 
 export type RequirementRow = typeof requirement.$inferSelect;
 
 export const EDITABLE: readonly RequirementLifecycleState[] = ['draft', 'preliminary'];
+/** Not finished paper. A draft of the next revision and the baseline in force are both live. */
+export const LIVE = ['draft', 'preliminary', 'baselined'] as const;
 export const isMutable = (r: Pick<RequirementRow, 'lifecycleState'>) =>
 	EDITABLE.includes(r.lifecycleState);
 
@@ -34,14 +37,39 @@ export function ensureMutable(r: RequirementRow): void {
 /** Reasons this row cannot baseline yet. Every block_baseline lint finding blocks. */
 export const baselineBlockers = baselineLintBlockers;
 
-/** Flag the direct children of a superseded revision. Informational only. */
-export function markDependentsStale(ctx: Ctx, predecessor: RequirementRow): void {
+/**
+ * The new revision takes over from the one it supersedes. The old row's links stay as they stand:
+ * they are the evidence for what was verified against that text. The text changed, so each part
+ * starts open on the new row and a person verifies it again. A link marked not applicable stays
+ * behind, because that is how a person retires a link that can no longer be removed.
+ */
+function carryAllocations(ctx: Ctx, predecessor: RequirementRow, next: RequirementRow): void {
+	const links = (requirementId: number) =>
+		ctx.db.select().from(partRequirement).where(eq(partRequirement.requirementId, requirementId)).all();
+	const held = new Set(links(next.id).map((l) => l.partId));
+	for (const link of links(predecessor.id)) {
+		if (link.status === 'not_applicable' || held.has(link.partId)) continue;
+		insert(ctx, partRequirement, { partId: link.partId, requirementId: next.id, notes: link.notes });
+	}
+}
+
+/**
+ * Live children follow the number to the new revision and go stale until a person looks at them.
+ * Finished children keep the parent they were written against.
+ */
+function carryChildren(ctx: Ctx, predecessor: RequirementRow, next: RequirementRow): void {
 	const children = ctx.db
 		.select()
 		.from(requirement)
-		.where(eq(requirement.parentId, predecessor.id))
+		.where(
+			and(
+				eq(requirement.parentId, predecessor.id),
+				inArray(requirement.lifecycleState, [...LIVE]),
+				ne(requirement.reqNumber, predecessor.reqNumber)
+			)
+		)
 		.all();
-	for (const child of children) update(ctx, requirement, child.id, { stale: true });
+	for (const child of children) update(ctx, requirement, child.id, { parentId: next.id, stale: true });
 }
 
 /** Baseline a draft or preliminary row; supersede its predecessor if one is in force. */
@@ -63,7 +91,8 @@ export function baselineRow(ctx: Ctx, r: RequirementRow): RequirementRow {
 		const prev = ctx.db.select().from(requirement).where(eq(requirement.id, r.supersedesId)).get();
 		if (prev && prev.lifecycleState === 'baselined') {
 			update(ctx, requirement, prev.id, { lifecycleState: 'superseded' });
-			markDependentsStale(ctx, prev);
+			carryAllocations(ctx, prev, done);
+			carryChildren(ctx, prev, done);
 		}
 	}
 	return done;

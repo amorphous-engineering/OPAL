@@ -20,6 +20,9 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - Extensions, Onshape links and Onshape keys. The report lists them. When keys were left out, the import also warns in the terminal: they are still in plaintext in the old database, so revoke them in Onshape if you no longer need them.
 - Free-text part requirement rows from before the requirement register, when no requirement has that number. They stay in the `legacy_row` table, and the report lists them.
 
+### Fixed
+- **A revised requirement no longer strands its parts and children.** When a revision baselines, each allocated part gets a new open allocation to verify against the new text, and the old allocation stays as the evidence for the old text. Children move to the new revision and stay STALE until someone reviews them. Revisions superseded before this fix keep their old allocations: allocate the part again from its page.
+
 ## 2.0.0-beta.1
 
 OPAL 2 is a rewrite in TypeScript: one Bun binary, one SQLite file. The Python 1.x backend is gone, and
