@@ -14,7 +14,7 @@ import { API_TOKEN_PREFIX, hashToken, newToken } from '../../auth/tokens.ts';
 import { serialized } from '../../registry.ts';
 import { insert, update } from '../../write.ts';
 import type { PluginProcess, PluginRuntime } from './runtime.ts';
-import { codeDir, findPlugin, pluginDataDir, settingValues, type PluginRow } from './store.ts';
+import { codeDir, findPlugin, pluginDataDir, settingValues, unreadableSettings, type PluginRow } from './store.ts';
 
 export interface HostOptions {
 	maxLines?: number;
@@ -49,7 +49,7 @@ const systemCtx = (db: Db): Ctx => ({ db, actor: { kind: 'system' }, op: 'plugin
 /**
  * What a plugin process inherits from the server: enough to run and to reach the network.
  * An allowlist, because the server's environment holds its secrets (OPAL_AUTH_SECRET,
- * OPAL_OIDC_CLIENT_SECRET) and whatever the operator's service manager adds next.
+ * OPAL_SECRETS_KEY, OPAL_OIDC_CLIENT_SECRET) and whatever the operator's service manager adds next.
  */
 const INHERITED_ENV = [
 	'PATH',
@@ -209,6 +209,13 @@ export class PluginHost implements PluginRuntime {
 		const e = this.entry(key);
 		const row = findPlugin(this.db, key);
 		if (!row?.enabled) {
+			e.state = 'stopped';
+			return;
+		}
+		// It would start without a credential it was given, and fail in its own way against some other system.
+		const unreadable = unreadableSettings(this.db, row);
+		if (unreadable.length) {
+			this.push(e, 'err', `Not started: the stored ${unreadable.join(', ')} cannot be read with the current key. Enter it again in the plugin's settings.`);
 			e.state = 'stopped';
 			return;
 		}

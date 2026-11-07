@@ -125,6 +125,8 @@ export const zAuthSettings = z.object({
 	oidcIssuer: z.string(),
 	oidcClientId: z.string(),
 	hasClientSecret: z.boolean(),
+	/** One is stored but no key opens it, so it has to be entered again. */
+	clientSecretUnreadable: z.boolean(),
 	oidcScopes: z.string(),
 	oidcProviderName: z.string(),
 	oidcGroupsClaim: z.string(),

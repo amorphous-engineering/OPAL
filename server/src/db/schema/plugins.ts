@@ -30,7 +30,7 @@ export const plugin = sqliteTable('plugin', {
 	updatedAt: updatedAt()
 });
 
-/** One value per setting. The audit log redacts `value` when `secret` is set. */
+/** One value per setting. When `secret` is set, `value` is sealed (auth/sealed.ts) and the audit log redacts it. */
 export const pluginSetting = sqliteTable(
 	'plugin_setting',
 	{
