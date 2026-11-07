@@ -911,8 +911,13 @@ function insertLink(ctx: Ctx, issueId: number, kind: IssueLinkKind, targetId: nu
 	}
 }
 
+/** Links belong to the observation, which is pencil only while the issue is pending. */
+function requirePendingLinks(r: IssueRow): void {
+	if (ticketState(r) !== 'pending') throw refuse(`${r.issueNumber} is past its observation, so its links no longer change`);
+}
+
 export function addLink(ctx: Ctx, id: number, kind: IssueLinkKind, targetId: number): IssueLink {
-	load(ctx, id);
+	requirePendingLinks(load(ctx, id));
 	checkLinkTarget(ctx, kind, targetId);
 	const dup = ctx.db
 		.select({ id: issueLink.id })
@@ -936,6 +941,7 @@ export function removeLink(ctx: Ctx, id: number, linkId: number): { ok: true } {
 		.where(and(eq(issueLink.id, linkId), eq(issueLink.issueId, id)))
 		.get();
 	if (!row) throw notFound('Link');
+	requirePendingLinks(load(ctx, id));
 	remove(ctx, issueLink, linkId);
 	return { ok: true };
 }

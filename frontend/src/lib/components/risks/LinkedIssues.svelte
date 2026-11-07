@@ -25,6 +25,9 @@
 	import { searchIssues } from './pickers.js';
 
 	let { risk }: { risk: Risk } = $props();
+	// Finished paper takes nothing new, and lines stand once a person accepted the risk.
+	const canAdd = $derived(risk.disposition !== 'realized' && risk.disposition !== 'closed');
+	const canRemove = $derived(canAdd && risk.disposition !== 'accepted');
 
 	const ROLES = RISK_ISSUE_ROLES;
 	let adding = $state(false);
@@ -110,7 +113,9 @@
 {#if risk.linkedIssues.length}
 	<Section title="Linked issues" count={risk.linkedIssues.length}>
 		{#snippet actions()}
-			<ActionLink onclick={() => (adding = !adding)}>{adding ? 'DONE' : '+ ADD'}</ActionLink>
+			{#if canAdd}<ActionLink onclick={() => (adding = !adding)}
+					>{adding ? 'DONE' : '+ ADD'}</ActionLink
+				>{/if}
 		{/snippet}
 		<DataTable
 			rows={risk.linkedIssues}
@@ -128,7 +133,7 @@
 					<span class="font-mono text-xs">{l.role.toUpperCase()}</span>
 				{:else if col.key === 'status'}
 					<State value={l.status} />
-				{:else}
+				{:else if canRemove}
 					<ActionLink disabled={busy} onclick={() => unlink(l)}>UNLINK</ActionLink>
 				{/if}
 			{/snippet}
@@ -139,7 +144,7 @@
 	<div>
 		<EmptyLine
 			label="Linked issues"
-			onadd={() => (adding = !adding)}
+			onadd={canAdd ? () => (adding = !adding) : undefined}
 			addLabel={adding ? 'DONE' : '+ ADD'}
 		/>
 		{#if adding}<div class="border border-t-0 border-border bg-card">

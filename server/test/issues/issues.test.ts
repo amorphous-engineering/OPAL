@@ -1046,3 +1046,28 @@ describe('no side doors around the disposition gate', () => {
 		expect((await p('signoff')).body.ticketState).toBe('done');
 	});
 });
+
+describe('the links of an issue are part of its observation', () => {
+	test('a pending issue adds and removes part links, and one past pending does neither', async () => {
+		const t = await setup();
+		const a = t.mkPart('A', 'P-A');
+		const b = t.mkPart('B', 'P-B');
+		const i = await t.raise();
+		const link = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id });
+		expect(link.status).toBeLessThan(300);
+		const other = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: b.id });
+		expect((await t.call('DELETE', `/issues/${i.id}/links/${other.body.id}`)).status).toBe(200);
+		expect((await t.call('POST', `/issues/${i.id}/start`)).status).toBe(200);
+		expect((await t.call('DELETE', `/issues/${i.id}/links/${link.body.id}`)).status).toBe(409);
+		expect((await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: b.id })).status).toBe(409);
+	});
+
+	test('a void issue keeps its links', async () => {
+		const t = await setup();
+		const a = t.mkPart('A', 'P-A');
+		const i = await t.raise();
+		const link = await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: a.id });
+		expect((await t.call('POST', `/issues/${i.id}/void`, { reason: 'duplicate' })).status).toBe(200);
+		expect((await t.call('DELETE', `/issues/${i.id}/links/${link.body.id}`)).status).toBe(409);
+	});
+});

@@ -567,6 +567,7 @@ export function assign(ctx: Ctx, input: { partId: number; reqNumber: string; not
 	const number = input.reqNumber.trim().toUpperCase();
 	const req = currentByNumber(ctx, number);
 	if (!req) throw invalid('reqNumber', `Requirement ${number} not found`);
+	requireLive(ctx, req.id);
 	// One link per part and requirement number, whichever revision it was made against.
 	const dup = ctx.db
 		.select({ id: partRequirement.id })

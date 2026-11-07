@@ -1,6 +1,6 @@
 /** The report of a finished execution, the holds payload and the QR code. */
 import { type ExecutionReport, OpalError, now, unitSymbol } from '@opal/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import QRCode from 'qrcode';
 import type { Ctx } from '../../context.ts';
 import { attachment, dataPoint, dataset, issue, part, project } from '../../db/schema/index.ts';
@@ -58,7 +58,7 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 	// Datasets with chart-enabled numeric fields whose points tie to this execution.
 	const chartDatasets: ExecutionReport['chartDatasets'] = [];
 	if (ids.length) {
-		const points = db.select().from(dataPoint).where(inArray(dataPoint.stepExecutionId, ids)).orderBy(asc(dataPoint.recordedAt)).all();
+		const points = db.select().from(dataPoint).where(and(inArray(dataPoint.stepExecutionId, ids), isNull(dataPoint.struckAt))).orderBy(asc(dataPoint.recordedAt)).all();
 		const byDs = new Map<number, typeof points>();
 		for (const p of points) byDs.set(p.datasetId, [...(byDs.get(p.datasetId) ?? []), p]);
 		if (byDs.size) {

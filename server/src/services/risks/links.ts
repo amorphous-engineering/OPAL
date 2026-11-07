@@ -20,8 +20,22 @@ function loadIssue(ctx: Ctx, id: number) {
 	return row;
 }
 
+/** A realized or closed risk is finished paper: it takes no new lines. */
+function requireAddable(row: ReturnType<typeof load>): void {
+	if (row.disposition === 'realized' || row.disposition === 'closed') {
+		throw conflict('risk_state', `${row.riskNumber} is ${row.disposition}, so it takes no new links or references`);
+	}
+}
+
+/** Lines stand once a person accepted the risk with them on the page. */
+function requireRemovable(row: ReturnType<typeof load>): void {
+	if (row.disposition === 'accepted' || row.disposition === 'realized' || row.disposition === 'closed') {
+		throw conflict('risk_state', `${row.riskNumber} is ${row.disposition}, so its links and references stay`);
+	}
+}
+
 export function linkIssue(ctx: Ctx, riskId: number, issueId: number, role: RiskIssueRole): Risk {
-	load(ctx, riskId);
+	requireAddable(load(ctx, riskId));
 	const target = loadIssue(ctx, issueId);
 	const dup = ctx.db
 		.select({ id: issueLink.id })
@@ -40,6 +54,7 @@ export function spawnIssue(
 	input: { role: RiskIssueRole | 'realized'; title: string; description?: string | null }
 ): Risk {
 	const r = load(ctx, riskId);
+	requireAddable(r);
 	if (input.role === 'realized' && r.realizedIssueId !== null) {
 		const existing = loadIssue(ctx, r.realizedIssueId);
 		throw conflict(
@@ -65,7 +80,7 @@ export function spawnIssue(
 }
 
 export function unlinkIssue(ctx: Ctx, riskId: number, issueId: number): Risk {
-	load(ctx, riskId);
+	requireRemovable(load(ctx, riskId));
 	const link = ctx.db
 		.select({ id: issueLink.id })
 		.from(issueLink)
@@ -85,7 +100,7 @@ export function addReference(
 	riskId: number,
 	input: { type: 'opal' | 'work_order'; value: string; notes?: string | null }
 ): Risk {
-	load(ctx, riskId);
+	requireAddable(load(ctx, riskId));
 	// Typed at any width: stored at one, so a duplicate at another width is caught.
 	const value = numbersFor(ctx.db).canonical(input.value.trim().toUpperCase());
 	if (!FORMAT[input.type].test(value)) {
@@ -114,7 +129,7 @@ export function addReference(
 }
 
 export function removeReference(ctx: Ctx, riskId: number, referenceId: number): Risk {
-	load(ctx, riskId);
+	requireRemovable(load(ctx, riskId));
 	const row = ctx.db
 		.select({ id: riskReference.id })
 		.from(riskReference)

@@ -1,8 +1,7 @@
 <script lang="ts">
 	// Which part this one revises and which parts revise it, with why. A reader of an old part
 	// sees that the design moved on, on the page itself.
-	import { DetailRow, DetailTable, Section, State } from '#lib/components/opal/index.js';
-	import { formatDate } from '#lib/format.js';
+	import { DetailRow, DetailTable, Section, State, Timestamp } from '#lib/components/opal/index.js';
 	import type { PartDetail, PartRevisionRef } from '@opal/shared';
 
 	let { detail }: { detail: PartDetail } = $props();
@@ -15,7 +14,7 @@
 		{#if r.state === 'draft'}<State value="draft" tone="warn" badge class="ml-2" />{/if}
 		<p class="font-sans text-sm">{r.reason}</p>
 		<p class="font-sans text-xs text-muted-foreground">
-			{r.createdBy ?? 'Unknown'}, {formatDate(r.createdAt)}
+			{r.createdBy ?? 'Unknown'}, <Timestamp value={r.createdAt} />
 		</p>
 	</DetailRow>
 {/snippet}

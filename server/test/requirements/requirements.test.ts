@@ -1054,3 +1054,13 @@ describe('cancelling and recording verification are a person\'s acts', () => {
 		}
 	});
 });
+
+describe('a cancelled requirement is finished paper', () => {
+	test('it takes no new allocation', async () => {
+		const { req, call, mkPart } = await setup();
+		const r = await req();
+		const p = mkPart('Bracket', 'P-1');
+		await call('POST', `/requirements/${r.id}/cancel`, { reason: 'dropped' });
+		expect((await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r.reqNumber })).status).toBe(409);
+	});
+});
