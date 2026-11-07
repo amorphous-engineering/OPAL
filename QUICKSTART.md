@@ -31,6 +31,14 @@ Stop 1.x first. The installer replaces the `opal` program, so anything that star
 
 The first start imports the database in the data folder, from any release from 1.2.2 through 1.4.0-beta.3. The original file is not changed: it stays next to the new database as `opal.legacy.db`. `import-report.txt`, in the same folder, lists every table in the old file, what moved, and what did not. Read it before you rely on the result. Extensions and the Onshape integration do not carry over, and the report lists what they held.
 
+The import keeps every row or does not happen. If even one row fails, OPAL stops and the old database stays in place. The report names each row. Fix the cause and start again, or go on without those rows:
+
+```bash
+opal import /path/to/opal.db --accept-failed-rows
+```
+
+If your attachments are not in `attachments` beside the database, name the folder with `--attachments`. Two records with one work order, order or part number both stay: the later one reads as that number with `-DUP2`, and the report lists each change.
+
 Databases from before 1.4 have no passwords. The first start then prints a link in the terminal, and in the log on the control page, where the administrator sets one. Under **Users**, the administrator can make links for everyone else. Skip the first-account step below.
 
 Before 1.4, the project name, tiers and part numbering lived in `opal.project.yaml`. OPAL looks for it next to the database, one folder up, and in the current folder and its parents. If it finds none, the report says so, and new part numbers use the default format.
