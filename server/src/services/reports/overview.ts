@@ -42,12 +42,17 @@ export function inProject<T>(rows: T[], projectId: number | undefined): T[] {
 
 const registry = new Map<OverviewSections, OverviewSection<never>>();
 
-/** Add or replace a section. The execution area calls this with `executions`. */
+/**
+ * Add or replace a section. The execution area calls this with `executions`.
+ * Returns the one it replaced, so a test can put it back: module state outlives a test file.
+ */
 export function registerOverviewSection<K extends OverviewSections>(
 	name: K,
 	fn: OverviewSection<K>
-): void {
+): OverviewSection<K> {
+	const previous = registry.get(name) as OverviewSection<K>;
 	registry.set(name, fn as OverviewSection<never>);
+	return previous;
 }
 
 const emptyCapped = { items: [], total: 0, flagged: 0 };

@@ -36,6 +36,15 @@ function hasRoom(dir: string): boolean {
 	}
 }
 
+/**
+ * A password hash takes 170 ms and its check 110 ms on purpose, and the auth tests do hundreds. Here a
+ * hash that names no cost gets the lowest one: still argon2id, and a check reads the cost from the hash.
+ * Spawned servers do not load this file. auth.test.ts pins what production asks for.
+ */
+const hashAtFullCost = Bun.password.hash;
+Bun.password.hash = (password, algorithm) =>
+	hashAtFullCost(password, typeof algorithm === 'object' && algorithm.algorithm === 'argon2id' && !algorithm.memoryCost ? { ...algorithm, memoryCost: 8, timeCost: 1 } : algorithm);
+
 if (!process.env.TMPDIR && hasRoom(RAM)) {
 	for (const name of readdirSync(RAM)) {
 		const pid = Number(name.slice(PREFIX.length));

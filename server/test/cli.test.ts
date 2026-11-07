@@ -44,23 +44,27 @@ describe('what the command line asks for', () => {
 		const dir = mkdtempSync(join(tmpdir(), 'opal-cli-'));
 		const data = join(dir, 'data');
 		try {
-			for (const [args, code] of [
+			const cases = [
 				[['--help'], 0],
 				[['--bogus'], 2],
 				[['backup', join(dir, 'backups'), '--help'], 0],
 				[['restore', join(dir, 'backups'), '--help'], 0],
 				[['backup'], 2],
 				[['restore'], 2]
-			] as const) {
-				const p = Bun.spawn([process.execPath, join(import.meta.dir, '../src/cli.ts'), ...args], {
-					env: { ...process.env, OPAL_DATA_DIR: data },
-					stdout: 'pipe',
-					stderr: 'pipe'
-				});
-				expect(await p.exited).toBe(code);
-				const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
-				expect(out).toContain('Usage: opal');
-			}
+			] as const;
+			// Each start takes a third of a second. Nothing here writes, so they can overlap.
+			await Promise.all(
+				cases.map(async ([args, code]) => {
+					const p = Bun.spawn([process.execPath, join(import.meta.dir, '../src/cli.ts'), ...args], {
+						env: { ...process.env, OPAL_DATA_DIR: data },
+						stdout: 'pipe',
+						stderr: 'pipe'
+					});
+					const [exit, stdout, stderr] = await Promise.all([p.exited, new Response(p.stdout).text(), new Response(p.stderr).text()]);
+					expect(exit).toBe(code);
+					expect(stdout + stderr).toContain('Usage: opal');
+				})
+			);
 			expect(readdirSync(dir)).toEqual([]);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });

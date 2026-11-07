@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { part } from '../../src/db/schema/index.ts';
 import { ensureFts, ftsStatements, registerSearchable } from '../../src/services/platform/search.ts';
 import { setup } from './helpers.ts';
 
-registerSearchable({
+const real = registerSearchable({
 	type: 'part',
 	table: part,
 	columns: [part.name, part.internalPn, part.externalPn, part.description],
@@ -12,6 +12,7 @@ registerSearchable({
 	where: eq(part.state, 'draft'),
 	hit: (r) => ({ label: r.name, sublabel: r.internalPn, href: `/parts/${r.id}`, status: r.state })
 });
+afterAll(() => registerSearchable(real!));
 
 const base = { unitOfMeasure: 'ea', trackingType: 'bulk', procurement: 'make', tier: 1 } as const;
 

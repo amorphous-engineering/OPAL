@@ -42,7 +42,8 @@ describe('work that can sit silent past the idle timeout', () => {
 		}
 	});
 
-	test('an anonymous request that stops partway through its body is closed by the idle timeout', async () => {
+	// At idleTimeout 1, Bun closes an idle socket about 4 s in, so these two wait that long. They wait together.
+	test.concurrent('an anonymous request that stops partway through its body is closed by the idle timeout', async () => {
 		const s = await setup();
 		s.setActor({ kind: 'anonymous' });
 		const server = Bun.serve({
@@ -52,8 +53,8 @@ describe('work that can sit silent past the idle timeout', () => {
 			fetch: (req, srv) => s.app.fetch(req, { ip: null, keepOpen: () => srv.timeout(req, 0) })
 		});
 		try {
-			for (const path of ['/api/plugins/preview', '/api/plugins/install']) {
-				const closed = await new Promise<boolean>((resolve) => {
+			const closes = (path: string) =>
+				new Promise<boolean>((resolve) => {
 					const sock = connect(server.port!, '127.0.0.1');
 					const timer = setTimeout(() => {
 						sock.destroy();
@@ -66,12 +67,26 @@ describe('work that can sit silent past the idle timeout', () => {
 					sock.on('error', () => undefined);
 					sock.write(`POST ${path} HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{`);
 				});
-				expect(closed).toBe(true);
-			}
+			expect(await Promise.all([closes('/api/plugins/preview'), closes('/api/plugins/install')])).toEqual([true, true]);
 		} finally {
 			server.stop(true);
 		}
 	}, 40_000);
+
+	test.concurrent('Bun lets a request outlast the idle timeout once it asks to', async () => {
+		const handler = (keep: boolean) => async (req: Request, server: Bun.Server<unknown>) => {
+			if (keep) server.timeout(req, 0);
+			await Bun.sleep(4000);
+			return new Response('done');
+		};
+		const server = Bun.serve({ port: 0, hostname: '127.0.0.1', idleTimeout: 1, fetch: handler(true) });
+		try {
+			const res = await fetch(`http://127.0.0.1:${server.port}/`);
+			expect(await res.text()).toBe('done');
+		} finally {
+			server.stop(true);
+		}
+	}, 20_000);
 
 	test('an anonymous webhook stays under the idle timeout', async () => {
 		const s = await setup();
@@ -105,21 +120,6 @@ describe('work that can sit silent past the idle timeout', () => {
 			upstream.stop(true);
 		}
 	});
-
-	test('Bun lets a request outlast the idle timeout once it asks to', async () => {
-		const handler = (keep: boolean) => async (req: Request, server: Bun.Server<unknown>) => {
-			if (keep) server.timeout(req, 0);
-			await Bun.sleep(4000);
-			return new Response('done');
-		};
-		const server = Bun.serve({ port: 0, hostname: '127.0.0.1', idleTimeout: 1, fetch: handler(true) });
-		try {
-			const res = await fetch(`http://127.0.0.1:${server.port}/`);
-			expect(await res.text()).toBe('done');
-		} finally {
-			server.stop(true);
-		}
-	}, 20_000);
 });
 
 describe('a client that hangs up partway through', () => {
