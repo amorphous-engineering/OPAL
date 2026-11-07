@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { execution, procedure, procedureVersion, purchase, purchaseLine, stockRecord } from '../../src/db/schema/index.ts';
+import { eq } from 'drizzle-orm';
+import { execution, procedure, procedureVersion, purchase, purchaseLine, stockMove, stockRecord } from '../../src/db/schema/index.ts';
 import { createTestProject } from '../helpers/project.ts';
+import { setup as executionSetup } from '../execution/helpers.ts';
 import { setup } from './helpers.ts';
 
 const TS = '2026-01-01T00:00:00.000Z';
@@ -81,7 +83,7 @@ describe('a BOM is pencil until copies of the part exist', () => {
 		await expectLocked(t);
 	});
 
-	test('a cut work order locks the BOM and a voided one does not', async () => {
+	test('a cut work order locks the BOM and a voided one does not, with no stock record involved', async () => {
 		const s = await fixture();
 		const { proc, version } = addVersion(s, s.asm.id);
 		s.db
@@ -172,5 +174,60 @@ describe('revising a part with copies files a new form', () => {
 		expect((await s.api('GET', `/parts/${s.asm.id}/detail`)).json.revisedBy).toEqual([]);
 		const again = (await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: 'real' })).json;
 		expect(again.internalPn).not.toBe(next.internalPn);
+	});
+});
+
+describe('a voided build leaves nothing behind that locks the BOM', () => {
+	async function cuttable() {
+		const t = await executionSetup();
+		const asm = await t.ok('POST', '/parts', { name: 'Assembly', tier: 1 });
+		const comp = await t.ok('POST', '/parts', { name: 'Comp', tier: 3, trackingType: 'bulk' });
+		await t.ok('POST', `/parts/${comp.id}/activate`, { cause: 't' });
+		const line = await t.ok('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		await t.ok('POST', `/parts/${asm.id}/activate`, { cause: 't' });
+		const p = await t.proc('Build it', { procedureType: 'build' });
+		await t.step(p.id, 'Do it');
+		await t.ok('POST', `/procedures/${p.id}/outputs`, { partId: asm.id, quantity: '1' });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const lockedBy = async () => (await t.ok('GET', `/parts/${asm.id}/detail`)).bomLockedBy;
+		return { ...t, asm, line, procId: p.id, lockedBy };
+	}
+
+	test('cutting a build locks the BOM, and voiding the only cut unlocks it', async () => {
+		const t = await cuttable();
+		expect(await t.lockedBy()).toBeNull();
+		const wo = await t.cut(t.procId);
+		expect(await t.lockedBy()).toBe('1 stock record, 1 work order');
+		expect((await t.call('PATCH', `/bom/${t.line.id}`, { quantity: '3' })).status).toBe(409);
+
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		expect(await t.lockedBy()).toBeNull();
+		expect((await t.call('PATCH', `/bom/${t.line.id}`, { quantity: '3' })).status).toBe(200);
+	});
+
+	test('a voided cut does not unlock a BOM another cut still holds', async () => {
+		const t = await cuttable();
+		const first = await t.cut(t.procId);
+		await t.cut(t.procId);
+		expect((await t.call('POST', `/executions/${first.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		expect(await t.lockedBy()).toBe('1 stock record, 1 work order');
+		expect((await t.call('PATCH', `/bom/${t.line.id}`, { quantity: '3' })).status).toBe(409);
+	});
+
+	test('stock received beside a voided cut still locks the BOM', async () => {
+		const t = await cuttable();
+		const wo = await t.cut(t.procId);
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		await t.ok('POST', '/inventory', { partId: t.asm.id, quantity: '1', location: 'A1', enforceTierRules: false });
+		expect(await t.lockedBy()).toBe('1 stock record');
+	});
+
+	test('a record of a voided cut that someone put stock on is a copy', async () => {
+		const t = await cuttable();
+		const wo = await t.cut(t.procId);
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		const [record] = t.db.select().from(stockRecord).where(eq(stockRecord.partId, t.asm.id)).all();
+		t.db.insert(stockMove).values({ stockId: record!.id, kind: 'adjust', qty: 10000, reason: 'found', at: TS }).run();
+		expect(await t.lockedBy()).toBe('1 stock record');
 	});
 });

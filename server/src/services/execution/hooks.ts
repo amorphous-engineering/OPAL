@@ -37,7 +37,8 @@ import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 
 // ---------------------------------------------------------------- parts, entities, search
 
-// A cut work order is a copy on its way. One voided before it started never made anything.
+// A cut work order is a copy on its way. One voided before it started never made anything, and the
+// stock record it reserved does not count either (see the stock source in the inventory area).
 registerPartCopies({
 	label: ['work order', 'work orders'],
 	count: (ctx, partId) =>
