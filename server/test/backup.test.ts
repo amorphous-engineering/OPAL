@@ -1,9 +1,10 @@
 import { Database } from 'bun:sqlite';
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import { now } from '@opal/shared';
 import { createHash } from 'node:crypto';
 import {
 	chmodSync,
+	copyFileSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
@@ -25,6 +26,9 @@ import { openDb, type Db } from '../src/db/client.ts';
 import { blob, part, user, userProfile } from '../src/db/schema/index.ts';
 import { assertNoUnfinishedRestore, RESTORE_MARKER, restoreBackup, takeBackup, verifyBackup } from '../src/services/platform/backup.ts';
 import { createTestProject } from './helpers/project.ts';
+
+// These tests write and flush real files, which a busy machine can make slow.
+setDefaultTimeout(60_000);
 
 const roots: string[] = [];
 const posix = process.platform === 'win32' ? test.skip : test;
@@ -54,11 +58,24 @@ interface Instance {
 	close(): void;
 }
 
+let migrated: string | undefined;
+
+/** Every migration, once. Applying them for each test takes seconds on a real file. */
+function migratedDb(): string {
+	if (!migrated) {
+		migrated = join(tempDir(), 'migrated.db');
+		openDb(migrated).$client.close();
+	}
+	return migrated;
+}
+
 /** A real instance on a file, opened the way `serve` opens it. The data folder follows it. */
 function open(dir: string): Instance {
 	process.env.OPAL_DATA_DIR = dir;
 	mkdirSync(dir, { recursive: true });
-	const db = openDb(join(dir, 'opal.db'));
+	const file = join(dir, 'opal.db');
+	if (!existsSync(file)) copyFileSync(migratedDb(), file);
+	const db = openDb(file);
 	const ts = now();
 	const person = db.select().from(user).get() ?? db.insert(user).values({ username: 'abby', name: 'Abby', isAdmin: true, createdAt: ts, updatedAt: ts }).returning().get();
 	const actor: Actor = { kind: 'user', userId: person.id, isAdmin: true, sessionId: 1 };
