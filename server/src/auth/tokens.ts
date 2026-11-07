@@ -135,23 +135,71 @@ export class LoginThrottle {
 }
 export const loginThrottle = new LoginThrottle();
 /**
- * Failures per username from any address. Past the cap, addresses this person has never signed in
- * from share one guess per name every `lockedGuess.intervalMs`, whichever address asks, so a stranger
- * with many addresses gets no more tries than one with a single address. The person still gets in
- * from an address they have used, and a stranger who guesses a name cannot lock them out of it.
+ * Failures per username from any address. Past the cap, addresses this person has not signed in from
+ * take turns at one guess per name every `lockedGuess.intervalMs`, however many addresses ask, so a
+ * stranger with many addresses gets no more tries than the line allows. The person still gets in from
+ * an address they have used, and a new address gets its turn however hard others ask.
  */
 export const usernameThrottle = new LoginThrottle(50, 900_000);
-export const lockedGuess = { intervalMs: 5000 };
+export const lockedGuess = { intervalMs: 5000, askerTtlMs: 60_000 };
 
-const nextLockedGuess = new Map<string, number>();
+/** A person is told to come back within this, so they are back before their place lapses. */
+const MAX_WAIT_MS = 30_000;
+const MAX_ASKERS = 512;
+const MAX_LINES = 1000;
 
-/** Whether a stranger's guess may go ahead against a name over its cap. Taking it uses the slot. */
-export function takeLockedGuess(nameKey: string): boolean {
+type Asker = { firstAsked: number; lastAsked: number; served: number };
+type Line = { nextAt: number; askers: Map<string, Asker> };
+const lockedLines = new Map<string, Line>();
+
+/** Never served goes first, then whoever was served longest ago; among equals, whoever asked first. */
+const goesBefore = (a: Asker, b: Asker) => a.served < b.served || (a.served === b.served && a.firstAsked < b.firstAsked);
+
+function lineFor(nameKey: string, t: number): Line {
+	const found = lockedLines.get(nameKey);
+	if (found) return found;
+	if (lockedLines.size >= MAX_LINES) {
+		for (const [key, l] of lockedLines) {
+			if (l.nextAt <= t && [...l.askers.values()].every((a) => t - a.lastAsked > lockedGuess.askerTtlMs)) lockedLines.delete(key);
+		}
+		if (lockedLines.size >= MAX_LINES) lockedLines.delete(lockedLines.keys().next().value!);
+	}
+	const line: Line = { nextAt: 0, askers: new Map() };
+	lockedLines.set(nameKey, line);
+	return line;
+}
+
+/**
+ * Asks for this address's turn at a name over its cap. 0 means the turn is taken and the guess may go
+ * ahead. Otherwise it is how long to wait before asking again. Asking again does not lose the place,
+ * and an address that stops asking drops out of the line. Synchronous, so requests sent at once still
+ * get one check between them.
+ */
+export function takeLockedGuess(nameKey: string, address: string): number {
 	const t = Date.now();
-	if (nextLockedGuess.size > 1000) for (const [k, at] of nextLockedGuess) if (at <= t) nextLockedGuess.delete(k);
-	if ((nextLockedGuess.get(nameKey) ?? 0) > t) return false;
-	nextLockedGuess.set(nameKey, t + lockedGuess.intervalMs);
-	return true;
+	const line = lineFor(nameKey, t);
+	for (const [a, asker] of line.askers) if (t - asker.lastAsked > lockedGuess.askerTtlMs) line.askers.delete(a);
+	let me = line.askers.get(address);
+	if (me) me.lastAsked = t;
+	else {
+		if (line.askers.size >= MAX_ASKERS) {
+			// Make room by dropping whoever just had a turn, so someone still waiting for a first one can join.
+			let last: [string, Asker] | undefined;
+			for (const entry of line.askers) if (entry[1].served && (!last || entry[1].served > last[1].served)) last = entry;
+			if (!last) return MAX_WAIT_MS;
+			line.askers.delete(last[0]);
+		}
+		me = { firstAsked: t, lastAsked: t, served: 0 };
+		line.askers.set(address, me);
+	}
+	let ahead = 0;
+	for (const other of line.askers.values()) if (other !== me && goesBefore(other, me)) ahead++;
+	if (ahead === 0 && t >= line.nextAt) {
+		me.served = t;
+		line.nextAt = t + lockedGuess.intervalMs;
+		return 0;
+	}
+	return Math.max(1, Math.min(MAX_WAIT_MS, Math.max(line.nextAt - t, 0) + ahead * lockedGuess.intervalMs));
 }
 
 /**

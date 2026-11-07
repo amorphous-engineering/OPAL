@@ -203,13 +203,18 @@ export const authImpls = [
 		const address = throttleAddress(ctx.request?.ip);
 		const key = `${address}:${username}`;
 		const nameKey = `name:${username}`;
-		const tooMany = () => new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
+		const tooMany = (waitMs?: number) => {
+			const seconds = waitMs === undefined ? 0 : Math.ceil(waitMs / 1000);
+			const when = seconds ? `in ${seconds} second${seconds === 1 ? '' : 's'}` : 'later';
+			return new OpalError(429, 'too_many_attempts', `Too many failed attempts. Try again ${when}.`);
+		};
 		if (loginThrottle.blocked(key)) throw tooMany();
 		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
-		// Over the name's limit, strangers share one guess per interval. An address this person has
-		// signed in from keeps only its own limit, so guessing cannot lock them out of it.
-		if (usernameThrottle.blocked(nameKey) && !(u && hasSignedInFrom(ctx.db, u.id, address)) && !takeLockedGuess(nameKey)) {
-			throw tooMany();
+		// Over the name's limit, strangers take turns by address at one guess per interval. An address
+		// this person has signed in from keeps only its own limit, so guessing cannot lock them out of it.
+		if (usernameThrottle.blocked(nameKey) && !(u && hasSignedInFrom(ctx.db, u.id, address))) {
+			const waitMs = takeLockedGuess(nameKey, address);
+			if (waitMs) throw tooMany(waitMs);
 		}
 		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
 		loginThrottle.fail(key);

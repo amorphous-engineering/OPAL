@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { throttleAddress } from '../../src/auth/client-ip.ts';
-import { hashPassword, LoginThrottle, lockedGuess, withHashSlot } from '../../src/auth/tokens.ts';
+import { hashPassword, LoginThrottle, lockedGuess, usernameThrottle, withHashSlot } from '../../src/auth/tokens.ts';
 import { adminSession, cookieOf, harness, makeUser } from './helpers.ts';
 
 afterEach(() => {
@@ -82,23 +82,31 @@ describe('login throttle', () => {
 		expect((await attempt('198.51.100.8', 'right-password-1')).status).toBe(200);
 	});
 
-	describe('past the name cap', () => {
-		const setupLocked = async (username: string) => {
-			const h = await harness();
-			makeUser(h, { username, passwordHash: await hashPassword('right-password-1') });
-			const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
-				h.app.request(
-					'http://opal.test/api/auth/login',
-					{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) },
-					{ ip }
-				);
-			// Fifty failures from many addresses, with no shared slot yet.
-			lockedGuess.intervalMs = 0;
-			for (let i = 0; i < 5; i++) await Promise.all(Array.from({ length: 10 }, (_, j) => attempt(`10.${i}.${j}.1`)));
-			lockedGuess.intervalMs = 60_000;
-			return { h, attempt };
-		};
+	/** Puts a name over its cap directly: fifty real password checks are slow and prove nothing here. */
+	const overCap = (username: string) => {
+		for (let i = 0; i < 50; i++) usernameThrottle.fail(`name:${username}`);
+		lockedGuess.intervalMs = 60_000;
+	};
 
+	const setupUser = async (username: string) => {
+		const h = await harness();
+		makeUser(h, { username, passwordHash: await hashPassword('right-password-1') });
+		const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
+			h.app.request(
+				'http://opal.test/api/auth/login',
+				{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) },
+				{ ip }
+			);
+		return { h, attempt };
+	};
+
+	const setupLocked = async (username: string) => {
+		const made = await setupUser(username);
+		overCap(username);
+		return made;
+	};
+
+	describe('past the name cap', () => {
 		test('guesses sent at once from many addresses get one password check between them', async () => {
 			const { attempt } = await setupLocked('flooded');
 			const results = await Promise.all(Array.from({ length: 60 }, (_, i) => attempt(`192.0.2.${i}`)));
@@ -126,20 +134,91 @@ describe('login throttle', () => {
 		});
 	});
 
+	describe('taking turns past the name cap', () => {
+		const status = async (r: Response | Promise<Response>) => (await r).status;
+
+		test('a new address with the right password gets in while a few addresses keep asking', async () => {
+			const { attempt } = await setupLocked('line-owner');
+			const start = Date.now();
+			lockedGuess.intervalMs = 5000;
+			const six = Array.from({ length: 6 }, (_, i) => `172.16.0.${i}`);
+			const round = () => Promise.all(six.map((ip) => attempt(ip)));
+			setSystemTime(new Date(start + 60_000));
+			await round();
+			let inAt = 0;
+			for (let s = 1; s <= 12 && !inAt; s++) {
+				setSystemTime(new Date(start + 60_000 + s * 5000));
+				await round();
+				if ((await status(attempt('203.0.113.77', 'right-password-1'))) === 200) inAt = s;
+			}
+			// Six addresses asked first and each had a turn. Then the owner, who has had none, goes next.
+			expect(inAt).toBeGreaterThan(0);
+			expect(inAt).toBeLessThanOrEqual(7);
+		});
+
+		test('asking harder does not move an address up the line', async () => {
+			const { attempt } = await setupLocked('line-hard');
+			lockedGuess.intervalMs = 5000;
+			const start = Date.now() + 60_000;
+			setSystemTime(new Date(start));
+			expect(await status(attempt('172.16.1.1'))).toBe(401); // first turn
+			setSystemTime(new Date(start + 100));
+			expect(await status(attempt('203.0.113.5', 'right-password-1'))).toBe(429); // joins the line
+			for (let i = 0; i < 50; i++) expect(await status(attempt('172.16.1.1'))).toBe(429);
+			setSystemTime(new Date(start + 5000));
+			// The slot is open and the hammering address asks first, but the waiting address is next.
+			expect(await status(attempt('172.16.1.1'))).toBe(429);
+			expect(await status(attempt('203.0.113.5', 'right-password-1'))).toBe(200);
+		});
+
+		test('the refusal says when to ask again, and coming back then keeps the place', async () => {
+			const { attempt } = await setupLocked('line-wait');
+			lockedGuess.intervalMs = 5000;
+			const start = Date.now() + 60_000;
+			setSystemTime(new Date(start));
+			expect(await status(attempt('172.16.2.1'))).toBe(401);
+			setSystemTime(new Date(start + 1000));
+			const refused = await attempt('203.0.113.6', 'right-password-1');
+			expect(refused.status).toBe(429);
+			expect((await refused.json()).message).toBe('Too many failed attempts. Try again in 4 seconds.');
+			setSystemTime(new Date(start + 5000));
+			expect(await status(attempt('203.0.113.6', 'right-password-1'))).toBe(200);
+		});
+
+		test('an address that stops asking does not hold the line for long', async () => {
+			const { attempt } = await setupLocked('line-gone');
+			lockedGuess.intervalMs = 5000;
+			const start = Date.now() + 60_000;
+			setSystemTime(new Date(start));
+			expect(await status(attempt('172.16.3.1'))).toBe(401);
+			setSystemTime(new Date(start + 100));
+			expect(await status(attempt('172.16.3.2'))).toBe(429); // asks once and never returns
+			setSystemTime(new Date(start + 200));
+			expect(await status(attempt('203.0.113.7', 'right-password-1'))).toBe(429);
+			setSystemTime(new Date(start + 30_000));
+			expect(await status(attempt('203.0.113.7', 'right-password-1'))).toBe(429); // still behind it
+			setSystemTime(new Date(start + 60_200));
+			expect(await status(attempt('203.0.113.7', 'right-password-1'))).toBe(200);
+		});
+
+		test('hundreds of addresses in line still get one check per interval', async () => {
+			const { attempt } = await setupLocked('line-many');
+			lockedGuess.intervalMs = 5000;
+			const start = Date.now() + 60_000;
+			setSystemTime(new Date(start));
+			const first = await Promise.all(Array.from({ length: 600 }, (_, i) => attempt(`172.20.${i >> 8}.${i & 255}`)));
+			expect(first.filter((r) => r.status === 401).length).toBe(1);
+			setSystemTime(new Date(start + 5000));
+			const second = await Promise.all(Array.from({ length: 600 }, (_, i) => attempt(`172.20.${i >> 8}.${i & 255}`)));
+			expect(second.filter((r) => r.status === 401).length).toBe(1);
+		});
+	});
+
 	describe('an address whose session was revoked', () => {
 		const lockedOut = async (username: string) => {
-			const h = await harness();
-			makeUser(h, { username, passwordHash: await hashPassword('right-password-1') });
-			const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
-				h.app.request(
-					'http://opal.test/api/auth/login',
-					{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) },
-					{ ip }
-				);
+			const { h, attempt } = await setupUser(username);
 			const lock = async () => {
-				lockedGuess.intervalMs = 0;
-				for (let i = 0; i < 5; i++) await Promise.all(Array.from({ length: 10 }, (_, j) => attempt(`10.${i}.${j}.1`)));
-				lockedGuess.intervalMs = 60_000;
+				overCap(username);
 				expect((await attempt('192.0.2.1')).status).toBe(401); // a stranger takes the slot
 			};
 			return { h, attempt, lock };
