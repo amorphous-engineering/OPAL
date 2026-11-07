@@ -7,6 +7,7 @@ const FLAGS: Record<string, Record<string, boolean>> = {
 	import: { out: true },
 	backup: { keep: true },
 	restore: {},
+	secrets: {},
 	update: {},
 	version: {}
 };
@@ -25,6 +26,7 @@ export const USAGE = `Usage: opal [command] [flags]
   opal backup <folder>    Write a backup into a new subfolder, while OPAL runs or not
       --keep <n>          Then remove older finished backups beyond the newest n
   opal restore <backup>   Restore a backup into an empty data folder
+  opal secrets rotate     Replace the key to stored secrets, with OPAL stopped
   opal update             Install the newest release
   opal version            Print the version
   opal help               Print this

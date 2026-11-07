@@ -45,6 +45,7 @@ const settings = (over: Partial<SignInSettings> = {}): SignInSettings => ({
 	passwordLoginEnabled: true,
 	passkeysEnabled: true,
 	passkeyRpId: '',
+	oidcClientSecretUnreadable: false,
 	oidcEnabled: true,
 	oidcIssuer: p.issuer,
 	oidcClientId: CLIENT_ID,

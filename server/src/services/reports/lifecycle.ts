@@ -26,6 +26,7 @@ import { type LifecycleState, FACTORY_RESET_WORD, OpalError, conflict, now } fro
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { pinKeyFolder, removeKeyFile } from '../../auth/sealed.ts';
 import { rotateAuthSecret } from '../../auth/signing.ts';
 import { SESSION_COOKIE } from '../../auth/tokens.ts';
 import { type Ctx, actorUserId } from '../../context.ts';
@@ -37,15 +38,14 @@ import { serialized } from '../../registry.ts';
 import { insert, remove, update } from '../../write.ts';
 import { startSession } from '../auth/sessions.ts';
 import { reissueSetupCode } from '../auth/setup-code.ts';
-import { writeSetting } from '../auth/settings.ts';
+import { plainSetting, writeSetting } from '../auth/settings.ts';
 import { upsertProfile } from '../org/profiles.ts';
 import { ensureFts } from '../platform/search.ts';
 import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
 import { renameCheckboxFields } from '../../db/boolean-fields.ts';
 import { removeSnapshots } from '../../db/snapshot.ts';
+import { DEMO_PREFIX, dataDir } from '../../paths.ts';
 import { buildDemoContent } from './demo.ts';
-
-export const DEMO_PREFIX = 'demo.';
 
 interface Home {
 	dbPath: string;
@@ -134,8 +134,11 @@ function copyAuthSettings(from: Db, to: Db): void {
 	const ctx = { db: to, actor: { kind: 'system' }, op: 'reports.lifecycle.enterDemo' } as Ctx;
 	for (const row of from.select().from(authSetting).all()) {
 		if (row.value === null || to.select().from(authSetting).where(eq(authSetting.key, row.key)).get()) continue;
-		// writeSetting keeps the OIDC client secret out of the demo audit log.
-		writeSetting(ctx, row.key as AuthSettingKey, row.value);
+		// A secret no key opens stays behind: the demo starts as if it was never set.
+		const plain = plainSetting(row.key, row.value);
+		if (plain === null) continue;
+		// writeSetting seals the OIDC client secret and keeps it out of the demo audit log.
+		writeSetting(ctx, row.key as AuthSettingKey, plain);
 	}
 }
 
@@ -229,6 +232,8 @@ export async function enterDemo(ctx: Ctx): Promise<LifecycleState> {
 
 	h.demo = true;
 	void serialized(async () => {
+		// Before the data folder moves. The demo runs on the real folder's key.
+		pinKeyFolder(dataDir());
 		setEnv('OPAL_DATA_DIR', demoAttachments(h));
 		setEnv('OPAL_DB_FILE', demoPath(h));
 		swap(ctx.db, demoDb);
@@ -254,6 +259,7 @@ export async function exitDemo(ctx: Ctx, deleteFiles = true): Promise<LifecycleS
 	void serialized(async () => {
 		setEnv('OPAL_DATA_DIR', h.env.OPAL_DATA_DIR);
 		setEnv('OPAL_DB_FILE', h.env.OPAL_DB_FILE);
+		pinKeyFolder(undefined);
 		swap(ctx.db, real);
 		if (deleteFiles) removeDemoFiles(h);
 	});
@@ -297,6 +303,8 @@ export function factoryReset(ctx: Ctx, confirm: string): void {
 		}
 		// Signed links from the erased organization must not verify in the new one.
 		rotateAuthSecret();
+		// Whatever was sealed with it is gone. A copy of the old database stays unreadable in the new one.
+		removeKeyFile();
 		swap(live, await openFile(h.dbPath));
 		reissueSetupCode();
 	});
@@ -305,4 +313,5 @@ export function factoryReset(ctx: Ctx, confirm: string): void {
 /** For tests: forget what was learned about a database. */
 export function forgetLifecycle(db: Db): void {
 	homes.delete(db);
+	pinKeyFolder(undefined);
 }

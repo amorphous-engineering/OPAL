@@ -1,7 +1,9 @@
 import { mkdirSync } from 'node:fs';
+import { openingKeys } from '../auth/sealed.ts';
 import { createApp } from '../app.ts';
-import { openDb } from '../db/client.ts';
+import { openDb, type Db } from '../db/client.ts';
 import { loadDevSchema } from '../db/dev.ts';
+import { scrubDatabase, scrubPending, sweepCopies } from '../db/seal-secrets.ts';
 import { importInPlace } from '../import/index.ts';
 import { dataDir, dbPath } from '../paths.ts';
 import { PluginHost } from '../services/plugins/host.ts';
@@ -17,12 +19,22 @@ import { startBlobSweeper } from '../services/platform/attachments.ts';
 import { assertNoUnfinishedRestore } from '../services/platform/backup.ts';
 import { flag } from './args.ts';
 
+/** Longer than the supervisor's health poll by a wide margin. */
+const SCRUB_DELAY_MS = 2000;
+
 export async function serve(args: string[]): Promise<void> {
 	// Before the folder or any file in it is created.
 	hardenDataDir();
 	mkdirSync(dataDir(), { recursive: true });
 	try {
 		assertNoUnfinishedRestore();
+	} catch (e) {
+		console.error((e as Error).message);
+		process.exit(1);
+	}
+	// A bad key stops here, in words for the person starting OPAL, not at the first saved secret.
+	try {
+		openingKeys();
 	} catch (e) {
 		console.error((e as Error).message);
 		process.exit(1);
@@ -38,7 +50,16 @@ export async function serve(args: string[]): Promise<void> {
 	}
 	if (report) console.log('Imported the legacy database. See import-report.txt next to it.');
 	// OPAL_DEV_SCHEMA=1: build a fresh dev database from schema.ts instead of migrations.
-	const db = process.env.OPAL_DEV_SCHEMA === '1' ? await (await loadDevSchema()).openSchemaDb(dbPath()) : openDb(dbPath());
+	const devSchema = process.env.OPAL_DEV_SCHEMA === '1';
+	let db: Db;
+	try {
+		// Right after an import, opal.legacy.db is the way back, and a copy would only add one more file with plaintext secrets.
+		db = devSchema ? await (await loadDevSchema()).openSchemaDb(dbPath()) : openDb(dbPath(), undefined, report ? () => null : undefined, { scrubLater: true });
+	} catch (e) {
+		console.error((e as Error).message);
+		process.exit(1);
+	}
+	sweepCopies(dbPath());
 	const app = createApp({ db, web: true });
 	startBlobSweeper(db, serialized, [versionHoldsBlob(db)]);
 	const port = Number(flag(args, 'port') ?? process.env.OPAL_PORT ?? 8080);
@@ -71,6 +92,11 @@ export async function serve(args: string[]): Promise<void> {
 		}
 	}
 	console.log(`OPAL listening on http://${hostname}:${port} (data: ${dataDir()})`);
+	// The compacting that follows the first sealing blocks the server, and on a large file that takes a
+	// while. A supervisor gives a new binary a short time to answer, and during a self-update it puts the
+	// old binary back if that runs out, which cannot read sealed values. That supervisor is the old
+	// version, so nothing new can be asked of it: this waits until it has had its answer.
+	if (!devSchema && scrubPending(db.$client)) setTimeout(() => void serialized(async () => scrubDatabase(db.$client)), SCRUB_DELAY_MS);
 	const unclaimed = db.select({ id: user.id }).from(user).limit(1).get() === undefined;
 	armSetupCode(unclaimed, `http://${hostname === '0.0.0.0' || hostname === '::' ? 'localhost' : hostname}:${port}`);
 }

@@ -1,6 +1,6 @@
 /**
- * Owner-only data. The database holds password hashes, session and API token hashes and the OIDC client
- * secret, so other local accounts must not read it.
+ * Owner-only data. The database holds password hashes and session and API token hashes, and the folder
+ * holds the key to the sealed secrets, so other local accounts must not read them.
  *
  * `hardenDataDir` runs first in `serve` and `import`, before anything is created: it sets the umask (every
  * file written afterwards is `0600`, every folder `0700`), creates a missing data folder `0700` and
@@ -28,8 +28,8 @@ function restrict(path: string, warn: string[]): void {
 	}
 }
 
-/** What OPAL keeps in its data folder: the database and its copies, reports, files, the auth secret. */
-const OURS = /^(opal\.|demo\.|import-report\.|\.opal_auth_secret$|blobs$|avatars$|plugins$|plugin-data$)/;
+/** What OPAL keeps in its data folder: the database and its copies, reports, files, the auth secret and the secrets key. */
+const OURS = /^(opal\.|demo\.|import-report\.|\.opal_auth_secret$|\.opal_secrets_key|blobs$|avatars$|plugins$|plugin-data$)/;
 
 export function hardenDataDir(opts: { umask?: boolean } = {}): void {
 	if (process.platform === 'win32') return;

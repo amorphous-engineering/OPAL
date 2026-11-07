@@ -5,6 +5,7 @@ import 'reflect-metadata';
 import { backup, restore } from './commands/backup.ts';
 import { importLegacy } from './commands/import.ts';
 import { parseCommand, USAGE } from './commands/parse.ts';
+import { secrets } from './commands/secrets.ts';
 import { serve } from './commands/serve.ts';
 import { supervise } from './commands/supervise.ts';
 import { update } from './commands/update.ts';
@@ -17,6 +18,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
 	backup,
 	restore,
 	update,
+	secrets,
 	version: () => console.log(VERSION)
 };
 
