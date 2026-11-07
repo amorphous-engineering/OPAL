@@ -60,12 +60,16 @@ export function revokeSessions(ctx: Ctx, userId: number, exceptSessionId?: numbe
 	return rows.length;
 }
 
-/** Whether a recent session of this person came from this client. `address` is a `throttleAddress`. */
+/**
+ * Whether a recent session of this person came from this client. `address` is a `throttleAddress`.
+ * A revoked session does not count: an address that signed in with a stolen password must not stay
+ * trusted after the reset that ended it.
+ */
 export function hasSignedInFrom(db: Db, userId: number, address: string): boolean {
 	return db
 		.select({ ip: session.ipAddress })
 		.from(session)
-		.where(eq(session.userId, userId))
+		.where(and(eq(session.userId, userId), isNull(session.revokedAt)))
 		.orderBy(desc(session.id))
 		.limit(50)
 		.all()

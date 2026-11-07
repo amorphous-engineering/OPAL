@@ -50,7 +50,7 @@
 			session.set(user);
 			await goto(landingFor(user, null), { replace: true });
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Setup failed';
+			error = err instanceof ApiError ? (err.fields?.password ?? err.message) : 'Setup failed';
 		} finally {
 			busy = false;
 		}
