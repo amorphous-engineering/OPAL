@@ -19,7 +19,11 @@ import {
 	RISK_DISPOSITIONS,
 	RISK_ISSUE_ROLES,
 	RISK_REFERENCE_TYPES,
-	zDatasetSchema
+	type DatasetSchema,
+	type PointValues,
+	zDatasetSchema,
+	zPointValue,
+	zSchemaField
 } from '@opal/shared';
 import {
 	baselineEvent,
@@ -93,7 +97,11 @@ export function importIssues(c: ImportCtx): void {
 		const id = Number(r.id);
 		const deleted = ts(r.deleted_at);
 		const closed = String(r.status) === 'closed';
-		if (r.procedure_id && !r.procedure_instance_id) keepLegacyRow(c, 'issue', { id, procedure_id: r.procedure_id }, 'issue named a procedure but no work order; the new issue has no procedure column');
+		if (!['open', 'closed'].includes(String(r.status))) warn(c, `issue ${id}: status "${String(r.status)}" is not in OPAL 2, reads as open`);
+		if (r.procedure_id && !r.procedure_instance_id) {
+			warn(c, `issue ${id}: named procedure ${Number(r.procedure_id)} and no work order. An issue here has no procedure, so the link is in legacy_row`);
+			keepLegacyRow(c, 'issue', { id, procedure_id: r.procedure_id }, 'issue named a procedure but no work order; the new issue has no procedure column');
+		}
 		return {
 			id,
 			issueNumber: issueNumber(id, String(r.issue_number)),
@@ -345,20 +353,54 @@ function catalog(c: ImportCtx): { id: string; title: string; statement: string; 
 	});
 }
 
+/**
+ * One unreadable schema would stop every dataset listing, and 1.x took any object here. The fields that
+ * read as OPAL 2 fields stay, and the whole of what was stored stays in legacy_row.
+ */
+function datasetSchema(c: ImportCtx, id: number, r: Row): DatasetSchema {
+	const raw = json<{ fields?: unknown }>(r.schema);
+	const parsed = zDatasetSchema.safeParse(raw);
+	if (parsed.success) return parsed.data;
+	const names = new Set<string>();
+	const fields = (Array.isArray(raw?.fields) ? raw.fields : []).flatMap((f: unknown) => {
+		const one = zSchemaField.safeParse(f);
+		if (!one.success || names.has(one.data.name)) return [];
+		names.add(one.data.name);
+		return [one.data];
+	});
+	if (r.schema != null) {
+		warn(c, `dataset ${id}: schema does not read as OPAL 2 fields, kept ${fields.length} of them. What was stored is in legacy_row`);
+		keepLegacyRow(c, 'dataset', { id, schema: r.schema }, 'schema does not read as OPAL 2 fields');
+	}
+	return { fields: fields.slice(0, 100) };
+}
+
+/** A point is a flat set of values, or its dataset does not open. Anything nested reads as its JSON. */
+function pointValues(c: ImportCtx, id: number, value: unknown): PointValues {
+	const raw = json<unknown>(value);
+	if (raw === null) return {};
+	if (typeof raw !== 'object' || Array.isArray(raw)) {
+		warn(c, `data_point ${id}: values are not a set of fields, kept under "value"`);
+		return { value: JSON.stringify(raw) };
+	}
+	return Object.fromEntries(Object.entries(raw).map(([k, v]) => {
+		if (zPointValue.safeParse(v).success) return [k, v as PointValues[string]];
+		warn(c, `data_point ${id}: value of "${k}" is nested, kept as its JSON`);
+		return [k, JSON.stringify(v)];
+	}));
+}
+
 export function importDatasets(c: ImportCtx): void {
 	const sets = readTable(c, 'dataset', ['id', 'name', 'description', 'schema', 'procedure_id', 'created_at', 'updated_at', 'deleted_at']);
 	const rows = sets.map((r) => {
 		const id = Number(r.id);
-		const raw = json<unknown>(r.schema) ?? { fields: [] };
-		const parsed = zDatasetSchema.safeParse(raw);
-		if (!parsed.success) warn(c, `dataset ${id}: schema does not match the new schema rules, kept as stored`);
 		const deleted = ts(r.deleted_at);
 		return {
 			id,
 			projectId: c.projectId,
 			name: String(r.name),
 			description: str(r.description),
-			schema: (parsed.success ? parsed.data : raw) as never,
+			schema: datasetSchema(c, id, r),
 			procedureId: r.procedure_id != null && c.ids.procedure?.has(Number(r.procedure_id)) ? Number(r.procedure_id) : null,
 			state: deleted ? ('archived' as const) : ('active' as const),
 			archivedAt: deleted,
@@ -370,7 +412,7 @@ export function importDatasets(c: ImportCtx): void {
 	track(c, 'dataset', insertRows(c, 'dataset', dataset, rows));
 	const pts = readTable(c, 'data_point', ['id', 'dataset_id', 'recorded_at', 'values', 'step_execution_id', 'created_at']);
 	insertRows(c, 'data_point', dataPoint, keep(c, 'data_point', pts, (r) => (c.ids.dataset!.has(Number(r.dataset_id)) ? null : 'dataset is not imported'))
-		.map((r) => ({ id: Number(r.id), datasetId: Number(r.dataset_id), recordedAt: tsReq(r.recorded_at), values: json(r.values) ?? {}, stepExecutionId: num(r.step_execution_id), createdAt: tsReq(r.created_at) })));
+		.map((r) => ({ id: Number(r.id), datasetId: Number(r.dataset_id), recordedAt: tsReq(r.recorded_at), values: pointValues(c, Number(r.id), r.values), stepExecutionId: num(r.step_execution_id), createdAt: tsReq(r.created_at) })));
 }
 
 export function importNotifications(c: ImportCtx): void {

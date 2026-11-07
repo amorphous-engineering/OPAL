@@ -271,6 +271,50 @@ export function columns(src: Database, table: string): string[] {
 	return (src.query(`PRAGMA table_info(${ident(table)})`).all() as Row[]).map((r) => String(r.name));
 }
 
+/** Columns whose values the importers convert, and which would otherwise turn to nothing without a word. */
+const CONVERTED: Record<string, { qty?: string[]; date?: string[]; json?: string[] }> = {
+	part: { qty: ['reorder_point'], json: ['metadata'] },
+	purchase: { date: ['target_date'] },
+	purchase_line: { qty: ['qty_ordered', 'qty_received', 'unit_cost'] },
+	purchase_expense: { qty: ['quantity', 'unit_cost', 'total_cost'] },
+	inventory_record: { qty: ['quantity'], date: ['expiration_date'] },
+	inventory_consumption: { qty: ['quantity'] },
+	inventory_production: { qty: ['quantity'] },
+	stock_transfer: { qty: ['quantity'] },
+	test_template: { qty: ['min_value', 'max_value'] },
+	kit: { qty: ['quantity_required'] },
+	step_kit: { qty: ['quantity_required'] },
+	procedure_output: { qty: ['quantity_produced'] },
+	procedure_step: { json: ['required_data_schema', 'signoffs', 'callouts'] },
+	procedure_instance: { json: ['participants'] },
+	step_execution: { json: ['required_data_schema', 'signoffs'] },
+	dataset: { json: ['schema'] },
+	data_point: { json: ['values'] }
+};
+
+const shown = (v: unknown) => {
+	const s = String(v);
+	return JSON.stringify(s.length > 80 ? `${s.slice(0, 80)}...` : s);
+};
+
+/** Says so when a value will not survive being read. The row still imports, and the old file keeps the value. */
+function noteUnreadable(c: ImportCtx, table: string, rows: Row[]): void {
+	const rules = CONVERTED[table];
+	if (!rules) return;
+	for (const r of rows) {
+		const where = (col: string) => `${table} ${String(r.id ?? '')} ${col}`;
+		for (const col of rules.qty ?? []) {
+			if (r[col] != null && !Number.isFinite(Number(r[col]))) warn(c, `${where(col)}: ${shown(r[col])} is not a number, left empty`);
+		}
+		for (const col of rules.date ?? []) {
+			if (r[col] != null && r[col] !== '' && dateOnly(r[col]) === null) warn(c, `${where(col)}: ${shown(r[col])} is not a date, left empty`);
+		}
+		for (const col of rules.json ?? []) {
+			if (typeof r[col] === 'string' && r[col] !== '' && json(r[col]) === null && r[col].trim() !== 'null') warn(c, `${where(col)}: ${shown(r[col])} is not readable, left empty`);
+		}
+	}
+}
+
 /**
  * Reads every row of a legacy table in id order and records the read count and the columns
  * the importer does not use. `used` lists the columns that have a home.
@@ -290,6 +334,7 @@ export function readTable(c: ImportCtx, table: string, used: readonly string[], 
 	// A database nobody expected: without this its values would quietly read as empty.
 	const missing = used.filter((col) => !have.includes(col));
 	if (rows.length && missing.length) warn(c, `${table}: ${missing.join(', ')} not in this database, read as empty`);
+	noteUnreadable(c, table, rows);
 	return rows;
 }
 

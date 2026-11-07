@@ -126,8 +126,8 @@ export async function serve(args: string[]): Promise<void> {
 	const url = `http://${hostname === '0.0.0.0' || hostname === '::' ? 'localhost' : hostname}:${port}`;
 	armSetupCode(unclaimed, url);
 	// A database from before OPAL had passwords has people in it and nobody who can sign in, so
-	// setup is closed. These links are printed in the same place as the setup code.
+	// setup is closed. These links are printed in the same place as the setup code, and last like it.
 	for (const link of firstAdminClaimLinks(db, url)) {
-		console.log(`No administrator can sign in yet. ${link.username} sets a password here: ${link.url}`);
+		console.log(`No administrator can sign in yet. ${link.username} sets a password here, until OPAL restarts or for 12 hours: ${link.url}`);
 	}
 }

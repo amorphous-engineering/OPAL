@@ -3,14 +3,24 @@
  * from before OPAL had passwords arrives with no way in, and if that includes every administrator
  * there is nobody to make links for the others.
  */
+import { randomBytes } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { signPayload } from '../../auth/signing.ts';
 import type { Db } from '../../db/client.ts';
-import { passkeyCredential, user } from '../../db/schema/index.ts';
+import { auditLog, passkeyCredential, user } from '../../db/schema/index.ts';
 import type { ImportReport } from '../../import/context.ts';
 import { oidcActive, readSettings } from './settings.ts';
 
 export const CLAIM_LINK_TTL_MS = 7 * 86_400_000;
+
+/**
+ * A link printed at a start ends up in logs, where it gives whoever reads them an administrator. So it
+ * lasts hours, not days, and it dies with the process that printed it, as the setup code does.
+ */
+export const PRINTED_LINK_TTL_MS = 12 * 3_600_000;
+const THIS_START = randomBytes(16).toString('base64url');
+
+export const fromThisStart = (start: unknown): boolean => start === THIS_START;
 
 type Account = typeof user.$inferSelect;
 
@@ -41,10 +51,22 @@ export function noSignInPeople(db: Db, report: ImportReport): ImportReport['noSi
 	return people.filter((p) => !canSignIn(db, p, oidc)).map((p) => ({ id: p.id, username: p.username, isAdmin: p.isAdmin }));
 }
 
-/** One link per administrator, when no active administrator can sign in. Empty otherwise. */
+function printedToken(u: Pick<Account, 'id' | 'createdAt' | 'updatedAt'>): string {
+	return signPayload({ kind: 'printed-claim', uid: u.id, born: u.createdAt, rev: u.updatedAt, start: THIS_START }, PRINTED_LINK_TTL_MS);
+}
+
+/**
+ * One link per administrator of an imported database, when no active administrator can sign in. A person
+ * from before OPAL had passwords needs one. Nothing else gets a printed link: not a database that was
+ * never imported, where this would only be a way around how it signs people in, and not an account tied
+ * to single sign-on, which a password would step around.
+ */
 export function firstAdminClaimLinks(db: Db, baseUrl: string): { username: string; url: string }[] {
-	const oidc = oidcActive(readSettings(db));
+	const settings = readSettings(db);
+	if (!settings.passwordLoginEnabled) return [];
+	const oidc = oidcActive(settings);
 	const admins = db.select().from(user).where(and(eq(user.isActive, true), eq(user.isAdmin, true))).orderBy(user.id).all();
 	if (admins.some((a) => canSignIn(db, a, oidc))) return [];
-	return admins.map((a) => ({ username: a.username, url: `${baseUrl}/claim?token=${encodeURIComponent(claimToken(a))}` }));
+	if (!db.select({ id: auditLog.id }).from(auditLog).where(eq(auditLog.op, 'legacy.import')).limit(1).get()) return [];
+	return admins.filter((a) => !a.oidcSubject).map((a) => ({ username: a.username, url: `${baseUrl}/claim?token=${encodeURIComponent(printedToken(a))}` }));
 }

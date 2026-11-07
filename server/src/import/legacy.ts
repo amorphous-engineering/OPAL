@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import type { Db } from '../db/client.ts';
 import { auditLog } from '../db/schema/index.ts';
 import { noSignInPeople } from '../services/auth/claim.ts';
-import { importAttachments } from './attachments.ts';
+import { importAttachments, reportLostOwners } from './attachments.ts';
 import { bridgeToHead, canBridge, LEGACY_HEAD, RELEASED_HEADS } from './bridge.ts';
 import {
 	type ImportCtx,
@@ -288,6 +288,7 @@ export function importInto(src: Database, d: Db, report: ImportReport, opts: Res
 		importNotifications(c);
 		c.progress('work orders');
 		importExecutions(c, links);
+		reportLostOwners(c);
 		c.progress('history');
 		importAudit(c);
 		importDesignators(c);

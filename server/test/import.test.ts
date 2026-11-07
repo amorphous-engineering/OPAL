@@ -94,7 +94,11 @@ describe('legacy import of a database with rows in every table', async () => {
 	test('a deleted role is left out with its grants and gates', () => {
 		expect(q('SELECT id, name, key FROM role ORDER BY id')).toEqual([{ id: 1, name: 'Engineer', key: 'engineer' }, { id: 2, name: 'Welder', key: null }]);
 		expect(q('SELECT user_id, role_id FROM user_role')).toEqual([{ user_id: 7, role_id: 1 }]);
-		expect(q('SELECT gate FROM role_gate').map((r) => r.gate)).toEqual(['issue.disposition']);
+		expect(q('SELECT role_id, gate FROM role_gate ORDER BY role_id, gate')).toEqual([
+			{ role_id: 1, gate: 'execution.closeShort' },
+			{ role_id: 1, gate: 'execution.skipRequired' },
+			{ role_id: 1, gate: 'issue.disposition' }
+		]);
 	});
 
 	test('one project is made from the project config and holds every scoped record', () => {

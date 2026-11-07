@@ -15,6 +15,7 @@ import {
 	workcenter
 } from '../db/schema/index.ts';
 import { humanUsernameBase, isPluginUsername } from '../auth/tokens.ts';
+import { SYSTEM_ROLES } from '../services/org/roles.ts';
 import { AUTH_SETTING_KEYS } from '../db/schema/auth.ts';
 import { sourceFile, storeByHash } from './files.ts';
 import {
@@ -146,6 +147,8 @@ export function importPeople(c: ImportCtx): void {
 	})));
 }
 
+const GATES_NEW_IN_OPAL_2 = ['execution.skipRequired', 'execution.closeShort'];
+
 /** role, user_role, role_gate. A soft-deleted role is left out with its grants. */
 export function importRoles(c: ImportCtx): void {
 	const roles = readTable(c, 'role', ['id', 'name', 'description', 'key', 'is_system', 'created_at', 'updated_at', 'deleted_at']);
@@ -185,6 +188,17 @@ export function importRoles(c: ImportCtx): void {
 	insertRows(c, 'role_gate', roleGate, gates
 		.filter((r) => c.ids.role!.has(Number(r.role_id)) || (warn(c, `role_gate ${Number(r.id)}: role is not imported, gate skipped`), false))
 		.map((r) => ({ id: Number(r.id), roleId: Number(r.role_id), gate: String(r.gate) })));
+
+	// Gates 1.x did not have. Without these only an administrator could close short or skip a required
+	// step. The gates it had stay as its administrators left them.
+	let added = 0;
+	for (const r of live.filter((x) => c.ids.role!.has(Number(x.id)))) {
+		const defaults = SYSTEM_ROLES[String(r.key)]?.[2] ?? [];
+		for (const gate of defaults.filter((g) => GATES_NEW_IN_OPAL_2.includes(g))) {
+			added += c.d.insert(roleGate).values({ roleId: Number(r.id), gate }).onConflictDoNothing().returning({ id: roleGate.id }).all().length;
+		}
+	}
+	derived(c, 'role_gate_new_in_opal_2', added);
 }
 
 export const NO_ONSHAPE = 'the Onshape integration does not carry over to OPAL 2';

@@ -103,3 +103,10 @@ export function importAttachments(c: ImportCtx): BlobMap {
 	track(c, 'attachment', insertRows(c, 'attachment', attachment, links));
 	return map;
 }
+
+/** Run once every owner table is in. A link to a row that never existed points at nothing, and that gets a line. */
+export function reportLostOwners(c: ImportCtx): void {
+	for (const a of c.d.select({ id: attachment.id, ownerType: attachment.ownerType, ownerId: attachment.ownerId }).from(attachment).all()) {
+		if (!c.ids[a.ownerType]?.has(a.ownerId)) warn(c, `attachment ${a.id}: its owner, ${a.ownerType} ${a.ownerId}, does not exist, so nothing shows it`);
+	}
+}
