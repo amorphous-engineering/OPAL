@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { throttleAddress } from '../../src/auth/client-ip.ts';
 import { hashPassword, LoginThrottle, lockedGuess, withHashSlot } from '../../src/auth/tokens.ts';
-import { adminSession, harness, makeUser } from './helpers.ts';
+import { adminSession, cookieOf, harness, makeUser } from './helpers.ts';
 
 afterEach(() => {
 	delete process.env.OPAL_TRUST_PROXY;
@@ -123,6 +123,48 @@ describe('login throttle', () => {
 			expect((await attempt('192.0.2.2', 'right-password-1')).status).toBe(429);
 			expect((await attempt('198.51.100.9')).status).toBe(401); // the owner's typo
 			expect((await attempt('198.51.100.9', 'right-password-1')).status).toBe(200);
+		});
+	});
+
+	describe('an address whose session was revoked', () => {
+		const lockedOut = async (username: string) => {
+			const h = await harness();
+			makeUser(h, { username, passwordHash: await hashPassword('right-password-1') });
+			const attempt = (ip: string, password = 'wrong-guess-xxxx') =>
+				h.app.request(
+					'http://opal.test/api/auth/login',
+					{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) },
+					{ ip }
+				);
+			const lock = async () => {
+				lockedGuess.intervalMs = 0;
+				for (let i = 0; i < 5; i++) await Promise.all(Array.from({ length: 10 }, (_, j) => attempt(`10.${i}.${j}.1`)));
+				lockedGuess.intervalMs = 60_000;
+				expect((await attempt('192.0.2.1')).status).toBe(401); // a stranger takes the slot
+			};
+			return { h, attempt, lock };
+		};
+
+		test('is a stranger again after a password change ended the session', async () => {
+			const { h, attempt, lock } = await lockedOut('stolen');
+			const thief = await attempt('198.51.100.66', 'right-password-1');
+			expect(thief.status).toBe(200);
+			const owner = await attempt('198.51.100.1', 'right-password-1');
+			const cookie = cookieOf(owner);
+			const changed = await h.call('POST', '/auth/password', { currentPassword: 'right-password-1', newPassword: 'brand-new-password-1' }, { cookie });
+			expect(changed.status).toBe(200);
+			await lock();
+			expect((await attempt('198.51.100.66')).status).toBe(429);
+			// The session the change kept still counts.
+			expect((await attempt('198.51.100.1', 'brand-new-password-1')).status).toBe(200);
+		});
+
+		test('is a stranger again after the person signs out from it', async () => {
+			const { h, attempt, lock } = await lockedOut('signed-out');
+			const cookie = cookieOf(await attempt('198.51.100.2', 'right-password-1'));
+			expect((await h.call('POST', '/auth/logout', {}, { cookie })).status).toBe(200);
+			await lock();
+			expect((await attempt('198.51.100.2', 'right-password-1')).status).toBe(429);
 		});
 	});
 
