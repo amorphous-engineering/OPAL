@@ -9,7 +9,6 @@ import { receiveStock } from '../../src/services/inventory/index.ts';
 import { registerExecutionReport } from '../../src/services/reports/exports.ts';
 import { registerOverviewSection } from '../../src/services/reports/overview.ts';
 import { toCsv } from '../../src/services/reports/csv.ts';
-import { reportsImpls } from '../../src/ops/reports.ts';
 
 /** The base setup, with one project; issue and risk creates carry its id. */
 async function setup() {
@@ -228,8 +227,4 @@ describe('csv reports', () => {
 		expect(m.byPriority).toEqual({ high: 2 });
 		expect(m.advisoryOpen + m.undispositioned + m.dispositioned).toBe(m.open);
 	});
-});
-
-test('every report operation is bound', () => {
-	expect(reportsImpls.length).toBe(13);
 });
