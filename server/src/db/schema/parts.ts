@@ -77,6 +77,28 @@ export const bomLine = sqliteTable(
 );
 
 /**
+ * A part filed to change another part's design once copies of that part exist. The old part
+ * and its BOM stay as they are, because the copies were built to them.
+ */
+export const partRevision = sqliteTable(
+	'part_revision',
+	{
+		id: id(),
+		partId: integer('part_id')
+			.notNull()
+			.unique()
+			.references(() => part.id),
+		revisesId: integer('revises_id')
+			.notNull()
+			.references(() => part.id),
+		reason: text('reason').notNull(),
+		createdById: integer('created_by_id').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [index('part_revision_revises_idx').on(t.revisesId)]
+);
+
+/**
  * Part numbers that left the part table (deleted drafts, numbers a draft gave up when its tier
  * changed). They stay taken, so a number is never issued twice.
  */

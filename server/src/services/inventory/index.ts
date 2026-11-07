@@ -10,7 +10,7 @@
  */
 import { eq, sql } from 'drizzle-orm';
 import { stockRecord } from '../../db/schema/index.ts';
-import { registerPartReference } from '../parts/references.ts';
+import { registerPartCopies, registerPartReference } from '../parts/references.ts';
 export * from './ledger.ts';
 export * from './records.ts';
 export * from './moves.ts';
@@ -27,4 +27,10 @@ registerPartReference({
 	locksUnit: true,
 	count: (ctx, id) =>
 		ctx.db.select({ n: sql<number>`count(*)` }).from(stockRecord).where(eq(stockRecord.partId, id)).get()?.n ?? 0
+});
+
+// A record is never deleted, so this also counts stock that has since been consumed.
+registerPartCopies({
+	label: ['stock record', 'stock records'],
+	count: (ctx, id) => ctx.db.select({ n: sql<number>`count(*)` }).from(stockRecord).where(eq(stockRecord.partId, id)).get()?.n ?? 0
 });

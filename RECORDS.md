@@ -116,18 +116,19 @@ No other record can own a file. A new record type gets files by declaring its ru
 - A score change never withdraws an acceptance as a side effect. Withdraw first, then change the score.
 - Realizing a risk is a commit, so it takes a person. An agent may prepare it by linking the issue. Realizing an accepted risk also needs a reason.
 - Reopening a closed risk that was accepted voids that acceptance, the same as withdrawing it. The stamps stay as the last acceptance, and accepting again is a new signature.
-- Whether a realized risk should be editable at all is the owner's call, not a standard's. NASA and DoD guidance hands a realized risk to the issue process and is silent on editing. This table locks it by default and leaves a deliberate way out.
+- A realized risk stays locked, with CORRECT RECORD as the deliberate way out. This is the owner's decision, not a standard's: NASA and DoD guidance hands a realized risk to the issue process and is silent on editing.
 
 ## Part
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
 | Draft | What is this, and can it activate? | ACTIVATE, inert with blockers until ready | Print label | Everything, including tier and number | DELETE (if unreferenced) |
-| Active | What is it, where is it, what uses it? | | Print label, receive stock, order, variant | Description, category, reorder point, BOM | OBSOLETE (reason required) |
+| Active | What is it, where is it, what uses it? | | Print label, receive stock, order, variant, REVISE (reason required, once copies exist) | Description, category, reorder point, BOM until copies exist | OBSOLETE (reason required) |
 | Obsolete | What was this, and where was it used? | | Print label | | REINSTATE (reason required) |
 
 - The part tag with QR stays at the top. Stock, procedure use and consumption all show on the part page.
-- BOM changes on an active part are the one open question. See the sweep report.
+- A BOM is pencil until copies exist: a stock record, a placed PO line, or a work order that outputs the part and was not voided. From then on the server refuses BOM changes. REVISE files a draft copy with the BOM under a new number, and the old part stays as it is, because its copies were built to it. Assemblies keep naming the old part until someone changes them.
+- A published procedure does not lock the BOM, because nothing exists yet. Its kit stays as published, and EDIT on the BOM says so.
 - The unit of measure stops changing once stock or a purchase order line counts in it. A different unit is a new part.
 
 ## Stock record

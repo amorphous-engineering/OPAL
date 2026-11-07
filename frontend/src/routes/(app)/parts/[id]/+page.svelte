@@ -16,6 +16,7 @@
 	import { opal } from '#lib/api.js';
 	import { act } from '#lib/components/parts/actions.js';
 	import BomSection from '#lib/components/parts/BomSection.svelte';
+	import RevisionsSection from '#lib/components/parts/RevisionsSection.svelte';
 	import CauseDialog from '#lib/components/parts/CauseDialog.svelte';
 	import ConsumedSection from '#lib/components/parts/ConsumedSection.svelte';
 	import PartTag from '#lib/components/parts/PartTag.svelte';
@@ -85,6 +86,21 @@
 			await act(() => opal.parts.obsolete({ id: part.id, cause }), `${part.internalPn} obsolete`);
 	}
 
+	async function revise() {
+		const reason = await askReason({
+			title: `Revise ${part.internalPn}`,
+			body: 'Files a draft copy with this BOM under a new number. This part and its copies stay as they are.',
+			action: 'REVISE'
+		});
+		if (!reason) return;
+		try {
+			const next = await opal.parts.revise({ id: part.id, reason });
+			await goto(`/parts/${next.id}?edit=1`);
+		} catch (e) {
+			toastError(e);
+		}
+	}
+
 	async function remove() {
 		const ok = await confirm({
 			title: `Delete ${part.internalPn}`,
@@ -122,6 +138,9 @@
 		>
 		{#if detail.family.nextNumber}
 			<Button variant="outline" size="sm" href={`/parts/${part.id}/variant`}>VARIANT</Button>
+		{/if}
+		{#if part.state === 'active' && detail.bomLockedBy}
+			<Button variant="outline" size="sm" onclick={revise}>REVISE</Button>
 		{/if}
 		{#if part.state !== 'obsolete'}<EditToggle />{/if}
 		<MoreMenu
@@ -181,6 +200,7 @@
 			fields={data.fields}
 			editHref={editing ? `/parts/${part.id}/edit` : null}
 		/>
+		<RevisionsSection {detail} />
 		<VariantsSection {detail} />
 		<PluginPanels slot="part.side" recordId={part.id} number={part.internalPn} />
 		<ExternalLinks entityType="part" entityId={part.id} />

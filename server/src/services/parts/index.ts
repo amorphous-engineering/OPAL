@@ -16,9 +16,9 @@ import {
 } from '@opal/shared';
 import { and, asc, desc, eq, inArray, like, notInArray, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
-import type { Ctx } from '../../context.ts';
+import { actorUserId, type Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
-import { bomLine, part, user } from '../../db/schema/index.ts';
+import { bomLine, part, partRevision, user } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
 import { getProjectConfig, getTier, levelDefaults, numbersFor } from '../org/project.ts';
 import { addLine, listLines, whereUsedLines } from './bom.ts';
@@ -29,7 +29,7 @@ import {
 	requireConfiguredTier,
 	retirePartNumber
 } from './numbering.ts';
-import { hasTrackingLock, hasUnitLock, referenceCounts } from './references.ts';
+import { copiesOf, hasTrackingLock, hasUnitLock, publishedKits, referenceCounts } from './references.ts';
 import { family, familyOf, nextVariantNumber } from './variants.ts';
 
 type Row = typeof part.$inferSelect;
@@ -172,9 +172,32 @@ export function detail(ctx: Ctx, id: number): PartDetail {
 		deletable: row.state === 'draft' && Object.keys(refs).length === 0,
 		unitLocked: hasUnitLock(ctx, id),
 		bom: listLines(ctx, id),
+		bomLockedBy: row.state === 'obsolete' ? null : copiesOf(ctx, id),
+		publishedKits: publishedKits(ctx, id),
+		revises: revisionRefs(ctx, eq(partRevision.partId, id), partRevision.revisesId)[0] ?? null,
+		revisedBy: revisionRefs(ctx, eq(partRevision.revisesId, id), partRevision.partId),
 		whereUsed: whereUsedLines(ctx, id),
 		family: family(ctx.db, row)
 	};
+}
+
+/** Revision rows matching `where`, each naming the part at the other end (`other`). */
+function revisionRefs(ctx: Ctx, where: ReturnType<typeof eq>, other: typeof partRevision.partId | typeof partRevision.revisesId) {
+	return ctx.db
+		.select({
+			partId: part.id,
+			internalPn: part.internalPn,
+			state: part.state,
+			reason: partRevision.reason,
+			createdAt: partRevision.createdAt,
+			createdBy: user.name
+		})
+		.from(partRevision)
+		.innerJoin(part, eq(part.id, other))
+		.leftJoin(user, eq(user.id, partRevision.createdById))
+		.where(where)
+		.orderBy(asc(partRevision.id))
+		.all();
 }
 
 /** BOM expects content on make|both; suppliers and PO lines on buy|both. */
@@ -262,6 +285,7 @@ export function createMany(ctx: Ctx, inputs: PartCreateInput[]): Part[] {
 
 export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part {
 	const row = getRow(ctx, input.id);
+	if (row.state === 'obsolete') throw conflict('wrong_state', `${row.internalPn} is obsolete. Reinstate it to change it.`);
 	const patch: Partial<typeof part.$inferInsert> = {};
 
 	// Identity (number, tier) changes only while draft.
@@ -334,6 +358,9 @@ export function deletePart(ctx: Ctx, id: number): void {
 		);
 	}
 	retirePartNumber(ctx, row.internalPn, 'deleted');
+	// A revision filed by mistake goes with its draft. The part it revised never changed.
+	const filed = ctx.db.select({ id: partRevision.id }).from(partRevision).where(eq(partRevision.partId, id)).get();
+	if (filed) remove(ctx, partRevision, filed.id);
 	remove(ctx, part, id);
 }
 
@@ -360,6 +387,50 @@ export function reserve(ctx: Ctx, input: { tier: number; count: number; namePref
 		parts.push(toPart(row, names));
 	}
 	return { parts, firstPn: parts[0]!.internalPn, lastPn: parts.at(-1)!.internalPn };
+}
+
+/**
+ * File a draft that changes the design of an active part, with its attributes and BOM copied.
+ * The part stays as it is: its copies were built to it, and assemblies keep naming it until
+ * someone changes them. The number is the family's next variant, or a new one with variants off.
+ */
+export function revise(ctx: Ctx, input: { id: number; reason: string }): Part {
+	const src = getRow(ctx, input.id);
+	if (src.state !== 'active') throw conflict('wrong_state', `${src.internalPn} is ${src.state}; only an active part is revised`);
+	const row = insert(ctx, part, {
+		internalPn: getProjectConfig(ctx.db)?.partNumbering.variants
+			? nextVariantNumber(ctx, familyOf(ctx.db, src.internalPn))
+			: allocatePartNumber(ctx, src.tier),
+		externalPn: src.externalPn,
+		name: src.name,
+		description: src.description,
+		category: src.category,
+		unitOfMeasure: src.unitOfMeasure,
+		trackingType: src.trackingType,
+		procurement: src.procurement,
+		tier: src.tier,
+		reorderPoint: src.reorderPoint,
+		isTooling: src.isTooling,
+		calibrationIntervalDays: src.calibrationIntervalDays,
+		metadata: src.metadata ?? null,
+		state: 'draft'
+	});
+	for (const l of listLines(ctx, src.id)) {
+		addLine(ctx, {
+			assemblyId: row.id,
+			componentId: l.componentId,
+			quantity: l.quantity,
+			referenceDesignator: l.referenceDesignator,
+			notes: l.notes
+		});
+	}
+	insert(ctx, partRevision, {
+		partId: row.id,
+		revisesId: src.id,
+		reason: input.reason,
+		createdById: actorUserId(ctx.actor)
+	});
+	return present(ctx, row);
 }
 
 /**
