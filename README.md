@@ -89,12 +89,12 @@ An admin can install a plugin from a public GitHub repository. Its API token is 
 | OPAL runs on | What limits the plugin process | What the plugin can read and write |
 |---|---|---|
 | Linux, as a normal user, with Landlock (kernel 5.13 or later, on by default in most current distributions) | Landlock and a seccomp filter. It runs as the same OS user. | Its own `plugin-data/<id>`, read and write. Its own code and system files such as `/usr`, read only. Not the database, the auth secret, the rest of the data folder, other plugins or your home folder. |
-| Linux, as root | A separate OS user for each plugin (no account to create), plus Landlock and the filter when the kernel has them. | The same, and the data folder must sit where any user can pass through its parent folders (`/var/lib/opal`, not `/root`). |
+| Linux, as root | A separate OS user for each plugin (no account to create) and the filter, plus Landlock when the kernel has it. | The same. The data folder and its plugin folders become passable by any user (mode 0711), and stay so; what they hold stays owner-only. The data folder must sit where any user can pass through its parent folders (`/var/lib/opal`, not `/root`), or plugins do not start. |
 | Linux without Landlock (older kernels, some containers), as a normal user | Nothing. | **Shell-level access.** Everything OPAL can read, including the database. |
-| Linux, as root inside a container whose user IDs are mapped to a limited range (an unprivileged LXD container; Docker with user namespace remapping or rootless Podman work the same way) | Nothing. The plugin's user ID does not exist there. | **Shell-level access**, as root in that container, including the database. Run OPAL as a normal user in the container instead, or set `OPAL_PLUGIN_CONFINEMENT=required`. |
+| Linux, as root inside a container whose user IDs are mapped to a limited range (an unprivileged LXD container; Docker with user namespace remapping or rootless Podman work the same way) | Plugins do not start. Their user IDs do not exist there. | Nothing. Run OPAL as a normal user in the container instead. |
 | macOS, Windows | Nothing. | **Shell-level access.** Everything OPAL can read, including the database. |
 
-The plugin page shows which applies under **Confinement**, from what the server checked when that plugin started, and the plugin's log says the same. `none` means shell-level access. Set `OPAL_PLUGIN_CONFINEMENT=required` to refuse to start a plugin that cannot be confined, or `off` to run every plugin as the OPAL user.
+The plugin page shows which applies under **Confinement**, from what the server checked when that plugin started. The plugins list marks a plugin that runs unconfined, and the plugin's log and the server log say so at each start. `none` means shell-level access. Where confinement is possible but a check fails, the plugin does not start and both logs say why. Set `OPAL_PLUGIN_CONFINEMENT=required` to refuse also where the system offers nothing, or `off` to run every plugin as the OPAL user.
 
 **Confinement limits the damage from a plugin. It does not make an untrusted plugin safe.** Even when confined, a plugin can:
 

@@ -2,7 +2,22 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { dlopen, FFIType } from 'bun:ffi';
 import { Database } from 'bun:sqlite';
 import { eq } from 'drizzle-orm';
-import { closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	chmodSync,
+	closeSync,
+	cpSync,
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	mkdtempSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync
+} from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../../src/app.ts';
@@ -12,7 +27,7 @@ import { apiToken, plugin, user } from '../../src/db/schema/index.ts';
 import { setGithubFetch } from '../../src/services/plugins/github.ts';
 import { PluginHost } from '../../src/services/plugins/host.ts';
 import { idleRuntime, setRuntime } from '../../src/services/plugins/runtime.ts';
-import { ConfinementRefused, confinementPolicy, planLaunch, type PluginStart } from '../../src/services/plugins/sandbox.ts';
+import { ConfinementRefused, confinementPolicy, decide, planLaunch, type PluginStart } from '../../src/services/plugins/sandbox.ts';
 import { insert } from '../../src/write.ts';
 import { openTestDb } from '../helpers/db.ts';
 
@@ -238,6 +253,34 @@ describe.if(LANDLOCK)('a confined plugin on Linux', () => {
 		expect(names).not.toContain('OPAL_DATA_DIR');
 	});
 
+	test('what it leaves in its own folder cannot get it restarted unconfined', async () => {
+		const live = () => s.db.select().from(apiToken).all().filter((t) => !t.revokedAt);
+		const token = live()[0]!.tokenHash;
+		const warned: string[] = [];
+		const error = console.error;
+		console.error = (...a: unknown[]) => void warned.push(a.join(' '));
+		try {
+			await s.get('/plant');
+			await until(() => s.host.log('reach').some((l) => l.includes('is not a folder')));
+			// Restarts keep coming on the backoff. None of them runs it.
+			await Bun.sleep(500);
+		} finally {
+			console.error = error;
+		}
+		const p = s.host.process('reach');
+		expect(p.state).toBe('crashed');
+		expect(p.pid).toBeNull();
+		expect(p.confinement).toBeNull();
+		expect(s.host.log('reach').some((l) => l.includes('Not confined'))).toBe(false);
+		expect(live().map((t) => t.tokenHash)).toEqual([token]);
+		expect(warned.some((l) => l.startsWith('Plugin reach:') && l.includes('is not a folder'))).toBe(true);
+
+		rmSync(join(s.dir, 'plugin-data', 'reach', '.tmp'));
+		await s.running();
+		expect(s.host.process('reach').confinement).toBe('landlock');
+		denied((await s.get(`/outside?home=${encodeURIComponent(homedir())}`)).db);
+	});
+
 	test('a crash restarts it, still confined', async () => {
 		const pid = s.host.process('reach').pid;
 		await s.get('/crash');
@@ -352,6 +395,16 @@ describe('when a plugin cannot be confined', () => {
 		await expect(planLaunch(start(), { platform, uid: 501 })).rejects.toBeInstanceOf(ConfinementRefused);
 	});
 
+	test('only a kernel without Landlock lets a plugin run unconfined, and never as root', () => {
+		expect(decide({ ok: true, abi: 4 }, false)).toBe('confined');
+		expect(decide({ ok: true, abi: 0 }, true)).toBe('confined');
+		expect(decide({ ok: false, kind: 'no-landlock' }, false)).toBe('unconfined');
+		expect(decide({ ok: false, kind: 'no-landlock' }, true)).toBe('refused');
+		expect(decide({ ok: false, reason: 'EEXIST' }, false)).toBe('refused');
+		expect(decide({ ok: false, reason: 'EACCES' }, true)).toBe('refused');
+		expect(decide({ ok: false }, false)).toBe('refused');
+	});
+
 	test('a misspelled policy counts as required, and an empty one as auto', () => {
 		process.env.OPAL_PLUGIN_CONFINEMENT = 'requierd';
 		expect(confinementPolicy()).toBe('required');
@@ -401,13 +454,71 @@ describe('when a plugin cannot be confined', () => {
 			return { db, parent };
 		}
 
-		test('a plan that would leave the database readable is not called confined', async () => {
+		test('a plan that would leave the database readable does not run, even under auto', async () => {
 			const { parent } = await dataInsideCode();
 			const dir = process.env.OPAL_DATA_DIR!;
-			const plan = await planLaunch({ id: 1, code: parent, main: 'main.js', data: join(dir, 'plugin-data', 'reach'), local: true, env: { BUN_BE_BUN: '1' } });
-			expect(plan.confinement).toBe('none');
-			expect(plan.note).toContain('could still read');
+			const plan = planLaunch({ id: 1, code: parent, main: 'main.js', data: join(dir, 'plugin-data', 'reach'), local: true, env: { BUN_BE_BUN: '1' } });
+			await expect(plan).rejects.toBeInstanceOf(ConfinementRefused);
+			await expect(plan).rejects.toThrow('could still read');
 			delete process.env.OPAL_PLUGINS_LOCAL;
+		});
+
+		/** A real data folder and a plugin folder for planLaunch, without a server. */
+		function plainStart(): PluginStart {
+			const { dir, held } = fillDataFolder();
+			held.close();
+			const data = join(dir, 'plugin-data', 'plain');
+			mkdirSync(data, { recursive: true });
+			return { id: 1, code: FIXTURE, main: 'main.js', data, local: true, env: { BUN_BE_BUN: '1' } };
+		}
+		const me = () => ({ platform: 'linux' as const, uid: process.getuid!() });
+
+		test('anything but a folder where its temp folder goes keeps it stopped', async () => {
+			const start = plainStart();
+			symlinkSync(process.env.OPAL_DATA_DIR!, join(start.data, '.tmp'));
+			await expect(planLaunch(start, me())).rejects.toThrow('is not a folder');
+			rmSync(join(start.data, '.tmp'));
+			writeFileSync(join(start.data, '.tmp'), '');
+			await expect(planLaunch(start, me())).rejects.toBeInstanceOf(ConfinementRefused);
+			rmSync(join(start.data, '.tmp'));
+			expect((await planLaunch(start, me())).confinement).toBe('landlock');
+			expect(lstatSync(join(start.data, '.tmp')).isDirectory()).toBe(true);
+		});
+
+		test('a confinement check that does not finish keeps it stopped', async () => {
+			const plan = planLaunch(plainStart(), { ...me(), probeTimeoutMs: 1 });
+			await expect(plan).rejects.toThrow('did not finish');
+			await expect(plan).rejects.not.toBeInstanceOf(ConfinementRefused);
+		});
+
+		test('code it cannot reach keeps it stopped, rather than running it unconfined', async () => {
+			const start = plainStart();
+			const code = mkdtempSync(join(tmpdir(), 'opal-closed-'));
+			cpSync(FIXTURE, code, { recursive: true });
+			chmodSync(code, 0o000);
+			try {
+				await expect(planLaunch({ ...start, code }, me())).rejects.toBeInstanceOf(ConfinementRefused);
+			} finally {
+				chmodSync(code, 0o700);
+			}
+		});
+
+		test('a data folder another user owns is refused with the reason', async () => {
+			const start = plainStart();
+			const other = { platform: 'linux' as const, uid: process.getuid!() + 1 };
+			await expect(planLaunch(start, other)).rejects.toThrow('belongs to user id');
+		});
+
+		test('root that cannot give a plugin its own user does not run it, and loosens no folder', async () => {
+			const start = plainStart();
+			const dir = process.env.OPAL_DATA_DIR!;
+			chmodSync(dir, 0o700);
+			const before = [dir, join(dir, 'plugin-data')].map((p) => statSync(p).mode & 0o777);
+			// Not really root, so the change of owner fails, as it does in a container with mapped ids.
+			const plan = planLaunch(start, { platform: 'linux', uid: 0 });
+			await expect(plan).rejects.toBeInstanceOf(ConfinementRefused);
+			await expect(plan).rejects.toThrow('its own user');
+			expect([dir, join(dir, 'plugin-data')].map((p) => statSync(p).mode & 0o777)).toEqual(before);
 		});
 
 		test('with confinement required it does not start, says why, and mints no token', async () => {
@@ -418,7 +529,7 @@ describe('when a plugin cannot be confined', () => {
 				await host.start('reach');
 				await until(() => host.process('reach').state === 'crashed');
 				expect(host.process('reach').pid).toBeNull();
-				expect(host.log('reach').some((l) => l.includes('requires confinement'))).toBe(true);
+				expect(host.log('reach').some((l) => l.includes('could not be confined'))).toBe(true);
 				expect(db.select().from(apiToken).all()).toHaveLength(0);
 			} finally {
 				await host.stopAll();
@@ -477,5 +588,24 @@ describe.if(ROOT)('a plugin started by root', () => {
 		expect(v.mine).toEqual({ ok: true, value: 'across-updates' });
 		expect(s.host.process('reach').confinement).toBe('separate-user');
 		denied((await s.get(`/outside?home=${encodeURIComponent(homedir())}`)).db);
+	});
+
+	test('code its user cannot reach keeps it stopped, rather than running it as root', async () => {
+		const code = mkdtempSync(join(tmpdir(), 'opal-home-'));
+		cpSync(FIXTURE, code, { recursive: true });
+		// A home folder on current Ubuntu.
+		chmodSync(code, 0o750);
+		const data = join(s.dir, 'plugin-data', 'local');
+		mkdirSync(data, { recursive: true });
+		const plan = planLaunch({ id: 7, code, main: 'main.js', data, local: true, env: { BUN_BE_BUN: '1' } });
+		await expect(plan).rejects.toBeInstanceOf(ConfinementRefused);
+	});
+
+	test('what it leaves in its own folder cannot get it restarted as root', async () => {
+		await s.get('/plant');
+		await until(() => s.host.log('reach').some((l) => l.includes('is not a folder')));
+		await Bun.sleep(500);
+		expect(s.host.process('reach').pid).toBeNull();
+		expect(s.host.log('reach').some((l) => l.includes('Not confined'))).toBe(false);
 	});
 });

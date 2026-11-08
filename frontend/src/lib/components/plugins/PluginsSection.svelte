@@ -64,6 +64,10 @@
 							badge
 							tone={PROCESS_TONES[p.process.state] ?? 'muted'}
 						/>{/if}
+					{#if p.enabled && p.process.confinement === 'none'}<span
+							title="Not confined: it can read the database"
+							><State value="unconfined" badge tone="warn" /></span
+						>{/if}
 				</span>
 			{/if}
 		{/snippet}

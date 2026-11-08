@@ -68,13 +68,13 @@ secrets or `OPAL_DATA_DIR`. Put what a plugin needs in its settings.
 
 ## Trust
 
-The token limits a plugin's API calls. What limits its process depends on the system, and on macOS, on Windows, on Linux without Landlock and for root in a container with mapped user IDs nothing does: the plugin has shell-level access, runs as the same user as OPAL and can read the database. The README in the OPAL repository has the table. Install only plugins you would trust with a login on that machine.
+The token limits a plugin's API calls. What limits its process depends on the system, and on macOS, on Windows and on Linux without Landlock nothing does: the plugin has shell-level access, runs as the same user as OPAL and can read the database. Where Linux could confine it but a check fails, the plugin does not start. The README in the OPAL repository has the table. Install only plugins you would trust with a login on that machine.
 
 ## Running confined
 
 On Linux a plugin normally runs confined. Write it to work both ways:
 
-- Keep files in `dataDir`. It is the only place a plugin can write. `HOME` and `TMPDIR` point inside it, and `/tmp` is out of reach.
+- Keep files in `dataDir`. It is the only place a plugin can write. `HOME` and `TMPDIR` point inside it, and `/tmp` is out of reach. OPAL makes `TMPDIR` before each start; while anything but a folder is there, the plugin does not start.
 - Everything the plugin loads must be in its own repository. Parent folders are out of reach, so bundle dependencies into `dist/`.
 - System programs under `/usr` run, and they inherit the same limits.
 - Network connections work. Unix sockets do not, and neither do `chmod` and `chown` by path, kernel keyrings or `io_uring`. Set a new file's mode when you create it.

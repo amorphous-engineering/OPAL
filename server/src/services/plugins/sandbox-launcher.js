@@ -9,7 +9,7 @@
  * gets the rest of this environment, with spec.env on top.
  * On any failure it exits without starting the plugin.
  */
-import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, openSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dlopen, FFIType, ptr, toArrayBuffer } from 'bun:ffi';
 
 const spec = JSON.parse(process.env.OPAL_SANDBOX_SPEC);
@@ -65,6 +65,7 @@ const AF_UNIX = 1;
 const EPERM = 1;
 const EACCES = 13;
 const ENOSYS = 38;
+const EOPNOTSUPP = 95;
 
 const FS_EXECUTE = 1n << 0n;
 const FS_WRITE_FILE = 1n << 1n;
@@ -119,7 +120,12 @@ function landlock() {
 	try {
 		abi = sys(SYS.landlockCreate, 0, 0, 1);
 	} catch (e) {
-		throw new Error(`this kernel does not offer Landlock (errno ${e.code})`);
+		// Not built in, or turned off at boot. The server may run a plugin unconfined only for these,
+		// because nothing a plugin does can cause them.
+		if (e.code === ENOSYS || e.code === EOPNOTSUPP) {
+			throw Object.assign(new Error(`this kernel does not offer Landlock (errno ${e.code})`), { kind: 'no-landlock' });
+		}
+		throw new Error(`the Landlock check failed with errno ${e.code}`);
 	}
 	let handled = (1n << 13n) - 1n;
 	if (abi >= 2) handled |= FS_REFER;
@@ -165,7 +171,7 @@ function landlock() {
 	};
 	for (const path of spec.read) allow(path, readTree);
 	for (const path of spec.write) allow(path, writeTree);
-	for (const path of spec.devices) allow(path, FS_READ_FILE | FS_WRITE_FILE);
+	for (const path of spec.devices) allow(path, FS_READ_FILE | FS_WRITE_FILE | FS_IOCTL_DEV);
 
 	sys(SYS.landlockRestrict, ruleset, 0);
 	closeSync(ruleset);
@@ -263,15 +269,17 @@ try {
 	let abi = 0;
 	try {
 		abi = landlock();
-		seccomp(abi);
 	} catch (e) {
-		// Without a second user these are all there is. With one, they are the second layer.
-		if (spec.uid === undefined) throw e;
+		// With a second user, a kernel without Landlock leaves the user change and the filter. Any
+		// other failure, or no second user, stops here.
+		if (spec.uid === undefined || e.kind !== 'no-landlock') throw e;
 	}
+	seccomp(abi);
 	checkForbidden();
 	// Its own folders must be reachable from here. Under a second user, a closed parent folder stops it.
 	readdirSync(spec.cwd);
-	mkdirSync(spec.tmp, { recursive: true });
+	// The server made it. This only checks that the plugin can use it.
+	if (!statSync(spec.tmp).isDirectory()) throw new Error(`${spec.tmp} is not a folder`);
 	if (spec.probe) {
 		console.log(JSON.stringify({ ok: true, abi }));
 		process.exit(0);
@@ -280,7 +288,7 @@ try {
 	execPlugin(binaryFd);
 } catch (e) {
 	const reason = e instanceof Error ? e.message : String(e);
-	if (spec.probe) console.log(JSON.stringify({ ok: false, reason }));
+	if (spec.probe) console.log(JSON.stringify({ ok: false, kind: e?.kind, reason }));
 	else console.error(`opal: plugin not started, confinement failed: ${reason}`);
 	process.exit(126);
 }

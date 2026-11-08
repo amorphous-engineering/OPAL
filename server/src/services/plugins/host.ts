@@ -251,6 +251,7 @@ export class PluginHost implements PluginRuntime {
 		} catch (err) {
 			if (e.gen !== gen) return;
 			this.push(e, 'err', (err as Error).message);
+			console.error(`Plugin ${key}: ${(err as Error).message}`);
 			e.state = 'crashed';
 			// A refusal stands until the operator changes something, so it waits the longest.
 			if (err instanceof ConfinementRefused) e.backoff = this.o().backoffMaxMs;
@@ -262,6 +263,8 @@ export class PluginHost implements PluginRuntime {
 		await serialized(async () => mintToken(this.db, row, raw));
 		if (e.gen !== gen) return;
 		this.push(e, launch.confinement === 'none' ? 'err' : 'out', launch.note);
+		// The plugin's own log is in memory and on one page. The operator reads the server's.
+		if (launch.confinement === 'none') console.warn(`Plugin ${key}: ${launch.note}`);
 		e.confinement = launch.confinement;
 		let proc: Bun.Subprocess;
 		try {
