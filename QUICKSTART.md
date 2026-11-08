@@ -83,7 +83,7 @@ OPAL listens on every network interface, on port 8080. People on your network ca
 
 OPAL serves plain HTTP, so passwords cross the network unencrypted. Keep it on a network you trust, or put a TLS proxy in front of it and set `OPAL_PUBLIC_URL`. The README lists the [network settings](README.md#network-settings). This beta has not been tested on the open internet, so do not expose it there.
 
-Installing a plugin gives it shell-level access to this computer. To turn plugins off, set `OPAL_PLUGINS=0`.
+On macOS and Windows, installing a plugin gives it shell-level access to this computer. On Linux, OPAL keeps a plugin to its own folder where the kernel allows it, and the plugin's page shows whether it did. Install only plugins you trust either way. The README has [the details](README.md#plugins). To turn plugins off, set `OPAL_PLUGINS=0`.
 
 ## Back up your data
 

@@ -5,7 +5,6 @@
  */
 import { and, eq, isNull } from 'drizzle-orm';
 import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { now } from '@opal/shared';
 import type { Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
@@ -14,6 +13,7 @@ import { API_TOKEN_PREFIX, hashToken, newToken } from '../../auth/tokens.ts';
 import { serialized } from '../../registry.ts';
 import { insert, update } from '../../write.ts';
 import type { PluginProcess, PluginRuntime } from './runtime.ts';
+import { ConfinementRefused, planLaunch, type PluginLaunch } from './sandbox.ts';
 import { codeDir, findPlugin, pluginDataDir, settingValues, unreadableSettings, type PluginRow } from './store.ts';
 
 export interface HostOptions {
@@ -34,6 +34,7 @@ interface Entry {
 	proc: Bun.Subprocess | null;
 	port: number | null;
 	pid: number | null;
+	confinement: PluginProcess['confinement'];
 	startedAt: string | null;
 	runningSince: number | null;
 	restarts: number;
@@ -113,6 +114,7 @@ export class PluginHost implements PluginRuntime {
 				proc: null,
 				port: null,
 				pid: null,
+				confinement: null,
 				startedAt: null,
 				runningSince: null,
 				restarts: 0,
@@ -134,8 +136,15 @@ export class PluginHost implements PluginRuntime {
 
 	process(key: string): PluginProcess {
 		const e = this.entries.get(key);
-		if (!e) return { state: 'stopped', pid: null, startedAt: null, restarts: 0, exitCode: null };
-		return { state: e.state, pid: e.pid, startedAt: e.startedAt, restarts: e.restarts, exitCode: e.exitCode };
+		if (!e) return { state: 'stopped', pid: null, confinement: null, startedAt: null, restarts: 0, exitCode: null };
+		return {
+			state: e.state,
+			pid: e.pid,
+			confinement: e.confinement,
+			startedAt: e.startedAt,
+			restarts: e.restarts,
+			exitCode: e.exitCode
+		};
 	}
 
 	log(key: string): string[] {
@@ -201,6 +210,7 @@ export class PluginHost implements PluginRuntime {
 		e.state = 'stopped';
 		e.port = null;
 		e.pid = null;
+		e.confinement = null;
 		e.runningSince = null;
 	}
 
@@ -220,21 +230,20 @@ export class PluginHost implements PluginRuntime {
 			return;
 		}
 		e.state = 'starting';
+		e.confinement = null;
 		e.userId = row.userId;
 		const port = await freePort();
 		const raw = newToken(API_TOKEN_PREFIX);
-		// Waits for the write queue. Callers run start() fire-and-forget, never inside the queue.
-		await serialized(async () => mintToken(this.db, row, raw));
-		if (e.gen !== gen) return;
 		const data = pluginDataDir(key);
 		mkdirSync(data, { recursive: true });
-		let proc: Bun.Subprocess;
+		let launch: PluginLaunch;
 		try {
-			proc = Bun.spawn([process.execPath, join(codeDir(row), row.manifest.main)], {
-				cwd: codeDir(row),
-				stdout: 'pipe',
-				stderr: 'pipe',
-				stdin: 'ignore',
+			launch = await planLaunch({
+				id: row.id,
+				code: codeDir(row),
+				main: row.manifest.main,
+				data,
+				local: row.source.startsWith('local:'),
 				env: {
 					...inheritedEnv(),
 					BUN_BE_BUN: '1',
@@ -245,6 +254,30 @@ export class PluginHost implements PluginRuntime {
 					OPAL_PLUGIN_DATA: data,
 					OPAL_SETTINGS: JSON.stringify(settingValues(this.db, row))
 				}
+			});
+		} catch (err) {
+			if (e.gen !== gen) return;
+			this.push(e, 'err', (err as Error).message);
+			e.state = 'crashed';
+			// A refusal stands until the operator changes something, so it waits the longest.
+			if (err instanceof ConfinementRefused) e.backoff = this.o().backoffMaxMs;
+			this.scheduleRestart(key, e, gen);
+			return;
+		}
+		if (e.gen !== gen) return;
+		// Waits for the write queue. Callers run start() fire-and-forget, never inside the queue.
+		await serialized(async () => mintToken(this.db, row, raw));
+		if (e.gen !== gen) return;
+		this.push(e, launch.confinement === 'none' ? 'err' : 'out', launch.note);
+		e.confinement = launch.confinement;
+		let proc: Bun.Subprocess;
+		try {
+			proc = Bun.spawn(launch.cmd, {
+				cwd: launch.cwd,
+				stdout: 'pipe',
+				stderr: 'pipe',
+				stdin: 'ignore',
+				env: launch.env
 			});
 		} catch (err) {
 			this.push(e, 'err', `spawn failed: ${(err as Error).message}`);
