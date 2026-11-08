@@ -15,14 +15,16 @@
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { dataDir, dbPath } from './paths.ts';
+import { confinementPolicy } from './services/plugins/policy.ts';
 
-/** Remove group and other bits from one path. Quiet when it is not there or not ours. */
-function restrict(path: string, warn: string[]): void {
+/** Remove group and other bits from one path, except those in `keep`. Quiet when it is not there or not ours. */
+function restrict(path: string, warn: string[], keep = 0): void {
 	try {
 		const stat = lstatSync(path);
 		if (stat.isSymbolicLink()) return;
 		const mode = stat.mode & 0o7777;
-		if (mode & 0o077) chmodSync(path, mode & ~0o077);
+		const strip = 0o077 & ~keep;
+		if (mode & strip) chmodSync(path, mode & ~strip);
 	} catch (e) {
 		if ((e as { code?: string }).code !== 'ENOENT') warn.push(`${path}: ${(e as Error).message}`);
 	}
@@ -44,8 +46,14 @@ export function hardenDataDir(opts: { umask?: boolean } = {}): void {
 	} catch (e) {
 		warn.push(`${dir}: ${(e as Error).message}`);
 	}
+	// Under root each plugin runs as its own user and passes through these two (sandbox.ts), so they
+	// keep the bit that allows that and nothing more.
+	const passable = process.getuid?.() === 0 && confinementPolicy() !== 'off';
 	try {
-		for (const name of readdirSync(dir)) if (OURS.test(name)) restrict(join(dir, name), warn);
+		for (const name of readdirSync(dir)) {
+			if (!OURS.test(name)) continue;
+			restrict(join(dir, name), warn, passable && (name === 'plugins' || name === 'plugin-data') ? 0o011 : 0);
+		}
 	} catch (e) {
 		warn.push(`${dir}: ${(e as Error).message}`);
 	}

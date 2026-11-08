@@ -125,6 +125,14 @@ Bun.serve({
 		if (url.pathname === '/socket') return Response.json(await unixSocket(url.searchParams.get('path')));
 		if (url.pathname === '/api') return Response.json({ status: await api(url.searchParams.get('path')) });
 		if (url.pathname === '/uid') return Response.json({ uid: process.getuid(), gid: process.getgid(), groups: process.getgroups() });
+		// Leaves a file where the server expects its temp folder, then stops.
+		if (url.pathname === '/plant') {
+			const tmp = join(own, '.tmp');
+			rmSync(tmp, { recursive: true, force: true });
+			writeFileSync(tmp, 'not a folder');
+			setTimeout(() => process.exit(3), 10);
+			return Response.json({ ok: true });
+		}
 		if (url.pathname === '/crash') {
 			setTimeout(() => process.exit(3), 10);
 			return Response.json({ ok: true });
