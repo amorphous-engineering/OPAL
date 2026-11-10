@@ -1,9 +1,7 @@
 <script lang="ts">
-	// Launch console (prototype). The flight is a record: the countdown is an execution of a
-	// released procedure, the vehicle and motor are serials and stock, telemetry goes to a dataset.
-	// Everything on this page is simulated in the browser (lib/launch/sim). LAUNCH.md has the
-	// design basis and the standards it follows.
-	import { onDestroy } from 'svelte';
+	// The launch console. The countdown is an OPAL execution (WO-0041) of a released procedure,
+	// read and written through the launch-control plugin (lib/opal/link). Everything on this page
+	// is simulated in the browser (lib/launch/sim). launch-control/DESIGN.md has the design basis.
 	import TabStrip from '#lib/components/opal/TabStrip.svelte';
 	import CountdownBar from '#lib/components/launch/CountdownBar.svelte';
 	import PollPanel from '#lib/components/launch/PollPanel.svelte';
@@ -15,18 +13,17 @@
 	import EventLog from '#lib/components/launch/EventLog.svelte';
 	import FlightRecord from '#lib/components/launch/FlightRecord.svelte';
 	import SimBanner from '#lib/components/launch/SimBanner.svelte';
-	import { LaunchSim } from '#lib/launch/sim.svelte.js';
+	import { flightSim } from '#lib/launch/sim.svelte.js';
 
-	const sim = new LaunchSim();
-	sim.start();
-	onDestroy(() => sim.stop());
+	const sim = flightSim();
 
 	let tab = $state('console');
 
 	// HOLD is one key for anyone, never while typing. Toward safe is always easy.
 	function onkeydown(e: KeyboardEvent) {
 		const el = e.target as HTMLElement | null;
-		if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+		if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)))
+			return;
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
 		if (e.key === 'h' || e.key === 'H') {
 			e.preventDefault();
@@ -36,7 +33,7 @@
 </script>
 
 <svelte:window {onkeydown} />
-<svelte:head><title>FLT-0007 Kestrel IV flight 7 · OPAL</title></svelte:head>
+<svelte:head><title>FLT-0007 Kestrel IV flight 7 · Launch Control</title></svelte:head>
 
 <div class="flex min-h-[calc(100svh-var(--shell-h))] flex-col">
 	<SimBanner {sim} />

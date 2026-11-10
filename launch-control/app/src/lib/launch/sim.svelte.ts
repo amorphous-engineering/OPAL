@@ -8,6 +8,8 @@
  * actions, and drops back to safe on any doubt.
  */
 
+import type { LinkState } from '#lib/opal/link.js';
+
 export type Answer = 'GO' | 'NO-GO' | null;
 export type AlertLevel = 'warning' | 'caution' | 'advisory';
 export type Phase = 'count' | 'hold' | 'awaiting-fire' | 'flight' | 'landed' | 'safed' | 'scrubbed';
@@ -101,7 +103,12 @@ function noise(scale: number) {
 }
 
 /** Simple point-mass profile: boost, drag-heavy coast, drogue, main. Good enough to drive a screen. */
-function profile(t: number): { alt: number; vel: number; acc: number; state: FlightState } {
+function profile(t: number): {
+	alt: number;
+	vel: number;
+	acc: number;
+	state: FlightState;
+} {
 	const tb = 1.6;
 	const a = 90;
 	const vb = a * tb;
@@ -116,7 +123,12 @@ function profile(t: number): { alt: number; vel: number; acc: number; state: Fli
 	if (t < tb) return { alt: 0.5 * a * t * t, vel: a * t, acc: a, state: 'BOOST' };
 	const t1 = t - tb;
 	if (t1 < tc)
-		return { alt: hb + vb * t1 - 0.5 * dec * t1 * t1, vel: vb - dec * t1, acc: -dec, state: 'COAST' };
+		return {
+			alt: hb + vb * t1 - 0.5 * dec * t1 * t1,
+			vel: vb - dec * t1,
+			acc: -dec,
+			state: 'COAST'
+		};
 	const t2 = t1 - tc;
 	const tDrogue = (apo - mainAlt) / vd;
 	if (t2 < tDrogue) return { alt: apo - vd * t2, vel: -vd, acc: 0, state: 'DROGUE' };
@@ -146,6 +158,12 @@ export class LaunchSim {
 	gust = $state(false);
 	linkDown = $state(false);
 	contLost = $state(false);
+	opalDown = $state(false);
+
+	// OPAL link (through the plugin). The count never waits on it: entries queue and go in order.
+	journalSent = $state(0);
+	opalDroppedAt = $state<string | null>(null);
+	opalBackAt = $state<string | null>(null);
 
 	// Telemetry
 	lastPacket = $state(Date.now());
@@ -169,7 +187,14 @@ export class LaunchSim {
 
 	poll = $state<PollRole[]>([
 		{ id: 'ld', role: 'Launch director', person: ME, answer: null, at: null },
-		{ id: 'rso', role: 'Range safety', person: 'J. Okafor', answer: null, at: null, signs: true },
+		{
+			id: 'rso',
+			role: 'Range safety',
+			person: 'J. Okafor',
+			answer: null,
+			at: null,
+			signs: true
+		},
 		{ id: 'pad', role: 'Pad', person: 'M. Chen', answer: null, at: null },
 		{ id: 'av', role: 'Avionics', person: 'S. Patel', answer: null, at: null },
 		{ id: 'rec', role: 'Recovery', person: 'D. Haas', answer: null, at: null },
@@ -177,7 +202,12 @@ export class LaunchSim {
 	]);
 
 	steps = $state<CountStep[]>([
-		{ n: 1, title: 'Post the range at 30 m minimum distance', doneBy: 'M. Chen', doneAt: '' },
+		{
+			n: 1,
+			title: 'Post the range at 30 m minimum distance',
+			doneBy: 'M. Chen',
+			doneAt: ''
+		},
 		{
 			n: 2,
 			title: 'Power the flight computer and confirm PAD_IDLE',
@@ -203,8 +233,14 @@ export class LaunchSim {
 			n: 5,
 			title: 'Install the igniter with the pad key at SAFE',
 			callouts: [
-				{ kind: 'warning', text: 'The pad key stays in your pocket while you are at the pad.' },
-				{ kind: 'note', text: 'Shunt the igniter leads until they are on the clips.' }
+				{
+					kind: 'warning',
+					text: 'The pad key stays in your pocket while you are at the pad.'
+				},
+				{
+					kind: 'note',
+					text: 'Shunt the igniter leads until they are on the clips.'
+				}
 			],
 			capture: () => `Igniter ${this.igniterOhm.toFixed(1)} Ω`
 		},
@@ -223,7 +259,10 @@ export class LaunchSim {
 			n: 8,
 			title: 'Turn the pad key to ARMED',
 			callouts: [
-				{ kind: 'caution', text: 'Turn the key only after the RSO GO and with the range clear.' }
+				{
+					kind: 'caution',
+					text: 'Turn the key only after the RSO GO and with the range clear.'
+				}
 			],
 			capture: () => `Pad key ${this.padKey}, igniter ${this.igniterOhm.toFixed(1)} Ω`
 		},
@@ -257,6 +296,22 @@ export class LaunchSim {
 
 	// ---- derived ----
 
+	/** OFFLINE now; STALE latches after any drop until acknowledged, as in OPAL's status bar. */
+	get opal(): LinkState {
+		if (this.opalDown) return 'OFFLINE';
+		return this.opalDroppedAt ? 'STALE' : 'ONLINE';
+	}
+
+	get journalQueued(): number {
+		return this.log.length - this.journalSent;
+	}
+
+	ackOpal() {
+		if (this.opalDown) return;
+		this.opalDroppedAt = null;
+		this.opalBackAt = null;
+	}
+
 	get current(): CountStep | undefined {
 		return this.steps.find((s) => !s.doneBy);
 	}
@@ -286,7 +341,13 @@ export class LaunchSim {
 				limit: '> 0 min',
 				met: left > 0
 			},
-			{ id: 'ceiling', label: 'Cloud ceiling', value: '1 800 m', limit: '≥ 1 500 m', met: true },
+			{
+				id: 'ceiling',
+				label: 'Cloud ceiling',
+				value: '1 800 m',
+				limit: '≥ 1 500 m',
+				met: true
+			},
 			{
 				id: 'link',
 				label: 'Telemetry link',
@@ -320,7 +381,10 @@ export class LaunchSim {
 	get interlocks(): { label: string; met: boolean }[] {
 		const cur = this.current?.n ?? 99;
 		return [
-			{ label: 'Count at T−00:00:30 or later', met: this.clockMs >= ARM_OPEN_MS },
+			{
+				label: 'Count at T−00:00:30 or later',
+				met: this.clockMs >= ARM_OPEN_MS
+			},
 			{ label: 'Poll all GO', met: this.pollGo },
 			{ label: 'Launch commit criteria met', met: this.criteriaMet },
 			{ label: 'Pad key ARMED', met: this.padKey === 'ARMED' },
@@ -351,7 +415,9 @@ export class LaunchSim {
 	get fcState(): string {
 		if (this.phase === 'flight' || this.phase === 'landed' || this.phase === 'safed')
 			return this.flight;
-		return this.padKey === 'ARMED' && this.drogueOhm < 5 && this.mainOhm < 5 ? 'PAD_READY' : 'PAD_IDLE';
+		return this.padKey === 'ARMED' && this.drogueOhm < 5 && this.mainOhm < 5
+			? 'PAD_READY'
+			: 'PAD_IDLE';
 	}
 
 	get unackedWarning(): boolean {
@@ -431,7 +497,9 @@ export class LaunchSim {
 				this.vel = p.vel;
 				this.acc = p.acc;
 				this.apogee = Math.max(this.apogee, p.alt);
-				this.samples = [...this.samples, { t: this.clockMs / 1000, alt: this.baroAlt }].slice(-1200);
+				this.samples = [...this.samples, { t: this.clockMs / 1000, alt: this.baroAlt }].slice(
+					-1200
+				);
 			}
 			if (p.state !== this.flight) this.flightEvent(p.state);
 		}
@@ -453,8 +521,11 @@ export class LaunchSim {
 		for (const c of this.criteria) {
 			if (c.met) this.alerts = this.alerts.filter((a) => !(a.id === c.id && a.acked));
 		}
-		if (this.phase === 'flight' && this.stale) this.raise('caution', 'Telemetry stale in flight', 'link');
+		if (this.phase === 'flight' && this.stale)
+			this.raise('caution', 'Telemetry stale in flight', 'link');
 		if (this.sats < 6) this.raise('advisory', `GPS ${this.sats} satellites`, 'gps');
+
+		if (!this.opalDown) this.journalSent = this.log.length;
 
 		if (this.fireStart !== null) {
 			this.fireProgress = Math.min(1, (t - this.fireStart) / FIRE_HOLD_MS);
@@ -465,7 +536,10 @@ export class LaunchSim {
 	// ---- acts ----
 
 	say(actor: string, text: string, level?: LogEntry['level']) {
-		this.log = [{ utc: iso(), t: tTime(this.clockMs), actor, text, level }, ...this.log].slice(0, 300);
+		this.log = [{ utc: iso(), t: tTime(this.clockMs), actor, text, level }, ...this.log].slice(
+			0,
+			300
+		);
 	}
 
 	raise(level: AlertLevel, text: string, id: string) {
@@ -649,8 +723,15 @@ export class LaunchSim {
 
 	// ---- sim faults (prototype only) ----
 
-	toggle(fault: 'gust' | 'linkDown' | 'contLost') {
+	toggle(fault: 'gust' | 'linkDown' | 'contLost' | 'opalDown') {
 		this[fault] = !this[fault];
+		if (fault === 'opalDown') {
+			if (this.opalDown && (!this.opalDroppedAt || this.opalBackAt)) {
+				this.opalDroppedAt = iso();
+				this.opalBackAt = null;
+			}
+			if (!this.opalDown) this.opalBackAt = iso();
+		}
 		this.say('Sim', `${fault} ${this[fault] ? 'on' : 'off'}`);
 	}
 
@@ -699,4 +780,13 @@ export class LaunchSim {
 		if (this.toneTimer) clearInterval(this.toneTimer);
 		this.toneTimer = null;
 	}
+}
+
+let shared: LaunchSim | null = null;
+
+/** The one simulated flight in this tab. The status bar and the console read the same one. */
+export function flightSim(): LaunchSim {
+	shared ??= new LaunchSim();
+	shared.start();
+	return shared;
 }

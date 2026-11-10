@@ -2,6 +2,7 @@ packages:
   - packages/*
   - server
   - frontend
+  - launch-control/app
 
 allowBuilds:
   esbuild: true
